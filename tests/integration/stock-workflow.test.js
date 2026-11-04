@@ -20,6 +20,9 @@ const needsOf = (job) => {
   return n === undefined ? [] : Array.isArray(n) ? n : [n];
 };
 const stepsOf = (job) => (jobs[job] && jobs[job].steps) || [];
+// The workflow's own bash steps run under a real bash with stubbed commands.
+const GIT_BASH = 'C:\\Program Files\\Git\\bin\\bash.exe';
+const BASH = process.platform === 'win32' ? (existsSync(GIT_BASH) ? GIT_BASH : null) : 'bash';
 
 describe('triggers and posture', () => {
   test('runs on the 11:00 UTC schedule and on manual dispatch, nothing else', () => {
@@ -90,31 +93,42 @@ describe('access-gate', { timeout: 30_000 }, () => {
   const gateSteps = stepsOf('access-gate');
   const curlStep = gateSteps.find((s) => typeof s.run === 'string' && /\bcurl\b/.test(s.run));
 
-  test('runs curl with no credentials of any kind', () => {
+  test('runs curl with no credentials of any kind, on a page and on the public API', () => {
     expect(curlStep).toBeDefined();
     expect(JSON.stringify(jobs['access-gate'])).not.toMatch(/secrets\.|vars\.(?!STOCK_FULL)/);
     expect(curlStep.env).toBeUndefined();
     expect(curlStep.run).not.toMatch(/\s(-H|--header|-u|--user|-b|--cookie|--oauth2-bearer)\b/);
     expect(curlStep.run).toContain("-w '%{http_code} %{redirect_url}'");
-    expect(curlStep.run).toContain('"$STG_FULL_URL/"');
+    expect(curlStep.run).toContain('"${STG_FULL_URL}${path}"');
+    expect(curlStep.run).toContain('for path in / /api/v2/events; do');
     expect(wf.env.STG_FULL_URL).toBe('https://stg-full.oursharedevents.com');
   });
 
-  // The step's own script, with curl replaced by a function that answers as told.
-  const GIT_BASH = 'C:\\Program Files\\Git\\bin\\bash.exe';
-  const BASH = process.platform === 'win32' ? (existsSync(GIT_BASH) ? GIT_BASH : null) : 'bash';
-  function runGate(curlOut, curlRc = 0) {
+  // The step's own script, with curl replaced by a function that answers per URL.
+  function runGate(rootOut, apiOut = rootOut, curlRc = 0) {
     const dir = mkdtempSync(join(tmpdir(), 'stock-gate-'));
     try {
       const argsFile = join(dir, 'args').replace(/\\/g, '/');
       const script = join(dir, 'gate.sh');
-      writeFileSync(
-        script,
-        `curl() { printf '%s\\n' "$@" > '${argsFile}'; printf '%s' "$FAKE_OUT"; return ${curlRc}; }\n${curlStep.run}`
-      );
+      const stub = [
+        'curl() {',
+        `  printf '%s\\n' "$@" >> '${argsFile}'`,
+        '  case "${@: -1}" in',
+        `    */api/v2/events) printf '%s' "$FAKE_API" ;;`,
+        `    *) printf '%s' "$FAKE_ROOT" ;;`,
+        '  esac',
+        `  return ${curlRc}`,
+        '}',
+      ].join('\n');
+      writeFileSync(script, `${stub}\n${curlStep.run}`);
       const r = spawnSync(BASH, [script], {
         encoding: 'utf8',
-        env: { ...process.env, STG_FULL_URL: wf.env.STG_FULL_URL, FAKE_OUT: curlOut },
+        env: {
+          ...process.env,
+          STG_FULL_URL: wf.env.STG_FULL_URL,
+          FAKE_ROOT: rootOut,
+          FAKE_API: apiOut,
+        },
       });
       const args = existsSync(argsFile) ? readFileSync(argsFile, 'utf8').split('\n') : [];
       return { code: r.status, out: `${r.stdout}${r.stderr}`, args };
@@ -129,10 +143,11 @@ describe('access-gate', { timeout: 30_000 }, () => {
       '302 https://ourcommunityrituals.cloudflareaccess.com/cdn-cgi/access/login/stg-full?x=1',
       '303 https://team.cloudflareaccess.com/',
       '403 ',
-    ])('passes when Access answers: %s', (answer) => {
+    ])('passes when Access answers both requests: %s', (answer) => {
     const r = runGate(answer);
     expect(r.code, r.out).toBe(0);
     expect(r.args).toContain('https://stg-full.oursharedevents.com/');
+    expect(r.args).toContain('https://stg-full.oursharedevents.com/api/v2/events');
   });
 
   test
@@ -152,8 +167,18 @@ describe('access-gate', { timeout: 30_000 }, () => {
     expect(r.out).toContain('Real-world data is not loaded onto an open host.');
   });
 
+  test.skipIf(!BASH).each(['200 ', '404 ', '302 https://evil.example/'])(
+    'fails when the page is closed but the public API answers: %s',
+    (api) => {
+      const r = runGate('403 ', api);
+      expect(r.code).toBe(1);
+      expect(r.out).toContain('/api/v2/events answered HTTP');
+      expect(r.out).toContain('Real-world data is not loaded onto an open host.');
+    }
+  );
+
   test.skipIf(!BASH)('fails when the request itself fails', () => {
-    const r = runGate('', 7);
+    const r = runGate('', '', 7);
     expect(r.code).toBe(1);
     expect(r.out).toContain('Real-world data is not loaded onto an open host.');
   });
@@ -213,9 +238,20 @@ describe('deploy', () => {
       .map((s) => String(s.run || ''))
       .join('\n');
 
-  test('deploys main to staging-full after migrating both of its databases', () => {
-    const checkout = stepsOf('deploy').find((s) => /^actions\/checkout@/.test(s.uses || ''));
-    expect(checkout.with.ref).toBe('main');
+  test('every job checks out the triggering ref: none pins another', () => {
+    let checkouts = 0;
+    for (const job of Object.keys(jobs)) {
+      for (const s of stepsOf(job)) {
+        if (!/^actions\/checkout@/.test(s.uses || '')) continue;
+        checkouts += 1;
+        expect((s.with || {}).ref, `${job} checkout`).toBeUndefined();
+        expect((s.with || {}).repository, `${job} checkout`).toBeUndefined();
+      }
+    }
+    expect(checkouts).toBe(CHAIN.length - 1); // every job but access-gate checks out
+  });
+
+  test('deploys to staging-full after migrating both of its databases', () => {
     const text = runs();
     const dbAt = text.indexOf(
       'npx wrangler d1 migrations apply ocr-db-staging-full --env staging-full --remote'
@@ -255,8 +291,17 @@ describe('search', () => {
       'Write(stock-out/businesses.json)',
     ]);
     const disallowed = /--disallowedTools "([^"]*)"/.exec(args)[1].split(',');
-    expect(disallowed).toContain('Bash');
+    for (const tool of ['Bash', 'Edit', 'Read', 'Task', 'Agent']) {
+      expect(disallowed).toContain(tool);
+    }
     expect(args).toContain('--setting-sources user');
+  });
+
+  test('the CLI version the cap is checked on names the action SHA it pairs with', () => {
+    const text = readFileSync(WF_PATH, 'utf8');
+    const at = text.indexOf("CLAUDE_CODE_VERSION: '");
+    const comment = text.slice(text.lastIndexOf('# Pairs with', at), at);
+    expect(comment).toContain(action.uses.split('@')[1]);
   });
 
   test('the spend cap is checked fail-closed first, then passed to the CLI', () => {
@@ -275,16 +320,80 @@ describe('search', () => {
     expect(promptAt).toBeGreaterThanOrEqual(0);
     expect(promptAt).toBeLessThan(actionAt);
     expect(steps[promptAt].run).toContain('node scripts/stock/run-day.mjs prepare-search');
+    // its files go outside the checkout, so the gate after the search sees only the outputs
+    expect(steps[promptAt].env.STOCK_PREP_DIR).toBe('${{ runner.temp }}/stock-prep');
+    expect(steps[promptAt].run).not.toMatch(/stock-out\/search-prompt|stock-out\/event-types/);
     expect(action.with.prompt).toBe('${{ steps.prompt.outputs.text }}');
   });
 
-  test('both outputs are checked against their schemas before they are uploaded', () => {
+  const gateAt = steps.findIndex((s) => /git status --porcelain/.test(String(s.run || '')));
+
+  test('a gate right after the search, before any repo code, allows only the two outputs', () => {
+    expect(gateAt).toBe(actionAt + 1);
     const checkAt = steps.findIndex((s) =>
       String(s.run || '').includes('node scripts/stock/run-day.mjs search-output')
     );
     const uploadAt = steps.findIndex((s) => /^actions\/upload-artifact@/.test(s.uses || ''));
-    expect(checkAt).toBeGreaterThan(actionAt);
+    expect(checkAt).toBeGreaterThan(gateAt);
     expect(uploadAt).toBeGreaterThan(checkAt);
+    expect(steps[gateAt].run).toContain('--untracked-files=all');
+  });
+
+  // The gate's own script, with git replaced by a function that reports as told.
+  function runGitGate(status) {
+    const dir = mkdtempSync(join(tmpdir(), 'stock-git-gate-'));
+    try {
+      const script = join(dir, 'gate.sh');
+      writeFileSync(script, `git() { printf '%s' "$FAKE_STATUS"; }\n${steps[gateAt].run}`);
+      const r = spawnSync(BASH, [script], {
+        encoding: 'utf8',
+        env: { ...process.env, FAKE_STATUS: status },
+      });
+      return { code: r.status, out: `${r.stdout}${r.stderr}` };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  test
+    .skipIf(!BASH)
+    .each([
+      '',
+      '?? stock-out/finds.json\n?? stock-out/businesses.json\n',
+      '?? stock-out/finds.json\n',
+    ])(
+    'the gate passes on only the outputs: %j',
+    (status) => {
+      const r = runGitGate(status);
+      expect(r.code, r.out).toBe(0);
+    },
+    30_000
+  );
+
+  test
+    .skipIf(!BASH)
+    .each([
+      '?? stock-out/finds.json\n M scripts/stock/run-day.mjs\n',
+      '?? stock-out/finds.json\n?? stock-out/other.json\n',
+      '?? .claude/settings.json\n',
+      ' D stock/search-prompt.md\n',
+      '?? stock-out/finds.json.bak\n',
+    ])(
+    'the gate fails on anything else: %j',
+    (status) => {
+      const r = runGitGate(status);
+      expect(r.code).toBe(1);
+      expect(r.out).toContain('Search changed the checkout');
+    },
+    30_000
+  );
+
+  test('only the two outputs are uploaded', () => {
+    const upload = steps.find((s) => /^actions\/upload-artifact@/.test(s.uses || ''));
+    expect(upload.with.path.trim().split('\n')).toEqual([
+      'stock-out/finds.json',
+      'stock-out/businesses.json',
+    ]);
   });
 });
 

@@ -55,10 +55,16 @@ export async function buildDay({
   date,
   nodeIds,
   fetch: fetchFn = globalThis.fetch,
+  // Called with the manifest after every id it records, so the caller can save it
+  // as it grows: a build killed mid-run still leaves what it created on record.
+  onRecord = () => {},
 }) {
   const perNode = targets.perNode;
   const manifest = { date, items: [], qr: [], acceptSql: [], short: {}, warnings: [] };
-  const record = (kind, id, node) => manifest.items.push({ kind, id, node });
+  const record = (kind, id, node, extra = {}) => {
+    manifest.items.push({ kind, id, node, ...extra });
+    onRecord(manifest);
+  };
 
   try {
     // Sponsors first: one per business, into the root brand's pool.
@@ -71,7 +77,7 @@ export async function buildDay({
         address_line: business.address,
         tier: SPONSOR_TIER_WIRE[tier],
       });
-      manifest.items.push({ kind: 'sponsor', id: res.id, node: business.node, tier });
+      record('sponsor', res.id, business.node, { tier });
       if (tier === 'premium' && !anchorOf.has(business.node)) anchorOf.set(business.node, res.id);
     }
 

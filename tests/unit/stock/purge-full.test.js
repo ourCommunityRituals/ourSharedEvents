@@ -385,33 +385,42 @@ describe('purgeR2Keys', () => {
 });
 
 describe('manifest names', () => {
-  test('manifestName is manifest-YYYY-MM-DD-<runId>.json', () => {
-    expect(manifestName('2026-11-04', '18934572001')).toBe('manifest-2026-11-04-18934572001.json');
-    expect(manifestName('2026-11-04', 7)).toBe('manifest-2026-11-04-7.json');
+  test('manifestName is manifest-YYYY-MM-DD-<runId>-<attempt>.json', () => {
+    expect(manifestName('2026-11-04', '18934572001', '1')).toBe(
+      'manifest-2026-11-04-18934572001-1.json'
+    );
+    expect(manifestName('2026-11-04', 7, 2)).toBe('manifest-2026-11-04-7-2.json');
   });
 
   test.each([
-    ['2026-11-4', '1'],
-    ['2026-02-30', '1'],
-    ['2026-11-04', 'run-1'],
-    ['2026-11-04', ''],
-    ['2026-11-04', '1/../2'],
-  ])('manifestName refuses %s / %s', (date, runId) => {
-    expect(() => manifestName(date, runId)).toThrow(/manifestName/);
+    ['2026-11-4', '1', '1'],
+    ['2026-02-30', '1', '1'],
+    ['2026-11-04', 'run-1', '1'],
+    ['2026-11-04', '', '1'],
+    ['2026-11-04', '1/../2', '1'],
+    ['2026-11-04', '1', undefined],
+    ['2026-11-04', '1', '0'],
+    ['2026-11-04', '1', '01'],
+    ['2026-11-04', '1', '1/..'],
+  ])('manifestName refuses %s / %s / %s', (date, runId, attempt) => {
+    expect(() => manifestName(date, runId, attempt)).toThrow(/manifestName/);
   });
 
   test('parseManifestName reads an exact name and nothing else', () => {
-    expect(parseManifestName('manifest-2026-11-04-18934572001.json')).toEqual({
+    expect(parseManifestName('manifest-2026-11-04-18934572001-2.json')).toEqual({
       date: '2026-11-04',
       runId: '18934572001',
+      attempt: '2',
     });
     for (const bad of [
-      'manifest-2026-11-04-run-12345678.json',
+      'manifest-2026-11-04-run-12345678-1.json',
       'manifest-2026-11-04.json',
-      'stock/manifest-2026-11-04-1.json',
-      'manifest-2026-11-04-1.json.bak',
-      'manifest-2026-13-01-1.json',
-      'xmanifest-2026-11-04-1.json',
+      'manifest-2026-11-04-1.json', // no attempt
+      'manifest-2026-11-04-1-0.json',
+      'stock/manifest-2026-11-04-1-1.json',
+      'manifest-2026-11-04-1-1.json.bak',
+      'manifest-2026-13-01-1-1.json',
+      'xmanifest-2026-11-04-1-1.json',
       null,
     ]) {
       expect(parseManifestName(bad), String(bad)).toBeNull();
@@ -420,7 +429,7 @@ describe('manifest names', () => {
 });
 
 describe('listStaleManifests', () => {
-  const n = (date, run) => `manifest-${date}-${run}.json`;
+  const n = (date, run, attempt = 1) => `manifest-${date}-${run}-${attempt}.json`;
 
   test('every manifest older than the newest passing one, oldest first (Review Focus 3)', () => {
     const names = [n('2026-11-03', 300), n('2026-11-01', 100), n('2026-11-02', 200)];
@@ -441,9 +450,18 @@ describe('listStaleManifests', () => {
     expect(listStaleManifests(names, n('2026-11-04', 10))).toEqual([n('2026-11-04', 9)]);
   });
 
+  test('a re-run of the same run makes the earlier attempt stale, ordered as numbers', () => {
+    const names = [n('2026-11-04', 10, 1), n('2026-11-04', 10, 9), n('2026-11-04', 10, 11)];
+    expect(listStaleManifests(names, n('2026-11-04', 10, 2))).toEqual([n('2026-11-04', 10, 1)]);
+    expect(listStaleManifests(names, n('2026-11-04', 10, 10))).toEqual([
+      n('2026-11-04', 10, 1),
+      n('2026-11-04', 10, 9),
+    ]);
+  });
+
   test('a name that is not an exact manifest name is never stale', () => {
-    const names = ['manifest-2026-11-01-run-12345678.json', 'notes.txt', n('2026-11-01', 5)];
-    expect(parseManifestName('manifest-2026-11-01-run-12345678.json')).toBeNull();
+    const names = ['manifest-2026-11-01-run-12345678-1.json', 'notes.txt', n('2026-11-01', 5)];
+    expect(parseManifestName('manifest-2026-11-01-run-12345678-1.json')).toBeNull();
     expect(listStaleManifests(names, n('2026-11-03', 1))).toEqual([n('2026-11-01', 5)]);
   });
 

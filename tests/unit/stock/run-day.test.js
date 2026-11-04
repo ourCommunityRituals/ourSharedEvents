@@ -10,10 +10,11 @@ beforeAll(async () => {
 const ROOT = path.join(__dirname, '../../..');
 const TODAY = '2026-11-04';
 const RUN = '200';
-const TODAY_NAME = `manifest-${TODAY}-${RUN}.json`;
-const STALE_NAME = 'manifest-2026-11-03-100.json';
-const OLDER_NAME = 'manifest-2026-11-02-90.json';
-const NEWER_NAME = 'manifest-2026-11-05-300.json';
+const ATTEMPT = '1';
+const TODAY_NAME = `manifest-${TODAY}-${RUN}-${ATTEMPT}.json`;
+const STALE_NAME = 'manifest-2026-11-03-100-1.json';
+const OLDER_NAME = 'manifest-2026-11-02-90-1.json';
+const NEWER_NAME = 'manifest-2026-11-05-300-1.json';
 const NODES = { nodes: [{ id: 'a' }, { id: 'b' }] };
 const TARGETS = JSON.parse(readFileSync(path.join(ROOT, 'stock/targets.json'), 'utf8'));
 const P = TARGETS.perNode;
@@ -104,6 +105,7 @@ const swap = (w, extra = {}) =>
     targets: TARGETS,
     today: TODAY,
     runId: RUN,
+    runAttempt: ATTEMPT,
     cloud: w.cloud,
     checkNodes: checker(['a', 'b'], w.order),
     ...extra,
@@ -356,6 +358,7 @@ describe('the site and the secrets', () => {
     STG_FULL_ACCESS_CLIENT_SECRET: 'access-secret-value-3',
     INSTAGRAM_ACCESS_TOKEN: 'ig-token-value-4',
     GITHUB_RUN_ID: RUN,
+    GITHUB_RUN_ATTEMPT: ATTEMPT,
   };
 
   test('public reads send only the Access headers, never the Bearer, never a redirect', async () => {
@@ -432,7 +435,7 @@ describe('the site and the secrets', () => {
     expect(summary).toContain('IG note');
     expect(summary).toContain('token note');
     expect(summary).toContain('no shortcode for t_evt_blue-island');
-    for (const v of Object.values(ENV).filter((v) => v !== RUN)) {
+    for (const v of Object.values(ENV).filter((v) => v !== RUN && v !== ATTEMPT)) {
       expect(summary).not.toContain(v);
     }
     expect(summary).not.toMatch(/https?:\/\//);
@@ -470,17 +473,208 @@ describe('the search prompt', () => {
   test('fills perNode + 3, the window and the catalog, and leaves nothing unfilled', () => {
     const template = readFileSync(path.join(ROOT, 'stock/search-prompt.md'), 'utf8');
     const perNode = JSON.parse(readFileSync(path.join(ROOT, 'stock/targets.json'), 'utf8')).perNode;
+    const nodes = JSON.parse(readFileSync(path.join(ROOT, 'stock/nodes.json'), 'utf8')).nodes;
     const out = rd.renderPrompt(template, {
       today: TODAY,
       perNode,
       catalog: [{ id: 'trivia', name: 'Trivia', category: 'SOCIAL' }],
+      nodes,
     });
     expect(out).toContain(`once you have ${perNode + 3} good finds`);
     expect(out).toContain('2026-11-04');
     expect(out).toContain('2027-02-02'); // today + 90
     expect(out).toContain('{"id":"trivia","name":"Trivia","category":"SOCIAL"}');
     expect(out).not.toMatch(/\{\{[A-Z_]+\}\}/);
-    expect(() => rd.renderPrompt('{{NOPE}}', { today: TODAY, perNode, catalog: [] })).toThrow();
+    expect(() =>
+      rd.renderPrompt('{{NOPE}}', { today: TODAY, perNode, catalog: [], nodes })
+    ).toThrow();
+  });
+
+  test('the places come from stock/nodes.json, in its order, and none is written in the template', () => {
+    const template = readFileSync(path.join(ROOT, 'stock/search-prompt.md'), 'utf8');
+    const nodes = JSON.parse(readFileSync(path.join(ROOT, 'stock/nodes.json'), 'utf8')).nodes;
+    for (const n of nodes) {
+      expect(template).not.toContain(n.id);
+      for (const zip of n.zips) expect(template).not.toContain(zip);
+    }
+    const out = rd.renderPrompt(template, { today: TODAY, perNode: P, catalog: [], nodes });
+    const lines = nodes.map(
+      (n, i) => `${i + 1}. ${n.name} (node \`${n.id}\`, zip ${n.zips.join(', ')})`
+    );
+    for (const line of lines) expect(out).toContain(line);
+    const at = lines.map((line) => out.indexOf(line));
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    // a node added to nodes.json reaches the prompt with no template edit
+    const more = [...nodes, { id: 'new-place', name: 'New Place', zips: ['60999'] }];
+    expect(
+      rd.renderPrompt(template, { today: TODAY, perNode: P, catalog: [], nodes: more })
+    ).toContain(`${nodes.length + 1}. New Place (node \`new-place\`, zip 60999)`);
+  });
+
+  test('prepare-search writes to STOCK_PREP_DIR, outside the checkout', async () => {
+    const w = world();
+    const code = await rd.runPrepareSearch({
+      env: {
+        STG_FULL_ADMIN_KEY: 'k',
+        STG_FULL_ACCESS_CLIENT_ID: 'i',
+        STG_FULL_ACCESS_CLIENT_SECRET: 's',
+        STOCK_PREP_DIR: path.join('/runner-temp', 'stock-prep'),
+      },
+      fs: w.fs,
+      fetch: async () => ({
+        status: 200,
+        ok: true,
+        json: async () => ({
+          categories: [{ code: 'SOCIAL', types: [{ id: 'trivia', name: 'Trivia' }] }],
+        }),
+      }),
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir: path.join('/out'),
+    });
+    expect(code).toBe(0);
+    expect(w.files.has(path.join('/runner-temp', 'stock-prep', 'search-prompt.txt'))).toBe(true);
+    expect([...w.files.keys()].some((k) => k.startsWith(path.join('/out')))).toBe(false);
+  });
+});
+
+describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
+  test('a re-run (same run id, attempt 2) makes attempt 1 stale and purges it', async () => {
+    const first = `manifest-${TODAY}-${RUN}-1.json`;
+    const w = world({
+      index: [first],
+      objects: { [`stock/${first}`]: manifestOf(TODAY, 'r1', ['a', 'b']) },
+    });
+    const report = await swap(w, { runAttempt: '2' });
+    allCalls.push(...w.calls);
+    expect(report.todayName).toBe(`manifest-${TODAY}-${RUN}-2.json`);
+    const purged = w.sqls().join('\n');
+    expect(purged).toContain("'r1_evt_a'");
+    expect(purged).toContain("'r1_evt_b'");
+    expect(w.liveIndex()).toEqual([`manifest-${TODAY}-${RUN}-2.json`]);
+    expect(JSON.parse(w.r2.get(`stock/${first}`)).items[0].id).toMatch(/^r1_/); // never overwritten
+    expect(report.exitCode).toBe(0);
+  });
+
+  test('an existing manifest object under today’s name is never overwritten', async () => {
+    const w = world({
+      index: [],
+      objects: { [`stock/${TODAY_NAME}`]: manifestOf(TODAY, 'other', ['a']) },
+    });
+    const report = await swap(w);
+    allCalls.push(...w.calls);
+    expect(JSON.parse(w.r2.get(`stock/${TODAY_NAME}`)).items[0].id).toMatch(/^other_/);
+    expect(w.calls.some((c) => c.args[2] === 'put')).toBe(false);
+    expect(w.order).not.toContain('check');
+    expect(w.sqls().join('\n')).toContain("'t_evt_a'"); // this run's rows go, the other's stay
+    expect(w.sqls().join('\n')).not.toContain("'other_");
+    expect(report.problems.join('\n')).toMatch(/never overwritten/);
+    expect(report.exitCode).toBe(1);
+  });
+
+  test('a listed manifest recording a node not in nodes.json turns the run red, naming it', async () => {
+    const w = world({
+      index: [STALE_NAME],
+      objects: { [`stock/${STALE_NAME}`]: manifestOf('2026-11-03', 'y', ['a', 'gone-place']) },
+    });
+    const report = await swap(w);
+    allCalls.push(...w.calls);
+    expect(report.problems.join('\n')).toContain(
+      `${STALE_NAME} records node(s) not in stock/nodes.json: gone-place`
+    );
+    expect(w.liveIndex()).toContain(STALE_NAME);
+    expect(report.exitCode).toBe(1);
+  });
+
+  test('a purge that fails after the manifest could not be saved names the artifact as the only record', async () => {
+    const w = world({
+      index: [],
+      fail: (c) => c.args[2] === 'put' || (c.sql !== null && c.sql.includes("'t_evt_b'")),
+    });
+    const report = await swap(w);
+    allCalls.push(...w.calls);
+    const summary = rd.renderSummary({
+      report,
+      nodes: NODES,
+      targets: TARGETS,
+      manifest: manifestOf(TODAY, 't', ['a', 'b']),
+      notes: { ok: true },
+    });
+    expect(summary).toContain(
+      `rows of ${TODAY_NAME} for b are still live and recorded only in this run's stock-manifest artifact; purge them by hand`
+    );
+    expect(report.exitCode).toBe(1);
+  });
+
+  test('with no manifest at all, check-swap says rows may need a manual purge, and is red', async () => {
+    const w = world({ index: [] });
+    const logs = [];
+    const code = await rd.runCheckSwap({
+      env: { GITHUB_STEP_SUMMARY: '/summary.md' },
+      fs: w.fs,
+      fetch: async () => ({ status: 200 }),
+      wrangler: w.wrangler,
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir: path.join('/out'),
+      tmpDir: '/tmp',
+      log: (l) => logs.push(l),
+    });
+    expect(code).toBe(1);
+    const text = `${logs.join('\n')}\n${w.files.get('/summary.md')}`;
+    expect(text).toContain(
+      'No manifest was saved; rows created by an interrupted build may need a manual purge.'
+    );
+    expect(text).not.toMatch(/nothing was (created|recorded)/i);
+    expect(w.calls).toEqual([]);
+  });
+
+  test('a build killed mid-run leaves a manifest file with what it created', async () => {
+    const w = world();
+    const outDir = path.join('/out');
+    w.fs.writeFileSync(path.join(outDir, 'accepted.json'), '[]');
+    w.fs.writeFileSync(
+      path.join(outDir, 'businesses.json'),
+      JSON.stringify([
+        { name: 'One', address: '1 Main St', node: 'beverly', anchor: true },
+        { name: 'Two', address: '2 Main St', node: 'beverly', anchor: false },
+        { name: 'Three', address: '3 Main St', node: 'beverly', anchor: false },
+      ])
+    );
+    let sponsors = 0;
+    let stalled;
+    const hung = new Promise((resolve) => (stalled = resolve));
+    rd.runBuild({
+      env: {
+        STG_FULL_ADMIN_KEY: 'k',
+        STG_FULL_ACCESS_CLIENT_ID: 'i',
+        STG_FULL_ACCESS_CLIENT_SECRET: 's',
+      },
+      fs: w.fs,
+      fetch: (url) => {
+        if (String(url).endsWith('/event-types')) {
+          return Promise.resolve({
+            status: 200,
+            ok: true,
+            json: async () => ({ categories: [{ code: 'SOCIAL', types: [{ id: 'trivia' }] }] }),
+          });
+        }
+        sponsors += 1;
+        if (sponsors === 3) {
+          stalled();
+          return new Promise(() => {}); // the process is killed here: nothing after runs
+        }
+        return Promise.resolve({
+          status: 201,
+          ok: true,
+          json: async () => ({ id: `sp_${sponsors}` }),
+        });
+      },
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir,
+    });
+    await hung;
+    const saved = JSON.parse(w.files.get(path.join(outDir, 'manifest.json')));
+    expect(saved.items.map((i) => i.id)).toEqual(['sp_1', 'sp_2']);
+    expect(w.files.has(path.join(outDir, 'build-notes.json'))).toBe(false);
   });
 });
 

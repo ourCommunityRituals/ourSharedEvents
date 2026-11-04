@@ -2,7 +2,8 @@
 #
 # Each morning (11:00 UTC, 5 to 6 AM in Chicago) and on manual dispatch:
 #   access-gate  stg-full must answer through Cloudflare Access, not the Worker
-#   deploy       main → the staging-full Worker, after migrating both of its databases
+#   deploy       the triggering ref (main on the schedule) → the staging-full Worker,
+#                after migrating both of its databases
 #   search       Claude finds the next 90 days of public events (stock/search-prompt.md)
 #   validate     finds → accepted rows (scripts/stock/validate-finds.mjs)
 #   build        accepted rows → today's events, sponsors, posters and art, plus a manifest
@@ -49,39 +50,43 @@ jobs:
     timeout-minutes: 5
     steps:
       # No credentials of any kind: Access must answer (a redirect to its login
-      # host, or a deny) instead of the Worker.
+      # host, or a deny) instead of the Worker, on a page and on the public API.
       - name: Request stg-full with no credentials
         shell: bash
         run: |
           set -euo pipefail
-          if ! out="$(curl -sS -o /dev/null --max-time 30 -w '%{http_code} %{redirect_url}' "$STG_FULL_URL/")"; then
-            echo "::error title=stg-full unreachable::The request failed, so Access could not be confirmed. Real-world data is not loaded onto an open host."
-            exit 1
-          fi
-          code="${out%% *}"
-          location="${out#* }"
-          host=""
-          if [[ "$location" =~ ^https://([^/?#:@]+)(:[0-9]+)?([/?#]|$) ]]; then
-            host="${BASH_REMATCH[1],,}"
-          fi
-          if [ "$code" = "403" ]; then
-            echo "Access denied the request (HTTP 403): stg-full is closed."
-          elif { [ "$code" = "302" ] || [ "$code" = "303" ]; } && [[ "$host" == *.cloudflareaccess.com ]]; then
-            echo "Access redirected to its login host ${host} (HTTP ${code}): stg-full is closed."
-          else
-            echo "::error title=stg-full is not behind Access::HTTP ${code}${host:+ to ${host}}. Real-world data is not loaded onto an open host."
-            exit 1
-          fi
+          for path in / /api/v2/events; do
+            if ! out="$(curl -sS -o /dev/null --max-time 30 -w '%{http_code} %{redirect_url}' "${STG_FULL_URL}${path}")"; then
+              echo "::error title=stg-full unreachable::The request for ${path} failed, so Access could not be confirmed. Real-world data is not loaded onto an open host."
+              exit 1
+            fi
+            code="${out%% *}"
+            location="${out#* }"
+            host=""
+            if [[ "$location" =~ ^https://([^/?#:@]+)(:[0-9]+)?([/?#]|$) ]]; then
+              host="${BASH_REMATCH[1],,}"
+            fi
+            if [ "$code" = "403" ]; then
+              echo "${path}: Access denied the request (HTTP 403)."
+            elif { [ "$code" = "302" ] || [ "$code" = "303" ]; } && [[ "$host" == *.cloudflareaccess.com ]]; then
+              echo "${path}: Access redirected to its login host ${host} (HTTP ${code})."
+            else
+              echo "::error title=stg-full is not behind Access::${path} answered HTTP ${code}${host:+ to ${host}}. Real-world data is not loaded onto an open host."
+              exit 1
+            fi
+          done
+          echo "stg-full is closed."
 
   deploy:
-    name: 'Deploy main → staging-full'
+    name: 'Deploy → staging-full'
     needs: [access-gate]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      # The triggering ref, as every job uses: a scheduled run deploys main, and a
+      # dispatch from a branch tests that branch end to end on the test site.
       - uses: actions/checkout@v7
         with:
-          ref: main
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
@@ -176,6 +181,8 @@ jobs:
         id: budget
         env:
           MAX_USD: ${{ vars.STOCK_SEARCH_MAX_USD || '5' }}
+          # Pairs with anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f
+          # (agent SDK 0.3.259); bump both together.
           CLAUDE_CODE_VERSION: '2.1.259'
         run: |
           set -euo pipefail
@@ -194,19 +201,22 @@ jobs:
           echo "usd=${MAX_USD}" >> "$GITHUB_OUTPUT"
           echo "Spend cap: \$${MAX_USD} (--max-budget-usd)."
 
+      # Written outside the checkout, so the gate after the search sees only its files.
       - name: Event type catalog and search prompt
         id: prompt
         env:
           STG_FULL_ADMIN_KEY: ${{ secrets.STG_FULL_ADMIN_KEY }}
           STG_FULL_ACCESS_CLIENT_ID: ${{ secrets.STG_FULL_ACCESS_CLIENT_ID }}
           STG_FULL_ACCESS_CLIENT_SECRET: ${{ secrets.STG_FULL_ACCESS_CLIENT_SECRET }}
+          STOCK_PREP_DIR: ${{ runner.temp }}/stock-prep
         run: |
           set -euo pipefail
           node scripts/stock/run-day.mjs prepare-search
+          mkdir -p stock-out
           delim="PROMPT_$(openssl rand -hex 16)"
           {
             echo "text<<${delim}"
-            cat stock-out/search-prompt.txt
+            cat "${STOCK_PREP_DIR}/search-prompt.txt"
             echo "${delim}"
           } >> "$GITHUB_OUTPUT"
 
@@ -225,7 +235,22 @@ jobs:
             --max-budget-usd ${{ steps.budget.outputs.usd }}
             --setting-sources user
             --allowedTools "WebSearch,WebFetch,Write(stock-out/finds.json),Write(stock-out/businesses.json)"
-            --disallowedTools "Bash,Edit,MultiEdit,NotebookEdit,Read,Glob,Grep,Task"
+            --disallowedTools "Bash,Edit,MultiEdit,NotebookEdit,Read,Glob,Grep,Task,Agent"
+
+      # Before any repo code runs again: the search may have changed nothing in the
+      # checkout but its two output files.
+      - name: 'Gate: the search wrote only its two files'
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git status --porcelain --untracked-files=all)"
+          unexpected="$(printf '%s\n' "$changed" | grep -v -E '^(\?\?| M|M |A ) stock-out/(finds|businesses)\.json$' | grep -v '^$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "::error title=Search changed the checkout::The search changed files other than stock-out/finds.json and stock-out/businesses.json; nothing from it is used."
+            printf '%s\n' "$unexpected"
+            exit 1
+          fi
+          echo "The checkout is unchanged apart from the two output files."
 
       - name: Check the search output against its schemas
         run: node scripts/stock/run-day.mjs search-output
@@ -236,7 +261,6 @@ jobs:
           path: |
             stock-out/finds.json
             stock-out/businesses.json
-            stock-out/event-types.json
           if-no-files-found: error
           retention-days: 7
 

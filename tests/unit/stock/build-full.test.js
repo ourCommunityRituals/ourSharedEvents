@@ -304,6 +304,21 @@ describe('buildDay', () => {
     expect(callsTo(none, 'POST', /\/uploads$/)).toHaveLength(0);
   });
 
+  test('onRecord fires after every recorded id, with the manifest as it stands', async () => {
+    const seen = [];
+    const manifest = await buildDay(
+      args(fakeSite(), {
+        onRecord: (m) => seen.push(m.items.map((i) => `${i.kind}:${i.id}`)),
+      })
+    );
+    expect(seen).toHaveLength(manifest.items.length);
+    seen.forEach((snapshot, i) => expect(snapshot).toHaveLength(i + 1));
+    expect(seen[seen.length - 1]).toEqual(manifest.items.map((i) => `${i.kind}:${i.id}`));
+    expect(new Set(manifest.items.map((i) => i.kind))).toEqual(
+      new Set(['sponsor', 'event', 'poster', 'placement'])
+    );
+  });
+
   test('art tagged by category fits through typeCategory', async () => {
     const posts = [
       { id: 'p1', caption: 'x', hashtags: ['music'], mediaUrl: 'https://cdn.example/p1.png' },

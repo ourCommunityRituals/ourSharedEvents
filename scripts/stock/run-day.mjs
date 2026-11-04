@@ -212,6 +212,7 @@ export async function checkSwap({
   targets,
   today,
   runId,
+  runAttempt,
   cloud,
   checkNodes = realCheckNodes,
   client,
@@ -220,7 +221,18 @@ export async function checkSwap({
   const nodeList = Array.isArray(nodes) ? nodes : nodes.nodes;
   const problems = [];
   const purges = [];
-  const todayName = manifestName(manifest.date, runId);
+  const todayName = manifestName(manifest.date, runId, runAttempt);
+  // A node the manifest records but nodes.json no longer lists is never purged, so
+  // its manifest would stay listed for good: say so, and turn the run red.
+  const knownNodes = new Set(nodeList.map((n) => n.id));
+  const unknownNodes = (name, m) => {
+    const unknown = nodesOf(m).filter((node) => !knownNodes.has(node));
+    if (unknown.length) {
+      problems.push(
+        `${name} records node(s) not in stock/nodes.json: ${unknown.join(', ')}; it stays in the index`
+      );
+    }
+  };
   const allFailing = (reason) =>
     Object.fromEntries(
       nodeList.map((n) => [
@@ -273,25 +285,46 @@ export async function checkSwap({
         : 0,
   });
 
+  // Today's rows when no manifest of them could be saved: purge them all. A purge
+  // that fails leaves rows recorded only in this run's artifact.
+  async function purgeUnsaved() {
+    await purgeAll(todayName, manifest);
+    const left = purges.filter((p) => p.name === todayName && !p.ok).map((p) => p.node);
+    if (left.length) {
+      problems.push(
+        `rows of ${todayName} for ${left.join(', ')} are still live and recorded only in this run's stock-manifest artifact; purge them by hand`
+      );
+    }
+  }
+
   // 1. The index, then today's manifest object and its name in the index. If
   //    either cannot be written, today's rows are purged so nothing orphans.
+  //    Another attempt's record is never overwritten.
   let names;
   try {
     names = parseIndex(await cloud.r2Get(INDEX_KEY));
   } catch (err) {
     problems.push(`manifest index unreadable: ${err.message}; index left as it was`);
-    await purgeAll(todayName, manifest);
+    await purgeUnsaved();
     return report(allFailing('index-unreadable'), { written: false });
   }
-  const before = names.filter((n) => n !== todayName);
+  const before = names;
   try {
+    const exists =
+      names.includes(todayName) || (await cloud.r2Get(`${MANIFEST_PREFIX}${todayName}`)) !== null;
+    if (exists) {
+      problems.push(`${todayName} already exists; another attempt's record is never overwritten`);
+      await purgeUnsaved();
+      return report(allFailing('manifest-exists'), { before, written: false });
+    }
     await cloud.r2Put(`${MANIFEST_PREFIX}${todayName}`, `${JSON.stringify(manifest, null, 2)}\n`);
     await cloud.r2Put(INDEX_KEY, indexText([...before, todayName]));
   } catch (err) {
     problems.push(`today's manifest not saved: ${err.message}`);
-    await purgeAll(todayName, manifest);
+    await purgeUnsaved();
     return report(allFailing('manifest-not-saved'), { before, written: false });
   }
+  unknownNodes(todayName, manifest);
   let live = [...before, todayName];
 
   async function writeIndex(results) {
@@ -351,6 +384,7 @@ export async function checkSwap({
       }
       const m = JSON.parse(text);
       if (!m || !Array.isArray(m.items)) throw new Error('no items list');
+      unknownNodes(name, m);
       stale.push({ name, manifest: m });
     } catch (err) {
       problems.push(`${name} unreadable: ${err.message}; it stays in the index`);
@@ -484,9 +518,13 @@ const addDays = (ymd, days) => {
 };
 
 /** The search prompt with its run-time values filled in. */
-export function renderPrompt(template, { today, perNode, catalog }) {
+export function renderPrompt(template, { today, perNode, catalog, nodes }) {
   if (!Number.isInteger(perNode) || perNode < 1) throw new Error('perNode must be a whole number');
+  if (!Array.isArray(nodes) || nodes.length === 0) throw new Error('nodes must be a list');
   const values = {
+    NODES: nodes
+      .map((n, i) => `${i + 1}. ${n.name} (node \`${n.id}\`, zip ${(n.zips || []).join(', ')})`)
+      .join('\n'),
     TODAY: today,
     LAST_DAY: addDays(today, WINDOW_DAYS),
     STOP_AT: String(perNode + 3),
@@ -503,7 +541,10 @@ function summarize(env, fs, text) {
   if (env.GITHUB_STEP_SUMMARY) fs.appendFileSync(env.GITHUB_STEP_SUMMARY, text);
 }
 
+// In CI this writes outside the checkout (STOCK_PREP_DIR), so the search step can be
+// held to changing nothing in the checkout but its two output files.
 export async function runPrepareSearch({ env, fs, fetch: fetchFn, now, outDir }) {
+  const dir = env.STOCK_PREP_DIR || outDir;
   const today = chicagoDate(now());
   const catalog = await fetchCatalog(clientFrom(env, fetchFn));
   const template = nodeFs.readFileSync(join(ROOT, 'stock', 'search-prompt.md'), 'utf8');
@@ -511,10 +552,11 @@ export async function runPrepareSearch({ env, fs, fetch: fetchFn, now, outDir })
     today,
     perNode: repoJson('stock/targets.json').perNode,
     catalog,
+    nodes: repoJson('stock/nodes.json').nodes,
   });
-  fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(join(outDir, 'event-types.json'), `${JSON.stringify(catalog, null, 2)}\n`);
-  fs.writeFileSync(join(outDir, 'search-prompt.txt'), prompt);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(join(dir, 'event-types.json'), `${JSON.stringify(catalog, null, 2)}\n`);
+  fs.writeFileSync(join(dir, 'search-prompt.txt'), prompt);
   return 0;
 }
 
@@ -598,6 +640,8 @@ export async function runBuild({ env, fs, fetch: fetchFn, now, outDir }) {
   const writeNotes = () =>
     fs.writeFileSync(join(outDir, 'build-notes.json'), `${JSON.stringify(notes, null, 2)}\n`);
   let manifest = null;
+  const saveManifest = (m) =>
+    fs.writeFileSync(join(outDir, 'manifest.json'), `${JSON.stringify(m, null, 2)}\n`);
   try {
     const client = clientFrom(env, fetchFn);
     const catalog = await fetchCatalog(client);
@@ -622,15 +666,15 @@ export async function runBuild({ env, fs, fetch: fetchFn, now, outDir }) {
       date: today,
       nodeIds: nodes.map((n) => n.id),
       fetch: fetchFn,
+      // synchronous, after every id: a build killed mid-run leaves what it made on record
+      onRecord: saveManifest,
     });
     notes.ok = true;
   } catch (err) {
     notes.error = err.message;
     if (err.manifest) manifest = err.manifest;
   }
-  if (manifest) {
-    fs.writeFileSync(join(outDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  }
+  if (manifest) saveManifest(manifest);
   writeNotes();
   return notes.ok ? 0 : 1;
 }
@@ -648,8 +692,10 @@ export async function runCheckSwap({
 }) {
   const manifestPath = join(outDir, 'manifest.json');
   if (!fs.existsSync(manifestPath)) {
-    log('No manifest from the build: nothing was recorded, so nothing can be swapped.');
-    summarize(env, fs, '## Stock data: stg-full\n\nNo manifest from the build; nothing swapped.\n');
+    const msg =
+      'No manifest was saved; rows created by an interrupted build may need a manual purge.';
+    log(msg);
+    summarize(env, fs, `## Stock data: stg-full\n\n${msg}\n`);
     return 1;
   }
   const manifest = readJsonFile(fs, manifestPath);
@@ -666,6 +712,7 @@ export async function runCheckSwap({
     targets,
     today: chicagoDate(now()),
     runId: need(env, 'GITHUB_RUN_ID'),
+    runAttempt: need(env, 'GITHUB_RUN_ATTEMPT'),
     cloud,
     checkNodes,
     client: buildFailed ? null : clientFrom(env, fetchFn),

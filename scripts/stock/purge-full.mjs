@@ -124,11 +124,13 @@ export function purgeR2Keys(manifest, nodeIds) {
   );
 }
 
-// A manifest is named for its Chicago date and the GitHub run that built it, so a
-// same-day rerun gets its own name and orders after the run it replaces.
-const MANIFEST_NAME = /^manifest-(\d{4}-\d{2}-\d{2})-(\d{1,20})\.json$/;
+// A manifest is named for its Chicago date, the GitHub run that built it and the
+// run's attempt, so a same-day rerun, or a re-run of the same run (same run id,
+// next attempt), gets its own name and orders after the one it replaces.
+const MANIFEST_NAME = /^manifest-(\d{4}-\d{2}-\d{2})-(\d{1,20})-(\d{1,6})\.json$/;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const RUN_ID_RE = /^\d{1,20}$/;
+const ATTEMPT_RE = /^[1-9]\d{0,5}$/;
 
 const isCalendarDay = (ymd) => {
   const [y, m, d] = ymd.split('-').map(Number);
@@ -136,36 +138,44 @@ const isCalendarDay = (ymd) => {
   return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
 };
 
-/** `manifest-YYYY-MM-DD-<runId>.json`. Throws on a bad date or a run id that is not digits. */
-export function manifestName(date, runId) {
+/**
+ * `manifest-YYYY-MM-DD-<runId>-<attempt>.json`. Throws on a bad date, a run id that
+ * is not digits, or an attempt that is not a whole number from 1.
+ */
+export function manifestName(date, runId, attempt) {
   const run = String(runId);
+  const att = String(attempt);
   if (typeof date !== 'string' || !DAY_RE.test(date) || !isCalendarDay(date)) {
     throw new Error('manifestName: date must be YYYY-MM-DD');
   }
   if (!RUN_ID_RE.test(run)) throw new Error('manifestName: runId must be digits');
-  return `manifest-${date}-${run}.json`;
+  if (!ATTEMPT_RE.test(att)) throw new Error('manifestName: attempt must be a whole number from 1');
+  return `manifest-${date}-${run}-${att}.json`;
 }
 
-/** { date, runId } for an exact manifest name, otherwise null. */
+/** { date, runId, attempt } for an exact manifest name, otherwise null. */
 export function parseManifestName(name) {
   const m = typeof name === 'string' ? MANIFEST_NAME.exec(name) : null;
-  if (!m || !isCalendarDay(m[1])) return null;
-  return { date: m[1], runId: m[2] };
+  if (!m || !isCalendarDay(m[1]) || !ATTEMPT_RE.test(m[3])) return null;
+  return { date: m[1], runId: m[2], attempt: m[3] };
 }
 
-// Order by date, then by run id as a number (BigInt: exact for any digit count).
+// Order by date, then run id, then attempt, each number as a BigInt (exact for any digit count).
 function compareManifests(a, b) {
   if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-  const x = BigInt(a.runId);
-  const y = BigInt(b.runId);
-  return x < y ? -1 : x > y ? 1 : 0;
+  for (const key of ['runId', 'attempt']) {
+    const x = BigInt(a[key]);
+    const y = BigInt(b[key]);
+    if (x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
 }
 
 /**
  * Manifests ordered before the newest passing one, oldest first. A run that died
  * between build and purge leaves its manifest behind; the next passing run lists
- * it here, so its ids are still purged. A same-day rerun makes the earlier run's
- * manifest stale. A name that is not an exact manifest name is never listed.
+ * it here, so its ids are still purged. A same-day rerun, or a re-run attempt of
+ * the same run, makes the earlier manifest stale. A name that is not an exact manifest name is never listed.
  */
 export function listStaleManifests(names, newestPassingName) {
   const newest = parseManifestName(newestPassingName);
