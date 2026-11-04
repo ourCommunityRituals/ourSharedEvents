@@ -20,7 +20,12 @@ const reply = (status, body, headers = {}) => ({
 });
 
 // A fake Worker: records every call and hands back ids.
-function fakeSite({ failUpload = false, artStatus = 200 } = {}) {
+function fakeSite({
+  failUpload = false,
+  artStatus = 200,
+  noShortcode = false,
+  eventWarnings = [],
+} = {}) {
   const calls = [];
   let n = 0;
   const next = (p) => `${p}_${++n}`;
@@ -35,7 +40,12 @@ function fakeSite({ failUpload = false, artStatus = 200 } = {}) {
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
     calls.push({ method, path, body, headers: init.headers });
     if (method === 'POST' && path === '/api/v2/admin/events') {
-      return reply(201, { id: next('evt') });
+      const id = next('evt');
+      return reply(201, {
+        id,
+        shortcode: noShortcode ? null : `SC${id.split('_')[1]}`,
+        warnings: eventWarnings,
+      });
     }
     if (method === 'POST' && path.endsWith('/poster-deployments')) {
       return reply(201, { id: next('pd'), qr_token: next('qrt') });
@@ -266,7 +276,10 @@ describe('buildDay', () => {
     expect(callsTo(site, 'POST', /\/poster-deployments$/)).toHaveLength(3);
     expect(callsTo(site, 'POST', /\/short-links$/)).toHaveLength(3);
     expect(manifest.qr).toHaveLength(3);
-    expect(manifest.qr[0]).toMatchObject({ node: 'beverly', sPath: '/e/ABC234' });
+    expect(manifest.qr[0]).toMatchObject({
+      node: 'beverly',
+      sPath: expect.stringMatching(/^\/s\/SC/),
+    });
     expect(manifest.qr[0].qPath).toMatch(/^\/q\/qrt_/);
   });
 
@@ -415,5 +428,92 @@ describe('rulings round', () => {
     const valid = ['title', 'platinum', 'gold', 'silver', 'bronze', 'primary'];
     expect(Object.keys(SPONSOR_TIER_WIRE).sort()).toEqual(['local', 'mid', 'premium']);
     for (const v of Object.values(SPONSOR_TIER_WIRE)) expect(valid).toContain(v);
+  });
+});
+
+describe('fix round 1', () => {
+  test('a redirect is a failure, never followed, and leaks nothing', async () => {
+    const seen = [];
+    const redirecting = async (url, init) => {
+      seen.push(init);
+      return {
+        ...reply(302, {}, { location: `https://team.cloudflareaccess.com/?s=${SECRET}` }),
+        type: 'basic',
+      };
+    };
+    const err = await client(redirecting)
+      .post('/api/v2/admin/events', {})
+      .catch((e) => e);
+    expect(seen[0].redirect).toBe('manual');
+    expect(err.message).toBe('POST /api/v2/admin/events failed: redirected (HTTP 302)');
+    expect(err.message).not.toContain(SECRET);
+    expect(err.message).not.toContain('cloudflareaccess');
+  });
+
+  test('an opaque redirect is a failure too', async () => {
+    const opaque = async () => ({ ...reply(0, {}), ok: false, type: 'opaqueredirect' });
+    const err = await client(opaque)
+      .get('/api/v2/admin/sponsors')
+      .catch((e) => e);
+    expect(err.message).toBe('GET /api/v2/admin/sponsors failed: redirected (HTTP 0)');
+  });
+
+  test('a non-JSON 200 throws without a body excerpt', async () => {
+    const html = async () => ({
+      ...reply(200, {}),
+      json: async () => {
+        throw new SyntaxError(`Unexpected token < ${SECRET}`);
+      },
+    });
+    const err = await client(html)
+      .get('/api/v2/admin/sponsors')
+      .catch((e) => e);
+    expect(err.message).toBe('GET /api/v2/admin/sponsors failed: not JSON');
+  });
+
+  test('sPath is the /s/ routing link from the event shortcode', async () => {
+    const site = fakeSite();
+    const manifest = await buildDay(args(site, { accepted: rowsFor('beverly', 2, 0) }));
+    expect(manifest.qr.every((q) => q.sPath.startsWith('/s/SC'))).toBe(true);
+  });
+
+  test('a null shortcode warns and omits sPath', async () => {
+    const site = fakeSite({ noShortcode: true });
+    const manifest = await buildDay(args(site, { accepted: [row('beverly', 'private', 10)] }));
+    expect(manifest.qr[0]).not.toHaveProperty('sPath');
+    expect(manifest.warnings.join('|')).toMatch(/no shortcode for evt_/);
+  });
+
+  test("the event create's own warnings are copied, keyed by event id", async () => {
+    const site = fakeSite({
+      eventWarnings: [{ code: 'SHORTLINK_CREATE_FAILED', message: 'x' }],
+    });
+    const manifest = await buildDay(args(site, { accepted: [row('beverly', 'private', 10)] }));
+    expect(manifest.warnings).toContainEqual(
+      expect.stringMatching(/^evt_\d+ SHORTLINK_CREATE_FAILED$/)
+    );
+  });
+
+  test('the anchor is sent as title and recorded as premium', async () => {
+    const site = fakeSite();
+    const manifest = await buildDay(args(site, { accepted: [] }));
+    const anchor = callsTo(site, 'POST', /^\/api\/v2\/admin\/sponsors$/).find(
+      (c) => c.body.name === 'Anchor Co'
+    );
+    expect(anchor.body.tier).toBe('title');
+    expect(manifest.items.find((i) => i.kind === 'sponsor').tier).toBe('premium');
+  });
+
+  test('a missing or invalid starts_at sorts last, deterministically', async () => {
+    const good = { ...row('beverly', 'private', 10), title: 'good' };
+    const none = { ...row('beverly', 'private', 5), title: 'none', starts_at: undefined };
+    const junk = { ...row('beverly', 'private', 6), title: 'junk', starts_at: 'not a date' };
+    const run = async (accepted) => {
+      const site = fakeSite();
+      await buildDay(args(site, { accepted, targets: { perNode: 1 } }));
+      return callsTo(site, 'POST', /^\/api\/v2\/admin\/events$/).map((c) => c.body.title);
+    };
+    expect(await run([none, junk, good])).toEqual(['good']);
+    expect(await run([junk, good, none])).toEqual(['good']);
   });
 });

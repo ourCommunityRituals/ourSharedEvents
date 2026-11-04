@@ -23,7 +23,13 @@ export function sponsorTier(business, regionals) {
 // Private before public, then the soonest start.
 function bySectorThenStart(a, b) {
   const rank = (r) => (r.sector === 'private' ? 0 : 1);
-  return rank(a) - rank(b) || Date.parse(a.starts_at) - Date.parse(b.starts_at);
+  // a missing or invalid start sorts last; ties fall back to the title
+  const at = (r) => {
+    const t = Date.parse(r.starts_at);
+    return Number.isNaN(t) ? Infinity : t;
+  };
+  const byStart = at(a) === at(b) ? 0 : at(a) < at(b) ? -1 : 1;
+  return rank(a) - rank(b) || byStart || String(a.title).localeCompare(String(b.title));
 }
 
 async function downloadArt(fetchFn, url) {
@@ -101,13 +107,16 @@ export async function buildDay({
           placement_type: 'venue',
         });
         record('poster', poster.id, node);
-        const links = await client.post(`/api/v2/admin/events/${ev.id}/short-links`, {});
-        manifest.qr.push({
-          eventId: ev.id,
-          node,
-          qPath: `/q/${poster.qr_token}`,
-          sPath: links.links.share,
-        });
+        // mints the event's /e/ share code; the /s/ routing link is the create's shortcode
+        await client.post(`/api/v2/admin/events/${ev.id}/short-links`, {});
+        const qr = { eventId: ev.id, node, qPath: `/q/${poster.qr_token}` };
+        if (ev.shortcode) {
+          qr.sPath = `/s/${ev.shortcode}`;
+        } else {
+          manifest.warnings.push(`no shortcode for ${ev.id}`);
+        }
+        manifest.qr.push(qr);
+        for (const w of ev.warnings || []) manifest.warnings.push(`${ev.id} ${w.code}`);
 
         const post = pickArt(row, posts, artTags);
         if (post) {

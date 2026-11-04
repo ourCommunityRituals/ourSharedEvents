@@ -44,14 +44,22 @@ export function createClient({
     await pace();
     let res;
     try {
-      res = await fetchFn(`${baseUrl}${path}`, { method, headers, body });
+      // never follow a redirect: it would carry the Access secret to another host
+      res = await fetchFn(`${baseUrl}${path}`, { method, headers, body, redirect: 'manual' });
     } catch {
       throw new Error(`${method} ${bareApiPath(path)} failed: network error`);
+    }
+    if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
+      throw new Error(`${method} ${bareApiPath(path)} failed: redirected (HTTP ${res.status})`);
     }
     if (!res.ok) {
       throw new Error(`${method} ${bareApiPath(path)} failed: ${res.status}`);
     }
-    return res.json();
+    try {
+      return await res.json();
+    } catch {
+      throw new Error(`${method} ${bareApiPath(path)} failed: not JSON`);
+    }
   }
 
   const json = (method, path, payload) =>
