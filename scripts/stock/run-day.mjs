@@ -18,7 +18,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 
-import { validateFinds, chicagoDate } from './validate-finds.mjs';
+import { validateFinds, validateBusinesses, chicagoDate } from './validate-finds.mjs';
 import { listPosts, tokenWarning } from './instagram.mjs';
 import { STOCK_BASE_URL, createClient } from './client.mjs';
 import { buildDay } from './build-full.mjs';
@@ -627,21 +627,39 @@ export async function runValidate({ env, fs, fetch: fetchFn, now, outDir }) {
     geocode,
   });
   fs.writeFileSync(join(outDir, 'accepted.json'), `${JSON.stringify(accepted, null, 2)}\n`);
-  const byReason = {};
-  for (const r of refused) byReason[r.reason] = (byReason[r.reason] || 0) + 1;
+  // The businesses go through the same geocoder and polygons. The validated list
+  // replaces the search's, so the build only ever sees placed, deduplicated ones.
+  const businesses = await validateBusinesses({
+    businesses: readJsonFile(fs, join(outDir, 'businesses.json')),
+    nodes,
+    geocode,
+  });
+  fs.writeFileSync(
+    join(outDir, 'businesses.json'),
+    `${JSON.stringify(businesses.accepted, null, 2)}\n`
+  );
+  const tally = (list) => {
+    const byReason = {};
+    for (const r of list) byReason[r.reason] = (byReason[r.reason] || 0) + 1;
+    return (
+      Object.entries(byReason)
+        .map(([k, v]) => `${k} ${v}`)
+        .join(', ') || 'none'
+    );
+  };
+  const businessesIn = (id) => businesses.accepted.filter((b) => b.node === id).length;
   const perNode = repoJson('stock/targets.json').perNode;
   const lines = [
     '## Stock finds validated',
     '',
-    '| Node | Accepted | perNode |',
-    '| --- | --- | --- |',
-    ...nodes.map((n) => `| ${n.id} | ${acceptedPerNode[n.id] || 0} | ${perNode} |`),
+    '| Node | Accepted | perNode | Businesses |',
+    '| --- | --- | --- | --- |',
+    ...nodes.map(
+      (n) => `| ${n.id} | ${acceptedPerNode[n.id] || 0} | ${perNode} | ${businessesIn(n.id)} |`
+    ),
     '',
-    `Refused: ${
-      Object.entries(byReason)
-        .map(([k, v]) => `${k} ${v}`)
-        .join(', ') || 'none'
-    }`,
+    `Refused: ${tally(refused)}`,
+    `Businesses refused: ${tally(businesses.refused)}`,
   ];
   summarize(env, fs, `${lines.join('\n')}\n`);
   return 0;
@@ -700,7 +718,6 @@ export async function runCheckSwap({
   fs,
   fetch: fetchFn,
   wrangler,
-  now,
   outDir,
   tmpDir,
   checkNodes,
@@ -726,7 +743,9 @@ export async function runCheckSwap({
     buildFailed,
     nodes,
     targets,
-    today: chicagoDate(now()),
+    // The build's day, not the clock's: a check that runs past Chicago midnight
+    // still judges the 90-day window from the day the rows were built for.
+    today: manifest.date,
     runId: need(env, 'GITHUB_RUN_ID'),
     runAttempt: need(env, 'GITHUB_RUN_ATTEMPT'),
     cloud,

@@ -21,6 +21,16 @@ export function sponsorTier(business, regionals) {
   return list.includes(business.name) ? 'mid' : 'local';
 }
 
+// The Chicago end date of a row, for the Worker's end_date (handlers/events.ts reads
+// end_date as YYYY-MM-DD; it has no end time field). { date } to send, { skip } with
+// the reason it is not sent, or {} when the row has no end.
+export function endDateOf(row, startDate) {
+  if (typeof row.ends_at !== 'string' || row.ends_at === '') return {};
+  if (Number.isNaN(Date.parse(row.ends_at))) return { skip: 'unreadable' };
+  const date = chicagoDate(row.ends_at);
+  return date < startDate ? { skip: 'before the start' } : { date };
+}
+
 // Private before public, then the soonest start.
 function bySectorThenStart(a, b) {
   const rank = (r) => (r.sector === 'private' ? 0 : 1);
@@ -94,6 +104,8 @@ export async function buildDay({
       if (rows.length < perNode) manifest.short[node] = perNode - rows.length;
 
       for (const row of rows) {
+        const startDate = chicagoDate(row.starts_at);
+        const end = endDateOf(row, startDate);
         const ev = await client.post('/api/v2/admin/events', {
           brand_id: 'root',
           status: 'active',
@@ -103,13 +115,15 @@ export async function buildDay({
           location: row.venue,
           where_address: row.address,
           event_type_id: row.event_type_id,
-          start_date: chicagoDate(row.starts_at),
+          start_date: startDate,
           start_time: CHICAGO_TIME.format(new Date(row.starts_at)),
+          ...(end.date ? { end_date: end.date } : {}),
           timezone: 'America/Chicago',
           lat: row.lat,
           lon: row.lng,
         });
         record('event', ev.id, node);
+        if (end.skip) manifest.warnings.push(`${ev.id} ends_at not sent: ${end.skip}`);
 
         const poster = await client.post(`/api/v2/admin/events/${ev.id}/poster-deployments`, {
           placement_label: row.venue,

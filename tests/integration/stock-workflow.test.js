@@ -105,7 +105,13 @@ describe('access-gate', { timeout: 30_000 }, () => {
   });
 
   // The step's own script, with curl replaced by a function that answers per URL.
-  function runGate(rootOut, apiOut = rootOut, curlRc = 0) {
+  // Headers (CRLF lines, as curl -D writes them) go to the file named after -D.
+  function runGate(
+    rootOut,
+    apiOut = rootOut,
+    curlRc = 0,
+    { rootHeaders = '', apiHeaders = '' } = {}
+  ) {
     const dir = mkdtempSync(join(tmpdir(), 'stock-gate-'));
     try {
       const argsFile = join(dir, 'args').replace(/\\/g, '/');
@@ -113,9 +119,11 @@ describe('access-gate', { timeout: 30_000 }, () => {
       const stub = [
         'curl() {',
         `  printf '%s\\n' "$@" >> '${argsFile}'`,
+        '  local dump="" prev=""',
+        '  for a in "$@"; do [ "$prev" = "-D" ] && dump="$a"; prev="$a"; done',
         '  case "${@: -1}" in',
-        `    */api/v2/events) printf '%s' "$FAKE_API" ;;`,
-        `    *) printf '%s' "$FAKE_ROOT" ;;`,
+        `    */api/v2/events) printf '%s' "$FAKE_API"; [ -n "$dump" ] && printf '%b' "$FAKE_API_HEADERS" > "$dump" ;;`,
+        `    *) printf '%s' "$FAKE_ROOT"; [ -n "$dump" ] && printf '%b' "$FAKE_ROOT_HEADERS" > "$dump" ;;`,
         '  esac',
         `  return ${curlRc}`,
         '}',
@@ -128,6 +136,8 @@ describe('access-gate', { timeout: 30_000 }, () => {
           STG_FULL_URL: wf.env.STG_FULL_URL,
           FAKE_ROOT: rootOut,
           FAKE_API: apiOut,
+          FAKE_ROOT_HEADERS: rootHeaders,
+          FAKE_API_HEADERS: apiHeaders,
         },
       });
       const args = existsSync(argsFile) ? readFileSync(argsFile, 'utf8').split('\n') : [];
@@ -176,6 +186,40 @@ describe('access-gate', { timeout: 30_000 }, () => {
       expect(r.out).toContain('Real-world data is not loaded onto an open host.');
     }
   );
+
+  const ACCESS_DENY = 'HTTP/2 403\\r\\nserver: cloudflare\\r\\ncf-ray: 1-ORD\\r\\n\\r\\n';
+  const CHALLENGE = 'HTTP/2 403\\r\\nserver: cloudflare\\r\\ncf-mitigated: challenge\\r\\n\\r\\n';
+
+  test('captures the response headers, so a 403 can be told apart', () => {
+    expect(curlStep.run).toMatch(/curl -sS -o \/dev\/null -D "\$headers"/);
+    expect(curlStep.run).toContain('cf-mitigated');
+  });
+
+  test.skipIf(!BASH)('a 403 without cf-mitigated: challenge passes as an Access deny', () => {
+    const r = runGate('403 ', '403 ', 0, { rootHeaders: ACCESS_DENY, apiHeaders: ACCESS_DENY });
+    expect(r.code, r.out).toBe(0);
+  });
+
+  test.skipIf(!BASH).each([
+    ['the page', { rootHeaders: CHALLENGE, apiHeaders: ACCESS_DENY }],
+    ['the public API', { rootHeaders: ACCESS_DENY, apiHeaders: CHALLENGE }],
+    [
+      'the page, header in another case',
+      { rootHeaders: CHALLENGE.replace('cf-mitigated', 'CF-Mitigated'), apiHeaders: ACCESS_DENY },
+    ],
+  ])('a 403 challenge on %s fails: a challenge is not Access', (_n, headers) => {
+    const r = runGate('403 ', '403 ', 0, headers);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('answered a Cloudflare challenge');
+    expect(r.out).toContain('Real-world data is not loaded onto an open host.');
+  });
+
+  test.skipIf(!BASH)('a redirect to the Access login host still passes', () => {
+    const r = runGate('302 https://team.cloudflareaccess.com/cdn-cgi/access/login', undefined, 0, {
+      rootHeaders: 'HTTP/2 302\\r\\nlocation: https://team.cloudflareaccess.com/\\r\\n\\r\\n',
+    });
+    expect(r.code, r.out).toBe(0);
+  });
 
   test.skipIf(!BASH)('fails when the request itself fails', () => {
     const r = runGate('', '', 7);
@@ -263,6 +307,75 @@ describe('deploy', () => {
     expect(dbAt).toBeGreaterThanOrEqual(0);
     expect(formsAt).toBeGreaterThan(dbAt);
     expect(deployAt).toBeGreaterThan(formsAt);
+  });
+});
+
+describe('deploy: the staging-full ids are pasted', { timeout: 30_000 }, () => {
+  const steps = stepsOf('deploy');
+  const gateAt = steps.findIndex((s) => /OWNER_TO_FILL/.test(String(s.run || '')));
+  const gate = steps[gateAt];
+  const realToml = readFileSync(join(ROOT, 'workers/oursharedevents/wrangler.toml'), 'utf8');
+
+  test('runs in the Worker folder before any migration or deploy', () => {
+    expect(gate).toBeDefined();
+    expect(gate['working-directory']).toBe('${{ env.WORKER_DIR }}');
+    const firstWrangler = steps.findIndex((s) => /npx wrangler/.test(String(s.run || '')));
+    expect(gateAt).toBeLessThan(firstWrangler);
+  });
+
+  // The step's own script, run in a folder holding the given wrangler.toml.
+  function runIdGate(toml) {
+    const dir = mkdtempSync(join(tmpdir(), 'stock-id-gate-'));
+    try {
+      writeFileSync(join(dir, 'wrangler.toml'), toml);
+      writeFileSync(join(dir, 'gate.sh'), gate.run);
+      const r = spawnSync(BASH, ['gate.sh'], { cwd: dir, encoding: 'utf8' });
+      return { code: r.status, out: `${r.stdout}${r.stderr}` };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  const pasted = realToml
+    .replace('OWNER_TO_FILL_DB_STAGING_FULL', '0f0e0d0c-0000-4000-8000-000000000001')
+    .replace('OWNER_TO_FILL_FORMS_DB_STAGING_FULL', '0f0e0d0c-0000-4000-8000-000000000002')
+    .replace('OWNER_TO_FILL_KV_STAGING_FULL', '0123456789abcdef0123456789abcdef');
+
+  test.skipIf(!BASH)('fails on the repo wrangler.toml while its ids are placeholders', () => {
+    const r = runIdGate(realToml);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('paste each id over its OWNER_TO_FILL value');
+    expect(r.out).toContain('OWNER_TO_FILL_DB_STAGING_FULL');
+  });
+
+  test.skipIf(!BASH)(
+    'passes once the ids are pasted, comments naming the placeholders aside',
+    () => {
+      expect(pasted).toContain('OWNER_TO_FILL'); // still named in the owner checklist comment
+      const r = runIdGate(pasted);
+      expect(r.code, r.out).toBe(0);
+    }
+  );
+
+  test.skipIf(!BASH)('fails on one placeholder left in any staging-full sub-block', () => {
+    const one = pasted.replace('0123456789abcdef0123456789abcdef', 'OWNER_TO_FILL_KV_STAGING_FULL');
+    const r = runIdGate(one);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('OWNER_TO_FILL_KV_STAGING_FULL');
+  });
+
+  test.skipIf(!BASH)(
+    'reads only staging-full: a placeholder in another env is not its concern',
+    () => {
+      const other = `${pasted}\n[env.other]\nname = "x"\n[[env.other.kv_namespaces]]\nid = "OWNER_TO_FILL_OTHER"\n`;
+      expect(runIdGate(other).code).toBe(0);
+    }
+  );
+
+  test.skipIf(!BASH)('fails when there is no staging-full block at all', () => {
+    const r = runIdGate('name = "x"\n[env.staging]\nname = "y"\n');
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('no [env.staging-full] block');
   });
 });
 

@@ -51,12 +51,16 @@ jobs:
     steps:
       # No credentials of any kind: Access must answer (a redirect to its login
       # host, or a deny) instead of the Worker, on a page and on the public API.
+      # A 403 that carries `cf-mitigated: challenge` is a WAF or bot challenge, not
+      # Access, so it does not pass.
       - name: Request stg-full with no credentials
         shell: bash
         run: |
           set -euo pipefail
+          headers="$(mktemp)"
           for path in / /api/v2/events; do
-            if ! out="$(curl -sS -o /dev/null --max-time 30 -w '%{http_code} %{redirect_url}' "${STG_FULL_URL}${path}")"; then
+            : > "$headers"
+            if ! out="$(curl -sS -o /dev/null -D "$headers" --max-time 30 -w '%{http_code} %{redirect_url}' "${STG_FULL_URL}${path}")"; then
               echo "::error title=stg-full unreachable::The request for ${path} failed, so Access could not be confirmed. Real-world data is not loaded onto an open host."
               exit 1
             fi
@@ -66,7 +70,10 @@ jobs:
             if [[ "$location" =~ ^https://([^/?#:@]+)(:[0-9]+)?([/?#]|$) ]]; then
               host="${BASH_REMATCH[1],,}"
             fi
-            if [ "$code" = "403" ]; then
+            if [ "$code" = "403" ] && grep -qiE '^cf-mitigated:[[:space:]]*challenge' "$headers"; then
+              echo "::error title=stg-full is not behind Access::${path} answered a Cloudflare challenge (HTTP 403, cf-mitigated: challenge), not Access. Real-world data is not loaded onto an open host."
+              exit 1
+            elif [ "$code" = "403" ]; then
               echo "${path}: Access denied the request (HTTP 403)."
             elif { [ "$code" = "302" ] || [ "$code" = "303" ]; } && [[ "$host" == *.cloudflareaccess.com ]]; then
               echo "${path}: Access redirected to its login host ${host} (HTTP ${code})."
@@ -111,6 +118,29 @@ jobs:
       - name: 'Gate: no unprovisioned binding IDs (OSE-813)'
         working-directory: ${{ env.WORKER_DIR }}
         run: node scripts/check-binding-placeholders.mjs
+
+      # OSE-813's check does not know OWNER_TO_FILL_* (widening it would turn
+      # main's T1 red while staging-full is unprovisioned), so this env's own
+      # block is checked here, before anything is migrated or deployed.
+      - name: 'Gate: the staging-full binding ids are pasted'
+        shell: bash
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          set -euo pipefail
+          block="$(awk '
+            /^[[:space:]]*\[/ { on = ($0 ~ /^[[:space:]]*\[\[?env\.staging-full[].]/) }
+            on && $0 !~ /^[[:space:]]*#/
+          ' wrangler.toml)"
+          if [ -z "$block" ]; then
+            echo "::error title=No staging-full env::wrangler.toml has no [env.staging-full] block."
+            exit 1
+          fi
+          if left="$(printf '%s\n' "$block" | grep -o 'OWNER_TO_FILL_[A-Z_]*')"; then
+            echo "::error title=staging-full is not provisioned::wrangler.toml [env.staging-full] still holds placeholder ids. Create the databases and KV namespace (the owner checklist above [env.staging-full]), paste each id over its OWNER_TO_FILL value, and run again."
+            printf '%s\n' "$left"
+            exit 1
+          fi
+          echo "ok    every [env.staging-full] binding id is pasted"
 
       - name: Apply D1 migrations (ocr-db-staging-full)
         env:

@@ -158,3 +158,49 @@ export async function validateFinds({ finds, eventTypeIds, nodes, today, geocode
   for (const a of accepted) acceptedPerNode[a.node] = (acceptedPerNode[a.node] || 0) + 1;
   return { accepted, refused, acceptedPerNode };
 }
+
+// Name and address compared without case, punctuation or spacing differences.
+const normalized = (s) =>
+  String(s)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+
+/**
+ * The search's businesses, held to the same place rule as the finds: each
+ * address is geocoded and its node is the boundary polygon it falls in (the
+ * search's own node claim is replaced). A business outside every node, or one
+ * whose address does not geocode, is refused. Duplicates by name and address go;
+ * the first one stays. `anchor` stays the search's claim.
+ */
+export async function validateBusinesses({ businesses, nodes, geocode }) {
+  if (!Array.isArray(businesses)) throw new Error('businesses must be a list');
+  const accepted = [];
+  const refused = [];
+  const seen = new Set();
+  const refuse = (row, reason) => refused.push({ row, reason });
+  for (const b of businesses) {
+    if (!b || !isStr(b.name) || !isStr(b.address) || typeof b.anchor !== 'boolean') {
+      refuse(b, 'bad-shape');
+      continue;
+    }
+    const key = `${normalized(b.name)}|${normalized(b.address)}`;
+    if (seen.has(key)) {
+      refuse(b, 'duplicate');
+      continue;
+    }
+    seen.add(key);
+    const point = await geocode(b.address);
+    if (!point) {
+      refuse(b, 'geocode-failed');
+      continue;
+    }
+    const node = nodeAt(nodes, point.lat, point.lng);
+    if (!node) {
+      refuse(b, 'not-in-node');
+      continue;
+    }
+    accepted.push({ name: b.name, address: b.address, node, anchor: b.anchor });
+  }
+  return { accepted, refused };
+}

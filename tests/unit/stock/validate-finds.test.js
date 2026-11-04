@@ -249,3 +249,79 @@ describe('validateFinds', () => {
     expect(r.accepted.map((a) => a.sector)).toEqual(['private', 'public']);
   });
 });
+
+describe('validateBusinesses', () => {
+  let validateBusinesses;
+  beforeAll(async () => {
+    ({ validateBusinesses } = await import('../../../scripts/stock/validate-finds.mjs'));
+  });
+  const biz = (over = {}) => ({
+    name: 'Cork & Kerry',
+    address: '10614 S Western Ave',
+    node: 'beverly',
+    anchor: false,
+    ...over,
+  });
+  const runB = (businesses, g = geocode) => validateBusinesses({ businesses, nodes, geocode: g });
+
+  test('the node is the polygon the address falls in, not the search claim', async () => {
+    const { accepted } = await runB([biz({ address: '1 oaklawn Rd', node: 'beverly' })]);
+    expect(accepted).toEqual([
+      { name: 'Cork & Kerry', address: '1 oaklawn Rd', node: 'oak-lawn', anchor: false },
+    ]);
+  });
+
+  test('a business outside every node, or in a border cell but no polygon, is refused', async () => {
+    const { accepted, refused } = await runB([
+      biz({ address: '1 faraway St' }),
+      biz({ name: 'Two', address: '2 border St' }),
+    ]);
+    expect(accepted).toEqual([]);
+    expect(refused.map((r) => r.reason)).toEqual(['not-in-node', 'not-in-node']);
+  });
+
+  test('an address that does not geocode is refused', async () => {
+    const { refused } = await runB([biz({ address: 'nowhere' })]);
+    expect(refused.map((r) => r.reason)).toEqual(['geocode-failed']);
+  });
+
+  test('duplicates by name and address go, case, punctuation and spacing aside, without a geocode', async () => {
+    let calls = 0;
+    const counting = async (a) => {
+      calls += 1;
+      return geocode(a);
+    };
+    const { accepted, refused } = await runB(
+      [
+        biz({ anchor: true }),
+        biz({ name: 'cork  and kerry', address: '10614 s. western ave' }),
+        biz({ name: 'CORK & KERRY', address: '10614 S Western Ave.' }),
+        biz({ address: '10600 S Western Ave' }),
+      ],
+      counting
+    );
+    // "and" is a word, "&" is punctuation: those two names differ
+    expect(accepted.map((b) => b.address)).toEqual([
+      '10614 S Western Ave',
+      '10614 s. western ave',
+      '10600 S Western Ave',
+    ]);
+    expect(refused.map((r) => r.reason)).toEqual(['duplicate']);
+    expect(calls).toBe(3);
+  });
+
+  test('the anchor flag stays the search claim', async () => {
+    const { accepted } = await runB([biz({ anchor: true }), biz({ name: 'B', anchor: false })]);
+    expect(accepted.map((b) => b.anchor)).toEqual([true, false]);
+  });
+
+  test('a row without a name, address or anchor flag is refused, not geocoded', async () => {
+    const g = vi.fn(geocode);
+    const { refused } = await runB(
+      [biz({ name: 7 }), biz({ address: null }), { name: 'x', address: 'y' }],
+      g
+    );
+    expect(refused.map((r) => r.reason)).toEqual(['bad-shape', 'bad-shape', 'bad-shape']);
+    expect(g).not.toHaveBeenCalled();
+  });
+});

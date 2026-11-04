@@ -605,3 +605,44 @@ describe('fix round 1', () => {
     expect(await run([junk, good, none])).toEqual(['good']);
   });
 });
+
+describe('final review: the end date', () => {
+  const bodyFor = async (ends_at) => {
+    const site = fakeSite();
+    const manifest = await buildDay(
+      args(site, { accepted: [{ ...row('beverly', 'private', 10), ends_at }] })
+    );
+    return { body: callsTo(site, 'POST', /^\/api\/v2\/admin\/events$/)[0].body, manifest };
+  };
+
+  test('ends_at is sent as end_date, the Chicago date of the end', async () => {
+    // 02:00 UTC on the 11th is 20:00 on the 10th in Chicago
+    const { body, manifest } = await bodyFor('2026-11-11T02:00:00Z');
+    expect(body.end_date).toBe('2026-11-10');
+    expect(body.start_date).toBe('2026-11-10');
+    expect(body).not.toHaveProperty('end_time'); // the Worker has no end time field
+    expect(manifest.warnings).toEqual([]);
+  });
+
+  test('a multi-day event ends on its own Chicago date', async () => {
+    const { body } = await bodyFor('2026-11-12T22:00:00-06:00');
+    expect(body.end_date).toBe('2026-11-12');
+  });
+
+  test('no ends_at sends no end_date', async () => {
+    const { body, manifest } = await bodyFor(null);
+    expect(body).not.toHaveProperty('end_date');
+    expect(manifest.warnings).toEqual([]);
+  });
+
+  test.each([
+    ['unreadable', 'soon'],
+    ['before the start', '2026-11-09T19:00:00-06:00'],
+  ])('an ends_at that is %s is not sent, and says so', async (reason, ends_at) => {
+    const { body, manifest } = await bodyFor(ends_at);
+    expect(body).not.toHaveProperty('end_date');
+    expect(manifest.warnings).toHaveLength(1);
+    expect(manifest.warnings[0]).toMatch(/^evt_\d+ ends_at not sent: /);
+    expect(manifest.warnings[0].endsWith(reason)).toBe(true);
+  });
+});

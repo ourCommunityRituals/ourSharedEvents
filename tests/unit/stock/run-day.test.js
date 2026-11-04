@@ -898,3 +898,115 @@ describe('build', () => {
     expect(code).toBe(1);
   });
 });
+
+describe('final review', () => {
+  const W = require('./worker-bodies');
+  const ENV = {
+    STG_FULL_ADMIN_KEY: 'admin-key-value-1',
+    STG_FULL_ACCESS_CLIENT_ID: 'access-id-value-2',
+    STG_FULL_ACCESS_CLIENT_SECRET: 'access-secret-value-3',
+    GITHUB_RUN_ID: RUN,
+    GITHUB_RUN_ATTEMPT: ATTEMPT,
+  };
+  const NODE_LIST = JSON.parse(readFileSync(path.join(ROOT, 'stock/nodes.json'), 'utf8')).nodes;
+  const CATALOG = { ok: true, categories: [{ code: 'SOCIAL', types: [{ id: 'trivia' }] }] };
+  const res = (status, body) => ({
+    status,
+    ok: status >= 200 && status < 300,
+    json: async () => body,
+    headers: { get: () => null },
+  });
+  let nodeAt;
+  beforeAll(async () => {
+    ({ nodeAt } = await import('../../../scripts/stock/validate-finds.mjs'));
+  });
+  // A point inside a node's boundary polygon.
+  const insideOf = (id) => {
+    const n = NODE_LIST.find((x) => x.id === id);
+    const ring = (
+      n.polygon.type === 'Polygon' ? n.polygon.coordinates : n.polygon.coordinates[0]
+    )[0];
+    const xs = ring.map((p) => p[0]);
+    const ys = ring.map((p) => p[1]);
+    for (let i = 1; i < 40; i++) {
+      for (let j = 1; j < 40; j++) {
+        const lng = Math.min(...xs) + ((Math.max(...xs) - Math.min(...xs)) * i) / 40;
+        const lat = Math.min(...ys) + ((Math.max(...ys) - Math.min(...ys)) * j) / 40;
+        if (nodeAt(NODE_LIST, lat, lng) === id) return { lat, lng };
+      }
+    }
+    throw new Error(`no interior point for ${id}`);
+  };
+
+  test('check-swap judges the window from the manifest day, even past Chicago midnight', async () => {
+    const w = world({ index: [] });
+    w.fs.writeFileSync(
+      path.join('/out', 'manifest.json'),
+      JSON.stringify(manifestOf(TODAY, 't', ['a']))
+    );
+    w.fs.writeFileSync(path.join('/out', 'build-notes.json'), JSON.stringify({ ok: true }));
+    const seen = [];
+    await rd.runCheckSwap({
+      env: { ...ENV, BUILD_RESULT: 'success' },
+      fs: w.fs,
+      fetch: async () => ({ status: 200 }),
+      wrangler: w.wrangler,
+      // 00:30 on 5 November in Chicago: the clock says the 5th, the build was for the 4th
+      now: () => new Date('2026-11-05T06:30:00Z'),
+      outDir: '/out',
+      tmpDir: '/tmp',
+      checkNodes: async ({ today }) => {
+        seen.push(today);
+        return {};
+      },
+      log: () => {},
+    });
+    allCalls.push(...w.calls);
+    expect(seen).toEqual([TODAY]);
+  });
+
+  test('validate geocodes each business, places it by polygon and drops the rest', async () => {
+    const w = world();
+    const outDir = '/out';
+    w.fs.writeFileSync(path.join(outDir, 'finds.json'), '[]');
+    w.fs.writeFileSync(
+      path.join(outDir, 'businesses.json'),
+      JSON.stringify([
+        // the search said beverly; the address is in oak-lawn
+        { name: 'Anchor Co', address: '1 in-oak-lawn Rd', node: 'beverly', anchor: true },
+        { name: 'Far Co', address: '2 far-away St', node: 'beverly', anchor: false },
+        { name: 'anchor co.', address: '1 In-Oak-Lawn Rd', node: 'oak-lawn', anchor: false },
+        { name: 'Lost Co', address: '3 no-such St', node: 'beverly', anchor: false },
+      ])
+    );
+    const geocoded = [];
+    const code = await rd.runValidate({
+      env: { ...ENV, GITHUB_STEP_SUMMARY: '/summary.md' },
+      fs: w.fs,
+      fetch: async (url, init = {}) => {
+        if (String(url).endsWith('/event-types')) return res(200, CATALOG);
+        if (String(url).endsWith('/api/v2/admin/geocode')) {
+          const { address } = JSON.parse(init.body);
+          geocoded.push(address);
+          if (address.includes('in-oak-lawn')) return res(200, W.geocode(insideOf('oak-lawn')));
+          if (address.includes('far-away')) {
+            return res(200, W.geocode({ lat: 41.95, lng: -87.65 }));
+          }
+          return res(422, { ok: false });
+        }
+        return res(404, {});
+      },
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir,
+    });
+    expect(code).toBe(0);
+    expect(geocoded).toEqual(['1 in-oak-lawn Rd', '2 far-away St', '3 no-such St']);
+    expect(JSON.parse(w.files.get(path.join(outDir, 'businesses.json')))).toEqual([
+      { name: 'Anchor Co', address: '1 in-oak-lawn Rd', node: 'oak-lawn', anchor: true },
+    ]);
+    const summary = w.files.get('/summary.md');
+    expect(summary).toMatch(/[|] oak-lawn [|] 0 [|] [0-9]+ [|] 1 [|]/);
+    expect(summary).toMatch(/[|] beverly [|] 0 [|] [0-9]+ [|] 0 [|]/);
+    expect(summary).toContain('Businesses refused: not-in-node 1, duplicate 1, geocode-failed 1');
+  });
+});
