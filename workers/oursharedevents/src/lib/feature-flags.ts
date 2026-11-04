@@ -167,6 +167,29 @@ export async function isFeatureEnabled(
   }
 }
 
+/**
+ * Does this event's plan include the paid SharedReport? (OSE-682)
+ *
+ * The same flag and precedence as `isFeatureEnabled` (event override, then
+ * global, then the contract default of on when there is no row), but it fails
+ * CLOSED: a read error answers false, so the report falls back to Local. This
+ * is an entitlement, and `isFeatureEnabled` fails open (an unreadable flag table
+ * reads as every flag on), which here would hand a Free event the paid report
+ * whenever the forms database is unavailable.
+ */
+export async function isPaidReportEnabled(db: D1Database, eventId: string): Promise<boolean> {
+  try {
+    const a = adapter(db);
+    const onEvent = await a.getEventFlag(FLAG_KEYS.ANALYTICS_SHARED_REPORT, eventId);
+    if (onEvent !== null) return onEvent;
+    const global = await a.getGlobalFlag(FLAG_KEYS.ANALYTICS_SHARED_REPORT);
+    return global ?? true;
+  } catch {
+    console.warn(JSON.stringify({ event: 'paid_report_plan_lookup_failed', fallback: 'local' }));
+    return false;
+  }
+}
+
 export async function listFlags(
   db: D1Database,
   opts?: { scope?: Scope; eventId?: string }

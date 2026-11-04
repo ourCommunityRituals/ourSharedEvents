@@ -58,6 +58,7 @@
  */
 
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
+import { usePaidReportPlan } from './helpers/paid-report-plan';
 import { env, SELF } from 'cloudflare:test';
 import { mintSignedLinkToken } from '../src/lib/shared-report-auth';
 
@@ -152,6 +153,8 @@ async function readAsAdmin(
 }
 
 beforeAll(async () => {
+  // OSE-682: this spec asserts paid sections, so it runs on a paid plan.
+  await usePaidReportPlan();
   await applyMigrations();
 });
 

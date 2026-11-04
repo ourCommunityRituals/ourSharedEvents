@@ -15,6 +15,7 @@
  */
 
 import { describe, test, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { usePaidReportPlan } from './helpers/paid-report-plan';
 import { env, SELF } from 'cloudflare:test';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
@@ -85,6 +86,9 @@ async function clearReadTables(): Promise<void> {
 async function resetForTest(): Promise<void> {
   await applyMigrations();
   await clearReadTables();
+  // OSE-682: the default for this file is a paid plan; the OSE-682 block turns
+  // the plan off per test to assert the Free cap.
+  await usePaidReportPlan();
 }
 
 async function seedEvent(opts: {

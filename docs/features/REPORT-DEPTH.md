@@ -50,7 +50,12 @@ sponsor alike. With it on, each role reads at the depth in the table above.
   gone; it left a Free event with no report at all.
 - The router reads the flag (event override first, then global) and hands the
   read handler a lookup, so the handler never reaches `FORMS_DB` itself. The
-  lookup runs only after the token checks out.
+  lookup runs only after the token checks out, and it fails **closed**
+  (`isPaidReportEnabled`): an unreadable forms database reads as Local, never as
+  paid. (`isFeatureEnabled` fails open, which is wrong for an entitlement.)
+- Staging fixtures say their plan: `evt_smoke_tiers` (T4f, paid depths) carries
+  an event-level paid-report override in `forms-smoke.sql`; `plancap-evt` (T2,
+  the Free cap) has none.
 - `capDepthToPlan` (`lib/report-depth.ts`) only lowers depth. Sponsor scoping
   (TL-040, OSE-595) is unchanged by it.
 - The in-fleet batch read (`internal`) is not capped: it is a service class,

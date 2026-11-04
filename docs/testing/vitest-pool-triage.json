@@ -1731,6 +1731,13 @@
       "testCount": 3
     },
     {
+      "file": "workers/oursharedevents/tests/paid-report-plan-lookup.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 5
+    },
+    {
       "file": "workers/oursharedevents/tests/pdf-export.spec.ts",
       "bucket": "node",
       "needsReview": false,

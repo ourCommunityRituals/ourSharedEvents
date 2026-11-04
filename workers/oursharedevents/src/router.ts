@@ -267,7 +267,7 @@ import {
   isFeatureEnabled,
   listFlags,
   detectCurrentTier,
-  FLAG_KEYS,
+  isPaidReportEnabled,
   type FeatureFlagEnv,
 } from './lib/feature-flags';
 import {
@@ -1808,11 +1808,10 @@ export async function route(
     return publicReadLimited(
       'shared-report',
       // OSE-682: the plan caps depth. The lookup reads the plan flag (event
-      // override, then global) and runs only after the token checks out.
+      // override, then global), runs only after the token checks out, and fails
+      // closed: an unreadable forms database reads as Local, never as paid.
       (req, e: typeof env) =>
-        handleGetSharedReport(req, e, id, ctx, () =>
-          isFeatureEnabled(e.FORMS_DB, FLAG_KEYS.ANALYTICS_SHARED_REPORT, id)
-        ),
+        handleGetSharedReport(req, e, id, ctx, () => isPaidReportEnabled(e.FORMS_DB, id)),
       RATE_LIMIT_MAX,
       sharedReportBucketKey
     )(request, env);
