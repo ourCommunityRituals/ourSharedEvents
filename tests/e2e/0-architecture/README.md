@@ -186,6 +186,7 @@ and is wired — and let the mechanism do the scanning.
 
 | Gate spec | Brain invariant that names it |
 | --------- | ----------------------------- |
+| `admin-null-actor.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `aggregate-only.invariant.spec.ts` | #7 aggregate_only_reporting |
 | `anonymous-id.invariant.spec.ts` | #1 anonymous_id |
 | `api-response-schema.invariant.spec.ts` | #16 api_response_schema_stability |
