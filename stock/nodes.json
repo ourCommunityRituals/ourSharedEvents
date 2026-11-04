@@ -1,0 +1,46 @@
+{
+  "nodes": [
+    {
+      "id": "blue-island",
+      "name": "Blue Island",
+      "zips": ["60406"],
+      "cells": ["872664544ffffff", "872664571ffffff"],
+      "source": "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/4/query?where=STATE%3D'17'%20AND%20BASENAME%20IN%20('Blue%20Island'%2C'Evergreen%20Park'%2C'Oak%20Lawn')&outFields=NAME%2CBASENAME%2CGEOID&outSR=4326&f=geojson"
+    },
+    {
+      "id": "beverly",
+      "name": "Beverly",
+      "zips": ["60643"],
+      "cells": ["872664cdbffffff"],
+      "source": "https://data.cityofchicago.org/resource/igwz-8jzy.geojson"
+    },
+    {
+      "id": "auburn-gresham",
+      "name": "Auburn Gresham",
+      "zips": ["60620"],
+      "cells": ["872664cd8ffffff", "872664cdcffffff", "872664cddffffff"],
+      "source": "https://data.cityofchicago.org/resource/igwz-8jzy.geojson"
+    },
+    {
+      "id": "evergreen-park",
+      "name": "Evergreen Park",
+      "zips": ["60805"],
+      "cells": ["872664574ffffff", "872664cdaffffff"],
+      "source": "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/4/query?where=STATE%3D'17'%20AND%20BASENAME%20IN%20('Blue%20Island'%2C'Evergreen%20Park'%2C'Oak%20Lawn')&outFields=NAME%2CBASENAME%2CGEOID&outSR=4326&f=geojson"
+    },
+    {
+      "id": "oak-lawn",
+      "name": "Oak Lawn",
+      "zips": ["60453"],
+      "cells": ["87266450dffffff", "87266452bffffff", "872664576ffffff"],
+      "source": "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/4/query?where=STATE%3D'17'%20AND%20BASENAME%20IN%20('Blue%20Island'%2C'Evergreen%20Park'%2C'Oak%20Lawn')&outFields=NAME%2CBASENAME%2CGEOID&outSR=4326&f=geojson"
+    },
+    {
+      "id": "mount-greenwood",
+      "name": "Mount Greenwood",
+      "zips": ["60655"],
+      "cells": ["872664570ffffff"],
+      "source": "https://data.cityofchicago.org/resource/igwz-8jzy.geojson"
+    }
+  ]
+}
