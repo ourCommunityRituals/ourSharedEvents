@@ -33,6 +33,7 @@ import { isBucketTripped, scanRateLimitBuckets } from './lib/rate-limit';
 import { summarizeUnhandledError } from './lib/unhandled-error-log';
 
 import { errorLabel } from './lib/error-label';
+import { injectTestSiteNotice } from './lib/test-site-notice';
 export type { RouterEnv as Env };
 
 export default {
@@ -89,7 +90,8 @@ export default {
     // Pre-revenue by contract, not by choice.
     const patched = new Response(response.body, response);
     patched.headers.set('X-Monetization-Inert', 'true');
-    return patched;
+    // Staging only: every HTML page says it is for testing (lib/test-site-notice.ts).
+    return injectTestSiteNotice(patched, env);
   },
 
   async scheduled(_event: ScheduledEvent, env: RouterEnv, ctx: ExecutionContext): Promise<void> {

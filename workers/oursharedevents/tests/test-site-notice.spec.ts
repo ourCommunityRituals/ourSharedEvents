@@ -1,0 +1,92 @@
+import { env } from 'cloudflare:test';
+import { describe, test, expect } from 'vitest';
+import { injectTestSiteNotice, TEST_SITE_NOTICE_TESTID } from '../src/lib/test-site-notice';
+
+const PAGE =
+  '<!doctype html><html><head><title>t</title></head><body><h1>Hello</h1><p>x</p></body></html>';
+const html = (body: string = PAGE, init: ResponseInit = {}) =>
+  new Response(body, {
+    status: 200,
+    headers: { 'content-type': 'text/html; charset=utf-8', 'x-keep': 'yes' },
+    ...init,
+  });
+const count = (s: string, needle: string) => s.split(needle).length - 1;
+
+describe('injectTestSiteNotice', () => {
+  test('staging + text/html gets the band, role=note, and the headline, with the h1 count unchanged', async () => {
+    const out = await injectTestSiteNotice(html(), { WORKER_ENV: 'staging' }).text();
+    expect(out).toContain(`data-testid="${TEST_SITE_NOTICE_TESTID}"`);
+    expect(out).toContain('role="note"');
+    expect(out).toContain('Testing purposes only.');
+    expect(count(out, '<h1')).toBe(count(PAGE, '<h1'));
+    expect(out).not.toContain('endorsement');
+  });
+
+  test('STAGING_VARIANT=full adds the public-listings line', async () => {
+    const out = await injectTestSiteNotice(html(), {
+      WORKER_ENV: 'staging',
+      STAGING_VARIANT: 'full',
+    }).text();
+    expect(out).toContain('nothing here is an endorsement or an offer');
+  });
+
+  test('STAGING_VARIANT=empty does not', async () => {
+    const out = await injectTestSiteNotice(html(), {
+      WORKER_ENV: 'staging',
+      STAGING_VARIANT: 'empty',
+    }).text();
+    expect(out).toContain('Testing purposes only.');
+    expect(out).not.toContain('endorsement');
+  });
+
+  test.each(['production', 'development', 'test', undefined])(
+    'WORKER_ENV=%s leaves the body byte-identical',
+    async (w) => {
+      const out = await injectTestSiteNotice(html(), {
+        WORKER_ENV: w,
+        STAGING_VARIANT: 'full',
+      }).text();
+      expect(out).toBe(PAGE);
+    }
+  );
+
+  test('application/json on staging is unchanged', async () => {
+    const res = new Response('{"a":"<body>"}', { headers: { 'content-type': 'application/json' } });
+    const out = await injectTestSiteNotice(res, { WORKER_ENV: 'staging' }).text();
+    expect(out).toBe('{"a":"<body>"}');
+  });
+
+  test('HTML with no <body> is unchanged and status and headers are preserved', async () => {
+    const res = html('<p>fragment</p>', { status: 404 });
+    const out = injectTestSiteNotice(res, { WORKER_ENV: 'staging' });
+    expect(await out.text()).toBe('<p>fragment</p>');
+    expect(out.status).toBe(404);
+    expect(out.headers.get('x-keep')).toBe('yes');
+    expect(out.headers.get('content-type')).toContain('text/html');
+  });
+
+  test('status and headers survive on a page that gets the band', async () => {
+    const out = injectTestSiteNotice(html(PAGE, { status: 201 }), { WORKER_ENV: 'staging' });
+    expect(out.status).toBe(201);
+    expect(out.headers.get('x-keep')).toBe('yes');
+    await out.text();
+  });
+
+  test('the band carries no raw hex colour', async () => {
+    const out = await injectTestSiteNotice(html(), { WORKER_ENV: 'staging' }).text();
+    expect(out).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+});
+
+describe('index.ts wiring', () => {
+  test('the fetch seam calls injectTestSiteNotice(', () => {
+    const sources: Record<string, string> = JSON.parse(
+      (env as unknown as { TEST_SOURCE_FILES_JSON: string }).TEST_SOURCE_FILES_JSON
+    );
+    const entry = Object.entries(sources).find(([p]) =>
+      p.replaceAll('\\', '/').endsWith('src/index.ts')
+    );
+    expect(entry, 'src/index.ts not found in TEST_SOURCE_FILES_JSON').toBeDefined();
+    expect(entry![1]).toContain('injectTestSiteNotice(');
+  });
+});

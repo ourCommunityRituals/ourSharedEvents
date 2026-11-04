@@ -389,6 +389,8 @@ export type RouterEnv = PagesEnv &
   SponsorHomeEnv &
   RateLimitEnv & {
     WORKER_ENV?: string;
+    // Staging only: 'full' marks the owner-only staging site (lib/test-site-notice.ts).
+    STAGING_VARIANT?: string;
     WORKER_BUILD_VERSION?: string;
     // OSE-272: peppered SHA-256 input for SharedReport return-rate hashing.
     // Distinct secret from IP_HASH_PEPPER per Q1 ratified (separate peppers,
