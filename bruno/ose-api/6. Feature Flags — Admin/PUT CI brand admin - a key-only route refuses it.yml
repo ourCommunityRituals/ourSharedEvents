@@ -1,0 +1,49 @@
+info:
+  name: PUT CI brand admin - a key-only route refuses it
+  type: http
+  seq: 13
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/flags/forms.register"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{ciBrandClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{ciBrandClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "enabled": true
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1800: the CI service actor (a brand admin of ci-brand, never platform).
+        // Inert until the owner creates the Access service token and adds its secrets
+        // (CF_ACCESS_CI_BRAND_CLIENT_ID / _SECRET) and CI_SERVICE_ACTORS on staging.
+        // Until then this request is skipped under a test named for what is missing.
+        if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
+          test('SKIPPED until OSE-1800 setup: no CI brand service token configured', function () {});
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        // Global flags are key-actor only (R-5, OSE-850); the CI service actor is not a key.
+        // forms.register is on in every preset, so even a wrongful success changes nothing.
+        test('403 for a key-only route', function () { expect(res.getStatus()).to.eql(403); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

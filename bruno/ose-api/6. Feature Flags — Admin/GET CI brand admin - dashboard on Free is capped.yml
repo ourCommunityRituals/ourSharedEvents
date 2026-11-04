@@ -1,0 +1,43 @@
+info:
+  name: GET CI brand admin - dashboard on Free is capped
+  type: http
+  seq: 9
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/ci-free-evt/dashboard"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{ciBrandClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{ciBrandClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1800: the CI service actor (a brand admin of ci-brand, never platform).
+        // Inert until the owner creates the Access service token and adds its secrets
+        // (CF_ACCESS_CI_BRAND_CLIENT_ID / _SECRET) and CI_SERVICE_ACTORS on staging.
+        // Until then this request is skipped under a test named for what is missing.
+        if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
+          test('SKIPPED until OSE-1800 setup: no CI brand service token configured', function () {});
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        // OSE-1800 / OSE-682: the CI service actor is a brand admin, so on Free it reads the Local line.
+        const json = res.getBody() || {};
+        test('200 for its own brand', function () { expect(res.getStatus()).to.eql(200); });
+        test('reach is totals only: no per-day series', function () { expect(json.reach || {}).to.not.have.property('scansByDay'); });
+        test('the response names what the plan left out', function () { expect((json.plan || {}).locked_sections).to.include('reach.scansByDay'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

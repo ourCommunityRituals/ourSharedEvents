@@ -611,6 +611,13 @@
       "testCount": 3
     },
     {
+      "file": "workers/oursharedevents/tests/ci-service-actor-router.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 4
+    },
+    {
       "file": "workers/oursharedevents/tests/codeql-src-findings.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -2029,7 +2036,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 4
+      "testCount": 5
     },
     {
       "file": "workers/oursharedevents/tests/public-event-calendar.spec.ts",
@@ -2289,6 +2296,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): fetchMock",
       "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/ci-service-actor.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 30
     },
     {
       "file": "workers/oursharedevents/tests/red-team/form-security-deep.spec.ts",

@@ -45,6 +45,8 @@ export const STAGING_ONLY_VARS = [
   'ADMIN_SCOPE_ALL',
   'ALLOW_ADMIN_KEY_FALLBACK',
   'ALLOW_OCR_INTERNAL',
+  // OSE-1800: the CI service actor's synthetic brand; production has no svc actor.
+  'CI_SERVICE_ACTOR_BRAND',
 ];
 
 /** Job names of the staging chain, as the CI workflow prints them. */
