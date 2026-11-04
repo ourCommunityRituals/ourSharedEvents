@@ -320,7 +320,8 @@ GCP_REGION         = "us-central1"
 #      FORMS_ENCRYPTION_KEY and FORMS_HASH_PEPPER), and create the BigQuery dataset
 #      oursharedevents_backup_stg_full.
 #   6. Put an Access policy over stg-full.oursharedevents.com (owner only).
-# Until the ids are pasted, "OWNER_TO_FILL" marks each one.
+# Until the ids are pasted, an OWNER_TO_FILL_* value marks each one (distinct, so the
+# one-id-per-environment checks stay meaningful).
 [env.staging-full]
 name = "oursharedevents-stg-full"
 routes = [
@@ -330,13 +331,13 @@ routes = [
 [[env.staging-full.d1_databases]]
 binding = "DB"
 database_name = "ocr-db-staging-full"
-database_id = "OWNER_TO_FILL"
+database_id = "OWNER_TO_FILL_DB_STAGING_FULL"
 migrations_dir = "migrations"
 
 [[env.staging-full.d1_databases]]
 binding = "FORMS_DB"
 database_name = "ocr-forms-db-staging-full"
-database_id = "OWNER_TO_FILL"
+database_id = "OWNER_TO_FILL_FORMS_DB_STAGING_FULL"
 migrations_dir = "migrations-forms"
 
 [[env.staging-full.r2_buckets]]
@@ -345,7 +346,7 @@ bucket_name = "ose-uploads-staging-full"
 
 [[env.staging-full.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "OWNER_TO_FILL"
+id = "OWNER_TO_FILL_KV_STAGING_FULL"
 
 # Own namespace ids: staging 15093/15094, production 15095/15096.
 [[env.staging-full.ratelimits]]

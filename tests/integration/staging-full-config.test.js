@@ -81,6 +81,18 @@ describe('staging-full wrangler env', () => {
     expect(arrays(FULL, 'kv_namespaces')[0].values.binding).toBe('RATE_LIMIT_KV');
   });
 
+  test('unprovisioned ids are distinct placeholders, one per resource', () => {
+    const ids = [
+      ...arrays(FULL, 'd1_databases').map((s) => s.values.database_id),
+      arrays(FULL, 'kv_namespaces')[0].values.id,
+    ];
+    expect(ids).toEqual([
+      'OWNER_TO_FILL_DB_STAGING_FULL',
+      'OWNER_TO_FILL_FORMS_DB_STAGING_FULL',
+      'OWNER_TO_FILL_KV_STAGING_FULL',
+    ]);
+  });
+
   test('rate-limit namespace ids are unique across every env', () => {
     const ids = sections
       .filter((s) => s.array && /(^|\.)ratelimits$/.test(s.header))
