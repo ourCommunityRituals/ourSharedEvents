@@ -17,7 +17,7 @@
 - Colors only from tokens (`--status-warn` family); no raw hex. The notice is not a heading; one `<h1>` per page holds. Touch targets ≥ 44 px.
 - Nodes, exact names: Blue Island, Beverly, Auburn Gresham, Evergreen Park, Oak Lawn, Mount Greenwood.
 - Window: events starting from today through today + 90 days.
-- Saturation: **≥ 10 listed events per node**, counted strictly by the node's own res-7 cells.
+- Quantity: `stock/targets.json` = `{ "perNode": 12 }` is the **only** source of how many stock events each node gets. The build loads exactly `perNode` per node (private first, then soonest). The search stops a node at `perNode + 3`. Every check reads `perNode` and the day's manifest, never a literal. `perNode < 10` is refused. Counting is strict, by the node's own res-7 cells. Hand-made events are not in the manifest: assert exactly `perNode` stock events listed and a node total ≥ `perNode`.
 - Sector order: `private` before `public`.
 - Tiers: anchor → `premium`, regional (from `stock/regionals.json`) → `mid`, everything else → `local`.
 - Stock scripts and the stock workflow may target only `--env staging-full` / `https://stg-full.oursharedevents.com`.
@@ -109,7 +109,7 @@
 
 - Produces: `nodes.json` shape `{ "nodes": [{ "id": "blue-island", "name": "Blue Island", "zips": ["60406"], "cells": ["872664…", …], "source": "<boundary URL>" }] }`. The ids are `blue-island`, `beverly`, `auburn-gresham`, `evergreen-park`, `oak-lawn`, `mount-greenwood`.
 - Produces: a find row `{ venue, address, sector: 'private'|'public', node, event_type_id, starts_at, ends_at|null, title, summary, source_url }`.
-- Produces: `validateFinds({ finds, eventTypeIds: Set<string>, nodes, today: string /*YYYY-MM-DD*/, geocode: (address) => Promise<{lat:number,lng:number}|null> }) => Promise<{ accepted: Array<Find & {node:string, cell:string, lat:number, lng:number}>, refused: Array<{ row: Find, reason: 'outside-window'|'no-source'|'unknown-type'|'geocode-failed'|'not-in-node'|'duplicate'|'bad-shape' }>, perNode: Record<string, number> }>`
+- Produces: `validateFinds({ finds, eventTypeIds: Set<string>, nodes, today: string /*YYYY-MM-DD*/, geocode: (address) => Promise<{lat:number,lng:number}|null> }) => Promise<{ accepted: Array<Find & {node:string, cell:string, lat:number, lng:number}>, refused: Array<{ row: Find, reason: 'outside-window'|'no-source'|'unknown-type'|'geocode-failed'|'not-in-node'|'duplicate'|'bad-shape' }>, acceptedPerNode: Record<string, number> }>`
 
 - [ ] **Step 1: Write the failing tests.**
   - `nodes.test.js`: there are exactly six nodes with the ids above; every node has ≥ 1 zip and ≥ 1 cell; every cell is valid res 7 (`h3.getResolution(c) === 7`); no cell appears in two nodes.
@@ -121,7 +121,7 @@
     - A cell in Oak Lawn while the row claims `beverly` → accepted with `node: 'oak-lawn'`.
     - Two rows with the same venue (`"Cork & Kerry"` / `" cork &  kerry "`) and the same start → one accepted, one `duplicate`.
     - A 300-char title is cut to 120 and a 500-char summary to 200.
-    - `perNode` counts accepted rows per node.
+    - `acceptedPerNode` counts accepted rows per node.
     - Accepted rows come back with `private` before `public`.
 - [ ] **Step 2: Run them and watch them fail.** `npx vitest run tests/unit/stock`. Expected: FAIL, files missing.
 - [ ] **Step 3: Write `build-nodes.mjs` and generate `nodes.json`.** Boundaries: City of Chicago community areas (Beverly, Auburn Gresham, Mount Greenwood) and Census TIGER places (Blue Island, Evergreen Park, Oak Lawn). Convert each with `h3.polygonToCells(polygon, 7, true)`. A cell claimed by two boundaries goes to the one holding its center. Put each node's source URL and zips in its entry: Blue Island `60406`; Beverly `60643`; Auburn Gresham `60620`; Evergreen Park `60805`; Oak Lawn `60453`, `60456`, `60457`; Mount Greenwood `60655`.
@@ -133,18 +133,19 @@
 
 **Files:**
 
-- Create: `scripts/stock/client.mjs`, `scripts/stock/build-full.mjs`, `stock/regionals.json` (starts as `{ "regionals": [] }`)
+- Create: `scripts/stock/client.mjs`, `scripts/stock/build-full.mjs`, `stock/regionals.json` (starts as `{ "regionals": [] }`), `stock/targets.json` (`{ "perNode": 12 }`)
 - Test: `tests/unit/stock/build-full.test.js`
 
 **Interfaces:**
 
 - Consumes: Task 3 accepted rows; Task 5 `pickArt`.
 - Produces: `createClient({ baseUrl, adminKey, accessClientId, accessClientSecret, fetch }) => { post(path, body), get(path), upload(eventId, bytes, contentType) }`. Every request sends `CF-Access-Client-Id`, `CF-Access-Client-Secret`, `Authorization: Bearer <adminKey>` and `Content-Type: application/json`. `baseUrl` must equal `https://stg-full.oursharedevents.com` or the client throws.
-- Produces: `buildDay({ client, accepted, businesses, regionals, posts, artTags, date }) => Promise<Manifest>`, where `Manifest = { date: string, items: Array<{ kind: 'event'|'poster'|'sponsor'|'placement'|'upload', id: string, node: string }>, qr: Array<{ eventId, node, qPath, sPath }>, acceptSql: string[] /* placement ids whose acceptance is set by SQL */ }`.
+- Produces: `buildDay({ client, accepted, businesses, regionals, posts, artTags, targets, date }) => Promise<Manifest>`, where `Manifest = { date: string, items: Array<{ kind: 'event'|'poster'|'sponsor'|'placement'|'upload', id: string, node: string }>, qr: Array<{ eventId, node, qPath, sPath }>, acceptSql: string[] /* placement ids whose acceptance is set by SQL */, short: Record<string, number> /* node → how many it fell short of perNode */ }`.
 - Produces: `sponsorTier(business, regionals) => 'premium'|'mid'|'local'`.
 
 - [ ] **Step 1: Write the failing test** with a fake `fetch` that records calls and returns ids. Assertions:
-  - each accepted row produces one `POST /api/v2/admin/events` with `brand_id: 'root'`, `status: 'active'`, `is_published: true`, its `event_type_id`, `lat`/`lon`, `where_address`, `start_date`, and the title;
+  - given 15 accepted rows in one node (5 public, 10 private) and `targets = { perNode: 12 }`, exactly 12 events are created for that node: all 10 private, then the 2 soonest public; a node with 11 accepted creates 11 and is marked short in the manifest (`manifest.short = { node: 1 }`);
+  - each selected row produces one `POST /api/v2/admin/events` with `brand_id: 'root'`, `status: 'active'`, `is_published: true`, its `event_type_id`, `lat`/`lon`, `where_address`, `start_date`, and the title;
   - one `POST /api/v2/admin/events/:id/poster-deployments` per event, plus one `POST …/short-links`;
   - an upload only when `pickArt` returns a post;
   - one `POST /api/v2/admin/sponsors` per business, with `sponsorTier` giving `premium` for `anchor: true`, `mid` for a name listed in `regionals`, `local` otherwise;
@@ -198,7 +199,9 @@
 - Produces: `buildPurgeSql(manifest, nodeIds: string[]) => string`. It deletes those nodes' ids from every table keyed by those ids, child tables first, and leaves any append-only audit table alone. `listStaleManifests(names: string[], newestPassing: string) => string[]`.
 
 - [ ] **Step 1: Write the failing tests:**
-  - a node with 10 strict events passes; 9 strict plus 5 in a neighbor node fails with `count: 9`;
+  - with `targets = { perNode: 12 }`, a node with exactly 12 of today's manifest events listed in its own cells passes; with 11 it fails (`count: 11, expected: 12`); 11 own plus 5 in a neighbor node still fails; 12 stock plus 3 hand-made (not in the manifest) passes;
+  - `checkNodes` given `targets = { perNode: 9 }` throws before any request (`perNode below the map gate of 10`);
+  - no test file under `tests/unit/stock/` contains a numeric count literal for the live site; the expected values come from the `targets` fixture;
   - a node with no `premium` sponsor fails with the reason `no-anchor`;
   - an `sPath` answering 200 fails;
   - `buildPurgeSql` for `['oak-lawn']` names only Oak Lawn ids, and deletes child tables before `events`;
@@ -231,11 +234,11 @@
     - `access-gate` runs `curl` with no credentials and fails unless the status is 302/403 or the `Location` header is on `cloudflareaccess.com`;
     - no step references `secrets.CLOUDFLARE_API_TOKEN` except `deploy` and `check-swap`.
 - [ ] **Step 2: Watch them fail.**
-- [ ] **Step 3: Write `search-prompt.md`.** It goes node by node in the order above, private sector (bars, restaurants, churches, other businesses) then public (park districts, libraries, chambers, villages). It keeps only events from today through +90 days that fit a type in the catalog file the step provides (dump of `GET /api/v2/admin/event-types`). It stops a node at 15 good finds, writes only facts plus a one-line summary in its own words and a source URL, and never copies description text. It also records the businesses on each node's commercial strips, marking anchors. Output must match `stock/finds.schema.json` and `stock/businesses.schema.json`.
+- [ ] **Step 3: Write `search-prompt.md`.** It goes node by node in the order above, private sector (bars, restaurants, churches, other businesses) then public (park districts, libraries, chambers, villages). It keeps only events from today through +90 days that fit a type in the catalog file the step provides (dump of `GET /api/v2/admin/event-types`). It stops a node at `perNode + 3` good finds (read from `stock/targets.json` and substituted into the prompt by the step), writes only facts plus a one-line summary in its own words and a source URL, and never copies description text. It also records the businesses on each node's commercial strips, marking anchors. Output must match `stock/finds.schema.json` and `stock/businesses.schema.json`.
 - [ ] **Step 4: Write the workflow.**
   - `deploy` runs `npx wrangler deploy --env staging-full` and `wrangler d1 migrations apply` for both `-staging-full` databases.
   - `search` runs the pinned `anthropics/claude-code-action` (pin by commit SHA, as other workflows do) on Sonnet with tools limited to web search, web fetch and writing `stock-out/finds.json` / `stock-out/businesses.json`. It uses `--max-turns 80`, plus the CLI's budget flag set from `vars.STOCK_SEARCH_MAX_USD || 5` if the pinned version has one; check `claude --help` in the step and fail closed if no cap can be applied.
-  - `check-swap` first applies `manifest.acceptSql` (an `UPDATE … SET sponsor_accepted = 1, organizer_accepted = 1 WHERE id IN (…)`), then runs `checkNodes`. For each **passing** node it purges that node's ids from every older manifest (`listStaleManifests`). For each **failing** node it purges today's ids for that node, so yesterday's stay. It purges per node with `wrangler d1 execute ocr-db-staging-full --env staging-full --remote --file`, writes the manifest with `wrangler r2 object put ose-uploads-staging-full/stock/manifest-<date>.json --env staging-full --remote`, and prints a per-node table to `$GITHUB_STEP_SUMMARY`. The job fails if any node failed.
+  - `check-swap` first applies `manifest.acceptSql` (an `UPDATE … SET sponsor_accepted = 1, organizer_accepted = 1 WHERE id IN (…)`), then runs `checkNodes`. For each **passing** node it purges that node's ids from every older manifest (`listStaleManifests`). For each **failing** node it purges today's ids for that node, so yesterday's stay. It purges per node with `wrangler d1 execute ocr-db-staging-full --env staging-full --remote --file`, writes the manifest with `wrangler r2 object put ose-uploads-staging-full/stock/manifest-<date>.json --env staging-full --remote`, and prints a per-node table to `$GITHUB_STEP_SUMMARY` (node, expected `perNode`, stock listed, total listed, pass/fail, reasons). The job fails if any node failed.
   - Secrets: `ANTHROPIC_API_KEY`, `INSTAGRAM_ACCESS_TOKEN`, `STG_FULL_ADMIN_KEY`, `STG_FULL_ACCESS_CLIENT_ID`, `STG_FULL_ACCESS_CLIENT_SECRET`, `CLOUDFLARE_API_TOKEN`. Var: `INSTAGRAM_TOKEN_ISSUED`.
 - [ ] **Step 5: Run root `npm test` (incl. `infra-consistency`, `workflow-token-hardening`), `npm run lint:ci`; expect PASS. Born red:** put `--env staging` in `run-day.mjs` and watch the guard fail; drop `access-gate` from `needs` and watch the workflow test fail.
 - [ ] **Step 6: Commit** `feat(stock): morning workflow for the full staging site`.

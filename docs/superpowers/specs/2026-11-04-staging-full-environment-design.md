@@ -158,7 +158,8 @@ _My call:_ `anthropics/claude-code-action` on Sonnet, with only its built-in web
 web fetch tools and write access to the two output files, a turn cap and a 30-minute
 timeout. _My call, pending the owner:_ a per-run spend cap set by a repo variable
 (`STOCK_SEARCH_MAX_USD`, default 5), which the owner can change. The search works one node
-at a time and stops a node once it has 15 good finds, so the cost stays roughly flat. The repo's `.claude/hooks/policy-gate.mjs` is a workstation hook and does not run
+at a time and stops a node once it has `perNode + 3` good finds (see `stock/targets.json`
+below), so the cost stays roughly flat. The repo's `.claude/hooks/policy-gate.mjs` is a workstation hook and does not run
 in CI.
 
 **Job B: validate (plain code, tested).** `scripts/stock/validate-finds.mjs` refuses rows that
@@ -188,12 +189,30 @@ only, through its public admin API with the automation key:
    acceptance, which normally comes from the sponsor's own page), the job seeds that field
    with SQL. What it checks is always read back through the real public pages.
 
+**One number sets the quantity, and the loader and every check read it (owner,
+2026-11-04).** Real data changes every day, so a check that hard-codes a count would drift out
+of line with what was loaded. `stock/targets.json` holds `{ "perNode": 12 }` (_my call_: 12,
+two above the map gate of 10). That number is the only source:
+
+- the build loads **exactly `perNode` events per node**: the first `perNode` accepted finds in
+  priority order (private before public, then soonest start). Extra finds are dropped, and a
+  node with fewer fails;
+- the search stops a node at `perNode + 3` good finds, a buffer for rows the validator refuses;
+- every check takes its expected numbers from `targets.json` and that day's manifest, never
+  from a literal in a test. The run summary prints the expected count per node so the owner's
+  manual checks use the same numbers.
+
+Events the owner creates by hand are not in the manifest. Checks therefore assert that exactly
+`perNode` _stock_ events are listed per node, and that the node's total is at least `perNode`.
+A hand-made event never fails the run.
+
 **Job D: check, then swap.** The new day's data must pass all of these, read back over the
 real public surfaces:
 
-- **per node, strictly:** at least 10 listed events in the 90-day window whose res-7 cell is in
-  that node's own cell list (`stock/nodes.json`), counted from the public `GET /api/v2/events`.
-  Neighbors never count toward a node. Also, the landing page read with the node's zip
+- **per node, strictly:** exactly `perNode` of that day's manifest events are listed in the
+  90-day window, each with a res-7 cell in that node's own cell list (`stock/nodes.json`),
+  read from the public `GET /api/v2/events`. Neighbors never count toward a node. `perNode`
+  must be at least 10 (the map gate), and the check refuses a `targets.json` below that. Also, the landing page read with the node's zip
   (`/?zip=…`) leads with the map. The map leads on the live count (`landing-area.ts`
   `LIST_MAX`); it does not wait for the nightly latch.
   Finding (2026-11-04): today the zip view takes 8 rings of res-7 cells around the zip center
