@@ -2,6 +2,7 @@
 // The token is never logged and never put in an error message.
 
 const MEDIA_URL = 'https://graph.instagram.com/me/media';
+const MEDIA_ORIGIN = 'https://graph.instagram.com';
 const FIELDS = 'id,caption,media_type,media_url,timestamp';
 const KEEP = new Set(['IMAGE', 'CAROUSEL_ALBUM']);
 const TOKEN_LIFE_DAYS = 60;
@@ -40,21 +41,40 @@ export function fnv1a(str) {
 }
 
 /**
- * List the owner's image posts. A 400 or 401 returns [] and sets listPosts.warning.
+ * List the owner's image posts. Never throws: any failure returns the posts
+ * gathered so far (or []) and sets listPosts.warning to a fixed message. The
+ * warning never carries a URL, the token, err.message or err.cause.
  */
 export async function listPosts({ token, fetch: fetchFn = globalThis.fetch } = {}) {
   listPosts.warning = null;
   const posts = [];
   let url = `${MEDIA_URL}?fields=${FIELDS}&access_token=${encodeURIComponent(token || '')}`;
-  for (let page = 0; url && page < MAX_PAGES; page++) {
-    const res = await fetchFn(url);
-    if (res.status === 400 || res.status === 401) {
-      listPosts.warning = `Instagram rejected the token (HTTP ${res.status}); no art this run. Refresh the token.`;
-      return [];
+  let page = 0;
+  while (url) {
+    if (page >= MAX_PAGES) {
+      listPosts.warning = `Instagram post list truncated at ${MAX_PAGES} pages.`;
+      return posts;
     }
-    if (!res.ok) throw new Error(`Instagram media request failed (HTTP ${res.status})`);
-    const body = await res.json();
-    for (const p of body.data || []) {
+    page++;
+    let res;
+    let body;
+    try {
+      res = await fetchFn(url);
+      if (res.status === 400 || res.status === 401) {
+        listPosts.warning = `Instagram rejected the token (HTTP ${res.status}); no art this run. Refresh the token.`;
+        return [];
+      }
+      if (!res.ok) {
+        listPosts.warning = `Instagram media request failed (HTTP ${res.status}); art may be incomplete.`;
+        return posts;
+      }
+      body = await res.json();
+    } catch (err) {
+      const name = err && typeof err.name === 'string' ? err.name : 'Error';
+      listPosts.warning = `Instagram media request failed (${name}); art may be incomplete.`;
+      return posts;
+    }
+    for (const p of (body && body.data) || []) {
       if (!KEEP.has(p.media_type) || !p.media_url) continue;
       posts.push({
         id: String(p.id),
@@ -63,7 +83,21 @@ export async function listPosts({ token, fetch: fetchFn = globalThis.fetch } = {
         mediaUrl: p.media_url,
       });
     }
-    url = body.paging && body.paging.next ? body.paging.next : null;
+    const next = body && body.paging && body.paging.next;
+    url = null;
+    if (next) {
+      let origin = null;
+      try {
+        origin = new URL(next).origin;
+      } catch {
+        origin = null;
+      }
+      if (origin !== MEDIA_ORIGIN) {
+        listPosts.warning = 'Instagram paging link points off graph.instagram.com; stopped paging.';
+        return posts;
+      }
+      url = next;
+    }
   }
   return posts;
 }
@@ -98,7 +132,9 @@ export function tokenWarning(issuedDate, today) {
   const days = Math.floor(
     (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${issuedDate}T00:00:00Z`)) / 86400000
   );
-  if (Number.isNaN(days) || days < TOKEN_WARN_DAY) return null;
+  if (Number.isNaN(days))
+    return 'Instagram token issue date unreadable; set INSTAGRAM_TOKEN_ISSUED as YYYY-MM-DD';
+  if (days < TOKEN_WARN_DAY) return null;
   if (days >= TOKEN_LIFE_DAYS)
     return `Instagram token issued ${issuedDate} has expired (day ${days} of ${TOKEN_LIFE_DAYS}). Refresh it now.`;
   return `Instagram token issued ${issuedDate} is at day ${days} of ${TOKEN_LIFE_DAYS}; refresh it within ${TOKEN_LIFE_DAYS - days} days.`;

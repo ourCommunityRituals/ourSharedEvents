@@ -57,11 +57,65 @@ describe('listPosts', () => {
     expect(listPosts.warning).not.toContain('SECRET');
   });
 
-  test('other failures throw without the token or URL', async () => {
+  const clean = () => {
+    expect(listPosts.warning).toBeTruthy();
+    expect(listPosts.warning).not.toMatch(/SECRET|access_token|boom|http/i);
+  };
+
+  test('a fetch rejection gives [] plus a clean warning', async () => {
+    const fetch = async (url) => {
+      throw new Error('boom ' + url);
+    };
+    expect(await listPosts({ token: 'SECRET', fetch })).toEqual([]);
+    clean();
+  });
+
+  test('json() throwing gives [] plus a clean warning', async () => {
+    const fetch = async () => ({
+      status: 200,
+      ok: true,
+      json: async () => {
+        throw new Error('boom SECRET');
+      },
+    });
+    expect(await listPosts({ token: 'SECRET', fetch })).toEqual([]);
+    clean();
+  });
+
+  test('a paging.next on a foreign host is not followed', async () => {
+    let calls = 0;
+    const fetch = async () => {
+      calls++;
+      return res(200, {
+        data: [media('1', 'IMAGE', 'a')],
+        paging: { next: 'https://evil.example/x?access_token=SECRET' },
+      });
+    };
+    const posts = await listPosts({ token: 'SECRET', fetch });
+    expect(posts.map((p) => p.id)).toEqual(['1']);
+    expect(calls).toBe(1);
+    clean();
+  });
+
+  test('a 500 gives [] plus a warning naming the status', async () => {
     const fetch = async () => res(500, {});
-    const err = await listPosts({ token: 'SECRET', fetch }).catch((e) => e);
-    expect(err.message).toMatch(/HTTP 500/);
-    expect(err.message).not.toMatch(/SECRET|access_token/);
+    expect(await listPosts({ token: 'SECRET', fetch })).toEqual([]);
+    expect(listPosts.warning).toMatch(/500/);
+    expect(listPosts.warning).not.toMatch(/SECRET|access_token/);
+  });
+
+  test('hitting the page cap warns the list is truncated', async () => {
+    let calls = 0;
+    const fetch = async () => {
+      calls++;
+      return res(200, {
+        data: [media(String(calls), 'IMAGE', 'a')],
+        paging: { next: 'https://graph.instagram.com/n?access_token=SECRET' },
+      });
+    };
+    const posts = await listPosts({ token: 'SECRET', fetch });
+    expect(posts).toHaveLength(50);
+    expect(listPosts.warning).toMatch(/truncated at 50 pages/);
   });
 
   test('redactUrl hides access_token', () => {
@@ -122,5 +176,10 @@ describe('tokenWarning', () => {
     expect(tokenWarning('2026-10-01', '2026-10-21')).toBeNull();
     expect(tokenWarning('2026-09-02', '2026-10-21')).toBeNull();
     expect(tokenWarning('2026-08-01', '2026-10-21')).toMatch(/expired/);
+  });
+
+  test('an unreadable issue date says so', () => {
+    expect(tokenWarning('garbage', '2026-10-21')).toMatch(/unreadable.*INSTAGRAM_TOKEN_ISSUED/);
+    expect(tokenWarning(undefined, '2026-10-21')).toMatch(/unreadable/);
   });
 });
