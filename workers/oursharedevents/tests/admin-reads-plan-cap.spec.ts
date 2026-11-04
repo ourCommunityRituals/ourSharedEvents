@@ -463,3 +463,31 @@ describe('OSE-682 | event flag plan rule keeps the flag envelope', () => {
     expect(((await res.json()) as { code: string }).code).toBe('INVALID_FLAG_KEY');
   });
 });
+
+// ── Review 2026-11-04 (5): a platform read's reference finds its audit row ───
+//
+// @born-red OSE-682 | method: audit-router-id | verified: auditing with the
+//   router's own reqId instead of the response's reference turns every case red
+//   (the handlers mint their own X-Request-Id, and pre-event activity sent none).
+describe("OSE-682 | a platform read's X-Request-Id is its audit row's request_id", () => {
+  for (const [label, path] of [
+    ['event dashboard', dash],
+    ['pre-event activity', pre],
+    ['poster deployments', posters],
+    ['corridor dashboard', corridor],
+  ] as const) {
+    test(label, async () => {
+      await setPlan(false);
+      await db().prepare(`DELETE FROM admin_audit_log WHERE action = 'READ_PAST_PLAN'`).run();
+      const res = await callAs(PLATFORM, 'GET', path);
+      expect(res.status).toBe(200);
+      const reference = res.headers.get('X-Request-Id');
+      expect(reference, 'X-Request-Id').toBeTruthy();
+      await new Promise((r) => setTimeout(r, 50));
+      const row = await db()
+        .prepare(`SELECT request_id FROM admin_audit_log WHERE action = 'READ_PAST_PLAN'`)
+        .first<{ request_id: string }>();
+      expect(row?.request_id).toBe(reference);
+    });
+  }
+});

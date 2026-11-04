@@ -536,6 +536,22 @@ export async function route(
    * recorded as 'denied': the append-only log must never claim a write that
    * did not happen (same rule as UPDATE_EVENT, CCR-PR567 item 7).
    */
+  /**
+   * The reference a response carries is the one its audit row must hold, so a
+   * support lookup by X-Request-Id finds the row (review 2026-11-04). A handler
+   * that minted its own id keeps it; one that sent none gets `reqId`.
+   */
+  function _withReference(res: Response, reqId: string): { res: Response; ref: string } {
+    const own = res.headers.get('X-Request-Id');
+    if (own) return { res, ref: own };
+    const headers = new Headers(res.headers);
+    headers.set('X-Request-Id', reqId);
+    return {
+      res: new Response(res.body, { status: res.status, statusText: res.statusText, headers }),
+      ref: reqId,
+    };
+  }
+
   function _auditOutcome(res: Response): 'success' | 'denied' {
     return res.status < 400 ? 'success' : 'denied';
   }
@@ -964,14 +980,16 @@ export async function route(
         if (Array.isArray(brands))
           served = brands.filter((b): b is string => typeof b === 'string');
       }
+      const ref = _withReference(res, reqId);
       _audit(
-        reqId,
+        ref.ref,
         'READ_PAST_PLAN',
         outcome,
         'corridor',
         served.length ? served.join(',') : 'refused',
         served.length === 1 ? served[0] : null
       );
+      return ref.res;
     }
     return res;
   }
@@ -1382,8 +1400,10 @@ export async function route(
       const who = await reportPlanFor(request, env);
       const id = adminPosterListMatch[1];
       const res = await handleAdminListPosterDeployments(request, env, id, who.plan);
-      if (who.platform) _audit(reqId, 'READ_PAST_PLAN', _auditOutcome(res), 'event', id);
-      return res;
+      if (!who.platform) return res;
+      const ref = _withReference(res, reqId);
+      _audit(ref.ref, 'READ_PAST_PLAN', _auditOutcome(res), 'event', id);
+      return ref.res;
     }
   }
 
@@ -1443,8 +1463,10 @@ export async function route(
     const who = await reportPlanFor(request, env);
     const id = adminEventDashboardMatch[1];
     const res = await handleEventDashboard(request, env, id, who.plan);
-    if (who.platform) _audit(reqId, 'READ_PAST_PLAN', _auditOutcome(res), 'event', id);
-    return res;
+    if (!who.platform) return res;
+    const ref = _withReference(res, reqId);
+    _audit(ref.ref, 'READ_PAST_PLAN', _auditOutcome(res), 'event', id);
+    return ref.res;
   }
 
   // GET /api/v2/admin/events/:id/pre-event-activity — the organizer's pre-event
@@ -1459,8 +1481,10 @@ export async function route(
     const who = await reportPlanFor(request, env);
     const id = adminPreEventMatch[1];
     const res = await handleAdminPreEventActivity(request, env, id, who.plan);
-    if (who.platform) _audit(reqId, 'READ_PAST_PLAN', _auditOutcome(res), 'event', id);
-    return res;
+    if (!who.platform) return res;
+    const ref = _withReference(res, reqId);
+    _audit(ref.ref, 'READ_PAST_PLAN', _auditOutcome(res), 'event', id);
+    return ref.res;
   }
 
   // POST /api/v2/admin/poster-deployments/backfill-h3 (must match before /:id)
