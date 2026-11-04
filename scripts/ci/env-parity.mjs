@@ -52,6 +52,7 @@ export const INTENTIONAL_ONLY_IN = {
       'staging admin sees every brand; production must not (tests/prod-admin-scope-config.spec.ts)',
     ALLOW_ADMIN_KEY_FALLBACK: 'a key fallback for CI callers; production has none',
     ALLOW_OCR_INTERNAL: 'internal-header fallback for CI callers; production has none',
+    STAGING_VARIANT: 'names which staging site this is (empty or full); production has no variant',
   },
   production: {},
 };

@@ -35,6 +35,24 @@ describe('OSE-1418 | security alert runbooks are env-aware', () => {
     expect(steps).toContain('curl https://stg.oursharedevents.com/health');
   });
 
+  test('a staging-full health alert points at stg-full, not stg.', () => {
+    const body = buildLinearDescription(health, 'alert-2', 'staging', 'full');
+    expect(body).toContain('curl https://stg-full.oursharedevents.com/health');
+    expect(body).toContain('**Environment:** staging-full');
+    expect(body).not.toContain('https://stg.oursharedevents.com');
+    expect(buildInvestigationSteps(fiveXx, 'staging', 'full')).toContain(
+      'wrangler rollback --env staging-full'
+    );
+  });
+
+  test('the empty variant and no variant stay staging', () => {
+    for (const variant of ['empty', undefined]) {
+      expect(alertTarget('staging', variant).label).toBe('staging');
+      expect(alertTarget('staging', variant).baseUrl).toBe('https://stg.oursharedevents.com');
+    }
+    expect(alertTarget('production', 'full').label).toBe('production');
+  });
+
   test('a production 5xx alert rolls back production, not staging', () => {
     const steps = buildInvestigationSteps(fiveXx, 'production');
     expect(steps).toContain('wrangler rollback --env production');

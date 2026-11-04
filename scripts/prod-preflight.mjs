@@ -45,6 +45,7 @@ export const STAGING_ONLY_VARS = [
   'ADMIN_SCOPE_ALL',
   'ALLOW_ADMIN_KEY_FALLBACK',
   'ALLOW_OCR_INTERNAL',
+  'STAGING_VARIANT',
 ];
 
 /** Job names of the staging chain, as the CI workflow prints them. */
