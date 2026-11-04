@@ -261,6 +261,12 @@ ALLOW_OCR_INTERNAL = "true"
 # STAGING ONLY — deliberately absent from [env.production.vars]; unscoped automation
 # access to real tenant data on prod is a security boundary that must never open.
 ADMIN_SCOPE_ALL = "true"
+# OSE-1800: the one synthetic brand the CI service actor administers (a brand
+# admin, never platform: auth/admin.ts serviceActorName, admin-brand-scope.ts).
+# Inert until CI_SERVICE_ACTORS lists the CI service token's Client ID, which the
+# owner sets once the token exists and CF_ACCESS_AUD is pinned here (OSE-1377).
+# STAGING ONLY — tests/prod-admin-scope-config.spec.ts keeps it out of production.
+CI_SERVICE_ACTOR_BRAND = "ci-brand"
 # Admin email allowlist — plaintext vars take priority over secrets; set actual values here
 ALLOWED_ADMIN_EMAILS = "mzdano@gmail.com"
 ALLOWED_ADMIN_DOMAINS = "oursharedevents.com"

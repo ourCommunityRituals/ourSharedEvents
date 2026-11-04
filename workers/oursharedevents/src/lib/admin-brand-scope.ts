@@ -30,6 +30,27 @@ export interface AdminBrandScopeEnv {
   ADMIN_SCOPE_ALL?: string;
   /** B2: the audited membership table backing scope (migration 0050). */
   DB?: D1Database;
+  /** OSE-1800: the svc actor's scope is decided only on staging. */
+  WORKER_ENV?: string;
+  /**
+   * OSE-1800 — STAGING ONLY. The one brand the staging CI service actor
+   * (`svc:`) administers. Never the platform brand, never a list.
+   */
+  CI_SERVICE_ACTOR_BRAND?: string;
+}
+
+/** OSE-1800: a brand slug the svc actor may be scoped to (one, never the platform). */
+const SVC_BRAND_SHAPE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+
+/**
+ * OSE-1800 — the staging CI service actor's scope: exactly CI_SERVICE_ACTOR_BRAND,
+ * on staging only, never the platform brand, never `all`. Anything else denies.
+ */
+function resolveServiceActorScope(env: AdminBrandScopeEnv): AdminBrandScope {
+  if (env.WORKER_ENV !== 'staging') return { mode: 'deny' };
+  const brand = env.CI_SERVICE_ACTOR_BRAND?.trim() ?? '';
+  if (!SVC_BRAND_SHAPE.test(brand) || brand === PLATFORM_BRAND_ID) return { mode: 'deny' };
+  return { mode: 'scoped', brandIds: [brand] };
 }
 
 /**
@@ -64,6 +85,8 @@ export function resolveAdminBrandScope(
   // Fail-closed: no identity → no rows.
   if (!actor) return { mode: 'deny' };
 
+  // OSE-1800: the staging CI service actor has exactly one brand.
+  if (actor.startsWith('svc:')) return resolveServiceActorScope(env);
   // Automation / CI keys carry no brand identity. Unscoped access is an explicit
   // deployment opt-in, never inferred, and never for an email operator.
   if (actor.startsWith('key:')) {
@@ -111,7 +134,8 @@ export async function resolveAdminBrandScopeAsync(
 ): Promise<AdminBrandScope> {
   if (!actor) return { mode: 'deny' };
   // Automation keys carry no brand identity — same opt-in path, no DB.
-  if (actor.startsWith('key:')) return resolveAdminBrandScope(actor, env);
+  if (actor.startsWith('key:') || actor.startsWith('svc:'))
+    return resolveAdminBrandScope(actor, env);
 
   if (env.DB) {
     try {
@@ -145,7 +169,7 @@ export async function resolveAdminRoles(
   actor: string | null,
   env: AdminBrandScopeEnv
 ): Promise<Array<{ brandId: string; role: AdminRole }>> {
-  if (!actor || actor.startsWith('key:') || !env.DB) return [];
+  if (!actor || actor.startsWith('key:') || actor.startsWith('svc:') || !env.DB) return [];
   try {
     const rows = await env.DB.prepare(
       'SELECT brand_id, role FROM admin_brand_memberships WHERE email = ?'

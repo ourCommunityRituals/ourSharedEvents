@@ -56,6 +56,17 @@ describe('OSE-1415 | production admin scope config', () => {
     }
   );
 
+  // OSE-1800: the staging CI service actor (a brand admin over a synthetic brand)
+  // exists on staging only. The code also refuses it off staging; this keeps the
+  // settings themselves out of production.
+  test.each(['CI_SERVICE_ACTORS', 'CI_SERVICE_ACTOR_BRAND'])(
+    '%s is NOT set in [env.production.vars]',
+    (key) => {
+      const prod = setKeys(envVarsSection(toml, 'production'));
+      expect(prod).not.toContain(key);
+    }
+  );
+
   test('the staging opt-in is still where it belongs (parser sanity)', () => {
     const stg = setKeys(envVarsSection(toml, 'staging'));
     expect(stg).toContain('ADMIN_SCOPE_ALL');

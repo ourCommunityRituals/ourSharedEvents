@@ -31,6 +31,7 @@
  * widen what a brand reader sees.
  */
 
+import { isAutomationActor } from '../auth/admin';
 import type { AuditLogEnv } from '../lib/audit-log';
 import {
   resolveAdminBrandScope,
@@ -77,7 +78,7 @@ export type AuditSource = (typeof AUDIT_SOURCES)[number];
 export function auditSourceOf(actor: string | null): AuditSource {
   if (!actor) return 'unknown';
   if (actor.startsWith('system:')) return 'system';
-  if (actor.startsWith('key:')) return 'key';
+  if (isAutomationActor(actor)) return 'key'; // OSE-1800: svc: is automation too
   if (actor.startsWith('sponsor:')) return 'sponsor';
   return 'person';
 }
@@ -86,10 +87,10 @@ export function auditSourceOf(actor: string | null): AuditSource {
 const SOURCE_SQL: Record<AuditSource, string> = {
   unknown: 'actor IS NULL',
   system: "actor LIKE 'system:%'",
-  key: "actor LIKE 'key:%'",
+  key: "(actor LIKE 'key:%' OR actor LIKE 'svc:%')",
   sponsor: "actor LIKE 'sponsor:%'",
   person:
-    "(actor IS NOT NULL AND actor NOT LIKE 'system:%' AND actor NOT LIKE 'key:%' AND actor NOT LIKE 'sponsor:%')",
+    "(actor IS NOT NULL AND actor NOT LIKE 'system:%' AND actor NOT LIKE 'key:%' AND actor NOT LIKE 'svc:%' AND actor NOT LIKE 'sponsor:%')",
 };
 
 const BRAND_FILTER_SHAPE = /^[A-Za-z0-9._:-]{1,64}$/;
@@ -174,7 +175,7 @@ function parseDetails(details: string | null): unknown {
 
 /** Automation and system actors carry no person's identity and are always shown. */
 function isServiceActor(actor: string): boolean {
-  return actor.startsWith('key:') || actor.startsWith('system:');
+  return isAutomationActor(actor) || actor.startsWith('system:');
 }
 
 /**

@@ -40,7 +40,7 @@
  * send that across sites, and rule 1 or 2 has already run.
  */
 
-import { extractAdminActor, type AdminEnv } from '../auth/admin';
+import { extractAdminActor, isAutomationActor, type AdminEnv } from '../auth/admin';
 import { isJsonContentType } from './content-type';
 
 /** Response code for a write refused by rules 1 and 2. */
@@ -96,7 +96,7 @@ export function adminWriteRefusal(
     }
   } else if (origin !== null) {
     if (origin !== url.origin) return { kind: 'cross-site', reason: 'origin' };
-  } else if (actor !== null && !actor.startsWith('key:')) {
+  } else if (actor !== null && !isAutomationActor(actor)) {
     // Rule 2: no evidence at all, and the caller is a signed-in person.
     return { kind: 'cross-site', reason: 'no-origin' };
   }

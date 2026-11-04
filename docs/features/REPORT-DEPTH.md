@@ -106,9 +106,18 @@ then global); every plan read fails closed.
   platform, Free vs Mid vs event override), `tests/report-plan.spec.ts`, and the
   batch block in `tests/shared-report-read.spec.ts`.
 - Staging: the Bruno suite authenticates as a key actor, which is a platform
-  admin, so it cannot exercise the brand-admin cap. That case is covered in the
-  workers pool, and by signing in on staging with a brand admin email that is
-  not in `ose-platform`.
+  admin, so on its own it cannot exercise the brand-admin cap. OSE-1800 adds a
+  CI identity that is a **brand** admin: a second Cloudflare Access service token,
+  accepted on staging only as `svc:<common_name>` (`auth/admin.ts`
+  `serviceActorName`) when the signature verifies, the Access audience is pinned
+  and carried, `WORKER_ENV` is staging and the name is listed in
+  `CI_SERVICE_ACTORS`. Its scope is exactly `CI_SERVICE_ACTOR_BRAND`
+  (`ci-brand`), never `all` and never the platform brand, and key-only routes
+  refuse it. Folder 6 reads `ci-free-evt` with it while staging is on Free
+  (`bruno/fixtures/ci-brand-seed.sql`); until the token's secrets and
+  `CI_SERVICE_ACTORS` exist, those requests skip under a test named for what is
+  missing. Production can never carry either setting
+  (`tests/prod-admin-scope-config.spec.ts`).
 
 ## Sections by depth (additive ladder)
 

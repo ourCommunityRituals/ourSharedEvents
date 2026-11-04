@@ -1,0 +1,40 @@
+info:
+  name: GET CI brand admin - another brand's event is not found
+  type: http
+  seq: 12
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{testEventId}}/dashboard"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{ciBrandClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{ciBrandClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1800: the CI service actor (a brand admin of ci-brand, never platform).
+        // Inert until the owner creates the Access service token and adds its secrets
+        // (CF_ACCESS_CI_BRAND_CLIENT_ID / _SECRET) and CI_SERVICE_ACTORS on staging.
+        // Until then this request is skipped under a test named for what is missing.
+        if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
+          test('SKIPPED until OSE-1800 setup: no CI brand service token configured', function () {});
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        // test-event-001 belongs to another brand: brand scoping answers 404, like an unknown id.
+        test('404 for an event outside its brand', function () { expect(res.getStatus()).to.eql(404); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
