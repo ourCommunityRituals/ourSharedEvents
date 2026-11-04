@@ -410,6 +410,26 @@ describe('Tier 2 | each placement row: where it hangs + its floored scans', () =
     expect(at(rows[1], 'pd-scans')).toBe('Fewer than 5 scans in any hour');
   });
 
+  test('OSE-682: on a Free plan the per-poster count says it comes with Mid, never "fewer than 5"', async () => {
+    const { w, doc } = mountAdmin(
+      () => ({
+        body: {
+          ok: true,
+          // The server leaves `scans` off every row and names it in `plan`.
+          items: [{ ...ITEM({}), scans: undefined }],
+          event_address: EVENT_ADDRESS,
+          plan: { paid_report: false, locked_sections: ['items.scans'], next_plan: 'mid' },
+        },
+      }),
+      PD_SCRIPT
+    );
+    await (w.loadPosterDeployments as (id: string) => Promise<void>)(EVT);
+    const row = doc.querySelector('[data-testid="poster-deployment-row"]')!;
+    const scans = row.querySelector('[data-testid="pd-scans"]')!.textContent;
+    expect(scans).toBe('Scan counts come with the Mid plan');
+    expect(scans).not.toContain('Fewer than 5');
+  });
+
   test('hostile label / description / scans stay text', async () => {
     const { w, doc } = mountAdmin(
       () => listReply([ITEM({ placement_label: HOSTILE, location_desc: HOSTILE, scans: HOSTILE })]),

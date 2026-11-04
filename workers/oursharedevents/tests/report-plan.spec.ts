@@ -52,14 +52,14 @@ describe('OSE-682 | paidEventsSql (brand-wide reads)', () => {
     expect(paidEventsSql(FULL_PLAN, 'e.id')).toEqual({ sql: '1 = 1', binds: [], narrowed: false });
     expect(paidEventsSql(plan(true), 'e.id').narrowed).toBe(false);
   });
-  it('Mid with an off-override: that event is left out', () => {
+  it('Mid with an off-override: that event is left out, in one bound list', () => {
     expect(paidEventsSql(plan(true, [['e1', false]]), 'e.id')).toEqual({
-      sql: 'e.id NOT IN (?)',
-      binds: ['e1'],
+      sql: 'e.id NOT IN (SELECT value FROM json_each(?))',
+      binds: ['["e1"]'],
       narrowed: true,
     });
   });
-  it('Free with on-overrides: only those events', () => {
+  it('Free with on-overrides: only those events, in one bound list', () => {
     expect(
       paidEventsSql(
         plan(false, [
@@ -69,17 +69,25 @@ describe('OSE-682 | paidEventsSql (brand-wide reads)', () => {
         'e.id'
       )
     ).toEqual({
-      sql: 'e.id IN (?)',
-      binds: ['e1'],
+      sql: 'e.id IN (SELECT value FROM json_each(?))',
+      binds: ['["e1"]'],
       narrowed: true,
     });
   });
   it('Free with no override: nothing', () => {
     expect(paidEventsSql(plan(false), 'e.id')).toEqual({ sql: '0 = 1', binds: [], narrowed: true });
   });
-  it('too many off-overrides to bind: fails safe to nothing, not everything', () => {
-    const off = Array.from({ length: 200 }, (_, i) => [`e${i}`, false] as [string, boolean]);
-    expect(paidEventsSql(plan(true, off), 'e.id').sql).toBe('0 = 1');
+  it('a long list keeps every event, both ways, still one bind (D1 caps a statement at 100)', () => {
+    const many = (paid: boolean) =>
+      Array.from({ length: 500 }, (_, i) => [`e${i}`, paid] as [string, boolean]);
+    const off = paidEventsSql(plan(true, many(false)), 'e.id');
+    expect(off.binds).toHaveLength(1);
+    expect(JSON.parse(off.binds[0]!)).toHaveLength(500);
+    expect(off.sql).toContain('NOT IN');
+    const on = paidEventsSql(plan(false, many(true)), 'e.id');
+    expect(on.binds).toHaveLength(1);
+    expect(JSON.parse(on.binds[0]!)).toHaveLength(500);
+    expect(on.sql).toContain(' IN (');
   });
 });
 

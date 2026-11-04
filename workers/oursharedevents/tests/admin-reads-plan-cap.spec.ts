@@ -211,3 +211,96 @@ describe('OSE-682 | corridor dashboard (brand-wide map)', () => {
     expect(body).not.toHaveProperty('plan');
   });
 });
+
+// ── Review 2026-11-04: a brand admin cannot grant its own event a paid plan ──
+// A per-event override is how the plan reaches one event, so writing one is an
+// entitlement write. A brand admin may turn a feature OFF for an event or remove
+// an override; turning one ON is allowed only when the plan already includes it.
+// Anything beyond the plan is a platform action.
+//
+// @born-red OSE-682 | method: drop-guard | verified: removing the
+//   EVENT_FLAG_ABOVE_PLAN check in router.ts turns "Free plan, brand admin
+//   cannot switch the paid report on" red (the write succeeds and the dashboard
+//   comes back in full).
+describe('OSE-682 | event flag overrides are entitlement writes', () => {
+  const flagPath = `/api/v2/admin/events/${A.activeEventId}/flags/analytics.shared-report`;
+
+  test('Free plan, brand admin cannot switch the paid report on; the reads stay capped', async () => {
+    await setPlan(false);
+    const res = await callAs(OWNER, 'PUT', flagPath, { enabled: true });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { code: string }).code).toBe('EVENT_FLAG_ABOVE_PLAN');
+    const body = await read(OWNER, dash);
+    expect(body.reach as Record<string, unknown>).not.toHaveProperty('scansByDay');
+  });
+
+  test('Free plan, brand admin cannot switch a plan-locked form on either', async () => {
+    await setPlan(false);
+    await formsDb()
+      .prepare(
+        `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
+         VALUES ('t682-survey', 'global', '', 'forms.survey', 0, datetime('now'))
+         ON CONFLICT(scope, scope_id, flag_key) DO UPDATE SET enabled = 0`
+      )
+      .run();
+    const res = await callAs(
+      OWNER,
+      'PUT',
+      `/api/v2/admin/events/${A.activeEventId}/flags/forms.survey`,
+      { enabled: true }
+    );
+    expect(res.status).toBe(403);
+  });
+
+  test('a brand admin may turn a feature off for an event, and remove the override', async () => {
+    await setPlan(true);
+    expect((await callAs(OWNER, 'PUT', flagPath, { enabled: false })).status).toBe(200);
+    expect((await callAs(OWNER, 'DELETE', flagPath)).status).toBe(200);
+  });
+
+  test('Mid plan, brand admin may switch the paid report back on for its event', async () => {
+    await setPlan(true);
+    expect((await callAs(OWNER, 'PUT', flagPath, { enabled: true })).status).toBe(200);
+  });
+
+  test('Free plan, platform admin grants the event the paid report; the brand admin then reads it in full', async () => {
+    await setPlan(false);
+    expect((await callAs(PLATFORM, 'PUT', flagPath, { enabled: true })).status).toBe(200);
+    const body = await read(OWNER, dash);
+    expect(body.reach as Record<string, unknown>).toHaveProperty('scansByDay');
+    expect(body).not.toHaveProperty('plan');
+  });
+});
+
+// ── Review 2026-11-04: a platform admin's full view is audited ──────────────
+describe('OSE-682 | platform reads past the plan are audited', () => {
+  test('a platform admin reading a Free event dashboard leaves an audit row', async () => {
+    await setPlan(false);
+    await db().prepare(`DELETE FROM admin_audit_log WHERE action = 'READ_PAST_PLAN'`).run();
+    await read(PLATFORM, dash);
+    // The audit write is waitUntil'd; give it a turn.
+    await new Promise((r) => setTimeout(r, 50));
+    const row = await db()
+      .prepare(
+        `SELECT action, resource_type, resource_id, outcome, request_id FROM admin_audit_log
+          WHERE action = 'READ_PAST_PLAN' ORDER BY rowid DESC LIMIT 1`
+      )
+      .first<{ resource_type: string; resource_id: string; outcome: string; request_id: string }>();
+    expect(row).not.toBeNull();
+    expect(row!.resource_type).toBe('event');
+    expect(row!.resource_id).toBe(A.activeEventId);
+    expect(row!.outcome).toBe('success');
+    expect(row!.request_id).toBeTruthy();
+  });
+
+  test('a brand admin read is not a platform read: no such row', async () => {
+    await setPlan(false);
+    await db().prepare(`DELETE FROM admin_audit_log WHERE action = 'READ_PAST_PLAN'`).run();
+    await read(OWNER, dash);
+    await new Promise((r) => setTimeout(r, 50));
+    const n = await db()
+      .prepare(`SELECT COUNT(*) AS n FROM admin_audit_log WHERE action = 'READ_PAST_PLAN'`)
+      .first<{ n: number }>();
+    expect(n!.n).toBe(0);
+  });
+});

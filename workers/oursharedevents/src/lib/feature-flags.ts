@@ -192,6 +192,20 @@ export async function isPaidReportEnabled(db: D1Database, eventId: string): Prom
 }
 
 /**
+ * Does the plan (the global flag set) include this feature? Used to decide
+ * whether a brand admin may switch it ON for one event (review 2026-11-04: an
+ * event override is an entitlement write). No row is the contract default, on.
+ * Fails CLOSED: a read error answers false, so the write is refused.
+ */
+export async function isFlagInPlan(db: D1Database, flagKey: string): Promise<boolean> {
+  try {
+    return (await adapter(db).getGlobalFlag(flagKey)) ?? true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Read the paid-report plan once for a request that covers many events (the
  * admin reads in lib/report-plan.ts). Same flag and precedence as
  * `isPaidReportEnabled`; fails CLOSED to "nothing is paid".

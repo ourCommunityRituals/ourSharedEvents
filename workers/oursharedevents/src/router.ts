@@ -270,6 +270,7 @@ import {
   listFlags,
   detectCurrentTier,
   isPaidReportEnabled,
+  isFlagInPlan,
   readReportPlan,
   type FeatureFlagEnv,
 } from './lib/feature-flags';
@@ -469,11 +470,19 @@ async function formRouteLimit(
 
 /**
  * Who × plan for an admin read (OSE-682, owner 2026-11-04): a platform admin
- * sees every event as paid; anyone else gets the events' real plans, read once
- * and failing closed. See lib/report-plan.ts.
+ * sees every event as paid, and that read is audited (`audit` runs on the
+ * platform branch only); anyone else gets the events' real plans, read once and
+ * failing closed. See lib/report-plan.ts.
  */
-async function reportPlanFor(request: Request, env: RouterEnv): Promise<ReportPlan> {
-  if (await isPlatformActor(request, env)) return FULL_PLAN;
+async function reportPlanFor(
+  request: Request,
+  env: RouterEnv,
+  audit: () => void
+): Promise<ReportPlan> {
+  if (await isPlatformActor(request, env)) {
+    audit();
+    return FULL_PLAN;
+  }
   return readReportPlan(env.FORMS_DB);
 }
 
@@ -940,11 +949,18 @@ export async function route(
       pathname === '/api/v2/admin/dashboards/corridor') &&
     method === 'GET'
   ) {
-    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    return pathname.endsWith('/operations')
-      ? handleOperationsDashboard(request, env)
-      : handleCorridorDashboard(request, env, await reportPlanFor(request, env));
+    if (pathname.endsWith('/operations')) return handleOperationsDashboard(request, env);
+    const brandParam = new URL(request.url).searchParams.get('brand_id');
+    return handleCorridorDashboard(
+      request,
+      env,
+      await reportPlanFor(request, env, () =>
+        _audit(reqId, 'READ_PAST_PLAN', 'success', 'corridor', brandParam ?? 'scope', brandParam)
+      )
+    );
   }
 
   // GET /api/v2/admin/events/portfolio-rollup — OSE-669 brand-scoped rollup strip.
@@ -1354,7 +1370,9 @@ export async function route(
         request,
         env,
         adminPosterListMatch[1],
-        await reportPlanFor(request, env)
+        await reportPlanFor(request, env, () =>
+          _audit(reqId, 'READ_PAST_PLAN', 'success', 'event', adminPosterListMatch[1])
+        )
       );
   }
 
@@ -1415,7 +1433,9 @@ export async function route(
       request,
       env,
       adminEventDashboardMatch[1],
-      await reportPlanFor(request, env)
+      await reportPlanFor(request, env, () =>
+        _audit(reqId, 'READ_PAST_PLAN', 'success', 'event', adminEventDashboardMatch[1])
+      )
     );
   }
 
@@ -1432,7 +1452,9 @@ export async function route(
       request,
       env,
       adminPreEventMatch[1],
-      await reportPlanFor(request, env)
+      await reportPlanFor(request, env, () =>
+        _audit(reqId, 'READ_PAST_PLAN', 'success', 'event', adminPreEventMatch[1])
+      )
     );
   }
 
@@ -1561,6 +1583,30 @@ export async function route(
       return deny;
     }
     if (method === 'PUT') {
+      // Review 2026-11-04 (OSE-682): an event override is how a plan reaches one
+      // event, so switching a feature ON is an entitlement write. A brand admin
+      // may switch on only what its plan already includes; turning a feature off
+      // or removing an override is always theirs. Beyond the plan is platform's.
+      const peek = (await request
+        .clone()
+        .json()
+        .catch(() => null)) as { enabled?: unknown } | null;
+      if (
+        peek?.enabled === true &&
+        !(await isPlatformActor(request, env)) &&
+        !(await isFlagInPlan(env.FORMS_DB, flagKey))
+      ) {
+        _audit(reqId, 'SET_EVENT_FLAG', 'denied', 'flag', `${eventId}/${flagKey}`);
+        return Response.json(
+          {
+            ok: false,
+            status: 403,
+            code: 'EVENT_FLAG_ABOVE_PLAN',
+            error: "This feature isn't in this plan; a platform admin can grant it for an event",
+          },
+          { status: 403 }
+        );
+      }
       const response = await handleSetEventFlag(request, env, eventId, flagKey, reqId);
       const outcome = _auditOutcome(response);
       _audit(reqId, 'SET_EVENT_FLAG', outcome, 'flag', `${eventId}/${flagKey}`);

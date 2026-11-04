@@ -58,14 +58,12 @@ export function planNote(locked: string[]): PlanNote {
   return { paid_report: false, locked_sections: [...locked], next_plan: 'mid' };
 }
 
-/** D1 bind limit is 100; stay well under it alongside a query's own binds. */
-const MAX_LISTED_EVENTS = 80;
-
 /**
  * A SQL condition that keeps only events whose plan includes the paid report,
  * for a brand-wide read (the corridor dashboard). `column` names the event id.
- * Fails safe: when the override list is too long to bind, it keeps nothing
- * paid-only rather than everything.
+ * The override list is bound once, as JSON through `json_each` (the pattern in
+ * handlers/audit.ts): D1 caps a statement at 100 bound parameters, and a long
+ * list must neither be cut short nor empty every brand's map.
  */
 export function paidEventsSql(
   plan: ReportPlan,
@@ -77,14 +75,16 @@ export function paidEventsSql(
   for (const [id, paid] of plan.overrides) (paid ? on : off).push(id);
   if (plan.globalPaid) {
     if (off.length === 0) return { sql: '1 = 1', binds: [], narrowed: false };
-    if (off.length > MAX_LISTED_EVENTS) return { sql: '0 = 1', binds: [], narrowed: true };
     return {
-      sql: `${column} NOT IN (${off.map(() => '?').join(', ')})`,
-      binds: off,
+      sql: `${column} NOT IN (SELECT value FROM json_each(?))`,
+      binds: [JSON.stringify(off)],
       narrowed: true,
     };
   }
   if (on.length === 0) return { sql: '0 = 1', binds: [], narrowed: true };
-  const kept = on.slice(0, MAX_LISTED_EVENTS);
-  return { sql: `${column} IN (${kept.map(() => '?').join(', ')})`, binds: kept, narrowed: true };
+  return {
+    sql: `${column} IN (SELECT value FROM json_each(?))`,
+    binds: [JSON.stringify(on)],
+    narrowed: true,
+  };
 }
