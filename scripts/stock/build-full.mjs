@@ -2,6 +2,7 @@
 // every id it creates in a manifest (the check, swap and purge steps read it).
 import { pickArt } from './instagram.mjs';
 import { chicagoDate } from './validate-finds.mjs';
+import { SAFE_ID } from './purge-full.mjs';
 
 // The stock plan's sponsor tiers, and the tier word the Worker accepts for each.
 // Every value must be in VALID_TIERS in workers/oursharedevents/src/handlers/sponsors.ts.
@@ -130,9 +131,23 @@ export async function buildDay({
         if (post) {
           try {
             const art = await downloadArt(fetchFn, post.mediaUrl);
+            // The Worker answers { ok, status, file: { key, url, ... }, requestId }
+            // (handlers/upload.ts). A key the purge could not name is never recorded.
             const up = await client.upload(ev.id, art.bytes, art.contentType);
-            record('upload', up.key, node);
-            await client.put(`/api/v2/admin/events/${ev.id}`, { cover_image_url: up.url });
+            const file = up && up.file;
+            if (!file || typeof file.key !== 'string' || !SAFE_ID.test(file.key)) {
+              manifest.warnings.push(
+                `art skipped for ${ev.id}: the upload answer has no usable key`
+              );
+            } else {
+              // the object is in R2 now, so its key is recorded before anything else
+              record('upload', file.key, node);
+              if (typeof file.url === 'string' && file.url !== '') {
+                await client.put(`/api/v2/admin/events/${ev.id}`, { cover_image_url: file.url });
+              } else {
+                manifest.warnings.push(`art skipped for ${ev.id}: the upload answer has no url`);
+              }
+            }
           } catch (err) {
             manifest.warnings.push(`art skipped for ${ev.id}: ${err.message}`);
           }

@@ -1,3 +1,5 @@
+const W = require('./worker-bodies');
+
 let createClient;
 let buildDay;
 let sponsorTier;
@@ -25,6 +27,8 @@ function fakeSite({
   artStatus = 200,
   noShortcode = false,
   eventWarnings = [],
+  // the upload answer's file object, as the Worker would send it (null: no file)
+  uploadFile,
 } = {}) {
   const calls = [];
   let n = 0;
@@ -41,24 +45,29 @@ function fakeSite({
     calls.push({ method, path, body, headers: init.headers });
     if (method === 'POST' && path === '/api/v2/admin/events') {
       const id = next('evt');
-      return reply(201, {
-        id,
-        shortcode: noShortcode ? null : `SC${id.split('_')[1]}`,
-        warnings: eventWarnings,
-      });
+      return reply(
+        201,
+        W.eventCreate({
+          id,
+          shortcode: noShortcode ? null : `SC${id.split('_')[1]}`,
+          warnings: eventWarnings,
+        })
+      );
     }
     if (method === 'POST' && path.endsWith('/poster-deployments')) {
-      return reply(201, { id: next('pd'), qr_token: next('qrt') });
+      return reply(201, W.posterCreate({ id: next('pd'), qr_token: next('qrt') }));
     }
     if (method === 'POST' && path.endsWith('/short-links')) {
-      return reply(200, { code: 'ABC234', links: { share: '/e/ABC234' } });
+      return reply(200, W.shortLinks());
     }
     if (method === 'POST' && path.endsWith('/uploads')) {
       if (failUpload) return reply(500, {});
-      return reply(201, { key: next('events/up'), url: '/api/v2/uploads/events/x/art.png' });
+      const good = W.upload({ key: next('events/up'), url: '/api/v2/uploads/events/x/art.png' });
+      if (uploadFile === undefined) return reply(201, good);
+      return reply(201, { ...good, file: uploadFile });
     }
     if (method === 'POST' && path === '/api/v2/admin/sponsors') {
-      return reply(201, { id: next('sp') });
+      return reply(201, W.sponsorCreate({ id: next('sp') }));
     }
     if (method === 'PUT' && /^\/api\/v2\/admin\/sponsors\/[^/]+$/.test(path)) {
       placementOf.set(`${path.split('/').pop()}|${body.event_id}`, next('spl'));
@@ -73,7 +82,7 @@ function fakeSite({
           event_id: eid,
           placement_id: pid,
         }));
-      return reply(200, { items });
+      return reply(200, W.sponsorList(items));
     }
     if (method === 'PUT') return reply(200, { ok: true });
     return reply(404, {});
@@ -354,6 +363,54 @@ describe('buildDay', () => {
     expect(manifest.warnings[0]).toMatch(/art skipped/);
     expect(manifest.items.filter((i) => i.kind === 'event')).toHaveLength(1);
     expect(callsTo(site, 'PUT', /^\/api\/v2\/admin\/events\//)).toHaveLength(0);
+  });
+
+  const ART = {
+    posts: [
+      { id: 'p1', caption: 'x', hashtags: ['typea'], mediaUrl: 'https://cdn.example/p1.png' },
+    ],
+    artTags: { tags: { typea: 'type-a' } },
+  };
+
+  test("the upload is read from the Worker's file object: its key is recorded, its url is the cover", async () => {
+    const site = fakeSite();
+    const manifest = await buildDay(
+      args(site, { accepted: [row('beverly', 'private', 10)], ...ART })
+    );
+    const uploads = manifest.items.filter((i) => i.kind === 'upload');
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0].id).toMatch(/^events\/up_\d+$/);
+    expect(callsTo(site, 'PUT', /^\/api\/v2\/admin\/events\/evt_/)[0].body).toEqual({
+      cover_image_url: '/api/v2/uploads/events/x/art.png',
+    });
+    expect(manifest.warnings).toEqual([]);
+  });
+
+  test.each([
+    ['no file object', null],
+    ['a key the purge could not name', { key: "events/x/a b'.png", url: '/api/v2/uploads/x' }],
+    ['no key', { url: '/api/v2/uploads/x' }],
+  ])('an upload answer with %s warns, records nothing and sets no cover', async (_n, file) => {
+    const site = fakeSite({ uploadFile: file });
+    const manifest = await buildDay(
+      args(site, { accepted: [row('beverly', 'private', 10)], ...ART })
+    );
+    expect(manifest.items.filter((i) => i.kind === 'upload')).toEqual([]);
+    expect(callsTo(site, 'PUT', /^\/api\/v2\/admin\/events\//)).toHaveLength(0);
+    expect(manifest.warnings).toEqual([expect.stringMatching(/^art skipped for evt_\d+: /)]);
+    expect(manifest.items.filter((i) => i.kind === 'event')).toHaveLength(1);
+  });
+
+  test('an upload answer with a safe key but no url records the key for the purge, and sets no cover', async () => {
+    const site = fakeSite({ uploadFile: { key: 'events/evt_1/1-art.png' } });
+    const manifest = await buildDay(
+      args(site, { accepted: [row('beverly', 'private', 10)], ...ART })
+    );
+    expect(manifest.items.filter((i) => i.kind === 'upload').map((i) => i.id)).toEqual([
+      'events/evt_1/1-art.png',
+    ]);
+    expect(callsTo(site, 'PUT', /^\/api\/v2\/admin\/events\//)).toHaveLength(0);
+    expect(manifest.warnings).toEqual([expect.stringMatching(/no url$/)]);
   });
 
   test('one sponsor per business with the mapped tier, premium for the anchor', async () => {

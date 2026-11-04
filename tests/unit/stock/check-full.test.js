@@ -1,6 +1,7 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- reads fixed repo files and this folder's own test files */
 const { readFileSync, readdirSync } = require('node:fs');
 const path = require('node:path');
+const W = require('./worker-bodies');
 
 let checkNodes;
 let MAP_GATE;
@@ -83,7 +84,7 @@ function site({ listed, override = {}, listFails = false }) {
     get: async (p) => {
       calls.push({ via: 'client', path: p });
       if (listFails) throw new Error('GET /api/v2/events failed: 503');
-      return { ok: true, items: listed };
+      return W.publicEvents(listed);
     },
   };
   const fetchPublic = async (url, init) => {
