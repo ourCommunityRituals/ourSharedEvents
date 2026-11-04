@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:test';
+import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect } from 'vitest';
 import { injectTestSiteNotice, TEST_SITE_NOTICE_TESTID } from '../src/lib/test-site-notice';
 
@@ -72,6 +72,15 @@ describe('injectTestSiteNotice', () => {
     await out.text();
   });
 
+  test('the band stays in view above fixed layers (sticky, top 0, z-index above 9999)', async () => {
+    const out = await injectTestSiteNotice(html(), { WORKER_ENV: 'staging' }).text();
+    const style = out.match(/\.ose-test-notice\{[^}]*\}/)![0];
+    expect(style).toContain('position:sticky');
+    expect(style).toContain('top:0');
+    const z = Number(style.match(/z-index:(\d+)/)![1]);
+    expect(z).toBeGreaterThan(9999);
+  });
+
   test('the band carries no raw hex colour', async () => {
     const out = await injectTestSiteNotice(html(), { WORKER_ENV: 'staging' }).text();
     expect(out).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
@@ -79,6 +88,14 @@ describe('injectTestSiteNotice', () => {
 });
 
 describe('index.ts wiring', () => {
+  test('a real page served under WORKER_ENV=test carries no notice', async () => {
+    const res = await SELF.fetch('https://example.com/health');
+    await res.text();
+    const page = await SELF.fetch('https://example.com/?brand=root');
+    expect(page.headers.get('content-type') || '').toContain('text/html');
+    expect(await page.text()).not.toContain(TEST_SITE_NOTICE_TESTID);
+  });
+
   test('the fetch seam calls injectTestSiteNotice(', () => {
     const sources: Record<string, string> = JSON.parse(
       (env as unknown as { TEST_SOURCE_FILES_JSON: string }).TEST_SOURCE_FILES_JSON
