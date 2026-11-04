@@ -12,10 +12,13 @@
  * the light theme (5.1:1), both AA. The fallbacks are CSS keywords (not hex) for a
  * page that does not link `/ui.css`: it still shows a legible, bordered band.
  *
- * Stacking: the band is `position:sticky;top:0` with a z-index above every fixed
- * layer the templates use (the highest is 9999, the focused skip link). Sticky
- * keeps it in flow, so it pushes content down instead of covering it, and it
- * stays visible on the TV display (a flex column body with `min-height:100vh`).
+ * Stacking: the band is `position:relative` with a z-index above every fixed
+ * layer the templates use (the highest is 9999, the focused skip link). It sits
+ * in flow at the top of <body>, so it pushes content down and scrolls away with
+ * the page. It is not sticky: a sticky band at top:0 would cover the sticky
+ * toolbars that also sit at top:0 (the admin preview toolbar, the theme bar, the
+ * briefing header). The z-index keeps a fixed layer from covering it while it is
+ * in view, the TV display included (a flex column body with `min-height:100vh`).
  */
 
 export const TEST_SITE_NOTICE_TESTID = 'test-site-notice';
@@ -25,7 +28,7 @@ const FULL_VARIANT_LINE =
   'Events, venues and businesses here are drawn from public listings for testing; nothing here is an endorsement or an offer.';
 
 const STYLE =
-  `.ose-test-notice{position:sticky;top:0;z-index:2147483000;box-sizing:border-box;min-height:44px;width:100%;padding:.5rem 1rem;` +
+  `.ose-test-notice{position:relative;z-index:2147483000;box-sizing:border-box;min-height:44px;width:100%;padding:.5rem 1rem;` +
   `display:flex;flex-wrap:wrap;gap:.25rem .75rem;align-items:center;justify-content:center;` +
   `background:var(--status-warn,Canvas);color:var(--ground,CanvasText);` +
   `border-bottom:2px solid var(--status-warn,CanvasText);text-align:center;` +

@@ -37,7 +37,8 @@ const manifestOf = (date, tag, nodes) => ({
 });
 
 // The R2 bucket, a scratch file system and a wrangler that acts on both.
-function world({ index, objects = {}, fail = () => false, raw } = {}) {
+// strictDeletes: an R2 delete of a key that is not there answers as wrangler does (MISSING).
+function world({ index, objects = {}, fail = () => false, raw, strictDeletes = false } = {}) {
   const r2 = new Map(Object.entries(objects).map(([k, v]) => [k, JSON.stringify(v)]));
   if (raw !== undefined) r2.set(rd.INDEX_KEY, raw);
   else if (index !== undefined) r2.set(rd.INDEX_KEY, JSON.stringify({ manifests: index }));
@@ -69,6 +70,7 @@ function world({ index, objects = {}, fail = () => false, raw } = {}) {
       } else if (args[2] === 'put') {
         r2.set(key, files.get(file));
       } else if (args[2] === 'delete') {
+        if (strictDeletes && !r2.has(key)) return { code: 1, stdout: '', stderr: MISSING };
         r2.delete(key);
       }
     }
@@ -188,6 +190,41 @@ describe('swap per node', () => {
     allCalls.push(...w.calls);
     expect(w.liveIndex()).toContain(STALE_NAME);
     expect(report.exitCode).toBe(1);
+  });
+
+  test('an R2 delete of an object already gone is a success: the stale manifest still leaves', async () => {
+    // yesterday's art for node a is gone already (an earlier purge took it); b's is still there
+    const w = world({
+      index: [STALE_NAME],
+      objects: {
+        [`stock/${STALE_NAME}`]: manifestOf('2026-11-03', 'y', ['a', 'b']),
+        'events/y_evt_b/art.png': 'bytes',
+      },
+      strictDeletes: true,
+    });
+    const report = await swap(w);
+    allCalls.push(...w.calls);
+    expect(w.deletes().sort()).toEqual([
+      `${rd.R2_BUCKET}/events/y_evt_a/art.png`,
+      `${rd.R2_BUCKET}/events/y_evt_b/art.png`,
+    ]);
+    expect(w.r2.has('events/y_evt_b/art.png')).toBe(false);
+    expect(report.purges.every((p) => p.ok)).toBe(true);
+    expect(w.liveIndex()).toEqual([TODAY_NAME]);
+    expect(report.exitCode).toBe(0);
+  });
+
+  test('makeCloud.r2Delete: missing is success, any other failure throws without its output', async () => {
+    const answers = [
+      { code: 1, stdout: '', stderr: MISSING },
+      { code: 1, stdout: '', stderr: 'NoSuchKey: gone' },
+      { code: 1, stdout: '', stderr: 'Authentication error 10000' },
+    ];
+    const cloud = rd.makeCloud({ wrangler: async () => answers.shift(), fs: {}, tmpDir: '/tmp' });
+    await expect(cloud.r2Delete('events/x/a.png')).resolves.toBeUndefined();
+    await expect(cloud.r2Delete('events/x/a.png')).resolves.toBeUndefined();
+    const err = await cloud.r2Delete('events/x/a.png').catch((e) => e);
+    expect(err.message).toBe('wrangler r2 delete events/x/a.png failed (exit 1)');
   });
 
   test('an empty purge SQL skips wrangler', async () => {

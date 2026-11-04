@@ -40,6 +40,13 @@ describe('staging-full wrangler env', () => {
     expect(patterns).toEqual(['stg-full.oursharedevents.com/*']);
   });
 
+  test('serves only its Access-gated route: no workers.dev host, no preview URLs', () => {
+    const env = section(`env.${FULL}`);
+    // explicit, never left to wrangler's defaults
+    expect(env.values.workers_dev).toBe('false');
+    expect(env.values.preview_urls).toBe('false');
+  });
+
   test('vars name it a full staging site with the staging posture', () => {
     const v = vars(FULL);
     expect(v.WORKER_ENV).toBe('staging');

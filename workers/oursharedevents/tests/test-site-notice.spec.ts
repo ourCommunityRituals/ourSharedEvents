@@ -72,11 +72,14 @@ describe('injectTestSiteNotice', () => {
     await out.text();
   });
 
-  test('the band stays in view above fixed layers (sticky, top 0, z-index above 9999)', async () => {
+  // Not sticky: a sticky band at top:0 covers the sticky toolbars that also sit at
+  // top:0 (admin preview toolbar, theme bar, briefing header).
+  test('the band is in flow, never sticky or fixed, with a z-index above 9999', async () => {
     const out = await injectTestSiteNotice(html(), { WORKER_ENV: 'staging' }).text();
     const style = out.match(/\.ose-test-notice\{[^}]*\}/)![0];
-    expect(style).toContain('position:sticky');
-    expect(style).toContain('top:0');
+    expect(style).toContain('position:relative');
+    expect(style).not.toMatch(/position:(sticky|fixed|absolute)/);
+    expect(style).not.toMatch(/[{;]top:/);
     const z = Number(style.match(/z-index:(\d+)/)![1]);
     expect(z).toBeGreaterThan(9999);
   });

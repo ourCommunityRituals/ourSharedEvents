@@ -327,6 +327,10 @@ name = "oursharedevents-stg-full"
 routes = [
   { pattern = "stg-full.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
+# Only the Access-gated route above: no *.workers.dev host and no preview URLs,
+# either of which would serve the site outside the Access policy.
+workers_dev = false
+preview_urls = false
 
 [[env.staging-full.d1_databases]]
 binding = "DB"

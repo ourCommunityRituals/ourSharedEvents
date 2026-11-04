@@ -7,6 +7,12 @@
 // record (a scan, a placement, a code) still goes; the events and sponsor
 // businesses themselves go only by recorded id. Every statement is
 // `DELETE FROM <table> WHERE <column> IN (<non-empty list of quoted ids>)`.
+//
+// Every purge operation is idempotent by design. Re-purging a stale manifest
+// whose rows or objects are already gone is the normal daily path (a manifest
+// stays listed until every node it records has been purged), so a DELETE that
+// matches no row, or an R2 delete of a key that is not there (run-day.mjs
+// r2Delete), succeeds.
 
 // Ids must look like this before they are put inside a SQL string literal (and,
 // for upload keys, on a wrangler command line). Letters, digits and _ : . / - only.

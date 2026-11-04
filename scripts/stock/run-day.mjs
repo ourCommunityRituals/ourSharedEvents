@@ -152,9 +152,10 @@ export function makeCloud({ wrangler, fs, tmpDir, log = () => {} }) {
       ]);
       if (!r.ok) throw fail(r);
     },
+    /** Idempotent: a key that is already gone counts as deleted. */
     async r2Delete(key) {
       const r = await run(`r2 delete ${key}`, ['r2', 'object', 'delete', object(key), ...remote]);
-      if (!r.ok) throw fail(r);
+      if (!r.ok && !MISSING_OBJECT.test(r.out)) throw fail(r);
     },
   };
 }
