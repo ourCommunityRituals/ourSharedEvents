@@ -173,3 +173,82 @@ describe('OSE-1800 | the CI service actor is a brand admin through the router', 
     expect(res.status).toBe(403);
   });
 });
+
+/** A signed Access token with the given claims (same key as the JWKS stub). */
+async function signedToken(claims: Record<string, unknown>): Promise<string> {
+  const header = b64url(enc(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: 'ci' })));
+  const payload = b64url(enc(JSON.stringify(claims)));
+  const sig = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    key.privateKey,
+    enc(`${header}.${payload}`)
+  );
+  return `${header}.${payload}.${b64url(new Uint8Array(sig))}`;
+}
+
+async function callWith(jwt: string, path: string): Promise<Response> {
+  const ctx = createExecutionContext();
+  const res = await route(
+    new Request(`https://ose.test${path}`, { headers: { 'Cf-Access-Jwt-Assertion': jwt } }),
+    stagingEnv(),
+    ctx
+  );
+  await waitOnExecutionContext(ctx);
+  return res;
+}
+
+const humanClaims = (over: Record<string, unknown> = {}) => {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    email: A.ownerEmail,
+    aud: [AUD],
+    iss: `https://${DOMAIN}`,
+    iat: now - 10,
+    exp: now + 3600,
+    ...over,
+  };
+};
+
+describe('OSE-1801 | the router refuses an identity before anything is scoped by it', () => {
+  // @born-red TL-087 | method: deliberate-fixture-break | date: 2026-11-04
+  test('a token for another Access app of the same team is refused at the pre-flight (INVALID_JWT)', async () => {
+    armJwks();
+    const res = await callWith(
+      await signedToken(humanClaims({ aud: ['some-other-app'] })),
+      `/api/v2/admin/events/${A.activeEventId}/dashboard`
+    );
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as { code: string }).code).toBe('INVALID_JWT');
+  });
+
+  // @born-red TL-085 | method: deliberate-fixture-break | date: 2026-11-04
+  test('a signed token whose email reads like an automation key ("key:…") is no identity (401)', async () => {
+    armJwks();
+    const res = await callWith(
+      await signedToken(humanClaims({ email: 'key:ops@example.com' })),
+      `/api/v2/admin/events/${A.activeEventId}/dashboard`
+    );
+    expect(res.status).toBe(401);
+  });
+
+  // @born-red TL-089 | method: deliberate-fixture-break | date: 2026-11-04
+  test('a token that is not valid yet (nbf a day ahead) is refused (401)', async () => {
+    armJwks();
+    const later = Math.floor(Date.now() / 1000) + 86_400;
+    const res = await callWith(
+      await signedToken(humanClaims({ nbf: later, iat: later })),
+      `/api/v2/admin/events/${A.activeEventId}/dashboard`
+    );
+    expect(res.status).toBe(401);
+  });
+
+  test('control: the same owner with a good token reads the dashboard (200)', async () => {
+    await setFree();
+    armJwks();
+    const res = await callWith(
+      await signedToken(humanClaims()),
+      `/api/v2/admin/events/${A.activeEventId}/dashboard`
+    );
+    expect(res.status).toBe(200);
+  });
+});

@@ -13,7 +13,12 @@
  */
 
 import { describe, test, expect, beforeAll, afterEach, vi } from 'vitest';
-import { requireAdmin, __resetJwksCacheForTests, type AdminEnv } from '../../src/auth/admin';
+import {
+  requireAdmin,
+  verifyCfAccessJWT,
+  __resetJwksCacheForTests,
+  type AdminEnv,
+} from '../../src/auth/admin';
 
 const DOMAIN = 'test.cloudflareaccess.com';
 const ALLOWLISTED = 'admin@oursharedevents.com';
@@ -218,5 +223,31 @@ describe('OSE-1377 — audience + issuer pin (CF_ACCESS_AUD set)', () => {
     // still authenticates — proving the pin is a no-op until activated.
     const res = await requireAdmin(req(await signJwt(validClaims())), envWithDomain(), 'ok');
     expect(res).toBeNull();
+  });
+});
+
+describe('OSE-1801 | verifyCfAccessJWT refuses a token that is not an identity, before the signature', () => {
+  test('nbf beyond the skew: { valid: false }', async () => {
+    armFetch();
+    const jwt = await signJwt({ ...validClaims(), nbf: nowSec() + 3600 });
+    expect(await verifyCfAccessJWT(jwt, DOMAIN)).toEqual({ valid: false });
+  });
+
+  test('iat beyond the skew: { valid: false }', async () => {
+    armFetch();
+    const jwt = await signJwt({ ...validClaims(), iat: nowSec() + 3600 });
+    expect(await verifyCfAccessJWT(jwt, DOMAIN)).toEqual({ valid: false });
+  });
+
+  test('an email that is not a plain address ("key:…"): { valid: false }', async () => {
+    armFetch();
+    const jwt = await signJwt(validClaims('key:ops@oursharedevents.com'));
+    expect(await verifyCfAccessJWT(jwt, DOMAIN)).toEqual({ valid: false });
+  });
+
+  test('control: the same good token verifies with its email', async () => {
+    armFetch();
+    const jwt = await signJwt(validClaims());
+    expect(await verifyCfAccessJWT(jwt, DOMAIN)).toEqual({ valid: true, email: ALLOWLISTED });
   });
 });

@@ -493,6 +493,8 @@ export async function route(
 
   // ── Audit helpers (OSE-212) ───────────────────────────────────────────────────
   const _ip = request.headers.get('CF-Connecting-IP') ?? undefined;
+  // OSE-1801: this first read resolves the request's admin actor, and the answer
+  // is kept for the whole request (auth/admin.ts extractAdminActor).
   const _actor = extractAdminActor(request, env);
   function _audit(
     reqId: string,
@@ -790,10 +792,12 @@ export async function route(
   if (_cfJwt && (env as AdminEnv).CF_ACCESS_TEAM_DOMAIN) {
     // `request` lets requireAdmin reuse this signature verdict (one RSA pass
     // per admin request); its own aud/iss/exp checks still run.
+    // OSE-1801: the audience is pinned here too, so the object-scope guard below
+    // never scopes an identity minted for another Access app of the same team.
     const _jwtResult = await verifyCfAccessJWT(
       _cfJwt,
       (env as AdminEnv).CF_ACCESS_TEAM_DOMAIN as string,
-      { request }
+      { request, expectedAud: (env as AdminEnv).CF_ACCESS_AUD?.trim() || undefined }
     );
     if (!_jwtResult.valid) {
       return new Response(

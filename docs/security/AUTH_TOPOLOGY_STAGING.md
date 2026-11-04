@@ -62,6 +62,10 @@ worker never executed.
    Methods 2/3, each of which needs its own secret. So a request that clears the
    edge with the service token but sends **no `Bearer`** falls through all three
    → **`401`**. That is the achievable "unauthenticated `/admin` → 401" case.
+   **Exception (OSE-1800):** on staging, a service token whose `common_name` is
+   listed in `CI_SERVICE_ACTORS` (with the team domain and the audience pinned)
+   is an actor of its own, `svc:<common_name>`, a brand admin of
+   `CI_SERVICE_ACTOR_BRAND` only. Unlisted service tokens still fall through.
 
 **Response ladder for `/admin`:**
 

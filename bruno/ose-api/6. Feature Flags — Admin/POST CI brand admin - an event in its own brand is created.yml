@@ -1,0 +1,54 @@
+info:
+  name: POST CI brand admin - an event in its own brand is created
+  type: http
+  seq: 18
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{ciBrandClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{ciBrandClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "title": "ci-brand: own-brand create (staging, rebuilt daily)",
+        "brand_id": "ci-brand",
+        "start_date": "2099-06-01",
+        "is_published": false
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1801 staging layer, the happy path: a brand admin's own-brand create goes
+        // through the per-request actor and is not refused. The event is an unpublished
+        // draft in the synthetic ci-brand; the staging data is rebuilt daily.
+        if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
+          test('SKIPPED until OSE-1800 setup: no CI brand service token configured', function () {});
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('201 for the actor\'s own brand', function () {
+          expect(res.getStatus()).to.eql(201);
+        });
+        test('the create answers with the new event id', function () {
+          expect(res.getBody().id).to.be.a('string');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

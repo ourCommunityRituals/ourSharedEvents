@@ -128,6 +128,7 @@ export const NODE_SPECS = [
   // Node-clean: hand-built Requests/env + a stubbed fetch for the JWKS path;
   // Date faked with toFake:['Date'] only. Drives admin.ts mutation to break:95.
   'tests/red-team/auth-guard-mutation.spec.ts',
+  'tests/admin-actor-memo.spec.ts',
 
   // Architecture review 2026-10-01 — per-request CF Access signature memo in
   // src/auth/admin.ts (one RSA pass per admin request). Node-clean: hand-built

@@ -28,7 +28,12 @@ import {
   type PromotionResult,
 } from '../lib/sponsor-promotion';
 import { logAdminAction, type AuditLogEnv } from '../lib/audit-log';
-import { extractAdminActor, isDevOpenAdmin, type AdminEnv } from '../auth/admin';
+import {
+  extractAdminActor,
+  isDevOpenAdmin,
+  logNullAdminActorDenied,
+  type AdminEnv,
+} from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 
 export type SponsorDraftEnv = { DB: D1Database } & SponsorInviteEnv & MapsEnv;
@@ -265,9 +270,12 @@ export async function handlePromoteSponsorDraft(
   // holding another tenant's draft token could promote it. An out-of-scope draft
   // takes the lib's own not-found result, so the response and the audit row are
   // identical to a missing draft (no existence oracle).
-  const result: PromotionResult = (await isDraftOutsideCallerScope(request, env, draftToken))
-    ? { ok: false, code: 'DRAFT_NOT_FOUND', status: 404 }
-    : await promoteSponsorDraft(env, draftToken, { compInviteToken });
+  const scopeVerdict = await draftScopeVerdict(request, env, draftToken);
+  if (scopeVerdict === 'no-actor') logNullAdminActorDenied('sponsor-draft-promote', env);
+  const result: PromotionResult =
+    scopeVerdict !== 'in-scope'
+      ? { ok: false, code: 'DRAFT_NOT_FOUND', status: 404 }
+      : await promoteSponsorDraft(env, draftToken, { compInviteToken });
 
   // Eligibility-decision audit (#24 auditability). PII-FREE: brand_id is a tenant
   // id, and the details carry only the decision + granting source — no email, ip,
@@ -296,25 +304,27 @@ export async function handlePromoteSponsorDraft(
 }
 
 /**
- * True when the draft exists but belongs to a brand outside the caller's scope.
- * A missing draft returns false (the lib reports it as not found). A null actor
- * is inside scope only when the DEV_OPEN_ADMIN local-dev bypass is really on;
- * anywhere else every draft is outside it (OSE-1801).
+ * Whether the caller may promote this draft: 'outside' when the draft belongs to
+ * a brand outside the caller's scope, 'in-scope' otherwise (a missing draft too:
+ * the lib reports it as not found). A null actor is 'in-scope' only when the
+ * DEV_OPEN_ADMIN local-dev bypass is really on, and 'no-actor' anywhere else
+ * (OSE-1801); the caller logs that case. It logs nothing itself, so the draft
+ * token it is given never reaches a log call.
  */
-async function isDraftOutsideCallerScope(
+async function draftScopeVerdict(
   request: Request,
   env: PromotionEnv & AdminEnv & AdminBrandScopeEnv,
   draftToken: string
-): Promise<boolean> {
+): Promise<'in-scope' | 'outside' | 'no-actor'> {
   const actor = extractAdminActor(request, env);
-  if (actor === null) return !isDevOpenAdmin(env);
+  if (actor === null) return isDevOpenAdmin(env) ? 'in-scope' : 'no-actor';
   const scope = await resolveAdminBrandScopeAsync(actor, env);
-  if (scope.mode === 'all') return false;
+  if (scope.mode === 'all') return 'in-scope';
   const row = await env.DB.prepare(
     'SELECT brand_id FROM sponsor_business_draft WHERE draft_token = ?'
   )
     .bind(draftToken)
     .first<{ brand_id: string }>();
-  if (!row) return false;
-  return scope.mode === 'deny' || !scope.brandIds.includes(row.brand_id);
+  if (!row) return 'in-scope'; // a missing draft: the lib reports it as not found
+  return scope.mode === 'deny' || !scope.brandIds.includes(row.brand_id) ? 'outside' : 'in-scope';
 }

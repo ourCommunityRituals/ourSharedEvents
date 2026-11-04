@@ -85,13 +85,16 @@ function serviceActorName(
   // Stryker disable next-line ConditionalExpression: equivalent mutant — a non-string or empty common_name can never be in `listed` (strings, empties filtered out), so dropping this check reaches the same `return null` below.
   if (typeof cn !== 'string' || cn.length === 0) return null;
   if (env.WORKER_ENV !== 'staging') return null;
+  // Stryker disable next-line OptionalChaining: equivalent since OSE-1801 — serviceActorName is reached only where the JWT is trustable, and on staging that requires CF_ACCESS_TEAM_DOMAIN to be set (jwtIdentityTrustable; requireAdmin's cfTrustable), so it is never undefined here.
   const domain = env.CF_ACCESS_TEAM_DOMAIN?.trim();
   const aud = env.CF_ACCESS_AUD?.trim();
   if (!domain || !aud) return null;
   if (payload.iss !== `https://${domain}`) return null;
+  // Stryker disable next-line ArrayDeclaration: equivalent — the fallback array only has to not contain the pinned audience; ["Stryker was here"] differs only for an audience configured as that literal. The no-aud case IS covered ("a token with no aud claim is no actor").
   const auds = Array.isArray(payload.aud) ? payload.aud : payload.aud ? [payload.aud] : [];
   if (!auds.includes(aud)) return null;
   if (!env.CI_SERVICE_ACTORS) return null;
+  // Stryker disable next-line MethodExpression: equivalent — dropping .filter(Boolean) leaves '' entries, and a common name is never '' (checked above), so includes() answers the same.
   const listed = env.CI_SERVICE_ACTORS.split(',')
     .map((x) => x.trim())
     .filter(Boolean);
@@ -204,11 +207,18 @@ export async function verifyCfAccessJWT(
     const payload = JSON.parse(_decodeB64(parts[1])) as {
       exp?: number;
       iat?: number;
+      nbf?: number;
       email?: string;
       aud?: string | string[];
       iss?: string;
     };
-    if (!payload.exp || payload.exp <= Math.floor(Date.now() / 1000)) return { valid: false };
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!payload.exp || payload.exp <= nowSec) return { valid: false };
+    // OSE-1801: a token that is not valid yet, or an email that is not a plain
+    // address (e.g. "key:x@...", which would read as an automation actor), is no
+    // identity at all.
+    if (notYetValid(payload, nowSec)) return { valid: false };
+    if (payload.email !== undefined && !isPlainAdminEmail(payload.email)) return { valid: false };
 
     // The costly step: RSA-verify against the team JWKS. Runs at most once per
     // (request, domain, token) when opts.request is given; claims below run always.
@@ -236,6 +246,7 @@ export async function verifyCfAccessJWT(
     // array) to include the expected tag. DARK when expectedAud is unset.
     if (opts?.expectedAud) {
       if (payload.iss !== `https://${teamDomain}`) return { valid: false };
+      // Stryker disable next-line ArrayDeclaration: equivalent — as in serviceActorName, the fallback only has to not contain the expected audience. A token with no aud IS refused when the audience is pinned (auth-jwks-verify / ci-service-actor specs).
       const auds = Array.isArray(payload.aud) ? payload.aud : payload.aud ? [payload.aud] : [];
       if (!auds.includes(opts.expectedAud)) return { valid: false };
     }
@@ -248,6 +259,41 @@ export async function verifyCfAccessJWT(
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * OSE-1801: an admin email from Cloudflare Access must be a plain address. The
+ * actor's class is read from its prefix (`key:`, `svc:` are automation), so an
+ * email such as "key:x@oursharedevents.com" must never become an actor: a colon,
+ * a space or any other character outside this set refuses the identity.
+ */
+const PLAIN_EMAIL = /^[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/;
+export function isPlainAdminEmail(email: unknown): email is string {
+  return typeof email === 'string' && email.length <= 254 && PLAIN_EMAIL.test(email);
+}
+
+/** Leeway for clock skew between Cloudflare Access and this Worker. */
+const CLOCK_SKEW_SEC = 60;
+
+/** OSE-1801: a token whose `nbf` or `iat` is ahead of now (beyond skew) is not valid yet. */
+function notYetValid(payload: { iat?: number; nbf?: number }, nowSec: number): boolean {
+  if (typeof payload.nbf === 'number' && payload.nbf > nowSec + CLOCK_SKEW_SEC) return true;
+  // Stryker disable next-line ConditionalExpression: equivalent — without the typeof guard a missing iat compares `undefined > n`, which is false, the same answer.
+  return typeof payload.iat === 'number' && payload.iat > nowSec + CLOCK_SKEW_SEC;
+}
+
+function isDeployedWorkerEnv(env: AdminEnv): boolean {
+  return env.WORKER_ENV === 'staging' || env.WORKER_ENV === 'production';
+}
+
+/**
+ * OSE-1801: may the Access JWT name the actor? Only where requireAdmin would trust
+ * it: the team domain is set (so the signature is verified), or this is local dev.
+ * A deployed worker without the team domain authenticates by key only, so the
+ * actor must be the key, never an email decoded from an unverified token.
+ */
+function jwtIdentityTrustable(env: AdminEnv): boolean {
+  return Boolean(env.CF_ACCESS_TEAM_DOMAIN) || !isDeployedWorkerEnv(env);
+}
 
 function constantTimeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -294,6 +340,7 @@ function extractCfAccessPayload(jwt: string): CfAccessPayload {
     const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/') + padding)) as {
       exp?: number;
       iat?: number;
+      nbf?: number;
       email?: string;
       common_name?: unknown;
       aud?: unknown;
@@ -303,6 +350,11 @@ function extractCfAccessPayload(jwt: string): CfAccessPayload {
     if (!payload.exp || !payload.iat) return { valid: false };
     // Stryker disable next-line BooleanLiteral,ObjectLiteral: equivalent — emailless return, masked by `valid && email` (see NOTE). The `<=` boundary IS covered (exp==now → 401 under fake time). OSE-1278.
     if (payload.exp <= Math.floor(Date.now() / 1000)) return { valid: false };
+    // OSE-1801: not valid yet, or an email that is not a plain address: no identity.
+    // Stryker disable next-line BooleanLiteral,ObjectLiteral: equivalent — emailless return, masked by `valid && email` (see NOTE), and a svc payload without common_name is no actor either. The rule itself IS covered (nbf/iat cases in admin-actor-memo.spec.ts and auth-jwks-verify.spec.ts).
+    if (notYetValid(payload, Math.floor(Date.now() / 1000))) return { valid: false };
+    // Stryker disable next-line BooleanLiteral,ObjectLiteral: equivalent — emailless return, masked by `valid && email` (see NOTE). The rule itself IS covered (plain-address cases in admin-actor-memo.spec.ts, the router key: email test).
+    if (payload.email !== undefined && !isPlainAdminEmail(payload.email)) return { valid: false };
     return {
       valid: true,
       email: payload.email,
@@ -319,14 +371,17 @@ function extractCfAccessPayload(jwt: string): CfAccessPayload {
 // ─── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Extract the audit actor identifier from the request without enforcing auth.
- * Call AFTER requireAdmin passes; used to populate audit log entries.
+ * The request's admin actor, without enforcing auth. It drives brand scope and
+ * audit attribution. route() reads it at entry (router.ts `_actor`) and the answer
+ * is kept for the whole request (OSE-1801), so every later reader, requireAdmin
+ * and the handlers included, sees the same actor.
  *
  * Returns:
- *   - CF Access email string  (Method 1)
- *   - 'key:ocr-internal'      (Method 2)
- *   - 'key:admin'             (Method 3)
- *   - null                    (unauthenticated / unknown)
+ *   - CF Access email string      (Method 1; only where the JWT is trustable)
+ *   - 'svc:<common_name>'         (staging CI service token, OSE-1800)
+ *   - 'key:ocr-internal'          (Method 2)
+ *   - 'key:admin'                 (Method 3)
+ *   - null                        (unauthenticated / unknown)
  */
 export function extractAdminActor(request: Request, env: AdminEnv): string | null {
   // Resolved once per (request, env), OSE-1801. The JWT's `exp` is checked
@@ -349,23 +404,61 @@ export function extractAdminActor(request: Request, env: AdminEnv): string | nul
 const ACTOR_MEMO = new WeakMap<Request, WeakMap<object, string | null>>();
 
 /**
+ * OSE-1801: a handler that builds a new Request for another handler (event repeat
+ * to create) hands the actor on with it, so the inner request does not decode the
+ * token again after I/O. Copies the caller's resolved actor; never widens it.
+ */
+export function inheritAdminActor(from: Request, to: Request, env: AdminEnv): void {
+  const actor = extractAdminActor(from, env);
+  let perEnv = ACTOR_MEMO.get(to);
+  if (perEnv === undefined) {
+    perEnv = new WeakMap();
+    ACTOR_MEMO.set(to, perEnv);
+  }
+  perEnv.set(env as object, actor);
+}
+
+/**
+ * OSE-1801: one structured line when a handler refuses a null actor. After the
+ * memo this should never fire on a deployed worker, so it is a cheap alarm. The
+ * response the caller gets is unchanged (no existence oracle).
+ */
+export function logNullAdminActorDenied(site: string, env: AdminEnv): void {
+  console.warn(
+    JSON.stringify({
+      level: 'warn',
+      event: 'ADMIN_NULL_ACTOR_DENIED',
+      site,
+      worker_env: env.WORKER_ENV ?? null,
+    })
+  );
+}
+
+/** The only WORKER_ENV values the local-dev bypass may open: unset, local dev, the test pool. */
+const DEV_OPEN_WORKER_ENVS: ReadonlySet<string | undefined> = new Set([
+  undefined,
+  'development',
+  'test',
+]);
+
+/**
  * True only when the DEV_OPEN_ADMIN local-dev bypass is really on: opted in, and
- * neither production nor staging. A null admin actor allows nothing unless this
- * holds (OSE-1801); callers re-test the condition, never the null.
+ * WORKER_ENV is one of the local names. It is an allowlist (OSE-1801): "Production",
+ * "preview" or "staging " with a space are not local. A null admin actor allows
+ * nothing unless this holds; callers re-test the condition, never the null.
  */
 export function isDevOpenAdmin(env: AdminEnv): boolean {
-  return (
-    env.DEV_OPEN_ADMIN === 'true' && env.WORKER_ENV !== 'production' && env.WORKER_ENV !== 'staging'
-  );
+  return env.DEV_OPEN_ADMIN === 'true' && DEV_OPEN_WORKER_ENVS.has(env.WORKER_ENV);
 }
 
 function resolveAdminActor(request: Request, env: AdminEnv): string | null {
   const cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
   // Stryker disable next-line ConditionalExpression: equivalent mutant — forcing this guard true with no header makes `extractCfAccessPayload(null)` throw→caught→`{valid:false}`, then `valid && email` fails and control falls to the same key checks below. Actor extraction from a real JWT IS covered. OSE-1278.
-  if (cfJwt) {
+  if (cfJwt && jwtIdentityTrustable(env)) {
     const payload = extractCfAccessPayload(cfJwt);
     if (payload.valid && payload.email) return payload.email;
     // OSE-1800: the staging CI service actor (see serviceActorName).
+    // Stryker disable next-line ConditionalExpression: equivalent — an invalid decode returns only { valid: false }, with no common_name, so serviceActorName answers null either way. The expired-token case IS covered (ci-service-actor.spec.ts).
     if (payload.valid) {
       const svc = serviceActorName(payload, env);
       if (svc) return svc;
@@ -398,10 +491,11 @@ export async function requireAdmin(
   //      gitignored .dev.vars — never in wrangler.toml [vars] or secrets).
   //   2. Refused when WORKER_ENV is 'production' or 'staging'.
   //   3. Emits a loud warning so an accidental enable is always visible.
-  // Pin the request's actor now, at the moment auth is decided, so a handler that
-  // reads it after the body or a D1 await gets this answer (OSE-1801). Only an
-  // Access JWT's actor depends on the clock; key actors are left to the first
-  // reader so a key compare runs once (AUTH-002 counts its reads).
+  // OSE-1801: route() already resolved the actor at entry; this read keeps the
+  // same guarantee for a caller that reaches requireAdmin without route() (a
+  // direct call). Only an Access JWT's actor depends on the clock, so key actors
+  // are left to the first reader and a key compare runs once (AUTH-002).
+  // Stryker disable next-line ConditionalExpression: equivalent in the node project — reading the actor for a key request too changes no answer, only the number of key compares, which tests/red-team/auth-boundary.spec.ts (AUTH-002, workers pool) counts. The read itself IS covered (admin-actor-memo.spec.ts, requireAdmin direct call).
   if (request.headers.has('Cf-Access-Jwt-Assertion')) extractAdminActor(request, env);
   if (isDevOpenAdmin(env)) {
     console.warn(
@@ -419,7 +513,7 @@ export async function requireAdmin(
   // Method 1: Cloudflare Access JWT + RSA signature verification (OSE-590 / OSE-211)
   const cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
   if (cfJwt) {
-    const isDeployedEnv = env.WORKER_ENV === 'staging' || env.WORKER_ENV === 'production';
+    const isDeployedEnv = isDeployedWorkerEnv(env);
     // When CF_ACCESS_TEAM_DOMAIN is configured, the JWT signature MUST be
     // cryptographically verified against the JWKS before trusting any claims.
     // Skipping this check allows a forged JWT with any email to bypass auth.
