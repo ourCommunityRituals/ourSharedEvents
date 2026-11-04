@@ -87,6 +87,10 @@ export async function buildDay({
         name: business.name,
         address_line: business.address,
         tier: SPONSOR_TIER_WIRE[tier],
+        // the Worker derives the sponsor cells from lat/lon only and never
+        // geocodes address_line (handleAdminCreateSponsor)
+        lat: business.lat,
+        lon: business.lng,
       });
       record('sponsor', res.id, business.node, { tier });
       if (tier === 'premium' && !anchorOf.has(business.node)) anchorOf.set(business.node, res.id);

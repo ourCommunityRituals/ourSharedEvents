@@ -231,7 +231,7 @@
     - every job is on `ubuntu-24.04`, and `permissions` is `contents: read`;
     - `concurrency.group` is `stock-data-full` with `cancel-in-progress: false`;
     - `search` has `timeout-minutes: 30`;
-    - `access-gate` runs `curl` with no credentials and fails unless the status is 302/403 or the `Location` header is on `cloudflareaccess.com`;
+    - `access-gate` runs `curl` with no credentials (only `Accept: text/html`) on `/` and `/api/v2/events`, and fails closed unless each answers 302 or 303 with a `Location` of `https://<team>.cloudflareaccess.com`; a 403, 401, 200 or anything else fails;
     - no step references `secrets.CLOUDFLARE_API_TOKEN` except `deploy` and `check-swap`.
 - [ ] **Step 2: Watch them fail.**
 - [ ] **Step 3: Write `search-prompt.md`.** It goes node by node in the order above, private sector (bars, restaurants, churches, other businesses) then public (park districts, libraries, chambers, villages). It keeps only events from today through +90 days that fit a type in the catalog file the step provides (dump of `GET /api/v2/admin/event-types`). It stops a node at `perNode + 3` good finds (read from `stock/targets.json` and substituted into the prompt by the step), writes only facts plus a one-line summary in its own words and a source URL, and never copies description text. It also records the businesses on each node's commercial strips, marking anchors. Output must match `stock/finds.schema.json` and `stock/businesses.schema.json`.

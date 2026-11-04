@@ -49,18 +49,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      # No credentials of any kind: Access must answer (a redirect to its login
-      # host, or a deny) instead of the Worker, on a page and on the public API.
-      # A 403 that carries `cf-mitigated: challenge` is a WAF or bot challenge, not
-      # Access, so it does not pass.
+      # No credentials of any kind, asking for a page (Accept: text/html), on a page
+      # and on the public API. Fail closed: the only pass is Access's login
+      # redirect, a 302 or 303 to https://<team>.cloudflareaccess.com. A 403, 401
+      # or 200 does not prove Access holds the host (a WAF block, a bot challenge
+      # or the Worker itself can answer those), so every other answer fails.
       - name: Request stg-full with no credentials
         shell: bash
         run: |
           set -euo pipefail
-          headers="$(mktemp)"
           for path in / /api/v2/events; do
-            : > "$headers"
-            if ! out="$(curl -sS -o /dev/null -D "$headers" --max-time 30 -w '%{http_code} %{redirect_url}' "${STG_FULL_URL}${path}")"; then
+            if ! out="$(curl -sS -o /dev/null -H 'Accept: text/html' --max-time 30 -w '%{http_code} %{redirect_url}' "${STG_FULL_URL}${path}")"; then
               echo "::error title=stg-full unreachable::The request for ${path} failed, so Access could not be confirmed. Real-world data is not loaded onto an open host."
               exit 1
             fi
@@ -70,15 +69,10 @@ jobs:
             if [[ "$location" =~ ^https://([^/?#:@]+)(:[0-9]+)?([/?#]|$) ]]; then
               host="${BASH_REMATCH[1],,}"
             fi
-            if [ "$code" = "403" ] && grep -qiE '^cf-mitigated:[[:space:]]*challenge' "$headers"; then
-              echo "::error title=stg-full is not behind Access::${path} answered a Cloudflare challenge (HTTP 403, cf-mitigated: challenge), not Access. Real-world data is not loaded onto an open host."
-              exit 1
-            elif [ "$code" = "403" ]; then
-              echo "${path}: Access denied the request (HTTP 403)."
-            elif { [ "$code" = "302" ] || [ "$code" = "303" ]; } && [[ "$host" == *.cloudflareaccess.com ]]; then
+            if { [ "$code" = "302" ] || [ "$code" = "303" ]; } && [[ "$host" =~ ^([a-z0-9-]+\.)+cloudflareaccess\.com$ ]]; then
               echo "${path}: Access redirected to its login host ${host} (HTTP ${code})."
             else
-              echo "::error title=stg-full is not behind Access::${path} answered HTTP ${code}${host:+ to ${host}}. Real-world data is not loaded onto an open host."
+              echo "::error title=stg-full is not behind Access::${path} answered HTTP ${code}${host:+ to ${host}}: Access did not answer with its login redirect. Real-world data is not loaded onto an open host."
               exit 1
             fi
           done

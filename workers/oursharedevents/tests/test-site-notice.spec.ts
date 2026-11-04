@@ -1,6 +1,8 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect } from 'vitest';
 import { injectTestSiteNotice, TEST_SITE_NOTICE_TESTID } from '../src/lib/test-site-notice';
+import DISPLAY_HTML from '../src/templates/display.html';
+import PUBLIC_HTML from '../src/templates/public.html';
 
 const PAGE =
   '<!doctype html><html><head><title>t</title></head><body><h1>Hello</h1><p>x</p></body></html>';
@@ -72,16 +74,40 @@ describe('injectTestSiteNotice', () => {
     await out.text();
   });
 
+  const noticeZ = async () => {
+    const out = await injectTestSiteNotice(html(), { WORKER_ENV: 'staging' }).text();
+    const style = out.match(/\.ose-test-notice\{[^}]*\}/)![0];
+    return Number(style.match(/z-index:(\d+)/)![1]);
+  };
+
   // Not sticky: a sticky band at top:0 covers the sticky toolbars that also sit at
-  // top:0 (admin preview toolbar, theme bar, briefing header).
-  test('the band is in flow, never sticky or fixed, with a z-index above 9999', async () => {
+  // top:0 (admin preview toolbar, theme bar, briefing header). Its z-index sits
+  // below the focused skip links (9999 at top:0), which must stay visible over it.
+  test('the band is in flow, never sticky or fixed, with a z-index above 0 and below 9999', async () => {
     const out = await injectTestSiteNotice(html(), { WORKER_ENV: 'staging' }).text();
     const style = out.match(/\.ose-test-notice\{[^}]*\}/)![0];
     expect(style).toContain('position:relative');
     expect(style).not.toMatch(/position:(sticky|fixed|absolute)/);
     expect(style).not.toMatch(/[{;]top:/);
     const z = Number(style.match(/z-index:(\d+)/)![1]);
-    expect(z).toBeGreaterThan(9999);
+    expect(z).toBeGreaterThan(0);
+    expect(z).toBeLessThan(9999);
+  });
+
+  test.each([
+    ['display.html', DISPLAY_HTML],
+    ['public.html', PUBLIC_HTML],
+  ])('the focused skip link in %s sits above the band', async (_name, page) => {
+    const rule = (page as string).match(/\.skip-link:focus\s*\{[^}]*\}/);
+    expect(rule, 'a .skip-link:focus rule').not.toBeNull();
+    const z = Number(rule![0].match(/z-index:\s*(\d+)/)![1]);
+    expect(z).toBeGreaterThan(await noticeZ());
+  });
+
+  test('the band carries data-wizard-keep, so the admin setup wizard does not hide it', async () => {
+    const out = await injectTestSiteNotice(html(), { WORKER_ENV: 'staging' }).text();
+    const band = out.match(/<div class="ose-test-notice"[^>]*>/)![0];
+    expect(band).toMatch(/\sdata-wizard-keep[\s>=]/);
   });
 
   test('HTML with Content-Encoding: gzip passes through unchanged (same object, same bytes)', async () => {

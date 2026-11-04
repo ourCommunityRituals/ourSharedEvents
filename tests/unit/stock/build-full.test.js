@@ -126,9 +126,31 @@ const rowsFor = (node, privateN, publicN) => [
 ];
 
 const businesses = [
-  { name: 'Anchor Co', address: '2 Main St', node: 'beverly', anchor: true },
-  { name: 'Regional Co', address: '3 Main St', node: 'beverly', anchor: false },
-  { name: 'Corner Shop', address: '4 Main St', node: 'beverly', anchor: false },
+  // as validateBusinesses leaves them: each with the point its address geocoded to
+  {
+    name: 'Anchor Co',
+    address: '2 Main St',
+    node: 'beverly',
+    anchor: true,
+    lat: 41.71,
+    lng: -87.68,
+  },
+  {
+    name: 'Regional Co',
+    address: '3 Main St',
+    node: 'beverly',
+    anchor: false,
+    lat: 41.72,
+    lng: -87.67,
+  },
+  {
+    name: 'Corner Shop',
+    address: '4 Main St',
+    node: 'beverly',
+    anchor: false,
+    lat: 41.73,
+    lng: -87.66,
+  },
 ];
 
 const args = (site, over = {}) => ({
@@ -424,6 +446,18 @@ describe('buildDay', () => {
     expect(sponsors.every((c) => c.body.brand_id === 'root')).toBe(true);
     // the Worker's own vocabulary, one distinct word per stock tier
     expect(new Set(sponsors.map((c) => c.body.tier)).size).toBe(3);
+  });
+
+  test('each sponsor is sent its geocoded point as lat/lon, so the Worker can tag its cells', async () => {
+    const site = fakeSite();
+    await buildDay(args(site, { accepted: [] }));
+    const sponsors = callsTo(site, 'POST', /^\/api\/v2\/admin\/sponsors$/);
+    expect(sponsors.map((c) => [c.body.lat, c.body.lon])).toEqual([
+      [41.71, -87.68],
+      [41.72, -87.67],
+      [41.73, -87.66],
+    ]);
+    expect(sponsors.every((c) => !('lng' in c.body))).toBe(true);
   });
 
   test('one placement per event, for the node anchor, and its id goes to acceptSql', async () => {

@@ -197,29 +197,4 @@ test.describe('Page Endpoints: All Routes & Aliases', () => {
       expect(response.status()).toBe(404);
     });
   });
-
-  test.describe('Testing-only notice (staging)', () => {
-    test('GET / on staging shows exactly one testing notice and exactly one h1', async ({
-      page,
-    }) => {
-      await page.goto(`/?brand=${BRAND}`, { timeout: TIMEOUT });
-      await expect(page.locator('[data-testid="test-site-notice"]')).toHaveCount(1);
-      await expect(page.locator('[data-testid="test-site-notice"]')).toContainText(
-        'Testing purposes only.'
-      );
-      await expect(page.locator('h1')).toHaveCount(1);
-    });
-
-    test('GET /display shows the notice on top, not covered by a fixed layer', async ({ page }) => {
-      await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
-      const band = page.locator('[data-testid="test-site-notice"]');
-      await expect(band).toBeVisible();
-      const onTop = await band.evaluate((el) => {
-        const r = el.getBoundingClientRect();
-        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        return !!hit && (hit === el || el.contains(hit));
-      });
-      expect(onTop).toBe(true);
-    });
-  });
 });

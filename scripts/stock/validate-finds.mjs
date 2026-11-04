@@ -121,7 +121,9 @@ export async function validateFinds({ finds, eventTypeIds, nodes, today, geocode
       continue;
     }
 
-    const key = `${row.venue.toLowerCase().replace(/\s+/g, ' ').trim()}|${row.starts_at}`;
+    // one instant at one venue is one event, however its offset is written
+    const venue = row.venue.toLowerCase().replace(/\s+/g, ' ').trim();
+    const key = `${venue}|${startInstant(row.starts_at).toISOString()}`;
     if (seen.has(key)) {
       refuse(row, 'duplicate');
       continue;
@@ -171,7 +173,8 @@ const normalized = (s) =>
  * address is geocoded and its node is the boundary polygon it falls in (the
  * search's own node claim is replaced). A business outside every node, or one
  * whose address does not geocode, is refused. Duplicates by name and address go;
- * the first one stays. `anchor` stays the search's claim.
+ * the first one stays. `anchor` stays the search's claim. Each accepted
+ * business keeps the `lat`/`lng` its address geocoded to.
  */
 export async function validateBusinesses({ businesses, nodes, geocode }) {
   if (!Array.isArray(businesses)) throw new Error('businesses must be a list');
@@ -200,7 +203,15 @@ export async function validateBusinesses({ businesses, nodes, geocode }) {
       refuse(b, 'not-in-node');
       continue;
     }
-    accepted.push({ name: b.name, address: b.address, node, anchor: b.anchor });
+    // the geocoded point goes on: the sponsor's cells come from it
+    accepted.push({
+      name: b.name,
+      address: b.address,
+      node,
+      anchor: b.anchor,
+      lat: point.lat,
+      lng: point.lng,
+    });
   }
   return { accepted, refused };
 }

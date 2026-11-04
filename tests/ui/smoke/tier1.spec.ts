@@ -138,6 +138,37 @@ for (const route of manifest.routes) {
   });
 }
 
+// The "Testing purposes only." band on every staging page
+// (workers/oursharedevents/src/lib/test-site-notice.ts). T4d runs this file
+// against staging, so a page that loses the band, gains a second <h1>, or has
+// the band covered by a fixed layer goes red there. The band renders only where
+// WORKER_ENV is staging, which is this config's default base URL; pointed at any
+// other host, these cases fail rather than skip.
+const NOTICE = '[data-testid="test-site-notice"]';
+const noticeRoutes =
+  manifest.app === 'ose'
+    ? manifest.routes.filter((r) => r.name === 'landing' || r.name === 'display board')
+    : [];
+
+for (const route of noticeRoutes) {
+  test(`[T1:${manifest.app}] testing-only notice: ${route.name}`, async ({ page }) => {
+    await page.goto(resolvePath(route)!, { waitUntil: 'networkidle' });
+    const band = page.locator(NOTICE);
+    await expect(band, 'one notice').toHaveCount(1);
+    await expect(band).toBeVisible();
+    await expect(band).toContainText('Testing purposes only.');
+    await expect(page.locator('h1'), 'exactly one <h1>').toHaveCount(1);
+
+    // nothing fixed sits over it: the topmost element at its centre is the band
+    const onTop = await band.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !!hit && (hit === el || el.contains(hit));
+    });
+    expect(onTop, 'elementFromPoint at the band centre is the band').toBe(true);
+  });
+}
+
 async function assertTapTargets(page: Page, min: number): Promise<void> {
   const targets = page.locator('.btn:visible, .cta:visible, .nav-item:visible, .add-btn:visible');
   const n = Math.min(await targets.count(), 12); // sample cap keeps Tier-1 fast

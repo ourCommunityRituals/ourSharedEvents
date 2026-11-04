@@ -6,14 +6,19 @@
  * test and production never render it. `STAGING_VARIANT === 'full'` adds the
  * line saying the listings come from public sources and are not an endorsement.
  *
+ * `data-wizard-keep` keeps it shown while the admin setup wizard hides the other
+ * direct children of <body> (admin.html, body.wizard-active).
+ *
  * Colours come from the spine tokens only (no raw hex), which pages get from
  * `/ui.css` (@ocr/ui). The band sits on `--status-warn` and its text is
  * `--ground`: charcoal on amber in the dark theme (9.5:1) and creme on brown in
  * the light theme (5.1:1), both AA. The fallbacks are CSS keywords (not hex) for a
  * page that does not link `/ui.css`: it still shows a legible, bordered band.
  *
- * Stacking: the band is `position:relative` with a z-index above every fixed
- * layer the templates use (the highest is 9999, the focused skip link). It sits
+ * Stacking: the band is `position:relative` with z-index 9000: above the fixed
+ * layers the templates use, and below the focused skip links (9999 at top:0 in
+ * display.html and public.html), so a keyboard user still sees the skip link
+ * over the band. It sits
  * in flow at the top of <body>, so it pushes content down and scrolls away with
  * the page. It is not sticky: a sticky band at top:0 would cover the sticky
  * toolbars that also sit at top:0 (the admin preview toolbar, the theme bar, the
@@ -28,7 +33,7 @@ const FULL_VARIANT_LINE =
   'Events, venues and businesses here are drawn from public listings for testing; nothing here is an endorsement or an offer.';
 
 const STYLE =
-  `.ose-test-notice{position:relative;z-index:2147483000;box-sizing:border-box;min-height:44px;width:100%;padding:.5rem 1rem;` +
+  `.ose-test-notice{position:relative;z-index:9000;box-sizing:border-box;min-height:44px;width:100%;padding:.5rem 1rem;` +
   `display:flex;flex-wrap:wrap;gap:.25rem .75rem;align-items:center;justify-content:center;` +
   `background:var(--status-warn,Canvas);color:var(--ground,CanvasText);` +
   `border-bottom:2px solid var(--status-warn,CanvasText);text-align:center;` +
@@ -39,7 +44,7 @@ export function testSiteNoticeMarkup(variant?: string): string {
   const detail = variant === 'full' ? `<p>${FULL_VARIANT_LINE}</p>` : '';
   return (
     `<style>${STYLE}</style>` +
-    `<div class="ose-test-notice" role="note" data-testid="${TEST_SITE_NOTICE_TESTID}">` +
+    `<div class="ose-test-notice" role="note" data-testid="${TEST_SITE_NOTICE_TESTID}" data-wizard-keep>` +
     `<p><strong>${HEADLINE}</strong></p>${detail}</div>`
   );
 }

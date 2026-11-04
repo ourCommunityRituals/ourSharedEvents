@@ -2550,6 +2550,13 @@
       "testCount": 17
     },
     {
+      "file": "workers/oursharedevents/tests/security-alert-cron-variant.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 2
+    },
+    {
       "file": "workers/oursharedevents/tests/security-alert-env.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -3121,7 +3128,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 14
+      "testCount": 16
     },
     {
       "file": "workers/oursharedevents/tests/testid-pyramid.spec.ts",

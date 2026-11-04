@@ -18,6 +18,7 @@ beforeAll(async () => {
   const { parseToml } = await load('scripts/prod-preflight.mjs');
   const parity = await load('scripts/ci/env-parity.mjs');
   compareEnvironments = parity.compareEnvironments;
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- the repo's own wrangler.toml, by the path env-parity reads
   toml = readFileSync(join(ROOT, parity.WRANGLER_PATH), 'utf8');
   sections = parseToml(toml);
 });
@@ -100,16 +101,38 @@ describe('staging-full wrangler env', () => {
     expect(arrays(FULL, 'kv_namespaces')[0].values.binding).toBe('RATE_LIMIT_KV');
   });
 
-  test('unprovisioned ids are distinct placeholders, one per resource', () => {
-    const ids = [
-      ...arrays(FULL, 'd1_databases').map((s) => s.values.database_id),
-      arrays(FULL, 'kv_namespaces')[0].values.id,
-    ];
-    expect(ids).toEqual([
-      'OWNER_TO_FILL_DB_STAGING_FULL',
-      'OWNER_TO_FILL_FORMS_DB_STAGING_FULL',
-      'OWNER_TO_FILL_KV_STAGING_FULL',
-    ]);
+  // Each id is its placeholder until the owner pastes the real one, so this holds
+  // before and after provisioning. The deploy gate's own cases are in
+  // stock-workflow.test.js, on fixture strings.
+  const D1_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const KV_ID = /^[0-9a-f]{32}$/;
+  const PLACEHOLDER = {
+    DB: 'OWNER_TO_FILL_DB_STAGING_FULL',
+    FORMS_DB: 'OWNER_TO_FILL_FORMS_DB_STAGING_FULL',
+    RATE_LIMIT_KV: 'OWNER_TO_FILL_KV_STAGING_FULL',
+  };
+  const bindingIds = (env) => [
+    ...arrays(env, 'd1_databases').map((s) => [s.values.binding, s.values.database_id]),
+    ...arrays(env, 'kv_namespaces').map((s) => [s.values.binding, s.values.id]),
+  ];
+
+  test('each id is its own placeholder or a well-formed provisioned id', () => {
+    const ids = bindingIds(FULL);
+    expect(ids.map(([b]) => b).sort()).toEqual(['DB', 'FORMS_DB', 'RATE_LIMIT_KV']);
+    for (const [binding, id] of ids) {
+      const shape = binding === 'RATE_LIMIT_KV' ? KV_ID : D1_ID;
+      expect(id === PLACEHOLDER[binding] || shape.test(id), `${binding} = ${id}`).toBe(true);
+    }
+  });
+
+  test('its ids are distinct, and none is a staging or production id', () => {
+    const own = bindingIds(FULL).map(([, id]) => id);
+    expect(new Set(own).size).toBe(own.length);
+    for (const other of ['staging', 'production']) {
+      const theirs = bindingIds(other).map(([, id]) => id);
+      expect(theirs.length, other).toBeGreaterThan(0);
+      for (const id of own) expect(theirs, other).not.toContain(id);
+    }
   });
 
   test('rate-limit namespace ids are unique across every env', () => {

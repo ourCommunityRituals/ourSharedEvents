@@ -225,6 +225,24 @@ describe('validateFinds', () => {
     expect(r.refused.map((x) => x.reason)).toEqual(['duplicate']);
   });
 
+  test('one instant written with two offsets at the same venue is a duplicate', async () => {
+    const r = await run([
+      find({ starts_at: '2026-11-14T19:00:00-06:00' }),
+      find({ venue: 'CORK & KERRY', starts_at: '2026-11-15T01:00:00Z' }),
+    ]);
+    expect(r.accepted).toHaveLength(1);
+    expect(r.accepted[0].starts_at).toBe('2026-11-14T19:00:00-06:00');
+    expect(r.refused.map((x) => x.reason)).toEqual(['duplicate']);
+  });
+
+  test('a different instant at the same venue is not a duplicate', async () => {
+    const r = await run([
+      find({ starts_at: '2026-11-14T19:00:00-06:00' }),
+      find({ starts_at: '2026-11-14T19:00:00Z' }),
+    ]);
+    expect(r.accepted).toHaveLength(2);
+  });
+
   test('title is cut to 120 and summary to 200', async () => {
     const r = await run([find({ title: 'T'.repeat(300), summary: 'S'.repeat(500) })]);
     expect(r.accepted[0].title).toHaveLength(120);
@@ -266,9 +284,25 @@ describe('validateBusinesses', () => {
 
   test('the node is the polygon the address falls in, not the search claim', async () => {
     const { accepted } = await runB([biz({ address: '1 oaklawn Rd', node: 'beverly' })]);
+    const at = insideOf('oak-lawn');
     expect(accepted).toEqual([
-      { name: 'Cork & Kerry', address: '1 oaklawn Rd', node: 'oak-lawn', anchor: false },
+      {
+        name: 'Cork & Kerry',
+        address: '1 oaklawn Rd',
+        node: 'oak-lawn',
+        anchor: false,
+        lat: at.lat,
+        lng: at.lng,
+      },
     ]);
+  });
+
+  test('an accepted business carries the lat and lng its address geocoded to', async () => {
+    const inside = insideOf('beverly');
+    const { accepted } = await runB([biz()], async () => inside);
+    expect(accepted).toHaveLength(1);
+    expect(accepted[0].lat).toBe(inside.lat);
+    expect(accepted[0].lng).toBe(inside.lng);
   });
 
   test('a business outside every node, or in a border cell but no polygon, is refused', async () => {

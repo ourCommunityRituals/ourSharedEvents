@@ -121,7 +121,9 @@ what makes "testing only" true rather than a label. The job sends the service-to
 (to pass the host policy) **and** the full site's own `ADMIN_KEY` Bearer (for the Worker's
 admin guard); the Worker's admin auth is unchanged. **The job's first step requests
 `stg-full` with no credentials and stops red unless Access answers instead of the Worker**,
-so real-world data is never loaded onto an open host.
+so real-world data is never loaded onto an open host. It fails closed: the only pass is
+Access's login redirect (302 or 303 to `https://<team>.cloudflareaccess.com`) on both a page
+and the public API. A 403, 401 or 200 proves nothing about Access, so it fails.
 
 _My call:_ the full site's deploy and migrations run in their own workflow, never inside
 T1–T4. A failure there never turns `main` red and is not part of the Definition of Done.

@@ -1001,8 +1001,16 @@ describe('final review', () => {
     });
     expect(code).toBe(0);
     expect(geocoded).toEqual(['1 in-oak-lawn Rd', '2 far-away St', '3 no-such St']);
+    const at = insideOf('oak-lawn');
     expect(JSON.parse(w.files.get(path.join(outDir, 'businesses.json')))).toEqual([
-      { name: 'Anchor Co', address: '1 in-oak-lawn Rd', node: 'oak-lawn', anchor: true },
+      {
+        name: 'Anchor Co',
+        address: '1 in-oak-lawn Rd',
+        node: 'oak-lawn',
+        anchor: true,
+        lat: at.lat,
+        lng: at.lng,
+      },
     ]);
     const summary = w.files.get('/summary.md');
     expect(summary).toMatch(/[|] oak-lawn [|] 0 [|] [0-9]+ [|] 1 [|]/);
