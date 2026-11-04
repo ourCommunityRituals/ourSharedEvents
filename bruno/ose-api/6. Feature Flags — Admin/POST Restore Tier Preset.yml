@@ -1,0 +1,58 @@
+info:
+  name: POST Restore Tier Preset
+  type: http
+  seq: 14
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/flags/apply-tier"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "tier": "free"
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: "// Put back the plan GET Current Tier read before POST Apply Tier Preset set Free.
+
+        // Without this, every staging contract run (each push to main, and nightly) left
+
+        // staging on Free, so a manual tester could never reach a paid SharedReport.
+
+        // Unset (the tier read was refused) keeps Free, the old behaviour.
+
+        req.setBody({ tier: bru.getVar('tierBeforeApply') || 'free' });"
+    - type: after-response
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
+
+        
+
+        if (res.getStatus() === 200) {
+
+        \    test('ok is true', function() {
+
+        \        expect(json.ok).to.eql(true);
+
+        \    });
+
+        \    test('Restores the plan staging was on before the suite set Free', function() {
+
+        \        expect(json.tier).to.eql(bru.getVar('tierBeforeApply') || 'free');
+
+        \    });
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

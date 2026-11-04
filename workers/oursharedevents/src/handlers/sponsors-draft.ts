@@ -28,7 +28,7 @@ import {
   type PromotionResult,
 } from '../lib/sponsor-promotion';
 import { logAdminAction, type AuditLogEnv } from '../lib/audit-log';
-import { extractAdminActor, type AdminEnv } from '../auth/admin';
+import { extractAdminActor, isDevOpenAdmin, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 
 export type SponsorDraftEnv = { DB: D1Database } & SponsorInviteEnv & MapsEnv;
@@ -298,7 +298,8 @@ export async function handlePromoteSponsorDraft(
 /**
  * True when the draft exists but belongs to a brand outside the caller's scope.
  * A missing draft returns false (the lib reports it as not found). A null actor
- * is the DEV_OPEN_ADMIN local-dev bypass, refused on staging and production.
+ * is inside scope only when the DEV_OPEN_ADMIN local-dev bypass is really on;
+ * anywhere else every draft is outside it (OSE-1801).
  */
 async function isDraftOutsideCallerScope(
   request: Request,
@@ -306,7 +307,7 @@ async function isDraftOutsideCallerScope(
   draftToken: string
 ): Promise<boolean> {
   const actor = extractAdminActor(request, env);
-  if (actor === null) return false;
+  if (actor === null) return !isDevOpenAdmin(env);
   const scope = await resolveAdminBrandScopeAsync(actor, env);
   if (scope.mode === 'all') return false;
   const row = await env.DB.prepare(

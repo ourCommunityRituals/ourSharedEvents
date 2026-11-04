@@ -1594,6 +1594,33 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/core-values-draft-seed.sql
 
+      # OSE-682: one event with a materialized scan signal, so folder 6 can read a
+      # signed-link report on the Free plan and assert it is capped at Local. Own
+      # event (plancap-evt), unpublished; idempotent upserts. NOT continue-on-error:
+      # a missing fixture fails here by name, not as a 409 in the contract run.
+      - name: 'Seed report plan-cap fixture (OSE-682)'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/report-plan-cap-seed.sql
+
+      # OSE-1800: the CI service actor's brand (ci-brand): one Free event with a
+      # poster and scans above the floor, read in folder 6 as a BRAND admin. Own
+      # brand, unpublished; idempotent upserts. NOT continue-on-error.
+      - name: 'Seed CI brand fixture (OSE-1800)'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/ci-brand-seed.sql
+
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
       # from the collection root, so each step sets working-directory. Secrets are
@@ -1619,12 +1646,19 @@ jobs:
           # test fails loudly (not silently) — see section 11 seed tests.
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # OSE-1800: a SECOND service token, accepted on staging as a brand admin
+          # of ci-brand (never platform). Unset until the owner creates it; the
+          # folder-6 "CI brand admin" requests skip, under a named test, until then.
+          CF_ACCESS_CI_BRAND_CLIENT_ID: ${{ secrets.CF_ACCESS_CI_BRAND_CLIENT_ID }}
+          CF_ACCESS_CI_BRAND_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CI_BRAND_CLIENT_SECRET }}
         run: |
           npx bru run . -r --env ose-staging \
             --env-var "adminKey=$ADMIN_KEY" \
             --env-var "ocrInternalSecret=$X_OCR_INTERNAL" \
             --env-var "cfAccessClientId=$CF_ACCESS_CLIENT_ID" \
             --env-var "cfAccessClientSecret=$CF_ACCESS_CLIENT_SECRET" \
+            --env-var "ciBrandClientId=$CF_ACCESS_CI_BRAND_CLIENT_ID" \
+            --env-var "ciBrandClientSecret=$CF_ACCESS_CI_BRAND_CLIENT_SECRET" \
             --reporter-junit "$GITHUB_WORKSPACE/.test-results/${{ matrix.junit }}"
         timeout-minutes: 5
 
@@ -1637,6 +1671,7 @@ jobs:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          CF_ACCESS_CI_BRAND_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CI_BRAND_CLIENT_SECRET }}
         run: bash scripts/ci/scan-artifacts-for-secrets.sh .test-results/
 
       - name: Upload artifacts

@@ -28,6 +28,7 @@ import {
   type Tier as SharedTier,
 } from '@ocr/flags';
 import { D1Adapter } from '@ocr/flags/adapters/d1';
+import { CLOSED_PLAN, type ReportPlan } from './report-plan';
 
 // ─── OSE active catalog (17 keys) ───────────────────────────────────────
 // OSE surfaces only the flags that predate the events.* and intelligence.*
@@ -164,6 +165,65 @@ export async function isFeatureEnabled(
     return await isFeatureEnabledShared(adapter(db), flagKey, eventId);
   } catch {
     return true; // pre-migration fail-open
+  }
+}
+
+/**
+ * Does this event's plan include the paid SharedReport? (OSE-682)
+ *
+ * The same flag and precedence as `isFeatureEnabled` (event override, then
+ * global, then the contract default of on when there is no row), but it fails
+ * CLOSED: a read error answers false, so the report falls back to Local. This
+ * is an entitlement, and `isFeatureEnabled` fails open (an unreadable flag table
+ * reads as every flag on), which here would hand a Free event the paid report
+ * whenever the forms database is unavailable.
+ */
+export async function isPaidReportEnabled(db: D1Database, eventId: string): Promise<boolean> {
+  try {
+    const a = adapter(db);
+    const onEvent = await a.getEventFlag(FLAG_KEYS.ANALYTICS_SHARED_REPORT, eventId);
+    if (onEvent !== null) return onEvent;
+    const global = await a.getGlobalFlag(FLAG_KEYS.ANALYTICS_SHARED_REPORT);
+    return global ?? true;
+  } catch {
+    console.warn(JSON.stringify({ event: 'paid_report_plan_lookup_failed', fallback: 'local' }));
+    return false;
+  }
+}
+
+/**
+ * Does the plan (the global flag set) include this feature? Used to decide
+ * whether a brand admin may switch it ON for one event (review 2026-11-04: an
+ * event override is an entitlement write). No row is the contract default, on.
+ * Fails CLOSED: a read error answers false, so the write is refused.
+ */
+export async function isFlagInPlan(db: D1Database, flagKey: string): Promise<boolean> {
+  try {
+    return (await adapter(db).getGlobalFlag(flagKey)) ?? true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Read the paid-report plan once for a request that covers many events (the
+ * admin reads in lib/report-plan.ts). Same flag and precedence as
+ * `isPaidReportEnabled`; fails CLOSED to "nothing is paid".
+ */
+export async function readReportPlan(db: D1Database): Promise<ReportPlan> {
+  try {
+    const a = adapter(db);
+    const global = await a.getGlobalFlag(FLAG_KEYS.ANALYTICS_SHARED_REPORT);
+    const rows = await db
+      .prepare("SELECT scope_id, enabled FROM feature_flags WHERE flag_key = ? AND scope = 'event'")
+      .bind(FLAG_KEYS.ANALYTICS_SHARED_REPORT)
+      .all<{ scope_id: string; enabled: number }>();
+    const overrides = new Map<string, boolean>();
+    for (const r of rows.results ?? []) overrides.set(String(r.scope_id), r.enabled === 1);
+    return { full: false, globalPaid: global ?? true, overrides };
+  } catch {
+    console.warn(JSON.stringify({ event: 'report_plan_read_failed', fallback: 'local' }));
+    return CLOSED_PLAN;
   }
 }
 

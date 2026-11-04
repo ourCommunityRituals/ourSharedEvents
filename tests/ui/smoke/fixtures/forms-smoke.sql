@@ -49,3 +49,14 @@ VALUES
 -- was, so the count is set here, only while none has been recorded.
 UPDATE checkin_counts SET walk_in_count = 5
  WHERE id = 'chk_smoke_tiers' AND walk_in_count = 0;
+
+-- OSE-682: evt_smoke_tiers is the T4f depth-gate event, and T4f asserts the PAID
+-- depths on it (premium for an admin link, mid for a Mid sponsor link). Since a
+-- plan without the paid report caps every viewer at Local, and staging's global
+-- plan is whatever the owner set (often Free), this event carries its own
+-- paid-report override so T4f holds on any plan. The Free cap itself is asserted
+-- on a separate event (bruno/fixtures/report-plan-cap-seed.sql, plancap-evt).
+-- Idempotent upsert on UNIQUE(scope, scope_id, flag_key).
+INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
+VALUES ('evt_smoke_tiers-analytics-shared-report', 'event', 'evt_smoke_tiers', 'analytics.shared-report', 1, datetime('now'))
+ON CONFLICT(scope, scope_id, flag_key) DO UPDATE SET enabled = excluded.enabled, updated_at = excluded.updated_at;

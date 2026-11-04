@@ -41,11 +41,12 @@
  *   (3) AVAILABILITY reddens if the handler stops returning 404 for a missing
  *       event.
  *
- * SCOPE NOTE (no silent cap): the REPORT_DISABLED availability cell (flag
- * `analytics.shared-report` off) is deliberately NOT duplicated here — it is
- * already covered by `shared-report-disabled-page.spec.ts` (OSE-1206), which
- * seeds FORMS_DB and asserts both the JSON envelope and the friendly page. This
- * spec keeps the main-DB harness single-concern and cross-references that cell.
+ * SCOPE NOTE (no silent cap): the plan cell (flag `analytics.shared-report` off)
+ * is deliberately NOT duplicated here. Since OSE-682 the page loads on every
+ * plan and the read API caps a plan without the paid report at Local; that is
+ * covered by `shared-report-free-plan-page.spec.ts` (the page) and the OSE-682
+ * block in `shared-report-read.spec.ts` (the API through the router). This spec
+ * keeps the main-DB harness single-concern and cross-references those cells.
  *
  * HARNESS NOTE: migrations apply EXACTLY ONCE per isolate — re-applying migration
  * 0018 (ALTER TABLE sponsors RENAME TO sponsors_old) dangles the
@@ -57,6 +58,7 @@
  */
 
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
+import { usePaidReportPlan } from './helpers/paid-report-plan';
 import { env, SELF } from 'cloudflare:test';
 import { mintSignedLinkToken } from '../src/lib/shared-report-auth';
 
@@ -151,6 +153,8 @@ async function readAsAdmin(
 }
 
 beforeAll(async () => {
+  // OSE-682: this spec asserts paid sections, so it runs on a paid plan.
+  await usePaidReportPlan();
   await applyMigrations();
 });
 

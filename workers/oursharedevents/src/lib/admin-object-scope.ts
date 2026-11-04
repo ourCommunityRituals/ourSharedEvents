@@ -43,7 +43,7 @@
  * pass through here.
  */
 
-import { extractAdminActor, type AdminEnv } from '../auth/admin';
+import { extractAdminActor, isDevOpenAdmin, type AdminEnv } from '../auth/admin';
 import {
   PLATFORM_BRAND_ID,
   resolveAdminBrandScopeAsync,
@@ -182,6 +182,12 @@ function notFound(request: Request, target: AdminObjectTarget): Response {
  * (The one identity-less path that does reach a handler is the DEV_OPEN_ADMIN
  * local-dev bypass in requireAdmin, which is already refused on production and
  * staging and is proven local-only by tests/dev-open-admin-guard.spec.ts.)
+ *
+ * OSE-1801: the actor is resolved once per request (`extractAdminActor` is
+ * memoised), so the null this guard cedes on is the same null requireAdmin and
+ * every handler see later; a token cannot be scoped here and then read as null
+ * further down. Handlers that run after requireAdmin deny a null actor unless
+ * the bypass is really on.
  */
 export async function guardAdminObjectScope(
   request: Request,
@@ -216,10 +222,22 @@ export async function requirePlatformScope(
   request: Request,
   env: AdminObjectScopeEnv
 ): Promise<Response | null> {
-  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
-  if (scope.mode === 'all') return null;
-  if (scope.mode === 'scoped' && scope.brandIds.includes(PLATFORM_BRAND_ID)) return null;
+  if (await isPlatformActor(request, env)) return null;
   return Response.json({ ok: false, status: 404, error: 'Not found' }, { status: 404 });
+}
+
+/**
+ * Is the caller a platform admin: scope mode 'all' (a `key:` actor with the
+ * ADMIN_SCOPE_ALL opt-in) or a member of PLATFORM_BRAND_ID? The one definition
+ * requirePlatformScope and the who × plan rule (lib/report-plan.ts) both use.
+ */
+export async function isPlatformActor(
+  request: Request,
+  env: AdminObjectScopeEnv
+): Promise<boolean> {
+  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
+  if (scope.mode === 'all') return true;
+  return scope.mode === 'scoped' && scope.brandIds.includes(PLATFORM_BRAND_ID);
 }
 
 /**
@@ -234,12 +252,13 @@ export async function requirePlatformScope(
  *
  * Call AFTER requireAdmin (anonymous → 401 first) and before the handler, so the
  * refusal is the same 403 body for a flag key that exists and one that does not.
- * The DEV_OPEN_ADMIN local-dev bypass (null actor) keeps its behaviour, matching
- * guardAdminObjectScope; that bypass is refused on staging and production.
+ * A null actor passes only when the DEV_OPEN_ADMIN local-dev bypass is really on
+ * (re-tested, not inferred from the null; OSE-1801). That bypass is refused on
+ * staging and production.
  */
 export function requireKeyActor(request: Request, env: AdminObjectScopeEnv): Response | null {
   const actor = extractAdminActor(request, env);
-  if (actor === null || actor.startsWith('key:')) return null;
+  if (actor === null ? isDevOpenAdmin(env) : actor.startsWith('key:')) return null;
   return Response.json(
     { ok: false, status: 403, code: 'KEY_ACTOR_ONLY', error: 'Forbidden' },
     { status: 403 }

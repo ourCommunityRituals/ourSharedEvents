@@ -38,6 +38,87 @@ receives the section on the wire.
 
 ---
 
+## The plan caps depth (OSE-682)
+
+Everyone gets a SharedReport (PO, 2026-08-10). The plan flag
+`analytics.shared-report` is the **paid** report (the flags contract maps it to
+`tier-gates.features.shared_report_interactive`). With it off, as on the Free
+preset, **every signed-link viewer reads at `local`**: organizer, platform and
+sponsor alike. With it on, each role reads at the depth in the table above.
+
+- The report page loads on every plan. The old Free-plan 403 page (OSE-1206) is
+  gone; it left a Free event with no report at all.
+- The router reads the flag (event override first, then global) and hands the
+  read handler a lookup, so the handler never reaches `FORMS_DB` itself. The
+  lookup runs only after the token checks out, and it fails **closed**
+  (`isPaidReportEnabled`): an unreadable forms database reads as Local, never as
+  paid. (`isFeatureEnabled` fails open, which is wrong for an entitlement.)
+- Staging fixtures say their plan: `evt_smoke_tiers` (T4f, paid depths) carries
+  an event-level paid-report override in `forms-smoke.sql`; `plancap-evt` (T2,
+  the Free cap) has none.
+- `capDepthToPlan` (`lib/report-depth.ts`) only lowers depth. Sponsor scoping
+  (TL-040, OSE-595) is unchanged by it.
+- The in-fleet batch read (`internal`) is not capped: it is a service class,
+  not a customer view.
+- Until the plan is per brand (OSE-1562) the flag is one setting for the whole
+  deployment. Switch it with `POST /api/v2/admin/flags/apply-tier` (key actor).
+
+## Who × plan on every read (OSE-682, owner decisions 2026-11-04)
+
+What the front end hides does not matter if the back end returns it, so every
+read that carries report data follows the same rule: **who** asks and **what
+plan** the event is on. The plan is `analytics.shared-report` (event override,
+then global); every plan read fails closed.
+
+| Read                                                                       | Platform admin (scope `all` or `ose-platform` member) | Anyone else, event on a paid plan | Anyone else, event on Free                                                       |
+| -------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------- |
+| `GET /api/v2/events/:id/shared-report` (signed link)                       | capped like everyone: a link is a bearer token        | the role's depth                  | Local                                                                            |
+| `POST /api/v2/events/shared-reports/batch` (internal token)                | —                                                     | premium                           | Local                                                                            |
+| `GET /api/v2/admin/events/:id/dashboard` (and the live view that reads it) | everything                                            | everything                        | totals; `reach.scansByDay` withheld                                              |
+| `GET /api/v2/admin/events/:id/pre-event-activity`                          | everything                                            | everything                        | `reach.totals` and activity totals; per-placement, per-code and per-day withheld |
+| `GET /api/v2/admin/events/:id/poster-deployments`                          | everything                                            | everything                        | placements listed; per-poster `scans` withheld                                   |
+| `GET /api/v2/admin/dashboards/corridor` (brand-wide)                       | everything                                            | everything                        | `event_cells`, `source_cells`, `flows` only from paid events                     |
+| `GET /sponsor?t=…` (sponsor home)                                          | —                                                     | totals                            | totals (the page never prints a per-day series)                                  |
+
+- A capped admin response carries `plan: { paid_report: false, locked_sections, next_plan: 'mid' }`,
+  naming what it left out. The admin page prints "comes with the Mid plan" for a
+  withheld line, never "nothing yet".
+- **Writing the plan is the platform's.** An event override is how a plan
+  reaches one event, so `PUT /api/v2/admin/events/:id/flags/:key` is an
+  entitlement write: a brand admin may switch a feature on only when its plan
+  already includes it (`isFlagInPlan`, fails closed), and may always switch one
+  off or remove an override. Anything beyond the plan answers 403
+  `EVENT_FLAG_ABOVE_PLAN` and is audited; a platform admin may grant it.
+  Within the plan, a brand admin's "on" follows the plan: the override is
+  removed, not written, so a later downgrade reaches the event too. Only a
+  platform admin's grant is a stored "on" that outlives the plan.
+- A platform admin's full view of a capped read is audited (`READ_PAST_PLAN`,
+  with actor, request id and the event or brand) after the handler answers,
+  with its real outcome (a refused read is `denied`).
+- Brand scoping is unchanged and still decides **which** events a caller
+  reaches; the plan decides **how much** of each.
+- Entity totals stay on every plan: event and poster counts, registrations,
+  check-ins, the operations dashboard's brand totals, the portfolio rollup.
+- Code: `lib/report-plan.ts` (`hasPaidReport`, `paidEventsSql`, `planNote`),
+  `readReportPlan` / `isPaidReportEnabled` in `lib/feature-flags.ts`,
+  `isPlatformActor` in `lib/admin-object-scope.ts`, `reportPlanFor` in `router.ts`.
+- Tests: `tests/admin-reads-plan-cap.spec.ts` (workers pool, brand owner vs
+  platform, Free vs Mid vs event override), `tests/report-plan.spec.ts`, and the
+  batch block in `tests/shared-report-read.spec.ts`.
+- Staging: the Bruno suite authenticates as a key actor, which is a platform
+  admin, so on its own it cannot exercise the brand-admin cap. OSE-1800 adds a
+  CI identity that is a **brand** admin: a second Cloudflare Access service token,
+  accepted on staging only as `svc:<common_name>` (`auth/admin.ts`
+  `serviceActorName`) when the signature verifies, the Access audience is pinned
+  and carried, `WORKER_ENV` is staging and the name is listed in
+  `CI_SERVICE_ACTORS`. Its scope is exactly `CI_SERVICE_ACTOR_BRAND`
+  (`ci-brand`), never `all` and never the platform brand, and key-only routes
+  refuse it. Folder 6 reads `ci-free-evt` with it while staging is on Free
+  (`bruno/fixtures/ci-brand-seed.sql`); until the token's secrets and
+  `CI_SERVICE_ACTORS` exist, those requests skip under a test named for what is
+  missing. Production can never carry either setting
+  (`tests/prod-admin-scope-config.spec.ts`).
+
 ## Sections by depth (additive ladder)
 
 Each tier is a superset of the one below. `sponsor_class_breakdown` is present at

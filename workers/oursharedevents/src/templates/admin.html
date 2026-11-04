@@ -6843,7 +6843,7 @@
           r.addEventListener('change', syncPlacementType);
         });
 
-        const renderPdCard = (pd) => {
+        const renderPdCard = (pd, scansLocked) => {
           const card = fromTemplate(PD_CARD);
           const at = (id) => card.querySelector('[data-testid="' + id + '"]');
           const label = text(pd.placement_label) || 'Poster deployment';
@@ -6861,7 +6861,11 @@
           at('pd-placement-kind').textContent =
             pd.placement_type === 'venue' ? 'At the venue' : 'In the community';
           const scans = pd.scans && typeof pd.scans.count === 'number' ? pd.scans.count : null;
-          at('pd-scans').textContent = scans === null ? 'Fewer than 5 scans in any hour' : scans + ' scans';
+          // OSE-682: on a Free plan the server leaves the count off and names it in
+          // `plan`; that is the plan, not the privacy floor, so it says so.
+          at('pd-scans').textContent = scansLocked
+            ? 'Scan counts come with the Mid plan'
+            : scans === null ? 'Fewer than 5 scans in any hour' : scans + ' scans';
 
           // 1. The short link + Copy lead the card.
           at('pd-short-link').textContent = scanUrl;
@@ -6922,6 +6926,8 @@
             const data = await res.json();
             setAddressHint(data && data.ok ? data.event_address : null);
             const items = (data.ok && data.items) ? data.items : [];
+            const scansLocked = !!(data && data.plan && Array.isArray(data.plan.locked_sections) &&
+              data.plan.locked_sections.indexOf('items.scans') > -1);
             if (!items.length) {
               panel.innerHTML = '<p class="loading" data-testid="poster-deployments-empty">No deployments yet. Use the form above to add one.</p>';
               return;
@@ -6934,7 +6940,7 @@
                 scan_url: text(pd.scan_url),
                 label: text(pd.placement_label),
               });
-              grid.appendChild(renderPdCard(pd));
+              grid.appendChild(renderPdCard(pd, scansLocked));
             });
             // Mobile (<=640px, see CSS) hides every .qr-card except the one
             // tagged .pd-active and steps through them one at a time via this
@@ -8462,7 +8468,7 @@
           });
           spark.appendChild(svg);
         }
-        window.renderPreEventReach(d.reach);
+        window.renderPreEventReach(d.reach, d.plan);
         card.hidden = false;
       };
 
@@ -8473,10 +8479,14 @@
       // derivable by subtraction); under the floor is an ordinary early state.
       // A withheld figure means each link in it has fewer than 5, not that
       // they have fewer than 5 between them, so it reads "fewer than 5 each".
-      window.renderPreEventReach = function (r) {
+      window.renderPreEventReach = function (r, plan) {
         var box = document.getElementById('pre-event-reach');
         if (!box) return;
         var ok = r && typeof r === 'object';
+        // OSE-682: the server names what this event's plan leaves out. A
+        // withheld line says so; it never reads as "nothing yet".
+        var locked = plan && Array.isArray(plan.locked_sections) ? plan.locked_sections : [];
+        var LOCKED_TEXT = 'comes with the Mid plan';
         var line = function (testid, head, items, empty) {
           var p = box.querySelector('[data-testid="' + testid + '"]');
           p.textContent = '';
@@ -8508,9 +8518,11 @@
           taps.push({ name: taps.length ? 'other links' : 'all links', n: on === null ? 'fewer than 5 each' : on });
         }
         line('pre-event-reach-taps', 'Link taps', taps,
-          'fewer than 5 on any one link so far (a link shows here at 5 or more)');
-        line('pre-event-reach-venue', 'At the venue', places(ok && r.venue), 'no posters placed yet');
-        line('pre-event-reach-community', 'In the community', places(ok && r.community), 'no posters placed yet');
+          locked.indexOf('reach.taps') > -1 ? LOCKED_TEXT : 'fewer than 5 on any one link so far (a link shows here at 5 or more)');
+        line('pre-event-reach-venue', 'At the venue', places(ok && r.venue),
+          locked.indexOf('reach.venue') > -1 ? LOCKED_TEXT : 'no posters placed yet');
+        line('pre-event-reach-community', 'In the community', places(ok && r.community),
+          locked.indexOf('reach.community') > -1 ? LOCKED_TEXT : 'no posters placed yet');
         box.hidden = !ok;
       };
 

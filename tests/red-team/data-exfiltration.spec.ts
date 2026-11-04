@@ -26,8 +26,7 @@
 
 import { test, expect, type APIResponse } from '@playwright/test';
 
-const BASE_URL =
-  process.env.BASE_URL?.replace(/\/$/, '') ?? 'https://stg.oursharedevents.com';
+const BASE_URL = process.env.BASE_URL?.replace(/\/$/, '') ?? 'https://stg.oursharedevents.com';
 
 const ADMIN_KEY = process.env.ADMIN_KEY ?? '';
 const X_OCR_INTERNAL = process.env.X_OCR_INTERNAL ?? '';
@@ -78,7 +77,7 @@ class SafeResponse {
     for (const [pattern, label] of leakPatterns) {
       expect(
         pattern.test(body),
-        `Response body leaks "${label}". Body snippet: ${body.slice(0, 300)}`,
+        `Response body leaks "${label}". Body snippet: ${body.slice(0, 300)}`
       ).toBe(false);
     }
   }
@@ -103,9 +102,7 @@ test.describe('EX-001/002 — Event ID enumeration does not leak existence info'
   ];
 
   for (const id of NONEXISTENT_IDS) {
-    test(`GET /api/v2/events/${id} → 404 (not 403 — no existence leakage)`, async ({
-      request,
-    }) => {
+    test(`GET /api/v2/events/${id} → 404 (not 403 — no existence leakage)`, async ({ request }) => {
       const response = await request.get(`${BASE_URL}/api/v2/events/${id}`);
       const safe = new SafeResponse(response);
 
@@ -113,7 +110,7 @@ test.describe('EX-001/002 — Event ID enumeration does not leak existence info'
       expect(
         response.status(),
         `Event ID enumeration: "${id}" returned ${response.status()} ` +
-          `— expected 404 to avoid existence disclosure`,
+          `— expected 404 to avoid existence disclosure`
       ).toBe(404);
 
       await safe.assertNoInternalLeakage();
@@ -143,13 +140,12 @@ test.describe('EX-001/002 — Event ID enumeration does not leak existence info'
       // Must NOT include the queried ID verbatim in a way that exposes
       // internal query structure (e.g. "no row found for evt_redteam_probe in events table")
       const message = String(parsed['message'] ?? '');
-      expect(
-        /events\s+table/i.test(message),
-        `404 message exposes table name: "${message}"`,
-      ).toBe(false);
+      expect(/events\s+table/i.test(message), `404 message exposes table name: "${message}"`).toBe(
+        false
+      );
       expect(
         /row\s+not\s+found/i.test(message),
-        `404 message exposes internal DB language: "${message}"`,
+        `404 message exposes internal DB language: "${message}"`
       ).toBe(false);
     }
   });
@@ -164,57 +160,68 @@ test.describe('EX-001/002 — Event ID enumeration does not leak existence info'
       // Must be 400 (bad format) or 404 (not found) — never 200
       expect(
         [400, 404],
-        `Numeric event ID "${id}" returned ${response.status()} — expected 400 or 404`,
+        `Numeric event ID "${id}" returned ${response.status()} — expected 400 or 404`
       ).toContain(response.status());
 
       // Critically: must NOT be 500 (would indicate the ID reached the DB and caused an error)
       expect(
         response.status(),
-        `Numeric ID "${id}" caused a 500 — possible unhandled DB error`,
+        `Numeric ID "${id}" caused a 500 — possible unhandled DB error`
       ).not.toBe(500);
     }
   });
 });
 
 // ─── EX-003 — SharedReport without token ─────────────────────────────────────
+//
+// /sharedReport is a public HTML shell (OSE-682: it loads on every plan). It holds
+// no report data: the browser fetches the report from
+// /api/v2/events/:id/shared-report with the signed link token, and THAT is the
+// authentication boundary. These probes used to require the page itself to refuse
+// (401/403); it only ever did so because staging sat on the Free plan, which made
+// the page answer 403 for a plan reason, not an auth one. The probes now assert
+// what actually protects the data: the shell carries none, and the report API
+// refuses a missing or fabricated token.
 
-test.describe('EX-003 — SharedReport requires authentication token', () => {
-  test('GET /sharedReport without token → 401 or redirects to auth (not 200)', async ({
-    request,
-  }) => {
-    const response = await request.get(`${BASE_URL}/sharedReport`, {
-      maxRedirects: 0,
-    });
+const EX003_EVENT = SMOKE_EVENT_ID || 'test-event-001';
 
-    const status = response.status();
-    const isGated =
-      status === 401 ||
-      status === 403 ||
-      (status >= 300 && status < 400); // redirect to auth is acceptable
-
-    // 200 means the report rendered without authentication — data exposure
-    expect(
-      status,
-      '/sharedReport returned 200 without auth — unauthenticated data access',
-    ).not.toBe(200);
-
-    expect(
-      isGated,
-      `/sharedReport returned ${status} — expected 401, 403, or redirect to auth`,
-    ).toBe(true);
+test.describe('EX-003 — SharedReport data requires a signed link token', () => {
+  test('GET /sharedReport without token → a shell with no report data', async ({ request }) => {
+    const response = await request.get(`${BASE_URL}/sharedReport`, { maxRedirects: 0 });
+    expect(response.status(), '/sharedReport must not 5xx').toBeLessThan(500);
+    const body = await response.text();
+    // No server-rendered report payload: no JSON report object, no counts.
+    expect(body, 'the shell must not embed a report payload').not.toMatch(
+      /"distinct_scanners"\s*:\s*\d/
+    );
+    expect(body, 'the shell must not embed sponsor display rows').not.toMatch(
+      /"sponsor_displays"\s*:\s*\[\s*\{/
+    );
   });
 
-  test('GET /sharedReport with fabricated token → 401 or 403', async ({ request }) => {
-    const response = await request.get(`${BASE_URL}/sharedReport`, {
-      headers: {
-        Authorization: 'Bearer fabricated.token.value',
-      },
-    });
+  test('GET the report API without token → 401', async ({ request }) => {
+    const response = await request.get(
+      `${BASE_URL}/api/v2/events/${encodeURIComponent(EX003_EVENT)}/shared-report`
+    );
+    expect(
+      response.status(),
+      `report API without a token returned ${response.status()} — expected 401`
+    ).toBe(401);
+    const body = await response.text();
+    expect(body, 'a refusal carries no report').not.toContain('"report"');
+  });
 
+  test('GET the report API with fabricated token → 401 or 403', async ({ request }) => {
+    const response = await request.get(
+      `${BASE_URL}/api/v2/events/${encodeURIComponent(EX003_EVENT)}/shared-report`,
+      { headers: { Authorization: 'Bearer fabricated.token.value' } }
+    );
     expect(
       [401, 403],
-      `/sharedReport with fabricated token returned ${response.status()} — expected 401 or 403`,
+      `report API with fabricated token returned ${response.status()} — expected 401 or 403`
     ).toContain(response.status());
+    const body = await response.text();
+    expect(body, 'a refusal carries no report').not.toContain('"report"');
   });
 });
 
@@ -240,24 +247,21 @@ test.describe('EX-004/005 — Admin endpoints gate unauthenticated access', () =
       // 200 means the endpoint served content without auth — data exposure
       expect(
         status,
-        `${endpoint} returned 200 without auth — unauthenticated access to admin resource`,
+        `${endpoint} returned 200 without auth — unauthenticated access to admin resource`
       ).not.toBe(200);
 
       // 500 means the auth guard panicked instead of rejecting cleanly
       expect(
         status,
-        `${endpoint} returned 500 without auth — auth guard threw an unhandled error`,
+        `${endpoint} returned 500 without auth — auth guard threw an unhandled error`
       ).not.toBe(500);
 
       // Must be a gating response
-      const isGated =
-        status === 401 ||
-        status === 403 ||
-        (status >= 300 && status < 400);
+      const isGated = status === 401 || status === 403 || (status >= 300 && status < 400);
 
       expect(
         isGated,
-        `${endpoint} without auth returned ${status} — expected 401, 403, or redirect`,
+        `${endpoint} without auth returned ${status} — expected 401, 403, or redirect`
       ).toBe(true);
 
       await safe.assertNoInternalLeakage();
@@ -281,15 +285,12 @@ test.describe('EX-006 — Error responses are safe (no stack traces, no SQL)', (
       const safe = new SafeResponse(response);
 
       // Must not be 200 (that would mean we matched something)
-      expect(
-        response.status(),
-        `${label}: expected a 4xx error, got 200`,
-      ).not.toBe(200);
+      expect(response.status(), `${label}: expected a 4xx error, got 200`).not.toBe(200);
 
       // Must not be 500 (unhandled error)
       expect(
         response.status(),
-        `${label}: server returned 500 — possible unhandled error from input`,
+        `${label}: server returned 500 — possible unhandled error from input`
       ).not.toBe(500);
 
       await safe.assertNoInternalLeakage();
@@ -305,7 +306,7 @@ test.describe('EX-006 — Error responses are safe (no stack traces, no SQL)', (
     // POST to a GET-only endpoint: 405 Method Not Allowed or 401 (auth first)
     expect(
       [401, 403, 405],
-      `POST /api/v2/events returned ${response.status()} — expected 401, 403, or 405`,
+      `POST /api/v2/events returned ${response.status()} — expected 401, 403, or 405`
     ).toContain(response.status());
 
     const safe = new SafeResponse(response);

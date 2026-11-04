@@ -43,6 +43,7 @@
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
+import { usePaidReportPlan } from './helpers/paid-report-plan';
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import worker from '../src/index';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
@@ -605,6 +606,8 @@ const BASELINE_NAMING_A_GROUP: World = set({ baseline90: 112, baseline30: 109 })
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
+  // OSE-682: this spec asserts paid sections, so it runs on a paid plan.
+  await usePaidReportPlan();
   await applyMigrations();
 });
 

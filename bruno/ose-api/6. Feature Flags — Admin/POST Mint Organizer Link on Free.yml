@@ -1,0 +1,47 @@
+info:
+  name: POST Mint Organizer Link on Free
+  type: http
+  seq: 7
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/plancap-evt/shared-report/mint-link"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "role": "bar_owner",
+        "ttl_days": 7
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-682: runs while POST Apply Tier Preset has staging on Free. Mints an organizer
+
+        // link for the plan-cap fixture event (bruno/fixtures/report-plan-cap-seed.sql).
+
+        test('Mints an organizer link (200, ok, token)', function() {
+
+        \    expect(res.getStatus()).to.eql(200);
+
+        \    const json = res.getBody();
+
+        \    expect(json.ok).to.eql(true);
+
+        \    expect(json.token).to.be.a('string');
+
+        \    bru.setVar('planCapToken', json.token);
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -10,27 +10,29 @@
 
 > Registration + check-in forms. Basic public page. Admin read-only.
 
-| Category      | Feature                      | Status |
-| ------------- | ---------------------------- | ------ |
-| **Forms**     | Registration                 | ON     |
-|               | Check-in counter             | ON     |
-|               | Survey                       | OFF    |
-|               | Email signup                 | OFF    |
-| **Config**    | Self-serve event settings    | OFF    |
-|               | Event settings management    | OFF    |
-| **Analytics** | Shared report (basic view)   | OFF    |
-|               | Export JSON                  | ON     |
-|               | Advanced metrics             | OFF    |
-|               | Export PDF                   | OFF    |
-|               | Custom date window           | OFF    |
-|               | Portfolio view               | OFF    |
-| **Assets**    | File upload (logos, posters) | OFF    |
-|               | Custom QR design             | OFF    |
-| **Branding**  | White-label                  | OFF    |
-|               | Custom domain                | OFF    |
-|               | Custom color palette         | OFF    |
+| Category      | Feature                           | Status |
+| ------------- | --------------------------------- | ------ |
+| **Forms**     | Registration                      | ON     |
+|               | Check-in counter                  | ON     |
+|               | Survey                            | OFF    |
+|               | Email signup                      | OFF    |
+| **Config**    | Self-serve event settings         | OFF    |
+|               | Event settings management         | OFF    |
+| **Analytics** | Paid shared report (map and more) | OFF ¹  |
+|               | Export JSON                       | ON     |
+|               | Advanced metrics                  | OFF    |
+|               | Export PDF                        | OFF    |
+|               | Custom date window                | OFF    |
+|               | Portfolio view                    | OFF    |
+| **Assets**    | File upload (logos, posters)      | OFF    |
+|               | Custom QR design                  | OFF    |
+| **Branding**  | White-label                       | OFF    |
+|               | Custom domain                     | OFF    |
+|               | Custom color palette              | OFF    |
 
 **Use case:** Community organizer running a one-off event. Needs registration and door count. Nothing else.
+
+¹ Free still gets a SharedReport, at the Local depth: distinct scanners, the sponsors' own display counts and the class breakdown (OSE-682, PO 2026-08-10: "everyone gets SharedReport"). `analytics.shared-report` turns on the paid report; with it off, every signed-link viewer reads at Local, the organizer too. See [REPORT-DEPTH.md](REPORT-DEPTH.md), "The plan caps depth". The admin reads follow the same plan for a brand admin (totals on Free; per-poster, per-day and map data on Mid), while a platform admin sees everything: "Who × plan on every read" in the same doc.
 
 ---
 
@@ -103,25 +105,25 @@ This means:
 
 ### All 17 Flag Keys
 
-| Key                       | Category  | Description                     |
-| ------------------------- | --------- | ------------------------------- |
-| `forms.register`          | Forms     | Registration form               |
-| `forms.checkin`           | Forms     | Check-in counter                |
-| `forms.survey`            | Forms     | Post-event survey               |
-| `forms.email-signup`      | Forms     | Email list signup               |
-| `config.self-serve`       | Config    | Client manages own settings     |
-| `config.event-settings`   | Config    | Event-level settings            |
-| `analytics.shared-report` | Analytics | Shared report view              |
-| `report.export-json`      | Analytics | JSON data export                |
-| `report.advanced-metrics` | Analytics | Advanced metrics                |
-| `report.export-pdf`       | Analytics | PDF report export               |
-| `report.custom-window`    | Analytics | Custom date range               |
-| `report.portfolio`        | Analytics | Portfolio view (multi-event)    |
-| `assets.file-upload`      | Assets    | Upload logos, posters           |
-| `assets.custom-qr`        | Assets    | Custom QR code design           |
-| `branding.white-label`    | Branding  | Remove ourSharedEvents branding |
-| `branding.custom-domain`  | Branding  | Use own domain                  |
-| `branding.color-palette`  | Branding  | Custom brand colors             |
+| Key                       | Category  | Description                                             |
+| ------------------------- | --------- | ------------------------------------------------------- |
+| `forms.register`          | Forms     | Registration form                                       |
+| `forms.checkin`           | Forms     | Check-in counter                                        |
+| `forms.survey`            | Forms     | Post-event survey                                       |
+| `forms.email-signup`      | Forms     | Email list signup                                       |
+| `config.self-serve`       | Config    | Client manages own settings                             |
+| `config.event-settings`   | Config    | Event-level settings                                    |
+| `analytics.shared-report` | Analytics | Paid shared report (off = Local depth for every viewer) |
+| `report.export-json`      | Analytics | JSON data export                                        |
+| `report.advanced-metrics` | Analytics | Advanced metrics                                        |
+| `report.export-pdf`       | Analytics | PDF report export                                       |
+| `report.custom-window`    | Analytics | Custom date range                                       |
+| `report.portfolio`        | Analytics | Portfolio view (multi-event)                            |
+| `assets.file-upload`      | Assets    | Upload logos, posters                                   |
+| `assets.custom-qr`        | Assets    | Custom QR code design                                   |
+| `branding.white-label`    | Branding  | Remove ourSharedEvents branding                         |
+| `branding.custom-domain`  | Branding  | Use own domain                                          |
+| `branding.color-palette`  | Branding  | Custom brand colors                                     |
 
 ---
 

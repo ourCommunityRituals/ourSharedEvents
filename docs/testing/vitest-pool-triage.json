@@ -23,6 +23,13 @@
       "testCount": 4
     },
     {
+      "file": "workers/oursharedevents/tests/admin-actor-expiry-race.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 8
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-allowlist.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -266,6 +273,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-reads-plan-cap.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 32
     },
     {
       "file": "workers/oursharedevents/tests/admin-registrant-contacts.spec.ts",
@@ -604,6 +618,13 @@
       "testCount": 3
     },
     {
+      "file": "workers/oursharedevents/tests/ci-service-actor-router.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 4
+    },
+    {
       "file": "workers/oursharedevents/tests/codeql-src-findings.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -783,7 +804,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 26
+      "testCount": 27
     },
     {
       "file": "workers/oursharedevents/tests/data-class-schema.spec.ts",
@@ -1731,6 +1752,13 @@
       "testCount": 3
     },
     {
+      "file": "workers/oursharedevents/tests/paid-report-plan-lookup.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 5
+    },
+    {
       "file": "workers/oursharedevents/tests/pdf-export.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -1980,7 +2008,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 22
+      "testCount": 24
     },
     {
       "file": "workers/oursharedevents/tests/poster-tiers.spec.ts",
@@ -2015,7 +2043,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 4
+      "testCount": 5
     },
     {
       "file": "workers/oursharedevents/tests/public-event-calendar.spec.ts",
@@ -2277,6 +2305,13 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/red-team/ci-service-actor.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 30
+    },
+    {
       "file": "workers/oursharedevents/tests/red-team/form-security-deep.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -2386,7 +2421,14 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 25
+      "testCount": 32
+    },
+    {
+      "file": "workers/oursharedevents/tests/report-plan.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/return-count-rename.spec.ts",
@@ -2578,13 +2620,6 @@
       "testCount": 1
     },
     {
-      "file": "workers/oursharedevents/tests/shared-report-disabled-page.spec.ts",
-      "bucket": "workerd",
-      "needsReview": false,
-      "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 3
-    },
-    {
       "file": "workers/oursharedevents/tests/shared-report-event-state-maturity.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -2611,6 +2646,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-free-plan-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-get-rate-limit.spec.ts",
@@ -2673,14 +2715,14 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 3
+      "testCount": 7
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-read.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 68
+      "testCount": 74
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-return-rate-card.spec.ts",

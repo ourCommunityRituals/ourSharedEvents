@@ -42,6 +42,10 @@ export const NODE_SPECS = [
   // the D1 builder + audit log and mints a real signed-link token, so it binds
   // no runtime (no cloudflare:test / SELF.fetch) and runs node-clean.
   'tests/shared-report-read-depth-wiring.spec.ts',
+  // OSE-682 — the paid-report plan lookup fails closed. A fake D1 stands in.
+  'tests/paid-report-plan-lookup.spec.ts',
+  // OSE-682 — who × plan: pure plan module, plan read fails closed, sponsor home totals.
+  'tests/report-plan.spec.ts',
 
   // Batch 2 (OSE-946 c3) — manifest node-clean bucket, then GREEN-FILTERED in the
   // node project: added all 43 non-review node candidates, ran the node project,
@@ -116,6 +120,8 @@ export const NODE_SPECS = [
   // a JWT, stubs fetch to serve the JWKS. Re-imports admin.ts per test to reset the
   // module-level JWKS cache. No cloudflare:test/D1 — runs node-clean for Stryker.
   'tests/red-team/auth-jwks-verify.spec.ts',
+  // OSE-1800 — the staging CI service actor (brand admin, never platform). Real RSA tokens, JWKS stubbed.
+  'tests/red-team/ci-service-actor.spec.ts',
 
   // OSE-1278 slice 2 (G1 authZ mutation) — the behavioural kill loop over
   // src/auth/admin.ts (requireAdmin/extractAdminActor + the private helpers).

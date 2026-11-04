@@ -17,6 +17,12 @@ runtime:
 
         if (res.getStatus() === 200) {
 
+        \    // Remember the plan staging is on, so POST Restore Tier Preset can put it back
+
+        \    // after POST Apply Tier Preset sets Free (the suite must not leave staging on Free).
+
+        \    if (['free', 'mid', 'enterprise'].includes(json.tier)) { bru.setVar('tierBeforeApply', json.tier); }
+
         \    test('ok is true', function() {
 
         \        expect(json.ok).to.eql(true);

@@ -25,6 +25,7 @@
  * NOT a scan-path handler. Do NOT add this file to the SCAN_PATH list in h3-tagging.spec.ts.
  */
 
+import { hasPaidReport, planNote, type ReportPlan } from '../lib/report-plan';
 import { corsHeaders } from '../lib/cors';
 import { posterScans, readEventScanCells, scansByPoster } from '../lib/scan-cells';
 import { maybeTag } from '../lib/h3-tagging';
@@ -261,7 +262,8 @@ export async function handleAdminCreatePosterDeployment(
 export async function handleAdminListPosterDeployments(
   request: Request,
   env: PosterDeploymentsEnv,
-  eventId: string
+  eventId: string,
+  plan: ReportPlan
 ): Promise<Response> {
   const rid = requestId();
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
@@ -295,7 +297,10 @@ export async function handleAdminListPosterDeployments(
       created_at: string;
       updated_at: string;
     }>();
-  const scansPerPoster = scansByPoster(await readEventScanCells(env.DB, eventId));
+  const paidReport = hasPaidReport(plan, eventId);
+  const scansPerPoster = paidReport
+    ? scansByPoster(await readEventScanCells(env.DB, eventId))
+    : new Map();
 
   // Enrich each row with the physical scan URL and an in-bundle QR data-URI
   // (OSE-895). QR generation stays deterministic/LLM-free — same native
@@ -330,7 +335,9 @@ export async function handleAdminListPosterDeployments(
     const target_url = qrScanTarget(origin, eventId, row.id);
     return {
       ...row,
-      scans: posterScans(scansPerPoster, row.id),
+      // OSE-682: per-poster scans (poster attribution) only on a paid plan, or
+      // for a platform admin; a Free plan's brand admin gets the placements.
+      ...(paidReport ? { scans: posterScans(scansPerPoster, row.id) } : {}),
       scan_url,
       qr_data_uri,
       target_url,
@@ -347,7 +354,12 @@ export async function handleAdminListPosterDeployments(
   const event_address = eventRow?.where_address || eventRow?.location || null;
 
   return Response.json(
-    { ok: true, items, event_address },
+    {
+      ok: true,
+      items,
+      event_address,
+      ...(paidReport ? {} : { plan: planNote(['items.scans']) }),
+    },
     { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );
 }

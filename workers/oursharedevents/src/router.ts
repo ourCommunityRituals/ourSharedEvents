@@ -202,7 +202,6 @@ import {
   handlePosterPage,
   handleAdminPosterPreviewPage,
   handleSharedReportPage,
-  renderErrorPage,
   handleUiPreview,
   type PagesEnv,
 } from './handlers/pages';
@@ -212,9 +211,11 @@ import { requireAdmin, extractAdminActor, verifyCfAccessJWT, type AdminEnv } fro
 import {
   guardAdminObjectScope,
   requirePlatformScope,
+  isPlatformActor,
   requireKeyActor,
   type AdminObjectScopeEnv,
 } from './lib/admin-object-scope';
+import { FULL_PLAN, type ReportPlan } from './lib/report-plan';
 import { adminWriteRefusal, adminWriteRefusalResponse } from './lib/admin-write-guard';
 import {
   handleAdminMintSponsorHomeLink,
@@ -268,6 +269,8 @@ import {
   isFeatureEnabled,
   listFlags,
   detectCurrentTier,
+  isPaidReportEnabled,
+  readReportPlan,
   type FeatureFlagEnv,
 } from './lib/feature-flags';
 import {
@@ -466,6 +469,20 @@ async function formRouteLimit(
   return null;
 }
 
+/**
+ * Who × plan for an admin read (OSE-682, owner 2026-11-04): a platform admin
+ * sees every event as paid, and the caller audits that read once the handler
+ * has answered, with its real outcome; anyone else gets the events' real plans,
+ * read once and failing closed. See lib/report-plan.ts.
+ */
+async function reportPlanFor(
+  request: Request,
+  env: RouterEnv
+): Promise<{ plan: ReportPlan; platform: boolean }> {
+  if (await isPlatformActor(request, env)) return { plan: FULL_PLAN, platform: true };
+  return { plan: await readReportPlan(env.FORMS_DB), platform: false };
+}
+
 export async function route(
   request: Request,
   env: RouterEnv,
@@ -521,6 +538,22 @@ export async function route(
    * recorded as 'denied': the append-only log must never claim a write that
    * did not happen (same rule as UPDATE_EVENT, CCR-PR567 item 7).
    */
+  /**
+   * The reference a response carries is the one its audit row must hold, so a
+   * support lookup by X-Request-Id finds the row (review 2026-11-04). A handler
+   * that minted its own id keeps it; one that sent none gets `reqId`.
+   */
+  function _withReference(res: Response, reqId: string): { res: Response; ref: string } {
+    const own = res.headers.get('X-Request-Id');
+    if (own) return { res, ref: own };
+    const headers = new Headers(res.headers);
+    headers.set('X-Request-Id', reqId);
+    return {
+      res: new Response(res.body, { status: res.status, statusText: res.statusText, headers }),
+      ref: reqId,
+    };
+  }
+
   function _auditOutcome(res: Response): 'success' | 'denied' {
     return res.status < 400 ? 'success' : 'denied';
   }
@@ -929,11 +962,38 @@ export async function route(
       pathname === '/api/v2/admin/dashboards/corridor') &&
     method === 'GET'
   ) {
-    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    return pathname.endsWith('/operations')
-      ? handleOperationsDashboard(request, env)
-      : handleCorridorDashboard(request, env);
+    if (pathname.endsWith('/operations')) return handleOperationsDashboard(request, env);
+    const who = await reportPlanFor(request, env);
+    const res = await handleCorridorDashboard(request, env, who.plan);
+    if (who.platform) {
+      // The brand comes from the scope the handler validated and served, never
+      // from ?brand_id= (an untrusted tenant id); a refused read names no tenant.
+      const outcome = _auditOutcome(res);
+      let served: string[] = [];
+      if (outcome === 'success') {
+        const body = (await res
+          .clone()
+          .json()
+          .catch(() => null)) as { scope?: { brands?: unknown } } | null;
+        const brands = body?.scope?.brands;
+        if (Array.isArray(brands))
+          served = brands.filter((b): b is string => typeof b === 'string');
+      }
+      const ref = _withReference(res, reqId);
+      _audit(
+        ref.ref,
+        'READ_PAST_PLAN',
+        outcome,
+        'corridor',
+        served.length ? served.join(',') : 'refused',
+        served.length === 1 ? served[0] : null
+      );
+      return ref.res;
+    }
+    return res;
   }
 
   // GET /api/v2/admin/events/portfolio-rollup — OSE-669 brand-scoped rollup strip.
@@ -1338,8 +1398,15 @@ export async function route(
     if (deny) return deny;
     if (method === 'POST')
       return handleAdminCreatePosterDeployment(request, env, adminPosterListMatch[1]);
-    if (method === 'GET')
-      return handleAdminListPosterDeployments(request, env, adminPosterListMatch[1]);
+    if (method === 'GET') {
+      const who = await reportPlanFor(request, env);
+      const id = adminPosterListMatch[1];
+      const res = await handleAdminListPosterDeployments(request, env, id, who.plan);
+      if (!who.platform) return res;
+      const ref = _withReference(res, reqId);
+      _audit(ref.ref, 'READ_PAST_PLAN', _auditOutcome(res), 'event', id);
+      return ref.res;
+    }
   }
 
   // GET /api/v2/admin/events/:id/display-config — the TV card's current values.
@@ -1395,7 +1462,13 @@ export async function route(
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    return handleEventDashboard(request, env, adminEventDashboardMatch[1]);
+    const who = await reportPlanFor(request, env);
+    const id = adminEventDashboardMatch[1];
+    const res = await handleEventDashboard(request, env, id, who.plan);
+    if (!who.platform) return res;
+    const ref = _withReference(res, reqId);
+    _audit(ref.ref, 'READ_PAST_PLAN', _auditOutcome(res), 'event', id);
+    return ref.res;
   }
 
   // GET /api/v2/admin/events/:id/pre-event-activity — the organizer's pre-event
@@ -1407,7 +1480,13 @@ export async function route(
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    return handleAdminPreEventActivity(request, env, adminPreEventMatch[1]);
+    const who = await reportPlanFor(request, env);
+    const id = adminPreEventMatch[1];
+    const res = await handleAdminPreEventActivity(request, env, id, who.plan);
+    if (!who.platform) return res;
+    const ref = _withReference(res, reqId);
+    _audit(ref.ref, 'READ_PAST_PLAN', _auditOutcome(res), 'event', id);
+    return ref.res;
   }
 
   // POST /api/v2/admin/poster-deployments/backfill-h3 (must match before /:id)
@@ -1535,7 +1614,11 @@ export async function route(
       return deny;
     }
     if (method === 'PUT') {
-      const response = await handleSetEventFlag(request, env, eventId, flagKey, reqId);
+      // Review 2026-11-04 (OSE-682): an event override is an entitlement write;
+      // the handler applies the plan rule, in its own envelope (X-Request-Id).
+      const response = await handleSetEventFlag(request, env, eventId, flagKey, reqId, {
+        platform: await isPlatformActor(request, env),
+      });
       const outcome = _auditOutcome(response);
       _audit(reqId, 'SET_EVENT_FLAG', outcome, 'flag', `${eventId}/${flagKey}`);
       return response;
@@ -1794,7 +1877,8 @@ export async function route(
         return rateLimitResponse();
       }
     }
-    return handleBatchSharedReports(request, env, ctx);
+    // OSE-682: the batch read follows each event's plan too (read once, fails closed).
+    return handleBatchSharedReports(request, env, ctx, () => readReportPlan(env.FORMS_DB));
   }
 
   // GET /api/v2/events/:id/shared-report
@@ -1809,7 +1893,11 @@ export async function route(
     const id = sharedReportMatch[1];
     return publicReadLimited(
       'shared-report',
-      (req, e: typeof env) => handleGetSharedReport(req, e, id, ctx),
+      // OSE-682: the plan caps depth. The lookup reads the plan flag (event
+      // override, then global), runs only after the token checks out, and fails
+      // closed: an unreadable forms database reads as Local, never as paid.
+      (req, e: typeof env) =>
+        handleGetSharedReport(req, e, id, ctx, () => isPaidReportEnabled(e.FORMS_DB, id)),
       RATE_LIMIT_MAX,
       sharedReportBucketKey
     )(request, env);
@@ -2249,32 +2337,11 @@ export async function route(
     pathname === '/insights' ||
     pathname === '/stats'
   ) {
-    const reportEnabled = await isFeatureEnabled(env.FORMS_DB, 'analytics.shared-report');
-    if (!reportEnabled) {
-      // OSE-1206: a browser following a report link is a person, not a client.
-      // Give it the branded friendly-error page (guidelines §4.2: say what
-      // happened, offer a next step, no raw codes). API callers — anything not
-      // asking for text/html — keep the JSON envelope, unchanged.
-      const wantsHtml = (request.headers.get('Accept') || '').includes('text/html');
-      if (wantsHtml) {
-        return renderErrorPage(
-          403,
-          "Shared reports aren't switched on here yet",
-          "This event's plan doesn't include shared reports right now. If you host the event, you can turn them on from your admin page; if you were sent this link, ask the host for the latest recap.",
-          '/events',
-          'Browse upcoming events'
-        );
-      }
-      return Response.json(
-        {
-          ok: false,
-          status: 403,
-          code: 'REPORT_DISABLED',
-          error: 'Shared reports are not enabled for this tier',
-        },
-        { status: 403 }
-      );
-    }
+    // OSE-682 (PO, 2026-08-10): everyone gets a SharedReport. The page loads on
+    // every plan; what it shows is decided once, at the read API, where a plan
+    // without the paid report caps every viewer at Local (capDepthToPlan). This
+    // used to refuse the whole page on Free (OSE-1206's 403), which left a Free
+    // event with no report at all.
     return handleSharedReportPage(env);
   }
 
