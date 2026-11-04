@@ -119,7 +119,9 @@ describe('Authentication Methods (Story 3.1)', () => {
     });
 
     it('should return null (allow) on valid JWT', () => {
-      expect(adminAuthSource).toContain('const { valid, email } = extractCfAccessPayload(cfJwt)');
+      // OSE-1800: the payload is kept whole for the service-actor check.
+      expect(adminAuthSource).toContain('const payload = extractCfAccessPayload(cfJwt);');
+      expect(adminAuthSource).toContain('const { valid, email } = payload;');
     });
   });
 

@@ -41,6 +41,62 @@ export interface AdminEnv extends AdminAllowlistEnv {
    * Set ONLY in the gitignored .dev.vars. Never in wrangler.toml [vars]/secrets.
    */
   DEV_OPEN_ADMIN?: string;
+  /**
+   * OSE-1800 — STAGING ONLY. Comma-separated Access service-token common names
+   * (Client IDs) accepted as `svc:<common_name>` actors: a CI identity that is a
+   * brand admin of CI_SERVICE_ACTOR_BRAND, never a platform admin. Inert unless
+   * WORKER_ENV is staging and CF_ACCESS_TEAM_DOMAIN + CF_ACCESS_AUD are set.
+   * Never in [env.production.vars] (tests/prod-admin-scope-config.spec.ts).
+   */
+  CI_SERVICE_ACTORS?: string;
+}
+
+/**
+ * OSE-1800 — automation actors carry no person's identity: the `key:` actors
+ * (X-OCR-Internal, the Bearer admin key) and the staging CI service actor
+ * (`svc:`). Used where "a signed-in person" and "automation" are treated
+ * differently (write guard, "only mine", the audit Logs source). Key-only
+ * routes (requireKeyActor) still check `key:` alone: a `svc:` actor is not a key.
+ */
+export function isAutomationActor(actor: string | null): boolean {
+  return actor !== null && (actor.startsWith('key:') || actor.startsWith('svc:'));
+}
+
+/**
+ * OSE-1800 — the staging CI service actor's name, or null. A Cloudflare Access
+ * service token's JWT carries a `common_name` (its Client ID) and no `email`.
+ * It is an actor ONLY when every condition holds:
+ *   1. WORKER_ENV is staging;
+ *   2. the team domain is set (so requireAdmin verified the signature) and the
+ *      token was issued by that team;
+ *   3. the Access audience is pinned and the token carries it (the team signs
+ *      tokens for every app in the tenant);
+ *   4. the common name is listed in CI_SERVICE_ACTORS.
+ * The payload here is decoded, not verified: requireAdmin verifies the
+ * signature, and this predicate demands the settings under which it did.
+ */
+function serviceActorName(
+  payload: { email?: string; common_name?: unknown; aud?: unknown; iss?: unknown },
+  env: AdminEnv
+): string | null {
+  // Stryker disable next-line ConditionalExpression: equivalent mutant — both callers already require no email (extractAdminActor returns an email first; requireAdmin tests `!email`), so this line is the predicate's own statement of rule 0, not a reachable branch.
+  if (payload.email) return null;
+  const cn = payload.common_name;
+  // Stryker disable next-line ConditionalExpression: equivalent mutant — a non-string or empty common_name can never be in `listed` (strings, empties filtered out), so dropping this check reaches the same `return null` below.
+  if (typeof cn !== 'string' || cn.length === 0) return null;
+  if (env.WORKER_ENV !== 'staging') return null;
+  const domain = env.CF_ACCESS_TEAM_DOMAIN?.trim();
+  const aud = env.CF_ACCESS_AUD?.trim();
+  if (!domain || !aud) return null;
+  if (payload.iss !== `https://${domain}`) return null;
+  const auds = Array.isArray(payload.aud) ? payload.aud : payload.aud ? [payload.aud] : [];
+  if (!auds.includes(aud)) return null;
+  if (!env.CI_SERVICE_ACTORS) return null;
+  const listed = env.CI_SERVICE_ACTORS.split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (!listed.includes(cn)) return null;
+  return `svc:${cn}`;
 }
 
 // ─── CF Access JWT cryptographic verification (OSE-573) ───────────────────────
@@ -214,6 +270,10 @@ function getAdminKey(env: AdminEnv): string | null {
 interface CfAccessPayload {
   valid: boolean;
   email?: string;
+  /** OSE-1800: a service token's Client ID; with aud/iss, read by serviceActorName. */
+  common_name?: unknown;
+  aud?: unknown;
+  iss?: unknown;
 }
 
 function extractCfAccessPayload(jwt: string): CfAccessPayload {
@@ -235,12 +295,21 @@ function extractCfAccessPayload(jwt: string): CfAccessPayload {
       exp?: number;
       iat?: number;
       email?: string;
+      common_name?: unknown;
+      aud?: unknown;
+      iss?: unknown;
     };
     // Stryker disable next-line BooleanLiteral,ObjectLiteral: equivalent — emailless return, masked by `valid && email` (see NOTE). The exp+iat requirement IS covered (missing-exp / missing-iat → 401). OSE-1278.
     if (!payload.exp || !payload.iat) return { valid: false };
     // Stryker disable next-line BooleanLiteral,ObjectLiteral: equivalent — emailless return, masked by `valid && email` (see NOTE). The `<=` boundary IS covered (exp==now → 401 under fake time). OSE-1278.
     if (payload.exp <= Math.floor(Date.now() / 1000)) return { valid: false };
-    return { valid: true, email: payload.email };
+    return {
+      valid: true,
+      email: payload.email,
+      common_name: payload.common_name,
+      aud: payload.aud,
+      iss: payload.iss,
+    };
   } catch {
     // Stryker disable next-line ObjectLiteral,BooleanLiteral: equivalent — emailless return, masked by `valid && email` (see NOTE). The catch IS exercised (malformed base64 → 401). OSE-1278.
     return { valid: false };
@@ -294,8 +363,13 @@ function resolveAdminActor(request: Request, env: AdminEnv): string | null {
   const cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
   // Stryker disable next-line ConditionalExpression: equivalent mutant — forcing this guard true with no header makes `extractCfAccessPayload(null)` throw→caught→`{valid:false}`, then `valid && email` fails and control falls to the same key checks below. Actor extraction from a real JWT IS covered. OSE-1278.
   if (cfJwt) {
-    const { valid, email } = extractCfAccessPayload(cfJwt);
-    if (valid && email) return email;
+    const payload = extractCfAccessPayload(cfJwt);
+    if (payload.valid && payload.email) return payload.email;
+    // OSE-1800: the staging CI service actor (see serviceActorName).
+    if (payload.valid) {
+      const svc = serviceActorName(payload, env);
+      if (svc) return svc;
+    }
   }
   if (env.ALLOW_OCR_INTERNAL === 'true') {
     const ocrSecret = env.X_OCR_INTERNAL?.trim() ?? null;
@@ -388,7 +462,13 @@ export async function requireAdmin(
     }
 
     if (cfTrustable) {
-      const { valid, email } = extractCfAccessPayload(cfJwt);
+      const payload = extractCfAccessPayload(cfJwt);
+      const { valid, email } = payload;
+      // OSE-1800: a staging CI service token that is LISTED is an actor of its
+      // own (svc:<common_name>, a brand admin, never platform). The predicate
+      // requires the team domain, so the signature was verified above.
+      // Stryker disable next-line ConditionalExpression: `valid` is implied by the verification above (same exp/iat checks a moment earlier); it differs only if the clock crosses `exp` between the two reads, which a test cannot place. Kept as belt and braces. The LogicalOperator mutant (`valid || …`) IS killed: an email token off the allowlist still gets 403.
+      if (valid && !email && serviceActorName(payload, env)) return null;
       if (valid && email) {
         // A CF Access JWT carrying a HUMAN email must pass the admin allowlist.
         const allowlistDeny = assertAdminEmailAllowed(email, env, requestId);

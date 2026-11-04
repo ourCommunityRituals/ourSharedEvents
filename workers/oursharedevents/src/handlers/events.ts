@@ -62,7 +62,7 @@ import {
 } from '../lib/spine-keys-store';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
-import { extractAdminActor, isDevOpenAdmin, type AdminEnv } from '../auth/admin';
+import { extractAdminActor, isAutomationActor, isDevOpenAdmin, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import { validateLogoUrl, validateHttpsUrl } from '../lib/sponsor-logo';
 import { isUploadedArtworkPath } from '../lib/event-thumb';
@@ -420,7 +420,7 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
     // "Only mine" is meaningful only for a personal (email) actor; a key actor
     // has no creator identity to match, so the flag is a no-op for it rather
     // than an empty list.
-    if (mine && actor && !actor.startsWith('key:')) {
+    if (mine && actor && !isAutomationActor(actor)) {
       whereParts.push('e.created_by = ?');
       bindings.push(actor);
     }
@@ -465,7 +465,7 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
         // not what it asked for (a key actor asking ?mine=1 sees mine:false).
         filters: {
           status: statusFilter,
-          mine: Boolean(mine && actor && !actor.startsWith('key:')),
+          mine: Boolean(mine && actor && !isAutomationActor(actor)),
           sort,
         },
       },

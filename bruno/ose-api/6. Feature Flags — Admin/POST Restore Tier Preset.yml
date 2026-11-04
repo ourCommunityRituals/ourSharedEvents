@@ -1,7 +1,7 @@
 info:
   name: POST Restore Tier Preset
   type: http
-  seq: 9
+  seq: 14
 
 http:
   method: POST
