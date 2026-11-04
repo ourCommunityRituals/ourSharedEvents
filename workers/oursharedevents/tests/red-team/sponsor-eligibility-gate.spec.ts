@@ -228,7 +228,10 @@ describe('OSE-744 — the eligibility decision is audited, PII-free (#24)', () =
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ draft_token: token }),
     });
-    const res = await handlePromoteSponsorDraft(req, e() as never, ctx, reqId);
+    // No admin actor: the handler runs as under the DEV_OPEN_ADMIN local bypass, the
+    // one place a null actor may promote (OSE-1801).
+    const devOpen = { ...e(), DEV_OPEN_ADMIN: 'true' };
+    const res = await handlePromoteSponsorDraft(req, devOpen as never, ctx, reqId);
     await flush(); // drain waitUntil so the fire-and-forget audit row lands
     return res;
   }

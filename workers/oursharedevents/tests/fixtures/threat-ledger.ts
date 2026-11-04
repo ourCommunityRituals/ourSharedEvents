@@ -1787,6 +1787,32 @@ const FORM_PAGE_INJECTION: ThreatEntry[] = [
   },
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Layer: admin actor resolution (OSE-1801). TL-084.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ADMIN_ACTOR_ONCE: ThreatEntry[] = [
+  {
+    id: 'TL-084',
+    layer: 'permission_layer',
+    threat:
+      'A brand admin whose Access token expired during the request got every brand: extractAdminActor decoded the JWT again on each call and re-checked exp, and on Workers the clock moves after I/O, so a handler that re-read the actor after the body read saw null, and three handlers took a null actor as the DEV_OPEN_ADMIN bypass (allow). Proven on main: event create answered 201 in brand B, sponsor create 201 on a brand-B event, draft promote passed the scope check. Mitigated: the actor is resolved once per request (memoised, pinned when requireAdmin decides), and a null actor allows nothing unless isDevOpenAdmin(env) holds (opted in, not staging, not production).',
+    severity: 'CRITICAL',
+    target_invariant: null,
+    mitigation_story: 'OSE-1801',
+    test_ref:
+      'tests/admin-actor-expiry-race.spec.ts > OSE-1801 | a token that expires mid-request keeps the brand it started with > event create: a brand-A admin cannot create in brand B (403), even if the token expires during the body read',
+    status: 'tested',
+    red_birth: {
+      date: '2026-11-04',
+      method: 'deliberate-fixture-break',
+      notes:
+        'On main (before the fix) the three cross-brand tests were red: 201, 201, and 412 past the scope check; the fresh-token control was 403. With the fix, memo removed alone: the own-brand create under an expiring token went red (403 instead of 201). requireKeyActor restored to allow a null actor: four null-actor refusals went red. Green with the fix (15 tests).',
+    },
+    last_run_green: '2026-11-04',
+  },
+];
+
 export const THREAT_LEDGER: ThreatEntry[] = [
   ...D1_BOUNDARY,
   ...WORKER_SURFACE,
@@ -1807,12 +1833,13 @@ export const THREAT_LEDGER: ThreatEntry[] = [
   ...LINK_COUNT_ROBOTS,
   ...INVARIANT_GATES,
   ...FORM_PAGE_INJECTION,
+  ...ADMIN_ACTOR_ONCE,
 ];
 
 export const THREAT_LEDGER_META = {
   schema_version: '1.0.0',
   story: 'OSE-564',
-  last_updated: '2026-10-28',
+  last_updated: '2026-11-04',
   total_entries: THREAT_LEDGER.length,
   layers: 8,
 } as const;

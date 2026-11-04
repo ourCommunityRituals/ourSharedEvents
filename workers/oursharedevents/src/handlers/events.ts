@@ -62,7 +62,7 @@ import {
 } from '../lib/spine-keys-store';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
-import { extractAdminActor, isAutomationActor, type AdminEnv } from '../auth/admin';
+import { extractAdminActor, isAutomationActor, isDevOpenAdmin, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import { validateLogoUrl, validateHttpsUrl } from '../lib/sponsor-logo';
 import { isUploadedArtworkPath } from '../lib/event-thumb';
@@ -579,13 +579,16 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       rid
     );
   }
-  // A null actor reaches here only through the DEV_OPEN_ADMIN local-dev bypass,
-  // which requireAdmin refuses on staging and production
-  // (tests/dev-open-admin-guard.spec.ts); treat it like the object-scope guard
-  // does and leave the decision to requireAdmin.
+  // A null actor is allowed only when the DEV_OPEN_ADMIN local-dev bypass is
+  // really on (re-tested here, never inferred from the null). Anywhere else a
+  // null actor creates nothing (OSE-1801).
   const actor = extractAdminActor(request, env);
   const scope =
-    actor === null ? ({ mode: 'all' } as const) : await resolveAdminBrandScopeAsync(actor, env);
+    actor !== null
+      ? await resolveAdminBrandScopeAsync(actor, env)
+      : isDevOpenAdmin(env)
+        ? ({ mode: 'all' } as const)
+        : ({ mode: 'deny' } as const);
   if (scope.mode === 'deny') {
     return errorResponse(
       'BRAND_FORBIDDEN',

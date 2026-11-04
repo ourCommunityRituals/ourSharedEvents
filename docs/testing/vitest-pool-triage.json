@@ -23,6 +23,13 @@
       "testCount": 4
     },
     {
+      "file": "workers/oursharedevents/tests/admin-actor-expiry-race.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 8
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-allowlist.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

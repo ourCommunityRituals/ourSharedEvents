@@ -46,7 +46,7 @@ import {
   type DataProviderEnv,
 } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
-import { extractAdminActor, type AdminEnv } from '../auth/admin';
+import { extractAdminActor, isDevOpenAdmin, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 // NOTE: maybeTag is imported here because sponsors.ts is an admin/creation-time
 // handler — NOT a scan-path handler. The hot-path invariant (S-6.3.1c) permits
@@ -570,7 +570,7 @@ export async function handleAdminCreateSponsor(
     // brand-A admin could create a sponsor + placement inside brand B just by
     // naming a (public) brand-B event id. An out-of-scope event answers exactly
     // like a missing one, so the route is not an existence oracle. A null actor
-    // is the DEV_OPEN_ADMIN local bypass (refused on staging/production).
+    // passes only when the DEV_OPEN_ADMIN local bypass is really on (OSE-1801).
     if (eventBrandId) {
       const actor = extractAdminActor(request, env);
       if (actor !== null) {
@@ -579,6 +579,8 @@ export async function handleAdminCreateSponsor(
           scope.mode === 'all' ||
           (scope.mode === 'scoped' && scope.brandIds.includes(eventBrandId));
         if (!inScope) eventBrandId = null;
+      } else if (!isDevOpenAdmin(env)) {
+        eventBrandId = null;
       }
     }
     if (!eventBrandId) {

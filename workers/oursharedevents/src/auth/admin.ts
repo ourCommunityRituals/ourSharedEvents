@@ -329,6 +329,37 @@ function extractCfAccessPayload(jwt: string): CfAccessPayload {
  *   - null                    (unauthenticated / unknown)
  */
 export function extractAdminActor(request: Request, env: AdminEnv): string | null {
+  // Resolved once per (request, env), OSE-1801. The JWT's `exp` is checked
+  // against the clock, and on Workers the clock moves after I/O: a token that was
+  // valid when requireAdmin ran could read as expired (null actor) when a handler
+  // re-read the actor after the body or a D1 await. The first answer stands for
+  // the whole request.
+  let perEnv = ACTOR_MEMO.get(request);
+  if (perEnv === undefined) {
+    perEnv = new WeakMap();
+    ACTOR_MEMO.set(request, perEnv);
+  }
+  const memoKey = env as object;
+  if (perEnv.has(memoKey)) return perEnv.get(memoKey) ?? null;
+  const actor = resolveAdminActor(request, env);
+  perEnv.set(memoKey, actor);
+  return actor;
+}
+
+const ACTOR_MEMO = new WeakMap<Request, WeakMap<object, string | null>>();
+
+/**
+ * True only when the DEV_OPEN_ADMIN local-dev bypass is really on: opted in, and
+ * neither production nor staging. A null admin actor allows nothing unless this
+ * holds (OSE-1801); callers re-test the condition, never the null.
+ */
+export function isDevOpenAdmin(env: AdminEnv): boolean {
+  return (
+    env.DEV_OPEN_ADMIN === 'true' && env.WORKER_ENV !== 'production' && env.WORKER_ENV !== 'staging'
+  );
+}
+
+function resolveAdminActor(request: Request, env: AdminEnv): string | null {
   const cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
   // Stryker disable next-line ConditionalExpression: equivalent mutant — forcing this guard true with no header makes `extractCfAccessPayload(null)` throw→caught→`{valid:false}`, then `valid && email` fails and control falls to the same key checks below. Actor extraction from a real JWT IS covered. OSE-1278.
   if (cfJwt) {
@@ -367,11 +398,12 @@ export async function requireAdmin(
   //      gitignored .dev.vars — never in wrangler.toml [vars] or secrets).
   //   2. Refused when WORKER_ENV is 'production' or 'staging'.
   //   3. Emits a loud warning so an accidental enable is always visible.
-  if (
-    env.DEV_OPEN_ADMIN === 'true' &&
-    env.WORKER_ENV !== 'production' &&
-    env.WORKER_ENV !== 'staging'
-  ) {
+  // Pin the request's actor now, at the moment auth is decided, so a handler that
+  // reads it after the body or a D1 await gets this answer (OSE-1801). Only an
+  // Access JWT's actor depends on the clock; key actors are left to the first
+  // reader so a key compare runs once (AUTH-002 counts its reads).
+  if (request.headers.has('Cf-Access-Jwt-Assertion')) extractAdminActor(request, env);
+  if (isDevOpenAdmin(env)) {
     console.warn(
       JSON.stringify({
         event: 'DEV_OPEN_ADMIN_BYPASS',
