@@ -366,3 +366,66 @@ describe('OSE-682 | a platform read is audited with its real outcome', () => {
     expect(rows.results.map((r) => r.outcome)).toEqual(['denied']);
   });
 });
+
+// ── Review 2026-11-04 (3): the corridor note is about the caller's own events ──
+//
+// @born-red OSE-682 | method: note-on-narrowed | verified: emitting the plan
+//   note whenever the filter narrows (any override anywhere) turns "an override
+//   in another brand leaves brand A's map whole and unannotated" red.
+describe('OSE-682 | corridor plan note covers in-scope events only', () => {
+  const B = BRANDS[1]!;
+
+  test("an override in another brand leaves brand A's map whole and unannotated", async () => {
+    await setPlan(true);
+    await setEventOverride(B.activeEventId, false);
+    const body = await read(OWNER, `/api/v2/admin/dashboards/corridor?data_class=all`);
+    expect((body.flows as unknown[]).length).toBeGreaterThan(0);
+    expect(body).not.toHaveProperty('plan');
+  });
+
+  test("an override on brand A's own event is named", async () => {
+    await setPlan(true);
+    await setEventOverride(A.activeEventId, false);
+    const body = await read(OWNER, `/api/v2/admin/dashboards/corridor?data_class=all`);
+    expect(body).toHaveProperty('plan');
+    expect(body.flows).toEqual([]);
+  });
+});
+
+// ── Review 2026-11-04 (3): the audit names the validated brand ───────────────
+//
+// @born-red OSE-682 | method: audit-requested-brand | verified: recording
+//   ?brand_id= as the audit brand turns "a refused platform read names no
+//   tenant" red (brand A gets an entry for a read it never served).
+describe('OSE-682 | the corridor audit records the brand the handler validated', () => {
+  const PLATFORM_MEMBER = { kind: 'platform' } as const;
+  const auditRows = () =>
+    db()
+      .prepare(
+        `SELECT outcome, brand_id FROM admin_audit_log WHERE action = 'READ_PAST_PLAN' ORDER BY rowid`
+      )
+      .all<{ outcome: string; brand_id: string | null }>();
+
+  test('a served platform read names the brand it served', async () => {
+    await setPlan(false);
+    await db().prepare(`DELETE FROM admin_audit_log WHERE action = 'READ_PAST_PLAN'`).run();
+    const res = await callAs(PLATFORM, 'GET', corridor);
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 50));
+    expect((await auditRows()).results).toEqual([{ outcome: 'success', brand_id: A.brandId }]);
+  });
+
+  test('a refused platform read names no tenant', async () => {
+    await setPlan(false);
+    await db().prepare(`DELETE FROM admin_audit_log WHERE action = 'READ_PAST_PLAN'`).run();
+    // An ose-platform member holds no membership in brand A: 403 BRAND_FORBIDDEN.
+    const res = await callAs(
+      PLATFORM_MEMBER,
+      'GET',
+      `/api/v2/admin/dashboards/corridor?brand_id=${A.brandId}&data_class=all`
+    );
+    expect(res.status).toBe(403);
+    await new Promise((r) => setTimeout(r, 50));
+    expect((await auditRows()).results).toEqual([{ outcome: 'denied', brand_id: null }]);
+  });
+});

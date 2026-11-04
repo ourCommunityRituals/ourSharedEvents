@@ -950,12 +950,30 @@ export async function route(
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
     if (pathname.endsWith('/operations')) return handleOperationsDashboard(request, env);
-    const brandParam = new URL(request.url).searchParams.get('brand_id');
     const who = await reportPlanFor(request, env);
     const res = await handleCorridorDashboard(request, env, who.plan);
     if (who.platform) {
+      // The brand comes from the scope the handler validated and served, never
+      // from ?brand_id= (an untrusted tenant id); a refused read names no tenant.
       const outcome = _auditOutcome(res);
-      _audit(reqId, 'READ_PAST_PLAN', outcome, 'corridor', brandParam ?? 'scope', brandParam);
+      let served: string[] = [];
+      if (outcome === 'success') {
+        const body = (await res
+          .clone()
+          .json()
+          .catch(() => null)) as { scope?: { brands?: unknown } } | null;
+        const brands = body?.scope?.brands;
+        if (Array.isArray(brands))
+          served = brands.filter((b): b is string => typeof b === 'string');
+      }
+      _audit(
+        reqId,
+        'READ_PAST_PLAN',
+        outcome,
+        'corridor',
+        served.length ? served.join(',') : 'refused',
+        served.length === 1 ? served[0] : null
+      );
     }
     return res;
   }

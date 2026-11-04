@@ -575,7 +575,11 @@ describe('query failures are 503, never zeroes', () => {
       [handleOperationsDashboard, OPS],
       [handleCorridorDashboard, COR],
     ] as const) {
-      const res = await fn(reqAs(A, path), broken);
+      // The plan is passed so the corridor read reaches the injected fault; without
+      // it the handler threw on the plan first and answered the same 503 for the
+      // wrong reason (review 2026-11-04).
+      const call = fn as (r: Request, e: DashboardsEnv, p: ReportPlan) => Promise<Response>;
+      const res = await call(reqAs(A, path), broken, MID);
       expect(res.status, path).toBe(503);
       expect(((await res.json()) as Body).code).toBe('DB_UNAVAILABLE');
     }

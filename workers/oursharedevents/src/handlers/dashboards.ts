@@ -640,6 +640,24 @@ export async function handleCorridorDashboard(
     const perBrand = await Promise.all(
       brands.map((b) => readBrandCorridor(env.DB, b, dataClass, paid))
     );
+    // The printed refusal names only what this caller's own selection lost: an
+    // override on another brand's event narrows the filter but caps nothing here
+    // (review 2026-11-04).
+    let capped = false;
+    if (paid.narrowed) {
+      for (const b of brands) {
+        const row = await first<{ n: number }>(
+          env.DB.prepare(
+            `SELECT COUNT(*) AS n FROM events e
+              WHERE e.brand_id = ? AND ${DC} AND NOT (${paid.sql})`
+          ).bind(b, dataClass, ...paid.binds)
+        );
+        if (num(row?.n) > 0) {
+          capped = true;
+          break;
+        }
+      }
+    }
 
     // Category labels: a shared, non-tenant registry.
     const labels = new Map<string, string>(
@@ -769,7 +787,7 @@ export async function handleCorridorDashboard(
       partner_network: { sponsors: businesses.size, placements },
       // OSE-682: the printed refusal. Cells and flows above cover only the
       // events whose plan includes the paid report.
-      ...(paid.narrowed ? { plan: planNote(['event_cells', 'source_cells', 'flows']) } : {}),
+      ...(capped ? { plan: planNote(['event_cells', 'source_cells', 'flows']) } : {}),
     });
   });
 }
