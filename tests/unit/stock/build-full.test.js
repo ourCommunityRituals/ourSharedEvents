@@ -36,11 +36,14 @@ function fakeSite({
   const placementOf = new Map();
   const fetch = async (url, init = {}) => {
     const method = init.method || 'GET';
-    if (!String(url).startsWith(BASE)) {
+    // Compare parsed origins, never a string prefix: `${BASE}.evil.example`
+    // shares the prefix but is another host.
+    const parsed = new URL(String(url));
+    if (parsed.origin !== new URL(BASE).origin) {
       calls.push({ method, path: String(url), external: true });
       return reply(artStatus, {}, { 'content-type': 'image/png' });
     }
-    const path = String(url).slice(BASE.length);
+    const path = parsed.pathname + parsed.search;
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
     calls.push({ method, path, body, headers: init.headers });
     if (method === 'POST' && path === '/api/v2/admin/events') {
