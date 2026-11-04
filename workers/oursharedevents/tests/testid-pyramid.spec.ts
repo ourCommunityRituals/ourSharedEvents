@@ -678,14 +678,13 @@ describe('L4 E2E: Admin create → update → forms → export → flags → sur
     });
     expect(surveyRes.status).toBe(403);
 
-    // Step 9: Public surfaces return 200; sharedReport gated by flag (403 on free tier)
-    for (const path of ['/', '/display', '/poster']) {
+    // Step 9: Public surfaces return 200, the report page included. OSE-682:
+    // everyone gets a SharedReport; on Free (analytics.shared-report OFF) the
+    // page loads and the read API caps every viewer at Local.
+    for (const path of ['/', '/display', '/poster', '/sharedReport']) {
       const res = await SELF.fetch(`https://t.test${path}`);
-      expect(res.status).toBe(200);
+      expect(res.status, path).toBe(200);
     }
-    const reportRes = await SELF.fetch('https://t.test/sharedReport');
-    // Free tier: analytics.shared-report is OFF → 403
-    expect(reportRes.status).toBe(403);
   });
 });
 

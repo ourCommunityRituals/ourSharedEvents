@@ -149,6 +149,26 @@ export function resolveDepth(claim: DepthClaimInput): ResolvedDepth {
   };
 }
 
+/**
+ * The plan's say in depth (OSE-682, PO 2026-08-10; OSE-1562 "report depth
+ * follows the plan"). Everyone gets a SharedReport: a plan WITHOUT the paid
+ * report (`analytics.shared-report` off, the Free preset; the flags contract
+ * maps that flag to the interactive, paid report) reads at Local for every
+ * signed-link viewer, the organizer and platform roles included. Local is the
+ * honest smoke test; the map is the first paid line. A plan WITH the paid
+ * report leaves the role's depth as resolveDepth decided it.
+ *
+ * Lowers depth only, never raises it, and never touches sponsor scoping, so
+ * the TL-040 / OSE-595 isolation that resolveDepth set still binds. Pure.
+ */
+export function capDepthToPlan(
+  resolved: ResolvedDepth,
+  plan: { paidReport: boolean }
+): ResolvedDepth {
+  if (plan.paidReport) return resolved;
+  return { ...resolved, depth: 'local' };
+}
+
 export interface UpgradeHint {
   locked_sections: string[];
   next_depth: ReportDepth | null;

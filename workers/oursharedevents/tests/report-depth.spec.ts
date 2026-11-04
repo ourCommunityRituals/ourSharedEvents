@@ -10,7 +10,12 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { resolveDepth, filterReportByDepth, DEPTH_SECTIONS } from '../src/lib/report-depth';
+import {
+  resolveDepth,
+  filterReportByDepth,
+  capDepthToPlan,
+  DEPTH_SECTIONS,
+} from '../src/lib/report-depth';
 
 const SAMPLE_REPORT = {
   event_id: 'evt_test',
@@ -313,5 +318,71 @@ describe('OSE-817 | upgrade.locked_sections is a faithful next-rung picture (cli
     const resolved = resolveDepth({ role: 'admin' }); // resolves premium
     const { upgrade } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
     expect(upgrade).toBeNull();
+  });
+});
+
+// ── OSE-682 / OSE-1562 — the plan caps report depth ─────────────────────────
+// OSE-682 (PO, 2026-08-10): everyone gets a SharedReport; Free is the honest
+// smoke test (headcount + own logo counts) and the map is the first paid line.
+// A plan WITHOUT the paid report (`analytics.shared-report` off, the Free
+// preset) reads at Local for every signed-link viewer, the organizer too. A
+// plan WITH it leaves the role's depth untouched. Sponsor scoping is never
+// widened by the cap.
+describe('OSE-682 | capDepthToPlan: a plan without the paid report reads at Local', () => {
+  const FREE = { paidReport: false } as const;
+  const PAID = { paidReport: true } as const;
+
+  for (const role of ['admin', 'bar_owner'] as const) {
+    it(`${role} on a plan without the paid report → local (was premium)`, () => {
+      const capped = capDepthToPlan(resolveDepth({ role }), FREE);
+      expect(capped.depth).toBe('local');
+      expect(capped.sponsorScope).toBeNull();
+      expect(capped.sponsorScopeRequired).toBe(false);
+    });
+    it(`${role} on a paid plan → unchanged (premium)`, () => {
+      expect(capDepthToPlan(resolveDepth({ role }), PAID).depth).toBe('premium');
+    });
+  }
+
+  it('mid sponsor on a plan without the paid report → local, scope kept', () => {
+    const capped = capDepthToPlan(
+      resolveDepth({ role: 'sponsor', depth: 'mid', sponsor_id: 'sp_A' }),
+      FREE
+    );
+    expect(capped).toEqual({ depth: 'local', sponsorScope: 'sp_A', sponsorScopeRequired: true });
+  });
+
+  it('mid sponsor on a paid plan → mid, scope kept', () => {
+    const capped = capDepthToPlan(
+      resolveDepth({ role: 'sponsor', depth: 'mid', sponsor_id: 'sp_A' }),
+      PAID
+    );
+    expect(capped).toEqual({ depth: 'mid', sponsorScope: 'sp_A', sponsorScopeRequired: true });
+  });
+
+  it('unscoped sponsor stays blocked from every row under the cap (OSE-595)', () => {
+    const capped = capDepthToPlan(resolveDepth({ role: 'sponsor', depth: 'mid' }), FREE);
+    const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, capped);
+    expect(report.sponsor_displays).toEqual([]);
+  });
+
+  it('organizer at the Free cap keeps the smoke-test basics and loses the map line', () => {
+    const capped = capDepthToPlan(resolveDepth({ role: 'bar_owner' }), FREE);
+    const { report, upgrade } = filterReportByDepth(
+      { ...SAMPLE_REPORT, corridor_map: { svg: '<svg/>' } },
+      capped
+    );
+    expect(report.distinct_scanners).toBe(99);
+    expect(report.sponsor_displays).toHaveLength(2); // organizer sees its event's rows
+    expect('corridor_map' in report).toBe(false);
+    expect('headcount_trend' in report).toBe(false);
+    expect(upgrade?.next_depth).toBe('mid');
+    expect(upgrade?.locked_sections).toContain('corridor_map');
+  });
+
+  it('pure: never mutates the resolved input', () => {
+    const resolved = resolveDepth({ role: 'bar_owner' });
+    capDepthToPlan(resolved, FREE);
+    expect(resolved.depth).toBe('premium');
   });
 });

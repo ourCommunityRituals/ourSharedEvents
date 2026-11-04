@@ -183,7 +183,8 @@ async function read(
     }),
     env,
     EVENT_ID,
-    ctx
+    ctx,
+    async () => true // paid plan: the token's own depth applies (OSE-682 cap is off)
   );
   expect(res.status).toBe(200);
   return (await res.json()) as { ok: boolean; report: WireReport };

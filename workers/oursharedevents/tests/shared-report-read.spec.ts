@@ -14,7 +14,7 @@
  *   - Anonymity: no anon_id_hash in any response shape
  */
 
-import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, test, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
@@ -1613,6 +1613,129 @@ describe('OSE-816 — server-side report depth enforcement (sponsor role only)',
     expect(report).not.toHaveProperty('headcount_trend');
     expect(report).not.toHaveProperty('corridor_map');
     expect(report).toHaveProperty('sponsor_class_breakdown');
+  });
+});
+
+// ── OSE-682 — the plan caps depth, through the real router ───────────────────
+// Everyone gets a SharedReport (PO, 2026-08-10). The router hands the read the
+// plan flag (event override, then global): with `analytics.shared-report` off
+// (the Free preset) every signed-link viewer reads at Local; with it on, the
+// role's own depth applies. The flag is reset after each test so the rest of
+// this file keeps its default (no row = on).
+//
+// @born-red OSE-682 | method: wiring-removal | verified: passing `async () => true`
+//   in place of the plan lookup at router.ts turns both "Free plan" tests red.
+describe('OSE-682 — the plan caps report depth (router → read handler)', () => {
+  const formsDb = () => (env as unknown as { FORMS_DB: D1Database }).FORMS_DB;
+
+  async function setPlanFlag(enabled: boolean, scope: 'global' | 'event', scopeId = '') {
+    const stmts: string[] = JSON.parse(
+      (env as unknown as { TEST_FORMS_MIGRATION_STATEMENTS: string })
+        .TEST_FORMS_MIGRATION_STATEMENTS
+    );
+    for (const stmt of stmts) {
+      try {
+        await formsDb().prepare(stmt).run();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes('duplicate column name') || msg.includes('already exists')) continue;
+        throw e;
+      }
+    }
+    await formsDb()
+      .prepare(
+        `INSERT OR REPLACE INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
+         VALUES (?, ?, ?, 'analytics.shared-report', ?, datetime('now'))`
+      )
+      .bind(`t682-${scope}-${scopeId}`, scope, scopeId, enabled ? 1 : 0)
+      .run();
+  }
+
+  beforeEach(resetForTest);
+  afterEach(async () => {
+    await formsDb()
+      .prepare(`DELETE FROM feature_flags WHERE id LIKE 't682-%'`)
+      .run()
+      .catch(() => undefined);
+    await formsDb()
+      .prepare(
+        `UPDATE feature_flags SET enabled = 1 WHERE scope = 'global' AND flag_key = 'analytics.shared-report'`
+      )
+      .run()
+      .catch(() => undefined);
+  });
+
+  const mint = (eventId: string, role: 'sponsor' | 'bar_owner', depth?: string) =>
+    mintSignedLinkToken(
+      { SHARED_REPORT_SIGNING_SECRET: SIGNING_SECRET },
+      eventId,
+      role,
+      undefined,
+      {
+        ...(depth !== undefined ? { depth } : {}),
+        ...(role === 'sponsor' ? { sponsor_id: 'sp-682' } : {}),
+      }
+    );
+
+  async function read(eventId: string, token: string) {
+    const res = await SELF.fetch(`https://test.local/api/v2/events/${eventId}/shared-report`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { report: Record<string, unknown> }).report;
+  }
+
+  test('Free plan | organizer link reads at Local: basics kept, paid sections withheld', async () => {
+    await setPlanFlag(false, 'global');
+    await seedEvent({ id: 'test-evt-read-682-org' });
+    await seedScanAggregate('test-evt-read-682-org', 20);
+    const report = await read(
+      'test-evt-read-682-org',
+      await mint('test-evt-read-682-org', 'bar_owner')
+    );
+    expect(report).toHaveProperty('distinct_scanners');
+    expect(report).toHaveProperty('sponsor_class_breakdown');
+    expect(report).not.toHaveProperty('headcount_trend');
+    expect(report).not.toHaveProperty('poster_attribution');
+    expect(report).not.toHaveProperty('corridor_map');
+    expect((report.upgrade as { next_depth: string | null }).next_depth).toBe('mid');
+  });
+
+  test('Free plan | a Mid sponsor link reads at Local', async () => {
+    await setPlanFlag(false, 'global');
+    await seedEvent({ id: 'test-evt-read-682-sp' });
+    await seedScanAggregate('test-evt-read-682-sp', 20);
+    const report = await read(
+      'test-evt-read-682-sp',
+      await mint('test-evt-read-682-sp', 'sponsor', 'mid')
+    );
+    expect(report).not.toHaveProperty('poster_attribution');
+    expect((report.upgrade as { next_depth: string | null }).next_depth).toBe('mid');
+  });
+
+  test('Mid plan | the same Mid sponsor link reads at Mid', async () => {
+    await setPlanFlag(true, 'global');
+    await seedEvent({ id: 'test-evt-read-682-mid' });
+    await seedScanAggregate('test-evt-read-682-mid', 20);
+    const report = await read(
+      'test-evt-read-682-mid',
+      await mint('test-evt-read-682-mid', 'sponsor', 'mid')
+    );
+    expect(report).toHaveProperty('poster_attribution');
+    expect((report.upgrade as { next_depth: string | null }).next_depth).toBe('premium');
+  });
+
+  test('Free plan with an event override on | that event reads at its full depth', async () => {
+    await setPlanFlag(false, 'global');
+    await setPlanFlag(true, 'event', 'test-evt-read-682-ovr');
+    await seedEvent({ id: 'test-evt-read-682-ovr' });
+    await seedScanAggregate('test-evt-read-682-ovr', 20);
+    const report = await read(
+      'test-evt-read-682-ovr',
+      await mint('test-evt-read-682-ovr', 'bar_owner')
+    );
+    expect(report).toHaveProperty('headcount_trend');
+    expect(report).not.toHaveProperty('upgrade');
   });
 });
 

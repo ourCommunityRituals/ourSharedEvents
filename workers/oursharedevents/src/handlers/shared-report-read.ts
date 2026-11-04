@@ -31,7 +31,7 @@ import {
 import { buildSharedReport, type SharedReport } from '../lib/shared-report-builder';
 import { resolveMintTtlSeconds } from '../lib/mint-ttl';
 import { applyCountFloor } from '../lib/count-floor';
-import { resolveDepth, filterReportByDepth } from '../lib/report-depth';
+import { resolveDepth, filterReportByDepth, capDepthToPlan } from '../lib/report-depth';
 import { logReportAccess } from '../lib/audit-log';
 import { checkRateLimit, RATE_LIMIT_BATCH_MAX, type RateLimitEnv } from '../lib/rate-limit';
 
@@ -69,11 +69,19 @@ function jsonResponse(
 
 // ─── Single-event endpoint ─────────────────────────────────────────────────
 
+/**
+ * `planIncludesPaidReport` answers whether this event's plan includes the paid
+ * report (OSE-682). The router passes a lookup over the plan flag, so this
+ * handler never reaches the forms database itself (two-DB isolation), and it is asked only
+ * after the token checks out. Required, so no caller can forget the plan and
+ * hand out the paid report by default.
+ */
 export async function handleGetSharedReport(
   request: Request,
   env: SharedReportReadEnv,
   eventId: string,
-  ctx: ExecutionContext
+  ctx: ExecutionContext,
+  planIncludesPaidReport: () => Promise<boolean>
 ): Promise<Response> {
   const token = extractBearerToken(request.headers.get('Authorization'));
   if (!token) {
@@ -120,7 +128,10 @@ export async function handleGetSharedReport(
 
   // SR-25: report is a straight readout — no field-stripping by depth.
   // resolveDepth is still called to determine sponsor scope (TL-040 isolation).
-  const resolved = resolveDepth(claim);
+  // OSE-682: a plan without the paid report caps every viewer at Local.
+  const resolved = capDepthToPlan(resolveDepth(claim), {
+    paidReport: await planIncludesPaidReport(),
+  });
   let scopedImpressions = result.report.sponsor_displays;
   if (resolved.sponsorScope) {
     // Scoped sponsor token: filter to own rows only
@@ -195,8 +206,10 @@ export async function handleGetSharedReport(
   // already applied above; the filter's own scoping pass is idempotent over it.
   // sponsor_class_breakdown is present at every depth (OSE-719) — class-level
   // aggregate, the tier-neutral competitive-intel delivery, never stripped.
+  // OSE-682 widens this to any viewer the plan capped below premium: on a plan
+  // without the paid report the organizer reads Local too, through the same gate.
   let report: Record<string, unknown> = builtReport;
-  if (claim.role === 'sponsor') {
+  if (claim.role === 'sponsor' || resolved.depth !== 'premium') {
     const filtered = filterReportByDepth(builtReport, resolved);
     report = filtered.upgrade ? { ...filtered.report, upgrade: filtered.upgrade } : filtered.report;
   }

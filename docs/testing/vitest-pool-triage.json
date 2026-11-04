@@ -2386,7 +2386,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 25
+      "testCount": 32
     },
     {
       "file": "workers/oursharedevents/tests/return-count-rename.spec.ts",
@@ -2578,13 +2578,6 @@
       "testCount": 1
     },
     {
-      "file": "workers/oursharedevents/tests/shared-report-disabled-page.spec.ts",
-      "bucket": "workerd",
-      "needsReview": false,
-      "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 3
-    },
-    {
       "file": "workers/oursharedevents/tests/shared-report-event-state-maturity.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -2611,6 +2604,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-free-plan-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-get-rate-limit.spec.ts",
@@ -2673,14 +2673,14 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 3
+      "testCount": 7
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-read.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 68
+      "testCount": 72
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-return-rate-card.spec.ts",

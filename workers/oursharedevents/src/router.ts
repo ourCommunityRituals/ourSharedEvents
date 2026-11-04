@@ -202,7 +202,6 @@ import {
   handlePosterPage,
   handleAdminPosterPreviewPage,
   handleSharedReportPage,
-  renderErrorPage,
   handleUiPreview,
   type PagesEnv,
 } from './handlers/pages';
@@ -268,6 +267,7 @@ import {
   isFeatureEnabled,
   listFlags,
   detectCurrentTier,
+  FLAG_KEYS,
   type FeatureFlagEnv,
 } from './lib/feature-flags';
 import {
@@ -1807,7 +1807,12 @@ export async function route(
     const id = sharedReportMatch[1];
     return publicReadLimited(
       'shared-report',
-      (req, e: typeof env) => handleGetSharedReport(req, e, id, ctx),
+      // OSE-682: the plan caps depth. The lookup reads the plan flag (event
+      // override, then global) and runs only after the token checks out.
+      (req, e: typeof env) =>
+        handleGetSharedReport(req, e, id, ctx, () =>
+          isFeatureEnabled(e.FORMS_DB, FLAG_KEYS.ANALYTICS_SHARED_REPORT, id)
+        ),
       RATE_LIMIT_MAX,
       sharedReportBucketKey
     )(request, env);
@@ -2247,32 +2252,11 @@ export async function route(
     pathname === '/insights' ||
     pathname === '/stats'
   ) {
-    const reportEnabled = await isFeatureEnabled(env.FORMS_DB, 'analytics.shared-report');
-    if (!reportEnabled) {
-      // OSE-1206: a browser following a report link is a person, not a client.
-      // Give it the branded friendly-error page (guidelines §4.2: say what
-      // happened, offer a next step, no raw codes). API callers — anything not
-      // asking for text/html — keep the JSON envelope, unchanged.
-      const wantsHtml = (request.headers.get('Accept') || '').includes('text/html');
-      if (wantsHtml) {
-        return renderErrorPage(
-          403,
-          "Shared reports aren't switched on here yet",
-          "This event's plan doesn't include shared reports right now. If you host the event, you can turn them on from your admin page; if you were sent this link, ask the host for the latest recap.",
-          '/events',
-          'Browse upcoming events'
-        );
-      }
-      return Response.json(
-        {
-          ok: false,
-          status: 403,
-          code: 'REPORT_DISABLED',
-          error: 'Shared reports are not enabled for this tier',
-        },
-        { status: 403 }
-      );
-    }
+    // OSE-682 (PO, 2026-08-10): everyone gets a SharedReport. The page loads on
+    // every plan; what it shows is decided once, at the read API, where a plan
+    // without the paid report caps every viewer at Local (capDepthToPlan). This
+    // used to refuse the whole page on Free (OSE-1206's 403), which left a Free
+    // event with no report at all.
     return handleSharedReportPage(env);
   }
 
