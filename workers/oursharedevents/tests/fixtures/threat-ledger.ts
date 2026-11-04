@@ -1289,8 +1289,10 @@ const PAYMENT_OPS: ThreatEntry[] = [
 // Layer: sponsor eligibility gate (OSE-744 / P1 — 402 at the promotion seam)
 // TL-059/TL-060 are the P0 payment-ops group above; this P1 group starts at
 // TL-061 (unique + format, contiguity not required). Every gate test asserts by
-// calling the promotion lib directly (no auth path), so it CANNOT false-green
-// under DEV_OPEN_ADMIN — production auth posture by construction.
+// calling the promotion lib directly (no auth path). The TL-065 audit test goes
+// through the handler with DEV_OPEN_ADMIN on (OSE-1801: a null actor now needs the
+// bypass to reach it); it asserts only the audit row's shape, which auth does not
+// change, so it cannot false-green on auth.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const SPONSOR_ELIGIBILITY_GATE: ThreatEntry[] = [
@@ -1796,9 +1798,9 @@ const ADMIN_ACTOR_ONCE: ThreatEntry[] = [
     id: 'TL-084',
     layer: 'permission_layer',
     threat:
-      'A brand admin whose Access token expired during the request got every brand: extractAdminActor decoded the JWT again on each call and re-checked exp, and on Workers the clock moves after I/O, so a handler that re-read the actor after the body read saw null, and three handlers took a null actor as the DEV_OPEN_ADMIN bypass (allow). Proven on main: event create answered 201 in brand B, sponsor create 201 on a brand-B event, draft promote passed the scope check. Mitigated: the actor is resolved once per request (memoised, pinned when requireAdmin decides), and a null actor allows nothing unless isDevOpenAdmin(env) holds (opted in, not staging, not production).',
+      'A brand admin whose Access token expired during the request got every brand: extractAdminActor decoded the JWT again on each call and re-checked exp, and on Workers the clock moves after I/O, so a handler that re-read the actor after the body read saw null, and four sites took a null actor as the DEV_OPEN_ADMIN bypass (allow): event create, sponsor create on an event, draft promote, and requireKeyActor. Proven on main: event create answered 201 in brand B, sponsor create 201 on a brand-B event, draft promote passed the scope check. Mitigated: the actor is resolved once per request (memoised; route() fixes it at entry, requireAdmin reads it for a direct caller, and a handler that builds a new Request hands it on with inheritAdminActor, as event repeat does), and each of the four sites denies a null actor unless isDevOpenAdmin(env) holds (opted in, and WORKER_ENV unset, development or test). Gate: tests/e2e/0-architecture/admin-null-actor.invariant.spec.ts classifies every extractAdminActor call.',
     severity: 'CRITICAL',
-    target_invariant: null,
+    target_invariant: { number: 9, name: 'tenant_isolation' },
     mitigation_story: 'OSE-1801',
     test_ref:
       'tests/admin-actor-expiry-race.spec.ts > OSE-1801 | a token that expires mid-request keeps the brand it started with > event create: a brand-A admin cannot create in brand B (403), even if the token expires during the body read',
@@ -1807,7 +1809,109 @@ const ADMIN_ACTOR_ONCE: ThreatEntry[] = [
       date: '2026-11-04',
       method: 'deliberate-fixture-break',
       notes:
-        'On main (before the fix) the three cross-brand tests were red: 201, 201, and 412 past the scope check; the fresh-token control was 403. With the fix, memo removed alone: the own-brand create under an expiring token went red (403 instead of 201). requireKeyActor restored to allow a null actor: four null-actor refusals went red. Green with the fix (15 tests).',
+        'On main (before the fix) the three cross-brand tests were red: 201, 201, and 412 past the scope check; the fresh-token control was 403. Each piece was then reverted on its own, with the rest of the fix in place: the memo (the own-brand create went 403 instead of 201, and 3-4 memo unit tests went red); requireKeyActor allowing a null actor (four refusals red); the event-create, sponsor-create and promote deny lines (each turned its own four direct null-actor tests red, nothing else); inheritAdminActor in event repeat (the repeat-after-expiry test went 403). Every race test also asserts its precondition: under the moved clock a fresh Request with the same token reads as no actor. Green with the fix.',
+    },
+    last_run_green: '2026-11-04',
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Layer: admin identity hardening found by the OSE-1801 CCR. TL-085..TL-089.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ADMIN_IDENTITY_HARDENING: ThreatEntry[] = [
+  {
+    id: 'TL-085',
+    layer: 'permission_layer',
+    threat:
+      'An actor is classed by its prefix (key:, svc: are automation), and the Access email was never checked for shape. A signed token with an email such as "key:ops@<allowlisted domain>" read as a key actor: on staging every brand, the key-only routes and the platform routes; on production the key-only global flag writes. Needs an identity provider on the Access team that asserts such an email (staging, with no audience pinned, accepts tokens of any Access app in the team). Mitigated: both decoders refuse any email that is not a plain address (isPlainAdminEmail), so no email can carry a prefix.',
+    severity: 'HIGH',
+    target_invariant: { number: 9, name: 'tenant_isolation' },
+    mitigation_story: 'OSE-1801',
+    test_ref:
+      'tests/ci-service-actor-router.spec.ts > OSE-1801 | the router refuses an identity before anything is scoped by it > a signed token whose email reads like an automation key ("key:…") is no identity (401)',
+    status: 'tested',
+    red_birth: {
+      date: '2026-11-04',
+      method: 'deliberate-fixture-break',
+      notes:
+        'With isPlainAdminEmail reduced to a string check, the router test went red (the key: email reached the dashboard) and 8 of the plain-address table cases in admin-actor-memo.spec.ts went red. Green with the check.',
+    },
+    last_run_green: '2026-11-04',
+  },
+  {
+    id: 'TL-086',
+    layer: 'permission_layer',
+    threat:
+      'The actor was decoded from the Access JWT while requireAdmin verified it: on a deployed worker with keys on and no CF_ACCESS_TEAM_DOMAIN, requireAdmin did not trust the JWT and passed on the key, but the actor (brand scope, audit name, created_by) was the forged email in the token. A key holder could act and be recorded as any brand owner. Not live (the team domain is set on staging and production). Mitigated: the actor comes from the JWT only where requireAdmin would trust it (jwtIdentityTrustable: the team domain is set, or this is local dev).',
+    severity: 'HIGH',
+    target_invariant: { number: 9, name: 'tenant_isolation' },
+    mitigation_story: 'OSE-1801',
+    test_ref:
+      'tests/admin-actor-memo.spec.ts > OSE-1801 | a deployed worker without the team domain names the key, not the token > on %s with no CF_ACCESS_TEAM_DOMAIN, a forged email plus a valid key is the key actor',
+    status: 'tested',
+    red_birth: {
+      date: '2026-11-04',
+      method: 'deliberate-fixture-break',
+      notes:
+        'With jwtIdentityTrustable returning true, both cases (staging, production) went red: the actor was the forged email. Green with the rule.',
+    },
+    last_run_green: '2026-11-04',
+  },
+  {
+    id: 'TL-087',
+    layer: 'permission_layer',
+    threat:
+      'The router pre-flight verified the Access signature without the audience pin, so guardAdminObjectScope ran its brand-scope SQL for a token minted for another Access app of the same team before requireAdmin checked the audience (a 404/401 difference for an allowlisted member). Mitigated: the pre-flight passes expectedAud (CF_ACCESS_AUD), so such a token is refused before anything is scoped by it.',
+    severity: 'MEDIUM',
+    target_invariant: { number: 9, name: 'tenant_isolation' },
+    mitigation_story: 'OSE-1801',
+    test_ref:
+      'tests/ci-service-actor-router.spec.ts > OSE-1801 | the router refuses an identity before anything is scoped by it > a token for another Access app of the same team is refused at the pre-flight (INVALID_JWT)',
+    status: 'tested',
+    red_birth: {
+      date: '2026-11-04',
+      method: 'deliberate-fixture-break',
+      notes:
+        "With the pre-flight back to { request } only, the test got requireAdmin's UNAUTH instead of the pre-flight INVALID_JWT. Green with the pin.",
+    },
+    last_run_green: '2026-11-04',
+  },
+  {
+    id: 'TL-088',
+    layer: 'permission_layer',
+    threat:
+      'The DEV_OPEN_ADMIN bypass opened on any WORKER_ENV other than exactly "production" or "staging" ("Production", "prod", "preview", "staging " with a space, or unset on a worker deployed without --env), and it gates every admin route plus the four null-actor sites. Mitigated: isDevOpenAdmin is an allowlist (WORKER_ENV unset, "development" or "test").',
+    severity: 'HIGH',
+    target_invariant: { number: 9, name: 'tenant_isolation' },
+    mitigation_story: 'OSE-1801',
+    test_ref:
+      'tests/admin-actor-memo.spec.ts > OSE-1801 | the local-dev bypass opens only on local names > WORKER_ENV=%j with DEV_OPEN_ADMIN=true → %s',
+    status: 'tested',
+    red_birth: {
+      date: '2026-11-04',
+      method: 'deliberate-fixture-break',
+      notes:
+        'With isDevOpenAdmin back to the denylist, the "Production", "prod", "preview", "staging " and empty-string rows went red. Green with the allowlist.',
+    },
+    last_run_green: '2026-11-04',
+  },
+  {
+    id: 'TL-089',
+    layer: 'permission_layer',
+    threat:
+      'Neither Access decoder checked nbf or a future iat, so a token that was not valid yet counted. Only Cloudflare can sign one, so it is not attacker-reachable on its own; it removed a check the token format carries. Mitigated: both decoders refuse nbf or iat more than 60 s ahead.',
+    severity: 'LOW',
+    target_invariant: null,
+    mitigation_story: 'OSE-1801',
+    test_ref:
+      'tests/ci-service-actor-router.spec.ts > OSE-1801 | the router refuses an identity before anything is scoped by it > a token that is not valid yet (nbf a day ahead) is refused (401)',
+    status: 'tested',
+    red_birth: {
+      date: '2026-11-04',
+      method: 'deliberate-fixture-break',
+      notes:
+        'With notYetValid returning false, the router test (signed, nbf a day ahead) answered 200 and the two memo-spec cases went red. Green with the check.',
     },
     last_run_green: '2026-11-04',
   },
@@ -1834,6 +1938,7 @@ export const THREAT_LEDGER: ThreatEntry[] = [
   ...INVARIANT_GATES,
   ...FORM_PAGE_INJECTION,
   ...ADMIN_ACTOR_ONCE,
+  ...ADMIN_IDENTITY_HARDENING,
 ];
 
 export const THREAT_LEDGER_META = {

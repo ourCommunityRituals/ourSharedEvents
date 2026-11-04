@@ -43,7 +43,12 @@
  * pass through here.
  */
 
-import { extractAdminActor, isDevOpenAdmin, type AdminEnv } from '../auth/admin';
+import {
+  extractAdminActor,
+  isDevOpenAdmin,
+  logNullAdminActorDenied,
+  type AdminEnv,
+} from '../auth/admin';
 import {
   PLATFORM_BRAND_ID,
   resolveAdminBrandScopeAsync,
@@ -170,8 +175,9 @@ function notFound(request: Request, target: AdminObjectTarget): Response {
  * caller's brand scope, `null` when it may proceed.
  *
  * ORDERING CONTRACT — why an unauthenticated caller gets no opinion here.
- * `extractAdminActor` returns null for a caller carrying no verified admin
- * identity, and such a caller can never pass `requireAdmin` either (Methods 2/3
+ * `extractAdminActor` returns null for a caller carrying no admin identity it can
+ * trust (it decodes; the signature is checked by the router pre-flight and
+ * requireAdmin), and such a caller can never pass `requireAdmin` either (Methods 2/3
  * each require a secret, and Method 1 without an email falls through to them).
  * So returning null for a null actor cedes the response to the route's own
  * `requireAdmin` — preserving the 401 + audit-denied contract that
@@ -245,8 +251,9 @@ export async function isPlatformActor(
  *
  * `PUT /api/v2/admin/flags/:key` and `POST /api/v2/admin/flags/apply-tier` change
  * every brand at once, so there is no brand to scope them by. They belong to an
- * actor class, not a capability: only `key:` automation actors (X-OCR-Internal,
- * enabled in production, or the staging Bearer key) may call them. Every email
+ * actor class, not a capability: only `key:` automation actors (X-OCR-Internal or
+ * the Bearer key, where an environment turns them on; production has neither,
+ * wrangler.toml [env.production.vars]) may call them. Every email
  * actor, `brand_owner` and the platform brand included, gets 403. This does not
  * read ADMIN_SCOPE_ALL, so it works where that variable is unset (production).
  *
@@ -259,6 +266,7 @@ export async function isPlatformActor(
 export function requireKeyActor(request: Request, env: AdminObjectScopeEnv): Response | null {
   const actor = extractAdminActor(request, env);
   if (actor === null ? isDevOpenAdmin(env) : actor.startsWith('key:')) return null;
+  if (actor === null) logNullAdminActorDenied('key-actor-only', env);
   return Response.json(
     { ok: false, status: 403, code: 'KEY_ACTOR_ONLY', error: 'Forbidden' },
     { status: 403 }

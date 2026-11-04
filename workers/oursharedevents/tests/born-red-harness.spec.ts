@@ -24,11 +24,7 @@
 
 import { describe, test, expect } from 'vitest';
 import { env } from 'cloudflare:test';
-import {
-  THREAT_LEDGER,
-  THREAT_LEDGER_META,
-  type ThreatEntry,
-} from './fixtures/threat-ledger';
+import { THREAT_LEDGER, THREAT_LEDGER_META, type ThreatEntry } from './fixtures/threat-ledger';
 
 interface TestEnv {
   TEST_SOURCE_FILES_JSON: string;
@@ -60,19 +56,13 @@ describe('OSE-564: Threat ledger integrity', () => {
     const ids = THREAT_LEDGER.map((e) => e.id);
     const unique = new Set(ids);
     const duplicates = ids.filter((id, i) => ids.indexOf(id) !== i);
-    expect(
-      duplicates,
-      `Duplicate threat IDs found: ${duplicates.join(', ')}`
-    ).toHaveLength(0);
+    expect(duplicates, `Duplicate threat IDs found: ${duplicates.join(', ')}`).toHaveLength(0);
     expect(unique.size).toBe(ids.length);
   });
 
   test('all IDs follow TL-NNN format', () => {
     for (const entry of THREAT_LEDGER) {
-      expect(
-        entry.id,
-        `${entry.id} does not match TL-NNN format`
-      ).toMatch(/^TL-\d{3}$/);
+      expect(entry.id, `${entry.id} does not match TL-NNN format`).toMatch(/^TL-\d{3}$/);
     }
   });
 
@@ -84,10 +74,7 @@ describe('OSE-564: Threat ledger integrity', () => {
         if (!entry.red_birth) gaps.push(`${entry.id}: missing red_birth`);
       }
     }
-    expect(
-      gaps,
-      `Tested threats without evidence:\n${gaps.join('\n')}`
-    ).toHaveLength(0);
+    expect(gaps, `Tested threats without evidence:\n${gaps.join('\n')}`).toHaveLength(0);
   });
 
   test('every "mitigated" entry has a mitigation_story', () => {
@@ -99,19 +86,15 @@ describe('OSE-564: Threat ledger integrity', () => {
         }
       }
     }
-    expect(
-      gaps,
-      `Mitigated threats without story reference:\n${gaps.join('\n')}`
-    ).toHaveLength(0);
+    expect(gaps, `Mitigated threats without story reference:\n${gaps.join('\n')}`).toHaveLength(0);
   });
 
   test('red_birth dates are valid ISO dates in YYYY-MM-DD format', () => {
     for (const entry of THREAT_LEDGER) {
       if (entry.red_birth) {
-        expect(
-          entry.red_birth.date,
-          `${entry.id}.red_birth.date is not YYYY-MM-DD`
-        ).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(entry.red_birth.date, `${entry.id}.red_birth.date is not YYYY-MM-DD`).toMatch(
+          /^\d{4}-\d{2}-\d{2}$/
+        );
       }
     }
   });
@@ -129,10 +112,9 @@ describe('OSE-564: Threat ledger integrity', () => {
     ]);
     const presentLayers = new Set(THREAT_LEDGER.map((e) => e.layer));
     for (const layer of expectedLayers) {
-      expect(
-        presentLayers,
-        `Layer "${layer}" has no entries in the threat ledger`
-      ).toContain(layer);
+      expect(presentLayers, `Layer "${layer}" has no entries in the threat ledger`).toContain(
+        layer
+      );
     }
   });
 
@@ -167,6 +149,58 @@ describe('OSE-564: Threat ledger integrity', () => {
 describe('OSE-564: Born-red annotation cross-reference', () => {
   // Annotation format: @born-red TL-XXX | method: <method> | date: YYYY-MM-DD
   const ANNOTATION_RE = /@born-red\s+(TL-\d{3})/g;
+
+  // OSE-1801: the header promised "test_ref paths point to files that actually
+  // exist"; nothing checked it. A worker-tests test_ref must name a spec in this
+  // repo, and when it names a test ("file > … > test name") that test must exist.
+  test('every worker-tests test_ref names a spec that exists, and the test it names', () => {
+    const sources = loadSources();
+    const specs = new Map<string, string>();
+    for (const [path, content] of Object.entries(sources)) {
+      const m = normalizePath(path).match(/\/workers\/oursharedevents\/(tests\/.+)$/);
+      if (m) specs.set(m[1]!, content);
+    }
+    const gaps: string[] = [];
+    for (const entry of THREAT_LEDGER) {
+      if (entry.status !== 'tested' || !entry.test_ref) continue;
+      const m = entry.test_ref.match(/^(tests\/[\w./-]+?\.(?:spec|test)\.ts)(?:\s*>\s*([^;]+))?/);
+      if (!m) continue; // a CI gate or repo-root reference; checked elsewhere
+      const file = m[1]!;
+      const content = specs.get(file);
+      if (content === undefined) {
+        // Repo-root specs (tests/e2e, tests/integration) are not in the worker bundle.
+        if (!/^tests\/(e2e|integration|unit)\//.test(file))
+          gaps.push(`${entry.id}: no spec ${file}`);
+        continue;
+      }
+      // Test names are checked from TL-084 on (a ratchet): older refs name tests by
+      // a short label ("S2: …") rather than the exact title.
+      const testName = m[2]?.split('>').pop()?.trim();
+      const checksName = Number(entry.id.slice(3)) >= 84;
+      if (checksName && testName && !content.includes(testName)) {
+        gaps.push(`${entry.id}: ${file} has no test named "${testName}"`);
+      }
+    }
+    expect(gaps, `test_ref points at nothing:\n${gaps.join('\n')}`).toEqual([]);
+  });
+
+  test('every @born-red annotation names a method from the ledger enum', () => {
+    const METHODS = new Set([
+      'design-time-negative-assertion',
+      'historical-ci-failure',
+      'deliberate-fixture-break',
+      'red-team-fleet-finding',
+    ]);
+    const bad: string[] = [];
+    for (const [path, content] of Object.entries(loadSources())) {
+      if (!/[/\\]tests[/\\]/.test(path)) continue;
+      for (const m of content.matchAll(/@born-red\s+(TL-\d{3})\s*\|\s*method:\s*([^|\n]+)/g)) {
+        const method = m[2]!.trim();
+        if (!METHODS.has(method)) bad.push(`${normalizePath(path)}: ${m[1]} method "${method}"`);
+      }
+    }
+    expect(bad, `Annotation methods outside RedBirthMethod:\n${bad.join('\n')}`).toEqual([]);
+  });
 
   test('every @born-red annotation references a real threat ledger ID', () => {
     const sources = loadSources();
@@ -253,7 +287,9 @@ describe('OSE-564: Born-red annotation cross-reference', () => {
     const unannotated: string[] = [];
     for (const entry of THREAT_LEDGER) {
       if (entry.status === 'tested' && !annotatedIds.has(entry.id)) {
-        unannotated.push(`${entry.id}: status=tested but no @born-red annotation found in any test file`);
+        unannotated.push(
+          `${entry.id}: status=tested but no @born-red annotation found in any test file`
+        );
       }
     }
     expect(
@@ -350,7 +386,9 @@ describe('OSE-564 TL-020/021: No cross-repo module imports in any source file', 
     for (const [path, content] of Object.entries(sources)) {
       for (const pattern of FORBIDDEN_IMPORT_PATTERNS) {
         if (pattern.test(content)) {
-          violations.push(`${normalizePath(path)}: forbidden cross-repo import matching ${pattern.source}`);
+          violations.push(
+            `${normalizePath(path)}: forbidden cross-repo import matching ${pattern.source}`
+          );
         }
       }
     }
@@ -369,7 +407,9 @@ describe('OSE-564: Ledger gap report (gaps are expected — surfaced, not failed
   // @born-red TL-036 | method: design-time-negative-assertion | date: 2026-08-03
   test('open threats are visible and named (never silent gaps)', () => {
     const openThreats = THREAT_LEDGER.filter((e) => e.status === 'open');
-    const openIds = openThreats.map((e) => `${e.id} [${e.severity}] ${e.layer}: ${e.threat.slice(0, 60)}...`);
+    const openIds = openThreats.map(
+      (e) => `${e.id} [${e.severity}] ${e.layer}: ${e.threat.slice(0, 60)}...`
+    );
 
     if (openThreats.length > 0) {
       console.warn(`[OSE-564-GAPS] ${openThreats.length} open threats:\n${openIds.join('\n')}`);

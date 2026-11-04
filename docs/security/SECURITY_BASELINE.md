@@ -148,13 +148,13 @@ These are the non-negotiable security principles. Every change must preserve the
 
 ### Identity Requirements by Boundary
 
-| Transition              | Identity Required       | Mechanism                     | Enforcement                                                                                |
-| ----------------------- | ----------------------- | ----------------------------- | ------------------------------------------------------------------------------------------ |
-| Browser → Edge (Public) | None                    | Route matching                | N/A                                                                                        |
-| Browser → Edge (Admin)  | **Yes**                 | Cloudflare Access JWT         | `Cf-Access-Jwt-Assertion` header                                                           |
-| Edge → Worker (Public)  | None                    | Automatic                     | N/A                                                                                        |
-| Edge → Worker (Admin)   | **Yes**                 | OAuth session or Bearer token | `guardAdminOAuth()`, `guardV2AdminRoute()`                                                 |
-| Worker → Cloudflare D1  | **No** (binding-scoped) | D1 Worker binding             | `wrangler.toml` database binding (previously Google Sheets service account JWT in Phase 1) |
+| Transition              | Identity Required       | Mechanism                                              | Enforcement                                                                                |
+| ----------------------- | ----------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Browser → Edge (Public) | None                    | Route matching                                         | N/A                                                                                        |
+| Browser → Edge (Admin)  | **Yes**                 | Cloudflare Access JWT                                  | `Cf-Access-Jwt-Assertion` header                                                           |
+| Edge → Worker (Public)  | None                    | Automatic                                              | N/A                                                                                        |
+| Edge → Worker (Admin)   | **Yes**                 | Access JWT, or a key where an environment turns one on | `requireAdmin()` (`src/auth/admin.ts`); actor rules in §5.2 below                          |
+| Worker → Cloudflare D1  | **No** (binding-scoped) | D1 Worker binding                                      | `wrangler.toml` database binding (previously Google Sheets service account JWT in Phase 1) |
 
 ---
 
@@ -177,14 +177,14 @@ These are the non-negotiable security principles. Every change must preserve the
 
 ### 5.2 Privileged Routes (Auth Required)
 
-| Category               | Path Pattern                                         | Method(s) | Auth Mechanism      | Guard                 |
-| ---------------------- | ---------------------------------------------------- | --------- | ------------------- | --------------------- |
-| **Admin Pages**        | `/admin`, `/manage`, `/dashboard`, `/create`         | GET       | OAuth session       | `guardAdminOAuth()`   |
-| **Analytics Pages**    | `/report`, `/analytics`, `/reports`, `/insights`     | GET       | OAuth session       | `guardAdminOAuth()`   |
-| **Admin API (Legacy)** | `/api/admin/events`, `/api/admin/events/:id/results` | POST      | Bearer token        | `guardAdminRoute()`   |
-| **Admin API (V2)**     | `/api/v2/admin/events`, `/api/v2/admin/events/:id`   | POST, PUT | Access JWT / Bearer | `guardV2AdminRoute()` |
-| **QR Verification**    | `/api/v2/admin/events/:id/verify-qr`, `/unverify-qr` | POST      | Access JWT / Bearer | `guardV2AdminRoute()` |
-| **Archive Actions**    | `/api/v2/admin/events/:id/archive`, `/unarchive`     | POST      | Access JWT / Bearer | `guardV2AdminRoute()` |
+| Category               | Path Pattern                                         | Method(s) | Auth Mechanism      | Guard               |
+| ---------------------- | ---------------------------------------------------- | --------- | ------------------- | ------------------- |
+| **Admin Pages**        | `/admin`, `/manage`, `/dashboard`, `/create`         | GET       | OAuth session       | `guardAdminOAuth()` |
+| **Analytics Pages**    | `/report`, `/analytics`, `/reports`, `/insights`     | GET       | OAuth session       | `guardAdminOAuth()` |
+| **Admin API (Legacy)** | `/api/admin/events`, `/api/admin/events/:id/results` | POST      | Bearer token        | `guardAdminRoute()` |
+| **Admin API (V2)**     | `/api/v2/admin/events`, `/api/v2/admin/events/:id`   | POST, PUT | Access JWT / Bearer | `requireAdmin()`    |
+| **QR Verification**    | `/api/v2/admin/events/:id/verify-qr`, `/unverify-qr` | POST      | Access JWT / Bearer | `requireAdmin()`    |
+| **Archive Actions**    | `/api/v2/admin/events/:id/archive`, `/unarchive`     | POST      | Access JWT / Bearer | `requireAdmin()`    |
 
 **Authentication Stack:**
 
@@ -192,6 +192,26 @@ These are the non-negotiable security principles. Every change must preserve the
 2. **Cloudflare Access**: JWT assertion header (`Cf-Access-Jwt-Assertion`)
 3. **Bearer Token**: `Authorization: Bearer <ADMIN_TOKEN>` (fallback)
 4. **Signed Mutations** (SEC-IAC-05): HMAC-SHA256 tokens for public write actions
+
+**The admin actor (OSE-1801).** Who a request acts as (brand scope, audit name,
+`created_by`) is `extractAdminActor` in `src/auth/admin.ts`. These rules hold:
+
+- It is resolved once per request: `route()` reads it at entry and the answer
+  stands for the whole request, so a token that expires during the request
+  cannot change it. A handler that builds a new `Request` hands it on with
+  `inheritAdminActor`.
+- A null actor allows nothing. A handler that branches on a null actor re-tests
+  `isDevOpenAdmin(env)`, which is true only with `DEV_OPEN_ADMIN=true` and
+  `WORKER_ENV` unset, `development` or `test`. Gate:
+  `tests/e2e/0-architecture/admin-null-actor.invariant.spec.ts`.
+- An Access email names the actor only where `requireAdmin` trusts the JWT (the
+  team domain is set, or local dev), and only if it is a plain address: no
+  colon, so no email can read as a `key:` or `svc:` actor. A token that is not
+  valid yet (`nbf` or `iat` ahead) is refused.
+- The router pre-flight pins the Access audience, so nothing is scoped for a
+  token minted for another Access app of the same team.
+
+Threat ledger: TL-084 to TL-089.
 
 ### 5.3 Infrastructure Routes
 
