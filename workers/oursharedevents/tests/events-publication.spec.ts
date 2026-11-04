@@ -156,7 +156,10 @@ describe('the flag is not a substitute for the other guarantees', () => {
 describe('the create API honours the answer', () => {
   /** Capture what handleCreateEvent binds, without a real D1. */
   function captureDb(bound: unknown[][]) {
+    // No admin actor: this drives the handler on its own, as the DEV_OPEN_ADMIN
+    // local bypass does. A null actor creates nothing anywhere else (OSE-1801).
     return {
+      DEV_OPEN_ADMIN: 'true',
       DB: {
         prepare: (sql: string) => ({
           bind: (...args: unknown[]) => {
