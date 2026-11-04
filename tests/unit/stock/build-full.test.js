@@ -304,6 +304,22 @@ describe('buildDay', () => {
     expect(callsTo(none, 'POST', /\/uploads$/)).toHaveLength(0);
   });
 
+  test('art tagged by category fits through typeCategory', async () => {
+    const posts = [
+      { id: 'p1', caption: 'x', hashtags: ['music'], mediaUrl: 'https://cdn.example/p1.png' },
+    ];
+    const artTags = { tags: { music: 'MUSIC' } };
+    const accepted = [row('beverly', 'private', 10)];
+    const withMap = fakeSite();
+    await buildDay(
+      args(withMap, { accepted, posts, artTags, typeCategory: new Map([['type-a', 'MUSIC']]) })
+    );
+    expect(callsTo(withMap, 'POST', /\/uploads$/)).toHaveLength(1);
+    const without = fakeSite();
+    await buildDay(args(without, { accepted, posts, artTags }));
+    expect(callsTo(without, 'POST', /\/uploads$/)).toHaveLength(0);
+  });
+
   test.each([
     ['an upload failure', { failUpload: true }],
     ['a download failure', { artStatus: 404 }],

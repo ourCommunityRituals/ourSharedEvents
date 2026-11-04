@@ -49,6 +49,8 @@ export async function buildDay({
   regionals,
   posts,
   artTags,
+  // type id -> category code, so art tagged by category fits (pickArt)
+  typeCategory,
   targets,
   date,
   nodeIds,
@@ -118,7 +120,7 @@ export async function buildDay({
         manifest.qr.push(qr);
         for (const w of ev.warnings || []) manifest.warnings.push(`${ev.id} ${w.code}`);
 
-        const post = pickArt(row, posts, artTags);
+        const post = pickArt(row, posts, artTags, typeCategory);
         if (post) {
           try {
             const art = await downloadArt(fetchFn, post.mediaUrl);

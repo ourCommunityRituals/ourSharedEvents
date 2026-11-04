@@ -10,7 +10,8 @@
 
 // Ids must look like this before they are put inside a SQL string literal (and,
 // for upload keys, on a wrangler command line). Letters, digits and _ : . / - only.
-const SAFE_ID = /^[A-Za-z0-9_:./-]{1,200}$/;
+// run-day.mjs holds the acceptance UPDATE to the same rule.
+export const SAFE_ID = /^[A-Za-z0-9_:./-]{1,200}$/;
 const SAFE_NAME = /^[a-z_]+$/;
 
 // Which manifest items feed which id list. `placement` and `upload` items are
