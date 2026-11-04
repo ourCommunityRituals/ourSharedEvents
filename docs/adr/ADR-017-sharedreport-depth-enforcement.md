@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-08-16
 **Deciders:** Matthew Zdano (PO)
+**Amended:** 2026-11-04, the plan caps depth (see "Amendment" below; OSE-682, OSE-1562)
 
 > This ADR was ratified on 2026-08-16 and referred to in code comments as
 > "ADR-0001" before it had a file. OSE-815 gives it its real home and number;
@@ -35,7 +36,8 @@ isolation, rank-6).
 ## Decision
 
 **Depth is enforced server-side, in the read handler, at exactly one point, for
-the `sponsor` role only.**
+the `sponsor` role only.** _(Amended 2026-11-04: also for any viewer the plan
+caps below premium. See "Amendment" below.)_
 
 1. **One gate.** `filterReportByDepth()` is called in `handlers/shared-report-read.ts`
    after the report is built. It is the _only_ place a section is withheld for
@@ -50,7 +52,8 @@ the `sponsor` role only.**
    these is ignored, never honoured downward); `sponsor` caps at `mid` and
    **fails closed to `local`** on any invalid/garbage claim (never to the nearest
    valid value). The cross-product WKRP token never reaches `resolveDepth()` — it
-   fails closed at the handler auth boundary (OSE-577).
+   fails closed at the handler auth boundary (OSE-577). _(Amended 2026-11-04: the
+   role's depth is then capped by the plan; see "Amendment" below.)_
 4. **The withheld sections are named, not hidden.** The response carries
    `upgrade: { locked_sections: string[], next_depth }` — a **descriptive,
    load-bearing** wire field stating exactly which next-rung sections exist but
@@ -58,6 +61,40 @@ the `sponsor` role only.**
    locked state solely from this field (OSE-817). `sponsor_class_breakdown` is
    class-level aggregate and is present at **every** depth (OSE-719) — the
    tier-neutral competitive-intel delivery chosen over field-stripping it.
+
+## Amendment 2026-11-04: the plan caps depth (OSE-682, OSE-1562)
+
+**Why.** The PO ruled on 2026-08-10 (OSE-682) that _everyone gets a
+SharedReport_: Free is the honest smoke test, and the map is the first paid
+line. OSE-1562 (plan per brand) states that report depth (this ADR) follows the
+plan. The code had neither: on a plan without the paid report
+(`analytics.shared-report` off, the Free preset) the report page answered 403,
+and the read API served organizer and admin links at premium regardless of plan.
+The PO restated the model on 2026-11-04: Local is the basic essentials, and paying
+buys the deeper report.
+
+**What changes in the Decision.**
+
+- Decision 3 still resolves a role's depth as written. That depth is then capped
+  by the plan: when the event's plan does not include the paid report, every
+  signed-link viewer (`admin`, `bar_owner`, `sponsor`) reads at `local`.
+  `capDepthToPlan()` in `lib/report-depth.ts` only lowers depth, never raises it,
+  and never changes sponsor scoping (§5, TL-040, OSE-595).
+- Decision 1 still holds: there is one gate. It runs for the `sponsor` role, as
+  before, and for any viewer the plan capped below premium. The client still never
+  re-strips; the capped organizer gets `upgrade.locked_sections` like a sponsor.
+- The plan is read in the router, event override then global, and handed to the
+  read handler as a lookup that runs only after the token checks out. The lookup
+  fails **closed** (`isPaidReportEnabled`): an unreadable forms database reads as
+  `local`, never as paid. The handler itself never reaches the forms database.
+- The in-fleet `internal` batch read is not capped. It is a service class, not a
+  customer view.
+- Decision 2 (omission only) is unchanged: same numbers, fewer sections.
+
+**Consequences.** The report page loads on every plan, and the auth boundary is
+the report API (`/api/v2/events/:id/shared-report`), not the page shell; the
+EX-003 red-team probes test it there. Until OSE-1562 makes the plan per brand, the
+flag is one setting for the whole deployment.
 
 ## Alternatives Considered
 
@@ -134,14 +171,20 @@ recorded in the OCR-docs brain `architectural-invariants.yaml`:
 
 - Code: `workers/oursharedevents/src/lib/report-depth.ts` (`resolveDepth`,
   `filterReportByDepth`, `DEPTH_SECTIONS`, `UpgradeHint`);
-  `src/handlers/shared-report-read.ts` (the one call, sponsor-guarded).
+  `src/handlers/shared-report-read.ts` (the one call, sponsor-guarded, and since
+  the 2026-11-04 amendment also run for a plan-capped viewer); `capDepthToPlan`
+  in `lib/report-depth.ts`; `isPaidReportEnabled` in `lib/feature-flags.ts`.
 - Client: `src/templates/shared-report.html` renders the printed refusal from
   `report.upgrade.locked_sections` (OSE-817).
 - CI gate: `tests/shared-report-read.spec.ts` — enforcement-state test
   ("filterReportByDepth is WIRED in the single-read handler, sponsor-guarded"),
   T0 Gate `tests` shard; `tests/report-depth.spec.ts` — lib-level depth +
-  next-rung-symmetry (OSE-817).
-- PRs: #411 (OSE-816, wire the gate); #473 (OSE-817, print the refusal).
+  next-rung-symmetry (OSE-817) and the plan cap; the OSE-682 blocks in
+  `tests/shared-report-read.spec.ts` and `tests/shared-report-read-depth-wiring.spec.ts`;
+  `tests/paid-report-plan-lookup.spec.ts` (the lookup fails closed); Bruno T2
+  `GET Organizer Report on Free reads at Local` (staging).
+- PRs: #411 (OSE-816, wire the gate); #473 (OSE-817, print the refusal); #1085
+  (the plan caps depth, this ADR's 2026-11-04 amendment).
 
 ## References
 
