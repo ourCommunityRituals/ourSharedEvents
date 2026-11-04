@@ -63,6 +63,41 @@ sponsor alike. With it on, each role reads at the depth in the table above.
 - Until the plan is per brand (OSE-1562) the flag is one setting for the whole
   deployment. Switch it with `POST /api/v2/admin/flags/apply-tier` (key actor).
 
+## Who × plan on every read (OSE-682, owner decisions 2026-11-04)
+
+What the front end hides does not matter if the back end returns it, so every
+read that carries report data follows the same rule: **who** asks and **what
+plan** the event is on. The plan is `analytics.shared-report` (event override,
+then global); every plan read fails closed.
+
+| Read                                                                       | Platform admin (scope `all` or `ose-platform` member) | Anyone else, event on a paid plan | Anyone else, event on Free                                                       |
+| -------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------- |
+| `GET /api/v2/events/:id/shared-report` (signed link)                       | capped like everyone: a link is a bearer token        | the role's depth                  | Local                                                                            |
+| `POST /api/v2/events/shared-reports/batch` (internal token)                | —                                                     | premium                           | Local                                                                            |
+| `GET /api/v2/admin/events/:id/dashboard` (and the live view that reads it) | everything                                            | everything                        | totals; `reach.scansByDay` withheld                                              |
+| `GET /api/v2/admin/events/:id/pre-event-activity`                          | everything                                            | everything                        | `reach.totals` and activity totals; per-placement, per-code and per-day withheld |
+| `GET /api/v2/admin/events/:id/poster-deployments`                          | everything                                            | everything                        | placements listed; per-poster `scans` withheld                                   |
+| `GET /api/v2/admin/dashboards/corridor` (brand-wide)                       | everything                                            | everything                        | `event_cells`, `source_cells`, `flows` only from paid events                     |
+| `GET /sponsor?t=…` (sponsor home)                                          | —                                                     | totals                            | totals (the page never prints a per-day series)                                  |
+
+- A capped admin response carries `plan: { paid_report: false, locked_sections, next_plan: 'mid' }`,
+  naming what it left out. The admin page prints "comes with the Mid plan" for a
+  withheld line, never "nothing yet".
+- Brand scoping is unchanged and still decides **which** events a caller
+  reaches; the plan decides **how much** of each.
+- Entity totals stay on every plan: event and poster counts, registrations,
+  check-ins, the operations dashboard's brand totals, the portfolio rollup.
+- Code: `lib/report-plan.ts` (`hasPaidReport`, `paidEventsSql`, `planNote`),
+  `readReportPlan` / `isPaidReportEnabled` in `lib/feature-flags.ts`,
+  `isPlatformActor` in `lib/admin-object-scope.ts`, `reportPlanFor` in `router.ts`.
+- Tests: `tests/admin-reads-plan-cap.spec.ts` (workers pool, brand owner vs
+  platform, Free vs Mid vs event override), `tests/report-plan.spec.ts`, and the
+  batch block in `tests/shared-report-read.spec.ts`.
+- Staging: the Bruno suite authenticates as a key actor, which is a platform
+  admin, so it cannot exercise the brand-admin cap. That case is covered in the
+  workers pool, and by signing in on staging with a brand admin email that is
+  not in `ose-platform`.
+
 ## Sections by depth (additive ladder)
 
 Each tier is a superset of the one below. `sponsor_class_breakdown` is present at

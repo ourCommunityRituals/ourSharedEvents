@@ -211,9 +211,11 @@ import { requireAdmin, extractAdminActor, verifyCfAccessJWT, type AdminEnv } fro
 import {
   guardAdminObjectScope,
   requirePlatformScope,
+  isPlatformActor,
   requireKeyActor,
   type AdminObjectScopeEnv,
 } from './lib/admin-object-scope';
+import { FULL_PLAN, type ReportPlan } from './lib/report-plan';
 import { adminWriteRefusal, adminWriteRefusalResponse } from './lib/admin-write-guard';
 import {
   handleAdminMintSponsorHomeLink,
@@ -268,6 +270,7 @@ import {
   listFlags,
   detectCurrentTier,
   isPaidReportEnabled,
+  readReportPlan,
   type FeatureFlagEnv,
 } from './lib/feature-flags';
 import {
@@ -462,6 +465,16 @@ async function formRouteLimit(
     );
   }
   return null;
+}
+
+/**
+ * Who × plan for an admin read (OSE-682, owner 2026-11-04): a platform admin
+ * sees every event as paid; anyone else gets the events' real plans, read once
+ * and failing closed. See lib/report-plan.ts.
+ */
+async function reportPlanFor(request: Request, env: RouterEnv): Promise<ReportPlan> {
+  if (await isPlatformActor(request, env)) return FULL_PLAN;
+  return readReportPlan(env.FORMS_DB);
 }
 
 export async function route(
@@ -931,7 +944,7 @@ export async function route(
     if (deny) return deny;
     return pathname.endsWith('/operations')
       ? handleOperationsDashboard(request, env)
-      : handleCorridorDashboard(request, env);
+      : handleCorridorDashboard(request, env, await reportPlanFor(request, env));
   }
 
   // GET /api/v2/admin/events/portfolio-rollup — OSE-669 brand-scoped rollup strip.
@@ -1337,7 +1350,12 @@ export async function route(
     if (method === 'POST')
       return handleAdminCreatePosterDeployment(request, env, adminPosterListMatch[1]);
     if (method === 'GET')
-      return handleAdminListPosterDeployments(request, env, adminPosterListMatch[1]);
+      return handleAdminListPosterDeployments(
+        request,
+        env,
+        adminPosterListMatch[1],
+        await reportPlanFor(request, env)
+      );
   }
 
   // GET /api/v2/admin/events/:id/display-config — the TV card's current values.
@@ -1393,7 +1411,12 @@ export async function route(
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    return handleEventDashboard(request, env, adminEventDashboardMatch[1]);
+    return handleEventDashboard(
+      request,
+      env,
+      adminEventDashboardMatch[1],
+      await reportPlanFor(request, env)
+    );
   }
 
   // GET /api/v2/admin/events/:id/pre-event-activity — the organizer's pre-event
@@ -1405,7 +1428,12 @@ export async function route(
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    return handleAdminPreEventActivity(request, env, adminPreEventMatch[1]);
+    return handleAdminPreEventActivity(
+      request,
+      env,
+      adminPreEventMatch[1],
+      await reportPlanFor(request, env)
+    );
   }
 
   // POST /api/v2/admin/poster-deployments/backfill-h3 (must match before /:id)
@@ -1792,7 +1820,8 @@ export async function route(
         return rateLimitResponse();
       }
     }
-    return handleBatchSharedReports(request, env, ctx);
+    // OSE-682: the batch read follows each event's plan too (read once, fails closed).
+    return handleBatchSharedReports(request, env, ctx, () => readReportPlan(env.FORMS_DB));
   }
 
   // GET /api/v2/events/:id/shared-report

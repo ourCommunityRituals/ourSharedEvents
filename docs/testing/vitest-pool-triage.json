@@ -268,6 +268,13 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/admin-reads-plan-cap.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 13
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-registrant-contacts.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -783,7 +790,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 26
+      "testCount": 27
     },
     {
       "file": "workers/oursharedevents/tests/data-class-schema.spec.ts",
@@ -1987,7 +1994,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 22
+      "testCount": 23
     },
     {
       "file": "workers/oursharedevents/tests/poster-tiers.spec.ts",
@@ -2396,6 +2403,13 @@
       "testCount": 32
     },
     {
+      "file": "workers/oursharedevents/tests/report-plan.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 13
+    },
+    {
       "file": "workers/oursharedevents/tests/return-count-rename.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -2687,7 +2701,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 72
+      "testCount": 74
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-return-rate-card.spec.ts",

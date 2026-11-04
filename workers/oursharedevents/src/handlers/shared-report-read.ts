@@ -32,6 +32,7 @@ import { buildSharedReport, type SharedReport } from '../lib/shared-report-build
 import { resolveMintTtlSeconds } from '../lib/mint-ttl';
 import { applyCountFloor } from '../lib/count-floor';
 import { resolveDepth, filterReportByDepth, capDepthToPlan } from '../lib/report-depth';
+import { hasPaidReport, type ReportPlan } from '../lib/report-plan';
 import { logReportAccess } from '../lib/audit-log';
 import { checkRateLimit, RATE_LIMIT_BATCH_MAX, type RateLimitEnv } from '../lib/rate-limit';
 
@@ -228,10 +229,16 @@ export async function handleGetSharedReport(
 
 // ─── Batch endpoint (WKRP consumer pattern) ────────────────────────────────
 
+/**
+ * `readPlan` reads the events' plans (OSE-682). The router passes a lookup over
+ * the plan flag, so this handler never reaches the forms database itself; it is
+ * called only after the service token checks out, and it fails closed.
+ */
 export async function handleBatchSharedReports(
   request: Request,
   env: SharedReportReadEnv,
-  ctx: ExecutionContext
+  ctx: ExecutionContext,
+  readPlan: () => Promise<ReportPlan>
 ): Promise<Response> {
   // OSE-593: Rate limit batch endpoint by service token (IP as proxy for token identity)
   const batchKey = `batch-sr:${request.headers.get('CF-Connecting-IP') ?? 'unknown'}`;
@@ -313,7 +320,10 @@ export async function handleBatchSharedReports(
   }
 
   // The internal service class receives the full report (SR-25: no field
-  // stripping on this path; OSE-577: granted by role, not endpoint).
+  // stripping on this path; OSE-577: granted by role, not endpoint) for events
+  // whose plan includes the paid report. OSE-682 (owner, 2026-11-04): an event
+  // whose plan lacks it reads at Local on this path too, through the same gate,
+  // so no back door holds the paid sections.
   // sponsor_class_breakdown delivers competitive intelligence at the class level
   // without individual cross-sponsor attribution.
 
@@ -328,13 +338,27 @@ export async function handleBatchSharedReports(
     })
   );
 
-  const reports: Record<string, SharedReport> = {};
+  const plan = await readPlan();
+  const reports: Record<string, SharedReport | Record<string, unknown>> = {};
   const errors: Record<string, { code: string; message: string }> = {};
   for (const { id, result } of settled) {
     if (result.ok) {
       // Internal class → full report. Competitive intelligence is in
       // sponsor_class_breakdown (aggregate class labels), not field-stripping.
-      reports[id] = result.report;
+      const resolved = capDepthToPlan(resolveDepth({ role: 'internal' }), {
+        paidReport: hasPaidReport(plan, id),
+      });
+      if (resolved.depth === 'premium') {
+        reports[id] = result.report;
+      } else {
+        const filtered = filterReportByDepth(
+          result.report as unknown as Record<string, unknown>,
+          resolved
+        );
+        reports[id] = filtered.upgrade
+          ? { ...filtered.report, upgrade: filtered.upgrade }
+          : filtered.report;
+      }
     } else if (result.error === 'NOT_FOUND') {
       errors[id] = { code: 'NOT_FOUND', message: 'event does not exist' };
     } else {

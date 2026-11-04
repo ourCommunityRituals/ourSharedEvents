@@ -8462,7 +8462,7 @@
           });
           spark.appendChild(svg);
         }
-        window.renderPreEventReach(d.reach);
+        window.renderPreEventReach(d.reach, d.plan);
         card.hidden = false;
       };
 
@@ -8473,10 +8473,14 @@
       // derivable by subtraction); under the floor is an ordinary early state.
       // A withheld figure means each link in it has fewer than 5, not that
       // they have fewer than 5 between them, so it reads "fewer than 5 each".
-      window.renderPreEventReach = function (r) {
+      window.renderPreEventReach = function (r, plan) {
         var box = document.getElementById('pre-event-reach');
         if (!box) return;
         var ok = r && typeof r === 'object';
+        // OSE-682: the server names what this event's plan leaves out. A
+        // withheld line says so; it never reads as "nothing yet".
+        var locked = plan && Array.isArray(plan.locked_sections) ? plan.locked_sections : [];
+        var LOCKED_TEXT = 'comes with the Mid plan';
         var line = function (testid, head, items, empty) {
           var p = box.querySelector('[data-testid="' + testid + '"]');
           p.textContent = '';
@@ -8508,9 +8512,11 @@
           taps.push({ name: taps.length ? 'other links' : 'all links', n: on === null ? 'fewer than 5 each' : on });
         }
         line('pre-event-reach-taps', 'Link taps', taps,
-          'fewer than 5 on any one link so far (a link shows here at 5 or more)');
-        line('pre-event-reach-venue', 'At the venue', places(ok && r.venue), 'no posters placed yet');
-        line('pre-event-reach-community', 'In the community', places(ok && r.community), 'no posters placed yet');
+          locked.indexOf('reach.taps') > -1 ? LOCKED_TEXT : 'fewer than 5 on any one link so far (a link shows here at 5 or more)');
+        line('pre-event-reach-venue', 'At the venue', places(ok && r.venue),
+          locked.indexOf('reach.venue') > -1 ? LOCKED_TEXT : 'no posters placed yet');
+        line('pre-event-reach-community', 'In the community', places(ok && r.community),
+          locked.indexOf('reach.community') > -1 ? LOCKED_TEXT : 'no posters placed yet');
         box.hidden = !ok;
       };
 

@@ -38,6 +38,7 @@
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
+import { usePaidReportPlan } from './helpers/paid-report-plan';
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import worker from '../src/index';
 import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
@@ -353,6 +354,8 @@ const flowList = (b: CorridorBody): [string, number | null][] =>
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
+  // OSE-682: these floor checks read the paid map line, so they run on a paid plan.
+  await usePaidReportPlan();
   await applyMigrations();
   const db = tenv().DB;
   const stmts: D1PreparedStatement[] = [];

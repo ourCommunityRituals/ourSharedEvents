@@ -216,10 +216,22 @@ export async function requirePlatformScope(
   request: Request,
   env: AdminObjectScopeEnv
 ): Promise<Response | null> {
-  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
-  if (scope.mode === 'all') return null;
-  if (scope.mode === 'scoped' && scope.brandIds.includes(PLATFORM_BRAND_ID)) return null;
+  if (await isPlatformActor(request, env)) return null;
   return Response.json({ ok: false, status: 404, error: 'Not found' }, { status: 404 });
+}
+
+/**
+ * Is the caller a platform admin: scope mode 'all' (a `key:` actor with the
+ * ADMIN_SCOPE_ALL opt-in) or a member of PLATFORM_BRAND_ID? The one definition
+ * requirePlatformScope and the who × plan rule (lib/report-plan.ts) both use.
+ */
+export async function isPlatformActor(
+  request: Request,
+  env: AdminObjectScopeEnv
+): Promise<boolean> {
+  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
+  if (scope.mode === 'all') return true;
+  return scope.mode === 'scoped' && scope.brandIds.includes(PLATFORM_BRAND_ID);
 }
 
 /**

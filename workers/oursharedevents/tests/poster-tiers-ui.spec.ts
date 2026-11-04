@@ -451,7 +451,8 @@ function mountReach() {
   });
   const w = dom.window as unknown as Win;
   w.eval(reachFn());
-  const render = (r: unknown) => (w.renderPreEventReach as (r: unknown) => void)(r);
+  const render = (r: unknown, plan?: unknown) =>
+    (w.renderPreEventReach as (r: unknown, plan?: unknown) => void)(r, plan);
   const line = (id: string) => w.document.querySelector(`[data-testid="${id}"]`)!.textContent;
   return { w, doc: w.document, render, line };
 }
@@ -617,18 +618,38 @@ describe('Tier 3 | the "Before the event" card: a compact Reach section', () => 
     );
   });
 
+  test('OSE-682: a line the plan withholds says it comes with Mid, never "nothing yet"', () => {
+    const { render, line } = mountReach();
+    render(
+      { totals: { scans: fc(12), taps: fc(9) } },
+      {
+        paid_report: false,
+        locked_sections: ['reach.venue', 'reach.community', 'reach.taps', 'activity.scansByDay'],
+        next_plan: 'mid',
+      }
+    );
+    for (const id of [
+      'pre-event-reach-taps',
+      'pre-event-reach-venue',
+      'pre-event-reach-community',
+    ]) {
+      expect(line(id)).toContain('comes with the Mid plan');
+      expect(line(id)).not.toContain('no posters placed yet');
+    }
+  });
+
   test('textContent / createElement only: no innerHTML, no href, no response value as a key', () => {
     const fn = reachFn();
     expect(fn).not.toContain('innerHTML');
     expect(fn).not.toContain('insertAdjacentHTML');
     expect(fn).not.toMatch(/\bhref\b|\bsrc\b/);
     expect(fn).not.toMatch(/\[[a-z]+\.(kind|label|word)\]/);
-    // The card calls it with the response's reach, before revealing the card.
+    // The card calls it with the response's reach and plan, before revealing the card.
     const pre = ADMIN_HTML.slice(
       ADMIN_HTML.indexOf('window.renderPreEventWindow = async function')
     );
-    expect(pre.indexOf('window.renderPreEventReach(d.reach);')).toBeGreaterThan(-1);
-    expect(pre.indexOf('window.renderPreEventReach(d.reach);')).toBeLessThan(
+    expect(pre.indexOf('window.renderPreEventReach(d.reach, d.plan);')).toBeGreaterThan(-1);
+    expect(pre.indexOf('window.renderPreEventReach(d.reach, d.plan);')).toBeLessThan(
       pre.indexOf('card.hidden = false;')
     );
   });

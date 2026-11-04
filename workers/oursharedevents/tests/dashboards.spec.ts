@@ -19,6 +19,7 @@
 
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
+import type { ReportPlan } from '../src/lib/report-plan';
 import {
   handleCorridorDashboard,
   handleEventDashboard,
@@ -50,6 +51,8 @@ interface TestEnv {
 
 const tenv = env as unknown as TestEnv;
 const denv = env as unknown as DashboardsEnv;
+/** OSE-682: these checks read the paid sections, so the events are on a paid plan (Mid). */
+const MID: ReportPlan = { full: false, globalPaid: true, overrides: new Map() };
 
 async function applyMigrations(): Promise<void> {
   const runAll = async (db: D1Database, json: string) => {
@@ -139,10 +142,10 @@ function hasClassShape(v: unknown, cls: PrivacyClass): boolean {
 }
 
 async function call(
-  fn: (r: Request, e: DashboardsEnv) => Promise<Response>,
+  fn: (r: Request, e: DashboardsEnv, plan: ReportPlan) => Promise<Response>,
   req: Request
 ): Promise<{ status: number; body: Body }> {
-  const res = await fn(req, denv);
+  const res = await fn(req, denv, MID);
   return { status: res.status, body: (await res.json()) as Body };
 }
 
@@ -194,7 +197,7 @@ describe('contract', () => {
       operations: (await call(handleOperationsDashboard, reqAs(A, OPS))).body,
       corridor: (await call(handleCorridorDashboard, reqAs(A, COR))).body,
       event: (await (
-        await handleEventDashboard(reqAs(A, `/x/${DASH.bocce}/dashboard`), denv, DASH.bocce)
+        await handleEventDashboard(reqAs(A, `/x/${DASH.bocce}/dashboard`), denv, DASH.bocce, MID)
       ).json()) as Body,
     };
     for (const [id, m] of Object.entries(DASHBOARD_METRICS)) {
@@ -211,7 +214,7 @@ describe('contract', () => {
       operations: (await call(handleOperationsDashboard, reqAs(A, OPS))).body,
       corridor: (await call(handleCorridorDashboard, reqAs(A, COR))).body,
       event: (await (
-        await handleEventDashboard(reqAs(A, `/x/${DASH.bocce}/dashboard`), denv, DASH.bocce)
+        await handleEventDashboard(reqAs(A, `/x/${DASH.bocce}/dashboard`), denv, DASH.bocce, MID)
       ).json()) as Body,
     };
     for (const [dash, body] of Object.entries(responses)) {
@@ -228,6 +231,50 @@ describe('contract', () => {
         // object-valued terminal such as a FlooredCount or `event`).
         const covered = paths.some(
           (p) => leaf === p || leaf.startsWith(`${p}.`) || leaf.startsWith(`${p}[]`)
+        );
+        expect(covered, `${dash}: ${leaf} is registered`).toBe(true);
+      }
+    }
+  });
+
+  test('OSE-682: on a Free plan the responses shrink to registered metrics and name what they left out', async () => {
+    const FREE: ReportPlan = { full: false, globalPaid: false, overrides: new Map() };
+    const envelopeKeys = [
+      'ok',
+      'status',
+      'contract',
+      'scope',
+      'generated_at',
+      'not_measured',
+      'plan',
+    ];
+    const responses: Record<string, Body> = {
+      corridor: (await (await handleCorridorDashboard(reqAs(A, COR), denv, FREE)).json()) as Body,
+      event: (await (
+        await handleEventDashboard(reqAs(A, `/x/${DASH.bocce}/dashboard`), denv, DASH.bocce, FREE)
+      ).json()) as Body,
+    };
+    for (const [dash, body] of Object.entries(responses)) {
+      // The printed refusal: what was left out, and the plan that has it.
+      const plan = (body as unknown as { plan: { locked_sections: string[]; next_plan: string } })
+        .plan;
+      expect(plan.next_plan, dash).toBe('mid');
+      expect(plan.locked_sections.length, dash).toBeGreaterThan(0);
+      const paths = Object.values(DASHBOARD_METRICS)
+        .filter((m) => m.dashboard === dash)
+        .map((m) => m.path);
+      const rest = Object.fromEntries(
+        Object.entries(body).filter(([k]) => !envelopeKeys.includes(k))
+      );
+      for (const leaf of leafPaths(rest)) {
+        // An emptied list (withheld on Free) is one leaf, `name[]`; it is
+        // covered when its element paths are registered.
+        const covered = paths.some(
+          (p) =>
+            leaf === p ||
+            leaf.startsWith(`${p}.`) ||
+            leaf.startsWith(`${p}[]`) ||
+            (leaf.endsWith('[]') && p.startsWith(leaf))
         );
         expect(covered, `${dash}: ${leaf} is registered`).toBe(true);
       }
@@ -427,7 +474,7 @@ describe('corridor / community intelligence', () => {
   });
 
   test('#1: no coordinates or res-9 cells in the response', async () => {
-    const res = await handleCorridorDashboard(reqAs(A, COR), denv);
+    const res = await handleCorridorDashboard(reqAs(A, COR), denv, MID);
     const text = await res.text();
     expect(text).not.toMatch(/"(lat|lon|latitude|longitude|h3_res9)"/);
   });
@@ -441,10 +488,10 @@ describe('corridor / community intelligence', () => {
     } as DashboardsEnv;
     const req = (q: string) =>
       new Request(`https://x${COR}${q}`, { headers: { Authorization: 'Bearer k-dash' } });
-    const none = await handleCorridorDashboard(req(''), keyEnv);
+    const none = await handleCorridorDashboard(req(''), keyEnv, MID);
     expect(none.status).toBe(400);
     expect(((await none.json()) as Body).code).toBe('BRAND_REQUIRED');
-    const named = await handleCorridorDashboard(req(`?brand_id=${DASH.brandB}`), keyEnv);
+    const named = await handleCorridorDashboard(req(`?brand_id=${DASH.brandB}`), keyEnv, MID);
     expect(named.status).toBe(200);
     expect(((await named.json()) as Body).scope.brands).toEqual([DASH.brandB]);
   });
@@ -455,7 +502,8 @@ describe('organizer / partner report — one event', () => {
     const res = await handleEventDashboard(
       reqAs(A, `/api/v2/admin/events/${DASH.bocce}/dashboard`),
       denv,
-      DASH.bocce
+      DASH.bocce,
+      MID
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as Body;
@@ -480,7 +528,8 @@ describe('organizer / partner report — one event', () => {
     const res = await handleEventDashboard(
       reqAs(A, `/api/v2/admin/events/${DASH.workshop}/dashboard`),
       denv,
-      DASH.workshop
+      DASH.workshop,
+      MID
     );
     const body = (await res.json()) as Body;
     expect(body.participation.explicit.registrations).toEqual({
@@ -497,7 +546,8 @@ describe('organizer / partner report — one event', () => {
     const res = await handleEventDashboard(
       reqAs(A, '/api/v2/admin/events/nope/dashboard'),
       denv,
-      'nope'
+      'nope',
+      MID
     );
     expect(res.status).toBe(404);
   });
@@ -534,7 +584,7 @@ describe('query failures are 503, never zeroes', () => {
   test('a missing FORMS_DB binding is 503 when events exist', async () => {
     const unbound = { ...denv, FORMS_DB: undefined } as DashboardsEnv;
     expect((await handleOperationsDashboard(reqAs(A, OPS), unbound)).status).toBe(503);
-    expect((await handleEventDashboard(reqAs(A, '/x'), unbound, DASH.bocce)).status).toBe(503);
+    expect((await handleEventDashboard(reqAs(A, '/x'), unbound, DASH.bocce, MID)).status).toBe(503);
   });
 
   test('a FORMS_DB failure is 503, not a suppressed zero', async () => {
@@ -548,14 +598,14 @@ describe('query failures are 503, never zeroes', () => {
 
   test('the event report is 503 on a failed read, not 404 and not zeroes', async () => {
     const lookup = { ...denv, DB: failingOn(tenv.DB, 'FROM events') } as DashboardsEnv;
-    const a = await handleEventDashboard(reqAs(A, '/x'), lookup, DASH.bocce);
+    const a = await handleEventDashboard(reqAs(A, '/x'), lookup, DASH.bocce, MID);
     expect(a.status).toBe(503);
     const reach = { ...denv, DB: failingOn(tenv.DB, 'scan_placement_events') } as DashboardsEnv;
-    const b = await handleEventDashboard(reqAs(A, '/x'), reach, DASH.bocce);
+    const b = await handleEventDashboard(reqAs(A, '/x'), reach, DASH.bocce, MID);
     expect(b.status).toBe(503);
     // The tap read too: a failed read must not come back as a withheld total.
     const taps = { ...denv, DB: failingOn(tenv.DB, 'FROM shortlinks') } as DashboardsEnv;
-    const c = await handleEventDashboard(reqAs(A, '/x'), taps, DASH.bocce);
+    const c = await handleEventDashboard(reqAs(A, '/x'), taps, DASH.bocce, MID);
     expect(c.status).toBe(503);
   });
 });

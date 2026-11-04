@@ -33,6 +33,7 @@
  * the brand-scoped event ids; never a row, never a PII column, never a join.
  */
 
+import { hasPaidReport, paidEventsSql, planNote, type ReportPlan } from '../lib/report-plan';
 import { corsHeaders } from '../lib/cors';
 import { applyCountFloor, floorTotalOfParts, type FlooredCount } from '../lib/count-floor';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
@@ -515,7 +516,10 @@ interface BrandCorridor {
 async function readBrandCorridor(
   db: D1Database,
   brand: string,
-  dc: DataClassFilter
+  dc: DataClassFilter,
+  // OSE-682: the map line (event cells, poster cells, scan flows) only for
+  // events whose plan includes the paid report, unless the caller is platform.
+  paid: { sql: string; binds: string[] }
 ): Promise<BrandCorridor> {
   const [categories, eventCells, posterCells, scanParts, dayParts, series, partners] =
     await Promise.all([
@@ -535,10 +539,10 @@ async function readBrandCorridor(
             `SELECT e.h3_res7 AS cell, COUNT(*) AS events,
                     SUM(CASE WHEN e.status = 'active' THEN 1 ELSE 0 END) AS live
                FROM events e
-              WHERE e.brand_id = ? AND ${DC} AND e.h3_res7 IS NOT NULL
+              WHERE e.brand_id = ? AND ${DC} AND e.h3_res7 IS NOT NULL AND ${paid.sql}
               GROUP BY e.h3_res7`
           )
-          .bind(brand, dc)
+          .bind(brand, dc, ...paid.binds)
       ),
       all<{ cell: string; posters: number }>(
         db
@@ -546,9 +550,10 @@ async function readBrandCorridor(
             `SELECT pd.h3_res7 AS cell, COUNT(*) AS posters FROM poster_deployments pd
                JOIN events e ON e.id = pd.event_id
               WHERE e.brand_id = ? AND ${DC} AND pd.is_active = 1 AND pd.h3_res7 IS NOT NULL
+                AND ${paid.sql}
               GROUP BY pd.h3_res7`
           )
-          .bind(brand, dc)
+          .bind(brand, dc, ...paid.binds)
       ),
       // One read for cells and flows alike. An event with no cell is kept, as
       // a destination of its own (NULL groups with NULL): its scans are a part
@@ -560,10 +565,10 @@ async function readBrandCorridor(
                FROM scan_placement_events s
                JOIN events e ON e.id = s.event_id
                JOIN poster_deployments pd ON pd.id = s.poster_deployment_id
-              WHERE e.brand_id = ? AND ${DC} AND pd.h3_res7 IS NOT NULL
+              WHERE e.brand_id = ? AND ${DC} AND pd.h3_res7 IS NOT NULL AND ${paid.sql}
               GROUP BY s.poster_deployment_id, ${scanHourSql('s')}, pd.h3_res7, e.h3_res7`
           )
-          .bind(brand, dc)
+          .bind(brand, dc, ...paid.binds)
       ),
       all<{ part: string; cnt: number }>(
         db
@@ -623,14 +628,18 @@ function addTo(map: Map<string, number>, key: string, n: unknown): void {
 
 export async function handleCorridorDashboard(
   request: Request,
-  env: DashboardsEnv
+  env: DashboardsEnv,
+  plan: ReportPlan
 ): Promise<Response> {
   const reqId = rid();
   const pre = await preamble(request, env, reqId);
   if (pre instanceof Response) return pre;
   const { brands, dataClass } = pre;
   return guarded(request, reqId, 'corridor', async () => {
-    const perBrand = await Promise.all(brands.map((b) => readBrandCorridor(env.DB, b, dataClass)));
+    const paid = paidEventsSql(plan, 'e.id');
+    const perBrand = await Promise.all(
+      brands.map((b) => readBrandCorridor(env.DB, b, dataClass, paid))
+    );
 
     // Category labels: a shared, non-tenant registry.
     const labels = new Map<string, string>(
@@ -758,6 +767,9 @@ export async function handleCorridorDashboard(
         largest: series.length ? Math.max(...series) : 0,
       },
       partner_network: { sponsors: businesses.size, placements },
+      // OSE-682: the printed refusal. Cells and flows above cover only the
+      // events whose plan includes the paid report.
+      ...(paid.narrowed ? { plan: planNote(['event_cells', 'source_cells', 'flows']) } : {}),
     });
   });
 }
@@ -773,7 +785,8 @@ export async function handleCorridorDashboard(
 export async function handleEventDashboard(
   request: Request,
   env: DashboardsEnv,
-  eventId: string
+  eventId: string,
+  plan: ReportPlan
 ): Promise<Response> {
   const reqId = rid();
   return guarded(request, reqId, 'event', async () => {
@@ -821,6 +834,11 @@ export async function handleEventDashboard(
       explicitChoices(env.FORMS_DB, [eventId]),
     ]);
 
+    // OSE-682: on a plan without the paid report a brand admin gets the Local
+    // line, totals only; the per-day series is withheld and named.
+    const paidReport = hasPaidReport(plan, eventId);
+    const fullReach = organizerPreEventActivity(activity);
+    const { scansByDay: _scansByDay, ...reachTotals } = fullReach;
     return json(request, reqId, {
       ok: true,
       status: 200,
@@ -833,7 +851,7 @@ export async function handleEventDashboard(
         is_published: num(row.is_published) === 1,
         days_to_go: daysToGo(row, now),
       },
-      reach: organizerPreEventActivity(activity),
+      reach: paidReport ? fullReach : reachTotals,
       participation: {
         anonymous: { scans: activity.scans },
         explicit,
@@ -844,6 +862,7 @@ export async function handleEventDashboard(
         declined: num(sponsors?.declined),
       },
       shared_report: { views_30d: floorTotalOfParts(views.map((r) => num(r.n))) },
+      ...(paidReport ? {} : { plan: planNote(['reach.scansByDay']) }),
     });
   });
 }

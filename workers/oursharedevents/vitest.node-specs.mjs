@@ -44,6 +44,8 @@ export const NODE_SPECS = [
   'tests/shared-report-read-depth-wiring.spec.ts',
   // OSE-682 — the paid-report plan lookup fails closed. A fake D1 stands in.
   'tests/paid-report-plan-lookup.spec.ts',
+  // OSE-682 — who × plan: pure plan module, plan read fails closed, sponsor home totals.
+  'tests/report-plan.spec.ts',
 
   // Batch 2 (OSE-946 c3) — manifest node-clean bucket, then GREEN-FILTERED in the
   // node project: added all 43 non-review node candidates, ran the node project,
