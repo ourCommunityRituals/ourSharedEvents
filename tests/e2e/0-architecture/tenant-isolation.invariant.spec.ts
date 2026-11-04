@@ -104,7 +104,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
     'count per brand, written as one row under that brand’s own brand_id, so no ' +
     'brand’s events count toward another’s landing page. Nothing is returned to ' +
     'a caller. The request-path read (readLatches) binds brand_id.',
-  'handlers/events.ts:1881':
+  'handlers/events.ts:1884':
     'One-shot cell backfill (handleBackfillH3Cells, OSE-489). Cross-brand BY ' +
     'DESIGN and platform-only: the router puts `_platformOnly` in front of it, so ' +
     'no brand admin reaches it. It gives every event that has coordinates and no ' +
