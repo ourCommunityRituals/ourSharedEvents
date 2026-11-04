@@ -3,9 +3,16 @@
 import { pickArt } from './instagram.mjs';
 import { chicagoDate } from './validate-finds.mjs';
 
-// The sponsor tiers the stock plan uses, and the tier word the Worker accepts
-// for each (handlers/sponsors.ts VALID_TIERS has no premium, mid or local).
-const API_TIER = { premium: 'title', mid: 'gold', local: 'bronze' };
+// The stock plan's sponsor tiers, and the tier word the Worker accepts for each.
+// Every value must be in VALID_TIERS in workers/oursharedevents/src/handlers/sponsors.ts.
+export const SPONSOR_TIER_WIRE = { premium: 'title', mid: 'gold', local: 'bronze' };
+
+const CHICAGO_TIME = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'America/Chicago',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
 
 export function sponsorTier(business, regionals) {
   if (business.anchor === true) return 'premium';
@@ -38,6 +45,7 @@ export async function buildDay({
   artTags,
   targets,
   date,
+  nodeIds,
   fetch: fetchFn = globalThis.fetch,
 }) {
   const perNode = targets.perNode;
@@ -53,16 +61,17 @@ export async function buildDay({
         brand_id: 'root',
         name: business.name,
         address_line: business.address,
-        tier: API_TIER[tier],
+        tier: SPONSOR_TIER_WIRE[tier],
       });
       manifest.items.push({ kind: 'sponsor', id: res.id, node: business.node, tier });
       if (tier === 'premium' && !anchorOf.has(business.node)) anchorOf.set(business.node, res.id);
     }
 
-    const nodeIds = [
+    // Every node counts toward `short`, so the caller passes all of them.
+    const nodes = nodeIds || [
       ...new Set([...accepted.map((r) => r.node), ...businesses.map((b) => b.node)]),
     ];
-    for (const node of nodeIds) {
+    for (const node of nodes) {
       const rows = accepted
         .filter((r) => r.node === node)
         .sort(bySectorThenStart)
@@ -80,6 +89,8 @@ export async function buildDay({
           where_address: row.address,
           event_type_id: row.event_type_id,
           start_date: chicagoDate(row.starts_at),
+          start_time: CHICAGO_TIME.format(new Date(row.starts_at)),
+          timezone: 'America/Chicago',
           lat: row.lat,
           lon: row.lng,
         });

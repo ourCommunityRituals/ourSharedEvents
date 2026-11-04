@@ -1,9 +1,11 @@
 let createClient;
 let buildDay;
 let sponsorTier;
+let SPONSOR_TIER_WIRE;
 beforeAll(async () => {
   ({ createClient } = await import('../../../scripts/stock/client.mjs'));
-  ({ buildDay, sponsorTier } = await import('../../../scripts/stock/build-full.mjs'));
+  ({ buildDay, sponsorTier, SPONSOR_TIER_WIRE } =
+    await import('../../../scripts/stock/build-full.mjs'));
 });
 
 const BASE = 'https://stg-full.oursharedevents.com';
@@ -251,6 +253,8 @@ describe('buildDay', () => {
       lon: -87.7,
       where_address: '1 Main St',
       start_date: '2026-11-10',
+      start_time: '19:00',
+      timezone: 'America/Chicago',
       title: 'Title beverly private 10 0',
     });
     expect(body).not.toHaveProperty('lng');
@@ -366,5 +370,50 @@ describe('buildDay', () => {
     expect(err.message).toMatch(/POST \/api\/v2\/admin\/events\/evt_\d+\/short-links failed: 500/);
     expect(err.message).not.toContain(SECRET);
     expect(err.manifest.items.some((i) => i.kind === 'event')).toBe(true);
+  });
+});
+
+describe('rulings round', () => {
+  const SIX = [
+    'blue-island',
+    'beverly',
+    'auburn-gresham',
+    'evergreen-park',
+    'oak-lawn',
+    'mount-greenwood',
+  ];
+
+  test('start date and time are the Chicago wall clock of starts_at', async () => {
+    const site = fakeSite();
+    const find = { ...row('beverly', 'private', 10), starts_at: '2026-11-05T02:00:00Z' };
+    await buildDay(args(site, { accepted: [find] }));
+    const body = callsTo(site, 'POST', /^\/api\/v2\/admin\/events$/)[0].body;
+    expect(body).toMatchObject({
+      start_date: '2026-11-04',
+      start_time: '20:00',
+      timezone: 'America/Chicago',
+    });
+  });
+
+  test('short covers all six nodes when there are no rows at all', async () => {
+    const site = fakeSite();
+    const manifest = await buildDay(args(site, { accepted: [], nodeIds: SIX }));
+    expect(manifest.short).toEqual(Object.fromEntries(SIX.map((n) => [n, 12])));
+  });
+
+  test('a node passed in but short by some rows reports only its gap', async () => {
+    const site = fakeSite();
+    const manifest = await buildDay(
+      args(site, { accepted: rowsFor('beverly', 12, 0), nodeIds: SIX })
+    );
+    expect(manifest.short.beverly).toBeUndefined();
+    expect(manifest.short['oak-lawn']).toBe(12);
+    expect(Object.keys(manifest.short)).toHaveLength(5);
+  });
+
+  test('every wire tier is one the Worker accepts', () => {
+    const valid = ['title', 'platinum', 'gold', 'silver', 'bronze', 'primary'];
+    expect(Object.keys(SPONSOR_TIER_WIRE).sort()).toEqual(['local', 'mid', 'premium']);
+    for (const v of Object.values(SPONSOR_TIER_WIRE)) expect(valid).toContain(v);
   });
 });
