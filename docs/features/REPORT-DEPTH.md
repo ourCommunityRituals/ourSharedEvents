@@ -38,6 +38,31 @@ receives the section on the wire.
 
 ---
 
+## The plan caps depth (OSE-682)
+
+Everyone gets a SharedReport (PO, 2026-08-10). The plan flag
+`analytics.shared-report` is the **paid** report (the flags contract maps it to
+`tier-gates.features.shared_report_interactive`). With it off, as on the Free
+preset, **every signed-link viewer reads at `local`**: organizer, platform and
+sponsor alike. With it on, each role reads at the depth in the table above.
+
+- The report page loads on every plan. The old Free-plan 403 page (OSE-1206) is
+  gone; it left a Free event with no report at all.
+- The router reads the flag (event override first, then global) and hands the
+  read handler a lookup, so the handler never reaches `FORMS_DB` itself. The
+  lookup runs only after the token checks out, and it fails **closed**
+  (`isPaidReportEnabled`): an unreadable forms database reads as Local, never as
+  paid. (`isFeatureEnabled` fails open, which is wrong for an entitlement.)
+- Staging fixtures say their plan: `evt_smoke_tiers` (T4f, paid depths) carries
+  an event-level paid-report override in `forms-smoke.sql`; `plancap-evt` (T2,
+  the Free cap) has none.
+- `capDepthToPlan` (`lib/report-depth.ts`) only lowers depth. Sponsor scoping
+  (TL-040, OSE-595) is unchanged by it.
+- The in-fleet batch read (`internal`) is not capped: it is a service class,
+  not a customer view.
+- Until the plan is per brand (OSE-1562) the flag is one setting for the whole
+  deployment. Switch it with `POST /api/v2/admin/flags/apply-tier` (key actor).
+
 ## Sections by depth (additive ladder)
 
 Each tier is a superset of the one below. `sponsor_class_breakdown` is present at

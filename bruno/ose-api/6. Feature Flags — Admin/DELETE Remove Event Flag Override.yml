@@ -1,7 +1,7 @@
 info:
   name: DELETE Remove Event Flag Override
   type: http
-  seq: 8
+  seq: 11
 
 http:
   method: DELETE

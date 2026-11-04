@@ -11,67 +11,65 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "// SharedReport is feature-flag gated (analytics.shared-report).
+      code: "// OSE-682: everyone gets a SharedReport. The page loads on every plan; the read API
 
-        // Returns 200 HTML when enabled, 403 JSON with REPORT_DISABLED when off.
+        // decides what it shows (a plan without the paid report reads at Local). It used to
 
-        test('Returns 200 (enabled) or 403 (flag off)', function() {
+        // answer 403 REPORT_DISABLED on Free, and while staging sat on Free every check
 
-        \    expect([200, 403]).to.include(res.getStatus());
+        // below was skipped.
+
+        test('Returns 200 on every plan (OSE-682)', function() {
+
+        \    expect(res.getStatus()).to.eql(200);
 
         });
 
-        
+        test('Is HTML', function() {
 
-        if (res.getStatus() === 200) {
+        \    expect(res.getHeader('Content-Type')).to.include('text/html');
 
-        \    test('Is HTML', function() {
+        });
 
-        \        expect(res.getHeader('Content-Type')).to.include('text/html');
+        test('Has DOCTYPE', function() {
 
-        \    });
+        \    expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()))).to.include('<!DOCTYPE html>');
 
-        \    test('Has DOCTYPE', function() {
+        });
 
-        \        expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()))).to.include('<!DOCTYPE html>');
+        test('Is not kept by the browser (Cache-Control no-store)', function() {
 
-        \    });
+        \    expect(String(res.getHeader('cache-control') || '')).to.eql('no-store');
 
-        \    test('Is not kept by the browser (Cache-Control no-store)', function() {
+        });
 
-        \        expect(String(res.getHeader('cache-control') || '')).to.eql('no-store');
+        test('Never sends its address on (Referrer-Policy no-referrer)', function() {
 
-        \    });
+        \    expect(String(res.getHeader('referrer-policy') || '')).to.eql('no-referrer');
 
-        \    test('Never sends its address on (Referrer-Policy no-referrer)', function() {
+        });
 
-        \        expect(String(res.getHeader('referrer-policy') || '')).to.eql('no-referrer');
+        test('Reads the scan count as distinct_scanners, never unique_gatherings (OSE-818)', function() {
 
-        \    });
+        \    const html = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        \    test('Reads the scan count as distinct_scanners, never unique_gatherings (OSE-818)', function() {
+        \    expect(html).to.include('report.distinct_scanners');
 
-        \        const html = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
+        \    expect(html).to.include('Distinct Scanners');
 
-        \        expect(html).to.include('report.distinct_scanners');
+        \    expect(html).to.not.include('unique_gatherings');
 
-        \        expect(html).to.include('Distinct Scanners');
+        });
 
-        \        expect(html).to.not.include('unique_gatherings');
+        test('Is the report page, not the old plan refusal', function() {
 
-        \    });
+        \    const html = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        } else if (res.getStatus() === 403) {
+        \    expect(html).to.not.include('REPORT_DISABLED');
 
-        \    test('Has REPORT_DISABLED code', function() {
+        \    expect(html).to.not.include('switched on here yet');
 
-        \        const json = res.getBody();
-
-        \        expect(json.code).to.eql('REPORT_DISABLED');
-
-        \    });
-
-        }"
+        });"
 
 settings:
   encodeUrl: true

@@ -82,13 +82,14 @@ function fullReport(): Record<string, unknown> {
 
 async function callAs(
   role: SignedLinkRole,
-  extra: { depth?: string; sponsor_id?: string } = {}
+  extra: { depth?: string; sponsor_id?: string } = {},
+  paidReport = true
 ): Promise<{ status: number; report: Record<string, unknown> }> {
   const token = await mintSignedLinkToken(env, EVENT_ID, role, 3600, extra);
   const request = new Request(`https://x/api/v2/events/${EVENT_ID}/shared-report`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  const res = await handleGetSharedReport(request, env, EVENT_ID, ctx);
+  const res = await handleGetSharedReport(request, env, EVENT_ID, ctx, async () => paidReport);
   const body = (await res.json()) as { ok: boolean; report: Record<string, unknown> };
   return { status: res.status, report: body.report };
 }
@@ -138,5 +139,56 @@ describe('OSE-714 | read handler composes filterReportByDepth (enforcement-state
     expect(rows.map((x) => x.sponsor_id).sort()).toEqual(['sp_A', 'sp_B']);
     // No filter ran → no upgrade hint injected.
     expect('upgrade' in report).toBe(false);
+  });
+});
+
+// OSE-682 / OSE-1562 — the plan caps depth in the handler. A plan without the
+// paid report (Free) reads at Local for every signed-link viewer. The handler is
+// handed the plan as a lookup, so it never reaches FORMS_DB itself (two-DB gate).
+//
+// @born-red OSE-682 | method: wiring-removal | verified: dropping the
+//   capDepthToPlan(...) call in handleGetSharedReport turns FREE-ORG and
+//   FREE-SPONSOR red (the map and paid sections leak on a Free plan).
+describe('OSE-682 | read handler caps depth to the plan', () => {
+  it('FREE-ORG: organizer on a Free plan gets Local: basics kept, paid sections withheld, upgrade → mid', async () => {
+    const { status, report } = await callAs('bar_owner', {}, false);
+    expect(status).toBe(200);
+    expect(report.distinct_scanners).toBe(99);
+    expect('corridor_map' in report).toBe(false);
+    expect('poster_attribution' in report).toBe(false);
+    expect('headcount_trend' in report).toBe(false);
+    expect((report.upgrade as { next_depth?: string } | undefined)?.next_depth).toBe('mid');
+    // The organizer still sees every sponsor row at its own event.
+    const rows = report.sponsor_displays as Array<{ sponsor_id: string }>;
+    expect(rows.map((x) => x.sponsor_id).sort()).toEqual(['sp_A', 'sp_B']);
+  });
+
+  it('FREE-SPONSOR: a Mid sponsor link on a Free plan reads at Local, own rows only', async () => {
+    const { report } = await callAs('sponsor', { depth: 'mid', sponsor_id: 'sp_A' }, false);
+    expect('corridor_map' in report).toBe(false);
+    expect('poster_attribution' in report).toBe(false);
+    expect((report.upgrade as { next_depth?: string } | undefined)?.next_depth).toBe('mid');
+    const rows = report.sponsor_displays as Array<{ sponsor_id: string }>;
+    expect(rows.map((x) => x.sponsor_id)).toEqual(['sp_A']);
+  });
+
+  it('PAID-ORG: organizer on a paid plan keeps the full report, no upgrade', async () => {
+    const { report } = await callAs('bar_owner', {}, true);
+    expect('corridor_map' in report).toBe(true);
+    expect('headcount_trend' in report).toBe(true);
+    expect('upgrade' in report).toBe(false);
+  });
+
+  it('the plan is read only after the token checks out', async () => {
+    let asked = false;
+    const request = new Request(`https://x/api/v2/events/${EVENT_ID}/shared-report`, {
+      headers: { Authorization: 'Bearer not-a-real-token' },
+    });
+    const res = await handleGetSharedReport(request, env, EVENT_ID, ctx, async () => {
+      asked = true;
+      return true;
+    });
+    expect(res.status).toBe(401);
+    expect(asked).toBe(false);
   });
 });

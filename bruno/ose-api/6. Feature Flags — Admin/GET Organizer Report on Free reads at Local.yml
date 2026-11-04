@@ -1,0 +1,66 @@
+info:
+  name: GET Organizer Report on Free reads at Local
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/plancap-evt/shared-report"
+  headers:
+    - name: Accept
+      value: application/json
+    - name: Authorization
+      value: Bearer {{planCapToken}}
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-682: everyone gets a SharedReport, and a plan without the paid report reads at
+
+        // Local for every viewer, the organizer too. Staging is on Free here (POST Apply Tier
+
+        // Preset); POST Restore Tier Preset puts the previous plan back right after.
+
+        const json = res.getBody();
+
+        test('Reads the report (200)', function() {
+
+        \    expect(res.getStatus()).to.eql(200);
+
+        \    expect(json.ok).to.eql(true);
+
+        });
+
+        test('Keeps the Local basics: distinct scanners and the class breakdown', function() {
+
+        \    expect(json.report).to.have.property('distinct_scanners');
+
+        \    expect(json.report).to.have.property('sponsor_class_breakdown');
+
+        });
+
+        test('Withholds the paid sections on Free: map, poster attribution, return rate, trend', function() {
+
+        \    expect(json.report).to.not.have.property('corridor_map');
+
+        \    expect(json.report).to.not.have.property('poster_attribution');
+
+        \    expect(json.report).to.not.have.property('return_rate');
+
+        \    expect(json.report).to.not.have.property('headcount_trend');
+
+        });
+
+        test('Names the next report up as Mid (the printed upgrade)', function() {
+
+        \    expect(json.report.upgrade.next_depth).to.eql('mid');
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

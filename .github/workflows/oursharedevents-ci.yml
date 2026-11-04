@@ -1594,6 +1594,20 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/core-values-draft-seed.sql
 
+      # OSE-682: one event with a materialized scan signal, so folder 6 can read a
+      # signed-link report on the Free plan and assert it is capped at Local. Own
+      # event (plancap-evt), unpublished; idempotent upserts. NOT continue-on-error:
+      # a missing fixture fails here by name, not as a 409 in the contract run.
+      - name: 'Seed report plan-cap fixture (OSE-682)'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/report-plan-cap-seed.sql
+
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
       # from the collection root, so each step sets working-directory. Secrets are
