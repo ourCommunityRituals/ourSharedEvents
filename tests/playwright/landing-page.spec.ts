@@ -143,16 +143,21 @@ test.describe('landing: what the visitor sees first', () => {
     }
   });
 
-  test('the keyboard reaches the zip box and the doors', async ({ page }) => {
+  test('the keyboard reaches the zip box and both doors', async ({ page }) => {
+    const targets = ['landing-skip-link', 'where-zip', 'door-create-event', 'door-create-sponsor'];
+    // One Tab per focusable control, plus slack: at 10+ events the doors sit
+    // below the area, and every event card adds its own links.
+    const budget =
+      (await page
+        .locator('a[href], button, input, select, textarea, summary, [tabindex]')
+        .count()) + 5;
     const reached = new Set<string>();
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < budget && !targets.every((t) => reached.has(t)); i++) {
       await page.keyboard.press('Tab');
       const id = await page.evaluate(() => document.activeElement?.getAttribute('data-testid'));
       if (id) reached.add(id);
     }
-    expect([...reached]).toEqual(
-      expect.arrayContaining(['landing-skip-link', 'where-zip', 'door-create-event'])
-    );
+    expect([...reached]).toEqual(expect.arrayContaining(targets));
   });
 });
 
