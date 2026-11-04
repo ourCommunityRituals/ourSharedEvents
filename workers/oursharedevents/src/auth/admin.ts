@@ -79,8 +79,10 @@ function serviceActorName(
   payload: { email?: string; common_name?: unknown; aud?: unknown; iss?: unknown },
   env: AdminEnv
 ): string | null {
+  // Stryker disable next-line ConditionalExpression: equivalent mutant — both callers already require no email (extractAdminActor returns an email first; requireAdmin tests `!email`), so this line is the predicate's own statement of rule 0, not a reachable branch.
   if (payload.email) return null;
   const cn = payload.common_name;
+  // Stryker disable next-line ConditionalExpression: equivalent mutant — a non-string or empty common_name can never be in `listed` (strings, empties filtered out), so dropping this check reaches the same `return null` below.
   if (typeof cn !== 'string' || cn.length === 0) return null;
   if (env.WORKER_ENV !== 'staging') return null;
   const domain = env.CF_ACCESS_TEAM_DOMAIN?.trim();
@@ -89,8 +91,8 @@ function serviceActorName(
   if (payload.iss !== `https://${domain}`) return null;
   const auds = Array.isArray(payload.aud) ? payload.aud : payload.aud ? [payload.aud] : [];
   if (!auds.includes(aud)) return null;
-  const listed = (env.CI_SERVICE_ACTORS ?? '')
-    .split(',')
+  if (!env.CI_SERVICE_ACTORS) return null;
+  const listed = env.CI_SERVICE_ACTORS.split(',')
     .map((x) => x.trim())
     .filter(Boolean);
   if (!listed.includes(cn)) return null;
@@ -433,6 +435,7 @@ export async function requireAdmin(
       // OSE-1800: a staging CI service token that is LISTED is an actor of its
       // own (svc:<common_name>, a brand admin, never platform). The predicate
       // requires the team domain, so the signature was verified above.
+      // Stryker disable next-line ConditionalExpression: `valid` is implied by the verification above (same exp/iat checks a moment earlier); it differs only if the clock crosses `exp` between the two reads, which a test cannot place. Kept as belt and braces. The LogicalOperator mutant (`valid || …`) IS killed: an email token off the allowlist still gets 403.
       if (valid && !email && serviceActorName(payload, env)) return null;
       if (valid && email) {
         // A CF Access JWT carrying a HUMAN email must pass the admin allowlist.

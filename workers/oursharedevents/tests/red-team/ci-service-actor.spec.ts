@@ -25,6 +25,7 @@ import { describe, test, expect, beforeAll, afterEach, vi } from 'vitest';
 import {
   requireAdmin,
   extractAdminActor,
+  isAutomationActor,
   __resetJwksCacheForTests,
   type AdminEnv,
 } from '../../src/auth/admin';
@@ -279,5 +280,77 @@ describe('OSE-1800 | email and key actors are unchanged', () => {
     );
     expect(await requireAdmin(r, stagingEnv(), 'rid')).toBeNull();
     expect(extractAdminActor(r, stagingEnv())).toBe('owner@example.com');
+  });
+});
+
+describe('OSE-1800 | mutation kills: each check in the svc path does work', () => {
+  test.each([
+    [null, false],
+    ['key:admin', true],
+    ['svc:ci-brand-admin.access', true],
+    ['owner@example.com', false],
+    // ends with "key:" / "svc:" but does not start with it: not automation
+    ['x@example.key:', false],
+    ['x@example.svc:', false],
+  ])('isAutomationActor(%s) is %s', (actor, expected) => {
+    expect(isAutomationActor(actor)).toBe(expected);
+  });
+
+  test('an expired service token is no actor, even listed on staging', async () => {
+    const r = req(await signJwt(svcClaims({ iat: nowSec() - 7200, exp: nowSec() - 3600 })));
+    expect(extractAdminActor(r, stagingEnv())).toBeNull();
+  });
+
+  test('a service token that is not listed falls through to the key checks', async () => {
+    const r = req(await signJwt(svcClaims({ common_name: 'someone-else.access' })), {
+      headers: { Authorization: 'Bearer the-admin-key' },
+    });
+    const env = stagingEnv({ ALLOW_ADMIN_KEY_FALLBACK: 'true', ADMIN_KEY: 'the-admin-key' });
+    expect(extractAdminActor(r, env)).toBe('key:admin');
+  });
+
+  test('an email token off the allowlist is refused on staging (403), svc settings or not', async () => {
+    armFetch();
+    const r = req(
+      await signJwt({ ...svcClaims(), common_name: undefined, email: 'stranger@example.com' })
+    );
+    expect((await requireAdmin(r, stagingEnv(), 'rid'))?.status).toBe(403);
+  });
+
+  test('the team domain and audience settings are read trimmed', async () => {
+    armFetch();
+    const env = stagingEnv({ CF_ACCESS_TEAM_DOMAIN: ` ${DOMAIN} `, CF_ACCESS_AUD: ` ${AUD} ` });
+    const r = req(await signJwt(svcClaims()));
+    expect(extractAdminActor(r, env)).toBe(`svc:${CN}`);
+  });
+
+  test('an audience setting with spaces still pins an email token (requireAdmin trims it)', async () => {
+    armFetch();
+    const r = req(
+      await signJwt({ ...svcClaims(), common_name: undefined, email: 'owner@example.com' })
+    );
+    expect(await requireAdmin(r, stagingEnv({ CF_ACCESS_AUD: ` ${AUD} ` }), 'rid')).toBeNull();
+  });
+
+  test('an unset team domain or audience is no actor, not a crash', async () => {
+    const r = req(await signJwt(svcClaims()));
+    expect(extractAdminActor(r, stagingEnv({ CF_ACCESS_TEAM_DOMAIN: undefined }))).toBeNull();
+    expect(extractAdminActor(r, stagingEnv({ CF_ACCESS_AUD: undefined }))).toBeNull();
+  });
+
+  test('a token with no aud claim is no actor', async () => {
+    const r = req(await signJwt(svcClaims({ aud: undefined })));
+    expect(extractAdminActor(r, stagingEnv())).toBeNull();
+  });
+
+  test('a token whose aud is a single string (not an array) still counts', async () => {
+    const r = req(await signJwt(svcClaims({ aud: AUD })));
+    expect(extractAdminActor(r, stagingEnv())).toBe(`svc:${CN}`);
+  });
+
+  test('the listed setting is a comma list, entries trimmed', async () => {
+    const r = req(await signJwt(svcClaims()));
+    const env = stagingEnv({ CI_SERVICE_ACTORS: `other.access, ${CN}` });
+    expect(extractAdminActor(r, env)).toBe(`svc:${CN}`);
   });
 });
