@@ -107,25 +107,25 @@
 
 **Interfaces:**
 
-- Produces: `nodes.json` shape `{ "nodes": [{ "id": "blue-island", "name": "Blue Island", "zips": ["60406"], "cells": ["872664…", …], "source": "<boundary URL>" }] }`. The ids are `blue-island`, `beverly`, `auburn-gresham`, `evergreen-park`, `oak-lawn`, `mount-greenwood`.
+- Produces: `nodes.json` shape `{ "nodes": [{ "id": "blue-island", "name": "Blue Island", "zips": ["60406"], "polygon": <GeoJSON Polygon or MultiPolygon, simplified>, "cells": ["872664…", …] /* res-7 cells that OVERLAP the polygon; a border cell may be in two nodes */, "source": "<boundary URL>" }] }`. The ids are `blue-island`, `beverly`, `auburn-gresham`, `evergreen-park`, `oak-lawn`, `mount-greenwood`.
 - Produces: a find row `{ venue, address, sector: 'private'|'public', node, event_type_id, starts_at, ends_at|null, title, summary, source_url }`.
 - Produces: `validateFinds({ finds, eventTypeIds: Set<string>, nodes, today: string /*YYYY-MM-DD*/, geocode: (address) => Promise<{lat:number,lng:number}|null> }) => Promise<{ accepted: Array<Find & {node:string, cell:string, lat:number, lng:number}>, refused: Array<{ row: Find, reason: 'outside-window'|'no-source'|'unknown-type'|'geocode-failed'|'not-in-node'|'duplicate'|'bad-shape' }>, acceptedPerNode: Record<string, number> }>`
 
 - [ ] **Step 1: Write the failing tests.**
-  - `nodes.test.js`: there are exactly six nodes with the ids above; every node has ≥ 1 zip and ≥ 1 cell; every cell is valid res 7 (`h3.getResolution(c) === 7`); no cell appears in two nodes.
+  - `nodes.test.js`: there are exactly six nodes with the ids above; every node has ≥ 1 zip and ≥ 1 cell; every cell is valid res 7 (`h3.getResolution(c) === 7`); every node has a `polygon`; every cell overlaps its node's polygon.
   - `validate-finds.test.js`, one case per refusal reason:
     - a start the day before `today` → `outside-window`;
     - today + 91 days → `outside-window`;
     - today + 90 days → accepted.
-    - Empty `source_url` → `no-source`; an id not in `eventTypeIds` → `unknown-type`; geocode `null` → `geocode-failed`; coordinates whose cell is in no node → `not-in-node`.
-    - A cell in Oak Lawn while the row claims `beverly` → accepted with `node: 'oak-lawn'`.
+    - Empty `source_url` → `no-source`; an id not in `eventTypeIds` → `unknown-type`; geocode `null` → `geocode-failed`; coordinates inside no node polygon → `not-in-node`.
+    - Coordinates inside the Oak Lawn polygon while the row claims `beverly` → accepted with `node: 'oak-lawn'`.
     - Two rows with the same venue (`"Cork & Kerry"` / `" cork &  kerry "`) and the same start → one accepted, one `duplicate`.
     - A 300-char title is cut to 120 and a 500-char summary to 200.
     - `acceptedPerNode` counts accepted rows per node.
     - Accepted rows come back with `private` before `public`.
 - [ ] **Step 2: Run them and watch them fail.** `npx vitest run tests/unit/stock`. Expected: FAIL, files missing.
-- [ ] **Step 3: Write `build-nodes.mjs` and generate `nodes.json`.** Boundaries: City of Chicago community areas (Beverly, Auburn Gresham, Mount Greenwood) and Census TIGER places (Blue Island, Evergreen Park, Oak Lawn). Convert each with `h3.polygonToCells(polygon, 7, true)`. A cell claimed by two boundaries goes to the one holding its center. Put each node's source URL and zips in its entry: Blue Island `60406`; Beverly `60643`; Auburn Gresham `60620`; Evergreen Park `60805`; Oak Lawn `60453`, `60456`, `60457`; Mount Greenwood `60655`.
-- [ ] **Step 4: Implement `validateFinds`.** Node membership uses `h3.latLngToCell(lat, lng, 7)` looked up in a cell→node map. The duplicate key is `lower(collapse-spaces(venue)) + '|' + starts_at`.
+- [ ] **Step 3: Write `build-nodes.mjs` and generate `nodes.json`.** Boundaries: City of Chicago community areas (Beverly, Auburn Gresham, Mount Greenwood) and Census TIGER places (Blue Island, Evergreen Park, Oak Lawn). Keep each boundary (simplified) as `polygon`. `cells` = `h3.polygonToCellsExperimental(polygon, 7, POLYGON_TO_CELLS_FLAGS.containmentOverlapping)`. Put each node's source URL and zips in its entry: Blue Island `60406`; Beverly `60643`; Auburn Gresham `60620`; Evergreen Park `60805`; Oak Lawn `60453`; Mount Greenwood `60655`.
+- [ ] **Step 4: Implement `validateFinds`.** Node membership is point-in-polygon against each node's `polygon` (exact, never by cell, since border cells overlap two nodes); `cell` is still `h3.latLngToCell(lat, lng, 7)` for the record. The duplicate key is `lower(collapse-spaces(venue)) + '|' + starts_at`.
 - [ ] **Step 5: Run the tests; expect PASS. Born red:** change the window bound to `> 90` days as `>= 90` and watch the boundary case fail. Restore it.
 - [ ] **Step 6: Commit** `feat(stock): node cells and the finds validator`.
 
@@ -191,7 +191,7 @@
 
 - Consumes: Task 4 `Manifest`; Task 3 `nodes`.
 - Produces: `checkNodes({ client, manifest, nodes, today }) => Promise<Record<nodeId, { pass: boolean, count: number, reasons: string[] }>>`. It:
-  - counts `GET /api/v2/events` rows that are in the 90-day window and whose `h3_res7` is in the node's cells (**strict, neighbors never count**), needing ≥ 10;
+  - counts the day's manifest events assigned to the node (assignment = validator point-in-polygon; **strict, neighbors never count**) that `GET /api/v2/events` lists in the 90-day window, each with its server `h3_res7` among the node's overlapping `cells` as a sanity check; needs exactly `perNode`;
   - requires ≥ 1 `premium` sponsor in the node;
   - requires `GET /?zip=<first zip>` to have the area before the doors;
   - requires every `qPath` to return 200 and every `sPath` 302;
