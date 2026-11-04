@@ -1,10 +1,9 @@
-const { readFileSync } = require('node:fs');
+const { readFileSync, statSync } = require('node:fs');
 const path = require('node:path');
 const h3 = require('h3-js');
 
-const { nodes } = JSON.parse(
-  readFileSync(path.join(__dirname, '../../../stock/nodes.json'), 'utf8')
-);
+const file = path.join(__dirname, '../../../stock/nodes.json');
+const { nodes } = JSON.parse(readFileSync(file, 'utf8'));
 
 describe('stock/nodes.json', () => {
   test('has exactly the six nodes', () => {
@@ -35,8 +34,32 @@ describe('stock/nodes.json', () => {
     }
   });
 
-  test('no cell appears in two nodes', () => {
-    const all = nodes.flatMap((n) => n.cells);
-    expect(new Set(all).size).toBe(all.length);
+  test('every node has a polygon boundary', () => {
+    for (const n of nodes) {
+      expect(['Polygon', 'MultiPolygon'], n.id).toContain(n.polygon.type);
+      expect(n.polygon.coordinates.length, n.id).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  test('cells are exactly the res 7 cells overlapping the polygon', () => {
+    for (const n of nodes) {
+      const polys = n.polygon.type === 'Polygon' ? [n.polygon.coordinates] : n.polygon.coordinates;
+      const regenerated = new Set();
+      for (const p of polys) {
+        for (const c of h3.polygonToCellsExperimental(
+          p,
+          7,
+          h3.POLYGON_TO_CELLS_FLAGS.containmentOverlapping,
+          true
+        )) {
+          regenerated.add(c);
+        }
+      }
+      expect([...regenerated].sort(), n.id).toEqual([...n.cells].sort());
+    }
+  });
+
+  test('the file stays under 200 KB', () => {
+    expect(statSync(file).size).toBeLessThan(200 * 1024);
   });
 });

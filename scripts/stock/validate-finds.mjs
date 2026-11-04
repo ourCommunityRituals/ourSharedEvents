@@ -34,10 +34,31 @@ function badShape(r) {
   return false;
 }
 
+function inRing(lng, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// Ray casting; ring 0 is the outer boundary, the rest are holes.
+function inPolygon(lng, lat, rings) {
+  return inRing(lng, lat, rings[0]) && !rings.slice(1).some((r) => inRing(lng, lat, r));
+}
+
+// The first node, in file order, whose boundary polygon holds the point; else undefined.
+export function nodeAt(nodes, lat, lng) {
+  return nodes.find((n) => {
+    const polys = n.polygon.type === 'Polygon' ? [n.polygon.coordinates] : n.polygon.coordinates;
+    return polys.some((p) => inPolygon(lng, lat, p));
+  })?.id;
+}
+
 export async function validateFinds({ finds, eventTypeIds, nodes, today, geocode }) {
   if (!DAY_RE.test(today)) throw new Error('today must be YYYY-MM-DD');
-  const cellToNode = new Map();
-  for (const n of nodes) for (const c of n.cells) cellToNode.set(c, n.id);
 
   const first = dayNumber(today);
   const accepted = [];
@@ -69,12 +90,14 @@ export async function validateFinds({ finds, eventTypeIds, nodes, today, geocode
       refuse(row, 'geocode-failed');
       continue;
     }
-    const cell = h3.latLngToCell(point.lat, point.lng, RES);
-    const node = cellToNode.get(cell);
+    // membership is by boundary polygon, never by cell
+    const node = nodeAt(nodes, point.lat, point.lng);
     if (!node) {
       refuse(row, 'not-in-node');
       continue;
     }
+
+    const cell = h3.latLngToCell(point.lat, point.lng, RES);
 
     const key = `${row.venue.toLowerCase().replace(/\s+/g, ' ').trim()}|${row.starts_at}`;
     if (seen.has(key)) {

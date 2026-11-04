@@ -54,21 +54,69 @@ async function download(url, dir, name) {
   return JSON.parse(await readFile(file, 'utf8')); // data only, never executed
 }
 
+const TOLERANCE = 0.0002; // degrees, Douglas-Peucker
+const round = (n) => Math.round(n * 1e5) / 1e5;
+
 const polygonsOf = (geometry) =>
   geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
 
-function inRing(lng, lat, ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
-    if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
+function segDist([px, py], [ax, ay], [bx, by]) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
-const inPolygon = (lng, lat, rings) =>
-  inRing(lng, lat, rings[0]) && !rings.slice(1).some((r) => inRing(lng, lat, r));
-const inGeometry = (lng, lat, geometry) => polygonsOf(geometry).some((p) => inPolygon(lng, lat, p));
+
+function douglasPeucker(pts, tol) {
+  if (pts.length < 3) return pts;
+  let max = 0;
+  let idx = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = segDist(pts[i], pts[0], pts[pts.length - 1]);
+    if (d > max) {
+      max = d;
+      idx = i;
+    }
+  }
+  if (max <= tol) return [pts[0], pts[pts.length - 1]];
+  return [
+    ...douglasPeucker(pts.slice(0, idx + 1), tol).slice(0, -1),
+    ...douglasPeucker(pts.slice(idx), tol),
+  ];
+}
+
+// A closed ring simplified; null when it collapses below a triangle.
+function simplifyRing(ring) {
+  const open = ring.slice(0, -1);
+  // split at the farthest point so a closed loop is simplified as two open runs
+  let far = 0;
+  let max = -1;
+  open.forEach((p, i) => {
+    const d = Math.hypot(p[0] - open[0][0], p[1] - open[0][1]);
+    if (d > max) {
+      max = d;
+      far = i;
+    }
+  });
+  const a = douglasPeucker(open.slice(0, far + 1), TOLERANCE);
+  const c = douglasPeucker([...open.slice(far), open[0]], TOLERANCE);
+  const pts = [...a.slice(0, -1), ...c.slice(0, -1)].map(([x, y]) => [round(x), round(y)]);
+  if (pts.length < 3) return null;
+  return [...pts, pts[0]];
+}
+
+function simplifyGeometry(geometry) {
+  const polys = [];
+  for (const rings of polygonsOf(geometry)) {
+    const outer = simplifyRing(rings[0]);
+    if (!outer) continue;
+    polys.push([outer, ...rings.slice(1).map(simplifyRing).filter(Boolean)]);
+  }
+  return polys.length === 1
+    ? { type: 'Polygon', coordinates: polys[0] }
+    : { type: 'MultiPolygon', coordinates: polys };
+}
 
 async function main() {
   const dir = await mkdtemp(join(tmpdir(), 'ose-stock-boundaries-'));
@@ -85,32 +133,29 @@ async function main() {
     geoms[n.id] = feats[0].geometry;
   }
 
-  const owner = new Map();
-  for (const n of NODES) {
+  const nodes = NODES.map((n) => {
+    const polygon = simplifyGeometry(geoms[n.id]);
     const cells = new Set();
-    for (const poly of polygonsOf(geoms[n.id]))
-      for (const c of h3.polygonToCells(poly, RES, true)) cells.add(c);
-    for (const c of cells) {
-      const [lat, lng] = h3.cellToLatLng(c);
-      const prev = owner.get(c);
-      if (!prev) owner.set(c, n.id);
-      else if (!inGeometry(lng, lat, geoms[prev]) && inGeometry(lng, lat, geoms[n.id]))
-        owner.set(c, n.id);
+    for (const poly of polygonsOf(polygon)) {
+      for (const c of h3.polygonToCellsExperimental(
+        poly,
+        RES,
+        h3.POLYGON_TO_CELLS_FLAGS.containmentOverlapping,
+        true
+      ))
+        cells.add(c);
     }
-  }
-
-  const nodes = NODES.map((n) => ({
-    id: n.id,
-    name: n.name,
-    zips: n.zips,
-    cells: [...owner]
-      .filter(([, id]) => id === n.id)
-      .map(([c]) => c)
-      .sort(),
-    source: n.kind === 'chicago' ? CHICAGO_URL : TIGER_URL,
-  }));
+    return {
+      id: n.id,
+      name: n.name,
+      zips: n.zips,
+      cells: [...cells].sort(),
+      polygon,
+      source: n.kind === 'chicago' ? CHICAGO_URL : TIGER_URL,
+    };
+  });
   const out = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'stock', 'nodes.json');
-  await writeFile(out, JSON.stringify({ nodes }, null, 2) + '\n');
+  await writeFile(out, JSON.stringify({ nodes }) + '\n');
   for (const n of nodes) console.log(n.id, n.cells.length);
 }
 
