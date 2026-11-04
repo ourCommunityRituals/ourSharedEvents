@@ -56,15 +56,31 @@ export async function checkNodes({
   if (!Array.isArray(nodeList)) throw new Error('nodes must be a list');
 
   const origin = new URL(STOCK_BASE_URL).origin;
+  // A path on this site, or null. The path must start with '/' and resolve to this
+  // origin: `${origin}.evil.example/x` would otherwise send the read (and whatever
+  // headers the caller's fetchPublic adds) to another host.
+  function siteUrl(p) {
+    if (typeof p !== 'string' || !p.startsWith('/')) return null;
+    let url;
+    try {
+      url = new URL(p, origin);
+    } catch {
+      return null;
+    }
+    return url.origin === origin ? url : null;
+  }
+
   let lastAt = null;
-  async function publicGet(pathAndQuery) {
+  // Takes only a URL that siteUrl (or the same-origin check) has already passed.
+  async function publicGet(url) {
+    if (!(url instanceof URL) || url.origin !== origin) return null;
     if (lastAt !== null) {
       const wait = MIN_GAP_MS - (now() - lastAt);
       if (wait > 0) await sleep(wait);
     }
     lastAt = now();
     try {
-      return await fetchPublic(`${origin}${pathAndQuery}`, { method: 'GET', redirect: 'manual' });
+      return await fetchPublic(url.href, { method: 'GET', redirect: 'manual' });
     } catch {
       return null; // a failed read is a reason for its node, never a crash
     }
@@ -136,7 +152,7 @@ export async function checkNodes({
     if (!zip) {
       reasons.push('no-zip');
     } else {
-      const res = await publicGet(`/?zip=${encodeURIComponent(zip)}`);
+      const res = await publicGet(siteUrl(`/?zip=${encodeURIComponent(zip)}`));
       const page = res && res.status === 200 ? await bodyOf(res) : '';
       const areaAt = page.indexOf(AREA_MARK);
       const doorsAt = page.indexOf(DOORS_MARK);
@@ -147,18 +163,25 @@ export async function checkNodes({
     for (const id of eventIds) {
       // the poster QR and the shortcode both land on this event's page
       const qr = qrs.find((q) => q.eventId === id);
-      if (!qr) {
+      if (!qr || !qr.qPath) {
         reasons.push(`no-qr:${id}`);
       } else {
-        if (!redirectsToEvent(await publicGet(qr.qPath), id)) reasons.push(`qr-broken:${id}`);
-        if (!qr.sPath) reasons.push(`no-shortcode:${id}`);
-        else if (!redirectsToEvent(await publicGet(qr.sPath), id)) {
+        const qUrl = siteUrl(qr.qPath);
+        if (!qUrl) reasons.push(`bad-path:${id}`);
+        else if (!redirectsToEvent(await publicGet(qUrl), id)) reasons.push(`qr-broken:${id}`);
+      }
+      if (qr && !qr.sPath) {
+        reasons.push(`no-shortcode:${id}`);
+      } else if (qr) {
+        const sUrl = siteUrl(qr.sPath);
+        if (!sUrl) reasons.push(`bad-path:${id}`);
+        else if (!redirectsToEvent(await publicGet(sUrl), id)) {
           reasons.push(`shortlink-broken:${id}`);
         }
       }
 
       // the event page shows its sponsor strip
-      const res = await publicGet(`/events/${encodeURIComponent(id)}`);
+      const res = await publicGet(siteUrl(`/events/${encodeURIComponent(id)}`));
       const page = res && res.status === 200 ? await bodyOf(res) : '';
       if (!STRIP_RE.test(page)) reasons.push(`no-sponsor-strip:${id}`);
 
@@ -174,7 +197,7 @@ export async function checkNodes({
         if (!url || url.origin !== origin) {
           reasons.push(`art-off-site:${id}`);
         } else {
-          const got = await publicGet(`${url.pathname}${url.search}`);
+          const got = await publicGet(url);
           if (!got || got.status !== 200) reasons.push(`art-broken:${id}`);
         }
       }

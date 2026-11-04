@@ -267,6 +267,45 @@ describe('checkNodes: anchor, zip, QR, pages and art', () => {
     expect(r.beverly.reasons).toEqual([`qr-broken:${manifest.qr[0].eventId}`]);
   });
 
+  test.each([['qPath'], ['sPath']])(
+    'a %s that would leave the site is refused and never fetched',
+    async (field) => {
+      for (const bad of [
+        '.evil.example/x',
+        '//evil.example/x',
+        'https://evil.example/x',
+        '@evil.example/x',
+      ]) {
+        const { manifest, listed } = day({ beverly: PER_NODE });
+        manifest.qr[0][field] = bad;
+        const s = site({ listed });
+        const r = await run(s, manifest);
+        expect(r.beverly.reasons, bad).toEqual([`bad-path:${manifest.qr[0].eventId}`]);
+        const leaked = s.calls.filter(
+          (c) => c.via === 'public' && !String(c.url).startsWith(`${BASE}/`)
+        );
+        expect(leaked, bad).toEqual([]);
+        expect(
+          s.calls.some((c) => String(c.url).includes('evil')),
+          bad
+        ).toBe(false);
+        // every other read still happens: exactly one fewer than a clean run
+        const clean = day({ beverly: PER_NODE });
+        const cs = site({ listed: clean.listed });
+        await run(cs, clean.manifest);
+        const reads = (x) => x.calls.filter((c) => c.via === 'public').length;
+        expect(reads(s), bad).toBe(reads(cs) - 1);
+      }
+    }
+  );
+
+  test('a missing qPath fails with no-qr', async () => {
+    const { manifest, listed } = day({ beverly: PER_NODE });
+    delete manifest.qr[0].qPath;
+    const r = await run(site({ listed }), manifest);
+    expect(r.beverly.reasons).toEqual([`no-qr:${manifest.qr[0].eventId}`]);
+  });
+
   test('an event with no QR entry fails with no-qr', async () => {
     const { manifest, listed } = day({ beverly: PER_NODE });
     const dropped = manifest.qr.shift();

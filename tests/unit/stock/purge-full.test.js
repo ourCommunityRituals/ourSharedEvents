@@ -5,11 +5,20 @@ const path = require('node:path');
 let buildPurgeSql;
 let purgeR2Keys;
 let listStaleManifests;
+let manifestName;
+let parseManifestName;
 let PURGE_TABLES;
 let PURGE_EXEMPT;
 beforeAll(async () => {
-  ({ buildPurgeSql, purgeR2Keys, listStaleManifests, PURGE_TABLES, PURGE_EXEMPT } =
-    await import('../../../scripts/stock/purge-full.mjs'));
+  ({
+    buildPurgeSql,
+    purgeR2Keys,
+    listStaleManifests,
+    manifestName,
+    parseManifestName,
+    PURGE_TABLES,
+    PURGE_EXEMPT,
+  } = await import('../../../scripts/stock/purge-full.mjs'));
 });
 
 const MIGRATIONS = path.join(__dirname, '../../../workers/oursharedevents/migrations');
@@ -54,15 +63,16 @@ function topLevelParts(body) {
 }
 
 // table -> { file, columns: Map(column -> definition), fks: [{ column, parent }] }
-function finalSchema() {
+// `extraSql` is replayed after the real migrations, as if it were the next one.
+function finalSchema(extraSql = '') {
   const tables = new Map();
-  const files = readdirSync(MIGRATIONS)
+  const sources = readdirSync(MIGRATIONS)
     .filter((f) => /^\d{4}_.*\.sql$/.test(f))
-    .sort();
-  for (const file of files) {
-    const text = readFileSync(path.join(MIGRATIONS, file), 'utf8')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/--[^\n]*/g, '');
+    .sort()
+    .map((file) => [file, readFileSync(path.join(MIGRATIONS, file), 'utf8')]);
+  if (extraSql) sources.push(['9999_fixture.sql', extraSql]);
+  for (const [file, sql] of sources) {
+    const text = sql.replace(/\/\*[\s\S]*?\*\//g, '').replace(/--[^\n]*/g, '');
     const re = new RegExp(STATEMENT.source, 'gi');
     let m;
     while ((m = re.exec(text))) {
@@ -299,12 +309,21 @@ describe('purge coverage, read from workers/oursharedevents/migrations', () => {
     expect(tables.has('scans')).toBe(false); // dropped in 0062
   });
 
-  test('every table with a manifest-id column is purged or exempt with a reason', () => {
+  // Keyed columns that are neither purged nor exempt. Exemptions are per column.
+  const uncovered = (schema) => {
     const purged = new Set(PURGE_TABLES.map((p) => `${p.table}.${p.column}`));
-    const missing = keyedColumns(tables).filter(
-      (key) => !purged.has(key) && !Object.hasOwn(PURGE_EXEMPT, key.split('.')[0])
+    return keyedColumns(schema).filter(
+      (key) => !purged.has(key) && !Object.hasOwn(PURGE_EXEMPT, key)
     );
-    expect(missing).toEqual([]);
+  };
+
+  test('every manifest-id column is purged or exempt with a reason', () => {
+    expect(uncovered(tables)).toEqual([]);
+  });
+
+  test('a new key column on an exempt table fails the gate', () => {
+    const next = finalSchema('ALTER TABLE export_manifest ADD COLUMN sponsor_business_id TEXT;');
+    expect(uncovered(next)).toEqual(['export_manifest.sponsor_business_id']);
   });
 
   test('every purge entry names a table and column that exist now', () => {
@@ -313,15 +332,15 @@ describe('purge coverage, read from workers/oursharedevents/migrations', () => {
     }
   });
 
-  test('every exemption names a real keyed table, is not also purged, and gives a reason', () => {
-    const keyedTables = new Set(keyedColumns(tables).map((k) => k.split('.')[0]));
-    for (const [table, reason] of Object.entries(PURGE_EXEMPT)) {
-      expect(keyedTables.has(table), table).toBe(true);
+  test('every exemption names a real keyed column, is not also purged, and gives a reason', () => {
+    const keyed = new Set(keyedColumns(tables));
+    for (const [key, reason] of Object.entries(PURGE_EXEMPT)) {
+      expect(keyed.has(key), key).toBe(true);
       expect(
-        PURGE_TABLES.some((p) => p.table === table),
-        table
+        PURGE_TABLES.some((p) => `${p.table}.${p.column}` === key),
+        key
       ).toBe(false);
-      expect(typeof reason === 'string' && reason.length > 20, table).toBe(true);
+      expect(typeof reason === 'string' && reason.length > 20, key).toBe(true);
     }
   });
 
@@ -365,25 +384,70 @@ describe('purgeR2Keys', () => {
   });
 });
 
+describe('manifest names', () => {
+  test('manifestName is manifest-YYYY-MM-DD-<runId>.json', () => {
+    expect(manifestName('2026-11-04', '18934572001')).toBe('manifest-2026-11-04-18934572001.json');
+    expect(manifestName('2026-11-04', 7)).toBe('manifest-2026-11-04-7.json');
+  });
+
+  test.each([
+    ['2026-11-4', '1'],
+    ['2026-02-30', '1'],
+    ['2026-11-04', 'run-1'],
+    ['2026-11-04', ''],
+    ['2026-11-04', '1/../2'],
+  ])('manifestName refuses %s / %s', (date, runId) => {
+    expect(() => manifestName(date, runId)).toThrow(/manifestName/);
+  });
+
+  test('parseManifestName reads an exact name and nothing else', () => {
+    expect(parseManifestName('manifest-2026-11-04-18934572001.json')).toEqual({
+      date: '2026-11-04',
+      runId: '18934572001',
+    });
+    for (const bad of [
+      'manifest-2026-11-04-run-12345678.json',
+      'manifest-2026-11-04.json',
+      'stock/manifest-2026-11-04-1.json',
+      'manifest-2026-11-04-1.json.bak',
+      'manifest-2026-13-01-1.json',
+      'xmanifest-2026-11-04-1.json',
+      null,
+    ]) {
+      expect(parseManifestName(bad), String(bad)).toBeNull();
+    }
+  });
+});
+
 describe('listStaleManifests', () => {
-  test('every manifest older than the newest passing one (Review Focus 3)', () => {
-    expect(listStaleManifests(['2026-11-01', '2026-11-02', '2026-11-03'], '2026-11-03')).toEqual([
-      '2026-11-01',
-      '2026-11-02',
+  const n = (date, run) => `manifest-${date}-${run}.json`;
+
+  test('every manifest older than the newest passing one, oldest first (Review Focus 3)', () => {
+    const names = [n('2026-11-03', 300), n('2026-11-01', 100), n('2026-11-02', 200)];
+    expect(listStaleManifests(names, n('2026-11-03', 300))).toEqual([
+      n('2026-11-01', 100),
+      n('2026-11-02', 200),
     ]);
   });
 
-  test('reads the date out of a manifest file name, and never lists a newer one', () => {
+  test('a same-day rerun makes the earlier run stale, and never a later one', () => {
     const names = [
-      'stock/manifest-2026-11-03.json',
-      'stock/manifest-2026-11-01.json',
-      'stock/manifest-2026-11-04.json',
-      'stock/notes.txt',
+      n('2026-11-04', 9),
+      n('2026-11-04', 10),
+      n('2026-11-04', 11),
+      n('2026-11-05', 1),
     ];
-    expect(listStaleManifests(names, '2026-11-03')).toEqual(['stock/manifest-2026-11-01.json']);
+    // ordered by run id as a number: 9 < 10, though "9" > "10" as text
+    expect(listStaleManifests(names, n('2026-11-04', 10))).toEqual([n('2026-11-04', 9)]);
   });
 
-  test('refuses a newest-passing value with no date in it', () => {
-    expect(() => listStaleManifests(['2026-11-01'], 'latest')).toThrow(/date/);
+  test('a name that is not an exact manifest name is never stale', () => {
+    const names = ['manifest-2026-11-01-run-12345678.json', 'notes.txt', n('2026-11-01', 5)];
+    expect(parseManifestName('manifest-2026-11-01-run-12345678.json')).toBeNull();
+    expect(listStaleManifests(names, n('2026-11-03', 1))).toEqual([n('2026-11-01', 5)]);
+  });
+
+  test('refuses a newest-passing value that is not a manifest name', () => {
+    expect(() => listStaleManifests([n('2026-11-01', 1)], '2026-11-03')).toThrow(/manifest name/);
   });
 });

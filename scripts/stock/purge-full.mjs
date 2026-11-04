@@ -51,11 +51,12 @@ export const PURGE_TABLES = [
   { table: 'sponsor_business', column: 'id', ids: 'sponsor' }, // 0065
 ];
 
-// Keyed tables the purge leaves alone, each with its reason.
+// Keyed columns the purge leaves alone, each with its reason. Keyed per column, so a
+// new key column on an exempt table still fails the coverage gate.
 export const PURGE_EXEMPT = {
-  export_manifest:
+  'export_manifest.event_id':
     'append-only audit record of every D1 → OCR boundary crossing (0043); no foreign key, so it never blocks a delete',
-  sponsor_business_draft:
+  'sponsor_business_draft.event_id':
     "made only by a sponsor's own invite flow, never by the stock build; event_id has no foreign key (0053), and its sponsor_asset_draft children are keyed by draft_token, not a manifest id",
 };
 
@@ -122,23 +123,55 @@ export function purgeR2Keys(manifest, nodeIds) {
   );
 }
 
-const DATE_IN_NAME = /(\d{4})-?(\d{2})-?(\d{2})/;
-const dateOf = (name) => {
-  const m = DATE_IN_NAME.exec(String(name));
-  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+// A manifest is named for its Chicago date and the GitHub run that built it, so a
+// same-day rerun gets its own name and orders after the run it replaces.
+const MANIFEST_NAME = /^manifest-(\d{4}-\d{2}-\d{2})-(\d{1,20})\.json$/;
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const RUN_ID_RE = /^\d{1,20}$/;
+
+const isCalendarDay = (ymd) => {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
 };
 
+/** `manifest-YYYY-MM-DD-<runId>.json`. Throws on a bad date or a run id that is not digits. */
+export function manifestName(date, runId) {
+  const run = String(runId);
+  if (typeof date !== 'string' || !DAY_RE.test(date) || !isCalendarDay(date)) {
+    throw new Error('manifestName: date must be YYYY-MM-DD');
+  }
+  if (!RUN_ID_RE.test(run)) throw new Error('manifestName: runId must be digits');
+  return `manifest-${date}-${run}.json`;
+}
+
+/** { date, runId } for an exact manifest name, otherwise null. */
+export function parseManifestName(name) {
+  const m = typeof name === 'string' ? MANIFEST_NAME.exec(name) : null;
+  if (!m || !isCalendarDay(m[1])) return null;
+  return { date: m[1], runId: m[2] };
+}
+
+// Order by date, then by run id as a number (BigInt: exact for any digit count).
+function compareManifests(a, b) {
+  if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+  const x = BigInt(a.runId);
+  const y = BigInt(b.runId);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
 /**
- * Manifests older than the newest passing one, oldest first. A run that died
- * between build and purge leaves its manifest behind; the next passing day lists
- * it here, so its ids are still purged. A name with no date is never listed.
+ * Manifests ordered before the newest passing one, oldest first. A run that died
+ * between build and purge leaves its manifest behind; the next passing run lists
+ * it here, so its ids are still purged. A same-day rerun makes the earlier run's
+ * manifest stale. A name that is not an exact manifest name is never listed.
  */
-export function listStaleManifests(names, newestPassing) {
-  const cutoff = dateOf(newestPassing);
-  if (!cutoff) throw new Error('listStaleManifests: newestPassing has no date');
+export function listStaleManifests(names, newestPassingName) {
+  const newest = parseManifestName(newestPassingName);
+  if (!newest) throw new Error('listStaleManifests: newestPassingName is not a manifest name');
   return names
-    .map((name) => ({ name, date: dateOf(name) }))
-    .filter((m) => m.date !== null && m.date < cutoff)
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+    .map((name) => ({ name, parsed: parseManifestName(name) }))
+    .filter((m) => m.parsed !== null && compareManifests(m.parsed, newest) < 0)
+    .sort((a, b) => compareManifests(a.parsed, b.parsed))
     .map((m) => m.name);
 }
