@@ -317,8 +317,8 @@ GCP_REGION         = "us-central1"
 #   3. wrangler r2 bucket create ose-uploads-staging-full
 #   4. wrangler kv namespace create rate-limit-staging-full; paste its id into the KV id below.
 #   5. Set the same secrets as staging with --env staging-full (distinct values for
-#      FORMS_ENCRYPTION_KEY and FORMS_HASH_PEPPER), and create the BigQuery dataset
-#      oursharedevents_backup_stg_full.
+#      FORMS_ENCRYPTION_KEY and FORMS_HASH_PEPPER), except WIF_PRIVATE_KEY_PEM: this
+#      site has no BigQuery backup (no GCP vars below).
 #   6. Put an Access policy over stg-full.oursharedevents.com (owner only).
 # Until the ids are pasted, an OWNER_TO_FILL_* value marks each one (distinct, so the
 # one-id-per-environment checks stay meaningful).
@@ -382,14 +382,10 @@ ALLOWED_ADMIN_EMAILS = "mzdano@gmail.com"
 ALLOWED_ADMIN_DOMAINS = "oursharedevents.com"
 CF_ACCESS_TEAM_DOMAIN = "mzdano.cloudflareaccess.com"
 CF_ACCESS_AUD = ""
-GCP_PROJECT_ID     = "project-7cc9adcd-ed55-47aa-958"
-GCP_PROJECT_NUMBER = "295230478705"
-WIF_POOL_ID        = "cf-workers-pool"
-WIF_PROVIDER_ID    = "cf-workers-oidc-stg"
-WIF_ISSUER         = "https://stg-full.oursharedevents.com"
-BIGQUERY_DATASET_ID = "oursharedevents_backup_stg_full"
-VERTEX_AI_MODEL_ID = "gemini-2.0-flash"
-GCP_REGION         = "us-central1"
+# No GCP, WIF or BigQuery vars: this site has no BigQuery backup. Without
+# GCP_PROJECT_ID, GCP_PROJECT_NUMBER, WIF_POOL_ID and WIF_PROVIDER_ID,
+# isBigQueryConfigured (src/cloud/bigquery.ts) is false, so the nightly backup and
+# the SharedReport export return before any GCP call.
 
 # ── Production: oursharedevents.com ──────────────────────────────
 [env.production]

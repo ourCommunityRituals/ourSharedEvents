@@ -281,13 +281,15 @@ jobs:
             --disallowedTools "Bash,Edit,MultiEdit,NotebookEdit,Read,Glob,Grep,Task,Agent"
 
       # Before any repo code runs again: the search may have changed nothing in the
-      # checkout but its two output files.
+      # checkout but its two output files. --ignored lists git-ignored files too
+      # (`!!`), so a planted node_modules/ file fails here. stock-out/ is ignored, so
+      # the two outputs show as `!!`.
       - name: 'Gate: the search wrote only its two files'
         shell: bash
         run: |
           set -euo pipefail
-          changed="$(git status --porcelain --untracked-files=all)"
-          unexpected="$(printf '%s\n' "$changed" | grep -v -E '^(\?\?| M|M |A ) stock-out/(finds|businesses)\.json$' | grep -v '^$' || true)"
+          changed="$(git status --porcelain --untracked-files=all --ignored)"
+          unexpected="$(printf '%s\n' "$changed" | grep -v -E '^(\?\?|!!| M|M |A ) stock-out/(finds|businesses)\.json$' | grep -v '^$' || true)"
           if [ -n "$unexpected" ]; then
             echo "::error title=Search changed the checkout::The search changed files other than stock-out/finds.json and stock-out/businesses.json; nothing from it is used."
             printf '%s\n' "$unexpected"

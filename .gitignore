@@ -59,6 +59,10 @@ yarn-error.log*
 coverage/
 .nyc_output/
 
+# The stock workflow's working files (scripts/stock/run-day.mjs): search output,
+# accepted rows and manifests. CI passes them between jobs as artifacts.
+stock-out/
+
 # Test reports
 newman-reports/
 **/reports/mutation/

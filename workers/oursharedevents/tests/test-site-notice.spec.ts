@@ -84,6 +84,41 @@ describe('injectTestSiteNotice', () => {
     expect(z).toBeGreaterThan(9999);
   });
 
+  test('HTML with Content-Encoding: gzip passes through unchanged (same object, same bytes)', async () => {
+    const bytes = new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0x3c, 0x62, 0x6f, 0x64, 0x79, 0x3e]);
+    const res = new Response(bytes, {
+      headers: { 'content-type': 'text/html; charset=utf-8', 'content-encoding': 'gzip' },
+      encodeBody: 'manual',
+    } as ResponseInit);
+    const out = injectTestSiteNotice(res, { WORKER_ENV: 'staging' });
+    expect(out).toBe(res);
+    expect(new Uint8Array(await out.arrayBuffer())).toEqual(bytes);
+  });
+
+  test('Content-Encoding: identity is plain text, so it still gets the band', async () => {
+    const res = html(PAGE, {
+      headers: { 'content-type': 'text/html', 'content-encoding': 'identity' },
+    });
+    const out = await injectTestSiteNotice(res, { WORKER_ENV: 'staging' }).text();
+    expect(out).toContain(`data-testid="${TEST_SITE_NOTICE_TESTID}"`);
+  });
+
+  test('a ReadableStream body gets the band, with <body> split across chunks', async () => {
+    const enc = new TextEncoder();
+    const chunks = ['<!doctype html><html><head></head><bo', 'dy><h1>Hi</h1>', '</body></html>'];
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const c of chunks) controller.enqueue(enc.encode(c));
+        controller.close();
+      },
+    });
+    const res = new Response(stream, { headers: { 'content-type': 'text/html' } });
+    const out = await injectTestSiteNotice(res, { WORKER_ENV: 'staging' }).text();
+    expect(count(out, `data-testid="${TEST_SITE_NOTICE_TESTID}"`)).toBe(1);
+    expect(out.indexOf(TEST_SITE_NOTICE_TESTID)).toBeLessThan(out.indexOf('<h1>Hi</h1>'));
+    expect(out.indexOf('<body>')).toBeLessThan(out.indexOf(TEST_SITE_NOTICE_TESTID));
+  });
+
   test('the band carries no raw hex colour', async () => {
     const out = await injectTestSiteNotice(html(), { WORKER_ENV: 'staging' }).text();
     expect(out).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);

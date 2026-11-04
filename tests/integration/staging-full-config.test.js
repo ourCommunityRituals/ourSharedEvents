@@ -53,10 +53,22 @@ describe('staging-full wrangler env', () => {
     expect(v.STAGING_VARIANT).toBe('full');
     expect(v.ADMIN_SCOPE_ALL).toBe('true');
     expect(v.ALLOW_ADMIN_KEY_FALLBACK).toBe('true');
-    expect(v.WIF_ISSUER).toBe('https://stg-full.oursharedevents.com');
-    expect(v.BIGQUERY_DATASET_ID).toBeTruthy();
-    expect(v.BIGQUERY_DATASET_ID).not.toBe(vars('staging').BIGQUERY_DATASET_ID);
-    expect(v.BIGQUERY_DATASET_ID).not.toBe(vars('production').BIGQUERY_DATASET_ID);
+  });
+
+  // Owner ruling: no BigQuery from stg-full (no WIF provider exists for its issuer).
+  test('has no BigQuery backup: none of the GCP switch vars is set, so the backup skips', () => {
+    const v = vars(FULL);
+    const SWITCHES = ['GCP_PROJECT_ID', 'GCP_PROJECT_NUMBER', 'WIF_POOL_ID', 'WIF_PROVIDER_ID'];
+    for (const name of [...SWITCHES, 'WIF_ISSUER', 'BIGQUERY_DATASET_ID', 'VERTEX_AI_MODEL_ID']) {
+      expect(v[name], name).toBeUndefined();
+    }
+    // the guard the nightly backup and the SharedReport export return on needs every switch
+    const guard = readFileSync(
+      join(ROOT, 'workers/oursharedevents/src/cloud/bigquery.ts'),
+      'utf8'
+    ).match(/export function isBigQueryConfigured[\s\S]*?\n\}/)[0];
+    for (const name of SWITCHES) expect(guard).toContain(`env.${name}?.trim()`);
+    expect(guard).toMatch(/return Boolean\(/);
   });
 
   test('staging is the empty site and keeps both of its hosts', () => {

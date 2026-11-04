@@ -4,9 +4,16 @@
  * (.github/workflows/stock-data-full.yml): its triggers, its job chain, its
  * Access gate and where its secrets may appear.
  */
-const { readFileSync, writeFileSync, mkdtempSync, existsSync, rmSync } = require('node:fs');
+const {
+  readFileSync,
+  writeFileSync,
+  mkdtempSync,
+  mkdirSync,
+  existsSync,
+  rmSync,
+} = require('node:fs');
 const { spawnSync } = require('node:child_process');
-const { join } = require('node:path');
+const { join, dirname } = require('node:path');
 const { tmpdir } = require('node:os');
 const yaml = require('js-yaml');
 
@@ -450,7 +457,56 @@ describe('search', () => {
     expect(checkAt).toBeGreaterThan(gateAt);
     expect(uploadAt).toBeGreaterThan(checkAt);
     expect(steps[gateAt].run).toContain('--untracked-files=all');
+    expect(steps[gateAt].run).toContain('--ignored');
   });
+
+  test('stock-out/ is git-ignored, so its files never get committed by accident', () => {
+    const ignore = readFileSync(join(ROOT, '.gitignore'), 'utf8').split(/\r?\n/);
+    expect(ignore).toContain('stock-out/');
+  });
+
+  // The gate's own script against a real git: a throwaway repo with this repo's
+  // .gitignore, so ignored paths are judged as they would be in the checkout.
+  function runRealGitGate(files) {
+    const repo = mkdtempSync(join(tmpdir(), 'stock-real-gate-'));
+    const scripts = mkdtempSync(join(tmpdir(), 'stock-real-gate-sh-'));
+    const git = (...a) =>
+      spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...a], {
+        cwd: repo,
+        encoding: 'utf8',
+      });
+    try {
+      writeFileSync(join(repo, '.gitignore'), readFileSync(join(ROOT, '.gitignore'), 'utf8'));
+      git('init', '-q');
+      git('add', '.gitignore');
+      git('commit', '-qm', 'base');
+      for (const f of files) {
+        mkdirSync(dirname(join(repo, f)), { recursive: true });
+        writeFileSync(join(repo, f), '[]');
+      }
+      const script = join(scripts, 'gate.sh');
+      writeFileSync(script, steps[gateAt].run);
+      const r = spawnSync(BASH, [script], { cwd: repo, encoding: 'utf8' });
+      return { code: r.status, out: `${r.stdout}${r.stderr}` };
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+      rmSync(scripts, { recursive: true, force: true });
+    }
+  }
+
+  test.skipIf(!BASH)(
+    'with a real git: the two ignored outputs pass, a planted ignored file fails',
+    () => {
+      const ok = runRealGitGate(['stock-out/finds.json', 'stock-out/businesses.json']);
+      expect(ok.code, ok.out).toBe(0);
+      const planted = runRealGitGate(['stock-out/finds.json', 'node_modules/ajv/dist/ajv.js']);
+      expect(planted.code).toBe(1);
+      expect(planted.out).toContain('!! node_modules/ajv/dist/ajv.js');
+      const env = runRealGitGate(['stock-out/finds.json', '.env']);
+      expect(env.code).toBe(1);
+    },
+    30_000
+  );
 
   // The gate's own script, with git replaced by a function that reports as told.
   function runGitGate(status) {
@@ -474,6 +530,7 @@ describe('search', () => {
       '',
       '?? stock-out/finds.json\n?? stock-out/businesses.json\n',
       '?? stock-out/finds.json\n',
+      '!! stock-out/finds.json\n!! stock-out/businesses.json\n',
     ])(
     'the gate passes on only the outputs: %j',
     (status) => {
@@ -491,6 +548,8 @@ describe('search', () => {
       '?? .claude/settings.json\n',
       ' D stock/search-prompt.md\n',
       '?? stock-out/finds.json.bak\n',
+      '!! stock-out/finds.json\n!! node_modules/ajv/dist/ajv.js\n',
+      '!! stock-out/other.json\n',
     ])(
     'the gate fails on anything else: %j',
     (status) => {

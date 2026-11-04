@@ -48,6 +48,12 @@ export function testSiteNoticeMarkup(variant?: string): string {
  * Prepend the notice to every staging HTML page. Any other environment, and any
  * non-HTML response, comes back untouched (same object). A page with no
  * `<body>` is passed through by HTMLRewriter unchanged.
+ *
+ * A response that names a Content-Encoding (anything but `identity`) also comes
+ * back untouched: its body may already be encoded bytes (`encodeBody: 'manual'`),
+ * and HTMLRewriter would parse those as text and could corrupt them. No handler
+ * sets the header today; the Worker's own pages leave encoding to the runtime.
+ * Streamed bodies are fine: HTMLRewriter finds `<body>` across chunk boundaries.
  */
 export function injectTestSiteNotice(
   res: Response,
@@ -56,6 +62,8 @@ export function injectTestSiteNotice(
   if (env.WORKER_ENV !== 'staging') return res;
   const type = res.headers.get('content-type') || '';
   if (!type.toLowerCase().startsWith('text/html')) return res;
+  const encoding = (res.headers.get('content-encoding') || '').trim().toLowerCase();
+  if (encoding !== '' && encoding !== 'identity') return res;
   const html = testSiteNoticeMarkup(env.STAGING_VARIANT);
   return new HTMLRewriter()
     .on('body', {

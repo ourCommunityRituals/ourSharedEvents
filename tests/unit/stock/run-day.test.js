@@ -1009,4 +1009,76 @@ describe('final review', () => {
     expect(summary).toMatch(/[|] beverly [|] 0 [|] [0-9]+ [|] 0 [|]/);
     expect(summary).toContain('Businesses refused: not-in-node 1, duplicate 1, geocode-failed 1');
   });
+
+  test('build with Instagram refusing the token (401) exits 0, warns, and builds events without art', async () => {
+    const w = world();
+    const outDir = '/out';
+    const point = insideOf('beverly');
+    w.fs.writeFileSync(
+      path.join(outDir, 'accepted.json'),
+      JSON.stringify([
+        {
+          venue: 'Cork',
+          address: '1 Main St',
+          sector: 'private',
+          node: 'beverly',
+          event_type_id: 'trivia',
+          starts_at: '2026-11-10T19:00:00-06:00',
+          ends_at: null,
+          title: 'Trivia',
+          summary: 'Weekly.',
+          source_url: 'https://example.com/e/1',
+          lat: point.lat,
+          lng: point.lng,
+        },
+      ])
+    );
+    w.fs.writeFileSync(
+      path.join(outDir, 'businesses.json'),
+      JSON.stringify([{ name: 'Anchor Co', address: '2 Main St', node: 'beverly', anchor: true }])
+    );
+    const paths = [];
+    let n = 0;
+    const code = await rd.runBuild({
+      env: {
+        ...ENV,
+        INSTAGRAM_ACCESS_TOKEN: 'ig-token-value-4',
+        INSTAGRAM_TOKEN_ISSUED: '2026-10-30',
+      },
+      fs: w.fs,
+      fetch: async (url, init = {}) => {
+        const u = String(url);
+        if (u.startsWith('https://graph.instagram.com/')) return res(401, {});
+        const p = u.slice('https://stg-full.oursharedevents.com'.length);
+        paths.push(`${init.method || 'GET'} ${p}`);
+        n += 1;
+        if (p.endsWith('/event-types')) return res(200, CATALOG);
+        if (p === '/api/v2/admin/sponsors') return res(201, W.sponsorCreate({ id: 'sp_anchor' }));
+        if (p === '/api/v2/admin/events') {
+          return res(201, W.eventCreate({ id: `evt_${n}`, shortcode: `SC${n}` }));
+        }
+        if (p.endsWith('/poster-deployments')) {
+          return res(201, W.posterCreate({ id: `pd_${n}`, qr_token: `qrt_${n}` }));
+        }
+        if (p.endsWith('/short-links')) return res(200, W.shortLinks());
+        if (p.startsWith('/api/v2/admin/sponsors?eventId=')) {
+          return res(200, W.sponsorList([{ id: 'sp_anchor', placement_id: 'spl_1' }]));
+        }
+        return res(200, { ok: true });
+      },
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir,
+    });
+    expect(code).toBe(0);
+    const notes = JSON.parse(w.files.get(path.join(outDir, 'build-notes.json')));
+    expect(notes.ok).toBe(true);
+    expect(notes.instagramWarning).toMatch(/rejected the token [(]HTTP 401[)]; no art this run/);
+    expect(JSON.stringify(notes)).not.toContain('ig-token-value-4');
+    const manifest = JSON.parse(w.files.get(path.join(outDir, 'manifest.json')));
+    expect(manifest.items.filter((i) => i.kind === 'event')).toHaveLength(1);
+    expect(manifest.items.filter((i) => i.kind === 'placement')).toHaveLength(1);
+    expect(manifest.items.filter((i) => i.kind === 'upload')).toEqual([]);
+    expect(paths.some((p) => p.endsWith('/uploads'))).toBe(false);
+    expect(paths.some((p) => /^PUT [/]api[/]v2[/]admin[/]events[/]/.test(p))).toBe(false);
+  });
 });
