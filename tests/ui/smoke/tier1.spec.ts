@@ -169,6 +169,20 @@ for (const route of noticeRoutes) {
   });
 }
 
+// The band speaks the page's language: a Spanish event page on staging says
+// "Solo para pruebas.", never the English line (OSE-1760).
+if (manifest.app === 'ose') {
+  test('[T1:ose] testing-only notice: Spanish event page', async ({ page }) => {
+    const id = process.env.SMOKE_EVENT_POST;
+    test.skip(!id, 'SMOKE_EVENT_POST not set');
+    await page.goto(`/es/events/${encodeURIComponent(id!)}`, { waitUntil: 'networkidle' });
+    const band = page.locator(NOTICE);
+    await expect(band, 'one notice').toHaveCount(1);
+    await expect(band).toContainText('Solo para pruebas.');
+    await expect(band).not.toContainText('Testing purposes only.');
+  });
+}
+
 async function assertTapTargets(page: Page, min: number): Promise<void> {
   const targets = page.locator('.btn:visible, .cta:visible, .nav-item:visible, .add-btn:visible');
   const n = Math.min(await targets.count(), 12); // sample cap keeps Tier-1 fast

@@ -24,13 +24,16 @@
  * toolbars that also sit at top:0 (the admin preview toolbar, the theme bar, the
  * briefing header). The z-index keeps a fixed layer from covering it while it is
  * in view, the TV display included (a flex column body with `min-height:100vh`).
+ *
+ * Language: the band speaks the page's language, read from the page's own
+ * `<html lang>` (a Spanish event page says "Solo para pruebas."). A page with
+ * no `lang`, or one the catalog does not have, gets English.
  */
 
-export const TEST_SITE_NOTICE_TESTID = 'test-site-notice';
+import { msg } from './i18n/catalog';
+import { DEFAULT_LANG, isLang, type Lang } from './i18n/languages';
 
-const HEADLINE = 'Testing purposes only.';
-const FULL_VARIANT_LINE =
-  'Events, venues and businesses here are drawn from public listings for testing; nothing here is an endorsement or an offer.';
+export const TEST_SITE_NOTICE_TESTID = 'test-site-notice';
 
 const STYLE =
   `.ose-test-notice{position:relative;z-index:9000;box-sizing:border-box;min-height:44px;width:100%;padding:.5rem 1rem;` +
@@ -40,12 +43,12 @@ const STYLE =
   `font:600 1rem/1.3 system-ui,-apple-system,sans-serif;overflow-wrap:anywhere}` +
   `.ose-test-notice p{margin:0}`;
 
-export function testSiteNoticeMarkup(variant?: string): string {
-  const detail = variant === 'full' ? `<p>${FULL_VARIANT_LINE}</p>` : '';
+export function testSiteNoticeMarkup(variant?: string, lang: Lang = DEFAULT_LANG): string {
+  const detail = variant === 'full' ? `<p>${msg(lang, 'testSite.listings')}</p>` : '';
   return (
     `<style>${STYLE}</style>` +
     `<div class="ose-test-notice" role="note" data-testid="${TEST_SITE_NOTICE_TESTID}" data-wizard-keep>` +
-    `<p><strong>${HEADLINE}</strong></p>${detail}</div>`
+    `<p><strong>${msg(lang, 'testSite.headline')}</strong></p>${detail}</div>`
   );
 }
 
@@ -59,6 +62,7 @@ export function testSiteNoticeMarkup(variant?: string): string {
  * and HTMLRewriter would parse those as text and could corrupt them. No handler
  * sets the header today; the Worker's own pages leave encoding to the runtime.
  * Streamed bodies are fine: HTMLRewriter finds `<body>` across chunk boundaries.
+ * `<html>` opens before `<body>`, so its `lang` is known when the band goes in.
  */
 export function injectTestSiteNotice(
   res: Response,
@@ -69,11 +73,17 @@ export function injectTestSiteNotice(
   if (!type.toLowerCase().startsWith('text/html')) return res;
   const encoding = (res.headers.get('content-encoding') || '').trim().toLowerCase();
   if (encoding !== '' && encoding !== 'identity') return res;
-  const html = testSiteNoticeMarkup(env.STAGING_VARIANT);
+  let lang: Lang = DEFAULT_LANG;
   return new HTMLRewriter()
+    .on('html', {
+      element(el) {
+        const tag = (el.getAttribute('lang') || '').trim().toLowerCase();
+        if (isLang(tag)) lang = tag;
+      },
+    })
     .on('body', {
       element(el) {
-        el.prepend(html, { html: true });
+        el.prepend(testSiteNoticeMarkup(env.STAGING_VARIANT, lang), { html: true });
       },
     })
     .transform(res);

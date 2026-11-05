@@ -172,7 +172,7 @@
     <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Nunca quién, solo cuántos.</span> <span class="ose-never-who-trigger">Cómo funciona</span></summary>
     <div class="ose-never-who-body" data-testid="never-who-body">
         <p>
-      Formas parte del grupo, de forma anónima. OurSharedEvents registra cuándo
+      Eres parte del grupo, de manera anónima. OurSharedEvents registra cuándo
       se reúnen los grupos &mdash; nunca quién eres. Quienes organizan y
       patrocinan ven corredores y lugares, no personas. El enlace que seguiste
       contó como un solo clic; no se recopiló nada sobre tu dispositivo, tu
