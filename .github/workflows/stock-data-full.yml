@@ -1,0 +1,433 @@
+# Stock data for the full staging site (stg-full.oursharedevents.com).
+#
+# Each morning (11:00 UTC, 5 to 6 AM in Chicago) and on manual dispatch:
+#   access-gate  stg-full must answer through Cloudflare Access, not the Worker
+#   deploy       the triggering ref (main on the schedule) → the staging-full Worker,
+#                after migrating both of its databases
+#   search       Claude finds the next 90 days of public events (stock/search-prompt.md)
+#   validate     finds → accepted rows (scripts/stock/validate-finds.mjs)
+#   build        accepted rows → today's events, sponsors, posters and art, plus a manifest
+#   check-swap   check every node over the public pages, then swap or purge per node
+# A red job stops the next. check-swap also runs after a failed build, so the
+# partial manifest's rows are purged and nothing is orphaned.
+#
+# This workflow never touches the empty staging site or production, and it is
+# not part of T1–T4: a red run here never turns main red. Design:
+# docs/superpowers/specs/2026-11-04-staging-full-environment-design.md (sections 3, 4).
+#
+# The schedule runs only while the repo variable STOCK_FULL_ENABLED is 'true';
+# a manual dispatch always runs.
+#
+# Secrets (owner-set, repo level): CLOUDFLARE_API_TOKEN_OSE and CLOUDFLARE_ACCOUNT_ID
+# (deploy and check-swap only), OCR_HUB_READ (the pinned @ocr/ui the Worker builds
+# with), ANTHROPIC_API_KEY, INSTAGRAM_ACCESS_TOKEN, STG_FULL_ADMIN_KEY,
+# STG_FULL_ACCESS_CLIENT_ID, STG_FULL_ACCESS_CLIENT_SECRET.
+# Variables: STOCK_FULL_ENABLED, STOCK_SEARCH_MAX_USD (default 5), INSTAGRAM_TOKEN_ISSUED.
+
+name: Stock data (stg-full)
+
+on:
+  schedule:
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stock-data-full
+  cancel-in-progress: false
+
+env:
+  STG_FULL_URL: 'https://stg-full.oursharedevents.com'
+  WORKER_DIR: 'workers/oursharedevents'
+
+jobs:
+  access-gate:
+    name: 'Access gate: stg-full is closed'
+    if: github.event_name == 'workflow_dispatch' || vars.STOCK_FULL_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # No credentials of any kind, asking for a page (Accept: text/html), on a page
+      # and on the public API. Fail closed: the only pass is Access's login
+      # redirect, a 302 or 303 to https://<team>.cloudflareaccess.com. A 403, 401
+      # or 200 does not prove Access holds the host (a WAF block, a bot challenge
+      # or the Worker itself can answer those), so every other answer fails.
+      - name: Request stg-full with no credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /api/v2/events; do
+            if ! out="$(curl -sS -o /dev/null -H 'Accept: text/html' --max-time 30 -w '%{http_code} %{redirect_url}' "${STG_FULL_URL}${path}")"; then
+              echo "::error title=stg-full unreachable::The request for ${path} failed, so Access could not be confirmed. Real-world data is not loaded onto an open host."
+              exit 1
+            fi
+            code="${out%% *}"
+            location="${out#* }"
+            host=""
+            if [[ "$location" =~ ^https://([^/?#:@]+)(:[0-9]+)?([/?#]|$) ]]; then
+              host="${BASH_REMATCH[1],,}"
+            fi
+            if { [ "$code" = "302" ] || [ "$code" = "303" ]; } && [[ "$host" =~ ^([a-z0-9-]+\.)+cloudflareaccess\.com$ ]]; then
+              echo "${path}: Access redirected to its login host ${host} (HTTP ${code})."
+            else
+              echo "::error title=stg-full is not behind Access::${path} answered HTTP ${code}${host:+ to ${host}}: Access did not answer with its login redirect. Real-world data is not loaded onto an open host."
+              exit 1
+            fi
+          done
+          echo "stg-full is closed."
+
+  deploy:
+    name: 'Deploy → staging-full'
+    needs: [access-gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # The triggering ref, as every job uses: a scheduled run deploys main, and a
+      # dispatch from a branch tests that branch end to end on the test site.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
+
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install worker dependencies
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npm ci --prefer-offline || npm ci
+
+      - name: 'Gate: no unprovisioned binding IDs (OSE-813)'
+        working-directory: ${{ env.WORKER_DIR }}
+        run: node scripts/check-binding-placeholders.mjs
+
+      # OSE-813's check does not know OWNER_TO_FILL_* (widening it would turn
+      # main's T1 red while staging-full is unprovisioned), so this env's own
+      # block is checked here, before anything is migrated or deployed.
+      - name: 'Gate: the staging-full binding ids are pasted'
+        shell: bash
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          set -euo pipefail
+          block="$(awk '
+            /^[[:space:]]*\[/ { on = ($0 ~ /^[[:space:]]*\[\[?env\.staging-full[].]/) }
+            on && $0 !~ /^[[:space:]]*#/
+          ' wrangler.toml)"
+          if [ -z "$block" ]; then
+            echo "::error title=No staging-full env::wrangler.toml has no [env.staging-full] block."
+            exit 1
+          fi
+          if left="$(printf '%s\n' "$block" | grep -o 'OWNER_TO_FILL_[A-Z_]*')"; then
+            echo "::error title=staging-full is not provisioned::wrangler.toml [env.staging-full] still holds placeholder ids. Create the databases and KV namespace (the owner checklist above [env.staging-full]), paste each id over its OWNER_TO_FILL value, and run again."
+            printf '%s\n' "$left"
+            exit 1
+          fi
+          echo "ok    every [env.staging-full] binding id is pasted"
+
+      - name: Apply D1 migrations (ocr-db-staging-full)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npx wrangler d1 migrations apply ocr-db-staging-full --env staging-full --remote
+
+      - name: Apply D1 migrations (ocr-forms-db-staging-full)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npx wrangler d1 migrations apply ocr-forms-db-staging-full --env staging-full --remote
+
+      # Same gate as T1 (OSE-803): never ship a Worker ahead of its databases.
+      - name: 'Gate: zero unapplied D1 migrations before deploy'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          set -euo pipefail
+          FAILED=0
+          for DB_NAME in ocr-db-staging-full ocr-forms-db-staging-full; do
+            OUT="$(npx wrangler d1 migrations list "$DB_NAME" --env staging-full --remote 2>&1 || true)"
+            if printf '%s' "$OUT" | grep -qi 'No migrations to apply'; then
+              echo "ok    $DB_NAME: no unapplied migrations"
+            else
+              echo "FAIL  $DB_NAME: unapplied migrations remain, or the check could not run"
+              printf '%s\n' "$OUT"
+              FAILED=1
+            fi
+          done
+          if [ "$FAILED" -ne 0 ]; then
+            echo "Refusing to deploy a Worker ahead of its database."
+            exit 1
+          fi
+
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npx wrangler deploy --env staging-full
+
+  search:
+    name: 'Search (Claude)'
+    needs: [deploy]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      # Nothing installs into the checkout before the search: the steps before it run
+      # from a copy of this commit outside the checkout, so the gate after the search
+      # covers everything repo code later imports, git-ignored paths included.
+      - name: A copy of this commit outside the checkout, with its dependencies
+        shell: bash
+        env:
+          PREP_SRC: ${{ runner.temp }}/stock-src
+        run: |
+          set -euo pipefail
+          mkdir -p "$PREP_SRC"
+          git archive HEAD | tar -x -C "$PREP_SRC"
+          cd "$PREP_SRC"
+          npm ci --ignore-scripts --no-audit --no-fund
+
+      # Fail closed: the run spends only under a cap. The pinned action
+      # (fa2b2666, v1) runs @anthropic-ai/claude-agent-sdk 0.3.259, whose
+      # bundled CLI is Claude Code 2.1.259. This step asks that exact CLI
+      # whether it has the budget flag, and stops if it does not.
+      - name: 'Gate: a spend cap can be applied'
+        id: budget
+        env:
+          MAX_USD: ${{ vars.STOCK_SEARCH_MAX_USD || '5' }}
+          # Pairs with anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f
+          # (agent SDK 0.3.259); bump both together.
+          CLAUDE_CODE_VERSION: '2.1.259'
+        run: |
+          set -euo pipefail
+          if ! [[ "$MAX_USD" =~ ^[0-9]+(\.[0-9]{1,2})?$ ]] || ! awk -v v="$MAX_USD" 'BEGIN { exit !(v > 0) }'; then
+            echo "::error title=No spend cap::STOCK_SEARCH_MAX_USD must be a positive amount in dollars."
+            exit 1
+          fi
+          if ! HELP="$(npx --yes "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" --help 2>&1)"; then
+            echo "::error title=No spend cap::Could not read the CLI's options, so the cap cannot be confirmed."
+            exit 1
+          fi
+          if ! printf '%s' "$HELP" | grep -q -- '--max-budget-usd'; then
+            echo "::error title=No spend cap::Claude Code ${CLAUDE_CODE_VERSION} has no --max-budget-usd; refusing to search uncapped."
+            exit 1
+          fi
+          echo "usd=${MAX_USD}" >> "$GITHUB_OUTPUT"
+          echo "Spend cap: \$${MAX_USD} (--max-budget-usd)."
+
+      # Written outside the checkout, so the gate after the search sees only its files.
+      - name: Event type catalog and search prompt
+        id: prompt
+        env:
+          STG_FULL_ADMIN_KEY: ${{ secrets.STG_FULL_ADMIN_KEY }}
+          STG_FULL_ACCESS_CLIENT_ID: ${{ secrets.STG_FULL_ACCESS_CLIENT_ID }}
+          STG_FULL_ACCESS_CLIENT_SECRET: ${{ secrets.STG_FULL_ACCESS_CLIENT_SECRET }}
+          STOCK_PREP_DIR: ${{ runner.temp }}/stock-prep
+          WORKSPACE: ${{ github.workspace }}
+        working-directory: ${{ runner.temp }}/stock-src
+        run: |
+          set -euo pipefail
+          node scripts/stock/run-day.mjs prepare-search
+          mkdir -p "${WORKSPACE}/stock-out"
+          delim="PROMPT_$(openssl rand -hex 16)"
+          {
+            echo "text<<${delim}"
+            cat "${STOCK_PREP_DIR}/search-prompt.txt"
+            echo "${delim}"
+          } >> "$GITHUB_OUTPUT"
+
+      # SHA-pinned like claude-review.yml. Only web search, web fetch and a Write
+      # limited to the two output files; no shell. Project settings and CLAUDE.md
+      # are not loaded (--setting-sources user). The job token is read-only.
+      - name: Search
+        uses: anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f # v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          prompt: ${{ steps.prompt.outputs.text }}
+          claude_args: |
+            --model claude-sonnet-5-5
+            --max-turns 80
+            --max-budget-usd ${{ steps.budget.outputs.usd }}
+            --setting-sources user
+            --allowedTools "WebSearch,WebFetch,Write(stock-out/finds.json),Write(stock-out/businesses.json)"
+            --disallowedTools "Bash,Edit,MultiEdit,NotebookEdit,Read,Glob,Grep,Task,Agent"
+
+      # Before any repo code runs again: the search may have changed nothing in the
+      # checkout but its two output files. --ignored lists git-ignored files too
+      # (`!!`), so a planted node_modules/ file fails here. stock-out/ is ignored, so
+      # the two outputs show as `!!`.
+      - name: 'Gate: the search wrote only its two files'
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git status --porcelain --untracked-files=all --ignored)"
+          unexpected="$(printf '%s\n' "$changed" | grep -v -E '^(\?\?|!!| M|M |A ) stock-out/(finds|businesses)\.json$' | grep -v '^$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "::error title=Search changed the checkout::The search changed files other than stock-out/finds.json and stock-out/businesses.json; nothing from it is used."
+            printf '%s\n' "$unexpected"
+            exit 1
+          fi
+          echo "The checkout is unchanged apart from the two output files."
+
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Check the search output against its schemas
+        run: node scripts/stock/run-day.mjs search-output
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stock-search
+          path: |
+            stock-out/finds.json
+            stock-out/businesses.json
+          if-no-files-found: error
+          retention-days: 7
+
+  validate:
+    name: 'Validate finds'
+    needs: [search]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - uses: actions/download-artifact@v4
+        with:
+          name: stock-search
+          path: stock-out
+      - name: Validate
+        env:
+          STG_FULL_ADMIN_KEY: ${{ secrets.STG_FULL_ADMIN_KEY }}
+          STG_FULL_ACCESS_CLIENT_ID: ${{ secrets.STG_FULL_ACCESS_CLIENT_ID }}
+          STG_FULL_ACCESS_CLIENT_SECRET: ${{ secrets.STG_FULL_ACCESS_CLIENT_SECRET }}
+        run: node scripts/stock/run-day.mjs validate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stock-validated
+          path: |
+            stock-out/accepted.json
+            stock-out/businesses.json
+          if-no-files-found: error
+          retention-days: 7
+
+  build:
+    name: 'Build the day'
+    needs: [validate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - uses: actions/download-artifact@v4
+        with:
+          name: stock-validated
+          path: stock-out
+      # A step timeout fails the step, so the job ends as failure (not cancelled) and
+      # check-swap still runs to purge the partial manifest. The job allows 30.
+      - name: Build
+        timeout-minutes: 25
+        env:
+          STG_FULL_ADMIN_KEY: ${{ secrets.STG_FULL_ADMIN_KEY }}
+          STG_FULL_ACCESS_CLIENT_ID: ${{ secrets.STG_FULL_ACCESS_CLIENT_ID }}
+          STG_FULL_ACCESS_CLIENT_SECRET: ${{ secrets.STG_FULL_ACCESS_CLIENT_SECRET }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_TOKEN_ISSUED: ${{ vars.INSTAGRAM_TOKEN_ISSUED }}
+        run: node scripts/stock/run-day.mjs build
+      # Always: a failed build still hands its partial manifest to check-swap.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stock-manifest
+          path: |
+            stock-out/manifest.json
+            stock-out/build-notes.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  check-swap:
+    name: 'Check, then swap per node'
+    needs: [build]
+    # Also after a failed build, to purge its partial manifest.
+    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'failure') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+      # The lockfile's wrangler, the one the deploy ran.
+      - name: Install worker dependencies
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npm ci --prefer-offline || npm ci
+      # A build killed before any upload leaves no artifact, and this download fails.
+      # The next step still runs (its if: admits a failed download, and nothing else)
+      # and reports the missing manifest red. Not continue-on-error: that count is a
+      # down-only ratchet (.ci-integrity-baseline.json), and the job is red anyway.
+      - uses: actions/download-artifact@v4
+        id: download
+        with:
+          name: stock-manifest
+          path: stock-out
+      - name: Check, swap and purge
+        if: ${{ !cancelled() && (success() || steps.download.outcome == 'failure') }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STG_FULL_ADMIN_KEY: ${{ secrets.STG_FULL_ADMIN_KEY }}
+          STG_FULL_ACCESS_CLIENT_ID: ${{ secrets.STG_FULL_ACCESS_CLIENT_ID }}
+          STG_FULL_ACCESS_CLIENT_SECRET: ${{ secrets.STG_FULL_ACCESS_CLIENT_SECRET }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: node scripts/stock/run-day.mjs check-swap

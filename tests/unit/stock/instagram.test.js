@@ -1,0 +1,228 @@
+let listPosts;
+let pickArt;
+let tokenWarning;
+let redactUrl;
+beforeAll(async () => {
+  ({ listPosts, pickArt, tokenWarning, redactUrl } =
+    await import('../../../scripts/stock/instagram.mjs'));
+});
+
+const res = (status, body) => ({
+  status,
+  ok: status >= 200 && status < 300,
+  json: async () => body,
+});
+const media = (id, type, caption) => ({
+  id,
+  caption,
+  media_type: type,
+  media_url: `https://cdn.example/${id}.jpg`,
+  timestamp: '2026-10-01T00:00:00+0000',
+});
+
+describe('listPosts', () => {
+  test('follows paging.next across two pages and parses hashtags', async () => {
+    const calls = [];
+    const fetch = async (url) => {
+      calls.push(url);
+      if (calls.length === 1) {
+        return res(200, {
+          data: [media('1', 'IMAGE', 'Dusk #Bocce #lakeshore')],
+          paging: { next: 'https://graph.instagram.com/page2?access_token=SECRET' },
+        });
+      }
+      return res(200, { data: [media('2', 'CAROUSEL_ALBUM', 'Market')] });
+    };
+    const posts = await listPosts({ token: 'SECRET', fetch });
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toContain(
+      'https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,timestamp'
+    );
+    expect(posts.map((p) => p.id)).toEqual(['1', '2']);
+    expect(posts[0].hashtags).toEqual(['bocce', 'lakeshore']);
+    expect(posts[0].mediaUrl).toBe('https://cdn.example/1.jpg');
+    expect(listPosts.warning).toBeNull();
+  });
+
+  test('drops VIDEO posts', async () => {
+    const fetch = async () =>
+      res(200, { data: [media('1', 'VIDEO', 'x'), media('2', 'IMAGE', 'y')] });
+    expect((await listPosts({ token: 't', fetch })).map((p) => p.id)).toEqual(['2']);
+  });
+
+  test('skips rows that are not valid posts and keeps the valid one', async () => {
+    const fetch = async () =>
+      res(200, {
+        data: [
+          null,
+          5,
+          { id: 7, media_type: 'IMAGE', media_url: 'https://x/7.jpg' },
+          { id: '2', media_type: 'IMAGE' },
+          { id: '3', media_type: 'IMAGE', media_url: 9 },
+          { id: '4', media_type: 'AUDIO', media_url: 'https://x/4.jpg' },
+          { id: '1', media_type: 'IMAGE', media_url: 'https://x/1.jpg' },
+        ],
+      });
+    const posts = await listPosts({ token: 't', fetch });
+    expect(posts).toEqual([{ id: '1', caption: '', hashtags: [], mediaUrl: 'https://x/1.jpg' }]);
+    expect(listPosts.warning).toBeNull();
+  });
+
+  test.each([['nope'], [null], [{ a: 1 }]])(
+    'a non-array data (%j) gives [] plus a fixed warning, without throwing',
+    async (data) => {
+      const fetch = async () => res(200, { data });
+      expect(await listPosts({ token: 'SECRET', fetch })).toEqual([]);
+      expect(listPosts.warning).toBe(
+        'Instagram returned an unexpected media list; continuing without art'
+      );
+      expect(listPosts.warning).not.toMatch(/SECRET|access_token|http/i);
+    }
+  );
+
+  test('a non-array data on page two keeps the posts gathered so far', async () => {
+    let n = 0;
+    const fetch = async () =>
+      ++n === 1
+        ? res(200, {
+            data: [media('1', 'IMAGE', 'a')],
+            paging: { next: 'https://graph.instagram.com/page2' },
+          })
+        : res(200, { data: 'nope' });
+    expect((await listPosts({ token: 't', fetch })).map((p) => p.id)).toEqual(['1']);
+    expect(listPosts.warning).toMatch(/unexpected media list/);
+  });
+
+  test.each([400, 401])('a %i gives [] plus a warning without the token', async (status) => {
+    const fetch = async () => res(status, {});
+    expect(await listPosts({ token: 'SECRET', fetch })).toEqual([]);
+    expect(listPosts.warning).toMatch(String(status));
+    expect(listPosts.warning).not.toContain('SECRET');
+  });
+
+  const clean = () => {
+    expect(listPosts.warning).toBeTruthy();
+    expect(listPosts.warning).not.toMatch(/SECRET|access_token|boom|http/i);
+  };
+
+  test('a fetch rejection gives [] plus a clean warning', async () => {
+    const fetch = async (url) => {
+      throw new Error('boom ' + url);
+    };
+    expect(await listPosts({ token: 'SECRET', fetch })).toEqual([]);
+    clean();
+  });
+
+  test('json() throwing gives [] plus a clean warning', async () => {
+    const fetch = async () => ({
+      status: 200,
+      ok: true,
+      json: async () => {
+        throw new Error('boom SECRET');
+      },
+    });
+    expect(await listPosts({ token: 'SECRET', fetch })).toEqual([]);
+    clean();
+  });
+
+  test('a paging.next on a foreign host is not followed', async () => {
+    let calls = 0;
+    const fetch = async () => {
+      calls++;
+      return res(200, {
+        data: [media('1', 'IMAGE', 'a')],
+        paging: { next: 'https://evil.example/x?access_token=SECRET' },
+      });
+    };
+    const posts = await listPosts({ token: 'SECRET', fetch });
+    expect(posts.map((p) => p.id)).toEqual(['1']);
+    expect(calls).toBe(1);
+    clean();
+  });
+
+  test('a 500 gives [] plus a warning naming the status', async () => {
+    const fetch = async () => res(500, {});
+    expect(await listPosts({ token: 'SECRET', fetch })).toEqual([]);
+    expect(listPosts.warning).toMatch(/500/);
+    expect(listPosts.warning).not.toMatch(/SECRET|access_token/);
+  });
+
+  test('hitting the page cap warns the list is truncated', async () => {
+    let calls = 0;
+    const fetch = async () => {
+      calls++;
+      return res(200, {
+        data: [media(String(calls), 'IMAGE', 'a')],
+        paging: { next: 'https://graph.instagram.com/n?access_token=SECRET' },
+      });
+    };
+    const posts = await listPosts({ token: 'SECRET', fetch });
+    expect(posts).toHaveLength(50);
+    expect(listPosts.warning).toMatch(/truncated at 50 pages/);
+  });
+
+  test('redactUrl hides access_token', () => {
+    expect(redactUrl('https://x/y?a=1&access_token=SECRET&b=2')).toBe(
+      'https://x/y?a=1&access_token=REDACTED&b=2'
+    );
+  });
+});
+
+describe('pickArt', () => {
+  const find = { venue: 'Lake Park', starts_at: '2026-11-07T18:00:00Z', event_type_id: 'bocce' };
+  const art = { tags: { bocce: ['bocce'], market: 'cat-market', lawn: ['cat-sport'] } };
+  const post = (id, caption) => ({ id, caption, hashtags: [], mediaUrl: `u${id}` });
+  const posts = [
+    post('a', 'x #bocce'),
+    post('b', 'bocce night'),
+    post('c', 'big #bocce'),
+    post('d', 'unrelated'),
+  ];
+
+  test('same find gives the same pick, and a reordered array too', () => {
+    const one = pickArt(find, posts, art);
+    expect(one).not.toBeNull();
+    expect(pickArt(find, posts, art)).toBe(one);
+    // vary the find until the pick is not the first-by-id, so a missing sort shows
+    for (let i = 0; i < 30; i++) {
+      const f = { ...find, venue: 'V' + i };
+      expect(pickArt(f, [...posts].reverse(), art).id).toBe(pickArt(f, posts, art).id);
+    }
+    const picks = new Set(
+      Array.from({ length: 30 }, (_, i) => pickArt({ ...find, venue: 'V' + i }, posts, art).id)
+    );
+    expect(picks.size).toBeGreaterThan(1);
+  });
+
+  test('no matching tag gives null', () => {
+    expect(pickArt({ ...find, event_type_id: 'chess' }, posts, art)).toBeNull();
+    expect(pickArt(find, posts, { tags: {} })).toBeNull();
+    expect(pickArt(find, [], art)).toBeNull();
+  });
+
+  test('category-level tags match through typeCategory only', () => {
+    const p = [post('m', 'Saturday #market')];
+    const f = { ...find, event_type_id: 'farmers' };
+    expect(pickArt(f, p, art)).toBeNull();
+    expect(pickArt(f, p, art, new Map([['farmers', 'cat-market']])).id).toBe('m');
+    expect(pickArt(f, p, art, new Map([['farmers', 'cat-other']]))).toBeNull();
+  });
+
+  test('a prototype key in a caption does not match', () => {
+    expect(pickArt(find, [post('p', 'constructor toString')], art)).toBeNull();
+  });
+});
+
+describe('tokenWarning', () => {
+  test('warns from day 50 of 60', () => {
+    expect(tokenWarning('2026-09-01', '2026-10-21')).not.toBeNull();
+    expect(tokenWarning('2026-10-01', '2026-10-21')).toBeNull();
+    expect(tokenWarning('2026-09-02', '2026-10-21')).toBeNull();
+    expect(tokenWarning('2026-08-01', '2026-10-21')).toMatch(/expired/);
+  });
+
+  test('an unreadable issue date says so', () => {
+    expect(tokenWarning('garbage', '2026-10-21')).toMatch(/unreadable.*INSTAGRAM_TOKEN_ISSUED/);
+    expect(tokenWarning(undefined, '2026-10-21')).toMatch(/unreadable/);
+  });
+});

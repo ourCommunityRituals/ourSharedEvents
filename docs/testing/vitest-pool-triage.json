@@ -734,7 +734,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 9
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/cost-metric.spec.ts",
@@ -2557,11 +2557,18 @@
       "testCount": 17
     },
     {
+      "file": "workers/oursharedevents/tests/security-alert-cron-variant.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 2
+    },
+    {
       "file": "workers/oursharedevents/tests/security-alert-env.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 4
+      "testCount": 6
     },
     {
       "file": "workers/oursharedevents/tests/security-headers-hardening.spec.ts",
@@ -3122,6 +3129,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/test-site-notice.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 16
     },
     {
       "file": "workers/oursharedevents/tests/testid-pyramid.spec.ts",

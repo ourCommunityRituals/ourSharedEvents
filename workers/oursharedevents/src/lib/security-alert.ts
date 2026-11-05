@@ -52,6 +52,8 @@ export interface SecurityAlertEnv {
   LINEAR_TEAM_ID?: string;
   /** "staging" | "production" | "development" */
   WORKER_ENV?: string;
+  /** "empty" | "full": which staging site this is (only read when WORKER_ENV is "staging") */
+  STAGING_VARIANT?: string;
 }
 
 // ─── Priority mapping ─────────────────────────────────────────────────────────
@@ -118,7 +120,10 @@ function buildLinearTitle(payload: SecurityAlertPayload): string {
  * every runbook said to curl staging, so a production alert sent the on-call
  * to the wrong Worker. Unknown envs name no host rather than guess one.
  */
-export function alertTarget(workerEnv: string | undefined): {
+export function alertTarget(
+  workerEnv: string | undefined,
+  stagingVariant?: string
+): {
   label: string;
   baseUrl: string | null;
   wranglerEnv: string | null;
@@ -128,6 +133,13 @@ export function alertTarget(workerEnv: string | undefined): {
       label: 'production',
       baseUrl: 'https://oursharedevents.com',
       wranglerEnv: 'production',
+    };
+  }
+  if (workerEnv === 'staging' && stagingVariant === 'full') {
+    return {
+      label: 'staging-full',
+      baseUrl: 'https://stg-full.oursharedevents.com',
+      wranglerEnv: 'staging-full',
     };
   }
   if (workerEnv === 'staging') {
@@ -143,16 +155,17 @@ export function alertTarget(workerEnv: string | undefined): {
 export function buildLinearDescription(
   payload: SecurityAlertPayload,
   alertId: string | null,
-  workerEnv?: string
+  workerEnv?: string,
+  stagingVariant?: string
 ): string {
   const detectedAt = payload.detectedAt ?? new Date().toISOString();
   const detailsJson = JSON.stringify(payload.details, null, 2);
 
-  const investigationSteps = buildInvestigationSteps(payload, workerEnv);
+  const investigationSteps = buildInvestigationSteps(payload, workerEnv, stagingVariant);
 
   return `## Security Alert — ${payload.type}
 
-**Environment:** ${alertTarget(workerEnv).label}
+**Environment:** ${alertTarget(workerEnv, stagingVariant).label}
 **Severity:** ${payload.severity}
 **Detected:** ${detectedAt}
 **Alert ID:** ${alertId ?? 'not persisted'}
@@ -188,8 +201,12 @@ ${investigationSteps}
 `;
 }
 
-export function buildInvestigationSteps(payload: SecurityAlertPayload, workerEnv?: string): string {
-  const target = alertTarget(workerEnv);
+export function buildInvestigationSteps(
+  payload: SecurityAlertPayload,
+  workerEnv?: string,
+  stagingVariant?: string
+): string {
+  const target = alertTarget(workerEnv, stagingVariant);
   const wranglerEnv = target.wranglerEnv ?? '<env that raised this alert>';
   const healthUrl = target.baseUrl
     ? `${target.baseUrl}/health`
@@ -289,7 +306,7 @@ async function createLinearIssue(
   }
 
   const title = buildLinearTitle(payload);
-  const description = buildLinearDescription(payload, alertId, env.WORKER_ENV);
+  const description = buildLinearDescription(payload, alertId, env.WORKER_ENV, env.STAGING_VARIANT);
   const priority = SEVERITY_TO_LINEAR_PRIORITY[payload.severity];
 
   const mutation = `

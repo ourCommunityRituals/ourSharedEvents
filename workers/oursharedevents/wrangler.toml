@@ -152,7 +152,8 @@ GCP_REGION         = "us-central1"
 [env.staging]
 name = "oursharedevents-stg"
 routes = [
-  { pattern = "stg.oursharedevents.com/*", zone_name = "oursharedevents.com" }
+  { pattern = "stg.oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "stg-empty.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 
 # ── D1 Database (staging) ────────────────────────────────────────
@@ -232,6 +233,8 @@ crons = ["0 3 * * *"]
 
 [env.staging.vars]
 WORKER_ENV = "staging"
+# Which staging site this is (empty or full); drives the "Testing purposes only" notice.
+STAGING_VARIANT = "empty"
 WORKER_BUILD_VERSION = "stg-2026.03.22"
 # Named CF envs do NOT inherit top-level [vars] — declare launch config explicitly
 # (CCR-PR567 re-run item 9 / L2). Otherwise staging runs the invisible code defaults.
@@ -307,6 +310,88 @@ GCP_REGION         = "us-central1"
 #   — OSE-SEC-1: Security monitoring (optional — cron runs without them, just skips alerts) —
 #   LINEAR_API_KEY           (Linear personal API token for issue creation)
 #   LINEAR_TEAM_ID           (Linear team ID, e.g. "OUR")
+
+# ── Staging, full: stg-full.oursharedevents.com ──────────────────────────────
+# The second, owner-only staging site, rebuilt each morning from real events.
+# Its own Worker, databases, bucket, KV and rate-limit counters, so it never
+# touches staging or production. It copies [env.staging] without the scan queue
+# (a queue allows one consumer Worker and ose-scans is staging's).
+#
+# Owner setup, before the first deploy (an agent never provisions or deploys):
+#   1. wrangler d1 create ocr-db-staging-full; paste its id into the DB database_id below.
+#   2. wrangler d1 create ocr-forms-db-staging-full; paste its id into the FORMS_DB database_id.
+#   3. wrangler r2 bucket create ose-uploads-staging-full
+#   4. wrangler kv namespace create rate-limit-staging-full; paste its id into the KV id below.
+#   5. Set the same secrets as staging with --env staging-full (distinct values for
+#      FORMS_ENCRYPTION_KEY and FORMS_HASH_PEPPER), except WIF_PRIVATE_KEY_PEM: this
+#      site has no BigQuery backup (no GCP vars below).
+#   6. Put an Access policy over stg-full.oursharedevents.com (owner only).
+# Until the ids are pasted, an OWNER_TO_FILL_* value marks each one (distinct, so the
+# one-id-per-environment checks stay meaningful).
+[env.staging-full]
+name = "oursharedevents-stg-full"
+routes = [
+  { pattern = "stg-full.oursharedevents.com/*", zone_name = "oursharedevents.com" }
+]
+# Only the Access-gated route above: no *.workers.dev host and no preview URLs,
+# either of which would serve the site outside the Access policy.
+workers_dev = false
+preview_urls = false
+
+[[env.staging-full.d1_databases]]
+binding = "DB"
+database_name = "ocr-db-staging-full"
+database_id = "OWNER_TO_FILL_DB_STAGING_FULL"
+migrations_dir = "migrations"
+
+[[env.staging-full.d1_databases]]
+binding = "FORMS_DB"
+database_name = "ocr-forms-db-staging-full"
+database_id = "OWNER_TO_FILL_FORMS_DB_STAGING_FULL"
+migrations_dir = "migrations-forms"
+
+[[env.staging-full.r2_buckets]]
+binding = "UPLOADS_BUCKET"
+bucket_name = "ose-uploads-staging-full"
+
+[[env.staging-full.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "OWNER_TO_FILL_KV_STAGING_FULL"
+
+# Own namespace ids: staging 15093/15094, production 15095/15096.
+[[env.staging-full.ratelimits]]
+name = "PUBLIC_READ_EDGE_LIMITER"
+namespace_id = "15097"
+simple = { limit = 60, period = 10 }
+
+[[env.staging-full.ratelimits]]
+name = "FORM_EDGE_LIMITER"
+namespace_id = "15098"
+simple = { limit = 60, period = 10 }
+
+[env.staging-full.triggers]
+crons = ["0 3 * * *"]
+
+[env.staging-full.vars]
+WORKER_ENV = "staging"
+STAGING_VARIANT = "full"
+WORKER_BUILD_VERSION = "stg-full-2026.11.04"
+DRAFT_EXPIRY_DAYS = "30"
+SCAN_RETURNS_RETENTION_DAYS = "365"
+PUBLISH_GRACE_MINUTES = "10"
+SPONSOR_GEO_MATCH_ENABLED = "0"
+TURNSTILE_ENABLED = "0"
+ALLOW_ADMIN_KEY_FALLBACK = "true"
+ALLOW_OCR_INTERNAL = "true"
+ADMIN_SCOPE_ALL = "true"
+ALLOWED_ADMIN_EMAILS = "mzdano@gmail.com"
+ALLOWED_ADMIN_DOMAINS = "oursharedevents.com"
+CF_ACCESS_TEAM_DOMAIN = "mzdano.cloudflareaccess.com"
+CF_ACCESS_AUD = ""
+# No GCP, WIF or BigQuery vars: this site has no BigQuery backup. Without
+# GCP_PROJECT_ID, GCP_PROJECT_NUMBER, WIF_POOL_ID and WIF_PROVIDER_ID,
+# isBigQueryConfigured (src/cloud/bigquery.ts) is false, so the nightly backup and
+# the SharedReport export return before any GCP call.
 
 # ── Production: oursharedevents.com ──────────────────────────────
 [env.production]

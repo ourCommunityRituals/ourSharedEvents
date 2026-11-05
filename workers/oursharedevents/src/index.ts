@@ -33,6 +33,7 @@ import { isBucketTripped, scanRateLimitBuckets } from './lib/rate-limit';
 import { summarizeUnhandledError } from './lib/unhandled-error-log';
 
 import { errorLabel } from './lib/error-label';
+import { injectTestSiteNotice } from './lib/test-site-notice';
 export type { RouterEnv as Env };
 
 export default {
@@ -89,7 +90,8 @@ export default {
     // Pre-revenue by contract, not by choice.
     const patched = new Response(response.body, response);
     patched.headers.set('X-Monetization-Inert', 'true');
-    return patched;
+    // Staging only: every HTML page says it is for testing (lib/test-site-notice.ts).
+    return injectTestSiteNotice(patched, env);
   },
 
   async scheduled(_event: ScheduledEvent, env: RouterEnv, ctx: ExecutionContext): Promise<void> {
@@ -629,6 +631,8 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
     LINEAR_API_KEY: env.LINEAR_API_KEY as string | undefined,
     LINEAR_TEAM_ID: env.LINEAR_TEAM_ID as string | undefined,
     WORKER_ENV: workerEnv,
+    // names the staging site in the alert (staging vs staging-full)
+    STAGING_VARIANT: env.STAGING_VARIANT,
   };
 
   // TL-018: Key rotation age check — alert before and at the 90-day window.
