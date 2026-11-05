@@ -10,7 +10,9 @@
  * CAPPED before they touch anything:
  *   - `when` ∈ WHEN_OPTIONS (default 'all'). Anything else → default.
  *   - `q`    free text, trimmed, capped at Q_MAX_LEN, matched case-insensitively
- *            against the card's name and venue ONLY. Never reaches SQL: the
+ *            against the card's name and venue ONLY. A whole place name or a
+ *            zip ("Oak Lawn", "60453") is a place instead, and lists that
+ *            place's events (lib/place-names.ts, owner 2026-11-05). Never reaches SQL: the
  *            list is already the brand-scoped, active, published projection the
  *            DataProvider returns, and the filter runs over that in the Worker.
  *            It is reflected into the page exactly once, HTML-escaped, inside a
@@ -30,6 +32,8 @@ import { escapeHtml } from './html-escape';
 import { injectMarker } from './inject-marker';
 import { zonedDatePart } from './event-datetime';
 import type { EventListItem } from './event-list';
+import { findSearchPlace, inSearchPlace } from './place-names';
+import type { PlacedEvent } from './zip-areas';
 
 /**
  * The chips /events offers (OSE-1520: four or five, not eight). The other
@@ -129,6 +133,8 @@ const WIDER: Partial<Record<WhenOption, { to: WhenOption; text: string }>> = {
 
 /** The page heading follows the filter (OSE-1520). Plain text; the caller escapes. */
 export function discoveryHeading(f: DiscoveryFilters): string {
+  const place = findSearchPlace(f.q);
+  if (place) return `Events in ${place.label}`;
   return f.q ? `Matches for “${f.q}”` : WHEN_COPY[f.when].heading;
 }
 
@@ -139,6 +145,8 @@ export function discoveryHeading(f: DiscoveryFilters): string {
  * `shown` events are wrapped. Plain text; the caller escapes.
  */
 export function discoverySummaryText(f: DiscoveryFilters, shown: number, wrapped = 0): string {
+  const place = findSearchPlace(f.q);
+  if (place) return `${shown} event${shown === 1 ? '' : 's'} in ${place.label}`;
   if (f.q) return `${shown} match${shown === 1 ? '' : 'es'} for “${f.q}”`;
   if (f.when === 'all') {
     const up = shown - wrapped;
@@ -369,9 +377,13 @@ export function applyDiscoveryFilters(
   f: DiscoveryFilters,
   now: Date = new Date()
 ): EventListItem[] {
+  const place = findSearchPlace(f.q);
+  const inPlace = place ? inSearchPlace(place) : null;
   const needle = f.q.toLowerCase();
   return items.filter((e) => {
     if (!inWhenWindow(e, f.when, now)) return false;
+    // A place or zip lists that place's events, by their map cell and address.
+    if (inPlace) return inPlace(e as unknown as PlacedEvent);
 
     if (needle) {
       const hay = [
@@ -420,8 +432,8 @@ export function renderDiscoveryFilters(
   return `
         <form class="disc-search" method="get" action="/events" role="search" data-testid="disc-search">
           <input type="hidden" name="when" value="${escapeHtml(f.when)}" />
-          <label class="sr-only" for="disc-q">Search events by name or venue</label>
-          <input id="disc-q" class="disc-q" type="search" name="q" value="${qEsc}" maxlength="${Q_MAX_LEN}" placeholder="Search by name or venue" autocomplete="off" data-testid="disc-q" />
+          <label class="sr-only" for="disc-q">Search events by name, venue, town or zip</label>
+          <input id="disc-q" class="disc-q" type="search" name="q" value="${qEsc}" maxlength="${Q_MAX_LEN}" placeholder="Search by name, venue, town or zip" autocomplete="off" data-testid="disc-q" />
           <button type="submit" class="disc-go" data-testid="disc-go">Search</button>
         </form>
         <nav class="disc-chips" aria-label="When" data-testid="disc-chips">${chips}${clear}</nav>
@@ -430,6 +442,11 @@ export function renderDiscoveryFilters(
 
 /** Empty-state copy that names the question that had no answer. */
 export function discoveryEmptyCopy(f: DiscoveryFilters): string {
+  const place = findSearchPlace(f.q);
+  if (place) {
+    // "See all events" means all of them: no place, no date window.
+    return `Nothing in ${escapeHtml(place.label)} yet. <a href="/events" data-testid="disc-empty-wider">See all events</a>.`;
+  }
   if (f.q) {
     const keep = f.when === 'all' ? '/events' : `/events?when=${f.when}`;
     return `Nothing matches &ldquo;${escapeHtml(f.q)}&rdquo;. Try a shorter word, or <a href="${keep}" data-testid="disc-empty-wider">clear the search</a>.`;
