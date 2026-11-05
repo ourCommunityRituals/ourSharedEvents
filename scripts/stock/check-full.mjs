@@ -2,9 +2,14 @@
 // public surfaces. Each node passes or fails on its own; the workflow swaps the
 // passing ones and purges today's rows for the failing ones.
 //
-// Every number comes from `targets.perNode` and the day's manifest; none is
-// written here. Events the owner made by hand are not in the manifest and never
-// fail a node.
+// Every number comes from the expected count per node (the committed seed,
+// seed.mjs expectedByNode) and the day's manifest; none is written here. Events
+// the owner made by hand are not in the manifest and never fail a node.
+//
+// A node expected to hold 0 (Mount Greenwood, owner 2026-11-05) passes when no
+// stock event is assigned to it and none is listed in a cell of its own. Its
+// landing-map check is skipped: the zip view still takes about 17 km around the
+// zip (lib/zip-areas.ts), and narrowing it is a separate story.
 import { STOCK_BASE_URL } from './client.mjs';
 
 // The landing page leads with the map at this many events (landing-area.ts LIST_MAX).
@@ -39,21 +44,31 @@ export async function checkNodes({
   manifest,
   nodes,
   today,
-  targets,
+  // node id -> the number of stock events it must list (0 for an empty node)
+  expected,
   // Public reads: called as fetchPublic(url, { method: 'GET', redirect: 'manual' }),
   // never with an admin header. The caller adds whatever the host's Access gate needs.
   fetchPublic,
   sleep = realSleep,
   now = Date.now,
 }) {
-  const perNode = targets && targets.perNode;
-  if (!Number.isInteger(perNode) || perNode < MAP_GATE) {
-    throw new Error(`perNode below the map gate of ${MAP_GATE}`);
-  }
   if (!DAY_RE.test(String(today))) throw new Error('today must be YYYY-MM-DD');
   if (typeof fetchPublic !== 'function') throw new Error('fetchPublic is required');
   const nodeList = Array.isArray(nodes) ? nodes : nodes && nodes.nodes;
   if (!Array.isArray(nodeList)) throw new Error('nodes must be a list');
+  if (!expected || typeof expected !== 'object') throw new Error('expected counts are required');
+  for (const n of nodeList) {
+    const want = expected[n.id];
+    if (!Number.isInteger(want) || want < 0) throw new Error(`no expected count for ${n.id}`);
+    if (want > 0 && want < MAP_GATE) {
+      throw new Error(`expected count for ${n.id} below the map gate of ${MAP_GATE}`);
+    }
+  }
+  // The cells of every populated node. A border cell an empty node shares with
+  // one of them holds that neighbor's events (membership is by polygon).
+  const populatedCells = new Set(
+    nodeList.filter((n) => expected[n.id] > 0).flatMap((n) => n.cells)
+  );
 
   const origin = new URL(STOCK_BASE_URL).origin;
   // A path on this site, or null. The path must start with '/' and resolve to this
@@ -122,10 +137,41 @@ export async function checkNodes({
   const qrs = Array.isArray(manifest.qr) ? manifest.qr : [];
   const results = {};
 
+  const stockIds = items.filter((i) => i.kind === 'event').map((i) => String(i.id));
+
   for (const node of nodeList) {
     const reasons = [];
     const cells = new Set(node.cells);
     const eventIds = items.filter((i) => i.kind === 'event' && i.node === node.id).map((i) => i.id);
+    const want = expected[node.id];
+
+    if (want === 0) {
+      const own = new Set(node.cells.filter((c) => !populatedCells.has(c)));
+      let count = 0;
+      let totalListed = 0;
+      for (const id of eventIds) reasons.push(`unexpected-stock:${id}`);
+      if (listed === null) {
+        reasons.push('events-list-unreadable');
+      } else {
+        for (const id of stockIds) {
+          const e = listedById.get(id);
+          if (e && own.has(e.h3_res7)) {
+            count += 1;
+            reasons.push(`stock-in-empty-node:${id}`);
+          }
+        }
+        totalListed = listed.filter((e) => cells.has(e.h3_res7)).length;
+      }
+      results[node.id] = {
+        pass: reasons.length === 0,
+        count,
+        expected: 0,
+        totalListed,
+        reasons,
+        skipped: ['landing-map'],
+      };
+      continue;
+    }
 
     // count: the day's own events for this node, listed in the window, in the node's cells
     let count = 0;
@@ -141,7 +187,7 @@ export async function checkNodes({
       }
       totalListed = listed.filter((e) => cells.has(e.h3_res7)).length;
     }
-    if (count !== perNode) reasons.push(`count:${count}/${perNode}`);
+    if (count !== want) reasons.push(`count:${count}/${want}`);
 
     if (!items.some((i) => i.kind === 'sponsor' && i.node === node.id && i.tier === 'premium')) {
       reasons.push('no-anchor');
@@ -206,7 +252,7 @@ export async function checkNodes({
     results[node.id] = {
       pass: reasons.length === 0,
       count,
-      expected: perNode,
+      expected: want,
       totalListed,
       reasons,
     };

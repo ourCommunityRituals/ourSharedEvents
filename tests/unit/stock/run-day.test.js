@@ -16,8 +16,12 @@ const STALE_NAME = 'manifest-2026-11-03-100-1.json';
 const OLDER_NAME = 'manifest-2026-11-02-90-1.json';
 const NEWER_NAME = 'manifest-2026-11-05-300-1.json';
 const NODES = { nodes: [{ id: 'a' }, { id: 'b' }] };
-const TARGETS = JSON.parse(readFileSync(path.join(ROOT, 'stock/targets.json'), 'utf8'));
-const P = TARGETS.perNode;
+// The quantity comes from the committed seed, never a literal (owner, 2026-11-05).
+const SEED = JSON.parse(readFileSync(path.join(ROOT, 'stock/seed/seed.json'), 'utf8'));
+const SEED_COUNTS = {};
+for (const e of SEED.events) SEED_COUNTS[e.node] = (SEED_COUNTS[e.node] || 0) + 1;
+const P = Math.min(...Object.values(SEED_COUNTS));
+const EXPECTED = { a: P, b: P };
 const MISSING = '✘ [ERROR] The specified key does not exist.';
 
 // A day's manifest: one event, sponsor, poster and upload per node, one placement to accept.
@@ -104,7 +108,7 @@ const swap = (w, extra = {}) =>
   rd.checkSwap({
     manifest: manifestOf(TODAY, 't', ['a', 'b']),
     nodes: NODES,
-    targets: TARGETS,
+    expected: EXPECTED,
     today: TODAY,
     runId: RUN,
     runAttempt: ATTEMPT,
@@ -449,11 +453,12 @@ describe('the site and the secrets', () => {
           nodes.map((n) => [
             n.id,
             {
-              pass: n.id !== 'beverly',
-              count: n.id === 'beverly' ? P - 3 : P,
+              pass: n.id !== 'oak-lawn',
+              count: n.id === 'oak-lawn' ? P - 3 : P,
               expected: P,
               totalListed: P + 1,
-              reasons: n.id === 'beverly' ? [`count:${P - 3}/${P}`] : [],
+              reasons: n.id === 'oak-lawn' ? [`count:${P - 3}/${P}`] : [],
+              ...(n.id === 'mount-greenwood' ? { skipped: ['landing-map'] } : {}),
             },
           ])
         ),
@@ -463,11 +468,18 @@ describe('the site and the secrets', () => {
     const summary = w.files.get('/summary.md');
     expect(code).toBe(1);
     expect(summary).toContain(
-      '| Node | Expected (perNode) | Stock listed | Total listed | Result | Reasons |'
+      '| Node | Expected (seed) | Stock listed | Total listed | Result | Reasons |'
     );
-    for (const n of nodes) expect(summary).toContain(`| ${n.id} | ${P} | `);
+    // the expected column is the committed seed's count per node, 0 where it has none
+    for (const n of nodes) {
+      expect(summary).toContain(`| ${n.id} | ${SEED_COUNTS[n.id] || 0} | `);
+    }
+    expect(summary).toContain('| mount-greenwood | 0 | ');
     expect(summary).toContain(
-      `| beverly | ${P} | ${P - 3} | ${P + 1} | FAIL | count:${P - 3}/${P} |`
+      `| oak-lawn | ${SEED_COUNTS['oak-lawn']} | ${P - 3} | ${P + 1} | FAIL | count:${P - 3}/${P} |`
+    );
+    expect(summary).toContain(
+      'mount-greenwood is expected empty: its landing-map check is skipped (the zip-radius fix is a separate story)'
     );
     expect(summary).toContain('IG note');
     expect(summary).toContain('token note');
@@ -503,74 +515,6 @@ describe('the site and the secrets', () => {
     expect(checked).toBe(false);
     expect(w.sqls().join('\n')).toContain("'t_evt_a'");
     expect(code).toBe(1);
-  });
-});
-
-describe('the search prompt', () => {
-  test('fills perNode + 3, the window and the catalog, and leaves nothing unfilled', () => {
-    const template = readFileSync(path.join(ROOT, 'stock/search-prompt.md'), 'utf8');
-    const perNode = JSON.parse(readFileSync(path.join(ROOT, 'stock/targets.json'), 'utf8')).perNode;
-    const nodes = JSON.parse(readFileSync(path.join(ROOT, 'stock/nodes.json'), 'utf8')).nodes;
-    const out = rd.renderPrompt(template, {
-      today: TODAY,
-      perNode,
-      catalog: [{ id: 'trivia', name: 'Trivia', category: 'SOCIAL' }],
-      nodes,
-    });
-    expect(out).toContain(`once you have ${perNode + 3} good finds`);
-    expect(out).toContain('2026-11-04');
-    expect(out).toContain('2027-02-02'); // today + 90
-    expect(out).toContain('{"id":"trivia","name":"Trivia","category":"SOCIAL"}');
-    expect(out).not.toMatch(/\{\{[A-Z_]+\}\}/);
-    expect(() =>
-      rd.renderPrompt('{{NOPE}}', { today: TODAY, perNode, catalog: [], nodes })
-    ).toThrow();
-  });
-
-  test('the places come from stock/nodes.json, in its order, and none is written in the template', () => {
-    const template = readFileSync(path.join(ROOT, 'stock/search-prompt.md'), 'utf8');
-    const nodes = JSON.parse(readFileSync(path.join(ROOT, 'stock/nodes.json'), 'utf8')).nodes;
-    for (const n of nodes) {
-      expect(template).not.toContain(n.id);
-      for (const zip of n.zips) expect(template).not.toContain(zip);
-    }
-    const out = rd.renderPrompt(template, { today: TODAY, perNode: P, catalog: [], nodes });
-    const lines = nodes.map(
-      (n, i) => `${i + 1}. ${n.name} (node \`${n.id}\`, zip ${n.zips.join(', ')})`
-    );
-    for (const line of lines) expect(out).toContain(line);
-    const at = lines.map((line) => out.indexOf(line));
-    expect([...at].sort((a, b) => a - b)).toEqual(at);
-    // a node added to nodes.json reaches the prompt with no template edit
-    const more = [...nodes, { id: 'new-place', name: 'New Place', zips: ['60999'] }];
-    expect(
-      rd.renderPrompt(template, { today: TODAY, perNode: P, catalog: [], nodes: more })
-    ).toContain(`${nodes.length + 1}. New Place (node \`new-place\`, zip 60999)`);
-  });
-
-  test('prepare-search writes to STOCK_PREP_DIR, outside the checkout', async () => {
-    const w = world();
-    const code = await rd.runPrepareSearch({
-      env: {
-        STG_FULL_ADMIN_KEY: 'k',
-        STG_FULL_ACCESS_CLIENT_ID: 'i',
-        STG_FULL_ACCESS_CLIENT_SECRET: 's',
-        STOCK_PREP_DIR: path.join('/runner-temp', 'stock-prep'),
-      },
-      fs: w.fs,
-      fetch: async () => ({
-        status: 200,
-        ok: true,
-        json: async () => ({
-          categories: [{ code: 'SOCIAL', types: [{ id: 'trivia', name: 'Trivia' }] }],
-        }),
-      }),
-      now: () => new Date('2026-11-04T12:00:00Z'),
-      outDir: path.join('/out'),
-    });
-    expect(code).toBe(0);
-    expect(w.files.has(path.join('/runner-temp', 'stock-prep', 'search-prompt.txt'))).toBe(true);
-    expect([...w.files.keys()].some((k) => k.startsWith(path.join('/out')))).toBe(false);
   });
 });
 
@@ -734,7 +678,7 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
     const summary = rd.renderSummary({
       report,
       nodes: NODES,
-      targets: TARGETS,
+      expected: EXPECTED,
       manifest: manifestOf(TODAY, 't', ['a', 'b']),
       notes: { ok: true },
     });
@@ -793,9 +737,9 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
     w.fs.writeFileSync(
       path.join(outDir, 'businesses.json'),
       JSON.stringify([
-        { name: 'One', address: '1 Main St', node: 'beverly', anchor: true },
-        { name: 'Two', address: '2 Main St', node: 'beverly', anchor: false },
-        { name: 'Three', address: '3 Main St', node: 'beverly', anchor: false },
+        { name: 'One', address: '1 Main St', node: 'oak-lawn', anchor: true },
+        { name: 'Two', address: '2 Main St', node: 'oak-lawn', anchor: false },
+        { name: 'Three', address: '3 Main St', node: 'oak-lawn', anchor: false },
       ])
     );
     let sponsors = 0;
@@ -842,6 +786,99 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
   });
 });
 
+describe('the seed subcommand (owner, 2026-11-05: no search)', () => {
+  const NODE_LIST = JSON.parse(readFileSync(path.join(ROOT, 'stock/nodes.json'), 'utf8')).nodes;
+  const BUILD_ROW_KEYS = [
+    'address',
+    'cell',
+    'ends_at',
+    'event_type_id',
+    'lat',
+    'lng',
+    'node',
+    'sector',
+    'source_url',
+    'starts_at',
+    'summary',
+    'title',
+    'venue',
+  ];
+  const seedOn = async (when) => {
+    const w = world();
+    const code = await rd.runSeed({
+      env: { GITHUB_STEP_SUMMARY: '/summary.md' },
+      fs: w.fs,
+      // no network at load time: any request fails the test
+      fetch: () => {
+        throw new Error('the seed job made a request');
+      },
+      now: () => new Date(when),
+      outDir: '/out',
+    });
+    const read = (f) => JSON.parse(w.files.get(path.join('/out', f)));
+    return { w, code, read };
+  };
+
+  test('writes the seed re-based to the Chicago day, in the shape the build reads', async () => {
+    // 01:00 UTC on the 21st is still the 20th in Chicago
+    const { w, code, read } = await seedOn('2026-11-21T01:00:00Z');
+    expect(code).toBe(0);
+    const accepted = read('accepted.json');
+    expect(accepted).toHaveLength(SEED.events.length);
+    for (const r of accepted) expect(Object.keys(r).sort()).toEqual(BUILD_ROW_KEYS);
+    const first = SEED.events[0];
+    const row = accepted[0];
+    expect(row.title).toBe(first.title);
+    expect(row.node).toBe(first.node);
+    expect(row.starts_at.slice(11, 16)).toBe(first.localStart);
+    const [y, m, d] = '2026-11-20'.split('-').map(Number);
+    const want = new Date(Date.UTC(y, m - 1, d + first.offsetDays)).toISOString().slice(0, 10);
+    expect(row.starts_at.slice(0, 10)).toBe(want);
+    const businesses = read('businesses.json');
+    expect(businesses).toHaveLength(SEED.businesses.length);
+    for (const b of businesses) {
+      expect(Object.keys(b).sort()).toEqual(['address', 'anchor', 'lat', 'lng', 'name', 'node']);
+    }
+    expect(read('load.json')).toEqual({ loadDay: '2026-11-20', seededOn: SEED.seededOn });
+    const summary = w.files.get('/summary.md');
+    for (const n of NODE_LIST) {
+      expect(summary).toContain(`| ${n.id} | ${SEED_COUNTS[n.id] || 0} | `);
+    }
+  });
+
+  test('the build records the load day the seed job placed the rows on, past midnight too', async () => {
+    const { w } = await seedOn('2026-11-21T05:50:00Z'); // 23:50 on the 20th in Chicago
+    w.fs.writeFileSync(path.join('/out', 'accepted.json'), '[]');
+    w.fs.writeFileSync(path.join('/out', 'businesses.json'), '[]');
+    await rd.runBuild({
+      env: {
+        STG_FULL_ADMIN_KEY: 'k',
+        STG_FULL_ACCESS_CLIENT_ID: 'i',
+        STG_FULL_ACCESS_CLIENT_SECRET: 's',
+        GITHUB_RUN_ID: RUN,
+        GITHUB_RUN_ATTEMPT: ATTEMPT,
+      },
+      fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: () => {},
+      fetch: async () => ({ status: 200, ok: true, json: async () => ({ categories: [] }) }),
+      now: () => new Date('2026-11-21T06:30:00Z'), // 00:30 on the 21st in Chicago
+      outDir: '/out',
+    });
+    allCalls.push(...w.calls);
+    expect(JSON.parse(w.files.get(path.join('/out', 'manifest.json'))).date).toBe('2026-11-20');
+  });
+
+  test('the search subcommands are gone', async () => {
+    for (const cmd of ['prepare-search', 'search-output', 'validate']) {
+      const logs = [];
+      expect(await rd.main([cmd], { env: {}, log: (l) => logs.push(l) })).toBe(2);
+      expect(logs.join('\n')).toContain('usage: run-day.mjs <seed|build|check-swap>');
+    }
+  });
+});
+
 describe('build', () => {
   const ENV = {
     STG_FULL_ADMIN_KEY: 'admin-key-value-1',
@@ -867,7 +904,7 @@ describe('build', () => {
     return { w, outDir };
   };
 
-  test('passes every node in stock/nodes.json, so each one counts toward short', async () => {
+  test('passes every node in stock/nodes.json; each one the seed populates counts toward short', async () => {
     const { w, outDir } = setup([]);
     const code = await rd.runBuild({
       env: ENV,
@@ -880,7 +917,8 @@ describe('build', () => {
       outDir,
     });
     const manifest = JSON.parse(w.files.get(path.join(outDir, 'manifest.json')));
-    expect(Object.keys(manifest.short)).toEqual(NODE_IDS);
+    expect(Object.keys(manifest.short)).toEqual(NODE_IDS.filter((id) => SEED_COUNTS[id] > 0));
+    for (const id of NODE_IDS) expect(manifest.short[id] || 0, id).toBe(SEED_COUNTS[id] || 0);
     const notes = JSON.parse(w.files.get(path.join(outDir, 'build-notes.json')));
     expect(notes.ok).toBe(true);
     expect(notes.instagramWarning).toMatch(/INSTAGRAM_ACCESS_TOKEN is not set/);
@@ -889,8 +927,8 @@ describe('build', () => {
 
   test('a failed build still writes its partial manifest and exits non-zero', async () => {
     const { w, outDir } = setup([
-      { name: 'One', address: '1 Main St', node: 'beverly', anchor: true },
-      { name: 'Two', address: '2 Main St', node: 'beverly', anchor: false },
+      { name: 'One', address: '1 Main St', node: 'oak-lawn', anchor: true },
+      { name: 'Two', address: '2 Main St', node: 'oak-lawn', anchor: false },
     ]);
     let sponsors = 0;
     const code = await rd.runBuild({
@@ -909,7 +947,7 @@ describe('build', () => {
     });
     const manifest = JSON.parse(w.files.get(path.join(outDir, 'manifest.json')));
     expect(manifest.items).toEqual([
-      { kind: 'sponsor', id: 'sp_1', node: 'beverly', tier: 'premium' },
+      { kind: 'sponsor', id: 'sp_1', node: 'oak-lawn', tier: 'premium' },
     ]);
     const notes = JSON.parse(w.files.get(path.join(outDir, 'build-notes.json')));
     expect(notes.ok).toBe(false);
@@ -985,63 +1023,10 @@ describe('final review', () => {
     expect(seen).toEqual([TODAY]);
   });
 
-  test('validate geocodes each business, places it by polygon and drops the rest', async () => {
-    const w = world();
-    const outDir = '/out';
-    w.fs.writeFileSync(path.join(outDir, 'finds.json'), '[]');
-    w.fs.writeFileSync(
-      path.join(outDir, 'businesses.json'),
-      JSON.stringify([
-        // the search said beverly; the address is in oak-lawn
-        { name: 'Anchor Co', address: '1 in-oak-lawn Rd', node: 'beverly', anchor: true },
-        { name: 'Far Co', address: '2 far-away St', node: 'beverly', anchor: false },
-        { name: 'anchor co.', address: '1 In-Oak-Lawn Rd', node: 'oak-lawn', anchor: false },
-        { name: 'Lost Co', address: '3 no-such St', node: 'beverly', anchor: false },
-      ])
-    );
-    const geocoded = [];
-    const code = await rd.runValidate({
-      env: { ...ENV, GITHUB_STEP_SUMMARY: '/summary.md' },
-      fs: w.fs,
-      fetch: async (url, init = {}) => {
-        if (String(url).endsWith('/event-types')) return res(200, CATALOG);
-        if (String(url).endsWith('/api/v2/admin/geocode')) {
-          const { address } = JSON.parse(init.body);
-          geocoded.push(address);
-          if (address.includes('in-oak-lawn')) return res(200, W.geocode(insideOf('oak-lawn')));
-          if (address.includes('far-away')) {
-            return res(200, W.geocode({ lat: 41.95, lng: -87.65 }));
-          }
-          return res(422, { ok: false });
-        }
-        return res(404, {});
-      },
-      now: () => new Date('2026-11-04T12:00:00Z'),
-      outDir,
-    });
-    expect(code).toBe(0);
-    expect(geocoded).toEqual(['1 in-oak-lawn Rd', '2 far-away St', '3 no-such St']);
-    const at = insideOf('oak-lawn');
-    expect(JSON.parse(w.files.get(path.join(outDir, 'businesses.json')))).toEqual([
-      {
-        name: 'Anchor Co',
-        address: '1 in-oak-lawn Rd',
-        node: 'oak-lawn',
-        anchor: true,
-        lat: at.lat,
-        lng: at.lng,
-      },
-    ]);
-    const summary = w.files.get('/summary.md');
-    expect(summary).toMatch(/[|] oak-lawn [|] 0 [|] [0-9]+ [|] 1 [|]/);
-    expect(summary).toMatch(/[|] beverly [|] 0 [|] [0-9]+ [|] 0 [|]/);
-    expect(summary).toContain('Businesses refused: not-in-node 1, duplicate 1, geocode-failed 1');
-  });
-
   test('build with Instagram refusing the token (401) exits 0, warns, and builds events without art', async () => {
     const w = world();
     const outDir = '/out';
-    const point = insideOf('beverly');
+    const point = insideOf('oak-lawn');
     w.fs.writeFileSync(
       path.join(outDir, 'accepted.json'),
       JSON.stringify([
@@ -1049,7 +1034,7 @@ describe('final review', () => {
           venue: 'Cork',
           address: '1 Main St',
           sector: 'private',
-          node: 'beverly',
+          node: 'oak-lawn',
           event_type_id: 'trivia',
           starts_at: '2026-11-10T19:00:00-06:00',
           ends_at: null,
@@ -1063,7 +1048,7 @@ describe('final review', () => {
     );
     w.fs.writeFileSync(
       path.join(outDir, 'businesses.json'),
-      JSON.stringify([{ name: 'Anchor Co', address: '2 Main St', node: 'beverly', anchor: true }])
+      JSON.stringify([{ name: 'Anchor Co', address: '2 Main St', node: 'oak-lawn', anchor: true }])
     );
     const paths = [];
     let n = 0;
@@ -1135,7 +1120,7 @@ describe('the manifest is registered in R2 during the build', () => {
     Array.from({ length: n }, (_, i) => ({
       name: `Biz ${i + 1}`,
       address: `${i + 1} Main St`,
-      node: 'beverly',
+      node: 'oak-lawn',
       anchor: i === 0,
     }));
   const buildWorld = (opts, list = []) => {
@@ -1463,9 +1448,9 @@ describe('the manifest is registered in R2 during the build', () => {
 
       // Run 200 on the 4th: every node passes, so the cancelled run's rows are purged.
       const report = await rd.checkSwap({
-        manifest: manifestOf(TODAY, 't', ['beverly']),
+        manifest: manifestOf(TODAY, 't', ['oak-lawn']),
         nodes: { nodes: NODE_LIST },
-        targets: TARGETS,
+        expected: rd.seedExpected({ nodes: NODE_LIST }),
         today: TODAY,
         runId: RUN,
         runAttempt: ATTEMPT,

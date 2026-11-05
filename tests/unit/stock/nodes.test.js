@@ -6,10 +6,10 @@ const file = path.join(__dirname, '../../../stock/nodes.json');
 const { nodes } = JSON.parse(readFileSync(file, 'utf8'));
 
 describe('stock/nodes.json', () => {
-  test('has exactly the six nodes', () => {
+  // Owner, 2026-11-05: Beverly is dropped; Mount Greenwood stays, deliberately empty.
+  test('has exactly the five nodes', () => {
     expect(nodes.map((n) => n.id).sort()).toEqual([
       'auburn-gresham',
-      'beverly',
       'blue-island',
       'evergreen-park',
       'mount-greenwood',

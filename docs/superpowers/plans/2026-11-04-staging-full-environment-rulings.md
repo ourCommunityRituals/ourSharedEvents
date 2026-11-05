@@ -42,3 +42,18 @@ Decisions the build controller made on the owner's behalf while executing `2026-
 - Task 6: minor (deferred): FORMS_DB rows on stock events not purged; shortlink_click_daily counters remain for purged codes
 - Task 7: minor (deferred): CLAUDE_CODE_VERSION↔action SHA pairing unenforced (comment only); run-day.mjs size; r2 delete of missing key exit code unproven until live run; Write() path specifier unproven until live run.
 - Task 7: minor (deferred): gate comment overclaims git-ignored coverage (no --ignored); build step/job timeout margin only 5 min; stale filter by bare id not kind|id; 'already exists' double-fault wording; row killed before onRecord unhinted
+
+## Pivot (owner, 2026-11-05)
+
+These supersede Rulings 3 and 16 and the search parts of Ruling 17 and of the Task 7 deferred minors.
+
+- No nightly search, ever. The search ran once, on 2026-11-05; its rows are committed in `stock/seed/finds.json` and `businesses.json`, and `scripts/stock/make-seed.mjs` turned them into `stock/seed/seed.json` (US Census geocoder, cached in `stock/seed/geocode-cache.json`; this is the only network call, and it ran once).
+- The full site is loaded from the committed seed only when the owner dispatches `stock-data-full.yml` by hand. The `schedule` trigger, the `STOCK_FULL_ENABLED` gate and the `search` and `validate` jobs (Claude action, spend cap, `ANTHROPIC_API_KEY`, checkout-integrity gate) are removed. The chain is access-gate → deploy → seed → build → check-swap.
+- Populated zips: 60620 Auburn Gresham, 60406 Blue Island, 60805 Evergreen Park, 60453 Oak Lawn.
+- 60655 Mount Greenwood is deliberately empty, so the under-10 experience can be shown by zip.
+- Beverly is dropped from `stock/nodes.json`.
+- Dates are re-based on every load: each event keeps its offset in days from 2026-11-05 and its Chicago local start time (and its duration when known). A load places it at load day + offset, at that wall-clock time in America/Chicago (DST-safe), so each place's count in the 90-day window never changes.
+- Totals are tied to the tests: the expected count per node comes from the committed seed (`expectedByNode`), never a literal. `stock/targets.json` is removed. A test on the committed seed asserts every populated place reaches the map gate of 10 and Mount Greenwood holds 0.
+- Controller call: a node expected to hold 0 passes when no stock event is assigned to it and none is listed in a res-7 cell that is its own alone. Mount Greenwood shares five of its six cells with Blue Island, Evergreen Park and Oak Lawn (border cells), and nine seed events (seven Evergreen Park, two Oak Lawn) sit in those shared cells, inside their own node's polygon. Counting them would fail every load. — If wrong: Mount Greenwood's cell list needs trimming, or the owner accepts that a cell-based view of Mount Greenwood shows those nine (still under 10).
+- Controller call: the empty node's landing-map check is skipped and the run summary says so. The zip view still takes about 17 km around the zip center (`lib/zip-areas.ts`), so `/?zip=60655` shows its neighbors' events; narrowing it is a separate story.
+- Controller call: the seed job writes `load.json` with the load day, and the build records that day, so a build that starts after Chicago midnight still matches the rows' dates.

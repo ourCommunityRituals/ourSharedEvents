@@ -1,11 +1,16 @@
 # Stock data for the full staging site (stg-full.oursharedevents.com).
 #
-# Each morning (11:00 UTC, 5 to 6 AM in Chicago) and on manual dispatch:
+# Run by hand only (workflow_dispatch). Owner, 2026-11-05: there is no nightly
+# search. The events were searched once and committed as a fixed seed
+# (stock/seed/seed.json, made by scripts/stock/make-seed.mjs); each load
+# re-bases the seed's dates to the load day, so each place's count in the
+# 90-day window never changes.
+#
 #   access-gate  stg-full must answer through Cloudflare Access, not the Worker
-#   deploy       the triggering ref (main on the schedule) → the staging-full Worker,
-#                after migrating both of its databases
-#   search       Claude finds the next 90 days of public events (stock/search-prompt.md)
-#   validate     finds → accepted rows (scripts/stock/validate-finds.mjs)
+#   deploy       the dispatched ref → the staging-full Worker, after migrating
+#                both of its databases
+#   seed         the committed seed re-based to today → accepted rows + businesses
+#                (scripts/stock/seed.mjs); no network, no secrets
 #   build        accepted rows → today's events, sponsors, posters and art, plus a manifest
 #   check-swap   check every node over the public pages, then swap or purge per node
 # A red job stops the next. check-swap also runs after a failed build, so the
@@ -17,20 +22,15 @@
 # not part of T1–T4: a red run here never turns main red. Design:
 # docs/superpowers/specs/2026-11-04-staging-full-environment-design.md (sections 3, 4).
 #
-# The schedule runs only while the repo variable STOCK_FULL_ENABLED is 'true';
-# a manual dispatch always runs.
-#
 # Secrets (owner-set, repo level): CLOUDFLARE_API_TOKEN_OSE and CLOUDFLARE_ACCOUNT_ID
 # (deploy, build and check-swap only), OCR_HUB_READ (the pinned @ocr/ui the Worker builds
-# with), ANTHROPIC_API_KEY, INSTAGRAM_ACCESS_TOKEN, STG_FULL_ADMIN_KEY,
-# STG_FULL_ACCESS_CLIENT_ID, STG_FULL_ACCESS_CLIENT_SECRET.
-# Variables: STOCK_FULL_ENABLED, STOCK_SEARCH_MAX_USD (default 5), INSTAGRAM_TOKEN_ISSUED.
+# with), INSTAGRAM_ACCESS_TOKEN, STG_FULL_ADMIN_KEY, STG_FULL_ACCESS_CLIENT_ID,
+# STG_FULL_ACCESS_CLIENT_SECRET.
+# Variables: INSTAGRAM_TOKEN_ISSUED.
 
 name: Stock data (stg-full)
 
 on:
-  schedule:
-    - cron: '0 11 * * *'
   workflow_dispatch:
 
 permissions:
@@ -47,7 +47,6 @@ env:
 jobs:
   access-gate:
     name: 'Access gate: stg-full is closed'
-    if: github.event_name == 'workflow_dispatch' || vars.STOCK_FULL_ENABLED == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -86,8 +85,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      # The triggering ref, as every job uses: a scheduled run deploys main, and a
-      # dispatch from a branch tests that branch end to end on the test site.
+      # The dispatched ref, as every job uses: a dispatch from a branch tests that
+      # branch end to end on the test site.
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -183,136 +182,12 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: npx wrangler deploy --env staging-full
 
-  search:
-    name: 'Search (Claude)'
+  # Reads only committed files: no secrets, no geocoding, no network.
+  seed:
+    name: 'Seed: re-base to today'
     needs: [deploy]
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: 'npm'
-      # Nothing installs into the checkout before the search: the steps before it run
-      # from a copy of this commit outside the checkout, so the gate after the search
-      # covers everything repo code later imports, git-ignored paths included.
-      - name: A copy of this commit outside the checkout, with its dependencies
-        shell: bash
-        env:
-          PREP_SRC: ${{ runner.temp }}/stock-src
-        run: |
-          set -euo pipefail
-          mkdir -p "$PREP_SRC"
-          git archive HEAD | tar -x -C "$PREP_SRC"
-          cd "$PREP_SRC"
-          npm ci --ignore-scripts --no-audit --no-fund
-
-      # Fail closed: the run spends only under a cap. The pinned action
-      # (fa2b2666, v1) runs @anthropic-ai/claude-agent-sdk 0.3.259, whose
-      # bundled CLI is Claude Code 2.1.259. This step asks that exact CLI
-      # whether it has the budget flag, and stops if it does not.
-      - name: 'Gate: a spend cap can be applied'
-        id: budget
-        env:
-          MAX_USD: ${{ vars.STOCK_SEARCH_MAX_USD || '5' }}
-          # Pairs with anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f
-          # (agent SDK 0.3.259); bump both together.
-          CLAUDE_CODE_VERSION: '2.1.259'
-        run: |
-          set -euo pipefail
-          if ! [[ "$MAX_USD" =~ ^[0-9]+(\.[0-9]{1,2})?$ ]] || ! awk -v v="$MAX_USD" 'BEGIN { exit !(v > 0) }'; then
-            echo "::error title=No spend cap::STOCK_SEARCH_MAX_USD must be a positive amount in dollars."
-            exit 1
-          fi
-          if ! HELP="$(npx --yes "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" --help 2>&1)"; then
-            echo "::error title=No spend cap::Could not read the CLI's options, so the cap cannot be confirmed."
-            exit 1
-          fi
-          if ! printf '%s' "$HELP" | grep -q -- '--max-budget-usd'; then
-            echo "::error title=No spend cap::Claude Code ${CLAUDE_CODE_VERSION} has no --max-budget-usd; refusing to search uncapped."
-            exit 1
-          fi
-          echo "usd=${MAX_USD}" >> "$GITHUB_OUTPUT"
-          echo "Spend cap: \$${MAX_USD} (--max-budget-usd)."
-
-      # Written outside the checkout, so the gate after the search sees only its files.
-      - name: Event type catalog and search prompt
-        id: prompt
-        env:
-          STG_FULL_ADMIN_KEY: ${{ secrets.STG_FULL_ADMIN_KEY }}
-          STG_FULL_ACCESS_CLIENT_ID: ${{ secrets.STG_FULL_ACCESS_CLIENT_ID }}
-          STG_FULL_ACCESS_CLIENT_SECRET: ${{ secrets.STG_FULL_ACCESS_CLIENT_SECRET }}
-          STOCK_PREP_DIR: ${{ runner.temp }}/stock-prep
-          WORKSPACE: ${{ github.workspace }}
-        working-directory: ${{ runner.temp }}/stock-src
-        run: |
-          set -euo pipefail
-          node scripts/stock/run-day.mjs prepare-search
-          mkdir -p "${WORKSPACE}/stock-out"
-          delim="PROMPT_$(openssl rand -hex 16)"
-          {
-            echo "text<<${delim}"
-            cat "${STOCK_PREP_DIR}/search-prompt.txt"
-            echo "${delim}"
-          } >> "$GITHUB_OUTPUT"
-
-      # SHA-pinned like claude-review.yml. Only web search, web fetch and a Write
-      # limited to the two output files; no shell. Project settings and CLAUDE.md
-      # are not loaded (--setting-sources user). The job token is read-only.
-      - name: Search
-        uses: anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f # v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ github.token }}
-          prompt: ${{ steps.prompt.outputs.text }}
-          claude_args: |
-            --model claude-sonnet-5-5
-            --max-turns 80
-            --max-budget-usd ${{ steps.budget.outputs.usd }}
-            --setting-sources user
-            --allowedTools "WebSearch,WebFetch,Write(stock-out/finds.json),Write(stock-out/businesses.json)"
-            --disallowedTools "Bash,Edit,MultiEdit,NotebookEdit,Read,Glob,Grep,Task,Agent"
-
-      # Before any repo code runs again: the search may have changed nothing in the
-      # checkout but its two output files. --ignored lists git-ignored files too
-      # (`!!`), so a planted node_modules/ file fails here. stock-out/ is ignored, so
-      # the two outputs show as `!!`.
-      - name: 'Gate: the search wrote only its two files'
-        shell: bash
-        run: |
-          set -euo pipefail
-          changed="$(git status --porcelain --untracked-files=all --ignored)"
-          unexpected="$(printf '%s\n' "$changed" | grep -v -E '^(\?\?|!!| M|M |A ) stock-out/(finds|businesses)\.json$' | grep -v '^$' || true)"
-          if [ -n "$unexpected" ]; then
-            echo "::error title=Search changed the checkout::The search changed files other than stock-out/finds.json and stock-out/businesses.json; nothing from it is used."
-            printf '%s\n' "$unexpected"
-            exit 1
-          fi
-          echo "The checkout is unchanged apart from the two output files."
-
-      - name: Install root dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
-
-      - name: Check the search output against its schemas
-        run: node scripts/stock/run-day.mjs search-output
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: stock-search
-          path: |
-            stock-out/finds.json
-            stock-out/businesses.json
-          if-no-files-found: error
-          retention-days: 7
-
-  validate:
-    name: 'Validate finds'
-    needs: [search]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -323,28 +198,21 @@ jobs:
           cache: 'npm'
       - name: Install root dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - uses: actions/download-artifact@v4
-        with:
-          name: stock-search
-          path: stock-out
-      - name: Validate
-        env:
-          STG_FULL_ADMIN_KEY: ${{ secrets.STG_FULL_ADMIN_KEY }}
-          STG_FULL_ACCESS_CLIENT_ID: ${{ secrets.STG_FULL_ACCESS_CLIENT_ID }}
-          STG_FULL_ACCESS_CLIENT_SECRET: ${{ secrets.STG_FULL_ACCESS_CLIENT_SECRET }}
-        run: node scripts/stock/run-day.mjs validate
+      - name: Re-base the seed
+        run: node scripts/stock/run-day.mjs seed
       - uses: actions/upload-artifact@v4
         with:
-          name: stock-validated
+          name: stock-seeded
           path: |
             stock-out/accepted.json
             stock-out/businesses.json
+            stock-out/load.json
           if-no-files-found: error
           retention-days: 7
 
   build:
     name: 'Build the day'
-    needs: [validate]
+    needs: [seed]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -374,7 +242,7 @@ jobs:
         run: npm ci --prefer-offline || npm ci
       - uses: actions/download-artifact@v4
         with:
-          name: stock-validated
+          name: stock-seeded
           path: stock-out
       # A step timeout fails the step, so the job ends as failure (not cancelled) and
       # check-swap still runs to purge the partial manifest. The job allows 30.

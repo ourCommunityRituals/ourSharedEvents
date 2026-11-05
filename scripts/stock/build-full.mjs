@@ -62,7 +62,9 @@ export async function buildDay({
   artTags,
   // type id -> category code, so art tagged by category fits (pickArt)
   typeCategory,
-  targets,
+  // node id -> how many stock events it gets (seed.mjs expectedByNode); a node
+  // missing here gets none
+  expected,
   date,
   nodeIds,
   fetch: fetchFn = globalThis.fetch,
@@ -70,7 +72,10 @@ export async function buildDay({
   // as it grows: a build killed mid-run still leaves what it created on record.
   onRecord = () => {},
 }) {
-  const perNode = targets.perNode;
+  const want = (node) => {
+    const n = expected && expected[node];
+    return Number.isInteger(n) && n > 0 ? n : 0;
+  };
   const manifest = { date, items: [], qr: [], acceptSql: [], short: {}, warnings: [] };
   const record = (kind, id, node, extra = {}) => {
     manifest.items.push({ kind, id, node, ...extra });
@@ -110,8 +115,8 @@ export async function buildDay({
       const rows = accepted
         .filter((r) => r.node === node)
         .sort(bySectorThenStart)
-        .slice(0, perNode);
-      if (rows.length < perNode) manifest.short[node] = perNode - rows.length;
+        .slice(0, want(node));
+      if (rows.length < want(node)) manifest.short[node] = want(node) - rows.length;
       // The node's events by name: the order the mid and local sponsors go round in.
       const byName = new Map(
         [...rows]
