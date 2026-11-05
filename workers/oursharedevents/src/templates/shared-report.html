@@ -890,6 +890,13 @@
     <script>
       window.__reportBundle = { events: [], sponsors: [], generatedAt: null };
       window.__signedLinkMode = false;
+      // The page's admin probes give up after 5 s (an older browser without
+      // AbortSignal.timeout just waits), so no probe can hold the page open.
+      function probeTimeout() {
+        return typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+          ? AbortSignal.timeout(5000)
+          : undefined;
+      }
       // OSE-1363: ONE UTC date formatter for every client-rendered event date on
       // this surface. A date-only value ("YYYY-MM-DD") parses as UTC midnight;
       // rendering that instant in the viewer's zone rolls the day back one across
@@ -1579,8 +1586,14 @@
         if (!section || !content) return;
         let tier = 'free';
         try {
-          const tr = await fetch('/api/v2/admin/flags/current-tier')
-            .then((r) => r.json())
+          // A visitor without an admin session gets a 302 to the Access login on
+          // another origin; following it never settles. 'manual' reads it as "not
+          // an admin" at once, and the timeout means no probe holds the page open.
+          const tr = await fetch('/api/v2/admin/flags/current-tier', {
+            redirect: 'manual',
+            signal: probeTimeout(),
+          })
+            .then((r) => (r.ok ? r.json() : null))
             .catch(() => null);
           if (tr && tr.ok && tr.tier) tier = tr.tier;
         } catch {
@@ -1626,10 +1639,14 @@
                     : 'failed';
             try {
               const [rRes, cRes] = await Promise.all([
-                fetch('/api/v2/admin/events/' + encodeURIComponent(ev.id) + '/forms/registrations')
+                fetch('/api/v2/admin/events/' + encodeURIComponent(ev.id) + '/forms/registrations', {
+                  redirect: 'manual',
+                })
                   .then((r) => r.json())
                   .catch(() => null),
-                fetch('/api/v2/admin/events/' + encodeURIComponent(ev.id) + '/forms/checkin-count')
+                fetch('/api/v2/admin/events/' + encodeURIComponent(ev.id) + '/forms/checkin-count', {
+                  redirect: 'manual',
+                })
                   .then((r) => r.json())
                   .catch(() => null),
               ]);
@@ -1731,6 +1748,8 @@
         try {
           const r = await fetch('/api/v2/admin/flags/current-tier', {
             headers: { Accept: 'application/json' },
+            redirect: 'manual',
+            signal: probeTimeout(),
           });
           const j = r.ok ? await r.json().catch(() => null) : null;
           admin = !!(j && j.ok);
@@ -1779,6 +1798,7 @@
             res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/repeat', {
               method: 'POST',
               headers: { Accept: 'application/json' },
+              redirect: 'manual',
             });
           } catch {
             say(WORDS.NETWORK);
