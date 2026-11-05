@@ -427,7 +427,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
       const r = await request.get(`/api/v2/events/${encodeURIComponent(ev.id)}/sponsors`);
       if (!r.ok()) continue; // the page skips an event whose sponsor list fails too
       for (const s of ((await r.json()).items ?? []) as Array<{ id: string; name: string }>) {
-        if (!expectedById.has(s.id)) expectedById.set(s.id, s.name);
+        if (!expectedById.has(s.id)) expectedById.set(s.id, s.name.trim()); // rendered names are trimmed below
       }
     }
     const expected = [...expectedById.values()].sort();
