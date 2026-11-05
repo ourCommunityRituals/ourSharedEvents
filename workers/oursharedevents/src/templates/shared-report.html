@@ -890,12 +890,20 @@
     <script>
       window.__reportBundle = { events: [], sponsors: [], generatedAt: null };
       window.__signedLinkMode = false;
-      // The page's admin probes give up after 5 s (an older browser without
-      // AbortSignal.timeout just waits), so no probe can hold the page open.
-      function probeTimeout() {
-        return typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
-          ? AbortSignal.timeout(5000)
-          : undefined;
+      // The page's admin probes give up after 5 s, so no probe can hold the page
+      // open. A browser without AbortSignal.timeout gets the same from an
+      // AbortController and a timer; one with neither just waits.
+      function probeTimeout(ms) {
+        const wait = ms || 5000;
+        if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+          return AbortSignal.timeout(wait);
+        }
+        if (typeof AbortController === 'function') {
+          const c = new AbortController();
+          setTimeout(() => c.abort(), wait);
+          return c.signal;
+        }
+        return undefined;
       }
       // OSE-1363: ONE UTC date formatter for every client-rendered event date on
       // this surface. A date-only value ("YYYY-MM-DD") parses as UTC midnight;
@@ -1802,6 +1810,13 @@
             });
           } catch {
             say(WORDS.NETWORK);
+            btn.disabled = false;
+            return;
+          }
+          // redirect: 'manual' turns an expired Access session into an
+          // opaqueredirect (status 0): that is a sign-in problem, not a retry.
+          if (res.type === 'opaqueredirect') {
+            say(WORDS[401]);
             btn.disabled = false;
             return;
           }
