@@ -92,7 +92,7 @@ export async function listPosts({ token, fetch: fetchFn = globalThis.fetch } = {
       const caption = typeof p.caption === 'string' ? p.caption : '';
       posts.push({ id: p.id, caption, hashtags: extractHashtags(caption), mediaUrl: p.media_url });
     }
-    const next = body && body.paging && body.paging.next;
+    const next = body.paging && body.paging.next;
     url = null;
     if (next) {
       let origin = null;
