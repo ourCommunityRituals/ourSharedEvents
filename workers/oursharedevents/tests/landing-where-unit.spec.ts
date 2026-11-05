@@ -10,15 +10,21 @@
  * @born-red landing-where | method: each script-limit assertion was run against a
  *   planted fault (watchPosition, enableHighAccuracy true, a 6th character, a
  *   localStorage write, a fetch, auto-run without "granted") and went red | date: 2026-10-10
+ * @born-red landing-zip-own-area | method: inZipOwnArea run with each fault planted:
+ *   the old 8-ring test (return true inside the bound), the address zip ignored, a
+ *   0.001-degree neighbour search, an unanchored address-zip pattern; each turned
+ *   a test red | date: 2026-11-05
  */
 import { describe, test, expect } from 'vitest';
-import { latLngToCell } from 'h3-js';
+import { gridDistance, latLngToCell } from 'h3-js';
 import LANDING_HTML from '../src/templates/landing.html';
 import { CORRIDOR_RES } from '../src/lib/h3-tagging';
 import {
   findZipArea,
   nearestZipArea,
   nearCells,
+  inZipOwnArea,
+  addressZip,
   normalizeZip,
   roughBoxCenter,
   NEAR_RING_STEPS,
@@ -82,7 +88,7 @@ describe('zip table', () => {
     expect(nearestZipArea(Number.NaN, 0)).toBeNull();
   });
 
-  test('"near" is the zip cell and 8 rings of res-7 cells around it', () => {
+  test('the outer bound is the zip cell and 8 rings of res-7 cells around it', () => {
     const area = findZipArea('60406')!;
     const cells = nearCells(area);
     expect(NEAR_RING_STEPS).toBe(8);
@@ -91,6 +97,105 @@ describe('zip table', () => {
     // Eagles Hall is in; downtown Los Angeles is not.
     expect(cells.has(latLngToCell(41.6571, -87.6798, CORRIDOR_RES))).toBe(true);
     expect(cells.has(latLngToCell(34.05, -118.25, CORRIDOR_RES))).toBe(false);
+  });
+});
+
+/** An event placed at a point, as the Worker tags it (res 7 and res 9). */
+const at = (lat: number, lon: number, where_address?: string) => ({
+  h3_res7: latLngToCell(lat, lon, CORRIDOR_RES),
+  h3_res9: latLngToCell(lat, lon, 9),
+  where_address,
+});
+
+// Points one ring from Mount Greenwood's (60655) cell, each inside its own
+// town's Census zip boundary (stock/nodes.json polygons). The old 8-ring
+// "near" listed all of them for 60655; even 1 ring lists them.
+const OAK_LAWN = [41.698, -87.74] as const; // 60453
+const EVERGREEN_PARK = [41.708, -87.706] as const; // 60805
+const BEVERLY = [41.7, -87.683] as const; // 60643
+const MOUNT_GREENWOOD = [41.681, -87.711] as const; // 60655
+const EAGLES_HALL = [41.6571, -87.6798] as const; // 60406, Blue Island
+
+describe("a zip's own area (owner 2026-11-05)", () => {
+  test('the neighbours next to 60655 are within its old 8-ring "near", one ring out', () => {
+    const near = nearCells(findZipArea('60655')!);
+    const home = latLngToCell(41.695, -87.704, CORRIDOR_RES);
+    for (const [lat, lon] of [OAK_LAWN, EVERGREEN_PARK, BEVERLY]) {
+      const cell = latLngToCell(lat, lon, CORRIDOR_RES);
+      expect(near.has(cell)).toBe(true);
+      expect(gridDistance(home, cell)).toBe(1);
+    }
+  });
+
+  test("60655 holds none of its neighbours' events, by address or by cell", () => {
+    const mine = inZipOwnArea(findZipArea('60655')!);
+    expect(mine(at(...OAK_LAWN, '9400 S Cicero Ave, Oak Lawn, IL 60453'))).toBe(false);
+    expect(mine(at(...EVERGREEN_PARK, '3555 W 95th St, Evergreen Park, IL 60805'))).toBe(false);
+    expect(mine(at(...BEVERLY, '10400 S Western Ave, Chicago, IL 60643'))).toBe(false);
+    // No address: the nearest zip center decides, and it is the neighbour's.
+    expect(mine(at(...OAK_LAWN))).toBe(false);
+    expect(mine(at(...EVERGREEN_PARK))).toBe(false);
+    expect(mine(at(...BEVERLY))).toBe(false);
+    expect(mine(at(...EAGLES_HALL))).toBe(false);
+    // Its own event shows, either way.
+    expect(mine(at(...MOUNT_GREENWOOD, '3700 W 111th St, Chicago, IL 60655'))).toBe(true);
+    expect(mine(at(...MOUNT_GREENWOOD))).toBe(true);
+  });
+
+  test('each neighbour keeps its own events', () => {
+    for (const [zip, point] of [
+      ['60453', OAK_LAWN],
+      ['60805', EVERGREEN_PARK],
+      ['60643', BEVERLY],
+      ['60406', EAGLES_HALL],
+    ] as const) {
+      const mine = inZipOwnArea(findZipArea(zip)!);
+      expect(mine(at(...point, `1 Main St, Town, IL ${zip}`)), zip).toBe(true);
+      expect(mine(at(...point)), zip).toBe(true);
+    }
+  });
+
+  test('an event shows for one zip at most', () => {
+    const zips = ['60406', '60643', '60620', '60805', '60453', '60655', '60469', '60803'];
+    const tests = zips.map((z) => inZipOwnArea(findZipArea(z)!));
+    for (let lat = 41.64; lat <= 41.75; lat += 0.005) {
+      for (let lon = -87.77; lon <= -87.64; lon += 0.005) {
+        const e = at(lat, lon);
+        expect(tests.filter((t) => t(e)).length, `${lat},${lon}`).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  test('the address zip wins over the nearest center, but not past the 8-ring bound', () => {
+    // A point nearest 60655's center, whose venue says Oak Lawn: Oak Lawn's.
+    const said = at(...MOUNT_GREENWOOD, '1 Main St, Oak Lawn, IL 60453');
+    expect(inZipOwnArea(findZipArea('60655')!)(said)).toBe(false);
+    expect(inZipOwnArea(findZipArea('60453')!)(said)).toBe(true);
+    // A Los Angeles venue with a Chicago zip typed: not listed for that zip.
+    expect(inZipOwnArea(findZipArea('60655')!)(at(34.05, -118.25, 'X, IL 60655'))).toBe(false);
+    // A zip that is not a zip area (a PO-box-only zip) falls back to the center.
+    expect(inZipOwnArea(findZipArea('60655')!)(at(...MOUNT_GREENWOOD, 'Box 1, IL 00000'))).toBe(
+      true
+    );
+  });
+
+  test('an event with no cell, or a cell that is not one, is in no zip', () => {
+    const mine = inZipOwnArea(findZipArea('60655')!);
+    expect(mine({ where_address: '3700 W 111th St, Chicago, IL 60655' })).toBe(false);
+    expect(mine({ h3_res7: 'not-a-cell', where_address: 'IL 60655' })).toBe(false);
+    expect(mine({ h3_res7: 42 })).toBe(false);
+  });
+
+  test('reads a zip only at the end of an address', () => {
+    expect(addressZip('1234 W Example St, Town, IL 60453')).toBe('60453');
+    expect(addressZip('1234 W Example St, Town, IL 60453-1234')).toBe('60453');
+    expect(addressZip('1234 W Example St, Town, IL 60453, USA')).toBe('60453');
+    expect(addressZip('60453')).toBe('60453');
+    expect(addressZip('12345 S Pulaski Rd, Alsip, IL')).toBeNull();
+    expect(addressZip('2427 Grove St')).toBeNull();
+    expect(addressZip('Room 604531')).toBeNull();
+    expect(addressZip(null)).toBeNull();
+    expect(addressZip(60453)).toBeNull();
   });
 });
 
@@ -120,7 +225,8 @@ describe('rough box', () => {
       expect(Math.abs(c.lon - lon)).toBeLessThan(0.025);
     }
     // The box is coarser than a zip, so its zip can be the neighbour (Posen,
-    // next to Blue Island); the 10-mile ring around either covers both.
+    // next to Blue Island). The page then shows that zip's own area and names
+    // the zip in its heading, so the person can type their own instead.
     expect(scriptRoughBox(41.6571, -87.6798)).toBe('dp3su');
     const near = roughBoxCenter('dp3su')!;
     const zip = nearestZipArea(near.lat, near.lon)!;

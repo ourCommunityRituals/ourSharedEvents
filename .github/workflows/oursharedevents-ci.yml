@@ -1622,6 +1622,19 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/ci-brand-seed.sql
 
+      # Owner 2026-11-05: a landing zip lookup shows the zip's own area. Three
+      # synthetic events next to Mount Greenwood (60655), one per town; the Pages
+      # collection's /?zip=60655 and /?zip=60453 requests read them. Upserts by id.
+      - name: 'Seed landing zip own-area fixture'
+        if: matrix.section == 'pages'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/landing-zip-own-area-seed.sql
+
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
       # from the collection root, so each step sets working-directory. Secrets are
