@@ -180,15 +180,6 @@ const CALLS = [
     fake: W.sponsorList([]),
   },
   {
-    call: 'POST /api/v2/admin/geocode',
-    handler: [`${HANDLERS}/geocode.ts`, 'handleAdminGeocode'],
-    stock: [
-      'scripts/stock/run-day.mjs',
-      /const (\w+) = await client\.post\('\/api\/v2\/admin\/geocode'/,
-    ],
-    fake: W.geocode({ lat: 41.7, lng: -87.7 }),
-  },
-  {
     call: 'GET /api/v2/events',
     handler: [`${HANDLERS}/events.ts`, 'handleListEvents'],
     stock: [

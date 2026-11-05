@@ -4,7 +4,7 @@ const path = require('node:path');
 
 /**
  * The stock run touches the full staging site only. Every command and URL in
- * its scripts, its workflow and its search prompt names `staging-full` /
+ * its scripts, its workflow and its seed names `staging-full` /
  * `stg-full.`, never the empty staging site or production.
  */
 
@@ -25,7 +25,7 @@ const offences = (text) => RULES.filter((r) => r.re.test(text)).map((r) => r.nam
 const FILES = [
   ...readdirSync(path.join(ROOT, 'scripts/stock')).map((f) => `scripts/stock/${f}`),
   '.github/workflows/stock-data-full.yml',
-  'stock/search-prompt.md',
+  'stock/seed/seed.json',
 ];
 
 describe('detector controls', () => {
@@ -59,7 +59,7 @@ describe('detector controls', () => {
 });
 
 describe('the stock run names only the full staging site', () => {
-  test('it scans the scripts, the workflow and the search prompt', () => {
+  test('it scans the scripts, the workflow and the seed', () => {
     for (const rel of FILES) expect(existsSync(path.join(ROOT, rel)), rel).toBe(true);
     expect(FILES).toContain('scripts/stock/run-day.mjs');
   });

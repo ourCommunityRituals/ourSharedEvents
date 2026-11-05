@@ -1,0 +1,157 @@
+{
+  "1210 W 78th Pl, Chicago, IL 60620": {
+    "lat": 41.751449,
+    "lng": -87.654504
+  },
+  "12237 Western Ave, Blue Island, IL 60406": {
+    "lat": 41.671021,
+    "lng": -87.680423
+  },
+  "12725 S Western Ave, Blue Island, IL 60406": {
+    "lat": 41.66222,
+    "lng": -87.680037
+  },
+  "12924 Western Ave, Blue Island, IL 60406": {
+    "lat": 41.658391,
+    "lng": -87.680162
+  },
+  "12952 Western Ave, Blue Island, IL 60406": {
+    "lat": 41.657795,
+    "lng": -87.68016
+  },
+  "13011 S Western Ave, Blue Island, IL 60406": {
+    "lat": 41.656818,
+    "lng": -87.680003
+  },
+  "13018 Maple Ave, Blue Island, IL 60406": {
+    "lat": 41.656312,
+    "lng": -87.684929
+  },
+  "13031 Western Ave, Blue Island, IL 60406": {
+    "lat": 41.656244,
+    "lng": -87.680001
+  },
+  "13115 S Western Ave, Blue Island, IL 60406": {
+    "lat": 41.655175,
+    "lng": -87.679982
+  },
+  "13328 Olde Western Ave, Blue Island, IL 60406": {
+    "lat": 41.651337,
+    "lng": -87.681243
+  },
+  "13357 Olde Western Ave, Blue Island, IL 60406": {
+    "lat": 41.650142,
+    "lng": -87.680906
+  },
+  "13404 Olde Western Ave, Blue Island, IL 60406": {
+    "lat": 41.649072,
+    "lng": -87.680892
+  },
+  "13414 Olde Western Ave, Blue Island, IL 60406": {
+    "lat": 41.648875,
+    "lng": -87.680859
+  },
+  "1350 W 89th St, Chicago, IL 60620": {
+    "lat": 41.732406,
+    "lng": -87.656964
+  },
+  "2519 Grove St, Blue Island, IL 60406": {
+    "lat": 41.65439,
+    "lng": -87.683358
+  },
+  "2800 W 95th St, Evergreen Park, IL 60805": {
+    "lat": 41.720897,
+    "lng": -87.692044
+  },
+  "3146 W 95th St, Evergreen Park, IL 60805": {
+    "lat": 41.720798,
+    "lng": -87.701035
+  },
+  "3422 W 95th St, Evergreen Park, IL 60805": {
+    "lat": 41.72071,
+    "lng": -87.708013
+  },
+  "3450 W 97th St, Evergreen Park, IL 60805": {
+    "lat": 41.717057,
+    "lng": -87.708524
+  },
+  "3541 W 99th St, Evergreen Park, IL 60805": {
+    "lat": 41.713268,
+    "lng": -87.710624
+  },
+  "406 W Winneconna Pkwy, Chicago, IL 60620": {
+    "lat": 41.753903,
+    "lng": -87.634705
+  },
+  "4625 W 110th St, Oak Lawn, IL 60453": {
+    "lat": 41.692769,
+    "lng": -87.735291
+  },
+  "5420 W 95th St, Oak Lawn, IL 60453": {
+    "lat": 41.719858,
+    "lng": -87.756455
+  },
+  "5850 W 103rd St, Oak Lawn, IL 60453": {
+    "lat": 41.705227,
+    "lng": -87.765414
+  },
+  "6605 W 95th St, Oak Lawn, IL 60453": null,
+  "7506 S Racine Ave, Chicago, IL 60620": {
+    "lat": 41.757446,
+    "lng": -87.653997
+  },
+  "7811 S Racine Ave, Chicago, IL 60620": {
+    "lat": 41.751954,
+    "lng": -87.653699
+  },
+  "839 W 79th St, Chicago, IL 60620": {
+    "lat": 41.75056,
+    "lng": -87.645741
+  },
+  "9320 S Kenton Ave, Oak Lawn, IL 60453": {
+    "lat": 41.723416,
+    "lng": -87.736134
+  },
+  "9333 S Cicero Ave, Oak Lawn, IL 60453": {
+    "lat": 41.722645,
+    "lng": -87.740796
+  },
+  "9400 S Troy Ave, Evergreen Park, IL 60805": {
+    "lat": 41.722521,
+    "lng": -87.700734
+  },
+  "9401 S Oak Park Ave, Oak Lawn, IL 60453": {
+    "lat": 41.721222,
+    "lng": -87.789646
+  },
+  "9411 S 51st Ave, Oak Lawn, IL 60453": {
+    "lat": 41.72155,
+    "lng": -87.748072
+  },
+  "9427 S Raymond Ave, Oak Lawn, IL 60453": {
+    "lat": 41.721096,
+    "lng": -87.752742
+  },
+  "9500 S Western Ave, Evergreen Park, IL 60805": {
+    "lat": 41.720881,
+    "lng": -87.682142
+  },
+  "9514 S 52nd Ave, Oak Lawn, IL 60453": {
+    "lat": 41.719336,
+    "lng": -87.750614
+  },
+  "Blue Island, IL 60406": null,
+  "Chicago, IL (address not listed)": null,
+  "High St & Western Ave, Blue Island, IL 60406": {
+    "lat": 41.658,
+    "lng": -87.680085
+  },
+  "Western Ave & High St, Blue Island, IL 60406": {
+    "lat": 41.658,
+    "lng": -87.680085
+  },
+  "York St & Western Ave, Blue Island, IL 60406": {
+    "lat": 41.657172,
+    "lng": -87.680081
+  }
+}
