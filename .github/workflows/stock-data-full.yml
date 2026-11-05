@@ -9,7 +9,9 @@
 #   build        accepted rows → today's events, sponsors, posters and art, plus a manifest
 #   check-swap   check every node over the public pages, then swap or purge per node
 # A red job stops the next. check-swap also runs after a failed build, so the
-# partial manifest's rows are purged and nothing is orphaned.
+# partial manifest's rows are purged and nothing is orphaned. The build lists its
+# manifest in R2 before it creates anything and keeps that copy current, so a run
+# cancelled before check-swap is purged by the next run.
 #
 # This workflow never touches the empty staging site or production, and it is
 # not part of T1–T4: a red run here never turns main red. Design:
@@ -19,7 +21,7 @@
 # a manual dispatch always runs.
 #
 # Secrets (owner-set, repo level): CLOUDFLARE_API_TOKEN_OSE and CLOUDFLARE_ACCOUNT_ID
-# (deploy and check-swap only), OCR_HUB_READ (the pinned @ocr/ui the Worker builds
+# (deploy, build and check-swap only), OCR_HUB_READ (the pinned @ocr/ui the Worker builds
 # with), ANTHROPIC_API_KEY, INSTAGRAM_ACCESS_TOKEN, STG_FULL_ADMIN_KEY,
 # STG_FULL_ACCESS_CLIENT_ID, STG_FULL_ACCESS_CLIENT_SECRET.
 # Variables: STOCK_FULL_ENABLED, STOCK_SEARCH_MAX_USD (default 5), INSTAGRAM_TOKEN_ISSUED.
@@ -353,17 +355,36 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
       - name: Install root dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+      # The lockfile's wrangler, the one the deploy ran: the build lists its manifest
+      # in R2 with it before the first admin API call.
+      - name: Install worker dependencies
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npm ci --prefer-offline || npm ci
       - uses: actions/download-artifact@v4
         with:
           name: stock-validated
           path: stock-out
       # A step timeout fails the step, so the job ends as failure (not cancelled) and
       # check-swap still runs to purge the partial manifest. The job allows 30.
+      # The Cloudflare token is for R2 only: the manifest object and the index in
+      # ose-uploads-staging-full, every command --env staging-full --remote.
       - name: Build
         timeout-minutes: 25
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           STG_FULL_ADMIN_KEY: ${{ secrets.STG_FULL_ADMIN_KEY }}
           STG_FULL_ACCESS_CLIENT_ID: ${{ secrets.STG_FULL_ACCESS_CLIENT_ID }}
           STG_FULL_ACCESS_CLIENT_SECRET: ${{ secrets.STG_FULL_ACCESS_CLIENT_SECRET }}
@@ -414,7 +435,8 @@ jobs:
         run: npm ci --prefer-offline || npm ci
       # A build killed before any upload leaves no artifact, and this download fails.
       # The next step still runs (its if: admits a failed download, and nothing else)
-      # and reports the missing manifest red. Not continue-on-error: that count is a
+      # and purges every node of the build's R2 copy, or reports the manifest missing,
+      # red either way. Not continue-on-error: that count is a
       # down-only ratchet (.ci-integrity-baseline.json), and the job is red anyway.
       - uses: actions/download-artifact@v4
         id: download

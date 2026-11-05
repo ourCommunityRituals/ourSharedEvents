@@ -604,8 +604,13 @@ describe('fix round 2: a re-run of check-swap alone', () => {
         STG_FULL_ADMIN_KEY: 'k',
         STG_FULL_ACCESS_CLIENT_ID: 'i',
         STG_FULL_ACCESS_CLIENT_SECRET: 's',
+        GITHUB_RUN_ID: RUN,
+        GITHUB_RUN_ATTEMPT: ATTEMPT,
       },
       fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: () => {},
       fetch: () => {
         calls += 1;
         stalled();
@@ -761,7 +766,7 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
     const w = world({ index: [] });
     const logs = [];
     const code = await rd.runCheckSwap({
-      env: { GITHUB_STEP_SUMMARY: '/summary.md' },
+      env: { GITHUB_STEP_SUMMARY: '/summary.md', GITHUB_RUN_ID: RUN, GITHUB_RUN_ATTEMPT: ATTEMPT },
       fs: w.fs,
       fetch: async () => ({ status: 200 }),
       wrangler: w.wrangler,
@@ -776,7 +781,9 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
       'No manifest was saved; rows created by an interrupted build may need a manual purge.'
     );
     expect(text).not.toMatch(/nothing was (created|recorded)/i);
-    expect(w.calls).toEqual([]);
+    // it looked for an R2 copy of today's manifest, and changed nothing
+    allCalls.push(...w.calls);
+    expect(w.calls.map((c) => `${c.args[0]} ${c.args[2]}`)).toEqual(['r2 get']);
   });
 
   test('a build killed mid-run leaves a manifest file with what it created', async () => {
@@ -799,8 +806,13 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
         STG_FULL_ADMIN_KEY: 'k',
         STG_FULL_ACCESS_CLIENT_ID: 'i',
         STG_FULL_ACCESS_CLIENT_SECRET: 's',
+        GITHUB_RUN_ID: RUN,
+        GITHUB_RUN_ATTEMPT: ATTEMPT,
       },
       fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: () => {},
       fetch: (url) => {
         if (String(url).endsWith('/event-types')) {
           return Promise.resolve({
@@ -835,6 +847,8 @@ describe('build', () => {
     STG_FULL_ADMIN_KEY: 'admin-key-value-1',
     STG_FULL_ACCESS_CLIENT_ID: 'access-id-value-2',
     STG_FULL_ACCESS_CLIENT_SECRET: 'access-secret-value-3',
+    GITHUB_RUN_ID: RUN,
+    GITHUB_RUN_ATTEMPT: ATTEMPT,
   };
   const res = (status, body) => ({
     status,
@@ -858,6 +872,9 @@ describe('build', () => {
     const code = await rd.runBuild({
       env: ENV,
       fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: () => {},
       fetch: async (url) => res(200, String(url).endsWith('/event-types') ? CATALOG : {}),
       now: () => new Date('2026-11-04T12:00:00Z'),
       outDir,
@@ -879,6 +896,9 @@ describe('build', () => {
     const code = await rd.runBuild({
       env: ENV,
       fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: () => {},
       fetch: async (url) => {
         if (String(url).endsWith('/event-types')) return res(200, CATALOG);
         sponsors += 1;
@@ -1054,6 +1074,9 @@ describe('final review', () => {
         INSTAGRAM_TOKEN_ISSUED: '2026-10-30',
       },
       fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: () => {},
       fetch: async (url, init = {}) => {
         const u = String(url);
         if (u.startsWith('https://graph.instagram.com/')) return res(401, {});
@@ -1088,5 +1111,489 @@ describe('final review', () => {
     expect(manifest.items.filter((i) => i.kind === 'upload')).toEqual([]);
     expect(paths.some((p) => p.endsWith('/uploads'))).toBe(false);
     expect(paths.some((p) => /^PUT [/]api[/]v2[/]admin[/]events[/]/.test(p))).toBe(false);
+  });
+});
+
+describe('the manifest is registered in R2 during the build', () => {
+  const ENV = {
+    STG_FULL_ADMIN_KEY: 'admin-key-value-1',
+    STG_FULL_ACCESS_CLIENT_ID: 'access-id-value-2',
+    STG_FULL_ACCESS_CLIENT_SECRET: 'access-secret-value-3',
+    GITHUB_RUN_ID: RUN,
+    GITHUB_RUN_ATTEMPT: ATTEMPT,
+  };
+  const EMPTY = { date: TODAY, items: [], qr: [], acceptSql: [], short: {}, warnings: [] };
+  const CATALOG = { ok: true, categories: [{ code: 'SOCIAL', types: [{ id: 'trivia' }] }] };
+  const NODE_LIST = JSON.parse(readFileSync(path.join(ROOT, 'stock/nodes.json'), 'utf8')).nodes;
+  const res = (status, body) => ({
+    status,
+    ok: status >= 200 && status < 300,
+    json: async () => body,
+  });
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  const businesses = (n) =>
+    Array.from({ length: n }, (_, i) => ({
+      name: `Biz ${i + 1}`,
+      address: `${i + 1} Main St`,
+      node: 'beverly',
+      anchor: i === 0,
+    }));
+  const buildWorld = (opts, list = []) => {
+    const w = world(opts);
+    w.fs.writeFileSync(path.join('/out', 'accepted.json'), '[]');
+    w.fs.writeFileSync(path.join('/out', 'businesses.json'), JSON.stringify(list));
+    return w;
+  };
+  const manifestPuts = (w, name = TODAY_NAME) =>
+    w.calls.filter((c) => c.args[2] === 'put' && c.args[3].endsWith(`stock/${name}`));
+  const isManifestPut = (c) => c.args[2] === 'put' && /manifest-\d/.test(c.args[3]);
+  const isIndexPut = (c) => c.args[2] === 'put' && c.args[3].endsWith('manifest-index.json');
+
+  test('the build writes the empty manifest and lists its name before the first API call', async () => {
+    const w = buildWorld({ index: [STALE_NAME] });
+    let stalled;
+    const hung = new Promise((resolve) => (stalled = resolve));
+    rd.runBuild({
+      env: ENV,
+      fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: () => {},
+      fetch: () => {
+        w.order.push('api');
+        stalled();
+        return new Promise(() => {});
+      },
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir: '/out',
+    });
+    await hung;
+    allCalls.push(...w.calls);
+    expect(JSON.parse(w.r2.get(`stock/${TODAY_NAME}`))).toEqual(EMPTY);
+    expect(w.liveIndex()).toEqual([STALE_NAME, TODAY_NAME]);
+    // read the index and today's key, write the object, then the index; only then the API
+    expect(w.order).toEqual(['r2:get', 'r2:get', 'r2:put', 'r2:put', 'api']);
+    expect(w.calls[3].args[3]).toBe(`${rd.R2_BUCKET}/${rd.INDEX_KEY}`);
+  });
+
+  test.each([
+    ['the index cannot be read', (c) => c.args[2] === 'get'],
+    ['the manifest object cannot be written', isManifestPut],
+    ['the index cannot be written', isIndexPut],
+  ])('when %s, the build creates nothing and exits red', async (_, fail) => {
+    const w = buildWorld({ index: [STALE_NAME], fail }, businesses(2));
+    let fetched = 0;
+    const code = await rd.runBuild({
+      env: ENV,
+      fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: () => {},
+      fetch: async () => {
+        fetched += 1;
+        return res(200, CATALOG);
+      },
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir: '/out',
+    });
+    allCalls.push(...w.calls);
+    expect(code).toBe(1);
+    expect(fetched).toBe(0);
+    const notes = JSON.parse(w.files.get(path.join('/out', 'build-notes.json')));
+    expect(notes.ok).toBe(false);
+    expect(notes.error).toMatch(/^manifest not registered in R2: /);
+    expect(w.liveIndex()).toEqual([STALE_NAME]);
+  });
+
+  test('a build with no run id registers nothing and creates nothing', async () => {
+    const w = buildWorld({ index: [] });
+    let fetched = 0;
+    const code = await rd.runBuild({
+      env: { ...ENV, GITHUB_RUN_ID: '' },
+      fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: () => {},
+      fetch: async () => {
+        fetched += 1;
+        return res(200, CATALOG);
+      },
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir: '/out',
+    });
+    expect(code).toBe(1);
+    expect(fetched).toBe(0);
+    expect(w.calls).toEqual([]);
+  });
+
+  test('an existing object under the build’s own name is never overwritten: red, nothing created', async () => {
+    const w = buildWorld({
+      index: [],
+      objects: { [`stock/${TODAY_NAME}`]: manifestOf(TODAY, 'other', ['a']) },
+    });
+    let fetched = 0;
+    const code = await rd.runBuild({
+      env: ENV,
+      fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: () => {},
+      fetch: async () => {
+        fetched += 1;
+        return res(200, CATALOG);
+      },
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir: '/out',
+    });
+    allCalls.push(...w.calls);
+    expect(code).toBe(1);
+    expect(fetched).toBe(0);
+    expect(JSON.parse(w.r2.get(`stock/${TODAY_NAME}`)).items[0].id).toMatch(/^other_/);
+    expect(w.calls.some((c) => c.args[2] === 'put')).toBe(false);
+  });
+
+  describe('throttled copies, under a fake clock', () => {
+    // A clock and a timer queue that move only when the test says so.
+    const fakeTime = (start = 0) => {
+      const t = { now: start, timers: [] };
+      t.setTimer = (fn, ms) => {
+        const h = { at: t.now + ms, fn };
+        t.timers.push(h);
+        return h;
+      };
+      t.clearTimer = (h) => {
+        t.timers = t.timers.filter((x) => x !== h);
+      };
+      t.advance = async (ms) => {
+        const end = t.now + ms;
+        for (;;) {
+          const due = t.timers.filter((h) => h.at <= end).sort((a, b) => a.at - b.at)[0];
+          if (!due) break;
+          t.timers = t.timers.filter((x) => x !== due);
+          t.now = due.at;
+          due.fn();
+          await settle();
+        }
+        t.now = end;
+        await settle();
+      };
+      return t;
+    };
+
+    test('at most one write per 20 s, a lone change still lands within 20 s, then a final write', async () => {
+      const t = fakeTime();
+      const writes = [];
+      const p = rd.makeManifestPersister({
+        save: async (text) => writes.push({ at: t.now, n: JSON.parse(text).items.length }),
+        now: () => t.now,
+        setTimer: t.setTimer,
+        clearTimer: t.clearTimer,
+      });
+      const m = { date: TODAY, items: [] };
+      for (let i = 1; i <= 65; i++) {
+        m.items.push({ kind: 'sponsor', id: `sp_${i}`, node: 'a' });
+        p.record(m);
+        await t.advance(1000);
+      }
+      expect(writes.map((x) => x.at)).toEqual([20000, 40000, 60000]);
+      for (let i = 1; i < writes.length; i++) {
+        expect(writes[i].at - writes[i - 1].at).toBeGreaterThanOrEqual(rd.PERSIST_INTERVAL_MS);
+      }
+      // the last records, then nothing: the trailing write still lands by 80 s
+      await t.advance(25000);
+      expect(writes.map((x) => x.at)).toEqual([20000, 40000, 60000, 80000]);
+      expect(writes[3].n).toBe(65);
+      await p.final(m);
+      expect(writes).toHaveLength(5);
+      expect(writes[4]).toEqual({ at: 90000, n: 65 });
+      expect(t.timers).toEqual([]);
+    });
+
+    test('a failed throttled write is a warning; a failed final write throws', async () => {
+      const t = fakeTime();
+      const warnings = [];
+      let ok = false;
+      const p = rd.makeManifestPersister({
+        save: async () => {
+          if (!ok) throw new Error('wrangler r2 put failed (exit 1)');
+        },
+        now: () => t.now,
+        setTimer: t.setTimer,
+        clearTimer: t.clearTimer,
+        warn: (msg) => warnings.push(msg),
+      });
+      const m = { date: TODAY, items: [{ kind: 'sponsor', id: 'sp_1', node: 'a' }] };
+      p.record(m);
+      await t.advance(21000);
+      expect(warnings).toEqual([
+        'manifest copy in R2 not updated: wrangler r2 put failed (exit 1)',
+      ]);
+      await expect(p.final(m)).rejects.toThrow('wrangler r2 put failed (exit 1)');
+      ok = true;
+      await expect(p.final(m)).resolves.toBeUndefined();
+    });
+
+    // The build's clock moves 15 s per API call, so its R2 copy is throttled for real.
+    const runTimed = (
+      w,
+      {
+        env = ENV,
+        start = '2026-11-04T12:00:00Z',
+        log = () => {},
+        t = fakeTime(Date.parse(start)),
+      },
+      fetchFor
+    ) => {
+      return rd.runBuild({
+        env,
+        fs: w.fs,
+        wrangler: w.wrangler,
+        tmpDir: '/tmp',
+        log,
+        now: () => new Date(t.now),
+        setTimer: t.setTimer,
+        clearTimer: t.clearTimer,
+        fetch: (url, init) => {
+          t.now += 15000;
+          return fetchFor(String(url), init);
+        },
+        outDir: '/out',
+      });
+    };
+    const sponsorsOk = () => {
+      let n = 0;
+      return async (url) =>
+        url.endsWith('/event-types') ? res(200, CATALOG) : res(201, { id: `sp_${++n}` });
+    };
+
+    test('the build writes throttled copies and a final one when buildDay returns', async () => {
+      const w = buildWorld({ index: [] }, businesses(6));
+      const code = await runTimed(w, {}, sponsorsOk());
+      allCalls.push(...w.calls);
+      expect(code).toBe(0);
+      const local = JSON.parse(w.files.get(path.join('/out', 'manifest.json')));
+      expect(local.items).toHaveLength(6);
+      expect(JSON.parse(w.r2.get(`stock/${TODAY_NAME}`))).toEqual(local);
+      // registration, at least one throttled copy mid-build, then the final copy
+      const sizes = manifestPuts(w).map(
+        (c) => JSON.parse(w.files.get(c.args[c.args.indexOf('--file') + 1])).items.length
+      );
+      expect(sizes[0]).toBe(0);
+      expect(sizes.at(-1)).toBe(6);
+      expect(sizes.slice(1, -1).length).toBeGreaterThanOrEqual(1);
+      expect(sizes.slice(1, -1).every((k) => k > 0 && k < 6)).toBe(true);
+      expect(w.liveIndex()).toEqual([TODAY_NAME]);
+    });
+
+    test('the build writes a final copy when buildDay throws', async () => {
+      const w = buildWorld({ index: [] }, businesses(3));
+      let n = 0;
+      const code = await runTimed(w, {}, async (url) => {
+        if (url.endsWith('/event-types')) return res(200, CATALOG);
+        n += 1;
+        return n < 3 ? res(201, { id: `sp_${n}` }) : res(500, {});
+      });
+      allCalls.push(...w.calls);
+      expect(code).toBe(1);
+      const saved = JSON.parse(w.r2.get(`stock/${TODAY_NAME}`));
+      expect(saved.items.map((i) => i.id)).toEqual(['sp_1', 'sp_2']);
+    });
+
+    test('a failed final copy turns a good build red; failed throttled copies alone do not', async () => {
+      // every manifest put after registration fails: the throttled ones warn, the final one is red
+      let puts = 0;
+      const red = buildWorld(
+        { index: [], fail: (c) => isManifestPut(c) && ++puts > 1 },
+        businesses(4)
+      );
+      const logs = [];
+      const code = await runTimed(red, { log: (l) => logs.push(l) }, sponsorsOk());
+      allCalls.push(...red.calls);
+      expect(code).toBe(1);
+      expect(puts).toBeGreaterThan(2); // at least one throttled copy, then the final one
+      expect(logs.join('\n')).toContain('manifest copy in R2 not updated');
+      const notes = JSON.parse(red.files.get(path.join('/out', 'build-notes.json')));
+      expect(notes.ok).toBe(false);
+      expect(notes.error).toMatch(/manifest not saved to R2/);
+
+      // only the throttled copies fail: the build stays green and the final copy lands
+      const sizes = [];
+      const green = buildWorld(
+        {
+          index: [],
+          fail: (c) => {
+            if (!isManifestPut(c)) return false;
+            sizes.push(c);
+            return sizes.length > 1 && sizes.length < manifestPuts(red).length;
+          },
+        },
+        businesses(4)
+      );
+      const ok = await runTimed(green, {}, sponsorsOk());
+      allCalls.push(...green.calls);
+      expect(sizes.length).toBeGreaterThan(2);
+      expect(ok).toBe(0);
+      expect(JSON.parse(green.r2.get(`stock/${TODAY_NAME}`)).items).toHaveLength(4);
+    });
+
+    test('a cancelled build’s registered manifest is stale to the next run, which purges it per passing node', async () => {
+      // Run 100 on the 3rd: two sponsors made, a throttled copy written, then cancelled.
+      const w = buildWorld({ index: [] }, businesses(3));
+      const t = fakeTime(Date.parse('2026-11-03T12:00:00Z'));
+      let n = 0;
+      let stalled;
+      const hung = new Promise((resolve) => (stalled = resolve));
+      runTimed(w, { env: { ...ENV, GITHUB_RUN_ID: '100' }, t }, async (url) => {
+        if (url.endsWith('/event-types')) return res(200, CATALOG);
+        n += 1;
+        if (n === 3) {
+          await t.advance(20000); // the third request hangs long enough for the timer
+          stalled();
+          return new Promise(() => {}); // cancelled here: no final write, no check-swap
+        }
+        return res(201, { id: `sp_${n}` });
+      });
+      await hung;
+      await settle();
+      expect(w.liveIndex()).toEqual([STALE_NAME]);
+      expect(JSON.parse(w.r2.get(`stock/${STALE_NAME}`)).items.map((i) => i.id)).toEqual([
+        'sp_1',
+        'sp_2',
+      ]);
+
+      // Run 200 on the 4th: every node passes, so the cancelled run's rows are purged.
+      const report = await rd.checkSwap({
+        manifest: manifestOf(TODAY, 't', ['beverly']),
+        nodes: { nodes: NODE_LIST },
+        targets: TARGETS,
+        today: TODAY,
+        runId: RUN,
+        runAttempt: ATTEMPT,
+        cloud: w.cloud,
+        checkNodes: async () =>
+          Object.fromEntries(
+            NODE_LIST.map((x) => [
+              x.id,
+              { pass: true, count: P, expected: P, totalListed: P, reasons: [] },
+            ])
+          ),
+      });
+      allCalls.push(...w.calls);
+      const purged = w
+        .sqls()
+        .filter((s) => s.startsWith('DELETE'))
+        .join('\n');
+      expect(purged).toContain("'sp_1'");
+      expect(purged).toContain("'sp_2'");
+      expect(purged).not.toContain("'t_");
+      expect(w.liveIndex()).toEqual([TODAY_NAME]);
+      expect(report.exitCode).toBe(0);
+    });
+  });
+});
+
+describe('check-swap over a manifest the build registered', () => {
+  test('it overwrites its own registered object with the complete manifest, and lists it once', async () => {
+    const full = manifestOf(TODAY, 't', ['a', 'b']);
+    const partial = { ...full, items: full.items.slice(0, 3), acceptSql: [] };
+    const w = world({ index: [TODAY_NAME], objects: { [`stock/${TODAY_NAME}`]: partial } });
+    const report = await swap(w, { manifest: full });
+    allCalls.push(...w.calls);
+    expect(JSON.parse(w.r2.get(`stock/${TODAY_NAME}`))).toEqual(full);
+    expect(w.liveIndex()).toEqual([TODAY_NAME]);
+    expect(w.order).toContain('check');
+    expect(w.sqls().filter((s) => s.startsWith('DELETE'))).toEqual([]);
+    expect(report.problems).toEqual([]);
+    expect(report.exitCode).toBe(0);
+  });
+
+  test('it overwrites the empty registration of a build that recorded nothing yet', async () => {
+    const w = world({
+      index: [TODAY_NAME],
+      objects: {
+        [`stock/${TODAY_NAME}`]: {
+          date: TODAY,
+          items: [],
+          qr: [],
+          acceptSql: [],
+          short: {},
+          warnings: [],
+        },
+      },
+    });
+    const report = await swap(w);
+    allCalls.push(...w.calls);
+    expect(JSON.parse(w.r2.get(`stock/${TODAY_NAME}`)).items).toHaveLength(10);
+    expect(w.liveIndex()).toEqual([TODAY_NAME]);
+    expect(report.exitCode).toBe(0);
+  });
+
+  test('it refuses red when the registered object holds an id the artifact does not', async () => {
+    const full = manifestOf(TODAY, 't', ['a', 'b']);
+    const foreign = {
+      ...full,
+      items: [...full.items, { kind: 'event', id: 'x_evt_a', node: 'a' }],
+    };
+    const w = world({ index: [TODAY_NAME], objects: { [`stock/${TODAY_NAME}`]: foreign } });
+    const report = await swap(w, { manifest: full });
+    allCalls.push(...w.calls);
+    expect(JSON.parse(w.r2.get(`stock/${TODAY_NAME}`))).toEqual(foreign);
+    expect(w.calls.some((c) => c.args[2] === 'put')).toBe(false);
+    expect(w.order).not.toContain('check');
+    expect(w.sqls().join('\n')).not.toContain("'x_evt_a'");
+    expect(report.problems.join('\n')).toMatch(/x_evt_a/);
+    expect(report.problems.join('\n')).toMatch(/never overwritten/);
+    expect(report.exitCode).toBe(1);
+  });
+
+  test('a garbled object under today’s name is never overwritten', async () => {
+    const w = world({ index: [TODAY_NAME] });
+    w.r2.set(`stock/${TODAY_NAME}`, '{"items": nope');
+    const report = await swap(w);
+    allCalls.push(...w.calls);
+    expect(w.r2.get(`stock/${TODAY_NAME}`)).toBe('{"items": nope');
+    expect(w.calls.some((c) => c.args[2] === 'put')).toBe(false);
+    expect(report.exitCode).toBe(1);
+  });
+
+  test('with no artifact, it purges every node of the R2 copy, red', async () => {
+    const w = world({
+      index: [STALE_NAME, TODAY_NAME],
+      objects: {
+        [`stock/${STALE_NAME}`]: manifestOf('2026-11-03', 'y', ['a', 'b']),
+        [`stock/${TODAY_NAME}`]: manifestOf(TODAY, 't', ['a', 'b']),
+      },
+    });
+    let checked = false;
+    const code = await rd.runCheckSwap({
+      env: {
+        GITHUB_RUN_ID: RUN,
+        GITHUB_RUN_ATTEMPT: ATTEMPT,
+        BUILD_RESULT: 'success',
+        GITHUB_STEP_SUMMARY: '/summary.md',
+      },
+      fs: w.fs,
+      fetch: async () => ({ status: 200 }),
+      wrangler: w.wrangler,
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir: '/out',
+      tmpDir: '/tmp',
+      checkNodes: async () => {
+        checked = true;
+        return {};
+      },
+      log: () => {},
+    });
+    allCalls.push(...w.calls);
+    expect(code).toBe(1);
+    expect(checked).toBe(false);
+    const purged = w.sqls().join('\n');
+    expect(purged).toContain("'t_evt_a'");
+    expect(purged).toContain("'t_evt_b'");
+    expect(purged).not.toContain("'y_");
+    expect(w.liveIndex()).toEqual([STALE_NAME]);
+    const summary = w.files.get('/summary.md');
+    expect(summary).toContain(`the R2 copy of ${TODAY_NAME}`);
+    expect(summary).not.toContain('No manifest was saved');
   });
 });
