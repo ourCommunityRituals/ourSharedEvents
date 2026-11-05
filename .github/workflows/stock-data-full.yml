@@ -24,9 +24,10 @@
 #
 # Secrets (owner-set, repo level): CLOUDFLARE_API_TOKEN_OSE and CLOUDFLARE_ACCOUNT_ID
 # (deploy, build and check-swap only), OCR_HUB_READ (the pinned @ocr/ui the Worker builds
-# with), INSTAGRAM_ACCESS_TOKEN, STG_FULL_ADMIN_KEY, STG_FULL_ACCESS_CLIENT_ID,
-# STG_FULL_ACCESS_CLIENT_SECRET.
-# Variables: INSTAGRAM_TOKEN_ISSUED.
+# with), STG_FULL_ADMIN_KEY, STG_FULL_ACCESS_CLIENT_ID, STG_FULL_ACCESS_CLIENT_SECRET.
+# Optional: INSTAGRAM_ACCESS_TOKEN (secret) and INSTAGRAM_TOKEN_ISSUED (variable). The
+# owner's photos in stock/art are the art without them (owner 2026-11-05); a token only
+# adds Instagram posts to choose from.
 
 name: Stock data (stg-full)
 

@@ -353,6 +353,33 @@ describe('buildDay', () => {
     expect(callsTo(none, 'POST', /\/uploads$/)).toHaveLength(0);
   });
 
+  test('a local photo (stock/art) is read from disk, never downloaded, and set as the cover', async () => {
+    const posts = [
+      { id: 'mural', caption: 'x', hashtags: ['typea'], file: '/repo/stock/art/m.jpg' },
+    ];
+    const artTags = { tags: { typea: 'type-a' } };
+    const site = fakeSite();
+    const read = [];
+    const manifest = await buildDay(
+      args(site, {
+        accepted: [row('beverly', 'private', 10)],
+        posts,
+        artTags,
+        readFile: async (p) => {
+          read.push(p);
+          return new Uint8Array([0xff, 0xd8, 0xff]);
+        },
+      })
+    );
+    expect(read).toEqual(['/repo/stock/art/m.jpg']);
+    expect(site.calls.some((c) => c.external)).toBe(false);
+    expect(callsTo(site, 'POST', /\/uploads$/)).toHaveLength(1);
+    expect(callsTo(site, 'PUT', /^\/api\/v2\/admin\/events\/evt_/)[0].body).toEqual({
+      cover_image_url: '/api/v2/uploads/events/x/art.png',
+    });
+    expect(manifest.items.some((i) => i.kind === 'upload')).toBe(true);
+  });
+
   test('onRecord fires after every recorded id, with the manifest as it stands', async () => {
     const seen = [];
     const manifest = await buildDay(

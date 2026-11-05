@@ -1,0 +1,47 @@
+{
+  "credit": "Owner's photographs (@brokenbatphoto), given 2026-11-05 for the full staging site only. Metadata stripped.",
+  "photos": [
+    {
+      "id": "blue-island-mural",
+      "file": "blue-island-mural.jpg",
+      "orientation": "landscape",
+      "caption": "The Island 60406 mural and its picnic tables, reflected.",
+      "hashtags": ["mural"]
+    },
+    {
+      "id": "court-reflection",
+      "file": "court-reflection.jpg",
+      "orientation": "landscape",
+      "caption": "A pickup game on an outdoor court, reflected in a puddle.",
+      "hashtags": ["court"]
+    },
+    {
+      "id": "city-sidewalk",
+      "file": "city-sidewalk.jpg",
+      "orientation": "landscape",
+      "caption": "A busy city sidewalk, from above.",
+      "hashtags": ["sidewalk"]
+    },
+    {
+      "id": "passenger-seat",
+      "file": "passenger-seat.jpg",
+      "orientation": "landscape",
+      "caption": "A driver with a statue riding in the passenger seat.",
+      "hashtags": ["passenger"]
+    },
+    {
+      "id": "holiday-train",
+      "file": "holiday-train.jpg",
+      "orientation": "landscape",
+      "caption": "The holiday train, its lights streaking past.",
+      "hashtags": ["holidaytrain"]
+    },
+    {
+      "id": "storefront-curb",
+      "file": "storefront-curb.jpg",
+      "orientation": "portrait",
+      "caption": "A store's long wall under a grey sky, someone resting on the curb.",
+      "hashtags": ["storefront"]
+    }
+  ]
+}
