@@ -1,7 +1,7 @@
 {
   "generated_at": "2026-11-05",
-  "commit": "e8c6492b",
-  "run_url": "https://github.com/ourCommunityRituals/ourSharedEvents/actions/runs/42039239452",
+  "commit": "23ffa034",
+  "run_url": "https://github.com/ourCommunityRituals/ourSharedEvents/actions/runs/42079019367",
   "schema_version": "1.0.0",
   "story": "OSE-560",
   "summary": {
@@ -10,8 +10,8 @@
     "partial": 8,
     "gap": 2,
     "retired": 2,
-    "threat_entries": 89,
-    "open_threats": 2
+    "threat_entries": 93,
+    "open_threats": 5
   },
   "invariants": [
     {
@@ -119,9 +119,9 @@
       "invariant_status": "partial",
       "enforcement_status": "partial",
       "last_attacked": "2026-11-04",
-      "last_green": "2026-11-04",
-      "threat_count": 13,
-      "open_threat_count": 0,
+      "last_green": "2026-11-05",
+      "threat_count": 16,
+      "open_threat_count": 2,
       "brain_conformance": []
     },
     {
