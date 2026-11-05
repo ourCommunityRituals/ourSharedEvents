@@ -28,7 +28,14 @@ describe('OSE-R-008 — public event page registration CTA copy', () => {
       'eventFormHref(row.id, { type, deploymentId: ctx.deploymentId })'
     );
     expect(pagesSource).toContain("const formContext = opts?.formContext ?? { type: 'register' };");
-    expect(pagesSource).toContain("return 'Register';");
+    // The label is in the language catalog; English reads "Register".
+    expect(pagesSource).toContain("return msg(lang, 'cta.register');");
+    const catalogSource = readFileSync(
+      join(__dirname, '../../workers/oursharedevents/src/lib/i18n/catalog.ts'),
+      'utf8'
+    );
+    expect(catalogSource).toContain("'cta.register': 'Register',");
     expect(pagesSource).not.toContain('>RSVP for this event</a>');
+    expect(catalogSource).not.toContain('RSVP for this event');
   });
 });

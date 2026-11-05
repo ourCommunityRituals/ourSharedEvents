@@ -1080,6 +1080,13 @@
       "testCount": 27
     },
     {
+      "file": "workers/oursharedevents/tests/event-page-spanish.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 9
+    },
+    {
       "file": "workers/oursharedevents/tests/event-phase-coherence.spec.ts",
       "bucket": "node",
       "needsReview": true,

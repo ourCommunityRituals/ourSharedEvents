@@ -14,6 +14,8 @@
 // The test id sits on the <details> itself: it is always rendered and visible
 // (the summary is), so existing `toBeVisible()` assertions keep holding.
 
+import { msg } from './i18n/catalog';
+import { DEFAULT_LANG, type Lang } from './i18n/languages';
 import { injectMarker } from './inject-marker';
 
 export type NeverWhoSurface = 'landing' | 'events' | 'event';
@@ -24,7 +26,7 @@ export const NEVER_WHO_MARKER = '<!--OCR_NEVER_WHO-->';
 export const NEVER_WHO_CSS_MARKER = '/*OCR_NEVER_WHO_CSS*/';
 
 /** The one visible line. Also the standing product subtitle (OSE-1230). */
-export const NEVER_WHO_LINE = 'Never who, only how many.';
+export const NEVER_WHO_LINE = msg(DEFAULT_LANG, 'neverWho.line');
 
 // Per-surface paragraph — wording unchanged from the cards they replace; each is
 // true of the page it sits on (the landing sets no cookies and asks for
@@ -47,13 +49,9 @@ const BODIES: Record<NeverWhoSurface, string> = {
           corridors and venues, not people. Nothing about your device, location,
           or identity was collected to display this page.
         </p>`,
-  event: `<p>
-      You're part of the group, anonymously. OurSharedEvents tracks when
-      groups gather &mdash; never who you are. Event hosts and sponsors see
-      corridors and venues, not people. The link you followed counted as a
-      single click; nothing about your device, location, or identity was
-      collected to display this page.
-    </p>`,
+  // The event page's paragraph is in the language catalog (`neverWho.event`),
+  // because the event page renders in the visitor's language.
+  event: msg(DEFAULT_LANG, 'neverWho.event'),
 };
 
 // Test ids predate this partial and are asserted by unit + E2E suites.
@@ -63,12 +61,17 @@ const TESTIDS: Record<NeverWhoSurface, string> = {
   event: 'anonymity-affordance',
 };
 
-/** Render the disclosure for a surface. Collapsed by default. */
-export function renderNeverWho(surface: NeverWhoSurface): string {
+/**
+ * Render the disclosure for a surface. Collapsed by default. Only the event
+ * page is on the language layer; landing and /events stay English until they
+ * join it, so their paragraph ignores `lang`.
+ */
+export function renderNeverWho(surface: NeverWhoSurface, lang: Lang = DEFAULT_LANG): string {
+  const body = surface === 'event' ? msg(lang, 'neverWho.event') : BODIES[surface];
   return `<details class="ose-never-who" data-testid="${TESTIDS[surface]}" data-never-who="${surface}">
-    <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">${NEVER_WHO_LINE}</span> <span class="ose-never-who-trigger">How this works</span></summary>
+    <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">${msg(lang, 'neverWho.line')}</span> <span class="ose-never-who-trigger">${msg(lang, 'neverWho.trigger')}</span></summary>
     <div class="ose-never-who-body" data-testid="never-who-body">
-        ${BODIES[surface]}
+        ${body}
     </div>
   </details>`;
 }

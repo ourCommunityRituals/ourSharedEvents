@@ -41,8 +41,8 @@ import {
 import { injectLegalFooter } from '../lib/legal-footer';
 import { injectNeverWho, renderNeverWho, NEVER_WHO_CSS } from '../lib/never-who';
 import { BACK_BUTTON_CSS, renderBackButton } from '../lib/back-button';
-import { DEFAULT_LANG, type Lang } from '../lib/i18n/languages';
-import { msg, msgAll, WHAT_TYPES } from '../lib/i18n/catalog';
+import { DEFAULT_LANG, OG_LOCALE, type Lang } from '../lib/i18n/languages';
+import { fmt, msg, msgAll, WHAT_TYPES } from '../lib/i18n/catalog';
 import { resolveLanguage } from '../lib/i18n/resolve-language';
 import { languageAlternates, withLangPrefix } from '../lib/i18n/path-prefix';
 import { LANGUAGE_SWITCH_CSS, renderLanguageSwitch } from '../lib/i18n/language-switch';
@@ -478,10 +478,15 @@ function esc(s: string | null | undefined): string {
     .replace(/'/g, '&#39;');
 }
 
-function renderEventTypeMeta(row: PublicEventRow, testId = 'event-type'): string {
+function renderEventTypeMeta(
+  row: PublicEventRow,
+  testId = 'event-type',
+  lang: Lang = DEFAULT_LANG
+): string {
+  // The type's own name is catalog data; its labels per language are OSE-1764.
   const label = esc(row.event_type_name) || esc(row.event_type_id);
   if (!label) return '';
-  return `<p class="ose-meta" data-testid="${testId}">Type: ${label}</p>`;
+  return `<p class="ose-meta" data-testid="${testId}">${fmt(lang, 'event.type', { type: label })}</p>`;
 }
 
 /**
@@ -568,6 +573,8 @@ function buildOgMeta(opts: {
   imageUrl?: string | null;
   startTime?: string | null;
   endTime?: string | null;
+  /** The page language, for `og:locale`. */
+  lang?: Lang;
 }): string {
   const type = opts.type ?? 'event';
   const image = opts.imageUrl ? esc(opts.imageUrl) : '';
@@ -585,7 +592,7 @@ function buildOgMeta(opts: {
     `  <meta property="og:url" content="${opts.url}" />`,
     `  <meta property="og:type" content="${type}" />`,
     `  <meta property="og:site_name" content="OurSharedEvents" />`,
-    `  <meta property="og:locale" content="en_US" />`,
+    `  <meta property="og:locale" content="${OG_LOCALE[opts.lang ?? DEFAULT_LANG]}" />`,
     `  <meta name="twitter:card" content="${twitterCard}" />`,
     `  <meta name="twitter:title" content="${opts.title}" />`,
     `  <meta name="twitter:description" content="${opts.description}" />`,
@@ -777,17 +784,17 @@ function eventFormHref(eventId: string, ctx: EventFormContext): string {
   return eventFormPath(eventId, ctx.type, ctx.deploymentId);
 }
 
-function eventFormCtaLabel(type: EventFormType): string {
+function eventFormCtaLabel(type: EventFormType, lang: Lang = DEFAULT_LANG): string {
   switch (type) {
     case 'checkin':
-      return 'Check in at this event';
+      return msg(lang, 'cta.checkin');
     case 'survey':
-      return 'Share feedback';
+      return msg(lang, 'cta.survey');
     case 'email-signup':
-      return 'Get event updates';
+      return msg(lang, 'cta.emailSignup');
     case 'register':
     default:
-      return 'Register';
+      return msg(lang, 'cta.register');
   }
 }
 
@@ -890,15 +897,16 @@ const NEXT_AT_VENUE_CSS = `
 /** One row of a "next at this venue" list. */
 function renderSuggestionItems(
   events: NextEventRow[],
-  ids: (i: number) => { item: string; link: string }
+  ids: (i: number) => { item: string; link: string },
+  lang: Lang = DEFAULT_LANG
 ): string {
   return events
     .map((ev, i) => {
       const t = ids(i);
       return `<li class="ose-suggestion" data-testid="${t.item}">
-          <a class="ose-suggestion-link" data-testid="${t.link}" href="/events/${esc(ev.id)}">
+          <a class="ose-suggestion-link" data-testid="${t.link}" href="${withLangPrefix(lang, `/events/${esc(ev.id)}`)}">
             <span class="ose-suggestion-title">${esc(ev.title)}</span>
-            <span class="ose-suggestion-when">${formatHumanDate(ev.start_date)}</span>
+            <span class="ose-suggestion-when">${formatHumanDate(ev.start_date, lang)}</span>
           </a>
         </li>`;
     })
@@ -910,12 +918,16 @@ function renderSuggestionItems(
  * the deeper detail (the recap has had the same since OSE-657). Nothing renders
  * when there are none: no empty heading.
  */
-function renderNextAtVenue(events: NextEventRow[] | undefined, venue: string): string {
+function renderNextAtVenue(
+  events: NextEventRow[] | undefined,
+  venue: string,
+  lang: Lang = DEFAULT_LANG
+): string {
   const curated = (events ?? []).slice(0, MAX_POST_EVENT_SUGGESTIONS);
   if (!curated.length) return '';
   return `<aside class="ose-venue-next" data-testid="venue-next-events" aria-labelledby="venue-next-heading">
-      <h2 id="venue-next-heading" class="ose-suggestions-heading">Next at ${venue || 'this venue'}</h2>
-      <ul class="ose-suggestion-list">${renderSuggestionItems(curated, (i) => ({ item: `venue-next-event-${i}`, link: `venue-next-event-link-${i}` }))}</ul>
+      <h2 id="venue-next-heading" class="ose-suggestions-heading">${fmt(lang, 'next.atVenue', { venue: venue || msg(lang, 'next.thisVenue') })}</h2>
+      <ul class="ose-suggestion-list">${renderSuggestionItems(curated, (i) => ({ item: `venue-next-event-${i}`, link: `venue-next-event-link-${i}` }), lang)}</ul>
     </aside>`;
 }
 
@@ -969,7 +981,7 @@ function renderEventChoices(
       first,
       ' ose-choice-primary',
       href(ctx.type),
-      eventFormCtaLabel(ctx.type),
+      eventFormCtaLabel(ctx.type, lang),
       ctx.type === 'register' ? t.registerNote : t.checkinNote,
       'choice-note-first'
     ),
@@ -980,7 +992,7 @@ function renderEventChoices(
         'event-choice-register',
         '',
         href('register'),
-        eventFormCtaLabel('register'),
+        eventFormCtaLabel('register', lang),
         t.registerNote,
         'choice-note-register'
       )
@@ -1003,9 +1015,14 @@ function renderEventChoices(
   </section>`;
 }
 
-function renderSponsorStrip(testid: string, sponsors: SponsorBasicRow[], heading: string): string {
+function renderSponsorStrip(
+  testid: string,
+  sponsors: SponsorBasicRow[],
+  heading: string,
+  lang: Lang = DEFAULT_LANG
+): string {
   if (!sponsors.length) return '';
-  return `<section class="ose-sponsor-strip" data-testid="${testid}" aria-label="Event sponsors">
+  return `<section class="ose-sponsor-strip" data-testid="${testid}" aria-label="${msg(lang, 'sponsors.label')}">
     <p class="ose-sponsor-label">${heading}</p>
     ${renderSponsorList(sponsors)}
   </section>`;
@@ -1017,20 +1034,23 @@ function renderSponsorStrip(testid: string, sponsors: SponsorBasicRow[], heading
  * a date-only event keeps its prior shape (date · zone name). Pure Intl — no zone
  * string is interpolated into markup except through esc() at the call site.
  */
-function formatEventWhen(row: {
-  start_date: string | null;
-  starts_at?: string | null;
-  timezone: string | null;
-}): string {
+function formatEventWhen(
+  row: {
+    start_date: string | null;
+    starts_at?: string | null;
+    timezone: string | null;
+  },
+  lang: Lang = DEFAULT_LANG
+): string {
   if (row.starts_at) {
-    const time = formatEventTime(row.starts_at, row.timezone);
-    const date = formatHumanDate(zonedDatePart(row.starts_at, row.timezone));
+    const time = formatEventTime(row.starts_at, row.timezone, lang);
+    const date = formatHumanDate(zonedDatePart(row.starts_at, row.timezone), lang);
     if (time && date) return `${date} · ${time}`;
   }
-  const date = formatHumanDate(row.start_date);
+  const date = formatHumanDate(row.start_date, lang);
   if (!date) return '';
   // OSE-1518: the zone by its everyday name ("Central Time"), not the IANA id.
-  const zone = zoneDisplayName(row.timezone);
+  const zone = zoneDisplayName(row.timezone, undefined, lang);
   return zone ? `${date} · ${zone}` : date;
 }
 
@@ -1050,10 +1070,10 @@ const ANONYMITY_AFFORDANCE = renderNeverWho('event');
  * only, so the admin preview of a draft passes over it rather than show a
  * broken image.
  */
-function venueMapImg(row: PublicEventRow, testId: string): string {
+function venueMapImg(row: PublicEventRow, testId: string, lang: Lang = DEFAULT_LANG): string {
   const venue = row.location || row.where_address;
   if (!venue) return '';
-  return `<img src="/api/v2/maps/venue-image?event=${encodeURIComponent(row.id)}" alt="Map of ${esc(venue)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="${testId}" />`;
+  return `<img src="/api/v2/maps/venue-image?event=${encodeURIComponent(row.id)}" alt="${fmt(lang, 'map.alt', { venue: esc(venue) })}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="${testId}" />`;
 }
 
 // NOTE on CSP + the nonce parameter (added 2026-05-14 after code review):
@@ -1111,10 +1131,10 @@ export function renderPreEventHtml(
   const howDetails = esc(row.how_details);
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
-  const startHuman = formatEventWhen(row);
+  const startHuman = formatEventWhen(row, lang);
   // OSE-474: "Starts in 5 hours" under the labelled when line, pre-event only.
-  const countdown = renderEventCountdown(row, nonce);
-  const mapImg = preview ? '' : venueMapImg(row, 'venue-map');
+  const countdown = renderEventCountdown(row, nonce, undefined, lang);
+  const mapImg = preview ? '' : venueMapImg(row, 'venue-map', lang);
   const geoLink = renderGeoLink(
     row.lat,
     row.lon,
@@ -1129,7 +1149,7 @@ export function renderPreEventHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>${preview ? '<meta name="robots" content="noindex, nofollow" />' : ''}
-${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}${preview ? '' : '\n' + buildSearchMeta(row, shareUrl)}
+${buildOgMeta({ lang, title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}${preview ? '' : '\n' + buildSearchMeta(row, shareUrl)}
   <link rel="stylesheet" href="/ui.css" />
   <style>
     /* OSE-655 A2: palette driven by @ocr/ui role tokens (from /ui.css), so a
@@ -1165,21 +1185,21 @@ ${SPONSOR_LIST_CSS}
   </style>
 </head>
 <body>
-  <a href="#main" class="ose-skip">Skip to event content</a>
-  ${renderEventNav(row.id, 'event', { live: (row.status || '').toLowerCase() === 'active', allEventsTestId: 'event-nav-events' })}
+  <a href="#main" class="ose-skip">${msg(lang, 'page.skip')}</a>
+  ${renderEventNav(row.id, 'event', { live: (row.status || '').toLowerCase() === 'active', allEventsTestId: 'event-nav-events', lang })}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
     <header data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">${title}</h1>
-      ${renderEventTypeMeta(row)}
+      ${renderEventTypeMeta(row, 'event-type', lang)}
       ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}${countdown.html}</p>${countdown.script}` : ''}
-      ${renderTrustLine(row, 'event-trust')}
+      ${renderTrustLine(row, 'event-trust', lang)}
     </header>
-    ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
+    ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, msg(lang, 'sponsors.supportedBy'), lang) : ''}
 
     ${
       whatShort || whatVideo || whatLink
         ? `<section class="ose-card ose-section" data-testid="event-what" aria-labelledby="what-heading">
-           <h2 id="what-heading">What</h2>
+           <h2 id="what-heading">${msg(lang, 'section.what')}</h2>
            ${whatShort ? `<p>${whatShort}</p>` : ''}
            ${whatVideo ? `<p><a class="ose-what-video" data-testid="event-what-video" href="${esc(whatVideo)}" target="_blank" rel="noopener noreferrer nofollow">${msg(lang, 'video.watch')}</a></p>` : ''}
            ${whatLink}
@@ -1190,7 +1210,7 @@ ${SPONSOR_LIST_CSS}
     ${
       venueDisplay || whereAddress
         ? `<section class="ose-card ose-section" data-testid="event-where" aria-labelledby="where-heading">
-           <h2 id="where-heading">Where</h2>
+           <h2 id="where-heading">${msg(lang, 'section.where')}</h2>
            ${mapImg}
            ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
            ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
@@ -1202,8 +1222,8 @@ ${SPONSOR_LIST_CSS}
     ${
       whoHost || whoStory || whoImage
         ? `<section class="ose-card ose-section" data-testid="event-who" aria-labelledby="who-heading">
-           <h2 id="who-heading">Who</h2>
-           ${whoImage ? `<img class="ose-who-image" data-testid="event-who-image" src="${esc(whoImage)}" alt="${whoHost ? `Photo of ${whoHost}` : 'Host'}" loading="lazy" width="120" height="120" />` : ''}
+           <h2 id="who-heading">${msg(lang, 'section.who')}</h2>
+           ${whoImage ? `<img class="ose-who-image" data-testid="event-who-image" src="${esc(whoImage)}" alt="${whoHost ? fmt(lang, 'who.photoOf', { host: whoHost }) : msg(lang, 'who.host')}" loading="lazy" width="120" height="120" />` : ''}
            ${whoHost ? `<p data-testid="event-who-host">${whoHost}</p>` : ''}
            ${whoStory ? `<p class="ose-who-story" data-testid="event-who-story">${whoStory}</p>` : ''}
          </section>`
@@ -1214,11 +1234,11 @@ ${SPONSOR_LIST_CSS}
       // HOW MUCH — the event's own price (display only; #6 inert_monetization
       // holds — no charge logic). Sits right before the CTA: cost is the last
       // fact a recipient weighs before the ask (order: What → Where → Who → How much → CTA).
-      const howMuch = formatEventPrice(row);
+      const howMuch = formatEventPrice(row, lang);
       return howMuch === null
         ? ''
         : `<section class="ose-card ose-section" data-testid="event-how-much" aria-labelledby="how-much-heading">
-           <h2 id="how-much-heading">How much</h2>
+           <h2 id="how-much-heading">${msg(lang, 'section.howMuch')}</h2>
            <p>${esc(howMuch)}</p>
          </section>`;
     })()}
@@ -1236,7 +1256,7 @@ ${SPONSOR_LIST_CSS}
     ${
       whyPurpose
         ? `<section class="ose-card ose-section" data-testid="event-why" aria-labelledby="why-heading">
-           <h2 id="why-heading">Why</h2>
+           <h2 id="why-heading">${msg(lang, 'section.why')}</h2>
            <p>${whyPurpose}</p>
          </section>`
         : ''
@@ -1245,19 +1265,19 @@ ${SPONSOR_LIST_CSS}
     ${
       howDetails
         ? `<section class="ose-card ose-section" data-testid="event-how" aria-labelledby="how-heading">
-           <h2 id="how-heading">How</h2>
+           <h2 id="how-heading">${msg(lang, 'section.how')}</h2>
            <p>${howDetails}</p>
          </section>`
         : ''
     }
 
-    ${preview ? '' : renderNextAtVenue(opts?.nextEvents, venueDisplay)}
+    ${preview ? '' : renderNextAtVenue(opts?.nextEvents, venueDisplay, lang)}
 
     ${preview ? '' : renderLanguageSwitch({ lang, path: eventPagePath(row.id, row.slug), query: opts?.pageQuery })}
 
     ${renderBackButton({ fallbackHref: '/events', nonce, lang, inert: preview, testid: 'event-back' })}
 
-    ${ANONYMITY_AFFORDANCE}
+    ${renderNeverWho('event', lang)}
   </main>
 </body>
 </html>`;
@@ -1298,7 +1318,7 @@ export function renderEventLiveHtml(
   const formContext = opts?.formContext ?? { type: 'checkin' };
   const title = esc(row.title);
   // OSE-1313 — keep the scheduled time visible once the page flips to live.
-  const liveWhen = formatEventWhen(row);
+  const liveWhen = formatEventWhen(row, lang);
   // Same What fallback as the pre-event render: host blurb, else description.
   const whatShort = esc(row.what_short) || esc(row.description);
   const whatLink = renderWhatLink(
@@ -1313,7 +1333,7 @@ export function renderEventLiveHtml(
   const howDetails = esc(row.how_details);
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
-  const mapImg = venueMapImg(row, 'venue-map-live');
+  const mapImg = venueMapImg(row, 'venue-map-live', lang);
   const geoLink = renderGeoLink(
     row.lat,
     row.lon,
@@ -1329,7 +1349,7 @@ export function renderEventLiveHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
-${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}
+${buildOgMeta({ lang, title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.starts_at ?? row.start_date, endTime: phaseTimesFor(row).end_date })}
 ${buildSearchMeta(row, shareUrl)}
   <link rel="stylesheet" href="/ui.css" />
   <style>
@@ -1368,24 +1388,24 @@ ${SPONSOR_LIST_CSS}
   </style>
 </head>
 <body>
-  <a href="#main" class="ose-skip">Skip to event content</a>
-  ${renderEventNav(row.id, 'event', { live: (row.status || '').toLowerCase() === 'active', allEventsTestId: 'event-nav-events-live' })}
+  <a href="#main" class="ose-skip">${msg(lang, 'page.skip')}</a>
+  ${renderEventNav(row.id, 'event', { live: (row.status || '').toLowerCase() === 'active', allEventsTestId: 'event-nav-events-live', lang })}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
     <header data-testid="event-header-live">
-      <span class="ose-live-badge" data-testid="event-live-badge" aria-label="Event is live now">
-        <span class="ose-live-dot" aria-hidden="true"></span>Live now
+      <span class="ose-live-badge" data-testid="event-live-badge" aria-label="${msg(lang, 'live.badgeLabel')}">
+        <span class="ose-live-dot" aria-hidden="true"></span>${msg(lang, 'live.badge')}
       </span>
       <h1 id="event-title" data-testid="event-title-live">${title}</h1>
-      ${renderEventTypeMeta(row, 'event-type-live')}
+      ${renderEventTypeMeta(row, 'event-type-live', lang)}
       ${liveWhen ? `<p class="ose-meta" data-testid="event-when-live">${esc(liveWhen)}</p>` : ''}
-      ${renderTrustLine(row, 'event-trust-live')}
+      ${renderTrustLine(row, 'event-trust-live', lang)}
     </header>
-    ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
+    ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, msg(lang, 'sponsors.supportedBy'), lang) : ''}
 
     ${
       whatShort || whatLink
         ? `<section class="ose-card ose-section" data-testid="event-what-live" aria-labelledby="what-heading-live">
-           <h2 id="what-heading-live">What</h2>
+           <h2 id="what-heading-live">${msg(lang, 'section.what')}</h2>
            ${whatShort ? `<p>${whatShort}</p>` : ''}
            ${whatLink}
          </section>`
@@ -1395,7 +1415,7 @@ ${SPONSOR_LIST_CSS}
     ${
       venueDisplay || whereAddress
         ? `<section class="ose-card ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
-           <h2 id="where-heading-live">Where</h2>
+           <h2 id="where-heading-live">${msg(lang, 'section.where')}</h2>
            ${mapImg}
            ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
            ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
@@ -1407,7 +1427,7 @@ ${SPONSOR_LIST_CSS}
     ${
       whoHost
         ? `<section class="ose-card ose-section" data-testid="event-who-live" aria-labelledby="who-heading-live">
-           <h2 id="who-heading-live">Who</h2>
+           <h2 id="who-heading-live">${msg(lang, 'section.who')}</h2>
            <p>${whoHost}</p>
          </section>`
         : ''
@@ -1417,11 +1437,11 @@ ${SPONSOR_LIST_CSS}
       // HOW MUCH — mirrors the pre-event render so the order is identical across
       // phases (What → Where → Who → How much → CTA). Display only; #6
       // inert_monetization holds — no charge logic.
-      const howMuch = formatEventPrice(row);
+      const howMuch = formatEventPrice(row, lang);
       return howMuch === null
         ? ''
         : `<section class="ose-card ose-section" data-testid="event-how-much-live" aria-labelledby="how-much-heading-live">
-           <h2 id="how-much-heading-live">How much</h2>
+           <h2 id="how-much-heading-live">${msg(lang, 'section.howMuch')}</h2>
            <p>${esc(howMuch)}</p>
          </section>`;
     })()}
@@ -1433,7 +1453,7 @@ ${SPONSOR_LIST_CSS}
     ${
       whyPurpose
         ? `<section class="ose-card ose-section" data-testid="event-why-live" aria-labelledby="why-heading-live">
-           <h2 id="why-heading-live">Why</h2>
+           <h2 id="why-heading-live">${msg(lang, 'section.why')}</h2>
            <p>${whyPurpose}</p>
          </section>`
         : ''
@@ -1442,19 +1462,19 @@ ${SPONSOR_LIST_CSS}
     ${
       howDetails
         ? `<section class="ose-card ose-section" data-testid="event-how-live" aria-labelledby="how-heading-live">
-           <h2 id="how-heading-live">How</h2>
+           <h2 id="how-heading-live">${msg(lang, 'section.how')}</h2>
            <p>${howDetails}</p>
          </section>`
         : ''
     }
 
-    ${renderNextAtVenue(opts?.nextEvents, venueDisplay)}
+    ${renderNextAtVenue(opts?.nextEvents, venueDisplay, lang)}
 
     ${renderLanguageSwitch({ lang, path: eventPagePath(row.id, row.slug), query: opts?.pageQuery })}
 
     ${renderBackButton({ fallbackHref: '/events', nonce, lang, testid: 'event-back' })}
 
-    ${ANONYMITY_AFFORDANCE}
+    ${renderNeverWho('event', lang)}
   </main>
 </body>
 </html>`;
@@ -1504,9 +1524,11 @@ ${NEVER_WHO_CSS}
  * event link" means here (the QR check that moves it to active).
  */
 // Less text (owner 2026-10-11): the header names the host and nothing more.
-function renderTrustLine(row: PublicEventRow, testid: string): string {
+function renderTrustLine(row: PublicEventRow, testid: string, lang: Lang = DEFAULT_LANG): string {
   const host = esc(row.who_host);
-  return host ? `<p class="ose-meta" data-testid="${testid}">Hosted by ${host}</p>` : '';
+  return host
+    ? `<p class="ose-meta" data-testid="${testid}">${fmt(lang, 'event.hostedBy', { host })}</p>`
+    : '';
 }
 
 /**
@@ -1555,6 +1577,7 @@ export function renderPostEventHtml(
   // OG/Twitter card computed up front (needs only title + whatShort + shareUrl):
   // keeps buildOgMeta near the top now that the recap has a fuller 5W setup below.
   const ogMeta = buildOgMeta({
+    lang,
     title,
     description: whatShort,
     url: esc(shareUrl),
@@ -1571,44 +1594,50 @@ export function renderPostEventHtml(
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location) || esc(row.where_address);
   // OSE-1313 — a timed event's recap keeps its entered time, in the event zone.
-  const whenHuman = row.starts_at ? formatEventWhen(row) : formatHumanDate(row.start_date);
+  const whenHuman = row.starts_at
+    ? formatEventWhen(row, lang)
+    : formatHumanDate(row.start_date, lang);
   // HOW MUCH — the event's own price, display-only (#6 inert_monetization holds:
   // it is a label, never a payment primitive). Same source the pre/live renders use.
-  const howMuch = formatEventPrice(row);
-  const mapImg = venueMapImg(row, 'venue-map-post');
+  const howMuch = formatEventPrice(row, lang);
+  const mapImg = venueMapImg(row, 'venue-map-post', lang);
   // Archived before its day: it never happened. Same page shape (nothing to
   // join), but no "Happened", no "wrap" and no numbers that say it took place.
   const calledOff = archivedBeforeStart(row);
   const whenLine = calledOff
     ? whenHuman
-      ? `No longer taking place. It was planned for ${whenHuman}`
-      : 'No longer taking place.'
+      ? fmt(lang, 'recap.calledOffWhen', { when: whenHuman })
+      : msg(lang, 'recap.calledOff')
     : whenHuman
-      ? `Happened ${whenHuman}`
-      : 'This event has ended.';
+      ? fmt(lang, 'recap.happened', { when: whenHuman })
+      : msg(lang, 'recap.ended');
 
   // OSE-657: curated, bounded suggestions — the subtle margin. Sliced defensively
   // to MAX_POST_EVENT_SUGGESTIONS so this can never become an exhaustive listing.
   // The first item keeps the OSE-454 next-event-card testids for continuity; any
   // further items are indexed. When none exist, the corridor fallback stands in.
   const curated = nextEvents.slice(0, MAX_POST_EVENT_SUGGESTIONS);
-  const suggestionItems = renderSuggestionItems(curated, (i) => ({
-    item: i === 0 ? 'next-event-card' : `next-event-suggestion-${i}`,
-    link: i === 0 ? 'next-event-link' : `next-event-suggestion-link-${i}`,
-  }));
+  const suggestionItems = renderSuggestionItems(
+    curated,
+    (i) => ({
+      item: i === 0 ? 'next-event-card' : `next-event-suggestion-${i}`,
+      link: i === 0 ? 'next-event-link' : `next-event-suggestion-link-${i}`,
+    }),
+    lang
+  );
   const suggestionsInner = curated.length
-    ? `<h2 id="next-heading" class="ose-suggestions-heading">Next at ${venueDisplay || 'this venue'}</h2>
+    ? `<h2 id="next-heading" class="ose-suggestions-heading">${fmt(lang, 'next.atVenue', { venue: venueDisplay || msg(lang, 'next.thisVenue') })}</h2>
         <ul class="ose-suggestion-list">${suggestionItems}</ul>`
-    : `<h2 id="next-heading" class="ose-suggestions-heading" data-testid="next-event-fallback">The corridor keeps going</h2>
-        <p class="ose-suggestions-note">More gatherings are always coming together nearby.</p>
-        <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="/events">See what's coming up</a>`;
+    : `<h2 id="next-heading" class="ose-suggestions-heading" data-testid="next-event-fallback">${msg(lang, 'next.fallbackHeading')}</h2>
+        <p class="ose-suggestions-note">${msg(lang, 'next.fallbackNote')}</p>
+        <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="/events">${msg(lang, 'next.browse')}</a>`;
 
   return `<!DOCTYPE html>
 <html lang="${lang}" data-surface="ose-public">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title} — ${calledOff ? 'no longer taking place' : 'recap'}</title>
+  <title>${title} — ${msg(lang, calledOff ? 'recap.titleCalledOff' : 'recap.title')}</title>
 ${ogMeta}
 ${buildSearchMeta(row, shareUrl)}
   <link rel="stylesheet" href="/ui.css" />
@@ -1648,16 +1677,16 @@ ${SPONSOR_LIST_CSS}
 </head>
 <body>
   <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
-    <span class="ose-phase-chip" data-testid="event-phase-chip">${calledOff ? 'Not happening' : "This one's a wrap"}</span>
+    <span class="ose-phase-chip" data-testid="event-phase-chip">${msg(lang, calledOff ? 'recap.chipCalledOff' : 'recap.chip')}</span>
     <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>
-    ${renderEventTypeMeta(row, 'event-type-post')}
+    ${renderEventTypeMeta(row, 'event-type-post', lang)}
     <p class="ose-when" data-testid="event-when-post">${whenLine}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
     ${
       // OSE-1513: sponsors sit by the title on every phase. Still spend-blind
       // here (names/links only, no tier/spend).
       social && social.sponsors.length
         ? `<section class="ose-card ose-sponsor-thanks" data-testid="post-sponsor-thanks" aria-labelledby="thanks-heading">
-            <h2 id="thanks-heading">Thanks to our sponsors</h2>
+            <h2 id="thanks-heading">${msg(lang, 'sponsors.thanks')}</h2>
             ${renderSponsorList(social.sponsors)}
           </section>`
         : ''
@@ -1673,16 +1702,16 @@ ${SPONSOR_LIST_CSS}
     <div class="ose-recap-primary" data-testid="recap-primary" data-region="recap">
       <!-- WHAT — keeps the event-recap-card testid the recap-first invariant asserts. -->
       <section class="ose-card ose-section" data-testid="event-recap-card" aria-labelledby="recap-heading">
-        <h2 id="recap-heading">What this was</h2>
+        <h2 id="recap-heading">${msg(lang, 'recap.whatHeading')}</h2>
         ${whatShort ? `<p data-testid="recap-what">${whatShort}</p>` : ''}
-        ${!whatShort && !whoHost && !whyPurpose ? `<p data-testid="recap-empty">${calledOff ? "The host didn't write this one up." : "The host hasn't written this one up yet. The numbers below are the story."}</p>` : ''}
+        ${!whatShort && !whoHost && !whyPurpose ? `<p data-testid="recap-empty">${msg(lang, calledOff ? 'recap.emptyCalledOff' : 'recap.empty')}</p>` : ''}
         ${whatLink}
       </section>
 
       ${
         venueDisplay || whereAddress
           ? `<section class="ose-card ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
-             <h2 id="where-heading-post">Where</h2>
+             <h2 id="where-heading-post">${msg(lang, 'section.where')}</h2>
              ${mapImg}
              ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
              ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
@@ -1693,8 +1722,8 @@ ${SPONSOR_LIST_CSS}
       ${
         whoHost || whoStory || whoImage
           ? `<section class="ose-card ose-section" data-testid="event-who-post" aria-labelledby="who-heading-post">
-             <h2 id="who-heading-post">Who</h2>
-             ${whoImage ? `<img class="ose-who-image" data-testid="event-who-image-post" src="${esc(whoImage)}" alt="${whoHost ? `Photo of ${whoHost}` : 'Host'}" loading="lazy" width="120" height="120" />` : ''}
+             <h2 id="who-heading-post">${msg(lang, 'section.who')}</h2>
+             ${whoImage ? `<img class="ose-who-image" data-testid="event-who-image-post" src="${esc(whoImage)}" alt="${whoHost ? fmt(lang, 'who.photoOf', { host: whoHost }) : msg(lang, 'who.host')}" loading="lazy" width="120" height="120" />` : ''}
              ${whoHost ? `<p data-testid="event-who-host-post">${whoHost}</p>` : ''}
              ${whoStory ? `<p class="ose-who-story" data-testid="event-who-story-post">${whoStory}</p>` : ''}
            </section>`
@@ -1707,7 +1736,7 @@ ${SPONSOR_LIST_CSS}
         howMuch === null
           ? ''
           : `<section class="ose-card ose-section" data-testid="event-how-much-post" aria-labelledby="how-much-heading-post">
-             <h2 id="how-much-heading-post">How much</h2>
+             <h2 id="how-much-heading-post">${msg(lang, 'section.howMuch')}</h2>
              <p>${esc(howMuch)}</p>
            </section>`
       }
@@ -1727,34 +1756,34 @@ ${SPONSOR_LIST_CSS}
         // every line is drawn: a small count reads "Fewer than 5", whether it
         // is 0 or 4.
         const hasStats = [regCount, checkinCount, surveyCount, emailCount].some(clearsFloor);
-        const walkInLine = walkInStatLine(checkinCount, walkInCount);
+        const walkInLine = walkInStatLine(checkinCount, walkInCount, lang);
         const walkInPct = flooredRatePct(walkInCount, checkinCount);
         const statsCard = hasStats
           ? `<section class="ose-card ose-stats-card" data-testid="event-stats-card" aria-labelledby="stats-heading">
-              <h2 id="stats-heading">By the numbers</h2>
+              <h2 id="stats-heading">${msg(lang, 'stats.heading')}</h2>
               ${
                 // OSE-1373: the promise first (how many said they'd come), then
                 // the turnout, then how many walked in, then the ratio — the
                 // order a reader asks in.
-                statLine(regCount, 'Registered', 'stat-registrations')
+                statLine(regCount, msg(lang, 'stats.registered'), 'stat-registrations', lang)
               }
-              ${statLine(checkinCount, 'Checked in', 'stat-checkins')}
+              ${statLine(checkinCount, msg(lang, 'stats.checkedIn'), 'stat-checkins', lang)}
               ${walkInLine}
               ${
                 // The walk-in share uses the same nested rule as the walk-in line.
                 walkInPct !== null
-                  ? `<p data-testid="stat-walk-in-share">${Math.round(walkInPct)}% of check-ins were walk-ins</p>`
+                  ? `<p data-testid="stat-walk-in-share">${fmt(lang, 'stats.walkInShare', { pct: Math.round(walkInPct) })}</p>`
                   : ''
               }
               ${
                 // Ratio only when BOTH operands clear the floor — a "% showed up"
                 // over a sub-K denominator (e.g. 50% of 2) back-derives a person.
                 clearsFloor(checkinCount) && clearsFloor(regCount)
-                  ? `<p data-testid="stat-showed-up-share">${Math.round((checkinCount / regCount) * 100)}% of those registered showed up</p>`
+                  ? `<p data-testid="stat-showed-up-share">${fmt(lang, 'stats.showedUpShare', { pct: Math.round((checkinCount / regCount) * 100) })}</p>`
                   : ''
               }
-              ${statLine(surveyCount, 'Surveys submitted', 'stat-surveys')}
-              ${statLine(emailCount, 'Email signups', 'stat-email-signups')}
+              ${statLine(surveyCount, msg(lang, 'stats.surveys'), 'stat-surveys', lang)}
+              ${statLine(emailCount, msg(lang, 'stats.emailSignups'), 'stat-email-signups', lang)}
             </section>`
           : '';
         return statsCard;
@@ -1768,9 +1797,9 @@ ${SPONSOR_LIST_CSS}
       ${renderEventActions(row, shareUrl, nonce, lang, { calendar: false })}
       ${suggestionsInner}
       <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
-        <h2 id="connect-heading" class="ose-suggestions-heading">Hear about the next one</h2>
-        <p class="ose-suggestions-note">One email when something's coming up. Nothing else.</p>
-        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="${esc(eventFormPath(row.id, 'email-signup'))}">Keep me posted</a>
+        <h2 id="connect-heading" class="ose-suggestions-heading">${msg(lang, 'connect.heading')}</h2>
+        <p class="ose-suggestions-note">${msg(lang, 'connect.note')}</p>
+        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="${esc(eventFormPath(row.id, 'email-signup'))}">${msg(lang, 'connect.cta')}</a>
       </section>
     </aside>
 
@@ -1778,7 +1807,7 @@ ${SPONSOR_LIST_CSS}
     ${
       whyPurpose
         ? `<section class="ose-card ose-section" data-testid="event-why-post" aria-labelledby="why-heading-post">
-           <h2 id="why-heading-post">Why</h2>
+           <h2 id="why-heading-post">${msg(lang, 'section.why')}</h2>
            <p>${whyPurpose}</p>
          </section>`
         : ''
@@ -1788,7 +1817,7 @@ ${SPONSOR_LIST_CSS}
 
     ${renderBackButton({ fallbackHref: '/events', nonce, lang, testid: 'event-back' })}
 
-    ${ANONYMITY_AFFORDANCE}
+    ${renderNeverWho('event', lang)}
   </main>
 </body>
 </html>`;
