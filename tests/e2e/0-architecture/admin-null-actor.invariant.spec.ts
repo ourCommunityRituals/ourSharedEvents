@@ -41,7 +41,8 @@
  *   requireKeyActor, and the event list's `deny` return removed each failed
  *   check 2. A log-then-allow block in requireKeyActor and a log-then-grant
  *   in draftScopeVerdict fail check 2; loosening isStandaloneDenyLog to "any
- *   line that logs" fails its own regression table.
+ *   line that logs" fails its own regression table. Removing only the `return` from
+ *   the event list's deny branch fails check 2.
  */
 import { test, expect } from '@playwright/test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -300,7 +301,10 @@ test.describe('Invariant 9: a null admin actor allows nothing (OSE-1801)', () =>
           );
           const deniedAfter =
             resolvedAt !== -1 &&
-            /\.mode\s*===\s*'deny'\)\s*\{?\s*(return\b|$)/m.test(
+            // The deny branch must start with `return` (on the same line or the
+            // next): an `if (… 'deny') {` that only builds a response does not
+            // stop the request (PR #1107 review).
+            /\.mode\s*===\s*'deny'\)\s*\{?\s*return\b/.test(
               lines.slice(resolvedAt, resolvedAt + 3).join('\n')
             );
           const judged = deniedAfter ? lines.slice(0, resolvedAt) : lines;
