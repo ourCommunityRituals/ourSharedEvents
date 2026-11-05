@@ -160,7 +160,7 @@
     
 
     <nav class="ose-lang" data-testid="language-switch" aria-label="Idioma">
-      <a lang="en" hreflang="en" data-testid="language-switch-en" href="/events/evt_golden/parish-spring-fundraiser">English</a>
+      <a lang="es" hreflang="en" data-testid="language-switch-en" href="/events/evt_golden/parish-spring-fundraiser">Inglés</a>
     </nav>
 
     <nav class="ose-back" aria-label="Volver">

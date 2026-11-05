@@ -187,7 +187,7 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
 
     // The switch: a link, no button or script behind it, with a 44 px target.
     const toEnglish = page.locator('[data-testid="language-switch-en"]');
-    await expect(toEnglish).toHaveText('English');
+    await expect(toEnglish).toHaveText('Inglés');
     expect(await toEnglish.evaluate((el) => el.tagName)).toBe('A');
     const box = await toEnglish.boundingBox();
     expect(box?.height ?? 0, 'target height').toBeGreaterThanOrEqual(44);
