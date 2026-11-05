@@ -34,7 +34,7 @@ runtime:
         // through the per-request actor and is not refused. The event is an unpublished
         // draft in the synthetic ci-brand; the staging data is rebuilt daily.
         if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
-          test('SKIPPED until OSE-1800 setup: no CI brand service token configured', function () {});
+          console.log('NOT RUN (OSE-1800 setup pending): no CI brand service token configured');
           bru.runner.skipRequest();
         }
     - type: after-response

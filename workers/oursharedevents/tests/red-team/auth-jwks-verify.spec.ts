@@ -211,6 +211,39 @@ describe('OSE-1377 — audience + issuer pin (CF_ACCESS_AUD set)', () => {
     expect(res!.status).toBe(401);
   });
 
+  test('verifyCfAccessJWT names the check that refused it: audience, issuer', async () => {
+    armFetch();
+    const wrongAud = await signJwt(audClaims({ aud: ['some-other-app-aud'] }));
+    expect(await verifyCfAccessJWT(wrongAud, DOMAIN, { expectedAud: AUD })).toEqual({
+      valid: false,
+      reason: 'audience',
+    });
+    const wrongIss = await signJwt(audClaims({ iss: 'https://evil.cloudflareaccess.com' }));
+    expect(await verifyCfAccessJWT(wrongIss, DOMAIN, { expectedAud: AUD })).toEqual({
+      valid: false,
+      reason: 'issuer',
+    });
+  });
+
+  // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-04
+  test('requireAdmin logs one ADMIN_JWT_REFUSED line with the reason and the request id', async () => {
+    const { requireAdmin } = armFetch();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = await requireAdmin(
+      req(await signJwt(audClaims({ aud: ['some-other-app-aud'] }))),
+      envWithAud(),
+      'rid-aud'
+    );
+    expect(res!.status).toBe(401);
+    const lines = warn.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes('"event":"ADMIN_JWT_REFUSED"'))
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    expect(lines).toEqual([
+      expect.objectContaining({ reason: 'audience', where: 'requireAdmin', request_id: 'rid-aud' }),
+    ]);
+  });
+
   test('aud as a single string (not an array) is accepted', async () => {
     const { requireAdmin } = armFetch();
     const res = await requireAdmin(req(await signJwt(audClaims({ aud: AUD }))), envWithAud(), 'ok');
@@ -230,19 +263,19 @@ describe('OSE-1801 | verifyCfAccessJWT refuses a token that is not an identity, 
   test('nbf beyond the skew: { valid: false }', async () => {
     armFetch();
     const jwt = await signJwt({ ...validClaims(), nbf: nowSec() + 3600 });
-    expect(await verifyCfAccessJWT(jwt, DOMAIN)).toEqual({ valid: false });
+    expect(await verifyCfAccessJWT(jwt, DOMAIN)).toEqual({ valid: false, reason: 'not_yet_valid' });
   });
 
   test('iat beyond the skew: { valid: false }', async () => {
     armFetch();
     const jwt = await signJwt({ ...validClaims(), iat: nowSec() + 3600 });
-    expect(await verifyCfAccessJWT(jwt, DOMAIN)).toEqual({ valid: false });
+    expect(await verifyCfAccessJWT(jwt, DOMAIN)).toEqual({ valid: false, reason: 'not_yet_valid' });
   });
 
   test('an email that is not a plain address ("key:…"): { valid: false }', async () => {
     armFetch();
     const jwt = await signJwt(validClaims('key:ops@oursharedevents.com'));
-    expect(await verifyCfAccessJWT(jwt, DOMAIN)).toEqual({ valid: false });
+    expect(await verifyCfAccessJWT(jwt, DOMAIN)).toEqual({ valid: false, reason: 'email_shape' });
   });
 
   test('control: the same good token verifies with its email', async () => {

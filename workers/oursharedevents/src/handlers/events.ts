@@ -590,7 +590,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // null actor creates nothing (OSE-1801).
   const actor = extractAdminActor(request, env);
   if (actor === null && !isDevOpenAdmin(env)) {
-    logNullAdminActorDenied('event-create', env);
+    logNullAdminActorDenied('event-create', env, rid);
     return errorResponse(
       'BRAND_FORBIDDEN',
       'Your admin sign-in could not be confirmed for this request. Sign in again and retry.',
@@ -598,8 +598,14 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       rid
     );
   }
+  // The bypass is re-tested in this condition too, so the grant below never rests
+  // on the early return above staying where it is (CCR 2026-11-04 R1-03).
   const scope =
-    actor !== null ? await resolveAdminBrandScopeAsync(actor, env) : ({ mode: 'all' } as const);
+    actor !== null
+      ? await resolveAdminBrandScopeAsync(actor, env)
+      : isDevOpenAdmin(env)
+        ? ({ mode: 'all' } as const)
+        : ({ mode: 'deny' } as const);
   if (scope.mode === 'deny') {
     return errorResponse(
       'BRAND_FORBIDDEN',

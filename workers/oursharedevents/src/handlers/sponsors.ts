@@ -585,7 +585,7 @@ export async function handleAdminCreateSponsor(
           (scope.mode === 'scoped' && scope.brandIds.includes(eventBrandId));
         if (!inScope) eventBrandId = null;
       } else if (!isDevOpenAdmin(env)) {
-        logNullAdminActorDenied('sponsor-create', env);
+        logNullAdminActorDenied('sponsor-create', env, rid);
         eventBrandId = null;
       }
     }

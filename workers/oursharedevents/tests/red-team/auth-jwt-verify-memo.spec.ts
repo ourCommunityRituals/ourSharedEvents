@@ -150,7 +150,7 @@ describe('a memo hit never skips a claim check', () => {
     // requireAdmin shape with a DIFFERENT expected aud → must still fail.
     expect(
       await verifyCfAccessJWT(jwt, DOMAIN, { request: r, expectedAud: 'some-other-app' })
-    ).toEqual({ valid: false });
+    ).toEqual({ valid: false, reason: 'audience' });
   });
 
   test('iss pin is enforced on the memo hit', async () => {
@@ -160,6 +160,7 @@ describe('a memo hit never skips a claim check', () => {
     expect((await verifyCfAccessJWT(jwt, DOMAIN, { request: r })).valid).toBe(true);
     expect(await verifyCfAccessJWT(jwt, DOMAIN, { request: r, expectedAud: AUD })).toEqual({
       valid: false,
+      reason: 'issuer',
     });
   });
 
@@ -172,7 +173,10 @@ describe('a memo hit never skips a claim check', () => {
     const r = req(jwt);
     expect((await verifyCfAccessJWT(jwt, DOMAIN, { request: r })).valid).toBe(true);
     vi.setSystemTime(new Date(t0.getTime() + 60_000));
-    expect(await verifyCfAccessJWT(jwt, DOMAIN, { request: r })).toEqual({ valid: false });
+    expect(await verifyCfAccessJWT(jwt, DOMAIN, { request: r })).toEqual({
+      valid: false,
+      reason: 'expired',
+    });
   });
 });
 
@@ -182,8 +186,14 @@ describe('failure verdicts', () => {
     const forged = await signJwt(claims(), attackerKey.privateKey);
     const r = req(forged);
     const verify = spyVerify();
-    expect(await verifyCfAccessJWT(forged, DOMAIN, { request: r })).toEqual({ valid: false });
-    expect(await verifyCfAccessJWT(forged, DOMAIN, { request: r })).toEqual({ valid: false });
+    expect(await verifyCfAccessJWT(forged, DOMAIN, { request: r })).toEqual({
+      valid: false,
+      reason: 'signature',
+    });
+    expect(await verifyCfAccessJWT(forged, DOMAIN, { request: r })).toEqual({
+      valid: false,
+      reason: 'signature',
+    });
     expect(verify).toHaveBeenCalledTimes(1);
   });
 
@@ -191,7 +201,12 @@ describe('failure verdicts', () => {
     const jwt = await signJwt(claims());
     const r = req(jwt);
     armJwks(500);
-    expect(await verifyCfAccessJWT(jwt, DOMAIN, { request: r })).toEqual({ valid: false });
+    // A JWKS outage throws inside verification and reads as 'malformed' today (a
+    // known mislabel, listed as a residual in the CCR worksheet).
+    expect(await verifyCfAccessJWT(jwt, DOMAIN, { request: r })).toEqual({
+      valid: false,
+      reason: 'malformed',
+    });
     armJwks(200); // JWKS recovers within the same request
     expect(await verifyCfAccessJWT(jwt, DOMAIN, { request: r })).toEqual({
       valid: true,

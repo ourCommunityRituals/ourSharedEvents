@@ -281,9 +281,33 @@ describe('OSE-1801 | repeat keeps the actor across the source read', () => {
     const res = await route(req, routerEnv, ctx);
     await waitOnExecutionContext(ctx);
     expectTheTokenHadExpired();
+    // The clock jump is keyed on the repeat handler's source query; if that query
+    // changes shape the jump never happens, and this says so instead of passing.
+    expect(bodyPulls).toBe(1);
     expect(res.status).toBe(201);
   });
 });
+
+/** The ADMIN_NULL_ACTOR_DENIED lines written while `fn` ran, as parsed objects. */
+async function denyLogsDuring<T>(fn: () => Promise<T>): Promise<{ result: T; sites: string[] }> {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    const result = await fn();
+    const sites = warn.mock.calls
+      .map((c) => {
+        try {
+          return JSON.parse(String(c[0])) as { event?: string; site?: string };
+        } catch {
+          return {};
+        }
+      })
+      .filter((l) => l.event === 'ADMIN_NULL_ACTOR_DENIED')
+      .map((l) => l.site ?? '');
+    return { result, sites };
+  } finally {
+    warn.mockRestore();
+  }
+}
 
 describe('OSE-1801 | each deny site refuses a null actor on its own', () => {
   // These call the handlers directly with no credentials, so the memo cannot
@@ -305,47 +329,56 @@ describe('OSE-1801 | each deny site refuses a null actor on its own', () => {
 
   // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-04
   test.each(deployedOrNotLocal)('event create (%o): 403 BRAND_FORBIDDEN', async (over) => {
-    const res = await handleCreateEvent(
-      jsonPost('/api/v2/admin/events', {
-        title: `${A.marker}null actor`,
-        brand_id: A.brandId,
-        start_date: '2099-06-01',
-      }),
-      envWith(over) as never
+    const { result: res, sites } = await denyLogsDuring(() =>
+      handleCreateEvent(
+        jsonPost('/api/v2/admin/events', {
+          title: `${A.marker}null actor`,
+          brand_id: A.brandId,
+          start_date: '2099-06-01',
+        }),
+        envWith(over) as never
+      )
     );
     expect(res.status).toBe(403);
     expect(((await res.json()) as { code: string }).code).toBe('BRAND_FORBIDDEN');
+    expect(sites).toEqual(['event-create']);
   });
 
   // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-04
   test.each(deployedOrNotLocal)(
     'sponsor create on an event (%o): 400 EVENT_NOT_FOUND',
     async (over) => {
-      const res = await handleAdminCreateSponsor(
-        jsonPost('/api/v2/admin/sponsors', {
-          name: `${A.marker}null actor sponsor`,
-          tier: 'silver',
-          event_id: A.activeEventId,
-        }),
-        envWith(over) as never
+      const { result: res, sites } = await denyLogsDuring(() =>
+        handleAdminCreateSponsor(
+          jsonPost('/api/v2/admin/sponsors', {
+            name: `${A.marker}null actor sponsor`,
+            tier: 'silver',
+            event_id: A.activeEventId,
+          }),
+          envWith(over) as never
+        )
       );
       expect(res.status).toBe(400);
       expect(((await res.json()) as { code: string }).code).toBe('EVENT_NOT_FOUND');
+      expect(sites).toEqual(['sponsor-create']);
     }
   );
 
   // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-04
   test.each(deployedOrNotLocal)('draft promote (%o): 404 DRAFT_NOT_FOUND', async (over) => {
     const ctx = createExecutionContext();
-    const res = await handlePromoteSponsorDraft(
-      jsonPost('/api/v2/admin/sponsors/promote', { draft_token: 'tl084-draft-a' }),
-      envWith(over) as never,
-      ctx,
-      'rid-null-actor'
+    const { result: res, sites } = await denyLogsDuring(() =>
+      handlePromoteSponsorDraft(
+        jsonPost('/api/v2/admin/sponsors/promote', { draft_token: 'tl084-draft-a' }),
+        envWith(over) as never,
+        ctx,
+        'rid-null-actor'
+      )
     );
     await waitOnExecutionContext(ctx);
     expect(res.status).toBe(404);
     expect(((await res.json()) as { code: string }).code).toBe('DRAFT_NOT_FOUND');
+    expect(sites).toEqual(['sponsor-draft-promote']);
   });
 
   test('control: under the real local bypass the same event create is not refused', async () => {

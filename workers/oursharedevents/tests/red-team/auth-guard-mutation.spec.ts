@@ -545,13 +545,13 @@ describe('verifyCfAccessJWT — direct (segment + exp branches)', () => {
   test('4-segment token → { valid:false } (parts.length !== 3, verify path)', async () => {
     armFetch();
     const four = `${await signJwt(validClaims())}.extra`;
-    expect(await verifyCfAccessJWT(four, DOMAIN)).toEqual({ valid: false });
+    expect(await verifyCfAccessJWT(four, DOMAIN)).toEqual({ valid: false, reason: 'malformed' });
   });
 
   test('missing exp → { valid:false } (kills the || → && and guard mutants)', async () => {
     armFetch();
     const noExp = await signJwt({ email: ADMIN, iat: nowSec() - 10 });
-    expect(await verifyCfAccessJWT(noExp, DOMAIN)).toEqual({ valid: false });
+    expect(await verifyCfAccessJWT(noExp, DOMAIN)).toEqual({ valid: false, reason: 'expired' });
   });
 
   test('exp exactly == now is expired (<= boundary, deterministic under fake time)', async () => {
@@ -560,13 +560,16 @@ describe('verifyCfAccessJWT — direct (segment + exp branches)', () => {
     armFetch();
     const atNow = await signJwt({ email: ADMIN, iat: nowSec() - 10, exp: nowSec() }); // exp === floor(now)
     // `<=` → expired → invalid. The `<` mutant would treat exp==now as still valid.
-    expect(await verifyCfAccessJWT(atNow, DOMAIN)).toEqual({ valid: false });
+    expect(await verifyCfAccessJWT(atNow, DOMAIN)).toEqual({ valid: false, reason: 'expired' });
   });
 
   test('wrong-key signature → { valid:false }', async () => {
     armFetch(); // real key only
     const forgedSig = await signJwt(validClaims(), attackerKey.privateKey);
-    expect(await verifyCfAccessJWT(forgedSig, DOMAIN)).toEqual({ valid: false });
+    expect(await verifyCfAccessJWT(forgedSig, DOMAIN)).toEqual({
+      valid: false,
+      reason: 'signature',
+    });
   });
 });
 

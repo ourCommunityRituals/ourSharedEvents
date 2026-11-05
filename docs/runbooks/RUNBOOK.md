@@ -166,6 +166,24 @@ curl -s https://stg.oursharedevents.com/health | jq
    - In `wrangler.toml`: `ALLOW_ADMIN_KEY_FALLBACK = "true"` should be set for staging
    - Production uses CF Access JWT as primary
 
+4. **Read the refusal line** (an Access login that gets 401): in the live logs,
+   find `ADMIN_JWT_REFUSED` with the response's `X-Request-Id` as `request_id`.
+   `where` says which check refused it (`preflight` in the router, or
+   `requireAdmin`), and `reason` says why:
+   - `expired`, `not_yet_valid`: the token's time claims (check the clock skew
+     or log in again).
+   - `audience`, `issuer`: a token for another Access app or team. Check
+     `CF_ACCESS_AUD` and `CF_ACCESS_TEAM_DOMAIN`.
+   - `signature`: not signed by the team's current key.
+   - `email_shape`: the email is not a plain address.
+   - `actor_mismatch`: the identity changed during the request (it was not
+     valid at entry). Retry.
+   - `malformed`: a token that cannot be decoded, **or** a JWKS fetch outage
+     (TL-093). If many requests fail at once, check the team's certs endpoint.
+
+   An `ADMIN_AUTH_MISCONFIG` line means a deployed worker received an Access
+   token with no `CF_ACCESS_TEAM_DOMAIN` set; the token is not trusted.
+
 **Resolution:**
 
 - Re-set the secret: `wrangler secret put ADMIN_KEY --env staging`

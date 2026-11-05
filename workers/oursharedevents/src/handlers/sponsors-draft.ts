@@ -271,7 +271,7 @@ export async function handlePromoteSponsorDraft(
   // takes the lib's own not-found result, so the response and the audit row are
   // identical to a missing draft (no existence oracle).
   const scopeVerdict = await draftScopeVerdict(request, env, draftToken);
-  if (scopeVerdict === 'no-actor') logNullAdminActorDenied('sponsor-draft-promote', env);
+  if (scopeVerdict === 'no-actor') logNullAdminActorDenied('sponsor-draft-promote', env, reqId);
   const result: PromotionResult =
     scopeVerdict !== 'in-scope'
       ? { ok: false, code: 'DRAFT_NOT_FOUND', status: 404 }

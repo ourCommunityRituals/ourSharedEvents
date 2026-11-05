@@ -18,6 +18,7 @@ import {
   inheritAdminActor,
   isDevOpenAdmin,
   isPlainAdminEmail,
+  logJwtRefused,
   logNullAdminActorDenied,
   requireAdmin,
   type AdminEnv,
@@ -64,10 +65,14 @@ describe('OSE-1801 | one actor per request', () => {
   });
 
   test('a null first answer is kept too (no later read can turn it into an actor)', () => {
-    const r = req({});
-    const env = local({ ALLOW_ADMIN_KEY_FALLBACK: 'true', ADMIN_KEY: 'k' });
+    // The request carries a key the env does not know yet; the env then learns it.
+    // Re-resolving would now answer key:admin, so only a kept null stays null.
+    const r = req({ Authorization: 'Bearer k' });
+    const env = local({ ALLOW_ADMIN_KEY_FALLBACK: 'true' }) as AdminEnv & { ADMIN_KEY?: string };
     expect(extractAdminActor(r, env)).toBeNull();
+    env.ADMIN_KEY = 'k';
     expect(extractAdminActor(r, env)).toBeNull();
+    expect(extractAdminActor(req({ Authorization: 'Bearer k' }), env)).toBe('key:admin');
   });
 
   test('a second env object is resolved on its own', () => {
@@ -240,13 +245,129 @@ describe('OSE-1801 | the local-dev bypass opens only on local names', () => {
 describe('OSE-1801 | a refused null actor leaves one structured line', () => {
   test('logNullAdminActorDenied names the site and the environment', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    logNullAdminActorDenied('event-create', local({ WORKER_ENV: 'staging' }));
+    logNullAdminActorDenied('event-create', local({ WORKER_ENV: 'staging' }), 'rid-1');
     expect(warn).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(warn.mock.calls[0]![0]))).toEqual({
       level: 'warn',
       event: 'ADMIN_NULL_ACTOR_DENIED',
       site: 'event-create',
       worker_env: 'staging',
+      request_id: 'rid-1',
     });
+  });
+
+  test('logJwtRefused names the reason and where, and nothing from the token', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    logJwtRefused('audience', 'preflight', local({ WORKER_ENV: 'production' }), 'rid-2');
+    expect(JSON.parse(String(warn.mock.calls[0]![0]))).toEqual({
+      level: 'warn',
+      event: 'ADMIN_JWT_REFUSED',
+      reason: 'audience',
+      where: 'preflight',
+      worker_env: 'production',
+      request_id: 'rid-2',
+    });
+  });
+});
+
+describe('CCR 2026-11-04 | only a local WORKER_ENV trusts an unverified Access JWT', () => {
+  // @born-red TL-086 | method: deliberate-fixture-break | date: 2026-11-04
+  test.each(['preview', 'Production', 'staging ', 'prod', '', 'staging', 'production'])(
+    'WORKER_ENV=%j, no team domain: a forged email is no actor, and requireAdmin refuses it',
+    async (workerEnv) => {
+      const r = req({ 'Cf-Access-Jwt-Assertion': human('owner@example.com') });
+      const env = local({ WORKER_ENV: workerEnv });
+      expect(extractAdminActor(r, env)).toBeNull();
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      expect((await requireAdmin(r, env, 'rid'))?.status).toBe(401);
+      // requireAdmin itself refuses to trust the token here (fail closed), and says so.
+      expect(
+        log.mock.calls.some((c) => String(c[0]).includes('"event":"ADMIN_AUTH_MISCONFIG"'))
+      ).toBe(true);
+      // ...and the token is not read at all: the 401 is the key methods finding no
+      // key, not the pinned-actor check catching a trusted forgery (that second
+      // check must not be what holds this line).
+      expect(warn.mock.calls.some((c) => String(c[0]).includes('ADMIN_JWT_REFUSED'))).toBe(false);
+    }
+  );
+
+  test.each([undefined, 'development', 'test'])(
+    'WORKER_ENV=%j (local): the decoded email still names the actor',
+    (workerEnv) => {
+      const r = req({ 'Cf-Access-Jwt-Assertion': human('owner@example.com') });
+      expect(extractAdminActor(r, local({ WORKER_ENV: workerEnv }))).toBe('owner@example.com');
+    }
+  );
+});
+
+describe('CCR 2026-11-04 | requireAdmin allows only the actor the request was pinned to', () => {
+  // @born-red TL-090 | method: deliberate-fixture-break | date: 2026-11-04
+  test('a token not valid yet at entry pins no actor; valid later, requireAdmin still refuses it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = req({
+      'Cf-Access-Jwt-Assertion': human('owner@example.com', {
+        iat: nowSec() + 120,
+        exp: nowSec() + 3600,
+      }),
+    });
+    const env = local();
+    expect(extractAdminActor(r, env)).toBeNull(); // route() entry: not valid yet
+    moveClock(120_000); // the token becomes valid during the request
+    const res = await requireAdmin(r, env, 'rid');
+    expect(res?.status).toBe(401);
+    expect(await res!.json()).toEqual({ ok: false, status: 401, code: 'UNAUTH', requestId: 'rid' });
+    expect(res!.headers.get('Content-Type')).toBe('application/json');
+    expect(res!.headers.get('WWW-Authenticate')).toBe('Bearer realm="OurSharedEvents Admin"');
+    expect(res!.headers.get('X-Request-Id')).toBe('rid');
+    expect(warn.mock.calls.map((c) => JSON.parse(String(c[0])))).toContainEqual(
+      expect.objectContaining({
+        reason: 'actor_mismatch',
+        where: 'requireAdmin',
+        request_id: 'rid',
+      })
+    );
+  });
+
+  test('control: the same token valid at entry is allowed', async () => {
+    const r = req({ 'Cf-Access-Jwt-Assertion': human('owner@example.com') });
+    expect(await requireAdmin(r, local(), 'rid')).toBeNull();
+  });
+});
+
+describe('CCR 2026-11-04 | token claim edges', () => {
+  test.each([
+    ['nbf', 'far future'],
+    ['iat', '9999999999'],
+    ['nbf', null],
+  ])('a non-numeric %s (%j) is no identity', (claim, value) => {
+    const r = req({
+      'Cf-Access-Jwt-Assertion': human('owner@example.com', { [claim]: value }),
+    });
+    expect(extractAdminActor(r, local())).toBeNull();
+  });
+
+  test.each(['', null])(
+    'an email claim of %j is no email: the request falls to the key methods',
+    async (email) => {
+      const r = req({
+        'Cf-Access-Jwt-Assertion': token({ email, iat: nowSec() - 10, exp: nowSec() + 30 }),
+        Authorization: 'Bearer k',
+      });
+      const env = local({ ALLOW_ADMIN_KEY_FALLBACK: 'true', ADMIN_KEY: 'k' });
+      expect(extractAdminActor(r, env)).toBe('key:admin');
+      expect(await requireAdmin(r, env, 'rid')).toBeNull();
+    }
+  );
+
+  test('an array holding an address is not an address', () => {
+    expect(isPlainAdminEmail(['owner@example.com'])).toBe(false);
+  });
+
+  test('254 characters is the longest address accepted', () => {
+    const at254 = 'a'.repeat(254 - '@example.com'.length) + '@example.com';
+    expect(at254.length).toBe(254);
+    expect(isPlainAdminEmail(at254)).toBe(true);
+    expect(isPlainAdminEmail('a' + at254)).toBe(false);
   });
 });

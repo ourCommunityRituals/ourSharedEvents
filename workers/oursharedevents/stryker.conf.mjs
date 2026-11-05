@@ -52,8 +52,11 @@ export default {
     'src/auth/admin.ts',
   ],
   coverageAnalysis: 'perTest',
-  reporters: ['html', 'clear-text', 'progress'],
+  // `json` feeds the per-file floor (scripts/ci/mutation-file-floor.mjs, OSE-1801):
+  // the break threshold below is global, so one file can hide under another.
+  reporters: ['html', 'clear-text', 'progress', 'json'],
   htmlReporter: { fileName: 'reports/mutation/index.html' },
+  jsonReporter: { fileName: 'reports/mutation/mutation.json' },
   // Covenant guards are held to the SAME bar as the CCR artifact standard (>=95%)
   // so OCR's quality thresholds read as one coherent system. Residual survivors
   // below a raw 100% are documented EQUIVALENT mutants (`// Stryker disable`
