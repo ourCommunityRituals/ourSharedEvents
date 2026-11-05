@@ -1503,7 +1503,7 @@ describe('check-swap over a manifest the build registered', () => {
     const w = world({ index: [TODAY_NAME], objects: { [`stock/${TODAY_NAME}`]: partial } });
     const report = await swap(w, { manifest: full });
     allCalls.push(...w.calls);
-    expect(JSON.parse(w.r2.get(`stock/${TODAY_NAME}`))).toEqual(full);
+    expect(JSON.parse(w.r2.get(`stock/${TODAY_NAME}`))).toEqual({ ...full, swapped: true });
     expect(w.liveIndex()).toEqual([TODAY_NAME]);
     expect(w.order).toContain('check');
     expect(w.sqls().filter((s) => s.startsWith('DELETE'))).toEqual([]);
@@ -1685,6 +1685,29 @@ describe('check-swap re-run alone recovers the build’s registration', () => {
     expect(purged).not.toContain("'one_");
     expect(w.liveIndex()).toEqual([nameOf(1), nameOf(3)]);
     expect(summary).toContain(`the R2 copy of ${nameOf(2)}`);
+  });
+
+  test('a completed (swapped) load is never recovered: attempt 1 swapped, attempt 2 died before registering', async () => {
+    const w = world({
+      index: [nameOf(1)],
+      objects: {
+        [`stock/${nameOf(1)}`]: { ...manifestOf(TODAY, 'good', ['a', 'b']), swapped: true },
+      },
+    });
+    const { code, summary } = await runAlone(w, '2');
+    expect(code).toBe(1);
+    expect(w.sqls().join('\n')).not.toContain("'good_");
+    expect(w.deletes().join('\n')).not.toContain('good_');
+    expect(w.liveIndex()).toEqual([nameOf(1)]);
+    expect(summary).toContain('No manifest was saved');
+  });
+
+  test('a successful swap marks today’s copy swapped', async () => {
+    const w = world({ index: [] });
+    const report = await swap(w);
+    allCalls.push(...w.calls);
+    expect(report.exitCode).toBe(0);
+    expect(JSON.parse(w.r2.get(`stock/${TODAY_NAME}`)).swapped).toBe(true);
   });
 
   test('no registration for this run id is the red "no manifest" path, and changes nothing', async () => {

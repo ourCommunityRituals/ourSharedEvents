@@ -555,6 +555,18 @@ export async function checkSwap({
     if (fullyPurged(s.name, s.manifest)) live = live.filter((n) => n !== s.name);
   }
   if (fullyPurged(todayName, manifest)) live = live.filter((n) => n !== todayName);
+  // Mark today's copy as swapped, so a later attempt's no-artifact recovery
+  // (registeredCopy) never mistakes this completed load for an interrupted build.
+  if (live.includes(todayName)) {
+    try {
+      await cloud.r2Put(
+        `${MANIFEST_PREFIX}${todayName}`,
+        manifestText({ ...manifest, swapped: true })
+      );
+    } catch (err) {
+      problems.push(`${todayName} could not be marked swapped: ${err.message}`);
+    }
+  }
   return writeIndex(results);
 }
 
@@ -848,6 +860,11 @@ export async function registeredCopy({ cloud, env, log }) {
       const manifest = JSON.parse(text);
       if (!manifest || !Array.isArray(manifest.items) || typeof manifest.date !== 'string') {
         throw new Error('no items list');
+      }
+      // A completed swap is a live load, not an interrupted build: never recover it.
+      if (manifest.swapped === true) {
+        log(`the R2 copy ${name} is a completed load; it is not recovered`);
+        continue;
       }
       return { name, attempt: p.attempt, manifest };
     } catch (err) {
