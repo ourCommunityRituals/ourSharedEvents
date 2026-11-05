@@ -162,7 +162,8 @@ function stripComments(src: string): string {
 
 /** Every way the code can branch on `v` being null (or falsy), not only `=== null`. */
 function nullTests(v: string): RegExp {
-  const id = v.replace(/\$/g, '\\$');
+  // Escape every regex metacharacter (backslash included), not only `$`.
+  const id = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(
     [
       `\\b${id}\\s*[!=]==?\\s*null\\b`,

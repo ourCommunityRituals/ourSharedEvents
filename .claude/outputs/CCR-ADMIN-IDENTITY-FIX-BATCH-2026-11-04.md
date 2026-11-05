@@ -9,7 +9,7 @@ cumulative_score: 0
 system_score: 0
 unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 9, medium: 8, low: 19 }
 pr: 1092
-subject_sha: '5f9fb51c364d7c91e476e619ea35e2087ba80eb1'
+subject_commit: 5f9fb51c (full SHA in git, PR #1092 head)
 ---
 
 # CCR re-run: the admin identity fix batch (PR #1092, OSE-1801), 2026-11-04
