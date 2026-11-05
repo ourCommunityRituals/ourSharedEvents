@@ -34,6 +34,12 @@
  *   ternary granting `mode: 'all'` without the bypass in its condition, an
  *   `extractAdminActor(…) ?? 'key:admin'` default, and a `!actor ||` branch in
  *   the write guard (cede-to-auth) each failed.
+ *   PR #1107 review (2026-11-05), the scan now runs to the end of the actor's
+ *   scope and the log exemption is the standalone line only: the write guard's
+ *   content-type rule flipped to `actor === null` (17 lines below the read),
+ *   `if (actor === null) return logNullAdminActorDenied(…), null;` in
+ *   requireKeyActor, and the event list's `deny` return removed each failed
+ *   check 2.
  */
 import { test, expect } from '@playwright/test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -177,6 +183,24 @@ function nullTests(v: string): RegExp {
   );
 }
 
+/**
+ * The last line of the block the call sits in: the actor's scope (a `const` is
+ * block-scoped), so every later use of it is judged, not a fixed window (a
+ * 16-line window missed the write guard's content-type rule; PR #1107 review).
+ * Braces are counted on comment-stripped text; a brace inside a string can only
+ * move the end, and the planted-fault cases below would show a scan cut short.
+ */
+function scopeEnd(lines: string[], from: number): number {
+  let depth = 0;
+  for (let j = from; j < lines.length; j++) {
+    for (const ch of lines[j]!) {
+      if (ch === '{') depth++;
+      else if (ch === '}' && --depth < 0) return j;
+    }
+  }
+  return lines.length - 1;
+}
+
 function findCalls(): Call[] {
   const calls: Call[] = [];
   for (const path of walk(SRC)) {
@@ -190,7 +214,7 @@ function findCalls(): Call[] {
         key: `${rel}: ${text.trim()}`,
         file: rel,
         line: i + 1,
-        after: lines.slice(i, i + 16).join('\n'),
+        after: lines.slice(i, scopeEnd(lines, i) + 1).join('\n'),
         before: lines.slice(Math.max(0, i - 3), i + 1).join('\n'),
       });
     });
@@ -253,7 +277,20 @@ test.describe('Invariant 9: a null admin actor allows nothing (OSE-1801)', () =>
             const end = lines.findIndex((l, j) => j >= i && /;|\{\s*$/.test(l));
             return lines.slice(i, end === -1 ? lines.length : end + 1).join(' ');
           };
-          const tests = lines.flatMap((l, i) => (nullTests(v).test(l) ? [statementAt(i)] : []));
+          // Once the actor has gone to the scope resolver and a `deny` scope has
+          // returned, a null actor is already refused; later uses of it only
+          // narrow what an allowed caller sees ("only mine"). Judge the branches
+          // before that point.
+          const resolvedAt = lines.findIndex((l) =>
+            new RegExp(`resolveAdminBrandScopeAsync\\(\\s*${v}\\b`).test(l)
+          );
+          const deniedAfter =
+            resolvedAt !== -1 &&
+            /\.mode\s*===\s*'deny'\)\s*\{?\s*(return\b|$)/m.test(
+              lines.slice(resolvedAt, resolvedAt + 3).join('\n')
+            );
+          const judged = deniedAfter ? lines.slice(0, resolvedAt) : lines;
+          const tests = judged.flatMap((l, i) => (nullTests(v).test(l) ? [statementAt(i)] : []));
           if (tests.length === 0) {
             if (!new RegExp(`resolveAdminBrandScopeAsync\\(\\s*${v}\\b`).test(c.after))
               bad.push(`${where} never handles a null actor and does not scope it`);
@@ -263,7 +300,11 @@ test.describe('Invariant 9: a null admin actor allows nothing (OSE-1801)', () =>
           for (const l of tests) {
             const ok =
               /isDevOpenAdmin\(env\)/.test(l) ||
-              /logNullAdminActorDenied\(/.test(l) ||
+              // Only the standalone log line: no return, no comma expression, no
+              // other statement (logging does not prove denial; PR #1107 review).
+              new RegExp(
+                `^\\s*if\\s*\\(\\s*${v}\\s*===?\\s*null\\s*\\)\\s*logNullAdminActorDenied\\([^;()]*\\);\\s*$`
+              ).test(l) ||
               (elseRetest &&
                 new RegExp(`\\b${v}\\s*!==?\\s*null\\b|\\bif\\s*\\(\\s*${v}\\s*\\)`).test(l));
             if (!ok)
