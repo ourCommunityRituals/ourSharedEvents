@@ -32,7 +32,9 @@ interface Call {
 interface Opts {
   /** Does GET /api/v2/admin/flags/current-tier answer as a signed-in admin? */
   admin?: boolean;
-  repeat?: { status: number; body?: unknown } | 'network-error';
+  repeat?: { status: number; body?: unknown } | 'network-error' | 'access-redirect';
+  /** Remove AbortSignal.timeout before the page loads (an older browser). */
+  noAbortSignalTimeout?: boolean;
 }
 
 async function open(search: string, opts: Opts = {}) {
@@ -42,6 +44,9 @@ async function open(search: string, opts: Opts = {}) {
     runScripts: 'dangerously',
     pretendToBeVisual: true,
     beforeParse(w) {
+      if (opts.noAbortSignalTimeout) {
+        (w.AbortSignal as unknown as { timeout?: unknown }).timeout = undefined;
+      }
       (w as unknown as { fetch: unknown }).fetch = async (url: string, init?: RequestInit) => {
         const method = (init?.method ?? 'GET').toUpperCase();
         calls.push({ url, method });
@@ -55,6 +60,17 @@ async function open(search: string, opts: Opts = {}) {
         }
         if (url.endsWith('/repeat')) {
           if (opts.repeat === 'network-error') throw new TypeError('network down');
+          if (opts.repeat === 'access-redirect') {
+            // What fetch(..., { redirect: 'manual' }) gives for a 302 to the Access login.
+            return {
+              type: 'opaqueredirect',
+              status: 0,
+              ok: false,
+              json: async () => {
+                throw new SyntaxError('opaque');
+              },
+            } as unknown as Response;
+          }
           const r = opts.repeat ?? { status: 201, body: { ok: true, id: 'evt_new' } };
           return json(r.status, r.body ?? { ok: false });
         }
@@ -183,6 +199,17 @@ describe('Repeat this event', () => {
     expect($('report-action-open-draft')).toBeNull();
   });
 
+  test('an expired Access session (the request is redirected to the login) asks to sign in', async () => {
+    const { $, w, settle } = await open('?event=evt_1', { admin: true, repeat: 'access-redirect' });
+    ($('report-action-repeat') as HTMLButtonElement).click();
+    await settle();
+    expect($('report-action-status')!.textContent).toBe(
+      'Sign in to the admin to repeat this event.'
+    );
+    expect(w.sessionStorage.getItem(SELECTED_KEY)).toBeNull();
+    expect(($('report-action-repeat') as HTMLButtonElement).disabled).toBe(false);
+  });
+
   test('no connection: says so, changes nothing, can be tried again', async () => {
     const { $, w, settle } = await open('?event=evt_1', { admin: true, repeat: 'network-error' });
     ($('report-action-repeat') as HTMLButtonElement).click();
@@ -192,6 +219,19 @@ describe('Repeat this event', () => {
     );
     expect(w.sessionStorage.getItem(SELECTED_KEY)).toBeNull();
     expect(($('report-action-repeat') as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+describe('the admin probes cannot hold the page open', () => {
+  test('without AbortSignal.timeout, the probe signal still aborts on its own', async () => {
+    const { w } = await open('?event=evt_1', { admin: true, noAbortSignalTimeout: true });
+    const probe = (w as unknown as { probeTimeout: (ms?: number) => AbortSignal | undefined })
+      .probeTimeout;
+    const signal = probe(20);
+    expect(signal).toBeDefined();
+    expect(signal!.aborted).toBe(false);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(signal!.aborted).toBe(true);
   });
 });
 

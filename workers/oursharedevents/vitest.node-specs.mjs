@@ -266,6 +266,8 @@ export const NODE_SPECS = [
   // OSE-1531 — the report's action row + Repeat this event, run in jsdom over the
   // real template with a stubbed fetch. No cloudflare:test.
   'tests/shared-report-actions.spec.ts',
+  // A public page's admin probe never follows the Access login redirect (T4 hang).
+  'tests/public-page-admin-probe.spec.ts',
   // The Return Rate card when the API withholds the rate on its own: the same
   // jsdom-over-the-real-template shape as the spec above. No cloudflare:test.
   'tests/shared-report-return-rate-card.spec.ts',
