@@ -114,6 +114,12 @@ function armFetch() {
   );
 }
 
+const refusals = (warn: { mock: { calls: unknown[][] } }) =>
+  warn.mock.calls
+    .map((c) => String(c[0]))
+    .filter((l) => l.includes('"event":"ADMIN_JWT_REFUSED"'))
+    .map((l) => JSON.parse(l) as Record<string, unknown>);
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -322,6 +328,40 @@ describe('OSE-1800 | mutation kills: each check in the svc path does work', () =
     expect(extractAdminActor(r, env)).toBe('key:admin');
   });
 
+  // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-05 | with the
+  // final-401 log line removed, this test and the expired-during-check test had no
+  // refusal line; with it logged on every final 401, the no-token test had one.
+  test('a listed-nowhere service token with no working key: 401, logged as no_actor', async () => {
+    armFetch();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = req(await signJwt(svcClaims({ common_name: 'someone-else.access' })));
+    expect((await requireAdmin(r, stagingEnv(), 'rid'))?.status).toBe(401);
+    expect(refusals(warn)).toEqual([
+      expect.objectContaining({ reason: 'no_actor', where: 'requireAdmin', request_id: 'rid' }),
+    ]);
+  });
+
+  test('the same token with a working key is allowed and logs no refusal', async () => {
+    armFetch();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = req(await signJwt(svcClaims({ common_name: 'someone-else.access' })), {
+      headers: { Authorization: 'Bearer the-admin-key' },
+    });
+    const env = stagingEnv({ ALLOW_ADMIN_KEY_FALLBACK: 'true', ADMIN_KEY: 'the-admin-key' });
+    expect(await requireAdmin(r, env, 'rid')).toBeNull();
+    expect(refusals(warn)).toEqual([]);
+  });
+
+  test('no Access token and a wrong key: 401 with no JWT refusal line', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = new Request('https://stg.example/api/v2/admin/events', {
+      headers: { Authorization: 'Bearer wrong' },
+    });
+    const env = stagingEnv({ ALLOW_ADMIN_KEY_FALLBACK: 'true', ADMIN_KEY: 'the-admin-key' });
+    expect((await requireAdmin(r, env, 'rid'))?.status).toBe(401);
+    expect(refusals(warn)).toEqual([]);
+  });
+
   test('an email token off the allowlist is refused on staging (403), svc settings or not', async () => {
     armFetch();
     const r = req(
@@ -396,7 +436,11 @@ describe('CCR 2026-11-04 | a service token is allowed only as the actor pinned a
       vi.spyOn(Date, 'now').mockImplementation(() => t0 + 120_000);
       return realVerify(...(args as Parameters<typeof realVerify>));
     });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect((await requireAdmin(r, env, 'rid'))?.status).toBe(401);
+    expect(refusals(warn)).toEqual([
+      expect.objectContaining({ reason: 'no_actor', where: 'requireAdmin' }),
+    ]);
   });
 
   test('control: valid at entry, the listed service token is allowed', async () => {

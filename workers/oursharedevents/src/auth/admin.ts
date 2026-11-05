@@ -471,7 +471,7 @@ export function logNullAdminActorDenied(site: string, env: AdminEnv, requestId?:
  * token, its email and its claims are never logged.
  */
 export function logJwtRefused(
-  reason: JwtRefusal | 'actor_mismatch',
+  reason: JwtRefusal | 'actor_mismatch' | 'no_actor',
   where: 'preflight' | 'requireAdmin',
   env: AdminEnv,
   requestId?: string
@@ -576,6 +576,10 @@ export async function requireAdmin(
 
   // Method 1: Cloudflare Access JWT + RSA signature verification (OSE-590 / OSE-211)
   const cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
+  // A trusted Access token that named no actor here (an unlisted service token,
+  // or one that expired during the signature check) falls through to the key
+  // methods; if they fail too, the final 401 says why (CCR review, PR #1107).
+  let jwtNamedNoActor = false;
   if (cfJwt) {
     const isLocalEnv = isLocalWorkerEnv(env);
     // When CF_ACCESS_TEAM_DOMAIN is configured, the JWT signature MUST be
@@ -641,10 +645,13 @@ export async function requireAdmin(
       if (valid && email) {
         // A CF Access JWT carrying a HUMAN email must pass the admin allowlist.
         const allowlistDeny = assertAdminEmailAllowed(email, env, requestId);
-        // Stryker disable next-line ConditionalExpression: equivalent mutant — when the email is allowlisted `allowlistDeny` is null, so `if(true) return allowlistDeny` returns the same null the next line returns; when denied it returns the same 403. Both allow and deny outcomes ARE covered. OSE-1278.
+        // Not an equivalent mutant since OSE-1801: `if (true)` would return the
+        // allowlist null before the pinned-actor check below (killed by the
+        // not-valid-yet-at-entry test in admin-actor-memo.spec.ts).
         if (allowlistDeny) return allowlistDeny;
         return pinned === email ? null : refuseActorMismatch(env, requestId);
       }
+      jwtNamedNoActor = true;
     }
     // OSE-889: a VALID CF Access JWT with NO email is a **service token**
     // (non-human identity — CF Access injects these when a service token
@@ -671,6 +678,7 @@ export async function requireAdmin(
     if (key && token && constantTimeEqual(token, key)) return null;
   }
 
+  if (jwtNamedNoActor) logJwtRefused('no_actor', 'requireAdmin', env, requestId);
   return new Response(JSON.stringify({ ok: false, status: 401, code: 'UNAUTH', requestId }), {
     status: 401,
     headers: {

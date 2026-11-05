@@ -811,7 +811,10 @@ export async function route(
       // OSE-1801: say which check refused the token (reason code only; the token
       // and its claims are never logged or echoed).
       const reason = _jwtResult.reason;
-      logJwtRefused(reason, 'preflight', env as AdminEnv);
+      // One reference in the log line, the body and the header, so a refusal
+      // can be found in the logs from the response (runbook).
+      const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+      logJwtRefused(reason, 'preflight', env as AdminEnv, reqId);
       return new Response(
         JSON.stringify({
           ok: false,
@@ -819,8 +822,12 @@ export async function route(
           code: 'INVALID_JWT',
           reason,
           error: 'The Access token was refused (' + reason + ')',
+          requestId: reqId,
         }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': reqId },
+        }
       );
     }
   }

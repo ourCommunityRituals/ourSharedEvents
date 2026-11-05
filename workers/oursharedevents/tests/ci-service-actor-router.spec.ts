@@ -239,6 +239,11 @@ describe('OSE-1801 | the router refuses an identity before anything is scoped by
       .filter((l) => l.includes('"event":"ADMIN_JWT_REFUSED"'))
       .map((l) => JSON.parse(l) as Record<string, unknown>);
     expect(lines).toEqual([expect.objectContaining({ reason: 'audience', where: 'preflight' })]);
+    // One reference in the log, the header and the body (PR #1107 review).
+    const ref = res.headers.get('X-Request-Id');
+    expect(ref).toBeTruthy();
+    expect(lines[0]!.request_id).toBe(ref);
+    expect(((await res.json()) as { requestId?: string }).requestId).toBe(ref);
     warn.mockRestore();
   });
 

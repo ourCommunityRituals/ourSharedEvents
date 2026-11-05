@@ -178,6 +178,9 @@ curl -s https://stg.oursharedevents.com/health | jq
    - `email_shape`: the email is not a plain address.
    - `actor_mismatch`: the identity changed during the request (it was not
      valid at entry). Retry.
+   - `no_actor`: a trusted token that names no admin here (a service token not
+     listed in `CI_SERVICE_ACTORS`, or one that expired during the check), and
+     no key worked either.
    - `malformed`: a token that cannot be decoded, **or** a JWKS fetch outage
      (TL-093). If many requests fail at once, check the team's certs endpoint.
 
