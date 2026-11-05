@@ -29,7 +29,15 @@
  * boundaries; rule 2 cuts the country into one area per zip, so an event
  * shows for one zip at most.
  */
-import { cellToLatLng, gridDisk, gridDistance, isValidCell, latLngToCell } from 'h3-js';
+import {
+  cellToLatLng,
+  getHexagonEdgeLengthAvg,
+  greatCircleDistance,
+  gridDisk,
+  gridDistance,
+  isValidCell,
+  latLngToCell,
+} from 'h3-js';
 import { CORRIDOR_RES } from './h3-tagging';
 import { ZIP_AREAS, ZIP_AREA_COUNT, ZIP_AREA_RECORD } from './zip-areas-data';
 
@@ -168,12 +176,21 @@ function zipsAround(area: ZipArea): ZipArea[] {
   return out;
 }
 
-/** Is the res-7 cell within NEAR_RING_STEPS rings of the zip's own cell? */
-function withinBound(zip: ZipArea, res7: string): boolean {
+// The 8-ring bound's reach in km: cell centers are sqrt(3) edges apart.
+const BOUND_KM = NEAR_RING_STEPS * Math.sqrt(3) * getHexagonEdgeLengthAvg(CORRIDOR_RES, 'km');
+
+/**
+ * Is the res-7 cell within NEAR_RING_STEPS rings of the zip's own cell? When H3
+ * cannot count the rings (the path crosses a pentagon; all twelve are at sea),
+ * the straight-line distance between the two centers decides instead, so a
+ * valid address zip is never dropped for that reason alone.
+ */
+export function withinBound(zip: ZipArea, res7: string): boolean {
   try {
     return gridDistance(latLngToCell(zip.lat, zip.lon, CORRIDOR_RES), res7) <= NEAR_RING_STEPS;
   } catch {
-    return false; // too far apart for H3 to count, or across a pentagon
+    if (!isValidCell(res7)) return false;
+    return greatCircleDistance([zip.lat, zip.lon], cellToLatLng(res7), 'km') <= BOUND_KM;
   }
 }
 

@@ -28,6 +28,7 @@ import {
   nearCells,
   inZipOwnArea,
   addressZip,
+  withinBound,
   normalizeZip,
   roughBoxCenter,
   NEAR_RING_STEPS,
@@ -185,6 +186,21 @@ describe("a zip's own area (owner 2026-11-05)", () => {
     const typo = at(...MOUNT_GREENWOOD, '3700 W 111th St, Chicago, CA 90012');
     expect(inZipOwnArea(findZipArea('60655')!)(typo)).toBe(true);
     expect(inZipOwnArea(findZipArea('90012')!)(typo)).toBe(false);
+  });
+
+  test('where H3 cannot count rings (a pentagon), straight-line distance decides', () => {
+    // Off Norway, next to the res-7 pentagon 870800000ffffff: gridDistance throws
+    // between this point's cell and a cell 8 km away.
+    const zip = { zip: '00000', lat: 64.745, lon: 10.5362 };
+    expect(() =>
+      gridDistance(latLngToCell(zip.lat, zip.lon, CORRIDOR_RES), '870800015ffffff')
+    ).toThrow();
+    expect(withinBound(zip, '870800015ffffff')).toBe(true); // 8 km: inside the bound
+    expect(withinBound(zip, 'not-a-cell')).toBe(false);
+    // Ordinary cells still count rings.
+    const mg = findZipArea('60655')!;
+    expect(withinBound(mg, latLngToCell(...OAK_LAWN, CORRIDOR_RES))).toBe(true);
+    expect(withinBound(mg, latLngToCell(34.05, -118.25, CORRIDOR_RES))).toBe(false);
   });
 
   test('an event with no cell, or a cell that is not one, is in no zip', () => {
