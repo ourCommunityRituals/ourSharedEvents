@@ -413,25 +413,37 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   test('Step 7: SharedReport shows sponsor in metrics', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
 
-    await page.goto('/sharedReport', { waitUntil: 'networkidle', timeout: TIMEOUT });
-    await page.waitForTimeout(5000);
-
-    // SharedReport fetches sponsors for all events and renders metric cards
-    const sponsorCards = page.locator('[data-testid="report-sponsor-card"]');
-    const count = await sponsorCards.count();
-
-    if (count > 0) {
-      let foundInReport = false;
-      for (let i = 0; i < count; i++) {
-        const text = await sponsorCards.nth(i).textContent();
-        if (text?.includes('Journey Sponsor')) {
-          foundInReport = true;
-          // Verify tier is shown
-          expect(text).toContain('gold');
-          break;
-        }
+    // What the all-events report renders (shared-report.html): one card per
+    // sponsor of the FIRST 10 events in the public list. Read that list the same
+    // way the page does, so the check holds however busy staging is. (Until
+    // #1085 the page answered 403 on Free and this step passed with no cards.)
+    const listRes = await request.get('/api/v2/events');
+    expect(listRes.ok()).toBe(true);
+    const listed = ((await listRes.json()).items ?? []).slice(0, 10) as Array<{ id: string }>;
+    const expected = new Set<string>();
+    for (const ev of listed) {
+      const r = await request.get(`/api/v2/events/${encodeURIComponent(ev.id)}/sponsors`);
+      if (!r.ok()) continue; // the page skips an event whose sponsor list fails too
+      for (const s of ((await r.json()).items ?? []) as Array<{ name: string }>) {
+        expected.add(s.name);
       }
-      expect(foundInReport).toBe(true);
+    }
+
+    await page.goto('/sharedReport', { waitUntil: 'networkidle', timeout: TIMEOUT });
+    const cards = page.locator('[data-testid="report-sponsor-card"]');
+    if (expected.size > 0) await expect(cards.first()).toBeVisible({ timeout: TIMEOUT });
+    const shown = new Set(
+      (await cards.locator('.sponsor-name').allTextContents()).map((t) => t.trim())
+    );
+
+    // Exactly the sponsors of those events, no more and no fewer.
+    expect([...shown].sort()).toEqual([...expected].sort());
+
+    // When this run's event is among them, its sponsor is there, with its tier.
+    if (listed.some((ev) => ev.id === eventId)) {
+      expect(shown.has(SPONSOR_NAME)).toBe(true);
+      const card = cards.filter({ hasText: SPONSOR_NAME }).first();
+      await expect(card).toContainText('gold');
     }
   });
 
