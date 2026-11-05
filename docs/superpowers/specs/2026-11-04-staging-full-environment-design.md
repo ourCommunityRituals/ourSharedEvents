@@ -236,7 +236,9 @@ Before its first API call the build writes the empty manifest to R2 and lists it
 `stock/manifest-index.json`, then keeps that copy at most 20 seconds behind, so a run cancelled
 before the swap is still purged by the next run, which reads only the index. The swap overwrites
 that copy with the complete manifest (or, with no artifact, purges every node of the copy), and
-refuses, red, a copy holding ids its manifest does not.
+refuses, red, a copy holding ids its manifest does not. With no artifact it looks the copy up by
+run id, preferring the current attempt and otherwise the highest readable one, because
+re-running check-swap alone raises the attempt while the build's registration keeps its own.
 
 _My call:_ the purge is direct SQL from CI (`wrangler d1 execute … --env staging-full
 --remote`), deleting by manifest id, including the scans, placements and audit rows those
