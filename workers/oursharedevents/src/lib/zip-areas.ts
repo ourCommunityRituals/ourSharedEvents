@@ -99,25 +99,41 @@ export function nearCells(area: ZipArea, steps = NEAR_RING_STEPS): Set<string> {
   return new Set(gridDisk(latLngToCell(area.lat, area.lon, CORRIDOR_RES), steps));
 }
 
+/** US postal state, district, territory and military codes. */
+const POSTAL_STATES = new Set(
+  (
+    'AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE ' +
+    'NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY ' +
+    'PR VI GU AS MP AA AE AP'
+  ).split(' ')
+);
+
 /**
  * The zip an address ends with: "1234 W Example St, Town, IL 60000" → "60000"
- * ("60000-1234" and a trailing ", USA" are fine). Only a zip at the very end,
- * after a state code or a comma (or alone), counts: a 5-digit street number
- * ("12345 S Pulaski Rd") or a box or unit number ("PO Box 12345") is never one.
+ * ("60000-1234", a trailing ", USA" and a final "." are fine). Only a zip at the
+ * very end counts, and only when nothing comes before it, or a comma, or a
+ * postal state code does: a street number ("12345 S Pulaski Rd"), a box or
+ * room ("PO Box 12345", "RM 60453") is never read as one.
+ *
+ * Linear in the address's length: no pattern here has two whitespace runs that
+ * can trade characters, so a padded address costs no more than a short one
+ * (this runs on a public page for every event near the zip).
  */
 export function addressZip(address: unknown): string | null {
   if (typeof address !== 'string') return null;
-  // Only the last 40 characters, trimmed, and one pattern with a single
-  // whitespace run: a padded 500-character address costs no more than a short
-  // one (this runs on a public page for every event near the zip).
-  const tail = address
-    .slice(-40)
+  const s = address
     .trim()
     .replace(/\.$/, '')
     .replace(/,? ?(?:USA|US|United States)$/, '')
     .trimEnd();
-  const m = /(?:^|,|\b[A-Z]{2})\s*(\d{5})(?:-\d{4})?$/.exec(tail);
-  return m ? m[1] : null;
+  const m = /(\d{5})(?:-\d{4})?$/.exec(s);
+  if (!m) return null;
+  const before = s.slice(0, m.index).trimEnd();
+  if (before === '' || before.endsWith(',')) return m[1];
+  // The word just before the zip: two capital letters after a space or comma.
+  const word = before.slice(-3);
+  const ok = /^[\s,][A-Z]{2}$/.test(word) || (before.length === 2 && /^[A-Z]{2}$/.test(before));
+  return ok && POSTAL_STATES.has(before.slice(-2)) ? m[1] : null;
 }
 
 /**

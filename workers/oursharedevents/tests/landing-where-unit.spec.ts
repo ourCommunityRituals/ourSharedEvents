@@ -14,8 +14,9 @@
  *   the old 8-ring test (return true inside the bound), the address zip ignored, a
  *   0.001-degree neighbour search, an unanchored address-zip pattern, the address
  *   zip trusted without its own bound, a zip read after any space ("Box 12345"),
- *   the old three-whitespace-run pattern (400 padded calls took 12.9 s); each
- *   turned a test red | date: 2026-11-05
+ *   the old three-whitespace-run pattern (400 padded calls took 12.9 s), any two
+ *   capitals taken as a state, the address cut before it is trimmed; each turned
+ *   a test red | date: 2026-11-05
  */
 import { describe, test, expect } from 'vitest';
 import { gridDistance, latLngToCell } from 'h3-js';
@@ -207,6 +208,14 @@ describe("a zip's own area (owner 2026-11-05)", () => {
     expect(addressZip('Oak Lawn, 60453')).toBe('60453');
     expect(addressZip('Oak Lawn, IL 60453.')).toBe('60453');
     expect(addressZip('Oak Lawn, IL 60453 USA')).toBe('60453');
+    // PR review: padding, room codes and the state list.
+    expect(addressZip('PO Box' + ' '.repeat(35) + '60453')).toBeNull();
+    expect(addressZip('RM 60453')).toBeNull();
+    expect(addressZip('Oak Lawn, ZZ 60453')).toBeNull();
+    expect(addressZip('Oak Lawn, IL 60453' + ' '.repeat(40))).toBe('60453');
+    expect(addressZip('IL 60453')).toBe('60453');
+    expect(addressZip('San Juan, PR 00901')).toBe('00901');
+    expect(addressZip('Oak Lawn,IL 60453')).toBe('60453');
   });
 
   test('a padded 500-character address costs no more than a short one', () => {
