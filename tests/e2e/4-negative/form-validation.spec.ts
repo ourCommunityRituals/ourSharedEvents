@@ -186,7 +186,8 @@ test.describe('Form Validation', () => {
     test('should show form disabled error when submission returns 403 FORM_DISABLED', async ({
       page,
     }) => {
-      // Intercept form submission to return 403 FORM_DISABLED
+      // Intercept form submission to return 403 FORM_DISABLED, in the shape the
+      // router sends when a form type is off for the event (router.ts, forms flag check).
       await page.route('**/api/**', (route) => {
         const request = route.request();
         if (request.method() === 'POST' && request.url().includes('/forms/')) {
@@ -194,8 +195,10 @@ test.describe('Form Validation', () => {
             status: 403,
             contentType: 'application/json',
             body: JSON.stringify({
-              error: 'FORM_DISABLED',
-              message: 'This form is currently disabled',
+              ok: false,
+              status: 403,
+              code: 'FORM_DISABLED',
+              error: 'register is not enabled for this event',
             }),
           });
         } else {
@@ -211,18 +214,14 @@ test.describe('Form Validation', () => {
 
       await page.locator('button[type="submit"], [data-testid="submit-button"]').first().click();
 
-      // Should show an error state, not success
-      await expect(page.locator('[data-testid="form-success"]')).not.toBeVisible({
-        timeout: 5000,
-      });
+      // Wait for the refusal to render. isVisible() does not wait, so it raced
+      // the response; toBeVisible() retries until the error shows.
+      const formError = page.locator('[data-testid="form-error"]');
+      await expect(formError).toBeVisible({ timeout: 5000 });
+      await expect(formError).toHaveAttribute('data-error-code', 'FORM_DISABLED');
 
-      // Should show some error indication
-      const errorVisible = await page
-        .locator('[data-testid="form-error"]')
-        .isVisible({ timeout: 5000 })
-        .catch(() => false);
-
-      expect(errorVisible).toBeTruthy();
+      // Checked after the response has landed, so it is not vacuous.
+      await expect(page.locator('[data-testid="form-success"]')).toHaveCount(0);
     });
   });
 });
