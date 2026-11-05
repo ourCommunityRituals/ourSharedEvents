@@ -176,6 +176,8 @@ curl -s https://stg.oursharedevents.com/health | jq
      `CF_ACCESS_AUD` and `CF_ACCESS_TEAM_DOMAIN`.
    - `signature`: not signed by the team's current key.
    - `email_shape`: the email is not a plain address.
+   - `not_allowlisted`: a valid token whose email is not on the admin
+     allowlist (the response is 403, not 401).
    - `actor_mismatch`: the identity changed during the request (it was not
      valid at entry). Retry.
    - `no_actor`: a trusted token that names no admin here (a service token not

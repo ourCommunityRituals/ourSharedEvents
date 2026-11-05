@@ -39,7 +39,9 @@
  *   content-type rule flipped to `actor === null` (17 lines below the read),
  *   `if (actor === null) return logNullAdminActorDenied(…), null;` in
  *   requireKeyActor, and the event list's `deny` return removed each failed
- *   check 2.
+ *   check 2. A log-then-allow block in requireKeyActor and a log-then-grant
+ *   in draftScopeVerdict fail check 2; loosening isStandaloneDenyLog to "any
+ *   line that logs" fails its own regression table.
  */
 import { test, expect } from '@playwright/test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -184,6 +186,18 @@ function nullTests(v: string): RegExp {
 }
 
 /**
+ * The one null branch allowed without the bypass re-test: a standalone line that
+ * only logs the denial. No block, no return, no comma expression, no other
+ * statement, because logging does not prove denial (PR #1107 review).
+ */
+function isStandaloneDenyLog(statement: string, v: string): boolean {
+  const id = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `^\\s*if\\s*\\(\\s*${id}\\s*===?\\s*null\\s*\\)\\s*logNullAdminActorDenied\\([^;(){}]*\\);\\s*$`
+  ).test(statement);
+}
+
+/**
  * The last line of the block the call sits in: the actor's scope (a `const` is
  * block-scoped), so every later use of it is judged, not a fixed window (a
  * 16-line window missed the write guard's content-type rule; PR #1107 review).
@@ -300,11 +314,7 @@ test.describe('Invariant 9: a null admin actor allows nothing (OSE-1801)', () =>
           for (const l of tests) {
             const ok =
               /isDevOpenAdmin\(env\)/.test(l) ||
-              // Only the standalone log line: no return, no comma expression, no
-              // other statement (logging does not prove denial; PR #1107 review).
-              new RegExp(
-                `^\\s*if\\s*\\(\\s*${v}\\s*===?\\s*null\\s*\\)\\s*logNullAdminActorDenied\\([^;()]*\\);\\s*$`
-              ).test(l) ||
+              isStandaloneDenyLog(l, v) ||
               (elseRetest &&
                 new RegExp(`\\b${v}\\s*!==?\\s*null\\b|\\bif\\s*\\(\\s*${v}\\s*\\)`).test(l));
             if (!ok)
@@ -350,6 +360,25 @@ test.describe('Invariant 9: a null admin actor allows nothing (OSE-1801)', () =>
       }
     }
     expect(bad, bad.join('\n')).toEqual([]);
+  });
+
+  test('OSE-1801 | the log exemption accepts only a standalone deny log, never a log plus a grant', () => {
+    // PR #1107 review: a branch that logs and then allows must not pass as "only logs".
+    const accepted = [
+      "  if (actor === null) logNullAdminActorDenied('key-actor-only', env);",
+      'if (actor == null) logNullAdminActorDenied("x", env, rid);',
+    ];
+    const refused = [
+      "if (actor === null) { logNullAdminActorDenied('key-actor-only', env); return null; }",
+      "if (actor === null) { logNullAdminActorDenied('x', env); return 'in-scope'; }",
+      "if (actor === null) return logNullAdminActorDenied('key-actor-only', env), null;",
+      "if (actor === null) logNullAdminActorDenied('x', env), allow();",
+      "if (actor === null) logNullAdminActorDenied('x', env); return null;",
+      'if (actor === null) {',
+      "if (other === null) logNullAdminActorDenied('x', env);",
+    ];
+    expect(accepted.filter((s) => !isStandaloneDenyLog(s, 'actor'))).toEqual([]);
+    expect(refused.filter((s) => isStandaloneDenyLog(s, 'actor'))).toEqual([]);
   });
 
   test('OSE-1801 | no call defaults or short-circuits the actor in place', () => {

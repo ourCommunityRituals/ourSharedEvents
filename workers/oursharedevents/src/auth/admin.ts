@@ -471,7 +471,7 @@ export function logNullAdminActorDenied(site: string, env: AdminEnv, requestId?:
  * token, its email and its claims are never logged.
  */
 export function logJwtRefused(
-  reason: JwtRefusal | 'actor_mismatch' | 'no_actor',
+  reason: JwtRefusal | 'actor_mismatch' | 'no_actor' | 'not_allowlisted',
   where: 'preflight' | 'requireAdmin',
   env: AdminEnv,
   requestId?: string
@@ -648,7 +648,12 @@ export async function requireAdmin(
         // Not an equivalent mutant since OSE-1801: `if (true)` would return the
         // allowlist null before the pinned-actor check below (killed by the
         // not-valid-yet-at-entry test in admin-actor-memo.spec.ts).
-        if (allowlistDeny) return allowlistDeny;
+        if (allowlistDeny) {
+          // A signed token for an email off the allowlist is a refusal too
+          // (PR #1107 review); the 403 itself is built by the allowlist.
+          logJwtRefused('not_allowlisted', 'requireAdmin', env, requestId);
+          return allowlistDeny;
+        }
         return pinned === email ? null : refuseActorMismatch(env, requestId);
       }
       jwtNamedNoActor = true;

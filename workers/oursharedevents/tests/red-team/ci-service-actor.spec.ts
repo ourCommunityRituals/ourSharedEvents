@@ -362,12 +362,22 @@ describe('OSE-1800 | mutation kills: each check in the svc path does work', () =
     expect(refusals(warn)).toEqual([]);
   });
 
+  // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-05 | with the
+  // not_allowlisted log line removed, the 403 carried no refusal line.
   test('an email token off the allowlist is refused on staging (403), svc settings or not', async () => {
     armFetch();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const r = req(
       await signJwt({ ...svcClaims(), common_name: undefined, email: 'stranger@example.com' })
     );
     expect((await requireAdmin(r, stagingEnv(), 'rid'))?.status).toBe(403);
+    expect(refusals(warn)).toEqual([
+      expect.objectContaining({
+        reason: 'not_allowlisted',
+        where: 'requireAdmin',
+        request_id: 'rid',
+      }),
+    ]);
   });
 
   test('the team domain and audience settings are read trimmed', async () => {
