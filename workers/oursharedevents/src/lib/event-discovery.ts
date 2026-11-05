@@ -444,8 +444,8 @@ export function renderDiscoveryFilters(
 export function discoveryEmptyCopy(f: DiscoveryFilters): string {
   const place = findSearchPlace(f.q);
   if (place) {
-    const keep = f.when === 'all' ? '/events' : `/events?when=${f.when}`;
-    return `Nothing in ${escapeHtml(place.label)} yet. <a href="${keep}" data-testid="disc-empty-wider">See all events</a>.`;
+    // "See all events" means all of them: no place, no date window.
+    return `Nothing in ${escapeHtml(place.label)} yet. <a href="/events" data-testid="disc-empty-wider">See all events</a>.`;
   }
   if (f.q) {
     const keep = f.when === 'all' ? '/events' : `/events?when=${f.when}`;

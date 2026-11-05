@@ -170,6 +170,12 @@ describe('GET /events?q=<place>', () => {
     expect(body).toContain('Nothing in 60652 yet.');
   });
 
+  test('"See all events" from an empty place drops the date window too', async () => {
+    const res = await SELF.fetch('https://t.test/events?when=weekend&q=60652');
+    const body = await res.text();
+    expect(body).toMatch(/<a href="\/events" data-testid="disc-empty-wider">See all events<\/a>/);
+  });
+
   test('part of a name is still a name/venue search', async () => {
     const { body, titles } = await listed('Oak');
     expect(titles).toEqual([T.oakLawn]);
