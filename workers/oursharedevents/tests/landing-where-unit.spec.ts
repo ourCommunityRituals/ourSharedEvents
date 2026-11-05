@@ -216,6 +216,12 @@ describe("a zip's own area (owner 2026-11-05)", () => {
     expect(addressZip('IL 60453')).toBe('60453');
     expect(addressZip('San Juan, PR 00901')).toBe('00901');
     expect(addressZip('Oak Lawn,IL 60453')).toBe('60453');
+    // PR review: the state and country words in any case.
+    expect(addressZip('1 Main St, Oak Lawn, il 60453')).toBe('60453');
+    expect(addressZip('1 Main St, Oak Lawn, Il 60453')).toBe('60453');
+    expect(addressZip('1 Main St, Oak Lawn, IL 60453, usa')).toBe('60453');
+    expect(addressZip('1 Main St, Oak Lawn, il 60453, United states')).toBe('60453');
+    expect(addressZip('Rm 60453')).toBeNull();
   });
 
   test('a padded 500-character address costs no more than a short one', () => {

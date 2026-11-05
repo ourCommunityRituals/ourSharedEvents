@@ -124,16 +124,18 @@ export function addressZip(address: unknown): string | null {
   const s = address
     .trim()
     .replace(/\.$/, '')
-    .replace(/,? ?(?:USA|US|United States)$/, '')
+    .replace(/,? ?(?:USA|US|United States)$/i, '')
     .trimEnd();
   const m = /(\d{5})(?:-\d{4})?$/.exec(s);
   if (!m) return null;
   const before = s.slice(0, m.index).trimEnd();
   if (before === '' || before.endsWith(',')) return m[1];
-  // The word just before the zip: two capital letters after a space or comma.
+  // The word just before the zip: two letters after a space or comma, in any
+  // case ("il", "Il"), that are a postal state code once capitalised.
   const word = before.slice(-3);
-  const ok = /^[\s,][A-Z]{2}$/.test(word) || (before.length === 2 && /^[A-Z]{2}$/.test(before));
-  return ok && POSTAL_STATES.has(before.slice(-2)) ? m[1] : null;
+  const ok =
+    /^[\s,][A-Za-z]{2}$/.test(word) || (before.length === 2 && /^[A-Za-z]{2}$/.test(before));
+  return ok && POSTAL_STATES.has(before.slice(-2).toUpperCase()) ? m[1] : null;
 }
 
 /**
