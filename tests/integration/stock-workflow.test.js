@@ -218,17 +218,24 @@ describe('access-gate', { timeout: 30_000 }, () => {
 });
 
 describe('secrets', () => {
-  test('no job but deploy and check-swap names the Cloudflare token or account', () => {
+  test('no job but deploy, build and check-swap names the Cloudflare token or account', () => {
+    const CLOUDFLARE_JOBS = ['deploy', 'build', 'check-swap'];
     for (const job of Object.keys(jobs)) {
       const text = JSON.stringify(jobs[job]);
       const named = /secrets\.CLOUDFLARE_API_TOKEN|secrets\.CLOUDFLARE_ACCOUNT_ID/.test(text);
-      expect(named, job).toBe(job === 'deploy' || job === 'check-swap');
+      expect(named, job).toBe(CLOUDFLARE_JOBS.includes(job));
     }
-    const steps = stepsOf('deploy').concat(stepsOf('check-swap'));
+    const steps = CLOUDFLARE_JOBS.flatMap(stepsOf);
     for (const s of steps) {
       if (!/secrets\.CLOUDFLARE/.test(JSON.stringify(s))) continue;
       expect(JSON.stringify(s.env), s.name).toMatch(/secrets\.CLOUDFLARE_API_TOKEN_OSE/);
     }
+    // in build, the step that runs the build holds them, and no other
+    const held = stepsOf('build').filter((s) => /secrets\.CLOUDFLARE/.test(JSON.stringify(s)));
+    expect(held).toHaveLength(1);
+    expect(held[0].run).toBe('node scripts/stock/run-day.mjs build');
+    expect(held[0].env.CLOUDFLARE_API_TOKEN).toBe('${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}');
+    expect(held[0].env.CLOUDFLARE_ACCOUNT_ID).toBe('${{ secrets.CLOUDFLARE_ACCOUNT_ID }}');
   });
 
   test('secrets reach a step only through env:, and only the action takes one in with:', () => {
@@ -613,6 +620,17 @@ describe('build and check-swap', () => {
     expect(upload.with.name).toBe('stock-manifest');
     const swap = stepsOf('check-swap').find((s) => /run-day\.mjs check-swap/.test(s.run || ''));
     expect(swap.env.BUILD_RESULT).toBe('${{ needs.build.result }}');
+  });
+
+  test('the build installs the lockfile wrangler before it runs, to list its manifest in R2', () => {
+    const steps = stepsOf('build');
+    const installAt = steps.findIndex(
+      (s) =>
+        s['working-directory'] === '${{ env.WORKER_DIR }}' && /\bnpm ci\b/.test(String(s.run || ''))
+    );
+    const buildAt = steps.findIndex((s) => /run-day\.mjs build/.test(String(s.run || '')));
+    expect(installAt).toBeGreaterThanOrEqual(0);
+    expect(installAt).toBeLessThan(buildAt);
   });
 
   test('a slow build fails its step, not the job: the result is failure, so check-swap runs', () => {

@@ -6,7 +6,8 @@
 //   prepare-search  event type catalog + the rendered search prompt
 //   search-output   the search's two files against their schemas
 //   validate        finds -> accepted rows (validate-finds.mjs)
-//   build           accepted rows -> a day of stock data + its manifest (build-full.mjs)
+//   build           accepted rows -> a day of stock data + its manifest (build-full.mjs),
+//                   listed in R2 before the first API call and kept current there
 //   check-swap      accept the placements, check every node, swap or purge per node
 //
 // Every Cloudflare command goes through one wrangler(args) runner that refuses
@@ -28,6 +29,7 @@ import {
   buildPurgeSql,
   purgeR2Keys,
   manifestName,
+  parseManifestName,
   listStaleManifests,
 } from './purge-full.mjs';
 
@@ -180,7 +182,93 @@ export function parseIndex(text) {
 }
 
 const indexText = (names) => `${JSON.stringify({ manifests: names }, null, 2)}\n`;
+const manifestText = (m) => `${JSON.stringify(m, null, 2)}\n`;
 const nodesOf = (manifest) => unique((manifest.items || []).map((i) => i.node));
+
+/** The ids a stored manifest records. Anything unreadable throws. */
+function storedIds(text) {
+  const m = JSON.parse(text);
+  if (!m || !Array.isArray(m.items)) throw new Error('no items list');
+  return m.items.map((i) => i && i.id);
+}
+
+// ── The build's copy in R2 ─────────────────────────────────────────────────
+
+/**
+ * Lists today's manifest before the build creates anything: the empty manifest
+ * goes to stock/<name>, then the name joins the index. A run cancelled after
+ * this is still purged by the next run, which reads only the index. An object
+ * already under the name is never overwritten. Throws on any failure.
+ */
+export async function registerManifest({ cloud, name, manifest }) {
+  const names = parseIndex(await cloud.r2Get(INDEX_KEY));
+  if ((await cloud.r2Get(`${MANIFEST_PREFIX}${name}`)) !== null) {
+    throw new Error(`${name} already exists; another build's record is never overwritten`);
+  }
+  await cloud.r2Put(`${MANIFEST_PREFIX}${name}`, manifestText(manifest));
+  if (!names.includes(name)) await cloud.r2Put(INDEX_KEY, indexText([...names, name]));
+}
+
+export const PERSIST_INTERVAL_MS = 20_000;
+
+/**
+ * Keeps the R2 copy of a growing manifest: at most one write per interval, the
+ * latest change written within an interval of being recorded, and a final write
+ * that throws on failure. A throttled write that fails is only a warning.
+ * `record` never waits; the clock and timers are injected for tests.
+ */
+export function makeManifestPersister({
+  save,
+  now,
+  intervalMs = PERSIST_INTERVAL_MS,
+  setTimer = setTimeout,
+  clearTimer = clearTimeout,
+  warn = () => {},
+}) {
+  let lastAt = now(); // the registration was the first write
+  let latest = null; // text recorded but not yet written
+  let writing = null;
+  let timer = null;
+
+  function write() {
+    const text = latest;
+    latest = null;
+    lastAt = now();
+    writing = Promise.resolve()
+      .then(() => save(text))
+      .catch((err) => warn(`manifest copy in R2 not updated: ${err.message}`))
+      .finally(() => {
+        writing = null;
+        if (latest !== null) schedule();
+      });
+  }
+  function schedule() {
+    if (writing || timer) return; // a write in flight reschedules when it ends
+    const wait = lastAt + intervalMs - now();
+    if (wait <= 0) {
+      write();
+      return;
+    }
+    timer = setTimer(() => {
+      timer = null;
+      if (latest !== null) schedule();
+    }, wait);
+  }
+
+  return {
+    record(manifest) {
+      latest = manifestText(manifest);
+      schedule();
+    },
+    async final(manifest) {
+      if (timer) clearTimer(timer);
+      timer = null;
+      latest = null;
+      if (writing) await writing;
+      await save(manifestText(manifest));
+    },
+  };
+}
 
 // ── Acceptance (the only UPDATE the stock run sends) ───────────────────────
 
@@ -301,7 +389,10 @@ export async function checkSwap({
 
   // 1. The index, then today's manifest object and its name in the index. If
   //    either cannot be written, today's rows are purged so nothing orphans.
-  //    Another attempt's record is never overwritten.
+  //    The build registered today's name and kept a copy as it went, so an
+  //    object holding only ids of this manifest is this run's own record and is
+  //    overwritten with the complete one. An object holding any other id is
+  //    another build's record, and is never overwritten.
   let names;
   try {
     names = parseIndex(await cloud.r2Get(INDEX_KEY));
@@ -311,18 +402,36 @@ export async function checkSwap({
     return report(allFailing('index-unreadable'), { written: false });
   }
   const before = names;
+  const stored = before.includes(todayName) ? before : [...before, todayName];
   let objectSaved = false;
   try {
-    const exists =
-      names.includes(todayName) || (await cloud.r2Get(`${MANIFEST_PREFIX}${todayName}`)) !== null;
-    if (exists) {
-      problems.push(`${todayName} already exists; another attempt's record is never overwritten`);
-      await purgeUnsaved();
-      return report(allFailing('manifest-exists'), { before, written: false });
+    const existing = await cloud.r2Get(`${MANIFEST_PREFIX}${todayName}`);
+    if (existing !== null) {
+      let foreign;
+      try {
+        foreign = unique(storedIds(existing).filter((id) => !todayIds.has(id)));
+      } catch (err) {
+        foreign = null;
+        problems.push(
+          `${todayName} exists but is unreadable (${err.message}); another build's record is never overwritten`
+        );
+      }
+      if (foreign && foreign.length) {
+        const shown = foreign.slice(0, 5).join(', ');
+        problems.push(
+          `${todayName} already exists with ids this run's manifest does not hold (${shown}${
+            foreign.length > 5 ? `, and ${foreign.length - 5} more` : ''
+          }); another build's record is never overwritten`
+        );
+      }
+      if (foreign === null || foreign.length) {
+        await purgeUnsaved();
+        return report(allFailing('manifest-exists'), { before, written: false });
+      }
     }
-    await cloud.r2Put(`${MANIFEST_PREFIX}${todayName}`, `${JSON.stringify(manifest, null, 2)}\n`);
+    await cloud.r2Put(`${MANIFEST_PREFIX}${todayName}`, manifestText(manifest));
     objectSaved = true;
-    await cloud.r2Put(INDEX_KEY, indexText([...before, todayName]));
+    if (stored !== before) await cloud.r2Put(INDEX_KEY, indexText(stored));
   } catch (err) {
     problems.push(
       objectSaved
@@ -333,10 +442,10 @@ export async function checkSwap({
     return report(allFailing('manifest-not-saved'), { before, written: false });
   }
   unknownNodes(todayName, manifest);
-  let live = [...before, todayName];
+  let live = [...stored];
 
   async function writeIndex(results) {
-    if (live.length === before.length + 1 && live.includes(todayName)) {
+    if (live.length === stored.length && live.every((n, i) => n === stored[i])) {
       return report(results, { before, after: live, written: true });
     }
     try {
@@ -344,7 +453,7 @@ export async function checkSwap({
       return report(results, { before, after: live, written: true });
     } catch (err) {
       problems.push(`manifest index not updated: ${err.message}`);
-      return report(results, { before, after: [...before, todayName], written: false });
+      return report(results, { before, after: stored, written: false });
     }
   }
 
@@ -665,17 +774,54 @@ export async function runValidate({ env, fs, fetch: fetchFn, now, outDir }) {
   return 0;
 }
 
-export async function runBuild({ env, fs, fetch: fetchFn, now, outDir }) {
+export async function runBuild({
+  env,
+  fs,
+  fetch: fetchFn,
+  wrangler,
+  now,
+  outDir,
+  tmpDir,
+  log = () => {},
+  setTimer,
+  clearTimer,
+}) {
   const today = chicagoDate(now());
   const notes = { ok: false, date: today, instagramWarning: null, tokenWarning: null, error: null };
   const writeNotes = () =>
     fs.writeFileSync(join(outDir, 'build-notes.json'), `${JSON.stringify(notes, null, 2)}\n`);
   let manifest = null;
-  const saveManifest = (m) =>
-    fs.writeFileSync(join(outDir, 'manifest.json'), `${JSON.stringify(m, null, 2)}\n`);
+  const saveManifest = (m) => fs.writeFileSync(join(outDir, 'manifest.json'), manifestText(m));
   // Before the first API call: a build killed before it records anything still
   // hands check-swap a manifest (an empty one), so check-swap reports it red.
-  saveManifest({ date: today, items: [], qr: [], acceptSql: [], short: {}, warnings: [] });
+  const empty = { date: today, items: [], qr: [], acceptSql: [], short: {}, warnings: [] };
+  saveManifest(empty);
+  // Also before the first API call, today's manifest is listed in R2, so the
+  // next run purges this build's rows even if check-swap never runs. If it
+  // cannot be listed, nothing is created.
+  let persister;
+  try {
+    const name = manifestName(today, need(env, 'GITHUB_RUN_ID'), need(env, 'GITHUB_RUN_ATTEMPT'));
+    const cloud = makeCloud({ wrangler, fs, tmpDir, log });
+    await registerManifest({ cloud, name, manifest: empty });
+    persister = makeManifestPersister({
+      save: (text) => cloud.r2Put(`${MANIFEST_PREFIX}${name}`, text),
+      now: () => now().getTime(),
+      ...(setTimer ? { setTimer } : {}),
+      ...(clearTimer ? { clearTimer } : {}),
+      warn: (msg) => log(`warning: ${msg}`),
+    });
+  } catch (err) {
+    notes.error = `manifest not registered in R2: ${err.message}`;
+    writeNotes();
+    return 1;
+  }
+  let latest = empty;
+  const onRecord = (m) => {
+    latest = m;
+    saveManifest(m);
+    persister.record(m);
+  };
   try {
     const client = clientFrom(env, fetchFn);
     const catalog = await fetchCatalog(client);
@@ -700,8 +846,9 @@ export async function runBuild({ env, fs, fetch: fetchFn, now, outDir }) {
       date: today,
       nodeIds: nodes.map((n) => n.id),
       fetch: fetchFn,
-      // synchronous, after every id: a build killed mid-run leaves what it made on record
-      onRecord: saveManifest,
+      // synchronous, after every id: a build killed mid-run leaves what it made on
+      // record, in the local file at once and in R2 within PERSIST_INTERVAL_MS
+      onRecord,
     });
     notes.ok = true;
   } catch (err) {
@@ -709,8 +856,43 @@ export async function runBuild({ env, fs, fetch: fetchFn, now, outDir }) {
     if (err.manifest) manifest = err.manifest;
   }
   if (manifest) saveManifest(manifest);
+  try {
+    await persister.final(manifest || latest);
+  } catch (err) {
+    notes.ok = false;
+    const msg = `manifest not saved to R2: ${err.message}`;
+    notes.error = notes.error ? `${notes.error}; ${msg}` : msg;
+  }
   writeNotes();
   return notes.ok ? 0 : 1;
+}
+
+/**
+ * The manifest this run's build registered in R2, found in the index by this
+ * run's id and attempt (the build's day is not known without the artifact), as
+ * { name, manifest }; null when there is none or it cannot be read.
+ */
+export async function registeredCopy({ cloud, env, log }) {
+  const runId = env.GITHUB_RUN_ID;
+  const attempt = env.GITHUB_RUN_ATTEMPT;
+  if (!runId || !attempt) return null;
+  try {
+    const ours = parseIndex(await cloud.r2Get(INDEX_KEY)).filter((name) => {
+      const p = parseManifestName(name);
+      return p !== null && p.runId === String(runId) && p.attempt === String(attempt);
+    });
+    if (ours.length !== 1) return null;
+    const text = await cloud.r2Get(`${MANIFEST_PREFIX}${ours[0]}`);
+    if (text === null) return null;
+    const manifest = JSON.parse(text);
+    if (!manifest || !Array.isArray(manifest.items) || typeof manifest.date !== 'string') {
+      throw new Error('no items list');
+    }
+    return { name: ours[0], manifest };
+  } catch (err) {
+    log(`the R2 copy of today's manifest could not be read: ${err.message}`);
+    return null;
+  }
 }
 
 export async function runCheckSwap({
@@ -724,20 +906,32 @@ export async function runCheckSwap({
   log,
 }) {
   const manifestPath = join(outDir, 'manifest.json');
-  if (!fs.existsSync(manifestPath)) {
-    const msg =
-      'No manifest was saved; rows created by an interrupted build may need a manual purge.';
-    log(msg);
-    summarize(env, fs, `## Stock data: stg-full\n\n${msg}\n`);
-    return 1;
+  const cloud = makeCloud({ wrangler, fs, tmpDir, log });
+  let manifest;
+  let notes;
+  if (fs.existsSync(manifestPath)) {
+    manifest = readJsonFile(fs, manifestPath);
+    const notesPath = join(outDir, 'build-notes.json');
+    notes = fs.existsSync(notesPath) ? readJsonFile(fs, notesPath) : { ok: false };
+  } else {
+    // No artifact: the build's own copy in R2, if it registered one, stands in.
+    const copy = await registeredCopy({ cloud, env, log });
+    if (!copy) {
+      const msg =
+        'No manifest was saved; rows created by an interrupted build may need a manual purge.';
+      log(msg);
+      summarize(env, fs, `## Stock data: stg-full\n\n${msg}\n`);
+      return 1;
+    }
+    manifest = copy.manifest;
+    notes = {
+      ok: false,
+      error: `the stock-manifest artifact is missing; every node of the R2 copy of ${copy.name} is purged`,
+    };
   }
-  const manifest = readJsonFile(fs, manifestPath);
-  const notesPath = join(outDir, 'build-notes.json');
-  const notes = fs.existsSync(notesPath) ? readJsonFile(fs, notesPath) : { ok: false };
   const buildFailed = notes.ok !== true || env.BUILD_RESULT !== 'success';
   const nodes = repoJson('stock/nodes.json');
   const targets = repoJson('stock/targets.json');
-  const cloud = makeCloud({ wrangler, fs, tmpDir, log });
   const report = await checkSwap({
     manifest,
     buildFailed,

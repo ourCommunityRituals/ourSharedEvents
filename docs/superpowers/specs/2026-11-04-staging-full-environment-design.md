@@ -232,6 +232,12 @@ refresh. The manifest records each id's node so the purge can work node by node.
 never finds a place empty. Yesterday's and today's events overlap for the few
 minutes between build and purge.
 
+Before its first API call the build writes the empty manifest to R2 and lists its name in
+`stock/manifest-index.json`, then keeps that copy at most 20 seconds behind, so a run cancelled
+before the swap is still purged by the next run, which reads only the index. The swap overwrites
+that copy with the complete manifest (or, with no artifact, purges every node of the copy), and
+refuses, red, a copy holding ids its manifest does not.
+
 _My call:_ the purge is direct SQL from CI (`wrangler d1 execute … --env staging-full
 --remote`), deleting by manifest id, including the scans, placements and audit rows those
 ids own. No purge route is added to the Worker. The admin delete refuses events that have
