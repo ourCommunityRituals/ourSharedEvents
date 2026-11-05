@@ -1,0 +1,31 @@
+info:
+  name: GET /events?q=60453 - lists that zip only
+  type: http
+  seq: 20
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events?q=60453"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Owner 2026-11-05: the /events search box takes a town (the owner's list,
+        // lib/place-names.ts) or a zip, and lists that place's events.
+        // A zip in the /events box lists that zip's own area: the Oak Lawn event's address says 60453.
+        // Fixture: bruno/fixtures/landing-zip-own-area-seed.sql (published for this run only).
+        const body = String(res.getBody());
+        test('Returns 200', function () { expect(res.getStatus()).to.equal(200); });
+        test('Heads the list with the place', function () { expect(body).to.include('Events in 60453'); });
+        test('Does not list the Mount Greenwood event', function () { expect(body).to.not.include('Zip Own Area Check (Mount Greenwood)'); });
+        test('Lists the Oak Lawn event', function () { expect(body).to.include('Zip Own Area Check (Oak Lawn)'); });
+        test('Does not list the Evergreen Park event', function () { expect(body).to.not.include('Zip Own Area Check (Evergreen Park)'); });
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

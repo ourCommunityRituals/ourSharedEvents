@@ -1227,6 +1227,13 @@
       "testCount": 24
     },
     {
+      "file": "workers/oursharedevents/tests/events-place-search.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 11
+    },
+    {
       "file": "workers/oursharedevents/tests/events-publication.spec.ts",
       "bucket": "node",
       "needsReview": false,

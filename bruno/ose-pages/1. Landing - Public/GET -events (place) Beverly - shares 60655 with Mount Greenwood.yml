@@ -1,0 +1,31 @@
+info:
+  name: GET /events?q=Beverly - shares 60655 with Mount Greenwood
+  type: http
+  seq: 18
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events?q=Beverly"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Owner 2026-11-05: the /events search box takes a town (the owner's list,
+        // lib/place-names.ts) or a zip, and lists that place's events.
+        // Beverly's zips are 60643, 60655 and 60620, so it lists the 60655 (Mount Greenwood) event too.
+        // Fixture: bruno/fixtures/landing-zip-own-area-seed.sql (published for this run only).
+        const body = String(res.getBody());
+        test('Returns 200', function () { expect(res.getStatus()).to.equal(200); });
+        test('Heads the list with the place', function () { expect(body).to.include('Events in Beverly'); });
+        test('Lists the Mount Greenwood event', function () { expect(body).to.include('Zip Own Area Check (Mount Greenwood)'); });
+        test('Does not list the Oak Lawn event', function () { expect(body).to.not.include('Zip Own Area Check (Oak Lawn)'); });
+        test('Does not list the Evergreen Park event', function () { expect(body).to.not.include('Zip Own Area Check (Evergreen Park)'); });
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

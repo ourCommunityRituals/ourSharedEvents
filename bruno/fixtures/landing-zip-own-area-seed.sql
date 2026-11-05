@@ -9,6 +9,8 @@
 -- Cells from h3-js latLngToCell at res 7 and res 9, as lib/h3-tagging.ts tags them.
 --
 -- Read by bruno/ose-pages/1. Landing - Public/GET -?zip=60655 and -?zip=60453.
+-- Also read by the /events place search requests in the same folder (owner 2026-11-05):
+-- /events?q=Oak Lawn, Mount Greenwood, Beverly, Evergreen Park and 60453.
 -- Applied by CI before the Bruno contract run (pages section):
 --   node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/landing-zip-own-area-seed.sql
 --
