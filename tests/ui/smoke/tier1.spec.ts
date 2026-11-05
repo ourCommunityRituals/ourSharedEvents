@@ -173,8 +173,9 @@ for (const route of noticeRoutes) {
 // "Solo para pruebas.", never the English line (OSE-1760).
 if (manifest.app === 'ose') {
   test('[T1:ose] testing-only notice: Spanish event page', async ({ page }) => {
+    // T4d always sets the fixture; like the band checks above, this fails rather than skips.
     const id = process.env.SMOKE_EVENT_POST;
-    test.skip(!id, 'SMOKE_EVENT_POST not set');
+    expect(id, 'SMOKE_EVENT_POST must be set').toBeTruthy();
     await page.goto(`/es/events/${encodeURIComponent(id!)}`, { waitUntil: 'networkidle' });
     const band = page.locator(NOTICE);
     await expect(band, 'one notice').toHaveCount(1);
