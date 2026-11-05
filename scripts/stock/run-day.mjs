@@ -869,30 +869,47 @@ export async function runBuild({
 
 /**
  * The manifest this run's build registered in R2, found in the index by this
- * run's id and attempt (the build's day is not known without the artifact), as
- * { name, manifest }; null when there is none or it cannot be read.
+ * run's id (the build's day is not known without the artifact), as
+ * { name, attempt, manifest }; null when there is none that can be read.
+ * Re-running check-swap alone raises GITHUB_RUN_ATTEMPT while the build's
+ * registration keeps the attempt it ran in, so the current attempt is preferred,
+ * then the highest attempt of the same run whose object can be read.
  */
 export async function registeredCopy({ cloud, env, log }) {
   const runId = env.GITHUB_RUN_ID;
   const attempt = env.GITHUB_RUN_ATTEMPT;
   if (!runId || !attempt) return null;
+  let names;
   try {
-    const ours = parseIndex(await cloud.r2Get(INDEX_KEY)).filter((name) => {
-      const p = parseManifestName(name);
-      return p !== null && p.runId === String(runId) && p.attempt === String(attempt);
-    });
-    if (ours.length !== 1) return null;
-    const text = await cloud.r2Get(`${MANIFEST_PREFIX}${ours[0]}`);
-    if (text === null) return null;
-    const manifest = JSON.parse(text);
-    if (!manifest || !Array.isArray(manifest.items) || typeof manifest.date !== 'string') {
-      throw new Error('no items list');
-    }
-    return { name: ours[0], manifest };
+    names = parseIndex(await cloud.r2Get(INDEX_KEY));
   } catch (err) {
-    log(`the R2 copy of today's manifest could not be read: ${err.message}`);
+    log(`the manifest index could not be read: ${err.message}`);
     return null;
   }
+  const rank = (p) => (p.attempt === String(attempt) ? 0 : 1);
+  const ours = names
+    .map((name) => ({ name, p: parseManifestName(name) }))
+    .filter(({ p }) => p !== null && p.runId === String(runId))
+    .sort((a, b) => {
+      if (rank(a.p) !== rank(b.p)) return rank(a.p) - rank(b.p);
+      const x = BigInt(a.p.attempt);
+      const y = BigInt(b.p.attempt);
+      return x === y ? 0 : x > y ? -1 : 1;
+    });
+  for (const { name, p } of ours) {
+    try {
+      const text = await cloud.r2Get(`${MANIFEST_PREFIX}${name}`);
+      if (text === null) throw new Error('listed but missing');
+      const manifest = JSON.parse(text);
+      if (!manifest || !Array.isArray(manifest.items) || typeof manifest.date !== 'string') {
+        throw new Error('no items list');
+      }
+      return { name, attempt: p.attempt, manifest };
+    } catch (err) {
+      log(`the R2 copy ${name} could not be read: ${err.message}`);
+    }
+  }
+  return null;
 }
 
 export async function runCheckSwap({
@@ -909,6 +926,9 @@ export async function runCheckSwap({
   const cloud = makeCloud({ wrangler, fs, tmpDir, log });
   let manifest;
   let notes;
+  // The attempt whose name today's manifest goes by: this one, or, when the R2
+  // copy stands in, the attempt that registered it, so the swap works on that copy.
+  let runAttempt = null;
   if (fs.existsSync(manifestPath)) {
     manifest = readJsonFile(fs, manifestPath);
     const notesPath = join(outDir, 'build-notes.json');
@@ -924,6 +944,7 @@ export async function runCheckSwap({
       return 1;
     }
     manifest = copy.manifest;
+    runAttempt = copy.attempt;
     notes = {
       ok: false,
       error: `the stock-manifest artifact is missing; every node of the R2 copy of ${copy.name} is purged`,
@@ -941,7 +962,7 @@ export async function runCheckSwap({
     // still judges the 90-day window from the day the rows were built for.
     today: manifest.date,
     runId: need(env, 'GITHUB_RUN_ID'),
-    runAttempt: need(env, 'GITHUB_RUN_ATTEMPT'),
+    runAttempt: runAttempt ?? need(env, 'GITHUB_RUN_ATTEMPT'),
     cloud,
     checkNodes,
     client: buildFailed ? null : clientFrom(env, fetchFn),

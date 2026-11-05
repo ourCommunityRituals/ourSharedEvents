@@ -1597,3 +1597,105 @@ describe('check-swap over a manifest the build registered', () => {
     expect(summary).not.toContain('No manifest was saved');
   });
 });
+
+describe('check-swap re-run alone recovers the build’s registration', () => {
+  const nameOf = (attempt) => `manifest-${TODAY}-${RUN}-${attempt}.json`;
+  const runAlone = async (w, attempt) => {
+    let checked = false;
+    const code = await rd.runCheckSwap({
+      env: {
+        GITHUB_RUN_ID: RUN,
+        GITHUB_RUN_ATTEMPT: attempt,
+        BUILD_RESULT: 'success',
+        GITHUB_STEP_SUMMARY: '/summary.md',
+      },
+      fs: w.fs,
+      fetch: async () => ({ status: 200 }),
+      wrangler: w.wrangler,
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir: '/out',
+      tmpDir: '/tmp',
+      checkNodes: async () => {
+        checked = true;
+        return {};
+      },
+      log: () => {},
+    });
+    allCalls.push(...w.calls);
+    return { code, checked, summary: w.files.get('/summary.md') };
+  };
+
+  test('the build ran as attempt 1, check-swap re-runs as attempt 2 with no artifact: attempt 1 is purged, red', async () => {
+    const w = world({
+      index: [STALE_NAME, nameOf(1)],
+      objects: {
+        [`stock/${STALE_NAME}`]: manifestOf('2026-11-03', 'y', ['a', 'b']),
+        [`stock/${nameOf(1)}`]: manifestOf(TODAY, 't', ['a', 'b']),
+      },
+    });
+    const { code, checked, summary } = await runAlone(w, '2');
+    expect(code).toBe(1);
+    expect(checked).toBe(false);
+    const purged = w.sqls().join('\n');
+    expect(purged).toContain("'t_evt_a'");
+    expect(purged).toContain("'t_evt_b'");
+    expect(purged).not.toContain("'y_");
+    expect(w.deletes()).toContain(`${rd.R2_BUCKET}/events/t_evt_a/art.png`);
+    // the copy keeps its own name: nothing is written under attempt 2
+    expect(w.r2.has(`stock/${nameOf(2)}`)).toBe(false);
+    expect(w.liveIndex()).toEqual([STALE_NAME]);
+    expect(summary).toContain(`the R2 copy of ${nameOf(1)}`);
+    expect(summary).not.toContain('No manifest was saved');
+  });
+
+  test('the current attempt is preferred when both attempts registered', async () => {
+    const w = world({
+      index: [nameOf(1), nameOf(2)],
+      objects: {
+        [`stock/${nameOf(1)}`]: manifestOf(TODAY, 'one', ['a', 'b']),
+        [`stock/${nameOf(2)}`]: manifestOf(TODAY, 't', ['a', 'b']),
+      },
+    });
+    const { code, summary } = await runAlone(w, '2');
+    expect(code).toBe(1);
+    const purged = w.sqls().join('\n');
+    expect(purged).toContain("'t_evt_a'");
+    expect(purged).not.toContain("'one_");
+    expect(w.liveIndex()).toEqual([nameOf(1)]);
+    expect(summary).toContain(`the R2 copy of ${nameOf(2)}`);
+  });
+
+  test('otherwise the highest attempt whose object can be read', async () => {
+    // attempts 1, 2 and 3 registered; 3 is listed but missing, so 2 is recovered
+    const w = world({
+      index: [nameOf(1), nameOf(3), nameOf(2)],
+      objects: {
+        [`stock/${nameOf(1)}`]: manifestOf(TODAY, 'one', ['a', 'b']),
+        [`stock/${nameOf(2)}`]: manifestOf(TODAY, 'two', ['a', 'b']),
+      },
+    });
+    const { code, summary } = await runAlone(w, '4');
+    expect(code).toBe(1);
+    const purged = w.sqls().join('\n');
+    expect(purged).toContain("'two_evt_a'");
+    expect(purged).not.toContain("'one_");
+    expect(w.liveIndex()).toEqual([nameOf(1), nameOf(3)]);
+    expect(summary).toContain(`the R2 copy of ${nameOf(2)}`);
+  });
+
+  test('no registration for this run id is the red "no manifest" path, and changes nothing', async () => {
+    const other = 'manifest-2026-11-04-999-1.json';
+    const w = world({
+      index: [other],
+      objects: { [`stock/${other}`]: manifestOf(TODAY, 'z', ['a', 'b']) },
+    });
+    const { code, summary } = await runAlone(w, '2');
+    expect(code).toBe(1);
+    expect(summary).toContain(
+      'No manifest was saved; rows created by an interrupted build may need a manual purge.'
+    );
+    expect(w.calls.some((c) => c.args[2] === 'put' || c.args[2] === 'delete')).toBe(false);
+    expect(w.sqls()).toEqual([]);
+    expect(w.liveIndex()).toEqual([other]);
+  });
+});
