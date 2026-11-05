@@ -23,6 +23,7 @@ import { tmpdir } from 'node:os';
 import { chicagoDate } from './validate-finds.mjs';
 import { SEED_FILE, rebaseSeed, expectedByNode } from './seed.mjs';
 import { listPosts, tokenWarning } from './instagram.mjs';
+import { localPosts } from './local-art.mjs';
 import { STOCK_BASE_URL, createClient } from './client.mjs';
 import { buildDay } from './build-full.mjs';
 import { checkNodes as realCheckNodes } from './check-full.mjs';
@@ -784,14 +785,14 @@ export async function runBuild({
   try {
     const client = clientFrom(env, fetchFn);
     const catalog = await fetchCatalog(client);
-    let posts = [];
+    // The owner's photographs in stock/art come first and need no token
+    // (owner 2026-11-05); Instagram posts are added when a token is set.
+    let posts = localPosts(nodeFs, join(ROOT, 'stock', 'art'));
     if (env.INSTAGRAM_ACCESS_TOKEN) {
-      posts = await listPosts({ token: env.INSTAGRAM_ACCESS_TOKEN, fetch: fetchFn });
+      posts = posts.concat(await listPosts({ token: env.INSTAGRAM_ACCESS_TOKEN, fetch: fetchFn }));
       notes.instagramWarning = listPosts.warning || null;
-    } else {
-      notes.instagramWarning = 'INSTAGRAM_ACCESS_TOKEN is not set; no art this run.';
+      notes.tokenWarning = tokenWarning(env.INSTAGRAM_TOKEN_ISSUED || '', today);
     }
-    notes.tokenWarning = tokenWarning(env.INSTAGRAM_TOKEN_ISSUED || '', today);
     const nodes = repoJson('stock/nodes.json').nodes;
     manifest = await buildDay({
       client,

@@ -1,1 +1,10 @@
-{ "tags": {} }
+{
+  "tags": {
+    "mural": ["ART", "SOC", "MKT"],
+    "court": ["REC", "FIT", "GAR"],
+    "sidewalk": ["BIZ", "CIV", "VOL"],
+    "passenger": ["FAI", "PER", "LIT"],
+    "holidaytrain": ["ENT", "TAB", "FND"],
+    "storefront": ["BIZ", "MKT"]
+  }
+}

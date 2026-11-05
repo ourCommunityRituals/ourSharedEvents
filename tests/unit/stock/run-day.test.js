@@ -940,7 +940,9 @@ describe('build', () => {
     for (const id of NODE_IDS) expect(manifest.short[id] || 0, id).toBe(SEED_COUNTS[id] || 0);
     const notes = JSON.parse(w.files.get(path.join(outDir, 'build-notes.json')));
     expect(notes.ok).toBe(true);
-    expect(notes.instagramWarning).toMatch(/INSTAGRAM_ACCESS_TOKEN is not set/);
+    // Instagram is optional now (the owner's photos are in stock/art): no token, no warning.
+    expect(notes.instagramWarning).toBeNull();
+    expect(notes.tokenWarning).toBeNull();
     expect(code).toBe(0);
   });
 

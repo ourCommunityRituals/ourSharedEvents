@@ -1,5 +1,6 @@
 // Build one day of stock data through the Worker's real admin API, and record
 // every id it creates in a manifest (the check, swap and purge steps read it).
+import { readFile as fsReadFile } from 'node:fs/promises';
 import { pickArt } from './instagram.mjs';
 import { chicagoDate } from './validate-finds.mjs';
 import { SAFE_ID } from './purge-full.mjs';
@@ -43,6 +44,15 @@ function bySectorThenStart(a, b) {
   return rank(a) - rank(b) || byStart || String(a.title).localeCompare(String(b.title));
 }
 
+// A local photo (stock/art, local-art.mjs) is read from disk; an Instagram post
+// is downloaded.
+async function loadArt(post, fetchFn, readFile) {
+  if (typeof post.file === 'string') {
+    return { bytes: new Uint8Array(await readFile(post.file)), contentType: 'image/jpeg' };
+  }
+  return downloadArt(fetchFn, post.mediaUrl);
+}
+
 async function downloadArt(fetchFn, url) {
   const res = await fetchFn(url);
   if (!res.ok) throw new Error(`art download failed: ${res.status}`);
@@ -68,6 +78,8 @@ export async function buildDay({
   date,
   nodeIds,
   fetch: fetchFn = globalThis.fetch,
+  // reads a local photo's bytes (posts from local-art.mjs carry a file path)
+  readFile = (path) => fsReadFile(path),
   // Called with the manifest after every id it records, so the caller can save it
   // as it grows: a build killed mid-run still leaves what it created on record.
   onRecord = () => {},
@@ -169,7 +181,7 @@ export async function buildDay({
         const post = pickArt(row, posts, artTags, typeCategory);
         if (post) {
           try {
-            const art = await downloadArt(fetchFn, post.mediaUrl);
+            const art = await loadArt(post, fetchFn, readFile);
             // The Worker answers { ok, status, file: { key, url, ... }, requestId }
             // (handlers/upload.ts). A key the purge could not name is never recorded.
             const up = await client.upload(ev.id, art.bytes, art.contentType);
