@@ -64,7 +64,7 @@ const find = (over = {}) => ({
   venue: 'Cork & Kerry',
   address: '10614 S Western Ave, Chicago, IL',
   sector: 'private',
-  node: 'beverly',
+  node: 'evergreen-park',
   event_type_id: 'trivia',
   starts_at: `${day(10)}T19:00:00-06:00`,
   ends_at: null,
@@ -82,7 +82,7 @@ const geocode = async (address) => {
   if (address.includes('hole')) return { lat: 0.5, lng: 0.5 };
   if (address.includes('both')) return { lat: 0.5, lng: 1.5 };
   if (address.includes('oaklawn')) return insideOf('oak-lawn');
-  return insideOf('beverly');
+  return insideOf('evergreen-park');
 };
 
 const run = (finds) => validateFinds({ finds, eventTypeIds, nodes, today: TODAY, geocode });
@@ -94,7 +94,7 @@ describe('validateFinds', () => {
     expect(r.refused).toEqual([]);
     expect(r.accepted).toHaveLength(1);
     const a = r.accepted[0];
-    expect(a.node).toBe('beverly');
+    expect(a.node).toBe('evergreen-park');
     expect(a.cell).toBe(h3.latLngToCell(a.lat, a.lng, 7));
   });
 
@@ -176,7 +176,7 @@ describe('validateFinds', () => {
   test('a point in a polygon hole is not-in-node', async () => {
     const holed = [
       {
-        id: 'beverly',
+        id: 'evergreen-park',
         cells: [],
         polygon: {
           type: 'Polygon',
@@ -196,7 +196,11 @@ describe('validateFinds', () => {
 
   test('a point inside two polygons takes the first node in order', async () => {
     const overlapping = [
-      { id: 'beverly', cells: [], polygon: { type: 'Polygon', coordinates: square(0, 0, 2, 2) } },
+      {
+        id: 'evergreen-park',
+        cells: [],
+        polygon: { type: 'Polygon', coordinates: square(0, 0, 2, 2) },
+      },
       { id: 'oak-lawn', cells: [], polygon: { type: 'Polygon', coordinates: square(1, 0, 3, 2) } },
     ];
     const r = await validateFinds({
@@ -206,7 +210,7 @@ describe('validateFinds', () => {
       today: TODAY,
       geocode,
     });
-    expect(r.accepted[0].node).toBe('beverly');
+    expect(r.accepted[0].node).toBe('evergreen-park');
   });
   test('a malformed row is bad-shape', async () => {
     expect(await reason(find({ sector: 'other' }))).toBe('bad-shape');
@@ -215,7 +219,7 @@ describe('validateFinds', () => {
   });
 
   test('the polygon decides the node, not the claim', async () => {
-    const r = await run([find({ address: 'oaklawn', node: 'beverly' })]);
+    const r = await run([find({ address: 'oaklawn', node: 'evergreen-park' })]);
     expect(r.accepted[0].node).toBe('oak-lawn');
   });
 
@@ -256,7 +260,7 @@ describe('validateFinds', () => {
       find({ venue: 'C', address: 'oaklawn' }),
       find({ venue: 'D', source_url: '' }),
     ]);
-    expect(r.acceptedPerNode).toEqual({ beverly: 2, 'oak-lawn': 1 });
+    expect(r.acceptedPerNode).toEqual({ 'evergreen-park': 2, 'oak-lawn': 1 });
   });
 
   test('private rows come before public rows', async () => {
@@ -276,14 +280,14 @@ describe('validateBusinesses', () => {
   const biz = (over = {}) => ({
     name: 'Cork & Kerry',
     address: '10614 S Western Ave',
-    node: 'beverly',
+    node: 'evergreen-park',
     anchor: false,
     ...over,
   });
   const runB = (businesses, g = geocode) => validateBusinesses({ businesses, nodes, geocode: g });
 
   test('the node is the polygon the address falls in, not the search claim', async () => {
-    const { accepted } = await runB([biz({ address: '1 oaklawn Rd', node: 'beverly' })]);
+    const { accepted } = await runB([biz({ address: '1 oaklawn Rd', node: 'evergreen-park' })]);
     const at = insideOf('oak-lawn');
     expect(accepted).toEqual([
       {
@@ -298,7 +302,7 @@ describe('validateBusinesses', () => {
   });
 
   test('an accepted business carries the lat and lng its address geocoded to', async () => {
-    const inside = insideOf('beverly');
+    const inside = insideOf('evergreen-park');
     const { accepted } = await runB([biz()], async () => inside);
     expect(accepted).toHaveLength(1);
     expect(accepted[0].lat).toBe(inside.lat);

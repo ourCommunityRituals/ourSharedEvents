@@ -45,15 +45,6 @@ const sponsorCreate = ({ id }) => ({
 // GET /api/v2/admin/sponsors?eventId= (handleAdminListSponsors)
 const sponsorList = (items) => ({ ok: true, status: 200, items, scopedTo: null });
 
-// POST /api/v2/admin/geocode (handlers/geocode.ts handleAdminGeocode)
-const geocode = ({ lat, lng }) => ({
-  ok: true,
-  lat,
-  lng,
-  formatted_address: 'formatted',
-  corridor_id: null,
-});
-
 // GET /api/v2/events (handlers/events.ts handleListEvents)
 const publicEvents = (items) => ({ ok: true, status: 200, items, sponsor_titles: {} });
 
@@ -64,6 +55,5 @@ module.exports = {
   upload,
   sponsorCreate,
   sponsorList,
-  geocode,
   publicEvents,
 };

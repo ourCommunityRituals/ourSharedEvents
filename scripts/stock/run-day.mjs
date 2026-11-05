@@ -1,14 +1,15 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- every path is stock-out/, a temp file this script names, or a fixed repo file */
-// The morning run for the full staging site, one subcommand per workflow job
-// (.github/workflows/stock-data-full.yml). Each reads and writes files under
-// stock-out/, which the workflow passes between jobs as artifacts.
+// Loads the full staging site from its fixed seed, one subcommand per workflow
+// job (.github/workflows/stock-data-full.yml), run when the owner dispatches it.
+// Each reads and writes files under stock-out/, which the workflow passes
+// between jobs as artifacts. There is no search (owner, 2026-11-05): the seed
+// (stock/seed/seed.json) was made once, by make-seed.mjs.
 //
-//   prepare-search  event type catalog + the rendered search prompt
-//   search-output   the search's two files against their schemas
-//   validate        finds -> accepted rows (validate-finds.mjs)
-//   build           accepted rows -> a day of stock data + its manifest (build-full.mjs),
-//                   listed in R2 before the first API call and kept current there
-//   check-swap      accept the placements, check every node, swap or purge per node
+//   seed        the seed re-based to the load day -> accepted rows + businesses
+//               (seed.mjs); no geocoding, no network
+//   build       accepted rows -> a day of stock data + its manifest (build-full.mjs),
+//               listed in R2 before the first API call and kept current there
+//   check-swap  accept the placements, check every node, swap or purge per node
 //
 // Every Cloudflare command goes through one wrangler(args) runner that refuses
 // any command not aimed at the staging-full env. Every I/O seam (fs, fetch,
@@ -19,7 +20,8 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 
-import { validateFinds, validateBusinesses, chicagoDate } from './validate-finds.mjs';
+import { chicagoDate } from './validate-finds.mjs';
+import { SEED_FILE, rebaseSeed, expectedByNode } from './seed.mjs';
 import { listPosts, tokenWarning } from './instagram.mjs';
 import { STOCK_BASE_URL, createClient } from './client.mjs';
 import { buildDay } from './build-full.mjs';
@@ -43,7 +45,6 @@ export const R2_BUCKET = 'ose-uploads-staging-full';
 export const MANIFEST_PREFIX = 'stock/';
 export const INDEX_KEY = `${MANIFEST_PREFIX}manifest-index.json`;
 
-const WINDOW_DAYS = 90;
 const SECRET_ENV = [
   'STG_FULL_ADMIN_KEY',
   'STG_FULL_ACCESS_CLIENT_ID',
@@ -56,6 +57,16 @@ const MISSING_OBJECT = /specified key does not exist|NoSuchKey/i;
 const unique = (xs) => [...new Set(xs)];
 const readJsonFile = (fs, path) => JSON.parse(fs.readFileSync(path, 'utf8'));
 const repoJson = (rel) => JSON.parse(nodeFs.readFileSync(join(ROOT, rel), 'utf8'));
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Events per node from the committed seed, 0 for a node it leaves empty. */
+export function seedExpected(nodes) {
+  const list = Array.isArray(nodes) ? nodes : nodes.nodes;
+  return expectedByNode(
+    repoJson(SEED_FILE),
+    list.map((n) => n.id)
+  );
+}
 
 // ── Target guard ───────────────────────────────────────────────────────────
 
@@ -298,7 +309,8 @@ export async function checkSwap({
   manifest,
   buildFailed = false,
   nodes,
-  targets,
+  // node id -> stock events it must list (seedExpected)
+  expected,
   today,
   runId,
   runAttempt,
@@ -311,9 +323,12 @@ export async function checkSwap({
   const problems = [];
   const purges = [];
   const todayName = manifestName(manifest.date, runId, runAttempt);
-  // A node the manifest records but nodes.json no longer lists is never purged, so
-  // its manifest would stay listed for good: say so, and turn the run red.
-  const knownNodes = new Set(nodeList.map((n) => n.id));
+  // A node retired from nodes.json (`retired`, e.g. Beverly on 2026-11-05) is still
+  // purged from every manifest, with no checks, so an older manifest that records it
+  // can leave the index. A node that is neither active nor retired is never purged,
+  // so its manifest would stay listed for good: say so, and turn the run red.
+  const retired = Array.isArray(nodes) ? [] : nodes.retired || [];
+  const knownNodes = new Set([...nodeList.map((n) => n.id), ...retired]);
   const todayIds = new Set((manifest.items || []).map((i) => i.id));
   const unknownNodes = (name, m) => {
     const unknown = nodesOf(m).filter((node) => !knownNodes.has(node));
@@ -327,7 +342,13 @@ export async function checkSwap({
     Object.fromEntries(
       nodeList.map((n) => [
         n.id,
-        { pass: false, count: 0, expected: targets.perNode, totalListed: 0, reasons: [reason] },
+        {
+          pass: false,
+          count: 0,
+          expected: expected[n.id] ?? 0,
+          totalListed: 0,
+          reasons: [reason],
+        },
       ])
     );
 
@@ -481,7 +502,7 @@ export async function checkSwap({
         manifest,
         nodes: nodeList,
         today,
-        targets,
+        expected,
         fetchPublic,
       });
     } catch (err) {
@@ -522,12 +543,32 @@ export async function checkSwap({
       await purge(todayName, manifest, node.id);
     }
   }
+  // Retired nodes: purge their rows from every manifest that records them.
+  for (const node of retired) {
+    for (const s of stale)
+      if (nodesOf(s.manifest).includes(node)) await purge(s.name, s.manifest, node);
+    if (nodesOf(manifest).includes(node)) await purge(todayName, manifest, node);
+  }
 
   // 6. A manifest leaves the index once every node it records is purged.
   for (const s of stale) {
     if (fullyPurged(s.name, s.manifest)) live = live.filter((n) => n !== s.name);
   }
   if (fullyPurged(todayName, manifest)) live = live.filter((n) => n !== todayName);
+  // Mark today's copy as swapped, so a later attempt's no-artifact recovery
+  // (registeredCopy) never mistakes this completed load for an interrupted build.
+  // Only a load where at least one node passed is live; one where none passed
+  // stays recoverable so a later attempt can still purge it.
+  if (live.includes(todayName) && Object.values(results).some((r) => r && r.pass)) {
+    try {
+      await cloud.r2Put(
+        `${MANIFEST_PREFIX}${todayName}`,
+        manifestText({ ...manifest, swapped: true })
+      );
+    } catch (err) {
+      problems.push(`${todayName} could not be marked swapped: ${err.message}`);
+    }
+  }
   return writeIndex(results);
 }
 
@@ -545,21 +586,27 @@ function reasonsText(reasons) {
 }
 
 /** The markdown the check-swap job writes to $GITHUB_STEP_SUMMARY. */
-export function renderSummary({ report, nodes, targets, manifest, notes }) {
+export function renderSummary({ report, nodes, expected, manifest, notes }) {
   const nodeList = Array.isArray(nodes) ? nodes : nodes.nodes;
   const lines = [
     '## Stock data: stg-full',
     '',
-    '| Node | Expected (perNode) | Stock listed | Total listed | Result | Reasons |',
+    '| Node | Expected (seed) | Stock listed | Total listed | Result | Reasons |',
     '| --- | --- | --- | --- | --- | --- |',
   ];
+  const skipped = [];
   for (const node of nodeList) {
     const r = report.results[node.id] || { pass: false, count: 0, totalListed: 0, reasons: [] };
     lines.push(
-      `| ${cell(node.id)} | ${targets.perNode} | ${r.count} | ${r.totalListed} | ${
+      `| ${cell(node.id)} | ${expected[node.id] ?? 0} | ${r.count} | ${r.totalListed} | ${
         r.pass ? 'pass' : 'FAIL'
       } | ${reasonsText(r.reasons)} |`
     );
+    if (Array.isArray(r.skipped) && r.skipped.includes('landing-map')) {
+      skipped.push(
+        `${node.id} is expected empty: its landing-map check is skipped (the zip-radius fix is a separate story)`
+      );
+    }
   }
   const purgeFailures = report.purges.filter((p) => !p.ok);
   const notesList = [
@@ -567,6 +614,7 @@ export function renderSummary({ report, nodes, targets, manifest, notes }) {
     notes && notes.instagramWarning ? `Instagram: ${notes.instagramWarning}` : null,
     notes && notes.tokenWarning ? `Instagram token: ${notes.tokenWarning}` : null,
     notes && notes.error ? `Build failed: ${notes.error}` : null,
+    ...skipped,
     ...report.problems,
     ...purgeFailures.map((p) => `Purge failed: ${p.name} ${p.node} (${p.error})`),
   ].filter(Boolean);
@@ -634,141 +682,48 @@ export async function fetchCatalog(client) {
   return types;
 }
 
-const addDays = (ymd, days) => {
-  const [y, m, d] = ymd.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
-};
-
-/** The search prompt with its run-time values filled in. */
-export function renderPrompt(template, { today, perNode, catalog, nodes }) {
-  if (!Number.isInteger(perNode) || perNode < 1) throw new Error('perNode must be a whole number');
-  if (!Array.isArray(nodes) || nodes.length === 0) throw new Error('nodes must be a list');
-  const values = {
-    NODES: nodes
-      .map((n, i) => `${i + 1}. ${n.name} (node \`${n.id}\`, zip ${(n.zips || []).join(', ')})`)
-      .join('\n'),
-    TODAY: today,
-    LAST_DAY: addDays(today, WINDOW_DAYS),
-    STOP_AT: String(perNode + 3),
-    CATALOG: catalog.map((t) => JSON.stringify(t)).join('\n'),
-  };
-  const out = template.replace(/\{\{([A-Z_]+)\}\}/g, (m, key) =>
-    Object.hasOwn(values, key) ? values[key] : m
-  );
-  if (/\{\{[A-Z_]+\}\}/.test(out)) throw new Error('search prompt has an unfilled value');
-  return out;
-}
-
 function summarize(env, fs, text) {
   if (env.GITHUB_STEP_SUMMARY) fs.appendFileSync(env.GITHUB_STEP_SUMMARY, text);
 }
 
-// In CI this writes outside the checkout (STOCK_PREP_DIR), so the search step can be
-// held to changing nothing in the checkout but its two output files.
-export async function runPrepareSearch({ env, fs, fetch: fetchFn, now, outDir }) {
-  const dir = env.STOCK_PREP_DIR || outDir;
-  const today = chicagoDate(now());
-  const catalog = await fetchCatalog(clientFrom(env, fetchFn));
-  const template = nodeFs.readFileSync(join(ROOT, 'stock', 'search-prompt.md'), 'utf8');
-  const prompt = renderPrompt(template, {
-    today,
-    perNode: repoJson('stock/targets.json').perNode,
-    catalog,
-    nodes: repoJson('stock/nodes.json').nodes,
-  });
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(join(dir, 'event-types.json'), `${JSON.stringify(catalog, null, 2)}\n`);
-  fs.writeFileSync(join(dir, 'search-prompt.txt'), prompt);
-  return 0;
-}
-
-export async function runSearchOutput({ fs, outDir, log }) {
-  const { default: AjvModule } = await import('ajv');
-  const { default: formatsModule } = await import('ajv-formats');
-  const Ajv = AjvModule.default || AjvModule;
-  const addFormats = formatsModule.default || formatsModule;
-  const ajv = new Ajv({ allErrors: true, strict: false });
-  addFormats(ajv);
-  let bad = 0;
-  for (const [file, schema] of [
-    ['finds.json', 'stock/finds.schema.json'],
-    ['businesses.json', 'stock/businesses.schema.json'],
-  ]) {
-    let data;
-    try {
-      data = readJsonFile(fs, join(outDir, file));
-    } catch {
-      log(`${file}: missing or not JSON`);
-      bad++;
-      continue;
-    }
-    const validate = ajv.compile(repoJson(schema));
-    if (!validate(data)) {
-      bad++;
-      for (const e of validate.errors.slice(0, 20)) log(`${file}${e.instancePath}: ${e.message}`);
-    } else {
-      log(`${file}: ${data.length} rows match ${schema}`);
-    }
-  }
-  return bad === 0 ? 0 : 1;
-}
-
-export async function runValidate({ env, fs, fetch: fetchFn, now, outDir }) {
-  const client = clientFrom(env, fetchFn);
-  const today = chicagoDate(now());
-  const catalog = await fetchCatalog(client);
+/**
+ * The seed re-based to today's Chicago date: accepted.json and businesses.json
+ * in the shape the build consumes, and load.json naming the day, so the build
+ * records the day the rows were placed on even if it starts after midnight.
+ * Reads only committed files; no geocoding and no network.
+ */
+export async function runSeed({ env, fs, now, outDir }) {
+  const loadDay = chicagoDate(now());
+  const seed = repoJson(SEED_FILE);
   const nodes = repoJson('stock/nodes.json').nodes;
-  const geocode = async (address) => {
-    try {
-      const r = await client.post('/api/v2/admin/geocode', { address });
-      return Number.isFinite(r && r.lat) && Number.isFinite(r && r.lng)
-        ? { lat: r.lat, lng: r.lng }
-        : null;
-    } catch {
-      return null;
-    }
-  };
-  const { accepted, refused, acceptedPerNode } = await validateFinds({
-    finds: readJsonFile(fs, join(outDir, 'finds.json')),
-    eventTypeIds: new Set(catalog.map((t) => t.id)),
-    nodes,
-    today,
-    geocode,
-  });
-  fs.writeFileSync(join(outDir, 'accepted.json'), `${JSON.stringify(accepted, null, 2)}\n`);
-  // The businesses go through the same geocoder and polygons. The validated list
-  // replaces the search's, so the build only ever sees placed, deduplicated ones.
-  const businesses = await validateBusinesses({
-    businesses: readJsonFile(fs, join(outDir, 'businesses.json')),
-    nodes,
-    geocode,
-  });
-  fs.writeFileSync(
-    join(outDir, 'businesses.json'),
-    `${JSON.stringify(businesses.accepted, null, 2)}\n`
+  const known = new Set(nodes.map((n) => n.id));
+  const { accepted, businesses } = rebaseSeed(seed, loadDay);
+  const stray = [...new Set([...accepted, ...businesses].map((r) => r.node))].filter(
+    (id) => !known.has(id)
   );
-  const tally = (list) => {
-    const byReason = {};
-    for (const r of list) byReason[r.reason] = (byReason[r.reason] || 0) + 1;
-    return (
-      Object.entries(byReason)
-        .map(([k, v]) => `${k} ${v}`)
-        .join(', ') || 'none'
-    );
-  };
-  const businessesIn = (id) => businesses.accepted.filter((b) => b.node === id).length;
-  const perNode = repoJson('stock/targets.json').perNode;
+  if (stray.length)
+    throw new Error(`seed names node(s) not in stock/nodes.json: ${stray.join(', ')}`);
+  fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(join(outDir, 'accepted.json'), `${JSON.stringify(accepted, null, 2)}\n`);
+  fs.writeFileSync(join(outDir, 'businesses.json'), `${JSON.stringify(businesses, null, 2)}\n`);
+  fs.writeFileSync(
+    join(outDir, 'load.json'),
+    `${JSON.stringify({ loadDay, seededOn: seed.seededOn }, null, 2)}\n`
+  );
+  const expected = expectedByNode(
+    seed,
+    nodes.map((n) => n.id)
+  );
   const lines = [
-    '## Stock finds validated',
+    '## Stock seed re-based',
     '',
-    '| Node | Accepted | perNode | Businesses |',
-    '| --- | --- | --- | --- |',
+    `Seeded on ${seed.seededOn}; loaded for ${loadDay}.`,
+    '',
+    '| Node | Events | Businesses |',
+    '| --- | --- | --- |',
     ...nodes.map(
-      (n) => `| ${n.id} | ${acceptedPerNode[n.id] || 0} | ${perNode} | ${businessesIn(n.id)} |`
+      (n) => `| ${n.id} | ${expected[n.id]} | ${businesses.filter((b) => b.node === n.id).length} |`
     ),
-    '',
-    `Refused: ${tally(refused)}`,
-    `Businesses refused: ${tally(businesses.refused)}`,
   ];
   summarize(env, fs, `${lines.join('\n')}\n`);
   return 0;
@@ -786,7 +741,11 @@ export async function runBuild({
   setTimer,
   clearTimer,
 }) {
-  const today = chicagoDate(now());
+  // The day the seed job placed the rows on, when it says so; else today.
+  const loadPath = join(outDir, 'load.json');
+  const loadDay = fs.existsSync(loadPath) ? readJsonFile(fs, loadPath).loadDay : null;
+  if (loadDay !== null && !DAY_RE.test(String(loadDay))) throw new Error('load.json: bad loadDay');
+  const today = loadDay ?? chicagoDate(now());
   const notes = { ok: false, date: today, instagramWarning: null, tokenWarning: null, error: null };
   const writeNotes = () =>
     fs.writeFileSync(join(outDir, 'build-notes.json'), `${JSON.stringify(notes, null, 2)}\n`);
@@ -842,7 +801,7 @@ export async function runBuild({
       posts,
       artTags: repoJson('stock/art-tags.json'),
       typeCategory: new Map(catalog.map((t) => [t.id, t.category])),
-      targets: repoJson('stock/targets.json'),
+      expected: seedExpected(nodes),
       date: today,
       nodeIds: nodes.map((n) => n.id),
       fetch: fetchFn,
@@ -869,30 +828,54 @@ export async function runBuild({
 
 /**
  * The manifest this run's build registered in R2, found in the index by this
- * run's id and attempt (the build's day is not known without the artifact), as
- * { name, manifest }; null when there is none or it cannot be read.
+ * run's id (the build's day is not known without the artifact), as
+ * { name, attempt, manifest }; null when there is none that can be read.
+ * Re-running check-swap alone raises GITHUB_RUN_ATTEMPT while the build's
+ * registration keeps the attempt it ran in, so the current attempt is preferred,
+ * then the highest attempt of the same run whose object can be read.
  */
 export async function registeredCopy({ cloud, env, log }) {
   const runId = env.GITHUB_RUN_ID;
   const attempt = env.GITHUB_RUN_ATTEMPT;
   if (!runId || !attempt) return null;
+  let names;
   try {
-    const ours = parseIndex(await cloud.r2Get(INDEX_KEY)).filter((name) => {
-      const p = parseManifestName(name);
-      return p !== null && p.runId === String(runId) && p.attempt === String(attempt);
-    });
-    if (ours.length !== 1) return null;
-    const text = await cloud.r2Get(`${MANIFEST_PREFIX}${ours[0]}`);
-    if (text === null) return null;
-    const manifest = JSON.parse(text);
-    if (!manifest || !Array.isArray(manifest.items) || typeof manifest.date !== 'string') {
-      throw new Error('no items list');
-    }
-    return { name: ours[0], manifest };
+    names = parseIndex(await cloud.r2Get(INDEX_KEY));
   } catch (err) {
-    log(`the R2 copy of today's manifest could not be read: ${err.message}`);
+    log(`the manifest index could not be read: ${err.message}`);
     return null;
   }
+  const rank = (p) => (p.attempt === String(attempt) ? 0 : 1);
+  const ours = names
+    .map((name) => ({ name, p: parseManifestName(name) }))
+    .filter(({ p }) => p !== null && p.runId === String(runId))
+    .sort((a, b) => {
+      if (rank(a.p) !== rank(b.p)) return rank(a.p) - rank(b.p);
+      const x = BigInt(a.p.attempt);
+      const y = BigInt(b.p.attempt);
+      return x === y ? 0 : x > y ? -1 : 1;
+    });
+  for (const { name, p } of ours) {
+    try {
+      const text = await cloud.r2Get(`${MANIFEST_PREFIX}${name}`);
+      if (text === null) throw new Error('listed but missing');
+      const manifest = JSON.parse(text);
+      if (!manifest || !Array.isArray(manifest.items) || typeof manifest.date !== 'string') {
+        throw new Error('no items list');
+      }
+      // A completed swap is a live load, not an interrupted build: never recover it.
+      // A completed load ends the search: an older attempt of the same run may hold
+      // the very rows that load now serves, so it is never recovered either.
+      if (manifest.swapped === true) {
+        log(`the R2 copy ${name} is a completed load; recovery stops here`);
+        return null;
+      }
+      return { name, attempt: p.attempt, manifest };
+    } catch (err) {
+      log(`the R2 copy ${name} could not be read: ${err.message}`);
+    }
+  }
+  return null;
 }
 
 export async function runCheckSwap({
@@ -909,6 +892,9 @@ export async function runCheckSwap({
   const cloud = makeCloud({ wrangler, fs, tmpDir, log });
   let manifest;
   let notes;
+  // The attempt whose name today's manifest goes by: this one, or, when the R2
+  // copy stands in, the attempt that registered it, so the swap works on that copy.
+  let runAttempt = null;
   if (fs.existsSync(manifestPath)) {
     manifest = readJsonFile(fs, manifestPath);
     const notesPath = join(outDir, 'build-notes.json');
@@ -924,6 +910,7 @@ export async function runCheckSwap({
       return 1;
     }
     manifest = copy.manifest;
+    runAttempt = copy.attempt;
     notes = {
       ok: false,
       error: `the stock-manifest artifact is missing; every node of the R2 copy of ${copy.name} is purged`,
@@ -931,23 +918,23 @@ export async function runCheckSwap({
   }
   const buildFailed = notes.ok !== true || env.BUILD_RESULT !== 'success';
   const nodes = repoJson('stock/nodes.json');
-  const targets = repoJson('stock/targets.json');
+  const expected = seedExpected(nodes);
   const report = await checkSwap({
     manifest,
     buildFailed,
     nodes,
-    targets,
+    expected,
     // The build's day, not the clock's: a check that runs past Chicago midnight
     // still judges the 90-day window from the day the rows were built for.
     today: manifest.date,
     runId: need(env, 'GITHUB_RUN_ID'),
-    runAttempt: need(env, 'GITHUB_RUN_ATTEMPT'),
+    runAttempt: runAttempt ?? need(env, 'GITHUB_RUN_ATTEMPT'),
     cloud,
     checkNodes,
     client: buildFailed ? null : clientFrom(env, fetchFn),
     fetchPublic: buildFailed ? null : fetchPublicFrom(env, fetchFn),
   });
-  summarize(env, fs, renderSummary({ report, nodes, targets, manifest, notes }));
+  summarize(env, fs, renderSummary({ report, nodes, expected, manifest, notes }));
   for (const [id, r] of Object.entries(report.results)) {
     if (!r.pass) log(`node ${id} failed: ${reasonsText(r.reasons)}`);
   }
@@ -955,9 +942,7 @@ export async function runCheckSwap({
 }
 
 const COMMANDS = {
-  'prepare-search': runPrepareSearch,
-  'search-output': runSearchOutput,
-  validate: runValidate,
+  seed: runSeed,
   build: runBuild,
   'check-swap': runCheckSwap,
 };

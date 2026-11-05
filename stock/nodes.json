@@ -1,4 +1,5 @@
 {
+  "retired": ["beverly"],
   "nodes": [
     {
       "id": "blue-island",
@@ -84,44 +85,6 @@
         ]
       },
       "source": "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/4/query?where=STATE%3D'17'%20AND%20BASENAME%20IN%20('Blue%20Island'%2C'Evergreen%20Park'%2C'Oak%20Lawn')&outFields=NAME%2CBASENAME%2CGEOID&outSR=4326&f=geojson"
-    },
-    {
-      "id": "beverly",
-      "name": "Beverly",
-      "zips": ["60643"],
-      "cells": [
-        "872664566ffffff",
-        "872664574ffffff",
-        "872664575ffffff",
-        "872664cd8ffffff",
-        "872664cdaffffff",
-        "872664cdbffffff"
-      ],
-      "polygon": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [-87.67308, 41.73566],
-            [-87.66806, 41.73014],
-            [-87.66725, 41.72885],
-            [-87.66732, 41.72844],
-            [-87.6632, 41.72109],
-            [-87.66309, 41.7201],
-            [-87.66107, 41.71569],
-            [-87.65636, 41.70678],
-            [-87.65602, 41.70679],
-            [-87.65874, 41.69944],
-            [-87.69615, 41.69894],
-            [-87.69646, 41.70714],
-            [-87.69152, 41.7072],
-            [-87.69173, 41.71357],
-            [-87.68184, 41.71366],
-            [-87.68251, 41.73553],
-            [-87.67308, 41.73566]
-          ]
-        ]
-      },
-      "source": "https://data.cityofchicago.org/resource/igwz-8jzy.geojson"
     },
     {
       "id": "auburn-gresham",

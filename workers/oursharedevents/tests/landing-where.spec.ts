@@ -1,7 +1,9 @@
 /**
  * Landing "where are you?" over HTTP (owner 2026-10-10).
  *
- *   GET /?zip=NNNNN   lists only events within about 10 miles of the zip, results first.
+ *   GET /?zip=NNNNN   lists only the events in the zip's own area, results first
+ *                     (owner 2026-11-05: the zip in the event's address, else the
+ *                     nearest zip center; never the towns around it).
  *   POST /near g=...  a phone's 5-character box → 303 to /?zip= of the nearest zip.
  *   The landing alone may ask for location (Permissions-Policy geolocation=(self)).
  *
@@ -10,6 +12,9 @@
  * @born-red landing-where | method: filter removed (far event listed), /near reading
  *   ?g= from the address, /near answering 200 with a body, landing policy left at
  *   geolocation=() — each turned its test red | date: 2026-10-10
+ * @born-red landing-zip-own-area | method: the handler's filter put back to the old
+ *   8-ring nearCells test (60655 listed its Oak Lawn and Evergreen Park neighbours;
+ *   the box zip listed Blue Island) — each turned its test red | date: 2026-11-05
  */
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -23,6 +28,9 @@ interface TestEnv {
 
 const NEAR = 'where-near-blue-island';
 const FAR = 'where-far-los-angeles';
+const OAK_LAWN = 'where-oak-lawn';
+const EVERGREEN_PARK = 'where-evergreen-park';
+const MOUNT_GREENWOOD = 'where-mount-greenwood';
 const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
 
 async function applyMigrations(): Promise<void> {
@@ -38,17 +46,33 @@ async function applyMigrations(): Promise<void> {
   }
 }
 
-async function seed(id: string, title: string, lat: number, lon: number): Promise<void> {
+async function seed(
+  id: string,
+  title: string,
+  lat: number,
+  lon: number,
+  address: string | null = null
+): Promise<void> {
   const db = (env as unknown as TestEnv).DB;
   await db.prepare('DELETE FROM events WHERE id = ?').bind(id).run();
   await db
     .prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, is_published, location,
-                           start_date, timezone, lat, lon, h3_res7, created_at, updated_at)
-       VALUES (?, 'root', ?, ?, 'active', 1, 'A hall', ?, 'America/Chicago', ?, ?, ?,
+      `INSERT INTO events (id, brand_id, title, slug, status, is_published, location, where_address,
+                           start_date, timezone, lat, lon, h3_res9, h3_res7, created_at, updated_at)
+       VALUES (?, 'root', ?, ?, 'active', 1, 'A hall', ?, ?, 'America/Chicago', ?, ?, ?, ?,
                datetime('now'), datetime('now'))`
     )
-    .bind(id, title, id, inDays(4), lat, lon, latLngToCell(lat, lon, CORRIDOR_RES))
+    .bind(
+      id,
+      title,
+      id,
+      address,
+      inDays(4),
+      lat,
+      lon,
+      latLngToCell(lat, lon, 9),
+      latLngToCell(lat, lon, CORRIDOR_RES)
+    )
     .run();
 }
 
@@ -68,7 +92,24 @@ const near = (body: string, contentType = 'application/x-www-form-urlencoded') =
 beforeAll(async () => {
   await applyMigrations();
   await seed(NEAR, 'Where Test Blue Island Night', 41.6571, -87.6798);
-  await seed(FAR, 'Where Test Los Angeles Night', 34.0522, -118.2437);
+  await seed(
+    FAR,
+    'Where Test Los Angeles Night',
+    34.0522,
+    -118.2437,
+    '1 Main St, Los Angeles, CA 90012'
+  );
+  // One res-7 ring from Mount Greenwood (60655), each inside its own town: the
+  // old 8-ring "near" listed both for 60655. One says its zip, one does not.
+  await seed(
+    OAK_LAWN,
+    'Where Test Oak Lawn Night',
+    41.698,
+    -87.74,
+    '1 Main St, Oak Lawn, IL 60453'
+  );
+  await seed(EVERGREEN_PARK, 'Where Test Evergreen Park Night', 41.708, -87.706);
+  await seed(MOUNT_GREENWOOD, 'Where Test Mount Greenwood Night', 41.681, -87.711);
 });
 
 describe('GET / with a zip', () => {
@@ -85,6 +126,23 @@ describe('GET / with a zip', () => {
     const { body } = await page('/?zip=90012');
     expect(body).toContain('Where Test Los Angeles Night');
     expect(body).not.toContain('Where Test Blue Island Night');
+  });
+
+  test('a zip lists its own area only, not the towns next to it (owner 2026-11-05)', async () => {
+    const mg = (await page('/?zip=60655')).body;
+    expect(mg).toContain('Where Test Mount Greenwood Night');
+    expect(mg).not.toContain('Where Test Oak Lawn Night');
+    expect(mg).not.toContain('Where Test Evergreen Park Night');
+    expect(mg).not.toContain('Where Test Blue Island Night');
+    const ol = (await page('/?zip=60453')).body;
+    expect(ol).toContain('Where Test Oak Lawn Night');
+    expect(ol).not.toContain('Where Test Mount Greenwood Night');
+    const ep = (await page('/?zip=60805')).body;
+    expect(ep).toContain('Where Test Evergreen Park Night');
+    expect(ep).not.toContain('Where Test Mount Greenwood Night');
+    const bi = (await page('/?zip=60406')).body;
+    expect(bi).not.toContain('Where Test Mount Greenwood Night');
+    expect(bi).not.toContain('Where Test Oak Lawn Night');
   });
 
   test('a zip with nothing near says so and points to all events', async () => {
@@ -128,15 +186,17 @@ describe('GET / with a zip', () => {
 });
 
 describe('POST /near', () => {
-  test('a box near Blue Island goes to a zip whose area holds the near event', async () => {
+  test("a box near Blue Island goes to the box's nearest zip, and shows that zip's own area", async () => {
     const res = await near('g=dp3su');
     expect(res.status).toBe(303);
-    const to = res.headers.get('Location') ?? '';
-    expect(to).toMatch(/^\/\?zip=\d{5}$/);
+    // The box (about 5 km) is centered in Posen, next to Blue Island.
+    expect(res.headers.get('Location')).toBe('/?zip=60469');
     expect(res.headers.get('Cache-Control')).toBe('no-store');
     expect(res.headers.get('Set-Cookie')).toBeNull();
-    const { body } = await page(to);
-    expect(body).toContain('Where Test Blue Island Night');
+    const { body } = await page('/?zip=60469');
+    expect(body).toMatch(/data-testid="area-heading">Near 60469 /);
+    // Blue Island's event is in Blue Island's own area, not Posen's.
+    expect(body).not.toContain('Where Test Blue Island Night');
   });
 
   test('a box outside the US goes to the zip box with a note', async () => {

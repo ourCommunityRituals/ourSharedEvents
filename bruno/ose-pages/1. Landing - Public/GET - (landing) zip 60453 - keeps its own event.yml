@@ -1,0 +1,49 @@
+info:
+  name: GET /?zip=60453 (landing) - keeps its own event
+  type: http
+  seq: 15
+
+http:
+  method: GET
+  url: "{{baseUrl}}/?zip=60453"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// The other side of the own-area rule: Oak Lawn's event shows for Oak Lawn,
+
+        // and Mount Greenwood's does not. Fixture: bruno/fixtures/landing-zip-own-area-seed.sql.
+
+        const body = String(res.getBody());
+
+
+
+        test('Returns 200', function() {
+
+        \    expect(res.getStatus()).to.equal(200);
+
+        });
+
+
+
+        test('Lists its own event (Oak Lawn)', function() {
+
+        \    expect(body).to.include('Zip Own Area Check (Oak Lawn)');
+
+        });
+
+
+
+        test('Does not list the neighbour Mount Greenwood event', function() {
+
+        \    expect(body).to.not.include('Zip Own Area Check (Mount Greenwood)');
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

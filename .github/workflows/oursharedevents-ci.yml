@@ -1400,6 +1400,14 @@ jobs:
   contract-staging-sub:
     name: 'T2 Contract (${{ matrix.section }})'
     timeout-minutes: 15 # job ceiling; slowest observed run is far below it
+    # One section at a time across runs. The workflow group is keyed by event, so a
+    # push run and a scheduled run can overlap, and both seed the same fixture ids
+    # (the pages leg publishes the landing zip fixture, then unpublishes it after
+    # Bruno): without this, one run's reset could land mid-way through the other's
+    # assertions. A second run waits; it is never cancelled out from under a merge.
+    concurrency:
+      group: ose-t2-staging-${{ matrix.section }}
+      cancel-in-progress: false
     # OSE-954: runs on ephemeral ubuntu-latest. Bruno (`bru run`) + wrangler-d1
     # seed only; no deploy. Staging auth is the header-based CF Access service
     # token (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY) and the D1 seed uses
@@ -1623,6 +1631,19 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/ci-brand-seed.sql
 
+      # Owner 2026-11-05: a landing zip lookup shows the zip's own area. Three
+      # synthetic events next to Mount Greenwood (60655), one per town; the Pages
+      # collection's /?zip=60655 and /?zip=60453 requests read them. Upserts by id.
+      - name: 'Seed landing zip own-area fixture'
+        if: matrix.section == 'pages'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/landing-zip-own-area-seed.sql
+
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
       # from the collection root, so each step sets working-directory. Secrets are
@@ -1663,6 +1684,19 @@ jobs:
             --env-var "ciBrandClientSecret=$CF_ACCESS_CI_BRAND_CLIENT_SECRET" \
             --reporter-junit "$GITHUB_WORKSPACE/.test-results/${{ matrix.junit }}"
         timeout-minutes: 5
+
+      # The landing zip own-area fixture is published only for the run above:
+      # staging's landing is the empty site, so take the three events off again,
+      # pass or fail. A failed reset fails the job by name.
+      - name: 'Unpublish landing zip own-area fixture'
+        if: always() && matrix.section == 'pages'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/landing-zip-own-area-reset.sql
 
       # OSE-1470: Bruno ran with the admin key + CF Access token; refuse to
       # upload a report that recorded one. Upload runs only if this passes.

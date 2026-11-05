@@ -1,19 +1,13 @@
 /* eslint-disable security/detect-non-literal-fs-filename, security/detect-non-literal-regexp -- reads the repo's own workflow, writes temp scripts, and builds patterns from its env names */
 /**
- * The morning stock workflow for the full staging site
- * (.github/workflows/stock-data-full.yml): its triggers, its job chain, its
- * Access gate and where its secrets may appear.
+ * The stock workflow for the full staging site
+ * (.github/workflows/stock-data-full.yml): its trigger (manual only), its job
+ * chain, its Access gate and where its secrets may appear. Owner, 2026-11-05:
+ * no nightly search; the site loads from the committed seed.
  */
-const {
-  readFileSync,
-  writeFileSync,
-  mkdtempSync,
-  mkdirSync,
-  existsSync,
-  rmSync,
-} = require('node:fs');
+const { readFileSync, writeFileSync, mkdtempSync, existsSync, rmSync } = require('node:fs');
 const { spawnSync } = require('node:child_process');
-const { join, dirname } = require('node:path');
+const { join } = require('node:path');
 const { tmpdir } = require('node:os');
 const { pathToFileURL } = require('node:url');
 const yaml = require('js-yaml');
@@ -22,7 +16,7 @@ const ROOT = join(__dirname, '..', '..');
 const WF_PATH = join(ROOT, '.github', 'workflows', 'stock-data-full.yml');
 const wf = yaml.load(readFileSync(WF_PATH, 'utf8'));
 const jobs = wf.jobs || {};
-const CHAIN = ['access-gate', 'deploy', 'search', 'validate', 'build', 'check-swap'];
+const CHAIN = ['access-gate', 'deploy', 'seed', 'build', 'check-swap'];
 const needsOf = (job) => {
   const n = jobs[job] && jobs[job].needs;
   return n === undefined ? [] : Array.isArray(n) ? n : [n];
@@ -32,11 +26,35 @@ const stepsOf = (job) => (jobs[job] && jobs[job].steps) || [];
 const GIT_BASH = 'C:\\Program Files\\Git\\bin\\bash.exe';
 const BASH = process.platform === 'win32' ? (existsSync(GIT_BASH) ? GIT_BASH : null) : 'bash';
 
+// The gate scripts below run under bash. Missing bash is a red test, never a skip:
+// a gate that silently skips counts as absent.
+test('bash is available to run the workflow gate scripts', () => {
+  expect(BASH, `bash not found (looked for ${GIT_BASH} on Windows)`).not.toBeNull();
+});
+
 describe('triggers and posture', () => {
-  test('runs on the 11:00 UTC schedule and on manual dispatch, nothing else', () => {
+  test('runs on manual dispatch only: no schedule, no other trigger', () => {
     const on = wf.on ?? wf[true];
-    expect(Object.keys(on).sort()).toEqual(['schedule', 'workflow_dispatch']);
-    expect(on.schedule).toEqual([{ cron: '0 11 * * *' }]);
+    expect(Object.keys(on)).toEqual(['workflow_dispatch']);
+    expect(readFileSync(WF_PATH, 'utf8')).not.toMatch(/^\s*(schedule|cron)\s*:/m);
+  });
+
+  test('no search is left: no Claude action, no model key, no spend cap, no enable switch', () => {
+    const text = readFileSync(WF_PATH, 'utf8');
+    for (const gone of [
+      'anthropics/claude-code-action',
+      'ANTHROPIC_API_KEY',
+      'STOCK_SEARCH_MAX_USD',
+      'STOCK_FULL_ENABLED',
+      'max-budget-usd',
+      'prepare-search',
+      'search-output',
+      'run-day.mjs validate',
+    ]) {
+      expect(text, gone).not.toContain(gone);
+    }
+    expect(jobs.search).toBeUndefined();
+    expect(jobs.validate).toBeUndefined();
   });
 
   test('permissions are contents: read, and no job widens them', () => {
@@ -52,42 +70,22 @@ describe('triggers and posture', () => {
     for (const job of Object.keys(jobs)) expect(jobs[job]['runs-on'], job).toBe('ubuntu-24.04');
   });
 
-  test('search has a 30-minute timeout', () => {
-    expect(jobs.search['timeout-minutes']).toBe(30);
+  test('every job has a timeout', () => {
+    for (const job of Object.keys(jobs)) {
+      expect(jobs[job]['timeout-minutes'], job).toBeGreaterThan(0);
+    }
   });
 });
 
 describe('the job chain', () => {
-  test('access-gate → deploy → search → validate → build → check-swap', () => {
+  test('access-gate → deploy → seed → build → check-swap', () => {
     expect(Object.keys(jobs)).toEqual(CHAIN);
     expect(needsOf('access-gate')).toEqual([]);
     for (let i = 1; i < CHAIN.length; i++) expect(needsOf(CHAIN[i])).toEqual([CHAIN[i - 1]]);
   });
 
-  // The gate is `a == 'x' || b == 'y'`; anything else fails here. GitHub's `==`
-  // on these values is a plain string compare.
-  const evaluate = (expr, { event, enabled }) => {
-    const values = { 'github.event_name': event, 'vars.STOCK_FULL_ENABLED': enabled };
-    return expr.split('||').some((clause) => {
-      const m = /^\s*([\w.]+)\s*==\s*'([^']*)'\s*$/.exec(clause);
-      expect(m, `unexpected clause: ${clause}`).not.toBeNull();
-      expect(Object.keys(values)).toContain(m[1]);
-      return values[m[1]] === m[2];
-    });
-  };
-
-  test('the schedule runs only when STOCK_FULL_ENABLED is true; a dispatch always runs', () => {
-    const gate = jobs['access-gate'].if;
-    expect(typeof gate).toBe('string');
-    expect(evaluate(gate, { event: 'schedule', enabled: 'true' })).toBe(true);
-    expect(evaluate(gate, { event: 'schedule', enabled: '' })).toBe(false);
-    expect(evaluate(gate, { event: 'schedule', enabled: 'false' })).toBe(false);
-    expect(evaluate(gate, { event: 'workflow_dispatch', enabled: '' })).toBe(true);
-    expect(evaluate(gate, { event: 'workflow_dispatch', enabled: 'false' })).toBe(true);
-  });
-
   test('only check-swap overrides the default success() gate, and never on a skip or cancel', () => {
-    for (const job of CHAIN.slice(1, -1)) expect(jobs[job].if, job).toBeUndefined();
+    for (const job of CHAIN.slice(0, -1)) expect(jobs[job].if, job).toBeUndefined();
     const cond = jobs['check-swap'].if;
     expect(cond).toContain('!cancelled()');
     expect(cond).toContain("needs.build.result == 'success'");
@@ -106,7 +104,7 @@ describe('access-gate', { timeout: 30_000 }, () => {
 
   test('runs curl with no credentials of any kind, asking for a page, on a page and on the public API', () => {
     expect(curlStep).toBeDefined();
-    expect(JSON.stringify(jobs['access-gate'])).not.toMatch(/secrets\.|vars\.(?!STOCK_FULL)/);
+    expect(JSON.stringify(jobs['access-gate'])).not.toMatch(/secrets\.|vars\./);
     expect(curlStep.env).toBeUndefined();
     // the one header sent is Accept: text/html, so Access answers as it would a browser
     expect(curlStep.run).toContain("-H 'Accept: text/html'");
@@ -151,13 +149,11 @@ describe('access-gate', { timeout: 30_000 }, () => {
     }
   }
 
-  test
-    .skipIf(!BASH)
-    .each([
-      LOGIN,
-      '303 https://team.cloudflareaccess.com/',
-      '302 https://Team.CloudflareAccess.com/cdn-cgi/access/login',
-    ])(
+  test.each([
+    LOGIN,
+    '303 https://team.cloudflareaccess.com/',
+    '302 https://Team.CloudflareAccess.com/cdn-cgi/access/login',
+  ])(
     'passes when Access answers both / and /api/v2/events with its login redirect: %s',
     (answer) => {
       const r = runGate(answer);
@@ -170,37 +166,35 @@ describe('access-gate', { timeout: 30_000 }, () => {
     }
   );
 
-  test
-    .skipIf(!BASH)
-    .each([
-      '403 ',
-      '401 ',
-      '200 ',
-      '302 https://evil.example/login',
-      '302 https://cloudflareaccess.com/',
-      '302 https://.cloudflareaccess.com/',
-      '302 https://cloudflareaccess.com.evil.example/',
-      '302 https://x.cloudflareaccess.com@evil.example/',
-      '302 http://team.cloudflareaccess.com/',
-      '301 https://team.cloudflareaccess.com/',
-      '307 https://team.cloudflareaccess.com/',
-      '404 ',
-      '500 ',
-    ])('fails closed on anything but the login redirect: %s', (answer) => {
+  test.each([
+    '403 ',
+    '401 ',
+    '200 ',
+    '302 https://evil.example/login',
+    '302 https://cloudflareaccess.com/',
+    '302 https://.cloudflareaccess.com/',
+    '302 https://cloudflareaccess.com.evil.example/',
+    '302 https://x.cloudflareaccess.com@evil.example/',
+    '302 http://team.cloudflareaccess.com/',
+    '301 https://team.cloudflareaccess.com/',
+    '307 https://team.cloudflareaccess.com/',
+    '404 ',
+    '500 ',
+  ])('fails closed on anything but the login redirect: %s', (answer) => {
     const r = runGate(answer);
     expect(r.code).toBe(1);
     expect(r.out).toContain(NO_LOGIN);
     expect(r.out).toContain('Real-world data is not loaded onto an open host.');
   });
 
-  test.skipIf(!BASH)('a plain 403 fails: a deny does not prove Access holds the host', () => {
+  test('a plain 403 fails: a deny does not prove Access holds the host', () => {
     const r = runGate('403 ', '403 ');
     expect(r.code).toBe(1);
     expect(r.out).toContain('/ answered HTTP 403');
     expect(r.out).toContain(NO_LOGIN);
   });
 
-  test.skipIf(!BASH).each(['403 ', '200 ', '404 ', '302 https://evil.example/'])(
+  test.each(['403 ', '200 ', '404 ', '302 https://evil.example/'])(
     'fails when the page redirects to Access but the public API answers: %s',
     (api) => {
       const r = runGate(LOGIN, api);
@@ -210,7 +204,7 @@ describe('access-gate', { timeout: 30_000 }, () => {
     }
   );
 
-  test.skipIf(!BASH)('fails when the request itself fails', () => {
+  test('fails when the request itself fails', () => {
     const r = runGate('', '', 7);
     expect(r.code).toBe(1);
     expect(r.out).toContain('Real-world data is not loaded onto an open host.');
@@ -238,20 +232,19 @@ describe('secrets', () => {
     expect(held[0].env.CLOUDFLARE_ACCOUNT_ID).toBe('${{ secrets.CLOUDFLARE_ACCOUNT_ID }}');
   });
 
-  test('secrets reach a step only through env:, and only the action takes one in with:', () => {
+  test('secrets reach a step only through env:, never through with:', () => {
     for (const job of Object.keys(jobs)) {
       expect(JSON.stringify(jobs[job].env || {}), job).not.toContain('secrets.');
       for (const s of stepsOf(job)) {
         expect(String(s.run || ''), `${job}/${s.name}`).not.toContain('secrets.');
-        const withText = JSON.stringify(s.with || {});
-        if (s.uses && s.uses.startsWith('anthropics/claude-code-action@')) {
-          expect(withText.match(/secrets\.[A-Z_]+/g)).toEqual(['secrets.ANTHROPIC_API_KEY']);
-        } else {
-          expect(withText, `${job}/${s.name}`).not.toContain('secrets.');
-        }
+        expect(JSON.stringify(s.with || {}), `${job}/${s.name}`).not.toContain('secrets.');
       }
     }
     expect(JSON.stringify(wf.env)).not.toContain('secrets.');
+  });
+
+  test('the seed job holds no secret and reads no variable', () => {
+    expect(JSON.stringify(jobs.seed)).not.toMatch(/secrets\.|vars\./);
   });
 
   test('no step echoes a secret or traces its shell', () => {
@@ -367,239 +360,72 @@ describe('deploy: the staging-full ids are pasted', { timeout: 30_000 }, () => {
       '',
     ].join('\n');
 
-  test.skipIf(!BASH)('fails while the ids are placeholders', () => {
+  test('fails while the ids are placeholders', () => {
     const r = runIdGate(fixture(UNPROVISIONED));
     expect(r.code).toBe(1);
     expect(r.out).toContain('paste each id over its OWNER_TO_FILL value');
     expect(r.out).toContain('OWNER_TO_FILL_DB_STAGING_FULL');
   });
 
-  test.skipIf(!BASH)(
-    'passes once the ids are pasted, comments naming the placeholders aside',
-    () => {
-      const pasted = fixture(PASTED);
-      expect(pasted).toContain('OWNER_TO_FILL'); // still named in comments
-      const r = runIdGate(pasted);
-      expect(r.code, r.out).toBe(0);
-    }
-  );
+  test('passes once the ids are pasted, comments naming the placeholders aside', () => {
+    const pasted = fixture(PASTED);
+    expect(pasted).toContain('OWNER_TO_FILL'); // still named in comments
+    const r = runIdGate(pasted);
+    expect(r.code, r.out).toBe(0);
+  });
 
-  test.skipIf(!BASH).each(['db', 'forms', 'kv'])('fails on one placeholder left: %s', (left) => {
+  test.each(['db', 'forms', 'kv'])('fails on one placeholder left: %s', (left) => {
     const r = runIdGate(fixture({ ...PASTED, [left]: UNPROVISIONED[left] }));
     expect(r.code).toBe(1);
     expect(r.out).toContain(UNPROVISIONED[left]);
   });
 
-  test.skipIf(!BASH)(
-    'reads only staging-full: a placeholder in another env is not its concern',
-    () => {
-      const other = `${fixture(PASTED)}[env.other]\nname = "x"\n[[env.other.kv_namespaces]]\nid = "OWNER_TO_FILL_OTHER"\n`;
-      expect(runIdGate(other).code).toBe(0);
-    }
-  );
+  test('reads only staging-full: a placeholder in another env is not its concern', () => {
+    const other = `${fixture(PASTED)}[env.other]\nname = "x"\n[[env.other.kv_namespaces]]\nid = "OWNER_TO_FILL_OTHER"\n`;
+    expect(runIdGate(other).code).toBe(0);
+  });
 
-  test.skipIf(!BASH)('fails when there is no staging-full block at all', () => {
+  test('fails when there is no staging-full block at all', () => {
     const r = runIdGate('name = "x"\n[env.staging]\nname = "y"\n');
     expect(r.code).toBe(1);
     expect(r.out).toContain('no [env.staging-full] block');
   });
 
-  test.skipIf(!BASH)(
-    'on the repo wrangler.toml, the verdict matches whether a placeholder remains',
-    async () => {
-      const { parseToml } = await import(
-        pathToFileURL(join(ROOT, 'scripts/prod-preflight.mjs')).href
-      );
-      const ids = parseToml(repoToml)
-        .filter((s) => /^env\.staging-full\.(d1_databases|kv_namespaces)$/.test(s.header))
-        .map((s) => s.values.database_id ?? s.values.id);
-      expect(ids).toHaveLength(3);
-      const left = ids.some((id) => id.startsWith('OWNER_TO_FILL_'));
-      expect(runIdGate(repoToml).code).toBe(left ? 1 : 0);
-    }
-  );
+  test('on the repo wrangler.toml, the verdict matches whether a placeholder remains', async () => {
+    const { parseToml } = await import(
+      pathToFileURL(join(ROOT, 'scripts/prod-preflight.mjs')).href
+    );
+    const ids = parseToml(repoToml)
+      .filter((s) => /^env\.staging-full\.(d1_databases|kv_namespaces)$/.test(s.header))
+      .map((s) => s.values.database_id ?? s.values.id);
+    expect(ids).toHaveLength(3);
+    const left = ids.some((id) => id.startsWith('OWNER_TO_FILL_'));
+    expect(runIdGate(repoToml).code).toBe(left ? 1 : 0);
+  });
 });
 
-describe('search', () => {
-  const steps = stepsOf('search');
-  const actionAt = steps.findIndex((s) => /^anthropics\/claude-code-action@/.test(s.uses || ''));
-  const action = steps[actionAt];
-  const args = action ? String(action.with.claude_args) : '';
+describe('seed', () => {
+  const steps = stepsOf('seed');
 
-  test('the action is pinned to the SHA claude-review.yml uses', () => {
-    expect(action.uses).toBe(
-      'anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f'
-    );
-    const review = readFileSync(join(ROOT, '.github/workflows/claude-review.yml'), 'utf8');
-    expect(review).toContain(action.uses);
-  });
-
-  test('Sonnet, 80 turns, web search, web fetch and two writes; no shell', () => {
-    expect(args).toMatch(/--model claude-sonnet-/);
-    expect(args).toMatch(/--max-turns 80\b/);
-    const allowed = /--allowedTools "([^"]*)"/.exec(args)[1].split(',');
-    expect(allowed).toEqual([
-      'WebSearch',
-      'WebFetch',
-      'Write(stock-out/finds.json)',
-      'Write(stock-out/businesses.json)',
+  test('re-bases the committed seed and hands the build its three files', () => {
+    expect(steps.some((s) => s.run === 'node scripts/stock/run-day.mjs seed')).toBe(true);
+    const upload = steps.find((s) => /^actions\/upload-artifact@/.test(s.uses || ''));
+    expect(upload.with.name).toBe('stock-seeded');
+    expect(upload.with.path.trim().split('\n')).toEqual([
+      'stock-out/accepted.json',
+      'stock-out/businesses.json',
+      'stock-out/load.json',
     ]);
-    const disallowed = /--disallowedTools "([^"]*)"/.exec(args)[1].split(',');
-    for (const tool of ['Bash', 'Edit', 'Read', 'Task', 'Agent']) {
-      expect(disallowed).toContain(tool);
-    }
-    expect(args).toContain('--setting-sources user');
-  });
-
-  test('the CLI version the cap is checked on names the action SHA it pairs with', () => {
-    const text = readFileSync(WF_PATH, 'utf8');
-    const at = text.indexOf("CLAUDE_CODE_VERSION: '");
-    const comment = text.slice(text.lastIndexOf('# Pairs with', at), at);
-    expect(comment).toContain(action.uses.split('@')[1]);
-  });
-
-  test('the spend cap is checked fail-closed first, then passed to the CLI', () => {
-    const budgetAt = steps.findIndex((s) => s.id === 'budget');
-    expect(budgetAt).toBeGreaterThanOrEqual(0);
-    expect(budgetAt).toBeLessThan(actionAt);
-    const budget = steps[budgetAt];
-    expect(budget.env.MAX_USD).toBe("${{ vars.STOCK_SEARCH_MAX_USD || '5' }}");
-    expect(budget.run).toContain("grep -q -- '--max-budget-usd'");
-    expect(budget.run).toMatch(/exit 1/);
-    expect(args).toContain('--max-budget-usd ${{ steps.budget.outputs.usd }}');
-  });
-
-  test('the prompt is rendered from the repo before the action runs', () => {
-    const promptAt = steps.findIndex((s) => s.id === 'prompt');
-    expect(promptAt).toBeGreaterThanOrEqual(0);
-    expect(promptAt).toBeLessThan(actionAt);
-    expect(steps[promptAt].run).toContain('node scripts/stock/run-day.mjs prepare-search');
-    // its files go outside the checkout, so the gate after the search sees only the outputs
-    expect(steps[promptAt].env.STOCK_PREP_DIR).toBe('${{ runner.temp }}/stock-prep');
-    expect(steps[promptAt].run).not.toMatch(/stock-out\/search-prompt|stock-out\/event-types/);
-    expect(action.with.prompt).toBe('${{ steps.prompt.outputs.text }}');
-  });
-
-  const gateAt = steps.findIndex((s) => /git status --porcelain/.test(String(s.run || '')));
-
-  test('a gate right after the search, before any repo code, allows only the two outputs', () => {
-    expect(gateAt).toBe(actionAt + 1);
-    const checkAt = steps.findIndex((s) =>
-      String(s.run || '').includes('node scripts/stock/run-day.mjs search-output')
+    expect(upload.with['if-no-files-found']).toBe('error');
+    const download = stepsOf('build').find((s) =>
+      /^actions\/download-artifact@/.test(s.uses || '')
     );
-    const uploadAt = steps.findIndex((s) => /^actions\/upload-artifact@/.test(s.uses || ''));
-    expect(checkAt).toBeGreaterThan(gateAt);
-    expect(uploadAt).toBeGreaterThan(checkAt);
-    expect(steps[gateAt].run).toContain('--untracked-files=all');
-    expect(steps[gateAt].run).toContain('--ignored');
+    expect(download.with).toEqual({ name: 'stock-seeded', path: 'stock-out' });
   });
 
   test('stock-out/ is git-ignored, so its files never get committed by accident', () => {
     const ignore = readFileSync(join(ROOT, '.gitignore'), 'utf8').split(/\r?\n/);
     expect(ignore).toContain('stock-out/');
-  });
-
-  // The gate's own script against a real git: a throwaway repo with this repo's
-  // .gitignore, so ignored paths are judged as they would be in the checkout.
-  function runRealGitGate(files) {
-    const repo = mkdtempSync(join(tmpdir(), 'stock-real-gate-'));
-    const scripts = mkdtempSync(join(tmpdir(), 'stock-real-gate-sh-'));
-    const git = (...a) =>
-      spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...a], {
-        cwd: repo,
-        encoding: 'utf8',
-      });
-    try {
-      writeFileSync(join(repo, '.gitignore'), readFileSync(join(ROOT, '.gitignore'), 'utf8'));
-      git('init', '-q');
-      git('add', '.gitignore');
-      git('commit', '-qm', 'base');
-      for (const f of files) {
-        mkdirSync(dirname(join(repo, f)), { recursive: true });
-        writeFileSync(join(repo, f), '[]');
-      }
-      const script = join(scripts, 'gate.sh');
-      writeFileSync(script, steps[gateAt].run);
-      const r = spawnSync(BASH, [script], { cwd: repo, encoding: 'utf8' });
-      return { code: r.status, out: `${r.stdout}${r.stderr}` };
-    } finally {
-      rmSync(repo, { recursive: true, force: true });
-      rmSync(scripts, { recursive: true, force: true });
-    }
-  }
-
-  test.skipIf(!BASH)(
-    'with a real git: the two ignored outputs pass, a planted ignored file fails',
-    () => {
-      const ok = runRealGitGate(['stock-out/finds.json', 'stock-out/businesses.json']);
-      expect(ok.code, ok.out).toBe(0);
-      const planted = runRealGitGate(['stock-out/finds.json', 'node_modules/ajv/dist/ajv.js']);
-      expect(planted.code).toBe(1);
-      expect(planted.out).toContain('!! node_modules/ajv/dist/ajv.js');
-      const env = runRealGitGate(['stock-out/finds.json', '.env']);
-      expect(env.code).toBe(1);
-    },
-    30_000
-  );
-
-  // The gate's own script, with git replaced by a function that reports as told.
-  function runGitGate(status) {
-    const dir = mkdtempSync(join(tmpdir(), 'stock-git-gate-'));
-    try {
-      const script = join(dir, 'gate.sh');
-      writeFileSync(script, `git() { printf '%s' "$FAKE_STATUS"; }\n${steps[gateAt].run}`);
-      const r = spawnSync(BASH, [script], {
-        encoding: 'utf8',
-        env: { ...process.env, FAKE_STATUS: status },
-      });
-      return { code: r.status, out: `${r.stdout}${r.stderr}` };
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-
-  test
-    .skipIf(!BASH)
-    .each([
-      '',
-      '?? stock-out/finds.json\n?? stock-out/businesses.json\n',
-      '?? stock-out/finds.json\n',
-      '!! stock-out/finds.json\n!! stock-out/businesses.json\n',
-    ])(
-    'the gate passes on only the outputs: %j',
-    (status) => {
-      const r = runGitGate(status);
-      expect(r.code, r.out).toBe(0);
-    },
-    30_000
-  );
-
-  test
-    .skipIf(!BASH)
-    .each([
-      '?? stock-out/finds.json\n M scripts/stock/run-day.mjs\n',
-      '?? stock-out/finds.json\n?? stock-out/other.json\n',
-      '?? .claude/settings.json\n',
-      ' D stock/search-prompt.md\n',
-      '?? stock-out/finds.json.bak\n',
-      '!! stock-out/finds.json\n!! node_modules/ajv/dist/ajv.js\n',
-      '!! stock-out/other.json\n',
-    ])(
-    'the gate fails on anything else: %j',
-    (status) => {
-      const r = runGitGate(status);
-      expect(r.code).toBe(1);
-      expect(r.out).toContain('Search changed the checkout');
-    },
-    30_000
-  );
-
-  test('only the two outputs are uploaded', () => {
-    const upload = steps.find((s) => /^actions\/upload-artifact@/.test(s.uses || ''));
-    expect(upload.with.path.trim().split('\n')).toEqual([
-      'stock-out/finds.json',
-      'stock-out/businesses.json',
-    ]);
   });
 });
 
@@ -609,7 +435,7 @@ describe('build and check-swap', () => {
       stepsOf(job)
         .map((s) => String(s.run || ''))
         .join('\n');
-    expect(run('validate')).toContain('node scripts/stock/run-day.mjs validate');
+    expect(run('seed')).toContain('node scripts/stock/run-day.mjs seed');
     expect(run('build')).toContain('node scripts/stock/run-day.mjs build');
     expect(run('check-swap')).toContain('node scripts/stock/run-day.mjs check-swap');
   });
@@ -654,39 +480,5 @@ describe('build and check-swap', () => {
         expect(s['continue-on-error'], `${job}/${s.name}`).toBeUndefined();
       }
     }
-  });
-});
-
-describe('the search installs nothing into the checkout before its gate', () => {
-  const steps = stepsOf('search');
-  const actionAt = steps.findIndex((s) => /^anthropics\/claude-code-action@/.test(s.uses || ''));
-  const gateAt = steps.findIndex((s) => /git status --porcelain/.test(String(s.run || '')));
-  const installs = (s) => /\bnpm\s+(ci|install|i)\b|\byarn\b|\bpnpm\b/.test(String(s.run || ''));
-
-  test('every install before the gate happens in a copy outside the checkout', () => {
-    expect(gateAt).toBe(actionAt + 1);
-    const early = steps.slice(0, gateAt).filter(installs);
-    expect(early).toHaveLength(1);
-    expect(early[0].env.PREP_SRC).toBe('${{ runner.temp }}/stock-src');
-    expect(early[0].run).toContain('git archive HEAD | tar -x -C "$PREP_SRC"');
-    const cdAt = early[0].run.indexOf('cd "$PREP_SRC"');
-    expect(cdAt).toBeGreaterThanOrEqual(0);
-    expect(cdAt).toBeLessThan(early[0].run.indexOf('npm ci'));
-    expect(early[0]['working-directory']).toBeUndefined();
-  });
-
-  test('repo code before the gate runs from that copy', () => {
-    for (const s of steps.slice(0, gateAt)) {
-      if (!/\bnode\s+scripts\//.test(String(s.run || ''))) continue;
-      expect(s['working-directory'], s.name).toBe('${{ runner.temp }}/stock-src');
-    }
-  });
-
-  test('the checkout gets its dependencies after the gate, then the schema check runs', () => {
-    const installAt = steps.findIndex((s, i) => i > gateAt && installs(s));
-    const checkAt = steps.findIndex((s) => /run-day\.mjs search-output/.test(String(s.run || '')));
-    expect(installAt).toBeGreaterThan(gateAt);
-    expect(steps[installAt]['working-directory']).toBeUndefined();
-    expect(checkAt).toBeGreaterThan(installAt);
   });
 });

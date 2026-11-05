@@ -126,7 +126,7 @@ const rowsFor = (node, privateN, publicN) => [
 ];
 
 const businesses = [
-  // as validateBusinesses leaves them: each with the point its address geocoded to
+  // as the seed holds them: each with the point its address geocoded to
   {
     name: 'Anchor Co',
     address: '2 Main St',
@@ -160,7 +160,8 @@ const args = (site, over = {}) => ({
   regionals: { regionals: ['Regional Co'] },
   posts: [],
   artTags: { tags: {} },
-  targets: { perNode: 12 },
+  // per node, how many stock events it gets (the seed's count in a real run)
+  expected: { beverly: 12, bridgeport: 12 },
   date: '2026-11-04',
   fetch: site.fetch,
   ...over,
@@ -247,7 +248,7 @@ describe('sponsorTier', () => {
 });
 
 describe('buildDay', () => {
-  test('15 accepted rows with perNode 12: all private, then the soonest public', async () => {
+  test('15 accepted rows with 12 expected: all private, then the soonest public', async () => {
     const site = fakeSite();
     const accepted = rowsFor('beverly', 10, 5);
     const manifest = await buildDay(args(site, { accepted }));
@@ -269,12 +270,26 @@ describe('buildDay', () => {
     expect(manifest.short).toEqual({ beverly: 1 });
   });
 
-  test('the quantity comes from targets, not the code', async () => {
+  test('the quantity comes from the expected count per node, not the code', async () => {
     const site = fakeSite();
     const manifest = await buildDay(
-      args(site, { accepted: rowsFor('beverly', 6, 5), targets: { perNode: 3 } })
+      args(site, { accepted: rowsFor('beverly', 6, 5), expected: { beverly: 3 } })
     );
     expect(callsTo(site, 'POST', /^\/api\/v2\/admin\/events$/)).toHaveLength(3);
+    expect(manifest.short).toEqual({});
+  });
+
+  test('a node expected to hold 0, or not named at all, gets no events and is not short', async () => {
+    const site = fakeSite();
+    const manifest = await buildDay(
+      args(site, {
+        accepted: [...rowsFor('beverly', 2, 0), ...rowsFor('bridgeport', 2, 0)],
+        expected: { beverly: 0 },
+        nodeIds: ['beverly', 'bridgeport'],
+      })
+    );
+    expect(callsTo(site, 'POST', /^\/api\/v2\/admin\/events$/)).toHaveLength(0);
+    expect(manifest.items.filter((i) => i.kind === 'event')).toEqual([]);
     expect(manifest.short).toEqual({});
   });
 
@@ -659,6 +674,7 @@ describe('rulings round', () => {
     'oak-lawn',
     'mount-greenwood',
   ];
+  const TWELVE_EACH = Object.fromEntries(SIX.map((n) => [n, 12]));
 
   test('start date and time are the Chicago wall clock of starts_at', async () => {
     const site = fakeSite();
@@ -674,14 +690,16 @@ describe('rulings round', () => {
 
   test('short covers all six nodes when there are no rows at all', async () => {
     const site = fakeSite();
-    const manifest = await buildDay(args(site, { accepted: [], nodeIds: SIX }));
+    const manifest = await buildDay(
+      args(site, { accepted: [], nodeIds: SIX, expected: TWELVE_EACH })
+    );
     expect(manifest.short).toEqual(Object.fromEntries(SIX.map((n) => [n, 12])));
   });
 
   test('a node passed in but short by some rows reports only its gap', async () => {
     const site = fakeSite();
     const manifest = await buildDay(
-      args(site, { accepted: rowsFor('beverly', 12, 0), nodeIds: SIX })
+      args(site, { accepted: rowsFor('beverly', 12, 0), nodeIds: SIX, expected: TWELVE_EACH })
     );
     expect(manifest.short.beverly).toBeUndefined();
     expect(manifest.short['oak-lawn']).toBe(12);
@@ -774,7 +792,7 @@ describe('fix round 1', () => {
     const junk = { ...row('beverly', 'private', 6), title: 'junk', starts_at: 'not a date' };
     const run = async (accepted) => {
       const site = fakeSite();
-      await buildDay(args(site, { accepted, targets: { perNode: 1 } }));
+      await buildDay(args(site, { accepted, expected: { beverly: 1 } }));
       return callsTo(site, 'POST', /^\/api\/v2\/admin\/events$/).map((c) => c.body.title);
     };
     expect(await run([none, junk, good])).toEqual(['good']);

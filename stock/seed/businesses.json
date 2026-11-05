@@ -1,0 +1,205 @@
+[
+  {
+    "name": "St. Sabina Church",
+    "address": "1210 W 78th Pl, Chicago, IL 60620",
+    "zip": "60620",
+    "place": "Auburn Gresham",
+    "anchor": true
+  },
+  {
+    "name": "Greater Auburn Gresham Development Corporation / Healthy Lifestyle Hub",
+    "address": "839 W 79th St, Chicago, IL 60620",
+    "zip": "60620",
+    "place": "Auburn Gresham",
+    "anchor": true
+  },
+  {
+    "name": "St. Sabina Technology Center",
+    "address": "7811 S Racine Ave, Chicago, IL 60620",
+    "zip": "60620",
+    "place": "Auburn Gresham",
+    "anchor": false
+  },
+  {
+    "name": "Blue Island Beer Company",
+    "address": "13357 Olde Western Ave, Blue Island, IL 60406",
+    "zip": "60406",
+    "place": "Blue Island",
+    "anchor": true
+  },
+  {
+    "name": "Lyric Theater",
+    "address": "12952 Western Ave, Blue Island, IL 60406",
+    "zip": "60406",
+    "place": "Blue Island",
+    "anchor": true
+  },
+  {
+    "name": "Rock Island Public House",
+    "address": "13328 Olde Western Ave, Blue Island, IL 60406",
+    "zip": "60406",
+    "place": "Blue Island",
+    "anchor": false
+  },
+  {
+    "name": "Natural Law Cocktail Club & Eatery",
+    "address": "13404 Olde Western Ave, Blue Island, IL 60406",
+    "zip": "60406",
+    "place": "Blue Island",
+    "anchor": false
+  },
+  {
+    "name": "City Limits Kitchen & Bar",
+    "address": "13414 Olde Western Ave, Blue Island, IL 60406",
+    "zip": "60406",
+    "place": "Blue Island",
+    "anchor": false
+  },
+  {
+    "name": "Harry's Long Bar",
+    "address": "13115 S Western Ave, Blue Island, IL 60406",
+    "zip": "60406",
+    "place": "Blue Island",
+    "anchor": false
+  },
+  {
+    "name": "O'Connell's Pub Time",
+    "address": "12924 Western Ave, Blue Island, IL 60406",
+    "zip": "60406",
+    "place": "Blue Island",
+    "anchor": false
+  },
+  {
+    "name": "Haas Tavern",
+    "address": "12725 S Western Ave, Blue Island, IL 60406",
+    "zip": "60406",
+    "place": "Blue Island",
+    "anchor": false
+  },
+  {
+    "name": "Double Play Saloon",
+    "address": "13011 S Western Ave, Blue Island, IL 60406",
+    "zip": "60406",
+    "place": "Blue Island",
+    "anchor": false
+  },
+  {
+    "name": "Raven's Place",
+    "address": "13031 Western Ave, Blue Island, IL 60406",
+    "zip": "60406",
+    "place": "Blue Island",
+    "anchor": false
+  },
+  {
+    "name": "Tommy's Place",
+    "address": "12237 Western Ave, Blue Island, IL 60406",
+    "zip": "60406",
+    "place": "Blue Island",
+    "anchor": false
+  },
+  {
+    "name": "Spoke & Vine Wine Bar",
+    "address": "3146 W 95th St, Evergreen Park, IL 60805",
+    "zip": "60805",
+    "place": "Evergreen Park",
+    "anchor": true
+  },
+  {
+    "name": "Porter Cullen's Irish Pub & Restaurant",
+    "address": "3541 W 99th St, Evergreen Park, IL 60805",
+    "zip": "60805",
+    "place": "Evergreen Park",
+    "anchor": true
+  },
+  {
+    "name": "Tavern in the Green",
+    "address": "3422 W 95th St, Evergreen Park, IL 60805",
+    "zip": "60805",
+    "place": "Evergreen Park",
+    "anchor": false
+  },
+  {
+    "name": "Hilton Chicago/Oak Lawn",
+    "address": "9333 S Cicero Ave, Oak Lawn, IL 60453",
+    "zip": "60453",
+    "place": "Oak Lawn",
+    "anchor": true
+  },
+  {
+    "name": "VFW Johnson-Phelps Post 5220",
+    "address": "9514 S 52nd Ave, Oak Lawn, IL 60453",
+    "zip": "60453",
+    "place": "Oak Lawn",
+    "anchor": true
+  },
+  {
+    "name": "Acorn to Oak Studios",
+    "address": "9411 S 51st Ave, Oak Lawn, IL 60453",
+    "zip": "60453",
+    "place": "Oak Lawn",
+    "anchor": false
+  },
+  {
+    "name": "TGI Fridays",
+    "address": "5420 W 95th St, Oak Lawn, IL 60453",
+    "zip": "60453",
+    "place": "Oak Lawn",
+    "anchor": false
+  },
+  {
+    "name": "Lucky's Lounge",
+    "address": "6605 W 95th St, Oak Lawn, IL 60453",
+    "zip": "60453",
+    "place": "Oak Lawn",
+    "anchor": false
+  },
+  {
+    "name": "Thurgood Marshall Branch, Chicago Public Library",
+    "address": "7506 S Racine Ave, Chicago, IL 60620",
+    "zip": "60620",
+    "place": "Auburn Gresham",
+    "anchor": false
+  },
+  {
+    "name": "Brainerd Branch, Chicago Public Library",
+    "address": "1350 W 89th St, Chicago, IL 60620",
+    "zip": "60620",
+    "place": "Auburn Gresham",
+    "anchor": false
+  },
+  {
+    "name": "Auburn Park (Chicago Park District)",
+    "address": "406 W Winneconna Pkwy, Chicago, IL 60620",
+    "zip": "60620",
+    "place": "Auburn Gresham",
+    "anchor": false
+  },
+  {
+    "name": "OSF Little Company of Mary Medical Center",
+    "address": "2800 W 95th St, Evergreen Park, IL 60805",
+    "zip": "60805",
+    "place": "Evergreen Park",
+    "anchor": false
+  },
+  {
+    "name": "Evergreen Plaza (southwest corner of 95th St and Western Ave)",
+    "address": "9500 S Western Ave, Evergreen Park, IL 60805",
+    "zip": "60805",
+    "place": "Evergreen Park",
+    "anchor": false
+  },
+  {
+    "name": "Evergreen Park Public Library",
+    "address": "9400 S Troy Ave, Evergreen Park, IL 60805",
+    "zip": "60805",
+    "place": "Evergreen Park",
+    "anchor": false
+  },
+  {
+    "name": "Hamilton B. Maher Community Center",
+    "address": "3450 W 97th St, Evergreen Park, IL 60805",
+    "zip": "60805",
+    "place": "Evergreen Park",
+    "anchor": false
+  }
+]

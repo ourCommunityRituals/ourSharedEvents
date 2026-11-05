@@ -1,0 +1,69 @@
+info:
+  name: GET /?zip=60655 (landing) - lists its own area only
+  type: http
+  seq: 14
+
+http:
+  method: GET
+  url: "{{baseUrl}}/?zip=60655"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// Owner 2026-11-05: a zip shows its own area, not the towns around it.
+
+        // Fixture: bruno/fixtures/landing-zip-own-area-seed.sql. Its Oak Lawn and
+
+        // Evergreen Park events sit one res-7 ring from 60655's cell; the old
+
+        // 8-ring \"near\" listed both here.
+
+        const body = String(res.getBody());
+
+
+
+        test('Returns 200', function() {
+
+        \    expect(res.getStatus()).to.equal(200);
+
+        });
+
+
+
+        test('Answers for 60655', function() {
+
+        \    expect(body).to.match(/data-testid=\"area-heading\">Near 60655 /);
+
+        });
+
+
+
+        test('Lists its own event (Mount Greenwood)', function() {
+
+        \    expect(body).to.include('Zip Own Area Check (Mount Greenwood)');
+
+        });
+
+
+
+        test('Does not list the neighbour Oak Lawn event (its address says 60453)', function() {
+
+        \    expect(body).to.not.include('Zip Own Area Check (Oak Lawn)');
+
+        });
+
+
+
+        test('Does not list the neighbour Evergreen Park event (nearest zip 60805)', function() {
+
+        \    expect(body).to.not.include('Zip Own Area Check (Evergreen Park)');
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

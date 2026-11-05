@@ -70,7 +70,7 @@ import {
   type LandingAreaItem,
 } from '../lib/landing-area.js';
 import { readWhere, injectWhere, renderNearEmpty, type WhereState } from '../lib/landing-where';
-import { nearCells } from '../lib/zip-areas';
+import { inZipOwnArea } from '../lib/zip-areas';
 import {
   getDataProvider,
   type DataProviderEnv,
@@ -2606,10 +2606,11 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
 // ─── Landing page — OSE-1312, "where are you?" (owner 2026-10-10) ──────────────
 //
 // One question first: your zip (typed, or the nearest zip to a phone's rough
-// box, lib/landing-where.ts). With a zip, the area lists the events whose
-// res-7 cell is within NEAR_RING_STEPS rings of the zip's cell (about 10
-// miles); without one, every listed event, as before. No cookies, no
-// analytics; list/map and window toggles stay CSS-only (renderLandingArea).
+// box, lib/landing-where.ts). With a zip, the area lists the events in the
+// zip's own area (lib/zip-areas.ts inZipOwnArea: the zip in the event's address,
+// else the nearest zip center, within 8 rings); without one, every listed
+// event. No cookies, no analytics; list/map and window toggles stay CSS-only
+// (renderLandingArea).
 //
 // Reads events through the SAME DataProvider seam + enrichWithPhase as
 // `GET /api/v2/events`, so the page and the JSON API cannot describe different
@@ -2633,8 +2634,8 @@ export async function handleLandingPage(
     const result = await dp.listEvents('root');
     let items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
     if (where.kind === 'zip') {
-      const near = nearCells(where.area);
-      items = items.filter((e) => typeof e.h3_res7 === 'string' && near.has(e.h3_res7));
+      // Owner 2026-11-05: the zip's own area, not the towns around it.
+      items = items.filter(inZipOwnArea(where.area));
     }
     // §6.2b latch: corridors that have ever reached the threshold stay on the
     // map. Brand-bound read; a missing table (pre-0084) just means none yet.

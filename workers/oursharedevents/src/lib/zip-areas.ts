@@ -13,14 +13,35 @@
  *     turns the box into the nearest zip and from then on uses the zip. The
  *     exact spot never leaves the phone, and nothing is stored.
  *
- * Events "near" a zip are the events whose area cell lies within
- * NEAR_RING_STEPS rings of the zip's cell, about 10 miles.
+ * A zip shows the events in its OWN area, not the towns around it (owner
+ * 2026-11-05: what's going on in your area, without the bleed-over; going
+ * wider is the person's choice). An event is in a zip's own area when
+ * (inZipOwnArea):
+ *
+ *   1. its address ends in that zip ("…, IL 60453"), the zip the venue itself
+ *      gives; or, when its address names no zip we know near the event,
+ *   2. its cell's center is nearer that zip's center than any other zip's.
+ *
+ * and, either way, its area cell lies within NEAR_RING_STEPS rings of the zip's
+ * cell (about 10 miles): an outer bound. An address zip whose own bound does not
+ * hold the event (a typo, another state) is ignored, so the event falls to
+ * rule 2 instead of vanishing. The table has zip centers only, no
+ * boundaries; rule 2 cuts the country into one area per zip, so an event
+ * shows for one zip at most.
  */
-import { gridDisk, latLngToCell } from 'h3-js';
+import {
+  cellToLatLng,
+  getHexagonEdgeLengthAvg,
+  greatCircleDistance,
+  gridDisk,
+  gridDistance,
+  isValidCell,
+  latLngToCell,
+} from 'h3-js';
 import { CORRIDOR_RES } from './h3-tagging';
 import { ZIP_AREAS, ZIP_AREA_COUNT, ZIP_AREA_RECORD } from './zip-areas-data';
 
-/** Rings of res-7 cells around the zip's cell: 8 rings is about 10 miles. */
+/** The outer bound on a zip's own area: 8 rings of res-7 cells, about 10 miles. */
 export const NEAR_RING_STEPS = 8;
 
 export interface ZipArea {
@@ -84,6 +105,122 @@ export function nearestZipArea(lat: number, lon: number): ZipArea | null {
 /** The area cells within NEAR_RING_STEPS of the zip's cell. */
 export function nearCells(area: ZipArea, steps = NEAR_RING_STEPS): Set<string> {
   return new Set(gridDisk(latLngToCell(area.lat, area.lon, CORRIDOR_RES), steps));
+}
+
+/** US postal state, district, territory and military codes. */
+const POSTAL_STATES = new Set(
+  (
+    'AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE ' +
+    'NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY ' +
+    'PR VI GU AS MP AA AE AP'
+  ).split(' ')
+);
+
+/**
+ * The zip an address ends with: "1234 W Example St, Town, IL 60000" → "60000"
+ * ("60000-1234", a trailing ", USA" and a final "." are fine). Only a zip at the
+ * very end counts, and only when nothing comes before it, or a comma, or a
+ * postal state code does: a street number ("12345 S Pulaski Rd"), a box or
+ * room ("PO Box 12345", "RM 60453") is never read as one.
+ *
+ * Linear in the address's length: no pattern here has two whitespace runs that
+ * can trade characters, so a padded address costs no more than a short one
+ * (this runs on a public page for every event near the zip).
+ */
+export function addressZip(address: unknown): string | null {
+  if (typeof address !== 'string') return null;
+  const s = address
+    .trim()
+    .replace(/\.$/, '')
+    .replace(/,? ?(?:USA|US|United States)$/i, '')
+    .trimEnd();
+  const m = /(\d{5})(?:-\d{4})?$/.exec(s);
+  if (!m) return null;
+  const before = s.slice(0, m.index).trimEnd();
+  if (before === '' || before.endsWith(',')) return m[1];
+  // The word just before the zip: two letters after a space or comma, in any
+  // case ("il", "Il"), that are a postal state code once capitalised.
+  const word = before.slice(-3);
+  const ok =
+    /^[\s,][A-Za-z]{2}$/.test(word) || (before.length === 2 && /^[A-Za-z]{2}$/.test(before));
+  return ok && POSTAL_STATES.has(before.slice(-2).toUpperCase()) ? m[1] : null;
+}
+
+/**
+ * An event row. inZipOwnArea reads only its cells and its address; the index
+ * signature lets a whole listed row be passed in.
+ */
+export interface PlacedEvent {
+  [field: string]: unknown;
+  h3_res7?: unknown;
+  h3_res9?: unknown;
+  where_address?: unknown;
+}
+
+// The other zips that could be nearer a point in the 8-ring bound: every zip
+// whose center is within twice the bound's reach (8 rings is under 20 km, so
+// 0.5 degrees, about 55 km, is ample).
+const NEIGHBOUR_DEG = 0.5;
+
+function zipsAround(area: ZipArea): ZipArea[] {
+  const lonDeg = NEIGHBOUR_DEG / Math.max(0.1, Math.cos((area.lat * Math.PI) / 180));
+  const out: ZipArea[] = [];
+  for (let i = 0; i < ZIP_AREA_COUNT; i++) {
+    const rec = recordAt(i);
+    const lat = Number(rec.slice(5, 12));
+    const lon = Number(rec.slice(12, 20));
+    if (Math.abs(lat - area.lat) <= NEIGHBOUR_DEG && Math.abs(lon - area.lon) <= lonDeg) {
+      out.push({ zip: rec.slice(0, 5), lat, lon });
+    }
+  }
+  return out;
+}
+
+// The 8-ring bound's reach in km: cell centers are sqrt(3) edges apart.
+const BOUND_KM = NEAR_RING_STEPS * Math.sqrt(3) * getHexagonEdgeLengthAvg(CORRIDOR_RES, 'km');
+
+/**
+ * Is the res-7 cell within NEAR_RING_STEPS rings of the zip's own cell? When H3
+ * cannot count the rings (the path crosses a pentagon; all twelve are at sea),
+ * the straight-line distance between the two centers decides instead, so a
+ * valid address zip is never dropped for that reason alone.
+ */
+export function withinBound(zip: ZipArea, res7: string): boolean {
+  try {
+    return gridDistance(latLngToCell(zip.lat, zip.lon, CORRIDOR_RES), res7) <= NEAR_RING_STEPS;
+  } catch {
+    if (!isValidCell(res7)) return false;
+    return greatCircleDistance([zip.lat, zip.lon], cellToLatLng(res7), 'km') <= BOUND_KM;
+  }
+}
+
+/**
+ * A test for "is this event in the zip's own area?" (see the top of this file).
+ * Build it once per request; the neighbouring zips are read at most once.
+ */
+export function inZipOwnArea(area: ZipArea): (event: PlacedEvent) => boolean {
+  const bound = nearCells(area);
+  let around: ZipArea[] | null = null;
+  return (event) => {
+    const res7 = event.h3_res7;
+    if (typeof res7 !== 'string' || !bound.has(res7)) return false;
+    // The address's zip decides when it is a zip we know whose own 8-ring bound
+    // holds the event; a zip from far away (a typo) is ignored, not trusted.
+    const said = findZipArea(addressZip(event.where_address));
+    if (said && withinBound(said, res7)) return said.zip === area.zip;
+    // Otherwise: the zip whose center is nearest the event's finest cell (the
+    // res-9 placement when it has one).
+    const res9 = event.h3_res9;
+    const [lat, lon] = cellToLatLng(typeof res9 === 'string' && isValidCell(res9) ? res9 : res7);
+    around ??= zipsAround(area);
+    const cosLat = Math.cos((lat * Math.PI) / 180);
+    const dist = (z: ZipArea) => (z.lat - lat) ** 2 + ((z.lon - lon) * cosLat) ** 2;
+    const mine = dist(area);
+    // A tie goes to the lower zip, so no point belongs to two.
+    return around.every(
+      (z) => z.zip === area.zip || dist(z) > mine || (dist(z) === mine && z.zip > area.zip)
+    );
+  };
 }
 
 // ── The phone's rough box: a 5-character geohash ────────────────────────────
