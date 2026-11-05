@@ -13,6 +13,8 @@
 --   node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/landing-zip-own-area-seed.sql
 --
 -- Dates are relative (10 days out) so the rows never age off the landing list.
+-- Published only for the Bruno run: landing-zip-own-area-reset.sql unpublishes them
+-- right after it (CI step "Unpublish landing zip own-area fixture").
 -- Idempotent: every row is an upsert by fixed id. Never apply to production.
 
 INSERT INTO events (id, brand_id, title, slug, status, is_published, location, where_address,

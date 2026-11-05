@@ -19,16 +19,17 @@
  * (inZipOwnArea):
  *
  *   1. its address ends in that zip ("…, IL 60453"), the zip the venue itself
- *      gives; or, when its address names no zip we know,
+ *      gives; or, when its address names no zip we know near the event,
  *   2. its cell's center is nearer that zip's center than any other zip's.
  *
  * and, either way, its area cell lies within NEAR_RING_STEPS rings of the zip's
- * cell (about 10 miles): an outer bound, so a mistyped address zip cannot pull
- * in an event from another state. The table has zip centers only, no
+ * cell (about 10 miles): an outer bound. An address zip whose own bound does not
+ * hold the event (a typo, another state) is ignored, so the event falls to
+ * rule 2 instead of vanishing. The table has zip centers only, no
  * boundaries; rule 2 cuts the country into one area per zip, so an event
  * shows for one zip at most.
  */
-import { cellToLatLng, gridDisk, isValidCell, latLngToCell } from 'h3-js';
+import { cellToLatLng, gridDisk, gridDistance, isValidCell, latLngToCell } from 'h3-js';
 import { CORRIDOR_RES } from './h3-tagging';
 import { ZIP_AREAS, ZIP_AREA_COUNT, ZIP_AREA_RECORD } from './zip-areas-data';
 
@@ -100,14 +101,22 @@ export function nearCells(area: ZipArea, steps = NEAR_RING_STEPS): Set<string> {
 
 /**
  * The zip an address ends with: "1234 W Example St, Town, IL 60000" → "60000"
- * ("60000-1234" and a trailing ", USA" are fine). Only a zip at the very end
- * counts, so a 5-digit street number ("12345 S Pulaski Rd") is never read as one.
+ * ("60000-1234" and a trailing ", USA" are fine). Only a zip at the very end,
+ * after a state code or a comma (or alone), counts: a 5-digit street number
+ * ("12345 S Pulaski Rd") or a box or unit number ("PO Box 12345") is never one.
  */
 export function addressZip(address: unknown): string | null {
   if (typeof address !== 'string') return null;
-  const m = /(?:^|[\s,])(\d{5})(?:-\d{4})?\s*(?:,?\s*(?:USA|US|United States))?\s*\.?\s*$/i.exec(
-    address
-  );
+  // Only the last 40 characters, trimmed, and one pattern with a single
+  // whitespace run: a padded 500-character address costs no more than a short
+  // one (this runs on a public page for every event near the zip).
+  const tail = address
+    .slice(-40)
+    .trim()
+    .replace(/\.$/, '')
+    .replace(/,? ?(?:USA|US|United States)$/, '')
+    .trimEnd();
+  const m = /(?:^|,|\b[A-Z]{2})\s*(\d{5})(?:-\d{4})?$/.exec(tail);
   return m ? m[1] : null;
 }
 
@@ -141,6 +150,15 @@ function zipsAround(area: ZipArea): ZipArea[] {
   return out;
 }
 
+/** Is the res-7 cell within NEAR_RING_STEPS rings of the zip's own cell? */
+function withinBound(zip: ZipArea, res7: string): boolean {
+  try {
+    return gridDistance(latLngToCell(zip.lat, zip.lon, CORRIDOR_RES), res7) <= NEAR_RING_STEPS;
+  } catch {
+    return false; // too far apart for H3 to count, or across a pentagon
+  }
+}
+
 /**
  * A test for "is this event in the zip's own area?" (see the top of this file).
  * Build it once per request; the neighbouring zips are read at most once.
@@ -151,10 +169,12 @@ export function inZipOwnArea(area: ZipArea): (event: PlacedEvent) => boolean {
   return (event) => {
     const res7 = event.h3_res7;
     if (typeof res7 !== 'string' || !bound.has(res7)) return false;
-    const said = addressZip(event.where_address);
-    if (said && findZipArea(said)) return said === area.zip;
-    // No zip we know in the address: the zip whose center is nearest the
-    // event's finest cell (the res-9 placement when it has one).
+    // The address's zip decides when it is a zip we know whose own 8-ring bound
+    // holds the event; a zip from far away (a typo) is ignored, not trusted.
+    const said = findZipArea(addressZip(event.where_address));
+    if (said && withinBound(said, res7)) return said.zip === area.zip;
+    // Otherwise: the zip whose center is nearest the event's finest cell (the
+    // res-9 placement when it has one).
     const res9 = event.h3_res9;
     const [lat, lon] = cellToLatLng(typeof res9 === 'string' && isValidCell(res9) ? res9 : res7);
     around ??= zipsAround(area);

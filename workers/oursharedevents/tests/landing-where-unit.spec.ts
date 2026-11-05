@@ -12,8 +12,10 @@
  *   localStorage write, a fetch, auto-run without "granted") and went red | date: 2026-10-10
  * @born-red landing-zip-own-area | method: inZipOwnArea run with each fault planted:
  *   the old 8-ring test (return true inside the bound), the address zip ignored, a
- *   0.001-degree neighbour search, an unanchored address-zip pattern; each turned
- *   a test red | date: 2026-11-05
+ *   0.001-degree neighbour search, an unanchored address-zip pattern, the address
+ *   zip trusted without its own bound, a zip read after any space ("Box 12345"),
+ *   the old three-whitespace-run pattern (400 padded calls took 12.9 s); each
+ *   turned a test red | date: 2026-11-05
  */
 import { describe, test, expect } from 'vitest';
 import { gridDistance, latLngToCell } from 'h3-js';
@@ -177,6 +179,11 @@ describe("a zip's own area (owner 2026-11-05)", () => {
     expect(inZipOwnArea(findZipArea('60655')!)(at(...MOUNT_GREENWOOD, 'Box 1, IL 00000'))).toBe(
       true
     );
+    // A typo'd zip from far away is ignored, not trusted: the event still shows
+    // for its nearest zip instead of for no zip at all.
+    const typo = at(...MOUNT_GREENWOOD, '3700 W 111th St, Chicago, CA 90012');
+    expect(inZipOwnArea(findZipArea('60655')!)(typo)).toBe(true);
+    expect(inZipOwnArea(findZipArea('90012')!)(typo)).toBe(false);
   });
 
   test('an event with no cell, or a cell that is not one, is in no zip', () => {
@@ -194,6 +201,20 @@ describe("a zip's own area (owner 2026-11-05)", () => {
     expect(addressZip('12345 S Pulaski Rd, Alsip, IL')).toBeNull();
     expect(addressZip('2427 Grove St')).toBeNull();
     expect(addressZip('Room 604531')).toBeNull();
+    expect(addressZip('PO Box 12345')).toBeNull();
+    expect(addressZip('Unit 60453')).toBeNull();
+    expect(addressZip('Hwy 10 Exit 12345')).toBeNull();
+    expect(addressZip('Oak Lawn, 60453')).toBe('60453');
+    expect(addressZip('Oak Lawn, IL 60453.')).toBe('60453');
+    expect(addressZip('Oak Lawn, IL 60453 USA')).toBe('60453');
+  });
+
+  test('a padded 500-character address costs no more than a short one', () => {
+    const pads = [' ', '\t', ' ', ' \t'].map((p) => ' 12345' + p.repeat(494 / p.length) + 'x');
+    const t0 = performance.now();
+    for (let i = 0; i < 100; i++) for (const a of pads) expect(addressZip(a)).toBeNull();
+    // 400 calls; the old pattern took 12-38 ms for ONE such call.
+    expect(performance.now() - t0).toBeLessThan(50);
     expect(addressZip(null)).toBeNull();
     expect(addressZip(60453)).toBeNull();
   });
