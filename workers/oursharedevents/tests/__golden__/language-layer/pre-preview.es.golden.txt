@@ -9,7 +9,7 @@
   <meta property="og:url" content="https://oursharedevents.com/events/evt_golden" />
   <meta property="og:type" content="event" />
   <meta property="og:site_name" content="OurSharedEvents" />
-  <meta property="og:locale" content="en_US" />
+  <meta property="og:locale" content="es_US" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="Parish Spring Fundraiser" />
   <meta name="twitter:description" content="Come support the cause." />
@@ -94,26 +94,26 @@
   </style>
 </head>
 <body>
-  <a href="#main" class="ose-skip">Skip to event content</a>
-  <nav aria-label="Site" data-testid="event-nav" style="display:flex;flex-wrap:wrap;gap:0 1.25rem;margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">&larr; All events</a><span aria-current="page" data-testid="event-nav-event" style="color:inherit;font-weight:700;display:inline-flex;align-items:center;min-height:44px">Event page</span><a href="/events/evt_golden/poster?kind=digital" data-testid="event-nav-poster" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">Poster</a></nav>
+  <a href="#main" class="ose-skip">Ir al contenido del evento</a>
+  <nav aria-label="Sitio" data-testid="event-nav" style="display:flex;flex-wrap:wrap;gap:0 1.25rem;margin:0 0 0.5rem"><a href="/events" data-testid="event-nav-events" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">&larr; Todos los eventos</a><span aria-current="page" data-testid="event-nav-event" style="color:inherit;font-weight:700;display:inline-flex;align-items:center;min-height:44px">Página del evento</span><a href="/events/evt_golden/poster?kind=digital" data-testid="event-nav-poster" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">Cartel</a></nav>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
     <header data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">Parish Spring Fundraiser</h1>
       
-      <p class="ose-meta" data-testid="event-when">Saturday, October 24, 2026 · 6:00 PM CDT</p>
-      <p class="ose-meta" data-testid="event-trust">Hosted by The Parish Council</p>
+      <p class="ose-meta" data-testid="event-when">sábado, 24 de octubre de 2026 · 6:00 p.m. CDT</p>
+      <p class="ose-meta" data-testid="event-trust">Organizado por The Parish Council</p>
     </header>
     
 
     <section class="ose-card ose-section" data-testid="event-what" aria-labelledby="what-heading">
-           <h2 id="what-heading">What</h2>
+           <h2 id="what-heading">Qué</h2>
            <p>Come support the cause.</p>
            <p><a class="ose-what-video" data-testid="event-what-video" href="https://example.org/video" target="_blank" rel="noopener noreferrer nofollow">▶ Ver el video</a></p>
            
          </section>
 
     <section class="ose-card ose-section" data-testid="event-where" aria-labelledby="where-heading">
-           <h2 id="where-heading">Where</h2>
+           <h2 id="where-heading">Dónde</h2>
            
            <p><strong>St. Barnabas Hall</strong></p>
            <p>123 Main St</p>
@@ -127,7 +127,7 @@
          </section>
 
     <section class="ose-card ose-section" data-testid="event-who" aria-labelledby="who-heading">
-           <h2 id="who-heading">Who</h2>
+           <h2 id="who-heading">Quién</h2>
            
            <p data-testid="event-who-host">The Parish Council</p>
            
@@ -143,7 +143,7 @@
 
     <section class="ose-choices" data-testid="event-choices" aria-label="¿Cómo quieres participar?">
     <div class="ose-choice">
-      <a class="ose-choice-btn ose-choice-primary" data-testid="event-rsvp" data-preview-inert="true" aria-disabled="true" aria-describedby="choice-note-first">Register</a>
+      <a class="ose-choice-btn ose-choice-primary" data-testid="event-rsvp" data-preview-inert="true" aria-disabled="true" aria-describedby="choice-note-first">Inscribirse</a>
       <p class="ose-choice-note" id="choice-note-first">Pide tu nombre y correo.</p>
     </div>
     <div class="ose-choice">
@@ -175,14 +175,14 @@
     </nav>
 
     <details class="ose-never-who" data-testid="anonymity-affordance" data-never-who="event">
-    <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Never who, only how many.</span> <span class="ose-never-who-trigger">How this works</span></summary>
+    <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Nunca quién, solo cuántos.</span> <span class="ose-never-who-trigger">Cómo funciona</span></summary>
     <div class="ose-never-who-body" data-testid="never-who-body">
         <p>
-      You're part of the group, anonymously. OurSharedEvents tracks when
-      groups gather &mdash; never who you are. Event hosts and sponsors see
-      corridors and venues, not people. The link you followed counted as a
-      single click; nothing about your device, location, or identity was
-      collected to display this page.
+      Formas parte del grupo, de forma anónima. OurSharedEvents registra cuándo
+      se reúnen los grupos &mdash; nunca quién eres. Quienes organizan y
+      patrocinan ven corredores y lugares, no personas. El enlace que seguiste
+      contó como un solo clic; no se recopiló nada sobre tu dispositivo, tu
+      ubicación ni tu identidad para mostrar esta página.
     </p>
     </div>
   </details>

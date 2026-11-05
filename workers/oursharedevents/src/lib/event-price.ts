@@ -17,6 +17,9 @@
  * per #7) while the enum keeps sliding-scale / pay-what-you-can events honest.
  */
 
+import { msg } from './i18n/catalog';
+import { DEFAULT_LANG, type Lang } from './i18n/languages';
+
 export type PriceModel = 'free' | 'fixed' | 'sliding' | 'donation' | 'varies';
 
 export const PRICE_MODELS: readonly PriceModel[] = [
@@ -58,7 +61,7 @@ export function resolvePriceModel(p: EventPriceInput): PriceModel | null {
  * nothing — no broken card). The returned string is PLAIN TEXT; callers that
  * embed it in HTML MUST escape it (`price_note` is organizer-authored).
  */
-export function formatEventPrice(p: EventPriceInput): string | null {
+export function formatEventPrice(p: EventPriceInput, lang: Lang = DEFAULT_LANG): string | null {
   const model = resolvePriceModel(p);
   if (model === null) return null;
   const note = (p.price_note || '').trim();
@@ -66,19 +69,19 @@ export function formatEventPrice(p: EventPriceInput): string | null {
 
   switch (model) {
     case 'free':
-      return withNote('Free');
+      return withNote(msg(lang, 'price.free'));
     case 'fixed':
-      if (p.price_cents === 0) return withNote('Free');
+      if (p.price_cents === 0) return withNote(msg(lang, 'price.free'));
       if (typeof p.price_cents === 'number' && p.price_cents > 0) {
         return withNote(formatCents(p.price_cents));
       }
       return null; // model 'fixed' with no amount is malformed -> no card
     case 'sliding':
-      return withNote('Sliding scale');
+      return withNote(msg(lang, 'price.sliding'));
     case 'donation':
-      return withNote('Pay what you can');
+      return withNote(msg(lang, 'price.donation'));
     case 'varies':
-      return withNote('Varies');
+      return withNote(msg(lang, 'price.varies'));
     default:
       return null;
   }

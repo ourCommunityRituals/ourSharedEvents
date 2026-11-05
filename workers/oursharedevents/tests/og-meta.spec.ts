@@ -8,7 +8,7 @@
  *   1. buildOgMeta helper is defined with the required tags
  *   2. All three render functions call buildOgMeta (pre_event, event, post_event)
  *   3. og:site_name = "OurSharedEvents" in the helper
- *   4. og:locale = "en_US" in the helper
+ *   4. og:locale in the helper, from the page language (en_US / es_US)
  *   5. twitter:card, twitter:title, twitter:description in the helper
  *   6. og:event:start_time and og:event:end_time are conditional on date fields
  *   7. Live phase (renderEventLiveHtml) now includes twitter:card (was missing)
@@ -44,10 +44,13 @@ describe('OSE-637 | MKTB-1 | OpenGraph meta tag coverage gate', () => {
     expect(src).toContain('OurSharedEvents');
   });
 
-  test('buildOgMeta emits og:locale = en_US', () => {
+  // og:locale follows the page language (OG_LOCALE in lib/i18n/languages.ts):
+  // en_US for English, es_US for Spanish. The rendered values are asserted by
+  // the language goldens and tests/event-page-spanish.spec.ts.
+  test('buildOgMeta emits og:locale from the page language', () => {
     const src = getPagesTs();
     expect(src).toContain('og:locale');
-    expect(src).toContain('en_US');
+    expect(src).toContain('OG_LOCALE[opts.lang ?? DEFAULT_LANG]');
   });
 
   test('buildOgMeta emits twitter:card', () => {
@@ -69,7 +72,9 @@ describe('OSE-637 | MKTB-1 | OpenGraph meta tag coverage gate', () => {
     const src = getPagesTs();
     expect(src).toContain('og:event:start_time');
     // Conditional: only when startTime is truthy
-    expect(src).toMatch(/opts\.startTime.*og:event:start_time|og:event:start_time.*opts\.startTime/s);
+    expect(src).toMatch(
+      /opts\.startTime.*og:event:start_time|og:event:start_time.*opts\.startTime/s
+    );
   });
 
   test('buildOgMeta conditionally emits og:event:end_time', () => {

@@ -7,6 +7,8 @@
  */
 
 import { applyCountFloor, floorNestedCounts } from './count-floor';
+import { fmt, msg } from './i18n/catalog';
+import { DEFAULT_LANG, type Lang } from './i18n/languages';
 
 /**
  * D1 (CCR 2026-09-14) — the public post-event recap is the LEAST-trusted surface
@@ -20,11 +22,18 @@ import { applyCountFloor, floorNestedCounts } from './count-floor';
  *
  * `null` is a count the caller has already withheld (a nested floor said no). It reads
  * as every other withheld count does, "Fewer than 5", so the page has one form for it.
+ * The words come from the page language ("Menos de 5" in Spanish); the floor
+ * is the same in every language.
  */
-export function statLine(raw: number | null, label: string, testid: string): string {
+export function statLine(
+  raw: number | null,
+  label: string,
+  testid: string,
+  lang: Lang = DEFAULT_LANG
+): string {
   const f = applyCountFloor(raw ?? 0);
   const inner = f.suppressed
-    ? `Fewer than ${f.floor} ${label}`
+    ? fmt(lang, 'stats.fewerThan', { floor: f.floor, label })
     : `<strong>${f.count}</strong> ${label}`;
   return `<p data-testid="${testid}">${inner}</p>`;
 }
@@ -45,8 +54,12 @@ export function clearsFloor(raw: number): boolean {
  * A line that told them apart (the old "held" line) said
  * walk-ins were 5 or more AND the rest was a small group, which OSE-1657 forbids.
  */
-export function walkInStatLine(checkinCount: number, walkInCount: number): string {
+export function walkInStatLine(
+  checkinCount: number,
+  walkInCount: number,
+  lang: Lang = DEFAULT_LANG
+): string {
   if (!clearsFloor(checkinCount)) return '';
   const [, walkInShown] = floorNestedCounts([checkinCount, walkInCount]);
-  return statLine(walkInShown, 'Walked in', 'stat-walk-ins');
+  return statLine(walkInShown, msg(lang, 'stats.walkedIn'), 'stat-walk-ins', lang);
 }

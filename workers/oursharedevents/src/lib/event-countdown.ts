@@ -26,6 +26,8 @@
 
 import { escapeHtml } from './html-escape';
 import { isValidIanaTimezone, PLATFORM_HOME_TZ, zonedDatePart } from './event-datetime';
+import { msg } from './i18n/catalog';
+import { DEFAULT_LANG, type Lang } from './i18n/languages';
 
 /** Beyond this many days the date line says enough; no countdown is shown. */
 export const COUNTDOWN_MAX_DAYS = 30;
@@ -59,8 +61,23 @@ function localDayNumber(instant: Date, zone: string): number {
   return dayNumber(zonedDatePart(instant.toISOString(), zone));
 }
 
-function daysText(days: number): string {
-  return days === 1 ? 'Starts tomorrow' : `Starts in ${days} days`;
+/** The words of the countdown in one language (catalog keys `countdown.*`). */
+function words(lang: Lang) {
+  return {
+    now: msg(lang, 'countdown.now'),
+    today: msg(lang, 'countdown.today'),
+    tomorrow: msg(lang, 'countdown.tomorrow'),
+    in: msg(lang, 'countdown.in'),
+    minute: msg(lang, 'countdown.minute'),
+    minutes: msg(lang, 'countdown.minutes'),
+    hour: msg(lang, 'countdown.hour'),
+    hours: msg(lang, 'countdown.hours'),
+    days: msg(lang, 'countdown.days'),
+  };
+}
+
+function daysText(days: number, w: ReturnType<typeof words>): string {
+  return days === 1 ? w.tomorrow : `${w.in}${days}${w.days}`;
 }
 
 function countdownTarget(row: CountdownRow): CountdownTarget | null {
@@ -77,32 +94,42 @@ function countdownTarget(row: CountdownRow): CountdownTarget | null {
   return { startsAt: null, startDay: day, zone };
 }
 
-function textFor(target: CountdownTarget, now: Date): string | null {
+function textFor(target: CountdownTarget, now: Date, lang: Lang): string | null {
+  const w = words(lang);
   if (target.startsAt) {
     const start = new Date(target.startsAt);
     const ms = start.getTime() - now.getTime();
     if (ms <= 0) return null;
     const minutes = Math.floor(ms / 60_000);
-    if (minutes < 1) return 'Starting now';
-    if (minutes < 60) return `Starts in ${minutes} minute${minutes === 1 ? '' : 's'}`;
+    if (minutes < 1) return w.now;
+    if (minutes < 60) return `${w.in}${minutes}${minutes === 1 ? w.minute : w.minutes}`;
     const hours = Math.floor(minutes / 60);
     const days = localDayNumber(start, target.zone) - localDayNumber(now, target.zone);
     // A 25-hour fall-back day can put 24h+ on the same calendar day: keep hours.
-    if (hours < 24 || days < 1) return `Starts in ${hours} hour${hours === 1 ? '' : 's'}`;
-    return days > COUNTDOWN_MAX_DAYS ? null : daysText(days);
+    if (hours < 24 || days < 1) return `${w.in}${hours}${hours === 1 ? w.hour : w.hours}`;
+    return days > COUNTDOWN_MAX_DAYS ? null : daysText(days, w);
   }
   const days = dayNumber(target.startDay as string) - localDayNumber(now, target.zone);
   if (days < 1 || days > COUNTDOWN_MAX_DAYS) return null;
-  return daysText(days);
+  return daysText(days, w);
 }
 
 /**
  * The countdown line for an event at `now`, or null when none is shown.
  * Pure: Intl + Date only.
  */
-export function countdownText(row: CountdownRow, now: Date = new Date()): string | null {
+export function countdownText(
+  row: CountdownRow,
+  now: Date = new Date(),
+  lang: Lang = DEFAULT_LANG
+): string | null {
   const target = countdownTarget(row);
-  return target ? textFor(target, now) : null;
+  return target ? textFor(target, now, lang) : null;
+}
+
+/** A string literal for the browser script: single-quoted, backslash and quote escaped. */
+function q(text: string): string {
+  return `'${text.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 }
 
 /**
@@ -111,8 +138,15 @@ export function countdownText(row: CountdownRow, now: Date = new Date()): string
  * above, except that at or after the start it says "Starting now" (timed) or
  * "Starts today" (date-only) instead of removing the line, and it never
  * reloads the page or switches it to the live view. ES5, no handlers in markup.
+ * Its words are the page language's, the same ones countdownText uses.
  */
-export const COUNTDOWN_CLIENT_SCRIPT = `(function(){var el=document.querySelector('[data-testid="event-countdown"]');if(!el)return;var at=el.getAttribute('data-starts-at'),day=el.getAttribute('data-start-day'),tz=el.getAttribute('data-tz')||'UTC',D=864e5,MAX=${COUNTDOWN_MAX_DAYS};function ymd(s){var p=s.split('-');return Date.UTC(+p[0],+p[1]-1,+p[2])/D;}function local(ms){var m={};new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(ms)).forEach(function(x){m[x.type]=x.value;});return ymd(m.year+'-'+m.month+'-'+m.day);}function days(n){return n===1?'Starts tomorrow':'Starts in '+n+' days';}function text(){var now=Date.now(),n;if(at){var start=Date.parse(at),ms=start-now;if(!(ms>=60000))return 'Starting now';var min=Math.floor(ms/60000);if(min<60)return 'Starts in '+min+(min===1?' minute':' minutes');var h=Math.floor(min/60);n=local(start)-local(now);if(h<24||n<1)return 'Starts in '+h+(h===1?' hour':' hours');return n>MAX?null:days(n);}if(!day)return null;n=ymd(day)-local(now);if(n<1)return 'Starts today';return n>MAX?null:days(n);}function tick(){try{var t=text();if(t&&el.textContent!==t)el.textContent=t;}catch(e){}}tick();setInterval(tick,60000);})();`;
+export function countdownClientScript(lang: Lang = DEFAULT_LANG): string {
+  const w = words(lang);
+  return `(function(){var el=document.querySelector('[data-testid="event-countdown"]');if(!el)return;var at=el.getAttribute('data-starts-at'),day=el.getAttribute('data-start-day'),tz=el.getAttribute('data-tz')||'UTC',D=864e5,MAX=${COUNTDOWN_MAX_DAYS};function ymd(s){var p=s.split('-');return Date.UTC(+p[0],+p[1]-1,+p[2])/D;}function local(ms){var m={};new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(ms)).forEach(function(x){m[x.type]=x.value;});return ymd(m.year+'-'+m.month+'-'+m.day);}function days(n){return n===1?${q(w.tomorrow)}:${q(w.in)}+n+${q(w.days)};}function text(){var now=Date.now(),n;if(at){var start=Date.parse(at),ms=start-now;if(!(ms>=60000))return ${q(w.now)};var min=Math.floor(ms/60000);if(min<60)return ${q(w.in)}+min+(min===1?${q(w.minute)}:${q(w.minutes)});var h=Math.floor(min/60);n=local(start)-local(now);if(h<24||n<1)return ${q(w.in)}+h+(h===1?${q(w.hour)}:${q(w.hours)});return n>MAX?null:days(n);}if(!day)return null;n=ymd(day)-local(now);if(n<1)return ${q(w.today)};return n>MAX?null:days(n);}function tick(){try{var t=text();if(t&&el.textContent!==t)el.textContent=t;}catch(e){}}tick();setInterval(tick,60000);})();`;
+}
+
+/** The English script, kept as a named constant for the specs that read it. */
+export const COUNTDOWN_CLIENT_SCRIPT = countdownClientScript(DEFAULT_LANG);
 
 /**
  * The countdown element and its script for the pre-event `event-when` line, or
@@ -123,16 +157,17 @@ export const COUNTDOWN_CLIENT_SCRIPT = `(function(){var el=document.querySelecto
 export function renderEventCountdown(
   row: CountdownRow,
   nonce: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  lang: Lang = DEFAULT_LANG
 ): { html: string; script: string } {
   const target = countdownTarget(row);
-  const text = target ? textFor(target, now) : null;
+  const text = target ? textFor(target, now, lang) : null;
   if (!target || !text) return { html: '', script: '' };
   const when = target.startsAt
     ? `data-starts-at="${escapeHtml(target.startsAt)}"`
     : `data-start-day="${escapeHtml(target.startDay)}"`;
   return {
     html: `<small class="sub-line" data-testid="event-countdown" aria-live="off" ${when} data-tz="${escapeHtml(target.zone)}">${escapeHtml(text)}</small>`,
-    script: `<script nonce="${escapeHtml(nonce)}">${COUNTDOWN_CLIENT_SCRIPT}</script>`,
+    script: `<script nonce="${escapeHtml(nonce)}">${countdownClientScript(lang)}</script>`,
   };
 }

@@ -25,6 +25,22 @@ export const LANGUAGE_NAMES: Record<Lang, string> = {
   es: 'Español',
 };
 
+/**
+ * The locale each language formats dates, times and zone names in. `es-US`, not
+ * plain `es`: it keeps the 12-hour clock and the zone abbreviation ("6:00 p.m.
+ * CDT") that the English page shows, for an event in a US zone.
+ */
+export const INTL_LOCALE: Record<Lang, string> = {
+  en: 'en-US',
+  es: 'es-US',
+};
+
+/** The `og:locale` value of a page in each language. */
+export const OG_LOCALE: Record<Lang, string> = {
+  en: 'en_US',
+  es: 'es_US',
+};
+
 export function isLang(value: unknown): value is Lang {
   return typeof value === 'string' && (LANGUAGES as readonly string[]).includes(value);
 }

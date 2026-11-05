@@ -10,7 +10,13 @@
  * so the whole zone/DST/round-trip matrix (OSE-1313 test plan) runs as fast unit
  * tests in the node pool. The same `Intl.formatToParts` technique already backs
  * the .ics `formatInTimezone` in handlers/calendar.ts; this generalizes it.
+ *
+ * The human-facing formatters take an optional page language (default English)
+ * and format in its locale (`INTL_LOCALE`), so a Spanish page reads "viernes,
+ * 1 de mayo de 2026" and "6:00 p.m. CDT".
  */
+
+import { DEFAULT_LANG, INTL_LOCALE, type Lang } from './i18n/languages';
 
 /**
  * The platform's home zone (the Blue Island / south-Chicagoland corridor). The
@@ -126,9 +132,13 @@ export function formatEventDateTime(utcIso: string | null | undefined, tz: strin
  * A zone's everyday name: "Central Time" for America/Chicago. '' when the value
  * is not a real zone, so a caller never prints a stored string as is.
  */
-export function zoneDisplayName(tz: string | null | undefined, at: Date = new Date()): string {
+export function zoneDisplayName(
+  tz: string | null | undefined,
+  at: Date = new Date(),
+  lang: Lang = DEFAULT_LANG
+): string {
   if (!isValidIanaTimezone(tz)) return '';
-  const part = new Intl.DateTimeFormat('en-US', {
+  const part = new Intl.DateTimeFormat(INTL_LOCALE[lang], {
     timeZone: tz as string,
     timeZoneName: 'longGeneric',
   })
@@ -137,12 +147,16 @@ export function zoneDisplayName(tz: string | null | undefined, at: Date = new Da
   return part?.value ?? '';
 }
 
-export function formatEventTime(utcIso: string | null | undefined, tz: string | null): string {
+export function formatEventTime(
+  utcIso: string | null | undefined,
+  tz: string | null,
+  lang: Lang = DEFAULT_LANG
+): string {
   if (!utcIso) return '';
   const d = new Date(utcIso);
   if (Number.isNaN(d.getTime())) return '';
   const zone = isValidIanaTimezone(tz) ? (tz as string) : 'UTC';
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(INTL_LOCALE[lang], {
     timeZone: zone,
     hour: 'numeric',
     minute: '2-digit',
@@ -165,12 +179,13 @@ export function formatEventTime(utcIso: string | null | undefined, tz: string | 
  */
 export function formatDateOnly(
   dateStr: string | null | undefined,
-  opts: Intl.DateTimeFormatOptions = {}
+  opts: Intl.DateTimeFormatOptions = {},
+  lang: Lang = DEFAULT_LANG
 ): string {
   if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return '';
   const d = new Date(`${dateStr}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat('en-US', { ...opts, timeZone: 'UTC' }).format(d);
+  return new Intl.DateTimeFormat(INTL_LOCALE[lang], { ...opts, timeZone: 'UTC' }).format(d);
 }
 
 /**
@@ -182,11 +197,15 @@ export function formatDateOnly(
  * timestamp ("2026-08-25 02:25:18"); read its leading calendar date. A value
  * with no leading date renders nothing: a page never prints a stored string as is.
  */
-export function formatHumanDate(iso: string | null | undefined): string {
+export function formatHumanDate(iso: string | null | undefined, lang: Lang = DEFAULT_LANG): string {
   if (!iso) return '';
   const day = /^\d{4}-\d{2}-\d{2}(?=$|[T ])/.exec(iso)?.[0];
   if (!day) return '';
-  return formatDateOnly(day, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  return formatDateOnly(
+    day,
+    { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' },
+    lang
+  );
 }
 
 /** The local calendar date ("YYYY-MM-DD") of a UTC instant in `tz`. */

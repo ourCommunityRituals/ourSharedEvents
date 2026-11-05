@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Parish Spring Fundraiser — recap</title>
+  <title>Parish Spring Fundraiser — resumen</title>
   <meta property="og:title" content="Parish Spring Fundraiser" />
   <meta property="og:description" content="Come support the cause." />
   <meta property="og:url" content="https://oursharedevents.com/events/evt_golden" />
   <meta property="og:type" content="event" />
   <meta property="og:site_name" content="OurSharedEvents" />
-  <meta property="og:locale" content="en_US" />
+  <meta property="og:locale" content="es_US" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="Parish Spring Fundraiser" />
   <meta name="twitter:description" content="Come support the cause." />
@@ -96,10 +96,10 @@
 </head>
 <body>
   <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
-    <span class="ose-phase-chip" data-testid="event-phase-chip">This one's a wrap</span>
+    <span class="ose-phase-chip" data-testid="event-phase-chip">Ya terminó</span>
     <h1 id="event-title-post" data-testid="event-title-post">Parish Spring Fundraiser</h1>
     
-    <p class="ose-when" data-testid="event-when-post">Happened Saturday, October 24, 2026 · 6:00 PM CDT &middot; St. Barnabas Hall</p>
+    <p class="ose-when" data-testid="event-when-post">Se realizó el sábado, 24 de octubre de 2026 · 6:00 p.m. CDT &middot; St. Barnabas Hall</p>
     
 
     <!-- OSE-1136 / OSE-657: the recap is the canonical 5W table in PAST TENSE and
@@ -112,21 +112,21 @@
     <div class="ose-recap-primary" data-testid="recap-primary" data-region="recap">
       <!-- WHAT — keeps the event-recap-card testid the recap-first invariant asserts. -->
       <section class="ose-card ose-section" data-testid="event-recap-card" aria-labelledby="recap-heading">
-        <h2 id="recap-heading">What this was</h2>
+        <h2 id="recap-heading">De qué se trató</h2>
         <p data-testid="recap-what">Come support the cause.</p>
         
         
       </section>
 
       <section class="ose-card ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
-             <h2 id="where-heading-post">Where</h2>
-             <img src="/api/v2/maps/venue-image?event=evt_golden" alt="Map of St. Barnabas Hall" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-post" />
+             <h2 id="where-heading-post">Dónde</h2>
+             <img src="/api/v2/maps/venue-image?event=evt_golden" alt="Mapa de St. Barnabas Hall" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-post" />
              <p><strong>St. Barnabas Hall</strong></p>
              <p>123 Main St</p>
            </section>
 
       <section class="ose-card ose-section" data-testid="event-who-post" aria-labelledby="who-heading-post">
-             <h2 id="who-heading-post">Who</h2>
+             <h2 id="who-heading-post">Quién</h2>
              
              <p data-testid="event-who-host-post">The Parish Council</p>
              
@@ -146,13 +146,13 @@
 <script nonce="goldennonce">(function(){var btn=document.querySelector('.ose-share-btn');if(!btn)return;var orig=btn.textContent;btn.addEventListener('click',function(){var u=btn.dataset.shareUrl,t=btn.dataset.shareTitle;if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){btn.textContent='Enlace copiado';setTimeout(function(){btn.textContent=orig;},2000);}).catch(function(){});}});})();</script>
   
 </div>
-      <h2 id="next-heading" class="ose-suggestions-heading" data-testid="next-event-fallback">The corridor keeps going</h2>
-        <p class="ose-suggestions-note">More gatherings are always coming together nearby.</p>
-        <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="/events">See what's coming up</a>
+      <h2 id="next-heading" class="ose-suggestions-heading" data-testid="next-event-fallback">El corredor sigue</h2>
+        <p class="ose-suggestions-note">Siempre hay más encuentros organizándose cerca.</p>
+        <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="/events">Ver lo que viene</a>
       <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
-        <h2 id="connect-heading" class="ose-suggestions-heading">Hear about the next one</h2>
-        <p class="ose-suggestions-note">One email when something's coming up. Nothing else.</p>
-        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="/events/evt_golden/updates">Keep me posted</a>
+        <h2 id="connect-heading" class="ose-suggestions-heading">Entérate del próximo</h2>
+        <p class="ose-suggestions-note">Un correo cuando se acerque algo. Nada más.</p>
+        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="/events/evt_golden/updates">Avísame</a>
       </section>
     </aside>
 
@@ -169,14 +169,14 @@
 <script nonce="goldennonce">(function(){var a=document.querySelector('[data-testid="event-back"]');if(!a||!document.referrer||window.history.length<2)return;a.addEventListener('click',function(e){e.preventDefault();window.history.back();});})();</script>
 
     <details class="ose-never-who" data-testid="anonymity-affordance" data-never-who="event">
-    <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Never who, only how many.</span> <span class="ose-never-who-trigger">How this works</span></summary>
+    <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Nunca quién, solo cuántos.</span> <span class="ose-never-who-trigger">Cómo funciona</span></summary>
     <div class="ose-never-who-body" data-testid="never-who-body">
         <p>
-      You're part of the group, anonymously. OurSharedEvents tracks when
-      groups gather &mdash; never who you are. Event hosts and sponsors see
-      corridors and venues, not people. The link you followed counted as a
-      single click; nothing about your device, location, or identity was
-      collected to display this page.
+      Formas parte del grupo, de forma anónima. OurSharedEvents registra cuándo
+      se reúnen los grupos &mdash; nunca quién eres. Quienes organizan y
+      patrocinan ven corredores y lugares, no personas. El enlace que seguiste
+      contó como un solo clic; no se recopiló nada sobre tu dispositivo, tu
+      ubicación ni tu identidad para mostrar esta página.
     </p>
     </div>
   </details>

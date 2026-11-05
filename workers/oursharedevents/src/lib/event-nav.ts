@@ -14,6 +14,8 @@
 // are linked from admin, never here.
 
 import { escapeHtml } from './html-escape.js';
+import { msg } from './i18n/catalog';
+import { DEFAULT_LANG, type Lang } from './i18n/languages';
 
 export type EventScreen = 'event' | 'poster' | 'display';
 
@@ -28,6 +30,8 @@ export interface EventNavOptions {
   live: boolean;
   /** data-testid of the "All events" link (kept stable per page phase). */
   allEventsTestId?: string;
+  /** The page language; the poster and TV pages are English and leave it unset. */
+  lang?: Lang;
 }
 
 /** Paths of an event's public screens, keyed by screen. */
@@ -47,11 +51,12 @@ export function renderEventNav(
   opts: EventNavOptions
 ): string {
   const paths = eventScreenPaths(eventId);
+  const lang = opts.lang ?? DEFAULT_LANG;
   const items: { screen: EventScreen; label: string }[] = [
-    { screen: 'event', label: 'Event page' },
+    { screen: 'event', label: msg(lang, 'nav.eventPage') },
   ];
   if (opts.live) {
-    items.push({ screen: 'poster', label: 'Poster' });
+    items.push({ screen: 'poster', label: msg(lang, 'nav.poster') });
   }
   const links = items
     .map(({ screen, label }) =>
@@ -60,8 +65,8 @@ export function renderEventNav(
         : `<a href="${escapeHtml(paths[screen])}" data-testid="event-nav-${screen}" style="${LINK_STYLE}">${label}</a>`
     )
     .join('');
-  const allEvents = `<a href="/events" data-testid="${escapeHtml(opts.allEventsTestId ?? 'event-nav-events')}" style="${LINK_STYLE}">&larr; All events</a>`;
+  const allEvents = `<a href="/events" data-testid="${escapeHtml(opts.allEventsTestId ?? 'event-nav-events')}" style="${LINK_STYLE}">${msg(lang, 'nav.allEvents')}</a>`;
   // With nothing else to go to, the nav is the single link it always was.
   const rest = opts.live ? links : '';
-  return `<nav aria-label="Site" data-testid="event-nav" style="display:flex;flex-wrap:wrap;gap:0 1.25rem;margin:0 0 0.5rem">${allEvents}${rest}</nav>`;
+  return `<nav aria-label="${msg(lang, 'nav.site')}" data-testid="event-nav" style="display:flex;flex-wrap:wrap;gap:0 1.25rem;margin:0 0 0.5rem">${allEvents}${rest}</nav>`;
 }

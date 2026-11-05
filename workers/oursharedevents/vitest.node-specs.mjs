@@ -159,6 +159,9 @@ export const NODE_SPECS = [
   // OSE-1760 — golden renders of the three phase pages in English and Spanish:
   // the language layer must change no byte. Pure over the exported renderers.
   'tests/language-layer-golden.spec.ts',
+  // A Spanish event page, every phase and every optional part, shows no English
+  // of ours (catalog values or common English words). Pure over the renderers.
+  'tests/event-page-spanish.spec.ts',
   // OSE-1760 — the Accept-Language resolver and the string catalog. Pure, no runtime.
   'tests/i18n-resolve-language.spec.ts',
   'tests/i18n-catalog.spec.ts',
