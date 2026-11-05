@@ -323,9 +323,12 @@ export async function checkSwap({
   const problems = [];
   const purges = [];
   const todayName = manifestName(manifest.date, runId, runAttempt);
-  // A node the manifest records but nodes.json no longer lists is never purged, so
-  // its manifest would stay listed for good: say so, and turn the run red.
-  const knownNodes = new Set(nodeList.map((n) => n.id));
+  // A node retired from nodes.json (`retired`, e.g. Beverly on 2026-11-05) is still
+  // purged from every manifest, with no checks, so an older manifest that records it
+  // can leave the index. A node that is neither active nor retired is never purged,
+  // so its manifest would stay listed for good: say so, and turn the run red.
+  const retired = Array.isArray(nodes) ? [] : nodes.retired || [];
+  const knownNodes = new Set([...nodeList.map((n) => n.id), ...retired]);
   const todayIds = new Set((manifest.items || []).map((i) => i.id));
   const unknownNodes = (name, m) => {
     const unknown = nodesOf(m).filter((node) => !knownNodes.has(node));
@@ -539,6 +542,12 @@ export async function checkSwap({
     } else {
       await purge(todayName, manifest, node.id);
     }
+  }
+  // Retired nodes: purge their rows from every manifest that records them.
+  for (const node of retired) {
+    for (const s of stale)
+      if (nodesOf(s.manifest).includes(node)) await purge(s.name, s.manifest, node);
+    if (nodesOf(manifest).includes(node)) await purge(todayName, manifest, node);
   }
 
   // 6. A manifest leaves the index once every node it records is purged.

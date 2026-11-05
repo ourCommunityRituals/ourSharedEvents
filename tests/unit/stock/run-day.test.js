@@ -668,6 +668,25 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
     expect(report.exitCode).toBe(1);
   });
 
+  test('a retired node (nodes.json `retired`) is purged from an old manifest, which then leaves the index', async () => {
+    const w = world({
+      index: [STALE_NAME],
+      objects: { [`stock/${STALE_NAME}`]: manifestOf('2026-11-03', 'y', ['a', 'beverly']) },
+    });
+    const report = await swap(w, { nodes: { retired: ['beverly'], nodes: NODES.nodes } });
+    allCalls.push(...w.calls);
+    expect(w.sqls().join('\n')).toContain("'y_evt_beverly'");
+    expect(report.problems.join('\n')).not.toMatch(/not in stock\/nodes\.json/);
+    expect(w.liveIndex()).not.toContain(STALE_NAME);
+    expect(report.exitCode).toBe(0);
+  });
+
+  test('the repo nodes.json retires Beverly', () => {
+    const repoNodes = require('../../../stock/nodes.json');
+    expect(repoNodes.retired).toContain('beverly');
+    expect(repoNodes.nodes.map((n) => n.id)).not.toContain('beverly');
+  });
+
   test('a purge that fails after the manifest could not be saved names the artifact as the only record', async () => {
     const w = world({
       index: [],
