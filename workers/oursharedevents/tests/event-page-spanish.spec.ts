@@ -99,10 +99,12 @@ const NAMES = [
 
 /** The text a reader sees or hears: element text plus alt / aria-label / title. */
 function readerText(html: string): string {
+  // Any case, any attributes, and a closing tag with trailing junk (`</script >`),
+  // the way a browser reads them; a comment may also close with `--!>`.
   const body = html
-    .replace(/<style[\s\S]*?<\/style>/g, ' ')
-    .replace(/<script[\s\S]*?<\/script>/g, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ');
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style[^>]*>/gi, ' ')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script[^>]*>/gi, ' ')
+    .replace(/<!--[\s\S]*?--!?>/g, ' ');
   const attrs = [...body.matchAll(/\s(?:alt|aria-label|title)="([^"]*)"/g)].map((m) => m[1]);
   const title = /<title>([\s\S]*?)<\/title>/.exec(html)?.[1] ?? '';
   let text = [title, body.replace(/<[^>]+>/g, ' '), ...attrs].join(' \n ');
