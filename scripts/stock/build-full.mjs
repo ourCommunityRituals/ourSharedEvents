@@ -80,6 +80,8 @@ export async function buildDay({
   try {
     // Sponsors first: one per business, into the root brand's pool.
     const anchorOf = new Map();
+    // per node, the regional (mid) and local sponsor ids in creation order
+    const tierOf = { mid: new Map(), local: new Map() };
     for (const business of businesses) {
       const tier = sponsorTier(business, regionals);
       const res = await client.post('/api/v2/admin/sponsors', {
@@ -94,6 +96,10 @@ export async function buildDay({
       });
       record('sponsor', res.id, business.node, { tier });
       if (tier === 'premium' && !anchorOf.has(business.node)) anchorOf.set(business.node, res.id);
+      if (tier !== 'premium') {
+        if (!tierOf[tier].has(business.node)) tierOf[tier].set(business.node, []);
+        tierOf[tier].get(business.node).push(res.id);
+      }
     }
 
     // Every node counts toward `short`, so the caller passes all of them.
@@ -106,6 +112,16 @@ export async function buildDay({
         .sort(bySectorThenStart)
         .slice(0, perNode);
       if (rows.length < perNode) manifest.short[node] = perNode - rows.length;
+      // The node's events by name: the order the mid and local sponsors go round in.
+      const byName = new Map(
+        [...rows]
+          .sort(
+            (a, b) =>
+              String(a.title).localeCompare(String(b.title)) ||
+              String(a.venue).localeCompare(String(b.venue))
+          )
+          .map((r, i) => [r, i])
+      );
 
       for (const row of rows) {
         const startDate = chicagoDate(row.starts_at);
@@ -176,16 +192,27 @@ export async function buildDay({
           manifest.warnings.push(`no anchor sponsor in ${node}: ${ev.id} has no placement`);
           continue;
         }
-        await client.put(`/api/v2/admin/sponsors/${anchor}`, { event_id: ev.id });
-        const listed = await client.get(`/api/v2/admin/sponsors?eventId=${ev.id}`);
-        const placement = (listed.items || []).find((i) => i.id === anchor && i.placement_id);
-        if (!placement) {
-          manifest.warnings.push(`placement id not found for ${ev.id}`);
-          continue;
+        // The anchor, then one regional and one local from this node, round-robin by
+        // event name so every sponsor shows. Geo matching is off on staging-full, so
+        // only an attached placement shows a sponsor.
+        const idx = byName.get(row);
+        const picks = [anchor];
+        for (const t of ['mid', 'local']) {
+          const pool = tierOf[t].get(node) || [];
+          if (pool.length) picks.push(pool[idx % pool.length]);
         }
-        record('placement', placement.placement_id, node);
-        // No admin API sets sponsor_accepted: the swap step applies it by SQL.
-        manifest.acceptSql.push(placement.placement_id);
+        for (const sponsorId of picks) {
+          await client.put(`/api/v2/admin/sponsors/${sponsorId}`, { event_id: ev.id });
+          const listed = await client.get(`/api/v2/admin/sponsors?eventId=${ev.id}`);
+          const placement = (listed.items || []).find((i) => i.id === sponsorId && i.placement_id);
+          if (!placement) {
+            manifest.warnings.push(`placement id not found for ${ev.id}`);
+            continue;
+          }
+          record('placement', placement.placement_id, node);
+          // No admin API sets sponsor_accepted: the swap step applies it by SQL.
+          manifest.acceptSql.push(placement.placement_id);
+        }
       }
     }
   } catch (err) {

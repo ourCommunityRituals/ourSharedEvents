@@ -460,16 +460,155 @@ describe('buildDay', () => {
     expect(sponsors.every((c) => !('lng' in c.body))).toBe(true);
   });
 
-  test('one placement per event, for the node anchor, and its id goes to acceptSql', async () => {
+  test('every event gets its node anchor, and every placement id goes to acceptSql', async () => {
     const site = fakeSite();
     const manifest = await buildDay(args(site, { accepted: rowsFor('beverly', 2, 1) }));
     const anchorId = manifest.items.find((i) => i.kind === 'sponsor').id;
     const attaches = callsTo(site, 'PUT', /^\/api\/v2\/admin\/sponsors\//);
-    expect(attaches).toHaveLength(3);
-    expect(attaches.every((c) => c.path.endsWith(`/${anchorId}`))).toBe(true);
+    expect(attaches.filter((c) => c.path.endsWith(`/${anchorId}`))).toHaveLength(3);
     const placements = manifest.items.filter((i) => i.kind === 'placement');
-    expect(placements).toHaveLength(3);
+    expect(placements).toHaveLength(9);
     expect(manifest.acceptSql).toEqual(placements.map((p) => p.id));
+  });
+
+  describe('regional and local sponsors', () => {
+    const biz = (name, node, anchor) => ({
+      name,
+      address: 'x',
+      node,
+      anchor,
+      lat: 41.7,
+      lng: -87.7,
+    });
+    const ev = (node, n) => ({ ...row(node, 'public', 1 + n, 0), title: `Title ${node} ${n}` });
+    const tierBiz = (node, mids, locals) => [
+      biz(`A ${node}`, node, true),
+      ...Array.from({ length: mids }, (_, i) => biz(`Mid ${node} ${i}`, node, false)),
+      ...Array.from({ length: locals }, (_, i) => biz(`Loc ${node} ${i}`, node, false)),
+    ];
+    // sponsor id -> its business name, plus every attach as { sponsor, event }
+    const index = (manifest, site) => {
+      const created = callsTo(site, 'POST', /^\/api\/v2\/admin\/sponsors$/);
+      const sponsors = manifest.items.filter((i) => i.kind === 'sponsor');
+      const nameOf = new Map(sponsors.map((sp, i) => [sp.id, created[i].body.name]));
+      const attaches = callsTo(site, 'PUT', /^\/api\/v2\/admin\/sponsors\//).map((c) => ({
+        sponsor: c.path.split('/').pop(),
+        event: c.body.event_id,
+      }));
+      return { nameOf, attaches, sponsors };
+    };
+
+    test('1 anchor, 2 regional, 3 local, 4 events: one placement per tier each, all used', async () => {
+      const site = fakeSite();
+      const manifest = await buildDay(
+        args(site, {
+          accepted: Array.from({ length: 4 }, (_, n) => ev('beverly', n)),
+          businesses: tierBiz('beverly', 2, 3),
+          regionals: { regionals: ['Mid beverly 0', 'Mid beverly 1'] },
+        })
+      );
+      const { attaches, sponsors } = index(manifest, site);
+      const tierOfId = new Map(sponsors.map((sp) => [sp.id, sp.tier]));
+      const events = manifest.items.filter((i) => i.kind === 'event').map((e) => e.id);
+      expect(events).toHaveLength(4);
+      for (const e of events) {
+        const tiers = attaches
+          .filter((a) => a.event === e)
+          .map((a) => tierOfId.get(a.sponsor))
+          .sort();
+        expect(tiers).toEqual(['local', 'mid', 'premium']);
+      }
+      const uses = (tier) => {
+        const m = new Map();
+        for (const a of attaches.filter((x) => tierOfId.get(x.sponsor) === tier)) {
+          m.set(a.sponsor, (m.get(a.sponsor) || 0) + 1);
+        }
+        return [...m.values()].sort();
+      };
+      // round-robin: every sponsor used, counts differ by at most one
+      expect(uses('mid')).toEqual([2, 2]);
+      expect(uses('local')).toEqual([1, 1, 2]);
+      expect(manifest.items.filter((i) => i.kind === 'placement')).toHaveLength(12);
+    });
+
+    test('the round-robin follows event name, not build order', async () => {
+      const site = fakeSite();
+      // build order (private first) differs from name order
+      const accepted = [
+        { ...row('beverly', 'public', 1), title: 'Zeta' },
+        { ...row('beverly', 'private', 2), title: 'Alpha' },
+      ];
+      const manifest = await buildDay(
+        args(site, {
+          accepted,
+          businesses: tierBiz('beverly', 2, 0),
+          regionals: { regionals: ['Mid beverly 0', 'Mid beverly 1'] },
+        })
+      );
+      const { nameOf, attaches } = index(manifest, site);
+      const ids = manifest.items.filter((x) => x.kind === 'event').map((x) => x.id);
+      const titles = callsTo(site, 'POST', /^\/api\/v2\/admin\/events$/).map((c) => c.body.title);
+      const evTitle = new Map(ids.map((id, i) => [id, titles[i]]));
+      const midOf = (title) =>
+        attaches
+          .filter((a) => evTitle.get(a.event) === title && /^Mid/.test(nameOf.get(a.sponsor)))
+          .map((a) => nameOf.get(a.sponsor));
+      expect(midOf('Alpha')).toEqual(['Mid beverly 0']);
+      expect(midOf('Zeta')).toEqual(['Mid beverly 1']);
+    });
+
+    test('a node with no regional or local sponsor gets the anchor only', async () => {
+      const site = fakeSite();
+      const manifest = await buildDay(
+        args(site, {
+          accepted: [ev('beverly', 0), ev('beverly', 1)],
+          businesses: tierBiz('beverly', 0, 0),
+        })
+      );
+      const { attaches, sponsors } = index(manifest, site);
+      expect(attaches).toHaveLength(2);
+      expect(attaches.every((a) => a.sponsor === sponsors[0].id)).toBe(true);
+      expect(manifest.items.filter((i) => i.kind === 'placement')).toHaveLength(2);
+    });
+
+    test('every new placement id is recorded with its node and is in acceptSql', async () => {
+      const site = fakeSite();
+      const manifest = await buildDay(
+        args(site, {
+          accepted: [ev('beverly', 0), ev('beverly', 1)],
+          businesses: tierBiz('beverly', 1, 1),
+          regionals: { regionals: ['Mid beverly 0'] },
+        })
+      );
+      const placements = manifest.items.filter((i) => i.kind === 'placement');
+      expect(placements).toHaveLength(6);
+      expect(placements.every((p) => p.node === 'beverly')).toBe(true);
+      expect(manifest.acceptSql).toEqual(placements.map((p) => p.id));
+      expect(new Set(manifest.acceptSql).size).toBe(6);
+    });
+
+    test('a sponsor is never attached to an event in another node', async () => {
+      const site = fakeSite();
+      const manifest = await buildDay(
+        args(site, {
+          accepted: [ev('beverly', 0), ev('beverly', 1), ev('bridgeport', 0)],
+          businesses: [...tierBiz('beverly', 1, 2), ...tierBiz('bridgeport', 1, 1)],
+          regionals: { regionals: ['Mid beverly 0', 'Mid bridgeport 0'] },
+          nodeIds: ['beverly', 'bridgeport'],
+        })
+      );
+      const { nameOf, attaches } = index(manifest, site);
+      const nodeOfEvent = new Map(
+        manifest.items.filter((i) => i.kind === 'event').map((e) => [e.id, e.node])
+      );
+      expect(attaches).toHaveLength(9);
+      for (const a of attaches) {
+        expect(
+          nameOf.get(a.sponsor).endsWith(` ${nodeOfEvent.get(a.event)}`) ||
+            nameOf.get(a.sponsor).includes(` ${nodeOfEvent.get(a.event)} `)
+        ).toBe(true);
+      }
+    });
   });
 
   test('a node with no anchor creates its events and warns about the missing placements', async () => {
@@ -488,7 +627,7 @@ describe('buildDay', () => {
     const site = fakeSite();
     const manifest = await buildDay(args(site, { accepted: rowsFor('beverly', 2, 0) }));
     const kinds = manifest.items.reduce((m, i) => ({ ...m, [i.kind]: (m[i.kind] || 0) + 1 }), {});
-    expect(kinds).toEqual({ sponsor: 3, event: 2, poster: 2, placement: 2 });
+    expect(kinds).toEqual({ sponsor: 3, event: 2, poster: 2, placement: 6 });
     expect(manifest.items.every((i) => i.id && i.node === 'beverly')).toBe(true);
     expect(manifest.date).toBe('2026-11-04');
   });

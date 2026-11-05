@@ -50,6 +50,49 @@ describe('listPosts', () => {
     expect((await listPosts({ token: 't', fetch })).map((p) => p.id)).toEqual(['2']);
   });
 
+  test('skips rows that are not valid posts and keeps the valid one', async () => {
+    const fetch = async () =>
+      res(200, {
+        data: [
+          null,
+          5,
+          { id: 7, media_type: 'IMAGE', media_url: 'https://x/7.jpg' },
+          { id: '2', media_type: 'IMAGE' },
+          { id: '3', media_type: 'IMAGE', media_url: 9 },
+          { id: '4', media_type: 'AUDIO', media_url: 'https://x/4.jpg' },
+          { id: '1', media_type: 'IMAGE', media_url: 'https://x/1.jpg' },
+        ],
+      });
+    const posts = await listPosts({ token: 't', fetch });
+    expect(posts).toEqual([{ id: '1', caption: '', hashtags: [], mediaUrl: 'https://x/1.jpg' }]);
+    expect(listPosts.warning).toBeNull();
+  });
+
+  test.each([['nope'], [null], [{ a: 1 }]])(
+    'a non-array data (%j) gives [] plus a fixed warning, without throwing',
+    async (data) => {
+      const fetch = async () => res(200, { data });
+      expect(await listPosts({ token: 'SECRET', fetch })).toEqual([]);
+      expect(listPosts.warning).toBe(
+        'Instagram returned an unexpected media list; continuing without art'
+      );
+      expect(listPosts.warning).not.toMatch(/SECRET|access_token|http/i);
+    }
+  );
+
+  test('a non-array data on page two keeps the posts gathered so far', async () => {
+    let n = 0;
+    const fetch = async () =>
+      ++n === 1
+        ? res(200, {
+            data: [media('1', 'IMAGE', 'a')],
+            paging: { next: 'https://graph.instagram.com/page2' },
+          })
+        : res(200, { data: 'nope' });
+    expect((await listPosts({ token: 't', fetch })).map((p) => p.id)).toEqual(['1']);
+    expect(listPosts.warning).toMatch(/unexpected media list/);
+  });
+
   test.each([400, 401])('a %i gives [] plus a warning without the token', async (status) => {
     const fetch = async () => res(status, {});
     expect(await listPosts({ token: 'SECRET', fetch })).toEqual([]);

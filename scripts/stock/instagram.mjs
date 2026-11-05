@@ -74,14 +74,23 @@ export async function listPosts({ token, fetch: fetchFn = globalThis.fetch } = {
       listPosts.warning = `Instagram media request failed (${name}); art may be incomplete.`;
       return posts;
     }
-    for (const p of (body && body.data) || []) {
-      if (!KEEP.has(p.media_type) || !p.media_url) continue;
-      posts.push({
-        id: String(p.id),
-        caption: p.caption || '',
-        hashtags: extractHashtags(p.caption),
-        mediaUrl: p.media_url,
-      });
+    if (!body || !Array.isArray(body.data)) {
+      listPosts.warning = 'Instagram returned an unexpected media list; continuing without art';
+      return posts;
+    }
+    for (const p of body.data) {
+      if (
+        !p ||
+        typeof p !== 'object' ||
+        typeof p.id !== 'string' ||
+        !KEEP.has(p.media_type) ||
+        typeof p.media_url !== 'string' ||
+        !p.media_url
+      ) {
+        continue;
+      }
+      const caption = typeof p.caption === 'string' ? p.caption : '';
+      posts.push({ id: p.id, caption, hashtags: extractHashtags(caption), mediaUrl: p.media_url });
     }
     const next = body && body.paging && body.paging.next;
     url = null;
