@@ -26,6 +26,12 @@ const stepsOf = (job) => (jobs[job] && jobs[job].steps) || [];
 const GIT_BASH = 'C:\\Program Files\\Git\\bin\\bash.exe';
 const BASH = process.platform === 'win32' ? (existsSync(GIT_BASH) ? GIT_BASH : null) : 'bash';
 
+// The gate scripts below run under bash. Missing bash is a red test, never a skip:
+// a gate that silently skips counts as absent.
+test('bash is available to run the workflow gate scripts', () => {
+  expect(BASH, `bash not found (looked for ${GIT_BASH} on Windows)`).not.toBeNull();
+});
+
 describe('triggers and posture', () => {
   test('runs on manual dispatch only: no schedule, no other trigger', () => {
     const on = wf.on ?? wf[true];
@@ -143,13 +149,11 @@ describe('access-gate', { timeout: 30_000 }, () => {
     }
   }
 
-  test
-    .skipIf(!BASH)
-    .each([
-      LOGIN,
-      '303 https://team.cloudflareaccess.com/',
-      '302 https://Team.CloudflareAccess.com/cdn-cgi/access/login',
-    ])(
+  test.each([
+    LOGIN,
+    '303 https://team.cloudflareaccess.com/',
+    '302 https://Team.CloudflareAccess.com/cdn-cgi/access/login',
+  ])(
     'passes when Access answers both / and /api/v2/events with its login redirect: %s',
     (answer) => {
       const r = runGate(answer);
@@ -162,37 +166,35 @@ describe('access-gate', { timeout: 30_000 }, () => {
     }
   );
 
-  test
-    .skipIf(!BASH)
-    .each([
-      '403 ',
-      '401 ',
-      '200 ',
-      '302 https://evil.example/login',
-      '302 https://cloudflareaccess.com/',
-      '302 https://.cloudflareaccess.com/',
-      '302 https://cloudflareaccess.com.evil.example/',
-      '302 https://x.cloudflareaccess.com@evil.example/',
-      '302 http://team.cloudflareaccess.com/',
-      '301 https://team.cloudflareaccess.com/',
-      '307 https://team.cloudflareaccess.com/',
-      '404 ',
-      '500 ',
-    ])('fails closed on anything but the login redirect: %s', (answer) => {
+  test.each([
+    '403 ',
+    '401 ',
+    '200 ',
+    '302 https://evil.example/login',
+    '302 https://cloudflareaccess.com/',
+    '302 https://.cloudflareaccess.com/',
+    '302 https://cloudflareaccess.com.evil.example/',
+    '302 https://x.cloudflareaccess.com@evil.example/',
+    '302 http://team.cloudflareaccess.com/',
+    '301 https://team.cloudflareaccess.com/',
+    '307 https://team.cloudflareaccess.com/',
+    '404 ',
+    '500 ',
+  ])('fails closed on anything but the login redirect: %s', (answer) => {
     const r = runGate(answer);
     expect(r.code).toBe(1);
     expect(r.out).toContain(NO_LOGIN);
     expect(r.out).toContain('Real-world data is not loaded onto an open host.');
   });
 
-  test.skipIf(!BASH)('a plain 403 fails: a deny does not prove Access holds the host', () => {
+  test('a plain 403 fails: a deny does not prove Access holds the host', () => {
     const r = runGate('403 ', '403 ');
     expect(r.code).toBe(1);
     expect(r.out).toContain('/ answered HTTP 403');
     expect(r.out).toContain(NO_LOGIN);
   });
 
-  test.skipIf(!BASH).each(['403 ', '200 ', '404 ', '302 https://evil.example/'])(
+  test.each(['403 ', '200 ', '404 ', '302 https://evil.example/'])(
     'fails when the page redirects to Access but the public API answers: %s',
     (api) => {
       const r = runGate(LOGIN, api);
@@ -202,7 +204,7 @@ describe('access-gate', { timeout: 30_000 }, () => {
     }
   );
 
-  test.skipIf(!BASH)('fails when the request itself fails', () => {
+  test('fails when the request itself fails', () => {
     const r = runGate('', '', 7);
     expect(r.code).toBe(1);
     expect(r.out).toContain('Real-world data is not loaded onto an open host.');
@@ -358,57 +360,48 @@ describe('deploy: the staging-full ids are pasted', { timeout: 30_000 }, () => {
       '',
     ].join('\n');
 
-  test.skipIf(!BASH)('fails while the ids are placeholders', () => {
+  test('fails while the ids are placeholders', () => {
     const r = runIdGate(fixture(UNPROVISIONED));
     expect(r.code).toBe(1);
     expect(r.out).toContain('paste each id over its OWNER_TO_FILL value');
     expect(r.out).toContain('OWNER_TO_FILL_DB_STAGING_FULL');
   });
 
-  test.skipIf(!BASH)(
-    'passes once the ids are pasted, comments naming the placeholders aside',
-    () => {
-      const pasted = fixture(PASTED);
-      expect(pasted).toContain('OWNER_TO_FILL'); // still named in comments
-      const r = runIdGate(pasted);
-      expect(r.code, r.out).toBe(0);
-    }
-  );
+  test('passes once the ids are pasted, comments naming the placeholders aside', () => {
+    const pasted = fixture(PASTED);
+    expect(pasted).toContain('OWNER_TO_FILL'); // still named in comments
+    const r = runIdGate(pasted);
+    expect(r.code, r.out).toBe(0);
+  });
 
-  test.skipIf(!BASH).each(['db', 'forms', 'kv'])('fails on one placeholder left: %s', (left) => {
+  test.each(['db', 'forms', 'kv'])('fails on one placeholder left: %s', (left) => {
     const r = runIdGate(fixture({ ...PASTED, [left]: UNPROVISIONED[left] }));
     expect(r.code).toBe(1);
     expect(r.out).toContain(UNPROVISIONED[left]);
   });
 
-  test.skipIf(!BASH)(
-    'reads only staging-full: a placeholder in another env is not its concern',
-    () => {
-      const other = `${fixture(PASTED)}[env.other]\nname = "x"\n[[env.other.kv_namespaces]]\nid = "OWNER_TO_FILL_OTHER"\n`;
-      expect(runIdGate(other).code).toBe(0);
-    }
-  );
+  test('reads only staging-full: a placeholder in another env is not its concern', () => {
+    const other = `${fixture(PASTED)}[env.other]\nname = "x"\n[[env.other.kv_namespaces]]\nid = "OWNER_TO_FILL_OTHER"\n`;
+    expect(runIdGate(other).code).toBe(0);
+  });
 
-  test.skipIf(!BASH)('fails when there is no staging-full block at all', () => {
+  test('fails when there is no staging-full block at all', () => {
     const r = runIdGate('name = "x"\n[env.staging]\nname = "y"\n');
     expect(r.code).toBe(1);
     expect(r.out).toContain('no [env.staging-full] block');
   });
 
-  test.skipIf(!BASH)(
-    'on the repo wrangler.toml, the verdict matches whether a placeholder remains',
-    async () => {
-      const { parseToml } = await import(
-        pathToFileURL(join(ROOT, 'scripts/prod-preflight.mjs')).href
-      );
-      const ids = parseToml(repoToml)
-        .filter((s) => /^env\.staging-full\.(d1_databases|kv_namespaces)$/.test(s.header))
-        .map((s) => s.values.database_id ?? s.values.id);
-      expect(ids).toHaveLength(3);
-      const left = ids.some((id) => id.startsWith('OWNER_TO_FILL_'));
-      expect(runIdGate(repoToml).code).toBe(left ? 1 : 0);
-    }
-  );
+  test('on the repo wrangler.toml, the verdict matches whether a placeholder remains', async () => {
+    const { parseToml } = await import(
+      pathToFileURL(join(ROOT, 'scripts/prod-preflight.mjs')).href
+    );
+    const ids = parseToml(repoToml)
+      .filter((s) => /^env\.staging-full\.(d1_databases|kv_namespaces)$/.test(s.header))
+      .map((s) => s.values.database_id ?? s.values.id);
+    expect(ids).toHaveLength(3);
+    const left = ids.some((id) => id.startsWith('OWNER_TO_FILL_'));
+    expect(runIdGate(repoToml).code).toBe(left ? 1 : 0);
+  });
 });
 
 describe('seed', () => {
