@@ -557,7 +557,9 @@ export async function checkSwap({
   if (fullyPurged(todayName, manifest)) live = live.filter((n) => n !== todayName);
   // Mark today's copy as swapped, so a later attempt's no-artifact recovery
   // (registeredCopy) never mistakes this completed load for an interrupted build.
-  if (live.includes(todayName)) {
+  // Only a load where at least one node passed is live; one where none passed
+  // stays recoverable so a later attempt can still purge it.
+  if (live.includes(todayName) && Object.values(results).some((r) => r && r.pass)) {
     try {
       await cloud.r2Put(
         `${MANIFEST_PREFIX}${todayName}`,
@@ -862,9 +864,11 @@ export async function registeredCopy({ cloud, env, log }) {
         throw new Error('no items list');
       }
       // A completed swap is a live load, not an interrupted build: never recover it.
+      // A completed load ends the search: an older attempt of the same run may hold
+      // the very rows that load now serves, so it is never recovered either.
       if (manifest.swapped === true) {
-        log(`the R2 copy ${name} is a completed load; it is not recovered`);
-        continue;
+        log(`the R2 copy ${name} is a completed load; recovery stops here`);
+        return null;
       }
       return { name, attempt: p.attempt, manifest };
     } catch (err) {

@@ -1702,6 +1702,31 @@ describe('check-swap re-run alone recovers the build’s registration', () => {
     expect(summary).toContain('No manifest was saved');
   });
 
+  test('recovery stops at a completed attempt and never falls back to an older one', async () => {
+    // attempt 2 swapped using attempt 1's artifact, but the index kept both names
+    const w = world({
+      index: [nameOf(1), nameOf(2)],
+      objects: {
+        [`stock/${nameOf(1)}`]: manifestOf(TODAY, 'same', ['a', 'b']),
+        [`stock/${nameOf(2)}`]: { ...manifestOf(TODAY, 'same', ['a', 'b']), swapped: true },
+      },
+    });
+    const { code, summary } = await runAlone(w, '3');
+    expect(code).toBe(1);
+    expect(w.sqls().join('\n')).not.toContain("'same_");
+    expect(summary).toContain('No manifest was saved');
+  });
+
+  test('a load where no node passed (and a purge failed) is not marked swapped, so it stays recoverable', async () => {
+    // every node fails, and node a's purge of today's rows fails, so the name stays indexed
+    const w = world({ index: [], fail: (c) => c.sql !== null && c.sql.includes("'t_evt_a'") });
+    const report = await swap(w, { checkNodes: checker([], w.order) });
+    allCalls.push(...w.calls);
+    const stored = w.r2.get(`stock/${TODAY_NAME}`);
+    expect(stored === undefined || JSON.parse(stored).swapped !== true).toBe(true);
+    expect(report.exitCode).toBe(1);
+  });
+
   test('a successful swap marks today’s copy swapped', async () => {
     const w = world({ index: [] });
     const report = await swap(w);
