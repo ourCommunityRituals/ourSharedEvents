@@ -218,7 +218,43 @@ describe('OSE-1801 | the router refuses an identity before anything is scoped by
       `/api/v2/admin/events/${A.activeEventId}/dashboard`
     );
     expect(res.status).toBe(401);
-    expect(((await res.json()) as { code: string }).code).toBe('INVALID_JWT');
+    const body = (await res.json()) as { code: string; reason: string; error: string };
+    expect(body.code).toBe('INVALID_JWT');
+    // The refusal names the check that failed, not "signature".
+    expect(body.reason).toBe('audience');
+    expect(body.error).not.toMatch(/signature/i);
+  });
+
+  // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-04
+  test('the pre-flight logs one ADMIN_JWT_REFUSED line with the reason', async () => {
+    armJwks();
+    const warn = vi.spyOn(console, 'warn');
+    const res = await callWith(
+      await signedToken(humanClaims({ aud: ['some-other-app'] })),
+      `/api/v2/admin/events/${A.activeEventId}/dashboard`
+    );
+    expect(res.status).toBe(401);
+    const lines = warn.mock.calls
+      .map((c) => String(c[0]))
+      .filter((l) => l.includes('"event":"ADMIN_JWT_REFUSED"'))
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    expect(lines).toEqual([expect.objectContaining({ reason: 'audience', where: 'preflight' })]);
+    // One reference in the log, the header and the body (PR #1107 review).
+    const ref = res.headers.get('X-Request-Id');
+    expect(ref).toBeTruthy();
+    expect(lines[0]!.request_id).toBe(ref);
+    expect(((await res.json()) as { requestId?: string }).requestId).toBe(ref);
+    warn.mockRestore();
+  });
+
+  test('a token with a non-numeric nbf is refused at the pre-flight (not_yet_valid)', async () => {
+    armJwks();
+    const res = await callWith(
+      await signedToken(humanClaims({ nbf: 'far future' })),
+      `/api/v2/admin/events/${A.activeEventId}/dashboard`
+    );
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as { reason: string }).reason).toBe('not_yet_valid');
   });
 
   // @born-red TL-085 | method: deliberate-fixture-break | date: 2026-11-04

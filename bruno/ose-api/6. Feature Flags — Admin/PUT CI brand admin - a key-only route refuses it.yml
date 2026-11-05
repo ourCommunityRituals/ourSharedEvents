@@ -30,9 +30,9 @@ runtime:
         // OSE-1800: the CI service actor (a brand admin of ci-brand, never platform).
         // Inert until the owner creates the Access service token and adds its secrets
         // (CF_ACCESS_CI_BRAND_CLIENT_ID / _SECRET) and CI_SERVICE_ACTORS on staging.
-        // Until then this request is skipped under a test named for what is missing.
+        // Until then this request is skipped and logs NOT RUN; it records no passing test.
         if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
-          test('SKIPPED until OSE-1800 setup: no CI brand service token configured', function () {});
+          console.log('NOT RUN (OSE-1800 setup pending): no CI brand service token configured');
           bru.runner.skipRequest();
         }
     - type: after-response

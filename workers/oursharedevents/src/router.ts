@@ -207,7 +207,13 @@ import {
 } from './handlers/pages';
 import { handleBriefingPage } from './handlers/briefing';
 import { handleDemoIndex, handleDemoSite } from './handlers/demo';
-import { requireAdmin, extractAdminActor, verifyCfAccessJWT, type AdminEnv } from './auth/admin';
+import {
+  requireAdmin,
+  extractAdminActor,
+  verifyCfAccessJWT,
+  logJwtRefused,
+  type AdminEnv,
+} from './auth/admin';
 import {
   guardAdminObjectScope,
   requirePlatformScope,
@@ -802,20 +808,36 @@ export async function route(
       { request, expectedAud: (env as AdminEnv).CF_ACCESS_AUD?.trim() || undefined }
     );
     if (!_jwtResult.valid) {
+      // OSE-1801: say which check refused the token (reason code only; the token
+      // and its claims are never logged or echoed).
+      const reason = _jwtResult.reason;
+      // One reference in the log line, the body and the header, so a refusal
+      // can be found in the logs from the response (runbook).
+      const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+      logJwtRefused(reason, 'preflight', env as AdminEnv, reqId);
       return new Response(
         JSON.stringify({
           ok: false,
           status: 401,
           code: 'INVALID_JWT',
-          error: 'Token signature verification failed',
+          reason,
+          error: 'The Access token was refused (' + reason + ')',
+          requestId: reqId,
         }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': reqId },
+        }
       );
     }
   }
 
   // ── Admin route rate limit pre-flight (OSE-576) ────────────────────────────
-  // Rate-limit admin-path requests by CF-Ray-ID before paying the auth cost.
+  // Rate-limit admin-path requests by client IP. It runs AFTER the JWT pre-flight
+  // above, which is deliberate: the pre-flight must see the same clock as the
+  // actor read at route() entry (OSE-1801). requireAdmin also refuses an identity
+  // that is not the pinned actor, so moving this block is safe but not needed.
+  // tests/e2e/0-architecture/admin-guard-order.invariant.spec.ts pins the order.
   // Applies to any /admin or /api/v2/admin/* request in production only — skip
   // in test/staging to avoid exhausting the limit during automated test suites.
   if (

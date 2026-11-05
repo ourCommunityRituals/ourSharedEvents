@@ -66,6 +66,9 @@ worker never executed.
    listed in `CI_SERVICE_ACTORS` (with the team domain and the audience pinned)
    is an actor of its own, `svc:<common_name>`, a brand admin of
    `CI_SERVICE_ACTOR_BRAND` only. Unlisted service tokens still fall through.
+   **Inert today:** staging pins no Access audience (`CF_ACCESS_AUD`, OSE-1377)
+   and the service token is not configured, so no token meets these conditions
+   and the Bruno CI-brand requests log `NOT RUN` (threat ledger TL-091).
 
 **Response ladder for `/admin`:**
 

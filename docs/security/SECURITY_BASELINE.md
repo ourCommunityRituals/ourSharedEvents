@@ -194,24 +194,40 @@ These are the non-negotiable security principles. Every change must preserve the
 4. **Signed Mutations** (SEC-IAC-05): HMAC-SHA256 tokens for public write actions
 
 **The admin actor (OSE-1801).** Who a request acts as (brand scope, audit name,
-`created_by`) is `extractAdminActor` in `src/auth/admin.ts`. These rules hold:
+`created_by`) is `extractAdminActor` in `src/auth/admin.ts`. These rules hold on
+`main` and staging. Production is pending: it runs an older build until the next
+production update the owner asks for.
 
-- It is resolved once per request: `route()` reads it at entry and the answer
-  stands for the whole request, so a token that expires during the request
-  cannot change it. A handler that builds a new `Request` hands it on with
-  `inheritAdminActor`.
+- It is resolved once per request: `route()` reads it at entry, before any
+  `await`, and the answer stands for the whole request, so a token that expires
+  during the request cannot change it. A handler that builds a new `Request`
+  hands it on with `inheritAdminActor`.
+- `requireAdmin` allows only that pinned actor. An identity that differs from
+  it (a token not valid yet at entry and valid later, or one that expires while
+  its signature is checked) is refused with 401 and logged as
+  `ADMIN_JWT_REFUSED {reason: 'actor_mismatch'}`. The order of the admin guards
+  in `route()` (actor read, pre-flight, rate limit, write guard, object scope)
+  is gated by `tests/e2e/0-architecture/admin-guard-order.invariant.spec.ts`.
 - A null actor allows nothing. A handler that branches on a null actor re-tests
-  `isDevOpenAdmin(env)`, which is true only with `DEV_OPEN_ADMIN=true` and
-  `WORKER_ENV` unset, `development` or `test`. Gate:
-  `tests/e2e/0-architecture/admin-null-actor.invariant.spec.ts`.
+  `isDevOpenAdmin(env)` in the same condition. That is true only with
+  `DEV_OPEN_ADMIN=true` and `WORKER_ENV` unset, `development` or `test`. Gate:
+  `tests/e2e/0-architecture/admin-null-actor.invariant.spec.ts`. **Open
+  (TL-092):** a worker deployed without `--env` carries `WORKER_ENV=development`
+  (`wrangler.toml [vars]`), so the bypass would open there if `DEV_OPEN_ADMIN`
+  were set on it, and no deploy step checks for it yet.
 - An Access email names the actor only where `requireAdmin` trusts the JWT (the
-  team domain is set, or local dev), and only if it is a plain address: no
-  colon, so no email can read as a `key:` or `svc:` actor. A token that is not
-  valid yet (`nbf` or `iat` ahead) is refused.
-- The router pre-flight pins the Access audience, so nothing is scoped for a
-  token minted for another Access app of the same team.
+  team domain is set, or `WORKER_ENV` is one of the local names above), and only
+  if it is a plain address: no colon, so no email can read as a `key:` or `svc:`
+  actor. A token that is not valid yet (`nbf` or `iat` ahead) is refused.
+- The router pre-flight pins the Access audience where `CF_ACCESS_AUD` is set,
+  so nothing is scoped for a token minted for another Access app of the same
+  team. **Open (TL-091):** staging pins no audience today (OSE-1377), so there
+  the pin does nothing and the CI service actor is inert.
+- Every refused Access token logs one `ADMIN_JWT_REFUSED {reason, where,
+worker_env, request_id}` line (`where` is `preflight` or `requireAdmin`). A
+  JWKS outage is logged as `malformed` today (TL-093).
 
-Threat ledger: TL-084 to TL-089.
+Threat ledger: TL-084 to TL-093.
 
 ### 5.3 Infrastructure Routes
 

@@ -114,8 +114,15 @@ function armFetch() {
   );
 }
 
+const refusals = (warn: { mock: { calls: unknown[][] } }) =>
+  warn.mock.calls
+    .map((c) => String(c[0]))
+    .filter((l) => l.includes('"event":"ADMIN_JWT_REFUSED"'))
+    .map((l) => JSON.parse(l) as Record<string, unknown>);
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   __resetJwksCacheForTests();
 });
 
@@ -281,6 +288,18 @@ describe('OSE-1800 | email and key actors are unchanged', () => {
     expect(await requireAdmin(r, stagingEnv(), 'rid')).toBeNull();
     expect(extractAdminActor(r, stagingEnv())).toBe('owner@example.com');
   });
+
+  // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-05 | a Stryker
+  // mutant: without serviceActorName's `if (payload.email) return null`,
+  // requireAdmin read this token as svc:<cn>, saw the pinned email actor, and
+  // refused it (401).
+  test('a token with an email AND a listed common_name is the email actor, and allowed', async () => {
+    armFetch();
+    const r = req(await signJwt(svcClaims({ email: 'owner@example.com' })));
+    const env = stagingEnv();
+    expect(extractAdminActor(r, env)).toBe('owner@example.com');
+    expect(await requireAdmin(r, env, 'rid')).toBeNull();
+  });
 });
 
 describe('OSE-1800 | mutation kills: each check in the svc path does work', () => {
@@ -309,12 +328,56 @@ describe('OSE-1800 | mutation kills: each check in the svc path does work', () =
     expect(extractAdminActor(r, env)).toBe('key:admin');
   });
 
+  // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-05 | with the
+  // final-401 log line removed, this test and the expired-during-check test had no
+  // refusal line; with it logged on every final 401, the no-token test had one.
+  test('a listed-nowhere service token with no working key: 401, logged as no_actor', async () => {
+    armFetch();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = req(await signJwt(svcClaims({ common_name: 'someone-else.access' })));
+    expect((await requireAdmin(r, stagingEnv(), 'rid'))?.status).toBe(401);
+    expect(refusals(warn)).toEqual([
+      expect.objectContaining({ reason: 'no_actor', where: 'requireAdmin', request_id: 'rid' }),
+    ]);
+  });
+
+  test('the same token with a working key is allowed and logs no refusal', async () => {
+    armFetch();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = req(await signJwt(svcClaims({ common_name: 'someone-else.access' })), {
+      headers: { Authorization: 'Bearer the-admin-key' },
+    });
+    const env = stagingEnv({ ALLOW_ADMIN_KEY_FALLBACK: 'true', ADMIN_KEY: 'the-admin-key' });
+    expect(await requireAdmin(r, env, 'rid')).toBeNull();
+    expect(refusals(warn)).toEqual([]);
+  });
+
+  test('no Access token and a wrong key: 401 with no JWT refusal line', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = new Request('https://stg.example/api/v2/admin/events', {
+      headers: { Authorization: 'Bearer wrong' },
+    });
+    const env = stagingEnv({ ALLOW_ADMIN_KEY_FALLBACK: 'true', ADMIN_KEY: 'the-admin-key' });
+    expect((await requireAdmin(r, env, 'rid'))?.status).toBe(401);
+    expect(refusals(warn)).toEqual([]);
+  });
+
+  // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-05 | with the
+  // not_allowlisted log line removed, the 403 carried no refusal line.
   test('an email token off the allowlist is refused on staging (403), svc settings or not', async () => {
     armFetch();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const r = req(
       await signJwt({ ...svcClaims(), common_name: undefined, email: 'stranger@example.com' })
     );
     expect((await requireAdmin(r, stagingEnv(), 'rid'))?.status).toBe(403);
+    expect(refusals(warn)).toEqual([
+      expect.objectContaining({
+        reason: 'not_allowlisted',
+        where: 'requireAdmin',
+        request_id: 'rid',
+      }),
+    ]);
   });
 
   test('the team domain and audience settings are read trimmed', async () => {
@@ -353,4 +416,62 @@ describe('OSE-1800 | mutation kills: each check in the svc path does work', () =
     const env = stagingEnv({ CI_SERVICE_ACTORS: `other.access, ${CN}` });
     expect(extractAdminActor(r, env)).toBe(`svc:${CN}`);
   });
+});
+
+describe('CCR 2026-11-04 | a service token is allowed only as the actor pinned at entry', () => {
+  // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-04
+  test('not valid yet at entry (no actor pinned), valid later: requireAdmin refuses it', async () => {
+    armFetch();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = req(await signJwt(svcClaims({ iat: nowSec() + 120 })));
+    const env = stagingEnv();
+    expect(extractAdminActor(r, env)).toBeNull(); // route() entry: not valid yet
+    const t0 = Date.now();
+    vi.spyOn(Date, 'now').mockImplementation(() => t0 + 120_000);
+    expect((await requireAdmin(r, env, 'rid'))?.status).toBe(401);
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('actor_mismatch'))).toBe(true);
+  });
+
+  // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-04
+  test('valid at entry, expired while the signature is checked: requireAdmin refuses it', async () => {
+    armFetch();
+    const r = req(await signJwt(svcClaims({ exp: nowSec() + 30 })));
+    const env = stagingEnv();
+    expect(extractAdminActor(r, env)).toBe(`svc:${CN}`); // route() entry pins the actor
+    // The clock moves during the RSA check (the await inside verifyCfAccessJWT),
+    // after its own expiry test ran. The token read after it is expired.
+    const t0 = Date.now();
+    const realVerify = crypto.subtle.verify.bind(crypto.subtle);
+    vi.spyOn(crypto.subtle, 'verify').mockImplementation(async (...args) => {
+      vi.spyOn(Date, 'now').mockImplementation(() => t0 + 120_000);
+      return realVerify(...(args as Parameters<typeof realVerify>));
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect((await requireAdmin(r, env, 'rid'))?.status).toBe(401);
+    expect(refusals(warn)).toEqual([
+      expect.objectContaining({ reason: 'no_actor', where: 'requireAdmin' }),
+    ]);
+  });
+
+  test('control: valid at entry, the listed service token is allowed', async () => {
+    armFetch();
+    const r = req(await signJwt(svcClaims()));
+    const env = stagingEnv();
+    expect(extractAdminActor(r, env)).toBe(`svc:${CN}`);
+    expect(await requireAdmin(r, env, 'rid')).toBeNull();
+  });
+});
+
+describe('CCR 2026-11-04 | an empty or null email claim on a service token is no email', () => {
+  // @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-04
+  test.each(['', null])(
+    'a service token whose email claim is %j is still the service actor',
+    async (email) => {
+      armFetch();
+      const r = req(await signJwt(svcClaims({ email })));
+      const env = stagingEnv();
+      expect(extractAdminActor(r, env)).toBe(`svc:${CN}`);
+      expect(await requireAdmin(r, env, 'rid')).toBeNull();
+    }
+  );
 });

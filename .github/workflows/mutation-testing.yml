@@ -42,6 +42,9 @@ on:
       - 'workers/oursharedevents/tests/pii-crypto.spec.ts'
       - 'workers/oursharedevents/tests/red-team/auth-jwks-verify.spec.ts'
       - 'workers/oursharedevents/tests/red-team/auth-guard-mutation.spec.ts'
+      - 'workers/oursharedevents/tests/red-team/auth-jwt-verify-memo.spec.ts'
+      - 'workers/oursharedevents/tests/red-team/ci-service-actor.spec.ts'
+      - 'workers/oursharedevents/tests/admin-actor-memo.spec.ts'
       - 'workers/oursharedevents/stryker.conf.mjs'
       # OSE-1695: the CI security rule that keeps secrets off branch pushes, its test and config.
       - 'scripts/ci/branch-push-secret-exposure.mjs'
@@ -54,6 +57,39 @@ on:
       - 'workers/oursharedevents/vitest.node-specs.mjs'
       - 'workers/oursharedevents/package.json'
       - 'workers/oursharedevents/package-lock.json'
+      - 'scripts/ci/mutation-file-floor.mjs'
+      - '.github/workflows/mutation-testing.yml'
+  # OSE-1801 (CCR 2026-11-04 S-2): the same filter on a push to main, so a PR
+  # that merged before its mutation run finished (or skipped it) is still
+  # measured on main, not only at 08:40 the next day.
+  push:
+    branches: [main]
+    paths:
+      - 'workers/oursharedevents/src/lib/count-floor.ts'
+      - 'workers/oursharedevents/src/lib/report-depth.ts'
+      - 'workers/oursharedevents/src/lib/pii.ts'
+      - 'workers/oursharedevents/src/auth/admin.ts'
+      - 'workers/oursharedevents/tests/count-floor.spec.ts'
+      - 'workers/oursharedevents/tests/report-depth.spec.ts'
+      - 'workers/oursharedevents/tests/pii-crypto.spec.ts'
+      - 'workers/oursharedevents/tests/red-team/auth-jwks-verify.spec.ts'
+      - 'workers/oursharedevents/tests/red-team/auth-guard-mutation.spec.ts'
+      - 'workers/oursharedevents/tests/red-team/auth-jwt-verify-memo.spec.ts'
+      - 'workers/oursharedevents/tests/red-team/ci-service-actor.spec.ts'
+      - 'workers/oursharedevents/tests/admin-actor-memo.spec.ts'
+      - 'workers/oursharedevents/stryker.conf.mjs'
+      # OSE-1695: the CI security rule that keeps secrets off branch pushes, its test and config.
+      - 'scripts/ci/branch-push-secret-exposure.mjs'
+      - 'scripts/ci/secret-echo-exposure.mjs'
+      - 'tests/unit/ci/no-secret-on-branch-push.test.js'
+      - 'tests/unit/ci/no-secret-echo.test.js'
+      - 'stryker.ci-scripts.conf.mjs'
+      - 'vitest.ci-scripts.config.mjs'
+      - 'workers/oursharedevents/vitest.node.config.mts'
+      - 'workers/oursharedevents/vitest.node-specs.mjs'
+      - 'workers/oursharedevents/package.json'
+      - 'workers/oursharedevents/package-lock.json'
+      - 'scripts/ci/mutation-file-floor.mjs'
       - '.github/workflows/mutation-testing.yml'
 
 permissions:
@@ -101,6 +137,11 @@ jobs:
 
       - name: Run Stryker mutation testing
         run: npm run test:mutation
+
+      - name: Per-file mutation floor
+        # The break threshold in stryker.conf.mjs is global; this fails when any one
+        # guard file is under its own floor (admin.ts: 100%). OSE-1801, CCR S-2.
+        run: node ../../scripts/ci/mutation-file-floor.mjs reports/mutation/mutation.json
 
       - name: Upload mutation report
         if: always()

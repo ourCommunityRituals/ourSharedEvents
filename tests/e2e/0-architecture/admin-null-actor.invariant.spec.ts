@@ -29,6 +29,20 @@
  *   handlers/events.ts failed check 3, a planted unclassified extractAdminActor
  *   call failed check 1, and a null branch in sponsors-draft.ts with its
  *   isDevOpenAdmin test removed failed check 2.
+ *   CCR 2026-11-04 (R1-03), comments stripped and every null-test form matched:
+ *   `actor == null` with the bypass named only in a comment, the event-create
+ *   ternary granting `mode: 'all'` without the bypass in its condition, an
+ *   `extractAdminActor(…) ?? 'key:admin'` default, and a `!actor ||` branch in
+ *   the write guard (cede-to-auth) each failed.
+ *   PR #1107 review (2026-11-05), the scan now runs to the end of the actor's
+ *   scope and the log exemption is the standalone line only: the write guard's
+ *   content-type rule flipped to `actor === null` (17 lines below the read),
+ *   `if (actor === null) return logNullAdminActorDenied(…), null;` in
+ *   requireKeyActor, and the event list's `deny` return removed each failed
+ *   check 2. A log-then-allow block in requireKeyActor and a log-then-grant
+ *   in draftScopeVerdict fail check 2; loosening isStandaloneDenyLog to "any
+ *   line that logs" fails its own regression table. Removing only the `return` from
+ *   the event list's deny branch fails check 2.
  */
 import { test, expect } from '@playwright/test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -143,12 +157,71 @@ interface Call {
   before: string;
 }
 
+/**
+ * Source with comments blanked (line count kept), so prose that mentions
+ * `actor === null` or `isDevOpenAdmin(env)` can neither satisfy nor trip a check
+ * (CCR 2026-11-04 R1-03). String contents are kept; a `//` inside a quoted URL
+ * is not a comment start because it follows a quote or colon.
+ */
+function stripComments(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1');
+}
+
+/** Every way the code can branch on `v` being null (or falsy), not only `=== null`. */
+function nullTests(v: string): RegExp {
+  // Escape every regex metacharacter (backslash included), not only `$`.
+  const id = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    [
+      `\\b${id}\\s*[!=]==?\\s*null\\b`,
+      `\\bnull\\s*[!=]==?\\s*${id}\\b`,
+      `\\b${id}\\s*[!=]==?\\s*undefined\\b`,
+      `!\\s*${id}\\b(?!\\s*[.[(])`,
+      `\\bif\\s*\\(\\s*${id}\\s*\\)`,
+      `\\b${id}\\s*(?:\\?\\?|\\|\\||&&|\\?\\.)`,
+      `\\b${id}\\s*\\?(?!\\?|\\.)`,
+    ].join('|')
+  );
+}
+
+/**
+ * The one null branch allowed without the bypass re-test: a standalone line that
+ * only logs the denial. No block, no return, no comma expression, no other
+ * statement, because logging does not prove denial (PR #1107 review).
+ */
+function isStandaloneDenyLog(statement: string, v: string): boolean {
+  const id = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `^\\s*if\\s*\\(\\s*${id}\\s*===?\\s*null\\s*\\)\\s*logNullAdminActorDenied\\([^;(){}]*\\);\\s*$`
+  ).test(statement);
+}
+
+/**
+ * The last line of the block the call sits in: the actor's scope (a `const` is
+ * block-scoped), so every later use of it is judged, not a fixed window (a
+ * 16-line window missed the write guard's content-type rule; PR #1107 review).
+ * Braces are counted on comment-stripped text; a brace inside a string can only
+ * move the end, and the planted-fault cases below would show a scan cut short.
+ */
+function scopeEnd(lines: string[], from: number): number {
+  let depth = 0;
+  for (let j = from; j < lines.length; j++) {
+    for (const ch of lines[j]!) {
+      if (ch === '{') depth++;
+      else if (ch === '}' && --depth < 0) return j;
+    }
+  }
+  return lines.length - 1;
+}
+
 function findCalls(): Call[] {
   const calls: Call[] = [];
   for (const path of walk(SRC)) {
     const rel = relative(SRC, path).replace(/\\/g, '/');
     if (rel === 'auth/admin.ts') continue; // the definition itself
-    const lines = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').split('\n');
+    const lines = stripComments(readFileSync(path, 'utf8').replace(/\r\n/g, '\n')).split('\n');
     lines.forEach((text, i) => {
       if (!/\bextractAdminActor\(/.test(text)) return;
       if (/^\s*(\*|\/\/)/.test(text)) return; // prose
@@ -156,7 +229,7 @@ function findCalls(): Call[] {
         key: `${rel}: ${text.trim()}`,
         file: rel,
         line: i + 1,
-        after: lines.slice(i, i + 16).join('\n'),
+        after: lines.slice(i, scopeEnd(lines, i) + 1).join('\n'),
         before: lines.slice(Math.max(0, i - 3), i + 1).join('\n'),
       });
     });
@@ -202,22 +275,122 @@ test.describe('Invariant 9: a null admin actor allows nothing (OSE-1801)', () =>
           if (!/resolveAdminBrandScopeAsync\(/.test(c.before + c.after))
             bad.push(`${where} is scope-denies-null but no resolveAdminBrandScopeAsync follows`);
           break;
-        case 'dev-open-retest':
-          if (
-            /actor\s*===\s*null|actor\s*!==\s*null|!actor\b/.test(c.after) &&
-            !/isDevOpenAdmin\(env\)/.test(c.after)
-          )
-            bad.push(`${where} branches on a null actor without re-testing isDevOpenAdmin(env)`);
+        case 'dev-open-retest': {
+          // Every branch on a null actor carries the isDevOpenAdmin test in the
+          // same condition (same line), or is the `if (v !== null) { … } else if
+          // (!isDevOpenAdmin(env))` shape, or only logs the denial. With no null
+          // branch at all, the actor must go straight to the scope resolver.
+          const v = /const\s+(\w+)\s*=\s*extractAdminActor\(/.exec(c.key)?.[1];
+          if (!v) {
+            bad.push(`${where} is dev-open-retest but does not bind the actor to a name`);
+            break;
+          }
+          const lines = c.after.split('\n').slice(1);
+          // A condition can span lines (a wrapped ternary); judge the whole
+          // statement, up to the line that ends it with `;` or opens a block.
+          const statementAt = (i: number): string => {
+            const end = lines.findIndex((l, j) => j >= i && /;|\{\s*$/.test(l));
+            return lines.slice(i, end === -1 ? lines.length : end + 1).join(' ');
+          };
+          // Once the actor has gone to the scope resolver and a `deny` scope has
+          // returned, a null actor is already refused; later uses of it only
+          // narrow what an allowed caller sees ("only mine"). Judge the branches
+          // before that point.
+          const resolvedAt = lines.findIndex((l) =>
+            new RegExp(`resolveAdminBrandScopeAsync\\(\\s*${v}\\b`).test(l)
+          );
+          const deniedAfter =
+            resolvedAt !== -1 &&
+            // The deny branch must start with `return` (on the same line or the
+            // next): an `if (… 'deny') {` that only builds a response does not
+            // stop the request (PR #1107 review).
+            /\.mode\s*===\s*'deny'\)\s*\{?\s*return\b/.test(
+              lines.slice(resolvedAt, resolvedAt + 3).join('\n')
+            );
+          const judged = deniedAfter ? lines.slice(0, resolvedAt) : lines;
+          const tests = judged.flatMap((l, i) => (nullTests(v).test(l) ? [statementAt(i)] : []));
+          if (tests.length === 0) {
+            if (!new RegExp(`resolveAdminBrandScopeAsync\\(\\s*${v}\\b`).test(c.after))
+              bad.push(`${where} never handles a null actor and does not scope it`);
+            break;
+          }
+          const elseRetest = /\belse\s+if\s*\(\s*!\s*isDevOpenAdmin\(env\)\s*\)/.test(c.after);
+          for (const l of tests) {
+            const ok =
+              /isDevOpenAdmin\(env\)/.test(l) ||
+              isStandaloneDenyLog(l, v) ||
+              (elseRetest &&
+                new RegExp(`\\b${v}\\s*!==?\\s*null\\b|\\bif\\s*\\(\\s*${v}\\s*\\)`).test(l));
+            if (!ok)
+              bad.push(
+                `${where} branches on a null actor without isDevOpenAdmin(env) in the same condition: ${l.trim()}`
+              );
+          }
           break;
+        }
         case 'attribution-only':
           if (!/^\s*(actor:|const createdBy =)/.test(c.key.split(': ').slice(1).join(': ')))
             bad.push(`${where} is attribution-only but is not a plain recorded value`);
           break;
-        case 'cede-to-auth':
+        case 'cede-to-auth': {
+          // A pre-auth guard may only defer a null actor to requireAdmin (return
+          // null = "not mine to decide") or act on a non-null one. It never opens
+          // anything for a null actor and never consults the dev bypass.
+          const v = /const\s+(\w+)\s*=\s*extractAdminActor\(/.exec(c.key)?.[1];
+          if (/isDevOpenAdmin\(|mode:\s*'all'/.test(c.after))
+            bad.push(`${where} is cede-to-auth but consults the dev bypass or grants all`);
+          if (!v) {
+            if (!/extractAdminActor\(request, env\)\s*===\s*null\)\s*return null;/.test(c.key))
+              bad.push(`${where} is cede-to-auth but is neither a bound actor nor a null-defer`);
+            break;
+          }
+          for (const l of c.after
+            .split('\n')
+            .slice(1)
+            .filter((x) => nullTests(v).test(x))) {
+            if (!new RegExp(`\\b${v}\\s*!==\\s*null\\s*&&`).test(l))
+              bad.push(`${where} is cede-to-auth but branches on a null actor: ${l.trim()}`);
+          }
+          break;
+        }
         case 'route-entry':
+          // The order around it is pinned by admin-guard-order.invariant.spec.ts.
+          if (
+            c.file !== 'router.ts' ||
+            !/const _actor = extractAdminActor\(request, env\);$/.test(c.key)
+          )
+            bad.push(`${where} is route-entry but is not route()'s first read`);
           break;
       }
     }
+    expect(bad, bad.join('\n')).toEqual([]);
+  });
+
+  test('OSE-1801 | the log exemption accepts only a standalone deny log, never a log plus a grant', () => {
+    // PR #1107 review: a branch that logs and then allows must not pass as "only logs".
+    const accepted = [
+      "  if (actor === null) logNullAdminActorDenied('key-actor-only', env);",
+      'if (actor == null) logNullAdminActorDenied("x", env, rid);',
+    ];
+    const refused = [
+      "if (actor === null) { logNullAdminActorDenied('key-actor-only', env); return null; }",
+      "if (actor === null) { logNullAdminActorDenied('x', env); return 'in-scope'; }",
+      "if (actor === null) return logNullAdminActorDenied('key-actor-only', env), null;",
+      "if (actor === null) logNullAdminActorDenied('x', env), allow();",
+      "if (actor === null) logNullAdminActorDenied('x', env); return null;",
+      'if (actor === null) {',
+      "if (other === null) logNullAdminActorDenied('x', env);",
+    ];
+    expect(accepted.filter((s) => !isStandaloneDenyLog(s, 'actor'))).toEqual([]);
+    expect(refused.filter((s) => isStandaloneDenyLog(s, 'actor'))).toEqual([]);
+  });
+
+  test('OSE-1801 | no call defaults or short-circuits the actor in place', () => {
+    // `extractAdminActor(…) ?? 'x'`, `|| 'x'`, `&& …` or `?.` turn a null actor
+    // into something else before any class check sees it (R1-03).
+    const bad = calls
+      .filter((c) => /extractAdminActor\([^)]*\)\s*(?:\?\?|\|\||&&|\?\.)/.test(c.key))
+      .map((c) => `${c.file}:${c.line}: ${c.key}`);
     expect(bad, bad.join('\n')).toEqual([]);
   });
 

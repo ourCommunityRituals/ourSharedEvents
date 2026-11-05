@@ -1812,6 +1812,8 @@ const ADMIN_ACTOR_ONCE: ThreatEntry[] = [
         'On main (before the fix) the three cross-brand tests were red: 201, 201, and 412 past the scope check; the fresh-token control was 403. Each piece was then reverted on its own, with the rest of the fix in place: the memo (the own-brand create went 403 instead of 201, and 3-4 memo unit tests went red); requireKeyActor allowing a null actor (four refusals red); the event-create, sponsor-create and promote deny lines (each turned its own four direct null-actor tests red, nothing else); inheritAdminActor in event repeat (the repeat-after-expiry test went 403). Every race test also asserts its precondition: under the moved clock a fresh Request with the same token reads as no actor. Green with the fix.',
     },
     last_run_green: '2026-11-04',
+    notes:
+      'Holds on main and staging; production pending (it runs an older build until the next production update the owner asks for). CCR 2026-11-04 re-run, .claude/outputs/CCR-ADMIN-IDENTITY-FIX-BATCH-2026-11-04.md. requireAdmin now also refuses any identity other than the one pinned at entry (TL-090), so this no longer rests on the router order alone.',
   },
 ];
 
@@ -1838,6 +1840,8 @@ const ADMIN_IDENTITY_HARDENING: ThreatEntry[] = [
         'With isPlainAdminEmail reduced to a string check, the router test went red (the key: email reached the dashboard) and 8 of the plain-address table cases in admin-actor-memo.spec.ts went red. Green with the check.',
     },
     last_run_green: '2026-11-04',
+    notes:
+      'Holds on main and staging; production pending (it runs an older build until the next production update the owner asks for). CCR 2026-11-04 re-run, .claude/outputs/CCR-ADMIN-IDENTITY-FIX-BATCH-2026-11-04.md.',
   },
   {
     id: 'TL-086',
@@ -1857,12 +1861,14 @@ const ADMIN_IDENTITY_HARDENING: ThreatEntry[] = [
         'With jwtIdentityTrustable returning true, both cases (staging, production) went red: the actor was the forged email. Green with the rule.',
     },
     last_run_green: '2026-11-04',
+    notes:
+      'Holds on main and staging; production pending (it runs an older build until the next production update the owner asks for). CCR 2026-11-04 re-run, .claude/outputs/CCR-ADMIN-IDENTITY-FIX-BATCH-2026-11-04.md.',
   },
   {
     id: 'TL-087',
     layer: 'permission_layer',
     threat:
-      'The router pre-flight verified the Access signature without the audience pin, so guardAdminObjectScope ran its brand-scope SQL for a token minted for another Access app of the same team before requireAdmin checked the audience (a 404/401 difference for an allowlisted member). Mitigated: the pre-flight passes expectedAud (CF_ACCESS_AUD), so such a token is refused before anything is scoped by it.',
+      'The router pre-flight verified the Access signature without the audience pin, so guardAdminObjectScope ran its brand-scope SQL for a token minted for another Access app of the same team before requireAdmin checked the audience (a 404/401 difference for an allowlisted member). Mitigated where CF_ACCESS_AUD is set: the pre-flight passes expectedAud, so such a token is refused before anything is scoped by it.',
     severity: 'MEDIUM',
     target_invariant: { number: 9, name: 'tenant_isolation' },
     mitigation_story: 'OSE-1801',
@@ -1876,12 +1882,14 @@ const ADMIN_IDENTITY_HARDENING: ThreatEntry[] = [
         "With the pre-flight back to { request } only, the test got requireAdmin's UNAUTH instead of the pre-flight INVALID_JWT. Green with the pin.",
     },
     last_run_green: '2026-11-04',
+    notes:
+      'Holds on main and staging; production pending (it runs an older build until the next production update the owner asks for). CCR 2026-11-04 re-run, .claude/outputs/CCR-ADMIN-IDENTITY-FIX-BATCH-2026-11-04.md. The pin applies only where CF_ACCESS_AUD is set; staging has none today, so there the pre-flight still accepts a token of any app in the team (TL-091).',
   },
   {
     id: 'TL-088',
     layer: 'permission_layer',
     threat:
-      'The DEV_OPEN_ADMIN bypass opened on any WORKER_ENV other than exactly "production" or "staging" ("Production", "prod", "preview", "staging " with a space, or unset on a worker deployed without --env), and it gates every admin route plus the four null-actor sites. Mitigated: isDevOpenAdmin is an allowlist (WORKER_ENV unset, "development" or "test").',
+      'The DEV_OPEN_ADMIN bypass opened on any WORKER_ENV other than exactly "production" or "staging" ("Production", "prod", "preview", "staging " with a space, or unset on a worker deployed without --env), and it gates every admin route plus the four null-actor sites. Mitigated for misspelt and non-local names: isDevOpenAdmin is an allowlist (WORKER_ENV unset, "development" or "test"). Not for a worker deployed without --env, which carries "development" (TL-092).',
     severity: 'HIGH',
     target_invariant: { number: 9, name: 'tenant_isolation' },
     mitigation_story: 'OSE-1801',
@@ -1895,6 +1903,8 @@ const ADMIN_IDENTITY_HARDENING: ThreatEntry[] = [
         'With isDevOpenAdmin back to the denylist, the "Production", "prod", "preview", "staging " and empty-string rows went red. Green with the allowlist.',
     },
     last_run_green: '2026-11-04',
+    notes:
+      'Holds on main and staging; production pending (it runs an older build until the next production update the owner asks for). CCR 2026-11-04 re-run, .claude/outputs/CCR-ADMIN-IDENTITY-FIX-BATCH-2026-11-04.md. A worker deployed without --env carries WORKER_ENV="development" (wrangler.toml [vars]), a local name, so with DEV_OPEN_ADMIN=true it still opens (TL-092).',
   },
   {
     id: 'TL-089',
@@ -1914,6 +1924,74 @@ const ADMIN_IDENTITY_HARDENING: ThreatEntry[] = [
         'With notYetValid returning false, the router test (signed, nbf a day ahead) answered 200 and the two memo-spec cases went red. Green with the check.',
     },
     last_run_green: '2026-11-04',
+    notes:
+      'Holds on main and staging; production pending (it runs an older build until the next production update the owner asks for). CCR 2026-11-04 re-run, .claude/outputs/CCR-ADMIN-IDENTITY-FIX-BATCH-2026-11-04.md.',
+  },
+  {
+    id: 'TL-090',
+    layer: 'permission_layer',
+    threat:
+      'requireAdmin re-read the identity instead of the actor pinned at entry: a token that was not valid yet when route() pinned the actor (null) and valid by the time requireAdmin ran was allowed with no actor, and a null actor is the DEV_OPEN_ADMIN path at the four null-actor sites. Only the router order (actor read, then the pre-flight that refuses such a token) kept it out, and nothing gated that order. Mitigated: requireAdmin allows only the pinned actor (401 actor_mismatch otherwise), and tests/e2e/0-architecture/admin-guard-order.invariant.spec.ts (repo root, T0 invariants) fails if route() reads the actor after an await or reorders the pre-flight, rate limit, write guard and object scope.',
+    severity: 'HIGH',
+    target_invariant: { number: 9, name: 'tenant_isolation' },
+    mitigation_story: 'OSE-1801',
+    test_ref:
+      'tests/admin-actor-memo.spec.ts > CCR 2026-11-04 | requireAdmin allows only the actor the request was pinned to > a token not valid yet at entry pins no actor; valid later, requireAdmin still refuses it',
+    status: 'tested',
+    red_birth: {
+      date: '2026-11-04',
+      method: 'deliberate-fixture-break',
+      notes:
+        'With the pinned check removed from requireAdmin, this test and the two service-token cases in red-team/ci-service-actor.spec.ts (not valid yet at entry; expired during the signature check) were allowed (null). The guard-order gate went red on three planted router faults: the actor read moved after an await, the rate limit moved above the pre-flight, the object scope moved above the write guard.',
+    },
+    last_run_green: '2026-11-05',
+    notes:
+      'Holds on main and staging; production pending (it runs an older build until the next production update the owner asks for). CCR 2026-11-04 re-run, .claude/outputs/CCR-ADMIN-IDENTITY-FIX-BATCH-2026-11-04.md.',
+  },
+  {
+    id: 'TL-091',
+    layer: 'permission_layer',
+    threat:
+      'Staging pins no Access audience (CF_ACCESS_AUD unset), so the router pre-flight and requireAdmin accept a signed token minted for any Access app of the same team, and the CI service actor (which requires the audience) is inert: the Bruno CI-brand requests log NOT RUN. An allowlisted member holding a token for another app is treated as an admin of this one on staging.',
+    severity: 'MEDIUM',
+    target_invariant: { number: 9, name: 'tenant_isolation' },
+    mitigation_story: 'OSE-1377',
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'Owner setting: pin the staging Access audience (OSE-1377), then configure the service actor so the CI-brand requests run. The code path is covered at the mock layer (TL-087); this entry is the staging gap.',
+  },
+  {
+    id: 'TL-092',
+    layer: 'permission_layer',
+    threat:
+      'The local-dev bypass treats "development" as local, and a worker deployed without --env carries WORKER_ENV="development" (wrangler.toml [vars]). DEV_OPEN_ADMIN=true there, set as a secret or a dashboard variable, opens every admin route and the four null-actor sites; a config test keeps it out of wrangler.toml, but no deploy step checks the deployed worker. Not live: CI deploys only with --env, and DEV_OPEN_ADMIN is set only in the gitignored .dev.vars.',
+    severity: 'HIGH',
+    target_invariant: { number: 9, name: 'tenant_isolation' },
+    mitigation_story: 'OSE-1801',
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'Owner decision (CCR 2026-11-04 human gate): may a deploy without --env ever open the bypass, or should it need WORKER_ENV=test? Then add DEV_OPEN_ADMIN to the deploy-time absent checks beside ADMIN_KEY / X_OCR_INTERNAL / ADMIN_TOKEN.',
+  },
+  {
+    id: 'TL-093',
+    layer: 'audit_layer',
+    threat:
+      'A JWKS outage throws inside verification and is logged as ADMIN_JWT_REFUSED reason "malformed", so an Access key-fetch failure reads as bad tokens in the logs. Fails closed (401); only the label is wrong.',
+    severity: 'LOW',
+    target_invariant: null,
+    mitigation_story: 'OSE-1801',
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'tests/red-team/auth-jwt-verify-memo.spec.ts "a JWKS fetch failure is evicted, not replayed" pins today\'s label with a comment; give the outage its own reason (e.g. jwks_unavailable) and update that expectation.',
   },
 ];
 
@@ -1944,7 +2022,7 @@ export const THREAT_LEDGER: ThreatEntry[] = [
 export const THREAT_LEDGER_META = {
   schema_version: '1.0.0',
   story: 'OSE-564',
-  last_updated: '2026-11-04',
+  last_updated: '2026-11-05',
   total_entries: THREAT_LEDGER.length,
   layers: 8,
 } as const;

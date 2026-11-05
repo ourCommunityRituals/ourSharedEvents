@@ -34,7 +34,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 21
+      "testCount": 30
     },
     {
       "file": "workers/oursharedevents/tests/admin-allowlist.spec.ts",
@@ -629,7 +629,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 8
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/codeql-src-findings.spec.ts",
@@ -2316,7 +2316,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): fetchMock",
-      "testCount": 18
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/red-team/auth-jwt-fuzz.property.spec.ts",
@@ -2337,7 +2337,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 30
+      "testCount": 38
     },
     {
       "file": "workers/oursharedevents/tests/red-team/form-security-deep.spec.ts",

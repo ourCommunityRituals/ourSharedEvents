@@ -82,176 +82,254 @@ const TENANT_TABLES = [
  * Adding an entry is a decision. Write the reason for the next reader, not for
  * the linter.
  */
-// Keys are `<dir>/<file>: <the statement's line, trimmed>` (OSE-1801: line
-// numbers moved with every edit above a query, and stale numbers silently kept
-// exempting whatever landed there; an orphan check below now fails a key that no
-// longer matches). They are dir-qualified (`handlers/…` / `lib/…`) because two
-// basenames collide across the scanned dirs (feature-flags.ts,
-// shared-report-export.ts), so a bare basename would be ambiguous (CCR-PR567
-// re-run item 4).
-const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'lib/corridor-latch.ts: FROM events':
+// Keys are `<dir>/<file> > <enclosing top-level declaration>: <the statement's
+// line, trimmed>`, with ` #2`, ` #3` … on a repeat of the same line in the same
+// declaration. Each key exempts exactly one read (OSE-1801, CCR 2026-11-04
+// R1-01): a key of file plus line text alone exempted every same-text read in the
+// file, so a new read pasted into another function rode an old exemption. Line
+// numbers are not used either: they moved with every edit above a query. They
+// are dir-qualified (`handlers/…` / `lib/…`) because two basenames collide
+// across the scanned dirs (feature-flags.ts, shared-report-export.ts).
+//
+// A list of [key, reason] pairs, not an object literal, so a repeated key is a
+// failing test below and not a silent overwrite (R1-07: the two corridor-latch
+// reads once shared one key and the second reason replaced the first).
+// @born-red TL-084 | method: deliberate-fixture-break | date: 2026-11-04 |
+//   verified: a same-text read in a new function of lib/draft-expiry.ts, a repeated
+//   key, an orphan key, an admin route written with startsWith, one with a /…/i
+//   regex, and a route pasted on the line above a guarded one each failed.
+const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
+  [
+    'lib/corridor-latch.ts > latchReadyCorridors: FROM events',
     'Nightly corridor latch (runCorridorLatch, index.ts scheduled — no request, ' +
-    'no caller brand). `INSERT OR IGNORE … SELECT brand_id, h3_res7 FROM events … ' +
-    'GROUP BY brand_id, h3_res7 HAVING COUNT(*) >= 5`: grouped BY brand, and each ' +
-    'latch row is written under its own brand_id, so no brand’s count ever mixes ' +
-    'with another’s. Same shape as the other brand-agnostic cron readers. The ' +
-    'request-path read (readLatchedCorridors) binds brand_id. (Line shifted ' +
-    '43→55 by the OSE-1508 settled-events rule, then 55→68 by the landing area ' +
-    'latch: its header comment, the LIST_MAX import and LANDING_AREA_LATCH_KEY ' +
-    'land above the SELECT.)',
-  'lib/corridor-latch.ts: FROM events':
+      'no caller brand). `INSERT OR IGNORE … SELECT brand_id, h3_res7 FROM events … ' +
+      'GROUP BY brand_id, h3_res7 HAVING COUNT(*) >= 5`: grouped BY brand, and each ' +
+      'latch row is written under its own brand_id, so no brand’s count ever mixes ' +
+      'with another’s. Same shape as the other brand-agnostic cron readers. The ' +
+      'request-path read (readLatchedCorridors) binds brand_id. (Line shifted ' +
+      '43→55 by the OSE-1508 settled-events rule, then 55→68 by the landing area ' +
+      'latch: its header comment, the LIST_MAX import and LANDING_AREA_LATCH_KEY ' +
+      'land above the SELECT.)',
+  ],
+
+  [
+    'lib/corridor-latch.ts > latchLandingAreas: FROM events',
     'Nightly landing area latch (latchLandingAreas, called by the same ' +
-    'runCorridorLatch — no request, no caller brand). `INSERT OR IGNORE … SELECT ' +
-    'brand_id, ?, ? FROM events … GROUP BY brand_id HAVING COUNT(*) >= 10`: one ' +
-    'count per brand, written as one row under that brand’s own brand_id, so no ' +
-    'brand’s events count toward another’s landing page. Nothing is returned to ' +
-    'a caller. The request-path read (readLatches) binds brand_id.',
-  "handlers/events.ts: 'SELECT id, lat, lon FROM events WHERE lat IS NOT NULL AND lon IS NOT NULL AND h3_res9 IS NULL'":
+      'runCorridorLatch — no request, no caller brand). `INSERT OR IGNORE … SELECT ' +
+      'brand_id, ?, ? FROM events … GROUP BY brand_id HAVING COUNT(*) >= 10`: one ' +
+      'count per brand, written as one row under that brand’s own brand_id, so no ' +
+      'brand’s events count toward another’s landing page. Nothing is returned to ' +
+      'a caller. The request-path read (readLatches) binds brand_id.',
+  ],
+
+  [
+    "handlers/events.ts > handleBackfillH3Cells: 'SELECT id, lat, lon FROM events WHERE lat IS NOT NULL AND lon IS NOT NULL AND h3_res9 IS NULL'",
     'One-shot cell backfill (handleBackfillH3Cells, OSE-489). Cross-brand BY ' +
-    'DESIGN and platform-only: the router puts `_platformOnly` in front of it, so ' +
-    'no brand admin reaches it. It gives every event that has coordinates and no ' +
-    'cell its cell, writes each row back by id, and answers with counts and, for ' +
-    'a row that failed, that row’s id and the error. Until ' +
-    'OSE-1615 this read had no entry here: it passed because the `WHERE id = ?` ' +
-    'of the UPDATE below it fell inside the 400-character window this scan ' +
-    'reads. That UPDATE now also clears the spine keys and sits further down, ' +
-    'so the read is named for what it is.',
-  'lib/spine-keys-store.ts: FROM events e LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id':
+      'DESIGN and platform-only: the router puts `_platformOnly` in front of it, so ' +
+      'no brand admin reaches it. It gives every event that has coordinates and no ' +
+      'cell its cell, writes each row back by id, and answers with counts and, for ' +
+      'a row that failed, that row’s id and the error. Until ' +
+      'OSE-1615 this read had no entry here: it passed because the `WHERE id = ?` ' +
+      'of the UPDATE below it fell inside the 400-character window this scan ' +
+      'reads. That UPDATE now also clears the spine keys and sits further down, ' +
+      'so the read is named for what it is.',
+  ],
+
+  [
+    'lib/spine-keys-store.ts > runSpineKeyCheck: FROM events e LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id',
     'Nightly spine key check (runSpineKeyCheck, OSE-1615). Cross-brand BY ' +
-    'DESIGN: it reads events of every brand, a page at a time in id order ' +
-    '(`WHERE e.id > ?1`, at most 5,000 a run), computes venue_canonical_id / ' +
-    'event_correlation_id again and writes them where they differ, each row by ' +
-    'its id and at most 200 a run. It reads the columns a key is computed from ' +
-    'and the stored keys. It returns counts to the scheduler and logs counts, ' +
-    'why it stopped and the first error’s class and code, never its message or a row’s id or text ' +
-    '(tested: "a batch of writes that fails" and "a database that cannot be read" in spine-keys-store.spec.ts, each with an error whose message holds row data). Its ' +
-    'one caller is the scheduled handler, so it is not reachable from any ' +
-    "request path. (The store's other read, in refreshSpineKeys, is by a held " +
-    'id and needs no entry.)',
-  "handlers/events.ts: ' FROM events e LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id' +":
+      'DESIGN: it reads events of every brand, a page at a time in id order ' +
+      '(`WHERE e.id > ?1`, at most 5,000 a run), computes venue_canonical_id / ' +
+      'event_correlation_id again and writes them where they differ, each row by ' +
+      'its id and at most 200 a run. It reads the columns a key is computed from ' +
+      'and the stored keys. It returns counts to the scheduler and logs counts, ' +
+      'why it stopped and the first error’s class and code, never its message or a row’s id or text ' +
+      '(tested: "a batch of writes that fails" and "a database that cannot be read" in spine-keys-store.spec.ts, each with an error whose message holds row data). Its ' +
+      'one caller is the scheduled handler, so it is not reachable from any ' +
+      "request path. (The store's other read, in refreshSpineKeys, is by a held " +
+      'id and needs no entry.)',
+  ],
+
+  [
+    "handlers/events.ts > handleAdminListEvents: ' FROM events e LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id' +",
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
-    'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
-    '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
-    'the 2026-09-16 lifecycle filters — ?status= / ?mine= parsing and the ' +
-    'created_by predicate sit above the SELECT; 301→335 by OSE-1344, whose ' +
-    'resolveEventType helper + import land above it; 335→336 by OSE-1313, whose ' +
-    'event-datetime import (isValidIanaTimezone/zonedDateTimeToUtcIso) lands above ' +
-    'it; 336→370 by the "Soonest first" slice — the admin-events-upcoming import ' +
-    'and the ?sort= / cursor parsing sit above the SELECT; 370→371 by OSE-869, whose ' +
-    'one-line event-settings import lands above it; 371→373 by the publish grace ' +
-    'window, whose publish-grace import and EventsEnv field land above it; ' +
-    '373→383 by OSE-1560, whose map-default / event-settings imports land above it, ' +
-    'then →394 by OSE-1522, whose sponsor-titles import and the `sponsor_titles` block in the ' +
-    'public list handler land above it; 394→399 by OSE-1644, whose ' +
-    'logCoreValuesRefused import widens the core-values import above it; 399→400 ' +
-    'by OSE-1500, whose one-line content-type import lands above it; 400→401 by ' +
-    'OSE-1684, whose one-line event-code import lands above it; 401→403 by the ' +
-    'event place lookup, whose event-place and maps imports land above it; →434 ' +
-    'by OSE-1615, whose spine-keys-store import and refusal helper land above it. Scope ' +
-    'enforcement unchanged; ' +
-    'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
-  'handlers/portfolio-rollup.ts: const rs = await env.DB.prepare(`SELECT id FROM events${where}`)':
+      'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears. ' +
+      '(Line shifted 255→256 by the OSE-1319 what-url-types import; 256→301 by ' +
+      'the 2026-09-16 lifecycle filters — ?status= / ?mine= parsing and the ' +
+      'created_by predicate sit above the SELECT; 301→335 by OSE-1344, whose ' +
+      'resolveEventType helper + import land above it; 335→336 by OSE-1313, whose ' +
+      'event-datetime import (isValidIanaTimezone/zonedDateTimeToUtcIso) lands above ' +
+      'it; 336→370 by the "Soonest first" slice — the admin-events-upcoming import ' +
+      'and the ?sort= / cursor parsing sit above the SELECT; 370→371 by OSE-869, whose ' +
+      'one-line event-settings import lands above it; 371→373 by the publish grace ' +
+      'window, whose publish-grace import and EventsEnv field land above it; ' +
+      '373→383 by OSE-1560, whose map-default / event-settings imports land above it, ' +
+      'then →394 by OSE-1522, whose sponsor-titles import and the `sponsor_titles` block in the ' +
+      'public list handler land above it; 394→399 by OSE-1644, whose ' +
+      'logCoreValuesRefused import widens the core-values import above it; 399→400 ' +
+      'by OSE-1500, whose one-line content-type import lands above it; 400→401 by ' +
+      'OSE-1684, whose one-line event-code import lands above it; 401→403 by the ' +
+      'event place lookup, whose event-place and maps imports land above it; →434 ' +
+      'by OSE-1615, whose spine-keys-store import and refusal helper land above it. Scope ' +
+      'enforcement unchanged; ' +
+      'behaviourally gated by tests/admin-events-scope.invariant.spec.ts.)',
+  ],
+
+  [
+    'handlers/portfolio-rollup.ts > handlePortfolioRollup: const rs = await env.DB.prepare(`SELECT id FROM events${where}`)',
     'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +
-    'WHERE clause is interpolated, so the bind is invisible to a static scan. ' +
-    '(Line shifted 148→185 by the 2026-10-01 architecture review, whose ' +
-    'IN_LIST_CHUNK + perEventCounts helper lands above the handler.)',
-  'lib/event-place.ts: `SELECT id, where_address, location FROM events':
+      'WHERE clause is interpolated, so the bind is invisible to a static scan. ' +
+      '(Line shifted 148→185 by the 2026-10-01 architecture review, whose ' +
+      'IN_LIST_CHUNK + perEventCounts helper lands above the handler.)',
+  ],
+
+  [
+    'lib/event-place.ts > runEventPlaceBackfill: `SELECT id, where_address, location FROM events',
     'Nightly place lookup (runEventPlaceBackfill, owner report 2026-10-11; ' +
-    '163→164 by the OSE-1615 spine-keys-store import). ' +
-    'Cross-brand BY DESIGN: it fills in the map place of events saved before ' +
-    'saves looked places up, for every brand, at most 25 a night. It writes each ' +
-    'row back by id and returns nothing to any caller; not reachable from any ' +
-    'request path.',
-  'handlers/bigquery.ts: FROM events e':
+      '163→164 by the OSE-1615 spine-keys-store import). ' +
+      'Cross-brand BY DESIGN: it fills in the map place of events saved before ' +
+      'saves looked places up, for every brand, at most 25 a night. It writes each ' +
+      'row back by id and returns nothing to any caller; not reachable from any ' +
+      'request path.',
+  ],
+
+  [
+    'handlers/bigquery.ts > runBigQueryBackup: FROM events e',
     'OER emission cron, second read: the 24h recent-events backup joined to the ' +
-    'event-type registry for required tags. Cross-brand BY DESIGN, same rationale ' +
-    'as bigquery.ts:83; not reachable from any request path. (Re-keyed 268→280 by OSE-616: the h3_res7 column + corridor guard sit above it; 280→296 by the backup-scope fix, whose BACKUP_LISTED_EVENTS_SQL + publish-grace import land above it; 296→311 by the listed check in the on-demand route, which lands above it.) Previously passed the ' +
-    'gate via its LEFT JOIN ON-clause (`etr.id = e.event_type_id`), which the ' +
-    'CCR-PR567 M3 keyedById tightening no longer accepts as a scope.',
-  'handlers/portfolio-rollup.ts: (ph) => `SELECT event_id, COUNT(*) AS cnt FROM sponsor_placement':
+      'event-type registry for required tags. Cross-brand BY DESIGN, same rationale ' +
+      'as bigquery.ts:83; not reachable from any request path. (Re-keyed 268→280 by OSE-616: the h3_res7 column + corridor guard sit above it; 280→296 by the backup-scope fix, whose BACKUP_LISTED_EVENTS_SQL + publish-grace import land above it; 296→311 by the listed check in the on-demand route, which lands above it.) Previously passed the ' +
+      'gate via its LEFT JOIN ON-clause (`etr.id = e.event_type_id`), which the ' +
+      'CCR-PR567 M3 keyedById tightening no longer accepts as a scope.',
+  ],
+
+  [
+    'handlers/portfolio-rollup.ts > handlePortfolioRollup: (ph) => `SELECT event_id, COUNT(*) AS cnt FROM sponsor_placement',
     'COUNT over `event_id IN (?, …)` where the id list is the brand-scoped ' +
-    'event set assembled above (the same dynamic brandFilter that exempts ' +
-    'portfolio-rollup.ts:185). Not a cross-brand read. (Line shifted 165→203 ' +
-    'by the 2026-10-01 architecture review: the same held-id IN list, now ' +
-    'chunked under the D1 100-bound-parameter cap via perEventCounts.)',
-  'lib/sponsor-card.ts: SELECT 1 FROM sponsor_placement sp_show':
+      'event set assembled above (the same dynamic brandFilter that exempts ' +
+      'portfolio-rollup.ts:185). Not a cross-brand read. (Line shifted 165→203 ' +
+      'by the 2026-10-01 architecture review: the same held-id IN list, now ' +
+      'chunked under the D1 100-bound-parameter cap via perEventCounts.)',
+  ],
+
+  [
+    'lib/sponsor-card.ts > SPONSOR_ON_SHOW_SQL: SELECT 1 FROM sponsor_placement sp_show',
     'SPONSOR_ON_SHOW_SQL, a boolean fragment, never a query on its own. Its ' +
-    '`sponsor_placement sp_show` sub-select is correlated by ' +
-    "`sp_show.sponsor_business_id = sb.id` to the caller's outer " +
-    '`sponsor_business sb`, and both callers fence that row: the card page by ' +
-    '`sb.id = ?` (held sponsor id), the resolver by `sp.event_id = ?` (Path 1) or ' +
-    '`sb.brand_id = ?` (Path 2). Asks "is this one sponsor on show"; not ' +
-    'enumeration. Line-sensitive: bump on any edit above it in that file.',
-  'lib/sponsor-card.ts: AND EXISTS (SELECT 1 FROM events e_show WHERE e_show.id = sp_show.event_id':
+      '`sponsor_placement sp_show` sub-select is correlated by ' +
+      "`sp_show.sponsor_business_id = sb.id` to the caller's outer " +
+      '`sponsor_business sb`, and both callers fence that row: the card page by ' +
+      '`sb.id = ?` (held sponsor id), the resolver by `sp.event_id = ?` (Path 1) or ' +
+      '`sb.brand_id = ?` (Path 2). Asks "is this one sponsor on show"; not ' +
+      'enumeration. Line-sensitive: bump on any edit above it in that file.',
+  ],
+
+  [
+    'lib/sponsor-card.ts > SPONSOR_ON_SHOW_SQL: AND EXISTS (SELECT 1 FROM events e_show WHERE e_show.id = sp_show.event_id',
     'Same fragment: the nested `events e_show` check is keyed by ' +
-    '`e_show.id = sp_show.event_id AND e_show.brand_id = sb.brand_id`, so it only ' +
-    "reads the one event each placement points at, inside the sponsor's own brand.",
+      '`e_show.id = sp_show.event_id AND e_show.brand_id = sb.brand_id`, so it only ' +
+      "reads the one event each placement points at, inside the sponsor's own brand.",
+  ],
   // ── src/lib reads (scan extended to lib/ 2026-09-17, CCR-PR567 re-run item 4). ──
   // The reporting corridor, the sponsor resolver and the draft-expiry cron read
   // tenant tables from lib/. Each is a scheduled BI/aggregation job (cross-brand
   // BY DESIGN — a corridor is a shared geography, and OER ingests every brand),
   // a never-who geographic aggregate, or a correlated/transitively-scoped
   // subselect — never a request-reachable per-brand row enumeration.
-  'lib/draft-expiry.ts: `SELECT id FROM events':
+
+  [
+    'lib/draft-expiry.ts > runDraftExpiry: `SELECT id FROM events',
     'Stale-draft archival cron (runDraftExpiry). SELECTs drafts across ALL ' +
-    'brands by age — correct for a scheduled sweep. Not request-reachable; the ' +
-    'paired UPDATE is keyed by `id = ?`. Cross-brand BY DESIGN, OER-cron class.',
-  'lib/draft-expiry.ts: `SELECT COUNT(*) AS n FROM events':
+      'brands by age — correct for a scheduled sweep. Not request-reachable; the ' +
+      'paired UPDATE is keyed by `id = ?`. Cross-brand BY DESIGN, OER-cron class.',
+  ],
+
+  [
+    'lib/draft-expiry.ts > runDraftExpiry: `SELECT COUNT(*) AS n FROM events',
     'Same cron, the future-dated COUNT(*) that is skipped from expiry. Cross-' +
-    'brand by design, not request-reachable.',
-  'lib/draft-expiry.ts: FROM events e':
+      'brand by design, not request-reachable.',
+  ],
+
+  [
+    'lib/draft-expiry.ts > runDraftExpiry: FROM events e',
     'Same cron, AUD-3 Phase B: `INSERT INTO admin_audit_log ... SELECT ... FROM ' +
-    'events e WHERE e.id IN (?, …)` over exactly the ids this run just archived ' +
-    '(UPDATE … RETURNING id), to write one brand-attributed audit row per event. ' +
-    'Held ids, not enumeration; not request-reachable.',
-  'lib/shared-report.ts: `SELECT id, start_date, end_date, starts_at, timezone FROM events':
+      'events e WHERE e.id IN (?, …)` over exactly the ids this run just archived ' +
+      '(UPDATE … RETURNING id), to write one brand-attributed audit row per event. ' +
+      'Held ids, not enumeration; not request-reachable.',
+  ],
+
+  [
+    'lib/shared-report.ts > materializeAnonIdReturns: `SELECT id, start_date, end_date, starts_at, timezone FROM events',
     'materializeAnonIdReturns cron — `SELECT id, … FROM events WHERE status=active ' +
-    'AND substr(COALESCE(end_date, start_date),1,10) BETWEEN ? AND ?` (calendar-day ' +
-    'window incl. start-only events, then the real ' +
-    'end instant via phaseTimesFor — OSE-616; re-keyed 157→167). Cross-brand ' +
-    'geographic baseline input; the output is never-who anon-return aggregates. ' +
-    'Not request-reachable.',
-  'lib/shared-report.ts: FROM events e':
+      'AND substr(COALESCE(end_date, start_date),1,10) BETWEEN ? AND ?` (calendar-day ' +
+      'window incl. start-only events, then the real ' +
+      'end instant via phaseTimesFor — OSE-616; re-keyed 157→167). Cross-brand ' +
+      'geographic baseline input; the output is never-who anon-return aggregates. ' +
+      'Not request-reachable.',
+  ],
+
+  [
+    'lib/shared-report.ts > refreshCorridorBaselines: FROM events e',
     'refreshCorridorBaselines cron — aggregates by `COALESCE(LOWER(h3_res7), ' +
-    'corridor_id)` across brands. A corridor is a shared geography by design; ' +
-    'never-who (COUNT DISTINCT anon hash). Not request-reachable.',
-  'lib/shared-report.ts: FROM events':
+      'corridor_id)` across brands. A corridor is a shared geography by design; ' +
+      'never-who (COUNT DISTINCT anon hash). Not request-reachable.',
+  ],
+
+  [
+    'lib/shared-report.ts > detectEventSeriesClusters: FROM events',
     'detectEventSeriesClusters cron — brand/venue/day/hour event-count baseline, ' +
-    'GROUPED BY brand_id (OSE-1421: a series never groups events across brands), ' +
-    'count-floored (HAVING event_count >= ?). Never-who; not request-reachable.',
+      'GROUPED BY brand_id (OSE-1421: a series never groups events across brands), ' +
+      'count-floored (HAVING event_count >= ?). Never-who; not request-reachable.',
+  ],
   // OSE-1421: the two series-lookup subselects that were exempt here (:583, :607) now
   // bind `AND brand_id = ?` themselves, so they no longer need an exemption.
-  'lib/shared-report.ts: SELECT id FROM events WHERE start_date >= ?':
-    // 666→673 by OSE-1460 (country cleanup statement added above; the
-    // country-code twin query at :687 was removed with top_country).
+
+  [
+    'lib/shared-report.ts > aggregateScanBuckets: SELECT id FROM events WHERE start_date >= ?',
     'aggregateScanBuckets cron — scan_node_returns grouped by event/geo, inner ' +
-    '`SELECT id FROM events WHERE start_date >= ?` is a cross-brand time window. ' +
-    'Never-who scan aggregate; not request-reachable.',
+      '`SELECT id FROM events WHERE start_date >= ?` is a cross-brand time window. ' +
+      'Never-who scan aggregate; not request-reachable.',
+  ],
   // OSE-1459: aggregateScanCells (scans at the poster's own res9 cell). Same
   // cron class as aggregateScanBuckets (:740). Keys re-keyed after main's OSE-1459
   // and OSE-1460 (#737) merged together; the backfill moved 895/896/899 -> 943/944/947.
-  'lib/shared-report.ts: AND spe.event_id IN (SELECT id FROM events WHERE start_date >= ?)`':
+
+  [
+    'lib/shared-report.ts > aggregateScanCells: AND spe.event_id IN (SELECT id FROM events WHERE start_date >= ?)`',
     'aggregateScanCells cron — COUNT of scans at posters with no cell yet (skipped, ' +
-    'counted on a later run), for `event_id IN (SELECT id FROM events WHERE start_date ' +
-    '>= ?)` (a cross-brand time window). Place-side count only, never-who; not ' +
-    'request-reachable.',
-  'lib/shared-report.ts: WHERE event_id IN (SELECT id FROM events WHERE start_date >= ?)`':
+      'counted on a later run), for `event_id IN (SELECT id FROM events WHERE start_date ' +
+      '>= ?)` (a cross-brand time window). Place-side count only, never-who; not ' +
+      'request-reachable.',
+  ],
+
+  [
+    'lib/shared-report.ts > aggregateScanCells: WHERE event_id IN (SELECT id FROM events WHERE start_date >= ?)`',
     'Same cron — DELETE of the window before the atomic re-insert, so a corrected ' +
-    'poster location never double-counts. Same time window, same rationale.',
-  'lib/shared-report.ts: AND spe.event_id IN (SELECT id FROM events WHERE start_date >= ?)':
+      'poster location never double-counts. Same time window, same rationale.',
+  ],
+
+  [
+    'lib/shared-report.ts > aggregateScanCells: AND spe.event_id IN (SELECT id FROM events WHERE start_date >= ?)',
     'Same cron — the single INSERT ... SELECT that rebuilds the window: ' +
-    'scan_placement_events joined to poster_deployments, grouped by the poster res9 ' +
-    'cell. Place-side scan COUNT only, never-who. Same time window, same rationale.',
-  'lib/shared-report.ts: SET h3_res9 = (SELECT h3_res9 FROM events WHERE id = scan_aggregates.event_id),':
+      'scan_placement_events joined to poster_deployments, grouped by the poster res9 ' +
+      'cell. Place-side scan COUNT only, never-who. Same time window, same rationale.',
+  ],
+
+  [
+    'lib/shared-report.ts > backfillH3Cells: SET h3_res9 = (SELECT h3_res9 FROM events WHERE id = scan_aggregates.event_id),',
     'backfillH3Cells cron — `UPDATE scan_aggregates SET h3 = (SELECT h3 FROM ' +
-    'events WHERE id = scan_aggregates.event_id)`, a correlated per-row geo ' +
-    'backfill (id = column, not a bind). Not enumeration, not request-reachable.',
-  'lib/shared-report.ts: h3_res7 = (SELECT h3_res7 FROM events WHERE id = scan_aggregates.event_id)':
+      'events WHERE id = scan_aggregates.event_id)`, a correlated per-row geo ' +
+      'backfill (id = column, not a bind). Not enumeration, not request-reachable.',
+  ],
+
+  [
+    'lib/shared-report.ts > backfillH3Cells: h3_res7 = (SELECT h3_res7 FROM events WHERE id = scan_aggregates.event_id)',
     'Same backfill statement, the h3_res7 correlated subquery. Same rationale.',
-  'lib/shared-report.ts: SELECT 1 FROM events':
+  ],
+
+  [
+    'lib/shared-report.ts > backfillH3Cells: SELECT 1 FROM events',
     'Same backfill statement, the EXISTS guard correlated by ' +
-    '`id = scan_aggregates.event_id`. Same rationale.',
+      '`id = scan_aggregates.event_id`. Same rationale.',
+  ],
   // 322→339 and 729→790 by OSE-616 + OSE-1459 (corridorKeyOf helper above; the key is
   // now COALESCE(LOWER(h3_res7), corridor_id) to match the baseline writer).
   // 341→354 by the report-floor change (the return rate goes through
@@ -266,13 +344,19 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // the builder is this event's own rate and one yes/no ("another event here
   // must withhold"); no other event's count, id or brand is published.
   // 430→482 and 436→488 when publishCorridorBaseline was added above these queries (OSE-1751).
-  'lib/shared-report-builder.ts: JOIN events e ON e.id = a.venue_id':
+
+  [
+    'lib/shared-report-builder.ts > buildSharedReport: JOIN events e ON e.id = a.venue_id',
     'Corridor-wide per-event COUNTs keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
-    '(a geography). Cross-brand geographic aggregate by design; never-who (COUNT of ' +
-    "anon_id_hash per event); only this event's rate and an all-or-none yes/no are published.",
-  'lib/shared-report-builder.ts: JOIN events oe ON oe.id = o.venue_id':
+      '(a geography). Cross-brand geographic aggregate by design; never-who (COUNT of ' +
+      "anon_id_hash per event); only this event's rate and an all-or-none yes/no are published.",
+  ],
+
+  [
+    'lib/shared-report-builder.ts > buildSharedReport: JOIN events oe ON oe.id = o.venue_id',
     "Same corridor statement, the correlated EXISTS over the corridor's other events " +
-    '(same geography key). Same rationale.',
+      '(same geography key). Same rationale.',
+  ],
   // OSE-1421: the series-instance read (was :800) now binds `brand_id = ?` itself.
   // Line-sensitive: 263→296 and 513→554 for OSE-616 (emitRow guard + corridor
   // coverage + ran fields above these queries; corridor_id now COALESCE(h3_res7, …)).
@@ -289,13 +373,19 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // 490→493 and 894→897 for the fail-closed skew check.
   // 494→484 and 898→889 when roundForPublish moved to count-floor.ts (OSE-1782).
   // 484→489 and 889→893 when the baseline export called floorCorridorBaseline (OSE-1751).
-  'lib/shared-report-export.ts: JOIN events e ON e.id = air.venue_id':
+
+  [
+    'lib/shared-report-export.ts > exportAnonIdReturns: JOIN events e ON e.id = air.venue_id',
     'BigQuery/OER export (runSharedReportBigQueryExport, index.ts scheduled) — ' +
-    'anon_id_returns joined to event geo metadata over a 90-day window across ALL ' +
-    'brands, then aggregated to k-floored corridor counts (OSE-1460): no anon hash ' +
-    'or venue leaves. OER ingests every brand by design; not request-reachable.',
-  'lib/shared-report-export.ts: JOIN events e ON e.id = es.venue_id':
+      'anon_id_returns joined to event geo metadata over a 90-day window across ALL ' +
+      'brands, then aggregated to k-floored corridor counts (OSE-1460): no anon hash ' +
+      'or venue leaves. OER ingests every brand by design; not request-reachable.',
+  ],
+
+  [
+    'lib/shared-report-export.ts > exportEventSeries: JOIN events e ON e.id = es.venue_id',
     'Same OER export, the event_series emission twin. Cross-brand by design.',
+  ],
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to
   // sponsor-resolver.ts above this query. 228→252 for OSE-1316/1317 (the
@@ -305,14 +395,30 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   // placements) in the resolver header. Query unchanged.
   // 272→277 by OSE-1438 (the CardableRow type above the resolver, and the
   // has_card column in this SELECT list). Query scope unchanged.
-  'lib/sponsor-resolver.ts: COALESCE((SELECT sp2.tier FROM sponsor_placement sp2':
+
+  [
+    'lib/sponsor-resolver.ts > resolveSponsorsForEvent: COALESCE((SELECT sp2.tier FROM sponsor_placement sp2',
     'Path-2 (dark-at-launch, SPONSOR_GEO_MATCH_ENABLED off) tier subselect ' +
-    '`SELECT sp2.tier FROM sponsor_placement sp2 WHERE sp2.sponsor_business_id = ' +
-    'sb.id` — correlated to the outer `sponsor_business sb`, which IS brand-fenced ' +
-    '(`sb.brand_id = ?`). Reads one business latest tier; not enumeration. ' +
-    '(Line shifted 252→267 by 0083, which added display_name / address_line to ' +
-    'the Path-1 SELECT and SponsorRow above it. Scope unchanged.)',
-};
+      '`SELECT sp2.tier FROM sponsor_placement sp2 WHERE sp2.sponsor_business_id = ' +
+      'sb.id` — correlated to the outer `sponsor_business sb`, which IS brand-fenced ' +
+      '(`sb.brand_id = ?`). Reads one business latest tier; not enumeration. ' +
+      '(Line shifted 252→267 by 0083, which added display_name / address_line to ' +
+      'the Path-1 SELECT and SponsorRow above it. Scope unchanged.)',
+  ],
+];
+const BRAND_SCOPE_EXEMPT = new Map<string, string>(BRAND_SCOPE_EXEMPT_LIST);
+
+/** The top-level declaration (function, const or let at column 0) a source offset sits in. */
+const DECL_RE =
+  /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\*?\s+(\w+)|^(?:export\s+)?(?:const|let)\s+(\w+)\b/;
+function enclosingDeclaration(src: string, index: number): string {
+  const lines = src.slice(0, index).split('\n');
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const m = DECL_RE.exec(lines[i]);
+    if (m) return m[1] ?? m[2];
+  }
+  return '(module)';
+}
 
 test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', () => {
   test('OSE-INV9 | security | schema | migration 0001 defines brand_id TEXT NOT NULL on events', () => {
@@ -481,7 +587,8 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
     ).toBe(true);
   });
 
-  test('OSE-INV9 | security | query | EVERY handler + lib SELECT on a tenant table binds brand_id', () => {
+  /** Every unscoped tenant-table read under src/handlers and src/lib, and the exemptions used. */
+  function scanTenantReads(): { violations: string[]; usedExemptions: Set<string> } {
     // CCR-PR567 re-run item 4 — scan src/lib too, not just src/handlers. The
     // reporting corridor (shared-report*.ts), the DataProvider seam, the sponsor
     // resolver and the draft-expiry cron all read tenant tables from lib/, and a
@@ -502,7 +609,9 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
       expect(files.length, `${label} directory must not be empty`).toBeGreaterThan(0);
 
       for (const file of files) {
-        const src = readFileSync(join(dir, file), 'utf8');
+        const src = readFileSync(join(dir, file), 'utf8').replace(/\r\n/g, '\n');
+        // Repeats of one line in one declaration, so each read gets its own key.
+        const seen = new Map<string, number>();
 
         for (const table of TENANT_TABLES) {
           // Match `FROM <table>` AND `JOIN <table>` (PR #567). A tenant table read
@@ -543,12 +652,15 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
 
             if (!bindsBrand && !keyedById) {
               const line = src.slice(0, m.index).split('\n').length;
-              // OSE-1801: keyed by file plus the statement's own line text, not its
-              // line number, so an edit above a query cannot detach its exemption
-              // or hand it to whatever query lands on that line next.
+              // OSE-1801: keyed by file, enclosing declaration and the statement's
+              // own line text (not its line number), with #n on a repeat, so each
+              // key names one read (CCR 2026-11-04 R1-01).
               const lineText = src.slice(lineStart, src.indexOf('\n', m.index!)).trim();
-              const key = `${label}/${file}: ${lineText}`;
-              if (BRAND_SCOPE_EXEMPT[key]) {
+              const base = `${label}/${file} > ${enclosingDeclaration(src, m.index!)}: ${lineText}`;
+              const n = (seen.get(base) ?? 0) + 1;
+              seen.set(base, n);
+              const key = n === 1 ? base : `${base} #${n}`;
+              if (BRAND_SCOPE_EXEMPT.has(key)) {
                 usedExemptions.add(key);
                 continue;
               }
@@ -561,7 +673,11 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
         }
       }
     }
+    return { violations, usedExemptions };
+  }
 
+  test('OSE-INV9 | security | query | EVERY handler + lib SELECT on a tenant table binds brand_id', () => {
+    const { violations } = scanTenantReads();
     expect(
       violations,
       'Every handler SELECT that can enumerate a multi-tenant table must bind ' +
@@ -570,8 +686,21 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
         "brand's rows to every other brand.\n" +
         violations.join('\n')
     ).toEqual([]);
+  });
 
-    const orphans = Object.keys(BRAND_SCOPE_EXEMPT).filter((k) => !usedExemptions.has(k));
+  test('OSE-INV9 | meta | no exemption key is listed twice', () => {
+    const counts = new Map<string, number>();
+    for (const [k] of BRAND_SCOPE_EXEMPT_LIST) counts.set(k, (counts.get(k) ?? 0) + 1);
+    const repeated = [...counts].filter(([, n]) => n > 1).map(([k]) => k);
+    expect(
+      repeated,
+      'A repeated key would let one reason stand for two reads (R1-07):\n' + repeated.join('\n')
+    ).toEqual([]);
+  });
+
+  test('OSE-INV9 | meta | every exemption key still names a read the scan finds', () => {
+    const { usedExemptions } = scanTenantReads();
+    const orphans = [...BRAND_SCOPE_EXEMPT.keys()].filter((k) => !usedExemptions.has(k));
     expect(
       orphans,
       'Every BRAND_SCOPE_EXEMPT key must point at an unscoped tenant-table read the scan ' +
@@ -631,25 +760,31 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
     // (const adminXMatch = pathname.match(/^\/api\/v2\/admin/)).
     // OSE-1801: also the regex-literal form `/^\/api\/v2\/admin\/…$/.test(pathname)`,
     // which the first two shapes missed (verify-qr, unverify-qr, backup, uploads).
+    // OSE-1801 (CCR 2026-11-04 R1-05): a regex literal with flags (`/…/i.test`) and a
+    // `pathname.startsWith('/…admin')` are route shapes too.
     const adminRoutePattern =
-      /pathname\s*(?:===|\.match\s*\()\s*(?:'|"|\/).*\/admin|const\s+admin\w+Match\s*=\s*pathname\.match|\/\^\\\/(?:api\\\/v2\\\/)?admin[^\n]*\/\.test\(\s*pathname\s*\)/;
+      /pathname\s*(?:===|\.match\s*\()\s*(?:'|"|\/).*\/admin|const\s+admin\w+Match\s*=\s*pathname\.match|\/\^\\\/(?:api\\\/v2\\\/)?admin[^\n]*\/[a-z]*\.test\(\s*pathname\s*\)|pathname\.startsWith\(\s*['"]\/(?:api\/v2\/)?admin/;
 
     const adminRouteLines: number[] = [];
     const requireAdminLines: number[] = [];
 
-    // The OSE-576 admin rate-limit pre-flight references admin paths inside a
-    // boolean predicate — `pathname.startsWith('/api/v2/admin') || pathname === '/admin' || ...`.
-    // It is a PRE-AUTH guard (rate-limit before paying the auth cost), NOT a
-    // route handler, so it is intentionally exempt from the requireAdmin-proximity
-    // check. Real admin routes match the pathname with === or .match(), never
-    // with .startsWith — so keying the exemption on .startsWith cannot mask a
-    // real unguarded route.
-    const preAuthRateLimitPredicate = /\.startsWith\(\s*['"]\/api\/v2\/admin/;
+    // The OSE-576 admin rate-limit pre-flight names admin paths in a boolean
+    // predicate. It is a PRE-AUTH guard (rate-limit before paying the auth cost),
+    // NOT a route handler, so this one exact line is exempt. Before OSE-1801 every
+    // line with an admin startsWith was exempt, which would have hidden a route
+    // written that way (R1-05); now any other such line is checked like a route.
+    const PRE_AUTH_RATE_LIMIT_LINE =
+      "(pathname.startsWith('/api/v2/admin') || pathname === '/admin' || pathname === '/manage')";
+    let exemptSeen = 0;
     lines.forEach((line, i) => {
-      if (preAuthRateLimitPredicate.test(line)) return;
+      if (line.trim() === PRE_AUTH_RATE_LIMIT_LINE) {
+        exemptSeen += 1;
+        return;
+      }
       if (adminRoutePattern.test(line)) adminRouteLines.push(i);
       if (/requireAdmin\s*\(/.test(line)) requireAdminLines.push(i);
     });
+    expect(exemptSeen, 'the rate-limit predicate moved or changed; update the exemption').toBe(1);
 
     expect(
       adminRouteLines.length,
@@ -661,10 +796,22 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
     // (like adminEventMatch) have requireAdmin inside each method branch, always
     // within 20 lines of the outer pathname.match check.
     // OSE-1801: the window also stops at the next route definition, so one route's
-    // requireAdmin can never vouch for the route above it. Route lines within two
-    // lines of each other are one condition spread over lines and share a window.
+    // requireAdmin can never vouch for the route above it. Two route lines share a
+    // window only when they are one condition: the line before the later one ends
+    // in `||`, `&&`, `(` or `,` (R1-05: any two route lines within two lines used
+    // to share one, so a second route pasted right under a guarded one passed).
+    const continues = (j: number) => /(?:\|\||&&|\(|,)\s*$/.test(lines[j - 1] ?? '');
     for (const [i, routeLine] of adminRouteLines.entries()) {
-      const nextRoute = adminRouteLines.slice(i + 1).find((n) => n > routeLine + 2);
+      let last = routeLine;
+      let nextRoute: number | undefined;
+      for (const n of adminRouteLines.slice(i + 1)) {
+        if (n === last + 1 && continues(n)) {
+          last = n;
+          continue;
+        }
+        nextRoute = n;
+        break;
+      }
       const hasAuth = requireAdminLines.some(
         (n) => n > routeLine && n <= routeLine + 20 && (nextRoute === undefined || n < nextRoute)
       );
