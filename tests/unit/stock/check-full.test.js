@@ -200,13 +200,26 @@ describe('checkNodes: the count', () => {
     expect(r[A].pass).toBe(true);
   });
 
-  test('a populated expectation below the map gate is refused before any request', async () => {
-    const { manifest, listed } = day({ [A]: PER_NODE });
-    const s = site({ listed });
-    await expect(
-      run(s, manifest, { expected: { ...EXPECTED, [A]: MAP_GATE - 1 } })
-    ).rejects.toThrow(`expected count for ${A} below the map gate of ${MAP_GATE}`);
-    expect(s.calls).toEqual([]);
+  // Owner 2026-11-06: a place may hold fewer than the map gate (Auburn Gresham 9).
+  test('a place under the map gate is checked on its count; its landing-map check is skipped', async () => {
+    const under = MAP_GATE - 1;
+    const { manifest, listed } = day({ [A]: under });
+    const zip = node(A).zips[0];
+    const r = await run(
+      site({ listed, override: { [`/?zip=${zip}`]: html(DOORS_FIRST) } }),
+      manifest,
+      { expected: { ...EXPECTED, [A]: under } }
+    );
+    expect(r[A]).toMatchObject({ pass: true, count: under, expected: under, reasons: [] });
+    expect(r[A].skipped).toEqual(['landing-map']);
+  });
+
+  test('a place under the map gate still fails one short of its total', async () => {
+    const under = MAP_GATE - 1;
+    const { manifest, listed } = day({ [A]: under - 1 });
+    const r = await run(site({ listed }), manifest, { expected: { ...EXPECTED, [A]: under } });
+    expect(r[A].pass).toBe(false);
+    expect(r[A].reasons).toEqual([`count:${under - 1}/${under}`]);
   });
 
   test('a node with no expected count is refused before any request', async () => {

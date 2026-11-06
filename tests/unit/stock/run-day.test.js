@@ -478,7 +478,7 @@ describe('the site and the secrets', () => {
       `| oak-lawn | ${SEED_COUNTS['oak-lawn']} | ${P - 3} | ${P + 1} | FAIL | count:${P - 3}/${P} |`
     );
     expect(summary).toContain(
-      'mount-greenwood is expected empty: its landing-map check is skipped (the zip-radius fix is a separate story)'
+      'mount-greenwood is expected empty: its landing-map check is skipped'
     );
     expect(summary).toContain('IG note');
     expect(summary).toContain('token note');

@@ -606,7 +606,9 @@ export function renderSummary({ report, nodes, expected, manifest, notes }) {
     );
     if (Array.isArray(r.skipped) && r.skipped.includes('landing-map')) {
       skipped.push(
-        `${node.id} is expected empty: its landing-map check is skipped (the zip-radius fix is a separate story)`
+        (expected[node.id] ?? 0) === 0
+          ? `${node.id} is expected empty: its landing-map check is skipped`
+          : `${node.id} holds ${expected[node.id]}, under the map gate: its landing-map check is skipped`
       );
     }
   }

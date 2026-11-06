@@ -1,7 +1,7 @@
 /* eslint-disable security/detect-non-literal-regexp -- reads the repo's own workflow and builds patterns from its env names */
 /**
  * The stock workflow (.github/workflows/stock-data-full.yml): its trigger
- * (manual only), its job chain and where its secrets may appear. Owner,
+ * (every morning, and by hand), its job chain and where its secrets may appear. Owner,
  * 2026-11-05: no nightly search; the site loads from the committed seed.
  * Owner, 2026-11-06: one staging site. The seed loads into stg. itself, so the
  * workflow deploys nothing, has no Access gate, and uses the staging secrets the
@@ -23,10 +23,24 @@ const needsOf = (job) => {
 const stepsOf = (job) => (jobs[job] && jobs[job].steps) || [];
 
 describe('triggers and posture', () => {
-  test('runs on manual dispatch only: no schedule, no other trigger', () => {
+  // Owner 2026-11-06: a daily loop keeps stg at the permanent testing totals.
+  test('runs every morning at 09:23 UTC and on dispatch, and on nothing else', () => {
     const on = wf.on ?? wf[true];
-    expect(Object.keys(on)).toEqual(['workflow_dispatch']);
-    expect(readFileSync(WF_PATH, 'utf8')).not.toMatch(/^\s*(schedule|cron)\s*:/m);
+    expect(Object.keys(on).sort()).toEqual(['schedule', 'workflow_dispatch']);
+    expect(on.schedule).toEqual([{ cron: '23 9 * * *' }]);
+  });
+
+  test('the daily run starts well after the nightly staging run', () => {
+    const ci = yaml.load(
+      readFileSync(join(ROOT, '.github', 'workflows', 'oursharedevents-ci.yml'), 'utf8')
+    );
+    const minuteOfDay = (cron) => {
+      const [min, hour] = cron.split(' ').map(Number);
+      return hour * 60 + min;
+    };
+    const nightly = minuteOfDay((ci.on ?? ci[true]).schedule[0].cron);
+    const daily = minuteOfDay((wf.on ?? wf[true]).schedule[0].cron);
+    expect(daily - nightly).toBeGreaterThanOrEqual(120);
   });
 
   test('no search is left: no Claude action, no model key, no spend cap, no enable switch', () => {

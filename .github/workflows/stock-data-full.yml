@@ -1,6 +1,10 @@
 # Stock data for the staging site (stg.oursharedevents.com).
 #
-# Run by hand only (workflow_dispatch). Owner, 2026-11-05: there is no nightly
+# Owner, 2026-11-06: runs every morning (and by hand), so stg always holds the
+# permanent testing totals with future dates, for the whole CI/CD test pyramid:
+# Blue Island 10, Auburn Gresham 9, Evergreen Park 11, Oak Lawn 17, Mount
+# Greenwood 0 (stock/totals.json). Each run re-dates the same seed; nothing is
+# searched. Owner, 2026-11-05: there is no nightly
 # search. The events were searched once and committed as a fixed seed
 # (stock/seed/seed.json, made by scripts/stock/make-seed.mjs); each load
 # re-bases the seed's dates to the load day, so each place's count in the
@@ -38,6 +42,11 @@
 name: Stock data (stg)
 
 on:
+  # 09:23 UTC (3:23 or 4:23 in Chicago): after the 03:07 UTC nightly staging run
+  # and before the working day's merges, so the swap window (the old load and the
+  # new one both listed for a few minutes) falls when no test chain is reading stg.
+  schedule:
+    - cron: '23 9 * * *'
   workflow_dispatch:
 
 permissions:

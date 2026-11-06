@@ -13,8 +13,11 @@
 // same polygons. Each event keeps its offset in days from the seed day and its
 // Chicago local start time, so a load can re-base it (scripts/stock/seed.mjs).
 //
-// Nothing is written when a populated node falls under the map gate, or when a
-// deliberately empty node would hold anything: the run stops and reports.
+// Owner, 2026-11-06: each place holds exactly its total in stock/totals.json
+// (the permanent testing totals). A place with more finds is trimmed by
+// trimToTotals, keeping the widest mix of event types; nothing is written when a
+// place cannot reach its total, or when a deliberately empty node would hold
+// anything: the run stops and reports.
 import * as nodeFs from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -29,8 +32,6 @@ export const SEEDED_ON = '2026-11-05';
 // Owner, 2026-11-05: Mount Greenwood stays empty, so the under-10 experience can
 // be shown by zip.
 export const EMPTY_NODES = ['mount-greenwood'];
-// The landing page leads with the map at this many events (check-full.mjs MAP_GATE).
-const MAP_GATE = 10;
 const CENSUS =
   'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?benchmark=Public_AR_Current&format=json&address=';
 const PACE_MS = 1100;
@@ -91,6 +92,46 @@ export function toSeedEvent(row, seededOn = SEEDED_ON) {
  * The seed from the search's rows. Pure but for the injected geocoder.
  * Returns { seed, report }; report.ok is false when the seed must not be written.
  */
+/**
+ * Trim each node's events to its total, keeping the widest mix of event types:
+ * while a node holds more than its total, drop the latest-dated event of its
+ * most-repeated type (ties: the type whose latest event is later, then the
+ * later title). Deterministic; never adds. Returns { kept, dropped }.
+ */
+export function trimToTotals(events, totals) {
+  const kept = [...events];
+  const dropped = [];
+  const later = (a, b) =>
+    a.offsetDays - b.offsetDays ||
+    a.localStart.localeCompare(b.localStart) ||
+    a.title.localeCompare(b.title);
+  for (const node of Object.keys(totals)) {
+    for (;;) {
+      const mine = kept.filter((e) => e.node === node);
+      if (mine.length <= totals[node]) break;
+      const byType = new Map();
+      for (const e of mine) {
+        if (!byType.has(e.event_type_id)) byType.set(e.event_type_id, []);
+        byType.get(e.event_type_id).push(e);
+      }
+      let pick = null;
+      for (const list of byType.values()) {
+        const last = list.reduce((x, y) => (later(x, y) >= 0 ? x : y));
+        if (
+          !pick ||
+          list.length > pick.size ||
+          (list.length === pick.size && later(last, pick.event) > 0)
+        ) {
+          pick = { size: list.length, event: last };
+        }
+      }
+      kept.splice(kept.indexOf(pick.event), 1);
+      dropped.push(pick.event);
+    }
+  }
+  return { kept, dropped };
+}
+
 export async function makeSeed({
   finds,
   businesses,
@@ -99,7 +140,10 @@ export async function makeSeed({
   geocode,
   seededOn = SEEDED_ON,
   emptyNodes = EMPTY_NODES,
+  // node id -> its exact number of events (stock/totals.json)
+  totals,
 }) {
+  if (!totals || typeof totals !== 'object') throw new Error('makeSeed: totals are required');
   const zipNode = new Map();
   for (const n of nodes) for (const z of n.zips || []) zipNode.set(z, n.id);
 
@@ -123,6 +167,9 @@ export async function makeSeed({
     }
     events.push(seedEvent);
   }
+  const { kept, dropped } = trimToTotals(events, totals);
+  events.length = 0;
+  events.push(...kept);
   const order = new Map(nodes.map((n, i) => [n.id, i]));
   events.sort(
     (a, b) =>
@@ -156,8 +203,8 @@ export async function makeSeed({
   for (const n of nodes) {
     if (emptyNodes.includes(n.id)) {
       if (perNode[n.id] !== 0) problems.push(`${n.id} must be empty, holds ${perNode[n.id]}`);
-    } else if (perNode[n.id] < MAP_GATE) {
-      problems.push(`${n.id} has ${perNode[n.id]} events, under the map gate of ${MAP_GATE}`);
+    } else if (perNode[n.id] !== totals[n.id]) {
+      problems.push(`${n.id} has ${perNode[n.id]} events, not its total of ${totals[n.id]}`);
     }
     const anchors = seedBusinesses.filter((b) => b.node === n.id && b.anchor).length;
     if (!emptyNodes.includes(n.id) && anchors === 0) problems.push(`${n.id} has no anchor`);
@@ -173,6 +220,7 @@ export async function makeSeed({
       businessRefused,
       disagreements,
       noDuration,
+      trimmed: dropped.map((e) => ({ node: e.node, title: e.title, offsetDays: e.offsetDays })),
     },
   };
 }
@@ -230,6 +278,7 @@ async function main() {
     eventTypeIds: catalogIdsFromMigrations(sqlTexts),
     nodes: readJson(join(ROOT, 'stock', 'nodes.json')).nodes,
     geocode,
+    totals: readJson(join(ROOT, 'stock', 'totals.json')).totals,
   });
   const sorted = Object.fromEntries(
     Object.keys(cache)
@@ -241,6 +290,8 @@ async function main() {
   const describe = ({ row, reason }) =>
     `  ${reason}: ${(row && (row.title || row.name)) || '?'} @ ${(row && row.address) || '?'}`;
   console.log('Events per node:', JSON.stringify(report.perNode));
+  console.log(`Trimmed to stock/totals.json (${report.trimmed.length}):`);
+  for (const t of report.trimmed) console.log(`  ${t.node} day ${t.offsetDays}: ${t.title}`);
   console.log(`Refused finds (${report.refused.length}):`);
   for (const r of report.refused) console.log(describe(r));
   console.log(`Refused businesses (${report.businessRefused.length}):`);
