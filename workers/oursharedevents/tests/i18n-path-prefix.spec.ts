@@ -164,7 +164,10 @@ describe('OSE-1761 renderLanguageSwitch', () => {
   it('on a Spanish page links to the unprefixed English page, named in the page language', () => {
     const html = renderLanguageSwitch({ lang: 'es', path: '/events/abc/spring' });
     expect(html).toContain('href="/events/abc/spring"');
-    expect(html).toContain('>English</a>');
+    // English, named in Spanish (owner 2026-11-05); the word is Spanish, the target English.
+    expect(html).toContain('lang="es" hreflang="en"');
+    expect(html).toContain('>Inglés</a>');
+    expect(html).not.toContain('>English</a>');
     expect(html).toContain('aria-label="Idioma"');
     expect(html).not.toContain('>Español</a>');
   });

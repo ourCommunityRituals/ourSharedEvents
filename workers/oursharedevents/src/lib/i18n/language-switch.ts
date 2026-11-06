@@ -2,17 +2,19 @@
  * The visible language switch (OSE-1761).
  *
  * A plain link to the same page in each other language: no script, no cookie,
- * nothing stored about the visitor. The link text is the language's own name
- * ("Español"), marked with its own `lang`, so a reader finds their language
- * whatever the page is in and a screen reader says it right. The group's name
- * ("Language" / "Idioma") is in the page's language.
+ * nothing stored about the visitor. The link text comes from
+ * `LANGUAGE_SWITCH_NAMES`: a Spanish page names English in Spanish ("Inglés"),
+ * an English page names Spanish by its own name ("Español"). The link's `lang`
+ * is the language its text is written in, so a screen reader says it right;
+ * `hreflang` is the language it leads to. The group's name ("Language" /
+ * "Idioma") is in the page's language.
  *
  * It sits above Back, which stays the last control on the page (owner
  * 2026-10-11). An admin draft preview has no public address and shows none.
  */
 import { escapeHtml as esc } from '../html-escape';
 import { msg } from './catalog';
-import { LANGUAGES, LANGUAGE_NAMES, type Lang } from './languages';
+import { LANGUAGES, LANGUAGE_NAMES, LANGUAGE_SWITCH_NAMES, type Lang } from './languages';
 import { withLangPrefix } from './path-prefix';
 
 export const LANGUAGE_SWITCH_CSS = `
@@ -34,10 +36,12 @@ export function renderLanguageSwitch(opts: LanguageSwitchOptions): string {
   if (others.length === 0) return '';
   const query = opts.query ?? '';
   const links = others
-    .map(
-      (l) =>
-        `<a lang="${l}" hreflang="${l}" data-testid="language-switch-${l}" href="${esc(withLangPrefix(l, opts.path) + query)}">${esc(LANGUAGE_NAMES[l])}</a>`
-    )
+    .map((l) => {
+      const name = LANGUAGE_SWITCH_NAMES[opts.lang][l];
+      // Its own name ("Español") is in that language; any other is in the page's.
+      const textLang = name === LANGUAGE_NAMES[l] ? l : opts.lang;
+      return `<a lang="${textLang}" hreflang="${l}" data-testid="language-switch-${l}" href="${esc(withLangPrefix(l, opts.path) + query)}">${esc(name)}</a>`;
+    })
     .join('\n      ');
   return `<nav class="ose-lang" data-testid="language-switch" aria-label="${esc(msg(opts.lang, 'language.label'))}">
       ${links}

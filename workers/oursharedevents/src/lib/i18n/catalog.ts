@@ -117,6 +117,10 @@ const en = {
       single click; nothing about your device, location, or identity was
       collected to display this page.
     </p>`,
+  // The band on every staging page (lib/test-site-notice.ts), in the page's language.
+  'testSite.headline': 'Testing purposes only.',
+  'testSite.listings':
+    'Events, venues and businesses here are drawn from public listings for testing; nothing here is an endorsement or an offer.',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -212,12 +216,15 @@ const es: Record<MessageKey, string> = {
   'neverWho.line': 'Nunca quién, solo cuántos.',
   'neverWho.trigger': 'Cómo funciona',
   'neverWho.event': `<p>
-      Formas parte del grupo, de forma anónima. OurSharedEvents registra cuándo
+      Eres parte del grupo, de manera anónima. OurSharedEvents registra cuándo
       se reúnen los grupos &mdash; nunca quién eres. Quienes organizan y
       patrocinan ven corredores y lugares, no personas. El enlace que seguiste
       contó como un solo clic; no se recopiló nada sobre tu dispositivo, tu
       ubicación ni tu identidad para mostrar esta página.
     </p>`,
+  'testSite.headline': 'Solo para pruebas.',
+  'testSite.listings':
+    'Los eventos, lugares y negocios que aparecen aquí provienen de listados públicos y se usan para hacer pruebas; nada de esto es una recomendación ni una oferta.',
 };
 
 /** One catalog per language. A language still being written may omit keys. */

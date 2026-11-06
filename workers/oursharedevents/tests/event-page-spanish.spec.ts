@@ -10,8 +10,8 @@
  *
  * Organizer-entered text shows as typed, so every organizer field here is a
  * ZZ sentinel and is taken out before the check. So are product and language
- * names ("Google Maps", "English" in the language switch), which are names,
- * not English text.
+ * names ("Google Maps"), which are names, not English text. The language
+ * switch says "Inglés" on a Spanish page, so "English" is not excused.
  *
  * Two checks, so a new hard-coded string is caught as well as an old one:
  *   1. no English value from the catalog (a Spanish value left in English is
@@ -88,14 +88,7 @@ const SOCIAL = {
 const NEXT = [{ id: 'evt_next', title: 'ZZNEXT', start_date: '2026-12-05', location: 'ZZVENUE' }];
 
 /** Names, not English prose: they read the same on a Spanish page. */
-const NAMES = [
-  'OurSharedEvents',
-  'Google Maps',
-  'Apple Maps',
-  'Google Calendar',
-  'Outlook',
-  'English',
-];
+const NAMES = ['OurSharedEvents', 'Google Maps', 'Apple Maps', 'Google Calendar', 'Outlook'];
 
 /** The text a reader sees or hears: element text plus alt / aria-label / title. */
 function readerText(html: string): string {
@@ -174,6 +167,8 @@ const ENGLISH_WORDS = [
   'back',
   'fewer',
   'than',
+  // The language switch names English in Spanish ("Inglés") on a Spanish page.
+  'english',
 ];
 
 function englishLeft(text: string): string[] {

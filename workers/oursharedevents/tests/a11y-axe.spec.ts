@@ -247,8 +247,10 @@ describe('A11Y-7 / OSE-1761: event page in Spanish with the language switch', ()
     await scanPage('Spanish pre-event page', html);
     expect(document.documentElement.getAttribute('lang')).toBe('es');
     const link = document.querySelector('[data-testid="language-switch-en"]');
-    expect(link?.getAttribute('lang')).toBe('en');
-    expect(link?.textContent).toBe('English');
+    // "Inglés" is a Spanish word, so the link's lang is the page's; it leads to English.
+    expect(link?.getAttribute('lang')).toBe('es');
+    expect(link?.getAttribute('hreflang')).toBe('en');
+    expect(link?.textContent).toBe('Inglés');
   });
 
   test('live page', async () => {

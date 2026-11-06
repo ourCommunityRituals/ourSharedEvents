@@ -3156,7 +3156,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 16
+      "testCount": 18
     },
     {
       "file": "workers/oursharedevents/tests/testid-pyramid.spec.ts",

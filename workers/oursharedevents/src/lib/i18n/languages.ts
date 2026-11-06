@@ -41,6 +41,17 @@ export const OG_LOCALE: Record<Lang, string> = {
   es: 'es_US',
 };
 
+/**
+ * What the language switch calls each language, by the page it is on (owner
+ * 2026-11-05: on a Spanish page the English link reads "Inglés"). A Spanish
+ * page is all Spanish, so it names English in Spanish. An English page names
+ * Spanish by its own name, "Español", so a Spanish reader finds it there.
+ */
+export const LANGUAGE_SWITCH_NAMES: Record<Lang, Record<Lang, string>> = {
+  en: { en: 'English', es: 'Español' },
+  es: { en: 'Inglés', es: 'Español' },
+};
+
 export function isLang(value: unknown): value is Lang {
   return typeof value === 'string' && (LANGUAGES as readonly string[]).includes(value);
 }
