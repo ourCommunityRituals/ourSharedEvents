@@ -27,7 +27,7 @@ const node = (id) => nodes.find((n) => n.id === id);
 const A = 'evergreen-park';
 const EMPTY = 'mount-greenwood';
 
-const BASE = 'https://stg-full.oursharedevents.com';
+const BASE = 'https://stg.oursharedevents.com';
 const TODAY = '2026-11-04';
 const DAY_AFTER = '2026-11-05';
 

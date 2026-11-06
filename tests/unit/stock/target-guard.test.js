@@ -3,21 +3,21 @@ const { readFileSync, readdirSync, existsSync } = require('node:fs');
 const path = require('node:path');
 
 /**
- * The stock run touches the full staging site only. Every command and URL in
- * its scripts, its workflow and its seed names `staging-full` /
- * `stg-full.`, never the empty staging site or production.
+ * The stock run touches the staging site only (owner 2026-11-06: one staging
+ * site, stg., carries the seed). Every command and URL in its scripts, its
+ * workflow and its seed names `staging` / `stg.`, never production and never a
+ * second staging site.
  */
 
 const ROOT = path.join(__dirname, '../../..');
 
 const RULES = [
-  { name: '--env staging', re: /--env(?:\s+|=)["']?staging(?!-full)/ },
-  { name: "'--env', 'staging'", re: /['"`]--env['"`]\s*,\s*['"`]staging(?!-full)['"`]/ },
-  { name: '-e staging', re: /(?:^|\s)-e(?:\s+|=)staging(?!-full)/m },
   { name: '--env production', re: /--env(?:\s+|=)["']?production/ },
   { name: "'--env', 'production'", re: /['"`]--env['"`]\s*,\s*['"`]production['"`]/ },
-  { name: 'stg.oursharedevents.com', re: /stg\.oursharedevents\.com/ },
+  { name: '-e production', re: /(?:^|\s)-e(?:\s+|=)production/m },
   { name: '//oursharedevents.com', re: /\/\/oursharedevents\.com/ },
+  { name: 'a second staging site', re: /stg-full|stg-empty|staging-full/ },
+  { name: 'wrangler deploy', re: /wrangler\s+deploy/ },
 ];
 
 const offences = (text) => RULES.filter((r) => r.re.test(text)).map((r) => r.name);
@@ -28,63 +28,66 @@ const FILES = [
   'stock/seed/seed.json',
 ];
 
+// Comment lines may explain what is gone (the workflow header names stg-full to
+// say there is none); only code counts.
+const code = (text) =>
+  text
+    .split(/\r?\n/)
+    .filter((l) => !/^\s*(#|\/\/|\*|\/\*)/.test(l))
+    .join('\n');
+
 describe('detector controls', () => {
   test.each([
-    ['npx wrangler deploy --env staging', '--env staging'],
-    ['npx wrangler deploy --env staging\n', '--env staging'],
-    ['wrangler d1 execute x --env=staging --remote', '--env staging'],
-    ['npx wrangler deploy --env "staging"', '--env staging'],
-    ["npx wrangler deploy --env 'staging' --remote", '--env staging'],
-    ['npx wrangler deploy --env "production"', '--env production'],
-    ["spawn(['d1', '--env', 'staging'])", "'--env', 'staging'"],
-    ['wrangler r2 object get x -e staging', '-e staging'],
-    ['npx wrangler deploy --env production', '--env production'],
-    ["['--env', 'production']", "'--env', 'production'"],
-    ['curl https://stg.oursharedevents.com/health', 'stg.oursharedevents.com'],
+    ['npx wrangler d1 execute x --env production --remote', '--env production'],
+    ['wrangler d1 execute x --env=production --remote', '--env production'],
+    ['npx wrangler d1 execute x --env "production"', '--env production'],
+    ["spawn(['d1', '--env', 'production'])", "'--env', 'production'"],
+    ['wrangler r2 object get x -e production', '-e production'],
     ['curl -sS $PROTO//oursharedevents.com/api', '//oursharedevents.com'],
+    ['https://stg-full.oursharedevents.com/', 'a second staging site'],
+    ['wrangler d1 execute x --env staging-full --remote', 'a second staging site'],
+    ['npx wrangler deploy --env staging', 'wrangler deploy'],
   ])('flags %j', (text, rule) => {
     expect(offences(text)).toContain(rule);
   });
 
   test.each([
-    'npx wrangler deploy --env staging-full',
-    'npx wrangler deploy --env "staging-full"',
-    'wrangler d1 execute ocr-db-staging-full --env=staging-full --remote',
-    "['--env', 'staging-full']",
-    'https://stg-full.oursharedevents.com/',
-    'ose-uploads-staging-full/stock/manifest-index.json',
+    'wrangler d1 execute ocr-db-staging --env staging --remote',
+    "['--env', 'staging', '--remote']",
+    'https://stg.oursharedevents.com/',
+    'ose-uploads-staging/stock/manifest-index.json',
   ])('passes %j', (text) => {
     expect(offences(text)).toEqual([]);
   });
+
+  test('comment lines are not code', () => {
+    expect(code('# there is no separate stg-full site\nrun: x')).toBe('run: x');
+  });
 });
 
-describe('the stock run names only the full staging site', () => {
+describe('the stock run names only the staging site', () => {
   test('it scans the scripts, the workflow and the seed', () => {
     for (const rel of FILES) expect(existsSync(path.join(ROOT, rel)), rel).toBe(true);
     expect(FILES).toContain('scripts/stock/run-day.mjs');
   });
 
   test.each(FILES)('%s names no other env or host', (rel) => {
-    expect(offences(readFileSync(path.join(ROOT, rel), 'utf8'))).toEqual([]);
+    expect(offences(code(readFileSync(path.join(ROOT, rel), 'utf8')))).toEqual([]);
   });
 
-  test('the workflow and the run script do name the full site', () => {
-    const wf = readFileSync(path.join(ROOT, '.github/workflows/stock-data-full.yml'), 'utf8');
-    expect(wf).toContain('--env staging-full');
-    expect(wf).toContain('stg-full.oursharedevents.com');
+  test('the run script and the client do name staging', () => {
     const run = readFileSync(path.join(ROOT, 'scripts/stock/run-day.mjs'), 'utf8');
-    expect(run).toContain("WRANGLER_ENV = 'staging-full'");
+    expect(run).toContain("WRANGLER_ENV = 'staging'");
+    expect(run).toContain("D1_DATABASE = 'ocr-db-staging'");
+    expect(run).toContain("R2_BUCKET = 'ose-uploads-staging'");
+    const client = readFileSync(path.join(ROOT, 'scripts/stock/client.mjs'), 'utf8');
+    expect(client).toContain("STOCK_BASE_URL = 'https://stg.oursharedevents.com'");
   });
 });
 
-// Every wrangler command line names the full env: in the workflow, each line that
-// runs a wrangler subcommand; in run-day.mjs, each command array it hands the runner.
+// Every wrangler command goes through run-day's one runner, which refuses any
+// command not aimed at --env staging (assertStaging). The workflow runs none itself.
 const WRANGLER_LINE = /\bwrangler\s+(?:d1|deploy|r2|kv|secret|versions|rollback|tail|queues)\b/;
-const unscopedWorkflowLines = (text) =>
-  text
-    .split('\n')
-    .filter((line) => !/^\s*#/.test(line) && WRANGLER_LINE.test(line))
-    .filter((line) => !line.includes('--env staging-full'));
 function unscopedRunCalls(text) {
   const bad = [];
   for (const m of text.matchAll(/await run\(([^;]*?)\]\);/gs)) {
@@ -93,12 +96,8 @@ function unscopedRunCalls(text) {
   return bad;
 }
 
-describe('every wrangler invocation names --env staging-full', () => {
+describe('every wrangler invocation goes through the guarded runner', () => {
   test('detector controls', () => {
-    expect(unscopedWorkflowLines('run: npx wrangler deploy --env staging-full\n')).toEqual([]);
-    expect(unscopedWorkflowLines('run: npx wrangler deploy\n# npx wrangler deploy\n')).toEqual([
-      'run: npx wrangler deploy',
-    ]);
     expect(
       unscopedRunCalls("await run('x', ['d1', 'execute', D1, ...remote, '--file', p]);")
     ).toEqual([]);
@@ -108,9 +107,12 @@ describe('every wrangler invocation names --env staging-full', () => {
   const wf = readFileSync(path.join(ROOT, '.github/workflows/stock-data-full.yml'), 'utf8');
   const run = readFileSync(path.join(ROOT, 'scripts/stock/run-day.mjs'), 'utf8');
 
-  test('in the workflow', () => {
-    expect(wf.split('\n').filter((l) => WRANGLER_LINE.test(l)).length).toBeGreaterThan(3);
-    expect(unscopedWorkflowLines(wf)).toEqual([]);
+  test('the workflow runs no wrangler command of its own', () => {
+    expect(
+      code(wf)
+        .split('\n')
+        .filter((l) => WRANGLER_LINE.test(l))
+    ).toEqual([]);
   });
 
   test('in run-day.mjs', () => {

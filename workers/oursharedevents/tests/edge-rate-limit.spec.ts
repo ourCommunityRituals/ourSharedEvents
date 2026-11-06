@@ -148,9 +148,7 @@ describe('fails open — a speed bump never becomes an outage', () => {
 describe('wrangler.toml agrees with the code in every environment', () => {
   const toml = testEnv.TEST_WRANGLER_TOML;
 
-  const PREFIXES = ['', 'env.staging.', 'env.staging-full.', 'env.production.'];
-
-  for (const prefix of PREFIXES) {
+  for (const prefix of ['', 'env.staging.', 'env.production.']) {
     for (const [name, limit] of [
       ['PUBLIC_READ_EDGE_LIMITER', PUBLIC_READ_EDGE_MAX],
       ['FORM_EDGE_LIMITER', FORM_EDGE_MAX],
@@ -168,10 +166,7 @@ describe('wrangler.toml agrees with the code in every environment', () => {
 
   test('every namespace_id is unique, so environments never share counts', () => {
     const ids = [...toml.matchAll(/^namespace_id = "(\d+)"/gm)].map((m) => m[1]);
-    // two limiters per environment: derived from the sections, not a literal
-    const blocks = PREFIXES.reduce((n, p) => n + toml.split(`[[${p}ratelimits]]`).length - 1, 0);
-    expect(blocks).toBe(PREFIXES.length * 2);
-    expect(ids.length).toBe(blocks);
+    expect(ids.length).toBe(6);
     expect(new Set(ids).size).toBe(ids.length);
   });
 });

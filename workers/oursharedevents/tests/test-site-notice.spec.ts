@@ -21,24 +21,13 @@ describe('injectTestSiteNotice', () => {
     expect(out).toContain('role="note"');
     expect(out).toContain('Testing purposes only.');
     expect(count(out, '<h1')).toBe(count(PAGE, '<h1'));
-    expect(out).not.toContain('endorsement');
   });
 
-  test('STAGING_VARIANT=full adds the public-listings line', async () => {
-    const out = await injectTestSiteNotice(html(), {
-      WORKER_ENV: 'staging',
-      STAGING_VARIANT: 'full',
-    }).text();
+  // Owner 2026-11-06: one staging site, carrying the seed of real events and
+  // businesses, so every staging page also says the listings are not an endorsement.
+  test('every staging page carries the public-listings line', async () => {
+    const out = await injectTestSiteNotice(html(), { WORKER_ENV: 'staging' }).text();
     expect(out).toContain('nothing here is an endorsement or an offer');
-  });
-
-  test('STAGING_VARIANT=empty does not', async () => {
-    const out = await injectTestSiteNotice(html(), {
-      WORKER_ENV: 'staging',
-      STAGING_VARIANT: 'empty',
-    }).text();
-    expect(out).toContain('Testing purposes only.');
-    expect(out).not.toContain('endorsement');
   });
 
   // The band speaks the page's own language (<html lang>), so a Spanish page
@@ -46,10 +35,7 @@ describe('injectTestSiteNotice', () => {
   const pageIn = (lang: string) => PAGE.replace('<html>', `<html lang="${lang}">`);
 
   test('a Spanish page gets the band in Spanish, the listings line too', async () => {
-    const out = await injectTestSiteNotice(html(pageIn('es')), {
-      WORKER_ENV: 'staging',
-      STAGING_VARIANT: 'full',
-    }).text();
+    const out = await injectTestSiteNotice(html(pageIn('es')), { WORKER_ENV: 'staging' }).text();
     expect(out).toContain('<strong>Solo para pruebas.</strong>');
     expect(out).toContain('nada de esto es una recomendación ni una oferta');
     expect(out).not.toContain('Testing purposes only.');
@@ -68,10 +54,7 @@ describe('injectTestSiteNotice', () => {
   test.each(['production', 'development', 'test', undefined])(
     'WORKER_ENV=%s leaves the body byte-identical',
     async (w) => {
-      const out = await injectTestSiteNotice(html(), {
-        WORKER_ENV: w,
-        STAGING_VARIANT: 'full',
-      }).text();
+      const out = await injectTestSiteNotice(html(), { WORKER_ENV: w }).text();
       expect(out).toBe(PAGE);
     }
   );

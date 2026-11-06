@@ -2,6 +2,27 @@
 
 Date: 2026-11-04. Owner: Matthew Zdano (PO). Status: draft for owner approval.
 
+## Pivot 2026-11-06 (owner; one staging site)
+
+- **One staging site.** Owner: "you do not need to set up two separate databases. Because of the
+  distribution of looked-up events, I am able to exercise the testing conditions by just keeping
+  https://stg.oursharedevents.com/." The populated zips (60406, 60620, 60805, 60453) and the
+  deliberately empty 60655 show both experiences on stg itself.
+- **No stg-full.** `[env.staging-full]`, the `stg-empty.` alias and `STAGING_VARIANT` are removed.
+  Nothing was ever provisioned for stg-full, so nothing on Cloudflare needs undoing.
+- **Open stg (owner choice, 2026-11-06).** stg stays open to anyone; `robots.txt` disallows
+  indexing. The Access gate is removed. Every staging page now shows both lines of the notice:
+  "Testing purposes only." and that the listings are drawn from public sources and are not an
+  endorsement or offer (`src/lib/test-site-notice.ts`).
+- **The workflow** (`stock-data-full.yml`, renamed "Stock data (stg)") is seed → build →
+  check-swap. It deploys and migrates nothing (stg runs main as T1 deployed it). Every wrangler
+  command targets `--env staging --remote` (`ocr-db-staging`, `ose-uploads-staging`), and the
+  build and check use the staging secrets the T2 Bruno run already uses: `ADMIN_KEY`,
+  `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`. No new secret, database, bucket, DNS record
+  or Access policy is needed.
+- **Shared database.** stg's database also holds CI's own fixtures. The purge deletes only rows a
+  stock manifest names, so CI fixtures and hand-made events are never touched.
+
 ## Pivot 2026-11-05 (owner; supersedes the nightly search below)
 
 - **No nightly search, ever.** The search ran once, on 2026-11-05. Its rows are committed

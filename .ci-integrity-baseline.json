@@ -811,7 +811,7 @@
   "readUsesOnNewSecret": {
     "direction": "up",
     "reason": "Reads must name OCR_HUB_READ (OSE-1695): may only rise; a deleted read site needs a retired entry.",
-    "total": 31,
+    "total": 30,
     "byFile": {
       ".github/workflows/advanced-security-scan.yml": {
         "count": 2,
@@ -922,16 +922,22 @@
         "reason": "Rollback drill redeploys the Worker to staging, which bundles the pinned hub @ocr/ui (ADR-008)."
       },
       ".github/workflows/stock-data-full.yml": {
-        "count": 3,
+        "count": 2,
         "steps": [
           "build :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "check-swap :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
-          "deploy :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+          "check-swap :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
         ],
-        "reason": "The stg-full deploy bundles the pinned hub @ocr/ui (ADR-008); build and check-swap install the Worker deps for the lockfile wrangler (build lists its manifest in R2, check-swap purges)."
+        "reason": "Build and check-swap install the Worker deps for the lockfile wrangler (build lists its manifest in R2, check-swap purges), which needs the pinned hub @ocr/ui (ADR-008)."
       }
     },
-    "retired": []
+    "retired": [
+      {
+        "file": ".github/workflows/stock-data-full.yml",
+        "step": "deploy :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+        "reason": "Owner 2026-11-06: one staging site. The stock workflow no longer deploys a Worker of its own (stg runs main as T1 deployed it), so its deploy job and this hub-staging step were removed.",
+        "story": "OSE-1803"
+      }
+    ]
   },
   "writeUsesOnNewSecret": {
     "direction": "up",

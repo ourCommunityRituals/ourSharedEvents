@@ -1,5 +1,5 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- every path is stock-out/, a temp file this script names, or a fixed repo file */
-// Loads the full staging site from its fixed seed, one subcommand per workflow
+// Loads the staging site (stg.) from its fixed seed, one subcommand per workflow
 // job (.github/workflows/stock-data-full.yml), run when the owner dispatches it.
 // Each reads and writes files under stock-out/, which the workflow passes
 // between jobs as artifacts. There is no search (owner, 2026-11-05): the seed
@@ -12,7 +12,7 @@
 //   check-swap  accept the placements, check every node, swap or purge per node
 //
 // Every Cloudflare command goes through one wrangler(args) runner that refuses
-// any command not aimed at the staging-full env. Every I/O seam (fs, fetch,
+// any command not aimed at the staging env. Every I/O seam (fs, fetch,
 // wrangler, env, clock) is injected, so the swap is tested without wrangler.
 import * as nodeFs from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -40,16 +40,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const WORKER_DIR = join(ROOT, 'workers', 'oursharedevents');
 export const OUT_DIR = join(ROOT, 'stock-out');
 
-export const WRANGLER_ENV = 'staging-full';
-export const D1_DATABASE = 'ocr-db-staging-full';
-export const R2_BUCKET = 'ose-uploads-staging-full';
+export const WRANGLER_ENV = 'staging';
+export const D1_DATABASE = 'ocr-db-staging';
+export const R2_BUCKET = 'ose-uploads-staging';
 export const MANIFEST_PREFIX = 'stock/';
 export const INDEX_KEY = `${MANIFEST_PREFIX}manifest-index.json`;
 
+// The staging secrets the Bruno contract run already uses (repo level).
 const SECRET_ENV = [
-  'STG_FULL_ADMIN_KEY',
-  'STG_FULL_ACCESS_CLIENT_ID',
-  'STG_FULL_ACCESS_CLIENT_SECRET',
+  'ADMIN_KEY',
+  'CF_ACCESS_CLIENT_ID',
+  'CF_ACCESS_CLIENT_SECRET',
   'INSTAGRAM_ACCESS_TOKEN',
 ];
 // wrangler's answer for an R2 key that is not there. Anything else is a failure.
@@ -71,8 +72,8 @@ export function seedExpected(nodes) {
 
 // ── Target guard ───────────────────────────────────────────────────────────
 
-/** Throws unless a wrangler command names `--env staging-full` once and runs remote. */
-export function assertStagingFull(args) {
+/** Throws unless a wrangler command names `--env staging` once and runs remote. */
+export function assertStaging(args) {
   if (!Array.isArray(args) || !args.every((a) => typeof a === 'string')) {
     throw new Error('wrangler: arguments must be strings');
   }
@@ -104,7 +105,7 @@ export function makeCloud({ wrangler, fs, tmpDir, log = () => {} }) {
   let n = 0;
   const tmp = (name) => join(tmpDir, `stock-${process.pid}-${++n}-${name}`);
   async function run(op, args) {
-    assertStagingFull(args);
+    assertStaging(args);
     const r = await wrangler(args);
     const code = r && Number.isInteger(r.code) ? r.code : 1;
     const out = `${(r && r.stdout) || ''}${(r && r.stderr) || ''}`;
@@ -590,7 +591,7 @@ function reasonsText(reasons) {
 export function renderSummary({ report, nodes, expected, manifest, notes }) {
   const nodeList = Array.isArray(nodes) ? nodes : nodes.nodes;
   const lines = [
-    '## Stock data: stg-full',
+    '## Stock data: stg',
     '',
     '| Node | Expected (seed) | Stock listed | Total listed | Result | Reasons |',
     '| --- | --- | --- | --- | --- | --- |',
@@ -650,17 +651,17 @@ function need(env, name) {
 export function clientFrom(env, fetchFn) {
   return createClient({
     baseUrl: STOCK_BASE_URL,
-    adminKey: need(env, 'STG_FULL_ADMIN_KEY'),
-    accessClientId: need(env, 'STG_FULL_ACCESS_CLIENT_ID'),
-    accessClientSecret: need(env, 'STG_FULL_ACCESS_CLIENT_SECRET'),
+    adminKey: need(env, 'ADMIN_KEY'),
+    accessClientId: need(env, 'CF_ACCESS_CLIENT_ID'),
+    accessClientSecret: need(env, 'CF_ACCESS_CLIENT_SECRET'),
     fetch: fetchFn,
   });
 }
 
 /** Public reads: the Access service-token headers only, never the admin Bearer, never a redirect. */
 export function fetchPublicFrom(env, fetchFn) {
-  const id = need(env, 'STG_FULL_ACCESS_CLIENT_ID');
-  const secret = need(env, 'STG_FULL_ACCESS_CLIENT_SECRET');
+  const id = need(env, 'CF_ACCESS_CLIENT_ID');
+  const secret = need(env, 'CF_ACCESS_CLIENT_SECRET');
   const origin = new URL(STOCK_BASE_URL).origin;
   return (url, init = {}) => {
     if (new URL(url).origin !== origin) throw new Error('public read off the site');
@@ -907,7 +908,7 @@ export async function runCheckSwap({
       const msg =
         'No manifest was saved; rows created by an interrupted build may need a manual purge.';
       log(msg);
-      summarize(env, fs, `## Stock data: stg-full\n\n${msg}\n`);
+      summarize(env, fs, `## Stock data: stg\n\n${msg}\n`);
       return 1;
     }
     manifest = copy.manifest;
