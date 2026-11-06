@@ -285,7 +285,7 @@ Each step goes in a follow-up PR from `main`, and each is born red.
 - **Staging audience and service actor:** yes, pin them. The owner reads the staging Access app's AUD tag and creates the CI service token; the tag and the token's Client ID go into `[env.staging.vars]` in a PR; the token's secrets go into GitHub as `CF_ACCESS_CI_BRAND_CLIENT_ID` / `_SECRET` (owner only).
 - **`DEV_OPEN_ADMIN` on a deploy without `--env`:** no. The bypass must need an explicit environment value that only local development sets, so a no-`--env` deploy (`WORKER_ENV=development`) can never open it. Separate work (TL-092).
 - **Mutation testing:** make it a required check, and widen it: sunny and rainy paths, blue- and red-team security testing along whole target chains, split into separately organised runs. SharedReport gets the most weight, because after the privacy infrastructure it is the product's income driver at Anchor (mid), Enterprise and a possible Boutique level. Making a check required is a repository control the owner sets; the program is separate work.
-- **#1092 merged below the gate:** not yet answered.
+- **#1092 merged below the gate:** accepted (owner, 2026-11-06), with the Highs in this register addressed in the follow-up PR #1107 (merged 2026-11-05) and the rest tracked as TL-091..TL-093.
 
 ## Fix batch status (2026-11-05, branch `claude/admin-identity-ccr2-fixes`)
 
