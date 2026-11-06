@@ -91,10 +91,10 @@ describe('OSE-1761 | the prefix renders the page in that language', () => {
     expect(html).toContain(`hreflang="en" href="${ORIGIN}${readablePath(e)}"`);
     expect(html).toContain(`hreflang="es" href="${ORIGIN}/es${readablePath(e)}"`);
     expect(html).toContain(`hreflang="x-default" href="${ORIGIN}${readablePath(e)}"`);
-    // The switch: a plain link to English, named in English, in a group named in Spanish.
+    // The switch: a plain link to English, named in Spanish ("Inglés"), in a group named in Spanish.
     expect(html).toContain('aria-label="Idioma"');
     expect(html).toMatch(
-      new RegExp(`<a lang="en" hreflang="en"[^>]*href="${readablePath(e)}">English</a>`)
+      new RegExp(`<a lang="es" hreflang="en"[^>]*href="${readablePath(e)}">Inglés</a>`)
     );
   });
 
@@ -146,7 +146,7 @@ describe('OSE-1761 | the prefix renders the page in that language', () => {
     expect(html).toContain(`<link rel="canonical" href="${ORIGIN}/es${readablePath(e)}"`);
     // The way back to English is a link to the unprefixed address.
     expect(html).toMatch(
-      new RegExp(`<a lang="en" hreflang="en"[^>]*href="${readablePath(e)}">English</a>`)
+      new RegExp(`<a lang="es" hreflang="en"[^>]*href="${readablePath(e)}">Inglés</a>`)
     );
   });
 
