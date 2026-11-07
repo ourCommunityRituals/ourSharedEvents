@@ -125,6 +125,18 @@ describe('one staging site (owner 2026-11-06)', () => {
     }
   });
 
+  test('check-swap sends the CI edge token its public reads need (OSE-939)', () => {
+    const step = stepsOf('check-swap').find((s) => /run-day\.mjs/.test(String(s.run || '')));
+    expect(step.env.OCR_CI_EDGE_TOKEN).toBe('${{ secrets.OCR_CI_EDGE_TOKEN }}');
+    // only the step that reads the site holds it
+    for (const job of Object.keys(jobs)) {
+      for (const s of stepsOf(job)) {
+        if (s === step) continue;
+        expect(JSON.stringify(s), `${job}/${s.name}`).not.toContain('OCR_CI_EDGE_TOKEN');
+      }
+    }
+  });
+
   test('every wrangler command in the workflow targets --env staging', () => {
     for (const line of code.split('\n').filter((l) => /\bwrangler\b/.test(l))) {
       expect(line).toMatch(/--env staging(\s|$)/);

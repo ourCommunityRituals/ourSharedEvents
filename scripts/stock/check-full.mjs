@@ -26,6 +26,21 @@ const STRIP_RE = /data-testid="(?:pre|live)-sponsor-strip"/;
 const AREA_MARK = 'data-testid="landing-area"';
 const DOORS_MARK = 'data-testid="landing-doors"';
 
+// The Cloudflare edge answers a challenged read itself (cf-mitigated: challenge,
+// a 403 "Just a moment..." page) and the Worker never runs. stg challenges a
+// non-browser read of /q/, /s/ and /events/<id> unless the WAF skip rule for
+// X-OCR-CI lets it through (OSE-939). Such a read is named as the edge, never as
+// a broken QR, link or page (run 42359815222, 2026-11-07).
+export function edgeChallenged(res) {
+  const h = res && res.headers;
+  if (!h || typeof h.get !== 'function') return false;
+  return (
+    String(h.get('cf-mitigated') || '')
+      .trim()
+      .toLowerCase() === 'challenge'
+  );
+}
+
 const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const dayNumber = (ymd) => {
@@ -201,11 +216,13 @@ export async function checkNodes({
     if (!zip) {
       reasons.push('no-zip');
     } else if (!underGate) {
-      const res = await publicGet(siteUrl(`/?zip=${encodeURIComponent(zip)}`));
+      const zipPath = `/?zip=${encodeURIComponent(zip)}`;
+      const res = await publicGet(siteUrl(zipPath));
       const page = res && res.status === 200 ? await bodyOf(res) : '';
       const areaAt = page.indexOf(AREA_MARK);
       const doorsAt = page.indexOf(DOORS_MARK);
-      if (areaAt < 0 || (doorsAt >= 0 && doorsAt < areaAt))
+      if (edgeChallenged(res)) reasons.push(`edge-challenged:${zipPath}`);
+      else if (areaAt < 0 || (doorsAt >= 0 && doorsAt < areaAt))
         reasons.push(`zip-not-map-first:${zip}`);
     }
 
@@ -217,22 +234,30 @@ export async function checkNodes({
       } else {
         const qUrl = siteUrl(qr.qPath);
         if (!qUrl) reasons.push(`bad-path:${id}`);
-        else if (!redirectsToEvent(await publicGet(qUrl), id)) reasons.push(`qr-broken:${id}`);
+        else {
+          const got = await publicGet(qUrl);
+          if (edgeChallenged(got)) reasons.push(`edge-challenged:${qr.qPath}`);
+          else if (!redirectsToEvent(got, id)) reasons.push(`qr-broken:${id}`);
+        }
       }
       if (qr && !qr.sPath) {
         reasons.push(`no-shortcode:${id}`);
       } else if (qr) {
         const sUrl = siteUrl(qr.sPath);
         if (!sUrl) reasons.push(`bad-path:${id}`);
-        else if (!redirectsToEvent(await publicGet(sUrl), id)) {
-          reasons.push(`shortlink-broken:${id}`);
+        else {
+          const got = await publicGet(sUrl);
+          if (edgeChallenged(got)) reasons.push(`edge-challenged:${qr.sPath}`);
+          else if (!redirectsToEvent(got, id)) reasons.push(`shortlink-broken:${id}`);
         }
       }
 
       // the event page shows its sponsor strip
-      const res = await publicGet(siteUrl(`/events/${encodeURIComponent(id)}`));
+      const eventPath = `/events/${encodeURIComponent(id)}`;
+      const res = await publicGet(siteUrl(eventPath));
       const page = res && res.status === 200 ? await bodyOf(res) : '';
-      if (!STRIP_RE.test(page)) reasons.push(`no-sponsor-strip:${id}`);
+      if (edgeChallenged(res)) reasons.push(`edge-challenged:${eventPath}`);
+      else if (!STRIP_RE.test(page)) reasons.push(`no-sponsor-strip:${id}`);
 
       // art, when the event has some, loads from this site
       const art = listedById.get(String(id))?.cover_image_url;
@@ -247,7 +272,8 @@ export async function checkNodes({
           reasons.push(`art-off-site:${id}`);
         } else {
           const got = await publicGet(url);
-          if (!got || got.status !== 200) reasons.push(`art-broken:${id}`);
+          if (edgeChallenged(got)) reasons.push(`edge-challenged:${art}`);
+          else if (!got || got.status !== 200) reasons.push(`art-broken:${id}`);
         }
       }
     }
@@ -299,11 +325,17 @@ export async function checkSearches({ searches, fetchPublic, sleep = realSleep, 
     lastAt = now();
     const url = new URL(`/events?q=${encodeURIComponent(q)}`, origin);
     let page = '';
+    let challenged = false;
     try {
       const res = await fetchPublic(url.href, { method: 'GET', redirect: 'manual' });
+      challenged = edgeChallenged(res);
       page = res && res.status === 200 ? await res.text() : '';
     } catch {
       page = '';
+    }
+    if (challenged) {
+      results[q] = { pass: false, count: null, expected, reasons: ['edge-challenged'] };
+      continue;
     }
     if (page.includes(PUBLIC_ERROR_MARK)) {
       results[q] = { pass: false, count: null, expected, reasons: ['events-list-error'] };

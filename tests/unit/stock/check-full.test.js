@@ -82,6 +82,13 @@ const status = (code) => ({
   headers: { get: () => null },
   text: async () => '',
 });
+// What the Cloudflare edge answers a challenged read: the Worker never runs.
+const challenge = {
+  status: 403,
+  ok: false,
+  headers: { get: (k) => (k.toLowerCase() === 'cf-mitigated' ? 'challenge' : null) },
+  text: async () => '<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>',
+};
 
 const MAP_FIRST =
   '<section data-testid="landing-area"></section><section data-testid="landing-doors"></section>';
@@ -462,6 +469,37 @@ describe('checkNodes: anchor, zip, QR, pages and art', () => {
     expect(s.calls.some((c) => String(c.url).includes('elsewhere'))).toBe(false);
   });
 
+  // Run 42359815222 (2026-11-07): stg answered /q/, /s/ and /events/<id> with a
+  // Cloudflare managed challenge to the check's non-browser reads, and every event
+  // was reported as a broken QR, link and page. The edge is named as the edge.
+  test('an edge challenge is named as the edge, never as a broken QR, link, page or art', async () => {
+    const { manifest, listed } = day({ [A]: PER_NODE });
+    const ev = listed[0];
+    const qr = manifest.qr[0];
+    const zip = node(A).zips[0];
+    const r = await run(
+      site({
+        listed,
+        override: {
+          [`/?zip=${zip}`]: challenge,
+          [qr.qPath]: challenge,
+          [qr.sPath]: challenge,
+          [`/events/${ev.id}`]: challenge,
+          [ev.cover_image_url]: challenge,
+        },
+      }),
+      manifest
+    );
+    expect(r[A].pass).toBe(false);
+    expect(r[A].reasons).toEqual([
+      `edge-challenged:/?zip=${zip}`,
+      `edge-challenged:${qr.qPath}`,
+      `edge-challenged:${qr.sPath}`,
+      `edge-challenged:/events/${ev.id}`,
+      `edge-challenged:${ev.cover_image_url}`,
+    ]);
+  });
+
   test('a public read that throws is a reason, not a crash', async () => {
     const { manifest, listed } = day({ [A]: PER_NODE });
     const s = site({ listed });
@@ -593,6 +631,16 @@ describe('checkSearches: each /events search reads its total', () => {
       count: null,
       expected: MG,
       reasons: ['events-list-error'],
+    });
+  });
+
+  test('an edge challenge is named as the edge, never as an unreadable page', async () => {
+    const { results } = await run({ 'Oak Lawn': challenge }, { 'Oak Lawn': OL });
+    expect(results['Oak Lawn']).toEqual({
+      pass: false,
+      count: null,
+      expected: OL,
+      reasons: ['edge-challenged'],
     });
   });
 

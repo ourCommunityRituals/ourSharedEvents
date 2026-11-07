@@ -196,5 +196,8 @@ jobs:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # stg challenges a non-browser read of /q/, /s/ and /events/<id> at the edge;
+          # the WAF skip rule lets a read carrying X-OCR-CI with this value through (OSE-939).
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
           BUILD_RESULT: ${{ needs.build.result }}
         run: node scripts/stock/run-day.mjs check-swap
