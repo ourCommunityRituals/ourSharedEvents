@@ -20,31 +20,60 @@
 //   • THE TRAP: after `git checkout --force`, tracked + lockfile injection go GREEN
 //     again — locking WHY the workflow must not re-checkout before the check.
 // ─────────────────────────────────────────────────────────────────────────────
-const { execFileSync, execSync } = require('node:child_process');
-const { mkdtempSync, writeFileSync, mkdirSync, rmSync, appendFileSync } = require('node:fs');
+const { execFileSync } = require('node:child_process');
+const {
+  mkdtempSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+  appendFileSync,
+  cpSync,
+} = require('node:fs');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
 
 const SCRIPT = path.resolve(__dirname, '../../../scripts/check-post-execution-integrity.sh');
 const SRC = 'workers/oursharedevents/src';
 
+// git without a shell in between (execSync started cmd.exe, then git, for every call).
+const gitIn = (dir) => (args) => execFileSync('git', args, { cwd: dir, stdio: 'pipe' });
+
 /** Build a committed, clean repo that mirrors the paths the script guards. */
-function makeRepo() {
-  const dir = mkdtempSync(path.join(tmpdir(), 'ose-integrity-'));
-  const git = (args) => execSync(`git ${args}`, { cwd: dir, stdio: 'pipe' });
+function buildRepo(dir) {
+  const git = gitIn(dir);
   mkdirSync(path.join(dir, SRC), { recursive: true });
   mkdirSync(path.join(dir, 'workers/oursharedevents/migrations'), { recursive: true });
   writeFileSync(path.join(dir, SRC, 'app.ts'), 'export const ok = true;\n');
   writeFileSync(path.join(dir, 'package-lock.json'), '{"name":"x","lockfileVersion":3}\n');
   writeFileSync(path.join(dir, 'workers/oursharedevents/package-lock.json'), '{"name":"w"}\n');
-  git('init -q -b main');
-  git('config user.email t@t.co');
-  git('config user.name t');
-  git('config core.autocrlf false');
-  git('add -A');
-  git('commit -qm base');
-  return { dir, git };
+  git(['init', '-q', '-b', 'main']);
+  git(['config', 'user.email', 't@t.co']);
+  git(['config', 'user.name', 't']);
+  git(['config', 'core.autocrlf', 'false']);
+  git(['add', '-A']);
+  git(['commit', '-qm', 'base']);
 }
+
+// The committed repo is built once (six git processes) and each case gets a copy of it, .git
+// included. The GREEN case below is what proves a copy reads clean to the detector.
+let template;
+beforeAll(() => {
+  template = mkdtempSync(path.join(tmpdir(), 'ose-integrity-template-'));
+  buildRepo(template);
+}, 30_000);
+afterAll(() => {
+  if (template) rmSync(template, { recursive: true, force: true });
+});
+
+function makeRepo() {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ose-integrity-'));
+  cpSync(template, dir, { recursive: true });
+  return { dir, git: gitIn(dir) };
+}
+
+// Every case runs the real detector: bash plus three to five git processes. That is the
+// contract under test, so it stays a real process, with an explicit timeout for a loaded machine.
+const DETECTOR_BOUND = 20_000;
 
 /** Run the detector against `dir`. Returns { code } — 0 = green, non-zero = red. */
 function runDetector(dir) {
@@ -61,7 +90,7 @@ function runDetector(dir) {
   }
 }
 
-describe('S2 post-execution injection detector (born-red)', () => {
+describe('S2 post-execution injection detector (born-red)', { timeout: DETECTOR_BOUND }, () => {
   let repos = [];
   const fresh = () => {
     const r = makeRepo();
@@ -119,7 +148,7 @@ describe('S2 post-execution injection detector (born-red)', () => {
     writeFileSync(path.join(dir, 'package-lock.json'), '{"evil":true}\n');
     expect(runDetector(dir).code).not.toBe(0); // seen BEFORE a re-checkout
 
-    git('checkout --progress --force HEAD'); // what actions/checkout@v7 does
+    git(['checkout', '--progress', '--force', 'HEAD']); // what actions/checkout@v7 does
     // Tracked + lockfile mutations are gone; only untracked-file detection would survive.
     expect(runDetector(dir).code).toBe(0); // ← vacuous green: proves the trap
   });
