@@ -15,6 +15,8 @@
  */
 
 import { createDataProvider, type DataProviderEnv } from './data-provider.js';
+import { msg } from './i18n/catalog.js';
+import { DEFAULT_LANG, isLang, type Lang } from './i18n/languages.js';
 
 export const DEMO_BANNER_TESTID = 'demo-provenance-banner';
 export const DEGRADED_BANNER_TESTID = 'data-unavailable-banner';
@@ -90,14 +92,17 @@ function provenanceBar(o: {
   );
 }
 
-/** OSE-1012 — the 'demo' state: a confident amber showcase bar. Arity-0. */
-export function demoBannerMarkup(): string {
+/**
+ * OSE-1012 — the 'demo' state: a confident amber showcase bar. Arity-0 (the
+ * language defaults); its words are in the catalog, in the page's language.
+ */
+export function demoBannerMarkup(lang: Lang = DEFAULT_LANG): string {
   return provenanceBar({
     testid: DEMO_BANNER_TESTID,
     bg: 'var(--accent,#b45309)',
-    chip: 'DEMO',
-    text: 'Showcase only &mdash; not the live site.',
-    label: 'Demo site notice',
+    chip: msg(lang, 'provenance.demoChip'),
+    text: msg(lang, 'provenance.demoText'),
+    label: msg(lang, 'provenance.demoLabel'),
   });
 }
 
@@ -106,21 +111,36 @@ export function demoBannerMarkup(): string {
  * serving mock FALLBACK. Honest about degradation, NEVER "demo" (a broken state
  * is not a showcase); neutral slate, distinct from the amber demo bar. Arity-0.
  */
-export function degradedBannerMarkup(): string {
+export function degradedBannerMarkup(lang: Lang = DEFAULT_LANG): string {
   return provenanceBar({
     testid: DEGRADED_BANNER_TESTID,
     bg: '#334155',
-    chip: 'DATA UNAVAILABLE',
-    text: 'Showing sample content while the live data reconnects.',
-    label: 'Data temporarily unavailable notice',
+    chip: msg(lang, 'provenance.degradedChip'),
+    text: msg(lang, 'provenance.degradedText'),
+    label: msg(lang, 'provenance.degradedLabel'),
   });
 }
 
 /** The banner markup for a provenance state — empty string for 'live'. */
-export function provenanceBannerMarkup(state: SurfaceProvenance): string {
-  if (state === 'demo') return demoBannerMarkup();
-  if (state === 'degraded') return degradedBannerMarkup();
+export function provenanceBannerMarkup(
+  state: SurfaceProvenance,
+  lang: Lang = DEFAULT_LANG
+): string {
+  if (state === 'demo') return demoBannerMarkup(lang);
+  if (state === 'degraded') return degradedBannerMarkup(lang);
   return '';
+}
+
+/**
+ * The language of a page, from its own `<html lang>` (OSE-1762), as the
+ * staging band reads it (lib/test-site-notice.ts). A page with no `lang`, or
+ * one the catalog has not got, is the default.
+ */
+function pageLang(htmlDoc: string): Lang {
+  const open = /<html\b[^>]*>/i.exec(htmlDoc.slice(0, 4096));
+  const tag = open && /\slang="([^"]*)"/i.exec(open[0]);
+  const value = tag ? tag[1].trim().toLowerCase() : '';
+  return isLang(value) ? value : DEFAULT_LANG;
 }
 
 /**
@@ -129,7 +149,8 @@ export function provenanceBannerMarkup(state: SurfaceProvenance): string {
  * unchanged, so callers can inject unconditionally.
  */
 export function injectProvenanceBanner(htmlDoc: string, state: SurfaceProvenance): string {
-  const markup = provenanceBannerMarkup(state);
+  // In the page's own language: the band says what the page around it says.
+  const markup = provenanceBannerMarkup(state, pageLang(htmlDoc));
   if (!markup) return htmlDoc;
   // Linear on purpose: /(<body[^>]*>)/i rescans to the end from every "<body"
   // that has no ">" after it, which is quadratic (CodeQL js/polynomial-redos).

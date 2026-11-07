@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Próximos eventos | OurSharedEvents</title>
+    <link rel="stylesheet" href="/ui.css" />
+    <style>
+      header { background: var(--surface); border-bottom: 1px solid var(--border); color: var(--text); padding: 1.25rem 2rem; display: flex; align-items: center; gap: 1rem; }
+      header h1 { overflow-wrap: anywhere; font-size: 1.4rem; font-weight: 600; letter-spacing: -0.01em; }
+      main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+      h2 { font-size: 1.1rem; font-weight: 600; color: var(--text-muted); margin-bottom: 1rem; }
+      
+      #events, .view-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+      .event-card { min-height: var(--tap-min); position: relative; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 1.25rem 1.5rem; transition: background 0.15s; }
+      .event-card:hover { background: var(--surface-hover); }
+      .event-card-link { position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-sm); }
+      .event-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+      .event-card .event-thumb-box { position: relative; z-index: 2; pointer-events: none; flex: 0 0 64px; width: 64px; height: 64px; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-hover) url('/event-default-thumb.svg') center / cover no-repeat; }
+      .event-card .event-thumb { display: block; position: relative; width: 64px; height: 64px; object-fit: cover; }
+      .event-card .event-thumb::before { content: ''; position: absolute; inset: 0; background: var(--surface-hover) url('/event-default-thumb.svg') center / cover no-repeat; }
+      .event-card .event-info { position: relative; z-index: 2; pointer-events: none; flex: 1 1 12rem; min-width: 0; }
+      .event-card h3 { overflow-wrap: anywhere; font-size: 1rem; font-weight: 600; margin: 0 0 0.35rem; color: var(--text); }
+      .event-card .meta { font-size: 0.95rem; color: var(--text-muted); margin: 0; }
+      .event-card .cta { position: relative; z-index: 3; display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1.25rem; min-height: var(--tap-min); background: var(--accent); color: var(--on-accent); border-radius: var(--radius-sm); font-size: 1rem; font-weight: 600; text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+      .event-card .cta:hover { background: var(--accent-hover); }
+      .event-card .cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .event-card .cta-secondary { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+      @media (max-width: 480px) {
+        .event-card .event-info { flex: 1 1 0; }
+        .event-card .cta { flex: 1 1 100%; }
+      }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+      .tag-wrapped { display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; background: var(--bg); color: var(--text-muted); }
+      .events-subheading { font-size: 1.1rem; font-weight: 600; color: var(--text-muted); margin: 0.75rem 0 0; }
+      .empty { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 1.5rem 1rem; text-align: center; color: var(--text-muted); font-size: 1rem; }
+      .empty a { color: var(--accent); font-weight: 600; }
+      .disc-search { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.75rem; }
+      .disc-q { flex: 1 1 8rem; min-width: 0; min-height: 48px; font: inherit; padding: 0.5rem 0.9rem; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); }
+      .disc-go { min-height: 48px; padding: 0 1.1rem; border: none; border-radius: 999px; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 700; cursor: pointer; }
+      .disc-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.5rem; padding: 0; border: 0; min-inline-size: 0; }
+      .disc-chip, .disc-clear { flex: 0 1 auto; display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.95rem; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted); font-size: 0.95rem; font-weight: 600; text-decoration: none; cursor: pointer; }
+      .disc-chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+      .disc-chip.active::before { content: '\2713'; margin-right: 0.35rem; }
+      .disc-clear { color: var(--text); text-decoration: underline; }
+      .disc-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); padding: 0; margin: 0 0.25rem 0 0; align-self: center; }
+      .disc-summary { font-size: 0.95rem; color: var(--text-muted); margin: 0 0 0.75rem; }
+      .loading {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-muted);
+        font-size: 0.95rem;
+      }
+      .error {
+        text-align: center;
+        padding: 2rem;
+        color: var(--danger);
+      }
+      .sponsor-strip {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        padding: 0.75rem 0;
+        margin-bottom: 1rem;
+        overflow-x: auto;
+      }
+      .sponsor-strip:empty {
+        display: none;
+      }
+      .sponsor-card {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
+      }
+      .sponsor-card img {
+        height: 32px;
+        width: auto;
+        max-width: 100px;
+        object-fit: contain;
+      }
+      .sponsor-card a {
+        font-size: 0.8rem;
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .sponsor-card a:hover {
+        text-decoration: underline;
+      }
+      .sponsor-card a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .skip-link {
+        position: absolute;
+        left: -9999px;
+        top: auto;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+      }
+      .skip-link:focus {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: auto;
+        height: auto;
+        padding: 0.5rem 1rem;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 1rem;
+        z-index: 9999;
+        text-decoration: none;
+        border-bottom: 2px solid var(--accent);
+      }
+      footer {
+        text-align: center;
+        padding: 1.5rem;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        border-top: 1px solid var(--border);
+      }
+      footer a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
+      
+    .ose-never-who { margin: 2rem 0 0; border-top: 1px solid var(--border); font-size: 0.95rem; color: var(--text-muted); }
+    .ose-never-who-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; min-height: 44px; padding: 0.5rem 0; cursor: pointer; list-style: none; }
+    .ose-never-who-summary::-webkit-details-marker { display: none; }
+    .ose-never-who-line { color: var(--text); font-weight: 600; }
+    .ose-never-who-trigger { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+    .ose-never-who-trigger::after { content: " \25B8"; display: inline-block; text-decoration: none; }
+    .ose-never-who[open] .ose-never-who-trigger::after { content: " \25BE"; }
+    .ose-never-who-summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    .ose-never-who-body { padding: 0 0 0.75rem; }
+    .ose-never-who-body p { margin: 0 0 0.5rem; }
+    .ose-never-who-body a { color: var(--accent); }
+    </style>
+    <link rel="canonical" href="https://oursharedevents.com/es/events" />
+  <meta property="og:locale" content="es_US" />
+</head>
+  <body><div data-testid="data-unavailable-banner" role="status" aria-label="Aviso de datos no disponibles por el momento" style="position:sticky;top:0;left:0;right:0;z-index:2147483000;display:flex;gap:.5rem;align-items:center;justify-content:center;padding:.4rem .75rem;background:#334155;color:#fff;text-align:center;font:600 clamp(.72rem,2.6vw,.85rem)/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.01em;box-shadow:0 1px 3px rgba(0,0,0,.25);"><span style="background:rgba(255,255,255,.22);border-radius:.2rem;padding:.05rem .4rem;font-weight:800;letter-spacing:.06em;">DATOS NO DISPONIBLES</span><span>Mostramos contenido de ejemplo mientras se restablecen los datos reales.</span></div>
+    <a href="#main-content" class="skip-link" data-testid="public-skip-link">Ir al contenido</a>
+    <header data-testid="public-header" role="banner" aria-label="OurSharedEvents">
+      <h1 data-testid="public-title"><a href="/es/" data-testid="public-home-link" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;min-height:44px">OurSharedEvents</a></h1>
+    </header>
+    <main id="main-content" data-testid="public-main" aria-label="Próximos eventos de la comunidad">
+      <section data-testid="public-sponsor-section" aria-label="Patrocinadores del evento">
+        <div
+          id="sponsor-banner"
+          data-testid="public-sponsor-banner"
+          role="region"
+          aria-label="Patrocinadores"
+        ></div>
+      </section>
+      <section data-testid="public-events-section" aria-labelledby="events-heading">
+        <p id="events-count" class="sr-only" data-testid="public-events-count" role="status" aria-live="polite">4 eventos en 60643</p>
+        <h2 id="events-heading" data-testid="public-events-heading" tabindex="-1">Eventos en 60643</h2>
+        <!-- Discovery filters (lib/event-discovery): server-rendered GET form +
+             "when" chips. Works with no JS; the URL is the state. -->
+        
+        <form class="disc-search" method="get" action="/es/events" role="search" data-testid="disc-search">
+          <input type="hidden" name="when" value="all" />
+          <label class="sr-only" for="disc-q">Busca eventos por nombre, lugar, ciudad o código postal</label>
+          <input id="disc-q" class="disc-q" type="search" name="q" value="60643" maxlength="60" placeholder="Nombre, lugar, ciudad o código postal" autocomplete="off" data-testid="disc-q" />
+          <button type="submit" class="disc-go" data-testid="disc-go">Buscar</button>
+        </form>
+        <nav class="disc-chips" aria-label="Cuándo" data-testid="disc-chips"><a class="disc-chip active" href="/es/events?when=all&amp;q=60643" data-testid="disc-when-all" aria-current="true">Todo</a><a class="disc-chip" href="/es/events?when=weekend&amp;q=60643" data-testid="disc-when-weekend">Este fin de semana</a><a class="disc-chip" href="/es/events?when=week&amp;q=60643" data-testid="disc-when-week">Próximos 7 días</a><a class="disc-chip" href="/es/events?when=month&amp;q=60643" data-testid="disc-when-month">Este mes</a><a class="disc-chip" href="/es/events?when=past&amp;q=60643" data-testid="disc-when-past">Terminados hace poco</a><a class="disc-clear" href="/es/events" data-testid="disc-clear">Borrar filtros</a></nav>
+        <p class="disc-summary" data-testid="disc-summary">4 eventos en 60643</p>
+        <!-- OSE-1243: server-rendered. The Worker replaces this marker with the
+             event cards before the page is sent, so the served HTML is the
+             truth and there is no second round trip to see an event. The
+             "Loading events…" paragraph that used to sit here is gone with the
+             script that resolved it. -->
+        <div id="events" data-testid="public-events" aria-live="polite" aria-atomic="false">
+          
+          <article class="event-card" data-testid="public-event-card" data-event-id="evt_g03" data-phase="pre_event">
+            <a class="event-card-link" href="/es/events/evt_g03/golden-3" data-testid="public-event-card-link" aria-label="Abrir la página pública de Vinyl Swap"></a>
+            <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="public-event-thumb"></span>
+            <div class="event-info" data-testid="public-event-info">
+              <h3 data-testid="public-event-name">Vinyl Swap</h3>
+              <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">martes, 27 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Beverly Records</span></p>
+              
+            </div>
+            <a class="cta" href="/events/evt_g03/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Vinyl Swap">Inscribirse</a>
+          </article>
+          <article class="event-card" data-testid="public-event-card" data-event-id="evt_g04" data-phase="pre_event">
+            <a class="event-card-link" href="/es/events/evt_g04/golden-4" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 4"></a>
+            <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="public-event-thumb"></span>
+            <div class="event-info" data-testid="public-event-info">
+              <h3 data-testid="public-event-name">Golden Event 4</h3>
+              <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">jueves, 5 de noviembre de 2026</span> &middot; <span data-testid="public-event-venue">Beverly Records</span></p>
+              
+            </div>
+            <a class="cta" href="/events/evt_g04/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 4">Inscribirse</a>
+          </article>
+          <article class="event-card" data-testid="public-event-card" data-event-id="evt_g06" data-phase="pre_event">
+            <a class="event-card-link" href="/es/events/evt_g06/golden-6" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 6"></a>
+            <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="public-event-thumb"></span>
+            <div class="event-info" data-testid="public-event-info">
+              <h3 data-testid="public-event-name">Golden Event 6</h3>
+              <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">jueves, 19 de noviembre de 2026</span> &middot; <span data-testid="public-event-venue">Beverly Records</span></p>
+              
+            </div>
+            <a class="cta" href="/events/evt_g06/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 6">Inscribirse</a>
+          </article>
+          <article class="event-card" data-testid="public-event-card" data-event-id="evt_g08" data-phase="pre_event">
+            <a class="event-card-link" href="/es/events/evt_g08/golden-8" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 8"></a>
+            <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="public-event-thumb"></span>
+            <div class="event-info" data-testid="public-event-info">
+              <h3 data-testid="public-event-name">Golden Event 8</h3>
+              <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">jueves, 10 de diciembre de 2026</span> &middot; <span data-testid="public-event-venue">Beverly Records</span></p>
+              
+            </div>
+            <a class="cta" href="/events/evt_g08/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 8">Inscribirse</a>
+          </article>
+        </div>
+      </section>
+      <details class="ose-never-who" data-testid="anonymity-affordance" data-never-who="events">
+    <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Nunca quién, solo cuántos.</span> <span class="ose-never-who-trigger">Cómo funciona</span></summary>
+    <div class="ose-never-who-body" data-testid="never-who-body">
+        <p>
+          Eres parte del grupo, de manera anónima. OurSharedEvents registra cuándo
+          se reúnen los grupos &mdash; nunca quién eres. Quienes organizan y
+          patrocinan ven corredores y lugares, no personas. No se recopiló nada sobre
+          tu dispositivo, tu ubicación ni tu identidad para mostrar esta página.
+        </p>
+    </div>
+  </details>
+    </main>
+    <footer class="ocr-footer" data-testid="public-footer"><p class="ocr-footer-legal" data-testid="public-footer-copyright">© 2026 OurSharedEvents<span class="ocr-footer-sep" aria-hidden="true"> · </span><a href="/es/events" data-testid="public-footer-browse">Ver eventos</a><span class="ocr-footer-sep" aria-hidden="true"> · </span><a href="/privacy" data-testid="public-footer-privacy">Privacidad</a></p></footer>
+    <script nonce="N">
+      (async () => {
+        const banner = document.getElementById('sponsor-banner');
+        if (!banner) return;
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const eventId = params.get('event');
+          if (!eventId) return;
+          const res = await fetch(
+            '/api/v2/events/' + encodeURIComponent(eventId) + '/sponsor-bundle?surface=public'
+          );
+          const data = await res.json();
+          if (!data.ok) return;
+          const sponsors = data.bundle?.surface_sponsors?.mobileBanner || [];
+          if (!sponsors.length) {
+            banner.innerHTML = '<span hidden data-testid="public-sponsor-empty"></span>';
+            return;
+          }
+          const SPONSOR_DEFAULT_LOGO = '/sponsor-default-logo.svg';
+          const attr = (v) =>
+            String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+          banner.innerHTML = sponsors
+            .map((s) => {
+              // 0083: every sponsor shows an image — its logo through the
+              // same-origin proxy (the page CSP is img-src 'self' data:, so an
+              // external URL here was always blocked), or the OSE default. The
+              // title is display_name → name. attr() escapes quotes too: these
+              // values land inside attributes.
+              const title = s.title || s.name;
+              const src = s.logo_url
+                ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo'
+                : SPONSOR_DEFAULT_LOGO;
+              const logo =
+                '<img src="' + attr(src) + '" alt="' + attr(title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="' + SPONSOR_DEFAULT_LOGO + '" data-testid="public-sponsor-logo">';
+              const place = s.address_line
+                ? '<small class="sub-line" data-testid="public-sponsor-address">' + attr(s.address_line) + '</small>'
+                : '';
+              // A tap goes to the https website when there is one, otherwise to
+              // the sponsor's own card (title, location, contact). OSE-1438: the
+              // resolver sends card_url only when that card renders; without
+              // either, the name shows unlinked rather than linking to a 404.
+              const link = s.website_url
+                ? // OSE-1164: noreferrer (not just noopener) so clicking a sponsor sends NO
+                  // Referer header to the sponsor's site — the outbound click leaks neither
+                  // the attendee nor which OSE event page they came from.
+                  '<a href="' + attr(s.website_url) + '" target="_blank" rel="noopener noreferrer" data-testid="public-sponsor-link"><span data-testid="public-sponsor-name">' + attr(title) + '</span></a>'
+                : s.card_url
+                  ? '<a href="' + attr(s.card_url) + '" data-testid="public-sponsor-card-link"><span data-testid="public-sponsor-name">' + attr(title) + '</span></a>'
+                  : '<span data-testid="public-sponsor-name">' + attr(title) + '</span>';
+              return '<div class="sponsor-card" data-testid="public-sponsor-card">' + logo + link + place + '</div>';
+            })
+            .join('');
+          banner.classList.add('sponsor-strip');
+          sponsors.forEach((s) => {
+            fetch(
+              '/api/v2/events/' +
+                encodeURIComponent(eventId) +
+                '/sponsors/' +
+                encodeURIComponent(s.id) +
+                '/impression',
+              {
+                method: 'POST',
+                // OSE-1164: the sponsor-signal endpoints are aggregate-only (never-who).
+                // Omit credentials so the anonymous-scan cookie (ose_anon) is not even
+                // SENT to them — the "no link back to you" guarantee is then structural
+                // (the identity never reaches the server), not merely a handler that
+                // chooses not to read it. Locked by sponsor-signal-never-who.invariant.spec.ts.
+                credentials: 'omit',
+                headers: { 'Content-Type': 'application/json' },
+                // OSE-1310: beacon_token is minted per-sponsor into this bundle
+                // response; without it the write is dropped (honest 202, not counted).
+                body: JSON.stringify({ surface: 'public', placement: 'mobileBanner', beacon_token: s.beacon_token }),
+              }
+            ).catch(() => {});
+          });
+        } catch {
+          if (banner) banner.innerHTML = '<span hidden data-testid="public-sponsor-error"></span>';
+        }
+      })();
+    </script>
+    <!-- Sponsor logos hide themselves when the image 404s (OSE-1239).
+         This replaced onerror="this.style.display='none'", which the nonce CSP
+         refused at fire time — so a dead logo URL left a broken-image icon on
+         this surface instead of disappearing quietly. The `error` event does
+         NOT bubble, so this listens in the CAPTURE phase; that is the whole
+         reason it cannot be folded into an ordinary delegated listener. -->
+    <script nonce="N">
+      document.addEventListener(
+        'error',
+        function (ev) {
+          var el = ev.target;
+          if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
+            // 0083: a sponsor logo that fails becomes the OSE default instead of
+            // vanishing; only if the default itself fails is the image hidden.
+            // The fallback is a fixed same-origin path, never read back from
+            // the DOM — data-default-src only marks which images may fall back.
+            var d = '/sponsor-default-logo.svg';
+            if (el.hasAttribute('data-default-src') && el.getAttribute('src') !== d) el.setAttribute('src', d);
+            else el.style.display = 'none';
+          }
+        },
+        true
+      );
+    </script>
+  </body>
+</html>

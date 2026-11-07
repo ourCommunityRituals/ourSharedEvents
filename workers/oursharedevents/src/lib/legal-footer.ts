@@ -37,6 +37,9 @@
  *   no template edits, no partial changes, no new markup on five surfaces.
  */
 import { footer, type FooterLink } from '@ocr/ui';
+import { msg, type MessageKey } from './i18n/catalog';
+import { DEFAULT_LANG, type Lang } from './i18n/languages';
+import { withLangPrefix } from './i18n/path-prefix';
 
 /** The marker a template places where its footer belongs. */
 export const FOOTER_MARKER = '<!--OCR_LEGAL_FOOTER-->';
@@ -49,9 +52,13 @@ export const FOOTER_MARKER = '<!--OCR_LEGAL_FOOTER-->';
  * added ahead of its page fails CI rather than shipping a dead link into the
  * one place people go looking for their rights.
  */
-export const LEGAL_LINKS: ReadonlyArray<{ href: string; label: string; slug: string }> = [
-  { href: '/privacy', label: 'Privacy', slug: 'privacy' },
-];
+export const LEGAL_LINKS: ReadonlyArray<{
+  href: string;
+  label: string;
+  slug: string;
+  /** The label in the page's language (OSE-1762). */
+  key: MessageKey;
+}> = [{ href: '/privacy', label: 'Privacy', slug: 'privacy', key: 'footer.privacy' }];
 
 /** Surfaces that render the footer. Anything absent here simply has no marker. */
 export type FooterSurface =
@@ -72,23 +79,33 @@ function prefixFor(surface: FooterSurface): string {
   return surface === 'admin-signin' ? 'signin' : surface;
 }
 
-export function footerLinksFor(surface: FooterSurface): FooterLink[] {
+export function footerLinksFor(surface: FooterSurface, lang: Lang = DEFAULT_LANG): FooterLink[] {
   const prefix = prefixFor(surface);
   const links: FooterLink[] = [];
   if (BROWSE_SURFACES.has(surface)) {
-    links.push({ href: '/events', label: 'Browse Events', testid: `${prefix}-footer-browse` });
+    links.push({
+      href: withLangPrefix(lang, '/events'),
+      label: msg(lang, 'footer.browse'),
+      testid: `${prefix}-footer-browse`,
+    });
   }
   for (const l of LEGAL_LINKS) {
-    links.push({ href: l.href, label: l.label, testid: `${prefix}-footer-${l.slug}` });
+    // The privacy page itself is not on the language layer; its link names it
+    // in the page's language.
+    links.push({ href: l.href, label: msg(lang, l.key), testid: `${prefix}-footer-${l.slug}` });
   }
   return links;
 }
 
 /** Render the footer for a surface. Exported so tests can assert it without a Response. */
-export function renderLegalFooter(surface: FooterSurface, year?: number): string {
+export function renderLegalFooter(
+  surface: FooterSurface,
+  year?: number,
+  lang: Lang = DEFAULT_LANG
+): string {
   return footer({
     surface: prefixFor(surface),
-    links: footerLinksFor(surface),
+    links: footerLinksFor(surface, lang),
     year,
     // The standing product subtitle (OSE-1230) used to ride the landing and
     // /events footers. OSE-1372 moved it into the body, as the always-visible
@@ -102,7 +119,12 @@ export function renderLegalFooter(surface: FooterSurface, year?: number): string
  * Replace the marker with the rendered footer.
  * A document with no marker is returned unchanged — that is the opt-out.
  */
-export function injectLegalFooter(htmlDoc: string, surface: FooterSurface, year?: number): string {
+export function injectLegalFooter(
+  htmlDoc: string,
+  surface: FooterSurface,
+  year?: number,
+  lang: Lang = DEFAULT_LANG
+): string {
   if (!htmlDoc.includes(FOOTER_MARKER)) return htmlDoc;
-  return htmlDoc.split(FOOTER_MARKER).join(renderLegalFooter(surface, year));
+  return htmlDoc.split(FOOTER_MARKER).join(renderLegalFooter(surface, year, lang));
 }

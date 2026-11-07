@@ -21,6 +21,7 @@
 import { describe, test, expect } from 'vitest';
 import { gridDistance, latLngToCell } from 'h3-js';
 import LANDING_HTML from '../src/templates/landing.html';
+import { fillTemplate } from '../src/lib/i18n/template';
 import { CORRIDOR_RES } from '../src/lib/h3-tagging';
 import {
   findZipArea,
@@ -328,7 +329,13 @@ describe('the landing location script keeps to what the page says', () => {
 
   test('the button starts hidden and the note says what is used', () => {
     expect(LANDING_HTML).toMatch(/data-testid="near-me" hidden>/);
-    expect(LANDING_HTML).toContain('We use only your zip area, never your exact spot.');
+    // OSE-1762: the note is a catalog slot, filled in the page's language.
+    expect(fillTemplate(LANDING_HTML, 'en')).toContain(
+      'We use only your zip area, never your exact spot.'
+    );
+    expect(fillTemplate(LANDING_HTML, 'es')).toContain(
+      'Solo usamos la zona de tu código postal, nunca tu ubicación exacta.'
+    );
   });
 });
 

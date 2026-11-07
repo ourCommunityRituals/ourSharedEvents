@@ -34,6 +34,9 @@ import { zonedDatePart } from './event-datetime';
 import type { EventListItem } from './event-list';
 import { findSearchPlace, inSearchPlace } from './place-names';
 import type { PlacedEvent } from './zip-areas';
+import { fmt, fmtCount, msg, type MessageKey } from './i18n/catalog';
+import { DEFAULT_LANG, INTL_LOCALE, type Lang } from './i18n/languages';
+import { withLangPrefix } from './i18n/path-prefix';
 
 /**
  * The chips /events offers (OSE-1520: four or five, not eight). The other
@@ -62,80 +65,40 @@ export interface DiscoveryFilters {
 }
 
 /**
- * OSE-1372: ONE table per `when` value drives the chip, the count line and the
- * empty state, so the three cannot disagree (staging showed the Everything chip
- * beside "0 this month" and "Nothing else this month yet."). `span` is the
- * phrase that finishes "N events …" and "Nothing … yet."; '' for the undated
- * default.
+ * OSE-1372: ONE set of words per `when` value drives the chip, the heading, the
+ * count line and the empty state, so they cannot disagree (staging showed the
+ * Everything chip beside "0 this month" and "Nothing else this month yet.").
+ * OSE-1762: the words are in the language catalog, `when.<value>.<part>`.
  */
-const WHEN_COPY: Record<
-  WhenOption,
-  { chip: string; span: string; empty: string; heading: string }
-> = {
-  all: {
-    chip: 'Everything',
-    span: '',
-    empty: 'Nothing scheduled right now. Check back soon.',
-    heading: 'Upcoming events',
-  },
-  today: { chip: 'Today', span: 'today', empty: 'Nothing on today.', heading: 'Today' },
-  weekend: {
-    chip: 'This weekend',
-    span: 'this weekend',
-    empty: 'Nothing this weekend yet.',
-    heading: 'This weekend',
-  },
-  week: {
-    chip: 'Next 7 days',
-    span: 'in the next 7 days',
-    empty: 'Nothing in the next 7 days yet.',
-    heading: 'In the next 7 days',
-  },
-  month: {
-    chip: 'This month',
-    span: 'this month',
-    empty: 'Nothing this month yet.',
-    heading: 'This month',
-  },
-  'next-month': {
-    chip: 'Next month',
-    span: 'next month',
-    empty: 'Nothing next month yet.',
-    heading: 'Next month',
-  },
-  'next-90': {
-    chip: 'Next 90 days',
-    span: 'in the next 90 days',
-    empty: 'Nothing in the next 90 days yet.',
-    heading: 'In the next 90 days',
-  },
-  past: {
-    chip: 'Recently wrapped',
-    span: 'recently wrapped',
-    empty: 'Nothing has wrapped recently.',
-    heading: 'Recently wrapped',
-  },
-};
+function whenText(lang: Lang, when: WhenOption, part: 'chip' | 'heading' | 'empty'): string {
+  return msg(lang, `when.${when}.${part}` as MessageKey);
+}
 
 /**
  * The next wider window an empty state offers (OSE-1520): every dead end links
- * to a range that can hold more. `all` is the widest; it offers nothing.
+ * to a range that can hold more. `all` is the widest; it offers nothing. The
+ * link reads `disc.try.<to>`.
  */
-const WIDER: Partial<Record<WhenOption, { to: WhenOption; text: string }>> = {
-  today: { to: 'weekend', text: 'Try this weekend' },
-  weekend: { to: 'week', text: 'Try the next 7 days' },
-  week: { to: 'month', text: 'Try this month' },
-  month: { to: 'next-90', text: 'Try the next 90 days' },
-  'next-month': { to: 'next-90', text: 'Try the next 90 days' },
-  'next-90': { to: 'all', text: 'See everything' },
-  past: { to: 'all', text: 'See everything' },
+const WIDER: Partial<Record<WhenOption, WhenOption>> = {
+  today: 'weekend',
+  weekend: 'week',
+  week: 'month',
+  month: 'next-90',
+  'next-month': 'next-90',
+  'next-90': 'all',
+  past: 'all',
 };
 
+/** /events, with a window and a search, in the page's language. */
+function eventsHref(lang: Lang, when: WhenOption | null): string {
+  return withLangPrefix(lang, when && when !== 'all' ? `/events?when=${when}` : '/events');
+}
+
 /** The page heading follows the filter (OSE-1520). Plain text; the caller escapes. */
-export function discoveryHeading(f: DiscoveryFilters): string {
+export function discoveryHeading(f: DiscoveryFilters, lang: Lang = DEFAULT_LANG): string {
   const place = findSearchPlace(f.q);
-  if (place) return `Events in ${place.label}`;
-  return f.q ? `Matches for “${f.q}”` : WHEN_COPY[f.when].heading;
+  if (place) return fmt(lang, 'disc.headingPlace', { place: place.label });
+  return f.q ? fmt(lang, 'disc.headingQuery', { q: f.q }) : whenText(lang, f.when, 'heading');
 }
 
 /**
@@ -144,16 +107,41 @@ export function discoveryHeading(f: DiscoveryFilters): string {
  * "1 upcoming event" beside a visible "2 events"). `wrapped` is how many of the
  * `shown` events are wrapped. Plain text; the caller escapes.
  */
-export function discoverySummaryText(f: DiscoveryFilters, shown: number, wrapped = 0): string {
+export function discoverySummaryText(
+  f: DiscoveryFilters,
+  shown: number,
+  wrapped = 0,
+  lang: Lang = DEFAULT_LANG
+): string {
   const place = findSearchPlace(f.q);
-  if (place) return `${shown} event${shown === 1 ? '' : 's'} in ${place.label}`;
-  if (f.q) return `${shown} match${shown === 1 ? '' : 'es'} for “${f.q}”`;
-  if (f.when === 'all') {
-    const up = shown - wrapped;
-    const base = `${up} upcoming event${up === 1 ? '' : 's'}`;
-    return wrapped > 0 ? `${base}, ${wrapped} wrapped` : base;
+  if (place) {
+    return fmtCount(
+      lang,
+      shown,
+      { one: 'disc.placeCountOne', other: 'disc.placeCount' },
+      { place: place.label }
+    );
   }
-  return discoveryCountLabel(f.when, shown);
+  if (f.q) {
+    return fmtCount(
+      lang,
+      shown,
+      { one: 'disc.queryCountOne', other: 'disc.queryCount' },
+      { q: f.q }
+    );
+  }
+  if (f.when === 'all') {
+    const base = upcomingCountText(shown - wrapped, lang);
+    return wrapped > 0
+      ? fmtCount(lang, wrapped, { one: 'disc.withWrappedOne', other: 'disc.withWrapped' }, { base })
+      : base;
+  }
+  return discoveryCountLabel(f.when, shown, lang);
+}
+
+/** "3 upcoming events": the list's own count line and live region. */
+export function upcomingCountText(n: number, lang: Lang = DEFAULT_LANG): string {
+  return fmtCount(lang, n, { one: 'disc.upcomingOne', other: 'disc.upcoming' });
 }
 
 interface OrderItem extends WhenItem {
@@ -203,14 +191,20 @@ export function orderUpcomingFirst<T extends OrderItem>(
 }
 
 /** The count line for a `when` value: "3 events this month", "1 event", "0 events next month". */
-export function discoveryCountLabel(when: WhenOption, n: number): string {
-  const span = WHEN_COPY[when].span;
-  return `${n} ${n === 1 ? 'event' : 'events'}${span ? ` ${span}` : ''}`;
+export function discoveryCountLabel(
+  when: WhenOption,
+  n: number,
+  lang: Lang = DEFAULT_LANG
+): string {
+  return fmtCount(lang, n, {
+    one: `when.${when}.countOne` as MessageKey,
+    other: `when.${when}.count` as MessageKey,
+  });
 }
 
 /** The chip label for a `when` value. */
-export function discoveryChipLabel(when: WhenOption): string {
-  return WHEN_COPY[when].chip;
+export function discoveryChipLabel(when: WhenOption, lang: Lang = DEFAULT_LANG): string {
+  return whenText(lang, when, 'chip');
 }
 
 /** Parse + sanitise the query string. Never throws; unknown → defaults. */
@@ -288,20 +282,20 @@ function dayOfWeek(ymd: string): number {
  * noon, so weekday/month derive from that same YYYY-MM-DD; full AND abbreviated
  * forms are both included.
  */
-function dateSearchTokens(item: EventListItem): string {
+function dateSearchTokens(item: EventListItem, locale: string): string {
   const ymd = eventDate(item);
   if (!ymd) return '';
   const d = new Date(`${ymd}T12:00:00Z`);
   if (Number.isNaN(d.getTime())) return '';
   try {
-    const long = new Intl.DateTimeFormat('en-US', {
+    const long = new Intl.DateTimeFormat(locale, {
       timeZone: 'UTC',
       weekday: 'long',
       month: 'long',
       day: 'numeric',
       year: 'numeric',
     }).format(d);
-    const short = new Intl.DateTimeFormat('en-US', {
+    const short = new Intl.DateTimeFormat(locale, {
       timeZone: 'UTC',
       weekday: 'short',
       month: 'short',
@@ -375,7 +369,8 @@ export function inWhenWindow(e: WhenItem, when: WhenOption, now: Date = new Date
 export function applyDiscoveryFilters(
   items: readonly EventListItem[],
   f: DiscoveryFilters,
-  now: Date = new Date()
+  now: Date = new Date(),
+  lang: Lang = DEFAULT_LANG
 ): EventListItem[] {
   const place = findSearchPlace(f.q);
   const inPlace = place ? inSearchPlace(place) : null;
@@ -389,7 +384,9 @@ export function applyDiscoveryFilters(
       const hay = [
         typeof e.name === 'string' ? e.name : '',
         typeof e.venue === 'string' ? e.venue : '',
-        dateSearchTokens(e),
+        dateSearchTokens(e, 'en-US'),
+        // A reader types the day as the card shows it, in the page's language.
+        lang === DEFAULT_LANG ? '' : dateSearchTokens(e, INTL_LOCALE[lang]),
       ]
         .join(' ')
         .toLowerCase();
@@ -410,7 +407,8 @@ export const EVENT_FILTERS_MARKER = '<!--OCR_EVENT_FILTERS-->';
 export function renderDiscoveryFilters(
   f: DiscoveryFilters,
   resultCount: number,
-  wrappedCount = 0
+  wrappedCount = 0,
+  lang: Lang = DEFAULT_LANG
 ): string {
   const qEsc = escapeHtml(f.q);
   const qParam = f.q ? `&amp;q=${encodeURIComponent(f.q)}` : '';
@@ -421,49 +419,54 @@ export function renderDiscoveryFilters(
   const chips = shown
     .map((w) => {
       const active = w === f.when;
-      return `<a class="disc-chip${active ? ' active' : ''}" href="/events?when=${w}${qParam}" data-testid="disc-when-${w}"${active ? ' aria-current="true"' : ''}>${WHEN_COPY[w].chip}</a>`;
+      return `<a class="disc-chip${active ? ' active' : ''}" href="${withLangPrefix(lang, `/events?when=${w}`)}${qParam}" data-testid="disc-when-${w}"${active ? ' aria-current="true"' : ''}>${whenText(lang, w, 'chip')}</a>`;
     })
     .join('');
   const clear =
     f.q || f.when !== 'all'
-      ? `<a class="disc-clear" href="/events" data-testid="disc-clear">Clear</a>`
+      ? `<a class="disc-clear" href="${eventsHref(lang, null)}" data-testid="disc-clear">${msg(lang, 'disc.clear')}</a>`
       : '';
-  const summary = escapeHtml(discoverySummaryText(f, resultCount, wrappedCount));
+  const summary = escapeHtml(discoverySummaryText(f, resultCount, wrappedCount, lang));
   return `
-        <form class="disc-search" method="get" action="/events" role="search" data-testid="disc-search">
+        <form class="disc-search" method="get" action="${eventsHref(lang, null)}" role="search" data-testid="disc-search">
           <input type="hidden" name="when" value="${escapeHtml(f.when)}" />
-          <label class="sr-only" for="disc-q">Search events by name, venue, town or zip</label>
-          <input id="disc-q" class="disc-q" type="search" name="q" value="${qEsc}" maxlength="${Q_MAX_LEN}" placeholder="Search by name, venue, town or zip" autocomplete="off" data-testid="disc-q" />
-          <button type="submit" class="disc-go" data-testid="disc-go">Search</button>
+          <label class="sr-only" for="disc-q">${msg(lang, 'disc.searchLabel')}</label>
+          <input id="disc-q" class="disc-q" type="search" name="q" value="${qEsc}" maxlength="${Q_MAX_LEN}" placeholder="${msg(lang, 'disc.searchPlaceholder')}" autocomplete="off" data-testid="disc-q" />
+          <button type="submit" class="disc-go" data-testid="disc-go">${msg(lang, 'disc.search')}</button>
         </form>
-        <nav class="disc-chips" aria-label="When" data-testid="disc-chips">${chips}${clear}</nav>
+        <nav class="disc-chips" aria-label="${msg(lang, 'disc.when')}" data-testid="disc-chips">${chips}${clear}</nav>
         <p class="disc-summary" data-testid="disc-summary">${summary}</p>`;
 }
 
 /** Empty-state copy that names the question that had no answer. */
-export function discoveryEmptyCopy(f: DiscoveryFilters): string {
+export function discoveryEmptyCopy(f: DiscoveryFilters, lang: Lang = DEFAULT_LANG): string {
   const place = findSearchPlace(f.q);
   if (place) {
     // "See all events" means all of them: no place, no date window.
-    return `Nothing in ${escapeHtml(place.label)} yet. <a href="/events" data-testid="disc-empty-wider">See all events</a>.`;
+    const nothing = fmt(lang, 'disc.emptyPlace', { place: escapeHtml(place.label) });
+    return `${nothing} <a href="${eventsHref(lang, null)}" data-testid="disc-empty-wider">${msg(lang, 'disc.seeAll')}</a>.`;
   }
   if (f.q) {
-    const keep = f.when === 'all' ? '/events' : `/events?when=${f.when}`;
-    return `Nothing matches &ldquo;${escapeHtml(f.q)}&rdquo;. Try a shorter word, or <a href="${keep}" data-testid="disc-empty-wider">clear the search</a>.`;
+    const link = `<a href="${eventsHref(lang, f.when)}" data-testid="disc-empty-wider">${msg(lang, 'disc.clearSearch')}</a>`;
+    return fmt(lang, 'disc.emptyQuery', { q: escapeHtml(f.q), link });
   }
+  const empty = whenText(lang, f.when, 'empty');
   const wider = WIDER[f.when];
-  if (!wider) return WHEN_COPY[f.when].empty;
-  const href = wider.to === 'all' ? '/events' : `/events?when=${wider.to}`;
-  return `${WHEN_COPY[f.when].empty} <a href="${href}" data-testid="disc-empty-wider">${wider.text}</a>.`;
+  if (!wider) return empty;
+  return `${empty} <a href="${eventsHref(lang, wider)}" data-testid="disc-empty-wider">${msg(lang, `disc.try.${wider}` as MessageKey)}</a>.`;
 }
 
 /** Where the page heading goes (inside the `<h2>`). */
 export const EVENTS_HEADING_MARKER = '<!--OCR_EVENTS_HEADING-->';
 
 /** Put the filter's heading at its marker, escaped. A template without the marker is untouched. */
-export function injectDiscoveryHeading(html: string, f: DiscoveryFilters): string {
+export function injectDiscoveryHeading(
+  html: string,
+  f: DiscoveryFilters,
+  lang: Lang = DEFAULT_LANG
+): string {
   return html.includes(EVENTS_HEADING_MARKER)
-    ? injectMarker(html, EVENTS_HEADING_MARKER, escapeHtml(discoveryHeading(f)))
+    ? injectMarker(html, EVENTS_HEADING_MARKER, escapeHtml(discoveryHeading(f, lang)))
     : html;
 }
 

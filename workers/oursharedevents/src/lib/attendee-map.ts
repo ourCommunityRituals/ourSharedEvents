@@ -63,6 +63,9 @@ import {
   isInForwardWindow,
 } from './corridor-readiness.js';
 import { escapeHtml } from './html-escape.js';
+import { fmt, fmtCount, msg } from './i18n/catalog.js';
+import { DEFAULT_LANG, type Lang } from './i18n/languages.js';
+import { withLangPrefix } from './i18n/path-prefix.js';
 
 export interface AttendeeMapItem {
   id?: unknown;
@@ -167,17 +170,18 @@ function mostCommon(values: (string | null)[]): string {
 }
 
 /** Name an area from its events: the commonest town, else "near <venue>". */
-function areaName(places: { town: string | null; venue: string | null }[]): string {
+function areaName(places: { town: string | null; venue: string | null }[], lang: Lang): string {
   const town = mostCommon(places.map((p) => p.town));
   if (town) return town;
   const venue = mostCommon(places.map((p) => p.venue));
-  return venue ? `near ${venue}` : '';
+  return venue ? fmt(lang, 'map.near', { venue }) : '';
 }
 
 /** Group the drawable events by corridor cell, most events first. */
 export function attendeeMapAreas(
   items: readonly AttendeeMapItem[] | null | undefined,
-  now: Date = new Date()
+  now: Date = new Date(),
+  lang: Lang = DEFAULT_LANG
 ): { areas: AttendeeMapArea[]; count: number } {
   const byCell = new Map<string, { id: string; name: string }[]>();
   const places = new Map<string, { town: string | null; venue: string | null }[]>();
@@ -186,7 +190,7 @@ export function attendeeMapAreas(
     const cell = corridorCell(e.h3_res7);
     if (!cell) continue;
     const list = byCell.get(cell) ?? [];
-    list.push({ id: str(e.id), name: str(e.name) || 'Untitled event' });
+    list.push({ id: str(e.id), name: str(e.name) || msg(lang, 'card.untitled') });
     byCell.set(cell, list);
     const venueLine = str(e.venue) || str(e.location);
     const venue = venueLine.split(',')[0]!.trim().slice(0, NAME_MAX) || null;
@@ -200,7 +204,7 @@ export function attendeeMapAreas(
   const areas = sorted.map(([cell, events], i) => ({
     cell,
     n: i + 1,
-    name: areaName(places.get(cell) ?? []),
+    name: areaName(places.get(cell) ?? [], lang),
     events,
   }));
   return { areas, count: areas.reduce((s, a) => s + a.events.length, 0) };
@@ -213,8 +217,8 @@ export function attendeeMapAreas(
 // real map, so it takes both themes from the tokens.
 const HEX = (cx: number, cy: number) =>
   `${cx},${cy - 80} ${cx + 69.3},${cy - 40} ${cx + 69.3},${cy + 40} ${cx},${cy + 80} ${cx - 69.3},${cy + 40} ${cx - 69.3},${cy - 40}`;
-const EXAMPLE_SVG =
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" role="img" aria-label="Example map: three neighborhoods drawn as numbered hexagons, the busiest shaded deepest" data-testid="amap-example-svg">` +
+const exampleSvg = (lang: Lang) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" role="img" aria-label="${msg(lang, 'map.exampleLabel')}" data-testid="amap-example-svg">` +
   [
     [231, 100, '0.80', '1'],
     [369.6, 100, '0.50', '2'],
@@ -228,29 +232,40 @@ const EXAMPLE_SVG =
     .join('') +
   `</svg>`;
 
-function thinHtml(note: string): string {
+function thinHtml(note: string, lang: Lang): string {
   return `<div class="map-placeholder" data-testid="area-map-thin" role="status">
-              <p>${note} &mdash; every event is listed below.</p>
+              <p>${fmt(lang, 'map.listedBelow', { note })}</p>
             </div>
             <figure class="amap" data-testid="amap-example">
               ${MAP_STYLE}
-              ${EXAMPLE_SVG}
-              <figcaption data-testid="amap-example-caption"><strong>Example.</strong> This is what the map looks like once neighborhoods fill in: one numbered hexagon each, a few square kilometres, never a street address.</figcaption>
+              ${exampleSvg(lang)}
+              <figcaption data-testid="amap-example-caption">${msg(lang, 'map.exampleCaption')}</figcaption>
             </figure>`;
 }
 
-function corridorNote(busiest: number): string {
-  const sofar = busiest === 0 ? 'None yet' : `The busiest has ${busiest} so far`;
-  return `<strong>A neighborhood appears on the map once it has ${CORRIDOR_READY_MIN_EVENTS} events in the next ${CORRIDOR_WINDOW_DAYS} days.</strong> ${sofar}`;
+function corridorNote(busiest: number, lang: Lang): string {
+  const sofar = busiest === 0 ? msg(lang, 'map.noneYet') : fmt(lang, 'map.busiest', { n: busiest });
+  return fmt(lang, 'map.corridorNote', {
+    min: CORRIDOR_READY_MIN_EVENTS,
+    days: CORRIDOR_WINDOW_DAYS,
+    sofar,
+  });
 }
 
-function areaNote(gate: AreaGate): string {
+function areaNote(gate: AreaGate, lang: Lang): string {
   const sofar =
-    gate.count === 0 ? 'None yet' : `There ${gate.count === 1 ? 'is' : 'are'} ${gate.count} so far`;
-  return `<strong>The map appears once this area has ${gate.min} events in the next ${CORRIDOR_WINDOW_DAYS} days.</strong> ${sofar}`;
+    gate.count === 0
+      ? msg(lang, 'map.noneYet')
+      : fmtCount(lang, gate.count, { one: 'map.soFarOne', other: 'map.soFar' });
+  return fmt(lang, 'map.areaNote', { min: gate.min, days: CORRIDOR_WINDOW_DAYS, sofar });
 }
 
-function svgFor(areas: AttendeeMapArea[]): string {
+/** "3 events", in the page's language. */
+function eventCount(n: number, lang: Lang): string {
+  return fmtCount(lang, n, { one: 'when.all.countOne', other: 'when.all.count' });
+}
+
+function svgFor(areas: AttendeeMapArea[], lang: Lang): string {
   const rings = areas.map((a) => ({ a, ring: cellToBoundary(a.cell), mid: cellToLatLng(a.cell) }));
   const lats = rings.flatMap((r) => r.ring.map((p) => p[0]!));
   const lons = rings.flatMap((r) => r.ring.map((p) => p[1]!));
@@ -274,7 +289,10 @@ function svgFor(areas: AttendeeMapArea[]): string {
       const k = a.events.length;
       const points = ring.map((p) => `${px(p[1]!)},${py(p[0]!)}`).join(' ');
       const opacity = (0.2 + 0.6 * (k / max)).toFixed(2);
-      const label = `Area ${a.n}${a.name ? `, ${a.name}` : ''}: ${k} event${k === 1 ? '' : 's'}`;
+      const count = eventCount(k, lang);
+      const label = a.name
+        ? fmt(lang, 'map.areaTitleNamed', { n: a.n, name: a.name, count })
+        : fmt(lang, 'map.areaTitle', { n: a.n, count });
       // The name sits under the number while the hexagons are few and large.
       const short =
         a.name.length > SVG_NAME_MAX_CHARS ? `${a.name.slice(0, SVG_NAME_MAX_CHARS - 1)}…` : a.name;
@@ -294,7 +312,11 @@ function svgFor(areas: AttendeeMapArea[]): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="amap-caption" data-testid="amap-svg">${shapes}</svg>`;
 }
 
-function legendFor(areas: AttendeeMapArea[], sponsorTitles?: ReadonlyMap<string, string>): string {
+function legendFor(
+  areas: AttendeeMapArea[],
+  lang: Lang,
+  sponsorTitles?: ReadonlyMap<string, string>
+): string {
   const rows = areas
     .map((a) => {
       // OSE-1522: an event title shown here carries its consented sponsor.
@@ -302,16 +324,16 @@ function legendFor(areas: AttendeeMapArea[], sponsorTitles?: ReadonlyMap<string,
         .map((e) => {
           const sponsor = sponsorTitles?.get(e.id);
           const by = sponsor
-            ? ` <span data-testid="amap-event-sponsor">(Supported by ${escapeHtml(sponsor)})</span>`
+            ? ` <span data-testid="amap-event-sponsor">${fmt(lang, 'map.sponsor', { sponsor: escapeHtml(sponsor) })}</span>`
             : '';
-          return `<a href="/events/${escapeHtml(e.id)}" data-testid="amap-event">${escapeHtml(e.name)}</a>${by}`;
+          return `<a href="${withLangPrefix(lang, `/events/${escapeHtml(e.id)}`)}" data-testid="amap-event">${escapeHtml(e.name)}</a>${by}`;
         })
         .join(' &middot; ');
       const k = a.events.length;
       const place = a.name
         ? `<span data-testid="amap-legend-name">${escapeHtml(a.name)}</span> &middot; `
         : '';
-      return `<li value="${a.n}" data-testid="amap-legend-area"><strong>${place}${k} event${k === 1 ? '' : 's'}:</strong> ${links}</li>`;
+      return `<li value="${a.n}" data-testid="amap-legend-area"><strong>${place}${eventCount(k, lang)}:</strong> ${links}</li>`;
     })
     .join('');
   return `<ol class="amap-legend" data-testid="amap-legend">${rows}</ol>`;
@@ -330,11 +352,14 @@ export function renderAttendeeMap(
     area?: AreaGate;
     /** OSE-1522: event id to the consented sponsor's title, shown by the event title. */
     sponsorTitles?: ReadonlyMap<string, string>;
+    /** The page's language (OSE-1762). */
+    lang?: Lang;
   }
 ): RenderedAttendeeMap {
+  const lang = opts?.lang ?? DEFAULT_LANG;
   const now = new Date(opts?.now ?? Date.now());
   const latched = opts?.latched ?? new Set<string>();
-  const all = attendeeMapAreas(items, now).areas;
+  const all = attendeeMapAreas(items, now, lang).areas;
   const gate = opts?.area;
   // Landing (an area gate is given): below it nothing is drawn; at it, every
   // corridor with an event is. Anywhere else: per corridor, ready now or latched.
@@ -351,18 +376,22 @@ export function renderAttendeeMap(
     const busiest = all.reduce((m, a) => Math.max(m, a.events.length), 0);
     const note =
       gate && gate.count < gate.min && !gate.latched
-        ? areaNote(gate)
+        ? areaNote(gate, lang)
         : gate
-          ? '<strong>None of these events has a place on the map yet</strong>'
-          : corridorNote(busiest);
-    return { html: thinHtml(note), state: 'thin', count: 0, areas: [] };
+          ? msg(lang, 'map.noPlace')
+          : corridorNote(busiest, lang);
+    return { html: thinHtml(note, lang), state: 'thin', count: 0, areas: [] };
   }
 
-  const caption = `${count} event${count === 1 ? '' : 's'} in ${drawn.length} neighborhood${drawn.length === 1 ? '' : 's'}, every kind, over the next ${CORRIDOR_WINDOW_DAYS} days (the filters above change the list, not the map). Each hexagon is a few square kilometres, never a street address.`;
+  const caption = fmt(lang, 'map.caption', {
+    events: eventCount(count, lang),
+    areas: fmtCount(lang, drawn.length, { one: 'map.areasOne', other: 'map.areas' }),
+    days: CORRIDOR_WINDOW_DAYS,
+  });
   const html = `<figure class="amap" data-testid="amap">
               ${MAP_STYLE}
-              ${svgFor(drawn)}
-              ${legendFor(drawn, opts?.sponsorTitles)}
+              ${svgFor(drawn, lang)}
+              ${legendFor(drawn, lang, opts?.sponsorTitles)}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>
             </figure>`;
   return { html, state: 'map', count, areas: drawn };

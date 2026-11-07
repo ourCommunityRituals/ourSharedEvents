@@ -112,11 +112,22 @@ describe('OSE-1761 matchLanguagePage | the pages that exist under a prefix', () 
     }
   });
 
+  it('the landing and the event list are pages under a prefix (OSE-1762)', () => {
+    expect(matchLanguagePage('/')).toEqual({ kind: 'landing' });
+    expect(matchLanguagePage('/events')).toEqual({ kind: 'events' });
+  });
+
   it('nothing else is a page under a prefix', () => {
     const others = [
-      '/',
-      '/events',
+      // The landing's other names stay English-only addresses.
+      '/home',
+      '/welcome',
+      '/landing',
+      '/about',
+      '/info',
+      '/near',
       '/events/',
+      '/events?when=today',
       '/display',
       '/poster',
       '/privacy',

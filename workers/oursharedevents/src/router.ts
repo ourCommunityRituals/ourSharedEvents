@@ -640,7 +640,8 @@ export async function route(
     )(request, env);
   }
 
-  // ── Language-prefixed pages (OSE-1761) — `/es/events/<id>`, `/es/e/<code>` ──
+  // ── Language-prefixed pages (OSE-1761) — `/es/events/<id>`, `/es/e/<code>`,
+  // and (OSE-1762) the landing `/es/` and the list `/es/events` ──
   // The visitor's explicit choice, and it beats Accept-Language. Only a page on
   // the language layer is matched here (lib/i18n/path-prefix.ts); every other
   // path under a prefix, and any prefix that is not a listed language, matches no
@@ -653,6 +654,12 @@ export async function route(
     const page = matchLanguagePage(langPrefix.rest);
     if (page?.kind === 'event') {
       return handlePublicEventPage(request, env, page.id, page.name, langPrefix.lang);
+    }
+    if (page?.kind === 'landing') {
+      return handleLandingPage(env, ctx, request, langPrefix.lang);
+    }
+    if (page?.kind === 'events') {
+      return handlePublicPage(env, ctx, request, langPrefix.lang);
     }
     if (page?.kind === 'share') {
       // The same count and per-caller limit as /e/<code>: a share open, what + when.

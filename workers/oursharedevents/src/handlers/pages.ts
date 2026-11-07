@@ -69,7 +69,14 @@ import {
   injectLandingArea,
   type LandingAreaItem,
 } from '../lib/landing-area.js';
-import { readWhere, injectWhere, renderNearEmpty, type WhereState } from '../lib/landing-where';
+import {
+  readWhere,
+  injectWhere,
+  injectNearLang,
+  renderNearEmpty,
+  type WhereState,
+} from '../lib/landing-where';
+import { fillTemplate } from '../lib/i18n/template';
 import { inZipOwnArea } from '../lib/zip-areas';
 import {
   getDataProvider,
@@ -330,8 +337,11 @@ type PublicListEnv = PagesEnv & DataProviderEnv;
 export async function handlePublicPage(
   env: PagesEnv,
   ctx?: DataProviderCtx | null,
-  request?: Request
+  request?: Request,
+  /** OSE-1762: the language in the address (`/es/events`); it beats the header. */
+  pathLang?: Lang
 ): Promise<Response> {
+  const lang = pathLang ?? (request ? preferredLang(request) : DEFAULT_LANG);
   // Attendee discovery (lib/event-discovery): `?when=` (allowlisted) and `?q=`
   // (capped, escaped once) are parsed from the request and applied over the
   // already brand-scoped / active / published projection — never in SQL. The
@@ -354,46 +364,87 @@ export async function handlePublicPage(
     // registration for events that already happened. Same seam the JSON API
     // uses, so the two cannot disagree.
     const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
-    const filtered = applyDiscoveryFilters(items as EventListItem[], filters);
+    const filtered = applyDiscoveryFilters(items as EventListItem[], filters, undefined, lang);
     shown = filtered.length;
     wrappedShown = filtered.filter((e) => e.phase === 'post_event').length;
     counted = true;
     list =
       filtered.length === 0 && items.length > 0
         ? {
-            html: `<p class="empty" data-testid="public-events-empty">${discoveryEmptyCopy(filters)}</p>`,
+            html: `<p class="empty" data-testid="public-events-empty">${discoveryEmptyCopy(filters, lang)}</p>`,
             countText: '',
             upcoming: 0,
           }
         : renderEventList(filtered, await fetchSponsorTitles((env as PublicListEnv).DB, 'root'), {
             // On the wrapped filter the page heading already says so.
             wrappedHeading: filters.when !== 'past',
+            lang,
           });
   } catch {
-    list = renderEventListError();
+    list = renderEventListError(lang);
   }
   // OSE-1520: the visible line and the screen-reader count are one sentence.
   // (Left alone for the error and no-events-at-all states: nothing was counted.)
   if (counted) {
-    list = { ...list, countText: discoverySummaryText(filters, shown, wrappedShown) };
+    list = { ...list, countText: discoverySummaryText(filters, shown, wrappedShown, lang) };
   }
+  // OSE-1762: the shell's words are filled in the page's language first, before
+  // anything a visitor typed or an organizer wrote goes into it.
   const shell = injectEventCardCss(
     injectDiscoveryHeading(
       injectNeverWho(
-        injectLegalFooter(await withProvenanceBanner(PUBLIC_HTML, env, 'public'), 'public'),
-        'events'
+        injectLegalFooter(
+          await withProvenanceBanner(fillTemplate(PUBLIC_HTML, lang), env, 'public'),
+          'public',
+          undefined,
+          lang
+        ),
+        'events',
+        lang
       ),
-      filters
+      filters,
+      lang
     )
   );
   // One address per list: ?q= / ?when= variants all point search engines here.
-  const withCanonical = injectCanonical(shell, request, env, CANONICAL_PATH.events);
-  return html(
-    injectEventList(
-      injectDiscoveryFilters(withCanonical, renderDiscoveryFilters(filters, shown, wrappedShown)),
-      list
-    )
+  const withCanonical = injectLanguageHead(
+    injectCanonical(shell, request, env, withLangPrefix(lang, CANONICAL_PATH.events)),
+    lang
   );
+  return languageVaried(
+    html(
+      injectEventList(
+        injectDiscoveryFilters(
+          withCanonical,
+          renderDiscoveryFilters(filters, shown, wrappedShown, lang)
+        ),
+        list
+      )
+    ),
+    pathLang
+  );
+}
+
+/**
+ * OSE-1762: a page in a language other than the default says so to link
+ * previews. Open Graph reads a page with no `og:locale` as `en_US`, so the
+ * English page, which has never carried one, is left as it is.
+ */
+function injectLanguageHead(page: string, lang: Lang): string {
+  if (lang === DEFAULT_LANG) return page;
+  const at = page.search(/<\/head>/i);
+  if (at < 0) return page;
+  return `${page.slice(0, at)}  <meta property="og:locale" content="${OG_LOCALE[lang]}" />\n${page.slice(at)}`;
+}
+
+/**
+ * On a bare address the page's language comes from the Accept-Language header,
+ * so a cache keeps one copy per language. Under a language prefix the address
+ * alone decides it.
+ */
+function languageVaried(res: Response, pathLang: Lang | undefined): Response {
+  if (!pathLang) res.headers.set('Vary', 'Accept-Language');
+  return res;
 }
 
 // ─── Public event page — OSE-243a / BE-27 ─────────────────────────────────────
@@ -1275,7 +1326,7 @@ ${SPONSOR_LIST_CSS}
 
     ${preview ? '' : renderLanguageSwitch({ lang, path: eventPagePath(row.id, row.slug), query: opts?.pageQuery })}
 
-    ${renderBackButton({ fallbackHref: '/events', nonce, lang, inert: preview, testid: 'event-back' })}
+    ${renderBackButton({ fallbackHref: withLangPrefix(lang, '/events'), nonce, lang, inert: preview, testid: 'event-back' })}
 
     ${renderNeverWho('event', lang)}
   </main>
@@ -1472,7 +1523,7 @@ ${SPONSOR_LIST_CSS}
 
     ${renderLanguageSwitch({ lang, path: eventPagePath(row.id, row.slug), query: opts?.pageQuery })}
 
-    ${renderBackButton({ fallbackHref: '/events', nonce, lang, testid: 'event-back' })}
+    ${renderBackButton({ fallbackHref: withLangPrefix(lang, '/events'), nonce, lang, testid: 'event-back' })}
 
     ${renderNeverWho('event', lang)}
   </main>
@@ -1630,7 +1681,7 @@ export function renderPostEventHtml(
         <ul class="ose-suggestion-list">${suggestionItems}</ul>`
     : `<h2 id="next-heading" class="ose-suggestions-heading" data-testid="next-event-fallback">${msg(lang, 'next.fallbackHeading')}</h2>
         <p class="ose-suggestions-note">${msg(lang, 'next.fallbackNote')}</p>
-        <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="/events">${msg(lang, 'next.browse')}</a>`;
+        <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="${withLangPrefix(lang, '/events')}">${msg(lang, 'next.browse')}</a>`;
 
   return `<!DOCTYPE html>
 <html lang="${lang}" data-surface="ose-public">
@@ -1815,7 +1866,7 @@ ${SPONSOR_LIST_CSS}
 
     ${renderLanguageSwitch({ lang, path: eventPagePath(row.id, row.slug), query: opts?.pageQuery })}
 
-    ${renderBackButton({ fallbackHref: '/events', nonce, lang, testid: 'event-back' })}
+    ${renderBackButton({ fallbackHref: withLangPrefix(lang, '/events'), nonce, lang, testid: 'event-back' })}
 
     ${renderNeverWho('event', lang)}
   </main>
@@ -2620,8 +2671,11 @@ type LandingEnv = PagesEnv & DataProviderEnv;
 export async function handleLandingPage(
   env: PagesEnv,
   ctx?: DataProviderCtx | null,
-  request?: Request
+  request?: Request,
+  /** OSE-1762: the language in the address (`/es/`); it beats the header. */
+  pathLang?: Lang
 ): Promise<Response> {
+  const lang = pathLang ?? (request ? preferredLang(request) : DEFAULT_LANG);
   let where: WhereState;
   try {
     where = readWhere(request ? new URL(request.url) : null);
@@ -2658,30 +2712,45 @@ export async function handleLandingPage(
       latched,
       areaLatched: where.kind === 'zip' ? false : areaLatched,
       sponsorTitles,
+      lang,
     });
   } catch {
-    area = renderEmptyLandingArea();
+    area = renderEmptyLandingArea(lang);
   }
   if (where.kind === 'zip' && area.windowCount === 0 && area.types.length === 0) {
-    area = { ...area, html: renderNearEmpty(where.area.zip) };
+    area = { ...area, html: renderNearEmpty(where.area.zip, lang) };
   }
   // /home, /welcome, /landing, /about and /info serve this page too; they all
   // name `/` as the canonical.
+  // OSE-1762: the shell's words are filled in the page's language first.
+  const shell = injectNeverWho(
+    injectEventCardCss(
+      injectLegalFooter(
+        injectNearLang(fillTemplate(LANDING_HTML, lang), lang),
+        'landing',
+        undefined,
+        lang
+      )
+    ),
+    'landing',
+    lang
+  );
   const res = html(
-    injectCanonical(
-      injectWhere(
-        injectLandingArea(
-          injectNeverWho(injectEventCardCss(injectLegalFooter(LANDING_HTML, 'landing')), 'landing'),
-          area,
-          { areaFirst: where.kind === 'zip' }
+    injectLanguageHead(
+      injectCanonical(
+        injectWhere(
+          injectLandingArea(shell, area, { areaFirst: where.kind === 'zip' }),
+          where,
+          lang
         ),
-        where
+        request,
+        env,
+        withLangPrefix(lang, CANONICAL_PATH.landing)
       ),
-      request,
-      env,
-      CANONICAL_PATH.landing
+      lang
     )
   );
+  languageVaried(res, pathLang);
   // The one surface allowed to ask for location, for itself only.
   res.headers.set('Permissions-Policy', LANDING_PERMISSIONS_POLICY);
   return res;

@@ -20,6 +20,9 @@ import {
   nearestZipArea,
   type ZipArea,
 } from './zip-areas.js';
+import { fmt, msg } from './i18n/catalog.js';
+import { DEFAULT_LANG, isLang, type Lang } from './i18n/languages.js';
+import { withLangPrefix } from './i18n/path-prefix.js';
 
 export const WHERE_MARKER = '<!--OCR_WHERE-->';
 export const AREA_HEADING_MARKER = '<!--OCR_AREA_HEADING-->';
@@ -43,55 +46,71 @@ export function readWhere(url: URL | null): WhereState {
   return { kind: 'unknown-zip', typed: raw.trim().slice(0, 10) };
 }
 
-function message(state: WhereState): string {
+function message(state: WhereState, lang: Lang): string {
   if (state.kind === 'unknown-zip') {
-    return `We couldn't find zip ${escapeHtml(state.typed)}. Check it and try again.`;
+    return fmt(lang, 'where.unknownZip', { zip: escapeHtml(state.typed) });
   }
-  if (state.kind === 'no-us-zip')
-    return "We couldn't find a US zip where you are. Type one instead.";
+  if (state.kind === 'no-us-zip') return msg(lang, 'where.noUsZip');
   return '';
 }
 
 /** The zip form. The phone's location button is in the template, hidden until its script shows it. */
-export function renderWhere(state: WhereState): string {
+export function renderWhere(state: WhereState, lang: Lang = DEFAULT_LANG): string {
   const value =
     state.kind === 'zip'
       ? state.area.zip
       : state.kind === 'unknown-zip'
         ? (normalizeZip(state.typed) ?? '')
         : '';
-  const msg = message(state);
-  return `<form class="where-form" method="get" action="/" role="search" data-testid="where-form">
-          <label for="where-zip" class="where-label">Your zip code</label>
+  const note = message(state, lang);
+  return `<form class="where-form" method="get" action="${withLangPrefix(lang, '/')}" role="search" data-testid="where-form">
+          <label for="where-zip" class="where-label">${msg(lang, 'where.label')}</label>
           <div class="where-row">
             <input id="where-zip" name="zip" class="input" type="text" inputmode="numeric"
               pattern="[0-9]{5}(-[0-9]{4})?" maxlength="10" autocomplete="postal-code" required
-              value="${escapeHtml(value)}"${msg ? ' aria-invalid="true" aria-describedby="where-msg"' : ''}
+              value="${escapeHtml(value)}"${note ? ' aria-invalid="true" aria-describedby="where-msg"' : ''}
               data-testid="where-zip" />
-            <button class="btn btn-primary" type="submit" data-testid="where-submit">Find events</button>
-          </div>${msg ? `\n          <p class="where-msg" id="where-msg" role="alert" data-testid="where-msg">${msg}</p>` : ''}
+            <button class="btn btn-primary" type="submit" data-testid="where-submit">${msg(lang, 'where.submit')}</button>
+          </div>${note ? `\n          <p class="where-msg" id="where-msg" role="alert" data-testid="where-msg">${note}</p>` : ''}
         </form>`;
 }
 
 /** The area heading: the zip when there is one. */
-export function renderAreaHeading(state: WhereState): string {
-  if (state.kind !== 'zip') return 'Coming up';
-  return `Near ${escapeHtml(state.area.zip)} <a class="where-change" href="/?change=1" data-testid="where-change">Change</a>`;
+export function renderAreaHeading(state: WhereState, lang: Lang = DEFAULT_LANG): string {
+  if (state.kind !== 'zip') return msg(lang, 'where.comingUp');
+  const near = fmt(lang, 'where.near', { zip: escapeHtml(state.area.zip) });
+  return `${near} <a class="where-change" href="${withLangPrefix(lang, '/')}?change=1" data-testid="where-change">${msg(lang, 'where.change')}</a>`;
 }
 
 /** The area when nothing is near the zip. */
-export function renderNearEmpty(zip: string): string {
+export function renderNearEmpty(zip: string, lang: Lang = DEFAULT_LANG): string {
   return `<div class="near-empty" data-testid="area-empty-near" role="status">
-          <p><strong>Nothing near ${escapeHtml(zip)} yet.</strong></p>
-          <p><a href="/events" data-testid="area-empty-all">See all events</a> &middot; <a href="/admin?start=event" data-testid="area-empty-create">Create one</a></p>
+          <p><strong>${fmt(lang, 'where.nothingNear', { zip: escapeHtml(zip) })}</strong></p>
+          <p><a href="${withLangPrefix(lang, '/events')}" data-testid="area-empty-all">${msg(lang, 'disc.seeAll')}</a> &middot; <a href="/admin?start=event" data-testid="area-empty-create">${msg(lang, 'where.createOne')}</a></p>
         </div>`;
 }
 
-export function injectWhere(html: string, state: WhereState): string {
+export function injectWhere(html: string, state: WhereState, lang: Lang = DEFAULT_LANG): string {
   return injectMarker(
-    injectMarker(html, WHERE_MARKER, renderWhere(state)),
+    injectMarker(html, WHERE_MARKER, renderWhere(state, lang)),
     AREA_HEADING_MARKER,
-    renderAreaHeading(state)
+    renderAreaHeading(state, lang)
+  );
+}
+
+/**
+ * The phone's location form posts to /near, which answers with the landing for
+ * the zip. On a page in another language the form says which, so the answer is
+ * in it too (OSE-1762). The English form is as it was: no field, the English
+ * landing. Sent in the form body with the box, used for the redirect, kept nowhere.
+ */
+const NEAR_FORM_FIELD = '<input type="hidden" name="g" />';
+
+export function injectNearLang(html: string, lang: Lang): string {
+  if (lang === DEFAULT_LANG || !html.includes(NEAR_FORM_FIELD)) return html;
+  return html.replace(
+    NEAR_FORM_FIELD,
+    `${NEAR_FORM_FIELD}\n          <input type="hidden" name="lang" value="${lang}" />`
   );
 }
 
@@ -106,10 +125,16 @@ export async function handleNear(request: Request): Promise<Response> {
     return new Response(null, { status: 303, headers: { Location: '/', ...noStore } });
   }
   let g: unknown = null;
+  // The page's language, when the form came from a page in another one. Only a
+  // listed language is taken; anything else is the default.
+  let lang: Lang = DEFAULT_LANG;
   const type = (request.headers.get('Content-Type') ?? '').split(';')[0].trim().toLowerCase();
   if (type === 'application/x-www-form-urlencoded') {
     try {
-      g = (await request.formData()).get('g');
+      const form = await request.formData();
+      g = form.get('g');
+      const asked = form.get('lang');
+      if (isLang(asked)) lang = asked;
     } catch {
       g = null;
     }
@@ -119,6 +144,7 @@ export async function handleNear(request: Request): Promise<Response> {
     return Response.json({ ok: false, error: 'INVALID_AREA' }, { status: 400, headers: noStore });
   }
   const area = nearestZipArea(center.lat, center.lon);
-  const to = area ? `/?zip=${area.zip}` : '/?nozip=1';
+  const home = withLangPrefix(lang, '/');
+  const to = area ? `${home}?zip=${area.zip}` : `${home}?nozip=1`;
   return new Response(null, { status: 303, headers: { Location: to, ...noStore } });
 }

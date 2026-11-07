@@ -148,7 +148,7 @@
 </div>
       <h2 id="next-heading" class="ose-suggestions-heading" data-testid="next-event-fallback">El corredor sigue</h2>
         <p class="ose-suggestions-note">Siempre hay más encuentros organizándose cerca.</p>
-        <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="/events">Ver lo que viene</a>
+        <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="/es/events">Ver lo que viene</a>
       <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
         <h2 id="connect-heading" class="ose-suggestions-heading">Entérate del próximo</h2>
         <p class="ose-suggestions-note">Un correo cuando se acerque algo. Nada más.</p>
@@ -164,7 +164,7 @@
     </nav>
 
     <nav class="ose-back" aria-label="Volver">
-      <a class="ose-back-btn" data-testid="event-back" href="/events">Volver</a>
+      <a class="ose-back-btn" data-testid="event-back" href="/es/events">Volver</a>
     </nav>
 <script nonce="goldennonce">(function(){var a=document.querySelector('[data-testid="event-back"]');if(!a||!document.referrer||window.history.length<2)return;a.addEventListener('click',function(e){e.preventDefault();window.history.back();});})();</script>
 
