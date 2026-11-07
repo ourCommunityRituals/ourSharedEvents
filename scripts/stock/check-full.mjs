@@ -41,6 +41,19 @@ export function edgeChallenged(res) {
   );
 }
 
+// A Cloudflare Ray ID (hex, then the data centre): the key to the request in the
+// dashboard's Security Events, which names the rule that challenged it. It comes
+// from a response header, so only a ray-shaped value is written into the summary.
+const RAY_RE = /^[0-9a-f]{16}-[A-Z]{3}$/i;
+
+/** `edge-challenged:<what>`, with ` ray=<id>` when the edge sent a usable Ray ID. */
+export function edgeReason(res, what) {
+  const h = res && res.headers;
+  const ray = h && typeof h.get === 'function' ? String(h.get('cf-ray') || '').trim() : '';
+  const base = what ? `edge-challenged:${what}` : 'edge-challenged';
+  return RAY_RE.test(ray) ? `${base} ray=${ray}` : base;
+}
+
 const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const dayNumber = (ymd) => {
@@ -221,7 +234,7 @@ export async function checkNodes({
       const page = res && res.status === 200 ? await bodyOf(res) : '';
       const areaAt = page.indexOf(AREA_MARK);
       const doorsAt = page.indexOf(DOORS_MARK);
-      if (edgeChallenged(res)) reasons.push(`edge-challenged:${zipPath}`);
+      if (edgeChallenged(res)) reasons.push(edgeReason(res, zipPath));
       else if (areaAt < 0 || (doorsAt >= 0 && doorsAt < areaAt))
         reasons.push(`zip-not-map-first:${zip}`);
     }
@@ -236,7 +249,7 @@ export async function checkNodes({
         if (!qUrl) reasons.push(`bad-path:${id}`);
         else {
           const got = await publicGet(qUrl);
-          if (edgeChallenged(got)) reasons.push(`edge-challenged:${qr.qPath}`);
+          if (edgeChallenged(got)) reasons.push(edgeReason(got, qr.qPath));
           else if (!redirectsToEvent(got, id)) reasons.push(`qr-broken:${id}`);
         }
       }
@@ -247,7 +260,7 @@ export async function checkNodes({
         if (!sUrl) reasons.push(`bad-path:${id}`);
         else {
           const got = await publicGet(sUrl);
-          if (edgeChallenged(got)) reasons.push(`edge-challenged:${qr.sPath}`);
+          if (edgeChallenged(got)) reasons.push(edgeReason(got, qr.sPath));
           else if (!redirectsToEvent(got, id)) reasons.push(`shortlink-broken:${id}`);
         }
       }
@@ -256,7 +269,7 @@ export async function checkNodes({
       const eventPath = `/events/${encodeURIComponent(id)}`;
       const res = await publicGet(siteUrl(eventPath));
       const page = res && res.status === 200 ? await bodyOf(res) : '';
-      if (edgeChallenged(res)) reasons.push(`edge-challenged:${eventPath}`);
+      if (edgeChallenged(res)) reasons.push(edgeReason(res, eventPath));
       else if (!STRIP_RE.test(page)) reasons.push(`no-sponsor-strip:${id}`);
 
       // art, when the event has some, loads from this site
@@ -272,7 +285,7 @@ export async function checkNodes({
           reasons.push(`art-off-site:${id}`);
         } else {
           const got = await publicGet(url);
-          if (edgeChallenged(got)) reasons.push(`edge-challenged:${art}`);
+          if (edgeChallenged(got)) reasons.push(edgeReason(got, art));
           else if (!got || got.status !== 200) reasons.push(`art-broken:${id}`);
         }
       }
@@ -325,16 +338,16 @@ export async function checkSearches({ searches, fetchPublic, sleep = realSleep, 
     lastAt = now();
     const url = new URL(`/events?q=${encodeURIComponent(q)}`, origin);
     let page = '';
-    let challenged = false;
+    let challenged = null;
     try {
       const res = await fetchPublic(url.href, { method: 'GET', redirect: 'manual' });
-      challenged = edgeChallenged(res);
+      if (edgeChallenged(res)) challenged = edgeReason(res, '');
       page = res && res.status === 200 ? await res.text() : '';
     } catch {
       page = '';
     }
     if (challenged) {
-      results[q] = { pass: false, count: null, expected, reasons: ['edge-challenged'] };
+      results[q] = { pass: false, count: null, expected, reasons: [challenged] };
       continue;
     }
     if (page.includes(PUBLIC_ERROR_MARK)) {

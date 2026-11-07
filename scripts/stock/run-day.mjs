@@ -614,13 +614,21 @@ export function renderSummary({ report, nodes, expected, manifest, notes, search
     }
   }
   const purgeFailures = report.purges.filter((p) => !p.ok);
-  const challenged = [
+  const edgeReasons = [
     ...Object.values(report.results || {}),
     ...Object.values(searches || {}),
-  ].some((r) => (r.reasons || []).some((x) => String(x).startsWith('edge-challenged')));
+  ].flatMap((r) => (r.reasons || []).filter((x) => String(x).startsWith('edge-challenged')));
+  const challenged = edgeReasons.length > 0;
+  // The first challenged read that carries a Ray ID: look it up in Security → Events.
+  const firstRay = edgeReasons.find((x) => / ray=/.test(String(x)));
   const notesList = [
     challenged
       ? "The Cloudflare edge challenged the check's public reads (cf-mitigated: challenge), so the Worker never answered them. The staging WAF skip rule for the X-OCR-CI header must cover /q/*, /s/* and /events/* on stg, and OCR_CI_EDGE_TOKEN must match it (OSE-939)."
+      : null,
+    firstRay
+      ? `First challenged read: ${String(firstRay)
+          .replace(/^edge-challenged:?/, '')
+          .trim()}. Look up the ray in Cloudflare → Security → Events to see the rule that challenged it.`
       : null,
     ...((manifest && manifest.warnings) || []).map((w) => `Build: ${w}`),
     notes && notes.instagramWarning ? `Instagram: ${notes.instagramWarning}` : null,
