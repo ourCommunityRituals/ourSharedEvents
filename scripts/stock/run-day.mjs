@@ -26,7 +26,7 @@ import { listPosts, tokenWarning } from './instagram.mjs';
 import { localPosts } from './local-art.mjs';
 import { STOCK_BASE_URL, createClient } from './client.mjs';
 import { buildDay } from './build-full.mjs';
-import { checkNodes as realCheckNodes } from './check-full.mjs';
+import { checkNodes as realCheckNodes, checkSearches as realCheckSearches } from './check-full.mjs';
 import {
   SAFE_ID,
   buildPurgeSql,
@@ -588,7 +588,7 @@ function reasonsText(reasons) {
 }
 
 /** The markdown the check-swap job writes to $GITHUB_STEP_SUMMARY. */
-export function renderSummary({ report, nodes, expected, manifest, notes }) {
+export function renderSummary({ report, nodes, expected, manifest, notes, searches = null }) {
   const nodeList = Array.isArray(nodes) ? nodes : nodes.nodes;
   const lines = [
     '## Stock data: stg',
@@ -622,6 +622,20 @@ export function renderSummary({ report, nodes, expected, manifest, notes }) {
     ...report.problems,
     ...purgeFailures.map((p) => `Purge failed: ${p.name} ${p.node} (${p.error})`),
   ].filter(Boolean);
+  if (searches) {
+    lines.push(
+      '',
+      '### Searches on the site',
+      '',
+      '| Search | Expected | Reads | Result |',
+      '| --- | --- | --- | --- |'
+    );
+    for (const [q, r] of Object.entries(searches)) {
+      lines.push(
+        `| ${cell(q)} | ${r.expected} | ${r.count === null ? 'unreadable' : r.count} | ${r.pass ? 'pass' : 'FAIL'} |`
+      );
+    }
+  }
   lines.push('', `Manifest: \`${cell(report.todayName)}\``);
   if (report.index && report.index.after) {
     lines.push(`Live manifests: ${report.index.after.map((n) => `\`${cell(n)}\``).join(', ')}`);
@@ -890,6 +904,7 @@ export async function runCheckSwap({
   outDir,
   tmpDir,
   checkNodes,
+  checkSearches = realCheckSearches,
   log,
 }) {
   const manifestPath = join(outDir, 'manifest.json');
@@ -938,11 +953,24 @@ export async function runCheckSwap({
     client: buildFailed ? null : clientFrom(env, fetchFn),
     fetchPublic: buildFailed ? null : fetchPublicFrom(env, fetchFn),
   });
-  summarize(env, fs, renderSummary({ report, nodes, expected, manifest, notes }));
+  // Owner 2026-11-07: after the swap, every zip and town search reads its
+  // permanent total on the site (stock/totals.json `searches`).
+  let searches = null;
+  if (!buildFailed) {
+    searches = await checkSearches({
+      searches: repoJson('stock/totals.json').searches,
+      fetchPublic: fetchPublicFrom(env, fetchFn),
+    });
+  }
+  summarize(env, fs, renderSummary({ report, nodes, expected, manifest, notes, searches }));
   for (const [id, r] of Object.entries(report.results)) {
     if (!r.pass) log(`node ${id} failed: ${reasonsText(r.reasons)}`);
   }
-  return report.exitCode;
+  const searchFailed = searches !== null && Object.values(searches).some((r) => !r.pass);
+  for (const [q, r] of Object.entries(searches || {})) {
+    if (!r.pass) log(`search ${q} failed: ${reasonsText(r.reasons)}`);
+  }
+  return report.exitCode || (searchFailed ? 1 : 0);
 }
 
 const COMMANDS = {
