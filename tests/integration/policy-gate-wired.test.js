@@ -39,12 +39,17 @@ function mustBlockCounts(src) {
 
 describe('policy gate suite is wired into CI', () => {
   let out;
+  // The suite starts one real hook process (node) per case, ~490 of them, one after another.
+  // That is the contract under test, so it is not shortened. A node start is ~40 ms on Linux CI
+  // but ~0.3 s on a Windows workstation (152 s for the suite alone on 2026-11-07), and it does
+  // not overlap: eight at once took ~2 s each. Under a full local `npm test` it went past the
+  // old 180 s, so the limit is set for that case.
   beforeAll(() => {
     out = spawnSync(process.execPath, ['--test', '--test-reporter=spec', SUITE], {
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
     });
-  }, 180000);
+  }, 480_000);
 
   it('the hook suite passes', () => {
     expect(out.status, (out.stdout || '').slice(-1500)).toBe(0);

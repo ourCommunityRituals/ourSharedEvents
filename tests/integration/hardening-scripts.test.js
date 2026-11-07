@@ -78,7 +78,36 @@ const GOOD_GH = () => ({
   'auth status': { stdout: "Token scopes: 'repo', 'workflow'\n" },
 });
 
+// The verifier's checks, loaded once. verify() runs them in this process with the same two
+// environment switches the CLI reads (CLAUDE_HOME, OCR_GH_FIXTURE), instead of starting a node
+// process per reading: a node start costs ~0.3 s on Windows and some cases take nine readings.
+// The CLI path itself is covered by 'the CLI --json reports what the checks report' below.
+let verifier;
+beforeAll(async () => {
+  verifier = await import(pathToFileURL(join(DIR, 'verify-hardening.mjs')).href);
+}, 30_000);
+
 function verify(home, ghMap, only) {
+  const fixture = join(scratch('ose-ghfix-'), 'gh.json');
+  writeFileSync(fixture, JSON.stringify(ghMap));
+  const saved = {
+    CLAUDE_HOME: process.env.CLAUDE_HOME,
+    OCR_GH_FIXTURE: process.env.OCR_GH_FIXTURE,
+  };
+  process.env.CLAUDE_HOME = home;
+  process.env.OCR_GH_FIXTURE = fixture;
+  try {
+    return Object.fromEntries(verifier.runChecks(only).map((c) => [c.id, c.status]));
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
+// The CLI reading, for the parity case: a child process with its own environment.
+function verifyCli(home, ghMap, only) {
   const fixture = join(scratch('ose-ghfix-'), 'gh.json');
   writeFileSync(fixture, JSON.stringify(ghMap));
   const args = ['--json', ...(only ? [`--only=${only}`] : [])];
@@ -86,6 +115,10 @@ function verify(home, ghMap, only) {
   const out = JSON.parse(r.stdout);
   return Object.fromEntries(out.checks.map((c) => [c.id, c.status]));
 }
+
+// Cases that start the CLI (node) more than once: a node start is ~0.3 s on Windows, more on a
+// loaded machine, so these have an explicit timeout rather than the 5 s default.
+const CLI_BOUND = 30_000;
 
 const BAD = {
   permissions: {
@@ -120,6 +153,22 @@ describe('verify-hardening: workstation plane', () => {
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/self-test ok/);
   });
+
+  it(
+    'the CLI --json reports what the checks report, on both planes',
+    async () => {
+      const { home } = await hardenedHome();
+      for (const only of ['workstation', 'github']) {
+        expect(verifyCli(home, GOOD_GH(), only)).toEqual(verify(home, GOOD_GH(), only));
+      }
+      // and on a failing state, so the comparison is not only between two passing readings
+      const bad = scratchHome(BAD);
+      const cli = verifyCli(bad, GOOD_GH(), 'workstation');
+      expect(cli.W2).toBe('FAIL');
+      expect(cli).toEqual(verify(bad, GOOD_GH(), 'workstation'));
+    },
+    CLI_BOUND
+  );
 
   it('fails every settings control on a permissive scratch home', () => {
     const c = verify(scratchHome(BAD), GOOD_GH(), 'workstation');
@@ -318,7 +367,7 @@ describe('verify-hardening: GitHub plane (fixture)', () => {
   });
 });
 
-describe('apply-workstation', () => {
+describe('apply-workstation', { timeout: CLI_BOUND }, () => {
   it('plan is pure and idempotent', async () => {
     const ws = await import(pathToFileURL(join(DIR, 'apply-workstation.mjs')).href);
     const lib = await import(pathToFileURL(join(DIR, 'lib.mjs')).href);
@@ -376,7 +425,7 @@ describe('apply-workstation', () => {
   });
 });
 
-describe('guards found in the confirmation pass', () => {
+describe('guards found in the confirmation pass', { timeout: CLI_BOUND }, () => {
   it('applyTo refuses the real home folder unless the CLI confirmed the owner', async () => {
     const ws = await import(pathToFileURL(join(DIR, 'apply-workstation.mjs')).href);
     const lib = await import(pathToFileURL(join(DIR, 'lib.mjs')).href);
@@ -432,7 +481,7 @@ const isWrite = (args) => {
   return i !== -1 && String(args[i + 1]).toUpperCase() !== 'GET';
 };
 
-describe('apply-github', () => {
+describe('apply-github', { timeout: CLI_BOUND }, () => {
   it('--apply refuses before any gh call when there is no terminal', () => {
     // an empty fixture answers nothing: a gh call would exit 2, the guard must exit 3 first
     const fixture = join(scratch('ose-ghfix-'), 'gh.json');
@@ -587,7 +636,7 @@ const listed = (stdout, mark) =>
     .map((l) => l.slice(l.indexOf('[') + 1, l.indexOf(']')));
 const callText = (r) => r.calls.map((c) => c.join(' '));
 
-describe('apply-github --only', () => {
+describe('apply-github --only', { timeout: CLI_BOUND }, () => {
   it('names the steps in one table, in run order', async () => {
     const ag = await import(pathToFileURL(join(DIR, 'apply-github.mjs')).href);
     expect(ag.STEP_NAMES).toEqual(NAMES);

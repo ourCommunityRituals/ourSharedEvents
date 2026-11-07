@@ -472,6 +472,15 @@ function ghFromTempFolder() {
   return Boolean(first) && first.startsWith(resolve(tmpdir()).toLowerCase());
 }
 
+/**
+ * Every check for the selected plane(s), as the CLI runs them. --only=workstation skips every
+ * GitHub call except `gh auth status` for the token scopes. Exported so the tests can grade
+ * fixture states without starting a process per reading; the CLI below is a thin wrapper.
+ */
+export function runChecks(only) {
+  return [...(only === 'github' ? [] : workstation()), ...(only === 'workstation' ? [] : github())];
+}
+
 function grade(checks) {
   const fail = checks.filter((c) => c.status === 'FAIL').length;
   const warn = checks.filter((c) => c.status === 'WARN').length;
@@ -544,12 +553,8 @@ if (isMain) {
     selfTest();
     process.exit(0);
   }
-  // --only=workstation skips every GitHub call except `gh auth status` for the token scopes
   const only = process.argv.find((a) => a.startsWith('--only='))?.split('=')[1];
-  const all = [
-    ...(only === 'github' ? [] : workstation()),
-    ...(only === 'workstation' ? [] : github()),
-  ];
+  const all = runChecks(only);
   const planes = ['workstation', 'github'].filter((p) => !only || p === only);
   // A verifier pointed at another home folder or at fixture answers is a test, not a reading.
   const overrides = [

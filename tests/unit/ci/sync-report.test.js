@@ -11,15 +11,24 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 
 let sync;
 let tmp;
+let template; // the agreeing world, built once per file; every case works on its own copy
 const SCRIPT = path.resolve(__dirname, '../../../scripts/ci/sync-report.mjs');
 const TODAY = new Date('2026-10-22T12:00:00Z');
 
+// Building the world takes nine git processes (two spine commits). It is built once here and
+// copied per case, so a case costs a directory copy instead of nine process starts. The
+// timeout is explicit because process starts are what a loaded Windows machine is slowest at.
 beforeAll(async () => {
   sync = await import('../../../scripts/ci/sync-report.mjs');
+  template = buildWorld(fs.mkdtempSync(path.join(os.tmpdir(), 'sync-report-template-')));
+}, 30_000);
+
+afterAll(() => {
+  if (template) fs.rmSync(template.root, { recursive: true, force: true });
 });
 
 afterEach(() => {
@@ -90,13 +99,33 @@ const conf = (over = {}) =>
     ...over,
   });
 
-/** An agreeing world. Returns the paths object the report takes. */
+const layout = (root) => ({
+  root,
+  ose: path.join(root, 'ose'),
+  ocrDocs: path.join(root, 'ocr'),
+  wkrp: path.join(root, 'wkrp'),
+  spine: path.join(root, 'spine'),
+  agentsItems: 2,
+});
+
+/** A fresh copy of the agreeing world under its own temp folder (git history included). */
+function copyWorld() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-report-'));
+  fs.cpSync(template.root, root, { recursive: true });
+  const { first, tip } = template;
+  return { ...layout(root), first, tip };
+}
+
+/** An agreeing world for one case, removed after it. Returns the paths object the report takes. */
 function world() {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-report-'));
-  const ose = path.join(tmp, 'ose');
-  const ocr = path.join(tmp, 'ocr');
-  const wkrp = path.join(tmp, 'wkrp');
-  const spine = path.join(tmp, 'spine');
+  const w = copyWorld();
+  tmp = w.root;
+  return w;
+}
+
+/** Builds the agreeing world under `root`. */
+function buildWorld(root) {
+  const { ose, ocrDocs: ocr, wkrp, spine } = layout(root);
   for (const r of [ose, ocr, wkrp]) for (const f of GOV) put(r, f, '# x\n');
 
   put(ose, 'docs/adr/README.md', ADR_INDEX);
@@ -133,12 +162,18 @@ function world() {
   const tip = g(spine, 'rev-parse', 'HEAD');
   put(ose, '.ocr-hub-ref', tip + '\n');
   put(wkrp, '.ocr-hub-ref', tip + '\n');
-  return { ose, ocrDocs: ocr, wkrp, spine, agentsItems: 2, first, tip };
+  return { ...layout(root), first, tip };
 }
+
+// The report starts real processes: git (read-only, local refs) about five times per repo it
+// reads, and node once for the AGENTS.md check (check-agents-sync.mjs). The link 3 cases also
+// build a small history of their own. Those cases have an explicit timeout rather than the
+// 5 s default, because process starts are what a loaded Windows machine is slowest at.
+const PROCESS_BOUND = 20_000;
 
 const keys = (l, level) => l.findings.filter((f) => !level || f.level === level).map((f) => f.key);
 
-describe('baseline', () => {
+describe('baseline', { timeout: PROCESS_BOUND }, () => {
   test('an agreeing world reads in sync on every link', () => {
     const w = world();
     const r = sync.buildReport(w, TODAY);
@@ -226,7 +261,7 @@ describe('link 2: documentation', () => {
   });
 });
 
-describe('link 3: shared brain', () => {
+describe('link 3: shared brain', { timeout: PROCESS_BOUND }, () => {
   test('a missing governance file is amber and named', () => {
     const w = world();
     fs.rmSync(path.join(w.wkrp, 'docs/OCR_VISION.md'));
@@ -274,7 +309,7 @@ describe('link 3: shared brain', () => {
   });
 });
 
-describe('link 4: invariants', () => {
+describe('link 4: invariants', { timeout: PROCESS_BOUND }, () => {
   test('an id the brain has and the report does not is red', () => {
     const w = world();
     const c = JSON.parse(conf());
@@ -387,7 +422,7 @@ describe('link 4: invariants', () => {
   });
 });
 
-describe('spine pin', () => {
+describe('spine pin', { timeout: PROCESS_BOUND }, () => {
   test('a pin behind the spine tip is amber and counts the commits and packages files', () => {
     const w = world();
     put(w.wkrp, '.ocr-hub-ref', w.first + '\n');
@@ -427,8 +462,9 @@ describe('read-only and the command line', () => {
     walk(root);
     return out.sort();
   };
-  const cli = (w, ...extra) =>
-    execFileSync(
+  /** Runs the real CLI. Returns its exit status and stdout; a failed run does not throw. */
+  const cli = (w, ...extra) => {
+    const r = spawnSync(
       process.execPath,
       [
         SCRIPT,
@@ -449,35 +485,61 @@ describe('read-only and the command line', () => {
         stdio: ['ignore', 'pipe', 'ignore'],
       }
     );
+    if (r.error) throw r.error;
+    return { status: r.status, stdout: r.stdout };
+  };
+
+  // Each CLI run is a node process that starts a second one (check-agents-sync) and about twenty
+  // git processes, so the runs are made once here and the cases below read their results: one
+  // clean world read as JSON and as markdown, one --write, and one world with a red link read
+  // without and with --strict. Five runs, where one run per case made eight.
+  const shared = [];
+  let clean;
+  let red;
+  let written;
+  beforeAll(() => {
+    const keep = (w) => (shared.push(w.root), w);
+    clean = keep(copyWorld());
+    clean.before = snapshot(clean.root);
+    clean.json = cli(clean, '--json');
+    clean.after = snapshot(clean.root);
+    clean.md = cli(clean);
+
+    written = keep(copyWorld());
+    written.before = snapshot(written.root);
+    written.run = cli(written, '--write');
+    written.after = snapshot(written.root);
+
+    red = keep(copyWorld());
+    fs.rmSync(path.join(red.ose, 'docs/adr/ADR-002-two.md'));
+    red.md = cli(red);
+    red.strict = cli(red, '--strict');
+  }, 60_000);
+  afterAll(() => {
+    for (const d of shared) fs.rmSync(d, { recursive: true, force: true });
+  });
 
   test('a run changes nothing in any repo', () => {
-    const w = world();
-    const before = snapshot(tmp);
-    cli(w, '--json');
-    expect(snapshot(tmp)).toEqual(before);
+    expect(clean.json.status).toBe(0);
+    expect(clean.after).toEqual(clean.before);
   });
   test('--write puts files under the repo .claude/outputs only', () => {
-    const w = world();
-    const before = snapshot(tmp);
-    cli(w, '--write');
-    const added = snapshot(tmp).filter((x) => !before.includes(x));
+    expect(written.run.status).toBe(0);
+    const added = written.after.filter((x) => !written.before.includes(x));
     expect(added.length).toBe(2);
     expect(
       added.every((x) => x.startsWith(path.join('ose', '.claude', 'outputs', 'SYNC-REPORT-')))
     ).toBe(true);
   });
   test('--json prints parseable JSON with the chain and what is not read yet', () => {
-    const w = world();
-    const j = JSON.parse(cli(w, '--json'));
+    const j = JSON.parse(clean.json.stdout);
     expect(j.read_only).toBe(true);
     expect(j.links).toHaveLength(5);
     expect(j.chain).toMatch(/^ADR > documentation/);
   });
   test('exit code is 0 on a red link, and 1 only with --strict', () => {
-    const w = world();
-    fs.rmSync(path.join(w.ose, 'docs/adr/ADR-002-two.md'));
-    expect(() => cli(w)).not.toThrow();
-    expect(() => cli(w, '--strict')).toThrow();
+    expect(red.md.status).toBe(0);
+    expect(red.strict.status).toBe(1);
   });
   test('--hub still works as an alias for --spine', () => {
     const w = world();
@@ -485,8 +547,7 @@ describe('read-only and the command line', () => {
     expect(paths.spine).toBe(path.resolve(w.spine));
   });
   test('the repo table lists spine, OCR-docs, ourSharedEvents, ourWKRP in that order', () => {
-    const w = world();
-    const md = cli(w);
+    const md = clean.md.stdout;
     const rows = md
       .split('\n')
       .filter((l) => /^\| (spine|OCR-docs|ourSharedEvents|ourWKRP) \|/.test(l));
@@ -498,9 +559,7 @@ describe('read-only and the command line', () => {
     ]);
   });
   test('the table names each link and its status', () => {
-    const w = world();
-    fs.rmSync(path.join(w.ose, 'docs/adr/ADR-002-two.md'));
-    const md = cli(w);
+    const md = red.md.stdout;
     expect(md).toContain('| ADR index vs ADR files | out of sync | 1 |');
     expect(md).toContain('| Spine pin vs spine origin/main | in sync | 0 |');
   });
