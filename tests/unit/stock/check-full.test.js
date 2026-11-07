@@ -27,7 +27,7 @@ const node = (id) => nodes.find((n) => n.id === id);
 const A = 'evergreen-park';
 const EMPTY = 'mount-greenwood';
 
-const BASE = 'https://stg-full.oursharedevents.com';
+const BASE = 'https://stg.oursharedevents.com';
 const TODAY = '2026-11-04';
 const DAY_AFTER = '2026-11-05';
 
@@ -200,13 +200,26 @@ describe('checkNodes: the count', () => {
     expect(r[A].pass).toBe(true);
   });
 
-  test('a populated expectation below the map gate is refused before any request', async () => {
-    const { manifest, listed } = day({ [A]: PER_NODE });
-    const s = site({ listed });
-    await expect(
-      run(s, manifest, { expected: { ...EXPECTED, [A]: MAP_GATE - 1 } })
-    ).rejects.toThrow(`expected count for ${A} below the map gate of ${MAP_GATE}`);
-    expect(s.calls).toEqual([]);
+  // Owner 2026-11-06: a place may hold fewer than the map gate (Auburn Gresham 8).
+  test('a place under the map gate is checked on its count; its landing-map check is skipped', async () => {
+    const under = MAP_GATE - 1;
+    const { manifest, listed } = day({ [A]: under });
+    const zip = node(A).zips[0];
+    const r = await run(
+      site({ listed, override: { [`/?zip=${zip}`]: html(DOORS_FIRST) } }),
+      manifest,
+      { expected: { ...EXPECTED, [A]: under } }
+    );
+    expect(r[A]).toMatchObject({ pass: true, count: under, expected: under, reasons: [] });
+    expect(r[A].skipped).toEqual(['landing-map']);
+  });
+
+  test('a place under the map gate still fails one short of its total', async () => {
+    const under = MAP_GATE - 1;
+    const { manifest, listed } = day({ [A]: under - 1 });
+    const r = await run(site({ listed }), manifest, { expected: { ...EXPECTED, [A]: under } });
+    expect(r[A].pass).toBe(false);
+    expect(r[A].reasons).toEqual([`count:${under - 1}/${under}`]);
   });
 
   test('a node with no expected count is refused before any request', async () => {
@@ -501,5 +514,109 @@ describe('no live count is written in the stock tests', () => {
       expect(text.match(/perNode\s*:/g), f).toBeNull();
       expect(text.match(/expected:\s*\{\s*['"\w-]+\s*:\s*\d/g), f).toBeNull();
     }
+  });
+});
+
+// Owner 2026-11-07: every zip and town search reads its permanent total on stg.
+describe('checkSearches: each /events search reads its total', () => {
+  let checkSearches;
+  // the owner's totals, never a literal (stock/totals.json)
+  const S = readJson('stock/totals.json').searches;
+  const AG = S['Auburn Gresham'];
+  const ZIP = S['60620'];
+  const OL = S['Oak Lawn'];
+  const MG = S['Mount Greenwood'];
+  beforeAll(async () => {
+    ({ checkSearches } = await import('../../../scripts/stock/check-full.mjs'));
+  });
+  const summary = (n, label) => ({
+    status: 200,
+    text: async () =>
+      `<p class="disc-summary" data-testid="disc-summary">${n} event${n === 1 ? '' : 's'} in ${label}</p>`,
+  });
+  const run = (pages, searches) => {
+    const calls = [];
+    return checkSearches({
+      searches,
+      sleep: async () => {},
+      fetchPublic: async (url, init) => {
+        calls.push({ url, init });
+        const q = new URL(url).searchParams.get('q');
+        return pages[q] ?? { status: 404, text: async () => '' };
+      },
+    }).then((results) => ({ results, calls }));
+  };
+
+  test('passes when every search reads its total', async () => {
+    const { results } = await run(
+      { 'Auburn Gresham': summary(AG, 'Auburn Gresham'), 60620: summary(ZIP, '60620') },
+      { 'Auburn Gresham': AG, 60620: ZIP }
+    );
+    expect(results['Auburn Gresham']).toEqual({ pass: true, count: AG, expected: AG, reasons: [] });
+    expect(results['60620'].pass).toBe(true);
+  });
+
+  test('fails a town one short of its total (the CI fixture missing): 8 of 9', async () => {
+    const { results } = await run(
+      { 'Auburn Gresham': summary(AG - 1, 'Auburn Gresham') },
+      { 'Auburn Gresham': AG }
+    );
+    expect(results['Auburn Gresham']).toEqual({
+      pass: false,
+      count: AG - 1,
+      expected: AG,
+      reasons: [`count:${AG - 1}/${AG}`],
+    });
+  });
+
+  test('reads "0 events" and "1 event" alike', async () => {
+    const { results } = await run(
+      { 'Mount Greenwood': summary(MG, 'Mount Greenwood'), x: summary(1, 'x') },
+      { 'Mount Greenwood': MG, x: 1 }
+    );
+    expect(results['Mount Greenwood'].pass).toBe(true);
+    expect(results.x.pass).toBe(true);
+  });
+
+  // A failed read answers 200 with a zero summary next to the public error
+  // (handlePublicPage): an empty place must not pass on it.
+  test('an HTTP-200 error page with a zero summary fails, even where 0 is expected', async () => {
+    const errorPage = {
+      status: 200,
+      text: async () =>
+        '<p class="error" data-testid="public-error">Could not load events. Please try again.</p>' +
+        '<p class="disc-summary" data-testid="disc-summary">0 events in Mount Greenwood</p>',
+    };
+    const { results } = await run({ 'Mount Greenwood': errorPage }, { 'Mount Greenwood': MG });
+    expect(results['Mount Greenwood']).toEqual({
+      pass: false,
+      count: null,
+      expected: MG,
+      reasons: ['events-list-error'],
+    });
+  });
+
+  test('a page without its summary line fails as unreadable, never as a count', async () => {
+    const { results } = await run({}, { 'Oak Lawn': OL });
+    expect(results['Oak Lawn']).toEqual({
+      pass: false,
+      count: null,
+      expected: OL,
+      reasons: ['summary-unreadable'],
+    });
+  });
+
+  test('asks only stg /events with the search encoded, and no redirect', async () => {
+    const { calls } = await run({ 'Oak Lawn': summary(OL, 'Oak Lawn') }, { 'Oak Lawn': OL });
+    expect(calls).toEqual([
+      {
+        url: 'https://stg.oursharedevents.com/events?q=Oak%20Lawn',
+        init: { method: 'GET', redirect: 'manual' },
+      },
+    ]);
+  });
+
+  test('a search with no expected count is refused', async () => {
+    await expect(run({}, { 'Oak Lawn': -1 })).rejects.toThrow('no expected count');
   });
 });

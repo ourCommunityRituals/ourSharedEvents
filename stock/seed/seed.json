@@ -122,21 +122,6 @@
       "source_url": "https://www.blueisland.org/Calendar.aspx?EID=739"
     },
     {
-      "offsetDays": 36,
-      "localStart": "19:00",
-      "durationMinutes": null,
-      "venue": "First Lutheran Church",
-      "address": "2519 Grove St, Blue Island, IL 60406",
-      "lat": 41.65439,
-      "lng": -87.683358,
-      "node": "blue-island",
-      "sector": "private",
-      "event_type_id": "etr-art-music",
-      "title": "Music from A Charlie Brown Christmas, live",
-      "summary": "Live performance of the Charlie Brown Christmas music, presented by the historical society.",
-      "source_url": "https://bihistoricalsociety.org/featured_item/music-from-a-charlie-brown-christmas-live-2026/"
-    },
-    {
       "offsetDays": 42,
       "localStart": "18:00",
       "durationMinutes": null,
@@ -165,21 +150,6 @@
       "title": "New Year's Eve ball drop",
       "summary": "Street countdown and ball drop.",
       "source_url": "https://www.blueisland.org/Calendar.aspx?EID=737"
-    },
-    {
-      "offsetDays": 73,
-      "localStart": "17:00",
-      "durationMinutes": null,
-      "venue": "The Lyric Theater",
-      "address": "12952 Western Ave, Blue Island, IL 60406",
-      "lat": 41.657795,
-      "lng": -87.68016,
-      "node": "blue-island",
-      "sector": "private",
-      "event_type_id": "etr-art-music",
-      "title": "Bad Company tribute with Great Moments in Vinyl",
-      "summary": "Tribute band concert at the historic theater.",
-      "source_url": "https://www.lyrictheater.com/events/bad-company-tribute-with-great-moments-in-vinyl-sun-1-17-doors-open-4-pm-show-at-5-pm"
     },
     {
       "offsetDays": 2,
@@ -227,21 +197,6 @@
       "source_url": "https://chipublib.bibliocommons.com/events/6ad266b5a85a2c00337ffd53"
     },
     {
-      "offsetDays": 8,
-      "localStart": "10:00",
-      "durationMinutes": 120,
-      "venue": "Brainerd Branch, Chicago Public Library",
-      "address": "1350 W 89th St, Chicago, IL 60620",
-      "lat": 41.732406,
-      "lng": -87.656964,
-      "node": "auburn-gresham",
-      "sector": "public",
-      "event_type_id": "etr-ent-film",
-      "title": "Film screening: Toy Story 5",
-      "summary": "Morning family screening.",
-      "source_url": "https://chipublib.bibliocommons.com/events/6ad8f632a85a2c00338115aa"
-    },
-    {
       "offsetDays": 9,
       "localStart": "10:00",
       "durationMinutes": 120,
@@ -255,51 +210,6 @@
       "title": "Pet food giveaway",
       "summary": "Church-run distribution of pet food.",
       "source_url": "https://saintsabina.org/events/pet-food-give-away-wd88d"
-    },
-    {
-      "offsetDays": 9,
-      "localStart": "11:00",
-      "durationMinutes": 120,
-      "venue": "St. Sabina Church",
-      "address": "1210 W 78th Pl, Chicago, IL 60620",
-      "lat": 41.751449,
-      "lng": -87.654504,
-      "node": "auburn-gresham",
-      "sector": "private",
-      "event_type_id": "etr-vol-mutual",
-      "title": "Winter coat giveaway",
-      "summary": "Church-run distribution of winter coats.",
-      "source_url": "https://saintsabina.org/events/winter-coat-giveaway"
-    },
-    {
-      "offsetDays": 11,
-      "localStart": "17:30",
-      "durationMinutes": 90,
-      "venue": "Thurgood Marshall Branch, Chicago Public Library",
-      "address": "7506 S Racine Ave, Chicago, IL 60620",
-      "lat": 41.757446,
-      "lng": -87.653997,
-      "node": "auburn-gresham",
-      "sector": "public",
-      "event_type_id": "etr-ent-film",
-      "title": "Film screening: The Addams Family",
-      "summary": "Library evening screening.",
-      "source_url": "https://chipublib.bibliocommons.com/v2/events/6ac945f59dbc2b002c8d86ed"
-    },
-    {
-      "offsetDays": 13,
-      "localStart": "16:30",
-      "durationMinutes": 105,
-      "venue": "Thurgood Marshall Branch, Chicago Public Library",
-      "address": "7506 S Racine Ave, Chicago, IL 60620",
-      "lat": 41.757446,
-      "lng": -87.653997,
-      "node": "auburn-gresham",
-      "sector": "public",
-      "event_type_id": "etr-ent-film",
-      "title": "Film screening: Backrooms",
-      "summary": "Library after-school screening.",
-      "source_url": "https://chipublib.bibliocommons.com/v2/events/6ac94224035faf0033db849b"
     },
     {
       "offsetDays": 16,
@@ -317,21 +227,6 @@
       "source_url": "https://chipublib.bibliocommons.com/v2/events/693b33731e64afd01e4e96f8"
     },
     {
-      "offsetDays": 19,
-      "localStart": "17:30",
-      "durationMinutes": 120,
-      "venue": "Brainerd Branch, Chicago Public Library",
-      "address": "1350 W 89th St, Chicago, IL 60620",
-      "lat": 41.732406,
-      "lng": -87.656964,
-      "node": "auburn-gresham",
-      "sector": "public",
-      "event_type_id": "etr-ent-film",
-      "title": "Film screening: Shadow Force",
-      "summary": "Library evening screening.",
-      "source_url": "https://chipublib.bibliocommons.com/v2/events/6ad2580c901b02002cc2edcb"
-    },
-    {
       "offsetDays": 20,
       "localStart": "17:30",
       "durationMinutes": 60,
@@ -345,21 +240,6 @@
       "title": "Wonder Wednesday: Family Reading Night",
       "summary": "Evening of shared reading for families.",
       "source_url": "https://chipublib.bibliocommons.com/v2/events/6ac50bd8e8cf1c005cb09728"
-    },
-    {
-      "offsetDays": 24,
-      "localStart": "14:00",
-      "durationMinutes": 105,
-      "venue": "Thurgood Marshall Branch, Chicago Public Library",
-      "address": "7506 S Racine Ave, Chicago, IL 60620",
-      "lat": 41.757446,
-      "lng": -87.653997,
-      "node": "auburn-gresham",
-      "sector": "public",
-      "event_type_id": "etr-ent-film",
-      "title": "Film screening: Toy Story 5",
-      "summary": "Sunday family screening at the branch.",
-      "source_url": "https://chipublib.bibliocommons.com/v2/events/6ac57b65ebad2200454397ac"
     },
     {
       "offsetDays": 41,
@@ -468,21 +348,6 @@
     },
     {
       "offsetDays": 6,
-      "localStart": "10:00",
-      "durationMinutes": 120,
-      "venue": "Hamilton B. Maher Community Center",
-      "address": "3450 W 97th St, Evergreen Park, IL 60805",
-      "lat": 41.717057,
-      "lng": -87.708524,
-      "node": "evergreen-park",
-      "sector": "public",
-      "event_type_id": "etr-tab-boardgame",
-      "title": "Mahjong",
-      "summary": "Weekly mahjong play.",
-      "source_url": "https://www.evergreenpark-ill.com/Calendar.aspx?EID=2924"
-    },
-    {
-      "offsetDays": 6,
       "localStart": "18:00",
       "durationMinutes": 60,
       "venue": "Hamilton B. Maher Community Center",
@@ -542,36 +407,6 @@
       "source_url": "https://www.evergreenpark-ill.com/Calendar.aspx?EID=2662"
     },
     {
-      "offsetDays": 17,
-      "localStart": "14:00",
-      "durationMinutes": 45,
-      "venue": "Evergreen Park Public Library",
-      "address": "9400 S Troy Ave, Evergreen Park, IL 60805",
-      "lat": 41.722521,
-      "lng": -87.700734,
-      "node": "evergreen-park",
-      "sector": "public",
-      "event_type_id": "etr-ent-gamenight",
-      "title": "Thanksgiving Bingo",
-      "summary": "Holiday-themed bingo session.",
-      "source_url": "https://www.evergreenparklibrary.org/event/thanksgiving-bingo-103565"
-    },
-    {
-      "offsetDays": 22,
-      "localStart": "10:00",
-      "durationMinutes": 300,
-      "venue": "Evergreen Park Public Library",
-      "address": "9400 S Troy Ave, Evergreen Park, IL 60805",
-      "lat": 41.722521,
-      "lng": -87.700734,
-      "node": "evergreen-park",
-      "sector": "public",
-      "event_type_id": "etr-ent-film",
-      "title": "Holiday movie marathon",
-      "summary": "Day-long run of holiday films.",
-      "source_url": "https://www.evergreenparklibrary.org/event/holiday-movie-marathon-103528"
-    },
-    {
       "offsetDays": 26,
       "localStart": "00:00",
       "durationMinutes": 14399,
@@ -585,21 +420,6 @@
       "title": "Food drive of the month: Christmas treats",
       "summary": "Ten-day pantry collection for holiday treats (all-day listing).",
       "source_url": "https://www.evergreenparklibrary.org/event/drive-month-christmas-treats-107379"
-    },
-    {
-      "offsetDays": 27,
-      "localStart": "13:00",
-      "durationMinutes": 60,
-      "venue": "Evergreen Park Public Library",
-      "address": "9400 S Troy Ave, Evergreen Park, IL 60805",
-      "lat": 41.722521,
-      "lng": -87.700734,
-      "node": "evergreen-park",
-      "sector": "public",
-      "event_type_id": "etr-lit-bookclub",
-      "title": "Kindred Spirits book club",
-      "summary": "Discussion plus picking the 2027 reading list.",
-      "source_url": "https://www.evergreenparklibrary.org/event/kindred-spirits-book-club-discussion-2027-book-selection-meeting-106807"
     },
     {
       "offsetDays": 55,

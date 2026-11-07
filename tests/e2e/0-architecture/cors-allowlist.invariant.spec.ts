@@ -116,7 +116,7 @@ test.describe('Invariant 15: CORS Allowlist Immutability — structural code-sha
         domain,
         `CORS allowlist contains '${domain}' which is not an OCR-owned oursharedevents.com domain — ` +
           'only oursharedevents.com and its subdomains may be in the CORS allowlist'
-      ).toMatch(/^(?:www\.|stg\.|stg-full\.|stg-empty\.)?oursharedevents\.com$/);
+      ).toMatch(/^(?:www\.|stg\.)?oursharedevents\.com$/);
     }
     expect(allowedDomains.length, 'CORS allowlist must contain at least 1 domain').toBeGreaterThan(
       0
@@ -135,9 +135,9 @@ test.describe('Invariant 15: CORS Allowlist Immutability — structural code-sha
     expect(prodBlock, 'ALLOWED_ORIGINS must be declared as new Set([...])').not.toBeNull();
     expect(
       prodBlock![1],
-      'no staging host (stg., stg-full., stg-empty.) may be in ALLOWED_ORIGINS (the production set) — ' +
+      'stg.oursharedevents.com must not be in ALLOWED_ORIGINS (the production set) — ' +
         'put it in STAGING_ONLY_ORIGINS, gated on WORKER_ENV === staging'
-    ).not.toMatch(/stg(?:-full|-empty)?\.oursharedevents\.com/);
+    ).not.toMatch(/stg\.oursharedevents\.com/);
     expect(src, 'STAGING_ONLY_ORIGINS may only be consulted behind a staging-env check').toMatch(
       /isStaging\([^)]*\)\s*&&\s*STAGING_ONLY_ORIGINS\.has\s*\(/
     );

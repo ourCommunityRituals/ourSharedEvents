@@ -631,8 +631,6 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
     LINEAR_API_KEY: env.LINEAR_API_KEY as string | undefined,
     LINEAR_TEAM_ID: env.LINEAR_TEAM_ID as string | undefined,
     WORKER_ENV: workerEnv,
-    // names the staging site in the alert (staging vs staging-full)
-    STAGING_VARIANT: env.STAGING_VARIANT,
   };
 
   // TL-018: Key rotation age check — alert before and at the 90-day window.

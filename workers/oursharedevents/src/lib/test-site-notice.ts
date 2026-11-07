@@ -1,10 +1,11 @@
 /**
  * test-site-notice.ts: the "Testing purposes only." band on staging pages.
  *
- * Both staging sites carry real-world data, so every staging HTML page says it
- * is for testing. The guard is exactly `WORKER_ENV === 'staging'`: development,
- * test and production never render it. `STAGING_VARIANT === 'full'` adds the
- * line saying the listings come from public sources and are not an endorsement.
+ * The staging site carries real-world data (owner 2026-11-06: one staging site,
+ * loaded from the fixed seed of real events and businesses), so every staging
+ * HTML page says it is for testing and that its listings come from public
+ * sources and are not an endorsement. The guard is exactly
+ * `WORKER_ENV === 'staging'`: development, test and production never render it.
  *
  * `data-wizard-keep` keeps it shown while the admin setup wizard hides the other
  * direct children of <body> (admin.html, body.wizard-active).
@@ -43,8 +44,8 @@ const STYLE =
   `font:600 1rem/1.3 system-ui,-apple-system,sans-serif;overflow-wrap:anywhere}` +
   `.ose-test-notice p{margin:0}`;
 
-export function testSiteNoticeMarkup(variant?: string, lang: Lang = DEFAULT_LANG): string {
-  const detail = variant === 'full' ? `<p>${msg(lang, 'testSite.listings')}</p>` : '';
+export function testSiteNoticeMarkup(lang: Lang = DEFAULT_LANG): string {
+  const detail = `<p>${msg(lang, 'testSite.listings')}</p>`;
   return (
     `<style>${STYLE}</style>` +
     `<div class="ose-test-notice" role="note" data-testid="${TEST_SITE_NOTICE_TESTID}" data-wizard-keep>` +
@@ -64,10 +65,7 @@ export function testSiteNoticeMarkup(variant?: string, lang: Lang = DEFAULT_LANG
  * Streamed bodies are fine: HTMLRewriter finds `<body>` across chunk boundaries.
  * `<html>` opens before `<body>`, so its `lang` is known when the band goes in.
  */
-export function injectTestSiteNotice(
-  res: Response,
-  env: { WORKER_ENV?: string; STAGING_VARIANT?: string }
-): Response {
+export function injectTestSiteNotice(res: Response, env: { WORKER_ENV?: string }): Response {
   if (env.WORKER_ENV !== 'staging') return res;
   const type = res.headers.get('content-type') || '';
   if (!type.toLowerCase().startsWith('text/html')) return res;
@@ -83,7 +81,7 @@ export function injectTestSiteNotice(
     })
     .on('body', {
       element(el) {
-        el.prepend(testSiteNoticeMarkup(env.STAGING_VARIANT, lang), { html: true });
+        el.prepend(testSiteNoticeMarkup(lang), { html: true });
       },
     })
     .transform(res);

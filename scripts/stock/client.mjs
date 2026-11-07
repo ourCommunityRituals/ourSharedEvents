@@ -1,8 +1,8 @@
-// Admin API client for the stock build. Talks only to the owner-only staging
-// site. The admin key and the Access client secret go in request headers and
+// Admin API client for the stock build. Talks only to the staging site
+// (owner 2026-11-06: one staging site, stg., carries the seed). The admin key and the Access client secret go in request headers and
 // nowhere else: never in a log line, never in a thrown message.
 
-export const STOCK_BASE_URL = 'https://stg-full.oursharedevents.com';
+export const STOCK_BASE_URL = 'https://stg.oursharedevents.com';
 
 // At most 5 requests per second.
 const MIN_GAP_MS = 200;

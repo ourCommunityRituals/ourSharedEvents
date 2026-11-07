@@ -1687,7 +1687,8 @@ jobs:
         timeout-minutes: 5
 
       # The landing zip own-area fixture is published only for the run above:
-      # staging's landing is the empty site, so take the three events off again,
+      # Mount Greenwood (60655) is the seed's deliberately empty place on stg (owner
+      # 2026-11-06), so take the three events off again,
       # pass or fail. A failed reset fails the job by name.
       - name: 'Unpublish landing zip own-area fixture'
         if: always() && matrix.section == 'pages'

@@ -1,14 +1,21 @@
-# Stock data for the full staging site (stg-full.oursharedevents.com).
+# Stock data for the staging site (stg.oursharedevents.com).
 #
-# Run by hand only (workflow_dispatch). Owner, 2026-11-05: there is no nightly
+# Owner, 2026-11-06: runs every morning (and by hand), so stg always holds the
+# permanent testing totals with future dates, for the whole CI/CD test pyramid:
+# Blue Island 10, Auburn Gresham 8 (9 in its town search), Evergreen Park 11, Oak Lawn 17, Mount
+# Greenwood 0 (stock/totals.json). Each run re-dates the same seed; nothing is
+# searched. Owner, 2026-11-05: there is no nightly
 # search. The events were searched once and committed as a fixed seed
 # (stock/seed/seed.json, made by scripts/stock/make-seed.mjs); each load
 # re-bases the seed's dates to the load day, so each place's count in the
 # 90-day window never changes.
 #
-#   access-gate  stg-full must answer through Cloudflare Access, not the Worker
-#   deploy       the dispatched ref → the staging-full Worker, after migrating
-#                both of its databases
+# Owner, 2026-11-06: one staging site. The seed loads into stg itself, where the
+# populated zips (60406, 60620, 60805, 60453) and the deliberately empty 60655
+# show both experiences side by side; there is no separate stg-full site and no
+# second set of databases. stg stays open (robots.txt disallows indexing), and
+# every stg page says "Testing purposes only" and that nothing is an endorsement.
+#
 #   seed         the committed seed re-based to today → accepted rows + businesses
 #                (scripts/stock/seed.mjs); no network, no secrets
 #   build        accepted rows → today's events, sponsors, posters and art, plus a manifest
@@ -16,22 +23,30 @@
 # A red job stops the next. check-swap also runs after a failed build, so the
 # partial manifest's rows are purged and nothing is orphaned. The build lists its
 # manifest in R2 before it creates anything and keeps that copy current, so a run
-# cancelled before check-swap is purged by the next run.
+# cancelled before check-swap is purged by the next run. Only rows a manifest
+# names are ever deleted: CI's own staging fixtures and hand-made events are never
+# touched.
 #
-# This workflow never touches the empty staging site or production, and it is
-# not part of T1–T4: a red run here never turns main red. Design:
-# docs/superpowers/specs/2026-11-04-staging-full-environment-design.md (sections 3, 4).
+# stg runs main as T1 deployed it; this workflow deploys nothing. It never touches
+# production, and it is not part of T1–T4: a red run here never turns main red.
+# Design: docs/superpowers/specs/2026-11-04-staging-full-environment-design.md.
 #
-# Secrets (owner-set, repo level): CLOUDFLARE_API_TOKEN_OSE and CLOUDFLARE_ACCOUNT_ID
-# (deploy, build and check-swap only), OCR_HUB_READ (the pinned @ocr/ui the Worker builds
-# with), STG_FULL_ADMIN_KEY, STG_FULL_ACCESS_CLIENT_ID, STG_FULL_ACCESS_CLIENT_SECRET.
+# Secrets (repo level, the ones the T2 Bruno run already uses): CLOUDFLARE_API_TOKEN_OSE
+# and CLOUDFLARE_ACCOUNT_ID (build and check-swap: R2 and D1 on --env staging only),
+# OCR_HUB_READ (the pinned @ocr/ui for the Worker's wrangler install), ADMIN_KEY,
+# CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET.
 # Optional: INSTAGRAM_ACCESS_TOKEN (secret) and INSTAGRAM_TOKEN_ISSUED (variable). The
 # owner's photos in stock/art are the art without them (owner 2026-11-05); a token only
 # adds Instagram posts to choose from.
 
-name: Stock data (stg-full)
+name: Stock data (stg)
 
 on:
+  # 09:23 UTC (3:23 or 4:23 in Chicago): after the 03:07 UTC nightly staging run
+  # and before the working day's merges, so the swap window (the old load and the
+  # new one both listed for a few minutes) falls when no test chain is reading stg.
+  schedule:
+    - cron: '23 9 * * *'
   workflow_dispatch:
 
 permissions:
@@ -42,151 +57,12 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  STG_FULL_URL: 'https://stg-full.oursharedevents.com'
   WORKER_DIR: 'workers/oursharedevents'
 
 jobs:
-  access-gate:
-    name: 'Access gate: stg-full is closed'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      # No credentials of any kind, asking for a page (Accept: text/html), on a page
-      # and on the public API. Fail closed: the only pass is Access's login
-      # redirect, a 302 or 303 to https://<team>.cloudflareaccess.com. A 403, 401
-      # or 200 does not prove Access holds the host (a WAF block, a bot challenge
-      # or the Worker itself can answer those), so every other answer fails.
-      - name: Request stg-full with no credentials
-        shell: bash
-        run: |
-          set -euo pipefail
-          for path in / /api/v2/events; do
-            if ! out="$(curl -sS -o /dev/null -H 'Accept: text/html' --max-time 30 -w '%{http_code} %{redirect_url}' "${STG_FULL_URL}${path}")"; then
-              echo "::error title=stg-full unreachable::The request for ${path} failed, so Access could not be confirmed. Real-world data is not loaded onto an open host."
-              exit 1
-            fi
-            code="${out%% *}"
-            location="${out#* }"
-            host=""
-            if [[ "$location" =~ ^https://([^/?#:@]+)(:[0-9]+)?([/?#]|$) ]]; then
-              host="${BASH_REMATCH[1],,}"
-            fi
-            if { [ "$code" = "302" ] || [ "$code" = "303" ]; } && [[ "$host" =~ ^([a-z0-9-]+\.)+cloudflareaccess\.com$ ]]; then
-              echo "${path}: Access redirected to its login host ${host} (HTTP ${code})."
-            else
-              echo "::error title=stg-full is not behind Access::${path} answered HTTP ${code}${host:+ to ${host}}: Access did not answer with its login redirect. Real-world data is not loaded onto an open host."
-              exit 1
-            fi
-          done
-          echo "stg-full is closed."
-
-  deploy:
-    name: 'Deploy → staging-full'
-    needs: [access-gate]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      # The dispatched ref, as every job uses: a dispatch from a branch tests that
-      # branch end to end on the test site.
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            workers/oursharedevents/package-lock.json
-
-      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
-        shell: bash
-        timeout-minutes: 3
-        env:
-          GIT_TERMINAL_PROMPT: '0'
-          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
-        run: bash scripts/ci-stage-ocr-workspace.sh
-
-      - name: Install worker dependencies
-        working-directory: ${{ env.WORKER_DIR }}
-        run: npm ci --prefer-offline || npm ci
-
-      - name: 'Gate: no unprovisioned binding IDs (OSE-813)'
-        working-directory: ${{ env.WORKER_DIR }}
-        run: node scripts/check-binding-placeholders.mjs
-
-      # OSE-813's check does not know OWNER_TO_FILL_* (widening it would turn
-      # main's T1 red while staging-full is unprovisioned), so this env's own
-      # block is checked here, before anything is migrated or deployed.
-      - name: 'Gate: the staging-full binding ids are pasted'
-        shell: bash
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          set -euo pipefail
-          block="$(awk '
-            /^[[:space:]]*\[/ { on = ($0 ~ /^[[:space:]]*\[\[?env\.staging-full[].]/) }
-            on && $0 !~ /^[[:space:]]*#/
-          ' wrangler.toml)"
-          if [ -z "$block" ]; then
-            echo "::error title=No staging-full env::wrangler.toml has no [env.staging-full] block."
-            exit 1
-          fi
-          if left="$(printf '%s\n' "$block" | grep -o 'OWNER_TO_FILL_[A-Z_]*')"; then
-            echo "::error title=staging-full is not provisioned::wrangler.toml [env.staging-full] still holds placeholder ids. Create the databases and KV namespace (the owner checklist above [env.staging-full]), paste each id over its OWNER_TO_FILL value, and run again."
-            printf '%s\n' "$left"
-            exit 1
-          fi
-          echo "ok    every [env.staging-full] binding id is pasted"
-
-      - name: Apply D1 migrations (ocr-db-staging-full)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: npx wrangler d1 migrations apply ocr-db-staging-full --env staging-full --remote
-
-      - name: Apply D1 migrations (ocr-forms-db-staging-full)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: npx wrangler d1 migrations apply ocr-forms-db-staging-full --env staging-full --remote
-
-      # Same gate as T1 (OSE-803): never ship a Worker ahead of its databases.
-      - name: 'Gate: zero unapplied D1 migrations before deploy'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          set -euo pipefail
-          FAILED=0
-          for DB_NAME in ocr-db-staging-full ocr-forms-db-staging-full; do
-            OUT="$(npx wrangler d1 migrations list "$DB_NAME" --env staging-full --remote 2>&1 || true)"
-            if printf '%s' "$OUT" | grep -qi 'No migrations to apply'; then
-              echo "ok    $DB_NAME: no unapplied migrations"
-            else
-              echo "FAIL  $DB_NAME: unapplied migrations remain, or the check could not run"
-              printf '%s\n' "$OUT"
-              FAILED=1
-            fi
-          done
-          if [ "$FAILED" -ne 0 ]; then
-            echo "Refusing to deploy a Worker ahead of its database."
-            exit 1
-          fi
-
-      - name: Deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: npx wrangler deploy --env staging-full
-
   # Reads only committed files: no secrets, no geocoding, no network.
   seed:
     name: 'Seed: re-base to today'
-    needs: [deploy]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -236,8 +112,8 @@ jobs:
           GIT_TERMINAL_PROMPT: '0'
           OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
         run: bash scripts/ci-stage-ocr-workspace.sh
-      # The lockfile's wrangler, the one the deploy ran: the build lists its manifest
-      # in R2 with it before the first admin API call.
+      # The lockfile's wrangler: the build lists its manifest in R2 with it before
+      # the first admin API call.
       - name: Install worker dependencies
         working-directory: ${{ env.WORKER_DIR }}
         run: npm ci --prefer-offline || npm ci
@@ -248,15 +124,15 @@ jobs:
       # A step timeout fails the step, so the job ends as failure (not cancelled) and
       # check-swap still runs to purge the partial manifest. The job allows 30.
       # The Cloudflare token is for R2 only: the manifest object and the index in
-      # ose-uploads-staging-full, every command --env staging-full --remote.
+      # ose-uploads-staging, every command --env staging --remote.
       - name: Build
         timeout-minutes: 25
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          STG_FULL_ADMIN_KEY: ${{ secrets.STG_FULL_ADMIN_KEY }}
-          STG_FULL_ACCESS_CLIENT_ID: ${{ secrets.STG_FULL_ACCESS_CLIENT_ID }}
-          STG_FULL_ACCESS_CLIENT_SECRET: ${{ secrets.STG_FULL_ACCESS_CLIENT_SECRET }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           INSTAGRAM_TOKEN_ISSUED: ${{ vars.INSTAGRAM_TOKEN_ISSUED }}
         run: node scripts/stock/run-day.mjs build
@@ -298,7 +174,7 @@ jobs:
           GIT_TERMINAL_PROMPT: '0'
           OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
         run: bash scripts/ci-stage-ocr-workspace.sh
-      # The lockfile's wrangler, the one the deploy ran.
+      # The lockfile's wrangler.
       - name: Install worker dependencies
         working-directory: ${{ env.WORKER_DIR }}
         run: npm ci --prefer-offline || npm ci
@@ -317,8 +193,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          STG_FULL_ADMIN_KEY: ${{ secrets.STG_FULL_ADMIN_KEY }}
-          STG_FULL_ACCESS_CLIENT_ID: ${{ secrets.STG_FULL_ACCESS_CLIENT_ID }}
-          STG_FULL_ACCESS_CLIENT_SECRET: ${{ secrets.STG_FULL_ACCESS_CLIENT_SECRET }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           BUILD_RESULT: ${{ needs.build.result }}
         run: node scripts/stock/run-day.mjs check-swap

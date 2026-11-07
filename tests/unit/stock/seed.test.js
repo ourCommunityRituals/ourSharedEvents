@@ -1,8 +1,9 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- reads the repo's own stock files */
 /**
  * The fixed seed of the full staging site (owner, 2026-11-05): its re-basing to
- * a load day, and the committed seed's totals. Every count here comes from the
- * committed seed or the map gate, never a literal.
+ * a load day, and the committed seed's totals. The totals are the owner's
+ * permanent testing totals (stock/totals.json, owner 2026-11-06); one test pins
+ * that file to the owner's numbers, and every other count is read from it.
  */
 const { readFileSync, readdirSync } = require('node:fs');
 const path = require('node:path');
@@ -11,6 +12,7 @@ const h3 = require('h3-js');
 const ROOT = path.join(__dirname, '../../..');
 const readJson = (rel) => JSON.parse(readFileSync(path.join(ROOT, rel), 'utf8'));
 const SEED = readJson('stock/seed/seed.json');
+const TOTALS = readJson('stock/totals.json').totals;
 const { nodes } = readJson('stock/nodes.json');
 const EMPTY = 'mount-greenwood';
 
@@ -141,14 +143,22 @@ describe('the committed seed', () => {
     expect(SEED.seededOn).toBe(MS.SEEDED_ON);
   });
 
-  test('every populated place reaches the map gate; Mount Greenwood is 0; Beverly is absent', () => {
+  test('stock/totals.json holds the owner’s permanent testing totals', () => {
+    expect(TOTALS).toEqual({
+      'blue-island': 10,
+      'auburn-gresham': 8,
+      'evergreen-park': 11,
+      'oak-lawn': 17,
+      'mount-greenwood': 0,
+    });
+  });
+
+  test('each place holds exactly its total; Mount Greenwood is 0; Beverly is absent', () => {
     const expected = S.expectedByNode(SEED, ids);
     expect(Object.keys(expected).sort()).toEqual([...ids].sort());
     expect(ids).not.toContain('beverly');
+    expect(expected).toEqual(TOTALS);
     expect(expected[EMPTY]).toBe(0);
-    for (const id of ids.filter((x) => x !== EMPTY)) {
-      expect(expected[id], id).toBeGreaterThanOrEqual(MAP_GATE);
-    }
     expect(SEED.events.some((e) => e.node === 'beverly')).toBe(false);
     expect(SEED.businesses.some((b) => b.node === 'beverly' || b.node === EMPTY)).toBe(false);
   });
@@ -228,6 +238,7 @@ describe('make-seed (the one-time step)', () => {
       nodes: NODES,
       geocode,
       emptyNodes: ['quiet'],
+      totals: { left: MAP_GATE, right: MAP_GATE, quiet: 0 },
     });
   const enough = (place) => Array.from({ length: MAP_GATE }, (_, i) => find(place, i));
 
@@ -246,10 +257,19 @@ describe('make-seed (the one-time step)', () => {
     expect(e).toMatchObject({ offsetDays: 2, localStart: '19:30', durationMinutes: 90 });
   });
 
-  test('writes nothing when a populated place falls under the map gate', async () => {
+  test('writes nothing when a place cannot reach its total', async () => {
     const { report } = await run([...enough('left'), ...enough('right').slice(1)]);
     expect(report.ok).toBe(false);
-    expect(report.problems.join('\n')).toContain(`right has ${MAP_GATE - 1} events`);
+    expect(report.problems.join('\n')).toContain(
+      `right has ${MAP_GATE - 1} events, not its total of ${MAP_GATE}`
+    );
+  });
+
+  test('a place with more finds than its total is trimmed to exactly its total', async () => {
+    const { seed, report } = await run([...enough('left'), find('left', 99), ...enough('right')]);
+    expect(report.ok).toBe(true);
+    expect(seed.events.filter((e) => e.node === 'left')).toHaveLength(MAP_GATE);
+    expect(report.trimmed).toHaveLength(1);
   });
 
   test('refuses anything that lands in the empty place, events and businesses alike', async () => {
@@ -277,5 +297,82 @@ describe('make-seed (the one-time step)', () => {
     expect(ids.has('etr-art-music')).toBe(true);
     expect(ids.has('etr-soc-watchparty')).toBe(true);
     for (const e of SEED.events) expect(ids.has(e.event_type_id), e.event_type_id).toBe(true);
+  });
+});
+
+describe('trimToTotals: the widest mix of event types survives', () => {
+  const ev = (node, type, offsetDays, title = `${type} ${offsetDays}`) => ({
+    node,
+    event_type_id: type,
+    offsetDays,
+    localStart: '19:00',
+    title,
+  });
+
+  test('drops the latest event of the most-repeated type until the total holds', () => {
+    const events = [
+      ev('a', 'film', 1),
+      ev('a', 'film', 5),
+      ev('a', 'film', 9),
+      ev('a', 'book', 30),
+      ev('a', 'trivia', 40),
+    ];
+    const { kept, dropped } = MS.trimToTotals(events, { a: 3 });
+    expect(dropped.map((e) => e.title)).toEqual(['film 9', 'film 5']);
+    expect(kept.map((e) => e.event_type_id).sort()).toEqual(['book', 'film', 'trivia']);
+  });
+
+  test('never adds, and leaves a node at or under its total alone', () => {
+    const events = [ev('a', 'film', 1), ev('b', 'film', 2)];
+    expect(MS.trimToTotals(events, { a: 5, b: 1 })).toEqual({ kept: events, dropped: [] });
+  });
+
+  test('the committed seed lost no event type to the trim', () => {
+    const typesIn = (list) => new Set(list.map((e) => e.event_type_id));
+    for (const node of Object.keys(TOTALS).filter((n) => TOTALS[n] > 0)) {
+      const mine = SEED.events.filter((e) => e.node === node);
+      expect(mine.length, node).toBe(TOTALS[node]);
+      // each place still has more than one kind of event
+      expect(typesIn(mine).size, node).toBeGreaterThan(1);
+    }
+  });
+});
+
+// Owner 2026-11-07: what each /events search must read on stg is the stock events
+// in its zip (or its town's zips) plus the declared non-stock events, e.g. CI's
+// test-event-001 in 60643. The daily check-swap confirms it on the site.
+describe('the search totals follow from the seed and the declared fixtures', () => {
+  let PLACES;
+  let addressZip;
+  beforeAll(async () => {
+    ({ PLACES } = await import('../../../workers/oursharedevents/src/lib/place-names.ts'));
+    ({ addressZip } = await import('../../../workers/oursharedevents/src/lib/zip-areas.ts'));
+  });
+  const T = readJson('stock/totals.json');
+  const zipsOf = (q) => {
+    if (/^\d{5}$/.test(q)) return [q];
+    const place = PLACES.find((p) => p.name === q);
+    if (!place) throw new Error(`no place named ${q}`);
+    return place.zips;
+  };
+
+  test('every seeded event says its zip, and it is one of its place’s zips', () => {
+    for (const e of SEED.events) {
+      const zip = addressZip(e.address);
+      expect(zip, e.title).toMatch(/^\d{5}$/);
+    }
+  });
+
+  test.each(Object.keys(T.searches))('%s reads stock + fixtures', (q) => {
+    const zips = new Set(zipsOf(q));
+    const stock = SEED.events.filter((e) => zips.has(addressZip(e.address))).length;
+    const fixtures = T.fixtures.counts[q] || 0;
+    expect(T.searches[q]).toBe(stock + fixtures);
+  });
+
+  test('every zip a place holds and every place name has a search total', () => {
+    const named = new Set(Object.keys(T.searches));
+    for (const p of PLACES) expect(named.has(p.name), p.name).toBe(true);
+    for (const n of nodes) for (const z of n.zips) expect(named.has(z), z).toBe(true);
   });
 });

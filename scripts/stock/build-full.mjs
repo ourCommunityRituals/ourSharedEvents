@@ -210,7 +210,7 @@ export async function buildDay({
           continue;
         }
         // The anchor, then one regional and one local from this node, round-robin by
-        // event name so every sponsor shows. Geo matching is off on staging-full, so
+        // event name so every sponsor shows. Geo matching is off on staging, so
         // only an attached placement shows a sponsor.
         const idx = byName.get(row);
         const picks = [anchor];
