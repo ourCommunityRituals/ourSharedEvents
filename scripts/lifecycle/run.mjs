@@ -49,11 +49,34 @@ export function tableCell(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 }
 
-function wholeNumber(env, name, fallback) {
+function wholeNumber(env, name, fallback, max) {
   const raw = env[name];
   if (raw === undefined || raw === '') return fallback;
-  if (!/^\d{1,4}$/.test(raw)) throw new Error(`${name} must be a whole number`);
+  if (!/^\d{1,6}$/.test(raw) || Number(raw) > max) {
+    throw new Error(`${name} must be a whole number from 0 to ${max}`);
+  }
   return Number(raw);
+}
+
+/**
+ * The run's settings from the environment, checked before anything is called.
+ * tests/integration/lifecycle-workflow.test.js runs the workflow's own values
+ * through this, so a setting the workflow carries can never stop every step.
+ */
+export function settingsFrom(env) {
+  const whereRaw = env.LANDING_WHERE_SEARCH || 'off';
+  if (whereRaw !== 'on' && whereRaw !== 'off') {
+    throw new Error('LANDING_WHERE_SEARCH must be on or off');
+  }
+  return {
+    whereSearch: whereRaw === 'on',
+    window: {
+      pastDays: wholeNumber(env, 'WINDOW_PAST_DAYS', DEFAULT_WINDOW.pastDays, 365),
+      futureDays: wholeNumber(env, 'WINDOW_FUTURE_DAYS', DEFAULT_WINDOW.futureDays, 365),
+    },
+    attempts: Math.max(1, wholeNumber(env, 'LIFECYCLE_POLL_ATTEMPTS', 6, 30)),
+    delayMs: wholeNumber(env, 'LIFECYCLE_POLL_DELAY_MS', 5000, 60_000),
+  };
 }
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
@@ -77,9 +100,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   if (onStaging && (!env.CF_ACCESS_CLIENT_ID || !env.CF_ACCESS_CLIENT_SECRET)) {
     throw new Error('CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are not set');
   }
-  const whereRaw = env.LANDING_WHERE_SEARCH || 'off';
-  if (whereRaw !== 'on' && whereRaw !== 'off')
-    throw new Error('LANDING_WHERE_SEARCH must be on or off');
+  const settings = settingsFrom(env);
 
   const site = createSite({
     baseUrl,
@@ -109,13 +130,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     report,
     state,
     save,
-    whereSearch: whereRaw === 'on',
-    window: {
-      pastDays: wholeNumber(env, 'WINDOW_PAST_DAYS', DEFAULT_WINDOW.pastDays),
-      futureDays: wholeNumber(env, 'WINDOW_FUTURE_DAYS', DEFAULT_WINDOW.futureDays),
-    },
-    attempts: Math.max(1, wholeNumber(env, 'LIFECYCLE_POLL_ATTEMPTS', 6)),
-    delayMs: wholeNumber(env, 'LIFECYCLE_POLL_DELAY_MS', 5000),
+    ...settings,
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   };
   if (step === 'sweep') {

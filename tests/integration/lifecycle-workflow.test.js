@@ -140,4 +140,32 @@ describe('the steps', () => {
     expect(wf.env.WINDOW_PAST_DAYS).toBe('0');
     expect(['on', 'off']).toContain(wf.env.LANDING_WHERE_SEARCH);
   });
+
+  test('every step accepts the settings the workflow gives it', async () => {
+    const { settingsFrom } = await import('../../scripts/lifecycle/run.mjs');
+    for (const s of steps.filter((x) => /run\.mjs/.test(x.run || ''))) {
+      const env = { ...wf.env, ...job.env, ...s.env };
+      const got = settingsFrom(env);
+      expect(got.delayMs, s.name).toBe(Number(wf.env.LIFECYCLE_POLL_DELAY_MS));
+      expect(got.attempts, s.name).toBe(Number(wf.env.LIFECYCLE_POLL_ATTEMPTS));
+      expect(got.window, s.name).toEqual({
+        pastDays: Number(wf.env.WINDOW_PAST_DAYS),
+        futureDays: Number(wf.env.WINDOW_FUTURE_DAYS),
+      });
+    }
+  });
+
+  test('a setting out of range is refused before anything runs', async () => {
+    const { settingsFrom } = await import('../../scripts/lifecycle/run.mjs');
+    expect(() => settingsFrom({ LIFECYCLE_POLL_DELAY_MS: '600000' })).toThrow();
+    expect(() => settingsFrom({ LIFECYCLE_POLL_ATTEMPTS: '-1' })).toThrow();
+    expect(() => settingsFrom({ WINDOW_FUTURE_DAYS: '9x' })).toThrow();
+    expect(() => settingsFrom({ LANDING_WHERE_SEARCH: 'yes' })).toThrow();
+    expect(settingsFrom({})).toEqual({
+      whereSearch: false,
+      window: { pastDays: 0, futureDays: 90 },
+      attempts: 6,
+      delayMs: 5000,
+    });
+  });
 });
