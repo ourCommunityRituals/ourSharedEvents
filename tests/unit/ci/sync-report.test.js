@@ -547,6 +547,7 @@ describe('read-only and the command line', () => {
     expect(paths.spine).toBe(path.resolve(w.spine));
   });
   test('the repo table lists spine, OCR-docs, ourSharedEvents, ourWKRP in that order', () => {
+    expect(clean.md.status).toBe(0);
     const md = clean.md.stdout;
     const rows = md
       .split('\n')
