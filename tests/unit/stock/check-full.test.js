@@ -578,6 +578,24 @@ describe('checkSearches: each /events search reads its total', () => {
     expect(results.x.pass).toBe(true);
   });
 
+  // A failed read answers 200 with a zero summary next to the public error
+  // (handlePublicPage): an empty place must not pass on it.
+  test('an HTTP-200 error page with a zero summary fails, even where 0 is expected', async () => {
+    const errorPage = {
+      status: 200,
+      text: async () =>
+        '<p class="error" data-testid="public-error">Could not load events. Please try again.</p>' +
+        '<p class="disc-summary" data-testid="disc-summary">0 events in Mount Greenwood</p>',
+    };
+    const { results } = await run({ 'Mount Greenwood': errorPage }, { 'Mount Greenwood': MG });
+    expect(results['Mount Greenwood']).toEqual({
+      pass: false,
+      count: null,
+      expected: MG,
+      reasons: ['events-list-error'],
+    });
+  });
+
   test('a page without its summary line fails as unreadable, never as a count', async () => {
     const { results } = await run({}, { 'Oak Lawn': OL });
     expect(results['Oak Lawn']).toEqual({

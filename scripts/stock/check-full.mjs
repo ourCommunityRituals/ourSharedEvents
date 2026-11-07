@@ -273,6 +273,10 @@ export async function checkNodes({
 // summary line, so this is exactly what a person or a test sees.
 
 const SUMMARY_RE = /data-testid="disc-summary">(\d+) events? in /;
+// A failed read still answers 200, with a zero summary beside this marker
+// (handlePublicPage with event-list.ts renderEventListError), so it is checked
+// first: an empty place must never pass on an error page.
+const PUBLIC_ERROR_MARK = 'data-testid="public-error"';
 
 /**
  * @returns {Promise<Record<string, { pass: boolean, count: number|null,
@@ -300,6 +304,10 @@ export async function checkSearches({ searches, fetchPublic, sleep = realSleep, 
       page = res && res.status === 200 ? await res.text() : '';
     } catch {
       page = '';
+    }
+    if (page.includes(PUBLIC_ERROR_MARK)) {
+      results[q] = { pass: false, count: null, expected, reasons: ['events-list-error'] };
+      continue;
     }
     const m = SUMMARY_RE.exec(page);
     if (!m) {
