@@ -62,6 +62,8 @@ coverage/
 # The stock workflow's working files (scripts/stock/run-day.mjs): search output,
 # accepted rows and manifests. CI passes them between jobs as artifacts.
 stock-out/
+# The nightly event lifecycle job's state between its steps (scripts/lifecycle/run.mjs).
+lifecycle-out/
 
 # Test reports
 newman-reports/

@@ -1010,6 +1010,13 @@
       "testCount": 26
     },
     {
+      "file": "workers/oursharedevents/tests/event-create-data-class.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 7
+    },
+    {
       "file": "workers/oursharedevents/tests/event-create-slug-clash.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
