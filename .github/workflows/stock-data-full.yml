@@ -2,7 +2,7 @@
 #
 # Owner, 2026-11-06: runs every morning (and by hand), so stg always holds the
 # permanent testing totals with future dates, for the whole CI/CD test pyramid:
-# Blue Island 10, Auburn Gresham 9, Evergreen Park 11, Oak Lawn 17, Mount
+# Blue Island 10, Auburn Gresham 8 (9 in its town search), Evergreen Park 11, Oak Lawn 17, Mount
 # Greenwood 0 (stock/totals.json). Each run re-dates the same seed; nothing is
 # searched. Owner, 2026-11-05: there is no nightly
 # search. The events were searched once and committed as a fixed seed

@@ -200,7 +200,7 @@ describe('checkNodes: the count', () => {
     expect(r[A].pass).toBe(true);
   });
 
-  // Owner 2026-11-06: a place may hold fewer than the map gate (Auburn Gresham 9).
+  // Owner 2026-11-06: a place may hold fewer than the map gate (Auburn Gresham 8).
   test('a place under the map gate is checked on its count; its landing-map check is skipped', async () => {
     const under = MAP_GATE - 1;
     const { manifest, listed } = day({ [A]: under });

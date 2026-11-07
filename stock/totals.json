@@ -1,8 +1,8 @@
 {
-  "note": "Owner, 2026-11-06: the permanent testing totals per place. make-seed trims the seed to exactly these, and every test and check reads them through the seed. Change them only on the owner's word.",
+  "note": "Owner, 2026-11-06: the permanent testing totals per place (stock events). Owner, 2026-11-07: Auburn Gresham holds 8 stock events, so its town search reads 9 with CI's permanent test-event-001 (Beverly Arts Center, zip 60643, which the owner's Auburn Gresham and Beverly towns both include). make-seed trims the seed to exactly these; every test and check reads them through the seed. Change them only on the owner's word.",
   "totals": {
     "blue-island": 10,
-    "auburn-gresham": 9,
+    "auburn-gresham": 8,
     "evergreen-park": 11,
     "oak-lawn": 17,
     "mount-greenwood": 0

@@ -212,21 +212,6 @@
       "source_url": "https://saintsabina.org/events/pet-food-give-away-wd88d"
     },
     {
-      "offsetDays": 9,
-      "localStart": "11:00",
-      "durationMinutes": 120,
-      "venue": "St. Sabina Church",
-      "address": "1210 W 78th Pl, Chicago, IL 60620",
-      "lat": 41.751449,
-      "lng": -87.654504,
-      "node": "auburn-gresham",
-      "sector": "private",
-      "event_type_id": "etr-vol-mutual",
-      "title": "Winter coat giveaway",
-      "summary": "Church-run distribution of winter coats.",
-      "source_url": "https://saintsabina.org/events/winter-coat-giveaway"
-    },
-    {
       "offsetDays": 16,
       "localStart": "10:00",
       "durationMinutes": 120,

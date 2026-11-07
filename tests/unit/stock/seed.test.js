@@ -146,7 +146,7 @@ describe('the committed seed', () => {
   test('stock/totals.json holds the owner’s permanent testing totals', () => {
     expect(TOTALS).toEqual({
       'blue-island': 10,
-      'auburn-gresham': 9,
+      'auburn-gresham': 8,
       'evergreen-park': 11,
       'oak-lawn': 17,
       'mount-greenwood': 0,

@@ -69,6 +69,10 @@ These supersede every ruling that names stg-full, staging-full, the Access gate 
 
 ## Permanent totals and the daily loop (owner, 2026-11-06)
 
-- Permanent testing totals: Blue Island 10, Auburn Gresham 9, Evergreen Park 11, Oak Lawn 17, Mount Greenwood 0 (`stock/totals.json`, pinned by a test). `make-seed` trims to exactly these, keeping the widest mix of event types.
+- Permanent testing totals: Blue Island 10, Auburn Gresham 9 (8 from 2026-11-07, below), Evergreen Park 11, Oak Lawn 17, Mount Greenwood 0 (`stock/totals.json`, pinned by a test). `make-seed` trims to exactly these, keeping the widest mix of event types.
 - Owner: "This should on a loop every day so that the data is always in a position to enable the automation testing across the entire CICD test pyramid." The stock workflow runs daily at 09:23 UTC and on dispatch, re-dating the same seed; no search.
 - Controller call: Auburn Gresham's 9 is taken as written, under the map gate; its landing-map check is skipped, its count is checked. — If wrong: set it to 10 in `stock/totals.json` and re-run `make-seed`.
+
+## Auburn Gresham reads 9 in its town search (owner, 2026-11-07)
+
+- Owner: "Please remove one event from Auburn Gresham so the total is always 9." CI's permanent fixture `test-event-001` (Community Game Night, Beverly Arts Center, 2407 W 111th St, zip 60643) is in the owner's Auburn Gresham town list (60620, 60621, 60636, 60643, 60652), so the town search counted 9 stock events + 1. `stock/totals.json` now holds Auburn Gresham at 8: the town search reads 9, the zip 60620 reads 8, and Beverly's town search (60643, 60655, 60620) also reads 9. The trim dropped "Winter coat giveaway" (the later of two mutual-aid events), so no event type is lost.
