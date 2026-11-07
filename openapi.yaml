@@ -178,6 +178,61 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /:
+    get:
+      tags:
+        - Public
+      summary: Landing page — search events by town name, then zip
+      description: |
+        The front door (owner 2026-11-06). One box takes a town or city name first
+        and a zip code second, sent as `where`. The answer is an HTML page.
+
+        - **One place** (`Oak Lawn`, `Springfield, IL`, `Springfield Illinois`):
+          lists the events in that place's zips.
+        - **Many places** (`Springfield`, `Beverly`): no error and no silent pick.
+          The page lists every match, one per state, labelled `Name, ST` and
+          sorted by state, each a link to `/?where=Name%2C%20ST`
+          (`data-testid="where-choices"`, one `data-testid="where-choice"` per
+          match), and lists the events of all of them meanwhile.
+        - **A zip** (`60453`, `60453-1234`): lists the events in that zip's own area.
+        - **Neither**: a message (`data-testid="where-msg"`) and every listed event.
+
+        Place, not person: the search reads no location, header or IP, and text
+        with a digit is never read as a name, so coordinates are never accepted.
+        Town names: GeoNames (CC BY 4.0) joined with the owner's neighbourhood list.
+      operationId: landingSearch
+      security: []
+      parameters:
+        - name: where
+          in: query
+          required: false
+          description: A town or city name, optionally followed by a state (code or name), or a 5-digit zip. Read before `zip`.
+          schema:
+            type: string
+            maxLength: 60
+          examples:
+            many:
+              summary: One name, many places
+              value: Springfield
+            one:
+              summary: Narrowed to one place
+              value: Springfield, IL
+            zip:
+              summary: A zip
+              value: '60453'
+        - name: zip
+          in: query
+          required: false
+          description: A 5-digit zip. Sent by POST /near (a phone's location); read only when `where` is empty.
+          schema:
+            type: string
+            pattern: '^\d{5}(-\d{4})?$'
+      responses:
+        '200':
+          description: The landing page, listing the events of the place(s) searched.
+          content:
+            text/html:
+              schema:
+                type: string
     post:
       tags:
         - Authentication

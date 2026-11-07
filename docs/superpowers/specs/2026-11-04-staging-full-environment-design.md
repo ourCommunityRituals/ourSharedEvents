@@ -4,12 +4,13 @@ Date: 2026-11-04. Owner: Matthew Zdano (PO). Status: draft for owner approval.
 
 ## Permanent testing totals and the daily loop (owner 2026-11-06)
 
-- **The totals are permanent:** Blue Island (60406) 10, Auburn Gresham (60620) 9, Evergreen Park
+- **The totals are permanent:** Blue Island (60406) 10, Auburn Gresham (60620) 8 stock events (9 in
+  its town search, with CI's test-event-001 in 60643; owner 2026-11-07), Evergreen Park
   (60805) 11, Oak Lawn (60453) 17, Mount Greenwood (60655) 0. They live in `stock/totals.json`,
   and a test pins that file to these numbers. `make-seed.mjs` trims the seed to exactly them
   (`trimToTotals`: drop the latest-dated event of the most-repeated type until the total holds), so
-  every place keeps every event type it had: 22 of 22 overall. The seed now holds 47 events.
-- **Auburn Gresham at 9 is under the map gate on purpose:** its zip view shows the under-10
+  every place keeps every event type it had: 22 of 22 overall. The seed now holds 46 events.
+- **Auburn Gresham at 8 (9 in its town search) is under the map gate on purpose:** its zip view shows the under-10
   experience. The check verifies its count and skips its landing-map check, as for Mount Greenwood.
 - **A daily loop:** "Stock data (stg)" runs every morning at 09:23 UTC (and by hand). Each run
   re-dates the same seed to that day, so the totals hold in the 90-day window every day, for the

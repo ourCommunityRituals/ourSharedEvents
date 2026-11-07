@@ -210,6 +210,7 @@ and is wired — and let the mechanism do the scanning.
 | `ncr-accumulation.structural.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `oer-emission-boundary.invariant.spec.ts` | #17 oer_emission_boundary |
 | `pii-retention.invariant.spec.ts` | #8 bounded_pii_retention |
+| `place-name-search.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `qr-decode-matrix.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `rendered-surface-lexicon.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `runtime-llm-free.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |

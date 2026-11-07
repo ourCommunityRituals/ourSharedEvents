@@ -6,7 +6,7 @@
     <title>OurSharedEvents — qué pasa cerca de ti</title>
     <meta
       name="description"
-      content="Encuentra eventos cerca de tu código postal. La asistencia se cuenta sin saber quién eres."
+      content="Encuentra eventos en tu ciudad o cerca de tu código postal. La asistencia se cuenta sin saber quién eres."
     />
     <link rel="stylesheet" href="/ui.css" />
     <!--
@@ -242,15 +242,16 @@
           </p>
         </div>
         <form class="where-form" method="get" action="/es/" role="search" data-testid="where-form">
-          <label for="where-zip" class="where-label">Tu código postal</label>
+          <label for="where-input" class="where-label">Ciudad o código postal</label>
           <div class="where-row">
-            <input id="where-zip" name="zip" class="input" type="text" inputmode="numeric"
-              pattern="[0-9]{5}(-[0-9]{4})?" maxlength="10" autocomplete="postal-code" required
+            <input id="where-input" name="where" class="input" type="text"
+              maxlength="60" autocomplete="address-level2" required
               value="60406"
-              data-testid="where-zip" />
+              data-testid="where-input" />
             <button class="btn btn-primary" type="submit" data-testid="where-submit">Buscar eventos</button>
           </div>
         </form>
+        <p class="list-sub" data-testid="where-credit">Nombres de ciudades de <a href="https://www.geonames.org/">GeoNames</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>).</p>
         <form id="near-form" method="post" action="/near" hidden>
           <input type="hidden" name="g" />
           <input type="hidden" name="lang" value="es" />
@@ -431,7 +432,7 @@
         }
         function off() {
           btn.hidden = true;
-          note.textContent = 'La ubicación está desactivada. Escribe tu código postal abajo.';
+          note.textContent = 'La ubicación está desactivada. Escribe tu ciudad o código postal abajo.';
         }
         function find() {
           btn.disabled = true;

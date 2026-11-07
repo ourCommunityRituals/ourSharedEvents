@@ -6,7 +6,7 @@
     <title>OurSharedEvents — what's happening near you</title>
     <meta
       name="description"
-      content="Find events near your zip code. Attendance is counted without gathering who you are."
+      content="Find events in your town or near your zip code. Attendance is counted without gathering who you are."
     />
     <link rel="stylesheet" href="/ui.css" />
     <!--
@@ -241,15 +241,16 @@
           </p>
         </div>
         <form class="where-form" method="get" action="/" role="search" data-testid="where-form">
-          <label for="where-zip" class="where-label">Your zip code</label>
+          <label for="where-input" class="where-label">Town or zip code</label>
           <div class="where-row">
-            <input id="where-zip" name="zip" class="input" type="text" inputmode="numeric"
-              pattern="[0-9]{5}(-[0-9]{4})?" maxlength="10" autocomplete="postal-code" required
+            <input id="where-input" name="where" class="input" type="text"
+              maxlength="60" autocomplete="address-level2" required
               value="60406"
-              data-testid="where-zip" />
+              data-testid="where-input" />
             <button class="btn btn-primary" type="submit" data-testid="where-submit">Find events</button>
           </div>
         </form>
+        <p class="list-sub" data-testid="where-credit">Town names from <a href="https://www.geonames.org/">GeoNames</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>).</p>
         <form id="near-form" method="post" action="/near" hidden>
           <input type="hidden" name="g" />
         </form>
@@ -429,7 +430,7 @@
         }
         function off() {
           btn.hidden = true;
-          note.textContent = 'Location is off. Type your zip below.';
+          note.textContent = 'Location is off. Type your town or zip below.';
         }
         function find() {
           btn.disabled = true;

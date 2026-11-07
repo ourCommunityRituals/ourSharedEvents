@@ -104,6 +104,12 @@ const LANDING_CASES: Case[] = [
   { name: 'zip-nothing-near', query: '?zip=60453', rows: () => MANY },
   { name: 'zip-unknown', query: '?zip=00000', rows: () => MANY },
   { name: 'no-us-zip', query: '?nozip=1', rows: () => MANY },
+  // The town box (#1118).
+  { name: 'town', query: '?where=Blue+Island', rows: () => MANY },
+  { name: 'town-nothing', query: '?where=Oak+Lawn', rows: () => MANY },
+  { name: 'towns', query: '?where=Beverly', rows: () => MANY },
+  { name: 'towns-nothing', query: '?where=Springfield', rows: () => MANY },
+  { name: 'town-unknown', query: '?where=Nowhereville', rows: () => MANY },
 ];
 
 describe('OSE-1762 | /events and the landing | golden renders', () => {

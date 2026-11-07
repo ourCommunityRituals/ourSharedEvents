@@ -291,7 +291,15 @@ describe('A11Y-7 / OSE-1762: the event list and the landing in Spanish', () => {
     });
   }
 
-  for (const query of ['', '?zip=60406', '?zip=00000', '?nozip=1']) {
+  // The town box too (#1118): a name that is many places lists its choices.
+  for (const query of [
+    '',
+    '?zip=60406',
+    '?zip=00000',
+    '?nozip=1',
+    '?where=Springfield',
+    '?where=Nowhereville',
+  ]) {
     test(`/es/${query}`, async () => {
       await scanPage(`Spanish landing ${query}`, await (await landing(query)).text());
       expect(document.documentElement.getAttribute('lang')).toBe('es');

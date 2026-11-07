@@ -108,13 +108,35 @@ test.describe('landing: what the visitor sees first', () => {
     await loadAndRecord(page);
   });
 
-  test('one h1 asks where you are, and the zip box is labelled', async ({ page }) => {
+  test('one h1 asks where you are, and the town-or-zip box is labelled', async ({ page }) => {
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page.getByTestId('landing-h1')).toHaveText(/What.s happening near you\?/);
-    const zip = page.getByTestId('where-zip');
-    await expect(zip).toBeVisible();
-    await expect(page.getByLabel('Your zip code')).toBeVisible();
+    await expect(page.getByTestId('where-input')).toBeVisible();
+    await expect(page.getByLabel('Town or zip code')).toBeVisible();
     await expect(page.getByTestId('where-submit')).toHaveText('Find events');
+  });
+
+  // Owner 2026-11-06: a town name first, then a zip; one name can be many places.
+  test('a name that is many places offers every one to choose from', async ({ page }) => {
+    await page.getByTestId('where-input').fill('Springfield');
+    await page.getByTestId('where-submit').click();
+    await expect(page).toHaveURL(/[?&]where=Springfield/);
+    await expect(page.getByTestId('where-msg')).toHaveCount(0);
+    const choices = page.getByTestId('where-choice');
+    expect(await choices.count()).toBeGreaterThanOrEqual(20);
+    await expect(page.getByTestId('where-choices')).toContainText('places are called Springfield');
+    await page.getByRole('link', { name: 'Springfield, IL', exact: true }).click();
+    await expect(page).toHaveURL(/[?&]where=Springfield%2C(%20|\+)IL/);
+    await expect(page.getByTestId('where-choices')).toHaveCount(0);
+    await expect(page.getByTestId('area-heading')).toContainText('Near Springfield, IL');
+    await expect(page.getByTestId('where-input')).toHaveValue('Springfield, IL');
+  });
+
+  test('a town name with one place goes straight to it', async ({ page }) => {
+    await page.getByTestId('where-input').fill('Oak Lawn');
+    await page.getByTestId('where-submit').click();
+    await expect(page.getByTestId('area-heading')).toContainText('Near Oak Lawn, IL');
+    await expect(page.getByTestId('where-choices')).toHaveCount(0);
   });
 
   test('both organizer doors are there and lead to admin', async ({ page }) => {
@@ -129,11 +151,11 @@ test.describe('landing: what the visitor sees first', () => {
   });
 
   test('an unknown zip says so instead of showing nothing', async ({ page }) => {
-    await page.getByTestId('where-zip').fill('00000');
+    await page.getByTestId('where-input').fill('00000');
     await page.getByTestId('where-submit').click();
-    await expect(page).toHaveURL(/[?&]zip=00000/);
+    await expect(page).toHaveURL(/[?&]where=00000/);
     await expect(page.getByTestId('where-msg')).toContainText("couldn't find zip 00000");
-    await expect(page.getByTestId('where-zip')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByTestId('where-input')).toHaveAttribute('aria-invalid', 'true');
   });
 
   test('links are real and images carry alt text', async ({ page }) => {
@@ -143,8 +165,13 @@ test.describe('landing: what the visitor sees first', () => {
     }
   });
 
-  test('the keyboard reaches the zip box and both doors', async ({ page }) => {
-    const targets = ['landing-skip-link', 'where-zip', 'door-create-event', 'door-create-sponsor'];
+  test('the keyboard reaches the town-or-zip box and both doors', async ({ page }) => {
+    const targets = [
+      'landing-skip-link',
+      'where-input',
+      'door-create-event',
+      'door-create-sponsor',
+    ];
     // One Tab per focusable control, plus slack: at 10+ events the doors sit
     // below the area, and every event card adds its own links.
     const budget =

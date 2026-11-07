@@ -417,6 +417,27 @@ describe('the site and the secrets', () => {
     expect(() => fetchPublic('https://evil.example/x')).toThrow();
   });
 
+  // stg challenges a non-browser read of /q/, /s/ and /events/<id> at the edge; the
+  // WAF skip rule lets a request carrying X-OCR-CI with this token through (OSE-939).
+  test('public reads carry X-OCR-CI when OCR_CI_EDGE_TOKEN is set, and the token is masked', async () => {
+    const env = { ...ENV, OCR_CI_EDGE_TOKEN: 'edge-token-value-5' };
+    const seen = [];
+    const fetchPublic = rd.fetchPublicFrom(env, async (url, init) => {
+      seen.push({ url, init });
+      return { status: 200 };
+    });
+    await fetchPublic('https://stg.oursharedevents.com/q/qrt_x', { method: 'GET' });
+    expect(seen[0].init.headers).toEqual({
+      'CF-Access-Client-Id': ENV.CF_ACCESS_CLIENT_ID,
+      'CF-Access-Client-Secret': ENV.CF_ACCESS_CLIENT_SECRET,
+      'X-OCR-CI': 'edge-token-value-5',
+    });
+    expect(JSON.stringify(seen)).not.toContain(ENV.ADMIN_KEY);
+    const out = [];
+    rd.maskSecrets(env, (s) => out.push(s));
+    expect(out).toContain('::add-mask::edge-token-value-5\n');
+  });
+
   test('each secret is masked through a workflow command, and only that way', () => {
     const out = [];
     rd.maskSecrets(ENV, (s) => out.push(s));
@@ -487,6 +508,68 @@ describe('the site and the secrets', () => {
       expect(summary).not.toContain(v);
     }
     expect(summary).not.toMatch(/https?:\/\//);
+  });
+
+  // Owner 2026-11-07: after the swap, every zip and town search reads its total.
+  test('check-swap checks every search after the swap; one off by one turns the run red', async () => {
+    const SEARCHES = JSON.parse(
+      readFileSync(path.join(ROOT, 'stock/totals.json'), 'utf8')
+    ).searches;
+    const AG = SEARCHES['Auburn Gresham'];
+    const nodes = JSON.parse(readFileSync(path.join(ROOT, 'stock/nodes.json'), 'utf8')).nodes;
+    const runOnce = async (searchResults) => {
+      const w = world({ index: [] });
+      const manifest = manifestOf(TODAY, 't', ['blue-island']);
+      w.fs.writeFileSync(path.join('/out', 'manifest.json'), JSON.stringify(manifest));
+      w.fs.writeFileSync(path.join('/out', 'build-notes.json'), JSON.stringify({ ok: true }));
+      const asked = [];
+      const code = await rd.runCheckSwap({
+        env: { ...ENV, BUILD_RESULT: 'success', GITHUB_STEP_SUMMARY: '/summary.md' },
+        fs: w.fs,
+        fetch: async () => ({ status: 200 }),
+        wrangler: w.wrangler,
+        outDir: '/out',
+        tmpDir: '/tmp',
+        checkNodes: async () =>
+          Object.fromEntries(
+            nodes.map((n) => [
+              n.id,
+              { pass: true, count: 0, expected: 0, totalListed: 0, reasons: [] },
+            ])
+          ),
+        checkSearches: async ({ searches }) => {
+          asked.push(searches);
+          return searchResults;
+        },
+        log: () => {},
+      });
+      allCalls.push(...w.calls);
+      return { code, summary: w.files.get('/summary.md'), asked };
+    };
+    const allPass = Object.fromEntries(
+      Object.entries(SEARCHES).map(([q, n]) => [
+        q,
+        { pass: true, count: n, expected: n, reasons: [] },
+      ])
+    );
+
+    const good = await runOnce(allPass);
+    expect(good.asked).toEqual([SEARCHES]);
+    expect(good.code).toBe(0);
+    expect(good.summary).toContain('### Searches on the site');
+    expect(good.summary).toContain(`| Auburn Gresham | ${AG} | ${AG} | pass |`);
+
+    const bad = await runOnce({
+      ...allPass,
+      'Auburn Gresham': {
+        pass: false,
+        count: AG - 1,
+        expected: AG,
+        reasons: [`count:${AG - 1}/${AG}`],
+      },
+    });
+    expect(bad.code).toBe(1);
+    expect(bad.summary).toContain(`| Auburn Gresham | ${AG} | ${AG - 1} | FAIL |`);
   });
 
   test('check-swap treats a build that did not say ok as failed', async () => {
@@ -704,6 +787,29 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
       `rows of ${TODAY_NAME} for b are still live; they are recorded only in this run's stock-manifest artifact; purge them by hand`
     );
     expect(report.exitCode).toBe(1);
+  });
+
+  test('an edge challenge in any result names the WAF skip rule in the summary', () => {
+    const report = {
+      todayName: TODAY_NAME,
+      results: {
+        a: { pass: false, count: 0, totalListed: 0, reasons: ['edge-challenged:/q/qrt_x'] },
+        b: { pass: true, count: 0, totalListed: 0, reasons: [] },
+      },
+      purges: [],
+      problems: [],
+    };
+    const args = { report, nodes: NODES, expected: EXPECTED, manifest: null, notes: {} };
+    const summary = rd.renderSummary(args);
+    expect(summary).toContain('X-OCR-CI');
+    expect(summary).toContain('OSE-939');
+    // a search challenged alone says it too; a clean run never does
+    const clean = { ...report, results: { a: report.results.b, b: report.results.b } };
+    const searches = {
+      'Oak Lawn': { pass: false, count: null, expected: 1, reasons: ['edge-challenged'] },
+    };
+    expect(rd.renderSummary({ ...args, report: clean, searches })).toContain('X-OCR-CI');
+    expect(rd.renderSummary({ ...args, report: clean })).not.toContain('X-OCR-CI');
   });
 
   test('when the manifest object was saved but the index write failed, the summary says so', async () => {

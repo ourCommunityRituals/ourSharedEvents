@@ -44,7 +44,16 @@ vi.mock('../src/lib/sponsor-titles', async () => {
 import { handlePublicPage, handleLandingPage } from '../src/handlers/pages';
 
 /** Names, not English prose: they read the same on a Spanish page. */
-const NAMES = ['OurSharedEvents', 'Cloudflare Access', 'Blue Island', 'Oak Lawn', 'Chicago'];
+// GeoNames and its licence, CC BY 4.0, are credited by name under the town box.
+const NAMES = [
+  'OurSharedEvents',
+  'Cloudflare Access',
+  'GeoNames',
+  'CC BY 4.0',
+  'Blue Island',
+  'Oak Lawn',
+  'Chicago',
+];
 
 /** The text a reader sees or hears: element text plus the attributes read aloud or shown. */
 function readerText(html: string): string {
@@ -214,6 +223,13 @@ const PAGES: Page[] = [
   { name: '/es/, a zip with events', html: () => landing('?zip=60406', ROWS) },
   { name: '/es/, a zip with nothing near', html: () => landing('?zip=60453', ROWS) },
   { name: '/es/, a zip we do not know', html: () => landing('?zip=00000', ROWS) },
+  // The town box (#1118): one town, one with nothing, a name that is many
+  // places (with and without events), and a name that is no place.
+  { name: '/es/, a town', html: () => landing('?where=Blue+Island', ROWS) },
+  { name: '/es/, a town with nothing', html: () => landing('?where=Oak+Lawn', ROWS) },
+  { name: '/es/, a name that is many places', html: () => landing('?where=Beverly', ROWS) },
+  { name: '/es/, many places with nothing', html: () => landing('?where=Springfield', ROWS) },
+  { name: '/es/, a place we do not know', html: () => landing('?where=Nowhereville', ROWS) },
   { name: '/es/, no US zip', html: () => landing('?nozip=1', ROWS) },
 ];
 

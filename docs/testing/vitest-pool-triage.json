@@ -1588,7 +1588,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 16
+      "testCount": 23
     },
     {
       "file": "workers/oursharedevents/tests/language-layer-golden.spec.ts",
@@ -1827,6 +1827,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/place-search.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 29
     },
     {
       "file": "workers/oursharedevents/tests/platform-scope-tenant-writes.invariant.spec.ts",

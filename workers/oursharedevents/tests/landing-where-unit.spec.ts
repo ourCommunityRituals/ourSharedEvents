@@ -360,12 +360,12 @@ describe('where renderers', () => {
     expect(html).toContain('value=""');
   });
 
-  test('the zip box is a plain GET search with a 5-digit pattern', () => {
+  // The box takes a town first and a zip second since 2026-11-06
+  // (tests/place-search.spec.ts); a ?zip= from the phone's location still fills it.
+  test('the box is a plain GET search that a ?zip= still fills', () => {
     const html = renderWhere(at('?zip=60406'));
     expect(html).toMatch(/<form class="where-form" method="get" action="\/" role="search"/);
-    expect(html).toMatch(/name="zip"/);
-    expect(html).toMatch(/inputmode="numeric"/);
-    expect(html).toMatch(/autocomplete="postal-code"/);
+    expect(html).toMatch(/name="where"/);
     expect(html).toMatch(/value="60406"/);
     expect(html).not.toMatch(/where-msg/);
     expect(renderWhere(at('?zip=99999'))).toMatch(/We couldn't find zip 99999/);
