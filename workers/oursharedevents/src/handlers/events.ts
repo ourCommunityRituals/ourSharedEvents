@@ -397,7 +397,7 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       ' e.what_short, e.who_host, e.why_purpose, e.how_details, e.where_address,' +
       ' e.who_story, e.who_image_url, e.what_video_url,' +
       ' e.lat, e.lon, e.corridor_id, e.h3_res9, e.h3_res7,' +
-      ' e.is_published, e.created_by, e.listed_from,' +
+      ' e.is_published, e.created_by, e.listed_from, e.data_class,' +
       // OSE-1560 — is the map setting still the default (the organizer has not
       // chosen)? A flag, not the raw settings blob.
       ` CASE WHEN ${mapStillDefaultSql('e')} THEN 1 ELSE 0 END AS map_default`;
@@ -624,6 +624,33 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   }
   const brandId = requestedBrand || (scope.mode === 'scoped' ? scope.brandIds[0] : 'root');
 
+  // data_class (migration 0052): every row is labelled at write time. A person's
+  // event is 'production', the default. Automation (a key or the CI service
+  // actor) may label its own test event 'synthetic', which the dashboards leave
+  // out by default; the nightly staging lifecycle job does
+  // (scripts/lifecycle/). 'demo' is the mock-data class and is never written here. Absent
+  // or null means the default; anything else is refused before any write.
+  let dataClass: 'production' | 'synthetic' = 'production';
+  if (body.data_class !== undefined && body.data_class !== null) {
+    if (body.data_class !== 'production' && body.data_class !== 'synthetic') {
+      return errorResponse(
+        'INVALID_DATA_CLASS',
+        "data_class must be 'production' or 'synthetic'",
+        400,
+        rid
+      );
+    }
+    if (body.data_class === 'synthetic' && !isAutomationActor(actor)) {
+      return errorResponse(
+        'DATA_CLASS_FORBIDDEN',
+        'Only automation may label an event synthetic',
+        403,
+        rid
+      );
+    }
+    dataClass = body.data_class;
+  }
+
   const id = `evt_${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
   // A slug the caller chose is kept as is (and still answers 409 when taken).
   // A derived one starts from the title; a title with no letters or digits
@@ -836,9 +863,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
                              who_story, who_image_url, what_video_url, what_url,
                              what_url_enabled, what_url_type,
                              lat, lon, h3_res9, h3_res7, is_published, created_by,
-                             event_type_id, settings_json, listed_from,
+                             event_type_id, settings_json, listed_from, data_class,
                              created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           id,
@@ -876,6 +903,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
           // Created live (automation): listed at once, but the listing start is
           // recorded so the corridor latch's settling rule still applies.
           status === 'active' ? now : null,
+          dataClass,
           now,
           now
         )
@@ -998,6 +1026,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       starts_at: startsAt,
       timezone,
       place,
+      data_class: dataClass,
       warnings,
       // OSE-1560 — what the admin shows as the heads-up (the toast is OSE-1564).
       map: mapState(isPublished === 1, mapChoice === null),

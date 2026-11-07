@@ -1,0 +1,140 @@
+# Event lifecycle on staging (stg.oursharedevents.com), every night and by hand.
+#
+# Owner, 2026-11-07: prove that public content follows the day's event changes.
+# Neither the daily stock load (stock-data-full.yml, which replaces staging's
+# seeded events wholesale) nor the nightly CI run (gate, smoke and contract only)
+# shows that a create, an edit or a delete reaches the public pages.
+#
+# Each night one synthetic test event (data_class 'synthetic', root brand) goes
+# through its whole life through the real admin API, never by a D1 write, in the
+# owner's test area: Oak Lawn 60453, Evergreen Park 60805, Blue Island 60406 and
+# Chicago 60620 (Auburn Gresham), two of them a night in turn. After each change
+# every public surface is read back: the landing page (/, ?zip=, and ?where= once
+# the town search is on main), /events (and ?q= by town and zip), the public
+# events API, the attendee map (GET /api/v2/events/map) and the event page.
+#
+#   0 sweep    delete any lifecycle event an earlier run left behind
+#   1 create   create it live and on the map; every surface lists it
+#   2 edit     new title, a later date, another town; every surface shows the new
+#              values, and the old town's searches and map cell no longer list it
+#   3 window   just inside the window it is shown; just outside it leaves the
+#              landing page and the map (and /events?when=next-90), while /events
+#              still lists it
+#   4 remove   back in the window, then unpublish (gone from every list), then
+#              delete (gone everywhere, and the event page answers 404)
+#   5 cleanup  always, even after a red or cancelled step: the run's event is
+#              deleted and the sweep runs again, so a red run leaves nothing
+#
+# Each check is a named PASS/FAIL line in its step's log and a row in the run
+# summary; a failed check is also an error annotation on the run page.
+#
+# Staging only. The script refuses every other host (scripts/lifecycle/
+# event-lifecycle.mjs assertTarget); production is closed and is never touched
+# here (AGENTS.md). Nothing in this workflow sets the target.
+#
+# Window edges (owner, 2026-11-07): the landing page and the map are to cover
+# 30 days back as well as 90 ahead. When that ships, set WINDOW_PAST_DAYS to 30
+# below and the past edges are checked too.
+#
+# Secrets (repo level, the ones the stock run and the T2 Bruno run already use):
+# ADMIN_KEY, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET, OCR_CI_EDGE_TOKEN.
+# No new secret, no Cloudflare API token: the job only calls the site.
+
+name: Event lifecycle (stg)
+
+on:
+  # 06:47 UTC (00:47 or 01:47 in Chicago): well after the 03:07 UTC nightly CI
+  # run and well before the 09:23 UTC stock load, so no test chain reads stg
+  # while the test event briefly adds one to its town's totals.
+  schedule:
+    - cron: '47 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-event-lifecycle
+  cancel-in-progress: false
+
+env:
+  # PR #1118 adds the landing town search (/?where=). Set to 'on' once it is on
+  # main and deployed: step 1 goes red when stg has the search and this is off.
+  LANDING_WHERE_SEARCH: 'off'
+  WINDOW_PAST_DAYS: '0'
+  WINDOW_FUTURE_DAYS: '90'
+  # A change gets 90 s to reach every read (the map answers with max-age=60).
+  LIFECYCLE_POLL_ATTEMPTS: '9'
+  LIFECYCLE_POLL_DELAY_MS: '10000'
+
+jobs:
+  lifecycle:
+    name: 'Lifecycle of one test event'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: '0 Sweep leftovers from earlier runs'
+        timeout-minutes: 5
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+        run: node scripts/lifecycle/run.mjs sweep
+
+      - name: '1 Create and publish: every surface lists it'
+        timeout-minutes: 8
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+        run: node scripts/lifecycle/run.mjs create
+
+      - name: '2 Edit title, date and town: the new values show, the old town drops it'
+        timeout-minutes: 8
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+        run: node scripts/lifecycle/run.mjs edit
+
+      - name: '3 Move the date across the window edges: it leaves the landing page and map'
+        timeout-minutes: 8
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+        run: node scripts/lifecycle/run.mjs window
+
+      - name: '4 Unpublish, then delete: gone from every surface'
+        timeout-minutes: 8
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+        run: node scripts/lifecycle/run.mjs remove
+
+      # Always, so a red or cancelled run leaves no test event on stg.
+      - name: '5 Clean up: no test event is left'
+        if: always()
+        timeout-minutes: 5
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+        run: node scripts/lifecycle/run.mjs cleanup
