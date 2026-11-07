@@ -254,10 +254,15 @@ describe('Spanish /events and landing | no English of ours', () => {
   /**
    * Every link of ours stays in Spanish, but for the pages not on the language
    * layer yet: sign-in (admin), the privacy page, and an event's registration
-   * form (forms are surface 4 of OSE-1762).
+   * form (forms are surface 4 of OSE-1762). The language switch's link to the
+   * English page, and the head's alternate link to it, lead to English on purpose.
    */
   function englishLinks(html: string): string[] {
-    const hrefs = [...html.matchAll(/\shref="([^"]*)"/g)].map((m) => m[1]);
+    const hrefs = [...html.matchAll(/<(?:a|link)\b([^>]*)>/g)]
+      .map((m) => m[1])
+      .filter((attrs) => !/\shreflang="(en|x-default)"/.test(attrs))
+      .map((attrs) => /\shref="([^"]*)"/.exec(attrs)?.[1])
+      .filter((h): h is string => h !== undefined);
     return hrefs
       .filter((h) => h.startsWith('/') && !h.startsWith('//'))
       .filter((h) => !/^\/(es\/|es$|es\?|ui\.css|admin|privacy)/.test(h))
@@ -281,6 +286,52 @@ describe('Spanish /events and landing | no English of ours', () => {
   it('every link on the Spanish list stays in Spanish, in every state', async () => {
     for (const q of ['?when=today', '?q=zzquery', '?q=Oak+Lawn', '?when=past']) {
       expect(englishLinks(await events(q, ROWS)), q).toEqual([]);
+    }
+  });
+
+  it('the language switch names English in Spanish and keeps the filters', async () => {
+    const list = await events('?when=weekend&q=zzquery', ROWS);
+    expect(list).toContain(
+      '<a lang="es" hreflang="en" data-testid="language-switch-en" href="/events?when=weekend&amp;q=zzquery">Inglés</a>'
+    );
+    expect(list).toContain('aria-label="Idioma"');
+    const home = await landing('?zip=60406', ROWS);
+    expect(home).toContain(
+      '<a lang="es" hreflang="en" data-testid="language-switch-en" href="/?zip=60406">Inglés</a>'
+    );
+    // A zip we could not find is not carried over.
+    expect(await landing('?zip=00000', ROWS)).toContain(
+      'data-testid="language-switch-en" href="/">'
+    );
+  });
+
+  it('the English pages offer Spanish by its own name', async () => {
+    const list = await events('?when=past', ROWS, 'en');
+    expect(list).toContain(
+      '<a lang="es" hreflang="es" data-testid="language-switch-es" href="/es/events?when=past">Español</a>'
+    );
+    expect(await landing('', ROWS, 'en')).toContain(
+      '<a lang="es" hreflang="es" data-testid="language-switch-es" href="/es/">Español</a>'
+    );
+  });
+
+  it('each page names its siblings for search engines, without its filters', async () => {
+    for (const [html, path] of [
+      [await events('?when=today', ROWS), '/events'],
+      [await events('', ROWS, 'en'), '/events'],
+      [await landing('?zip=60406', ROWS), '/'],
+      [await landing('', ROWS, 'en'), '/'],
+    ] as const) {
+      const es = path === '/' ? '/es/' : `/es${path}`;
+      expect(html).toContain(
+        `<link rel="alternate" hreflang="en" href="https://oursharedevents.com${path}" />`
+      );
+      expect(html).toContain(
+        `<link rel="alternate" hreflang="es" href="https://oursharedevents.com${es}" />`
+      );
+      expect(html).toContain(
+        `<link rel="alternate" hreflang="x-default" href="https://oursharedevents.com${path}" />`
+      );
     }
   });
 

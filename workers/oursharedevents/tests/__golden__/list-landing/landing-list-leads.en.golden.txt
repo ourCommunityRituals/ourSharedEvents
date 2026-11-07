@@ -197,6 +197,10 @@
         color: var(--text);
       }
       
+    .ose-lang { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin: 1.5rem 0 0; }
+    .ose-lang a { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0.5rem 1rem; color: var(--accent); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: underline; }
+    .ose-lang a:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+      
     .ose-never-who { margin: 2rem 0 0; border-top: 1px solid var(--border); font-size: 0.95rem; color: var(--text-muted); }
     .ose-never-who-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; min-height: 44px; padding: 0.5rem 0; cursor: pointer; list-style: none; }
     .ose-never-who-summary::-webkit-details-marker { display: none; }
@@ -210,6 +214,9 @@
     .ose-never-who-body a { color: var(--accent); }
     </style>
     <link rel="canonical" href="https://oursharedevents.com/" />
+  <link rel="alternate" hreflang="en" href="https://oursharedevents.com/" />
+  <link rel="alternate" hreflang="es" href="https://oursharedevents.com/es/" />
+  <link rel="alternate" hreflang="x-default" href="https://oursharedevents.com/" />
 </head>
   <body>
     <a href="#main-content" class="skip-link" data-testid="landing-skip-link">Skip to content</a>
@@ -330,6 +337,9 @@
       </section>
       
 
+      <nav class="ose-lang" data-testid="language-switch" aria-label="Language">
+      <a lang="es" hreflang="es" data-testid="language-switch-es" href="/es/">Español</a>
+    </nav>
       <details class="ose-never-who" data-testid="landing-privacy" data-never-who="landing">
     <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Never who, only how many.</span> <span class="ose-never-who-trigger">How this works</span></summary>
     <div class="ose-never-who-body" data-testid="never-who-body">

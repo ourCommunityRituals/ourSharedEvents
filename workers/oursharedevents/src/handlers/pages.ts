@@ -39,7 +39,13 @@ import {
   resolveAndSignalProvenance,
 } from '../lib/demo-banner.js';
 import { injectLegalFooter } from '../lib/legal-footer';
-import { injectNeverWho, renderNeverWho, NEVER_WHO_CSS } from '../lib/never-who';
+import {
+  injectNeverWho,
+  renderNeverWho,
+  NEVER_WHO_CSS,
+  NEVER_WHO_CSS_MARKER,
+  NEVER_WHO_MARKER,
+} from '../lib/never-who';
 import { BACK_BUTTON_CSS, renderBackButton } from '../lib/back-button';
 import { DEFAULT_LANG, OG_LOCALE, type Lang } from '../lib/i18n/languages';
 import { fmt, msg, msgAll, WHAT_TYPES } from '../lib/i18n/catalog';
@@ -48,6 +54,7 @@ import { languageAlternates, withLangPrefix } from '../lib/i18n/path-prefix';
 import { LANGUAGE_SWITCH_CSS, renderLanguageSwitch } from '../lib/i18n/language-switch';
 import {
   parseDiscoveryFilters,
+  type DiscoveryFilters,
   applyDiscoveryFilters,
   renderDiscoveryFilters,
   injectDiscoveryFilters,
@@ -393,11 +400,16 @@ export async function handlePublicPage(
   const shell = injectEventCardCss(
     injectDiscoveryHeading(
       injectNeverWho(
-        injectLegalFooter(
-          await withProvenanceBanner(fillTemplate(PUBLIC_HTML, lang), env, 'public'),
-          'public',
-          undefined,
-          lang
+        withLanguageSwitch(
+          injectLegalFooter(
+            await withProvenanceBanner(fillTemplate(PUBLIC_HTML, lang), env, 'public'),
+            'public',
+            undefined,
+            lang
+          ),
+          lang,
+          CANONICAL_PATH.events,
+          discoveryQuery(filters)
         ),
         'events',
         lang
@@ -408,7 +420,12 @@ export async function handlePublicPage(
   );
   // One address per list: ?q= / ?when= variants all point search engines here.
   const withCanonical = injectLanguageHead(
-    injectCanonical(shell, request, env, withLangPrefix(lang, CANONICAL_PATH.events)),
+    injectLanguageAlternates(
+      injectCanonical(shell, request, env, withLangPrefix(lang, CANONICAL_PATH.events)),
+      request,
+      env,
+      CANONICAL_PATH.events
+    ),
     lang
   );
   return languageVaried(
@@ -423,6 +440,50 @@ export async function handlePublicPage(
     ),
     pathLang
   );
+}
+
+/**
+ * OSE-1762: the language switch on a shell page, above the never-who disclosure
+ * (on the event page it sits above Back, which these pages do not have). Its
+ * stylesheet goes in with the disclosure's. `query` is already vetted.
+ */
+function withLanguageSwitch(page: string, lang: Lang, path: string, query: string): string {
+  const nav = renderLanguageSwitch({ lang, path, query });
+  return page
+    .replace(NEVER_WHO_CSS_MARKER, () => `${LANGUAGE_SWITCH_CSS}\n      ${NEVER_WHO_CSS_MARKER}`)
+    .replace(NEVER_WHO_MARKER, () => `${nav}\n      ${NEVER_WHO_MARKER}`);
+}
+
+/**
+ * The filters a switch carries to the same list in another language: only the
+ * window and the search, both already parsed and bounded. `?when=all` is the
+ * default and is left out.
+ */
+function discoveryQuery(f: DiscoveryFilters): string {
+  const params = new URLSearchParams();
+  if (f.when !== 'all') params.set('when', f.when);
+  if (f.q) params.set('q', f.q);
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
+/**
+ * OSE-1762: the same page in every language, for search engines and link
+ * previews, after the canonical link. The bare address is `x-default`.
+ */
+function injectLanguageAlternates(
+  page: string,
+  request: Request | undefined,
+  env: PagesEnv,
+  path: string
+): string {
+  const origin = canonicalOrigin(request, env);
+  const at = page.search(/<\/head>/i);
+  if (!origin || at < 0) return page;
+  const links = languageAlternates(origin, path)
+    .map((alt) => `  <link rel="alternate" hreflang="${alt.hreflang}" href="${esc(alt.href)}" />\n`)
+    .join('');
+  return page.slice(0, at) + links + page.slice(at);
 }
 
 /**
@@ -2725,11 +2786,17 @@ export async function handleLandingPage(
   // OSE-1762: the shell's words are filled in the page's language first.
   const shell = injectNeverWho(
     injectEventCardCss(
-      injectLegalFooter(
-        injectNearLang(fillTemplate(LANDING_HTML, lang), lang),
-        'landing',
-        undefined,
-        lang
+      withLanguageSwitch(
+        injectLegalFooter(
+          injectNearLang(fillTemplate(LANDING_HTML, lang), lang),
+          'landing',
+          undefined,
+          lang
+        ),
+        lang,
+        CANONICAL_PATH.landing,
+        // A zip the page found carries over; anything else does not.
+        where.kind === 'zip' ? `?zip=${encodeURIComponent(where.area.zip)}` : ''
       )
     ),
     'landing',
@@ -2737,15 +2804,20 @@ export async function handleLandingPage(
   );
   const res = html(
     injectLanguageHead(
-      injectCanonical(
-        injectWhere(
-          injectLandingArea(shell, area, { areaFirst: where.kind === 'zip' }),
-          where,
-          lang
+      injectLanguageAlternates(
+        injectCanonical(
+          injectWhere(
+            injectLandingArea(shell, area, { areaFirst: where.kind === 'zip' }),
+            where,
+            lang
+          ),
+          request,
+          env,
+          withLangPrefix(lang, CANONICAL_PATH.landing)
         ),
         request,
         env,
-        withLangPrefix(lang, CANONICAL_PATH.landing)
+        CANONICAL_PATH.landing
       ),
       lang
     )

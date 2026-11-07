@@ -129,6 +129,10 @@
         text-decoration: underline;
       }
       
+    .ose-lang { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin: 1.5rem 0 0; }
+    .ose-lang a { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0.5rem 1rem; color: var(--accent); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: underline; }
+    .ose-lang a:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+      
     .ose-never-who { margin: 2rem 0 0; border-top: 1px solid var(--border); font-size: 0.95rem; color: var(--text-muted); }
     .ose-never-who-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; min-height: 44px; padding: 0.5rem 0; cursor: pointer; list-style: none; }
     .ose-never-who-summary::-webkit-details-marker { display: none; }
@@ -142,6 +146,9 @@
     .ose-never-who-body a { color: var(--accent); }
     </style>
     <link rel="canonical" href="https://oursharedevents.com/es/events" />
+  <link rel="alternate" hreflang="en" href="https://oursharedevents.com/events" />
+  <link rel="alternate" hreflang="es" href="https://oursharedevents.com/es/events" />
+  <link rel="alternate" hreflang="x-default" href="https://oursharedevents.com/events" />
   <meta property="og:locale" content="es_US" />
 </head>
   <body><div data-testid="data-unavailable-banner" role="status" aria-label="Aviso de datos no disponibles por el momento" style="position:sticky;top:0;left:0;right:0;z-index:2147483000;display:flex;gap:.5rem;align-items:center;justify-content:center;padding:.4rem .75rem;background:#334155;color:#fff;text-align:center;font:600 clamp(.72rem,2.6vw,.85rem)/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.01em;box-shadow:0 1px 3px rgba(0,0,0,.25);"><span style="background:rgba(255,255,255,.22);border-radius:.2rem;padding:.05rem .4rem;font-weight:800;letter-spacing:.06em;">DATOS NO DISPONIBLES</span><span>Mostramos contenido de ejemplo mientras se restablecen los datos reales.</span></div>
@@ -181,6 +188,9 @@
           <p class="empty" data-testid="public-events-empty">Todavía no hay nada en Oak Lawn. <a href="/es/events" data-testid="disc-empty-wider">Ver todos los eventos</a>.</p>
         </div>
       </section>
+      <nav class="ose-lang" data-testid="language-switch" aria-label="Idioma">
+      <a lang="es" hreflang="en" data-testid="language-switch-en" href="/events?q=Oak+Lawn">Inglés</a>
+    </nav>
       <details class="ose-never-who" data-testid="anonymity-affordance" data-never-who="events">
     <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Nunca quién, solo cuántos.</span> <span class="ose-never-who-trigger">Cómo funciona</span></summary>
     <div class="ose-never-who-body" data-testid="never-who-body">
