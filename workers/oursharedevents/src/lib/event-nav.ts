@@ -16,6 +16,7 @@
 import { escapeHtml } from './html-escape.js';
 import { msg } from './i18n/catalog';
 import { DEFAULT_LANG, type Lang } from './i18n/languages';
+import { withLangPrefix } from './i18n/path-prefix';
 
 export type EventScreen = 'event' | 'poster' | 'display';
 
@@ -65,7 +66,7 @@ export function renderEventNav(
         : `<a href="${escapeHtml(paths[screen])}" data-testid="event-nav-${screen}" style="${LINK_STYLE}">${label}</a>`
     )
     .join('');
-  const allEvents = `<a href="/events" data-testid="${escapeHtml(opts.allEventsTestId ?? 'event-nav-events')}" style="${LINK_STYLE}">${msg(lang, 'nav.allEvents')}</a>`;
+  const allEvents = `<a href="${withLangPrefix(lang, '/events')}" data-testid="${escapeHtml(opts.allEventsTestId ?? 'event-nav-events')}" style="${LINK_STYLE}">${msg(lang, 'nav.allEvents')}</a>`;
   // With nothing else to go to, the nav is the single link it always was.
   const rest = opts.live ? links : '';
   return `<nav aria-label="${msg(lang, 'nav.site')}" data-testid="event-nav" style="display:flex;flex-wrap:wrap;gap:0 1.25rem;margin:0 0 0.5rem">${allEvents}${rest}</nav>`;

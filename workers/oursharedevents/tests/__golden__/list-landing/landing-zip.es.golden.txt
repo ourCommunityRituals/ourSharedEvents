@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es" data-surface="ose-landing">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OurSharedEvents — qué pasa cerca de ti</title>
+    <meta
+      name="description"
+      content="Encuentra eventos en tu ciudad o cerca de tu código postal. La asistencia se cuenta sin saber quién eres."
+    />
+    <link rel="stylesheet" href="/ui.css" />
+    <!--
+      OSE-1312 / owner 2026-10-10: one question first, "where are you?". A zip box
+      everywhere; on a phone also "Use my location" (the one script below). No
+      cookies, no analytics, no storage. List/map and window toggles are CSS-only.
+    -->
+    <style>
+      [data-surface='ose-landing'] {
+        --muted: var(--text-muted, #5a5a5a);
+        --line: var(--border, rgba(42, 42, 42, 0.12));
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+      }
+      .skip-link {
+        position: absolute;
+        left: -9999px;
+      }
+      .skip-link:focus {
+        left: 1rem;
+        top: 1rem;
+        background: var(--accent);
+        color: var(--on-accent);
+        padding: 0.5rem 1rem;
+        z-index: 10;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.75rem 1.25rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .logo,
+      nav a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        text-decoration: none;
+      }
+      .logo {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--text);
+      }
+      nav a {
+        padding: 0 0.75rem;
+        color: var(--muted);
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 1.5rem 1.25rem 3rem;
+      }
+      .lead {
+        font-size: clamp(1.5rem, 4vw, 2rem);
+        line-height: 1.15;
+        margin: 0.25rem 0 1rem;
+      }
+      .where {
+        margin: 0 0 2rem;
+      }
+      .where-label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+      }
+      .where-row {
+        display: flex;
+        gap: 0.5rem;
+        max-width: 420px;
+      }
+      .where-row .input {
+        flex: 1;
+      }
+      .where-msg,
+      .near-note {
+        margin: 0.5rem 0 0;
+        color: var(--muted);
+      }
+      .near-me {
+        margin: 0 0 1rem;
+      }
+      .where-change {
+        font-size: 1rem;
+        font-weight: 400;
+        margin-left: 0.5rem;
+      }
+      .doors {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin: 0 0 2rem;
+      }
+      .door {
+        text-decoration: none;
+      }
+      .doors-why {
+        flex-basis: 100%;
+        color: var(--muted);
+      }
+      .doors-why summary {
+        padding: 0.7rem 0;
+        cursor: pointer;
+      }
+      .area-section {
+        margin: 0 0 2rem;
+      }
+      .area-heading {
+        font-size: 1.15rem;
+        margin: 0 0 0.75rem;
+      }
+      .toggles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem 1.25rem;
+        align-items: center;
+        margin: 0 0 1rem;
+      }
+      .toggle-radio {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .view-map {
+        display: none;
+      }
+      #view-map:checked ~ .area .view-map {
+        display: block;
+      }
+      
+      #events, .view-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+      .event-card { min-height: var(--tap-min); position: relative; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 1.25rem 1.5rem; transition: background 0.15s; }
+      .event-card:hover { background: var(--surface-hover); }
+      .event-card-link { position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-sm); }
+      .event-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+      .event-card .event-thumb-box { position: relative; z-index: 2; pointer-events: none; flex: 0 0 64px; width: 64px; height: 64px; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-hover) url('/event-default-thumb.svg') center / cover no-repeat; }
+      .event-card .event-thumb { display: block; position: relative; width: 64px; height: 64px; object-fit: cover; }
+      .event-card .event-thumb::before { content: ''; position: absolute; inset: 0; background: var(--surface-hover) url('/event-default-thumb.svg') center / cover no-repeat; }
+      .event-card .event-info { position: relative; z-index: 2; pointer-events: none; flex: 1 1 12rem; min-width: 0; }
+      .event-card h3 { overflow-wrap: anywhere; font-size: 1rem; font-weight: 600; margin: 0 0 0.35rem; color: var(--text); }
+      .event-card .meta { font-size: 0.95rem; color: var(--text-muted); margin: 0; }
+      .event-card .cta { position: relative; z-index: 3; display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1.25rem; min-height: var(--tap-min); background: var(--accent); color: var(--on-accent); border-radius: var(--radius-sm); font-size: 1rem; font-weight: 600; text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+      .event-card .cta:hover { background: var(--accent-hover); }
+      .event-card .cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .event-card .cta-secondary { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+      @media (max-width: 480px) {
+        .event-card .event-info { flex: 1 1 0; }
+        .event-card .cta { flex: 1 1 100%; }
+      }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+      .tag-wrapped { display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; background: var(--bg); color: var(--text-muted); }
+      .events-subheading { font-size: 1.1rem; font-weight: 600; color: var(--text-muted); margin: 0.75rem 0 0; }
+      .empty { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 1.5rem 1rem; text-align: center; color: var(--text-muted); font-size: 1rem; }
+      .empty a { color: var(--accent); font-weight: 600; }
+      .disc-search { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.75rem; }
+      .disc-q { flex: 1 1 8rem; min-width: 0; min-height: 48px; font: inherit; padding: 0.5rem 0.9rem; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); }
+      .disc-go { min-height: 48px; padding: 0 1.1rem; border: none; border-radius: 999px; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 700; cursor: pointer; }
+      .disc-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.5rem; padding: 0; border: 0; min-inline-size: 0; }
+      .disc-chip, .disc-clear { flex: 0 1 auto; display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.95rem; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted); font-size: 0.95rem; font-weight: 600; text-decoration: none; cursor: pointer; }
+      .disc-chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+      .disc-chip.active::before { content: '\2713'; margin-right: 0.35rem; }
+      .disc-clear { color: var(--text); text-decoration: underline; }
+      .disc-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); padding: 0; margin: 0 0.25rem 0 0; align-self: center; }
+      .disc-summary { font-size: 0.95rem; color: var(--text-muted); margin: 0 0 0.75rem; }
+      .empty-state,
+      .near-empty,
+      .map-placeholder {
+        border: 1px dashed var(--line);
+        border-radius: 10px;
+        padding: 1.5rem 1.25rem;
+        text-align: center;
+        color: var(--muted);
+      }
+      .empty-state strong,
+      .near-empty strong {
+        color: var(--text);
+      }
+      
+    .ose-lang { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin: 1.5rem 0 0; }
+    .ose-lang a { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0.5rem 1rem; color: var(--accent); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: underline; }
+    .ose-lang a:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+      
+    .ose-never-who { margin: 2rem 0 0; border-top: 1px solid var(--border); font-size: 0.95rem; color: var(--text-muted); }
+    .ose-never-who-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; min-height: 44px; padding: 0.5rem 0; cursor: pointer; list-style: none; }
+    .ose-never-who-summary::-webkit-details-marker { display: none; }
+    .ose-never-who-line { color: var(--text); font-weight: 600; }
+    .ose-never-who-trigger { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+    .ose-never-who-trigger::after { content: " \25B8"; display: inline-block; text-decoration: none; }
+    .ose-never-who[open] .ose-never-who-trigger::after { content: " \25BE"; }
+    .ose-never-who-summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    .ose-never-who-body { padding: 0 0 0.75rem; }
+    .ose-never-who-body p { margin: 0 0 0.5rem; }
+    .ose-never-who-body a { color: var(--accent); }
+    </style>
+    <link rel="canonical" href="https://oursharedevents.com/es/" />
+  <link rel="alternate" hreflang="en" href="https://oursharedevents.com/" />
+  <link rel="alternate" hreflang="es" href="https://oursharedevents.com/es/" />
+  <link rel="alternate" hreflang="x-default" href="https://oursharedevents.com/" />
+  <meta property="og:locale" content="es_US" />
+</head>
+  <body>
+    <a href="#main-content" class="skip-link" data-testid="landing-skip-link">Ir al contenido</a>
+    <header data-testid="landing-header">
+      <a href="/es/" class="logo" data-testid="landing-logo" aria-label="Inicio de OurSharedEvents"
+        >OurSharedEvents</a
+      >
+      <nav data-testid="landing-nav" aria-label="Principal">
+        <a href="/es/events" data-testid="nav-events">Eventos</a>
+      </nav>
+    </header>
+
+    <main id="main-content" data-testid="landing-main">
+      <h1 class="lead" data-testid="landing-h1">¿Qué pasa cerca de ti?</h1>
+      <section class="where" aria-label="¿Dónde estás?" data-testid="landing-where">
+        <div class="near-me" data-testid="near-me" hidden>
+          <button class="btn btn-primary" type="button" data-testid="near-me-button">
+            Usar mi ubicación
+          </button>
+          <p class="near-note" data-testid="near-me-note" aria-live="polite">
+            Solo usamos la zona de tu código postal, nunca tu ubicación exacta.
+          </p>
+        </div>
+        <form class="where-form" method="get" action="/es/" role="search" data-testid="where-form">
+          <label for="where-input" class="where-label">Ciudad o código postal</label>
+          <div class="where-row">
+            <input id="where-input" name="where" class="input" type="text"
+              maxlength="60" autocomplete="address-level2" required
+              value="60406"
+              data-testid="where-input" />
+            <button class="btn btn-primary" type="submit" data-testid="where-submit">Buscar eventos</button>
+          </div>
+        </form>
+        <p class="list-sub" data-testid="where-credit">Nombres de ciudades de <a href="https://www.geonames.org/">GeoNames</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>).</p>
+        <form id="near-form" method="post" action="/near" hidden>
+          <input type="hidden" name="g" />
+          <input type="hidden" name="lang" value="es" />
+        </form>
+      </section>
+      <!-- Doors lead the area below LIST_MAX events, follow it at or above
+           (lib/landing-area.ts orderLandingSections). -->
+      
+
+      <section class="area-section" aria-label="Eventos" data-testid="landing-area">
+        <h2 class="area-heading" data-testid="area-heading">Cerca de 60406 <a class="where-change" href="/es/?change=1" data-testid="where-change">Cambiar</a></h2>
+        <input type="radio" name="view" id="view-list" class="toggle-radio" checked /><input type="radio" name="view" id="view-map" class="toggle-radio" /><input type="radio" name="win" id="win-weekend" class="toggle-radio" /><input type="radio" name="win" id="win-week" class="toggle-radio" /><input type="radio" name="win" id="win-month" class="toggle-radio" /><input type="radio" name="win" id="win-next-90" class="toggle-radio" checked />
+        <style data-testid="area-window-css">
+#view-list:checked ~ .toggles label[for='view-list']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-list:checked ~ .toggles label[for='view-list']::before{content:'\2713';margin-right:.35rem}#view-list:focus-visible ~ .toggles label[for='view-list']{outline:3px solid var(--accent);outline-offset:2px}
+#view-map:checked ~ .toggles label[for='view-map']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-map:checked ~ .toggles label[for='view-map']::before{content:'\2713';margin-right:.35rem}#view-map:focus-visible ~ .toggles label[for='view-map']{outline:3px solid var(--accent);outline-offset:2px}
+#win-weekend:checked ~ .toggles label[for='win-weekend']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-weekend:checked ~ .toggles label[for='win-weekend']::before{content:'\2713';margin-right:.35rem}#win-weekend:focus-visible ~ .toggles label[for='win-weekend']{outline:3px solid var(--accent);outline-offset:2px}#win-weekend:checked ~ .area .event-card:not(.when-weekend){display:none}
+#win-week:checked ~ .toggles label[for='win-week']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-week:checked ~ .toggles label[for='win-week']::before{content:'\2713';margin-right:.35rem}#win-week:focus-visible ~ .toggles label[for='win-week']{outline:3px solid var(--accent);outline-offset:2px}#win-week:checked ~ .area .event-card:not(.when-week){display:none}
+#win-month:checked ~ .toggles label[for='win-month']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-month:checked ~ .toggles label[for='win-month']::before{content:'\2713';margin-right:.35rem}#win-month:focus-visible ~ .toggles label[for='win-month']{outline:3px solid var(--accent);outline-offset:2px}#win-month:checked ~ .area .event-card:not(.when-month){display:none}
+#win-next-90:checked ~ .toggles label[for='win-next-90']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-next-90:checked ~ .toggles label[for='win-next-90']::before{content:'\2713';margin-right:.35rem}#win-next-90:focus-visible ~ .toggles label[for='win-next-90']{outline:3px solid var(--accent);outline-offset:2px}#win-next-90:checked ~ .area .event-card:not(.when-next-90){display:none}
+</style>
+        <div class="toggles" data-testid="area-toggles">
+          <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">Vista</legend><label class="disc-chip" for="view-list">Lista</label><label class="disc-chip" for="view-map">Mapa</label></fieldset>
+          <fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">Cuándo</legend><label class="disc-chip" for="win-weekend">Este fin de semana</label><label class="disc-chip" for="win-week">Próximos 7 días</label><label class="disc-chip" for="win-month">Este mes</label><label class="disc-chip" for="win-next-90">Próximos 90 días</label></fieldset>
+          
+          
+        </div>
+        <div class="area" data-testid="area">
+          <div class="view-map" data-testid="area-map">
+            <div class="map-placeholder" data-testid="area-map-thin" role="status">
+              <p><strong>El mapa aparece cuando esta zona tiene 10 eventos en los próximos 90 días.</strong> Hay 7 por ahora &mdash; todos los eventos aparecen abajo.</p>
+            </div>
+            <figure class="amap" data-testid="amap-example">
+              <style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" role="img" aria-label="Mapa de ejemplo: tres barrios dibujados como hexágonos numerados; el de más actividad, con el tono más oscuro" data-testid="amap-example-svg"><polygon class="amap-cell" points="231,20 300.3,60 300.3,140 231,180 161.7,140 161.7,60" fill-opacity="0.80" stroke-width="1.5"/><text class="amap-num" x="231" y="100" text-anchor="middle" dominant-baseline="central">1</text><polygon class="amap-cell" points="369.6,20 438.90000000000003,60 438.90000000000003,140 369.6,180 300.3,140 300.3,60" fill-opacity="0.50" stroke-width="1.5"/><text class="amap-num" x="369.6" y="100" text-anchor="middle" dominant-baseline="central">2</text><polygon class="amap-cell" points="300.3,140 369.6,180 369.6,260 300.3,300 231,260 231,180" fill-opacity="0.30" stroke-width="1.5"/><text class="amap-num" x="300.3" y="220" text-anchor="middle" dominant-baseline="central">3</text></svg>
+              <figcaption data-testid="amap-example-caption"><strong>Ejemplo.</strong> Así se verá el mapa cuando se llenen los barrios: un hexágono numerado para cada uno, de unos pocos kilómetros cuadrados, nunca una dirección.</figcaption>
+            </figure>
+          </div>
+          <div class="view-list" data-testid="area-list">
+          <article class="event-card when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g13" data-phase="event">
+            <a class="event-card-link" href="/es/events/evt_g13/golden-13" data-testid="public-event-card-link" aria-label="Abrir la página pública de Morning Market"></a>
+            <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
+            <div class="event-info" data-testid="public-event-info">
+              <h3 data-testid="area-card-name">Morning Market</h3>
+              <p class="meta" data-testid="area-card-meta"><span data-testid="public-event-date">martes, 20 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
+              
+            </div>
+            <a class="cta" href="/events/evt_g13/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Morning Market">Inscribirse</a>
+          </article>
+          <article class="event-card when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g09" data-phase="pre_event">
+            <a class="event-card-link" href="/es/events/evt_g09/golden-9" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 9"></a>
+            <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
+            <div class="event-info" data-testid="public-event-info">
+              <h3 data-testid="area-card-name">Golden Event 9</h3>
+              <p class="meta" data-testid="area-card-meta"><span data-testid="public-event-date">miércoles, 21 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
+              
+            </div>
+            <a class="cta" href="/events/evt_g09/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 9">Inscribirse</a>
+          </article>
+          <article class="event-card when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g10" data-phase="pre_event">
+            <a class="event-card-link" href="/es/events/evt_g10/golden-10" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 10"></a>
+            <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
+            <div class="event-info" data-testid="public-event-info">
+              <h3 data-testid="area-card-name">Golden Event 10</h3>
+              <p class="meta" data-testid="area-card-meta"><span data-testid="public-event-date">jueves, 22 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
+              
+            </div>
+            <a class="cta" href="/events/evt_g10/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 10">Inscribirse</a>
+          </article>
+          <article class="event-card when-weekend when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g01" data-phase="pre_event">
+            <a class="event-card-link" href="/es/events/evt_g01/golden-1" data-testid="public-event-card-link" aria-label="Abrir la página pública de Trivia Night"></a>
+            <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
+            <div class="event-info" data-testid="public-event-info">
+              <h3 data-testid="area-card-name">Trivia Night</h3>
+              <p class="meta" data-testid="area-card-meta"><span data-testid="public-event-date">viernes, 23 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
+              
+            </div>
+            <a class="cta" href="/events/evt_g01/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Trivia Night">Inscribirse</a>
+          </article>
+          <article class="event-card when-weekend when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g02" data-phase="pre_event">
+            <a class="event-card-link" href="/es/events/evt_g02/golden-2" data-testid="public-event-card-link" aria-label="Abrir la página pública de Bocce League"></a>
+            <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
+            <div class="event-info" data-testid="public-event-info">
+              <h3 data-testid="area-card-name">Bocce League</h3>
+              <p class="meta" data-testid="area-card-meta"><span data-testid="public-event-date">sábado, 24 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
+              <p class="meta" data-testid="public-event-sponsor">Con el apoyo de Beggars Pizza</p>
+            </div>
+            <a class="cta" href="/events/evt_g02/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Bocce League">Inscribirse</a>
+          </article>
+          <article class="event-card when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g05" data-phase="pre_event">
+            <a class="event-card-link" href="/es/events/evt_g05/golden-5" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 5"></a>
+            <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
+            <div class="event-info" data-testid="public-event-info">
+              <h3 data-testid="area-card-name">Golden Event 5</h3>
+              <p class="meta" data-testid="area-card-meta"><span data-testid="public-event-date">jueves, 12 de noviembre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
+              
+            </div>
+            <a class="cta" href="/events/evt_g05/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 5">Inscribirse</a>
+          </article>
+          <article class="event-card when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g07" data-phase="pre_event">
+            <a class="event-card-link" href="/es/events/evt_g07/golden-7" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 7"></a>
+            <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
+            <div class="event-info" data-testid="public-event-info">
+              <h3 data-testid="area-card-name">Golden Event 7</h3>
+              <p class="meta" data-testid="area-card-meta"><span data-testid="public-event-date">jueves, 3 de diciembre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
+              
+            </div>
+            <a class="cta" href="/events/evt_g07/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 7">Inscribirse</a>
+          </article>
+          </div>
+        </div>
+      </section>
+      
+      <section class="doors" data-testid="landing-doors" aria-label="Para quienes organizan">
+        <a class="door" href="/admin?start=event" data-testid="door-create-event"
+          ><span class="btn btn-secondary" data-testid="door-event-cta"
+            >Inicia sesión para crear un evento</span
+          ></a
+        >
+        <a class="door" href="/admin?start=sponsor" data-testid="door-create-sponsor"
+          ><span class="btn btn-secondary" data-testid="door-sponsor-cta"
+            >Inicia sesión para agregar un patrocinador</span
+          ></a
+        >
+        <details class="doors-why">
+          <summary>¿Por qué iniciar sesión?</summary>
+          <p data-testid="doors-signin-note">
+            Las herramientas para organizar son privadas y solo por invitación. Cloudflare Access
+            te envía por correo un código de un solo uso, así que OurSharedEvents nunca ve ni guarda una
+            contraseña. Quienes asisten nunca inician sesión, y nada aquí los nombra.
+          </p>
+        </details>
+      </section>
+      
+
+      <nav class="ose-lang" data-testid="language-switch" aria-label="Idioma">
+      <a lang="es" hreflang="en" data-testid="language-switch-en" href="/?zip=60406">Inglés</a>
+    </nav>
+      <details class="ose-never-who" data-testid="landing-privacy" data-never-who="landing">
+    <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Nunca quién, solo cuántos.</span> <span class="ose-never-who-trigger">Cómo funciona</span></summary>
+    <div class="ose-never-who-body" data-testid="never-who-body">
+        <p>
+          La asistencia se mide <strong>sin saber quién eres</strong>, siempre de entrada.
+          Contamos que la gente vino — dónde y cuándo — nunca quién es. Esta página no usa cookies
+          ni herramientas de análisis. Si eliges &ldquo;Usar mi ubicación&rdquo;, solo usa la zona
+          de tu código postal, nunca tu ubicación exacta.
+        </p>
+        <p>
+          Dar tu nombre es una opción, no la norma &mdash; nada te nombra a menos que tú lo
+          elijas. <a href="/es/events" data-testid="privacy-more">Mira lo que está pasando &rarr;</a>
+        </p>
+    </div>
+  </details>
+    </main>
+    <footer class="ocr-footer" data-testid="landing-footer"><p class="ocr-footer-legal" data-testid="landing-footer-copyright">© 2026 OurSharedEvents<span class="ocr-footer-sep" aria-hidden="true"> · </span><a href="/es/events" data-testid="landing-footer-browse">Ver eventos</a><span class="ocr-footer-sep" aria-hidden="true"> · </span><a href="/privacy" data-testid="landing-footer-privacy">Privacidad</a></p></footer>
+    <script nonce="N">
+      // "Use my location" (owner 2026-10-10). Phones only, never on its own
+      // unless the person already allowed it. The phone turns its position into
+      // a 5-character geohash box (about 5 km) here, and only that box is sent,
+      // in a form body, to POST /near, which answers with the nearest zip.
+      // Nothing is stored. Gate: tests/landing-where.spec.ts.
+      (function () {
+        var box = document.querySelector('[data-testid="near-me"]');
+        var form = document.getElementById('near-form');
+        var geo = navigator.geolocation;
+        if (!box || !form || !geo || !window.matchMedia('(pointer: coarse)').matches) return;
+        var btn = box.querySelector('button');
+        var note = box.querySelector('p');
+        var B = '0123456789bcdefghjkmnpqrstuvwxyz';
+        function roughBox(lat, lon) {
+          var la = [-90, 90], lo = [-180, 180], h = '', ch = 0, bit = 0, even = true;
+          while (h.length < 5) {
+            var r = even ? lo : la, v = even ? lon : lat, mid = (r[0] + r[1]) / 2;
+            if (v >= mid) { ch = ch * 2 + 1; r[0] = mid; } else { ch = ch * 2; r[1] = mid; }
+            even = !even;
+            if (++bit === 5) { h += B.charAt(ch); ch = 0; bit = 0; }
+          }
+          return h;
+        }
+        function off() {
+          btn.hidden = true;
+          note.textContent = 'La ubicación está desactivada. Escribe tu ciudad o código postal abajo.';
+        }
+        function find() {
+          btn.disabled = true;
+          note.textContent = 'Buscando tu código postal…';
+          geo.getCurrentPosition(
+            function (p) {
+              form.elements.g.value = roughBox(p.coords.latitude, p.coords.longitude);
+              form.submit();
+            },
+            function () {
+              btn.disabled = false;
+              off();
+            },
+            { enableHighAccuracy: false, maximumAge: 600000, timeout: 15000 }
+          );
+        }
+        btn.addEventListener('click', find);
+        var fresh = location.search === '';
+        function show(state) {
+          if (state === 'denied') return;
+          box.hidden = false;
+          if (state === 'granted' && fresh) find();
+        }
+        if (navigator.permissions && navigator.permissions.query) {
+          navigator.permissions.query({ name: 'geolocation' }).then(
+            function (s) { show(s.state); },
+            function () { show('prompt'); }
+          );
+        } else {
+          show('prompt');
+        }
+      })();
+    </script>
+  </body>
+</html>

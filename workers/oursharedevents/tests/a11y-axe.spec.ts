@@ -273,3 +273,36 @@ describe('A11Y-7 / OSE-1761: event page in Spanish with the language switch', ()
     expect(LANGUAGE_SWITCH_CSS).toMatch(/\.ose-lang a \{[^}]*font-size: 1rem/);
   });
 });
+
+// OSE-1762: /es/events and /es/, rendered the way the router serves them, in the
+// states that change what is on the page (a filter, a search with no answer, a
+// zip, a zip we do not know). axe checks the page language is a valid code and
+// that nothing new is a critical or serious violation; one <h1> each.
+describe('A11Y-7 / OSE-1762: the event list and the landing in Spanish', () => {
+  const list = (query: string) =>
+    handlePublicPage({} as never, null, new Request(`https://t.test/es/events${query}`), 'es');
+  const landing = (query: string) =>
+    handleLandingPage({} as never, null, new Request(`https://t.test/es/${query}`), 'es');
+
+  for (const query of ['', '?when=weekend', '?q=zzzz', '?q=Blue+Island']) {
+    test(`/es/events${query}`, async () => {
+      await scanPage(`Spanish event list ${query}`, await (await list(query)).text());
+      expect(document.documentElement.getAttribute('lang')).toBe('es');
+    });
+  }
+
+  // The town box too (#1118): a name that is many places lists its choices.
+  for (const query of [
+    '',
+    '?zip=60406',
+    '?zip=00000',
+    '?nozip=1',
+    '?where=Springfield',
+    '?where=Nowhereville',
+  ]) {
+    test(`/es/${query}`, async () => {
+      await scanPage(`Spanish landing ${query}`, await (await landing(query)).text());
+      expect(document.documentElement.getAttribute('lang')).toBe('es');
+    });
+  }
+});

@@ -162,6 +162,11 @@ export const NODE_SPECS = [
   // A Spanish event page, every phase and every optional part, shows no English
   // of ours (catalog values or common English words). Pure over the renderers.
   'tests/event-page-spanish.spec.ts',
+  // OSE-1762 — /events and the landing: golden renders in English and Spanish,
+  // and the Spanish render shows no English of ours. Pure over the handlers,
+  // with the data provider replaced.
+  'tests/list-landing-language-golden.spec.ts',
+  'tests/list-landing-spanish.spec.ts',
   // OSE-1760 — the Accept-Language resolver and the string catalog. Pure, no runtime.
   'tests/i18n-resolve-language.spec.ts',
   'tests/i18n-catalog.spec.ts',

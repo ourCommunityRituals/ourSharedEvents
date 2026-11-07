@@ -43,7 +43,10 @@ export function withLangPrefix(lang: Lang, path: string): string {
 
 /** The pages that render in the visitor's language, and what each is called. */
 export type LanguagePage =
-  { kind: 'event'; id: string; name?: string } | { kind: 'share'; code: string };
+  | { kind: 'event'; id: string; name?: string }
+  | { kind: 'share'; code: string }
+  | { kind: 'landing' }
+  | { kind: 'events' };
 
 const EVENT_PAGE = /^\/events\/([A-Za-z0-9_-]{1,128})$/;
 const EVENT_PAGE_NAMED = /^\/events\/([A-Za-z0-9_-]{1,128})\/([a-z0-9-]{1,100})$/;
@@ -55,6 +58,9 @@ const SHARE_LINK = /^\/e\/([^/]{1,40})$/;
  * (`tv`, `poster`, `register`, ...) is that screen, not an event page.
  */
 export function matchLanguagePage(rest: string): LanguagePage | null {
+  // OSE-1762: the landing (`/es/`, `/es`) and the event list (`/es/events`).
+  if (rest === '/') return { kind: 'landing' };
+  if (rest === '/events') return { kind: 'events' };
   const plain = rest.match(EVENT_PAGE);
   if (plain) return { kind: 'event', id: plain[1] };
   const named = rest.match(EVENT_PAGE_NAMED);

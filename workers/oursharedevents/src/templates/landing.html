@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" data-surface="ose-landing">
+<html lang="{{lang}}" data-surface="ose-landing">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OurSharedEvents — what's happening near you</title>
+    <title>{{t:landing.title}}</title>
     <meta
       name="description"
-      content="Find events in your town or near your zip code. Attendance is counted without gathering who you are."
+      content="{{t:landing.description}}"
     />
     <link rel="stylesheet" href="/ui.css" />
     <!--
@@ -166,25 +166,25 @@
     </style>
   </head>
   <body>
-    <a href="#main-content" class="skip-link" data-testid="landing-skip-link">Skip to content</a>
+    <a href="#main-content" class="skip-link" data-testid="landing-skip-link">{{t:page.skipContent}}</a>
     <header data-testid="landing-header">
-      <a href="/" class="logo" data-testid="landing-logo" aria-label="OurSharedEvents home"
+      <a href="/{{langdir}}" class="logo" data-testid="landing-logo" aria-label="{{t:landing.homeLabel}}"
         >OurSharedEvents</a
       >
-      <nav data-testid="landing-nav" aria-label="Primary">
-        <a href="/events" data-testid="nav-events">Events</a>
+      <nav data-testid="landing-nav" aria-label="{{t:landing.navLabel}}">
+        <a href="/{{langdir}}events" data-testid="nav-events">{{t:landing.events}}</a>
       </nav>
     </header>
 
     <main id="main-content" data-testid="landing-main">
-      <h1 class="lead" data-testid="landing-h1">What&#x2019;s happening near you?</h1>
-      <section class="where" aria-label="Where are you?" data-testid="landing-where">
+      <h1 class="lead" data-testid="landing-h1">{{t:landing.lead}}</h1>
+      <section class="where" aria-label="{{t:landing.whereLabel}}" data-testid="landing-where">
         <div class="near-me" data-testid="near-me" hidden>
           <button class="btn btn-primary" type="button" data-testid="near-me-button">
-            Use my location
+            {{t:landing.nearMe}}
           </button>
           <p class="near-note" data-testid="near-me-note" aria-live="polite">
-            We use only your zip area, never your exact spot.
+            {{t:landing.nearNote}}
           </p>
         </div>
         <!--OCR_WHERE-->
@@ -195,29 +195,27 @@
       <!-- Doors lead the area below LIST_MAX events, follow it at or above
            (lib/landing-area.ts orderLandingSections). -->
       <!--OCR_DOORS_START-->
-      <section class="doors" data-testid="landing-doors" aria-label="For organizers">
+      <section class="doors" data-testid="landing-doors" aria-label="{{t:landing.doorsLabel}}">
         <a class="door" href="/admin?start=event" data-testid="door-create-event"
           ><span class="btn btn-secondary" data-testid="door-event-cta"
-            >Sign in to create an event</span
+            >{{t:landing.doorEvent}}</span
           ></a
         >
         <a class="door" href="/admin?start=sponsor" data-testid="door-create-sponsor"
           ><span class="btn btn-secondary" data-testid="door-sponsor-cta"
-            >Sign in to add a sponsor</span
+            >{{t:landing.doorSponsor}}</span
           ></a
         >
         <details class="doors-why">
-          <summary>Why sign in?</summary>
+          <summary>{{t:landing.whySignIn}}</summary>
           <p data-testid="doors-signin-note">
-            Organizer tools are private and by invitation. Cloudflare Access emails you a one-time
-            code, so OurSharedEvents never sees or stores a password. Attendees never sign in, and
-            nothing here names them.
+            {{t:landing.signInNote}}
           </p>
         </details>
       </section>
       <!--OCR_DOORS_END-->
 
-      <section class="area-section" aria-label="Events" data-testid="landing-area">
+      <section class="area-section" aria-label="{{t:landing.events}}" data-testid="landing-area">
         <h2 class="area-heading" data-testid="area-heading"><!--OCR_AREA_HEADING--></h2>
         <!--OCR_LANDING_AREA-->
       </section>
@@ -252,11 +250,11 @@
         }
         function off() {
           btn.hidden = true;
-          note.textContent = 'Location is off. Type your town or zip below.';
+          note.textContent = '{{js:landing.locationOff}}';
         }
         function find() {
           btn.disabled = true;
-          note.textContent = 'Finding your zip…';
+          note.textContent = '{{js:landing.finding}}';
           geo.getCurrentPosition(
             function (p) {
               form.elements.g.value = roughBox(p.coords.latitude, p.coords.longitude);

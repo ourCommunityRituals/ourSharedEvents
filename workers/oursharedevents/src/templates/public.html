@@ -1,9 +1,9 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="{{lang}}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Upcoming events | OurSharedEvents</title>
+    <title>{{t:list.title}}</title>
     <link rel="stylesheet" href="/ui.css" />
     <style>
       header { background: var(--surface); border-bottom: 1px solid var(--border); color: var(--text); padding: 1.25rem 2rem; display: flex; align-items: center; gap: 1rem; }
@@ -98,17 +98,17 @@
     </style>
   </head>
   <body>
-    <a href="#main-content" class="skip-link" data-testid="public-skip-link">Skip to content</a>
+    <a href="#main-content" class="skip-link" data-testid="public-skip-link">{{t:page.skipContent}}</a>
     <header data-testid="public-header" role="banner" aria-label="OurSharedEvents">
-      <h1 data-testid="public-title"><a href="/" data-testid="public-home-link" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;min-height:44px">OurSharedEvents</a></h1>
+      <h1 data-testid="public-title"><a href="/{{langdir}}" data-testid="public-home-link" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;min-height:44px">OurSharedEvents</a></h1>
     </header>
-    <main id="main-content" data-testid="public-main" aria-label="Upcoming community events">
-      <section data-testid="public-sponsor-section" aria-label="Event sponsors">
+    <main id="main-content" data-testid="public-main" aria-label="{{t:list.mainLabel}}">
+      <section data-testid="public-sponsor-section" aria-label="{{t:sponsors.label}}">
         <div
           id="sponsor-banner"
           data-testid="public-sponsor-banner"
           role="region"
-          aria-label="Sponsors"
+          aria-label="{{t:list.sponsorsRegion}}"
         ></div>
       </section>
       <section data-testid="public-events-section" aria-labelledby="events-heading">

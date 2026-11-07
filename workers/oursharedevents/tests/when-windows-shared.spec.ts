@@ -127,7 +127,7 @@ describe('OSE-1362 | landing and /events share one `when` definition', () => {
       ...fieldset.matchAll(/<label class="disc-chip" for="win-([a-z0-9-]+)">([^<]*)<\/label>/g),
     ];
     expect(pills.map((m) => m[1])).toEqual([...LANDING_WINDOWS]);
-    expect(pills.map((m) => m[2])).toEqual(LANDING_WINDOWS.map(discoveryChipLabel));
+    expect(pills.map((m) => m[2])).toEqual(LANDING_WINDOWS.map((w) => discoveryChipLabel(w)));
     expect(html).toContain(`id="win-${DEFAULT_WINDOW}" class="toggle-radio" checked`);
   });
 

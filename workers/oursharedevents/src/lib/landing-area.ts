@@ -66,6 +66,8 @@ import {
 import { renderEventCard } from './event-list.js';
 import { renderAttendeeMap } from './attendee-map.js';
 import { toPublicEvent } from './public-event-projection.js';
+import { msg } from './i18n/catalog.js';
+import { DEFAULT_LANG, type Lang } from './i18n/languages.js';
 
 export interface LandingAreaItem {
   id?: unknown;
@@ -163,9 +165,11 @@ function titleCase(raw: string): string {
     .join(' ');
 }
 
-function typeOf(item: LandingAreaItem): { slug: string; label: string } {
+// The label of a named type is the type id made readable (`bar_night` is "Bar
+// Night"), as typed; type names per language are OSE-1764. "Other" is ours.
+function typeOf(item: LandingAreaItem, lang: Lang): { slug: string; label: string } {
   const raw = str(item.template_id) || str(item.event_type_id);
-  if (!raw) return { slug: 'type-other', label: 'Other' };
+  if (!raw) return { slug: 'type-other', label: msg(lang, 'area.otherType') };
   return { slug: `type-${slugify(raw)}`, label: titleCase(raw) };
 }
 
@@ -186,15 +190,23 @@ function windowClasses(e: LandingAreaItem, now: Date): string[] {
 
 // ── empty state ────────────────────────────────────────────────────────────────
 
-const EMPTY_HTML = `<div class="empty-state" data-testid="area-empty" role="status">
-          <p><strong>Nothing on the map yet.</strong></p>
-          <p>Be the first &mdash; start a gathering and it shows up here.</p>
-          <p><a class="door" href="/admin" data-testid="area-empty-create">Create an event &rarr;</a></p>
+function emptyHtml(lang: Lang): string {
+  return `<div class="empty-state" data-testid="area-empty" role="status">
+          <p><strong>${msg(lang, 'area.emptyHeading')}</strong></p>
+          <p>${msg(lang, 'area.emptyNote')}</p>
+          <p><a class="door" href="/admin" data-testid="area-empty-create">${msg(lang, 'area.create')}</a></p>
         </div>`;
+}
 
 /** The empty area, for callers that have no events (or a read error). */
-export function renderEmptyLandingArea(): RenderedLandingArea {
-  return { html: EMPTY_HTML, types: [], windowCount: 0, defaultView: 'list', leadsWithMap: false };
+export function renderEmptyLandingArea(lang: Lang = DEFAULT_LANG): RenderedLandingArea {
+  return {
+    html: emptyHtml(lang),
+    types: [],
+    windowCount: 0,
+    defaultView: 'list',
+    leadsWithMap: false,
+  };
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
@@ -216,9 +228,12 @@ export function renderLandingArea(
     areaLatched?: boolean;
     /** OSE-1522: event id → the consented sponsor's title, shown by the event title. */
     sponsorTitles?: ReadonlyMap<string, string>;
+    /** The page's language (OSE-1762). */
+    lang?: Lang;
   }
 ): RenderedLandingArea {
-  if (!Array.isArray(items) || items.length === 0) return renderEmptyLandingArea();
+  const lang = opts?.lang ?? DEFAULT_LANG;
+  if (!Array.isArray(items) || items.length === 0) return renderEmptyLandingArea(lang);
 
   const now = new Date(opts?.now ?? Date.now());
 
@@ -226,7 +241,7 @@ export function renderLandingArea(
   // the "what's coming together" surface. phase is authoritative.
   // Upcoming first, soonest first, undated last (OSE-1520), as on /events.
   const live = orderUpcomingFirst(items.filter((e) => str(e.phase) !== 'post_event')).upcoming;
-  if (live.length === 0) return renderEmptyLandingArea();
+  if (live.length === 0) return renderEmptyLandingArea(lang);
 
   const typeMap = new Map<string, string>(); // slug → label
   const modalities = new Set<string>();
@@ -243,7 +258,7 @@ export function renderLandingArea(
       if (windows.includes(`when-${DEFAULT_WINDOW}`)) windowCount += 1;
       for (const w of windows) filledWindows.add(w);
 
-      const { slug: typeSlug, label: typeLabel } = typeOf(e);
+      const { slug: typeSlug, label: typeLabel } = typeOf(e, lang);
       typeMap.set(typeSlug, typeLabel);
       const modality = modalityOf(e);
       modalities.add(modality);
@@ -254,7 +269,8 @@ export function renderLandingArea(
           variant: 'landing',
           extraClasses: [...windows, typeSlug, 'product-ose', `modality-${modality}`],
           sponsorTitle: opts?.sponsorTitles?.get(str(e.id)),
-          venueFallback: modality === 'online' ? 'Online' : '',
+          venueFallback: modality === 'online' ? msg(lang, 'area.online') : '',
+          lang,
         }
       );
     })
@@ -282,6 +298,7 @@ export function renderLandingArea(
       latched: opts?.latched,
       area: { count: windowCount, min: LIST_MAX, latched: areaLatched },
       sponsorTitles: opts?.sponsorTitles,
+      lang,
     }
   ).html;
 
@@ -292,6 +309,7 @@ export function renderLandingArea(
     mapHtml,
     mixedModality: modalities.size > 1,
     emptyWindows: LANDING_WINDOWS.filter((w) => !filledWindows.has(`when-${w}`)),
+    lang,
   });
   return { html, types, windowCount, defaultView, leadsWithMap };
 }
@@ -338,8 +356,9 @@ function buildAreaMarkup(args: {
   mixedModality: boolean;
   /** Windows with no listed event: each gets a message instead of a blank list. */
   emptyWindows: readonly LandingWindow[];
+  lang: Lang;
 }): string {
-  const { cards, types, defaultView, mapHtml, mixedModality, emptyWindows } = args;
+  const { cards, types, defaultView, mapHtml, mixedModality, emptyWindows, lang } = args;
   const listChecked = defaultView === 'list';
   // A refinement is offered only when it can change what is shown.
   const showTypes = types.length > 1;
@@ -403,17 +422,17 @@ function buildAreaMarkup(args: {
   // refinements, so they carry a visible label (the old bar had four groups,
   // two of them unlabelled, such as "All / OSE / Hybrid").
   const typePills = showTypes
-    ? `<fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">Type</legend>${pill('type-all', 'All types')}${types
+    ? `<fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">${msg(lang, 'area.type')}</legend>${pill('type-all', msg(lang, 'area.allTypes'))}${types
         .map((t) => pill(t.slug, escapeHtml(t.label)))
         .join('')}</fieldset>`
     : '';
   const modPills = mixedModality
-    ? `<fieldset class="disc-chips" data-testid="toggle-modality"><legend class="disc-label">Where</legend>${pill('mod-all', 'All')}${pill('mod-online', 'Online')}${pill('mod-inperson', 'In person')}</fieldset>`
+    ? `<fieldset class="disc-chips" data-testid="toggle-modality"><legend class="disc-label">${msg(lang, 'area.where')}</legend>${pill('mod-all', msg(lang, 'area.all'))}${pill('mod-online', msg(lang, 'area.online'))}${pill('mod-inperson', msg(lang, 'area.inPerson'))}</fieldset>`
     : '';
 
   const toggles = `<div class="toggles" data-testid="area-toggles">
-          <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">View</legend>${pill('view-list', 'List')}${pill('view-map', 'Map')}</fieldset>
-          <fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">When</legend>${LANDING_WINDOWS.map((w) => pill(`win-${w}`, discoveryChipLabel(w))).join('')}</fieldset>
+          <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">${msg(lang, 'area.view')}</legend>${pill('view-list', msg(lang, 'area.list'))}${pill('view-map', msg(lang, 'area.map'))}</fieldset>
+          <fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">${msg(lang, 'disc.when')}</legend>${LANDING_WINDOWS.map((w) => pill(`win-${w}`, discoveryChipLabel(w, lang))).join('')}</fieldset>
           ${typePills}
           ${modPills}
         </div>`;
@@ -425,7 +444,7 @@ function buildAreaMarkup(args: {
   const emptyMessages = emptyWindows
     .map(
       (w) =>
-        `<p class="empty-state area-window-empty win-empty-${w}" data-testid="area-window-empty-${w}" role="status">${discoveryEmptyCopy({ when: w, q: '' })}</p>`
+        `<p class="empty-state area-window-empty win-empty-${w}" data-testid="area-window-empty-${w}" role="status">${discoveryEmptyCopy({ when: w, q: '' }, lang)}</p>`
     )
     .join('');
 

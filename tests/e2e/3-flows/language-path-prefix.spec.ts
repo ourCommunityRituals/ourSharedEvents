@@ -254,13 +254,14 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
     expect(where).not.toMatch(/\/es\//);
   });
 
-  test('a prefix reaches nothing but the event page and its share link', async ({ browser }) => {
+  test('a prefix reaches nothing but the language-layer pages', async ({ browser }) => {
     for (const path of [
       '/fr/events/x',
       '/ES/events/x',
       '/en/events/x',
-      '/es',
-      '/es/events',
+      // OSE-1762: /es/ and /es/events are pages; the landing's other names are not.
+      '/es/home',
+      '/es/near',
       '/es/admin',
       '/es/api/v2/events',
       `/es/q/${qrToken}`,
@@ -272,4 +273,122 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
       expect(res.status, path).toBe(404);
     }
   });
+
+  // ── OSE-1762: the event list and the landing in Spanish ─────────────────────
+
+  test('/es/events is the Spanish list: its words, its card, its head, a switch both ways', async ({
+    page,
+  }) => {
+    await page.route('**/cdn-cgi/challenge-platform/**', (route) => route.abort());
+    // The window and a search ride along on the switch. A new event waits out the
+    // publish grace before it is listed, so the cards read are the staging stock
+    // (refreshed daily), not this run's event.
+    const search = '?when=next-90';
+    const res = await page.goto(`${BASE_URL}/es/events${search}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    expect(res?.status(), 'the Spanish list is served by the Worker').toBe(200);
+    expect((await res?.allHeaders())?.['set-cookie'], 'no cookie').toBeUndefined();
+
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+    await expect(page.locator('[data-testid="public-events-heading"]')).toHaveText(
+      'En los próximos 90 días'
+    );
+    await expect(page.locator('[data-testid="disc-go"]')).toHaveText('Buscar');
+    await expect(page.locator('[data-testid="disc-when-all"]')).toHaveText('Todo');
+    await expect(page.locator('[data-testid="disc-summary"]')).toHaveText(
+      /^\d+ eventos? en los próximos 90 días$/
+    );
+    await expect(page.locator('[data-testid="never-who-summary"]')).toContainText(
+      'Nunca quién, solo cuántos.'
+    );
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/es\/events$/);
+    await expect(page.locator('link[rel="alternate"][hreflang="en"]')).toHaveAttribute(
+      'href',
+      /[^s]\/events$/
+    );
+
+    const toEnglish = page.locator('[data-testid="language-switch-en"]');
+    await expect(toEnglish).toHaveText('Inglés');
+    await toEnglish.click();
+    await expect(page).toHaveURL(`${BASE_URL}/events${search}`);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(page.locator('[data-testid="disc-go"]')).toHaveText('Search');
+    await page.locator('[data-testid="language-switch-es"]').click();
+    await expect(page).toHaveURL(`${BASE_URL}/es/events${search}`);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+
+    // What staging lists changes day to day, so the page is read as it is: a card
+    // reads its date in Spanish, offers a Spanish button and leads to the Spanish
+    // page; with no card, the empty state is Spanish. Either way it asserts.
+    const cards = page.locator('[data-testid="public-event-card"]');
+    if ((await cards.count()) === 0) {
+      await expect(page.locator('[data-testid="public-events-empty"]')).toContainText(
+        /^(Todavía no hay nada en los próximos 90 días\.|No hay eventos programados\.)/
+      );
+      return;
+    }
+    const card = cards.first();
+    await expect(card.locator('[data-testid="public-event-date"]')).toHaveText(
+      /^(lunes|martes|miércoles|jueves|viernes|sábado|domingo), \d{1,2} de [a-z]+ de \d{4}$/
+    );
+    await expect(card.locator('[data-testid="public-event-card-link"]')).toHaveAttribute(
+      'href',
+      /^\/es\/events\//
+    );
+    await expect(card.locator('[data-testid="public-event-cta"]')).toHaveText(
+      /^(Inscribirse|Ver cómo salió)$/
+    );
+  });
+
+  test('/es/ is the Spanish landing', async ({ page }) => {
+    await page.route('**/cdn-cgi/challenge-platform/**', (route) => route.abort());
+    const res = await page.goto(`${BASE_URL}/es/`, { waitUntil: 'domcontentloaded' });
+    expect(res?.status(), 'the Spanish landing is served by the Worker').toBe(200);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+    await expect(page.locator('[data-testid="landing-h1"]')).toHaveText('¿Qué pasa cerca de ti?');
+    await expect(page.locator('[data-testid="where-submit"]')).toHaveText('Buscar eventos');
+    await expect(page.locator('[data-testid="nav-events"]')).toHaveAttribute('href', '/es/events');
+    await expect(page.locator('[data-testid="language-switch-en"]')).toHaveText('Inglés');
+  });
+
+  // The longest Spanish strings these pages show (the doors, the chips, the
+  // search placeholder, the summary) on a 320 px phone: nothing scrolls sideways,
+  // inputs keep 16 px text and the controls keep a 44 px target.
+  for (const path of ['/es/events?when=weekend', '/es/']) {
+    test(`${path} holds at 320 px`, async ({ browser }) => {
+      const context = await browser.newContext({ viewport: { width: 320, height: 720 } });
+      try {
+        const page = await context.newPage();
+        await page.route('**/cdn-cgi/challenge-platform/**', (route) => route.abort());
+        const res = await page.goto(`${BASE_URL}${path}`, { waitUntil: 'load' });
+        expect(res?.status()).toBe(200);
+        await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+        // Open the disclosure too, so its paragraph is measured.
+        await page.locator('[data-testid="never-who-summary"]').click();
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+        );
+        expect(overflow, `${path} scrolls sideways at 320 px`).toBeLessThanOrEqual(0);
+
+        const small = await page.evaluate(() => {
+          const out: string[] = [];
+          for (const el of document.querySelectorAll<HTMLElement>(
+            'input:not([type="hidden"]):not([type="radio"]), button, .disc-chip, .ose-lang a, .btn'
+          )) {
+            const box = el.getBoundingClientRect();
+            if (box.width === 0 && box.height === 0) continue; // not shown
+            const name = el.getAttribute('data-testid') || el.textContent?.trim() || el.tagName;
+            if (box.height < 44) out.push(`${name}: ${Math.round(box.height)} px high`);
+            if (el.tagName === 'INPUT' && parseFloat(getComputedStyle(el).fontSize) < 16)
+              out.push(`${name}: text under 16 px`);
+          }
+          return out;
+        });
+        expect(small, `${path} controls under the floor`).toEqual([]);
+      } finally {
+        await context.close();
+      }
+    });
+  }
 });

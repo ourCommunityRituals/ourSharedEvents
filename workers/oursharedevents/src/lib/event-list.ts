@@ -26,7 +26,10 @@ import { eventFormPath, eventPagePath } from './canonical.js';
 import { injectMarker } from './inject-marker.js';
 import { formatDateOnly, zonedDatePart } from './event-datetime.js';
 // Type-only the other way (event-discovery imports EventListItem), so no cycle.
-import { orderUpcomingFirst } from './event-discovery.js';
+import { orderUpcomingFirst, upcomingCountText } from './event-discovery.js';
+import { fmt, msg } from './i18n/catalog.js';
+import { DEFAULT_LANG, type Lang } from './i18n/languages.js';
+import { withLangPrefix } from './i18n/path-prefix.js';
 import { EVENT_DEFAULT_THUMB_PATH, eventThumbSrc } from './event-thumb.js';
 
 export interface EventListItem {
@@ -51,15 +54,13 @@ export interface RenderedEventList {
   upcoming: number;
 }
 
-const EMPTY_HTML =
-  '<p class="loading" data-testid="public-events-empty" role="status">No events scheduled.</p>';
-
-const ERROR_HTML =
-  '<p class="error" data-testid="public-error">Could not load events. Please try again.</p>';
-
 /** The empty state, for callers that need it without a list (e.g. `ok: false`). */
-export function renderEmptyEventList(): RenderedEventList {
-  return { html: EMPTY_HTML, countText: '', upcoming: 0 };
+export function renderEmptyEventList(lang: Lang = DEFAULT_LANG): RenderedEventList {
+  return {
+    html: `<p class="loading" data-testid="public-events-empty" role="status">${msg(lang, 'list.none')}</p>`,
+    countText: '',
+    upcoming: 0,
+  };
 }
 
 /**
@@ -70,8 +71,12 @@ export function renderEmptyEventList(): RenderedEventList {
  * "Loading events…" paragraph, and the page only admitted failure after the
  * browser's own fetch also failed. The served HTML now says what happened.
  */
-export function renderEventListError(): RenderedEventList {
-  return { html: ERROR_HTML, countText: '', upcoming: 0 };
+export function renderEventListError(lang: Lang = DEFAULT_LANG): RenderedEventList {
+  return {
+    html: `<p class="error" data-testid="public-error">${msg(lang, 'list.error')}</p>`,
+    countText: '',
+    upcoming: 0,
+  };
 }
 
 /**
@@ -90,7 +95,7 @@ export function renderEventListError(): RenderedEventList {
  * back to UTC — the same answer the server would give anyway, and one that no
  * longer varies by who is looking.
  */
-function formatEventDate(iso: string, timezone: string | null): string {
+function formatEventDate(iso: string, timezone: string | null, lang: Lang): string {
   const opts: Intl.DateTimeFormatOptions = {
     weekday: 'long',
     year: 'numeric',
@@ -101,11 +106,11 @@ function formatEventDate(iso: string, timezone: string | null): string {
   // UTC midnight and rendered in the event's zone it rolled back a day for any
   // negative-offset zone (OSE-1363). Anchor + format in UTC via formatDateOnly so
   // the day always matches the value, whoever is looking.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return formatDateOnly(iso, opts);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return formatDateOnly(iso, opts, lang);
   // A full instant DOES have a zone: take its local calendar day in the event's
   // own zone (UTC fallback for a missing/invalid zone), then format that day. A
   // bad instant yields '' from zonedDatePart → '' from formatDateOnly.
-  return formatDateOnly(zonedDatePart(iso, timezone), opts);
+  return formatDateOnly(zonedDatePart(iso, timezone), opts, lang);
 }
 
 function str(v: unknown): string {
@@ -124,6 +129,8 @@ export interface EventCardOptions {
   extraClasses?: readonly string[];
   /** Shown in place of a venue when the event has none (the landing says "Online"). */
   venueFallback?: string;
+  /** The page's language (OSE-1762): the card's words, its date, its link. */
+  lang?: Lang;
 }
 
 /**
@@ -133,13 +140,14 @@ export interface EventCardOptions {
  */
 export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): string {
   const landing = opts.variant === 'landing';
+  const lang = opts.lang ?? DEFAULT_LANG;
   const safeId = escapeHtml(str(e.id));
   // OSE-871 (P-1): ONE canonical name per value. The API emits
   // name/startDateISO/venue; no `|| e.title` dual-reads here.
   const rawName = str(e.name);
-  const safeName = escapeHtml(rawName) || (landing ? 'Untitled event' : '');
+  const safeName = escapeHtml(rawName) || (landing ? msg(lang, 'card.untitled') : '');
   const isoRaw = str(e.startDateISO);
-  const dateStr = isoRaw ? escapeHtml(formatEventDate(isoRaw, str(e.timezone) || null)) : '';
+  const dateStr = isoRaw ? escapeHtml(formatEventDate(isoRaw, str(e.timezone) || null, lang)) : '';
   const venueStr = e.venue ? escapeHtml(str(e.venue)) : escapeHtml(opts.venueFallback ?? '');
   const datePart = dateStr ? `<span data-testid="public-event-date">${dateStr}</span>` : '';
   const venuePart = venueStr
@@ -148,16 +156,16 @@ export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): 
   const phase = escapeHtml(str(e.phase));
   const wrapped = e.phase === 'post_event';
   // The readable address (OSE-1684); the slug is [a-z0-9-] or left out.
-  const eventHref = eventPagePath(safeId, str(e.slug));
+  const eventHref = withLangPrefix(lang, eventPagePath(safeId, str(e.slug)));
   // A wrapped event links to its recap, never to a registration form.
   const cta = wrapped
-    ? `<a class="cta cta-secondary" href="${eventHref}" data-testid="public-event-cta" data-cta="recap" aria-label="See how ${safeName} went">See how it went</a>`
-    : `<a class="cta" href="${escapeHtml(eventFormPath(str(e.id), 'register'))}" data-testid="public-event-cta" data-cta="register" aria-label="Register for ${safeName}">Register</a>`;
+    ? `<a class="cta cta-secondary" href="${eventHref}" data-testid="public-event-cta" data-cta="recap" aria-label="${fmt(lang, 'card.recapLabel', { name: safeName })}">${msg(lang, 'card.recap')}</a>`
+    : `<a class="cta" href="${escapeHtml(eventFormPath(str(e.id), 'register'))}" data-testid="public-event-cta" data-cta="register" aria-label="${fmt(lang, 'card.registerLabel', { name: safeName })}">${msg(lang, 'cta.register')}</a>`;
   const wrappedTag = wrapped
-    ? ' <span class="tag-wrapped" data-testid="public-event-wrapped">Wrapped</span>'
+    ? ` <span class="tag-wrapped" data-testid="public-event-wrapped">${msg(lang, 'card.wrapped')}</span>`
     : '';
   const sponsorLine = opts.sponsorTitle
-    ? `<p class="meta" data-testid="public-event-sponsor">Supported by ${escapeHtml(opts.sponsorTitle)}</p>`
+    ? `<p class="meta" data-testid="public-event-sponsor">${fmt(lang, 'card.supportedBy', { sponsor: escapeHtml(opts.sponsorTitle) })}</p>`
     : '';
   const classes = ['event-card', ...(opts.extraClasses ?? [])].join(' ');
   // Owner 2026-10-11: every card shows a picture, the poster art or the
@@ -167,7 +175,7 @@ export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): 
   const thumb = `<span class="event-thumb-box"><img class="event-thumb" src="${escapeHtml(eventThumbSrc(e.cover_image_url))}" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="${landing ? 'area-card-thumb' : 'public-event-thumb'}"></span>`;
   return `
           <article class="${classes}" data-testid="${landing ? 'area-card' : 'public-event-card'}" data-event-id="${safeId}" data-phase="${phase}">
-            <a class="event-card-link" href="${eventHref}" data-testid="public-event-card-link" aria-label="Open ${safeName} public page"></a>
+            <a class="event-card-link" href="${eventHref}" data-testid="public-event-card-link" aria-label="${fmt(lang, 'card.open', { name: safeName })}"></a>
             ${thumb}
             <div class="event-info" data-testid="public-event-info">
               <h3 data-testid="${landing ? 'area-card-name' : 'public-event-name'}">${safeName}${wrappedTag}</h3>
@@ -184,6 +192,8 @@ export interface EventListOptions {
    * turns it off: the page heading already says so.
    */
   wrappedHeading?: boolean;
+  /** The page's language (OSE-1762). */
+  lang?: Lang;
 }
 
 /**
@@ -205,25 +215,24 @@ export function renderEventList(
   sponsorTitles?: ReadonlyMap<string, string>,
   opts: EventListOptions = {}
 ): RenderedEventList {
-  if (!Array.isArray(items) || items.length === 0) return renderEmptyEventList();
+  const lang = opts.lang ?? DEFAULT_LANG;
+  if (!Array.isArray(items) || items.length === 0) return renderEmptyEventList(lang);
 
   const ordered = orderUpcomingFirst(items);
   // OSE-1201: the list said "Upcoming" and offered Register on an event whose
   // own page said it was a wrap. `phase` is authoritative; the count reads it.
   const upcoming = ordered.upcoming.length;
-  const countText = `${upcoming} upcoming event${upcoming === 1 ? '' : 's'}`;
+  const countText = upcomingCountText(upcoming, lang);
 
   const card = (e: EventListItem) =>
-    renderEventCard(e, { sponsorTitle: sponsorTitles?.get(str(e.id)) });
+    renderEventCard(e, { sponsorTitle: sponsorTitles?.get(str(e.id)), lang });
   let html = ordered.upcoming.map(card).join('');
   if (ordered.wrapped.length > 0) {
     if (opts.wrappedHeading !== false) {
       if (upcoming === 0) {
-        html +=
-          '<p class="empty" data-testid="public-events-none-upcoming">Nothing coming up yet.</p>';
+        html += `<p class="empty" data-testid="public-events-none-upcoming">${msg(lang, 'list.noneUpcoming')}</p>`;
       }
-      html +=
-        '<h2 class="events-subheading" data-testid="public-events-wrapped-heading">Wrapped</h2>';
+      html += `<h2 class="events-subheading" data-testid="public-events-wrapped-heading">${msg(lang, 'list.wrappedHeading')}</h2>`;
     }
     html += ordered.wrapped.map(card).join('');
   }

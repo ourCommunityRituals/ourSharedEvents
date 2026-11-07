@@ -247,9 +247,15 @@ describe('OSE-1761 | everything else under a prefix is the ordinary 404', () => 
   test('pages that are not on the language layer yet do not exist under a prefix', async () => {
     const e = await publicEvent('Not yet translated');
     const paths = [
-      '/es',
-      '/es/',
-      '/es/events',
+      // OSE-1762: `/es/` and `/es/events` are pages now; the landing's other
+      // names and the location form are not.
+      '/es/home',
+      '/es/welcome',
+      '/es/landing',
+      '/es/about',
+      '/es/info',
+      '/es/near',
+      '/es/events/',
       '/es/display',
       '/es/poster',
       '/es/privacy',
@@ -305,6 +311,79 @@ describe('OSE-1761 | everything else under a prefix is the ordinary 404', () => 
       });
       expect(res.status, method).toBeGreaterThanOrEqual(400);
       await res.text();
+    }
+  });
+});
+
+describe('OSE-1762 | /es/ and /es/events through the router', () => {
+  test('/es/events is the Spanish list: lang, canonical, Spanish card links, no Vary', async () => {
+    const e = await publicEvent('Lista en español');
+    const res = await get('/es/events', { 'Accept-Language': 'en-US' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Vary')).toBeNull();
+    const html = await res.text();
+    expect(html).toContain('<html lang="es">');
+    expect(html).toContain(`<link rel="canonical" href="${ORIGIN}/es/events" />`);
+    expect(html).toContain('<meta property="og:locale" content="es_US" />');
+    expect(html).toContain('Próximos eventos');
+    expect(html).toContain(`href="/es${readablePath(e)}"`);
+  });
+
+  test('/es/ and /es are the Spanish landing, which may ask for location', async () => {
+    for (const path of ['/es/', '/es']) {
+      const res = await get(path);
+      expect(res.status, path).toBe(200);
+      expect(res.headers.get('Permissions-Policy') ?? '', path).toContain('geolocation=(self)');
+      const html = await res.text();
+      expect(html, path).toContain('<html lang="es" data-surface="ose-landing">');
+      expect(html, path).toContain('¿Qué pasa cerca de ti?');
+      expect(html, path).toContain(`<link rel="canonical" href="${ORIGIN}/es/" />`);
+    }
+  });
+
+  test('a filter and a zip keep the Spanish address', async () => {
+    const list = await (await get('/es/events?when=weekend&q=zz')).text();
+    expect(list).toContain('href="/es/events?when=month&amp;q=zz"');
+    expect(list).toContain('action="/es/events"');
+    const home = await (await get('/es/?zip=60406')).text();
+    expect(home).toContain('action="/es/"');
+    expect(home).toContain('href="/es/?change=1"');
+  });
+
+  test('a bare address negotiates by header and says it varies by it', async () => {
+    for (const path of ['/events', '/']) {
+      const es = await get(path, { 'Accept-Language': 'es-MX,es;q=0.9' });
+      expect(es.headers.get('Vary'), path).toBe('Accept-Language');
+      expect(await es.text(), path).toMatch(/<html lang="es"/);
+      const en = await get(path);
+      expect(await en.text(), path).toMatch(/<html lang="en"/);
+    }
+  });
+
+  test('a HEAD request is answered', async () => {
+    for (const path of ['/es/events', '/es/']) {
+      const res = await SELF.fetch(`${ORIGIN}${path}`, { method: 'HEAD' });
+      expect(res.status, path).toBe(200);
+    }
+  });
+
+  test('the location form from the Spanish landing comes back to it', async () => {
+    const post = (body: string) =>
+      SELF.fetch(`${ORIGIN}/near`, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      });
+    const es = await post('g=dp3su&lang=es');
+    expect(es.status).toBe(303);
+    expect(es.headers.get('Location')).toBe('/es/?zip=60469');
+    expect(es.headers.get('Set-Cookie')).toBeNull();
+    expect((await post('g=u09tv&lang=es')).headers.get('Location')).toBe('/es/?nozip=1');
+    // Only a listed language: anything else is the English landing.
+    for (const lang of ['en', 'xx', 'ES', 'es-MX', '']) {
+      const res = await post(`g=dp3su&lang=${lang}`);
+      expect(res.headers.get('Location'), lang).toBe('/?zip=60469');
     }
   });
 });
