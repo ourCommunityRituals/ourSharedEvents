@@ -1,0 +1,33 @@
+info:
+  name: GET /?where=Springfield (landing) - offers every Springfield
+  type: http
+  seq: 21
+
+http:
+  method: GET
+  url: "{{baseUrl}}/?where=Springfield"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Owner 2026-11-06: the landing searches by town name first, then zip. One name
+        // can be many places: every match is offered, labelled by town and state, with
+        // no error and no silent pick. The choices come from the town table
+        // (lib/place-names-data.ts), so no fixture is needed.
+        const body = String(res.getBody());
+        const choices = body.match(/data-testid="where-choice"/g) || [];
+        test('Returns 200', function () { expect(res.getStatus()).to.equal(200); });
+        test('Offers a choice of places', function () { expect(body).to.include('data-testid="where-choices"'); });
+        test('Offers every Springfield (20 or more)', function () { expect(choices.length).to.be.at.least(20); });
+        test('Labels each by town and state', function () { expect(body).to.include('href="/?where=Springfield%2C%20IL"'); expect(body).to.include('>Springfield, MA</a>'); });
+        test('Is not an error', function () { expect(body).to.not.include('data-testid="where-msg"'); });
+        test('Heads the area with the name', function () { expect(body).to.include('In every place called Springfield'); });
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
