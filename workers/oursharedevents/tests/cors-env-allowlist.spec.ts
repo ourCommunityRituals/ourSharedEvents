@@ -60,18 +60,6 @@ describe('OSE-1417 | CORS allowlist is per environment', () => {
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe(STG);
   });
 
-  test('staging preflight allows the stg-full and stg-empty origins; production does not', async () => {
-    for (const origin of [
-      'https://stg-full.oursharedevents.com',
-      'https://stg-empty.oursharedevents.com',
-    ]) {
-      const staging = await preflight('staging', origin);
-      expect(staging.headers.get('Access-Control-Allow-Origin')).toBe(origin);
-      const prod = await preflight('production', origin);
-      expect(prod.headers.get('Access-Control-Allow-Origin')).toBeNull();
-    }
-  });
-
   test('production preflight still allows production origins', async () => {
     for (const origin of [PROD, 'https://www.oursharedevents.com']) {
       const res = await preflight('production', origin);

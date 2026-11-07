@@ -15,11 +15,7 @@
 const ALLOWED_ORIGINS = new Set(['https://oursharedevents.com', 'https://www.oursharedevents.com']);
 
 /** Origins trusted only when WORKER_ENV === 'staging'. */
-const STAGING_ONLY_ORIGINS = new Set([
-  'https://stg.oursharedevents.com',
-  'https://stg-empty.oursharedevents.com',
-  'https://stg-full.oursharedevents.com',
-]);
+const STAGING_ONLY_ORIGINS = new Set(['https://stg.oursharedevents.com']);
 
 interface CorsEnv {
   WORKER_ENV?: string;

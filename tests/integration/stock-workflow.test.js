@@ -1,42 +1,46 @@
-/* eslint-disable security/detect-non-literal-fs-filename, security/detect-non-literal-regexp -- reads the repo's own workflow, writes temp scripts, and builds patterns from its env names */
+/* eslint-disable security/detect-non-literal-regexp -- reads the repo's own workflow and builds patterns from its env names */
 /**
- * The stock workflow for the full staging site
- * (.github/workflows/stock-data-full.yml): its trigger (manual only), its job
- * chain, its Access gate and where its secrets may appear. Owner, 2026-11-05:
- * no nightly search; the site loads from the committed seed.
+ * The stock workflow (.github/workflows/stock-data-full.yml): its trigger
+ * (every morning, and by hand), its job chain and where its secrets may appear. Owner,
+ * 2026-11-05: no nightly search; the site loads from the committed seed.
+ * Owner, 2026-11-06: one staging site. The seed loads into stg. itself, so the
+ * workflow deploys nothing, has no Access gate, and uses the staging secrets the
+ * Bruno contract run already uses.
  */
-const { readFileSync, writeFileSync, mkdtempSync, existsSync, rmSync } = require('node:fs');
-const { spawnSync } = require('node:child_process');
+const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
-const { tmpdir } = require('node:os');
-const { pathToFileURL } = require('node:url');
 const yaml = require('js-yaml');
 
 const ROOT = join(__dirname, '..', '..');
 const WF_PATH = join(ROOT, '.github', 'workflows', 'stock-data-full.yml');
 const wf = yaml.load(readFileSync(WF_PATH, 'utf8'));
 const jobs = wf.jobs || {};
-const CHAIN = ['access-gate', 'deploy', 'seed', 'build', 'check-swap'];
+const CHAIN = ['seed', 'build', 'check-swap'];
 const needsOf = (job) => {
   const n = jobs[job] && jobs[job].needs;
   return n === undefined ? [] : Array.isArray(n) ? n : [n];
 };
 const stepsOf = (job) => (jobs[job] && jobs[job].steps) || [];
-// The workflow's own bash steps run under a real bash with stubbed commands.
-const GIT_BASH = 'C:\\Program Files\\Git\\bin\\bash.exe';
-const BASH = process.platform === 'win32' ? (existsSync(GIT_BASH) ? GIT_BASH : null) : 'bash';
-
-// The gate scripts below run under bash. Missing bash is a red test, never a skip:
-// a gate that silently skips counts as absent.
-test('bash is available to run the workflow gate scripts', () => {
-  expect(BASH, `bash not found (looked for ${GIT_BASH} on Windows)`).not.toBeNull();
-});
 
 describe('triggers and posture', () => {
-  test('runs on manual dispatch only: no schedule, no other trigger', () => {
+  // Owner 2026-11-06: a daily loop keeps stg at the permanent testing totals.
+  test('runs every morning at 09:23 UTC and on dispatch, and on nothing else', () => {
     const on = wf.on ?? wf[true];
-    expect(Object.keys(on)).toEqual(['workflow_dispatch']);
-    expect(readFileSync(WF_PATH, 'utf8')).not.toMatch(/^\s*(schedule|cron)\s*:/m);
+    expect(Object.keys(on).sort()).toEqual(['schedule', 'workflow_dispatch']);
+    expect(on.schedule).toEqual([{ cron: '23 9 * * *' }]);
+  });
+
+  test('the daily run starts well after the nightly staging run', () => {
+    const ci = yaml.load(
+      readFileSync(join(ROOT, '.github', 'workflows', 'oursharedevents-ci.yml'), 'utf8')
+    );
+    const minuteOfDay = (cron) => {
+      const [min, hour] = cron.split(' ').map(Number);
+      return hour * 60 + min;
+    };
+    const nightly = minuteOfDay((ci.on ?? ci[true]).schedule[0].cron);
+    const daily = minuteOfDay((wf.on ?? wf[true]).schedule[0].cron);
+    expect(daily - nightly).toBeGreaterThanOrEqual(120);
   });
 
   test('no search is left: no Claude action, no model key, no spend cap, no enable switch', () => {
@@ -78,9 +82,9 @@ describe('triggers and posture', () => {
 });
 
 describe('the job chain', () => {
-  test('access-gate → deploy → seed → build → check-swap', () => {
+  test('seed → build → check-swap', () => {
     expect(Object.keys(jobs)).toEqual(CHAIN);
-    expect(needsOf('access-gate')).toEqual([]);
+    expect(needsOf('seed')).toEqual([]);
     for (let i = 1; i < CHAIN.length; i++) expect(needsOf(CHAIN[i])).toEqual([CHAIN[i - 1]]);
   });
 
@@ -94,126 +98,43 @@ describe('the job chain', () => {
   });
 });
 
-// Each case starts a bash; Windows under a full-suite load is slow to spawn one.
-describe('access-gate', { timeout: 30_000 }, () => {
-  const gateSteps = stepsOf('access-gate');
-  const curlStep = gateSteps.find((s) => typeof s.run === 'string' && /\bcurl\b/.test(s.run));
-  const LOGIN =
-    '302 https://ourcommunityrituals.cloudflareaccess.com/cdn-cgi/access/login/stg-full?x=1';
-  const NO_LOGIN = 'Access did not answer with its login redirect.';
+describe('one staging site (owner 2026-11-06)', () => {
+  const text = readFileSync(WF_PATH, 'utf8');
+  const code = text
+    .split(/\r?\n/)
+    .filter((l) => !/^\s*#/.test(l))
+    .join('\n');
 
-  test('runs curl with no credentials of any kind, asking for a page, on a page and on the public API', () => {
-    expect(curlStep).toBeDefined();
-    expect(JSON.stringify(jobs['access-gate'])).not.toMatch(/secrets\.|vars\./);
-    expect(curlStep.env).toBeUndefined();
-    // the one header sent is Accept: text/html, so Access answers as it would a browser
-    expect(curlStep.run).toContain("-H 'Accept: text/html'");
-    const rest = curlStep.run.replace("-H 'Accept: text/html'", '');
-    expect(rest).not.toMatch(/\s(-H|--header|-u|--user|-b|--cookie|--oauth2-bearer)\b/);
-    expect(curlStep.run).toContain("-w '%{http_code} %{redirect_url}'");
-    expect(curlStep.run).toContain('"${STG_FULL_URL}${path}"');
-    expect(curlStep.run).toContain('for path in / /api/v2/events; do');
-    expect(wf.env.STG_FULL_URL).toBe('https://stg-full.oursharedevents.com');
+  test('deploys nothing and migrates nothing: stg runs main as T1 deployed it', () => {
+    expect(code).not.toMatch(/wrangler\s+deploy/);
+    expect(code).not.toMatch(/migrations\s+apply/);
+    expect(jobs.deploy).toBeUndefined();
   });
 
-  // The step's own script, with curl replaced by a function that answers per URL.
-  function runGate(rootOut, apiOut = rootOut, curlRc = 0) {
-    const dir = mkdtempSync(join(tmpdir(), 'stock-gate-'));
-    try {
-      const argsFile = join(dir, 'args').replace(/\\/g, '/');
-      const script = join(dir, 'gate.sh');
-      const stub = [
-        'curl() {',
-        `  printf '%s\\n' "$@" >> '${argsFile}'`,
-        '  case "${@: -1}" in',
-        `    */api/v2/events) printf '%s' "$FAKE_API" ;;`,
-        `    *) printf '%s' "$FAKE_ROOT" ;;`,
-        '  esac',
-        `  return ${curlRc}`,
-        '}',
-      ].join('\n');
-      writeFileSync(script, `${stub}\n${curlStep.run}`);
-      const r = spawnSync(BASH, [script], {
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          STG_FULL_URL: wf.env.STG_FULL_URL,
-          FAKE_ROOT: rootOut,
-          FAKE_API: apiOut,
-        },
-      });
-      const args = existsSync(argsFile) ? readFileSync(argsFile, 'utf8').split('\n') : [];
-      return { code: r.status, out: `${r.stdout}${r.stderr}`, args };
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-
-  test.each([
-    LOGIN,
-    '303 https://team.cloudflareaccess.com/',
-    '302 https://Team.CloudflareAccess.com/cdn-cgi/access/login',
-  ])(
-    'passes when Access answers both / and /api/v2/events with its login redirect: %s',
-    (answer) => {
-      const r = runGate(answer);
-      expect(r.code, r.out).toBe(0);
-      expect(r.args).toContain('https://stg-full.oursharedevents.com/');
-      expect(r.args).toContain('https://stg-full.oursharedevents.com/api/v2/events');
-      expect(r.args).toContain('Accept: text/html');
-      expect(r.out).toContain('/: Access redirected to its login host');
-      expect(r.out).toContain('/api/v2/events: Access redirected to its login host');
-    }
-  );
-
-  test.each([
-    '403 ',
-    '401 ',
-    '200 ',
-    '302 https://evil.example/login',
-    '302 https://cloudflareaccess.com/',
-    '302 https://.cloudflareaccess.com/',
-    '302 https://cloudflareaccess.com.evil.example/',
-    '302 https://x.cloudflareaccess.com@evil.example/',
-    '302 http://team.cloudflareaccess.com/',
-    '301 https://team.cloudflareaccess.com/',
-    '307 https://team.cloudflareaccess.com/',
-    '404 ',
-    '500 ',
-  ])('fails closed on anything but the login redirect: %s', (answer) => {
-    const r = runGate(answer);
-    expect(r.code).toBe(1);
-    expect(r.out).toContain(NO_LOGIN);
-    expect(r.out).toContain('Real-world data is not loaded onto an open host.');
+  test('has no Access gate and names no second site', () => {
+    expect(jobs['access-gate']).toBeUndefined();
+    expect(code).not.toMatch(/stg-full|staging-full|STG_FULL/);
   });
 
-  test('a plain 403 fails: a deny does not prove Access holds the host', () => {
-    const r = runGate('403 ', '403 ');
-    expect(r.code).toBe(1);
-    expect(r.out).toContain('/ answered HTTP 403');
-    expect(r.out).toContain(NO_LOGIN);
+  test('build and check-swap use the staging secrets the Bruno run uses', () => {
+    for (const job of ['build', 'check-swap']) {
+      const step = stepsOf(job).find((s) => /run-day\.mjs/.test(String(s.run || '')));
+      expect(step.env.ADMIN_KEY, job).toBe('${{ secrets.ADMIN_KEY }}');
+      expect(step.env.CF_ACCESS_CLIENT_ID, job).toBe('${{ secrets.CF_ACCESS_CLIENT_ID }}');
+      expect(step.env.CF_ACCESS_CLIENT_SECRET, job).toBe('${{ secrets.CF_ACCESS_CLIENT_SECRET }}');
+    }
   });
 
-  test.each(['403 ', '200 ', '404 ', '302 https://evil.example/'])(
-    'fails when the page redirects to Access but the public API answers: %s',
-    (api) => {
-      const r = runGate(LOGIN, api);
-      expect(r.code).toBe(1);
-      expect(r.out).toContain('/api/v2/events answered HTTP');
-      expect(r.out).toContain(NO_LOGIN);
+  test('every wrangler command in the workflow targets --env staging', () => {
+    for (const line of code.split('\n').filter((l) => /\bwrangler\b/.test(l))) {
+      expect(line).toMatch(/--env staging(\s|$)/);
     }
-  );
-
-  test('fails when the request itself fails', () => {
-    const r = runGate('', '', 7);
-    expect(r.code).toBe(1);
-    expect(r.out).toContain('Real-world data is not loaded onto an open host.');
   });
 });
 
 describe('secrets', () => {
-  test('no job but deploy, build and check-swap names the Cloudflare token or account', () => {
-    const CLOUDFLARE_JOBS = ['deploy', 'build', 'check-swap'];
+  test('no job but build and check-swap names the Cloudflare token or account', () => {
+    const CLOUDFLARE_JOBS = ['build', 'check-swap'];
     for (const job of Object.keys(jobs)) {
       const text = JSON.stringify(jobs[job]);
       const named = /secrets\.CLOUDFLARE_API_TOKEN|secrets\.CLOUDFLARE_ACCOUNT_ID/.test(text);
@@ -265,12 +186,7 @@ describe('secrets', () => {
   });
 });
 
-describe('deploy', () => {
-  const runs = () =>
-    stepsOf('deploy')
-      .map((s) => String(s.run || ''))
-      .join('\n');
-
+describe('checkout', () => {
   test('every job checks out the triggering ref: none pins another', () => {
     let checkouts = 0;
     for (const job of Object.keys(jobs)) {
@@ -281,126 +197,7 @@ describe('deploy', () => {
         expect((s.with || {}).repository, `${job} checkout`).toBeUndefined();
       }
     }
-    expect(checkouts).toBe(CHAIN.length - 1); // every job but access-gate checks out
-  });
-
-  test('deploys to staging-full after migrating both of its databases', () => {
-    const text = runs();
-    const dbAt = text.indexOf(
-      'npx wrangler d1 migrations apply ocr-db-staging-full --env staging-full --remote'
-    );
-    const formsAt = text.indexOf(
-      'npx wrangler d1 migrations apply ocr-forms-db-staging-full --env staging-full --remote'
-    );
-    const deployAt = text.indexOf('npx wrangler deploy --env staging-full');
-    expect(dbAt).toBeGreaterThanOrEqual(0);
-    expect(formsAt).toBeGreaterThan(dbAt);
-    expect(deployAt).toBeGreaterThan(formsAt);
-  });
-});
-
-describe('deploy: the staging-full ids are pasted', { timeout: 30_000 }, () => {
-  const steps = stepsOf('deploy');
-  const gateAt = steps.findIndex((s) => /OWNER_TO_FILL/.test(String(s.run || '')));
-  const gate = steps[gateAt];
-  const repoToml = readFileSync(join(ROOT, 'workers/oursharedevents/wrangler.toml'), 'utf8');
-
-  test('runs in the Worker folder before any migration or deploy', () => {
-    expect(gate).toBeDefined();
-    expect(gate['working-directory']).toBe('${{ env.WORKER_DIR }}');
-    const firstWrangler = steps.findIndex((s) => /npx wrangler/.test(String(s.run || '')));
-    expect(gateAt).toBeLessThan(firstWrangler);
-  });
-
-  // The step's own script, run in a folder holding the given wrangler.toml.
-  function runIdGate(toml) {
-    const dir = mkdtempSync(join(tmpdir(), 'stock-id-gate-'));
-    try {
-      writeFileSync(join(dir, 'wrangler.toml'), toml);
-      writeFileSync(join(dir, 'gate.sh'), gate.run);
-      const r = spawnSync(BASH, ['gate.sh'], { cwd: dir, encoding: 'utf8' });
-      return { code: r.status, out: `${r.stdout}${r.stderr}` };
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-
-  // A fixture shaped like the repo's block, so these cases hold before and after
-  // the owner pastes the real ids into the repo wrangler.toml.
-  const UNPROVISIONED = {
-    db: 'OWNER_TO_FILL_DB_STAGING_FULL',
-    forms: 'OWNER_TO_FILL_FORMS_DB_STAGING_FULL',
-    kv: 'OWNER_TO_FILL_KV_STAGING_FULL',
-  };
-  const PASTED = {
-    db: '0f0e0d0c-0000-4000-8000-000000000001',
-    forms: '0f0e0d0c-0000-4000-8000-000000000002',
-    kv: '0123456789abcdef'.repeat(2),
-  };
-  const fixture = ({ db, forms, kv }) =>
-    [
-      'name = "oursharedevents"',
-      '[env.staging]',
-      'name = "oursharedevents-staging"',
-      '# Until the ids are pasted, an OWNER_TO_FILL_* value marks each one.',
-      '[env.staging-full]',
-      'name = "oursharedevents-stg-full"',
-      '[[env.staging-full.d1_databases]]',
-      'binding = "DB"',
-      '# paste the id over OWNER_TO_FILL_DB_STAGING_FULL',
-      `database_id = "${db}"`,
-      '[[env.staging-full.d1_databases]]',
-      'binding = "FORMS_DB"',
-      `database_id = "${forms}"`,
-      '[[env.staging-full.kv_namespaces]]',
-      'binding = "RATE_LIMIT_KV"',
-      `id = "${kv}"`,
-      '[env.staging-full.vars]',
-      'STAGING_VARIANT = "full"',
-      '',
-    ].join('\n');
-
-  test('fails while the ids are placeholders', () => {
-    const r = runIdGate(fixture(UNPROVISIONED));
-    expect(r.code).toBe(1);
-    expect(r.out).toContain('paste each id over its OWNER_TO_FILL value');
-    expect(r.out).toContain('OWNER_TO_FILL_DB_STAGING_FULL');
-  });
-
-  test('passes once the ids are pasted, comments naming the placeholders aside', () => {
-    const pasted = fixture(PASTED);
-    expect(pasted).toContain('OWNER_TO_FILL'); // still named in comments
-    const r = runIdGate(pasted);
-    expect(r.code, r.out).toBe(0);
-  });
-
-  test.each(['db', 'forms', 'kv'])('fails on one placeholder left: %s', (left) => {
-    const r = runIdGate(fixture({ ...PASTED, [left]: UNPROVISIONED[left] }));
-    expect(r.code).toBe(1);
-    expect(r.out).toContain(UNPROVISIONED[left]);
-  });
-
-  test('reads only staging-full: a placeholder in another env is not its concern', () => {
-    const other = `${fixture(PASTED)}[env.other]\nname = "x"\n[[env.other.kv_namespaces]]\nid = "OWNER_TO_FILL_OTHER"\n`;
-    expect(runIdGate(other).code).toBe(0);
-  });
-
-  test('fails when there is no staging-full block at all', () => {
-    const r = runIdGate('name = "x"\n[env.staging]\nname = "y"\n');
-    expect(r.code).toBe(1);
-    expect(r.out).toContain('no [env.staging-full] block');
-  });
-
-  test('on the repo wrangler.toml, the verdict matches whether a placeholder remains', async () => {
-    const { parseToml } = await import(
-      pathToFileURL(join(ROOT, 'scripts/prod-preflight.mjs')).href
-    );
-    const ids = parseToml(repoToml)
-      .filter((s) => /^env\.staging-full\.(d1_databases|kv_namespaces)$/.test(s.header))
-      .map((s) => s.values.database_id ?? s.values.id);
-    expect(ids).toHaveLength(3);
-    const left = ids.some((id) => id.startsWith('OWNER_TO_FILL_'));
-    expect(runIdGate(repoToml).code).toBe(left ? 1 : 0);
+    expect(checkouts).toBe(CHAIN.length);
   });
 });
 

@@ -10,7 +10,7 @@ beforeAll(async () => {
     await import('../../../scripts/stock/build-full.mjs'));
 });
 
-const BASE = 'https://stg-full.oursharedevents.com';
+const BASE = 'https://stg.oursharedevents.com';
 const SECRET = 'sekret-value-123';
 
 const reply = (status, body, headers = {}) => ({
@@ -171,10 +171,10 @@ const callsTo = (site, method, re) =>
   site.calls.filter((c) => c.method === method && re.test(c.path));
 
 describe('createClient', () => {
-  test('refuses any base URL but the full staging site', () => {
+  test('refuses any base URL but the staging site', () => {
     expect(() =>
       createClient({
-        baseUrl: 'https://stg.oursharedevents.com',
+        baseUrl: 'https://stg-full.oursharedevents.com',
         fetch: async () => reply(200, {}),
       })
     ).toThrow(/baseUrl/);

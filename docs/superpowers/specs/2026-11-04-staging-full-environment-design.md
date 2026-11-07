@@ -2,6 +2,43 @@
 
 Date: 2026-11-04. Owner: Matthew Zdano (PO). Status: draft for owner approval.
 
+## Permanent testing totals and the daily loop (owner 2026-11-06)
+
+- **The totals are permanent:** Blue Island (60406) 10, Auburn Gresham (60620) 9, Evergreen Park
+  (60805) 11, Oak Lawn (60453) 17, Mount Greenwood (60655) 0. They live in `stock/totals.json`,
+  and a test pins that file to these numbers. `make-seed.mjs` trims the seed to exactly them
+  (`trimToTotals`: drop the latest-dated event of the most-repeated type until the total holds), so
+  every place keeps every event type it had: 22 of 22 overall. The seed now holds 47 events.
+- **Auburn Gresham at 9 is under the map gate on purpose:** its zip view shows the under-10
+  experience. The check verifies its count and skips its landing-map check, as for Mount Greenwood.
+- **A daily loop:** "Stock data (stg)" runs every morning at 09:23 UTC (and by hand). Each run
+  re-dates the same seed to that day, so the totals hold in the 90-day window every day, for the
+  whole CI/CD test pyramid. Nothing is searched. It runs after the 03:07 UTC nightly staging run
+  and before the working day, so the few minutes in which the old and new loads are both listed
+  fall when no test chain is reading stg. Event ids, QR codes and short links are new each day;
+  tests read the totals and the places, never a stock id.
+
+## Pivot 2026-11-06 (owner; one staging site)
+
+- **One staging site.** Owner: "you do not need to set up two separate databases. Because of the
+  distribution of looked-up events, I am able to exercise the testing conditions by just keeping
+  https://stg.oursharedevents.com/." The populated zips (60406, 60620, 60805, 60453) and the
+  deliberately empty 60655 show both experiences on stg itself.
+- **No stg-full.** `[env.staging-full]`, the `stg-empty.` alias and `STAGING_VARIANT` are removed.
+  Nothing was ever provisioned for stg-full, so nothing on Cloudflare needs undoing.
+- **Open stg (owner choice, 2026-11-06).** stg stays open to anyone; `robots.txt` disallows
+  indexing. The Access gate is removed. Every staging page now shows both lines of the notice:
+  "Testing purposes only." and that the listings are drawn from public sources and are not an
+  endorsement or offer (`src/lib/test-site-notice.ts`).
+- **The workflow** (`stock-data-full.yml`, renamed "Stock data (stg)") is seed → build →
+  check-swap. It deploys and migrates nothing (stg runs main as T1 deployed it). Every wrangler
+  command targets `--env staging --remote` (`ocr-db-staging`, `ose-uploads-staging`), and the
+  build and check use the staging secrets the T2 Bruno run already uses: `ADMIN_KEY`,
+  `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`. No new secret, database, bucket, DNS record
+  or Access policy is needed.
+- **Shared database.** stg's database also holds CI's own fixtures. The purge deletes only rows a
+  stock manifest names, so CI fixtures and hand-made events are never touched.
+
 ## Pivot 2026-11-05 (owner; supersedes the nightly search below)
 
 - **No nightly search, ever.** The search ran once, on 2026-11-05. Its rows are committed
@@ -21,7 +58,7 @@ Date: 2026-11-04. Owner: Matthew Zdano (PO). Status: draft for owner approval.
 - **Totals are tied to the tests.** The expected count per place comes from the committed seed
   (`expectedByNode`), never a literal; `stock/targets.json` is gone. A test on the committed
   seed asserts every populated place reaches the map gate of 10 and Mount Greenwood holds 0.
-  The seed holds Auburn Gresham 14, Blue Island 12, Evergreen Park 15, Oak Lawn 17.
+  The seed holds Auburn Gresham 14, Blue Island 12, Evergreen Park 15, Oak Lawn 17. (Superseded 2026-11-06: trimmed to the permanent totals above.)
 - **The empty place's check.** Mount Greenwood passes when no stock event is assigned to it and
   none is listed in a res-7 cell that is its own alone (five of its six cells are border cells
   shared with populated places). Its landing-map check is skipped: the zip view still takes

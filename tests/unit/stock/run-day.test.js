@@ -333,16 +333,15 @@ describe('swap per node', () => {
 });
 
 describe('wrangler target', () => {
-  test('every wrangler invocation names --env staging-full and runs remote', () => {
+  test('every wrangler invocation names --env staging and runs remote', () => {
     expect(allCalls.length).toBeGreaterThan(20);
     for (const { args } of allCalls) {
       const line = args.join(' ');
-      expect(line).toContain('--env staging-full');
-      expect(`${line} `).not.toContain('--env staging ');
+      expect(`${line} `).toContain('--env staging ');
       expect(line).not.toContain('--env production');
       expect(args).toContain('--remote');
-      if (args[0] === 'd1') expect(args[2]).toBe('ocr-db-staging-full');
-      else expect(args[3].startsWith('ose-uploads-staging-full/')).toBe(true);
+      if (args[0] === 'd1') expect(args[2]).toBe('ocr-db-staging');
+      else expect(args[3].startsWith('ose-uploads-staging/')).toBe(true);
     }
   });
 
@@ -358,13 +357,13 @@ describe('wrangler target', () => {
     });
     await expect(cloud.d1File('SELECT 1;')).resolves.toBeUndefined();
     for (const bad of [
-      ['d1', 'execute', 'x', '--env', 'staging', '--remote'],
       ['d1', 'execute', 'x', '--env', 'production', '--remote'],
+      ['d1', 'execute', 'x', '--env', 'staging-full', '--remote'],
       ['d1', 'execute', 'x', '--remote'],
-      ['d1', 'execute', 'x', '--env', 'staging-full', '-e', 'staging', '--remote'],
-      ['d1', 'execute', 'x', '--env', 'staging-full'],
+      ['d1', 'execute', 'x', '--env', 'staging', '-e', 'production', '--remote'],
+      ['d1', 'execute', 'x', '--env', 'staging'],
     ]) {
-      expect(() => rd.assertStagingFull(bad)).toThrow();
+      expect(() => rd.assertStaging(bad)).toThrow();
     }
     expect(ran).toHaveLength(1);
   });
@@ -394,9 +393,9 @@ describe('wrangler target', () => {
 
 describe('the site and the secrets', () => {
   const ENV = {
-    STG_FULL_ADMIN_KEY: 'admin-key-value-1',
-    STG_FULL_ACCESS_CLIENT_ID: 'access-id-value-2',
-    STG_FULL_ACCESS_CLIENT_SECRET: 'access-secret-value-3',
+    ADMIN_KEY: 'admin-key-value-1',
+    CF_ACCESS_CLIENT_ID: 'access-id-value-2',
+    CF_ACCESS_CLIENT_SECRET: 'access-secret-value-3',
     INSTAGRAM_ACCESS_TOKEN: 'ig-token-value-4',
     GITHUB_RUN_ID: RUN,
     GITHUB_RUN_ATTEMPT: ATTEMPT,
@@ -408,13 +407,13 @@ describe('the site and the secrets', () => {
       seen.push({ url, init });
       return { status: 200 };
     });
-    await fetchPublic('https://stg-full.oursharedevents.com/events/x', { method: 'GET' });
+    await fetchPublic('https://stg.oursharedevents.com/events/x', { method: 'GET' });
     expect(seen[0].init.redirect).toBe('manual');
     expect(seen[0].init.headers).toEqual({
-      'CF-Access-Client-Id': ENV.STG_FULL_ACCESS_CLIENT_ID,
-      'CF-Access-Client-Secret': ENV.STG_FULL_ACCESS_CLIENT_SECRET,
+      'CF-Access-Client-Id': ENV.CF_ACCESS_CLIENT_ID,
+      'CF-Access-Client-Secret': ENV.CF_ACCESS_CLIENT_SECRET,
     });
-    expect(JSON.stringify(seen)).not.toContain(ENV.STG_FULL_ADMIN_KEY);
+    expect(JSON.stringify(seen)).not.toContain(ENV.ADMIN_KEY);
     expect(() => fetchPublic('https://evil.example/x')).toThrow();
   });
 
@@ -422,9 +421,9 @@ describe('the site and the secrets', () => {
     const out = [];
     rd.maskSecrets(ENV, (s) => out.push(s));
     expect(out).toEqual([
-      `::add-mask::${ENV.STG_FULL_ADMIN_KEY}\n`,
-      `::add-mask::${ENV.STG_FULL_ACCESS_CLIENT_ID}\n`,
-      `::add-mask::${ENV.STG_FULL_ACCESS_CLIENT_SECRET}\n`,
+      `::add-mask::${ENV.ADMIN_KEY}\n`,
+      `::add-mask::${ENV.CF_ACCESS_CLIENT_ID}\n`,
+      `::add-mask::${ENV.CF_ACCESS_CLIENT_SECRET}\n`,
       `::add-mask::${ENV.INSTAGRAM_ACCESS_TOKEN}\n`,
     ]);
   });
@@ -479,7 +478,7 @@ describe('the site and the secrets', () => {
       `| oak-lawn | ${SEED_COUNTS['oak-lawn']} | ${P - 3} | ${P + 1} | FAIL | count:${P - 3}/${P} |`
     );
     expect(summary).toContain(
-      'mount-greenwood is expected empty: its landing-map check is skipped (the zip-radius fix is a separate story)'
+      'mount-greenwood is expected empty: its landing-map check is skipped'
     );
     expect(summary).toContain('IG note');
     expect(summary).toContain('token note');
@@ -545,9 +544,9 @@ describe('fix round 2: a re-run of check-swap alone', () => {
     const hung = new Promise((resolve) => (stalled = resolve));
     rd.runBuild({
       env: {
-        STG_FULL_ADMIN_KEY: 'k',
-        STG_FULL_ACCESS_CLIENT_ID: 'i',
-        STG_FULL_ACCESS_CLIENT_SECRET: 's',
+        ADMIN_KEY: 'k',
+        CF_ACCESS_CLIENT_ID: 'i',
+        CF_ACCESS_CLIENT_SECRET: 's',
         GITHUB_RUN_ID: RUN,
         GITHUB_RUN_ATTEMPT: ATTEMPT,
       },
@@ -585,9 +584,9 @@ describe('fix round 2: a re-run of check-swap alone', () => {
       env: {
         GITHUB_RUN_ID: RUN,
         GITHUB_RUN_ATTEMPT: ATTEMPT,
-        STG_FULL_ADMIN_KEY: 'k',
-        STG_FULL_ACCESS_CLIENT_ID: 'i',
-        STG_FULL_ACCESS_CLIENT_SECRET: 's',
+        ADMIN_KEY: 'k',
+        CF_ACCESS_CLIENT_ID: 'i',
+        CF_ACCESS_CLIENT_SECRET: 's',
       },
       fs: w.fs,
       fetch: async () => ({ status: 200 }),
@@ -766,9 +765,9 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
     const hung = new Promise((resolve) => (stalled = resolve));
     rd.runBuild({
       env: {
-        STG_FULL_ADMIN_KEY: 'k',
-        STG_FULL_ACCESS_CLIENT_ID: 'i',
-        STG_FULL_ACCESS_CLIENT_SECRET: 's',
+        ADMIN_KEY: 'k',
+        CF_ACCESS_CLIENT_ID: 'i',
+        CF_ACCESS_CLIENT_SECRET: 's',
         GITHUB_RUN_ID: RUN,
         GITHUB_RUN_ATTEMPT: ATTEMPT,
       },
@@ -871,9 +870,9 @@ describe('the seed subcommand (owner, 2026-11-05: no search)', () => {
     w.fs.writeFileSync(path.join('/out', 'businesses.json'), '[]');
     await rd.runBuild({
       env: {
-        STG_FULL_ADMIN_KEY: 'k',
-        STG_FULL_ACCESS_CLIENT_ID: 'i',
-        STG_FULL_ACCESS_CLIENT_SECRET: 's',
+        ADMIN_KEY: 'k',
+        CF_ACCESS_CLIENT_ID: 'i',
+        CF_ACCESS_CLIENT_SECRET: 's',
         GITHUB_RUN_ID: RUN,
         GITHUB_RUN_ATTEMPT: ATTEMPT,
       },
@@ -900,9 +899,9 @@ describe('the seed subcommand (owner, 2026-11-05: no search)', () => {
 
 describe('build', () => {
   const ENV = {
-    STG_FULL_ADMIN_KEY: 'admin-key-value-1',
-    STG_FULL_ACCESS_CLIENT_ID: 'access-id-value-2',
-    STG_FULL_ACCESS_CLIENT_SECRET: 'access-secret-value-3',
+    ADMIN_KEY: 'admin-key-value-1',
+    CF_ACCESS_CLIENT_ID: 'access-id-value-2',
+    CF_ACCESS_CLIENT_SECRET: 'access-secret-value-3',
     GITHUB_RUN_ID: RUN,
     GITHUB_RUN_ATTEMPT: ATTEMPT,
   };
@@ -973,7 +972,7 @@ describe('build', () => {
     const notes = JSON.parse(w.files.get(path.join(outDir, 'build-notes.json')));
     expect(notes.ok).toBe(false);
     expect(notes.error).toBe('POST /api/v2/admin/sponsors failed: 500');
-    expect(JSON.stringify(notes)).not.toContain(ENV.STG_FULL_ADMIN_KEY);
+    expect(JSON.stringify(notes)).not.toContain(ENV.ADMIN_KEY);
     expect(code).toBe(1);
   });
 });
@@ -981,9 +980,9 @@ describe('build', () => {
 describe('final review', () => {
   const W = require('./worker-bodies');
   const ENV = {
-    STG_FULL_ADMIN_KEY: 'admin-key-value-1',
-    STG_FULL_ACCESS_CLIENT_ID: 'access-id-value-2',
-    STG_FULL_ACCESS_CLIENT_SECRET: 'access-secret-value-3',
+    ADMIN_KEY: 'admin-key-value-1',
+    CF_ACCESS_CLIENT_ID: 'access-id-value-2',
+    CF_ACCESS_CLIENT_SECRET: 'access-secret-value-3',
     GITHUB_RUN_ID: RUN,
     GITHUB_RUN_ATTEMPT: ATTEMPT,
   };
@@ -1086,7 +1085,7 @@ describe('final review', () => {
       fetch: async (url, init = {}) => {
         const u = String(url);
         if (u.startsWith('https://graph.instagram.com/')) return res(401, {});
-        const p = u.slice('https://stg-full.oursharedevents.com'.length);
+        const p = u.slice('https://stg.oursharedevents.com'.length);
         paths.push(`${init.method || 'GET'} ${p}`);
         n += 1;
         if (p.endsWith('/event-types')) return res(200, CATALOG);
@@ -1122,9 +1121,9 @@ describe('final review', () => {
 
 describe('the manifest is registered in R2 during the build', () => {
   const ENV = {
-    STG_FULL_ADMIN_KEY: 'admin-key-value-1',
-    STG_FULL_ACCESS_CLIENT_ID: 'access-id-value-2',
-    STG_FULL_ACCESS_CLIENT_SECRET: 'access-secret-value-3',
+    ADMIN_KEY: 'admin-key-value-1',
+    CF_ACCESS_CLIENT_ID: 'access-id-value-2',
+    CF_ACCESS_CLIENT_SECRET: 'access-secret-value-3',
     GITHUB_RUN_ID: RUN,
     GITHUB_RUN_ATTEMPT: ATTEMPT,
   };

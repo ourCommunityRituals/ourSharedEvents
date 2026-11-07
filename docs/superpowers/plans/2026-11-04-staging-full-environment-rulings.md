@@ -57,3 +57,18 @@ These supersede Rulings 3 and 16 and the search parts of Ruling 17 and of the Ta
 - Controller call: a node expected to hold 0 passes when no stock event is assigned to it and none is listed in a res-7 cell that is its own alone. Mount Greenwood shares five of its six cells with Blue Island, Evergreen Park and Oak Lawn (border cells), and nine seed events (seven Evergreen Park, two Oak Lawn) sit in those shared cells, inside their own node's polygon. Counting them would fail every load. — If wrong: Mount Greenwood's cell list needs trimming, or the owner accepts that a cell-based view of Mount Greenwood shows those nine (still under 10).
 - Controller call: the empty node's landing-map check is skipped and the run summary says so. The zip view still takes about 17 km around the zip center (`lib/zip-areas.ts`), so `/?zip=60655` shows its neighbors' events; narrowing it is a separate story.
 - Controller call: the seed job writes `load.json` with the load day, and the build records that day, so a build that starts after Chicago midnight still matches the rows' dates.
+
+## Pivot (owner, 2026-11-06)
+
+These supersede every ruling that names stg-full, staging-full, the Access gate or the deploy job.
+
+- One staging site: the seed loads into stg.oursharedevents.com. The populated zips and the empty 60655 show both experiences there. `[env.staging-full]`, the `stg-empty.` alias and `STAGING_VARIANT` are removed; nothing had been provisioned.
+- Owner choice: load onto open stg. The Access gate job is removed; every staging page shows "Testing purposes only." and the not-an-endorsement line.
+- The workflow is seed → build → check-swap, deploys and migrates nothing, targets `--env staging --remote` only, and uses the existing repo secrets `ADMIN_KEY`, `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`.
+- The deploy job's hub-staging step is recorded as retired in `.ci-integrity-baseline.json` (`readUsesOnNewSecret.retired`).
+
+## Permanent totals and the daily loop (owner, 2026-11-06)
+
+- Permanent testing totals: Blue Island 10, Auburn Gresham 9, Evergreen Park 11, Oak Lawn 17, Mount Greenwood 0 (`stock/totals.json`, pinned by a test). `make-seed` trims to exactly these, keeping the widest mix of event types.
+- Owner: "This should on a loop every day so that the data is always in a position to enable the automation testing across the entire CICD test pyramid." The stock workflow runs daily at 09:23 UTC and on dispatch, re-dating the same seed; no search.
+- Controller call: Auburn Gresham's 9 is taken as written, under the map gate; its landing-map check is skipped, its count is checked. — If wrong: set it to 10 in `stock/totals.json` and re-run `make-seed`.

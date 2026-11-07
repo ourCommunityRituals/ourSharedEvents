@@ -8,8 +8,12 @@
 //
 // A node expected to hold 0 (Mount Greenwood, owner 2026-11-05) passes when no
 // stock event is assigned to it and none is listed in a cell of its own. Its
-// landing-map check is skipped: the zip view still takes about 17 km around the
-// zip (lib/zip-areas.ts), and narrowing it is a separate story.
+// landing-map check is skipped.
+//
+// Owner, 2026-11-06: the totals are the owner's permanent testing totals
+// (stock/totals.json), and a place may hold fewer than the map gate (Auburn
+// Gresham holds 9). Such a place is checked like any populated one, except that
+// its landing-map check is skipped, since its zip view does not lead with the map.
 import { STOCK_BASE_URL } from './client.mjs';
 
 // The landing page leads with the map at this many events (landing-area.ts LIST_MAX).
@@ -60,9 +64,6 @@ export async function checkNodes({
   for (const n of nodeList) {
     const want = expected[n.id];
     if (!Number.isInteger(want) || want < 0) throw new Error(`no expected count for ${n.id}`);
-    if (want > 0 && want < MAP_GATE) {
-      throw new Error(`expected count for ${n.id} below the map gate of ${MAP_GATE}`);
-    }
   }
   // The cells of every populated node. A border cell an empty node shares with
   // one of them holds that neighbor's events (membership is by polygon).
@@ -193,11 +194,13 @@ export async function checkNodes({
       reasons.push('no-anchor');
     }
 
-    // the zip view leads with the area, the doors under it
+    // the zip view leads with the area, the doors under it (a place under the
+    // map gate does not lead with the map, so the check is skipped there)
+    const underGate = want < MAP_GATE;
     const zip = Array.isArray(node.zips) ? node.zips[0] : undefined;
     if (!zip) {
       reasons.push('no-zip');
-    } else {
+    } else if (!underGate) {
       const res = await publicGet(siteUrl(`/?zip=${encodeURIComponent(zip)}`));
       const page = res && res.status === 200 ? await bodyOf(res) : '';
       const areaAt = page.indexOf(AREA_MARK);
@@ -255,6 +258,7 @@ export async function checkNodes({
       expected: want,
       totalListed,
       reasons,
+      ...(underGate ? { skipped: ['landing-map'] } : {}),
     };
   }
   return results;

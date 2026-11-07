@@ -1,6 +1,6 @@
 // Builds the SQL that removes a manifest's rows for some nodes from the full
 // staging site's DB. It never runs SQL: the workflow runs the string with
-// `wrangler d1 execute ocr-db-staging-full --env staging-full --remote --file`.
+// `wrangler d1 execute ocr-db-staging --env staging --remote --file`.
 //
 // Only ids the manifest recorded are ever named. Child rows go by the parent id
 // they hang off (event_id, sponsor id, poster id), so a row the build did not

@@ -1,0 +1,10 @@
+{
+  "note": "Owner, 2026-11-06: the permanent testing totals per place. make-seed trims the seed to exactly these, and every test and check reads them through the seed. Change them only on the owner's word.",
+  "totals": {
+    "blue-island": 10,
+    "auburn-gresham": 9,
+    "evergreen-park": 11,
+    "oak-lawn": 17,
+    "mount-greenwood": 0
+  }
+}
