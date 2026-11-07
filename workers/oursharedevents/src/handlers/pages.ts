@@ -69,8 +69,15 @@ import {
   injectLandingArea,
   type LandingAreaItem,
 } from '../lib/landing-area.js';
-import { readWhere, injectWhere, renderNearEmpty, type WhereState } from '../lib/landing-where';
+import {
+  readWhere,
+  injectWhere,
+  renderNearEmpty,
+  renderPlaceEmpty,
+  type WhereState,
+} from '../lib/landing-where';
 import { inZipOwnArea } from '../lib/zip-areas';
+import { inPlaceMatches } from '../lib/place-search';
 import {
   getDataProvider,
   type DataProviderEnv,
@@ -2605,11 +2612,13 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
 
 // ─── Landing page — OSE-1312, "where are you?" (owner 2026-10-10) ──────────────
 //
-// One question first: your zip (typed, or the nearest zip to a phone's rough
-// box, lib/landing-where.ts). With a zip, the area lists the events in the
-// zip's own area (lib/zip-areas.ts inZipOwnArea: the zip in the event's address,
-// else the nearest zip center, within 8 rings); without one, every listed
-// event. No cookies, no analytics; list/map and window toggles stay CSS-only
+// One question first: your town, or your zip (owner 2026-11-06: a town name
+// first, then a zip; or the nearest zip to a phone's rough box,
+// lib/landing-where.ts). With a zip, the area lists the events in the zip's own
+// area (lib/zip-areas.ts inZipOwnArea: the zip in the event's address, else the
+// nearest zip center, within 8 rings); with a town, its zips' own areas; with a
+// name that is many towns, every match to choose from and the events of all of
+// them (lib/place-search.ts); without any, every listed event. No cookies, no analytics; list/map and window toggles stay CSS-only
 // (renderLandingArea).
 //
 // Reads events through the SAME DataProvider seam + enrichWithPhase as
@@ -2628,6 +2637,8 @@ export async function handleLandingPage(
   } catch {
     where = { kind: 'none' };
   }
+  // A zip, one place, or the places a name means: results come first.
+  const searched = where.kind === 'zip' || where.kind === 'place' || where.kind === 'choose';
   let area;
   try {
     const dp = getDataProvider(env as LandingEnv, ctx ?? null);
@@ -2636,6 +2647,12 @@ export async function handleLandingPage(
     if (where.kind === 'zip') {
       // Owner 2026-11-05: the zip's own area, not the towns around it.
       items = items.filter(inZipOwnArea(where.area));
+    } else if (where.kind === 'place') {
+      // Owner 2026-11-06: a town name first; its zips' own areas.
+      items = items.filter(inPlaceMatches([where.place]));
+    } else if (where.kind === 'choose') {
+      // One name, many places: the events of every match, while the person picks.
+      items = items.filter(inPlaceMatches(where.matches));
     }
     // §6.2b latch: corridors that have ever reached the threshold stay on the
     // map. Brand-bound read; a missing table (pre-0084) just means none yet.
@@ -2656,14 +2673,22 @@ export async function handleLandingPage(
     const sponsorTitles = await fetchSponsorTitles((env as LandingEnv).DB, 'root');
     area = renderLandingArea(items as LandingAreaItem[], {
       latched,
-      areaLatched: where.kind === 'zip' ? false : areaLatched,
+      areaLatched: searched ? false : areaLatched,
       sponsorTitles,
     });
   } catch {
     area = renderEmptyLandingArea();
   }
-  if (where.kind === 'zip' && area.windowCount === 0 && area.types.length === 0) {
-    area = { ...area, html: renderNearEmpty(where.area.zip) };
+  if (searched && area.windowCount === 0 && area.types.length === 0) {
+    const empty =
+      where.kind === 'zip'
+        ? renderNearEmpty(where.area.zip)
+        : where.kind === 'place'
+          ? renderPlaceEmpty(where.place.label)
+          : where.kind === 'choose'
+            ? renderPlaceEmpty(`any place called ${where.typed}`)
+            : '';
+    area = { ...area, html: empty };
   }
   // /home, /welcome, /landing, /about and /info serve this page too; they all
   // name `/` as the canonical.
@@ -2673,7 +2698,7 @@ export async function handleLandingPage(
         injectLandingArea(
           injectNeverWho(injectEventCardCss(injectLegalFooter(LANDING_HTML, 'landing')), 'landing'),
           area,
-          { areaFirst: where.kind === 'zip' }
+          { areaFirst: searched }
         ),
         where
       ),

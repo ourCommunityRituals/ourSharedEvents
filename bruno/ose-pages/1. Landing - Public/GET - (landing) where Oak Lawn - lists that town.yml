@@ -1,0 +1,30 @@
+info:
+  name: GET /?where=Oak Lawn (landing) - lists that town
+  type: http
+  seq: 22
+
+http:
+  method: GET
+  url: "{{baseUrl}}/?where=Oak%20Lawn"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Owner 2026-11-06: a town name that is one place goes straight to it and lists
+        // the events in its zips. Fixture: bruno/fixtures/landing-zip-own-area-seed.sql
+        // (its Oak Lawn event says 60453; Mount Greenwood's is next door).
+        const body = String(res.getBody());
+        test('Returns 200', function () { expect(res.getStatus()).to.equal(200); });
+        test('Heads the area with the town and state', function () { expect(body).to.include('Near Oak Lawn, IL'); });
+        test('Offers no choice: one place', function () { expect(body).to.not.include('data-testid="where-choices"'); });
+        test('Lists the Oak Lawn event', function () { expect(body).to.include('Zip Own Area Check (Oak Lawn)'); });
+        test('Does not list the Mount Greenwood event', function () { expect(body).to.not.include('Zip Own Area Check (Mount Greenwood)'); });
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

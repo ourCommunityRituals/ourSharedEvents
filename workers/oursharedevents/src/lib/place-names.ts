@@ -26,16 +26,28 @@ export interface Place {
   aliases: readonly string[];
   /** The owner's zips for this place. */
   zips: readonly string[];
+  /** Its state's postal code, so the landing's town search can label it ("Beverly, IL"). */
+  state: string;
 }
 
 /** The owner's list (2026-11-05). Change it only on the owner's word. */
 export const PLACES: readonly Place[] = [
-  { name: 'Beverly', aliases: [], zips: ['60643', '60655', '60620'] },
-  { name: 'Blue Island', aliases: [], zips: ['60406', '60472', '60827'] },
-  { name: 'Mount Greenwood', aliases: ['mt greenwood'], zips: ['60655'] },
-  { name: 'Evergreen Park', aliases: [], zips: ['60805'] },
-  { name: 'Oak Lawn', aliases: [], zips: ['60453', '60454', '60455', '60457', '60458'] },
-  { name: 'Auburn Gresham', aliases: [], zips: ['60620', '60621', '60636', '60643', '60652'] },
+  { name: 'Beverly', aliases: [], zips: ['60643', '60655', '60620'], state: 'IL' },
+  { name: 'Blue Island', aliases: [], zips: ['60406', '60472', '60827'], state: 'IL' },
+  { name: 'Mount Greenwood', aliases: ['mt greenwood'], zips: ['60655'], state: 'IL' },
+  { name: 'Evergreen Park', aliases: [], zips: ['60805'], state: 'IL' },
+  {
+    name: 'Oak Lawn',
+    aliases: [],
+    zips: ['60453', '60454', '60455', '60457', '60458'],
+    state: 'IL',
+  },
+  {
+    name: 'Auburn Gresham',
+    aliases: [],
+    zips: ['60620', '60621', '60636', '60643', '60652'],
+    state: 'IL',
+  },
 ];
 
 /** What a search box value resolved to: a named place, or one zip. */

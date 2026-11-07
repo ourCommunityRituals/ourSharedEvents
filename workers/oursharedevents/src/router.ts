@@ -3,7 +3,11 @@
  *
  * Route table:
  *
- *   GET /                        → landing page (?zip= lists events near a zip)
+ *   GET /                        → landing page. ?where= is a town name first, then a zip
+ *                                  (owner 2026-11-06): one place lists its events; a name
+ *                                  that is many places lists every match to choose from
+ *                                  ("Springfield, IL" …) and the events of all of them
+ *                                  (lib/place-search.ts). ?zip= lists events near a zip.
  *   POST /near                   → phone's rough box (form body g=) → 303 /?zip=
  *   GET /admin                   → admin dashboard (auth required)
  *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)

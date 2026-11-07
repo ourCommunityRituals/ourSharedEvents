@@ -874,6 +874,7 @@ jobs:
             tests/e2e/0-architecture/sponsor-share-covenant.invariant.spec.ts \
             tests/e2e/0-architecture/scan-path-split.invariant.spec.ts \
             tests/e2e/0-architecture/geo-resolution.structural.invariant.spec.ts \
+            tests/e2e/0-architecture/place-name-search.invariant.spec.ts \
             tests/e2e/0-architecture/ncr-accumulation.structural.invariant.spec.ts \
             tests/e2e/0-architecture/sponsor-identity-split.invariant.spec.ts \
             tests/e2e/0-architecture/edge-token-verification.invariant.spec.ts \
