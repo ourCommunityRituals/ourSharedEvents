@@ -82,13 +82,23 @@ const status = (code) => ({
   headers: { get: () => null },
   text: async () => '',
 });
-// What the Cloudflare edge answers a challenged read: the Worker never runs.
-const challenge = {
+// What the Cloudflare edge answers a challenged read: the Worker never runs. The
+// cf-ray header names the request in the dashboard's Security Events.
+const RAY = 'a56c65f64daac071-ORD';
+const challengeWith = (ray) => ({
   status: 403,
   ok: false,
-  headers: { get: (k) => (k.toLowerCase() === 'cf-mitigated' ? 'challenge' : null) },
+  headers: {
+    get: (k) => {
+      const key = k.toLowerCase();
+      if (key === 'cf-mitigated') return 'challenge';
+      if (key === 'cf-ray') return ray;
+      return null;
+    },
+  },
   text: async () => '<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>',
-};
+});
+const challenge = challengeWith(RAY);
 
 const MAP_FIRST =
   '<section data-testid="landing-area"></section><section data-testid="landing-doors"></section>';
@@ -492,11 +502,32 @@ describe('checkNodes: anchor, zip, QR, pages and art', () => {
     );
     expect(r[A].pass).toBe(false);
     expect(r[A].reasons).toEqual([
-      `edge-challenged:/?zip=${zip}`,
-      `edge-challenged:${qr.qPath}`,
-      `edge-challenged:${qr.sPath}`,
-      `edge-challenged:/events/${ev.id}`,
-      `edge-challenged:${ev.cover_image_url}`,
+      `edge-challenged:/?zip=${zip} ray=${RAY}`,
+      `edge-challenged:${qr.qPath} ray=${RAY}`,
+      `edge-challenged:${qr.sPath} ray=${RAY}`,
+      `edge-challenged:/events/${ev.id} ray=${RAY}`,
+      `edge-challenged:${ev.cover_image_url} ray=${RAY}`,
+    ]);
+  });
+
+  // The ray is a header the edge sets; only a ray-shaped value is written into the
+  // summary, and a challenge without one is still named.
+  test('a challenge without a ray, or with a malformed one, is named without it', async () => {
+    const { manifest, listed } = day({ [A]: PER_NODE });
+    const [a, b] = listed;
+    const r = await run(
+      site({
+        listed,
+        override: {
+          [`/events/${a.id}`]: challengeWith(null),
+          [`/events/${b.id}`]: challengeWith('x|y<script>'),
+        },
+      }),
+      manifest
+    );
+    expect(r[A].reasons).toEqual([
+      `edge-challenged:/events/${a.id}`,
+      `edge-challenged:/events/${b.id}`,
     ]);
   });
 
@@ -640,7 +671,7 @@ describe('checkSearches: each /events search reads its total', () => {
       pass: false,
       count: null,
       expected: OL,
-      reasons: ['edge-challenged'],
+      reasons: [`edge-challenged ray=${RAY}`],
     });
   });
 

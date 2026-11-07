@@ -793,7 +793,12 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
     const report = {
       todayName: TODAY_NAME,
       results: {
-        a: { pass: false, count: 0, totalListed: 0, reasons: ['edge-challenged:/q/qrt_x'] },
+        a: {
+          pass: false,
+          count: 0,
+          totalListed: 0,
+          reasons: ['edge-challenged:/q/qrt_x ray=a56c65f64daac071-ORD'],
+        },
         b: { pass: true, count: 0, totalListed: 0, reasons: [] },
       },
       purges: [],
@@ -803,6 +808,9 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
     const summary = rd.renderSummary(args);
     expect(summary).toContain('X-OCR-CI');
     expect(summary).toContain('OSE-939');
+    // the first challenged read and its ray, to look up in Security Events
+    expect(summary).toContain('/q/qrt_x ray=a56c65f64daac071-ORD');
+    expect(summary).toContain('Security → Events');
     // a search challenged alone says it too; a clean run never does
     const clean = { ...report, results: { a: report.results.b, b: report.results.b } };
     const searches = {
