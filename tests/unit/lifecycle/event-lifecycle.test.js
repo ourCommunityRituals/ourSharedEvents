@@ -125,14 +125,15 @@ function fakeSite(faults = {}) {
       if (method === 'GET' && !id) {
         return json({
           ok: true,
-          items: [...events.values()]
-            .filter((e) => e.created_by === 'key:admin')
-            .map((e) => ({
-              id: e.id,
-              title: e.title,
-              brand_id: e.brand_id,
-              data_class: e.data_class,
-            })),
+          // As the Worker: ?mine=1 filters nothing for a key actor, so every
+          // event comes back, whoever made it.
+          items: [...events.values()].map((e) => ({
+            id: e.id,
+            title: e.title,
+            brand_id: e.brand_id,
+            data_class: e.data_class,
+            created_by: e.created_by,
+          })),
           pagination: { hasMore: false, nextCursor: null },
         });
       }
@@ -527,7 +528,12 @@ describe('born red: each fault turns its checks red', () => {
     const f = failedNames(r);
     expect(f).toContain('delete: the admin API no longer knows it');
     expect(f).toContain('delete: the event page is gone');
-    // a 200 that deletes nothing is not taken as gone
+    // a 200 that deletes nothing is not taken as gone: cleanup tries the run's
+    // own event again and says it could not delete it
+    expect(f).toContain("cleanup: the run's event is deleted");
+    expect(
+      r.report.results.find((x) => x.name === "cleanup: the run's event is deleted").detail
+    ).not.toContain('deleted in step 4');
     expect(f).toContain('sweep: no lifecycle event is left on the site');
   });
 
@@ -563,8 +569,8 @@ describe('born red: each fault turns its checks red', () => {
 describe('the sweep', () => {
   test('deletes a lifecycle event an earlier run left, and only those', async () => {
     const site = fakeSite();
-    site.events.set('evt_left', {
-      id: 'evt_left',
+    const row = (id, over) => ({
+      id,
       title: `${'Nightly lifecycle check'} 99-1`,
       start_date: '2026-12-01',
       zip: '60453',
@@ -572,17 +578,15 @@ describe('the sweep', () => {
       published: true,
       brand_id: 'root',
       created_by: 'key:admin',
+      data_class: 'synthetic',
+      ...over,
     });
-    site.events.set('evt_brand', {
-      id: 'evt_brand',
-      title: `${'Nightly lifecycle check'} on another brand`,
-      start_date: '2026-12-01',
-      zip: '60453',
-      cell: PLACES[0].cell,
-      published: true,
-      brand_id: 'abc',
-      created_by: 'key:admin',
-    });
+    site.events.set('evt_left', row('evt_left', {}));
+    // Same title, but not this job's: each misses one mark, and each must stay.
+    site.events.set('evt_brand', row('evt_brand', { brand_id: 'abc' }));
+    site.events.set('evt_person', row('evt_person', { created_by: 'someone@example.com' }));
+    site.events.set('evt_real', row('evt_real', { data_class: 'production' }));
+    site.events.set('evt_nolabel', row('evt_nolabel', { data_class: undefined }));
     const report = L.createReport({ log: () => {} });
     const ctx = {
       site: L.createSite({
@@ -597,8 +601,15 @@ describe('the sweep', () => {
     };
     await L.sweep(ctx);
     expect(site.events.has('evt_left')).toBe(false);
-    expect(site.events.has('evt_brand')).toBe(true);
-    expect(site.events.has('evt_other_oak-lawn_3')).toBe(true);
+    for (const keep of [
+      'evt_brand',
+      'evt_person',
+      'evt_real',
+      'evt_nolabel',
+      'evt_other_oak-lawn_3',
+    ]) {
+      expect(site.events.has(keep), keep).toBe(true);
+    }
     expect(report.results[0].detail).toContain('1 left from an earlier run');
   });
 });

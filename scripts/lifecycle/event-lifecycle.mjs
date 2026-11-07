@@ -26,8 +26,10 @@ import productionHosts from '../../config/production-hosts.js';
 export const STAGING_BASE_URL = 'https://stg.oursharedevents.com';
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost']);
 
-// The events this job makes all start with this. The sweep deletes only events
-// whose title starts with it, on the root brand, made by the job's own actor.
+// The events this job makes all start with this. The sweep deletes only an event
+// that carries all four marks: this title prefix, the root brand, data_class
+// 'synthetic' (which only automation may set) and a key creator. A person's
+// event never matches, whatever its title.
 export const TITLE_PREFIX = 'Nightly lifecycle check';
 
 // The owner's test area (2026-11-07): Oak Lawn 60453, Evergreen Park 60805,
@@ -603,7 +605,24 @@ function eventBody(place) {
   };
 }
 
-/** Delete every leftover lifecycle event the job's actor made on the root brand. */
+/**
+ * True only for an event this job made. The admin list's ?mine=1 is a no-op for
+ * a key actor (events.ts handleAdminListEvents), so ownership is decided here,
+ * from the row itself, never from the filter.
+ */
+export function isLifecycleEvent(e) {
+  return Boolean(
+    e &&
+    e.brand_id === 'root' &&
+    typeof e.title === 'string' &&
+    e.title.startsWith(TITLE_PREFIX) &&
+    e.data_class === 'synthetic' &&
+    typeof e.created_by === 'string' &&
+    e.created_by.startsWith('key:')
+  );
+}
+
+/** Delete every leftover event this job made (isLifecycleEvent). */
 export async function sweep(ctx, { keep = null } = {}) {
   const { site, report } = ctx;
   const own = await listOwnEvents(site);
@@ -612,14 +631,7 @@ export async function sweep(ctx, { keep = null } = {}) {
     return false;
   }
   const found = own.items
-    .filter(
-      (e) =>
-        e &&
-        e.brand_id === 'root' &&
-        typeof e.title === 'string' &&
-        e.title.startsWith(TITLE_PREFIX) &&
-        String(e.id) !== keep
-    )
+    .filter((e) => isLifecycleEvent(e) && String(e.id) !== keep)
     .map((e) => String(e.id));
   let ok = true;
   for (const id of found) {
@@ -635,7 +647,11 @@ export async function sweep(ctx, { keep = null } = {}) {
   return ok;
 }
 
-/** Every event the job's own actor made (admin list, ?mine=1), or { detail } when it cannot be read. */
+/**
+ * The admin list, every page, or { detail } when it cannot be read. For a key
+ * actor ?mine=1 filters nothing, so this is every event the key may see; callers
+ * pick rows by id or with isLifecycleEvent.
+ */
 async function listOwnEvents(site) {
   const items = [];
   let cursor = null;
@@ -886,14 +902,17 @@ export async function stepRemove(ctx) {
       200
     );
     if (!del) return;
-    state.deleted = true;
-    ctx.save();
-    await expectAdmin(
+    const gone = await expectAdmin(
       ctx,
       'delete: the admin API no longer knows it',
       site.admin('DELETE', `/api/v2/admin/events/${q(state.eventId)}`),
       404
     );
+    // Only a confirmed 404 counts as deleted; otherwise cleanup tries again.
+    if (gone) {
+      state.deleted = true;
+      ctx.save();
+    }
     await expectEverywhere(ctx, 'delete', place, { absent: true });
     await expectEventPage(ctx, 'delete: the event page is gone', 404);
   } finally {
