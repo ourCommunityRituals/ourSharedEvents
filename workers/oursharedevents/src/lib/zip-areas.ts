@@ -199,27 +199,53 @@ export function withinBound(zip: ZipArea, res7: string): boolean {
  * Build it once per request; the neighbouring zips are read at most once.
  */
 export function inZipOwnArea(area: ZipArea): (event: PlacedEvent) => boolean {
-  const bound = nearCells(area);
-  let around: ZipArea[] | null = null;
+  return inZipsOwnArea([area]);
+}
+
+/**
+ * A test for "is this event in the own area of any of these zips?": a town of
+ * many zips, or a set of towns (lib/place-search.ts). The same answer as asking
+ * inZipOwnArea of each zip in turn, at the cost of one: an event is in a zip's
+ * own area when that zip's bound holds it and it is that zip's (by its address,
+ * else by the nearest zip center), and an event is only ever one zip's.
+ * Build it once per request; each neighbourhood of zips is read at most once.
+ */
+export function inZipsOwnArea(areas: readonly ZipArea[]): (event: PlacedEvent) => boolean {
+  const bounds = areas.map((area) => ({ area, cells: nearCells(area) }));
+  const around = new Map<string, ZipArea[]>();
   return (event) => {
     const res7 = event.h3_res7;
-    if (typeof res7 !== 'string' || !bound.has(res7)) return false;
+    if (typeof res7 !== 'string') return false;
+    const holding = bounds.filter((b) => b.cells.has(res7)).map((b) => b.area);
+    if (holding.length === 0) return false;
     // The address's zip decides when it is a zip we know whose own 8-ring bound
     // holds the event; a zip from far away (a typo) is ignored, not trusted.
     const said = findZipArea(addressZip(event.where_address));
-    if (said && withinBound(said, res7)) return said.zip === area.zip;
+    if (said && withinBound(said, res7)) return holding.some((a) => a.zip === said.zip);
     // Otherwise: the zip whose center is nearest the event's finest cell (the
-    // res-9 placement when it has one).
+    // res-9 placement when it has one). That zip is within the bound's reach of
+    // the event, so it is among the zips around any zip whose bound holds it.
     const res9 = event.h3_res9;
     const [lat, lon] = cellToLatLng(typeof res9 === 'string' && isValidCell(res9) ? res9 : res7);
-    around ??= zipsAround(area);
+    const first = holding[0];
+    let near = around.get(first.zip);
+    if (!near) {
+      near = zipsAround(first);
+      around.set(first.zip, near);
+    }
     const cosLat = Math.cos((lat * Math.PI) / 180);
     const dist = (z: ZipArea) => (z.lat - lat) ** 2 + ((z.lon - lon) * cosLat) ** 2;
-    const mine = dist(area);
     // A tie goes to the lower zip, so no point belongs to two.
-    return around.every(
-      (z) => z.zip === area.zip || dist(z) > mine || (dist(z) === mine && z.zip > area.zip)
-    );
+    let best = first;
+    let bestD = dist(first);
+    for (const z of near) {
+      const d = dist(z);
+      if (d < bestD || (d === bestD && z.zip < best.zip)) {
+        best = z;
+        bestD = d;
+      }
+    }
+    return holding.some((a) => a.zip === best.zip);
   };
 }
 
