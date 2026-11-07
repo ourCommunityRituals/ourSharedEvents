@@ -52,6 +52,13 @@ export default {
     'src/auth/admin.ts',
   ],
   coverageAnalysis: 'perTest',
+  // Stryker writes `// @ts-nocheck` into its sandbox copy of each file this
+  // pattern matches. Its default also matches `.html`, so it went into the
+  // inline <script> blocks of src/templates/*.html. The pages it rendered were
+  // then not the real pages, and the byte-exact golden renders
+  // (list-landing-language-golden.spec.ts) failed the dry run. Script and type
+  // files only; templates are copied as they are.
+  disableTypeChecks: '{src,tests}/**/*.{js,mjs,cjs,ts,mts,cts}',
   // `json` feeds the per-file floor (scripts/ci/mutation-file-floor.mjs, OSE-1801):
   // the break threshold below is global, so one file can hide under another.
   reporters: ['html', 'clear-text', 'progress', 'json'],
