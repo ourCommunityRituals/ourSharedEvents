@@ -337,3 +337,42 @@ describe('trimToTotals: the widest mix of event types survives', () => {
     }
   });
 });
+
+// Owner 2026-11-07: what each /events search must read on stg is the stock events
+// in its zip (or its town's zips) plus the declared non-stock events, e.g. CI's
+// test-event-001 in 60643. The daily check-swap confirms it on the site.
+describe('the search totals follow from the seed and the declared fixtures', () => {
+  let PLACES;
+  let addressZip;
+  beforeAll(async () => {
+    ({ PLACES } = await import('../../../workers/oursharedevents/src/lib/place-names.ts'));
+    ({ addressZip } = await import('../../../workers/oursharedevents/src/lib/zip-areas.ts'));
+  });
+  const T = readJson('stock/totals.json');
+  const zipsOf = (q) => {
+    if (/^\d{5}$/.test(q)) return [q];
+    const place = PLACES.find((p) => p.name === q);
+    if (!place) throw new Error(`no place named ${q}`);
+    return place.zips;
+  };
+
+  test('every seeded event says its zip, and it is one of its place’s zips', () => {
+    for (const e of SEED.events) {
+      const zip = addressZip(e.address);
+      expect(zip, e.title).toMatch(/^\d{5}$/);
+    }
+  });
+
+  test.each(Object.keys(T.searches))('%s reads stock + fixtures', (q) => {
+    const zips = new Set(zipsOf(q));
+    const stock = SEED.events.filter((e) => zips.has(addressZip(e.address))).length;
+    const fixtures = T.fixtures.counts[q] || 0;
+    expect(T.searches[q]).toBe(stock + fixtures);
+  });
+
+  test('every zip a place holds and every place name has a search total', () => {
+    const named = new Set(Object.keys(T.searches));
+    for (const p of PLACES) expect(named.has(p.name), p.name).toBe(true);
+    for (const n of nodes) for (const z of n.zips) expect(named.has(z), z).toBe(true);
+  });
+});

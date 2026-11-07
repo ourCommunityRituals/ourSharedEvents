@@ -263,3 +263,56 @@ export async function checkNodes({
   }
   return results;
 }
+
+// ── Searches: what each /events search reads on the site ────────────────────
+//
+// Owner, 2026-11-07: every zip and town search on stg reads its permanent total
+// (stock/totals.json `searches`): the stock events in it plus the declared
+// non-stock events (`fixtures.counts`, e.g. CI's test-event-001 in 60643, which
+// the Auburn Gresham and Beverly towns include). The count is the page's own
+// summary line, so this is exactly what a person or a test sees.
+
+const SUMMARY_RE = /data-testid="disc-summary">(\d+) events? in /;
+
+/**
+ * @returns {Promise<Record<string, { pass: boolean, count: number|null,
+ *   expected: number, reasons: string[] }>>}
+ */
+export async function checkSearches({ searches, fetchPublic, sleep = realSleep, now = Date.now }) {
+  if (typeof fetchPublic !== 'function') throw new Error('fetchPublic is required');
+  if (!searches || typeof searches !== 'object') throw new Error('searches are required');
+  const origin = new URL(STOCK_BASE_URL).origin;
+  const results = {};
+  let lastAt = null;
+  for (const [q, expected] of Object.entries(searches)) {
+    if (!Number.isInteger(expected) || expected < 0) {
+      throw new Error(`no expected count for the search ${q}`);
+    }
+    if (lastAt !== null) {
+      const wait = MIN_GAP_MS - (now() - lastAt);
+      if (wait > 0) await sleep(wait);
+    }
+    lastAt = now();
+    const url = new URL(`/events?q=${encodeURIComponent(q)}`, origin);
+    let page = '';
+    try {
+      const res = await fetchPublic(url.href, { method: 'GET', redirect: 'manual' });
+      page = res && res.status === 200 ? await res.text() : '';
+    } catch {
+      page = '';
+    }
+    const m = SUMMARY_RE.exec(page);
+    if (!m) {
+      results[q] = { pass: false, count: null, expected, reasons: ['summary-unreadable'] };
+      continue;
+    }
+    const count = Number(m[1]);
+    results[q] = {
+      pass: count === expected,
+      count,
+      expected,
+      reasons: count === expected ? [] : [`count:${count}/${expected}`],
+    };
+  }
+  return results;
+}

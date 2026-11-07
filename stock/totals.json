@@ -6,5 +6,26 @@
     "evergreen-park": 11,
     "oak-lawn": 17,
     "mount-greenwood": 0
-  }
+  },
+  "searches": {
+    "60406": 10,
+    "60453": 17,
+    "60620": 8,
+    "60655": 0,
+    "60805": 11,
+    "Blue Island": 10,
+    "Auburn Gresham": 9,
+    "Beverly": 9,
+    "Evergreen Park": 11,
+    "Oak Lawn": 17,
+    "Mount Greenwood": 0
+  },
+  "fixtures": {
+    "note": "Events on stg that are not stock but fall in a search, so the search reads stock + these. test-event-001 (CI fixture, Community Game Night, Beverly Arts Center) is placed in zip 60643 on stg.",
+    "counts": {
+      "Auburn Gresham": 1,
+      "Beverly": 1
+    }
+  },
+  "searchesNote": "Owner, 2026-11-07: what each /events search must read on stg after every load (stock events in the zip or town, plus fixtures.counts). Checked by tests/unit/stock/seed.test.js against the seed and, after each daily swap, on stg by check-full.mjs checkSearches."
 }
