@@ -1,0 +1,35 @@
+info:
+  name: GET /?where=Beverly (landing) - lists the events of every match
+  type: http
+  seq: 23
+
+http:
+  method: GET
+  url: "{{baseUrl}}/?where=Beverly"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Owner 2026-11-06: a name that is many places offers every match and, while
+        // the person chooses, lists the events of all of them, and only of them.
+        // Beverly is 8 places; Beverly, IL (the owner's list) has zips 60620, 60643
+        // and 60655, so the 60655 (Mount Greenwood) event is listed and the Oak Lawn
+        // (60453) and Evergreen Park (60805) events are not.
+        // Fixture: bruno/fixtures/landing-zip-own-area-seed.sql (published for this run only).
+        const body = String(res.getBody());
+        const choices = body.match(/data-testid="where-choice"/g) || [];
+        test('Returns 200', function () { expect(res.getStatus()).to.equal(200); });
+        test('Offers every Beverly', function () { expect(choices.length).to.be.at.least(8); expect(body).to.include('>Beverly, IL</a>'); });
+        test('Heads the area with the name', function () { expect(body).to.include('In every place called Beverly'); });
+        test('Lists the Mount Greenwood event (a Beverly, IL zip)', function () { expect(body).to.include('Zip Own Area Check (Mount Greenwood)'); });
+        test('Does not list the Oak Lawn event', function () { expect(body).to.not.include('Zip Own Area Check (Oak Lawn)'); });
+        test('Does not list the Evergreen Park event', function () { expect(body).to.not.include('Zip Own Area Check (Evergreen Park)'); });
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
