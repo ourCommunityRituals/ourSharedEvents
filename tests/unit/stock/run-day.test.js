@@ -417,6 +417,27 @@ describe('the site and the secrets', () => {
     expect(() => fetchPublic('https://evil.example/x')).toThrow();
   });
 
+  // stg challenges a non-browser read of /q/, /s/ and /events/<id> at the edge; the
+  // WAF skip rule lets a request carrying X-OCR-CI with this token through (OSE-939).
+  test('public reads carry X-OCR-CI when OCR_CI_EDGE_TOKEN is set, and the token is masked', async () => {
+    const env = { ...ENV, OCR_CI_EDGE_TOKEN: 'edge-token-value-5' };
+    const seen = [];
+    const fetchPublic = rd.fetchPublicFrom(env, async (url, init) => {
+      seen.push({ url, init });
+      return { status: 200 };
+    });
+    await fetchPublic('https://stg.oursharedevents.com/q/qrt_x', { method: 'GET' });
+    expect(seen[0].init.headers).toEqual({
+      'CF-Access-Client-Id': ENV.CF_ACCESS_CLIENT_ID,
+      'CF-Access-Client-Secret': ENV.CF_ACCESS_CLIENT_SECRET,
+      'X-OCR-CI': 'edge-token-value-5',
+    });
+    expect(JSON.stringify(seen)).not.toContain(ENV.ADMIN_KEY);
+    const out = [];
+    rd.maskSecrets(env, (s) => out.push(s));
+    expect(out).toContain('::add-mask::edge-token-value-5\n');
+  });
+
   test('each secret is masked through a workflow command, and only that way', () => {
     const out = [];
     rd.maskSecrets(ENV, (s) => out.push(s));
@@ -766,6 +787,29 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
       `rows of ${TODAY_NAME} for b are still live; they are recorded only in this run's stock-manifest artifact; purge them by hand`
     );
     expect(report.exitCode).toBe(1);
+  });
+
+  test('an edge challenge in any result names the WAF skip rule in the summary', () => {
+    const report = {
+      todayName: TODAY_NAME,
+      results: {
+        a: { pass: false, count: 0, totalListed: 0, reasons: ['edge-challenged:/q/qrt_x'] },
+        b: { pass: true, count: 0, totalListed: 0, reasons: [] },
+      },
+      purges: [],
+      problems: [],
+    };
+    const args = { report, nodes: NODES, expected: EXPECTED, manifest: null, notes: {} };
+    const summary = rd.renderSummary(args);
+    expect(summary).toContain('X-OCR-CI');
+    expect(summary).toContain('OSE-939');
+    // a search challenged alone says it too; a clean run never does
+    const clean = { ...report, results: { a: report.results.b, b: report.results.b } };
+    const searches = {
+      'Oak Lawn': { pass: false, count: null, expected: 1, reasons: ['edge-challenged'] },
+    };
+    expect(rd.renderSummary({ ...args, report: clean, searches })).toContain('X-OCR-CI');
+    expect(rd.renderSummary({ ...args, report: clean })).not.toContain('X-OCR-CI');
   });
 
   test('when the manifest object was saved but the index write failed, the summary says so', async () => {

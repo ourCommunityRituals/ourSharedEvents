@@ -52,6 +52,7 @@ const SECRET_ENV = [
   'CF_ACCESS_CLIENT_ID',
   'CF_ACCESS_CLIENT_SECRET',
   'INSTAGRAM_ACCESS_TOKEN',
+  'OCR_CI_EDGE_TOKEN',
 ];
 // wrangler's answer for an R2 key that is not there. Anything else is a failure.
 const MISSING_OBJECT = /specified key does not exist|NoSuchKey/i;
@@ -613,7 +614,14 @@ export function renderSummary({ report, nodes, expected, manifest, notes, search
     }
   }
   const purgeFailures = report.purges.filter((p) => !p.ok);
+  const challenged = [
+    ...Object.values(report.results || {}),
+    ...Object.values(searches || {}),
+  ].some((r) => (r.reasons || []).some((x) => String(x).startsWith('edge-challenged')));
   const notesList = [
+    challenged
+      ? "The Cloudflare edge challenged the check's public reads (cf-mitigated: challenge), so the Worker never answered them. The staging WAF skip rule for the X-OCR-CI header must cover /q/*, /s/* and /events/* on stg, and OCR_CI_EDGE_TOKEN must match it (OSE-939)."
+      : null,
     ...((manifest && manifest.warnings) || []).map((w) => `Build: ${w}`),
     notes && notes.instagramWarning ? `Instagram: ${notes.instagramWarning}` : null,
     notes && notes.tokenWarning ? `Instagram token: ${notes.tokenWarning}` : null,
@@ -674,17 +682,25 @@ export function clientFrom(env, fetchFn) {
   });
 }
 
-/** Public reads: the Access service-token headers only, never the admin Bearer, never a redirect. */
+/**
+ * Public reads: the Access service-token headers only, never the admin Bearer, never a
+ * redirect. With OCR_CI_EDGE_TOKEN set they also carry X-OCR-CI, which the staging WAF
+ * skip rule matches so the edge's managed challenge lets the check's reads through
+ * (OSE-939). Without it, a challenged read is reported as edge-challenged.
+ */
 export function fetchPublicFrom(env, fetchFn) {
   const id = need(env, 'CF_ACCESS_CLIENT_ID');
   const secret = need(env, 'CF_ACCESS_CLIENT_SECRET');
+  const edge = typeof env.OCR_CI_EDGE_TOKEN === 'string' ? env.OCR_CI_EDGE_TOKEN : '';
+  const headers = { 'CF-Access-Client-Id': id, 'CF-Access-Client-Secret': secret };
+  if (edge !== '') headers['X-OCR-CI'] = edge;
   const origin = new URL(STOCK_BASE_URL).origin;
   return (url, init = {}) => {
     if (new URL(url).origin !== origin) throw new Error('public read off the site');
     return fetchFn(url, {
       method: init.method || 'GET',
       redirect: 'manual',
-      headers: { 'CF-Access-Client-Id': id, 'CF-Access-Client-Secret': secret },
+      headers: { ...headers },
     });
   };
 }
