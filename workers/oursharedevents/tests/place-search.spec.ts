@@ -266,6 +266,19 @@ describe('the landing reads ?where=: name first, then zip', () => {
     expect(where('?where=' + encodeURIComponent('41.6571,-87.6798')).kind).toBe('unknown-place');
   });
 
+  test('the whole value is looked up; only the echo is cut to fit the box', () => {
+    // A long value must not become a place by losing its tail: "Oak Lawn", 52
+    // spaces and a digit is over 60 characters and has a digit, so no place.
+    const long = 'Oak Lawn' + ' '.repeat(52) + '1';
+    const s = where('?where=' + encodeURIComponent(long));
+    expect(s.kind).toBe('unknown-place');
+    if (s.kind !== 'unknown-place') return;
+    expect(s.typed.length).toBeLessThanOrEqual(60);
+    expect(where('?where=' + encodeURIComponent('Oak Lawn' + 'x'.repeat(60))).kind).toBe(
+      'unknown-place'
+    );
+  });
+
   test('where wins over zip; an empty where falls back to zip, as /near sends', () => {
     expect(where('?where=Oak%20Lawn&zip=60406').kind).toBe('place');
     expect(where('?where=&zip=60406')).toMatchObject({ kind: 'zip', area: { zip: '60406' } });

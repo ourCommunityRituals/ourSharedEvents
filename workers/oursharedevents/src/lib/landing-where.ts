@@ -49,14 +49,16 @@ export type WhereState =
  * findPlaces never reads text with a digit, and only a 5-digit zip is a zip.
  */
 function readTyped(raw: string): WhereState {
-  // Echo back at most what fits the box; it is escaped where it is shown.
-  const typed = raw.trim().slice(0, PLACE_QUERY_MAX);
-  const matches = findPlaces(typed);
+  // The whole value is looked up, so a long one never becomes a place by losing
+  // its tail. Only the echo is cut to fit the box; it is escaped where shown.
+  const full = raw.trim();
+  const typed = full.slice(0, PLACE_QUERY_MAX);
+  const matches = findPlaces(full);
   if (matches.length === 1) return { kind: 'place', place: matches[0] };
   if (matches.length > 1) return { kind: 'choose', typed, matches };
-  const area = findZipArea(typed);
+  const area = findZipArea(full);
   if (area) return { kind: 'zip', area };
-  if (normalizeZip(typed)) return { kind: 'unknown-zip', typed };
+  if (normalizeZip(full)) return { kind: 'unknown-zip', typed };
   return { kind: 'unknown-place', typed };
 }
 
@@ -105,19 +107,21 @@ function boxValue(state: WhereState): string {
 
 /**
  * Every place a name means, each a link that narrows the search to it. All of
- * them, in state order: the person chooses; the page never picks one.
+ * them, in state order: the person chooses; the page never picks one. Styled
+ * by /ui.css only (`source-list` wraps, `filter-chip` is a 44px target): the
+ * landing carries no stylesheet of its own for this (spine design check).
  */
 function renderChoices(typed: string, matches: readonly PlaceMatch[]): string {
   const items = matches
     .map(
       (m) =>
-        `<li><a href="/?where=${escapeHtml(encodeURIComponent(m.label))}" data-testid="where-choice">${escapeHtml(m.label)}</a></li>`
+        `<a class="filter-chip" href="/?where=${escapeHtml(encodeURIComponent(m.label))}" data-testid="where-choice">${escapeHtml(m.label)}</a>`
     )
     .join('');
   return `
-        <div class="where-choices" data-testid="where-choices">
-          <p class="where-choose" id="where-choose" role="status">${matches.length} places are called ${escapeHtml(typed)}. Pick yours:</p>
-          <ul class="where-choice-list" aria-labelledby="where-choose">${items}</ul>
+        <div data-testid="where-choices">
+          <p id="where-choose" role="status">${matches.length} places are called ${escapeHtml(typed)}. Pick yours:</p>
+          <div class="source-list" role="group" aria-labelledby="where-choose">${items}</div>
         </div>`;
 }
 
@@ -140,7 +144,7 @@ export function renderWhere(state: WhereState): string {
             <button class="btn btn-primary" type="submit" data-testid="where-submit">Find events</button>
           </div>${msg ? `\n          <p class="where-msg" id="where-msg" role="alert" data-testid="where-msg">${msg}</p>` : ''}
         </form>${choices}
-        <p class="where-credit" data-testid="where-credit">Town names from <a href="https://www.geonames.org/">GeoNames</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>).</p>`;
+        <p class="list-sub" data-testid="where-credit">Town names from <a href="https://www.geonames.org/">GeoNames</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>).</p>`;
 }
 
 const CHANGE = '<a class="where-change" href="/?change=1" data-testid="where-change">Change</a>';
