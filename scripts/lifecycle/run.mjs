@@ -41,6 +41,14 @@ const SECRETS = [
 
 const readJson = (rel) => JSON.parse(readFileSync(join(ROOT, rel), 'utf8'));
 
+/**
+ * Text for one cell of the run summary's Markdown table: backslashes first, then
+ * the pipe that would end the cell, and a line break would end the row.
+ */
+export function tableCell(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+}
+
 function wholeNumber(env, name, fallback) {
   const raw = env[name];
   if (raw === undefined || raw === '') return fallback;
@@ -121,8 +129,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   if (env.GITHUB_STEP_SUMMARY) {
     const rows = report.results
       .map(
-        (r) =>
-          `| ${r.pass ? 'pass' : '**FAIL**'} | ${r.name} | ${String(r.detail).replace(/\|/g, '\\|')} |`
+        (r) => `| ${r.pass ? 'pass' : '**FAIL**'} | ${tableCell(r.name)} | ${tableCell(r.detail)} |`
       )
       .join('\n');
     appendFileSync(

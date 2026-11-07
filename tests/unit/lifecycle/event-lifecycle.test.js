@@ -26,7 +26,7 @@ const { PRODUCTION_HOSTS } = require('../../../config/production-hosts');
 const PROD = [...PRODUCTION_HOSTS].map((h) => `https://${h}`);
 const KEY = 'unit-test-admin-key';
 const ACCESS_ID = 'unit-access-id';
-const ACCESS_SECRET = 'unit-access-secret';
+const ACCESS_PART2 = 'unit-access-part2';
 
 // ── The fake site ───────────────────────────────────────────────────────────
 
@@ -258,7 +258,7 @@ async function runAll(
       baseUrl: STG,
       adminKey: KEY,
       accessClientId: ACCESS_ID,
-      accessClientSecret: ACCESS_SECRET,
+      accessClientSecret: ACCESS_PART2,
       fetch: site.fetch,
       sleep: async () => {},
     }),
@@ -401,7 +401,7 @@ describe('a healthy site', () => {
   test('no secret appears in any log line', async () => {
     const r = await runAll({ deleteFails: true });
     const all = r.lines.join('\n');
-    for (const s of [KEY, ACCESS_ID, ACCESS_SECRET]) expect(all).not.toContain(s);
+    for (const s of [KEY, ACCESS_ID, ACCESS_PART2]) expect(all).not.toContain(s);
   });
 
   test('a change that reaches a read late still passes (the checks poll)', async () => {
@@ -589,7 +589,7 @@ describe('the sweep', () => {
         baseUrl: STG,
         adminKey: KEY,
         accessClientId: ACCESS_ID,
-        accessClientSecret: ACCESS_SECRET,
+        accessClientSecret: ACCESS_PART2,
         fetch: site.fetch,
         sleep: async () => {},
       }),
@@ -600,5 +600,17 @@ describe('the sweep', () => {
     expect(site.events.has('evt_brand')).toBe(true);
     expect(site.events.has('evt_other_oak-lawn_3')).toBe(true);
     expect(report.results[0].detail).toContain('1 left from an earlier run');
+  });
+});
+
+describe('the run summary table', () => {
+  test('a cell escapes backslashes before pipes, and keeps to one row', async () => {
+    const { tableCell } = await import('../../../scripts/lifecycle/run.mjs');
+    const BS = String.fromCharCode(92); // one backslash
+    expect(tableCell('a|b')).toBe(`a${BS}|b`);
+    // a trailing backslash must not swallow the pipe that ends the cell
+    expect(tableCell(`ends in ${BS}`)).toBe(`ends in ${BS}${BS}`);
+    expect(tableCell(`${BS}|`)).toBe(`${BS}${BS}${BS}|`);
+    expect(tableCell('one\ntwo\r\nthree')).toBe('one two three');
   });
 });
