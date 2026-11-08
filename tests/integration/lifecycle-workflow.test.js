@@ -45,9 +45,11 @@ describe('when it runs', () => {
     expect(scheduleOf('stock-data-full.yml') - mine).toBeGreaterThanOrEqual(60);
   });
 
-  test('one run at a time, never cancelled by the next, on its own group', () => {
+  // One writer on stg at a time (CCR 2026-11-07 R-07): shared with the stock load,
+  // the T2 pages leg and the rollback drill.
+  test('one run at a time, never cancelled by the next, in the stg-writer group', () => {
     expect(wf.concurrency).toEqual({
-      group: 'staging-event-lifecycle',
+      group: 'stg-writer',
       'cancel-in-progress': false,
     });
   });

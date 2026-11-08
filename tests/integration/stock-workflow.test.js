@@ -66,8 +66,9 @@ describe('triggers and posture', () => {
     for (const job of Object.keys(jobs)) expect(jobs[job].permissions, job).toBeUndefined();
   });
 
+  // One writer on stg at a time (CCR 2026-11-07 R-07; tests/integration/stg-writer-concurrency.test.js).
   test('one run at a time, never cancelled by the next', () => {
-    expect(wf.concurrency).toEqual({ group: 'stock-data-full', 'cancel-in-progress': false });
+    expect(wf.concurrency).toEqual({ group: 'stg-writer', 'cancel-in-progress': false });
   });
 
   test('every job is on ubuntu-24.04', () => {
@@ -89,7 +90,10 @@ describe('the job chain', () => {
   });
 
   test('only check-swap overrides the default success() gate, and never on a skip or cancel', () => {
-    for (const job of CHAIN.slice(0, -1)) expect(jobs[job].if, job).toBeUndefined();
+    // seed and build add only the main-only guard (CCR 2026-11-07 R-06)
+    for (const job of CHAIN.slice(0, -1)) {
+      expect(jobs[job].if, job).toBe("${{ github.ref == 'refs/heads/main' }}");
+    }
     const cond = jobs['check-swap'].if;
     expect(cond).toContain('!cancelled()');
     expect(cond).toContain("needs.build.result == 'success'");

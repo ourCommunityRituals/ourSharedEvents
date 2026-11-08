@@ -52,8 +52,11 @@ on:
 permissions:
   contents: read
 
+# One writer on stg at a time (CCR 2026-11-07 R-07): the stock load, the T2 pages leg,
+# the event lifecycle and the rollback drill
+# share this group. A second run waits; it is never cancelled out from under a run.
 concurrency:
-  group: stock-data-full
+  group: stg-writer
   cancel-in-progress: false
 
 env:
@@ -61,8 +64,11 @@ env:
 
 jobs:
   # Reads only committed files: no secrets, no geocoding, no network.
+  # Every job runs only from main (CCR 2026-11-07 R-06): a dispatch from another
+  # branch skips the chain, so a branch's scripts never reach stg with this token.
   seed:
     name: 'Seed: re-base to today'
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -90,6 +96,7 @@ jobs:
   build:
     name: 'Build the day'
     needs: [seed]
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -151,7 +158,7 @@ jobs:
     name: 'Check, then swap per node'
     needs: [build]
     # Also after a failed build, to purge its partial manifest.
-    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'failure') }}
+    if: ${{ github.ref == 'refs/heads/main' && !cancelled() && (needs.build.result == 'success' || needs.build.result == 'failure') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
