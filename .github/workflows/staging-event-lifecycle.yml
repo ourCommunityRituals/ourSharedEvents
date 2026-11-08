@@ -9,8 +9,8 @@
 # through its whole life through the real admin API, never by a D1 write, in the
 # owner's test area: Oak Lawn 60453, Evergreen Park 60805, Blue Island 60406 and
 # Chicago 60620 (Auburn Gresham), two of them a night in turn. After each change
-# every public surface is read back: the landing page (/, ?zip=, and ?where= once
-# the town search is on main), /events (and ?q= by town and zip), the public
+# every public surface is read back: the landing page (/, ?zip= and ?where= by
+# town), /events (and ?q= by town and zip), the public
 # events API, the attendee map (GET /api/v2/events/map) and the event page.
 #
 #   0 sweep    delete any lifecycle event an earlier run left behind
@@ -61,9 +61,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # PR #1118 adds the landing town search (/?where=). Set to 'on' once it is on
-  # main and deployed: step 1 goes red when stg has the search and this is off.
-  LANDING_WHERE_SEARCH: 'off'
+  # The landing town search (/?where=, PR #1118) is on main and live on stg
+  # (first run 42515134938, 2026-11-08, went red on it), so every step checks it.
+  # With 'off', step 1 goes red while stg has the search.
+  LANDING_WHERE_SEARCH: 'on'
   WINDOW_PAST_DAYS: '0'
   WINDOW_FUTURE_DAYS: '90'
   # A change gets 90 s to reach every read (the map answers with max-age=60).
