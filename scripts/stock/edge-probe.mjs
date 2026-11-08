@@ -27,12 +27,12 @@ import { edgeChallenged } from './check-full.mjs';
 // The kinds of public read the stock check makes, plus the page the searches use,
 // each with the Worker's own answer. test-event-001 is CI's permanent staging
 // fixture, read on the slugless route the check reads. The /q/ and /s/ codes are
-// made up: the Worker sends /q/ home (a 302 on this site) and answers /s/ with a
-// 404 (read on stg 2026-11-08). A redirect anywhere else, such as a Cloudflare
-// Access login, never reached the Worker and fails.
+// made up: the Worker sends /q/ home (a 302 to this site's /) and answers /s/ with
+// a 404 (read on stg 2026-11-08). Any other answer fails, including a redirect
+// anywhere else, such as a Cloudflare Access login, which never reached the Worker.
 export const PROBES = [
-  { path: '/q/edge-probe', expect: ['same-site-redirect', 404] },
-  { path: '/s/edge-probe', expect: ['same-site-redirect', 404] },
+  { path: '/q/edge-probe', expect: ['302-home'] },
+  { path: '/s/edge-probe', expect: [404] },
   { path: '/events/test-event-001', expect: [200] },
   { path: '/?zip=60453', expect: [200] },
 ];
@@ -44,13 +44,16 @@ const RAY_RE = /^[0-9a-f]{16}-[A-Z]{3}$/i;
 const SITE_ORIGIN = new URL(STOCK_BASE_URL).origin;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
-/** 'this-site', 'elsewhere' or '' (no Location). The Location itself is never kept. */
+/** 'home' (this site's /), 'this-site' (another path here), 'elsewhere' or '' (none).
+ * The Location itself is never kept. */
 function redirectTarget(res) {
   const h = res && res.headers;
   const loc = h && typeof h.get === 'function' ? h.get('location') : null;
   if (!loc) return '';
   try {
-    return new URL(loc, SITE_ORIGIN).origin === SITE_ORIGIN ? 'this-site' : 'elsewhere';
+    const target = new URL(loc, SITE_ORIGIN);
+    if (target.origin !== SITE_ORIGIN) return 'elsewhere';
+    return target.pathname === '/' && !target.search ? 'home' : 'this-site';
   } catch {
     return 'elsewhere';
   }
@@ -117,7 +120,7 @@ export function readOk(r) {
   const probe = PROBES.find((p) => p.path === r.path);
   if (!probe) return false;
   if (REDIRECT_STATUSES.has(r.status)) {
-    return probe.expect.includes('same-site-redirect') && r.redirect === 'this-site';
+    return probe.expect.includes('302-home') && r.status === 302 && r.redirect === 'home';
   }
   return probe.expect.includes(r.status);
 }

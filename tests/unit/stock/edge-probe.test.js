@@ -86,7 +86,7 @@ describe('stg edge probe', () => {
       '| check | `/s/edge-probe` | 403 | CHALLENGED | a5711b195919fa42-SEA |'
     );
     expect(r.out).toContain('| edge-only | `/s/edge-probe` | 404 | no |');
-    expect(r.out).toContain('| check | `/q/edge-probe` | 302 → this-site | no |');
+    expect(r.out).toContain('| check | `/q/edge-probe` | 302 → home | no |');
   });
 
   test('red when a check read never reaches anything', async () => {
@@ -116,13 +116,16 @@ describe('stg edge probe', () => {
       redirect,
       challenged: false,
     });
-    expect(ep.readOk(row('/q/edge-probe', 302, 'this-site'))).toBe(true);
-    expect(ep.readOk(row('/q/edge-probe', 404))).toBe(true);
+    expect(ep.readOk(row('/q/edge-probe', 302, 'home'))).toBe(true);
+    expect(ep.readOk(row('/q/edge-probe', 302, 'this-site'))).toBe(false);
+    expect(ep.readOk(row('/q/edge-probe', 301, 'home'))).toBe(false);
+    expect(ep.readOk(row('/q/edge-probe', 404))).toBe(false);
+    expect(ep.readOk(row('/s/edge-probe', 302, 'home'))).toBe(false);
     expect(ep.readOk(row('/s/edge-probe', 404))).toBe(true);
     expect(ep.readOk(row('/q/edge-probe', 200))).toBe(false);
     expect(ep.readOk(row('/events/test-event-001', 200))).toBe(true);
     expect(ep.readOk(row('/events/test-event-001', 404))).toBe(false);
-    expect(ep.readOk(row('/events/test-event-001', 302, 'this-site'))).toBe(false);
+    expect(ep.readOk(row('/events/test-event-001', 302, 'home'))).toBe(false);
     expect(ep.readOk(row('/?zip=60453', 404))).toBe(false);
     expect(ep.readOk(row('/elsewhere', 200))).toBe(false);
     expect(ep.readOk({ ...row('/s/edge-probe', 404), challenged: true })).toBe(false);
