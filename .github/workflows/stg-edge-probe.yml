@@ -1,0 +1,50 @@
+# stg edge probe: what the Cloudflare edge answers a GitHub runner on stg.
+#
+# "Stock data (stg)" builds the day's events, then its check reads each one's /s/
+# and /events/ page from a runner. Since 2026-11-07 the edge has challenged every
+# such read (cf-mitigated: challenge), so the check purged every node and stg's
+# zip searches read 0, while the same read from the owner's machine got through.
+# This probe repeats the check's read from a runner in three shapes (the check's
+# own headers, X-OCR-CI alone, no headers) and reports status, challenge and Ray
+# ID per read, so a rule change at the edge can be tested in under a minute
+# instead of a full stock run. It fails when a read shaped like the check's is
+# challenged.
+#
+# Reads only: no deploy, no D1 or R2, no writes anywhere. Dispatch by hand.
+# Secrets: OCR_CI_EDGE_TOKEN, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET (the
+# stock check's own read headers); values are masked and never printed.
+
+name: stg edge probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stg-edge-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: 'Probe the stg edge from a runner'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Probe
+        timeout-minutes: 3
+        env:
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: node scripts/stock/edge-probe.mjs
