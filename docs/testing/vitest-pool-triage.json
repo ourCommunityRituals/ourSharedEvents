@@ -1238,7 +1238,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 12
+      "testCount": 16
     },
     {
       "file": "workers/oursharedevents/tests/events-publication.spec.ts",
