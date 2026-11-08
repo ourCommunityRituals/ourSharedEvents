@@ -5,6 +5,7 @@ const path = require('node:path');
 let buildPurgeSql;
 let purgeR2Keys;
 let listStaleManifests;
+let listNewerManifests;
 let manifestName;
 let parseManifestName;
 let PURGE_TABLES;
@@ -14,6 +15,7 @@ beforeAll(async () => {
     buildPurgeSql,
     purgeR2Keys,
     listStaleManifests,
+    listNewerManifests,
     manifestName,
     parseManifestName,
     PURGE_TABLES,
@@ -431,7 +433,9 @@ describe('manifest names', () => {
 describe('listStaleManifests', () => {
   const n = (date, run, attempt = 1) => `manifest-${date}-${run}-${attempt}.json`;
 
-  test('every manifest older than the newest passing one, oldest first (Review Focus 3)', () => {
+  // Ordered by run start (run id, then attempt), never by date: a re-run of an older
+  // run carries a later date but is not newer (CCR 2026-11-07 L3-08).
+  test('every manifest from an earlier run than the newest passing one, oldest run first', () => {
     const names = [n('2026-11-03', 300), n('2026-11-01', 100), n('2026-11-02', 200)];
     expect(listStaleManifests(names, n('2026-11-03', 300))).toEqual([
       n('2026-11-01', 100),
@@ -444,7 +448,7 @@ describe('listStaleManifests', () => {
       n('2026-11-04', 9),
       n('2026-11-04', 10),
       n('2026-11-04', 11),
-      n('2026-11-05', 1),
+      n('2026-11-05', 12),
     ];
     // ordered by run id as a number: 9 < 10, though "9" > "10" as text
     expect(listStaleManifests(names, n('2026-11-04', 10))).toEqual([n('2026-11-04', 9)]);
@@ -462,7 +466,13 @@ describe('listStaleManifests', () => {
   test('a name that is not an exact manifest name is never stale', () => {
     const names = ['manifest-2026-11-01-run-12345678-1.json', 'notes.txt', n('2026-11-01', 5)];
     expect(parseManifestName('manifest-2026-11-01-run-12345678-1.json')).toBeNull();
-    expect(listStaleManifests(names, n('2026-11-03', 1))).toEqual([n('2026-11-01', 5)]);
+    expect(listStaleManifests(names, n('2026-11-03', 9))).toEqual([n('2026-11-01', 5)]);
+  });
+
+  test('a later date from an earlier run is stale; an earlier date from a later run is not', () => {
+    const names = [n('2026-11-06', 100), n('2026-11-02', 300)];
+    expect(listStaleManifests(names, n('2026-11-04', 200))).toEqual([n('2026-11-06', 100)]);
+    expect(listNewerManifests(names, n('2026-11-04', 200))).toEqual([n('2026-11-02', 300)]);
   });
 
   test('refuses a newest-passing value that is not a manifest name', () => {

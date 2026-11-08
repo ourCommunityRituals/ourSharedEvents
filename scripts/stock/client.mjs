@@ -6,6 +6,8 @@ export const STOCK_BASE_URL = 'https://stg.oursharedevents.com';
 
 // At most 5 requests per second.
 const MIN_GAP_MS = 200;
+// Every call has a deadline (CCR 2026-11-07 R-11); an upload of art gets the same.
+export const REQUEST_TIMEOUT_MS = 60_000;
 
 const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -20,6 +22,7 @@ export function createClient({
   fetch: fetchFn = globalThis.fetch,
   sleep = realSleep,
   now = Date.now,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 }) {
   if (baseUrl !== STOCK_BASE_URL) {
     throw new Error(`createClient: baseUrl must be ${STOCK_BASE_URL}`);
@@ -43,11 +46,19 @@ export function createClient({
   async function request(method, path, { body, headers } = {}) {
     await pace();
     let res;
+    const signal = AbortSignal.timeout(timeoutMs);
     try {
       // never follow a redirect: it would carry the Access secret to another host
-      res = await fetchFn(`${baseUrl}${path}`, { method, headers, body, redirect: 'manual' });
+      res = await fetchFn(`${baseUrl}${path}`, {
+        method,
+        headers,
+        body,
+        redirect: 'manual',
+        signal,
+      });
     } catch {
-      throw new Error(`${method} ${bareApiPath(path)} failed: network error`);
+      const why = signal.aborted ? 'timed out' : 'network error';
+      throw new Error(`${method} ${bareApiPath(path)} failed: ${why}`);
     }
     if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
       throw new Error(`${method} ${bareApiPath(path)} failed: redirected (HTTP ${res.status})`);

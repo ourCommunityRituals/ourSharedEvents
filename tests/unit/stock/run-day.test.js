@@ -23,6 +23,12 @@ for (const e of SEED.events) SEED_COUNTS[e.node] = (SEED_COUNTS[e.node] || 0) + 
 const P = Math.min(...Object.values(SEED_COUNTS));
 const EXPECTED = { a: P, b: P };
 const MISSING = '✘ [ERROR] The specified key does not exist.';
+const DONE = {
+  d1: '🚣 Executed 3 queries in 1.20ms',
+  get: 'Download complete.',
+  put: 'Upload complete.',
+  delete: 'Delete complete.',
+};
 
 // A day's manifest: one event, sponsor, poster and upload per node, one placement to accept.
 const manifestOf = (date, tag, nodes) => ({
@@ -78,9 +84,15 @@ function world({ index, objects = {}, fail = () => false, raw, strictDeletes = f
         r2.delete(key);
       }
     }
-    return { code: 0, stdout: '', stderr: '' };
+    // the completion line each command prints (wrangler 4.145.0); makeCloud requires it
+    return {
+      code: 0,
+      stdout: `${DONE[args[0] === 'd1' ? 'd1' : args[2]]}
+`,
+      stderr: '',
+    };
   };
-  const cloud = rd.makeCloud({ wrangler, fs, tmpDir: '/tmp' });
+  const cloud = rd.makeCloud({ wrangler, fs, tmpDir: '/tmp', sleep: async () => {} });
   const liveIndex = () => JSON.parse(r2.get(rd.INDEX_KEY)).manifests;
   const sqls = () => calls.filter((c) => c.sql !== null).map((c) => c.sql);
   const deletes = () => calls.filter((c) => c.args[2] === 'delete').map((c) => c.args[3]);
@@ -121,12 +133,12 @@ const swap = (w, extra = {}) =>
 const allCalls = [];
 
 describe('swap per node', () => {
-  test('a passing node purges only stale manifests, never today or a newer one', async () => {
+  // A newer run's load supersedes this one: see 'stale manifests by run start' below.
+  test('a passing node purges only stale manifests, never today', async () => {
     const w = world({
-      index: [STALE_NAME, NEWER_NAME],
+      index: [STALE_NAME],
       objects: {
         [`stock/${STALE_NAME}`]: manifestOf('2026-11-03', 'y', ['a', 'b']),
-        [`stock/${NEWER_NAME}`]: manifestOf('2026-11-05', 'n', ['a', 'b']),
       },
     });
     const report = await swap(w);
@@ -143,8 +155,8 @@ describe('swap per node', () => {
       `${rd.R2_BUCKET}/events/y_evt_a/art.png`,
       `${rd.R2_BUCKET}/events/y_evt_b/art.png`,
     ]);
-    // the stale one is fully purged, so it leaves; the newer one is never touched
-    expect(w.liveIndex()).toEqual([NEWER_NAME, TODAY_NAME]);
+    // the stale one is fully purged, so it leaves
+    expect(w.liveIndex()).toEqual([TODAY_NAME]);
     expect(w.r2.has(`stock/${STALE_NAME}`)).toBe(true); // the manifest object itself stays
     expect(JSON.parse(w.r2.get(`stock/${TODAY_NAME}`)).date).toBe(TODAY);
     expect(report.exitCode).toBe(0);
@@ -350,7 +362,7 @@ describe('wrangler target', () => {
     const cloud = rd.makeCloud({
       wrangler: async (a) => {
         ran.push(a);
-        return { code: 0 };
+        return { code: 0, stdout: DONE.d1 };
       },
       fs: { writeFileSync() {}, readFileSync: () => '' },
       tmpDir: '/tmp',
@@ -633,6 +645,14 @@ describe('the site and the secrets', () => {
               reasons: n.id === 'oak-lawn' ? [`count:${P - 3}/${P}`] : [],
               ...(n.id === 'mount-greenwood' ? { skipped: ['landing-map'] } : {}),
             },
+          ])
+        ),
+      // every search on its total: this test is about the node rows
+      checkSearches: async ({ searches }) =>
+        Object.fromEntries(
+          Object.entries(searches).map(([q, n]) => [
+            q,
+            { pass: true, count: n, expected: n, reasons: [] },
           ])
         ),
       log: () => {},
@@ -971,6 +991,12 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
     };
     expect(rd.renderSummary({ ...args, report: clean, searches })).toContain('X-OCR-CI');
     expect(rd.renderSummary({ ...args, report: clean })).not.toContain('X-OCR-CI');
+    // decision 2A: an unverified node is named so, and its load was kept
+    const kept = {
+      ...report,
+      results: { ...report.results, a: { ...report.results.a, unverified: true } },
+    };
+    expect(rd.renderSummary({ ...args, report: kept })).toContain('| UNVERIFIED (kept) |');
   });
 
   test('when the manifest object was saved but the index write failed, the summary says so', async () => {
@@ -2017,5 +2043,221 @@ describe('check-swap re-run alone recovers the build’s registration', () => {
     expect(w.calls.some((c) => c.args[2] === 'put' || c.args[2] === 'delete')).toBe(false);
     expect(w.sqls()).toEqual([]);
     expect(w.liveIndex()).toEqual([other]);
+  });
+});
+
+// ── CCR 2026-11-07 group 2: check honesty (owner decision 2A) ──────────────
+describe('check honesty: an unverified read keeps the load and turns the run red', () => {
+  const unverifiedChecker = (unverifiedNodes, reason) => async () =>
+    Object.fromEntries(
+      NODES.nodes.map((n) => [
+        n.id,
+        unverifiedNodes.includes(n.id)
+          ? { pass: false, count: P, expected: P, totalListed: P, reasons: [reason] }
+          : { pass: true, count: P, expected: P, totalListed: P, reasons: [] },
+      ])
+    );
+  const stale = () =>
+    world({
+      index: [STALE_NAME],
+      objects: { [`stock/${STALE_NAME}`]: manifestOf('2026-11-03', 'y', ['a', 'b']) },
+    });
+
+  test('an edge-challenged node swaps in the new load, and the run is red', async () => {
+    const w = stale();
+    const report = await swap(w, {
+      checkNodes: unverifiedChecker(['b'], 'edge-challenged:/s/x ray=a56c65f64daac071-ORD'),
+    });
+    allCalls.push(...w.calls);
+    const purged = w
+      .sqls()
+      .filter((s) => s.startsWith('DELETE'))
+      .join('\n');
+    expect(purged).toContain("'y_evt_b'");
+    expect(purged).not.toMatch(/'t_/);
+    expect(report.results.b.unverified).toBe(true);
+    expect(w.liveIndex()).toEqual([TODAY_NAME]);
+    expect(report.exitCode).toBe(1);
+  });
+
+  test('a database busy with a long-running import is retried, then counts as unverified', async () => {
+    const w = stale();
+    const busy = 'X [ERROR] A long-running import is in progress for this database';
+    let tries = 0;
+    const wrangler = async (args) => {
+      const sql = args[0] === 'd1' ? w.files.get(args[args.indexOf('--file') + 1]) : '';
+      if (sql.startsWith('UPDATE')) {
+        tries += 1;
+        return { code: 1, stdout: '', stderr: busy };
+      }
+      return w.wrangler(args);
+    };
+    const cloud = rd.makeCloud({ wrangler, fs: w.fs, tmpDir: '/tmp', sleep: async () => {} });
+    const report = await swap(w, { cloud });
+    expect(tries).toBe(rd.D1_BUSY_TRIES);
+    expect(Object.values(report.results).every((r) => r.unverified)).toBe(true);
+    const purged = w
+      .sqls()
+      .filter((s) => s.startsWith('DELETE'))
+      .join('\n');
+    expect(purged).not.toMatch(/'t_/);
+    expect(report.exitCode).toBe(1);
+  });
+
+  test('a busy answer that clears on retry is a success', async () => {
+    const w = stale();
+    const answers = [{ code: 1, stdout: '', stderr: 'D1_ERROR: SQLITE_BUSY' }];
+    const wrangler = async (args) => answers.shift() || w.wrangler(args);
+    const cloud = rd.makeCloud({ wrangler, fs: w.fs, tmpDir: '/tmp', sleep: async () => {} });
+    await expect(cloud.d1File('SELECT 1;')).resolves.toBeUndefined();
+  });
+
+  test('a wrangler that exits 0 without its completion line failed (a signal-killed child)', async () => {
+    for (const op of ['d1', 'get', 'put', 'delete']) {
+      const cloud = rd.makeCloud({
+        wrangler: async () => ({ code: 0, stdout: '', stderr: '' }),
+        fs: { writeFileSync() {}, readFileSync: () => '{}' },
+        tmpDir: '/tmp',
+        sleep: async () => {},
+      });
+      const call = {
+        d1: () => cloud.d1File('SELECT 1;'),
+        get: () => cloud.r2Get('stock/x.json'),
+        put: () => cloud.r2Put('stock/x.json', '{}'),
+        delete: () => cloud.r2Delete('events/x/a.png'),
+      }[op];
+      await expect(call(), op).rejects.toThrow(/no completion line/);
+    }
+  });
+
+  test('a wrangler killed by a signal or past its deadline is a failure', () => {
+    expect(
+      rd.wranglerResult({ status: null, signal: 'SIGTERM', stdout: '', stderr: '' }).code
+    ).toBe(1);
+    expect(rd.wranglerResult({ status: 0, signal: 'SIGKILL', stdout: 'x', stderr: '' }).code).toBe(
+      1
+    );
+    expect(rd.wranglerResult({ status: 0, error: new Error('ETIMEDOUT') }).code).toBe(1);
+    expect(rd.wranglerResult({ status: 0, signal: null, stdout: 'ok', stderr: '' })).toEqual({
+      code: 0,
+      stdout: 'ok',
+      stderr: '',
+    });
+  });
+});
+
+describe('check honesty: the searches gate the swap', () => {
+  // the owner's total, never a literal (stock/totals.json)
+  const OLT = JSON.parse(readFileSync(path.join(ROOT, 'stock/totals.json'), 'utf8')).searches[
+    'Oak Lawn'
+  ];
+  const stale = () =>
+    world({
+      index: [STALE_NAME],
+      objects: { [`stock/${STALE_NAME}`]: manifestOf('2026-11-03', 'y', ['a', 'b']) },
+    });
+  const searchesOf =
+    (pass, order, seen) =>
+    async ({ exclude }) => {
+      if (order) order.push('searches');
+      if (seen) seen.push(exclude);
+      return {
+        'Oak Lawn': pass
+          ? { pass: true, count: OLT, expected: OLT, reasons: [] }
+          : { pass: false, count: OLT - 1, expected: OLT, reasons: [`count:${OLT - 1}/${OLT}`] },
+      };
+    };
+  const deletes = (w) =>
+    w
+      .sqls()
+      .filter((s) => s.startsWith('DELETE'))
+      .join('\n');
+
+  test('the searches run before any purge, and leave out what the swap will remove', async () => {
+    const w = stale();
+    const seen = [];
+    const report = await swap(w, {
+      checkNodes: checker(['a'], w.order),
+      searches: { 'Oak Lawn': OLT },
+      checkSearches: searchesOf(true, w.order, seen),
+    });
+    allCalls.push(...w.calls);
+    const firstDelete = w.order.findIndex((o) => o === 'd1:DELETE');
+    expect(w.order.indexOf('searches')).toBeGreaterThan(-1);
+    expect(w.order.indexOf('searches')).toBeLessThan(firstDelete);
+    // a passes: yesterday's a goes; b fails: today's b goes, yesterday's b stays
+    expect(seen[0].has('y_evt_a')).toBe(true);
+    expect(seen[0].has('t_evt_b')).toBe(true);
+    expect(seen[0].has('y_evt_b')).toBe(false);
+    expect(seen[0].has('t_evt_a')).toBe(false);
+    expect(report.searches['Oak Lawn'].pass).toBe(true);
+  });
+
+  test('a search off its total stops the swap: the new load goes, the old one stays', async () => {
+    const w = stale();
+    const report = await swap(w, {
+      searches: { 'Oak Lawn': OLT },
+      checkSearches: searchesOf(false),
+    });
+    allCalls.push(...w.calls);
+    expect(deletes(w)).toContain("'t_evt_a'");
+    expect(deletes(w)).toContain("'t_evt_b'");
+    expect(deletes(w)).not.toMatch(/'y_/);
+    expect(w.liveIndex()).toEqual([STALE_NAME]);
+    expect(report.exitCode).toBe(1);
+  });
+
+  test('an edge-challenged search keeps the load and turns the run red', async () => {
+    const w = stale();
+    const report = await swap(w, {
+      searches: { 'Oak Lawn': OLT },
+      checkSearches: async () => ({
+        'Oak Lawn': { pass: false, count: null, expected: OLT, reasons: ['edge-challenged'] },
+      }),
+    });
+    allCalls.push(...w.calls);
+    expect(deletes(w)).toMatch(/'y_/);
+    expect(deletes(w)).not.toMatch(/'t_/);
+    expect(report.exitCode).toBe(1);
+  });
+});
+
+describe('stale manifests by run start: a re-run never leaves two loads listed', () => {
+  test('a listed load from a later run supersedes this one: the new rows go, the later load stays', async () => {
+    const w = world({
+      index: [NEWER_NAME],
+      objects: { [`stock/${NEWER_NAME}`]: manifestOf('2026-11-05', 'n', ['a', 'b']) },
+    });
+    const report = await swap(w);
+    allCalls.push(...w.calls);
+    const purged = w
+      .sqls()
+      .filter((s) => s.startsWith('DELETE'))
+      .join('\n');
+    expect(purged).toContain("'t_evt_a'");
+    expect(purged).not.toMatch(/'n_/);
+    expect(w.liveIndex()).toEqual([NEWER_NAME]);
+    expect(report.problems.join(' ')).toContain(`superseded by ${NEWER_NAME}`);
+    expect(report.exitCode).toBe(1);
+  });
+
+  test('an earlier run with a later date is still stale', async () => {
+    const LATER_DATE_EARLIER_RUN = 'manifest-2026-11-05-150-1.json';
+    const w = world({
+      index: [LATER_DATE_EARLIER_RUN],
+      objects: {
+        [`stock/${LATER_DATE_EARLIER_RUN}`]: manifestOf('2026-11-05', 'e', ['a', 'b']),
+      },
+    });
+    const report = await swap(w);
+    allCalls.push(...w.calls);
+    const purged = w
+      .sqls()
+      .filter((s) => s.startsWith('DELETE'))
+      .join('\n');
+    expect(purged).toContain("'e_evt_a'");
+    expect(purged).not.toMatch(/'t_/);
+    expect(w.liveIndex()).toEqual([TODAY_NAME]);
+    expect(report.exitCode).toBe(0);
   });
 });

@@ -551,7 +551,11 @@ describe('checkNodes: anchor, zip, QR, pages and art', () => {
     expect(pub.length).toBeGreaterThan(0);
     for (const c of pub) {
       expect(String(c.url).startsWith(`${BASE}/`)).toBe(true);
-      expect(c.init).toEqual({ method: 'GET', redirect: 'manual' });
+      expect(c.init).toEqual({
+        method: 'GET',
+        redirect: 'manual',
+        signal: expect.any(AbortSignal),
+      });
     }
     expect(s.calls.filter((c) => c.via === 'client').map((c) => c.path)).toEqual([
       '/api/v2/events',
@@ -690,12 +694,120 @@ describe('checkSearches: each /events search reads its total', () => {
     expect(calls).toEqual([
       {
         url: 'https://stg.oursharedevents.com/events?q=Oak%20Lawn',
-        init: { method: 'GET', redirect: 'manual' },
+        init: { method: 'GET', redirect: 'manual', signal: expect.any(AbortSignal) },
       },
     ]);
   });
 
   test('a search with no expected count is refused', async () => {
     await expect(run({}, { 'Oak Lawn': -1 })).rejects.toThrow('no expected count');
+  });
+});
+
+// CCR 2026-11-07 group 2 (owner decision 2A): a read the harness could not make
+// is "unverified", never a broken page; every read has a deadline; and the
+// searches can be judged while yesterday's load is still listed.
+describe('check honesty (CCR 2026-11-07, decision 2A)', () => {
+  let cf;
+  beforeAll(async () => {
+    cf = await import('../../../scripts/stock/check-full.mjs');
+  });
+  const S = readJson('stock/totals.json').searches;
+  const OL = S['Oak Lawn'];
+
+  test('a node whose only reasons are edge challenges or a busy database is unverified', () => {
+    const r = (reasons) => ({ pass: false, reasons });
+    expect(
+      cf.isUnverified(r([`edge-challenged:/s/x ray=${RAY}`, 'edge-challenged:/events/e']))
+    ).toBe(true);
+    expect(cf.isUnverified(r(['d1-busy']))).toBe(true);
+    expect(cf.isUnverified(r(['edge-challenged:/s/x', 'count:3/10']))).toBe(false);
+    expect(cf.isUnverified(r(['read-timeout:/s/x']))).toBe(false);
+    expect(cf.isUnverified(r([]))).toBe(false);
+    expect(cf.isUnverified({ pass: true, reasons: [] })).toBe(false);
+  });
+
+  test('every public read carries a deadline, and a read that never answers fails its node', async () => {
+    const d = day({ [A]: 1 });
+    const s = site({ listed: d.listed });
+    const signals = [];
+    const hanging = async (url, init) => {
+      signals.push(init && init.signal);
+      return new Promise((resolve, reject) => {
+        if (init && init.signal) {
+          init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        }
+      });
+    };
+    const results = await run({ ...s, fetchPublic: hanging }, d.manifest, {
+      expected: { ...EXPECTED, [A]: 1 },
+      readTimeoutMs: 5,
+    });
+    expect(signals.length).toBeGreaterThan(0);
+    for (const sig of signals) expect(sig).toBeInstanceOf(AbortSignal);
+    expect(results[A].pass).toBe(false);
+    expect(results[A].reasons.some((x) => x.startsWith('read-timeout:'))).toBe(true);
+  }, 5000);
+
+  test('a search read that never answers fails with read-timeout', async () => {
+    const results = await cf.checkSearches({
+      searches: { 'Oak Lawn': OL },
+      sleep: async () => {},
+      readTimeoutMs: 5,
+      fetchPublic: (url, init) =>
+        new Promise((resolve, reject) => {
+          init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    });
+    expect(results['Oak Lawn']).toEqual({
+      pass: false,
+      count: null,
+      expected: OL,
+      reasons: ['read-timeout'],
+    });
+  }, 5000);
+
+  const page = (summary, ids) => ({
+    status: 200,
+    text: async () =>
+      `<p class="disc-summary" data-testid="disc-summary">${summary} events in Oak Lawn</p>` +
+      ids
+        .map((id) => `<article data-testid="public-event-card" data-event-id="${id}"></article>`)
+        .join(''),
+  });
+
+  test('with yesterday still listed, the search counts only what the swap will leave', async () => {
+    const today = Array.from({ length: OL }, (_, i) => `t_${i}`);
+    const stale = Array.from({ length: OL }, (_, i) => `y_${i}`);
+    const results = await cf.checkSearches({
+      searches: { 'Oak Lawn': OL },
+      exclude: new Set(stale),
+      sleep: async () => {},
+      fetchPublic: async () => page(2 * OL, [...today, ...stale]),
+    });
+    expect(results['Oak Lawn']).toEqual({ pass: true, count: OL, expected: OL, reasons: [] });
+  });
+
+  test('an over-count after the exclusion still fails', async () => {
+    const ids = Array.from({ length: OL + 1 }, (_, i) => `t_${i}`);
+    const results = await cf.checkSearches({
+      searches: { 'Oak Lawn': OL },
+      exclude: new Set(['y_0']),
+      sleep: async () => {},
+      fetchPublic: async () => page(OL + 2, [...ids, 'y_0']),
+    });
+    expect(results['Oak Lawn'].pass).toBe(false);
+    expect(results['Oak Lawn'].reasons).toEqual([`count:${OL + 1}/${OL}`]);
+  });
+
+  test('when cards and the summary disagree, an excluding search cannot be judged', async () => {
+    const results = await cf.checkSearches({
+      searches: { 'Oak Lawn': OL },
+      exclude: new Set(['y_0']),
+      sleep: async () => {},
+      fetchPublic: async () => page(OL + 5, ['t_0', 'y_0']),
+    });
+    expect(results['Oak Lawn'].pass).toBe(false);
+    expect(results['Oak Lawn'].reasons).toEqual(['cards-unreadable']);
   });
 });
