@@ -73,7 +73,17 @@ export function seedExpected(nodes) {
 
 // ── Target guard ───────────────────────────────────────────────────────────
 
-/** Throws unless a wrangler command names `--env staging` once and runs remote. */
+// Any argument that names production, apart from a temp file's path.
+const PRODUCTION_NAME = /production/i;
+
+/**
+ * Throws unless a wrangler command names `--env staging` once, runs remote, and
+ * targets the staging database or bucket by name. The flag alone is not enough:
+ * wrangler resolves a database name account-wide, so `--env staging` with
+ * `ocr-db-production` would reach production (CCR 2026-11-07 R-06). Only the
+ * two command shapes the swap sends are allowed: `d1 execute <db>` and
+ * `r2 object get|put|delete <bucket>/<key>`.
+ */
 export function assertStaging(args) {
   if (!Array.isArray(args) || !args.every((a) => typeof a === 'string')) {
     throw new Error('wrangler: arguments must be strings');
@@ -84,6 +94,24 @@ export function assertStaging(args) {
     throw new Error(`wrangler: every command must name --env ${WRANGLER_ENV}, once`);
   }
   if (!args.includes('--remote')) throw new Error('wrangler: every command must be --remote');
+  const fileAt = args.indexOf('--file');
+  if (args.some((a, i) => (fileAt < 0 || i !== fileAt + 1) && PRODUCTION_NAME.test(a))) {
+    throw new Error('wrangler: a production name is never a target');
+  }
+  const [tool, sub, verb, target] = args;
+  if (tool === 'd1' && sub === 'execute') {
+    if (verb !== D1_DATABASE) throw new Error(`wrangler: d1 may target ${D1_DATABASE} only`);
+    return;
+  }
+  if (tool === 'r2' && sub === 'object' && ['get', 'put', 'delete'].includes(verb)) {
+    const key =
+      typeof target === 'string' && target.startsWith(`${R2_BUCKET}/`)
+        ? target.slice(R2_BUCKET.length + 1)
+        : '';
+    if (key === '') throw new Error(`wrangler: r2 may target ${R2_BUCKET}/<key> only`);
+    return;
+  }
+  throw new Error('wrangler: only d1 execute and r2 object get/put/delete are allowed');
 }
 
 /** A wrangler runner on this machine: `npx wrangler …` in the Worker folder, no shell. */

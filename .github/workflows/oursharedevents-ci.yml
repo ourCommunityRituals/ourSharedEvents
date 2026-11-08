@@ -1406,8 +1406,11 @@ jobs:
     # (the pages leg publishes the landing zip fixture, then unpublishes it after
     # Bruno): without this, one run's reset could land mid-way through the other's
     # assertions. A second run waits; it is never cancelled out from under a merge.
+    # The pages leg writes to stg (the landing zip fixture), so it also waits for the
+    # stock load, the event lifecycle and the rollback drill: one stg writer at a
+    # time (CCR 2026-11-07 R-07).
     concurrency:
-      group: ose-t2-staging-${{ matrix.section }}
+      group: ${{ matrix.section == 'pages' && 'stg-writer' || format('ose-t2-staging-{0}', matrix.section) }}
       cancel-in-progress: false
     # OSE-954: runs on ephemeral ubuntu-latest. Bruno (`bru run`) + wrangler-d1
     # seed only; no deploy. Staging auth is the header-based CF Access service

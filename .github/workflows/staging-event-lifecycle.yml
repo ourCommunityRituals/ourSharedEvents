@@ -53,8 +53,11 @@ on:
 permissions:
   contents: read
 
+# One writer on stg at a time (CCR 2026-11-07 R-07): this job, the stock load, the T2 pages
+# leg and the other stg writer
+# share this group. A second run waits; it is never cancelled out from under a run.
 concurrency:
-  group: staging-event-lifecycle
+  group: stg-writer
   cancel-in-progress: false
 
 env:

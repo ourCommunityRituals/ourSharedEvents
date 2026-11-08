@@ -368,6 +368,159 @@ describe('wrangler target', () => {
     expect(ran).toHaveLength(1);
   });
 
+  // CCR 2026-11-07 R-06: wrangler resolves database names account-wide, so a
+  // command with --env staging that names a production database or bucket still
+  // reaches production. The guard checks the target, not only the flag.
+  test.each([
+    [
+      'the production database',
+      [
+        'd1',
+        'execute',
+        'ocr-db-production',
+        '--env',
+        'staging',
+        '--remote',
+        '--yes',
+        '--file',
+        'x.sql',
+      ],
+    ],
+    [
+      'the production forms database',
+      [
+        'd1',
+        'execute',
+        'ocr-forms-db-production',
+        '--env',
+        'staging',
+        '--remote',
+        '--file',
+        'x.sql',
+      ],
+    ],
+    [
+      'the staging forms database',
+      ['d1', 'execute', 'ocr-forms-db-staging', '--env', 'staging', '--remote', '--file', 'x.sql'],
+    ],
+    [
+      'a database by id',
+      [
+        'd1',
+        'execute',
+        '2b4c1f0e-0000-4000-8000-000000000000',
+        '--env',
+        'staging',
+        '--remote',
+        '--file',
+        'x.sql',
+      ],
+    ],
+    [
+      'the production bucket',
+      [
+        'r2',
+        'object',
+        'get',
+        'ose-uploads-production/stock/x.json',
+        '--env',
+        'staging',
+        '--remote',
+        '--file',
+        'x',
+      ],
+    ],
+    [
+      'a bucket prefix lookalike',
+      [
+        'r2',
+        'object',
+        'put',
+        'ose-uploads-staging-prod/x.json',
+        '--env',
+        'staging',
+        '--remote',
+        '--file',
+        'x',
+      ],
+    ],
+    [
+      'a bare bucket',
+      ['r2', 'object', 'delete', 'ose-uploads-staging', '--env', 'staging', '--remote'],
+    ],
+    [
+      'a production name anywhere',
+      [
+        'd1',
+        'execute',
+        'ocr-db-staging',
+        '--env',
+        'staging',
+        '--remote',
+        '--command',
+        'ATTACH ocr-db-production',
+      ],
+    ],
+    [
+      'a command other than d1 execute or r2 object',
+      ['d1', 'migrations', 'apply', 'ocr-db-staging', '--env', 'staging', '--remote'],
+    ],
+    ['a deploy', ['deploy', '--env', 'staging', '--remote']],
+  ])('refuses %s, even with --env staging', (_name, args) => {
+    expect(() => rd.assertStaging(args)).toThrow(/wrangler:/);
+  });
+
+  test('accepts each command the swap sends', () => {
+    for (const args of [
+      [
+        'd1',
+        'execute',
+        'ocr-db-staging',
+        '--env',
+        'staging',
+        '--remote',
+        '--yes',
+        '--file',
+        '/tmp/production-notes/stock-1-d1.sql',
+      ],
+      [
+        'r2',
+        'object',
+        'get',
+        'ose-uploads-staging/stock/manifest-index.json',
+        '--env',
+        'staging',
+        '--remote',
+        '--file',
+        '/tmp/x',
+      ],
+      [
+        'r2',
+        'object',
+        'put',
+        'ose-uploads-staging/events/e/art.png',
+        '--env',
+        'staging',
+        '--remote',
+        '--file',
+        '/tmp/x',
+        '--content-type',
+        'application/json',
+      ],
+      [
+        'r2',
+        'object',
+        'delete',
+        'ose-uploads-staging/events/e/art.png',
+        '--env',
+        'staging',
+        '--remote',
+      ],
+    ]) {
+      expect(() => rd.assertStaging(args), args.join(' ')).not.toThrow();
+    }
+  });
+
   test('UPDATE appears once in the stock scripts and workflow: the acceptance SQL', () => {
     const files = [
       ...readdirSync(path.join(ROOT, 'scripts/stock')).map((f) => `scripts/stock/${f}`),
