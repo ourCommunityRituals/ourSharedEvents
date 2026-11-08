@@ -33,6 +33,9 @@ import {
   type PlacedEvent,
   type ZipArea,
 } from './zip-areas';
+import { placeKey, STATE_BY_KEY } from './place-key';
+
+export { placeKey };
 
 /** One place a name can mean. */
 export interface PlaceMatch {
@@ -48,49 +51,6 @@ export interface PlaceMatch {
 
 /** The longest box value read as a name (as /events caps its search). */
 export const PLACE_QUERY_MAX = 60;
-
-const WORDS: Record<string, string> = { saint: 'st', mount: 'mt', fort: 'ft' };
-
-/**
- * A name as compared: no accents, lower case, no dots or apostrophes, hyphens
- * and runs of spaces as one space, and saint/mount/fort as st/mt/ft. Keep in
- * step with scripts/gen-place-names.mjs, which sorts the town table by it (a
- * unit test checks the table's order with this function).
- */
-export function placeKey(s: string): string {
-  return s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[.']/g, '')
-    .replace(/[\s-]+/g, ' ')
-    .trim()
-    .replace(/\b(saint|mount|fort)\b/g, (w) => WORDS[w]);
-}
-
-/** States and territories by postal code and by name. */
-// prettier-ignore
-const STATE_NAMES: Record<string, string> = {
-  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
-  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', DC: 'District of Columbia',
-  FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois',
-  IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana',
-  ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota',
-  MS: 'Mississippi', MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada',
-  NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York',
-  NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon',
-  PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota',
-  TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia',
-  WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
-  PR: 'Puerto Rico', GU: 'Guam', VI: 'Virgin Islands', AS: 'American Samoa',
-  MP: 'Northern Mariana Islands', MH: 'Marshall Islands',
-};
-
-const STATE_BY_KEY = new Map<string, string>();
-for (const [code, name] of Object.entries(STATE_NAMES)) {
-  STATE_BY_KEY.set(code.toLowerCase(), code);
-  STATE_BY_KEY.set(placeKey(name), code);
-}
 
 // The town table, split into lines the first time a name is searched, then kept
 // for the life of the isolate.

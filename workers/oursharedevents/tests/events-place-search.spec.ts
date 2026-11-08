@@ -187,3 +187,47 @@ describe('GET /events?q=<place>', () => {
     expect(body).toContain('placeholder="Search by name, venue, town or zip"');
   });
 });
+
+// CCR 2026-11-07 L3-04: the landing takes "Oak Lawn, IL" and "oak-lawn"; /events
+// read 0 for them. Both now name the place, by the landing's own placeKey.
+describe('a place typed as the landing takes it', () => {
+  test.each([
+    ['Oak Lawn, IL', 'Oak Lawn'],
+    ['oak lawn il', 'Oak Lawn'],
+    ['Oak Lawn, Illinois', 'Oak Lawn'],
+    ['Oak-Lawn', 'Oak Lawn'],
+    ['Mount Greenwood, IL', 'Mount Greenwood'],
+    ['Mt. Greenwood IL', 'Mount Greenwood'],
+    ['Evergreen Park,IL', 'Evergreen Park'],
+  ])('%j is %j', (typed, label) => {
+    expect(findSearchPlace(typed)?.label ?? null).toBe(label);
+  });
+
+  test('a state the place is not in is not the place', () => {
+    expect(findSearchPlace('Oak Lawn, IN')).toBeNull();
+    expect(findSearchPlace('Blue Island Indiana')).toBeNull();
+  });
+
+  test('GET /events?q=Oak Lawn, IL lists what Oak Lawn lists', async () => {
+    const plain = await listed('Oak Lawn');
+    const withState = await listed('Oak Lawn, IL');
+    expect(withState.titles).toEqual(plain.titles);
+    expect(withState.titles.length).toBeGreaterThan(0);
+  });
+});
+
+// CCR 2026-11-07 L3-03: q is cut to its length cap; a cut through an emoji left
+// half a surrogate pair, and encodeURIComponent threw: one GET answered 500.
+describe('a long search that ends in an emoji', () => {
+  test.each([
+    ['an emoji across the cap', `${'a'.repeat(59)}😀`],
+    ['emoji only, past the cap', '😀'.repeat(40)],
+    ['a flag across the cap', `${'b'.repeat(58)}🇺🇸`],
+  ])('%s answers 200 with the search in the box', async (_name, q) => {
+    const res = await SELF.fetch(`https://t.test/events?q=${encodeURIComponent(q)}`);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('data-testid="disc-q"');
+    expect(body).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+  });
+});

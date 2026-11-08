@@ -376,3 +376,50 @@ describe('the search totals follow from the seed and the declared fixtures', () 
     for (const n of nodes) for (const z of n.zips) expect(named.has(z), z).toBe(true);
   });
 });
+
+// CCR 2026-11-07 R-14: the test above reads each event's zip from its address,
+// not the Worker's own search. This one runs the real findSearchPlace and
+// inSearchPlace over the committed seed, as /events does, and checks that every
+// one of a town's zips counts, the 4th and 5th included (a `zips.slice(0, 3)`
+// fault survived every test before this one).
+describe('the real /events place search over the committed seed', () => {
+  let findSearchPlace;
+  let inSearchPlace;
+  let PLACES;
+  let findZipArea;
+  beforeAll(async () => {
+    ({ findSearchPlace, inSearchPlace, PLACES } =
+      await import('../../../workers/oursharedevents/src/lib/place-names.ts'));
+    ({ findZipArea } = await import('../../../workers/oursharedevents/src/lib/zip-areas.ts'));
+  });
+  const T = readJson('stock/totals.json');
+  // As the build places it: the cells from the point, the address as given.
+  const placed = (e) => ({
+    where_address: e.address,
+    h3_res7: h3.latLngToCell(e.lat, e.lng, 7),
+    h3_res9: h3.latLngToCell(e.lat, e.lng, 9),
+  });
+
+  test.each(Object.keys(T.searches))('%s: the Worker’s search finds stock + fixtures', (q) => {
+    const place = findSearchPlace(q);
+    expect(place, q).not.toBeNull();
+    const inPlace = inSearchPlace(place);
+    const stock = SEED.events.filter((e) => inPlace(placed(e))).length;
+    expect(stock + (T.fixtures.counts[q] || 0)).toBe(T.searches[q]);
+  });
+
+  test('every one of a town’s zips counts, the 4th and 5th included', () => {
+    const towns = PLACES.filter((p) => p.zips.length >= 5);
+    expect(towns.map((p) => p.name).sort()).toEqual(['Auburn Gresham', 'Oak Lawn']);
+    for (const town of PLACES) {
+      const inTown = inSearchPlace(findSearchPlace(town.name));
+      town.zips.forEach((zip, i) => {
+        // an event whose address ends with the zip, at the zip's own center when it has one
+        const area = findZipArea(zip);
+        const at = area ? { lat: area.lat, lng: area.lon } : { lat: 41.7, lng: -87.7 };
+        const ev = placed({ address: `1 Test St, Somewhere, IL ${zip}`, ...at });
+        expect(inTown(ev), `${town.name} zip ${i + 1} (${zip})`).toBe(true);
+      });
+    }
+  });
+});

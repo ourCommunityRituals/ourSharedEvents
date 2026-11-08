@@ -214,12 +214,20 @@ export function parseDiscoveryFilters(url: URL): DiscoveryFilters {
     ? (rawWhen as WhenOption)
     : 'all';
   const rawQ = url.searchParams.get('q') ?? '';
-  // Collapse whitespace, strip control chars, cap length.
-  const q = rawQ
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, Q_MAX_LEN);
+  // Collapse whitespace, strip control chars, cap length. The cap counts code
+  // points, never UTF-16 units: a cut through an emoji left half a surrogate
+  // pair, and encodeURIComponent threw on it, a 500 (CCR 2026-11-07 L3-03). A
+  // lone surrogate that came in some other way becomes U+FFFD.
+  const q = Array.from(
+    rawQ
+      .replace(/[\u0000-\u001f\u007f]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '�')
+  )
+    .slice(0, Q_MAX_LEN)
+    .join('')
+    .trim();
   return { when, q };
 }
 
