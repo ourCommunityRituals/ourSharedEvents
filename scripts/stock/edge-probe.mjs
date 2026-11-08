@@ -12,8 +12,10 @@
 //   plain      no headers: what any script sees
 //
 // It reads only, writes nothing, and prints status, cf-mitigated and the Ray ID per
-// read, never a header value. It fails when a `check` read is challenged, so a green
-// run means the next "Stock data (stg)" run gets past the edge.
+// read, never a header value. It fails when a `check` read is challenged, ends in an
+// error status (other than the Worker's 404 for a made-up code) or gets no answer
+// within its deadline, so a green run means the next "Stock data (stg)" run gets
+// past the edge.
 
 import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -76,10 +78,30 @@ export async function probeAll(env, fetchFn) {
   return rows;
 }
 
-/** Ok only when every `check` read reached the Worker unchallenged. */
+// The /q/ and /s/ codes are made up, so the Worker's 404 for them is a pass: the
+// read got past the edge. Any other 4xx/5xx, challenged or not, is a failure.
+const MADE_UP_CODE = /^\/[qs]\//;
+
+/** Whether one read reached the Worker and got an answer the check can use. */
+export function readOk(r) {
+  if (r.challenged || !r.status) return false;
+  if (r.status < 400) return true;
+  return r.status === 404 && MADE_UP_CODE.test(r.path);
+}
+
+/** Ok only when every `check` read reached the Worker and was answered as expected. */
 export function verdict(rows) {
-  const bad = rows.filter((r) => r.shape === 'check' && (r.challenged || r.status === 0));
+  const bad = rows.filter((r) => r.shape === 'check' && !readOk(r));
   return { ok: bad.length === 0, bad };
+}
+
+// Each read gets its own deadline, so a stalled read becomes an error row and the
+// table still prints well inside the step's timeout (12 reads × 8 s < 2 min).
+export const READ_TIMEOUT_MS = 8_000;
+
+/** fetchFn with a per-read abort deadline, beneath every shape's own builder. */
+export function withDeadline(fetchFn, ms = READ_TIMEOUT_MS) {
+  return (url, init = {}) => fetchFn(url, { ...init, signal: AbortSignal.timeout(ms) });
 }
 
 /** A Markdown table of the rows. No header value ever appears in it. */
@@ -104,12 +126,13 @@ export async function main(env = process.env, deps = {}) {
     return 1;
   }
   maskSecrets(env, out);
-  const rows = await probeAll(env, fetchFn);
+  const rows = await probeAll(env, withDeadline(fetchFn, deps.readTimeoutMs));
   const table = report(rows);
   const { ok, bad } = verdict(rows);
+  const challengedCount = bad.filter((r) => r.challenged).length;
   const summary = ok
     ? 'Every read shaped like the stock check got past the stg edge from this runner. "Stock data (stg)" can run.\n'
-    : `${bad.length} of ${PROBE_PATHS.length} reads shaped like the stock check were stopped at the stg edge from this runner. Look up a CHALLENGED Ray ID in Cloudflare Security → Events to see the rule or service that did it.\n`;
+    : `${bad.length} of ${PROBE_PATHS.length} reads shaped like the stock check failed from this runner (${challengedCount} challenged at the edge, ${bad.length - challengedCount} an error status or no answer). Look up a CHALLENGED Ray ID in Cloudflare Security → Events to see the rule or service that did it.\n`;
   out(`${table}\n${summary}`);
   if (env.GITHUB_STEP_SUMMARY) {
     (deps.appendFile || appendFileSync)(

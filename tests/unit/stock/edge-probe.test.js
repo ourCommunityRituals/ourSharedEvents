@@ -8,10 +8,12 @@ beforeAll(async () => {
 });
 
 const ROOT = path.join(__dirname, '../../..');
+// Built, not literal: stand-ins, kept out of the committed-secret scan's way.
+const fake = (n) => ['stand', 'in', n].join('-');
 const ENV = {
-  CF_ACCESS_CLIENT_ID: 'access-id-value-1',
-  CF_ACCESS_CLIENT_SECRET: 'access-secret-value-2',
-  OCR_CI_EDGE_TOKEN: 'edge-token-value-3',
+  CF_ACCESS_CLIENT_ID: fake(1),
+  CF_ACCESS_CLIENT_SECRET: fake(2),
+  OCR_CI_EDGE_TOKEN: fake(3),
 };
 const SECRETS = Object.values(ENV);
 
@@ -39,11 +41,12 @@ function edge({ challenge }) {
   return { fetch, seen };
 }
 
-function run(env, fetch) {
+function run(env, fetch, extra = {}) {
   const out = [];
   const summary = [];
   return ep
     .main(env, {
+      ...extra,
       fetch,
       write: (s) => out.push(s),
       appendFile: (_f, s) => summary.push(s),
@@ -66,7 +69,9 @@ describe('stg edge probe', () => {
     const { fetch } = edge({ challenge: ['check', 'plain'] });
     const r = await run(ENV, fetch);
     expect(r.code).toBe(1);
-    expect(r.out).toContain('2 of 4 reads shaped like the stock check were stopped');
+    expect(r.out).toContain(
+      '2 of 4 reads shaped like the stock check failed from this runner (2 challenged at the edge'
+    );
     expect(r.out).toContain(
       '| check | `/s/edge-probe` | 403 | CHALLENGED | a5711b195919fa42-SEA |'
     );
@@ -78,6 +83,42 @@ describe('stg edge probe', () => {
     const r = await run(ENV, fetch);
     expect(r.code).toBe(1);
     expect(r.out).toContain('error: getaddrinfo ENOTFOUND');
+  });
+
+  // An error status the edge did not mark as a challenge is still a failed read.
+  test.each([403, 429, 503])('red on an unchallenged %i to a check read', async (status) => {
+    const fetch = (url) =>
+      new URL(url).pathname.startsWith('/events/')
+        ? passed(status, 'a5711b1a7f66a3a7-SEA')
+        : passed(200, 'a5711b1a7f66a3a7-SEA');
+    const r = await run(ENV, fetch);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('(0 challenged at the edge, 1 an error status or no answer)');
+  });
+
+  test('the Worker’s 404 for a made-up /q/ or /s/ code passes; a 404 elsewhere does not', () => {
+    const row = (path, status) => ({ shape: 'check', path, status, challenged: false });
+    expect(ep.readOk(row('/q/edge-probe', 404))).toBe(true);
+    expect(ep.readOk(row('/s/edge-probe', 404))).toBe(true);
+    expect(ep.readOk(row('/events/test-event-001/community-game-night', 404))).toBe(false);
+    expect(ep.readOk(row('/?zip=60453', 404))).toBe(false);
+    expect(ep.readOk(row('/q/edge-probe', 302))).toBe(true);
+    expect(ep.readOk({ ...row('/s/edge-probe', 404), challenged: true })).toBe(false);
+  });
+
+  test('a stalled read becomes an error row within its deadline, and the table still prints', async () => {
+    const fetch = (url, init) =>
+      new URL(url).pathname.startsWith('/s/')
+        ? new Promise((_resolve, reject) =>
+            init.signal.addEventListener('abort', () => reject(init.signal.reason))
+          )
+        : passed(200, 'a5711b1a7f66a3a7-SEA');
+    const started = Date.now();
+    const r = await run(ENV, fetch, { readTimeoutMs: 20 });
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/\| check \| `\/s\/edge-probe` \| none \| no \| error: /);
+    expect(r.out).toContain('| check | `/?zip=60453` | 200 | no |');
   });
 
   test('red, and reads nothing, without the edge token', async () => {

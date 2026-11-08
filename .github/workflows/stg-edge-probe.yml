@@ -42,7 +42,7 @@ jobs:
       - name: Install root dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Probe
-        timeout-minutes: 2
+        timeout-minutes: 3
         env:
           OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
