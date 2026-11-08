@@ -18,6 +18,7 @@
  */
 import { addressZip, findZipArea, inZipOwnArea, normalizeZip } from './zip-areas';
 import type { PlacedEvent } from './zip-areas';
+import { placeKey, STATE_BY_KEY } from './place-key';
 
 export interface Place {
   /** How the page names the place. */
@@ -57,10 +58,9 @@ export interface SearchPlace {
   zips: readonly string[];
 }
 
-/** Lower case, dots dropped ("Mt." → "mt"), whitespace collapsed. */
-function key(raw: string): string {
-  return raw.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
-}
+// The landing's own comparison (place-key.ts): case, dots, hyphens, accents and
+// mount/mt fold alike, so "Oak-Lawn" and "Mt. Greenwood" are the places.
+const key = placeKey;
 
 const BY_KEY = new Map<string, Place>();
 for (const p of PLACES) {
@@ -69,12 +69,35 @@ for (const p of PLACES) {
 }
 
 /**
+ * The place a typed name means, with or without its state after it ("Oak Lawn,
+ * IL", "Oak Lawn Illinois"), as the landing's town search reads it (CCR
+ * 2026-11-07 L3-04). A state the place is not in means no place.
+ */
+function placeTyped(q: string): Place | undefined {
+  const whole = BY_KEY.get(key(q));
+  if (whole) return whole;
+  const comma = q.lastIndexOf(',');
+  if (comma >= 0) {
+    const place = BY_KEY.get(key(q.slice(0, comma)));
+    const state = STATE_BY_KEY.get(placeKey(q.slice(comma + 1)));
+    return place && place.state === state ? place : undefined;
+  }
+  const words = key(q).split(' ');
+  for (let n = Math.min(3, words.length - 1); n >= 1; n--) {
+    const state = STATE_BY_KEY.get(words.slice(-n).join(' '));
+    const place = state ? BY_KEY.get(words.slice(0, -n).join(' ')) : undefined;
+    if (place && place.state === state) return place;
+  }
+  return undefined;
+}
+
+/**
  * The place a search means, or null when it is ordinary text. A whole place name
  * (any case) is a place; a 5-digit zip is that zip. "Oak" alone is text.
  */
 export function findSearchPlace(q: unknown): SearchPlace | null {
   if (typeof q !== 'string') return null;
-  const place = BY_KEY.get(key(q));
+  const place = placeTyped(q);
   if (place) return { label: place.name, zips: place.zips };
   const zip = normalizeZip(q);
   return zip ? { label: zip, zips: [zip] } : null;
