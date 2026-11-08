@@ -12,10 +12,10 @@
 //   plain      no headers: what any script sees
 //
 // It reads only, writes nothing, and prints status, cf-mitigated and the Ray ID per
-// read, never a header value. It fails when a `check` read is challenged, ends in an
-// error status (other than the Worker's 404 for a made-up code) or gets no answer
-// within its deadline, so a green run means the next "Stock data (stg)" run gets
-// past the edge.
+// read, never a header value or a Location. It fails when a `check` read is
+// challenged, gets anything but the Worker's own answer for its path (PROBES), or
+// gets no answer within its deadline, so a green run means the next "Stock data
+// (stg)" run gets past the edge.
 
 import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -24,20 +24,45 @@ import { STOCK_BASE_URL } from './client.mjs';
 import { fetchPublicFrom, maskSecrets } from './run-day.mjs';
 import { edgeChallenged } from './check-full.mjs';
 
-// The kinds of public read the stock check makes, plus the page the searches use.
-// test-event-001 is CI's permanent staging fixture; the /q/ and /s/ codes do not
-// exist, so the Worker answers them with a redirect or a 404 and only the edge
-// can challenge them.
-export const PROBE_PATHS = [
-  '/q/edge-probe',
-  '/s/edge-probe',
-  '/events/test-event-001/community-game-night',
-  '/?zip=60453',
+// The kinds of public read the stock check makes, plus the page the searches use,
+// each with the Worker's own answer. test-event-001 is CI's permanent staging
+// fixture, read on the slugless route the check reads. The /q/ and /s/ codes are
+// made up: the Worker sends /q/ home (a 302 on this site) and answers /s/ with a
+// 404 (read on stg 2026-11-08). A redirect anywhere else, such as a Cloudflare
+// Access login, never reached the Worker and fails.
+export const PROBES = [
+  { path: '/q/edge-probe', expect: ['same-site-redirect', 404] },
+  { path: '/s/edge-probe', expect: ['same-site-redirect', 404] },
+  { path: '/events/test-event-001', expect: [200] },
+  { path: '/?zip=60453', expect: [200] },
 ];
+export const PROBE_PATHS = PROBES.map((p) => p.path);
 
 export const SHAPES = ['check', 'edge-only', 'plain'];
 
 const RAY_RE = /^[0-9a-f]{16}-[A-Z]{3}$/i;
+const SITE_ORIGIN = new URL(STOCK_BASE_URL).origin;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+/** 'this-site', 'elsewhere' or '' (no Location). The Location itself is never kept. */
+function redirectTarget(res) {
+  const h = res && res.headers;
+  const loc = h && typeof h.get === 'function' ? h.get('location') : null;
+  if (!loc) return '';
+  try {
+    return new URL(loc, SITE_ORIGIN).origin === SITE_ORIGIN ? 'this-site' : 'elsewhere';
+  } catch {
+    return 'elsewhere';
+  }
+}
+
+// A fixed error text: a fetch error can quote a malformed header value, so only the
+// error's class and a code-shaped cause (ENOTFOUND, ECONNRESET) are ever reported.
+export function safeError(err) {
+  const name = err && /^[A-Za-z]{1,40}$/.test(String(err.name)) ? err.name : 'Error';
+  const code = err && err.cause && err.cause.code;
+  return /^[A-Z][A-Z0-9_]{1,40}$/.test(String(code || '')) ? `${name} ${code}` : name;
+}
 
 /** The fetch for one request shape. `check` is the stock check's own builder. */
 export function shapeFetch(shape, env, fetchFn) {
@@ -60,11 +85,19 @@ export async function probeOne(fetchShape, shape, path) {
       path,
       status: res.status,
       challenged: edgeChallenged(res),
+      redirect: REDIRECT_STATUSES.has(res.status) ? redirectTarget(res) : '',
       ray: RAY_RE.test(ray) ? ray : '',
     };
   } catch (err) {
-    const error = String((err && err.message) || err).slice(0, 120);
-    return { shape, path, status: 0, challenged: false, ray: '', error };
+    return {
+      shape,
+      path,
+      status: 0,
+      challenged: false,
+      redirect: '',
+      ray: '',
+      error: safeError(err),
+    };
   }
 }
 
@@ -78,15 +111,15 @@ export async function probeAll(env, fetchFn) {
   return rows;
 }
 
-// The /q/ and /s/ codes are made up, so the Worker's 404 for them is a pass: the
-// read got past the edge. Any other 4xx/5xx, challenged or not, is a failure.
-const MADE_UP_CODE = /^\/[qs]\//;
-
-/** Whether one read reached the Worker and got an answer the check can use. */
+/** Whether one read got the Worker's own answer for its path, unchallenged. */
 export function readOk(r) {
   if (r.challenged || !r.status) return false;
-  if (r.status < 400) return true;
-  return r.status === 404 && MADE_UP_CODE.test(r.path);
+  const probe = PROBES.find((p) => p.path === r.path);
+  if (!probe) return false;
+  if (REDIRECT_STATUSES.has(r.status)) {
+    return probe.expect.includes('same-site-redirect') && r.redirect === 'this-site';
+  }
+  return probe.expect.includes(r.status);
 }
 
 /** Ok only when every `check` read reached the Worker and was answered as expected. */
@@ -112,7 +145,7 @@ export function report(rows) {
     '|---|---|---|---|---|',
     ...rows.map(
       (r) =>
-        `| ${r.shape} | \`${r.path}\` | ${r.status || 'none'} | ${r.challenged ? 'CHALLENGED' : 'no'} | ${cell(r)} |`
+        `| ${r.shape} | \`${r.path}\` | ${r.status || 'none'}${r.redirect ? ` → ${r.redirect}` : ''} | ${r.challenged ? 'CHALLENGED' : 'no'} | ${cell(r)} |`
     ),
   ];
   return `${lines.join('\n')}\n`;
@@ -132,7 +165,7 @@ export async function main(env = process.env, deps = {}) {
   const challengedCount = bad.filter((r) => r.challenged).length;
   const summary = ok
     ? 'Every read shaped like the stock check got past the stg edge from this runner. "Stock data (stg)" can run.\n'
-    : `${bad.length} of ${PROBE_PATHS.length} reads shaped like the stock check failed from this runner (${challengedCount} challenged at the edge, ${bad.length - challengedCount} an error status or no answer). Look up a CHALLENGED Ray ID in Cloudflare Security → Events to see the rule or service that did it.\n`;
+    : `${bad.length} of ${PROBE_PATHS.length} reads shaped like the stock check failed from this runner (${challengedCount} challenged at the edge, ${bad.length - challengedCount} an unexpected answer or none). Look up a CHALLENGED Ray ID in Cloudflare Security → Events to see the rule or service that did it.\n`;
   out(`${table}\n${summary}`);
   if (env.GITHUB_STEP_SUMMARY) {
     (deps.appendFile || appendFileSync)(

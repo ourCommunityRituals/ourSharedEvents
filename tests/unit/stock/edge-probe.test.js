@@ -23,7 +23,17 @@ const challenged = (ray) =>
     status: 403,
     headers: headersOf({ 'cf-mitigated': 'challenge', 'cf-ray': ray }),
   });
-const passed = (status, ray) => Promise.resolve({ status, headers: headersOf({ 'cf-ray': ray }) });
+const passed = (status, ray, extra = {}) =>
+  Promise.resolve({ status, headers: headersOf({ 'cf-ray': ray, ...extra }) });
+const RAY = 'a5711b1a7f66a3a7-SEA';
+// The Worker's own answers, as read on stg 2026-11-08: /q/<made-up> goes home,
+// /s/<made-up> is a 404, the event page and the zip page are 200.
+const worker = (pathname) =>
+  pathname.startsWith('/q/')
+    ? passed(302, RAY, { location: 'https://stg.oursharedevents.com/' })
+    : pathname.startsWith('/s/')
+      ? passed(404, RAY)
+      : passed(200, RAY);
 
 // An edge that challenges the listed shapes on /s/ and /events/ only.
 function edge({ challenge }) {
@@ -36,7 +46,7 @@ function edge({ challenge }) {
     if (challenge.includes(shape) && (p.startsWith('/s/') || p.startsWith('/events/'))) {
       return challenged('a5711b195919fa42-SEA');
     }
-    return passed(p.startsWith('/q/') ? 302 : 200, 'a5711b1a7f66a3a7-SEA');
+    return worker(p);
   };
   return { fetch, seen };
 }
@@ -75,35 +85,75 @@ describe('stg edge probe', () => {
     expect(r.out).toContain(
       '| check | `/s/edge-probe` | 403 | CHALLENGED | a5711b195919fa42-SEA |'
     );
-    expect(r.out).toContain('| edge-only | `/s/edge-probe` | 200 | no |');
+    expect(r.out).toContain('| edge-only | `/s/edge-probe` | 404 | no |');
+    expect(r.out).toContain('| check | `/q/edge-probe` | 302 → this-site | no |');
   });
 
   test('red when a check read never reaches anything', async () => {
-    const fetch = () => Promise.reject(new Error('getaddrinfo ENOTFOUND'));
+    const err = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } });
+    const fetch = () => Promise.reject(err);
     const r = await run(ENV, fetch);
     expect(r.code).toBe(1);
-    expect(r.out).toContain('error: getaddrinfo ENOTFOUND');
+    expect(r.out).toContain('error: TypeError ENOTFOUND');
   });
 
   // An error status the edge did not mark as a challenge is still a failed read.
   test.each([403, 429, 503])('red on an unchallenged %i to a check read', async (status) => {
-    const fetch = (url) =>
-      new URL(url).pathname.startsWith('/events/')
-        ? passed(status, 'a5711b1a7f66a3a7-SEA')
-        : passed(200, 'a5711b1a7f66a3a7-SEA');
+    const fetch = (url) => {
+      const p = new URL(url).pathname;
+      return p.startsWith('/events/') ? passed(status, RAY) : worker(p);
+    };
     const r = await run(ENV, fetch);
     expect(r.code).toBe(1);
-    expect(r.out).toContain('(0 challenged at the edge, 1 an error status or no answer)');
+    expect(r.out).toContain('(0 challenged at the edge, 1 an unexpected answer or none)');
   });
 
-  test('the Worker’s 404 for a made-up /q/ or /s/ code passes; a 404 elsewhere does not', () => {
-    const row = (path, status) => ({ shape: 'check', path, status, challenged: false });
+  test('each path passes only on the Worker’s own answer for it', () => {
+    const row = (path, status, redirect = '') => ({
+      shape: 'check',
+      path,
+      status,
+      redirect,
+      challenged: false,
+    });
+    expect(ep.readOk(row('/q/edge-probe', 302, 'this-site'))).toBe(true);
     expect(ep.readOk(row('/q/edge-probe', 404))).toBe(true);
     expect(ep.readOk(row('/s/edge-probe', 404))).toBe(true);
-    expect(ep.readOk(row('/events/test-event-001/community-game-night', 404))).toBe(false);
+    expect(ep.readOk(row('/q/edge-probe', 200))).toBe(false);
+    expect(ep.readOk(row('/events/test-event-001', 200))).toBe(true);
+    expect(ep.readOk(row('/events/test-event-001', 404))).toBe(false);
+    expect(ep.readOk(row('/events/test-event-001', 302, 'this-site'))).toBe(false);
     expect(ep.readOk(row('/?zip=60453', 404))).toBe(false);
-    expect(ep.readOk(row('/q/edge-probe', 302))).toBe(true);
+    expect(ep.readOk(row('/elsewhere', 200))).toBe(false);
     expect(ep.readOk({ ...row('/s/edge-probe', 404), challenged: true })).toBe(false);
+  });
+
+  // A Cloudflare Access login is a redirect off the site: the read never reached the Worker.
+  test('red when every read is sent to an Access login', async () => {
+    const fetch = () =>
+      passed(302, RAY, {
+        location:
+          'https://mzdano.cloudflareaccess.com/cdn-cgi/access/login/stg.oursharedevents.com',
+      });
+    const r = await run(ENV, fetch);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('4 of 4 reads shaped like the stock check failed');
+    expect(r.out).toContain('| check | `/q/edge-probe` | 302 → elsewhere | no |');
+    expect(r.out).not.toContain('cloudflareaccess');
+  });
+
+  // A fetch error can quote a malformed header value; only a fixed text is reported.
+  test('a fetch error that quotes a header value reports none of it', async () => {
+    const leak = `Headers.append: "${ENV.CF_ACCESS_CLIENT_SECRET}\r" is an invalid header value.`;
+    const fetch = () => Promise.reject(new TypeError(leak));
+    const r = await run({ ...ENV, GITHUB_STEP_SUMMARY: 'summary.md' }, fetch);
+    expect(r.code).toBe(1);
+    const printed = r.out.replace(/^::add-mask::.*\n/gm, '');
+    for (const text of [printed, r.summary]) {
+      expect(text).not.toContain('stand-in');
+      expect(text).not.toContain('Headers.append');
+    }
+    expect(r.out).toContain('error: TypeError |');
   });
 
   test('a stalled read becomes an error row within its deadline, and the table still prints', async () => {
@@ -112,7 +162,7 @@ describe('stg edge probe', () => {
         ? new Promise((_resolve, reject) =>
             init.signal.addEventListener('abort', () => reject(init.signal.reason))
           )
-        : passed(200, 'a5711b1a7f66a3a7-SEA');
+        : worker(new URL(url).pathname);
     const started = Date.now();
     const r = await run(ENV, fetch, { readTimeoutMs: 20 });
     expect(Date.now() - started).toBeLessThan(2_000);
