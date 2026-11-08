@@ -56,6 +56,36 @@ export function edgeReason(res, what) {
 
 const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Every public read has a deadline (CCR 2026-11-07 R-11): a read that never
+// answers fails its node as read-timeout, and the run never hangs on it.
+export const READ_TIMEOUT_MS = 20_000;
+
+// Owner decision 2A (2026-11-07): a read the harness could not make is
+// "unverified", not a broken page. A node whose only reasons are these keeps its
+// load and turns the run red; any other reason fails it as before.
+const UNVERIFIED_RE = /^(?:edge-challenged|d1-busy)(?::|\s|$)/;
+
+/** True for a failed result whose every reason is an edge challenge or a busy database. */
+export function isUnverified(result) {
+  const reasons = result && Array.isArray(result.reasons) ? result.reasons : [];
+  return (
+    Boolean(result) &&
+    result.pass !== true &&
+    reasons.length > 0 &&
+    reasons.every((r) => UNVERIFIED_RE.test(String(r)))
+  );
+}
+
+// A read that hit its deadline: no status, no headers.
+const TIMED_OUT = Object.freeze({ timedOut: true, status: 0, headers: null });
+
+/** read-timeout:<what> or the edge reason for a read the harness could not make, else null. */
+function readFault(res, what) {
+  if (res && res.timedOut) return what ? `read-timeout:${what}` : 'read-timeout';
+  if (edgeChallenged(res)) return edgeReason(res, what);
+  return null;
+}
+
 const dayNumber = (ymd) => {
   const [y, m, d] = ymd.split('-').map(Number);
   return Date.UTC(y, m - 1, d) / 86_400_000;
@@ -83,6 +113,7 @@ export async function checkNodes({
   fetchPublic,
   sleep = realSleep,
   now = Date.now,
+  readTimeoutMs = READ_TIMEOUT_MS,
 }) {
   if (!DAY_RE.test(String(today))) throw new Error('today must be YYYY-MM-DD');
   if (typeof fetchPublic !== 'function') throw new Error('fetchPublic is required');
@@ -123,10 +154,12 @@ export async function checkNodes({
       if (wait > 0) await sleep(wait);
     }
     lastAt = now();
+    const signal = AbortSignal.timeout(readTimeoutMs);
     try {
-      return await fetchPublic(url.href, { method: 'GET', redirect: 'manual' });
+      return await fetchPublic(url.href, { method: 'GET', redirect: 'manual', signal });
     } catch {
-      return null; // a failed read is a reason for its node, never a crash
+      // a failed read is a reason for its node, never a crash
+      return signal.aborted ? TIMED_OUT : null;
     }
   }
   const bodyOf = async (res) => {
@@ -234,7 +267,8 @@ export async function checkNodes({
       const page = res && res.status === 200 ? await bodyOf(res) : '';
       const areaAt = page.indexOf(AREA_MARK);
       const doorsAt = page.indexOf(DOORS_MARK);
-      if (edgeChallenged(res)) reasons.push(edgeReason(res, zipPath));
+      const fault = readFault(res, zipPath);
+      if (fault) reasons.push(fault);
       else if (areaAt < 0 || (doorsAt >= 0 && doorsAt < areaAt))
         reasons.push(`zip-not-map-first:${zip}`);
     }
@@ -249,7 +283,8 @@ export async function checkNodes({
         if (!qUrl) reasons.push(`bad-path:${id}`);
         else {
           const got = await publicGet(qUrl);
-          if (edgeChallenged(got)) reasons.push(edgeReason(got, qr.qPath));
+          const fault = readFault(got, qr.qPath);
+          if (fault) reasons.push(fault);
           else if (!redirectsToEvent(got, id)) reasons.push(`qr-broken:${id}`);
         }
       }
@@ -260,7 +295,8 @@ export async function checkNodes({
         if (!sUrl) reasons.push(`bad-path:${id}`);
         else {
           const got = await publicGet(sUrl);
-          if (edgeChallenged(got)) reasons.push(edgeReason(got, qr.sPath));
+          const fault = readFault(got, qr.sPath);
+          if (fault) reasons.push(fault);
           else if (!redirectsToEvent(got, id)) reasons.push(`shortlink-broken:${id}`);
         }
       }
@@ -269,7 +305,8 @@ export async function checkNodes({
       const eventPath = `/events/${encodeURIComponent(id)}`;
       const res = await publicGet(siteUrl(eventPath));
       const page = res && res.status === 200 ? await bodyOf(res) : '';
-      if (edgeChallenged(res)) reasons.push(edgeReason(res, eventPath));
+      const fault = readFault(res, eventPath);
+      if (fault) reasons.push(fault);
       else if (!STRIP_RE.test(page)) reasons.push(`no-sponsor-strip:${id}`);
 
       // art, when the event has some, loads from this site
@@ -285,7 +322,8 @@ export async function checkNodes({
           reasons.push(`art-off-site:${id}`);
         } else {
           const got = await publicGet(url);
-          if (edgeChallenged(got)) reasons.push(edgeReason(got, art));
+          const fault = readFault(got, art);
+          if (fault) reasons.push(fault);
           else if (!got || got.status !== 200) reasons.push(`art-broken:${id}`);
         }
       }
@@ -321,7 +359,23 @@ const PUBLIC_ERROR_MARK = 'data-testid="public-error"';
  * @returns {Promise<Record<string, { pass: boolean, count: number|null,
  *   expected: number, reasons: string[] }>>}
  */
-export async function checkSearches({ searches, fetchPublic, sleep = realSleep, now = Date.now }) {
+// One card per listed event, with its id (event-list.ts).
+const CARD_ID_RE = /data-event-id="([^"]+)"/g;
+
+/**
+ * `exclude`: event ids the page may still list that the swap is about to remove
+ * (yesterday's load for a passing node, today's for a failing one). The search is
+ * judged on what will be left, so it can gate the swap before anything is purged
+ * (CCR 2026-11-07 R-09). With ids to exclude, every card must be on the page.
+ */
+export async function checkSearches({
+  searches,
+  fetchPublic,
+  exclude = new Set(),
+  sleep = realSleep,
+  now = Date.now,
+  readTimeoutMs = READ_TIMEOUT_MS,
+}) {
   if (typeof fetchPublic !== 'function') throw new Error('fetchPublic is required');
   if (!searches || typeof searches !== 'object') throw new Error('searches are required');
   const origin = new URL(STOCK_BASE_URL).origin;
@@ -338,16 +392,18 @@ export async function checkSearches({ searches, fetchPublic, sleep = realSleep, 
     lastAt = now();
     const url = new URL(`/events?q=${encodeURIComponent(q)}`, origin);
     let page = '';
-    let challenged = null;
+    let fault = null;
+    const signal = AbortSignal.timeout(readTimeoutMs);
     try {
-      const res = await fetchPublic(url.href, { method: 'GET', redirect: 'manual' });
-      if (edgeChallenged(res)) challenged = edgeReason(res, '');
+      const res = await fetchPublic(url.href, { method: 'GET', redirect: 'manual', signal });
+      fault = readFault(res, '');
       page = res && res.status === 200 ? await res.text() : '';
     } catch {
+      if (signal.aborted) fault = 'read-timeout';
       page = '';
     }
-    if (challenged) {
-      results[q] = { pass: false, count: null, expected, reasons: [challenged] };
+    if (fault) {
+      results[q] = { pass: false, count: null, expected, reasons: [fault] };
       continue;
     }
     if (page.includes(PUBLIC_ERROR_MARK)) {
@@ -359,7 +415,15 @@ export async function checkSearches({ searches, fetchPublic, sleep = realSleep, 
       results[q] = { pass: false, count: null, expected, reasons: ['summary-unreadable'] };
       continue;
     }
-    const count = Number(m[1]);
+    let count = Number(m[1]);
+    if (exclude.size > 0) {
+      const ids = [...page.matchAll(CARD_ID_RE)].map((x) => x[1]);
+      if (ids.length !== count) {
+        results[q] = { pass: false, count: null, expected, reasons: ['cards-unreadable'] };
+        continue;
+      }
+      count -= ids.filter((id) => exclude.has(id)).length;
+    }
     results[q] = {
       pass: count === expected,
       count,

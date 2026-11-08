@@ -867,3 +867,49 @@ describe('final review: the end date', () => {
     expect(manifest.warnings[0].endsWith(reason)).toBe(true);
   });
 });
+
+// CCR 2026-11-07 group 2: an id the admin API hands back goes into SQL and R2 keys
+// at purge time, so it is checked before it is recorded. A bad one stops the build,
+// with what was made so far on record for the purge.
+describe('buildDay validates the ids the admin API returns', () => {
+  const tamper = (match, patch) => {
+    const site = fakeSite();
+    const base = site.fetch;
+    site.fetch = async (url, init = {}) => {
+      const res = await base(url, init);
+      const path = new URL(String(url)).pathname;
+      if ((init.method || 'GET') !== 'POST' || !match.test(path)) return res;
+      const body = await res.json();
+      return { ...res, json: async () => ({ ...body, ...patch(body) }) };
+    };
+    return site;
+  };
+  test.each([
+    ['an event id with a quote', /^\/api\/v2\/admin\/events$/, () => ({ id: "evt_1'); --" })],
+    ['a missing event id', /^\/api\/v2\/admin\/events$/, () => ({ id: undefined })],
+    ['a sponsor id with a space', /^\/api\/v2\/admin\/sponsors$/, () => ({ id: 'sp 1' })],
+    ['a poster id that is a number', /\/poster-deployments$/, () => ({ id: 7 })],
+    ['a QR token that climbs a path', /\/poster-deployments$/, () => ({ qr_token: '../admin' })],
+    ['a shortcode with a slash', /^\/api\/v2\/admin\/events$/, () => ({ shortcode: 'a/b' })],
+  ])('%s stops the build, with its manifest so far', async (_name, re, patch) => {
+    const site = tamper(re, patch);
+    const err = await buildDay(args(site, { client: client(site.fetch) })).catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toMatch(/unsafe/);
+    expect(err.manifest).toBeDefined();
+    for (const i of err.manifest.items) expect(String(i.id)).toMatch(/^[A-Za-z0-9_:./-]{1,200}$/);
+  });
+});
+
+describe('createClient: every admin call has a deadline (CCR 2026-11-07 R-11)', () => {
+  test('a call that never answers fails as timed out, without a secret', async () => {
+    const hanging = (url, init) =>
+      new Promise((resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(new Error(`aborted ${SECRET}`)));
+      });
+    const err = await client(hanging, { timeoutMs: 5 })
+      .get('/api/v2/events')
+      .catch((e) => e);
+    expect(err.message).toBe('GET /api/v2/events failed: timed out');
+  }, 5000);
+});

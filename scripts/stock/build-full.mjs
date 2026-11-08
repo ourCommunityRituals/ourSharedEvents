@@ -5,6 +5,9 @@ import { pickArt } from './instagram.mjs';
 import { chicagoDate } from './validate-finds.mjs';
 import { SAFE_ID } from './purge-full.mjs';
 
+// A QR token or shortcode: one path segment, nothing that climbs or adds a query.
+const PATH_TOKEN = /^[A-Za-z0-9_-]{1,100}$/;
+
 // The stock plan's sponsor tiers, and the tier word the Worker accepts for each.
 // Every value must be in VALID_TIERS in workers/oursharedevents/src/handlers/sponsors.ts.
 export const SPONSOR_TIER_WIRE = { premium: 'title', mid: 'gold', local: 'bronze' };
@@ -89,7 +92,11 @@ export async function buildDay({
     return Number.isInteger(n) && n > 0 ? n : 0;
   };
   const manifest = { date, items: [], qr: [], acceptSql: [], short: {}, warnings: [] };
+  // An id the admin API hands back goes into the purge's SQL and R2 keys, so it
+  // is checked before it is recorded; a bad one stops the build (CCR 2026-11-07).
   const record = (kind, id, node, extra = {}) => {
+    if (typeof id !== 'string' || !SAFE_ID.test(id))
+      throw new Error(`unsafe ${kind} id from the admin API`);
     manifest.items.push({ kind, id, node, ...extra });
     onRecord(manifest);
   };
@@ -169,6 +176,12 @@ export async function buildDay({
         record('poster', poster.id, node);
         // mints the event's /e/ share code; the /s/ routing link is the create's shortcode
         await client.post(`/api/v2/admin/events/${ev.id}/short-links`, {});
+        if (typeof poster.qr_token !== 'string' || !PATH_TOKEN.test(poster.qr_token)) {
+          throw new Error('unsafe QR token from the admin API');
+        }
+        if (ev.shortcode && (typeof ev.shortcode !== 'string' || !PATH_TOKEN.test(ev.shortcode))) {
+          throw new Error('unsafe shortcode from the admin API');
+        }
         const qr = { eventId: ev.id, node, qPath: `/q/${poster.qr_token}` };
         if (ev.shortcode) {
           qr.sPath = `/s/${ev.shortcode}`;

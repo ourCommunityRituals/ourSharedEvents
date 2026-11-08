@@ -26,7 +26,11 @@ import { listPosts, tokenWarning } from './instagram.mjs';
 import { localPosts } from './local-art.mjs';
 import { STOCK_BASE_URL, createClient } from './client.mjs';
 import { buildDay } from './build-full.mjs';
-import { checkNodes as realCheckNodes, checkSearches as realCheckSearches } from './check-full.mjs';
+import {
+  checkNodes as realCheckNodes,
+  checkSearches as realCheckSearches,
+  isUnverified,
+} from './check-full.mjs';
 import {
   SAFE_ID,
   buildPurgeSql,
@@ -34,6 +38,7 @@ import {
   manifestName,
   parseManifestName,
   listStaleManifests,
+  listNewerManifests,
 } from './purge-full.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -56,6 +61,22 @@ const SECRET_ENV = [
 ];
 // wrangler's answer for an R2 key that is not there. Anything else is a failure.
 const MISSING_OBJECT = /specified key does not exist|NoSuchKey/i;
+// D1 answers a write while an import is still running with a busy error
+// (CCR 2026-11-07 L2-04). It is retried; one that stays busy is "unverified".
+const D1_BUSY = /long-running import|SQLITE_BUSY|database is (?:locked|busy)/i;
+export const D1_BUSY_TRIES = 3;
+const D1_BUSY_WAIT_MS = 15_000;
+// The line each command prints when it finished (wrangler 4.145.0). wrangler's bin
+// wrapper exits 0 when its child is killed by a signal, so exit 0 without this
+// line is a failure (CCR 2026-11-07 R-11).
+const COMPLETION = {
+  d1: /Executed \d+ (?:queries|commands)/,
+  get: /Download complete/,
+  put: /Upload complete/,
+  delete: /Delete complete/,
+};
+// No single wrangler command may run longer than this.
+const WRANGLER_TIMEOUT_MS = 10 * 60_000;
 
 const unique = (xs) => [...new Set(xs)];
 const readJsonFile = (fs, path) => JSON.parse(fs.readFileSync(path, 'utf8'));
@@ -86,35 +107,55 @@ export function assertStaging(args) {
   if (!args.includes('--remote')) throw new Error('wrangler: every command must be --remote');
 }
 
+/** spawnSync's answer as { code, stdout, stderr }: a signal, a spawn error or a timeout is exit 1. */
+export function wranglerResult(r) {
+  const failed = !r || r.error || r.signal || r.status === null || r.status === undefined;
+  return {
+    code: failed ? 1 : r.status,
+    stdout: (r && r.stdout) || '',
+    stderr: (r && r.stderr) || '',
+  };
+}
+
 /** A wrangler runner on this machine: `npx wrangler …` in the Worker folder, no shell. */
 export function spawnWrangler(args) {
-  const r = spawnSync('npx', ['wrangler', ...args], {
-    cwd: WORKER_DIR,
-    encoding: 'utf8',
-    env: process.env,
-    shell: false,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  return { code: r.status === null ? 1 : r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
+  return wranglerResult(
+    spawnSync('npx', ['wrangler', ...args], {
+      cwd: WORKER_DIR,
+      encoding: 'utf8',
+      env: process.env,
+      shell: false,
+      maxBuffer: 16 * 1024 * 1024,
+      timeout: WRANGLER_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+    })
+  );
 }
+
+const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * The D1 and R2 operations the swap needs, each one wrangler command. A failed
  * command throws; its output goes to `log`, never into the thrown message.
  */
-export function makeCloud({ wrangler, fs, tmpDir, log = () => {} }) {
+export function makeCloud({ wrangler, fs, tmpDir, log = () => {}, sleep = realSleep }) {
   let n = 0;
   const tmp = (name) => join(tmpDir, `stock-${process.pid}-${++n}-${name}`);
-  async function run(op, args) {
+  // kind: the completion line this command must print (COMPLETION)
+  async function run(op, args, kind) {
     assertStaging(args);
     const r = await wrangler(args);
     const code = r && Number.isInteger(r.code) ? r.code : 1;
     const out = `${(r && r.stdout) || ''}${(r && r.stderr) || ''}`;
-    return { ok: code === 0, code, out, op };
+    const incomplete = code === 0 && !COMPLETION[kind].test(out);
+    return { ok: code === 0 && !incomplete, code, out, op, incomplete };
   }
   const fail = (r) => {
     log(`wrangler ${r.op} failed (exit ${r.code}): ${r.out.slice(-500)}`);
-    return new Error(`wrangler ${r.op} failed (exit ${r.code})`);
+    if (r.incomplete) return new Error(`wrangler ${r.op} failed (exit 0 with no completion line)`);
+    const err = new Error(`wrangler ${r.op} failed (exit ${r.code})`);
+    if (D1_BUSY.test(r.out)) err.busy = true;
+    return err;
   };
   const object = (key) => `${R2_BUCKET}/${key}`;
   const remote = ['--env', WRANGLER_ENV, '--remote'];
@@ -123,31 +164,25 @@ export function makeCloud({ wrangler, fs, tmpDir, log = () => {} }) {
     async d1File(sql) {
       const path = tmp('d1.sql');
       fs.writeFileSync(path, sql);
-      const r = await run('d1 execute', [
-        'd1',
-        'execute',
-        D1_DATABASE,
-        ...remote,
-        '--yes',
-        '--file',
-        path,
-      ]);
+      const args = ['d1', 'execute', D1_DATABASE, ...remote, '--yes', '--file', path];
+      let r = await run('d1 execute', args, 'd1');
+      for (let tries = 1; !r.ok && D1_BUSY.test(r.out) && tries < D1_BUSY_TRIES; tries++) {
+        log(`D1 busy; retry ${tries} of ${D1_BUSY_TRIES - 1}`);
+        await sleep(D1_BUSY_WAIT_MS * tries);
+        r = await run('d1 execute', args, 'd1');
+      }
       if (!r.ok) throw fail(r);
     },
     /** The object's text, or null when the key does not exist. */
     async r2Get(key) {
       const path = tmp('get.json');
-      const r = await run(`r2 get ${key}`, [
-        'r2',
-        'object',
-        'get',
-        object(key),
-        ...remote,
-        '--file',
-        path,
-      ]);
+      const r = await run(
+        `r2 get ${key}`,
+        ['r2', 'object', 'get', object(key), ...remote, '--file', path],
+        'get'
+      );
       if (!r.ok) {
-        if (MISSING_OBJECT.test(r.out)) return null;
+        if (!r.incomplete && MISSING_OBJECT.test(r.out)) return null;
         throw fail(r);
       }
       return fs.readFileSync(path, 'utf8');
@@ -155,23 +190,31 @@ export function makeCloud({ wrangler, fs, tmpDir, log = () => {} }) {
     async r2Put(key, text) {
       const path = tmp('put.json');
       fs.writeFileSync(path, text);
-      const r = await run(`r2 put ${key}`, [
-        'r2',
-        'object',
-        'put',
-        object(key),
-        ...remote,
-        '--file',
-        path,
-        '--content-type',
-        'application/json',
-      ]);
+      const r = await run(
+        `r2 put ${key}`,
+        [
+          'r2',
+          'object',
+          'put',
+          object(key),
+          ...remote,
+          '--file',
+          path,
+          '--content-type',
+          'application/json',
+        ],
+        'put'
+      );
       if (!r.ok) throw fail(r);
     },
     /** Idempotent: a key that is already gone counts as deleted. */
     async r2Delete(key) {
-      const r = await run(`r2 delete ${key}`, ['r2', 'object', 'delete', object(key), ...remote]);
-      if (!r.ok && !MISSING_OBJECT.test(r.out)) throw fail(r);
+      const r = await run(
+        `r2 delete ${key}`,
+        ['r2', 'object', 'delete', object(key), ...remote],
+        'delete'
+      );
+      if (!r.ok && (r.incomplete || !MISSING_OBJECT.test(r.out))) throw fail(r);
     },
   };
 }
@@ -321,10 +364,14 @@ export async function checkSwap({
   checkNodes = realCheckNodes,
   client,
   fetchPublic,
+  // query -> the total it must read on the site (stock/totals.json searches); null skips
+  searches = null,
+  checkSearches = realCheckSearches,
 }) {
   const nodeList = Array.isArray(nodes) ? nodes : nodes.nodes;
   const problems = [];
   const purges = [];
+  let searchResults = null;
   const todayName = manifestName(manifest.date, runId, runAttempt);
   // A node retired from nodes.json (`retired`, e.g. Beverly on 2026-11-05) is still
   // purged from every manifest, with no checks, so an older manifest that records it
@@ -390,11 +437,13 @@ export async function checkSwap({
     purges,
     problems,
     index,
+    searches: searchResults,
     exitCode:
       buildFailed ||
       problems.length > 0 ||
       purges.some((p) => !p.ok) ||
-      Object.values(results).some((r) => !r.pass)
+      Object.values(results).some((r) => !r.pass) ||
+      (searchResults !== null && Object.values(searchResults).some((r) => !r.pass))
         ? 1
         : 0,
   });
@@ -488,7 +537,19 @@ export async function checkSwap({
     return writeIndex(allFailing('build-failed'));
   }
 
-  // 3. Accept the day's placements, then check every node.
+  // 2b. A later run's load is listed: this run is a re-run of an older one, and its
+  //     load would sit beside the later one. It is superseded: purge it, keep the
+  //     later load (CCR 2026-11-07 L3-08; ordered by run start, never by date).
+  const newer = listNewerManifests(before, todayName);
+  if (newer.length) {
+    problems.push(`${todayName} is superseded by ${newer.join(', ')}; its rows are purged`);
+    await purgeAll(todayName, manifest);
+    if (fullyPurged(todayName, manifest)) live = live.filter((n) => n !== todayName);
+    return writeIndex(allFailing('superseded'));
+  }
+
+  // 3. Accept the day's placements, then check every node. A database still busy
+  //    after its retries is a harness fault: every node is unverified (decision 2A).
   let results;
   let acceptSql;
   try {
@@ -496,7 +557,7 @@ export async function checkSwap({
     if (acceptSql !== '') await cloud.d1File(acceptSql);
   } catch (err) {
     problems.push(`placements not accepted: ${err.message}`);
-    results = allFailing('accept-failed');
+    results = allFailing(err.busy ? 'd1-busy' : 'accept-failed');
   }
   if (!results) {
     try {
@@ -537,10 +598,45 @@ export async function checkSwap({
     }
   }
 
+  // Owner decision 2A (2026-11-07): a node whose only failures are reads the harness
+  // could not make (edge challenge, busy database) is unverified. It keeps its load,
+  // so it swaps like a passing node, and the run is red.
+  for (const r of Object.values(results)) if (r && isUnverified(r)) r.unverified = true;
+  const swaps = (id) => Boolean(results[id] && (results[id].pass || results[id].unverified));
+
+  // 4b. The searches, before anything is purged, so they gate the swap (R-09). Each
+  //     is judged on what the swap would leave: yesterday's ids for a swapping node
+  //     and today's for a failing one are not counted. A search off its total stops
+  //     every node's swap; an unverified one keeps the load and turns the run red.
+  if (searches !== null) {
+    const exclude = new Set();
+    for (const node of nodeList) {
+      const from = swaps(node.id) ? stale.map((x) => x.manifest) : [manifest];
+      for (const m of from) {
+        for (const i of m.items || []) {
+          if (i.kind === 'event' && i.node === node.id) exclude.add(String(i.id));
+        }
+      }
+    }
+    try {
+      searchResults = await checkSearches({ searches, fetchPublic, exclude });
+    } catch (err) {
+      problems.push(`searches did not run: ${err.message}`);
+      searchResults = {};
+    }
+    const off = Object.entries(searchResults).filter(([, r]) => !r.pass && !isUnverified(r));
+    if (off.length || Object.keys(searchResults).length === 0) {
+      for (const r of Object.values(results)) {
+        r.pass = false;
+        r.unverified = false;
+        r.reasons = [...(r.reasons || []), 'searches-off-total'];
+      }
+    }
+  }
+
   // 5. Swap per node.
   for (const node of nodeList) {
-    const r = results[node.id];
-    if (r && r.pass) {
+    if (swaps(node.id)) {
       for (const s of stale) await purge(s.name, s.manifest, node.id);
     } else {
       await purge(todayName, manifest, node.id);
@@ -562,7 +658,7 @@ export async function checkSwap({
   // (registeredCopy) never mistakes this completed load for an interrupted build.
   // Only a load where at least one node passed is live; one where none passed
   // stays recoverable so a later attempt can still purge it.
-  if (live.includes(todayName) && Object.values(results).some((r) => r && r.pass)) {
+  if (live.includes(todayName) && nodeList.some((n) => swaps(n.id))) {
     try {
       await cloud.r2Put(
         `${MANIFEST_PREFIX}${todayName}`,
@@ -602,7 +698,7 @@ export function renderSummary({ report, nodes, expected, manifest, notes, search
     const r = report.results[node.id] || { pass: false, count: 0, totalListed: 0, reasons: [] };
     lines.push(
       `| ${cell(node.id)} | ${expected[node.id] ?? 0} | ${r.count} | ${r.totalListed} | ${
-        r.pass ? 'pass' : 'FAIL'
+        r.pass ? 'pass' : r.unverified ? 'UNVERIFIED (kept)' : 'FAIL'
       } | ${reasonsText(r.reasons)} |`
     );
     if (Array.isArray(r.skipped) && r.skipped.includes('landing-map')) {
@@ -709,6 +805,7 @@ export function fetchPublicFrom(env, fetchFn) {
       method: init.method || 'GET',
       redirect: 'manual',
       headers: { ...headers },
+      ...(init.signal ? { signal: init.signal } : {}),
     });
   };
 }
@@ -976,16 +1073,12 @@ export async function runCheckSwap({
     checkNodes,
     client: buildFailed ? null : clientFrom(env, fetchFn),
     fetchPublic: buildFailed ? null : fetchPublicFrom(env, fetchFn),
+    // Owner 2026-11-07: every zip and town search reads its permanent total on the
+    // site (stock/totals.json `searches`). Checked before the purge, so it gates it.
+    searches: repoJson('stock/totals.json').searches,
+    checkSearches,
   });
-  // Owner 2026-11-07: after the swap, every zip and town search reads its
-  // permanent total on the site (stock/totals.json `searches`).
-  let searches = null;
-  if (!buildFailed) {
-    searches = await checkSearches({
-      searches: repoJson('stock/totals.json').searches,
-      fetchPublic: fetchPublicFrom(env, fetchFn),
-    });
-  }
+  const searches = report.searches;
   summarize(env, fs, renderSummary({ report, nodes, expected, manifest, notes, searches }));
   for (const [id, r] of Object.entries(report.results)) {
     if (!r.pass) log(`node ${id} failed: ${reasonsText(r.reasons)}`);

@@ -166,9 +166,12 @@ export function parseManifestName(name) {
   return { date: m[1], runId: m[2], attempt: m[3] };
 }
 
-// Order by date, then run id, then attempt, each number as a BigInt (exact for any digit count).
+// Order by run start: run id, then attempt, each number as a BigInt (exact for any
+// digit count). GitHub gives a later run a larger id. The date is not used: a
+// re-run of an older run builds for the day it re-runs, yet it started earlier
+// than any run after it (CCR 2026-11-07 L3-08: ordering by date let a re-run
+// leave two loads listed).
 function compareManifests(a, b) {
-  if (a.date !== b.date) return a.date < b.date ? -1 : 1;
   for (const key of ['runId', 'attempt']) {
     const x = BigInt(a[key]);
     const y = BigInt(b[key]);
@@ -183,6 +186,17 @@ function compareManifests(a, b) {
  * it here, so its ids are still purged. A same-day rerun, or a re-run attempt of
  * the same run, makes the earlier manifest stale. A name that is not an exact manifest name is never listed.
  */
+/** Manifests from a later run (or a later attempt) than this one, oldest first. */
+export function listNewerManifests(names, name) {
+  const own = parseManifestName(name);
+  if (!own) throw new Error('listNewerManifests: name is not a manifest name');
+  return names
+    .map((n) => ({ name: n, parsed: parseManifestName(n) }))
+    .filter((m) => m.parsed !== null && compareManifests(m.parsed, own) > 0)
+    .sort((a, b) => compareManifests(a.parsed, b.parsed))
+    .map((m) => m.name);
+}
+
 export function listStaleManifests(names, newestPassingName) {
   const newest = parseManifestName(newestPassingName);
   if (!newest) throw new Error('listStaleManifests: newestPassingName is not a manifest name');
