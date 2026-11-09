@@ -61,9 +61,10 @@ describe('triggers and posture', () => {
     expect(jobs.validate).toBeUndefined();
   });
 
-  test('permissions are contents: read, and no job widens them', () => {
+  test('permissions are contents: read; only announce widens them, to issues: write', () => {
     expect(wf.permissions).toEqual({ contents: 'read' });
-    for (const job of Object.keys(jobs)) expect(jobs[job].permissions, job).toBeUndefined();
+    for (const job of CHAIN) expect(jobs[job].permissions, job).toBeUndefined();
+    expect(jobs.announce.permissions).toEqual({ contents: 'read', issues: 'write' });
   });
 
   // One writer on stg at a time (CCR 2026-11-07 R-07; tests/integration/stg-writer-concurrency.test.js).
@@ -83,8 +84,8 @@ describe('triggers and posture', () => {
 });
 
 describe('the job chain', () => {
-  test('seed → build → check-swap', () => {
-    expect(Object.keys(jobs)).toEqual(CHAIN);
+  test('seed → build → check-swap, then announce', () => {
+    expect(Object.keys(jobs)).toEqual([...CHAIN, 'announce']);
     expect(needsOf('seed')).toEqual([]);
     for (let i = 1; i < CHAIN.length; i++) expect(needsOf(CHAIN[i])).toEqual([CHAIN[i - 1]]);
   });
@@ -99,6 +100,23 @@ describe('the job chain', () => {
     expect(cond).toContain("needs.build.result == 'success'");
     expect(cond).toContain("needs.build.result == 'failure'");
     expect(cond).not.toContain('always()');
+  });
+
+  // 2026-11-07/08: every run failed for days and nothing turned red where anyone
+  // looked. A red run opens (or comments on) a GitHub issue; a green one closes it.
+  test('announce runs after the whole chain, red or green, from main only', () => {
+    const a = jobs.announce;
+    expect(needsOf('announce')).toEqual(CHAIN);
+    expect(a.if).toBe("${{ always() && github.ref == 'refs/heads/main' }}");
+    const step = stepsOf('announce').find((s) => /announce-run\.mjs/.test(String(s.run || '')));
+    expect(step.run).toBe('node scripts/ci/announce-run.mjs');
+    expect(step.env.NEEDS).toBe('${{ toJSON(needs) }}');
+    expect(step.env.ANNOUNCE_KEY).toBe('stock-data-stg');
+    expect(step.env.GITHUB_TOKEN).toBe('${{ github.token }}');
+  });
+
+  test('announce holds no repository secret: only the run token', () => {
+    expect(JSON.stringify(jobs.announce)).not.toMatch(/secrets\./);
   });
 });
 
@@ -213,7 +231,7 @@ describe('checkout', () => {
         expect((s.with || {}).repository, `${job} checkout`).toBeUndefined();
       }
     }
-    expect(checkouts).toBe(CHAIN.length);
+    expect(checkouts).toBe(Object.keys(jobs).length);
   });
 });
 

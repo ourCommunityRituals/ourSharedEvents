@@ -28,7 +28,9 @@
 # touched.
 #
 # stg runs main as T1 deployed it; this workflow deploys nothing. It never touches
-# production, and it is not part of T1–T4: a red run here never turns main red.
+# production, and it is not part of T1–T4: a red run here never turns main red,
+# so the announce job opens a GitHub issue for it, and "stg watch" (stg-watch.yml)
+# reads the searches on its own schedule.
 # Design: docs/superpowers/specs/2026-11-04-staging-full-environment-design.md.
 #
 # Secrets (repo level, the ones the T2 Bruno run already uses): CLOUDFLARE_API_TOKEN_OSE
@@ -208,3 +210,33 @@ jobs:
           OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
           BUILD_RESULT: ${{ needs.build.result }}
         run: node scripts/stock/run-day.mjs check-swap
+
+  # A red run is never silent (2026-11-07/08: every run failed for days and nothing
+  # turned red where anyone looked). Opens a GitHub issue, label ci-red:stock-data-stg,
+  # or comments on the open one; the next green run closes it. The only job with a
+  # wider token, and only issues: write; it holds no Cloudflare or admin secret.
+  announce:
+    name: 'Announce: open or close the stock issue'
+    needs: [seed, build, check-swap]
+    if: ${{ always() && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Announce
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NEEDS: ${{ toJSON(needs) }}
+          ANNOUNCE_KEY: stock-data-stg
+          ANNOUNCE_TITLE: 'Stock data (stg) is red: stg may hold no stock events'
+          ANNOUNCE_HINT: 'Open the run and read the check-swap `node … failed:` and `search … failed:` lines. edge-challenged means the stg edge blocks CI (dispatch "stg edge probe"; an edge setting, the owner''s).'
+          ANNOUNCE_ASSIGNEE: ${{ vars.PR_REVIEWER }}
+        run: node scripts/ci/announce-run.mjs
