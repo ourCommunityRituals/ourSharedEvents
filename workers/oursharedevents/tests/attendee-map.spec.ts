@@ -13,6 +13,7 @@
  *   - escaping, links, the design-check CSS budget, and that the cards stay
  *     below the map (OSE-1354)
  */
+// @born-red attendee-map mutants | method: StrykerJS mutants of src/lib/attendee-map.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
 
 import { describe, it, expect } from 'vitest';
 import { latLngToCell } from 'h3-js';
@@ -31,6 +32,7 @@ import {
 } from '../src/lib/landing-area';
 import LANDING_HTML from '../src/templates/landing.html';
 import { CORRIDOR_READY_MIN_EVENTS } from '../src/lib/corridor-readiness';
+import { STREET_STYLE, cellsKey } from '../src/lib/street-map';
 
 const NOW = Date.parse('2026-09-13T00:00:00.000Z');
 const inDays = (n: number) => new Date(NOW + n * 86_400_000).toISOString();
@@ -541,5 +543,183 @@ describe('attendee map | OSE-1522: the legend names the consented sponsor by an 
     const html = renderLandingArea(many(LIST_MAX), { now: NOW, sponsorTitles }).html;
     expect(legendOf(html)).toContain('Supported by Hall');
     expect(html.split('Supported by Hall').length - 1).toBe(2); // one card, one legend entry
+  });
+});
+
+describe('attendee map | area names, order and shading, edge by edge', () => {
+  const G = CORRIDOR_READY_MIN_EVENTS;
+  const at = (town: string) => `1 Main St, ${town}, IL`;
+
+  it('townOf drops a trailing country however it is written, and only a country', () => {
+    const street = '13326 Olde Western Ave, Blue Island, IL 60406';
+    for (const country of [
+      'US',
+      'USA',
+      'usa.',
+      'United States',
+      'United States.',
+      'United States of America',
+    ]) {
+      expect(townOf(`${street}, ${country}`), country).toBe('Blue Island');
+    }
+    // Empty parts between commas are skipped, not read as the state.
+    expect(townOf(`${street},`)).toBe('Blue Island');
+    expect(townOf(`${street}, , USA`)).toBe('Blue Island');
+  });
+
+  it('townOf reads "Town ST" with a ZIP or ZIP+4, and spaced the way people type it', () => {
+    expect(townOf('Venue, Chicago IL 60406')).toBe('Chicago');
+    expect(townOf('Venue, Chicago IL 60406-9100')).toBe('Chicago');
+    expect(townOf('Venue, Chicago IL  60406')).toBe('Chicago');
+    expect(townOf('1 Main St, Blue Island, IL  60406')).toBe('Blue Island');
+  });
+
+  it('townOf: a state that is not two capitals, or a country inside a longer part, is no name', () => {
+    expect(townOf('1 Main St, Blue Island, ILLINOIS')).toBeNull();
+    expect(townOf('Venue, Chicago ILLINOIS')).toBeNull();
+    expect(townOf('Venue, Old\nChicago IL')).toBeNull();
+    expect(townOf('1 Main St, Chicago IL, Little USA')).toBeNull();
+    expect(townOf('1 Main St, Chicago IL, USA Today')).toBeNull();
+  });
+
+  it('townOf: a town is 2 to 40 characters', () => {
+    expect(townOf('1 Main St, X, IL')).toBeNull();
+    expect(townOf('1 Main St, Ox, IL')).toBe('Ox');
+    const forty = `A${'a'.repeat(39)}`;
+    expect(townOf(`1 Main St, ${forty}, IL`)).toBe(forty);
+    expect(townOf(`1 Main St, ${forty}a, IL`)).toBeNull();
+  });
+
+  it('a number given as an id is written as that number', () => {
+    const out = renderAttendeeMap(many(G, { id: 7 }), { now: NOW });
+    expect(out.areas[0]!.events[0]!.id).toBe('7');
+    expect(out.html).toContain('href="/events/7"');
+  });
+
+  it('townOf: a town with a digit or a symbol, or a line of one part, is no name', () => {
+    expect(townOf('1 Main St, Blue Island 2, IL')).toBeNull();
+    expect(townOf('1 Main St, Blue Island!, IL 60406')).toBeNull();
+    expect(townOf('Chicago IL')).toBeNull();
+    expect(townOf('IL')).toBeNull();
+    expect(townOf('IL 60406')).toBeNull();
+  });
+
+  it('the commonest town names the area whatever order the events come in', () => {
+    const items = [
+      ev(0, { where_address: at('Alsip') }),
+      ev(1, { where_address: at('Posen') }),
+      ev(2, { where_address: at('Posen') }),
+      ev(3, { where_address: at('Posen') }),
+    ];
+    expect(attendeeMapAreas(items, new Date(NOW)).areas[0]!.name).toBe('Posen');
+  });
+
+  it('two towns with as many events each: the first alphabetically names the area', () => {
+    const items = [ev(0, { where_address: at('Posen') }), ev(1, { where_address: at('Alsip') })];
+    expect(attendeeMapAreas(items, new Date(NOW)).areas[0]!.name).toBe('Alsip');
+  });
+
+  it('areas come busiest first, numbered from 1, whatever order the events come in', () => {
+    const [lo, hi] = [BLUE7, BEV7].sort();
+    const items = [ev(0, { h3_res7: lo }), ev(1, { h3_res7: hi }), ev(2, { h3_res7: hi })];
+    const { areas } = attendeeMapAreas(items, new Date(NOW));
+    expect(areas.map((a) => [a.n, a.cell, a.events.length])).toEqual([
+      [1, hi, 2],
+      [2, lo, 1],
+    ]);
+  });
+
+  it('areas with as many events each are ordered by cell id', () => {
+    const [lo, hi] = [BLUE7, BEV7].sort();
+    const { areas } = attendeeMapAreas(
+      [ev(0, { h3_res7: hi }), ev(1, { h3_res7: lo })],
+      new Date(NOW)
+    );
+    expect(areas.map((a) => [a.n, a.cell])).toEqual([
+      [1, lo],
+      [2, hi],
+    ]);
+  });
+
+  it('an event with no name is listed as an untitled event', () => {
+    const out = renderAttendeeMap(many(G, { name: '' }), { now: NOW });
+    expect(out.areas[0]!.events[0]).toEqual({ id: 'e0', name: 'Untitled event' });
+    expect(out.html).toContain('href="/events/e0" data-testid="amap-event">Untitled event</a>');
+  });
+
+  it('"near <venue>" is the venue line trimmed and cut at 40 characters', () => {
+    const out = renderAttendeeMap(many(G, { location: `  ${'x'.repeat(45)}  ` }), { now: NOW });
+    expect(out.areas[0]!.name).toBe(`near ${'x'.repeat(40)}`);
+  });
+
+  it('a name of exactly 16 characters is drawn whole; one more is cut with an ellipsis', () => {
+    const whole = renderAttendeeMap(many(G, { where_address: at('Grand Beach Park') }), {
+      now: NOW,
+    });
+    expect(whole.html).toContain('data-testid="amap-area-name">Grand Beach Park</tspan>');
+    const cut = renderAttendeeMap(many(G, { where_address: at('Grand Beach Parks') }), {
+      now: NOW,
+    });
+    expect(cut.html).toContain('data-testid="amap-area-name">Grand Beach Par…</tspan>');
+  });
+
+  it('a hexagon with no name carries its number and nothing else', () => {
+    const html = renderAttendeeMap(many(G), { now: NOW }).html;
+    expect(html).toMatch(/dominant-baseline="central">1<\/text><\/g><\/svg>/);
+  });
+
+  it('the busiest hexagon is shaded deepest, and every shade is lighter over a street map', () => {
+    const items = [ev(0), ev(1), ev(2), ev(3, { h3_res7: BEV7 })];
+    const opts = { now: NOW, latched: new Set([BLUE7, BEV7]) };
+    const opacity = (html: string, cell: string) =>
+      new RegExp(`data-cell="${cell}"[^]*?fill-opacity="([\\d.]+)"`).exec(html)![1];
+    const plain = renderAttendeeMap(items, opts).html;
+    expect(opacity(plain, BLUE7)).toBe('0.80');
+    expect(opacity(plain, BEV7)).toBe('0.40');
+    const streets = {
+      cellsKey: cellsKey([BLUE7, BEV7]),
+      svg: '<g data-testid="amap-streets"></g>',
+    };
+    const over = renderAttendeeMap(items, { ...opts, streets }).html;
+    expect(over).toContain('data-testid="amap-streets"');
+    expect(opacity(over, BLUE7)).toBe('0.50');
+    expect(opacity(over, BEV7)).toBe('0.27');
+    expect(over).toContain(
+      '<p class="amap-credit" data-testid="amap-credit">Street map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.</p>'
+    );
+    // Streets drawn for other cells would not line up: they are left out.
+    const elsewhere = renderAttendeeMap(items, {
+      ...opts,
+      streets: { ...streets, cellsKey: cellsKey([BLUE7]) },
+    }).html;
+    expect(elsewhere).not.toContain('data-testid="amap-streets"');
+    expect(elsewhere).not.toContain('data-testid="amap-credit"');
+    expect(opacity(elsewhere, BLUE7)).toBe('0.80');
+  });
+
+  it('the clock given is the one used: an event past its horizon is not drawn', () => {
+    const then = Date.parse('2020-01-01T00:00:00.000Z');
+    const later = new Date(then + 100 * 86_400_000).toISOString();
+    const out = renderAttendeeMap(many(G, { startDateISO: later }), { now: then });
+    expect(out.state).toBe('thin');
+    expect(out.count).toBe(0);
+  });
+
+  it('with no options at all: the real clock, the per-corridor gate, no streets, no zoom links', () => {
+    expect(renderAttendeeMap(null).state).toBe('thin');
+    expect(renderAttendeeMap(undefined).html).toContain('None yet');
+    const soon = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    const out = renderAttendeeMap(many(G, { startDateISO: soon }));
+    expect(out.state).toBe('map');
+    expect(out.count).toBe(G);
+    expect(out.html).toContain('data-testid="amap-svg"');
+    expect(out.html).not.toContain('amap-zoom');
+    expect(out.html).not.toContain('amap-area-link');
+    expect(out.html).not.toContain('Tap a hexagon');
+    expect(out.html).not.toContain('data-testid="amap-credit"');
+    expect(out.html).toMatch(/<\/figcaption>\s*<\/figure>$/);
+    expect(out.html).not.toContain(STREET_STYLE);
+    expect(out.html).not.toContain('Supported by');
+    expect(renderAttendeeMap(many(G - 1, { startDateISO: soon })).state).toBe('thin');
   });
 });

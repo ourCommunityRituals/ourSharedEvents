@@ -496,7 +496,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 45
+      "testCount": 62
     },
     {
       "file": "workers/oursharedevents/tests/attendee-name-encryption.spec.ts",
@@ -1266,7 +1266,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 12
+      "testCount": 19
     },
     {
       "file": "workers/oursharedevents/tests/feature-flags.spec.ts",
@@ -1693,7 +1693,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 53
+      "testCount": 64
     },
     {
       "file": "workers/oursharedevents/tests/maps.spec.ts",
@@ -1728,7 +1728,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 5
+      "testCount": 34
     },
     {
       "file": "workers/oursharedevents/tests/ncr-pipeline.spec.ts",
@@ -1889,7 +1889,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 9
+      "testCount": 43
     },
     {
       "file": "workers/oursharedevents/tests/portfolio-rollup.invariant.spec.ts",
