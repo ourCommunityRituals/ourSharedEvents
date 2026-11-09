@@ -2624,7 +2624,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 35
+      "testCount": 39
     },
     {
       "file": "workers/oursharedevents/tests/seo-canonical-schema.spec.ts",

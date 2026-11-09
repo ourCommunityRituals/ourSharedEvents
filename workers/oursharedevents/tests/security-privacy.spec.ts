@@ -165,23 +165,25 @@ describe('BE-9 L1: legal_clearance_tier extensibility', () => {
     expect(html).toContain('PCI');
   });
 
-  test('tier 4 adds HIPAA health addendum', async () => {
+  // ADR-018: tiers 4 (HIPAA) and 5 (COPPA) are declined regimes, so no
+  // health or children's notice is ever added, even if a tier reaches the page.
+  test('tier 4 adds no health notice (HIPAA is declined, ADR-018)', async () => {
     const html = await formHtml('register', 4);
-    expect(html).toContain('Health notice');
-    expect(html).toContain('HIPAA');
+    expect(html).not.toContain('Health notice');
+    expect(html).not.toContain('HIPAA');
   });
 
-  test('tier 5 adds COPPA children addendum', async () => {
+  test('tier 5 adds no children notice (COPPA is declined, ADR-018)', async () => {
     const html = await formHtml('register', 5);
-    expect(html).toContain("Children's notice");
-    expect(html).toContain('COPPA');
+    expect(html).not.toContain("Children's notice");
+    expect(html).not.toContain('COPPA');
   });
 
-  test('tier 5 includes all lower-tier addenda (cumulative)', async () => {
+  test('tier 5 keeps only the commerce notice', async () => {
     const html = await formHtml('register', 5);
     expect(html).toContain('Commerce notice');
-    expect(html).toContain('Health notice');
-    expect(html).toContain("Children's notice");
+    expect(html).not.toContain('Health notice');
+    expect(html).not.toContain("Children's notice");
   });
 });
 
@@ -255,6 +257,47 @@ describe('BE-10 L1: /privacy page content (GDPR Art. 13 handler)', () => {
     expect(html).toContain('data-testid="privacy-main"');
     expect(html).toContain('data-testid="privacy-updated"');
   });
+});
+
+// ADR-018: HIPAA, COPPA and SOPPA are declined regimes. No public text may
+// promise their safeguards (a BAA, HIPAA handling, verifiable parental consent),
+// because OSE refuses those regimes by construction.
+const DECLINED_REGIME_PROMISES: RegExp[] = [
+  /HIPAA safeguards/i,
+  /under HIPAA/i,
+  /Business Associate Agreement[^.]*applies/i,
+  /protected under HIPAA/i,
+  /with verifiable parental consent|without verifiable parental consent/i,
+  /we comply with COPPA/i,
+  /submit this form \(COPPA\)/i,
+];
+
+describe('ADR-018: public privacy text states the declined regimes, never promises them', () => {
+  test('privacy page makes no HIPAA, BAA or COPPA-consent promise', async () => {
+    const html = await handlePrivacyPage().text();
+    for (const re of DECLINED_REGIME_PROMISES) expect(html).not.toMatch(re);
+  });
+
+  test('privacy page says plainly that health data and BAAs are refused', async () => {
+    const html = await handlePrivacyPage().text();
+    expect(html).toContain('We do not collect health information');
+    expect(html).toContain('We do not sign Business Associate Agreements');
+  });
+
+  test('privacy page says plainly that it is not for children under 13', async () => {
+    const html = await handlePrivacyPage().text();
+    expect(html).toContain('not directed to children under 13');
+    expect(html).toContain('We do not offer a parental-consent process');
+  });
+
+  for (const type of FORM_TYPES) {
+    for (const tier of [1, 2, 3, 4, 5]) {
+      test(`${type} form notice at tier ${tier} makes no HIPAA, BAA or COPPA promise`, async () => {
+        const html = await formHtml(type, tier);
+        for (const re of DECLINED_REGIME_PROMISES) expect(html).not.toMatch(re);
+      });
+    }
+  }
 });
 
 describe('BE-10 L2: /privacy route via SELF fetch', () => {

@@ -1,9 +1,11 @@
 /**
  * Privacy policy page handler (BE-10 / GDPR Art. 13).
  *
- * Phase 1 baseline — standard community event privacy policy.
- * Phase 2+ addenda (PCI DSS, HIPAA, COPPA) are anchored sections
- * that can be linked via ?phase=N query param for phase-specific notices.
+ * Standard community event privacy policy. The commerce addendum (#phase2)
+ * covers paid events. Sections #phase4 (health) and #phase5 (children) state
+ * the declined regimes of ADR-018 as refusals: no HIPAA/BAA, no under-13 data,
+ * no parental-consent process. Never word them as promises
+ * (tests/security-privacy.spec.ts, "ADR-018").
  *
  * Data controller: OurSharedEvents (ourCommunityRituals)
  */
@@ -108,22 +110,24 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
       data handling disclosures will be provided at point of payment.
     </p>
 
-    <h2 id="phase4" class="phase-anchor">9. Health information addendum (Phase 4 events)</h2>
+    <h2 id="phase4" class="phase-anchor">9. Health information</h2>
     <p>
-      For health-related events where a Business Associate Agreement (BAA) applies, health information
-      is handled under HIPAA safeguards. Additional disclosures will be provided at the point of
-      health data collection.
+      We do not collect health information. We do not sign Business Associate Agreements, and we are
+      not set up to hold protected health information. Health-related events can still use
+      OurSharedEvents for event details and anonymous counts, but no form asks about anyone's health.
+      Please do not put health details in a form or a comment.
     </p>
 
-    <h2 id="phase5" class="phase-anchor">10. Children's privacy addendum (Phase 5 events)</h2>
+    <h2 id="phase5" class="phase-anchor">10. Children's privacy</h2>
     <p>
-      For events open to children under 13, we comply with COPPA. A parent or guardian must
-      submit any form on behalf of a child. We do not knowingly collect personal data from
-      children under 13 without verifiable parental consent. To request deletion of a child's data,
-      email <a href="mailto:privacy@oursharedevents.com">privacy@oursharedevents.com</a>.
+      OurSharedEvents is not directed to children under 13, and we do not knowingly collect personal
+      data from them. We do not offer a parental-consent process. Family events can still use
+      OurSharedEvents for event details and anonymous counts. If you think a child under 13 has given
+      us personal data, email <a href="mailto:privacy@oursharedevents.com">privacy@oursharedevents.com</a>
+      and we will delete it.
     </p>
 
-    <p class="updated" data-testid="privacy-updated">Last updated: 2026-04-23 &mdash; Phase 1 baseline</p>
+    <p class="updated" data-testid="privacy-updated">Last updated: 2026-11-08</p>
   </main>
 </body>
 </html>`;
