@@ -1,0 +1,109 @@
+# stg watch: is stg readable from CI, and does it hold its stock totals?
+#
+# From 2026-11-07 every "Stock data (stg)" run failed (the edge challenged the
+# check's reads from runners), each run purged every node, and stg's searches read
+# 0 for days while main stayed green: neither the load nor its cause is part of
+# T1–T4. This watch runs on its own schedule, independent of the load, and turns
+# red the same day when either breaks:
+#
+#   edge      the stg edge probe (scripts/stock/edge-probe.mjs): a read shaped like
+#             the stock check's /q/, /s/, /events/<id> and zip page must reach the
+#             Worker. Red when a WAF or bot setting starts challenging CI.
+#   searches  every search in stock/totals.json reads its permanent total on stg
+#             (scripts/stock/stg-watch.mjs). Red when stg is empty or wrong,
+#             whatever the cause.
+#   announce  a red run opens a GitHub issue (label ci-red:stg-watch), or comments
+#             on the open one; the next green run closes it (scripts/ci/announce-run.mjs).
+#
+# Reads only: no deploy, no D1 or R2, no writes to stg. Not in the stg-writer group
+# (GitHub keeps one waiting run per group, so a waiting read could replace a
+# waiting load). Runs well after the 09:23 UTC load and again in the evening.
+# Secrets: OCR_CI_EDGE_TOKEN, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET (the
+# stock check's own read headers), masked and never printed.
+
+name: stg watch
+
+on:
+  schedule:
+    - cron: '41 12 * * *'
+    - cron: '41 22 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stg-watch
+  cancel-in-progress: false
+
+jobs:
+  edge:
+    name: 'Edge: CI reads reach the Worker'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Probe
+        timeout-minutes: 3
+        env:
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: node scripts/stock/edge-probe.mjs
+
+  searches:
+    name: 'Searches: stg reads its stock totals'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Read every search
+        timeout-minutes: 8
+        env:
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: node scripts/stock/stg-watch.mjs
+
+  announce:
+    name: 'Announce: open or close the stg watch issue'
+    needs: [edge, searches]
+    # Only main's runs speak for stg; a dispatch from a branch announces nothing.
+    if: ${{ always() && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Announce
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NEEDS: ${{ toJSON(needs) }}
+          ANNOUNCE_KEY: stg-watch
+          ANNOUNCE_TITLE: 'stg watch is red: CI cannot read stg, or stg does not hold its stock totals'
+          ANNOUNCE_HINT: 'Open the run. If the edge job is red, look up a CHALLENGED Ray ID in Cloudflare Security → Events (an edge setting, the owner''s). If only searches are red, read the newest "Stock data (stg)" run.'
+          ANNOUNCE_ASSIGNEE: ${{ vars.PR_REVIEWER }}
+        run: node scripts/ci/announce-run.mjs
