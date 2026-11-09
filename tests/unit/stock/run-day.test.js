@@ -981,6 +981,8 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
     const summary = rd.renderSummary(args);
     expect(summary).toContain('X-OCR-CI');
     expect(summary).toContain('OSE-939');
+    // and names the one command that fixes it
+    expect(summary).toContain('scripts/ci/cf-waf-stg-ci-skip.mjs');
     // the first challenged read and its ray, to look up in Security Events
     expect(summary).toContain('/q/qrt_x ray=a56c65f64daac071-ORD');
     expect(summary).toContain('Security → Events');

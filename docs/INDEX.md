@@ -98,7 +98,7 @@ Hardening runbooks, access control, and security configurations.
 | LOGGING_STANDARD.md              | Structured logging standard       |
 | SETTINGS_AS_CODE_PLAN.md         | Settings-as-code plan             |
 
-### [`runbooks/`](runbooks/) — Operational Runbooks (15 files)
+### [`runbooks/`](runbooks/) — Operational Runbooks (16 files)
 
 Step-by-step procedures for deployment, debugging, and incident response.
 
@@ -118,6 +118,7 @@ Step-by-step procedures for deployment, debugging, and incident response.
 | RUNBOOK-SEC-3.2-HSTS-PHASED.md         | HSTS phased rollout        |
 | RUNBOOK-SEC-4.1-CANONICAL-HOST.md      | Canonical host setup       |
 | RUNBOOK-SEC-4.2-SINGLE-WORKER-ROUTE.md | Single worker route setup  |
+| RUNBOOK-STG-CI-SKIP-RULE.md            | stg CI edge skip rule      |
 
 ### [`deployment/`](deployment/) — Deploy & Infrastructure (12 files)
 
