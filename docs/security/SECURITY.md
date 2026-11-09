@@ -629,7 +629,7 @@ npm audit --json > .security-reports/audit.json
 
 | File                                                | Purpose                                                    |
 | --------------------------------------------------- | ---------------------------------------------------------- |
-| `.github/workflows/security-scan.yml`               | CodeQL + npm audit (all branches)                          |
+| `.github/workflows/security-scan.yml`               | CodeQL + npm audit (every PR, pushes to main, weekly)      |
 | `.github/workflows/advanced-security-scan.yml`      | SBOM, License Compliance, Dependency Review (all branches) |
 | `.github/workflows/security-triage.yml`             | Auto-creates issues from scan failures                     |
 | `.github/workflows/security-sla-enforcement.yml`    | Daily SLA checks + escalation                              |
