@@ -28,6 +28,19 @@ export const FLOORS = {
   'src/lib/count-floor.ts': 89.78,
   'src/lib/report-depth.ts': 95,
   'src/lib/pii.ts': 95,
+  // OSE-1824 (2026-11-09): the landing's Type row by event-type category, at
+  // the scores of the run that added them. One equivalent mutant in the catalog
+  // read carries a written `// Stryker disable` reason. landing-area.ts is 306 of
+  // 308: the two survivors are the `<=` forms of `b < a || c < b` in
+  // orderLandingSections, equivalent because two markers never share an index
+  // (a disable comment would also hide the killable `>=` forms). The two handler
+  // files are mutated only in a marker range (rangeOf in stryker.conf.mjs).
+  // Never lower.
+  'src/lib/event-type-catalog.ts': 100,
+  'src/lib/event-type-catalog-read.ts': 100,
+  'src/lib/landing-area.ts': 99.35,
+  'src/handlers/pages.ts': 100,
+  'src/handlers/events.ts': 100,
 };
 
 /** One file's score from its mutants, or null when it has no valid mutant. */

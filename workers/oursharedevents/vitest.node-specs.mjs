@@ -147,6 +147,10 @@ export const NODE_SPECS = [
   // event shape; asserts the CSS-filter tags (window/type/product/modality) and
   // the default-view rule. No DOM / cloudflare:test / D1 — node-clean.
   'tests/landing-area.spec.ts',
+  // OSE-1824 — the Type row by category: catalog read (fake D1), the landing
+  // handler's use of it, the admin picker endpoint, edge + fat-finger renders.
+  // Mocks the data provider and the catalog read; no cloudflare:test.
+  'tests/landing-category-scenarios.spec.ts',
   'tests/attendee-map.spec.ts',
   // Street map under the hexagons — PMTiles reader, vector tile decoder and the
   // server-drawn layer over in-memory archives and a fake R2 bucket (no runtime).
