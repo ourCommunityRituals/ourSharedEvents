@@ -328,6 +328,9 @@ export const NODE_SPECS = [
   // digital, with and without artwork, picker and draft preview), plus the same
   // parse of its attribute writes (tests/helpers/markup-attribute-check.ts).
   'tests/poster-attribute-escaping.spec.ts',
+  // OSE-1825 - the digital poster's When / Where / Share block: the served
+  // page in jsdom (address line, button actions, Web Share and its fallback).
+  'tests/poster-digital-actions.spec.ts',
   // OSE-1441 - the /poster picker drops a late bundle answer for the event it
   // left: the page script in jsdom with one answer held back.
   'tests/poster-picker-stale-response.spec.ts',
