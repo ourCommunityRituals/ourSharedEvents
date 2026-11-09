@@ -41,6 +41,11 @@ vi.mock('../src/lib/sponsor-titles', async () => {
   return { fetchSponsorTitles: async () => new Map([[SPONSORED_EVENT, 'Beggars Pizza']]) };
 });
 
+// The landing's Type row is the event-type categories (owner 2026-11-09).
+vi.mock('../src/lib/event-type-catalog-read', async () => {
+  const { goldenCatalog } = await import('./helpers/list-landing-rows');
+  return { readEventTypeCatalog: async () => goldenCatalog() };
+});
 import { handlePublicPage, handleLandingPage } from '../src/handlers/pages';
 import { renderAttendeeMap } from '../src/lib/attendee-map';
 import { toPublicEvent } from '../src/lib/public-event-projection';

@@ -77,8 +77,8 @@ export function buildEventTypeCatalog(
 ): EventTypeCatalog {
   const byCode = new Map<string, CatalogCategory>();
   const ordered = categories
+    // filter() returns a new array, so the sort never touches the caller's rows.
     .filter((c) => c.is_active === undefined || c.is_active === 1)
-    .slice()
     .sort(
       (a, b) => a.display_order - b.display_order || a.category_code.localeCompare(b.category_code)
     );
@@ -119,4 +119,25 @@ export function buildEventTypeCatalog(
     out.push(other);
   }
   return { categories: out, orphans };
+}
+
+/** The category an event type sits under, as the landing's Type row names it. */
+export interface TypeCategory {
+  code: string;
+  name: string;
+  /** Position in the catalog: categories keep display_order, "Other" is last. */
+  order: number;
+}
+
+/**
+ * Event type id → its category, from the same grouping the picker shows, so a
+ * filter by category (the landing's Type row, owner 2026-11-09) and the Create
+ * Event picker cannot disagree. An orphan type maps to the "Other" bucket.
+ */
+export function categoryByTypeId(catalog: EventTypeCatalog): Map<string, TypeCategory> {
+  const out = new Map<string, TypeCategory>();
+  catalog.categories.forEach((c, order) => {
+    for (const t of c.types) out.set(t.id, { code: c.code, name: c.name, order });
+  });
+  return out;
 }

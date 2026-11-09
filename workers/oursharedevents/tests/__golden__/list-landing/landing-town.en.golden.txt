@@ -261,7 +261,7 @@
 
       <section class="area-section" aria-label="Events" data-testid="landing-area">
         <h2 class="area-heading" data-testid="area-heading">Near Blue Island, IL <a class="where-change" href="/?change=1" data-testid="where-change">Change</a></h2>
-        <input type="radio" name="view" id="view-list" class="toggle-radio" checked /><input type="radio" name="view" id="view-map" class="toggle-radio" /><input type="radio" name="win" id="win-weekend" class="toggle-radio" /><input type="radio" name="win" id="win-week" class="toggle-radio" /><input type="radio" name="win" id="win-month" class="toggle-radio" /><input type="radio" name="win" id="win-next-90" class="toggle-radio" checked />
+        <input type="radio" name="view" id="view-list" class="toggle-radio" checked /><input type="radio" name="view" id="view-map" class="toggle-radio" /><input type="radio" name="win" id="win-weekend" class="toggle-radio" /><input type="radio" name="win" id="win-week" class="toggle-radio" /><input type="radio" name="win" id="win-month" class="toggle-radio" /><input type="radio" name="win" id="win-next-90" class="toggle-radio" checked /><input type="radio" name="type" id="type-all" class="toggle-radio" checked /><input type="radio" name="type" id="cat-rec" class="toggle-radio" /><input type="radio" name="type" id="cat-ent" class="toggle-radio" />
         <style data-testid="area-window-css">
 #view-list:checked ~ .toggles label[for='view-list']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-list:checked ~ .toggles label[for='view-list']::before{content:'\2713';margin-right:.35rem}#view-list:focus-visible ~ .toggles label[for='view-list']{outline:3px solid var(--accent);outline-offset:2px}
 #view-map:checked ~ .toggles label[for='view-map']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-map:checked ~ .toggles label[for='view-map']::before{content:'\2713';margin-right:.35rem}#view-map:focus-visible ~ .toggles label[for='view-map']{outline:3px solid var(--accent);outline-offset:2px}
@@ -269,11 +269,15 @@
 #win-week:checked ~ .toggles label[for='win-week']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-week:checked ~ .toggles label[for='win-week']::before{content:'\2713';margin-right:.35rem}#win-week:focus-visible ~ .toggles label[for='win-week']{outline:3px solid var(--accent);outline-offset:2px}#win-week:checked ~ .area .event-card:not(.when-week){display:none}
 #win-month:checked ~ .toggles label[for='win-month']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-month:checked ~ .toggles label[for='win-month']::before{content:'\2713';margin-right:.35rem}#win-month:focus-visible ~ .toggles label[for='win-month']{outline:3px solid var(--accent);outline-offset:2px}#win-month:checked ~ .area .event-card:not(.when-month){display:none}
 #win-next-90:checked ~ .toggles label[for='win-next-90']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-next-90:checked ~ .toggles label[for='win-next-90']::before{content:'\2713';margin-right:.35rem}#win-next-90:focus-visible ~ .toggles label[for='win-next-90']{outline:3px solid var(--accent);outline-offset:2px}#win-next-90:checked ~ .area .event-card:not(.when-next-90){display:none}
+</style><style data-testid="area-type-css">
+#type-all:checked ~ .toggles label[for='type-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-all:checked ~ .toggles label[for='type-all']::before{content:'\2713';margin-right:.35rem}#type-all:focus-visible ~ .toggles label[for='type-all']{outline:3px solid var(--accent);outline-offset:2px}
+#cat-rec:checked ~ .toggles label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-rec:checked ~ .toggles label[for='cat-rec']::before{content:'\2713';margin-right:.35rem}#cat-rec:focus-visible ~ .toggles label[for='cat-rec']{outline:3px solid var(--accent);outline-offset:2px}#cat-rec:checked ~ .area .event-card:not(.cat-rec){display:none}
+#cat-ent:checked ~ .toggles label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .toggles label[for='cat-ent']::before{content:'\2713';margin-right:.35rem}#cat-ent:focus-visible ~ .toggles label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent){display:none}
 </style>
         <div class="toggles" data-testid="area-toggles">
           <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">View</legend><label class="disc-chip" for="view-list">List</label><label class="disc-chip" for="view-map">Map</label></fieldset>
           <fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">When</legend><label class="disc-chip" for="win-weekend">This weekend</label><label class="disc-chip" for="win-week">Next 7 days</label><label class="disc-chip" for="win-month">This month</label><label class="disc-chip" for="win-next-90">Next 90 days</label></fieldset>
-          
+          <fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">Type</legend><label class="disc-chip" for="type-all">All types</label><label class="disc-chip" for="cat-rec">Sports &amp; Recreation</label><label class="disc-chip" for="cat-ent">Entertainment &amp; Trivia</label></fieldset>
           
         </div>
         <div class="area" data-testid="area">
@@ -282,13 +286,13 @@
               <p><strong>The map appears once this area has 10 events in the next 90 days.</strong> There are 7 so far &mdash; every event is listed below.</p>
             </div>
             <figure class="amap" data-testid="amap-example">
-              <style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>
+              <style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-credit a,.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" role="img" aria-label="Example map: three neighborhoods drawn as numbered hexagons, the busiest shaded deepest" data-testid="amap-example-svg"><polygon class="amap-cell" points="231,20 300.3,60 300.3,140 231,180 161.7,140 161.7,60" fill-opacity="0.80" stroke-width="1.5"/><text class="amap-num" x="231" y="100" text-anchor="middle" dominant-baseline="central">1</text><polygon class="amap-cell" points="369.6,20 438.90000000000003,60 438.90000000000003,140 369.6,180 300.3,140 300.3,60" fill-opacity="0.50" stroke-width="1.5"/><text class="amap-num" x="369.6" y="100" text-anchor="middle" dominant-baseline="central">2</text><polygon class="amap-cell" points="300.3,140 369.6,180 369.6,260 300.3,300 231,260 231,180" fill-opacity="0.30" stroke-width="1.5"/><text class="amap-num" x="300.3" y="220" text-anchor="middle" dominant-baseline="central">3</text></svg>
               <figcaption data-testid="amap-example-caption"><strong>Example.</strong> This is what the map looks like once neighborhoods fill in: one numbered hexagon each, a few square kilometres, never a street address.</figcaption>
             </figure>
           </div>
           <div class="view-list" data-testid="area-list">
-          <article class="event-card when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g13" data-phase="event">
+          <article class="event-card when-week when-month when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g13" data-phase="event">
             <a class="event-card-link" href="/events/evt_g13/golden-13" data-testid="public-event-card-link" aria-label="Open Morning Market public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -298,7 +302,7 @@
             </div>
             <a class="cta" href="/events/evt_g13/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Morning Market">Register</a>
           </article>
-          <article class="event-card when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g09" data-phase="pre_event">
+          <article class="event-card when-week when-month when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g09" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g09/golden-9" data-testid="public-event-card-link" aria-label="Open Golden Event 9 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -308,7 +312,7 @@
             </div>
             <a class="cta" href="/events/evt_g09/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 9">Register</a>
           </article>
-          <article class="event-card when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g10" data-phase="pre_event">
+          <article class="event-card when-week when-month when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g10" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g10/golden-10" data-testid="public-event-card-link" aria-label="Open Golden Event 10 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -318,7 +322,7 @@
             </div>
             <a class="cta" href="/events/evt_g10/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 10">Register</a>
           </article>
-          <article class="event-card when-weekend when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g01" data-phase="pre_event">
+          <article class="event-card when-weekend when-week when-month when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g01" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g01/golden-1" data-testid="public-event-card-link" aria-label="Open Trivia Night public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -328,7 +332,7 @@
             </div>
             <a class="cta" href="/events/evt_g01/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Trivia Night">Register</a>
           </article>
-          <article class="event-card when-weekend when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g02" data-phase="pre_event">
+          <article class="event-card when-weekend when-week when-month when-next-90 cat-rec product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g02" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g02/golden-2" data-testid="public-event-card-link" aria-label="Open Bocce League public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -338,7 +342,7 @@
             </div>
             <a class="cta" href="/events/evt_g02/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Bocce League">Register</a>
           </article>
-          <article class="event-card when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g05" data-phase="pre_event">
+          <article class="event-card when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g05" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g05/golden-5" data-testid="public-event-card-link" aria-label="Open Golden Event 5 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -348,7 +352,7 @@
             </div>
             <a class="cta" href="/events/evt_g05/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 5">Register</a>
           </article>
-          <article class="event-card when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g07" data-phase="pre_event">
+          <article class="event-card when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g07" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g07/golden-7" data-testid="public-event-card-link" aria-label="Open Golden Event 7 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">

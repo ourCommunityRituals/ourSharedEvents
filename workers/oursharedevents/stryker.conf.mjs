@@ -24,6 +24,27 @@
 //   npm install -D @stryker-mutator/core @stryker-mutator/vitest-runner).
 // CI wiring (nightly + workflow_dispatch) follows once the baseline score is known.
 
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * `file:start-end` for the lines from the first one containing `from` to the
+ * next one containing `to` (inclusive), so a range in a big handler file
+ * follows its code when lines above it move. A marker that is missing throws:
+ * a range that points nowhere would be a gate that cannot fail.
+ */
+export function rangeOf(file, from, to) {
+  const lines = readFileSync(join(HERE, file), 'utf8').split(/\r?\n/);
+  const start = lines.findIndex((l) => l.includes(from));
+  if (start < 0) throw new Error(`stryker.conf: "${from}" not found in ${file}`);
+  const end = lines.findIndex((l, i) => i > start && l.includes(to));
+  if (end < 0) throw new Error(`stryker.conf: "${to}" not found after "${from}" in ${file}`);
+  return `${file}:${start + 1}-${end + 1}`;
+}
+
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {
   packageManager: 'npm',
@@ -50,6 +71,20 @@ export default {
     // log lines via console spies). Residual survivors are documented EQUIVALENT
     // mutants (`// Stryker disable` with written reasons in src/auth/admin.ts).
     'src/auth/admin.ts',
+    // OSE-1824 — the landing's Type row by event-type category (owner 2026-11-09).
+    // The catalog grouping and its read are whole files; the renderer is the
+    // whole landing area (its CSS-only filter is the behaviour); in the two big
+    // handler files only the code this feature owns is mutated. Killed by
+    // landing-area.spec.ts, landing-category-scenarios.spec.ts and the goldens.
+    'src/lib/event-type-catalog.ts',
+    'src/lib/event-type-catalog-read.ts',
+    'src/lib/landing-area.ts',
+    rangeOf('src/handlers/pages.ts', 'let typeCategories:', 'const areaOpts = {'),
+    rangeOf(
+      'src/handlers/events.ts',
+      'export async function handleAdminListEventTypes(',
+      'Failed to list event types'
+    ),
   ],
   coverageAnalysis: 'perTest',
   // Stryker writes `// @ts-nocheck` into its sandbox copy of each file this

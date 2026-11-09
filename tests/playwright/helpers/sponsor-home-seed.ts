@@ -47,7 +47,9 @@ export async function createLiveEvent(
   bearer: string,
   title: string,
   daysOut = 30,
-  where?: { lat: number; lon: number }
+  where?: { lat: number; lon: number },
+  /** An event type id from GET /api/v2/admin/event-types; default the catalog's first. */
+  eventTypeId?: string
 ): Promise<{ id: string; listedFrom: string | null }> {
   const headers = { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' };
   const start = new Date(Date.now() + daysOut * 86_400_000).toISOString().slice(0, 10);
@@ -66,20 +68,21 @@ export async function createLiveEvent(
     'create event'
   );
   // OSE-1560: leaving draft needs a start time and an event type.
-  const catalog = await ok<{ categories: { types: { id: string }[] }[] }>(
-    await request.get('/api/v2/admin/event-types', { headers }),
-    'event types'
-  );
-  const eventTypeId = catalog.categories[0]?.types[0]?.id;
+  const typeId =
+    eventTypeId ??
+    (
+      await ok<{ categories: { types: { id: string }[] }[] }>(
+        await request.get('/api/v2/admin/event-types', { headers }),
+        'event types'
+      )
+    ).categories[0]?.types[0]?.id;
   let listedFrom: string | null = null;
   for (const status of ['ready', 'active']) {
     const res = await ok<{ listedFrom?: string | null }>(
       await request.put(`/api/v2/admin/events/${encodeURIComponent(ev.id)}`, {
         headers,
         data:
-          status === 'ready'
-            ? { status, start_time: '18:00', event_type_id: eventTypeId }
-            : { status },
+          status === 'ready' ? { status, start_time: '18:00', event_type_id: typeId } : { status },
       }),
       `event -> ${status}`
     );

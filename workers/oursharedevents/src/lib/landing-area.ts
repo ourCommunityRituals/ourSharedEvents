@@ -10,8 +10,10 @@
 //   1. view     list | map            (default chosen by count; see LIST_MAX)
 //   2. window   LANDING_WINDOWS — the SAME `when` values + labels as the /events
 //               chips (lib/event-discovery, OSE-1362), default DEFAULT_WINDOW
-//   3. type     one pill per event-type present, plus "All"  (niche discovery);
-//               offered only when there are two or more types to choose between
+//   3. type     one pill per event-type CATEGORY present, plus "All types"
+//               (owner 2026-11-09: "Event Types should be Categories. When
+//               clicked you get all the event types under this category");
+//               offered only when there are two or more categories to choose
 //   4. modality All | online | in-person                    ("in reality");
 //               offered only when the list holds both kinds
 //
@@ -37,8 +39,12 @@
 // DATA BACKING (audited against the events table, 2026-09-13):
 //   - window   : inWhenWindow() from lib/event-discovery — one definition for
 //                /events and here (event-local calendar day; live = today).
-//   - type     : `template_id` (readable slugs like `bar_night`), then
-//                `event_type_id`; untyped → "Other".
+//   - type     : `event_type_id` → its category in the event-type catalog
+//                (lib/event-type-catalog, the grouping the Create Event picker
+//                shows), passed in as `typeCategories`. No type, a type the
+//                catalog does not know, or a type in the catalog's own "Other"
+//                bucket → "Other". `template_id` is a layout, not a type, and
+//                maps to several types, so it never decides the category.
 //   - modality : DERIVED — in-person when the event has geo (`lat`/`lon`) or a
 //                `venue`/`location`, else online. There is no modality column;
 //                this heuristic is the agreed slice-2 backing (OSE-1312).
@@ -65,9 +71,11 @@ import {
 } from './event-discovery.js';
 import { renderEventCard } from './event-list.js';
 import { renderAttendeeMap } from './attendee-map.js';
+import type { StreetLayer } from './street-map.js';
 import { toPublicEvent } from './public-event-projection.js';
 import { msg } from './i18n/catalog.js';
 import { DEFAULT_LANG, type Lang } from './i18n/languages.js';
+import { OTHER_CATEGORY_CODE, type TypeCategory } from './event-type-catalog.js';
 
 export interface LandingAreaItem {
   id?: unknown;
@@ -125,52 +133,54 @@ export const LANDING_AREA_MARKER = '<!--OCR_LANDING_AREA-->';
 export interface RenderedLandingArea {
   /** Full inner markup for the area section (radios + toggles + cards). */
   html: string;
-  /** Distinct event-types present, by slug. Order is stable (by label). */
-  types: { slug: string; label: string }[];
+  /** Distinct type categories present, by slug, in catalog order ("Other" last). */
+  categories: { slug: string; label: string }[];
   /** Cards visible at the widest window — drives the default view. */
   windowCount: number;
   /** 'list' | 'map' — the view the area opens on. */
   defaultView: 'list' | 'map';
   /** True at LIST_MAX or more: the map leads the page and the doors go under it. */
   leadsWithMap: boolean;
+  /** The res-7 cells the map draws; empty or absent when no map is drawn. */
+  mapCells?: string[];
 }
 
 // ── small helpers ────────────────────────────────────────────────────────────
 
 function str(v: unknown): string {
-  return typeof v === 'string' ? v : v == null ? '' : String(v);
+  // String(v) of a string is v itself, so one test covers every kind.
+  return v == null ? '' : String(v);
 }
 
 function isFiniteNum(v: unknown): boolean {
-  return typeof v === 'number' && Number.isFinite(v);
+  // Number.isFinite is false for anything that is not a number, NaN and ±Infinity.
+  return Number.isFinite(v);
 }
 
 /** CSS-ident-safe slug: lowercase, non-[a-z0-9] → '-', collapsed, trimmed. */
 function slugify(raw: string): string {
-  const s = raw
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  const dashed = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  // `dashed` has at most one '-' per run, so one at each end is all there is.
+  const s = dashed.replace(/^-|-$/g, '');
   return s || 'other';
 }
 
-/** Human label from a raw type id: `bar_night` → `Bar Night`. */
-function titleCase(raw: string): string {
-  return raw
-    .replace(/[_-]+/g, ' ')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .split(' ')
-    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
-    .join(' ');
-}
+/** The slug every event without a known category shares. */
+const OTHER_SLUG = 'cat-other';
 
-// The label of a named type is the type id made readable (`bar_night` is "Bar
-// Night"), as typed; type names per language are OSE-1764. "Other" is ours.
-function typeOf(item: LandingAreaItem, lang: Lang): { slug: string; label: string } {
-  const raw = str(item.template_id) || str(item.event_type_id);
-  if (!raw) return { slug: 'type-other', label: msg(lang, 'area.otherType') };
-  return { slug: `type-${slugify(raw)}`, label: titleCase(raw) };
+// The category's own name from the catalog ("Arts, Culture & Live Music"), as
+// the Create Event picker shows it; names per language are OSE-1764. "Other" is
+// ours, so it is in the page's language, and it always sorts last.
+function categoryOf(
+  item: LandingAreaItem,
+  lang: Lang,
+  typeCategories: ReadonlyMap<string, TypeCategory> | undefined
+): { slug: string; label: string; order: number } {
+  const cat = typeCategories?.get(str(item.event_type_id));
+  if (!cat || cat.code === OTHER_CATEGORY_CODE) {
+    return { slug: OTHER_SLUG, label: msg(lang, 'area.otherType'), order: Infinity };
+  }
+  return { slug: `cat-${slugify(cat.code)}`, label: cat.name, order: cat.order };
 }
 
 function modalityOf(item: LandingAreaItem): 'online' | 'inperson' {
@@ -202,7 +212,7 @@ function emptyHtml(lang: Lang): string {
 export function renderEmptyLandingArea(lang: Lang = DEFAULT_LANG): RenderedLandingArea {
   return {
     html: emptyHtml(lang),
-    types: [],
+    categories: [],
     windowCount: 0,
     defaultView: 'list',
     leadsWithMap: false,
@@ -216,7 +226,7 @@ export function renderEmptyLandingArea(lang: Lang = DEFAULT_LANG): RenderedLandi
  *
  * Accepts the same shape the DataProvider list emits post-`enrichWithPhase`
  * (so the landing area and `GET /api/v2/events` describe the same events), plus
- * `template_id` / `event_type_id` / `lat` / `lon` / `location` for tagging.
+ * `event_type_id` / `lat` / `lon` / `location` for tagging.
  *
  * @param opts.now  injectable clock for deterministic window tests.
  */
@@ -230,20 +240,26 @@ export function renderLandingArea(
     sponsorTitles?: ReadonlyMap<string, string>;
     /** The page's language (OSE-1762). */
     lang?: Lang;
+    /** Event type id → its category (lib/event-type-catalog categoryByTypeId). */
+    typeCategories?: ReadonlyMap<string, TypeCategory>;
+    /** The street map under the hexagons, drawn for `mapCells` of a first pass. */
+    streets?: StreetLayer | null;
   }
 ): RenderedLandingArea {
   const lang = opts?.lang ?? DEFAULT_LANG;
-  if (!Array.isArray(items) || items.length === 0) return renderEmptyLandingArea(lang);
+  // An empty list falls through to `live.length === 0` below.
+  if (!Array.isArray(items)) return renderEmptyLandingArea(lang);
 
   const now = new Date(opts?.now ?? Date.now());
 
   // Forward-looking: wrapped events belong on /events + the event page, not on
-  // the "what's coming together" surface. phase is authoritative.
-  // Upcoming first, soonest first, undated last (OSE-1520), as on /events.
-  const live = orderUpcomingFirst(items.filter((e) => str(e.phase) !== 'post_event')).upcoming;
+  // the "what's coming together" surface. phase is authoritative: `upcoming`
+  // leaves out every post_event. Upcoming first, soonest first, undated last
+  // (OSE-1520), as on /events.
+  const live = orderUpcomingFirst(items).upcoming;
   if (live.length === 0) return renderEmptyLandingArea(lang);
 
-  const typeMap = new Map<string, string>(); // slug → label
+  const categoryMap = new Map<string, { label: string; order: number }>(); // by slug
   const modalities = new Set<string>();
   let windowCount = 0;
   // Windows that hold at least one listed event. The rest get a message.
@@ -258,8 +274,8 @@ export function renderLandingArea(
       if (windows.includes(`when-${DEFAULT_WINDOW}`)) windowCount += 1;
       for (const w of windows) filledWindows.add(w);
 
-      const { slug: typeSlug, label: typeLabel } = typeOf(e, lang);
-      typeMap.set(typeSlug, typeLabel);
+      const category = categoryOf(e, lang, opts?.typeCategories);
+      categoryMap.set(category.slug, { label: category.label, order: category.order });
       const modality = modalityOf(e);
       modalities.add(modality);
 
@@ -267,7 +283,7 @@ export function renderLandingArea(
         { ...e, venue: str(e.venue) || str(e.location) },
         {
           variant: 'landing',
-          extraClasses: [...windows, typeSlug, 'product-ose', `modality-${modality}`],
+          extraClasses: [...windows, category.slug, 'product-ose', `modality-${modality}`],
           sponsorTitle: opts?.sponsorTitles?.get(str(e.id)),
           venueFallback: modality === 'online' ? msg(lang, 'area.online') : '',
           lang,
@@ -276,9 +292,11 @@ export function renderLandingArea(
     })
     .join('');
 
-  const types = [...typeMap.entries()]
-    .map(([slug, label]) => ({ slug, label }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+  // Catalog order (the picker's display_order), so the row reads the way the
+  // Create Event picker does; "Other" last.
+  const categories = [...categoryMap.entries()]
+    .sort(([, a], [, b]) => a.order - b.order || a.label.localeCompare(b.label))
+    .map(([slug, { label }]) => ({ slug, label }));
 
   // Once the area has been recorded at LIST_MAX (nightly, lib/corridor-latch) it
   // keeps leading with the map while it has anything to show.
@@ -291,7 +309,7 @@ export function renderLandingArea(
   // Fed through the public event projection (the allowlist behind
   // GET /api/v2/events), so a location-precision policy (OSE-1245) that narrows
   // what the public sees narrows the map with it.
-  const mapHtml = renderAttendeeMap(
+  const map = renderAttendeeMap(
     live.map((e) => toPublicEvent(e as Record<string, unknown>)),
     {
       now: now.getTime(),
@@ -299,19 +317,28 @@ export function renderLandingArea(
       area: { count: windowCount, min: LIST_MAX, latched: areaLatched },
       sponsorTitles: opts?.sponsorTitles,
       lang,
+      streets: opts?.streets,
     }
-  ).html;
+  );
+  const mapHtml = map.html;
 
   const html = buildAreaMarkup({
     cards,
-    types,
+    categories,
     defaultView,
     mapHtml,
     mixedModality: modalities.size > 1,
     emptyWindows: LANDING_WINDOWS.filter((w) => !filledWindows.has(`when-${w}`)),
     lang,
   });
-  return { html, types, windowCount, defaultView, leadsWithMap };
+  return {
+    html,
+    categories,
+    windowCount,
+    defaultView,
+    leadsWithMap,
+    mapCells: map.areas.map((a) => a.cell),
+  };
 }
 
 // ── markup assembly ──────────────────────────────────────────────────────────
@@ -349,7 +376,7 @@ function chipRules(id: string): string {
 
 function buildAreaMarkup(args: {
   cards: string;
-  types: { slug: string; label: string }[];
+  categories: { slug: string; label: string }[];
   defaultView: 'list' | 'map';
   mapHtml: string;
   /** Both online and in-person events are listed, so the Where choice can differ. */
@@ -358,10 +385,10 @@ function buildAreaMarkup(args: {
   emptyWindows: readonly LandingWindow[];
   lang: Lang;
 }): string {
-  const { cards, types, defaultView, mapHtml, mixedModality, emptyWindows, lang } = args;
+  const { cards, categories, defaultView, mapHtml, mixedModality, emptyWindows, lang } = args;
   const listChecked = defaultView === 'list';
   // A refinement is offered only when it can change what is shown.
-  const showTypes = types.length > 1;
+  const showTypes = categories.length > 1;
 
   // ── radios (all groups, before .toggles / .area) ──
   const viewRadios =
@@ -370,7 +397,7 @@ function buildAreaMarkup(args: {
     ''
   );
   const typeRadios = showTypes
-    ? radio('type-all', 'type', true) + types.map((t) => radio(t.slug, 'type', false)).join('')
+    ? radio('type-all', 'type', true) + categories.map((c) => radio(c.slug, 'type', false)).join('')
     : '';
   const modRadios = mixedModality
     ? radio('mod-all', 'mod', true) +
@@ -404,17 +431,15 @@ function buildAreaMarkup(args: {
     );
   }
   const winStyle = `<style data-testid="area-window-css">\n${rules.join('\n')}\n</style>`;
-  // Type pills are dynamic, so their rules are too.
-  const typeCss = showTypes
-    ? [
-        chipRules('type-all'),
-        ...types.map(
-          (t) =>
-            chipRules(t.slug) +
-            `#${t.slug}:checked ~ .area .event-card:not(.${t.slug}){display:none}`
-        ),
-      ].join('\n')
-    : '';
+  // Category pills are dynamic, so their rules are too. A card carries the one
+  // class of its category, so a category's rule keeps every type under it.
+  const typeCss = [
+    chipRules('type-all'),
+    ...categories.map(
+      (c) =>
+        chipRules(c.slug) + `#${c.slug}:checked ~ .area .event-card:not(.${c.slug}){display:none}`
+    ),
+  ].join('\n');
   const typeStyle = showTypes ? `<style data-testid="area-type-css">\n${typeCss}\n</style>` : '';
 
   // ── toggle bar (labels) ──
@@ -422,8 +447,8 @@ function buildAreaMarkup(args: {
   // refinements, so they carry a visible label (the old bar had four groups,
   // two of them unlabelled, such as "All / OSE / Hybrid").
   const typePills = showTypes
-    ? `<fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">${msg(lang, 'area.type')}</legend>${pill('type-all', msg(lang, 'area.allTypes'))}${types
-        .map((t) => pill(t.slug, escapeHtml(t.label)))
+    ? `<fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">${msg(lang, 'area.type')}</legend>${pill('type-all', msg(lang, 'area.allTypes'))}${categories
+        .map((c) => pill(c.slug, escapeHtml(c.label)))
         .join('')}</fieldset>`
     : '';
   const modPills = mixedModality
@@ -496,7 +521,10 @@ export function orderLandingSections(html: string, defaultView: 'list' | 'map'):
   const a = html.indexOf(DOORS_START);
   const b = html.indexOf(DOORS_END);
   const c = html.indexOf(AFTER_AREA);
-  if (a < 0 || b < a || c < b) return html;
+  if (a < 0) return html;
+  // Two markers never share an index, so `<` and `<=` agree here: the two
+  // `<=` mutants of this line are equivalent and survive (OSE-1824 floor).
+  if (b < a || c < b) return html;
   const doors = html.slice(a + DOORS_START.length, b);
   const before = html.slice(0, a);
   const middle = html.slice(b + DOORS_END.length, c);

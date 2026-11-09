@@ -36,6 +36,12 @@ vi.mock('../src/lib/data-provider', async (importOriginal) => ({
     },
   }),
 }));
+// Category names per language are OSE-1764; until then each is a sentinel here.
+vi.mock('../src/lib/event-type-catalog-read', async () => {
+  const { goldenCatalog } = await import('./helpers/list-landing-rows');
+  const names = { REC: 'ZZCATREC', ENT: 'ZZCATENT', MKT: 'ZZCATMKT', LIT: 'ZZCATLIT' };
+  return { readEventTypeCatalog: async () => goldenCatalog(names) };
+});
 vi.mock('../src/lib/sponsor-titles', async () => {
   const { SPONSORED_EVENT } = await import('./helpers/list-landing-rows');
   return { fetchSponsorTitles: async () => new Map([[SPONSORED_EVENT, 'ZZSPONSOR']]) };
