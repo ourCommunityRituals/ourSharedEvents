@@ -290,6 +290,10 @@ describe('the landing, zoomed', () => {
     expect(area.html).toContain('data-testid="amap-zoom-empty"');
     expect(area.html).toContain('href="/?zip=60406"');
     expect(area.mapCells).toEqual([]);
+    // It opens on the map, with no category pills to offer.
+    expect(area.defaultView).toBe('map');
+    expect(area.leadsWithMap).toBe(true);
+    expect(area.categories).toEqual([]);
   });
 });
 

@@ -246,7 +246,8 @@ export function landingZoom(
     const v = url?.searchParams.get(k);
     if (v != null) keep.set(k, v);
   }
-  const raw = url?.searchParams.get(AREA_PARAM) ?? '';
+  // No parameter reads as "null" or "undefined", which the shape below refuses.
+  const raw = String(url?.searchParams.get(AREA_PARAM));
   // A cell is exactly 15 hex digits. h3-js reads the string as a number, so it
   // also takes `00<cell>` (any number of zeros): that would zoom on a string no
   // event row holds and echo it into every link. Shape first, then H3.
@@ -263,15 +264,19 @@ export function landingZoom(
   return { cell, href };
 }
 
-/** Zoomed in on an area with no upcoming event: say so, and the way back. */
+/**
+ * Zoomed in on an area with no upcoming event: say so, and the way back.
+ * The zoom path reads only `zoom.events`, never the items argument.
+ */
 function renderEmptyZoom(
   zoom: { cell: string; backHref: string },
   now: Date,
   lang: Lang
 ): RenderedLandingArea {
-  const map = renderAttendeeMap([], {
+  const map = renderAttendeeMap(null, {
     now: now.getTime(),
     lang,
+    // Stryker disable next-line ArrayDeclaration: equivalent mutant. It puts a string in this list; renderZoom keeps only events in the forward window, which a string never is, so the area still has none and says so.
     zoom: { cell: zoom.cell, backHref: zoom.backHref, events: [] },
   });
   return {
@@ -335,8 +340,8 @@ export function renderLandingArea(
   const categoryMap = new Map<string, { label: string; order: number }>(); // by slug
   const modalities = new Set<string>();
   let windowCount = 0;
-  // Zoomed in: each event's place and filter classes, for its dot.
-  const zoomEvents: ZoomEvent[] = [];
+  // Each card's filter classes, so a zoomed map's dots can carry the same ones.
+  const classesOf = new Map<LandingAreaItem, string[]>();
   // Windows that hold at least one listed event. The rest get a message.
   const filledWindows = new Set<string>();
 
@@ -354,13 +359,7 @@ export function renderLandingArea(
       const modality = modalityOf(e);
       modalities.add(modality);
       const classes = [...windows, category.slug, 'product-ose', `modality-${modality}`];
-      if (zoom) {
-        zoomEvents.push({
-          ...toPublicEvent(e as Record<string, unknown>),
-          place_kind: e.place_kind,
-          classes,
-        });
-      }
+      classesOf.set(e, classes);
 
       return renderEventCard(
         { ...e, venue: str(e.venue) || str(e.location) },
@@ -403,7 +402,16 @@ export function renderLandingArea(
       lang,
       streets: opts?.streets,
       zoomHref: opts?.zoomHref,
-      zoom: zoom && { cell: zoom.cell, backHref: zoom.backHref, events: zoomEvents },
+      // Zoomed in: each event's place and filter classes, for its dot.
+      zoom: zoom && {
+        cell: zoom.cell,
+        backHref: zoom.backHref,
+        events: live.map((e) => ({
+          ...toPublicEvent(e as Record<string, unknown>),
+          place_kind: e.place_kind,
+          classes: classesOf.get(e)!, // set for every card above
+        })),
+      },
     }
   );
   const mapHtml = map.html;
