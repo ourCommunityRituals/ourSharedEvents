@@ -194,13 +194,15 @@ test.describe('OSE-1825 digital poster: When / Where / Share at 375px', () => {
     expect(hb!.width / hb!.height).toBeGreaterThan(2.8);
     expect(hb!.width / hb!.height).toBeLessThan(3.2);
     await expect(page.getByTestId('poster-sponsor-text')).toHaveText(BAKERY.header_text);
-    // The label is small next to the sponsor's own name.
+    // The label is small next to the sponsor's own name: @ocr/ui's sponsor
+    // panel sets it at the 13px text floor, the smallest the fleet renders.
     const sizes = await page.evaluate(() => {
       const fs = (id: string) =>
         parseFloat(getComputedStyle(document.querySelector(`[data-testid="${id}"]`)!).fontSize);
       return { label: fs('poster-sponsor-label'), name: fs('poster-sponsor-name') };
     });
-    expect(sizes.label).toBeLessThan(sizes.name * 0.7);
+    expect(sizes.label).toBe(13);
+    expect(sizes.label).toBeLessThan(sizes.name);
     // Placement: below the title, above the When / Where block.
     const title = await page.getByTestId('poster-title').boundingBox();
     const when = await page.getByTestId('poster-meta-date').boundingBox();
