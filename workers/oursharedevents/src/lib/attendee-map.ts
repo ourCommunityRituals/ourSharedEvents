@@ -66,6 +66,15 @@ import { escapeHtml } from './html-escape.js';
 import { fmt, fmtCount, msg } from './i18n/catalog.js';
 import { DEFAULT_LANG, type Lang } from './i18n/languages.js';
 import { withLangPrefix } from './i18n/path-prefix.js';
+import {
+  MAP_H,
+  MAP_W,
+  STREET_STYLE,
+  cellsKey,
+  frameForCells,
+  project,
+  type StreetLayer,
+} from './street-map.js';
 
 export interface AttendeeMapItem {
   id?: unknown;
@@ -116,13 +125,16 @@ export interface AreaGate {
 /** Hexes drawn at most. Past this the answer is clustering, not a bigger SVG. */
 export const MAX_MAP_AREAS = 60;
 
-const W = 600;
-const H = 360;
+const W = MAP_W;
+const H = MAP_H;
 
 // Under the 400-char inline budget (ADR-008 design check); tokens only, no hex.
 // One literal style block so the design check measures exactly what ships.
-const MAP_STYLE =
-  '<style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>';
+export const MAP_STYLE =
+  '<style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-credit a,.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>';
+
+/** OpenStreetMap's licence (ODbL) asks for this credit wherever its data shows. */
+const OSM_LINK = '<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v : v == null ? '' : String(v);
@@ -265,30 +277,28 @@ function eventCount(n: number, lang: Lang): string {
   return fmtCount(lang, n, { one: 'when.all.countOne', other: 'when.all.count' });
 }
 
-function svgFor(areas: AttendeeMapArea[], lang: Lang): string {
-  const rings = areas.map((a) => ({ a, ring: cellToBoundary(a.cell), mid: cellToLatLng(a.cell) }));
-  const lats = rings.flatMap((r) => r.ring.map((p) => p[0]!));
-  const lons = rings.flatMap((r) => r.ring.map((p) => p[1]!));
-  const latMin = Math.min(...lats);
-  const latMax = Math.max(...lats);
-  const lonMin = Math.min(...lons);
-  const lonMax = Math.max(...lons);
-  const kx = Math.cos((((latMin + latMax) / 2) * Math.PI) / 180);
-  const spanX = Math.max((lonMax - lonMin) * kx, 1e-6);
-  const spanY = Math.max(latMax - latMin, 1e-6);
-  const pad = 0.08;
-  const scale = Math.min((W * (1 - 2 * pad)) / spanX, (H * (1 - 2 * pad)) / spanY);
-  const offX = W * pad + (W * (1 - 2 * pad) - spanX * scale) / 2;
-  const offY = H * pad + (H * (1 - 2 * pad) - spanY * scale) / 2;
-  const px = (lon: number) => ((lon - lonMin) * kx * scale + offX).toFixed(1);
-  const py = (lat: number) => (H - ((lat - latMin) * scale + offY)).toFixed(1);
+function svgFor(areas: AttendeeMapArea[], lang: Lang, streets?: string): string {
+  // Web Mercator, the street map's projection, so the hexagons sit on its
+  // streets. The frame comes from the cell ids alone.
+  const frame = frameForCells(
+    areas.map((a) => a.cell),
+    W,
+    H
+  );
+  const rings = areas.map((a) => ({
+    a,
+    ring: cellToBoundary(a.cell).map(([lat, lng]) => project(frame, lat, lng)),
+    mid: project(frame, ...cellToLatLng(a.cell)),
+  }));
+  const fx = (v: number) => v.toFixed(1);
 
   const max = Math.max(...areas.map((a) => a.events.length), 1);
   const shapes = rings
     .map(({ a, ring, mid }) => {
       const k = a.events.length;
-      const points = ring.map((p) => `${px(p[1]!)},${py(p[0]!)}`).join(' ');
-      const opacity = (0.2 + 0.6 * (k / max)).toFixed(2);
+      const points = ring.map(([x, y]) => `${fx(x)},${fx(y)}`).join(' ');
+      // Lighter over a street map, so the streets still read through.
+      const opacity = (streets ? 0.15 + 0.35 * (k / max) : 0.2 + 0.6 * (k / max)).toFixed(2);
       const count = eventCount(k, lang);
       const label = a.name
         ? fmt(lang, 'map.areaTitleNamed', { n: a.n, name: a.name, count })
@@ -298,18 +308,18 @@ function svgFor(areas: AttendeeMapArea[], lang: Lang): string {
         a.name.length > SVG_NAME_MAX_CHARS ? `${a.name.slice(0, SVG_NAME_MAX_CHARS - 1)}…` : a.name;
       const nameLine =
         a.name && areas.length <= SVG_NAME_MAX_AREAS
-          ? `<tspan x="${px(mid[1])}" dy="1.15em" data-testid="amap-area-name">${escapeHtml(short)}</tspan>`
+          ? `<tspan x="${fx(mid[0])}" dy="1.15em" data-testid="amap-area-name">${escapeHtml(short)}</tspan>`
           : '';
       return (
         `<g data-testid="amap-area" data-cell="${a.cell}" data-count="${k}">` +
         `<title>${escapeHtml(label)}</title>` +
         `<polygon class="amap-cell" points="${points}" fill-opacity="${opacity}" stroke-width="1.5"/>` +
-        `<text class="amap-num" x="${px(mid[1])}" y="${py(mid[0])}" text-anchor="middle" dominant-baseline="central">${a.n}${nameLine}</text>` +
+        `<text class="amap-num" x="${fx(mid[0])}" y="${fx(mid[1])}" text-anchor="middle" dominant-baseline="central">${a.n}${nameLine}</text>` +
         `</g>`
       );
     })
     .join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="amap-caption" data-testid="amap-svg">${shapes}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="amap-caption" data-testid="amap-svg">${streets ?? ''}${shapes}</svg>`;
 }
 
 function legendFor(
@@ -354,6 +364,11 @@ export function renderAttendeeMap(
     sponsorTitles?: ReadonlyMap<string, string>;
     /** The page's language (OSE-1762). */
     lang?: Lang;
+    /**
+     * The street map under the hexagons (lib/street-map.ts). Used only when it
+     * was drawn for exactly the cells this map draws, so the two frames match.
+     */
+    streets?: StreetLayer | null;
   }
 ): RenderedAttendeeMap {
   const lang = opts?.lang ?? DEFAULT_LANG;
@@ -388,11 +403,18 @@ export function renderAttendeeMap(
     areas: fmtCount(lang, drawn.length, { one: 'map.areasOne', other: 'map.areas' }),
     days: CORRIDOR_WINDOW_DAYS,
   });
+  const streets =
+    opts?.streets && opts.streets.cellsKey === cellsKey(drawn.map((a) => a.cell))
+      ? opts.streets.svg
+      : undefined;
+  const credit = streets
+    ? `<p class="amap-credit" data-testid="amap-credit">${fmt(lang, 'map.credit', { osm: OSM_LINK })}</p>`
+    : '';
   const html = `<figure class="amap" data-testid="amap">
-              ${MAP_STYLE}
-              ${svgFor(drawn, lang)}
+              ${MAP_STYLE}${streets ? STREET_STYLE : ''}
+              ${svgFor(drawn, lang, streets)}
               ${legendFor(drawn, lang, opts?.sponsorTitles)}
-              <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>
+              <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>${credit}
             </figure>`;
   return { html, state: 'map', count, areas: drawn };
 }

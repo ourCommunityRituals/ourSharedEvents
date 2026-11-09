@@ -12,11 +12,11 @@
 
 ## The three map layers
 
-| Layer                             | What it is                                                                                                                | Status                 |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| **H3 hexagons**                   | Server-drawn SVG from res-7 cell ids (`lib/attendee-map.ts`, `lib/corridor-map.ts`). No tiles, no JS, no outside request. | Shipped                |
-| **Venue image**                   | One Google Static Maps image per venue, fetched by the Worker (`GET /api/v2/maps/venue-image`, `lib/maps.ts`).            | Shipped on event pages |
-| **Street map under the hexagons** | A political/street base map with the hexagons drawn on top.                                                               | Not built              |
+| Layer                             | What it is                                                                                                                     | Status                                                                    |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| **H3 hexagons**                   | Server-drawn SVG from res-7 cell ids (`lib/attendee-map.ts`, `lib/corridor-map.ts`). No tiles, no JS, no outside request.      | Shipped                                                                   |
+| **Venue image**                   | One Google Static Maps image per venue, fetched by the Worker (`GET /api/v2/maps/venue-image`, `lib/maps.ts`).                 | Shipped on event pages                                                    |
+| **Street map under the hexagons** | Water, roads and town names drawn by the Worker as SVG under the hexagons (`lib/street-map.ts`), from a PMTiles archive in R2. | Built on the landing map; off until `MAP_TILES` is bound (see decision 4) |
 
 ## Cost lines
 
@@ -60,6 +60,20 @@ share one load, so the real figure is lower.
 3. **Google is the only per-view map cost today, and it is driven by unpaid public
    traffic.** It is free up to 10,000 loads a month. Before public traffic nears
    that, either cap the Google quota or move the venue image to the self-hosted map.
+4. **The street map is drawn by the server, as SVG** (owner, 2026-11-09), not as an
+   interactive map in the browser. It keeps hex-map standard rule 10 (no JavaScript,
+   no browser fetch), and the server, not the visitor, picks which tiles to read, so
+   no tile request says where a person looked. The Worker reads at most 12 tiles
+   (zoom 14 or coarser) per landing render where the map draws, plus directories it
+   keeps per isolate: at 1 million such views that is about 12 million R2 reads,
+   about $0.75 a month after the free 10 million. Any failure, or a read slower than
+   1.5 s, draws the hexagons alone. The OpenStreetMap credit shows whenever streets do.
+
+   **Turning it on (owner steps):** create an R2 bucket per environment, load the
+   regional archive (`proofs/street-map/README.md`, step 1), then add a `MAP_TILES`
+   binding to `[env.staging]` and `[env.production]` in `wrangler.toml` in one PR
+   (`MAP_TILES_ARCHIVE` names the file; the default is `chicago-region.pmtiles`).
+   Until then staging and production show hexagons only. Local dev has the binding.
 
 ## If a large client arrives (American Bocce Co. or similar)
 
