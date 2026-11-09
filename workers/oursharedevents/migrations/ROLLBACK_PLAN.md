@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0104; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0105; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,12 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0105: sponsor_business.header_image_url + header_text, the sponsor's header
+-- block on the digital poster (OSE-1826). Additive, nullable, no backfill. THE
+-- ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS. The older Worker reads
+-- neither column, so the poster shows the logo and name as before; any header a
+-- sponsor saved stays in the row, unused, until the newer Worker returns.
+
 -- 0104: events.venue_canonical_id + events.event_correlation_id, each with an
 -- index (OSE-1615). Additive. THE ROLLBACK IS: revert the Worker and LEAVE THE
 -- COLUMNS. The older Worker reads neither column and runs unchanged.
