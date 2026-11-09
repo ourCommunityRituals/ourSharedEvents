@@ -294,7 +294,7 @@
             </figure>
           </div>
           <div class="view-list" data-testid="area-list"><p class="empty-state area-window-empty win-empty-weekend" data-testid="area-window-empty-weekend" role="status">Nothing this weekend yet. <a href="/events?when=week" data-testid="disc-empty-wider">Try the next 7 days</a>.</p>
-          <article class="event-card when-week when-month when-next-90 type-record-swap product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g03" data-phase="pre_event">
+          <article class="event-card when-week when-month when-next-90 cat-mkt product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g03" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g03/golden-3" data-testid="public-event-card-link" aria-label="Open Vinyl Swap public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -304,7 +304,7 @@
             </div>
             <a class="cta" href="/events/evt_g03/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Vinyl Swap">Register</a>
           </article>
-          <article class="event-card when-next-90 type-record-swap product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g04" data-phase="pre_event">
+          <article class="event-card when-next-90 cat-mkt product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g04" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g04/golden-4" data-testid="public-event-card-link" aria-label="Open Golden Event 4 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -314,7 +314,7 @@
             </div>
             <a class="cta" href="/events/evt_g04/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 4">Register</a>
           </article>
-          <article class="event-card when-next-90 type-record-swap product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g06" data-phase="pre_event">
+          <article class="event-card when-next-90 cat-mkt product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g06" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g06/golden-6" data-testid="public-event-card-link" aria-label="Open Golden Event 6 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -324,7 +324,7 @@
             </div>
             <a class="cta" href="/events/evt_g06/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 6">Register</a>
           </article>
-          <article class="event-card when-next-90 type-record-swap product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g08" data-phase="pre_event">
+          <article class="event-card when-next-90 cat-mkt product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g08" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g08/golden-8" data-testid="public-event-card-link" aria-label="Open Golden Event 8 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">

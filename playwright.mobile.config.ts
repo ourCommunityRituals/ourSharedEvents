@@ -128,7 +128,7 @@ const config = defineConfig({
   // against an empty local D1 while no longer testing what it was written for.
   // A spec joins this gate only by being named.
   testMatch:
-    /(mobile-workability|a11y-profile|admin-wizard-isolation|admin-csp-controls|admin-back-to-your-events|admin-sponsor-form|sponsor-home-flow|landing-theme|landing-empty-window|landing-page|poster-to-page-journey|publish-loop-journey|admin-deep-dive-journey|sponsor-surfaces-journey|attendee-forms-journey|report-counts-journey|form-sponsor-logo-fallback|admin-create-preview|admin-logs-settings-journey|event-page-choices|poster-layout|report-repeat-journey|display-tv-board|toast-service)\.spec\.ts/,
+    /(mobile-workability|a11y-profile|admin-wizard-isolation|admin-csp-controls|admin-back-to-your-events|admin-sponsor-form|sponsor-home-flow|landing-theme|landing-empty-window|landing-page|poster-to-page-journey|publish-loop-journey|admin-deep-dive-journey|sponsor-surfaces-journey|attendee-forms-journey|report-counts-journey|form-sponsor-logo-fallback|admin-create-preview|admin-logs-settings-journey|event-page-choices|poster-layout|poster-digital-actions|report-repeat-journey|display-tv-board|toast-service)\.spec\.ts/,
 
   // Seeds a live event + sponsor and mints its /sponsor link so the phone audit
   // measures the real sponsor surface instead of skipping it. Runs after the

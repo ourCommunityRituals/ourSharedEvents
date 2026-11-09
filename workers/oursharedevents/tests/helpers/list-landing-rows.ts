@@ -10,6 +10,7 @@
  * address, type) for sentinels, so a language check can take them out.
  */
 import { latLngToCell } from 'h3-js';
+import { buildEventTypeCatalog, type EventTypeCatalog } from '../../src/lib/event-type-catalog';
 
 export const NOW = new Date('2026-10-20T15:00:00Z'); // a Tuesday, 10 a.m. in Chicago
 export const BLUE_ISLAND = latLngToCell(41.6573, -87.6806, 7);
@@ -33,7 +34,8 @@ function ev(n: number, o: Row): Row {
     lon: -87.6806,
     h3_res7: BLUE_ISLAND,
     template_id: 'bar_night',
-    event_type_id: null,
+    // Real registry ids (0024): the landing's Type row is their categories.
+    event_type_id: 'etr-ent-trivia',
     cover_image_url: null,
     ...o,
   };
@@ -50,11 +52,12 @@ const beverly = {
   lon: -87.6812,
   h3_res7: BEVERLY,
   template_id: 'record_swap',
+  event_type_id: 'etr-mkt-swap',
 };
 
 export const MANY: Row[] = [
   ev(1, { title: 'Trivia Night', ...day('2026-10-23') }),
-  ev(2, { title: 'Bocce League', ...day('2026-10-24') }),
+  ev(2, { title: 'Bocce League', event_type_id: 'etr-rec-bocce', ...day('2026-10-24') }),
   ev(3, { title: 'Vinyl Swap', ...beverly, ...day('2026-10-27') }),
   ev(4, { ...beverly, ...day('2026-11-05') }),
   ev(5, day('2026-11-12')),
@@ -71,6 +74,7 @@ export const MANY: Row[] = [
     lon: null,
     h3_res7: null,
     template_id: 'webinar',
+    event_type_id: 'etr-lit-bookclub',
     ...day('2026-10-30'),
   }),
   ev(12, { title: 'Fall Fest', ...day('2026-10-01') }),
@@ -85,6 +89,40 @@ export const MANY: Row[] = [
 export const FEW: Row[] = [MANY[0], MANY[2], MANY[11]];
 
 /**
+ * The event-type catalog for these rows, as the registry has it (0024/0076),
+ * for a spec that replaces lib/event-type-catalog-read. `names` swaps the
+ * category names (a sentinel per category, for the Spanish leak check).
+ */
+export function goldenCatalog(names?: Record<string, string>): EventTypeCatalog {
+  const cat = (code: string, name: string, order: number) => ({
+    category_code: code,
+    display_name: names?.[code] ?? name,
+    display_order: order,
+  });
+  const type = (id: string, uec: string, name: string, code: string) => ({
+    id,
+    uec_code: uec,
+    name,
+    description: null,
+    category_code: code,
+  });
+  return buildEventTypeCatalog(
+    [
+      cat('REC', 'Sports & Recreation', 10),
+      cat('ENT', 'Entertainment & Trivia', 30),
+      cat('MKT', 'Neighborhood Markets', 70),
+      cat('LIT', 'Literary & Book Clubs', 140),
+    ],
+    [
+      type('etr-rec-bocce', 'REC-BOCCE-001', 'Bocce', 'REC'),
+      type('etr-ent-trivia', 'ENT-TRIVIA-001', 'Trivia Night', 'ENT'),
+      type('etr-mkt-swap', 'MKT-SWAP-001', 'Swap Meet', 'MKT'),
+      type('etr-lit-bookclub', 'LIT-BOOKCLUB-001', 'Book Club', 'LIT'),
+    ]
+  );
+}
+
+/**
  * The same rows with every organizer-written word a ZZ sentinel. The town in
  * the address stays (it names the map's area, and a zip search reads it), but
  * the street and venue do not.
@@ -95,7 +133,7 @@ export function sentinel(rows: Row[]): Row[] {
     title: `ZZTITLE${String(r.id).slice(-2)}`,
     location: r.location ? 'ZZVENUE' : null,
     where_address: r.where_address ? String(r.where_address).replace(/^[^,]+/, 'ZZSTREET') : null,
-    // One word, so the readable label ("Zzbarnight") is one sentinel word too.
+    // The landing no longer shows it (its Type row is categories), but a sentinel keeps it out.
     template_id: r.template_id ? `zz${String(r.template_id).replace(/_/g, '')}` : null,
   }));
 }

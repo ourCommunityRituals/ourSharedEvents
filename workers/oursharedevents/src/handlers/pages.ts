@@ -77,6 +77,8 @@ import {
   landingZoom,
   type LandingAreaItem,
 } from '../lib/landing-area.js';
+import { categoryByTypeId, type TypeCategory } from '../lib/event-type-catalog.js';
+import { readEventTypeCatalog } from '../lib/event-type-catalog-read.js';
 import { loadStreetLayer, type StreetMapEnv } from '../lib/street-map.js';
 import {
   readWhere,
@@ -2805,6 +2807,15 @@ export async function handleLandingPage(
     }
     // OSE-1522: the consented sponsor by the title on each card, as on /events.
     const sponsorTitles = await fetchSponsorTitles((env as LandingEnv).DB, 'root');
+    // Owner 2026-11-09: the Type row is the categories of the event-type
+    // catalog, read through the same query as the Create Event picker.
+    let typeCategories: Map<string, TypeCategory> | undefined;
+    try {
+      typeCategories = categoryByTypeId(await readEventTypeCatalog((env as LandingEnv).DB));
+    } catch {
+      // A failed read only folds every event into "Other" (one choice, so no
+      // row); the cards still show. tests/landing-category-scenarios.spec.ts.
+    }
     const areaOpts = {
       latched,
       areaLatched: searched ? false : areaLatched,
@@ -2812,6 +2823,7 @@ export async function handleLandingPage(
       lang,
       zoomHref: (cell: string) => zoom.href(cell),
       zoom: zoom.cell ? { cell: zoom.cell, backHref: zoom.href() } : undefined,
+      typeCategories,
     };
     area = renderLandingArea(items as LandingAreaItem[], areaOpts);
     // The street map under the hexagons (lib/street-map.ts): drawn for exactly
@@ -2824,7 +2836,7 @@ export async function handleLandingPage(
   } catch {
     area = renderEmptyLandingArea(lang);
   }
-  if (searched && !zoom.cell && area.windowCount === 0 && area.types.length === 0) {
+  if (searched && !zoom.cell && area.windowCount === 0 && area.categories.length === 0) {
     const empty =
       where.kind === 'zip'
         ? renderNearEmpty(where.area.zip, lang)

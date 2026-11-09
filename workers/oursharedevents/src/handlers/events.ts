@@ -79,12 +79,8 @@ const INVALID_COVER = 'INVALID_COVER_IMAGE_URL';
 const INVALID_COVER_MESSAGE =
   'cover_image_url must be an uploaded file under /api/v2/uploads/ (upload it in Poster art), or null to clear';
 import { WHAT_URL_TYPES, isValidWhatUrlType } from '../lib/what-url-types';
-import {
-  buildEventTypeCatalog,
-  isEventTypeIdShape,
-  type EventTypeCategoryRow,
-  type EventTypeRow,
-} from '../lib/event-type-catalog';
+import { isEventTypeIdShape } from '../lib/event-type-catalog';
+import { readEventTypeCatalog } from '../lib/event-type-catalog-read';
 import { isValidIanaTimezone, zonedDateTimeToUtcIso, zonedTimePart } from '../lib/event-datetime';
 import { listedFromForPublish } from '../lib/publish-grace';
 import { explicitMapChoice, mapState } from '../lib/map-default';
@@ -1878,19 +1874,7 @@ export async function handleAdminListEventTypes(
     return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
   }
   try {
-    const [cats, types] = await Promise.all([
-      env.DB.prepare(
-        `SELECT category_code, display_name, display_order, is_active
-           FROM event_type_category_registry
-          WHERE is_active = 1`
-      ).all<EventTypeCategoryRow>(),
-      env.DB.prepare(
-        `SELECT id, uec_code, name, description, category_code, legal_clearance_tier, is_active
-           FROM event_type_registry
-          WHERE is_active = 1`
-      ).all<EventTypeRow>(),
-    ]);
-    const catalog = buildEventTypeCatalog(cats.results ?? [], types.results ?? []);
+    const catalog = await readEventTypeCatalog(env.DB);
     return Response.json(
       { ok: true, ...catalog },
       {

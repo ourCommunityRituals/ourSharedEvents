@@ -197,6 +197,9 @@ function bundle(typed: Fill, opts: BundleOptions = {}): Record<string, unknown> 
       id: EVT,
       name: LONG + typed('NAME'),
       venue: typed('VENUE'),
+      // OSE-1825: the venue's street address, shown under the name on the
+      // digital poster; the map links search it.
+      where_address: typed('ADDRESS'),
       startDateISO: '2026-10-24',
       starts_at: '2026-10-24T23:00:00.000Z',
       timezone: 'America/Chicago',
@@ -410,15 +413,22 @@ describe('the poster (/poster?event=): what an organizer or a sponsor types', ()
     );
     const map = doc.querySelector('[data-testid="poster-open-map"]')!;
     expect(map.getAttribute('href')).toBe(
-      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hostile('VENUE'))}`
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hostile('ADDRESS'))}`
     );
     expect(map.textContent).toBe('Google Maps');
-    expect(doc.querySelector('[data-testid="poster-directions-summary"]')!.textContent).toBe(
-      `${hostile('VENUE')} · Directions`
+    expect(doc.querySelector('[data-testid="poster-venue-name"]')!.textContent).toBe(
+      hostile('VENUE')
+    );
+    expect(doc.querySelector('[data-testid="poster-venue-address"]')!.textContent).toBe(
+      hostile('ADDRESS')
     );
     expect(doc.querySelector('[data-testid="poster-open-map-apple"]')!.getAttribute('href')).toBe(
-      `https://maps.apple.com/?q=${encodeURIComponent(hostile('VENUE'))}`
+      `https://maps.apple.com/?q=${encodeURIComponent(hostile('ADDRESS'))}`
     );
+    // The share block carries the typed name as data, never as markup.
+    const share = doc.querySelector('[data-testid="poster-share"]')!;
+    expect(share.getAttribute('data-share-title')).toBe(name);
+    expect(share.getAttribute('data-share-url')).toBe(`${ORIGIN}/events/${EVT}`);
     const sponsors = [...doc.querySelectorAll('[data-testid="poster-sponsor-item"]')];
     expect(sponsors.map((s) => s.getAttribute('aria-label'))).toEqual([
       hostile('SPONSORTITLE'),
@@ -731,26 +741,34 @@ describe("a code's link and picture (made by the server; checked on the page all
     ).toEqual([pictures[0], pictures[1], '', '', '', '', '']);
   });
 
-  test('digital: the venue link is the map search for the venue, whatever the venue holds', async () => {
-    for (const venue of [
+  test('digital: the map links search the street address (else the venue), whatever it holds', async () => {
+    for (const where of [
       'Harbor Hall, Sawyer',
       hostile('VENUE'),
       'javascript:alert(1)',
       '" href="javascript:alert(1)',
     ]) {
-      const body = bundle(plain);
-      (body.event as Record<string, unknown>).venue = venue;
-      const { doc } = await openPoster('digital', body);
-      const map = doc.querySelector('[data-testid="poster-open-map"]')!;
-      expect(names(map)).toEqual(['data-testid', 'href', 'rel', 'target']);
-      expect(map.getAttribute('href')).toBe(
-        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}`
-      );
-      const apple = doc.querySelector('[data-testid="poster-open-map-apple"]')!;
-      expect(names(apple)).toEqual(['data-testid', 'href', 'rel', 'target']);
-      expect(apple.getAttribute('href')).toBe(
-        `https://maps.apple.com/?q=${encodeURIComponent(venue)}`
-      );
+      // With an address the links search it; with none, the venue name.
+      for (const withAddress of [true, false]) {
+        const body = bundle(plain);
+        const ev = body.event as Record<string, unknown>;
+        if (withAddress) ev.where_address = where;
+        else {
+          delete ev.where_address;
+          ev.venue = where;
+        }
+        const { doc } = await openPoster('digital', body);
+        const map = doc.querySelector('[data-testid="poster-open-map"]')!;
+        expect(names(map)).toEqual(['class', 'data-testid', 'href', 'rel', 'target']);
+        expect(map.getAttribute('href')).toBe(
+          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(where)}`
+        );
+        const apple = doc.querySelector('[data-testid="poster-open-map-apple"]')!;
+        expect(names(apple)).toEqual(['class', 'data-testid', 'href', 'rel', 'target']);
+        expect(apple.getAttribute('href')).toBe(
+          `https://maps.apple.com/?q=${encodeURIComponent(where)}`
+        );
+      }
     }
   });
 
@@ -760,7 +778,7 @@ describe("a code's link and picture (made by the server; checked on the page all
     (body.event as Record<string, unknown>).id = id;
     const { doc } = await openPoster('digital', body);
     const link = doc.querySelector('[data-testid="poster-add-to-calendar"]')!;
-    expect(names(link)).toEqual(['data-testid', 'download', 'href']);
+    expect(names(link)).toEqual(['class', 'data-testid', 'download', 'href']);
     expect(link.getAttribute('href')).toBe(`/events/${encodeURIComponent(id)}/calendar.ics`);
   });
 });
@@ -840,9 +858,22 @@ describe('the page has one escaper, and it escapes quote marks', () => {
 const HELPER = 'escapePosterHtml';
 const MAP_START = 'https://www.google.com/maps/search/?api=1&amp;query=';
 const APPLE_MAP_START = 'https://maps.apple.com/?q=';
+// OSE-1825 / OSE-1371: the share links (owner 2026-09-28: plain share-intent
+// addresses, no SDK). Each is fixed text, then the share text or the event's
+// public address through encodeURIComponent.
+const SHARE_STARTS = [
+  'mailto:?body=',
+  'sms:?&amp;body=',
+  'https://wa.me/?text=',
+  'https://www.facebook.com/sharer/sharer.php?u=',
+  'https://twitter.com/intent/tweet?text=',
+  'https://www.linkedin.com/sharing/share-offsite/?url=',
+  'https://www.reddit.com/submit?url=',
+  'https://t.me/share/url?url=',
+];
 const RULES: MarkupRules = {
   helper: HELPER,
-  addressStarts: [MAP_START, APPLE_MAP_START],
+  addressStarts: [MAP_START, APPLE_MAP_START, ...SHARE_STARTS],
   addressMakers: ['posterArtAddress', 'slotLink', 'slotPicture'],
 };
 const checkPage = (page: string) => checkMarkupPage(page, RULES);
@@ -870,7 +901,12 @@ describe('the source: every value written into an attribute goes through the esc
         'img[alt] esc(name)',
         'img[src] esc(artAddress)',
         'a[href] encodeURIComponent(event.id)',
-        'a[href] encodeURIComponent(venue)',
+        'a[href] encodeURIComponent(where)',
+        'a[href] encodeURIComponent(shareText)',
+        'a[href] encodeURIComponent(shareUrl)',
+        'div[data-share-url] esc(shareUrl)',
+        'div[data-share-title] esc(name)',
+        'div[data-share-text] esc(shareLine)',
         'option[value] esc(i)',
         'img[src] encodeURIComponent(s.id)',
         'img[alt] esc(title)',
@@ -894,14 +930,29 @@ describe('the source: every value written into an attribute goes through the esc
     expect(checkPage(POSTER_HTML).findings).toEqual([]);
   });
 
-  test('the same check, with only the report page’s rules, refuses this page’s five addresses and nothing else', () => {
+  test('the same check, with only the report page’s rules, refuses this page’s own addresses and nothing else', () => {
     // The negative control for the two extra rules: take them away and exactly
     // the writes they are there for are named.
     const { findings } = checkMarkupPage(POSTER_HTML, { helper: HELPER });
     expect(findings.map((f) => f.replace(/^line \d+: /, '')).sort()).toEqual(
       [
-        '`encodeURIComponent(venue)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
-        '`encodeURIComponent(venue)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
+        '`encodeURIComponent(where)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
+        '`encodeURIComponent(where)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
+        ...[
+          'shareText',
+          'shareText',
+          'shareText',
+          'shareText',
+          'shareUrl',
+          'shareUrl',
+          'shareUrl',
+          'shareUrl',
+        ].map(
+          (v) =>
+            '`encodeURIComponent(' +
+            v +
+            ')` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed'
+        ),
         '`esc(artAddress)` is written into an address, <img src="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
         '`esc(link)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
         '`esc(link)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
@@ -996,21 +1047,41 @@ describe('the source: every value written into an attribute goes through the esc
     [
       'the map link moved to another start',
       (p) => p.replace(MAP_START, 'https://maps.example.org/?q='),
-      /`encodeURIComponent\(venue\)` is written into an address, <a href="…">/,
+      /`encodeURIComponent\(where\)` is written into an address, <a href="…">/,
     ],
     [
       'the venue escaped, not encoded, in the map link',
-      (p) => p.replace(MAP_START + "' + encodeURIComponent(venue)", MAP_START + "' + esc(venue)"),
-      /`esc\(venue\)` is written into an address, <a href="…">/,
+      (p) => p.replace(MAP_START + "' + encodeURIComponent(where)", MAP_START + "' + esc(where)"),
+      /`esc\(where\)` is written into an address, <a href="…">/,
     ],
     [
       'the venue escaped, not encoded, in the Apple Maps link',
       (p) =>
         p.replace(
-          APPLE_MAP_START + "' + encodeURIComponent(venue)",
-          APPLE_MAP_START + "' + esc(venue)"
+          APPLE_MAP_START + "' + encodeURIComponent(where)",
+          APPLE_MAP_START + "' + esc(where)"
         ),
-      /`esc\(venue\)` is written into an address, <a href="…">/,
+      /`esc\(where\)` is written into an address, <a href="…">/,
+    ],
+    [
+      'a share link moved to another start',
+      (p) => p.replace('https://wa.me/?text=', 'https://share.example.org/?text='),
+      /`encodeURIComponent\(shareText\)` is written into an address, <a href="…">/,
+    ],
+    [
+      'the event address escaped, not encoded, in a share link',
+      (p) =>
+        p.replace(
+          "sharer.php?u=' + encodeURIComponent(shareUrl)",
+          "sharer.php?u=' + esc(shareUrl)"
+        ),
+      /`esc\(shareUrl\)` is written into an address, <a href="…">/,
+    ],
+    [
+      'the share title written into its data attribute without the escaper',
+      (p) =>
+        p.replace('data-share-title="\' + esc(name) + \'"', 'data-share-title="\' + name + \'"'),
+      /`name` is written into <div data-share-title="…"> without esc/,
     ],
     [
       'the event id escaped, not encoded, in the calendar link',

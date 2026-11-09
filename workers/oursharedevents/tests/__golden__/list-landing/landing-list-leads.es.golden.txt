@@ -284,7 +284,7 @@
 
       <section class="area-section" aria-label="Eventos" data-testid="landing-area">
         <h2 class="area-heading" data-testid="area-heading">Próximamente</h2>
-        <input type="radio" name="view" id="view-list" class="toggle-radio" checked /><input type="radio" name="view" id="view-map" class="toggle-radio" /><input type="radio" name="win" id="win-weekend" class="toggle-radio" /><input type="radio" name="win" id="win-week" class="toggle-radio" /><input type="radio" name="win" id="win-month" class="toggle-radio" /><input type="radio" name="win" id="win-next-90" class="toggle-radio" checked /><input type="radio" name="type" id="type-all" class="toggle-radio" checked /><input type="radio" name="type" id="type-bar-night" class="toggle-radio" /><input type="radio" name="type" id="type-record-swap" class="toggle-radio" />
+        <input type="radio" name="view" id="view-list" class="toggle-radio" checked /><input type="radio" name="view" id="view-map" class="toggle-radio" /><input type="radio" name="win" id="win-weekend" class="toggle-radio" /><input type="radio" name="win" id="win-week" class="toggle-radio" /><input type="radio" name="win" id="win-month" class="toggle-radio" /><input type="radio" name="win" id="win-next-90" class="toggle-radio" checked /><input type="radio" name="type" id="type-all" class="toggle-radio" checked /><input type="radio" name="type" id="cat-ent" class="toggle-radio" /><input type="radio" name="type" id="cat-mkt" class="toggle-radio" />
         <style data-testid="area-window-css">
 #view-list:checked ~ .toggles label[for='view-list']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-list:checked ~ .toggles label[for='view-list']::before{content:'\2713';margin-right:.35rem}#view-list:focus-visible ~ .toggles label[for='view-list']{outline:3px solid var(--accent);outline-offset:2px}
 #view-map:checked ~ .toggles label[for='view-map']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-map:checked ~ .toggles label[for='view-map']::before{content:'\2713';margin-right:.35rem}#view-map:focus-visible ~ .toggles label[for='view-map']{outline:3px solid var(--accent);outline-offset:2px}
@@ -294,13 +294,13 @@
 #win-next-90:checked ~ .toggles label[for='win-next-90']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-next-90:checked ~ .toggles label[for='win-next-90']::before{content:'\2713';margin-right:.35rem}#win-next-90:focus-visible ~ .toggles label[for='win-next-90']{outline:3px solid var(--accent);outline-offset:2px}#win-next-90:checked ~ .area .event-card:not(.when-next-90),#win-next-90:checked ~ .area .amap-f:not(.when-next-90){display:none}
 </style><style data-testid="area-type-css">
 #type-all:checked ~ .toggles label[for='type-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-all:checked ~ .toggles label[for='type-all']::before{content:'\2713';margin-right:.35rem}#type-all:focus-visible ~ .toggles label[for='type-all']{outline:3px solid var(--accent);outline-offset:2px}
-#type-bar-night:checked ~ .toggles label[for='type-bar-night']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-bar-night:checked ~ .toggles label[for='type-bar-night']::before{content:'\2713';margin-right:.35rem}#type-bar-night:focus-visible ~ .toggles label[for='type-bar-night']{outline:3px solid var(--accent);outline-offset:2px}#type-bar-night:checked ~ .area .event-card:not(.type-bar-night),#type-bar-night:checked ~ .area .amap-f:not(.type-bar-night){display:none}
-#type-record-swap:checked ~ .toggles label[for='type-record-swap']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-record-swap:checked ~ .toggles label[for='type-record-swap']::before{content:'\2713';margin-right:.35rem}#type-record-swap:focus-visible ~ .toggles label[for='type-record-swap']{outline:3px solid var(--accent);outline-offset:2px}#type-record-swap:checked ~ .area .event-card:not(.type-record-swap),#type-record-swap:checked ~ .area .amap-f:not(.type-record-swap){display:none}
+#cat-ent:checked ~ .toggles label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .toggles label[for='cat-ent']::before{content:'\2713';margin-right:.35rem}#cat-ent:focus-visible ~ .toggles label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent),#cat-ent:checked ~ .area .amap-f:not(.cat-ent){display:none}
+#cat-mkt:checked ~ .toggles label[for='cat-mkt']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-mkt:checked ~ .toggles label[for='cat-mkt']::before{content:'\2713';margin-right:.35rem}#cat-mkt:focus-visible ~ .toggles label[for='cat-mkt']{outline:3px solid var(--accent);outline-offset:2px}#cat-mkt:checked ~ .area .event-card:not(.cat-mkt),#cat-mkt:checked ~ .area .amap-f:not(.cat-mkt){display:none}
 </style>
         <div class="toggles" data-testid="area-toggles">
           <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">Vista</legend><label class="disc-chip" for="view-list">Lista</label><label class="disc-chip" for="view-map">Mapa</label></fieldset>
           <fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">Cuándo</legend><label class="disc-chip" for="win-weekend">Este fin de semana</label><label class="disc-chip" for="win-week">Próximos 7 días</label><label class="disc-chip" for="win-month">Este mes</label><label class="disc-chip" for="win-next-90">Próximos 90 días</label></fieldset>
-          <fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">Tipo</legend><label class="disc-chip" for="type-all">Todos los tipos</label><label class="disc-chip" for="type-bar-night">Bar Night</label><label class="disc-chip" for="type-record-swap">Record Swap</label></fieldset>
+          <fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">Tipo</legend><label class="disc-chip" for="type-all">Todos los tipos</label><label class="disc-chip" for="cat-ent">Entertainment &amp; Trivia</label><label class="disc-chip" for="cat-mkt">Neighborhood Markets</label></fieldset>
           
         </div>
         <div class="area" data-testid="area">
@@ -315,7 +315,7 @@
             </figure>
           </div>
           <div class="view-list" data-testid="area-list">
-          <article class="event-card when-weekend when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g01" data-phase="pre_event">
+          <article class="event-card when-weekend when-week when-month when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g01" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g01/golden-1" data-testid="public-event-card-link" aria-label="Abrir la página pública de Trivia Night"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -325,7 +325,7 @@
             </div>
             <a class="cta" href="/events/evt_g01/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Trivia Night">Inscribirse</a>
           </article>
-          <article class="event-card when-week when-month when-next-90 type-record-swap product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g03" data-phase="pre_event">
+          <article class="event-card when-week when-month when-next-90 cat-mkt product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g03" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g03/golden-3" data-testid="public-event-card-link" aria-label="Abrir la página pública de Vinyl Swap"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">

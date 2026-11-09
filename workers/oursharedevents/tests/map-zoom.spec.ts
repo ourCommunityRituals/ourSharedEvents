@@ -259,13 +259,25 @@ describe('the landing, zoomed', () => {
     expect(area.html).toContain(`data-zoom="${CELL}"`);
   });
 
-  test('the type, window and where pills hide the dots and rows as they hide the cards', () => {
-    const area = renderLandingArea([...items, { ...ev('two'), template_id: 'bingo' }], {
-      now: NOW,
-      zoom: { cell: CELL, backHref: '/' },
-    });
+  test('the category, window and where pills hide the dots and rows as they hide the cards', () => {
+    // Two categories in the area, so the category pills are offered.
+    const typeCategories = new Map([
+      ['etr-art-music', { code: 'ART', name: 'Arts', order: 50 }],
+      ['etr-biz-mixer', { code: 'BIZ', name: 'Business', order: 80 }],
+    ]);
+    const area = renderLandingArea(
+      [
+        { ...ev('here'), event_type_id: 'etr-art-music' },
+        { ...ev('two'), event_type_id: 'etr-biz-mixer' },
+      ],
+      { now: NOW, zoom: { cell: CELL, backHref: '/' }, typeCategories }
+    );
     expect(area.html).toContain(
-      '#type-trivia:checked ~ .area .event-card:not(.type-trivia),#type-trivia:checked ~ .area .amap-f:not(.type-trivia){display:none}'
+      '#cat-art:checked ~ .area .event-card:not(.cat-art),#cat-art:checked ~ .area .amap-f:not(.cat-art){display:none}'
+    );
+    // Each dot carries its events' category class, so the rule reaches it.
+    expect(area.html).toMatch(
+      /<a [^>]*class="[^"]*amap-f[^"]*cat-art[^"]*"[^>]*data-testid="amap-dot"/
     );
     expect(area.html).toContain('#win-week:checked ~ .area .amap-f:not(.when-week){display:none}');
   });

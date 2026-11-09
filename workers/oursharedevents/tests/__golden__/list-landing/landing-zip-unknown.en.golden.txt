@@ -262,7 +262,7 @@
 
       <section class="area-section" aria-label="Events" data-testid="landing-area">
         <h2 class="area-heading" data-testid="area-heading">Coming up</h2>
-        <input type="radio" name="view" id="view-list" class="toggle-radio" /><input type="radio" name="view" id="view-map" class="toggle-radio" checked /><input type="radio" name="win" id="win-weekend" class="toggle-radio" /><input type="radio" name="win" id="win-week" class="toggle-radio" /><input type="radio" name="win" id="win-month" class="toggle-radio" /><input type="radio" name="win" id="win-next-90" class="toggle-radio" checked /><input type="radio" name="type" id="type-all" class="toggle-radio" checked /><input type="radio" name="type" id="type-bar-night" class="toggle-radio" /><input type="radio" name="type" id="type-record-swap" class="toggle-radio" /><input type="radio" name="type" id="type-webinar" class="toggle-radio" /><input type="radio" name="mod" id="mod-all" class="toggle-radio" checked /><input type="radio" name="mod" id="mod-online" class="toggle-radio" /><input type="radio" name="mod" id="mod-inperson" class="toggle-radio" />
+        <input type="radio" name="view" id="view-list" class="toggle-radio" /><input type="radio" name="view" id="view-map" class="toggle-radio" checked /><input type="radio" name="win" id="win-weekend" class="toggle-radio" /><input type="radio" name="win" id="win-week" class="toggle-radio" /><input type="radio" name="win" id="win-month" class="toggle-radio" /><input type="radio" name="win" id="win-next-90" class="toggle-radio" checked /><input type="radio" name="type" id="type-all" class="toggle-radio" checked /><input type="radio" name="type" id="cat-rec" class="toggle-radio" /><input type="radio" name="type" id="cat-ent" class="toggle-radio" /><input type="radio" name="type" id="cat-mkt" class="toggle-radio" /><input type="radio" name="type" id="cat-lit" class="toggle-radio" /><input type="radio" name="mod" id="mod-all" class="toggle-radio" checked /><input type="radio" name="mod" id="mod-online" class="toggle-radio" /><input type="radio" name="mod" id="mod-inperson" class="toggle-radio" />
         <style data-testid="area-window-css">
 #view-list:checked ~ .toggles label[for='view-list']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-list:checked ~ .toggles label[for='view-list']::before{content:'\2713';margin-right:.35rem}#view-list:focus-visible ~ .toggles label[for='view-list']{outline:3px solid var(--accent);outline-offset:2px}
 #view-map:checked ~ .toggles label[for='view-map']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-map:checked ~ .toggles label[for='view-map']::before{content:'\2713';margin-right:.35rem}#view-map:focus-visible ~ .toggles label[for='view-map']{outline:3px solid var(--accent);outline-offset:2px}
@@ -275,14 +275,15 @@
 #mod-inperson:checked ~ .toggles label[for='mod-inperson']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#mod-inperson:checked ~ .toggles label[for='mod-inperson']::before{content:'\2713';margin-right:.35rem}#mod-inperson:focus-visible ~ .toggles label[for='mod-inperson']{outline:3px solid var(--accent);outline-offset:2px}#mod-inperson:checked ~ .area .event-card:not(.modality-inperson),#mod-inperson:checked ~ .area .amap-f:not(.modality-inperson){display:none}
 </style><style data-testid="area-type-css">
 #type-all:checked ~ .toggles label[for='type-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-all:checked ~ .toggles label[for='type-all']::before{content:'\2713';margin-right:.35rem}#type-all:focus-visible ~ .toggles label[for='type-all']{outline:3px solid var(--accent);outline-offset:2px}
-#type-bar-night:checked ~ .toggles label[for='type-bar-night']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-bar-night:checked ~ .toggles label[for='type-bar-night']::before{content:'\2713';margin-right:.35rem}#type-bar-night:focus-visible ~ .toggles label[for='type-bar-night']{outline:3px solid var(--accent);outline-offset:2px}#type-bar-night:checked ~ .area .event-card:not(.type-bar-night),#type-bar-night:checked ~ .area .amap-f:not(.type-bar-night){display:none}
-#type-record-swap:checked ~ .toggles label[for='type-record-swap']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-record-swap:checked ~ .toggles label[for='type-record-swap']::before{content:'\2713';margin-right:.35rem}#type-record-swap:focus-visible ~ .toggles label[for='type-record-swap']{outline:3px solid var(--accent);outline-offset:2px}#type-record-swap:checked ~ .area .event-card:not(.type-record-swap),#type-record-swap:checked ~ .area .amap-f:not(.type-record-swap){display:none}
-#type-webinar:checked ~ .toggles label[for='type-webinar']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-webinar:checked ~ .toggles label[for='type-webinar']::before{content:'\2713';margin-right:.35rem}#type-webinar:focus-visible ~ .toggles label[for='type-webinar']{outline:3px solid var(--accent);outline-offset:2px}#type-webinar:checked ~ .area .event-card:not(.type-webinar),#type-webinar:checked ~ .area .amap-f:not(.type-webinar){display:none}
+#cat-rec:checked ~ .toggles label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-rec:checked ~ .toggles label[for='cat-rec']::before{content:'\2713';margin-right:.35rem}#cat-rec:focus-visible ~ .toggles label[for='cat-rec']{outline:3px solid var(--accent);outline-offset:2px}#cat-rec:checked ~ .area .event-card:not(.cat-rec),#cat-rec:checked ~ .area .amap-f:not(.cat-rec){display:none}
+#cat-ent:checked ~ .toggles label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .toggles label[for='cat-ent']::before{content:'\2713';margin-right:.35rem}#cat-ent:focus-visible ~ .toggles label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent),#cat-ent:checked ~ .area .amap-f:not(.cat-ent){display:none}
+#cat-mkt:checked ~ .toggles label[for='cat-mkt']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-mkt:checked ~ .toggles label[for='cat-mkt']::before{content:'\2713';margin-right:.35rem}#cat-mkt:focus-visible ~ .toggles label[for='cat-mkt']{outline:3px solid var(--accent);outline-offset:2px}#cat-mkt:checked ~ .area .event-card:not(.cat-mkt),#cat-mkt:checked ~ .area .amap-f:not(.cat-mkt){display:none}
+#cat-lit:checked ~ .toggles label[for='cat-lit']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-lit:checked ~ .toggles label[for='cat-lit']::before{content:'\2713';margin-right:.35rem}#cat-lit:focus-visible ~ .toggles label[for='cat-lit']{outline:3px solid var(--accent);outline-offset:2px}#cat-lit:checked ~ .area .event-card:not(.cat-lit),#cat-lit:checked ~ .area .amap-f:not(.cat-lit){display:none}
 </style>
         <div class="toggles" data-testid="area-toggles">
           <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">View</legend><label class="disc-chip" for="view-list">List</label><label class="disc-chip" for="view-map">Map</label></fieldset>
           <fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">When</legend><label class="disc-chip" for="win-weekend">This weekend</label><label class="disc-chip" for="win-week">Next 7 days</label><label class="disc-chip" for="win-month">This month</label><label class="disc-chip" for="win-next-90">Next 90 days</label></fieldset>
-          <fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">Type</legend><label class="disc-chip" for="type-all">All types</label><label class="disc-chip" for="type-bar-night">Bar Night</label><label class="disc-chip" for="type-record-swap">Record Swap</label><label class="disc-chip" for="type-webinar">Webinar</label></fieldset>
+          <fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">Type</legend><label class="disc-chip" for="type-all">All types</label><label class="disc-chip" for="cat-rec">Sports &amp; Recreation</label><label class="disc-chip" for="cat-ent">Entertainment &amp; Trivia</label><label class="disc-chip" for="cat-mkt">Neighborhood Markets</label><label class="disc-chip" for="cat-lit">Literary &amp; Book Clubs</label></fieldset>
           <fieldset class="disc-chips" data-testid="toggle-modality"><legend class="disc-label">Where</legend><label class="disc-chip" for="mod-all">All</label><label class="disc-chip" for="mod-online">Online</label><label class="disc-chip" for="mod-inperson">In person</label></fieldset>
         </div>
         <div class="area" data-testid="area">
@@ -295,7 +296,7 @@
             </figure>
           </div>
           <div class="view-list" data-testid="area-list">
-          <article class="event-card when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g13" data-phase="event">
+          <article class="event-card when-week when-month when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g13" data-phase="event">
             <a class="event-card-link" href="/events/evt_g13/golden-13" data-testid="public-event-card-link" aria-label="Open Morning Market public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -305,7 +306,7 @@
             </div>
             <a class="cta" href="/events/evt_g13/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Morning Market">Register</a>
           </article>
-          <article class="event-card when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g09" data-phase="pre_event">
+          <article class="event-card when-week when-month when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g09" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g09/golden-9" data-testid="public-event-card-link" aria-label="Open Golden Event 9 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -315,7 +316,7 @@
             </div>
             <a class="cta" href="/events/evt_g09/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 9">Register</a>
           </article>
-          <article class="event-card when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g10" data-phase="pre_event">
+          <article class="event-card when-week when-month when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g10" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g10/golden-10" data-testid="public-event-card-link" aria-label="Open Golden Event 10 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -325,7 +326,7 @@
             </div>
             <a class="cta" href="/events/evt_g10/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 10">Register</a>
           </article>
-          <article class="event-card when-weekend when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g01" data-phase="pre_event">
+          <article class="event-card when-weekend when-week when-month when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g01" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g01/golden-1" data-testid="public-event-card-link" aria-label="Open Trivia Night public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -335,7 +336,7 @@
             </div>
             <a class="cta" href="/events/evt_g01/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Trivia Night">Register</a>
           </article>
-          <article class="event-card when-weekend when-week when-month when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g02" data-phase="pre_event">
+          <article class="event-card when-weekend when-week when-month when-next-90 cat-rec product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g02" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g02/golden-2" data-testid="public-event-card-link" aria-label="Open Bocce League public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -345,7 +346,7 @@
             </div>
             <a class="cta" href="/events/evt_g02/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Bocce League">Register</a>
           </article>
-          <article class="event-card when-week when-month when-next-90 type-record-swap product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g03" data-phase="pre_event">
+          <article class="event-card when-week when-month when-next-90 cat-mkt product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g03" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g03/golden-3" data-testid="public-event-card-link" aria-label="Open Vinyl Swap public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -355,7 +356,7 @@
             </div>
             <a class="cta" href="/events/evt_g03/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Vinyl Swap">Register</a>
           </article>
-          <article class="event-card when-month when-next-90 type-webinar product-ose modality-online" data-testid="area-card" data-event-id="evt_g11" data-phase="pre_event">
+          <article class="event-card when-month when-next-90 cat-lit product-ose modality-online" data-testid="area-card" data-event-id="evt_g11" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g11/golden-11" data-testid="public-event-card-link" aria-label="Open Online Book Club public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -365,7 +366,7 @@
             </div>
             <a class="cta" href="/events/evt_g11/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Online Book Club">Register</a>
           </article>
-          <article class="event-card when-next-90 type-record-swap product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g04" data-phase="pre_event">
+          <article class="event-card when-next-90 cat-mkt product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g04" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g04/golden-4" data-testid="public-event-card-link" aria-label="Open Golden Event 4 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -375,7 +376,7 @@
             </div>
             <a class="cta" href="/events/evt_g04/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 4">Register</a>
           </article>
-          <article class="event-card when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g05" data-phase="pre_event">
+          <article class="event-card when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g05" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g05/golden-5" data-testid="public-event-card-link" aria-label="Open Golden Event 5 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -385,7 +386,7 @@
             </div>
             <a class="cta" href="/events/evt_g05/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 5">Register</a>
           </article>
-          <article class="event-card when-next-90 type-record-swap product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g06" data-phase="pre_event">
+          <article class="event-card when-next-90 cat-mkt product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g06" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g06/golden-6" data-testid="public-event-card-link" aria-label="Open Golden Event 6 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -395,7 +396,7 @@
             </div>
             <a class="cta" href="/events/evt_g06/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 6">Register</a>
           </article>
-          <article class="event-card when-next-90 type-bar-night product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g07" data-phase="pre_event">
+          <article class="event-card when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g07" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g07/golden-7" data-testid="public-event-card-link" aria-label="Open Golden Event 7 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">
@@ -405,7 +406,7 @@
             </div>
             <a class="cta" href="/events/evt_g07/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 7">Register</a>
           </article>
-          <article class="event-card when-next-90 type-record-swap product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g08" data-phase="pre_event">
+          <article class="event-card when-next-90 cat-mkt product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g08" data-phase="pre_event">
             <a class="event-card-link" href="/events/evt_g08/golden-8" data-testid="public-event-card-link" aria-label="Open Golden Event 8 public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="area-card-thumb"></span>
             <div class="event-info" data-testid="public-event-info">

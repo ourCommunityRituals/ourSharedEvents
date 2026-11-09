@@ -1581,7 +1581,21 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 26
+      "testCount": 44
+    },
+    {
+      "file": "workers/oursharedevents/tests/landing-categories.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/landing-category-scenarios.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 29
     },
     {
       "file": "workers/oursharedevents/tests/landing-where-unit.spec.ts",
@@ -1953,6 +1967,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 28
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-digital-actions.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 19
     },
     {
       "file": "workers/oursharedevents/tests/poster-family-foundation.spec.ts",
