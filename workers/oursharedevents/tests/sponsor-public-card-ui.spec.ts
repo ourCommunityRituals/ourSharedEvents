@@ -241,7 +241,7 @@ describe('admin | Create Sponsor form order and sections (OSE-1434)', () => {
   const details = (doc: Document) =>
     doc.querySelector('[data-testid="spon-card-details"]') as HTMLDetailsElement;
 
-  test('fields run Name → Tier → Event → Image → logos → Website, then the card section', async () => {
+  test('fields run Name → Tier → Event → Image → logos → Website, then the poster header and the card section', async () => {
     const { doc } = await mountCard();
     const form = doc.getElementById('spon-create-form')!;
     const order = Array.from(form.querySelectorAll('input:not([type="hidden"]), select')).map(
@@ -255,6 +255,9 @@ describe('admin | Create Sponsor form order and sections (OSE-1434)', () => {
       'spon-logo',
       'spon-sidebar-logo',
       'spon-website',
+      // OSE-1826: the poster header's two fields, in their own collapsed section.
+      'spon-header-image',
+      'spon-header-text',
       'spon-display-name',
       'spon-address',
       'spon-phone',
@@ -516,5 +519,102 @@ describe('admin | switching an existing sponsor to the default warns first', () 
     $('spon-logo').value = 'https://cdn.example.com/typed.png';
     choose('default');
     expect($('spon-image-choice-hint').textContent).not.toMatch(/remove/i);
+  });
+});
+
+// ── OSE-1826: the poster header block's two fields ─────────────────────────────
+
+describe('admin | the poster header (OSE-1826)', () => {
+  const header = (doc: Document) =>
+    doc.querySelector('[data-testid="spon-header-details"]') as HTMLDetailsElement;
+
+  test('both optional, in one collapsed "Poster header" section, with limits on the inputs', async () => {
+    const { doc, $, open, submit, sent } = await mountCard();
+    await open();
+    const d = header(doc);
+    expect(d.tagName).toBe('DETAILS');
+    expect(d.open, 'collapsed by default').toBe(false);
+    expect(d.querySelector('summary')!.textContent).toMatch(/poster header/i);
+    for (const id of ['spon-header-image', 'spon-header-text']) {
+      expect(d.contains($(id)), id).toBe(true);
+      expect($(id).hasAttribute('required'), id).toBe(false);
+    }
+    expect($('spon-header-image').getAttribute('maxlength')).toBe('500');
+    expect($('spon-header-text').getAttribute('maxlength')).toBe('140');
+    $('spon-name').value = 'Minimal';
+    $('spon-tier').value = 'primary';
+    await submit();
+    expect(sent('POST')[0].body).toEqual({ name: 'Minimal', tier: 'primary' });
+  });
+
+  test('filled fields are sent on create; an edit loads them, opens the section, and a blank clears', async () => {
+    const created = await mountCard();
+    await created.open();
+    created.$('spon-name').value = 'Bakery';
+    created.$('spon-tier').value = 'bronze';
+    created.$('spon-header-image').value = 'https://cdn.example.com/h.jpg';
+    created.$('spon-header-text').value = 'Fresh bread every morning';
+    await created.submit();
+    expect(created.sent('POST')[0].body).toMatchObject({
+      header_image_url: 'https://cdn.example.com/h.jpg',
+      header_text: 'Fresh bread every morning',
+    });
+
+    const edited = await mountCard((url, init) =>
+      url === `/api/v2/admin/sponsors/${EXISTING.id}` && !init?.method
+        ? {
+            body: {
+              ok: true,
+              item: {
+                ...EXISTING,
+                header_image_url: 'https://cdn.example.com/old.jpg',
+                header_text: 'Old line',
+              },
+            },
+          }
+        : undefined
+    );
+    await (edited.w as unknown as { _editSponsor(id: string): Promise<void> })._editSponsor(
+      EXISTING.id
+    );
+    await flush();
+    expect(header(edited.doc).open).toBe(true);
+    expect(edited.$('spon-header-image').value).toBe('https://cdn.example.com/old.jpg');
+    expect(edited.$('spon-header-text').value).toBe('Old line');
+    edited.$('spon-header-image').value = '';
+    await edited.submit();
+    const body = edited.sent('PUT')[0].body!;
+    expect(body.header_image_url).toBeNull();
+    expect(body.header_text).toBe('Old line');
+  });
+
+  test('an edit of a sponsor with no header keeps the section collapsed', async () => {
+    const { w, doc } = await mountCard();
+    await (w as unknown as { _editSponsor(id: string): Promise<void> })._editSponsor(EXISTING.id);
+    await flush();
+    expect(header(doc).open).toBe(false);
+  });
+
+  test('a server error on the header image opens the section and focuses the field', async () => {
+    const { doc, $, open, submit } = await mountCard((url, init) =>
+      url === '/api/v2/admin/sponsors' && init?.method === 'POST'
+        ? {
+            status: 400,
+            body: {
+              ok: false,
+              code: 'INVALID_HEADER_IMAGE_URL',
+              error: 'Header image must be an http:// or https:// URL',
+            },
+          }
+        : undefined
+    );
+    await open();
+    $('spon-name').value = 'Bad Header';
+    $('spon-tier').value = 'gold';
+    $('spon-header-image').value = 'javascript:alert(1)';
+    await submit();
+    expect($('spon-header-image').getAttribute('aria-invalid')).toBe('true');
+    expect(header(doc).open).toBe(true);
+    expect(doc.activeElement).toBe($('spon-header-image'));
   });
 });

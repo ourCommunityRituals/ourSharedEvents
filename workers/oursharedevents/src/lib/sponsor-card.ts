@@ -20,8 +20,11 @@ export const DISPLAY_NAME_MAX = 80;
 export const ADDRESS_LINE_MAX = 200;
 export const CONTACT_PHONE_MAX = 32;
 export const CONTACT_EMAIL_MAX = 254;
+/** OSE-1826 (0105): the short text in the sponsor's header block. */
+export const HEADER_TEXT_MAX = 140;
 
-export type CardField = 'display_name' | 'address_line' | 'contact_phone' | 'contact_email';
+export type CardField =
+  'display_name' | 'address_line' | 'contact_phone' | 'contact_email' | 'header_text';
 
 export type CardFieldResult =
   { ok: true; value: string | null } | { ok: false; code: string; message: string };
@@ -89,6 +92,15 @@ export function checkCardField(field: CardField, raw: unknown): CardFieldResult 
         };
       }
       return { ok: true, value: v.toLowerCase() };
+    case 'header_text':
+      if (v.length > HEADER_TEXT_MAX) {
+        return {
+          ok: false,
+          code: 'INVALID_HEADER_TEXT',
+          message: `Header text must be ${HEADER_TEXT_MAX} characters or fewer`,
+        };
+      }
+      return { ok: true, value: v };
   }
 }
 
@@ -97,6 +109,7 @@ export const CARD_FIELDS: readonly CardField[] = [
   'address_line',
   'contact_phone',
   'contact_email',
+  'header_text',
 ];
 
 // ── Presentation ──────────────────────────────────────────────────────────────
