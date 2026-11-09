@@ -213,7 +213,7 @@ export async function runEventPlaceBackfill(
       result.errors++;
     }
   }
-  // What is left of the night's lookups goes to place kinds (migration 0105).
+  // What is left of the night's lookups goes to place kinds (migration 0106).
   const kinds = await runPlaceKindBackfill(env, PLACE_BACKFILL_MAX - rows.length, fetcher);
   result.kinds = kinds.kinds;
   result.errors += kinds.errors;
