@@ -16,9 +16,13 @@
  * the header text written as markup, the fallback drawing an empty image, the
  * header drawn on print, a failed header image left in place, a tier selector
  * in the block's CSS | date: 2026-11-09
+ * @born-red styles moved to @ocr/ui | method: the inline OSE-1826 CSS put back,
+ * the digital label left on its print class, a [data-tier] panel rule added to
+ * @ocr/ui. Each turned the styles block red | date: 2026-11-09
  */
 import { describe, test, expect } from 'vitest';
 import { JSDOM } from 'jsdom';
+import { componentStyles } from '@ocr/ui';
 import POSTER_HTML from '../src/templates/poster.html';
 
 const EVT = 'evt_1826';
@@ -90,9 +94,9 @@ describe('digital: each sponsor gets a header block', () => {
   test('header image full width through the proxy, then logo and name, then the text', async () => {
     const { doc } = await openPoster('digital', bundle([BAKERY]));
     const [item] = items(doc);
-    expect(item.classList.contains('poster-sponsor--block')).toBe(true);
+    expect(item.className).toBe('sponsor-panel-block');
     const kids = [...item.children].map((c) => c.className);
-    expect(kids).toEqual(['poster-sponsor-header', 'poster-sponsor-id', 'poster-sponsor-text']);
+    expect(kids).toEqual(['sponsor-panel-header', 'sponsor-panel-id', 'sponsor-panel-text']);
     const img = item.querySelector('[data-testid="poster-sponsor-header"]')!;
     expect(img.getAttribute('src')).toBe('/api/v2/sponsors/sp_bakery/logo?slot=header');
     expect(img.getAttribute('referrerpolicy')).toBe('no-referrer');
@@ -131,8 +135,8 @@ describe('digital: each sponsor gets a header block', () => {
       bundle([{ id: 'sp_plain', name: 'Plain Hardware', tier: 'primary', logo_url: null }])
     );
     const [item] = items(doc);
-    expect(item.querySelector('.poster-sponsor-header')).toBeNull();
-    expect(item.querySelector('.poster-sponsor-text')).toBeNull();
+    expect(item.querySelector('.sponsor-panel-header')).toBeNull();
+    expect(item.querySelector('.sponsor-panel-text')).toBeNull();
     expect(item.querySelector('[data-testid="poster-sponsor-name"]')!.textContent).toBe(
       'Plain Hardware'
     );
@@ -146,8 +150,8 @@ describe('digital: each sponsor gets a header block', () => {
         bundle([{ ...BAKERY, has_header_image: has, header_text: '   ' }])
       );
       const [item] = items(doc);
-      expect(item.querySelector('.poster-sponsor-header'), String(has)).toBeNull();
-      expect(item.querySelector('.poster-sponsor-text')).toBeNull();
+      expect(item.querySelector('.sponsor-panel-header'), String(has)).toBeNull();
+      expect(item.querySelector('.sponsor-panel-text')).toBeNull();
     }
   });
 
@@ -197,38 +201,87 @@ describe('print keeps the compact row', () => {
   test('no header image and no header text on the printed sheet', async () => {
     const { doc } = await openPoster('print', bundle([BAKERY]));
     const [item] = items(doc);
-    expect(item.classList.contains('poster-sponsor--block')).toBe(false);
-    expect(item.querySelector('.poster-sponsor-header, .poster-sponsor-text')).toBeNull();
+    expect(item.className).toBe('poster-sponsor');
+    expect(item.querySelector('.sponsor-panel-header, .sponsor-panel-text')).toBeNull();
     expect(item.querySelector('[data-testid="poster-sponsor-name"]')!.textContent).toBe(
       'Western Ave Bakery'
     );
   });
 });
 
-describe('the block’s styles', () => {
-  const css = (() => {
-    const start = POSTER_HTML.indexOf('/* OSE-1826:');
-    const end = POSTER_HTML.indexOf('.page-header a:focus-visible', start);
-    expect(start).toBeGreaterThan(-1);
-    expect(end).toBeGreaterThan(start);
-    return POSTER_HTML.slice(start, end).replace(/\r\n/g, '\n');
-  })();
+// The block's look is @ocr/ui's sponsor panel (.sponsor-panel*), not CSS in
+// this spoke: the spoke-styles ratchet refuses a poster that grows its own
+// stylesheet (owner 2026-11-09, "Move to @ocr/ui").
+describe('the block’s styles come from @ocr/ui', () => {
+  const posterCss = [...POSTER_HTML.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)]
+    .map((m) => m[1])
+    .join('\n');
+  const uiCss = componentStyles.replace(/\/\*[\s\S]*?\*\//g, '');
+  /** The declaration block of the @ocr/ui rule whose selector is exactly `sel`. */
+  const uiRule = (sel: string): string => {
+    for (const before of ['\n', '}']) {
+      const at = uiCss.indexOf(`${before}${sel}{`);
+      if (at === -1) continue;
+      const start = at + before.length + sel.length + 1;
+      return uiCss.slice(start, uiCss.indexOf('}', start));
+    }
+    return '';
+  };
+  const PANEL = [
+    '.sponsor-panel',
+    '.sponsor-panel-label',
+    '.sponsor-panel-block',
+    '.sponsor-panel-header',
+    '.sponsor-panel-id',
+    '.sponsor-panel-id img',
+    '.sponsor-panel-name',
+    '.sponsor-panel-text',
+  ];
 
-  test('tier-blind (WALL-3b): no rule in it reads a tier', () => {
-    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '');
-    expect(rules).not.toMatch(/tier/i);
+  test('the digital strip, label and name use the panel classes; print keeps its own', async () => {
+    const digital = await openPoster('digital', bundle([BAKERY]));
+    const strip = digital.doc.querySelector('[data-testid="poster-sponsor-strip"]')!;
+    expect(strip.classList.contains('sponsor-panel')).toBe(true);
+    expect(strip.querySelector('[data-testid="poster-sponsor-label"]')!.className).toBe(
+      'sponsor-panel-label'
+    );
+    expect(strip.querySelector('[data-testid="poster-sponsor-name"]')!.className).toBe(
+      'sponsor-panel-name'
+    );
+    const print = await openPoster('print', bundle([BAKERY]));
+    const printStrip = print.doc.querySelector('[data-testid="poster-sponsor-strip"]')!;
+    expect(printStrip.classList.contains('sponsor-panel')).toBe(false);
+    expect(printStrip.querySelector('[data-testid="poster-sponsor-label"]')!.className).toBe(
+      'poster-sponsor-label'
+    );
+  });
+
+  test('@ocr/ui defines every class the block uses', () => {
+    for (const sel of PANEL) expect(uiRule(sel), sel).not.toBe('');
+  });
+
+  test('the poster carries no CSS of its own for the block', () => {
+    expect(posterCss).not.toMatch(
+      /\.(?:sponsor-panel[\w-]*|poster-sponsor--block|poster-sponsor-(?:header|id|text))\b[^{]*\{/
+    );
+  });
+
+  test('tier-blind (WALL-3b): no panel rule reads a tier', () => {
+    const rules = uiCss.split('}').filter((r) => r.includes('sponsor-panel'));
+    expect(rules.length).toBeGreaterThanOrEqual(PANEL.length);
+    for (const r of rules) expect(r).not.toMatch(/tier|platinum|gold|silver|bronze/i);
   });
 
   test('tokens only: no raw colour', () => {
-    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-    expect(css).not.toMatch(/rgba?\(|hsla?\(/);
+    for (const sel of PANEL) {
+      expect(uiRule(sel), sel).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/);
+    }
   });
 
-  test('the label is smaller on the digital poster, and the header image is full width', () => {
-    const label = /\.poster--digital \.poster-sponsor-label \{([^}]*)\}/.exec(css)![1];
-    expect(Number(/font-size:\s*([\d.]+)rem/.exec(label)![1])).toBeLessThan(0.65);
-    const header = /\.poster-sponsor \.poster-sponsor-header \{([^}]*)\}/.exec(css)![1];
-    expect(header).toMatch(/width:\s*100%/);
-    expect(header).toMatch(/max-width:\s*none/);
+  test('the label is small (the 13px floor), and the header image is full width at 3:1', () => {
+    expect(uiRule('.sponsor-panel-label')).toContain('font-size:var(--text-min)');
+    const header = uiRule('.sponsor-panel-header');
+    expect(header).toContain('width:100%');
+    expect(header).toContain('aspect-ratio:3/1');
   });
 });

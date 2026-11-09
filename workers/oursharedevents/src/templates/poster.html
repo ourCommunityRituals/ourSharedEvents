@@ -483,66 +483,6 @@ body {
   margin-bottom: 0.35rem;
 }
 /* OSE-864/#25: no tier-keyed sponsor CSS (WALL-3b). */
-/* OSE-1826: the digital poster's sponsor block. "Sponsored by" is a small
-   label above the sponsor, and the sponsor gets the room: its header image
-   full width, its logo and name, its short text. One block, the same size for
-   every sponsor at every tier (WALL-3b): money buys frequency, never size.
-   Colours are tokens only. */
-.poster--digital .poster-sponsors {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.4rem;
-  padding: 1rem 1.25rem;
-}
-.poster--digital .poster-sponsor-label {
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-  margin: 0;
-}
-.poster-sponsor--block {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--surface);
-}
-.poster-sponsor .poster-sponsor-header {
-  display: block;
-  width: 100%;
-  height: auto;
-  max-width: none;
-  aspect-ratio: 3 / 1;
-  object-fit: cover;
-  background: var(--surface-hover);
-}
-.poster-sponsor-id {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  padding: 0.75rem 1rem 0.5rem;
-}
-.poster--digital .poster-sponsor-name {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text);
-}
-.poster-sponsor-text {
-  margin: 0;
-  padding: 0 1rem 0.9rem;
-  font-size: 0.95rem;
-  line-height: 1.4;
-  text-align: center;
-  color: var(--text-muted);
-  overflow-wrap: anywhere;
-}
-.poster-sponsor--block .poster-sponsor-id:last-child {
-  padding-bottom: 0.75rem;
-}
 .page-header a:focus-visible,
 .page-header .print-btn:focus-visible {
   outline: 2px solid var(--text);
@@ -1391,7 +1331,8 @@ body {
         // sponsor's host. Same block for every tier (WALL-3b). Print keeps the
         // compact row of logos: the sheet has half an inch for sponsors.
         const digital = KIND === 'digital';
-        strip.innerHTML = '<div class="poster-sponsor-label" data-testid="poster-sponsor-label">Sponsored By</div>' +
+        strip.classList.toggle('sponsor-panel', digital);
+        strip.innerHTML = '<div class="' + (digital ? 'sponsor-panel-label' : 'poster-sponsor-label') + '" data-testid="poster-sponsor-label">Sponsored By</div>' +
           sponsors.map(function(s) {
             // OSE-R-015 (2026-05-15): referrerpolicy + data-hide-on-error.
             // 0083: logo via the same-origin proxy (external URLs are CSP-
@@ -1403,17 +1344,17 @@ body {
             // data-tier retained for rotation/frequency-share identity only; NO
             // poster-sponsor--<tier> class — #25 forbids tier-keyed geometry (OSE-864).
             const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
-            const identity = logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(title) + '</span>';
+            const identity = logo + '<span class="' + (digital ? 'sponsor-panel-name' : 'poster-sponsor-name') + '" data-testid="poster-sponsor-name">' + esc(title) + '</span>';
             if (!digital) {
               return '<div class="poster-sponsor" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(title) + '">' + identity + '</div>';
             }
             const headerText = String(s.header_text == null ? '' : s.header_text).trim();
-            return '<div class="poster-sponsor poster-sponsor--block" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(title) + '">' +
+            return '<div class="sponsor-panel-block" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(title) + '">' +
               (s.has_header_image === true
-                ? '<img class="poster-sponsor-header" src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo?slot=header" alt="" referrerpolicy="no-referrer" data-testid="poster-sponsor-header">'
+                ? '<img class="sponsor-panel-header" src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo?slot=header" alt="" referrerpolicy="no-referrer" data-testid="poster-sponsor-header">'
                 : '') +
-              '<div class="poster-sponsor-id">' + identity + '</div>' +
-              (headerText ? '<p class="poster-sponsor-text" data-testid="poster-sponsor-text">' + esc(headerText) + '</p>' : '') +
+              '<div class="sponsor-panel-id">' + identity + '</div>' +
+              (headerText ? '<p class="sponsor-panel-text" data-testid="poster-sponsor-text">' + esc(headerText) + '</p>' : '') +
               '</div>';
           }).join('');
         rotatePosterSponsors(strip);
@@ -1834,7 +1775,7 @@ body {
           }
           // OSE-1826: a sponsor header image that fails drops out; the logo,
           // name and text below it still make the block.
-          if (el && el.tagName === 'IMG' && el.classList.contains('poster-sponsor-header')) {
+          if (el && el.tagName === 'IMG' && el.classList.contains('sponsor-panel-header')) {
             el.remove();
             return;
           }
