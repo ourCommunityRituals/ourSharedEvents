@@ -171,6 +171,17 @@ describe('stg watch: the searches read their permanent totals', () => {
     for (const v of Object.values(ENV)) expect(printed).not.toContain(v);
   });
 
+  test('a reason holding a backslash and a pipe cannot break its table row', () => {
+    const table = w.report({
+      searches: { q: { pass: false, count: null, expected: 1, reasons: ['a\\|b'] } },
+      zips: {},
+    });
+    const row = table.split('\n')[2];
+    expect(row).toContain('a\\\\\\|b');
+    // five unescaped pipes: four cells
+    expect(row.match(/(?<!\\)\|/g)).toHaveLength(5);
+  });
+
   test('eventLinks counts distinct events, not links', () => {
     expect(
       w.eventLinks('<a href="/events/a">1</a><a href="/events/a/x">2</a><a href="/events/b">3</a>')

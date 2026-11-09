@@ -132,8 +132,11 @@ export async function checkZipPages({
   return results;
 }
 
+// A table cell: backslashes first, then pipes, so a "\|" in the input cannot
+// unescape the pipe and break the row.
 const cell = (s) =>
   String(s)
+    .replace(/\\/g, '\\\\')
     .replace(/\|/g, '\\|')
     .replace(/[\r\n]+/g, ' ');
 
