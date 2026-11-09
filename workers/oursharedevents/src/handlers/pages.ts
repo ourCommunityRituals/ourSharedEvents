@@ -2798,13 +2798,13 @@ export async function handleLandingPage(
     // OSE-1522: the consented sponsor by the title on each card, as on /events.
     const sponsorTitles = await fetchSponsorTitles((env as LandingEnv).DB, 'root');
     // Owner 2026-11-09: the Type row is the categories of the event-type
-    // catalog, read through the same query as the Create Event picker. A failed
-    // read only folds every event into "Other" (one choice, so no row).
+    // catalog, read through the same query as the Create Event picker.
     let typeCategories: Map<string, TypeCategory> | undefined;
     try {
       typeCategories = categoryByTypeId(await readEventTypeCatalog((env as LandingEnv).DB));
     } catch {
-      typeCategories = undefined;
+      // A failed read only folds every event into "Other" (one choice, so no
+      // row); the cards still show. tests/landing-category-scenarios.spec.ts.
     }
     const areaOpts = {
       latched,

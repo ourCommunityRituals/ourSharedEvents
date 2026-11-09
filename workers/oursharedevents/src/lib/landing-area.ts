@@ -148,19 +148,20 @@ export interface RenderedLandingArea {
 // ── small helpers ────────────────────────────────────────────────────────────
 
 function str(v: unknown): string {
-  return typeof v === 'string' ? v : v == null ? '' : String(v);
+  // String(v) of a string is v itself, so one test covers every kind.
+  return v == null ? '' : String(v);
 }
 
 function isFiniteNum(v: unknown): boolean {
-  return typeof v === 'number' && Number.isFinite(v);
+  // Number.isFinite is false for anything that is not a number, NaN and ±Infinity.
+  return Number.isFinite(v);
 }
 
 /** CSS-ident-safe slug: lowercase, non-[a-z0-9] → '-', collapsed, trimmed. */
 function slugify(raw: string): string {
-  const s = raw
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  const dashed = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  // `dashed` has at most one '-' per run, so one at each end is all there is.
+  const s = dashed.replace(/^-|-$/g, '');
   return s || 'other';
 }
 
@@ -246,14 +247,16 @@ export function renderLandingArea(
   }
 ): RenderedLandingArea {
   const lang = opts?.lang ?? DEFAULT_LANG;
-  if (!Array.isArray(items) || items.length === 0) return renderEmptyLandingArea(lang);
+  // An empty list falls through to `live.length === 0` below.
+  if (!Array.isArray(items)) return renderEmptyLandingArea(lang);
 
   const now = new Date(opts?.now ?? Date.now());
 
   // Forward-looking: wrapped events belong on /events + the event page, not on
-  // the "what's coming together" surface. phase is authoritative.
-  // Upcoming first, soonest first, undated last (OSE-1520), as on /events.
-  const live = orderUpcomingFirst(items.filter((e) => str(e.phase) !== 'post_event')).upcoming;
+  // the "what's coming together" surface. phase is authoritative: `upcoming`
+  // leaves out every post_event. Upcoming first, soonest first, undated last
+  // (OSE-1520), as on /events.
+  const live = orderUpcomingFirst(items).upcoming;
   if (live.length === 0) return renderEmptyLandingArea(lang);
 
   const categoryMap = new Map<string, { label: string; order: number }>(); // by slug
@@ -430,16 +433,13 @@ function buildAreaMarkup(args: {
   const winStyle = `<style data-testid="area-window-css">\n${rules.join('\n')}\n</style>`;
   // Category pills are dynamic, so their rules are too. A card carries the one
   // class of its category, so a category's rule keeps every type under it.
-  const typeCss = showTypes
-    ? [
-        chipRules('type-all'),
-        ...categories.map(
-          (c) =>
-            chipRules(c.slug) +
-            `#${c.slug}:checked ~ .area .event-card:not(.${c.slug}){display:none}`
-        ),
-      ].join('\n')
-    : '';
+  const typeCss = [
+    chipRules('type-all'),
+    ...categories.map(
+      (c) =>
+        chipRules(c.slug) + `#${c.slug}:checked ~ .area .event-card:not(.${c.slug}){display:none}`
+    ),
+  ].join('\n');
   const typeStyle = showTypes ? `<style data-testid="area-type-css">\n${typeCss}\n</style>` : '';
 
   // ── toggle bar (labels) ──
@@ -521,7 +521,10 @@ export function orderLandingSections(html: string, defaultView: 'list' | 'map'):
   const a = html.indexOf(DOORS_START);
   const b = html.indexOf(DOORS_END);
   const c = html.indexOf(AFTER_AREA);
-  if (a < 0 || b < a || c < b) return html;
+  if (a < 0) return html;
+  // Two markers never share an index, so `<` and `<=` agree here: the two
+  // `<=` mutants of this line are equivalent and survive (OSE-1824 floor).
+  if (b < a || c < b) return html;
   const doors = html.slice(a + DOORS_START.length, b);
   const before = html.slice(0, a);
   const middle = html.slice(b + DOORS_END.length, c);

@@ -26,8 +26,9 @@ on:
     # 08:40 UTC — clear of overnight-fuzz (07:00) and the 08:00 jobs.
     - cron: '40 8 * * *'
   workflow_dispatch:
-  # Per-PR gate, but ONLY for changes that can hollow a covenant guard. The run
-  # is ~10s (two pure-logic files on the node project), so gating the handful of
+  # Per-PR gate, but ONLY for changes that can hollow a mutated file. The run is
+  # a few minutes (the guard files plus, since OSE-1824, the landing's category
+  # filter, all on the node project), so gating the handful of
   # PRs that touch these files closes the ~24h post-merge hollowing window
   # without taxing every other PR. If you add a mutate target in stryker.conf.mjs,
   # add its source + spec here too — a stale filter is a gate that never fires.
@@ -45,6 +46,19 @@ on:
       - 'workers/oursharedevents/tests/red-team/auth-jwt-verify-memo.spec.ts'
       - 'workers/oursharedevents/tests/red-team/ci-service-actor.spec.ts'
       - 'workers/oursharedevents/tests/admin-actor-memo.spec.ts'
+      # OSE-1824: the landing's Type row by event-type category — its sources
+      # (two handler files are mutated only in a marker range, see rangeOf in
+      # stryker.conf.mjs) and the node specs and goldens that kill its mutants.
+      - 'workers/oursharedevents/src/lib/event-type-catalog.ts'
+      - 'workers/oursharedevents/src/lib/event-type-catalog-read.ts'
+      - 'workers/oursharedevents/src/lib/landing-area.ts'
+      - 'workers/oursharedevents/src/handlers/pages.ts'
+      - 'workers/oursharedevents/src/handlers/events.ts'
+      - 'workers/oursharedevents/tests/landing-area.spec.ts'
+      - 'workers/oursharedevents/tests/landing-category-scenarios.spec.ts'
+      - 'workers/oursharedevents/tests/list-landing-language-golden.spec.ts'
+      - 'workers/oursharedevents/tests/list-landing-spanish.spec.ts'
+      - 'workers/oursharedevents/tests/helpers/list-landing-rows.ts'
       - 'workers/oursharedevents/stryker.conf.mjs'
       # OSE-1695: the CI security rule that keeps secrets off branch pushes, its test and config.
       - 'scripts/ci/branch-push-secret-exposure.mjs'
@@ -77,6 +91,19 @@ on:
       - 'workers/oursharedevents/tests/red-team/auth-jwt-verify-memo.spec.ts'
       - 'workers/oursharedevents/tests/red-team/ci-service-actor.spec.ts'
       - 'workers/oursharedevents/tests/admin-actor-memo.spec.ts'
+      # OSE-1824: the landing's Type row by event-type category — its sources
+      # (two handler files are mutated only in a marker range, see rangeOf in
+      # stryker.conf.mjs) and the node specs and goldens that kill its mutants.
+      - 'workers/oursharedevents/src/lib/event-type-catalog.ts'
+      - 'workers/oursharedevents/src/lib/event-type-catalog-read.ts'
+      - 'workers/oursharedevents/src/lib/landing-area.ts'
+      - 'workers/oursharedevents/src/handlers/pages.ts'
+      - 'workers/oursharedevents/src/handlers/events.ts'
+      - 'workers/oursharedevents/tests/landing-area.spec.ts'
+      - 'workers/oursharedevents/tests/landing-category-scenarios.spec.ts'
+      - 'workers/oursharedevents/tests/list-landing-language-golden.spec.ts'
+      - 'workers/oursharedevents/tests/list-landing-spanish.spec.ts'
+      - 'workers/oursharedevents/tests/helpers/list-landing-rows.ts'
       - 'workers/oursharedevents/stryker.conf.mjs'
       # OSE-1695: the CI security rule that keeps secrets off branch pushes, its test and config.
       - 'scripts/ci/branch-push-secret-exposure.mjs'

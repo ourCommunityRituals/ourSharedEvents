@@ -33,5 +33,7 @@ export async function readEventTypeCatalog(
       )
       .all<EventTypeRow>(),
   ]);
-  return buildEventTypeCatalog(cats.results ?? [], types.results ?? []);
+  // Stryker disable next-line ArrayDeclaration: equivalent — a junk category row with no type under it is dropped by the grouping, the same as no row
+  const categoryRows = cats.results ?? [];
+  return buildEventTypeCatalog(categoryRows, types.results ?? []);
 }

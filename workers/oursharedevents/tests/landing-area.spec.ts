@@ -15,6 +15,7 @@ import {
   renderLandingArea,
   renderEmptyLandingArea,
   injectLandingArea,
+  orderLandingSections,
   LANDING_AREA_MARKER,
   DEFAULT_WINDOW,
   LIST_MAX,
@@ -432,5 +433,122 @@ describe('an empty time window says so and links to a wider range', () => {
     const html = midOnly();
     const list = html.slice(html.indexOf('data-testid="area-list"'));
     expect(list).toContain('data-testid="area-window-empty-weekend"');
+  });
+});
+
+// OSE-1824 widened Stryker to the whole of this file (stryker.conf.mjs); these
+// pin the older behaviour its first run found untested: modality from geo and
+// place, the venue fallback, ids that are not strings, the post-event cut, the
+// latch with nothing in the window, a call with no options, and the section order.
+// @born-red landing-area-mutation-kills | method: Stryker — each case below killed
+//   a mutant that survived the first run on 2026-11-09 (see the PR) | date: 2026-11-09
+describe('OSE-1824 | what the mutation run found untested', () => {
+  const card = (html: string, id: string) => {
+    const at = html.indexOf(`data-event-id="${id}"`);
+    return at < 0 ? '' : html.slice(at, html.indexOf('</article>', at));
+  };
+  const venue = (html: string, id: string) =>
+    card(html, id).match(/data-testid="public-event-venue">([^<]*)</)?.[1] ?? null;
+  const bare = { lat: null, lon: null, venue: null, location: null };
+
+  it('no place at all is online, and the card says "Online"', () => {
+    const html = render([ev({ id: 'o', ...bare })]).html;
+    expect(cardClass(html)).toContain('modality-online');
+    expect(venue(html, 'o')).toBe('Online');
+  });
+
+  it.each([
+    ['NaN coordinates', { lat: Number.NaN, lon: Number.NaN }],
+    ['only a latitude', { lat: 41.9 }],
+    ['coordinates as text', { lat: '41.9', lon: '-87.6' }],
+    ['a blank venue', { venue: '   ' }],
+    ['a blank location', { location: '   ' }],
+  ])('%s is not a place: online', (_, o) => {
+    const html = render([ev({ id: 'x', ...bare, ...o })]).html;
+    expect(cardClass(html)).toContain('modality-online');
+  });
+
+  it('a location alone is in person, and the card shows it as the venue', () => {
+    const html = render([ev({ id: 'l', ...bare, location: 'Town Hall' })]).html;
+    expect(cardClass(html)).toContain('modality-inperson');
+    expect(venue(html, 'l')).toBe('Town Hall');
+  });
+
+  it('coordinates alone are in person, with no venue line (never "Online")', () => {
+    const html = render([ev({ id: 'g', ...bare, lat: 41.9, lon: -87.6 })]).html;
+    expect(cardClass(html)).toContain('modality-inperson');
+    expect(venue(html, 'g')).toBeNull();
+  });
+
+  it('a numeric id finds its sponsor by the same text key', () => {
+    const html = renderLandingArea([ev({ id: 42 })], {
+      now: NOW,
+      sponsorTitles: new Map([['42', 'Pizza Co']]),
+    }).html;
+    expect(card(html, '42')).toContain('data-testid="public-event-sponsor"');
+    expect(card(html, '42')).toContain('Pizza Co');
+  });
+
+  it('a wrapped (post-event) event is not listed; only wrapped events is the empty area', () => {
+    const mixed = render([ev({ id: 'done', phase: 'post_event' }), ev({ id: 'next' })]).html;
+    expect(mixed).not.toContain('data-event-id="done"');
+    expect(mixed).toContain('data-event-id="next"');
+    const onlyDone = render([ev({ id: 'done', phase: 'post_event' })]);
+    expect(onlyDone.html).toContain('data-testid="area-empty"');
+    expect(onlyDone.windowCount).toBe(0);
+  });
+
+  it('a list that is not an array is the empty area, never a throw', () => {
+    const out = renderLandingArea(null as unknown as LandingAreaItem[], { now: NOW });
+    expect(out.html).toContain('data-testid="area-empty"');
+    expect(renderEmptyLandingArea()).toMatchObject({ defaultView: 'list', leadsWithMap: false });
+  });
+
+  it('renders with no options at all', () => {
+    const soon = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    const out = renderLandingArea([ev({ id: 'n', startDateISO: soon })]);
+    expect(out.html).toContain('data-event-id="n"');
+    expect(out.categories).toEqual([{ slug: 'cat-other', label: 'Other' }]);
+  });
+
+  it('a latched area with nothing in the window still opens on the list', () => {
+    const out = renderLandingArea([ev({ id: 'far', startDateISO: inDays(120) })], {
+      now: NOW,
+      areaLatched: true,
+    });
+    expect(out.windowCount).toBe(0);
+    expect(out.leadsWithMap).toBe(false);
+    expect(out.defaultView).toBe('list');
+  });
+
+  it('several empty windows each get their own message, side by side', () => {
+    const html = render([ev({ id: 'm', startDateISO: inDays(60) })]).html;
+    expect(html).toMatch(
+      /<\/p><p class="empty-state area-window-empty win-empty-week" data-testid="area-window-empty-week"/
+    );
+  });
+});
+
+describe('OSE-1824 | the landing sections keep their order rules', () => {
+  const S = '<!--OCR_DOORS_START-->';
+  const E = '<!--OCR_DOORS_END-->';
+  const A = '<!--OCR_AFTER_AREA-->';
+
+  it('doors at the very start of the page still move under the map', () => {
+    expect(orderLandingSections(`${S}D${E}M${A}T`, 'map')).toBe('MDT');
+    expect(orderLandingSections(`${S}D${E}M${A}T`, 'list')).toBe('DMT');
+  });
+
+  it.each([
+    ['no doors start', `x${E}M${A}T`],
+    ['doors end before start', `x${E}D${S}M${A}T`],
+    ['after-area before doors end', `x${S}D${A}M${E}T`],
+  ])('%s: the page comes back unchanged', (_, html) => {
+    expect(orderLandingSections(html, 'map')).toBe(html);
+  });
+
+  it('a page without the area marker is not reordered either', () => {
+    const page = `${S}D${E}M${A}T`;
+    expect(injectLandingArea(page, render([ev()]))).toBe(page);
   });
 });

@@ -1581,7 +1581,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 31
+      "testCount": 44
     },
     {
       "file": "workers/oursharedevents/tests/landing-categories.spec.ts",
@@ -1589,6 +1589,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/landing-category-scenarios.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 28
     },
     {
       "file": "workers/oursharedevents/tests/landing-where-unit.spec.ts",
