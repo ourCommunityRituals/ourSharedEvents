@@ -18,9 +18,13 @@
  * the address line removed, Web Share skipped, a tracking parameter added to
  * the shared address, the preview's Share left live, a control under 44px.
  * Each turned this file red | date: 2026-11-09
+ * @born-red styles moved to @ocr/ui | method: the inline OSE-1825 CSS put back,
+ * a class renamed in the markup, .share-chip dropped from @ocr/ui, its
+ * min-height dropped. Each turned the styles block red | date: 2026-11-09
  */
 import { describe, test, expect } from 'vitest';
 import { JSDOM } from 'jsdom';
+import { componentStyles, structural } from '@ocr/ui';
 import POSTER_HTML from '../src/templates/poster.html';
 
 const EVT = 'evt_1825';
@@ -186,7 +190,7 @@ describe('digital: Share', () => {
       nav: { share: async (d) => void calls.push(d) },
     });
     const btn = q(doc, 'poster-share-btn') as HTMLButtonElement;
-    expect(btn.className).toBe('btn btn-primary');
+    expect(btn.className).toBe('btn btn-primary btn-block');
     expect(btn.textContent).toBe('Share this event');
     btn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
     await tick();
@@ -308,31 +312,80 @@ describe('digital: Share', () => {
   });
 });
 
-describe('the block’s styles: 44px targets, tokens only', () => {
-  const css = (() => {
-    const start = POSTER_HTML.indexOf('/* OSE-1825:');
-    const end = POSTER_HTML.indexOf('.poster-share-status {', start);
-    expect(start).toBeGreaterThan(-1);
-    expect(end).toBeGreaterThan(start);
-    return POSTER_HTML.slice(start, POSTER_HTML.indexOf('}', end) + 1).replace(/\r\n/g, '\n');
-  })();
-  const rule = (selector: string): string => {
-    const i = css.indexOf(`${selector} {`);
-    expect(i, selector).toBeGreaterThan(-1);
-    return css.slice(i, css.indexOf('}', i));
+// The block's look comes from @ocr/ui (.detail-card, .share-row, .share-chip),
+// not from CSS in this spoke: the spoke-styles ratchet refuses a poster that
+// grows its own stylesheet (owner 2026-11-09, "Move to @ocr/ui").
+describe('the block’s styles come from @ocr/ui: 44px targets, tokens only', () => {
+  const posterCss = [...POSTER_HTML.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)]
+    .map((m) => m[1])
+    .join('\n');
+  /** The declaration block of the @ocr/ui rule whose selector is exactly `sel`. */
+  const uiRule = (sel: string): string => {
+    for (const before of ['\n', '}']) {
+      const at = componentStyles.indexOf(`${before}${sel}{`);
+      if (at === -1) continue;
+      const start = at + before.length + sel.length + 1;
+      return componentStyles.slice(start, componentStyles.indexOf('}', start));
+    }
+    return '';
   };
+  const tapMinPx = Number(/^(\d+)px$/.exec(structural['--tap-min'])?.[1]);
+
+  test('the digital markup uses the @ocr/ui classes', async () => {
+    const { doc } = await openPoster('digital', bundle(), { nav: {} });
+    expect(q(doc, 'poster-meta')!.classList.contains('detail-list')).toBe(true);
+    expect(q(doc, 'poster-meta-date')!.className).toBe('detail-card');
+    expect(q(doc, 'poster-meta-venue')!.className).toBe('detail-card');
+    expect(q(doc, 'poster-directions')!.className).toBe('detail-card-actions');
+    expect(q(doc, 'poster-share')!.classList.contains('share-row')).toBe(true);
+    expect(q(doc, 'poster-share-links')!.className).toBe('share-chips');
+    const chips = [...q(doc, 'poster-share-links')!.querySelectorAll('a, button')];
+    expect(chips.length).toBe(9);
+    for (const c of chips) expect(c.className, c.textContent ?? '').toBe('share-chip');
+    expect(q(doc, 'poster-share-status')!.className).toBe('share-status');
+  });
+
+  test('@ocr/ui defines every class the block uses', () => {
+    for (const sel of [
+      '.detail-list',
+      '.detail-card',
+      '.detail-card-text',
+      '.detail-card-label',
+      '.detail-card-main',
+      '.detail-card-sub',
+      '.detail-card-actions',
+      '.share-chips',
+      '.share-chip',
+      '.share-status',
+    ]) {
+      expect(uiRule(sel), sel).not.toBe('');
+    }
+  });
+
+  test('the poster carries no CSS of its own for the block', () => {
+    expect(posterCss).not.toMatch(
+      /\.(?:detail-list|detail-card|share-row|share-chips?|share-status|poster-details?|poster-detail-\w+|poster-share(?:-\w+)?)\b[^{]*\{/
+    );
+  });
 
   test('every control in it is at least 44px tall', () => {
-    for (const sel of ['.poster-share .btn', '.poster-share-link']) {
-      const px = Number(/min-height:\s*(\d+)px/.exec(rule(sel))?.[1]);
-      expect(px, sel).toBeGreaterThanOrEqual(44);
-    }
-    expect(rule('.poster-detail-actions .btn,\n.poster-share .btn')).toMatch(/min-height:\s*44px/);
+    expect(tapMinPx).toBeGreaterThanOrEqual(44);
+    expect(uiRule('.btn')).toContain('min-height:var(--tap-min)');
+    expect(uiRule('.share-chip')).toContain('min-height:var(--tap-min)');
+    expect(uiRule('.detail-card-actions .btn')).not.toMatch(/height/);
   });
 
   test('no raw colour: every colour is a token', () => {
-    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-    expect(css).not.toMatch(/rgba?\(|hsla?\(/);
-    expect(css).toContain('var(--accent)');
+    for (const sel of [
+      '.detail-card',
+      '.detail-card-label',
+      '.detail-card-main',
+      '.share-chip',
+      '.share-status',
+    ]) {
+      const body = uiRule(sel);
+      expect(body, sel).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/);
+      expect(body, sel).toMatch(/var\(--/);
+    }
   });
 });

@@ -302,114 +302,6 @@ body {
   min-height: 44px;
   color: var(--accent);
 }
-/* OSE-1825: the digital poster's When / Where / Share block. Each fact is a
-   small card of its own with its actions as @ocr/ui buttons (.btn), not inline
-   text links. Colours are tokens only. Print keeps the one plain line. */
-.poster-details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin: 0 0 1.25rem;
-  text-align: left;
-}
-.poster-detail {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1rem;
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-}
-.poster-detail-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  min-width: 0;
-  flex: 1 1 14rem;
-}
-.poster-detail-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.poster-detail-main {
-  font-size: 1.05rem;
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-.poster-detail-sub {
-  font-size: 0.95rem;
-  line-height: 1.35;
-  color: var(--text-muted);
-  overflow-wrap: anywhere;
-}
-.poster-detail-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  flex: 1 1 auto;
-}
-.poster-detail-actions .btn,
-.poster-share .btn {
-  flex: 1 1 7.5rem;
-  min-height: 44px;
-  margin: 0;
-  padding: 0.6rem 1rem;
-  font-size: 1rem;
-}
-.poster-share .btn {
-  width: 100%;
-  min-height: 48px;
-  font-size: 1.05rem;
-}
-.poster-share-links {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-.poster-share-links[hidden] {
-  display: none;
-}
-.poster-share-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 1rem;
-  font-weight: 600;
-  text-decoration: none;
-  cursor: pointer;
-}
-.poster-share-link:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.poster-detail-actions .btn:focus-visible,
-.poster-share .btn:focus-visible,
-.poster-share-link:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
-.poster-share-status {
-  min-height: 1.25em;
-  margin-top: 0.35rem;
-  font-size: 0.9rem;
-  color: var(--text-muted);
-}
 .poster-stage {
   position: relative;
   margin: 1rem 0 1.25rem;
@@ -1340,26 +1232,26 @@ body {
         const shareText = shareLine + '\n' + shareUrl;
         const shareOff = !event.id || !!PREVIEW_EVENT;
         const detailsHtml =
-          '<div class="poster-details" data-testid="poster-meta">' +
+          '<div class="detail-list section" data-testid="poster-meta">' +
           (startDate
-            ? '<div class="poster-detail" data-testid="poster-meta-date">' +
-              '<div class="poster-detail-text"><span class="poster-detail-label">When</span>' +
-              '<span class="poster-detail-main" data-testid="poster-when-date">' + esc(startDate) + '</span>' +
-              (startTime ? '<span class="poster-detail-sub" data-testid="poster-when-time">' + esc(startTime) + '</span>' : '') +
+            ? '<div class="detail-card" data-testid="poster-meta-date">' +
+              '<div class="detail-card-text"><span class="detail-card-label">When</span>' +
+              '<span class="detail-card-main" data-testid="poster-when-date">' + esc(startDate) + '</span>' +
+              (startTime ? '<span class="detail-card-sub" data-testid="poster-when-time">' + esc(startTime) + '</span>' : '') +
               '</div>' +
               (event.id
-                ? '<div class="poster-detail-actions"><a class="btn btn-outline" href="/events/' + encodeURIComponent(event.id) + '/calendar.ics" download data-testid="poster-add-to-calendar">Add to calendar</a></div>'
+                ? '<div class="detail-card-actions"><a class="btn btn-outline" href="/events/' + encodeURIComponent(event.id) + '/calendar.ics" download data-testid="poster-add-to-calendar">Add to calendar</a></div>'
                 : '') +
               '</div>'
             : '') +
           (where
-            ? '<div class="poster-detail" data-testid="poster-meta-venue">' +
-              '<div class="poster-detail-text"><span class="poster-detail-label">Where</span>' +
-              '<span class="poster-detail-main" data-testid="poster-venue-name">' + esc(venue || address) + '</span>' +
-              (showAddress && venue ? '<span class="poster-detail-sub" data-testid="poster-venue-address">' + esc(address) + '</span>' : '') +
+            ? '<div class="detail-card" data-testid="poster-meta-venue">' +
+              '<div class="detail-card-text"><span class="detail-card-label">Where</span>' +
+              '<span class="detail-card-main" data-testid="poster-venue-name">' + esc(venue || address) + '</span>' +
+              (showAddress && venue ? '<span class="detail-card-sub" data-testid="poster-venue-address">' + esc(address) + '</span>' : '') +
               '</div>' +
               // Owner 2026-10-11: two choices, Google Maps and Apple Maps.
-              '<div class="poster-detail-actions" role="group" aria-label="Directions" data-testid="poster-directions">' +
+              '<div class="detail-card-actions" role="group" aria-label="Directions" data-testid="poster-directions">' +
               '<a class="btn btn-outline" href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">Google Maps</a>' +
               '<a class="btn btn-outline" href="https://maps.apple.com/?q=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map-apple">Apple Maps</a>' +
               '</div>' +
@@ -1368,22 +1260,22 @@ body {
           // OSE-1825 / OSE-1371: Web Share first; without it, plain share
           // links (owner 2026-09-28: no SDK, no tracker, no cookie). A draft
           // preview shows the button switched off: its link is not public yet.
-          '<div class="poster-share no-print" data-testid="poster-share" data-share-url="' + esc(shareUrl) + '" data-share-title="' + esc(name) + '" data-share-text="' + esc(shareLine) + '">' +
+          '<div class="share-row section no-print" data-testid="poster-share" data-share-url="' + esc(shareUrl) + '" data-share-title="' + esc(name) + '" data-share-text="' + esc(shareLine) + '">' +
           (shareOff
-            ? '<button type="button" class="btn btn-primary" data-testid="poster-share-btn" disabled aria-disabled="true">Share this event</button>'
-            : '<button type="button" class="btn btn-primary" data-testid="poster-share-btn" aria-expanded="false" aria-controls="poster-share-links">Share this event</button>' +
-              '<div id="poster-share-links" class="poster-share-links" data-testid="poster-share-links" role="group" aria-label="Share this event" hidden>' +
-              '<a class="poster-share-link" href="mailto:?body=' + encodeURIComponent(shareText) + '" data-testid="poster-share-email">Email</a>' +
-              '<a class="poster-share-link" href="sms:?&amp;body=' + encodeURIComponent(shareText) + '" data-testid="poster-share-sms">Text message</a>' +
-              '<a class="poster-share-link" href="https://wa.me/?text=' + encodeURIComponent(shareText) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-whatsapp">WhatsApp</a>' +
-              '<a class="poster-share-link" href="https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-facebook">Facebook</a>' +
-              '<a class="poster-share-link" href="https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareText) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-x">X</a>' +
-              '<a class="poster-share-link" href="https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(shareUrl) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-linkedin">LinkedIn</a>' +
-              '<a class="poster-share-link" href="https://www.reddit.com/submit?url=' + encodeURIComponent(shareUrl) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-reddit">Reddit</a>' +
-              '<a class="poster-share-link" href="https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-telegram">Telegram</a>' +
-              '<button type="button" class="poster-share-link" data-testid="poster-share-copy">Copy link</button>' +
+            ? '<button type="button" class="btn btn-primary btn-block" data-testid="poster-share-btn" disabled aria-disabled="true">Share this event</button>'
+            : '<button type="button" class="btn btn-primary btn-block" data-testid="poster-share-btn" aria-expanded="false" aria-controls="poster-share-links">Share this event</button>' +
+              '<div id="poster-share-links" class="share-chips" data-testid="poster-share-links" role="group" aria-label="Share this event" hidden>' +
+              '<a class="share-chip" href="mailto:?body=' + encodeURIComponent(shareText) + '" data-testid="poster-share-email">Email</a>' +
+              '<a class="share-chip" href="sms:?&amp;body=' + encodeURIComponent(shareText) + '" data-testid="poster-share-sms">Text message</a>' +
+              '<a class="share-chip" href="https://wa.me/?text=' + encodeURIComponent(shareText) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-whatsapp">WhatsApp</a>' +
+              '<a class="share-chip" href="https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-facebook">Facebook</a>' +
+              '<a class="share-chip" href="https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareText) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-x">X</a>' +
+              '<a class="share-chip" href="https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(shareUrl) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-linkedin">LinkedIn</a>' +
+              '<a class="share-chip" href="https://www.reddit.com/submit?url=' + encodeURIComponent(shareUrl) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-reddit">Reddit</a>' +
+              '<a class="share-chip" href="https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-telegram">Telegram</a>' +
+              '<button type="button" class="share-chip" data-testid="poster-share-copy">Copy link</button>' +
               '</div>' +
-              '<p class="poster-share-status" data-testid="poster-share-status" role="status" aria-live="polite"></p>') +
+              '<p class="share-status" data-testid="poster-share-status" role="status" aria-live="polite"></p>') +
           '</div>' +
           '</div>';
 
