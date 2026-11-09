@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-11-04 — 617 ids.
+ * Generated 2026-11-09 — 633 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -539,7 +539,7 @@
       'display-wall-sponsor-logo',
       'display-wall-sponsor-name',
     ]),
-    // poster.html — 42 ids
+    // poster.html — 58 ids
     POSTER: Object.freeze([
       'poster-add-to-calendar',
       'poster-area',
@@ -550,7 +550,6 @@
       'poster-card-header',
       'poster-container',
       'poster-directions',
-      'poster-directions-summary',
       'poster-empty',
       'poster-error',
       'poster-event-nav',
@@ -574,6 +573,19 @@
       'poster-print-status',
       'poster-qr-section',
       'poster-qr-slots',
+      'poster-share',
+      'poster-share-btn',
+      'poster-share-copy',
+      'poster-share-email',
+      'poster-share-facebook',
+      'poster-share-linkedin',
+      'poster-share-links',
+      'poster-share-reddit',
+      'poster-share-sms',
+      'poster-share-status',
+      'poster-share-telegram',
+      'poster-share-whatsapp',
+      'poster-share-x',
       'poster-skip-link',
       'poster-sponsor-item',
       'poster-sponsor-label',
@@ -583,6 +595,10 @@
       'poster-sponsors-loading',
       'poster-stage',
       'poster-title',
+      'poster-venue-address',
+      'poster-venue-name',
+      'poster-when-date',
+      'poster-when-time',
     ]),
     // shared-report.html — 88 ids
     SHARED_REPORT: Object.freeze([
