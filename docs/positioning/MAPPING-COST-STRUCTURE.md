@@ -17,6 +17,7 @@
 | **H3 hexagons**                   | Server-drawn SVG from res-7 cell ids (`lib/attendee-map.ts`, `lib/corridor-map.ts`). No tiles, no JS, no outside request.      | Shipped                                                                   |
 | **Venue image**                   | One Google Static Maps image per venue, fetched by the Worker (`GET /api/v2/maps/venue-image`, `lib/maps.ts`).                 | Shipped on event pages                                                    |
 | **Street map under the hexagons** | Water, roads and town names drawn by the Worker as SVG under the hexagons (`lib/street-map.ts`), from a PMTiles archive in R2. | Built on the landing map; off until `MAP_TILES` is bound (see decision 4) |
+| **Zoomed area with event dots**   | A tapped hexagon drawn alone over its streets, one dot per place (`lib/attendee-map.ts`, `/?area=`).                           | Built on the landing map (see decision 5); streets need `MAP_TILES`       |
 
 ## Cost lines
 
@@ -74,6 +75,22 @@ share one load, so the real figure is lower.
    binding to `[env.staging]` and `[env.production]` in `wrangler.toml` in one PR
    (`MAP_TILES_ARCHIVE` names the file; the default is `chicago-region.pmtiles`).
    Until then staging and production show hexagons only. Local dev has the binding.
+
+5. **Tap a hexagon to zoom in; events show as dots** (owner, 2026-11-09). On the
+   landing each hexagon links to `/?area=<res-7 cell>`, which the Worker draws as
+   that one area over the street map, with a numbered dot per place that holds an
+   event. Each dot links to its event, or to its row in the list when it holds
+   several. The type, date and where pills filter the dots as they filter the cards,
+   still with no JavaScript. **Where a dot sits:** a place the lookup named a
+   business or landmark (`events.place_kind = 'business'`, migration 0105) at its
+   exact point; anything else, which can be a home, at the centre of its res-9 cell
+   (about one block). A missing kind is drawn as a block. Only a res-7 cell is
+   accepted; anything finer is ignored.
+
+   **Cost:** the zoomed view reads the same 12 tiles at most as the hexagon view, so
+   decision 4's figure holds per view. Kinds for events placed before 0105 are filled
+   by the nightly place job from what is left of its 25 lookups a night; the nightly
+   Google spend does not go up.
 
 ## If a large client arrives (American Bocce Co. or similar)
 

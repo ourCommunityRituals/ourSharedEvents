@@ -74,6 +74,7 @@ import {
   renderLandingArea,
   renderEmptyLandingArea,
   injectLandingArea,
+  landingZoom,
   type LandingAreaItem,
 } from '../lib/landing-area.js';
 import { loadStreetLayer, type StreetMapEnv } from '../lib/street-map.js';
@@ -2763,6 +2764,15 @@ export async function handleLandingPage(
   }
   // A zip, one place, or the places a name means: results come first.
   const searched = where.kind === 'zip' || where.kind === 'place' || where.kind === 'choose';
+  // A tapped hexagon: `?area=<res-7 cell>` opens that area zoomed in (owner,
+  // 2026-11-09). The links keep the visitor's search; anything but a res-7 cell
+  // is ignored.
+  let zoom: ReturnType<typeof landingZoom>;
+  try {
+    zoom = landingZoom(request ? new URL(request.url) : null, withLangPrefix(lang, '/'));
+  } catch {
+    zoom = landingZoom(null, withLangPrefix(lang, '/'));
+  }
   let area;
   try {
     const dp = getDataProvider(env as LandingEnv, ctx ?? null);
@@ -2800,6 +2810,8 @@ export async function handleLandingPage(
       areaLatched: searched ? false : areaLatched,
       sponsorTitles,
       lang,
+      zoomHref: (cell: string) => zoom.href(cell),
+      zoom: zoom.cell ? { cell: zoom.cell, backHref: zoom.href() } : undefined,
     };
     area = renderLandingArea(items as LandingAreaItem[], areaOpts);
     // The street map under the hexagons (lib/street-map.ts): drawn for exactly
@@ -2812,7 +2824,7 @@ export async function handleLandingPage(
   } catch {
     area = renderEmptyLandingArea(lang);
   }
-  if (searched && area.windowCount === 0 && area.types.length === 0) {
+  if (searched && !zoom.cell && area.windowCount === 0 && area.types.length === 0) {
     const empty =
       where.kind === 'zip'
         ? renderNearEmpty(where.area.zip, lang)
@@ -2847,7 +2859,11 @@ export async function handleLandingPage(
     injectLanguageHead(
       injectLanguageAlternates(
         injectCanonical(
-          injectWhere(injectLandingArea(shell, area, { areaFirst: searched }), where, lang),
+          injectWhere(
+            injectLandingArea(shell, area, { areaFirst: searched || zoom.cell !== null }),
+            where,
+            lang
+          ),
           request,
           env,
           withLangPrefix(lang, CANONICAL_PATH.landing)

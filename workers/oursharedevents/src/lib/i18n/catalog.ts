@@ -284,6 +284,16 @@ const en = {
   'map.caption':
     '{events} in {areas}, every kind, over the next {days} days (the filters above change the list, not the map). Each hexagon is a few square kilometres, never a street address.',
   'map.credit': 'Street map data © {osm} contributors.',
+  'map.tapToZoom': 'Tap a hexagon to see its events on the map.',
+  'map.zoomIn': 'Zoom in',
+  'map.allAreas': 'Back to all areas',
+  'map.zoomCaption':
+    '{events} in this area over the next {days} days. A solid dot is the place itself; a pale dot marks only its block.',
+  'map.zoomCaptionNamed':
+    '{events} in this area ({name}) over the next {days} days. A solid dot is the place itself; a pale dot marks only its block.',
+  'map.zoomEmpty': '<strong>No upcoming events in this area.</strong>',
+  'map.unplaced': 'Somewhere in this area',
+  'map.dotTitle': 'Spot {n}: {count}',
   // The landing's where-are-you form (lib/landing-where.ts).
   'where.unknownZip': "We couldn't find zip {zip}. Check it and try again.",
   'where.noUsZip': "We couldn't find a US zip where you are. Type your town or zip instead.",
@@ -570,6 +580,16 @@ const es: Record<MessageKey, string> = {
   'map.caption':
     '{events} en {areas}, de todo tipo, en los próximos {days} días (los filtros de arriba cambian la lista, no el mapa). Cada hexágono mide unos pocos kilómetros cuadrados y nunca es una dirección.',
   'map.credit': 'Datos del mapa de calles © colaboradores de {osm}.',
+  'map.tapToZoom': 'Toca un hexágono para ver sus eventos en el mapa.',
+  'map.zoomIn': 'Acercar',
+  'map.allAreas': 'Volver a todas las zonas',
+  'map.zoomCaption':
+    '{events} en esta zona en los próximos {days} días. Un punto sólido es el lugar exacto; un punto claro marca solo su cuadra.',
+  'map.zoomCaptionNamed':
+    '{events} en esta zona ({name}) en los próximos {days} días. Un punto sólido es el lugar exacto; un punto claro marca solo su cuadra.',
+  'map.zoomEmpty': '<strong>No hay eventos próximos en esta zona.</strong>',
+  'map.unplaced': 'En algún lugar de esta zona',
+  'map.dotTitle': 'Punto {n}: {count}',
   'where.unknownZip': 'No encontramos el código postal {zip}. Revísalo e inténtalo de nuevo.',
   'where.noUsZip':
     'No encontramos un código postal de EE. UU. donde estás. Escribe tu ciudad o código postal.',

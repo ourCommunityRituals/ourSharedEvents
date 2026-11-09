@@ -23,11 +23,13 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 import { handleCreateEvent, handleUpdateEvent, type EventsEnv } from '../src/handlers/events';
+import { cellToLatLng, latLngToCell } from 'h3-js';
 import {
   lookUpEventPlace,
   runEventPlaceBackfill,
   PLACE_BACKFILL_MAX,
 } from '../src/lib/event-place';
+import { MAP_H, MAP_W, frameForCells, project } from '../src/lib/street-map';
 
 interface TestEnv {
   DB: D1Database;
@@ -88,7 +90,7 @@ function stubGoogle(answer: () => Response): string[] {
 
 const row = (id: string) =>
   E.DB.prepare(
-    'SELECT lat, lon, h3_res7, h3_res9, place_checked_at, location, where_address FROM events WHERE id = ?'
+    'SELECT lat, lon, h3_res7, h3_res9, place_kind, place_checked_at, location, where_address FROM events WHERE id = ?'
   )
     .bind(id)
     .first<Record<string, unknown>>();
@@ -122,11 +124,17 @@ async function update(env: EventsEnv, id: string, body: Record<string, unknown>)
 
 describe('the lookup keeps a spot and nothing wider', () => {
   test('a business or street address is kept, with its coordinates', async () => {
-    for (const types of [['establishment', 'point_of_interest'], ['street_address'], ['premise']]) {
+    for (const [types, kind] of [
+      [['establishment', 'point_of_interest'], 'business'],
+      [['point_of_interest'], 'business'],
+      [['street_address'], 'address'],
+      [['premise'], 'address'],
+      [['intersection'], 'address'],
+    ] as const) {
       const r = await lookUpEventPlace(KEYED, null, 'Rock Island Public House', async () =>
-        spot(types)
+        spot([...types])
       );
-      expect(r, types.join()).toEqual({ found: true, lat: RIPH.lat, lon: RIPH.lng });
+      expect(r, types.join()).toEqual({ found: true, lat: RIPH.lat, lon: RIPH.lng, kind });
     }
   });
 
@@ -183,6 +191,7 @@ describe('saving an event looks its place up once', () => {
     expect(r.lat).toBe(RIPH.lat);
     expect(r.lon).toBe(RIPH.lng);
     expect(r.h3_res7).toBe('872664544ffffff');
+    expect(r.place_kind).toBe('business');
     expect(typeof r.place_checked_at).toBe('string');
   });
 
@@ -193,6 +202,7 @@ describe('saving an event looks its place up once', () => {
     const r = (await row(id))!;
     expect(r.lat).toBeNull();
     expect(r.h3_res7).toBeNull();
+    expect(r.place_kind).toBeNull();
     expect(typeof r.place_checked_at).toBe('string');
   });
 
@@ -225,6 +235,14 @@ describe('saving an event looks its place up once', () => {
     expect(place).toBe('on_map');
     expect(urls).toHaveLength(0);
     expect((await row(id))!.h3_res7).toBe('872664544ffffff');
+    // Not looked up, so no kind: the zoomed map puts it at its block.
+    expect((await row(id))!.place_kind).toBeNull();
+  });
+
+  test('create: a street address is kept as an address, so its dot is a block', async () => {
+    stubGoogle(() => spot(['street_address']));
+    const { id } = await create(KEYED, { title: 'Backyard', location: '1 Home St, Blue Island' });
+    expect((await row(id))!.place_kind).toBe('address');
   });
 
   test('update: a changed place drops the old point and is looked up again', async () => {
@@ -238,7 +256,25 @@ describe('saving an event looks its place up once', () => {
     const r = (await row(id))!;
     expect(r.lat).toBeNull();
     expect(r.h3_res7).toBeNull();
+    expect(r.place_kind).toBeNull();
     expect(r.location).toBe('A bar that is not on any map');
+  });
+
+  test('update: a changed place drops the old kind even when Google is down', async () => {
+    stubGoogle(() => spot(['establishment']));
+    const { id } = await create(KEYED, {
+      title: 'Was a bar',
+      location: 'Rock Island Public House',
+    });
+    expect((await row(id))!.place_kind).toBe('business');
+    vi.restoreAllMocks();
+    stubGoogle(() => new Response('', { status: 503 }));
+    const out = await update(KEYED, id, { location: '1 Home St, Blue Island' });
+    expect(out.place).toBe('not_looked_up');
+    const r = (await row(id))!;
+    expect(r.lat).toBeNull();
+    // The old business kind must not ride along to the new place.
+    expect(r.place_kind).toBeNull();
   });
 
   test('update: the same place text, or another field, costs no lookup', async () => {
@@ -252,6 +288,16 @@ describe('saving an event looks its place up once', () => {
     expect((await row(id))!.h3_res7).toBe('872664544ffffff');
   });
 });
+
+/** Empty the nightly queues other tests may have left, so a run sees only its own rows. */
+async function emptyQueue() {
+  await E.DB.prepare(
+    "UPDATE events SET place_checked_at = 'earlier' WHERE place_checked_at IS NULL"
+  ).run();
+  await E.DB.prepare(
+    "UPDATE events SET place_kind = 'address' WHERE place_kind IS NULL AND lat IS NOT NULL"
+  ).run();
+}
 
 describe('the nightly job looks up older events, each once, a few a night', () => {
   async function seedOld(id: string, overrides: Record<string, unknown> = {}) {
@@ -272,9 +318,7 @@ describe('the nightly job looks up older events, each once, a few a night', () =
 
   test('only upcoming, unarchived, never-checked events with place text are asked', async () => {
     // Empty the queue other tests may have left so this run sees only these rows.
-    await E.DB.prepare(
-      "UPDATE events SET place_checked_at = 'earlier' WHERE place_checked_at IS NULL"
-    ).run();
+    await emptyQueue();
     await seedOld('evt-pl-due');
     await seedOld('evt-pl-past', { start_date: '2001-01-01' });
     await seedOld('evt-pl-archived', { status: 'archived' });
@@ -297,9 +341,7 @@ describe('the nightly job looks up older events, each once, a few a night', () =
     // 25 lookups is the nightly spend this change is held to (about 13 cents at
     // Google's list price); raising it is a cost decision, not a refactor.
     expect(PLACE_BACKFILL_MAX).toBe(25);
-    await E.DB.prepare(
-      "UPDATE events SET place_checked_at = 'earlier' WHERE place_checked_at IS NULL"
-    ).run();
+    await emptyQueue();
     for (let i = 0; i < 30; i++) {
       await seedOld(`evt-pl-cap-${String(i).padStart(2, '0')}`);
     }
@@ -321,6 +363,89 @@ describe('the nightly job looks up older events, each once, a few a night', () =
   });
 });
 
+describe('the nightly job fills the place kind of events placed before kinds were kept', () => {
+  async function seedPlaced(id: string, overrides: Record<string, unknown> = {}) {
+    const v = {
+      start_date: '2099-01-01',
+      place_checked_at: '2026-10-01T00:00:00Z',
+      place_kind: null,
+      ...overrides,
+    };
+    await E.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, is_published, start_date, location,
+         lat, lon, h3_res9, h3_res7, place_kind, place_checked_at, created_at, updated_at)
+       VALUES (?, 'root', ?, ?, 'active', 1, ?, 'Rock Island Public House', 41.65, -87.68,
+         'kept-res9', 'kept-res7', ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind(id, id, id, v.start_date, v.place_kind, v.place_checked_at)
+      .run();
+  }
+
+  test('a business answer stores the kind and never moves the event', async () => {
+    await emptyQueue();
+    await seedPlaced('evt-kind-biz');
+    const urls = stubGoogle(() => spot(['establishment']));
+    const out = await runEventPlaceBackfill(KEYED);
+    expect(urls).toHaveLength(1);
+    expect(out.kinds).toBe(1);
+    const r = (await row('evt-kind-biz'))!;
+    expect(r.place_kind).toBe('business');
+    // Google answered RIPH's point; the stored point and cells stay as they were.
+    expect([r.lat, r.lon, r.h3_res9, r.h3_res7]).toEqual([41.65, -87.68, 'kept-res9', 'kept-res7']);
+    // Filled once: the next night asks nothing.
+    await runEventPlaceBackfill(KEYED);
+    expect(urls).toHaveLength(1);
+  });
+
+  test('an answer that names no spot stores address and keeps the point', async () => {
+    await emptyQueue();
+    await seedPlaced('evt-kind-none');
+    stubGoogle(() => google([]));
+    await runEventPlaceBackfill(KEYED);
+    const r = (await row('evt-kind-none'))!;
+    expect(r.place_kind).toBe('address');
+    expect(r.lat).toBe(41.65);
+  });
+
+  test('Google down leaves the kind open for the next night', async () => {
+    await emptyQueue();
+    await seedPlaced('evt-kind-down');
+    stubGoogle(() => new Response('', { status: 503 }));
+    await runEventPlaceBackfill(KEYED);
+    expect((await row('evt-kind-down'))!.place_kind).toBeNull();
+  });
+
+  test('events placed from coordinates, past or already kinded are not asked', async () => {
+    await emptyQueue();
+    await seedPlaced('evt-kind-coords', { place_checked_at: null });
+    await seedPlaced('evt-kind-past', { start_date: '2001-01-01' });
+    await seedPlaced('evt-kind-done', { place_kind: 'business' });
+    const urls = stubGoogle(() => spot(['establishment']));
+    await runEventPlaceBackfill(KEYED);
+    expect(urls).toHaveLength(0);
+    expect((await row('evt-kind-coords'))!.place_kind).toBeNull();
+  });
+
+  test('kinds use only what the night has left after never-looked-up events', async () => {
+    await emptyQueue();
+    await seedPlaced('evt-kind-wait');
+    for (let i = 0; i < PLACE_BACKFILL_MAX; i++) {
+      await E.DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, is_published, start_date, location, created_at, updated_at)
+         VALUES (?, 'root', 'q', ?, 'active', 1, '2099-01-01', 'Rock Island Public House', datetime('now'), datetime('now'))`
+      )
+        .bind(`evt-kind-q-${i}`, `q-${i}`)
+        .run();
+    }
+    const urls = stubGoogle(() => google([]));
+    await runEventPlaceBackfill(KEYED);
+    expect(urls).toHaveLength(PLACE_BACKFILL_MAX);
+    expect((await row('evt-kind-wait'))!.place_kind).toBeNull();
+    await runEventPlaceBackfill(KEYED);
+    expect((await row('evt-kind-wait'))!.place_kind).toBe('address');
+  });
+});
+
 describe('the zip search then finds the event', () => {
   test('/?zip=60406 lists an event at Rock Island Public House once its place is found', async () => {
     stubGoogle(() => spot(['establishment', 'point_of_interest']));
@@ -334,5 +459,90 @@ describe('the zip search then finds the event', () => {
     vi.restoreAllMocks();
     const html = await (await SELF.fetch('https://t.test/?zip=60406')).text();
     expect(html).toContain('Zip Night At RIPH');
+  });
+});
+
+describe('a tapped hexagon: /?area= zooms into its events (owner, 2026-11-09)', () => {
+  const CELL = '872664544ffffff';
+  const soon = () => new Date(Date.now() + 12 * 86_400_000).toISOString().slice(0, 10);
+
+  /** The number of the legend row holding this event, and whether its dot is exact. */
+  function dotOf(html: string, name: string): { n: string; exact: string } | null {
+    const n = new RegExp(
+      `<li value="(\\d+)" id="amap-dot-\\d+"[^>]*data-testid="amap-legend-dot">(?:(?!</li>).)*${name}`
+    ).exec(html)?.[1];
+    if (!n) return null;
+    const exact = new RegExp(
+      `<a [^>]*data-testid="amap-dot" data-exact="(\\d)"[^>]*>(?:(?!</a>).)*>${n}</text></a>`
+    ).exec(html)?.[1];
+    return exact ? { n, exact } : null;
+  }
+
+  test('a business sits at its point, a street address at its block centre', async () => {
+    stubGoogle(() => spot(['establishment']));
+    await create(KEYED, {
+      title: 'Zoom Biz Night',
+      location: 'Rock Island Public House',
+      status: 'active',
+      is_published: true,
+      start_date: soon(),
+    });
+    vi.restoreAllMocks();
+    stubGoogle(() => spot(['street_address']));
+    await create(KEYED, {
+      title: 'Zoom Backyard',
+      location: '1 Home St, Blue Island',
+      status: 'active',
+      is_published: true,
+      start_date: soon(),
+    });
+    vi.restoreAllMocks();
+
+    const html = await (await SELF.fetch(`https://t.test/?area=${CELL}`)).text();
+    expect(html).toContain(`data-zoom="${CELL}"`);
+    expect(dotOf(html, 'Zoom Biz Night')?.exact).toBe('1');
+    expect(dotOf(html, 'Zoom Backyard')?.exact).toBe('0');
+
+    // Both were looked up at the same point. The business's dot is on it; the
+    // home's dot is on its res-9 block's centre, and no dot is on its doorstep
+    // except the business's own.
+    const frame = frameForCells([CELL], MAP_W, MAP_H);
+    const at = (lat: number, lng: number) => project(frame, lat, lng).map((v) => v.toFixed(1));
+    const [px, py] = at(RIPH.lat, RIPH.lng);
+    const [bx, by] = at(...cellToLatLng(latLngToCell(RIPH.lat, RIPH.lng, 9)));
+    const hits = [
+      ...html.matchAll(
+        /data-exact="(\d)"[^>]*><title>[^<]*<\/title><circle class="amap-hit" cx="([\d.-]+)" cy="([\d.-]+)"/g
+      ),
+    ].map((m) => `${m[1]}@${m[2]},${m[3]}`);
+    expect(hits).toContain(`1@${px},${py}`);
+    expect(hits).toContain(`0@${bx},${by}`);
+    expect(hits).not.toContain(`0@${px},${py}`);
+  });
+
+  test('the zoomed page keeps the search in its way back, and only that area is listed', async () => {
+    stubGoogle(() => spot(['establishment']));
+    await create(KEYED, {
+      title: 'Zoom Keeps Zip',
+      location: 'Rock Island Public House',
+      status: 'active',
+      is_published: true,
+      start_date: soon(),
+    });
+    vi.restoreAllMocks();
+    const html = await (await SELF.fetch(`https://t.test/?zip=60406&area=${CELL}&x=<b>`)).text();
+    expect(html).toContain('data-testid="amap-back"');
+    expect(html).toMatch(/href="\/\?zip=60406" data-testid="amap-back"/);
+    expect(html).not.toMatch(/(?:\?|&amp;|&)x=/);
+    expect(html).toContain('Zoom Keeps Zip');
+  });
+
+  test('anything but a res-7 cell is ignored: no zoom, never a finer area', async () => {
+    const res9 = latLngToCell(RIPH.lat, RIPH.lng, 9);
+    for (const v of [res9, 'not-a-cell', '41.65,-87.68']) {
+      const html = await (await SELF.fetch(`https://t.test/?area=${encodeURIComponent(v)}`)).text();
+      expect(html, v).not.toContain('data-zoom=');
+      expect(html, v).not.toContain('data-testid="amap-dot"');
+    }
   });
 });

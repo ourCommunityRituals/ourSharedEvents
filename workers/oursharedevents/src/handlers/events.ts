@@ -1284,6 +1284,7 @@ export async function handleUpdateEvent(
           'lon = NULL',
           'h3_res9 = NULL',
           'h3_res7 = NULL',
+          'place_kind = NULL',
           'place_checked_at = NULL'
         );
       }

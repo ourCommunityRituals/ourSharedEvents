@@ -64,7 +64,9 @@ import {
   type WhenOption,
 } from './event-discovery.js';
 import { renderEventCard } from './event-list.js';
-import { renderAttendeeMap } from './attendee-map.js';
+import { renderAttendeeMap, type ZoomEvent } from './attendee-map.js';
+import { getResolution, isValidCell } from 'h3-js';
+import { CORRIDOR_RES } from './h3-tagging.js';
 import type { StreetLayer } from './street-map.js';
 import { toPublicEvent } from './public-event-projection.js';
 import { msg } from './i18n/catalog.js';
@@ -84,6 +86,8 @@ export interface LandingAreaItem {
   event_type_id?: unknown;
   h3_res7?: unknown;
   endDateISO?: unknown;
+  /** Migration 0105: where the zoomed map puts the dot (lib/attendee-map). */
+  place_kind?: unknown;
 }
 
 // ── Configured defaults (named, not hardcoded at the call site) ─────────────────
@@ -212,6 +216,59 @@ export function renderEmptyLandingArea(lang: Lang = DEFAULT_LANG): RenderedLandi
   };
 }
 
+/** The landing's search parameters a zoom keeps, and the parameter that zooms. */
+const KEPT_PARAMS = ['where', 'zip', 'nozip'] as const;
+export const AREA_PARAM = 'area';
+
+/**
+ * The landing's zoom links (owner, 2026-11-09). `cell` is the `?area=` value
+ * when it is a valid res-7 cell, else null (any other value is ignored, so a
+ * finer cell can never narrow the map). `href(cell)` opens an area zoomed in and
+ * `href()` is the way back; both keep the visitor's search. Only the search
+ * parameters are carried, so nothing else in the address is reflected.
+ */
+export function landingZoom(
+  url: URL | null,
+  base: string
+): { cell: string | null; href: (cell?: string) => string } {
+  const keep = new URLSearchParams();
+  for (const k of KEPT_PARAMS) {
+    const v = url?.searchParams.get(k);
+    if (v != null) keep.set(k, v);
+  }
+  const raw = url?.searchParams.get(AREA_PARAM) ?? '';
+  const cell =
+    raw && isValidCell(raw) && getResolution(raw) === CORRIDOR_RES ? raw.toLowerCase() : null;
+  const href = (c?: string) => {
+    const q = new URLSearchParams(keep);
+    if (c) q.set(AREA_PARAM, c);
+    const s = q.toString();
+    return s ? `${base}?${s}` : base;
+  };
+  return { cell, href };
+}
+
+/** Zoomed in on an area with no upcoming event: say so, and the way back. */
+function renderEmptyZoom(
+  zoom: { cell: string; backHref: string },
+  now: Date,
+  lang: Lang
+): RenderedLandingArea {
+  const map = renderAttendeeMap([], {
+    now: now.getTime(),
+    lang,
+    zoom: { cell: zoom.cell, backHref: zoom.backHref, events: [] },
+  });
+  return {
+    html: `<div class="area" data-testid="area">${map.html}</div>`,
+    types: [],
+    windowCount: 0,
+    defaultView: 'map',
+    leadsWithMap: true,
+    mapCells: [],
+  };
+}
+
 // ── main ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -235,6 +292,10 @@ export function renderLandingArea(
     lang?: Lang;
     /** The street map under the hexagons, drawn for `mapCells` of a first pass. */
     streets?: StreetLayer | null;
+    /** Each hexagon links here to open its area zoomed in (owner, 2026-11-09). */
+    zoomHref?: (cell: string) => string;
+    /** Zoomed in on one res-7 area: only its events, the map shows their dots. */
+    zoom?: { cell: string; backHref: string };
   }
 ): RenderedLandingArea {
   const lang = opts?.lang ?? DEFAULT_LANG;
@@ -245,12 +306,18 @@ export function renderLandingArea(
   // Forward-looking: wrapped events belong on /events + the event page, not on
   // the "what's coming together" surface. phase is authoritative.
   // Upcoming first, soonest first, undated last (OSE-1520), as on /events.
-  const live = orderUpcomingFirst(items.filter((e) => str(e.phase) !== 'post_event')).upcoming;
-  if (live.length === 0) return renderEmptyLandingArea(lang);
+  const zoom = opts?.zoom;
+  const live = orderUpcomingFirst(
+    items.filter((e) => str(e.phase) !== 'post_event' && (!zoom || str(e.h3_res7) === zoom.cell))
+  ).upcoming;
+  if (live.length === 0)
+    return zoom ? renderEmptyZoom(zoom, now, lang) : renderEmptyLandingArea(lang);
 
   const typeMap = new Map<string, string>(); // slug → label
   const modalities = new Set<string>();
   let windowCount = 0;
+  // Zoomed in: each event's place and filter classes, for its dot.
+  const zoomEvents: ZoomEvent[] = [];
   // Windows that hold at least one listed event. The rest get a message.
   const filledWindows = new Set<string>();
 
@@ -267,12 +334,20 @@ export function renderLandingArea(
       typeMap.set(typeSlug, typeLabel);
       const modality = modalityOf(e);
       modalities.add(modality);
+      const classes = [...windows, typeSlug, 'product-ose', `modality-${modality}`];
+      if (zoom) {
+        zoomEvents.push({
+          ...toPublicEvent(e as Record<string, unknown>),
+          place_kind: e.place_kind,
+          classes,
+        });
+      }
 
       return renderEventCard(
         { ...e, venue: str(e.venue) || str(e.location) },
         {
           variant: 'landing',
-          extraClasses: [...windows, typeSlug, 'product-ose', `modality-${modality}`],
+          extraClasses: classes,
           sponsorTitle: opts?.sponsorTitles?.get(str(e.id)),
           venueFallback: modality === 'online' ? msg(lang, 'area.online') : '',
           lang,
@@ -288,7 +363,8 @@ export function renderLandingArea(
   // Once the area has been recorded at LIST_MAX (nightly, lib/corridor-latch) it
   // keeps leading with the map while it has anything to show.
   const areaLatched = opts?.areaLatched === true && windowCount > 0;
-  const leadsWithMap = windowCount >= LIST_MAX || areaLatched;
+  // A zoom was asked for with a tap: it opens on the map.
+  const leadsWithMap = windowCount >= LIST_MAX || areaLatched || zoom !== undefined;
   const defaultView: 'list' | 'map' = leadsWithMap ? 'map' : 'list';
 
   // The map is drawn from the same `live` set as the cards, at corridor (res-7)
@@ -305,6 +381,8 @@ export function renderLandingArea(
       sponsorTitles: opts?.sponsorTitles,
       lang,
       streets: opts?.streets,
+      zoomHref: opts?.zoomHref,
+      zoom: zoom && { cell: zoom.cell, backHref: zoom.backHref, events: zoomEvents },
     }
   );
   const mapHtml = map.html;
@@ -361,6 +439,14 @@ function chipRules(id: string): string {
   );
 }
 
+/**
+ * A filter pill's hide rule: the cards, and the zoomed map's dots and list rows
+ * (`.amap-f`, lib/attendee-map), that lack the chosen class.
+ */
+function hide(id: string, cls: string): string {
+  return `#${id}:checked ~ .area .event-card:not(.${cls}),#${id}:checked ~ .area .amap-f:not(.${cls}){display:none}`;
+}
+
 function buildAreaMarkup(args: {
   cards: string;
   types: { slug: string; label: string }[];
@@ -396,9 +482,7 @@ function buildAreaMarkup(args: {
   const rules: string[] = [];
   for (const id of ['view-list', 'view-map']) rules.push(chipRules(id));
   for (const w of LANDING_WINDOWS) {
-    rules.push(
-      chipRules(`win-${w}`) + `#win-${w}:checked ~ .area .event-card:not(.when-${w}){display:none}`
-    );
+    rules.push(chipRules(`win-${w}`) + hide(`win-${w}`, `when-${w}`));
   }
   // An empty window's message is written by the server and shown by the same
   // radio that hides the cards, so the choice still never leaves the device.
@@ -408,26 +492,15 @@ function buildAreaMarkup(args: {
   }
   if (mixedModality) {
     rules.push(chipRules('mod-all'));
-    rules.push(
-      chipRules('mod-online') +
-        '#mod-online:checked ~ .area .event-card:not(.modality-online){display:none}'
-    );
-    rules.push(
-      chipRules('mod-inperson') +
-        '#mod-inperson:checked ~ .area .event-card:not(.modality-inperson){display:none}'
-    );
+    rules.push(chipRules('mod-online') + hide('mod-online', 'modality-online'));
+    rules.push(chipRules('mod-inperson') + hide('mod-inperson', 'modality-inperson'));
   }
   const winStyle = `<style data-testid="area-window-css">\n${rules.join('\n')}\n</style>`;
   // Type pills are dynamic, so their rules are too.
   const typeCss = showTypes
-    ? [
-        chipRules('type-all'),
-        ...types.map(
-          (t) =>
-            chipRules(t.slug) +
-            `#${t.slug}:checked ~ .area .event-card:not(.${t.slug}){display:none}`
-        ),
-      ].join('\n')
+    ? [chipRules('type-all'), ...types.map((t) => chipRules(t.slug) + hide(t.slug, t.slug))].join(
+        '\n'
+      )
     : '';
   const typeStyle = showTypes ? `<style data-testid="area-type-css">\n${typeCss}\n</style>` : '';
 
