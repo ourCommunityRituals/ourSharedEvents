@@ -172,8 +172,13 @@ describe('categoryByTypeId', () => {
     expect(map.get('etr-rec-bocce')).toEqual({ code: 'REC', name: 'Sports', order: 0 });
     expect(map.get('etr-art-music')).toEqual({ code: 'ART', name: 'Arts', order: 1 });
     expect(map.get('etr-art-gallery')).toEqual({ code: 'ART', name: 'Arts', order: 1 });
-    expect(map.get('etr-zzz')).toEqual({ code: OTHER_CATEGORY_CODE, name: 'Other', order: 2 });
+    expect(map.get('etr-zzz')).toEqual({ code: 'OTHER', name: 'Other', order: 2 });
     expect(map.size).toBe(4);
+  });
+
+  it('the "Other" bucket is code OTHER, the value the admin picker API returns', () => {
+    // A literal, not the constant compared with itself: mutated, both sides move.
+    expect(OTHER_CATEGORY_CODE).toBe('OTHER');
   });
 
   it('an empty catalog is an empty map', () => {
@@ -199,7 +204,7 @@ describe('buildEventTypeCatalog grouping', () => {
       t('o2', 'Yodel', 'NOPE'),
       t('o1', 'Banjo', null),
     ]);
-    expect(cat.categories.map((c) => c.code)).toEqual(['ART', OTHER_CATEGORY_CODE]);
+    expect(cat.categories.map((c) => c.code)).toEqual(['ART', 'OTHER']);
     expect(cat.categories[0].types.map((x) => x.name)).toEqual([
       'Accordion Hour',
       'Mime',
@@ -459,7 +464,7 @@ describe('buildEventTypeCatalog keeps only active rows', () => {
 
   it('an inactive category is left out and its types count as orphans', () => {
     const cat = buildEventTypeCatalog([{ ...CATS[0], is_active: 0 }, CATS[1]], TYPES);
-    expect(cat.categories.map((c) => c.code)).toEqual(['REC', OTHER_CATEGORY_CODE]);
+    expect(cat.categories.map((c) => c.code)).toEqual(['REC', 'OTHER']);
     expect(cat.orphans).toBe(2);
   });
 });

@@ -77,8 +77,8 @@ export function buildEventTypeCatalog(
 ): EventTypeCatalog {
   const byCode = new Map<string, CatalogCategory>();
   const ordered = categories
+    // filter() returns a new array, so the sort never touches the caller's rows.
     .filter((c) => c.is_active === undefined || c.is_active === 1)
-    .slice()
     .sort(
       (a, b) => a.display_order - b.display_order || a.category_code.localeCompare(b.category_code)
     );
