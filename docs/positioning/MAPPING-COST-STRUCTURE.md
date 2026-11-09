@@ -82,7 +82,7 @@ share one load, so the real figure is lower.
    event. Each dot links to its event, or to its row in the list when it holds
    several. The type, date and where pills filter the dots as they filter the cards,
    still with no JavaScript. **Where a dot sits:** a place the lookup named a
-   business or landmark (`events.place_kind = 'business'`, migration 0105) at its
+   business or landmark (`events.place_kind = 'business'`, migration 0106) at its
    exact point; anything else, which can be a home, at the centre of its res-9 cell
    (about one block). A missing kind is drawn as a block. Only a res-7 cell is
    accepted; anything finer is ignored.

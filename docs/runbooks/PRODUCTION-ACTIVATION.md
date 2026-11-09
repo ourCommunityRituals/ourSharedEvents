@@ -31,7 +31,7 @@ repo on 2026-10-12; check a line against the file it names before relying on it.
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `docs/runbooks/RUNBOOK-DEPLOYMENT.md`               | has the first-launch one-time steps; read it against the deploy before activation         |
 | `docs/runbooks/ROLLBACK.md`, `DISASTER-RECOVERY.md` | rewritten; **no command on them has been run**, and a staging restore drill is still owed |
-| `docs/runbooks/PRODUCTION-MIGRATION-PLAN.md`        | covers migrations 0078 to 0104                                                            |
+| `docs/runbooks/PRODUCTION-MIGRATION-PLAN.md`        | covers migrations 0078 to 0106                                                            |
 | Threat ledger, brain, ADRs                          | follow the code; the brain was brought up to date in OCR-docs#163                         |
 
 ## Not built, or not yet decided

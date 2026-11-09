@@ -94,7 +94,7 @@ export interface LandingAreaItem {
   event_type_id?: unknown;
   h3_res7?: unknown;
   endDateISO?: unknown;
-  /** Migration 0105: where the zoomed map puts the dot (lib/attendee-map). */
+  /** Migration 0106: how the zoomed map marks the dot (lib/attendee-map). */
   place_kind?: unknown;
 }
 

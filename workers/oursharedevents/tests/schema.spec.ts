@@ -141,11 +141,11 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // 35 (pre-0051) + 3 (migration 0051: who_story, who_image_url,
   // what_video_url — OSE-664 rich WHO/WHAT authoring) = 38.
   // + 1 (migration 0052: data_class — OSE-606/608 demo data class) = 39.
-  events: 51, // 0105 place_kind (zoomed map dots); 0104 venue_canonical_id + event_correlation_id (OSE-1615); 0070 is_published; 0072 what_url; 0074 what_url_enabled + what_url_type (R3); 0075 created_by; 0078 starts_at (OSE-1313); 0085 settings_json (OSE-869); 0093 listed_from (publish grace); 0099 place_checked_at (zip search)
+  events: 51, // 0106 place_kind (zoomed map dots); 0104 venue_canonical_id + event_correlation_id (OSE-1615); 0070 is_published; 0072 what_url; 0074 what_url_enabled + what_url_type (R3); 0075 created_by; 0078 starts_at (OSE-1313); 0085 settings_json (OSE-869); 0093 listed_from (publish grace); 0099 place_checked_at (zip search)
   // OSE-799 A2 (0065-0067): `sponsors` (32) retired → split into three tables.
   // sponsor_business: id, brand_id, name, website_url, business_type, lat, lon,
   //   h3_res9, h3_res7, created_at, updated_at = 11.
-  sponsor_business: 17, // +is_active (0068 — lifecycle lives on the business); +tier (0081, OSE-1316); +display_name/address_line/contact_phone/contact_email (0083 — public card)
+  sponsor_business: 19, // +is_active (0068 — lifecycle lives on the business); +tier (0081, OSE-1316); +display_name/address_line/contact_phone/contact_email (0083 — public card); +header_image_url/header_text (0105, OSE-1826)
   // sponsor_asset: id, sponsor_business_id, format, url, content_type, focal_x,
   //   focal_y, crop_rect, validated_at, created_at, updated_at = 11.
   sponsor_asset: 11, // 0081 rebuilds it (CHECK += logo_compact), same 11 columns

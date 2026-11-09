@@ -1323,7 +1323,16 @@ body {
         if (!strip) return;
         strip.setAttribute('aria-busy', 'false');
         if (!Array.isArray(sponsors) || !sponsors.length) { strip.innerHTML = ''; return; }
-        strip.innerHTML = '<div class="poster-sponsor-label" data-testid="poster-sponsor-label">Sponsored By</div>' +
+        // OSE-1826 (owner 2026-11-09): on the digital poster each sponsor gets a
+        // header block: its header image full width, then its logo and name,
+        // then its short text, all from the sponsor's own settings. A sponsor
+        // with neither shows its logo and name as before. The image loads only
+        // through the consent-gated proxy (?slot=header), never from the
+        // sponsor's host. Same block for every tier (WALL-3b). Print keeps the
+        // compact row of logos: the sheet has half an inch for sponsors.
+        const digital = KIND === 'digital';
+        strip.classList.toggle('sponsor-panel', digital);
+        strip.innerHTML = '<div class="' + (digital ? 'sponsor-panel-label' : 'poster-sponsor-label') + '" data-testid="poster-sponsor-label">Sponsored By</div>' +
           sponsors.map(function(s) {
             // OSE-R-015 (2026-05-15): referrerpolicy + data-hide-on-error.
             // 0083: logo via the same-origin proxy (external URLs are CSP-
@@ -1335,7 +1344,18 @@ body {
             // data-tier retained for rotation/frequency-share identity only; NO
             // poster-sponsor--<tier> class — #25 forbids tier-keyed geometry (OSE-864).
             const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
-            return '<div class="poster-sponsor" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(title) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(title) + '</span></div>';
+            const identity = logo + '<span class="' + (digital ? 'sponsor-panel-name' : 'poster-sponsor-name') + '" data-testid="poster-sponsor-name">' + esc(title) + '</span>';
+            if (!digital) {
+              return '<div class="poster-sponsor" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(title) + '">' + identity + '</div>';
+            }
+            const headerText = String(s.header_text == null ? '' : s.header_text).trim();
+            return '<div class="sponsor-panel-block" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(title) + '">' +
+              (s.has_header_image === true
+                ? '<img class="sponsor-panel-header" src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo?slot=header" alt="" referrerpolicy="no-referrer" data-testid="poster-sponsor-header">'
+                : '') +
+              '<div class="sponsor-panel-id">' + identity + '</div>' +
+              (headerText ? '<p class="sponsor-panel-text" data-testid="poster-sponsor-text">' + esc(headerText) + '</p>' : '') +
+              '</div>';
           }).join('');
         rotatePosterSponsors(strip);
       }
@@ -1751,6 +1771,12 @@ body {
             var box = el.closest('.poster-art');
             if (box) box.remove();
             if (typeof relayoutPoster === 'function') relayoutPoster();
+            return;
+          }
+          // OSE-1826: a sponsor header image that fails drops out; the logo,
+          // name and text below it still make the block.
+          if (el && el.tagName === 'IMG' && el.classList.contains('sponsor-panel-header')) {
+            el.remove();
             return;
           }
           if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {

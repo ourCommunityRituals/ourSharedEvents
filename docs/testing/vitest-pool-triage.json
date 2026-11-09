@@ -2088,6 +2088,13 @@
       "testCount": 23
     },
     {
+      "file": "workers/oursharedevents/tests/poster-sponsor-header.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 15
+    },
+    {
       "file": "workers/oursharedevents/tests/poster-sponsor.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -3033,6 +3040,13 @@
       "testCount": 10
     },
     {
+      "file": "workers/oursharedevents/tests/sponsor-header-block.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, env.DB",
+      "testCount": 14
+    },
+    {
       "file": "workers/oursharedevents/tests/sponsor-home-less-text.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -3079,7 +3093,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 21
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/sponsor-public-card.spec.ts",

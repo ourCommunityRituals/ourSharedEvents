@@ -9,9 +9,14 @@
  *
  * No seeded data: the poster's one data call (the poster-bundle) is answered here.
  *
+ * OSE-1826 adds the sponsor's header block: the header image full width, the
+ * text under the logo and name, the small "Sponsored by" label, the fallback.
+ *
  * @born-red OSE-1825 | method: run against the pre-change template (no
  * poster-details block) and with the share-link min-height planted at 30px
  * | date: 2026-11-09
+ * @born-red OSE-1826 | method: run against the parent commit's template (no
+ * sponsor block) | date: 2026-11-09
  */
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -19,7 +24,25 @@ import AxeBuilder from '@axe-core/playwright';
 const EVT = 'evt-poster-actions-1825';
 const ADDRESS = '13001 S Western Ave, Blue Island, IL 60406';
 
-async function load(page: Page, kind: 'digital' | 'print' = 'digital') {
+const BAKERY = {
+  id: 'sp1',
+  name: 'Western Ave Bakery',
+  title: 'Western Ave Bakery',
+  tier: 'bronze',
+  has_header_image: true,
+  header_text: 'Fresh bread every morning, two blocks from the square.',
+};
+const HEADER_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400"><rect width="1200" height="400" fill="#7a4"/></svg>';
+
+async function load(
+  page: Page,
+  kind: 'digital' | 'print' = 'digital',
+  sponsors: Record<string, unknown>[] = [{ id: 'sp1', name: 'Western Ave Bakery', tier: 'primary' }]
+) {
+  await page.route('**/api/v2/sponsors/sp1/logo?slot=header', (route) =>
+    route.fulfill({ contentType: 'image/svg+xml', body: HEADER_SVG })
+  );
   await page.setViewportSize({ width: 375, height: 812 });
   await page.route(`**/api/v2/events/${EVT}/poster-bundle`, (route) =>
     route.fulfill({
@@ -35,7 +58,7 @@ async function load(page: Page, kind: 'digital' | 'print' = 'digital') {
           starts_at: '2026-11-11T23:00:00.000Z',
           timezone: 'America/Chicago',
         },
-        sponsors: [{ id: 'sp1', name: 'Western Ave Bakery', tier: 'primary' }],
+        sponsors,
         slots: [],
       }),
     })
@@ -153,16 +176,89 @@ test.describe('OSE-1825 digital poster: When / Where / Share at 375px', () => {
     await expect(page.locator('[data-testid="poster-meta"] a')).toHaveCount(0);
   });
 
+  test('OSE-1826: the sponsor gets a header block: the image full width, then logo, name and text', async ({
+    page,
+  }) => {
+    await load(page, 'digital', [BAKERY]);
+    const item = page.getByTestId('poster-sponsor-item');
+    const header = page.getByTestId('poster-sponsor-header');
+    await expect(header).toBeVisible();
+    await page.waitForFunction(() => {
+      const i = document.querySelector('[data-testid="poster-sponsor-header"]') as HTMLImageElement;
+      return i && i.complete && i.naturalWidth > 0;
+    });
+    const ib = await item.boundingBox();
+    const hb = await header.boundingBox();
+    // Full width of the block (less its 1px border), about 3:1.
+    expect(hb!.width).toBeGreaterThanOrEqual(ib!.width - 3);
+    expect(hb!.width / hb!.height).toBeGreaterThan(2.8);
+    expect(hb!.width / hb!.height).toBeLessThan(3.2);
+    await expect(page.getByTestId('poster-sponsor-text')).toHaveText(BAKERY.header_text);
+    // The label is small next to the sponsor's own name: @ocr/ui's sponsor
+    // panel sets it at the 13px text floor, the smallest the fleet renders.
+    const sizes = await page.evaluate(() => {
+      const fs = (id: string) =>
+        parseFloat(getComputedStyle(document.querySelector(`[data-testid="${id}"]`)!).fontSize);
+      return { label: fs('poster-sponsor-label'), name: fs('poster-sponsor-name') };
+    });
+    expect(sizes.label).toBe(13);
+    expect(sizes.label).toBeLessThan(sizes.name);
+    // Placement: below the title, above the When / Where block.
+    const title = await page.getByTestId('poster-title').boundingBox();
+    const when = await page.getByTestId('poster-meta-date').boundingBox();
+    expect(ib!.y).toBeGreaterThan(title!.y + title!.height - 1);
+    expect(ib!.y + ib!.height).toBeLessThanOrEqual(when!.y + 1);
+    const over = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(over).toBeLessThanOrEqual(1);
+  });
+
+  test('OSE-1826: an unconfigured sponsor falls back to logo and name; a dead header image drops out', async ({
+    page,
+  }) => {
+    await load(page, 'digital', [{ id: 'sp2', name: 'Plain Hardware', tier: 'primary' }]);
+    await expect(page.getByTestId('poster-sponsor-name')).toHaveText('Plain Hardware');
+    await expect(page.getByTestId('poster-sponsor-header')).toHaveCount(0);
+    await expect(page.getByTestId('poster-sponsor-text')).toHaveCount(0);
+
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await page.route('**/api/v2/sponsors/sp1/logo?slot=header', (route) =>
+      route.fulfill({ status: 404, body: '' })
+    );
+    await page.route(`**/api/v2/events/${EVT}/poster-bundle`, (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          event: {
+            id: EVT,
+            name: 'Uptown Blue Island',
+            venue: 'Uptown Blue Island',
+            startDateISO: '2026-11-11',
+          },
+          sponsors: [BAKERY],
+          slots: [],
+        }),
+      })
+    );
+    await page.goto(`/events/${EVT}/poster?kind=digital`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('poster-sponsor-name')).toHaveText('Western Ave Bakery');
+    await expect(page.getByTestId('poster-sponsor-header')).toHaveCount(0);
+    await expect(page.getByTestId('poster-sponsor-text')).toBeVisible();
+  });
+
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`axe WCAG 2.1 AA, ${colorScheme}, links open: nothing serious`, async ({ page }) => {
       await page.emulateMedia({ colorScheme });
       await page.addInitScript(() => {
         delete (Navigator.prototype as unknown as { share?: unknown }).share;
       });
-      await load(page);
+      await load(page, 'digital', [BAKERY]);
       await page.getByTestId('poster-share-btn').click();
       const results = await new AxeBuilder({ page })
         .include('[data-testid="poster-meta"]')
+        .include('[data-testid="poster-sponsor-strip"]')
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
         .analyze();
       const serious = results.violations.filter(
