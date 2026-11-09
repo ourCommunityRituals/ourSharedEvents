@@ -71,6 +71,7 @@ import {
 } from './event-discovery.js';
 import { renderEventCard } from './event-list.js';
 import { renderAttendeeMap, type ZoomEvent } from './attendee-map.js';
+import type { PlaceLinks } from './map-place-links.js';
 import { getResolution, isValidCell } from 'h3-js';
 import { CORRIDOR_RES } from './h3-tagging.js';
 import type { StreetLayer } from './street-map.js';
@@ -318,6 +319,10 @@ export function renderLandingArea(
     zoomHref?: (cell: string) => string;
     /** Zoomed in on one res-7 area: only its events, the map shows their dots. */
     zoom?: { cell: string; backHref: string };
+    /** Zoomed in: each event's direct links and share code, for its panel card. */
+    placeLinks?: ReadonlyMap<string, PlaceLinks>;
+    /** Zoomed in: the site's origin, for the link a Share button carries. */
+    origin?: string;
   }
 ): RenderedLandingArea {
   const lang = opts?.lang ?? DEFAULT_LANG;
@@ -402,6 +407,8 @@ export function renderLandingArea(
       lang,
       streets: opts?.streets,
       zoomHref: opts?.zoomHref,
+      placeLinks: opts?.placeLinks,
+      origin: opts?.origin,
       // Zoomed in: each event's place and filter classes, for its dot.
       zoom: zoom && {
         cell: zoom.cell,

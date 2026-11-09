@@ -183,6 +183,32 @@
       .disc-clear { color: var(--text); text-decoration: underline; }
       .disc-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); padding: 0; margin: 0 0.25rem 0 0; align-self: center; }
       .disc-summary { font-size: 0.95rem; color: var(--text-muted); margin: 0 0 0.75rem; }
+      /* The map's place panel (owner 2026-11-09): the card's buttons in a grid,
+         phone first. "Open event" across the top, the rest two to a row with
+         12px between, 48px tall; a lone last button takes the row. Wider
+         screens fit them on one row where they can. */
+      .event-card .amap-acts { position: relative; z-index: 3; flex: 1 1 100%; display: grid; grid-template-columns: 1fr 1fr; gap: var(--tap-gap, 12px); }
+      .event-card .amap-acts .cta { width: 100%; min-height: 48px; box-sizing: border-box; white-space: normal; text-align: center; font: inherit; font-weight: 600; border: 0; cursor: pointer; }
+      .event-card .amap-acts .cta:first-child, .event-card .amap-acts > :last-child:nth-child(even) { grid-column: 1 / -1; }
+      .event-card .amap-acts .ose-share-btn:focus-visible { outline: 3px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }
+      @media (min-width: 600px) {
+        .event-card .amap-acts { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+        .event-card .amap-acts .cta:first-child, .event-card .amap-acts > :last-child:nth-child(even) { grid-column: auto; }
+      }
+      /* The place panels themselves (lib/map-place-panel.ts): hidden until
+         their dot is tapped; the tapped place's target sits at the top of the
+         map, so the map stays on screen with the panel under it. */
+      .amap-wrap { position: relative; }
+      .amap-t { position: absolute; top: 0; left: 0; width: 1px; height: 1px; }
+      .amap-p { display: none; margin-top: 1rem; padding-top: 0.75rem; border-top: 3px solid var(--accent); }
+      .amap-t:target + .amap-p { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+      .amap-wrap:has(.amap-t:target) .amap-legend, .amap-wrap:has(.amap-t:target) [data-testid="amap-unplaced"] { display: none; }
+      .amap-ph { font-size: 1.25rem; margin: 0; color: var(--text); }
+      .amap-pm { font-size: 0.95rem; color: var(--text-muted); margin: 0; }
+      .amap-pn { display: grid; grid-template-columns: 1fr 1fr; gap: var(--tap-gap, 12px); }
+      .amap-pn .disc-chip { justify-content: center; color: var(--text); }
+      .amap-all { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent-text, var(--accent)); }
+      .amap svg a:focus-visible .amap-dot { stroke: var(--focus-ring, var(--text)); stroke-width: 6; }
       .empty-state,
       .near-empty,
       .map-placeholder {

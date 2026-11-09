@@ -150,6 +150,12 @@ export const MAP_STYLE =
 // gives each source file one 400-char inline budget, and MAP_STYLE uses this one.
 export { ZOOM_STYLE } from './map-zoom-style.js';
 import { ZOOM_STYLE } from './map-zoom-style.js';
+import {
+  renderPlacePanels,
+  type PanelEvent,
+  type PanelOptions,
+  type PanelPlace,
+} from './map-place-panel.js';
 
 /** Touch target round a dot, in map units: 44 px on a 343 px wide phone map. */
 const DOT_HIT_R = 39;
@@ -405,7 +411,7 @@ export interface MapDot {
   n: number;
   lat: number;
   lng: number;
-  /** True at a business's own point; false at the centre of its res-9 block. */
+  /** True when every event here is at a business (drawn solid, named). Always the block centre. */
   exact: boolean;
   events: { id: string; name: string; classes: string[] }[];
 }
@@ -439,18 +445,15 @@ export function mapDots(
       unplaced.push(ev);
       continue;
     }
-    const exact = e.place_kind === 'business';
-    let at: [number, number];
-    let key: string;
-    if (exact) {
-      at = [lat, lon];
-      key = `p:${lat.toFixed(5)},${lon.toFixed(5)}`;
-    } else {
-      const block = latLngToCell(lat, lon, NODE_RES);
-      at = cellToLatLng(block);
-      key = `b:${block}`;
-    }
-    const dot = byKey.get(key) ?? { lat: at[0], lng: at[1], exact, events: [] };
+    // Place, not person (AGENTS.md invariant 3; owner 2026-11-09, epic OSE-1880):
+    // every place sits at its res-9 block centre, a business too. A business is
+    // marked (solid dot, named in its panel), never pinpointed.
+    const business = e.place_kind === 'business';
+    const block = latLngToCell(lat, lon, NODE_RES);
+    const at = cellToLatLng(block);
+    const key = `b:${block}`;
+    const dot = byKey.get(key) ?? { lat: at[0], lng: at[1], exact: true, events: [] };
+    dot.exact = dot.exact && business;
     dot.events.push(ev);
     byKey.set(key, dot);
   }
@@ -466,10 +469,9 @@ function dotClasses(events: { classes: string[] }[]): string {
   return [...new Set(events.flatMap((e) => e.classes))].join(' ');
 }
 
-function dotHref(d: MapDot, lang: Lang): string {
-  return d.events.length === 1
-    ? withLangPrefix(lang, `/events/${escapeHtml(d.events[0]!.id)}`)
-    : `#amap-dot-${d.n}`;
+/** Every dot opens its place panel under the map (lib/map-place-panel.ts). */
+function dotHref(d: MapDot): string {
+  return `#amap-dot-${d.n}`;
 }
 
 function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets?: string): string {
@@ -486,9 +488,9 @@ function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets?: string): st
         d.events.length === 1
           ? d.events[0]!.name
           : fmt(lang, 'map.dotTitle', { n: d.n, count: eventCount(d.events.length, lang) });
-      const cls = `amap-f${d.exact ? '' : ' amap-blk'} ${dotClasses(d.events)}`.trim();
+      const cls = `amap-f amap-d${d.n}${d.exact ? '' : ' amap-blk'} ${dotClasses(d.events)}`.trim();
       return (
-        `<a href="${dotHref(d, lang)}" class="${escapeHtml(cls)}" data-testid="amap-dot" data-exact="${d.exact ? 1 : 0}" data-count="${d.events.length}">` +
+        `<a href="${dotHref(d)}" class="${escapeHtml(cls)}" data-testid="amap-dot" data-exact="${d.exact ? 1 : 0}" data-count="${d.events.length}">` +
         `<title>${escapeHtml(title)}</title>` +
         `<circle class="amap-hit" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_HIT_R}"/>` +
         `<circle class="amap-dot" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_R}"/>` +
@@ -498,7 +500,7 @@ function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets?: string): st
     })
     .join('');
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="amap-caption" data-testid="amap-svg">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="group" aria-labelledby="amap-caption" data-testid="amap-svg">` +
     `${streets ?? ''}<polygon class="amap-zone" points="${ring}" data-testid="amap-zone" data-cell="${cell}"/>${marks}</svg>`
   );
 }
@@ -516,13 +518,13 @@ function zoomLegend(
   const rows = dots
     .map(
       (d) =>
-        `<li value="${d.n}" id="amap-dot-${d.n}" class="${escapeHtml(`amap-f ${dotClasses(d.events)}`.trim())}" data-testid="amap-legend-dot">${row(d.events)}</li>`
+        `<li value="${d.n}" class="${escapeHtml(`amap-f ${dotClasses(d.events)}`.trim())}" data-testid="amap-legend-dot">${row(d.events)}</li>`
     )
     .join('');
   const rest = unplaced.length
     ? `<p class="amap-f ${escapeHtml(dotClasses(unplaced))}" data-testid="amap-unplaced"><strong>${msg(lang, 'map.unplaced')}:</strong> ${row(unplaced)}</p>`
     : '';
-  return `<ol class="amap-legend" data-testid="amap-legend">${rows}</ol>${rest}`;
+  return `<ol class="amap-legend" id="amap-places" data-testid="amap-legend">${rows}</ol>${rest}`;
 }
 
 /** The landing's zoomed area: one hexagon, its streets, a dot per place. */
@@ -531,7 +533,8 @@ function renderZoom(
   now: Date,
   lang: Lang,
   sponsorTitles?: ReadonlyMap<string, string>,
-  streetLayer?: StreetLayer | null
+  streetLayer?: StreetLayer | null,
+  panel?: Pick<PanelOptions, 'placeLinks' | 'origin'>
 ): RenderedAttendeeMap {
   const back = `<p><a class="amap-back" href="${escapeHtml(zoom.backHref)}" data-testid="amap-back">${msg(lang, 'map.allAreas')}</a></p>`;
   const cell = corridorCell(zoom.cell);
@@ -561,13 +564,20 @@ function renderZoom(
         days: CORRIDOR_WINDOW_DAYS,
       })
     : fmt(lang, 'map.zoomCaption', { events, days: CORRIDOR_WINDOW_DAYS });
-  const html = `<figure class="amap" data-testid="amap" data-zoom="${cell}">
+  const byId = new Map(inArea.map((e) => [str(e.id), e]));
+  const places: PanelPlace[] = dots.map((d) => ({
+    n: d.n,
+    business: d.exact,
+    events: d.events.map((ev) => ({ ...(byId.get(ev.id) as PanelEvent), classes: ev.classes })),
+  }));
+  const panels = renderPlacePanels(places, { lang, sponsorTitles, ...panel });
+  const html = `<div class="amap-wrap" data-testid="amap-wrap"><figure class="amap" data-testid="amap" data-zoom="${cell}">
               ${MAP_STYLE}${ZOOM_STYLE}${streets ? STREET_STYLE : ''}
               ${back}
               ${zoomSvg(cell, dots, lang, streets)}
               ${zoomLegend(dots, unplaced, lang, sponsorTitles)}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>${credit}
-            </figure>`;
+            </figure>${panels}</div>`;
   return { html, state: 'map', count: inArea.length, areas: [{ ...area, n: 1 }] };
 }
 
@@ -604,12 +614,20 @@ export function renderAttendeeMap(
     zoomHref?: (cell: string) => string;
     /** The landing, zoomed in on one area: drawn in place of the hexagons. */
     zoom?: AreaZoom;
+    /** Zoomed in: each event's direct links and share code (lib/map-place-links.ts). */
+    placeLinks?: PanelOptions['placeLinks'];
+    /** Zoomed in: the site's origin, for the link a Share button carries. */
+    origin?: string;
   }
 ): RenderedAttendeeMap {
   const lang = opts?.lang ?? DEFAULT_LANG;
   const now = new Date(opts?.now ?? Date.now());
   // A zoom was asked for by a tap, so the area gate does not apply to it.
-  if (opts?.zoom) return renderZoom(opts.zoom, now, lang, opts.sponsorTitles, opts.streets);
+  if (opts?.zoom)
+    return renderZoom(opts.zoom, now, lang, opts.sponsorTitles, opts.streets, {
+      placeLinks: opts.placeLinks,
+      origin: opts.origin,
+    });
   const latched = opts?.latched ?? new Set<string>();
   const all = attendeeMapAreas(items, now, lang).areas;
   const gate = opts?.area;
