@@ -283,6 +283,7 @@ const en = {
   'map.areasOne': '{n} neighborhood',
   'map.caption':
     '{events} in {areas}, every kind, over the next {days} days (the filters above change the list, not the map). Each hexagon is a few square kilometres, never a street address.',
+  'map.credit': 'Street map data © {osm} contributors.',
   // The landing's where-are-you form (lib/landing-where.ts).
   'where.unknownZip': "We couldn't find zip {zip}. Check it and try again.",
   'where.noUsZip': "We couldn't find a US zip where you are. Type your town or zip instead.",
@@ -568,6 +569,7 @@ const es: Record<MessageKey, string> = {
   'map.areasOne': '{n} barrio',
   'map.caption':
     '{events} en {areas}, de todo tipo, en los próximos {days} días (los filtros de arriba cambian la lista, no el mapa). Cada hexágono mide unos pocos kilómetros cuadrados y nunca es una dirección.',
+  'map.credit': 'Datos del mapa de calles © colaboradores de {osm}.',
   'where.unknownZip': 'No encontramos el código postal {zip}. Revísalo e inténtalo de nuevo.',
   'where.noUsZip':
     'No encontramos un código postal de EE. UU. donde estás. Escribe tu ciudad o código postal.',

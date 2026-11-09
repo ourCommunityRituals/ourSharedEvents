@@ -65,6 +65,7 @@ import {
 } from './event-discovery.js';
 import { renderEventCard } from './event-list.js';
 import { renderAttendeeMap } from './attendee-map.js';
+import type { StreetLayer } from './street-map.js';
 import { toPublicEvent } from './public-event-projection.js';
 import { msg } from './i18n/catalog.js';
 import { DEFAULT_LANG, type Lang } from './i18n/languages.js';
@@ -133,6 +134,8 @@ export interface RenderedLandingArea {
   defaultView: 'list' | 'map';
   /** True at LIST_MAX or more: the map leads the page and the doors go under it. */
   leadsWithMap: boolean;
+  /** The res-7 cells the map draws; empty or absent when no map is drawn. */
+  mapCells?: string[];
 }
 
 // ── small helpers ────────────────────────────────────────────────────────────
@@ -230,6 +233,8 @@ export function renderLandingArea(
     sponsorTitles?: ReadonlyMap<string, string>;
     /** The page's language (OSE-1762). */
     lang?: Lang;
+    /** The street map under the hexagons, drawn for `mapCells` of a first pass. */
+    streets?: StreetLayer | null;
   }
 ): RenderedLandingArea {
   const lang = opts?.lang ?? DEFAULT_LANG;
@@ -291,7 +296,7 @@ export function renderLandingArea(
   // Fed through the public event projection (the allowlist behind
   // GET /api/v2/events), so a location-precision policy (OSE-1245) that narrows
   // what the public sees narrows the map with it.
-  const mapHtml = renderAttendeeMap(
+  const map = renderAttendeeMap(
     live.map((e) => toPublicEvent(e as Record<string, unknown>)),
     {
       now: now.getTime(),
@@ -299,8 +304,10 @@ export function renderLandingArea(
       area: { count: windowCount, min: LIST_MAX, latched: areaLatched },
       sponsorTitles: opts?.sponsorTitles,
       lang,
+      streets: opts?.streets,
     }
-  ).html;
+  );
+  const mapHtml = map.html;
 
   const html = buildAreaMarkup({
     cards,
@@ -311,7 +318,14 @@ export function renderLandingArea(
     emptyWindows: LANDING_WINDOWS.filter((w) => !filledWindows.has(`when-${w}`)),
     lang,
   });
-  return { html, types, windowCount, defaultView, leadsWithMap };
+  return {
+    html,
+    types,
+    windowCount,
+    defaultView,
+    leadsWithMap,
+    mapCells: map.areas.map((a) => a.cell),
+  };
 }
 
 // ── markup assembly ──────────────────────────────────────────────────────────

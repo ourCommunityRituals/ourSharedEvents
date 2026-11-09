@@ -66,6 +66,18 @@ migrations_dir = "migrations-forms"
 binding = "UPLOADS_BUCKET"
 bucket_name = "ose-uploads-dev"
 
+# ── Street map tiles (local dev) ─────────────────────────────────────────────
+# The self-hosted OpenStreetMap archive the landing map draws its streets from
+# (lib/street-map.ts). Local only: `wrangler dev` keeps it on disk. Load the
+# archive once (proofs/street-map/README.md, step 1, makes the file):
+#   wrangler r2 object put ose-map-tiles-dev/chicago-region.pmtiles --file <file> --local
+# Staging and production have no binding yet, so their maps stay hexagons only.
+# The owner creates the bucket and loads the archive before the binding is added
+# to the staging and production blocks (docs/positioning/MAPPING-COST-STRUCTURE.md).
+[[r2_buckets]]
+binding = "MAP_TILES"
+bucket_name = "ose-map-tiles-dev"
+
 # ── Rate Limit KV (local dev) ─────────────────────────────────────────────────
 # Provision once: wrangler kv namespace create rate-limit-dev
 # Then fill id below with the ID from: wrangler kv namespace list

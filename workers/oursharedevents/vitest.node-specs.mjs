@@ -148,6 +148,12 @@ export const NODE_SPECS = [
   // the default-view rule. No DOM / cloudflare:test / D1 — node-clean.
   'tests/landing-area.spec.ts',
   'tests/attendee-map.spec.ts',
+  // Street map under the hexagons — PMTiles reader, vector tile decoder and the
+  // server-drawn layer over in-memory archives and a fake R2 bucket (no runtime).
+  'tests/pmtiles.spec.ts',
+  'tests/mvt.spec.ts',
+  'tests/street-map.spec.ts',
+  'tests/street-map-landing.spec.ts',
   // WHAT external link — event-page render fns emit the optional outbound link
   // on all three phases. Pure unit over renderPre/Live/PostEventHtml (no
   // cloudflare:test / D1); node-clean like the other pages.ts render specs.

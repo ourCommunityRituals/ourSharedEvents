@@ -1696,6 +1696,13 @@
       "testCount": 8
     },
     {
+      "file": "workers/oursharedevents/tests/mvt.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 5
+    },
+    {
       "file": "workers/oursharedevents/tests/ncr-pipeline.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -1848,6 +1855,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): env.DB, createExecutionContext, waitOnExecutionContext",
       "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/pmtiles.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/portfolio-rollup.invariant.spec.ts",
@@ -3115,6 +3129,20 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/street-map-landing.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 2
+    },
+    {
+      "file": "workers/oursharedevents/tests/street-map.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 22
     },
     {
       "file": "workers/oursharedevents/tests/subscribers.spec.ts",

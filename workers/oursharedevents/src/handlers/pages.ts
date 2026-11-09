@@ -76,6 +76,7 @@ import {
   injectLandingArea,
   type LandingAreaItem,
 } from '../lib/landing-area.js';
+import { loadStreetLayer, type StreetMapEnv } from '../lib/street-map.js';
 import {
   readWhere,
   injectWhere,
@@ -2732,7 +2733,7 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
 // Reads events through the SAME DataProvider seam + enrichWithPhase as
 // `GET /api/v2/events`, so the page and the JSON API cannot describe different
 // events. A read failure renders the empty area, never a broken page.
-type LandingEnv = PagesEnv & DataProviderEnv;
+type LandingEnv = PagesEnv & DataProviderEnv & StreetMapEnv;
 
 /**
  * What the landing's language switch carries to the same page in another
@@ -2794,12 +2795,20 @@ export async function handleLandingPage(
     }
     // OSE-1522: the consented sponsor by the title on each card, as on /events.
     const sponsorTitles = await fetchSponsorTitles((env as LandingEnv).DB, 'root');
-    area = renderLandingArea(items as LandingAreaItem[], {
+    const areaOpts = {
       latched,
       areaLatched: searched ? false : areaLatched,
       sponsorTitles,
       lang,
-    });
+    };
+    area = renderLandingArea(items as LandingAreaItem[], areaOpts);
+    // The street map under the hexagons (lib/street-map.ts): drawn for exactly
+    // the cells the first pass drew, then the area is drawn again with it. No
+    // binding, or any failure, leaves the hexagons-only map from the first pass.
+    if (area.mapCells?.length) {
+      const streets = await loadStreetLayer(env as LandingEnv, area.mapCells);
+      if (streets) area = renderLandingArea(items as LandingAreaItem[], { ...areaOpts, streets });
+    }
   } catch {
     area = renderEmptyLandingArea(lang);
   }
