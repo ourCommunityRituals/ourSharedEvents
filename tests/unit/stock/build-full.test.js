@@ -29,6 +29,9 @@ function fakeSite({
   eventWarnings = [],
   // the upload answer's file object, as the Worker would send it (null: no file)
   uploadFile,
+  // PUT poster-codes: its HTTP status, and (optional) the codes it answers with
+  codesStatus = 200,
+  codesAnswer,
 } = {}) {
   const calls = [];
   let n = 0;
@@ -86,6 +89,16 @@ function fakeSite({
           placement_id: pid,
         }));
       return reply(200, W.sponsorList(items));
+    }
+    if (method === 'PUT' && /^\/api\/v2\/admin\/events\/[^/]+\/poster-codes$/.test(path)) {
+      if (codesStatus !== 200) return reply(codesStatus, { ok: false, code: 'PLAN_LIMIT' });
+      const codes = codesAnswer
+        ? codesAnswer(body)
+        : [
+            { kind: 'public', code: `PUB${++n}` },
+            ...body.codes.map((c) => ({ kind: c.kind, code: `K${c.kind.slice(0, 3)}${++n}` })),
+          ];
+      return reply(200, W.posterCodes({ codes }));
     }
     if (method === 'PUT') return reply(200, { ok: true });
     return reply(404, {});
@@ -912,4 +925,168 @@ describe('createClient: every admin call has a deadline (CCR 2026-11-07 R-11)', 
       .catch((e) => e);
     expect(err.message).toBe('GET /api/v2/events failed: timed out');
   }, 5000);
+});
+
+describe('poster showcase (owner 2026-11-08): code sets and art orientation', () => {
+  const CODE_SETS = {
+    default: 'events',
+    types: { 'type-reg': 'events+registration', 'type-don': 'events+registration+donation' },
+    donateUrl: 'https://example.org/donate',
+  };
+  const LAND = {
+    id: 'land',
+    caption: '',
+    hashtags: ['land'],
+    file: '/x/land.jpg',
+    orientation: 'landscape',
+  };
+  const PORT = {
+    id: 'port',
+    caption: '',
+    hashtags: ['port'],
+    file: '/x/port.jpg',
+    orientation: 'portrait',
+  };
+  // every type fits only the landscape photo, so each portrait is the build's doing
+  const ART = { tags: { land: ['type-a', 'type-reg', 'type-don'], port: [] } };
+  const typed = () => [
+    { ...row('beverly', 'private', 10, 0), event_type_id: 'type-a' },
+    { ...row('beverly', 'private', 11, 1), event_type_id: 'type-a' },
+    { ...row('beverly', 'private', 12, 2), event_type_id: 'type-reg' },
+    { ...row('beverly', 'private', 13, 3), event_type_id: 'type-reg' },
+    { ...row('beverly', 'private', 14, 4), event_type_id: 'type-don' },
+    { ...row('beverly', 'private', 15, 5), event_type_id: 'type-don' },
+  ];
+  const run = (site, over = {}) =>
+    buildDay(
+      args(site, {
+        accepted: typed(),
+        expected: { beverly: 6 },
+        posts: [LAND, PORT],
+        artTags: ART,
+        codeSets: CODE_SETS,
+        readFile: async () => new Uint8Array([1]),
+        ...over,
+      })
+    );
+  const codePuts = (site) => callsTo(site, 'PUT', /\/poster-codes$/);
+
+  test('events saves nothing; registration saves REGISTER; donation adds the https link', async () => {
+    const site = fakeSite();
+    await run(site);
+    const bodies = codePuts(site).map((c) => c.body);
+    expect(bodies).toEqual([
+      { codes: [{ kind: 'register' }] },
+      { codes: [{ kind: 'register' }] },
+      {
+        codes: [
+          { kind: 'register' },
+          { kind: 'donation', target_url: 'https://example.org/donate' },
+        ],
+      },
+      {
+        codes: [
+          { kind: 'register' },
+          { kind: 'donation', target_url: 'https://example.org/donate' },
+        ],
+      },
+    ]);
+  });
+
+  test('the codes are saved through the organizer route, after the poster is placed', async () => {
+    const site = fakeSite();
+    await run(site);
+    const paths = site.calls.map((c) => `${c.method} ${c.path}`);
+    const firstPut = paths.findIndex((p) => /\/poster-codes$/.test(p));
+    const firstPoster = paths.findIndex((p) => /\/poster-deployments$/.test(p));
+    expect(firstPoster).toBeGreaterThan(-1);
+    expect(firstPut).toBeGreaterThan(firstPoster);
+  });
+
+  test('each QR entry records its set, its art orientation and its saved /s codes', async () => {
+    const site = fakeSite();
+    const m = await run(site);
+    expect(m.qr.map((q) => q.set)).toEqual([
+      'events',
+      'events',
+      'events+registration',
+      'events+registration',
+      'events+registration+donation',
+      'events+registration+donation',
+    ]);
+    for (const q of m.qr) expect(['landscape', 'portrait']).toContain(q.orientation);
+    const don = m.qr.filter((q) => q.set === 'events+registration+donation');
+    for (const q of don) {
+      expect(q.codes.register).toMatch(/^\/s\/Kreg\d+$/);
+      expect(q.codes.donation).toMatch(/^\/s\/Kdon\d+$/);
+    }
+    const ev = m.qr.filter((q) => q.set === 'events');
+    for (const q of ev) expect(q.codes).toEqual({});
+  });
+
+  test('every set shows both orientations, though the tags fit only the landscape photo', async () => {
+    const site = fakeSite();
+    const m = await run(site);
+    const pairs = new Set(m.qr.map((q) => `${q.set} ${q.orientation}`));
+    expect(pairs.size).toBe(6);
+    expect(m.warnings.filter((w) => /showcase/.test(w))).toEqual([]);
+  });
+
+  // ── failure cases ──
+  test('a refused save (403 PLAN_LIMIT) is named per event and the build goes on', async () => {
+    const site = fakeSite({ codesStatus: 403 });
+    const m = await run(site);
+    expect(m.items.filter((i) => i.kind === 'event')).toHaveLength(6);
+    const named = m.warnings.filter((w) => /^poster codes not saved for evt_\d+: .*403/.test(w));
+    expect(named).toHaveLength(4);
+    for (const q of m.qr) expect(q.codes).toEqual({});
+  });
+
+  test('an answer without a code it was asked to save is named, never recorded', async () => {
+    const site = fakeSite({
+      codesAnswer: () => [
+        { kind: 'public', code: 'PUB1' },
+        { kind: 'register', code: 'REG1' },
+      ],
+    });
+    const m = await run(site);
+    const don = m.qr.filter((q) => q.set === 'events+registration+donation');
+    for (const q of don) {
+      expect(q.codes).toEqual({ register: '/s/REG1' });
+      expect(m.warnings).toContain(`poster code donation missing for ${q.eventId}`);
+    }
+  });
+
+  test('an unsafe code in the answer is named, never recorded as a path', async () => {
+    const site = fakeSite({
+      codesAnswer: (body) => body.codes.map((c) => ({ kind: c.kind, code: '../admin?x=1' })),
+    });
+    const m = await run(site);
+    for (const q of m.qr) expect(Object.values(q.codes)).toEqual([]);
+    expect(m.warnings.some((w) => /poster code register missing for evt_/.test(w))).toBe(true);
+  });
+
+  test('a pair the stock cannot show is named in the warnings', async () => {
+    const site = fakeSite();
+    const m = await run(site, { posts: [LAND] });
+    expect(m.warnings).toEqual(
+      expect.arrayContaining([
+        'showcase pair not shown: events portrait',
+        'showcase pair not shown: events+registration portrait',
+        'showcase pair not shown: events+registration+donation portrait',
+      ])
+    );
+  });
+
+  test('an art upload that fails leaves no orientation recorded', async () => {
+    const site = fakeSite({ failUpload: true });
+    const m = await run(site);
+    for (const q of m.qr) expect(q.orientation).toBeNull();
+  });
+
+  test('without code sets the build saves no codes (as before)', async () => {
+    const site = fakeSite();
+    await run(site, { codeSets: undefined });
+    expect(codePuts(site)).toEqual([]);
+  });
 });

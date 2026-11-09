@@ -999,6 +999,31 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
     expect(rd.renderSummary({ ...args, report: kept })).toContain('| UNVERIFIED (kept) |');
   });
 
+  test('the summary carries the poster showcase table when the build saved code sets', () => {
+    const report = { todayName: TODAY_NAME, results: {}, purges: [], problems: [] };
+    const manifest = {
+      warnings: [],
+      qr: [
+        {
+          eventId: 'evt_1',
+          node: 'oak-lawn',
+          qPath: '/q/qrt_1',
+          sPath: '/s/ABC234',
+          set: 'events',
+          orientation: 'portrait',
+          codes: {},
+        },
+      ],
+    };
+    const base = { report, nodes: NODES, expected: EXPECTED, notes: {} };
+    const summary = rd.renderSummary({ ...base, manifest });
+    expect(summary).toContain('### Poster showcase');
+    expect(summary).toContain(
+      '| events | portrait | https://stg.oursharedevents.com/events/evt_1/poster | https://stg.oursharedevents.com/q/qrt_1 |'
+    );
+    expect(rd.renderSummary({ ...base, manifest: null })).not.toContain('Poster showcase');
+  });
+
   test('when the manifest object was saved but the index write failed, the summary says so', async () => {
     const w = world({
       index: [],
@@ -1238,6 +1263,24 @@ describe('build', () => {
     expect(code).toBe(0);
   });
 
+  test('the build reads stock/poster-code-sets.json: a day with no events names every showcase pair it could not show', async () => {
+    const { w, outDir } = setup([]);
+    await rd.runBuild({
+      env: ENV,
+      fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: () => {},
+      fetch: async (url) => res(200, String(url).endsWith('/event-types') ? CATALOG : {}),
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir,
+    });
+    const manifest = JSON.parse(w.files.get(path.join(outDir, 'manifest.json')));
+    expect(manifest.warnings.filter((x) => x.startsWith('showcase pair not shown: '))).toHaveLength(
+      6
+    );
+  });
+
   test('a failed build still writes its partial manifest and exits non-zero', async () => {
     const { w, outDir } = setup([
       { name: 'One', address: '1 Main St', node: 'oak-lawn', anchor: true },
@@ -1364,6 +1407,7 @@ describe('final review', () => {
       JSON.stringify([{ name: 'Anchor Co', address: '2 Main St', node: 'oak-lawn', anchor: true }])
     );
     const paths = [];
+    const external = [];
     let n = 0;
     const code = await rd.runBuild({
       env: {
@@ -1377,6 +1421,7 @@ describe('final review', () => {
       log: () => {},
       fetch: async (url, init = {}) => {
         const u = String(url);
+        if (!u.startsWith('https://stg.oursharedevents.com/')) external.push(u);
         if (u.startsWith('https://graph.instagram.com/')) return res(401, {});
         const p = u.slice('https://stg.oursharedevents.com'.length);
         paths.push(`${init.method || 'GET'} ${p}`);
@@ -1406,9 +1451,13 @@ describe('final review', () => {
     const manifest = JSON.parse(w.files.get(path.join(outDir, 'manifest.json')));
     expect(manifest.items.filter((i) => i.kind === 'event')).toHaveLength(1);
     expect(manifest.items.filter((i) => i.kind === 'placement')).toHaveLength(1);
-    expect(manifest.items.filter((i) => i.kind === 'upload')).toEqual([]);
-    expect(paths.some((p) => p.endsWith('/uploads'))).toBe(false);
-    expect(paths.some((p) => /^PUT [/]api[/]v2[/]admin[/]events[/]/.test(p))).toBe(false);
+    // No Instagram art: the only call off the site is the refused media list, so
+    // nothing is downloaded from Instagram. (The event may still carry one of the
+    // owner's local photos: the poster showcase gives each code set a landscape
+    // and a portrait poster, owner 2026-11-08.)
+    expect(external.length).toBeGreaterThan(0);
+    for (const u of external) expect(u.startsWith('https://graph.instagram.com/')).toBe(true);
+    expect(manifest.items.filter((i) => i.kind === 'upload').length).toBeLessThanOrEqual(1);
   });
 });
 
