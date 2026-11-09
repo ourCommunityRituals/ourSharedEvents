@@ -538,11 +538,28 @@ describe('a tapped hexagon: /?area= zooms into its events (owner, 2026-11-09)', 
   });
 
   test('anything but a res-7 cell is ignored: no zoom, never a finer area', async () => {
+    // An event in the area, so a cell that slipped through would draw a zoomed
+    // view (and the control below proves the real cell does).
+    stubGoogle(() => spot(['establishment']));
+    await create(KEYED, {
+      title: 'Zoom Refusal Control',
+      location: 'Rock Island Public House',
+      status: 'active',
+      is_published: true,
+      start_date: soon(),
+    });
+    vi.restoreAllMocks();
+    const ok = await (await SELF.fetch(`https://t.test/?area=${CELL}`)).text();
+    expect(ok).toContain(`data-zoom="${CELL}"`);
+    expect(ok).toContain('data-testid="amap-back"');
+
     const res9 = latLngToCell(RIPH.lat, RIPH.lng, 9);
-    for (const v of [res9, 'not-a-cell', '41.65,-87.68']) {
+    for (const v of [res9, 'not-a-cell', '41.65,-87.68', `00${CELL}`, ` ${CELL}`]) {
       const html = await (await SELF.fetch(`https://t.test/?area=${encodeURIComponent(v)}`)).text();
       expect(html, v).not.toContain('data-zoom=');
       expect(html, v).not.toContain('data-testid="amap-dot"');
+      // Every zoomed view, the empty one too, has the way back; a refused cell has none.
+      expect(html, v).not.toContain('data-testid="amap-back"');
     }
   });
 });

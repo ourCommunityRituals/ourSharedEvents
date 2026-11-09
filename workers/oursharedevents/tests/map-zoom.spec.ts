@@ -22,7 +22,7 @@
  *   | date: 2026-11-09
  */
 import { describe, expect, test } from 'vitest';
-import { cellToLatLng, cellToParent, latLngToCell } from 'h3-js';
+import { cellToChildren, cellToLatLng, cellToParent, latLngToCell } from 'h3-js';
 import {
   MAP_STYLE,
   ZOOM_STYLE,
@@ -297,6 +297,41 @@ describe('the ?area= parameter', () => {
       expect(read(`?area=${encodeURIComponent(v)}`).cell, v).toBeNull();
     }
     expect(landingZoom(null, '/').cell).toBeNull();
+  });
+
+  test('fat fingers: a padded, spaced, cut, foreign-script or wrong-size cell never zooms', () => {
+    // h3-js reads a cell as hex, so `00` + a cell is still "valid" to it. Taken as
+    // is, the page zoomed on a string no event row holds ("nothing upcoming") and
+    // echoed it, at any length, into every link.
+    const fullwidth = [...CELL]
+      .map((c) => (/[0-9]/.test(c) ? String.fromCharCode(c.charCodeAt(0) + 0xfee0) : c))
+      .join('');
+    for (const v of [
+      `0${CELL}`,
+      `00${CELL}`,
+      `${'0'.repeat(2000)}${CELL}`,
+      ` ${CELL}`,
+      `${CELL} `,
+      `${CELL}	`,
+      `${CELL}
+`,
+      `${CELL}​`,
+      `0x${CELL}`,
+      CELL.slice(0, -1),
+      `${CELL}${'f'.repeat(5000)}`,
+      fullwidth,
+      cellToParent(CELL, 6),
+      cellToChildren(CELL, 8)[0]!,
+    ]) {
+      const z = read(`?area=${encodeURIComponent(v)}`);
+      expect(z.cell, JSON.stringify(v.slice(0, 40))).toBeNull();
+    }
+    // `+` in a query is a space: `?area=+<cell>` is a spaced cell, not a cell.
+    expect(read(`?area=+${CELL}`).cell).toBeNull();
+    // The parameter name is exact, and with two the first is the one read.
+    expect(read(`?AREA=${CELL}`).cell).toBeNull();
+    expect(read(`?area=${CELL}&area=x`).cell).toBe(CELL);
+    expect(read(`?area=x&area=${CELL}`).cell).toBeNull();
   });
 
   test('links keep the search and nothing else', () => {

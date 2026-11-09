@@ -227,6 +227,9 @@ export const AREA_PARAM = 'area';
  * `href()` is the way back; both keep the visitor's search. Only the search
  * parameters are carried, so nothing else in the address is reflected.
  */
+/** The written form of an H3 cell: 15 hex digits, nothing around them. */
+const H3_CELL_SHAPE = /^[0-9a-f]{15}$/i;
+
 export function landingZoom(
   url: URL | null,
   base: string
@@ -237,8 +240,13 @@ export function landingZoom(
     if (v != null) keep.set(k, v);
   }
   const raw = url?.searchParams.get(AREA_PARAM) ?? '';
+  // A cell is exactly 15 hex digits. h3-js reads the string as a number, so it
+  // also takes `00<cell>` (any number of zeros): that would zoom on a string no
+  // event row holds and echo it into every link. Shape first, then H3.
   const cell =
-    raw && isValidCell(raw) && getResolution(raw) === CORRIDOR_RES ? raw.toLowerCase() : null;
+    H3_CELL_SHAPE.test(raw) && isValidCell(raw) && getResolution(raw) === CORRIDOR_RES
+      ? raw.toLowerCase()
+      : null;
   const href = (c?: string) => {
     const q = new URLSearchParams(keep);
     if (c) q.set(AREA_PARAM, c);

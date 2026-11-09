@@ -146,10 +146,10 @@ const H = MAP_H;
 export const MAP_STYLE =
   '<style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-credit a,.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>';
 
-// The zoomed area: its outline, the dots and the links, in a second block under
-// the same 400-char budget. `.amap-hit` is the invisible touch target round a dot.
-export const ZOOM_STYLE =
-  '<style>.amap-zone{fill:var(--accent);fill-opacity:.06;stroke:var(--accent);stroke-width:3}.amap-hit{fill:transparent}.amap-dot{fill:var(--accent);stroke:var(--bg);stroke-width:3}.amap-blk .amap-dot{fill-opacity:.45;stroke-dasharray:4 3}.amap-dn{fill:var(--on-accent);font:700 15px system-ui}.amap-back,.amap-zoom{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>';
+// The zoomed area's style lives in its own module: the ADR-008 design check
+// gives each source file one 400-char inline budget, and MAP_STYLE uses this one.
+export { ZOOM_STYLE } from './map-zoom-style.js';
+import { ZOOM_STYLE } from './map-zoom-style.js';
 
 /** Touch target round a dot, in map units: 44 px on a 343 px wide phone map. */
 const DOT_HIT_R = 39;
