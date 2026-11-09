@@ -748,7 +748,7 @@ export function renderSummary({ report, nodes, expected, manifest, notes, search
   const firstRay = edgeReasons.find((x) => / ray=/.test(String(x)));
   const notesList = [
     challenged
-      ? "The Cloudflare edge challenged the check's public reads (cf-mitigated: challenge), so the Worker never answered them. The staging WAF skip rule for the X-OCR-CI header must cover /q/*, /s/* and /events/* on stg, and OCR_CI_EDGE_TOKEN must match it (OSE-939)."
+      ? "The Cloudflare edge challenged the check's public reads (cf-mitigated: challenge), so the Worker never answered them. The staging WAF skip rule for the X-OCR-CI header must cover /q/*, /s/* and /events/* on stg, and OCR_CI_EDGE_TOKEN must match it (OSE-939). The owner applies it with scripts/ci/cf-waf-stg-ci-skip.mjs (docs/runbooks/RUNBOOK-STG-CI-SKIP-RULE.md)."
       : null,
     firstRay
       ? `First challenged read: ${String(firstRay)
