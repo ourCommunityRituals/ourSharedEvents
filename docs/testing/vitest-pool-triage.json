@@ -1962,6 +1962,13 @@
       "testCount": 28
     },
     {
+      "file": "workers/oursharedevents/tests/poster-digital-actions.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 19
+    },
+    {
       "file": "workers/oursharedevents/tests/poster-family-foundation.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

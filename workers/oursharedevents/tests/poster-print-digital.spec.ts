@@ -90,18 +90,24 @@ describe('Print | Digital — the URL is the state', () => {
     expect(digitalBranch).not.toContain('<img');
   });
 
-  test('Digital: the date adds to a calendar, the venue opens a map (escaped, new tab)', () => {
-    // Both addresses are a fixed start with one encoded value written straight
+  test('Digital: the date adds to a calendar, the place opens a map (buttons, escaped, new tab)', () => {
+    // OSE-1825: each is an @ocr/ui button, not an inline text link. Both
+    // addresses are a fixed start with one encoded value written straight
     // after it (what the links come out as, for a venue or an id holding quote
     // marks, is run in poster-attribute-escaping.spec.ts).
     expect(html).toContain(
-      '\'<a href="/events/\' + encodeURIComponent(event.id) + \'/calendar.ics" download data-testid="poster-add-to-calendar">\''
+      '<a class="btn btn-outline" href="/events/\' + encodeURIComponent(event.id) + \'/calendar.ics" download data-testid="poster-add-to-calendar">Add to calendar</a>'
     );
     expect(html).toContain(
-      '\'<a href="https://www.google.com/maps/search/?api=1&amp;query=\' + encodeURIComponent(venue) + \'" target="_blank" rel="noopener noreferrer"'
+      '\'<a class="btn btn-outline" href="https://www.google.com/maps/search/?api=1&amp;query=\' + encodeURIComponent(where) + \'" target="_blank" rel="noopener noreferrer"'
     );
-    // Print stays plain text — nothing to tap on paper.
-    expect(html).toContain('const whenHtml = digital && event.id');
+    // Print stays one plain line: nothing to tap on paper.
+    expect(html).toMatch(
+      /\(digital\s*\? detailsHtml\s*: '<div class="poster-meta" data-testid="poster-meta">'/
+    );
+    // The old inline-text forms are gone.
+    expect(html).not.toContain('&middot; Add to calendar');
+    expect(html).not.toContain('&middot; Directions');
   });
 });
 

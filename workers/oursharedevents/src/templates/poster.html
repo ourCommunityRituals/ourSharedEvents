@@ -295,16 +295,7 @@ body {
   max-width: none;
   font-size: 0.85rem;
 }
-.poster-directions,
-.poster-directions summary {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  cursor: pointer;
-}
 .meta-text a,
-.poster-directions summary,
 .poster--digital .qr-slot-code {
   display: inline-flex;
   align-items: center;
@@ -1160,21 +1151,73 @@ body {
         // name, not `art`: posterLayout() has a yes/no of that name.)
         const artAddress = posterArtAddress(event.cover_image_url || event.coverImageUrl);
 
-        // Digital: the date adds itself to a calendar, the venue opens a map.
-        // Print has nothing to tap, so it stays plain text. Both addresses are
-        // a fixed start with one encoded value after it.
+        // Print has nothing to tap, so the date and venue stay one plain line.
+        // Digital (OSE-1825, owner 2026-11-09) gives each its own small card
+        // with its actions as buttons: When + Add to calendar, Where (name and
+        // street address) + Google Maps / Apple Maps, then Share. Every address
+        // is a fixed start with one encoded value after it.
         const digital = KIND === 'digital';
         const whenText = esc(startDate) + (startTime ? ' &mdash; ' + esc(startTime) : '');
-        const whenHtml = digital && event.id
-          ? '<a href="/events/' + encodeURIComponent(event.id) + '/calendar.ics" download data-testid="poster-add-to-calendar">' + whenText + ' &middot; Add to calendar</a>'
-          : whenText;
-        // Owner 2026-10-11: one Directions button, two choices (Google Maps,
-        // Apple Maps), as on the event page.
-        const venueHtml = digital
-          ? '<details class="poster-directions" data-testid="poster-directions"><summary data-testid="poster-directions-summary">' + esc(venue) + ' &middot; Directions</summary>' +
-            '<a href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(venue) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">Google Maps</a> ' +
-            '<a href="https://maps.apple.com/?q=' + encodeURIComponent(venue) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map-apple">Apple Maps</a></details>'
-          : esc(venue);
+        // The venue's street address (events.where_address, in the public
+        // projection): shown under the name when it adds something.
+        const address = String(event.where_address || '').trim();
+        const showAddress = address !== '' && address.toLowerCase() !== venue.trim().toLowerCase();
+        // Directions search the street address, else the venue name: text the
+        // organizer typed, never the visitor's location (invariant 3).
+        const where = address || venue;
+        // Share: the public event page, nothing added to it (no tracking
+        // parameters). The words are what the poster already shows.
+        const shareUrl = location.origin + '/events/' + encodeURIComponent(event.id || '');
+        const shareLine = [name, [startDate, startTime].filter(Boolean).join(', '), venue].filter(Boolean).join(' · ');
+        const shareText = shareLine + '\n' + shareUrl;
+        const shareOff = !event.id || !!PREVIEW_EVENT;
+        const detailsHtml =
+          '<div class="detail-list section" data-testid="poster-meta">' +
+          (startDate
+            ? '<div class="detail-card" data-testid="poster-meta-date">' +
+              '<div class="detail-card-text"><span class="detail-card-label">When</span>' +
+              '<span class="detail-card-main" data-testid="poster-when-date">' + esc(startDate) + '</span>' +
+              (startTime ? '<span class="detail-card-sub" data-testid="poster-when-time">' + esc(startTime) + '</span>' : '') +
+              '</div>' +
+              (event.id
+                ? '<div class="detail-card-actions"><a class="btn btn-outline" href="/events/' + encodeURIComponent(event.id) + '/calendar.ics" download data-testid="poster-add-to-calendar">Add to calendar</a></div>'
+                : '') +
+              '</div>'
+            : '') +
+          (where
+            ? '<div class="detail-card" data-testid="poster-meta-venue">' +
+              '<div class="detail-card-text"><span class="detail-card-label">Where</span>' +
+              '<span class="detail-card-main" data-testid="poster-venue-name">' + esc(venue || address) + '</span>' +
+              (showAddress && venue ? '<span class="detail-card-sub" data-testid="poster-venue-address">' + esc(address) + '</span>' : '') +
+              '</div>' +
+              // Owner 2026-10-11: two choices, Google Maps and Apple Maps.
+              '<div class="detail-card-actions" role="group" aria-label="Directions" data-testid="poster-directions">' +
+              '<a class="btn btn-outline" href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">Google Maps</a>' +
+              '<a class="btn btn-outline" href="https://maps.apple.com/?q=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map-apple">Apple Maps</a>' +
+              '</div>' +
+              '</div>'
+            : '') +
+          // OSE-1825 / OSE-1371: Web Share first; without it, plain share
+          // links (owner 2026-09-28: no SDK, no tracker, no cookie). A draft
+          // preview shows the button switched off: its link is not public yet.
+          '<div class="share-row section no-print" data-testid="poster-share" data-share-url="' + esc(shareUrl) + '" data-share-title="' + esc(name) + '" data-share-text="' + esc(shareLine) + '">' +
+          (shareOff
+            ? '<button type="button" class="btn btn-primary btn-block" data-testid="poster-share-btn" disabled aria-disabled="true">Share this event</button>'
+            : '<button type="button" class="btn btn-primary btn-block" data-testid="poster-share-btn" aria-expanded="false" aria-controls="poster-share-links">Share this event</button>' +
+              '<div id="poster-share-links" class="share-chips" data-testid="poster-share-links" role="group" aria-label="Share this event" hidden>' +
+              '<a class="share-chip" href="mailto:?body=' + encodeURIComponent(shareText) + '" data-testid="poster-share-email">Email</a>' +
+              '<a class="share-chip" href="sms:?&amp;body=' + encodeURIComponent(shareText) + '" data-testid="poster-share-sms">Text message</a>' +
+              '<a class="share-chip" href="https://wa.me/?text=' + encodeURIComponent(shareText) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-whatsapp">WhatsApp</a>' +
+              '<a class="share-chip" href="https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-facebook">Facebook</a>' +
+              '<a class="share-chip" href="https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareText) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-x">X</a>' +
+              '<a class="share-chip" href="https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(shareUrl) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-linkedin">LinkedIn</a>' +
+              '<a class="share-chip" href="https://www.reddit.com/submit?url=' + encodeURIComponent(shareUrl) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-reddit">Reddit</a>' +
+              '<a class="share-chip" href="https://t.me/share/url?url=' + encodeURIComponent(shareUrl) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-share-telegram">Telegram</a>' +
+              '<button type="button" class="share-chip" data-testid="poster-share-copy">Copy link</button>' +
+              '</div>' +
+              '<p class="share-status" data-testid="poster-share-status" role="status" aria-live="polite"></p>') +
+          '</div>' +
+          '</div>';
 
         // OSE-1516: the layout starts from the artwork alone (the codes are not
         // here yet); relayoutPoster() redoes it once they and the sponsors are.
@@ -1188,11 +1231,13 @@ body {
           // and codes — the same place as on the public event page.
           '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
           '<div class="poster-body" data-testid="poster-body">' +
-            // OSE-1516: date, start time and venue are ONE line.
-            '<div class="poster-meta" data-testid="poster-meta">' +
-            (startDate ? '<span class="meta-item" data-testid="poster-meta-date"><span class="meta-text">' + whenHtml + '</span></span>' : '') +
-            (venue ? '<span class="meta-item" data-testid="poster-meta-venue"><span class="meta-text">' + venueHtml + '</span></span>' : '') +
-            '</div>' +
+            // OSE-1516: on print, date, start time and venue are ONE line.
+            (digital
+              ? detailsHtml
+              : '<div class="poster-meta" data-testid="poster-meta">' +
+                (startDate ? '<span class="meta-item" data-testid="poster-meta-date"><span class="meta-text">' + whenText + '</span></span>' : '') +
+                (venue ? '<span class="meta-item" data-testid="poster-meta-venue"><span class="meta-text">' + esc(venue) + '</span></span>' : '') +
+                '</div>') +
             // The stage holds the artwork and the codes. No artwork: the art area
             // is not drawn at all (nothing dashed, nothing to hide in print).
             '<div class="poster-stage" data-testid="poster-stage">' +
@@ -1642,6 +1687,49 @@ body {
         const btn = document.querySelector('[data-testid="poster-print"]');
         if (btn) btn.addEventListener('click', function () {
           if (!btn.disabled) window.print();
+        });
+      })();
+      // OSE-1825: Share on the digital poster. The phone's own share sheet
+      // first (every app the person already has); where there is none (most
+      // desktops) or it refuses, the button opens the row of plain share links.
+      // One listener for the page, so a redrawn poster needs no rewiring.
+      (function wireShareButton() {
+        document.addEventListener('click', function (ev) {
+          const t = ev.target && ev.target.closest
+            ? ev.target.closest('[data-testid="poster-share-btn"], [data-testid="poster-share-copy"]')
+            : null;
+          if (!t || t.disabled) return;
+          const box = t.closest('[data-testid="poster-share"]');
+          if (!box) return;
+          const url = box.getAttribute('data-share-url') || '';
+          const status = box.querySelector('[data-testid="poster-share-status"]');
+          const btn = box.querySelector('[data-testid="poster-share-btn"]');
+          const links = box.querySelector('[data-testid="poster-share-links"]');
+          const openLinks = function (open) {
+            if (!links || !btn) return;
+            links.hidden = !open;
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+          };
+          if (t === btn) {
+            if (navigator.share) {
+              navigator
+                .share({ title: box.getAttribute('data-share-title') || '', text: box.getAttribute('data-share-text') || '', url: url })
+                .catch(function (e) { if (!e || e.name !== 'AbortError') openLinks(true); });
+              return;
+            }
+            openLinks(!!(links && links.hidden));
+            return;
+          }
+          // Copy link.
+          const say = function (words) { if (status) status.textContent = words; };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(
+              function () { say('Link copied'); },
+              function () { say('Copy did not work. The link is ' + url); }
+            );
+          } else {
+            say('The link is ' + url);
+          }
         });
       })();
       init();
