@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-11-09 — 633 ids.
+ * Generated 2026-11-09 — 641 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 419 ids
+    // admin.html — 425 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -330,6 +330,12 @@
       'spon-email',
       'spon-event',
       'spon-event-hint',
+      'spon-header-details',
+      'spon-header-details-summary',
+      'spon-header-image',
+      'spon-header-image-hint',
+      'spon-header-text',
+      'spon-header-text-hint',
       'spon-image-choice',
       'spon-image-choice-hint',
       'spon-is-local-pill',
@@ -539,7 +545,7 @@
       'display-wall-sponsor-logo',
       'display-wall-sponsor-name',
     ]),
-    // poster.html — 58 ids
+    // poster.html — 60 ids
     POSTER: Object.freeze([
       'poster-add-to-calendar',
       'poster-area',
@@ -587,11 +593,13 @@
       'poster-share-whatsapp',
       'poster-share-x',
       'poster-skip-link',
+      'poster-sponsor-header',
       'poster-sponsor-item',
       'poster-sponsor-label',
       'poster-sponsor-logo',
       'poster-sponsor-name',
       'poster-sponsor-strip',
+      'poster-sponsor-text',
       'poster-sponsors-loading',
       'poster-stage',
       'poster-title',
