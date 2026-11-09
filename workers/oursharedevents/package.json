@@ -50,8 +50,11 @@
     "ws": "8.21.0",
     "sharp": "0.35.5",
     "@cloudflare/vitest-pool-workers": {
-      "wrangler": "$wrangler",
-      "miniflare": "^5.20260930.0-alpha"
+      "wrangler": {
+        ".": "$wrangler",
+        "miniflare": "5.20261104.0-beta"
+      },
+      "miniflare": "5.20260930.0-alpha"
     }
   }
 }
