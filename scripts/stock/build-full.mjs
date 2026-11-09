@@ -4,6 +4,7 @@ import { readFile as fsReadFile } from 'node:fs/promises';
 import { pickArt } from './instagram.mjs';
 import { chicagoDate } from './validate-finds.mjs';
 import { SAFE_ID } from './purge-full.mjs';
+import { missingPairs, planShowcase, posterCodesBody } from './poster-showcase.mjs';
 
 // A QR token or shortcode: one path segment, nothing that climbs or adds a query.
 const PATH_TOKEN = /^[A-Za-z0-9_-]{1,100}$/;
@@ -83,6 +84,10 @@ export async function buildDay({
   fetch: fetchFn = globalThis.fetch,
   // reads a local photo's bytes (posts from local-art.mjs carry a file path)
   readFile = (path) => fsReadFile(path),
+  // stock/poster-code-sets.json, read by poster-showcase.mjs readCodeSets: the
+  // codes each poster carries, and every set shown with both art orientations.
+  // Absent: no codes are saved and art is picked per event, as before.
+  codeSets,
   // Called with the manifest after every id it records, so the caller can save it
   // as it grows: a build killed mid-run still leaves what it created on record.
   onRecord = () => {},
@@ -130,12 +135,29 @@ export async function buildDay({
     const nodes = nodeIds || [
       ...new Set([...accepted.map((r) => r.node), ...businesses.map((b) => b.node)]),
     ];
+    const rowsOf = new Map();
     for (const node of nodes) {
       const rows = accepted
         .filter((r) => r.node === node)
         .sort(bySectorThenStart)
         .slice(0, want(node));
       if (rows.length < want(node)) manifest.short[node] = want(node) - rows.length;
+      rowsOf.set(node, rows);
+    }
+    // The poster showcase is planned over every event at once, so each code set
+    // shows a landscape and a portrait poster somewhere on the site.
+    const pick = (row, list) => pickArt(row, list, artTags, typeCategory);
+    const showcase = codeSets
+      ? planShowcase([...rowsOf.values()].flat(), { codeSets, posts, pick })
+      : null;
+    if (showcase) {
+      for (const pair of missingPairs(showcase)) {
+        manifest.warnings.push(`showcase pair not shown: ${pair}`);
+      }
+    }
+
+    for (const node of nodes) {
+      const rows = rowsOf.get(node);
       // The node's events by name: the order the mid and local sponsors go round in.
       const byName = new Map(
         [...rows]
@@ -188,10 +210,37 @@ export async function buildDay({
         } else {
           manifest.warnings.push(`no shortcode for ${ev.id}`);
         }
+        const planned = showcase ? showcase.get(row) : null;
+        if (planned) {
+          qr.set = planned.set;
+          qr.orientation = null;
+          qr.codes = {};
+        }
         manifest.qr.push(qr);
         for (const w of ev.warnings || []) manifest.warnings.push(`${ev.id} ${w.code}`);
 
-        const post = pickArt(row, posts, artTags, typeCategory);
+        // The organizer's choice of codes, made through the organizer's own
+        // route. A refused save is named and the build goes on: the event and its
+        // event-page code stand without it.
+        const body = planned ? posterCodesBody(planned.set, codeSets.donateUrl) : null;
+        if (body) {
+          try {
+            const saved = await client.put(`/api/v2/admin/events/${ev.id}/poster-codes`, body);
+            const list = Array.isArray(saved && saved.codes) ? saved.codes : [];
+            for (const { kind } of body.codes) {
+              const found = list.find((c) => c && c.kind === kind);
+              if (found && typeof found.code === 'string' && PATH_TOKEN.test(found.code)) {
+                qr.codes[kind] = `/s/${found.code}`;
+              } else {
+                manifest.warnings.push(`poster code ${kind} missing for ${ev.id}`);
+              }
+            }
+          } catch (err) {
+            manifest.warnings.push(`poster codes not saved for ${ev.id}: ${err.message}`);
+          }
+        }
+
+        const post = planned ? planned.post : pick(row, posts);
         if (post) {
           try {
             const art = await loadArt(post, fetchFn, readFile);
@@ -208,6 +257,7 @@ export async function buildDay({
               record('upload', file.key, node);
               if (typeof file.url === 'string' && file.url !== '') {
                 await client.put(`/api/v2/admin/events/${ev.id}`, { cover_image_url: file.url });
+                if (planned && post.orientation) qr.orientation = post.orientation;
               } else {
                 manifest.warnings.push(`art skipped for ${ev.id}: the upload answer has no url`);
               }

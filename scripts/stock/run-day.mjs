@@ -26,6 +26,7 @@ import { listPosts, tokenWarning } from './instagram.mjs';
 import { localPosts } from './local-art.mjs';
 import { STOCK_BASE_URL, createClient } from './client.mjs';
 import { buildDay } from './build-full.mjs';
+import { readCodeSets, renderShowcase } from './poster-showcase.mjs';
 import {
   checkNodes as realCheckNodes,
   checkSearches as realCheckSearches,
@@ -776,6 +777,8 @@ export function renderSummary({ report, nodes, expected, manifest, notes, search
       );
     }
   }
+  const showcase = renderShowcase(manifest, STOCK_BASE_URL);
+  if (showcase) lines.push(showcase.trimEnd());
   lines.push('', `Manifest: \`${cell(report.todayName)}\``);
   if (report.index && report.index.after) {
     lines.push(`Live manifests: ${report.index.after.map((n) => `\`${cell(n)}\``).join(', ')}`);
@@ -967,6 +970,8 @@ export async function runBuild({
       regionals: repoJson('stock/regionals.json'),
       posts,
       artTags: repoJson('stock/art-tags.json'),
+      // the codes each stock poster carries, and every set with both art orientations
+      codeSets: readCodeSets(repoJson('stock/poster-code-sets.json')),
       typeCategory: new Map(catalog.map((t) => [t.id, t.category])),
       expected: seedExpected(nodes),
       date: today,

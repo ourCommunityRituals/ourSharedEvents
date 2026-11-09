@@ -1,0 +1,17 @@
+{
+  "note": "Stock data only (owner 2026-11-08). The codes each stock poster carries: the event type suggests a starting set, and the stock build makes that choice the way an organizer of that type most likely would, through the same admin route an organizer uses (PUT /api/v2/admin/events/:id/poster-codes). The app never reads this file and no type is locked to a set: an organizer adds or drops any code (lib/poster-codes.ts). Sets: events = the event page code only (/s, with the placement's /q); events+registration adds REGISTER (the event's own form); events+registration+donation adds DONATE (an https link). The largest set is 3 codes, which fits every plan, Free included.",
+  "donateUrl": "https://example.org/donate",
+  "default": "events",
+  "types": {
+    "etr-ent-trivia": "events+registration",
+    "etr-biz-workshop": "events+registration",
+    "etr-biz-mixer": "events+registration",
+    "etr-lit-bookclub": "events+registration",
+    "etr-tab-rpg": "events+registration",
+    "etr-rec-volleyball": "events+registration",
+    "etr-vol-cleanup": "events+registration",
+    "etr-vol-mutual": "events+registration+donation",
+    "etr-vol-fooddrive": "events+registration+donation",
+    "etr-soc-dinner": "events+registration+donation"
+  }
+}

@@ -45,6 +45,16 @@ const sponsorCreate = ({ id }) => ({
 // GET /api/v2/admin/sponsors?eventId= (handleAdminListSponsors)
 const sponsorList = (items) => ({ ok: true, status: 200, items, scopedTo: null });
 
+// PUT /api/v2/admin/events/:id/poster-codes (handlers/poster-codes.ts respond):
+// the poster's codes after the save, event page first
+const posterCodes = ({ codes, limit = 3 }) => ({
+  ok: true,
+  limit,
+  kinds: [],
+  codes,
+  settings: { showQRSection: true },
+});
+
 // GET /api/v2/events (handlers/events.ts handleListEvents)
 const publicEvents = (items) => ({ ok: true, status: 200, items, sponsor_titles: {} });
 
@@ -55,5 +65,6 @@ module.exports = {
   upload,
   sponsorCreate,
   sponsorList,
+  posterCodes,
   publicEvents,
 };

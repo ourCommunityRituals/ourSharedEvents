@@ -180,6 +180,15 @@ const CALLS = [
     fake: W.sponsorList([]),
   },
   {
+    call: 'PUT /api/v2/admin/events/:id/poster-codes',
+    handler: [`${HANDLERS}/poster-codes.ts`, 'respond'],
+    stock: [
+      BUILD,
+      /const (\w+) = await client\.put\(\s*`\/api\/v2\/admin\/events\/\$\{ev\.id\}\/poster-codes`/,
+    ],
+    fake: W.posterCodes({ codes: [{ kind: 'public', code: 'ABC234' }] }),
+  },
+  {
     call: 'GET /api/v2/events',
     handler: [`${HANDLERS}/events.ts`, 'handleListEvents'],
     stock: [
