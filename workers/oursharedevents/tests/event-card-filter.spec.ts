@@ -24,6 +24,12 @@ import {
   DISCOVERY_CHIPS,
 } from '../src/lib/event-discovery';
 import { renderLandingArea, LANDING_WINDOWS } from '../src/lib/landing-area';
+
+// Two categories, so the Type row (one chip per category, owner 2026-11-09) is offered.
+const TWO_CATEGORIES = new Map([
+  ['etr-ent-trivia', { code: 'ENT', name: 'Entertainment & Trivia', order: 0 }],
+  ['etr-soc-dinner', { code: 'SOC', name: 'Social & Community Dining', order: 1 }],
+]);
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 
 const NOW = new Date('2026-09-16T20:00:00Z'); // Wed Sep 16, 3pm Chicago
@@ -162,15 +168,15 @@ describe('OSE-1520 | one filter control, four or five chips', () => {
     }).html;
     expect(html).not.toContain('toggle-product');
     expect(html).not.toContain('prod-hybrid');
-    // all in person, one type (Other): neither refinement is offered
+    // all in person, one category (Other): neither refinement is offered
     expect(html).not.toContain('toggle-modality');
     expect(html).not.toContain('toggle-type');
     const mixed = renderLandingArea(
       [
-        { ...ev('a', '2026-09-18'), template_id: 'bar_night' },
-        { ...ev('b', '2026-09-19'), template_id: 'trivia', venue: '', location: '' },
+        { ...ev('a', '2026-09-18'), event_type_id: 'etr-soc-dinner' },
+        { ...ev('b', '2026-09-19'), event_type_id: 'etr-ent-trivia', venue: '', location: '' },
       ],
-      { now: NOW.getTime() }
+      { now: NOW.getTime(), typeCategories: TWO_CATEGORIES }
     ).html;
     expect(mixed).toContain('toggle-modality');
     expect(mixed).toContain('toggle-type');
@@ -179,10 +185,10 @@ describe('OSE-1520 | one filter control, four or five chips', () => {
   test('landing filter groups say what they are, visibly', () => {
     const mixed = renderLandingArea(
       [
-        { ...ev('a', '2026-09-18'), template_id: 'bar_night' },
-        { ...ev('b', '2026-09-19'), template_id: 'trivia', venue: '', location: '' },
+        { ...ev('a', '2026-09-18'), event_type_id: 'etr-soc-dinner' },
+        { ...ev('b', '2026-09-19'), event_type_id: 'etr-ent-trivia', venue: '', location: '' },
       ],
-      { now: NOW.getTime() }
+      { now: NOW.getTime(), typeCategories: TWO_CATEGORIES }
     ).html;
     const legend = (testid: string) =>
       mixed.match(new RegExp(`data-testid="${testid}"><legend[^>]*>([^<]*)<`))?.[1] ?? '';

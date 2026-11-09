@@ -218,3 +218,72 @@ test.describe('landing: an area with events', () => {
     await expect(page.locator('#win-next-90')).toBeChecked();
   });
 });
+
+// Owner 2026-11-09: "Event Types should be Categories. When clicked you get all
+// the event types under this category". Two types under Arts and one under
+// Business, made through the admin API; a tap on the Arts chip shows both Arts
+// events and hides the Business one, with no script and no request.
+// @born-red landing-category-click | method: the card tagged by its type id
+//   instead of its category (the Arts chip then hid both Arts events), and the
+//   category rule's selector misspelt (nothing hidden) — each turned it red
+//   | date: 2026-11-09
+test.describe('landing: the Type row is the event categories', () => {
+  const run = Date.now();
+  const titles = {
+    music: `Category probe music ${run}`,
+    gallery: `Category probe gallery ${run}`,
+    mixer: `Category probe mixer ${run}`,
+  };
+
+  test.beforeAll(async ({ request }) => {
+    test.setTimeout(150_000);
+    expect(ADMIN_BEARER, 'OSE_ADMIN_BEARER is set by playwright.mobile.config.ts').not.toBe('');
+    const made = [
+      await createLiveEvent(request, ADMIN_BEARER, titles.music, 12, undefined, 'etr-art-music'),
+      await createLiveEvent(
+        request,
+        ADMIN_BEARER,
+        titles.gallery,
+        13,
+        undefined,
+        'etr-art-gallery'
+      ),
+      await createLiveEvent(request, ADMIN_BEARER, titles.mixer, 14, undefined, 'etr-biz-mixer'),
+    ];
+    await waitUntilListed(
+      made
+        .map((m) => m.listedFrom)
+        .sort()
+        .at(-1) ?? null
+    );
+  });
+
+  test('a category chip shows every type under it, and only those', async ({ page }) => {
+    await loadAndRecord(page);
+    const row = page.getByTestId('toggle-type');
+    await expect(row).toBeVisible();
+    // Real category names, never a type id made readable ("Etr Art Music").
+    await expect(row).not.toContainText('Etr ');
+    await expect(page.locator('label[for="type-all"]')).toHaveText('All types');
+    await expect(page.locator('#type-all')).toBeChecked();
+    const arts = page.locator('label[for="cat-art"]');
+    await expect(arts).toHaveText('Arts, Culture & Live Music');
+    await expect(page.locator('label[for="cat-biz"]')).toHaveText('Business & Networking');
+
+    const card = (title: string) =>
+      page.getByTestId('area-card').filter({ has: page.getByText(title, { exact: true }) });
+    for (const t of Object.values(titles)) await expect(card(t), t).toBeVisible();
+
+    const requestsAfterLoad: string[] = [];
+    page.on('request', (r) => requestsAfterLoad.push(r.url()));
+    await arts.click();
+    await expect(page.locator('#cat-art')).toBeChecked();
+    await expect(card(titles.music)).toBeVisible();
+    await expect(card(titles.gallery)).toBeVisible();
+    await expect(card(titles.mixer)).toBeHidden();
+
+    await page.locator('label[for="type-all"]').click();
+    await expect(card(titles.mixer)).toBeVisible();
+    expect(requestsAfterLoad, 'choosing a category stays on the device').toEqual([]);
+  });
+});

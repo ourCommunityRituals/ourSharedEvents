@@ -76,6 +76,8 @@ import {
   injectLandingArea,
   type LandingAreaItem,
 } from '../lib/landing-area.js';
+import { categoryByTypeId, type TypeCategory } from '../lib/event-type-catalog.js';
+import { readEventTypeCatalog } from '../lib/event-type-catalog-read.js';
 import {
   readWhere,
   injectWhere,
@@ -2794,16 +2796,26 @@ export async function handleLandingPage(
     }
     // OSE-1522: the consented sponsor by the title on each card, as on /events.
     const sponsorTitles = await fetchSponsorTitles((env as LandingEnv).DB, 'root');
+    // Owner 2026-11-09: the Type row is the categories of the event-type
+    // catalog, read through the same query as the Create Event picker. A failed
+    // read only folds every event into "Other" (one choice, so no row).
+    let typeCategories: Map<string, TypeCategory> | undefined;
+    try {
+      typeCategories = categoryByTypeId(await readEventTypeCatalog((env as LandingEnv).DB));
+    } catch {
+      typeCategories = undefined;
+    }
     area = renderLandingArea(items as LandingAreaItem[], {
       latched,
       areaLatched: searched ? false : areaLatched,
       sponsorTitles,
       lang,
+      typeCategories,
     });
   } catch {
     area = renderEmptyLandingArea(lang);
   }
-  if (searched && area.windowCount === 0 && area.types.length === 0) {
+  if (searched && area.windowCount === 0 && area.categories.length === 0) {
     const empty =
       where.kind === 'zip'
         ? renderNearEmpty(where.area.zip, lang)

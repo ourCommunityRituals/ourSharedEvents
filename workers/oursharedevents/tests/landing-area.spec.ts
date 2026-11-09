@@ -20,6 +20,7 @@ import {
   LIST_MAX,
   type LandingAreaItem,
 } from '../src/lib/landing-area';
+import { buildEventTypeCatalog, categoryByTypeId } from '../src/lib/event-type-catalog';
 
 // A fixed clock so window math is deterministic.
 const NOW = Date.parse('2026-09-13T00:00:00.000Z');
@@ -89,29 +90,184 @@ describe('OSE-1312 | window tagging', () => {
   });
 });
 
-describe('OSE-1312 | type tagging', () => {
-  it('slugs template_id and emits one pill + hide rule per present type', () => {
-    const out = render([
-      ev({ id: 'a', template_id: 'bar_night' }),
-      ev({ id: 'b', template_id: 'trivia_night' }),
+// Owner 2026-11-09: "Event Types should be Categories. When clicked you get all
+// the event types under this category". The catalog is built by the same pure
+// grouping the Create Event picker uses; the rows are a slice of 0024/0076.
+// @born-red landing-category-chips | method: the chip named and slugged by the raw
+//   type id; the row sorted by label instead of catalog order; the catalog's own
+//   "Other" bucket kept as a category (English name on a Spanish page); template_id
+//   allowed to decide — each turned a test red | date: 2026-11-09
+const CATALOG = categoryByTypeId(
+  buildEventTypeCatalog(
+    [
+      { category_code: 'REC', display_name: 'Sports & Recreation', display_order: 10 },
+      { category_code: 'ART', display_name: 'Arts, Culture & Live Music', display_order: 50 },
+      { category_code: 'BIZ', display_name: 'Business & Networking', display_order: 80 },
+    ],
+    [
+      {
+        id: 'etr-art-music',
+        uec_code: 'ART-MUSIC-001',
+        name: 'Live Music Event',
+        description: null,
+        category_code: 'ART',
+      },
+      {
+        id: 'etr-art-gallery',
+        uec_code: 'ART-GALLERY-001',
+        name: 'Art Show & Gallery Opening',
+        description: null,
+        category_code: 'ART',
+      },
+      {
+        id: 'etr-biz-mixer',
+        uec_code: 'BIZ-MIXER-001',
+        name: 'Business Mixer',
+        description: null,
+        category_code: 'BIZ',
+      },
+      {
+        id: 'etr-rec-bocce',
+        uec_code: 'REC-BOCCE-001',
+        name: 'Bocce',
+        description: null,
+        category_code: 'REC',
+      },
+      // A seed mistake: a cluster with no category row. The catalog puts it in "Other".
+      {
+        id: 'etr-zzz-orphan',
+        uec_code: 'ZZZ-ORPHAN-001',
+        name: 'Orphan',
+        description: null,
+        category_code: 'ZZZ',
+      },
+    ]
+  )
+);
+const renderCats = (items: LandingAreaItem[]) =>
+  renderLandingArea(items, { now: NOW, typeCategories: CATALOG });
+const typeCss = (html: string) =>
+  html.match(/<style data-testid="area-type-css">([\s\S]*?)<\/style>/)?.[1] ?? '';
+const typeChips = (html: string) =>
+  [
+    ...(html.match(/data-testid="toggle-type">([\s\S]*?)<\/fieldset>/)?.[1] ?? '').matchAll(
+      /<label class="disc-chip" for="([^"]+)">([^<]*)<\/label>/g
+    ),
+  ].map((m) => [m[1], m[2]]);
+
+describe('the Type row is the event-type categories (owner 2026-11-09)', () => {
+  it('one chip per category present, with its catalog name, All types first', () => {
+    const out = renderCats([
+      ev({ id: 'a', event_type_id: 'etr-art-music' }),
+      ev({ id: 'b', event_type_id: 'etr-art-gallery' }),
+      ev({ id: 'c', event_type_id: 'etr-biz-mixer' }),
     ]);
-    expect(out.types.map((t) => t.slug)).toEqual(['type-bar-night', 'type-trivia-night']);
-    expect(out.html).toContain(
-      'class="event-card when-week when-month when-next-90 type-bar-night'
-    );
-    // dynamic hide rule for a type
-    expect(out.html).toContain('#type-bar-night:checked ~ .area .event-card:not(.type-bar-night)');
-    // readable label
-    expect(out.html).toContain('Bar Night');
+    expect(out.categories).toEqual([
+      { slug: 'cat-art', label: 'Arts, Culture & Live Music' },
+      { slug: 'cat-biz', label: 'Business & Networking' },
+    ]);
+    expect(typeChips(out.html)).toEqual([
+      ['type-all', 'All types'],
+      ['cat-art', 'Arts, Culture &amp; Live Music'],
+      ['cat-biz', 'Business &amp; Networking'],
+    ]);
+    expect(out.html).toContain('id="type-all" class="toggle-radio" checked');
+    expect(out.html).not.toMatch(/Etr |Live Music Event<\/label>/);
   });
 
-  it('falls back to event_type_id, then to "Other"', () => {
-    const byType = render([ev({ id: 'a', template_id: null, event_type_id: 'farmers_market' })]);
-    expect(byType.types[0].slug).toBe('type-farmers-market');
+  it("a category's rule keeps every card of every type in it, and only those", () => {
+    const html = renderCats([
+      ev({ id: 'a', event_type_id: 'etr-art-music' }),
+      ev({ id: 'b', event_type_id: 'etr-art-gallery' }),
+      ev({ id: 'c', event_type_id: 'etr-biz-mixer' }),
+    ]).html;
+    const cls = (id: string) =>
+      html
+        .match(
+          new RegExp(`<article class="([^"]*)" data-testid="area-card" data-event-id="${id}"`)
+        )?.[1]
+        ?.split(' ') ?? [];
+    expect(typeCss(html)).toContain(
+      '#cat-art:checked ~ .area .event-card:not(.cat-art){display:none}'
+    );
+    expect(typeCss(html)).toContain(
+      '#cat-biz:checked ~ .area .event-card:not(.cat-biz){display:none}'
+    );
+    // Both Arts types carry .cat-art, so #cat-art hides neither; the mixer does not.
+    expect(cls('a')).toContain('cat-art');
+    expect(cls('b')).toContain('cat-art');
+    expect(cls('c')).not.toContain('cat-art');
+    expect(cls('c')).toContain('cat-biz');
+    // One category per card: no type id leaks in as a class.
+    for (const id of ['a', 'b', 'c']) {
+      expect(cls(id).filter((k) => k.startsWith('cat-') || k.startsWith('type-'))).toHaveLength(1);
+    }
+  });
 
-    const untyped = render([ev({ id: 'a', template_id: null, event_type_id: null })]);
-    expect(untyped.types[0].slug).toBe('type-other');
-    expect(untyped.types[0].label).toBe('Other');
+  it('a category with no listed event has no chip, and catalog order wins over the alphabet', () => {
+    const out = renderCats([
+      ev({ id: 'c', event_type_id: 'etr-biz-mixer' }),
+      ev({ id: 'r', event_type_id: 'etr-rec-bocce' }),
+    ]);
+    // Sports (10) before Business (80), though "B" sorts first; no Arts chip.
+    expect(out.categories.map((c) => c.slug)).toEqual(['cat-rec', 'cat-biz']);
+    expect(out.html).not.toContain('cat-art');
+  });
+
+  it('no type, an unknown type and an orphan type are one "Other", always last', () => {
+    const out = renderCats([
+      ev({ id: 'o1', event_type_id: null }),
+      ev({ id: 'o2', event_type_id: 'not-in-the-catalog' }),
+      ev({ id: 'o3', event_type_id: 'etr-zzz-orphan' }),
+      ev({ id: 'r', event_type_id: 'etr-rec-bocce' }),
+    ]);
+    expect(out.categories).toEqual([
+      { slug: 'cat-rec', label: 'Sports & Recreation' },
+      { slug: 'cat-other', label: 'Other' },
+    ]);
+  });
+
+  it('"Other" speaks the page language', () => {
+    const out = renderLandingArea(
+      [ev({ id: 'o', event_type_id: null }), ev({ id: 'r', event_type_id: 'etr-rec-bocce' })],
+      { now: NOW, typeCategories: CATALOG, lang: 'es' }
+    );
+    expect(out.categories.at(-1)).toEqual({ slug: 'cat-other', label: 'Otro' });
+    // The catalog's own "Other" bucket (an orphan type) is ours too, not its English name.
+    const orphan = renderLandingArea(
+      [
+        ev({ id: 'o', event_type_id: 'etr-zzz-orphan' }),
+        ev({ id: 'r', event_type_id: 'etr-rec-bocce' }),
+      ],
+      { now: NOW, typeCategories: CATALOG, lang: 'es' }
+    );
+    expect(orphan.categories.at(-1)).toEqual({ slug: 'cat-other', label: 'Otro' });
+  });
+
+  it('template_id never decides the category; without a catalog every event is "Other" and the row is not offered', () => {
+    const out = renderCats([ev({ id: 'a', template_id: 'bar_night', event_type_id: null })]);
+    expect(out.categories).toEqual([{ slug: 'cat-other', label: 'Other' }]);
+    const bare = renderLandingArea(
+      [
+        ev({ id: 'a', event_type_id: 'etr-art-music' }),
+        ev({ id: 'b', event_type_id: 'etr-biz-mixer' }),
+      ],
+      { now: NOW }
+    );
+    expect(bare.categories).toEqual([{ slug: 'cat-other', label: 'Other' }]);
+    expect(bare.html).not.toContain('data-testid="toggle-type"');
+  });
+
+  it('escapes a category name', () => {
+    const hostile = new Map([
+      ['etr-x', { code: 'XSS', name: '<img src=x onerror=alert(1)>', order: 0 }],
+    ]);
+    const html = renderLandingArea(
+      [ev({ id: 'a', event_type_id: 'etr-x' }), ev({ id: 'b', event_type_id: null })],
+      { now: NOW, typeCategories: hostile }
+    ).html;
+    expect(html).not.toContain('<img src=x');
+    expect(html).toContain('&lt;img src=x');
   });
 });
 
