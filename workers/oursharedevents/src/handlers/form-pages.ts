@@ -143,12 +143,8 @@ function privacyNotice(formType: string, legalTier = 1): string {
   if (legalTier >= 2) {
     addenda += `<br/><strong>Commerce notice:</strong> Payment data is handled by our PCI DSS-compliant processor and never stored by us. `;
   }
-  if (legalTier >= 4) {
-    addenda += `<br/><strong>Health notice:</strong> Health data is protected under HIPAA safeguards and a Business Associate Agreement. `;
-  }
-  if (legalTier >= 5) {
-    addenda += `<br/><strong>Children's notice:</strong> For children under 13, a parent or guardian must submit this form (COPPA). `;
-  }
+  // Tiers 4 and 5 (HIPAA, COPPA) are declined regimes (ADR-018): no notice may
+  // promise their safeguards. The tier is capped at 3, so these never render.
 
   return `<div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">${privacySummary(formType)}</p>
