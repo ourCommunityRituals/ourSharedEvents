@@ -2825,9 +2825,7 @@ export async function handleLandingPage(
           items.filter((e) => e.h3_res7 === zoomCell).map((e) => String(e.id))
         )
       : undefined;
-    const origin = request
-      ? (canonicalOrigin(request, env) ?? new URL(request.url).origin)
-      : undefined;
+    const origin = canonicalOrigin(request, env);
     const areaOpts = {
       placeLinks,
       origin,

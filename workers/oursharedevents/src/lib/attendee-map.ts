@@ -59,14 +59,23 @@
 // ZOOMED IN ON ONE AREA (owner, 2026-11-09). On the landing each hexagon links
 // to `?area=<cell>`, which draws that one res-7 area over the street map with a
 // numbered dot per place that holds an event. Where a dot sits is the owner's
-// rule: a place the lookup named a business or landmark (`place_kind`
-// 'business', lib/event-place.ts) at its exact point; anything else, which can
-// be a home, at the centre of its res-9 cell, about one block. A missing kind
-// is drawn as a block. A dot with one event links to its page; a dot with more
-// links to its row in the list below the map. Dots carry the same type, window
-// and modality classes as the cards, so the landing's pills filter them too,
-// still with no JS. This is the one place this module reads an event's
-// lat/lon, and only to place the event itself; no viewer location is read.
+// rule, merged with invariant 3 (place, not person; epic OSE-1880): every place
+// at the centre of its res-9 cell, about one block, a business too. A place the
+// lookup named a business or landmark (`place_kind` 'business',
+// lib/event-place.ts) is marked (solid dot, named in its panel), never
+// pinpointed; anything else, which can be a home, is a pale dashed dot. A
+// missing kind is drawn as a block. Dots nearer than two touch targets are one
+// place, so every dot can be tapped. Every dot opens its place panel under the
+// map (lib/map-place-panel.ts). Dots carry the same type, window and modality
+// classes as the cards, so the landing's pills filter them too, still with no
+// JS. This is the one place this module reads an event's lat/lon, and only to
+// find the event's own block; no coordinate is written to the page and no
+// viewer location is read.
+//
+// NO STREET MAP, NO FLOATING DOTS (owner, 2026-11-09; OSE-1894). Dots on a bare
+// hexagon tell nobody where anything is. Where the street map is missing (no
+// `MAP_TILES` binding, or a failed read), the zoomed area is the list of its
+// places and their panels, and no dot map is drawn.
 
 import { cellToBoundary, cellToLatLng, getResolution, isValidCell, latLngToCell } from 'h3-js';
 import { CORRIDOR_RES, NODE_RES } from './h3-tagging.js';
@@ -160,6 +169,8 @@ import {
 /** Touch target round a dot, in map units: 44 px on a 343 px wide phone map. */
 const DOT_HIT_R = 39;
 const DOT_R = 13;
+/** Dots nearer than two hit radii overlap as touch targets, so they are one place. */
+export const DOT_MERGE = 2 * DOT_HIT_R;
 
 /** OpenStreetMap's licence (ODbL) asks for this credit wherever its data shows. */
 const OSM_LINK = '<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
@@ -400,7 +411,7 @@ function legendFor(
 export interface ZoomEvent extends AttendeeMapItem {
   lat?: unknown;
   lon?: unknown;
-  /** 'business' draws at the exact point; anything else at the block centre. */
+  /** 'business' is marked (solid, named); every kind sits at its block centre. */
   place_kind?: unknown;
   /** The card's filter classes (type, window, modality), so the pills filter the dot. */
   classes?: readonly string[];
@@ -411,7 +422,7 @@ export interface MapDot {
   n: number;
   lat: number;
   lng: number;
-  /** True when every event here is at a business (drawn solid, named). Always the block centre. */
+  /** True when every event here is at a business (drawn solid, named). Always a block centre. */
   exact: boolean;
   events: { id: string; name: string; classes: string[] }[];
 }
@@ -421,9 +432,10 @@ function finite(v: unknown): number | null {
 }
 
 /**
- * Where each event of one area sits (owner, 2026-11-09): a business at its
- * point, anything else at its res-9 block's centre. Events at one spot share a
- * dot. Events with no coordinates are returned as `unplaced`.
+ * Where each event of one area sits (owner, 2026-11-09): at its res-9 block's
+ * centre, a business too. Events on one block share a dot, and so do blocks
+ * nearer than two touch targets (DOT_MERGE), at the centre of the first of them
+ * in reading order. Events with no coordinates are returned as `unplaced`.
  */
 export function mapDots(
   cell: string,
@@ -457,10 +469,22 @@ export function mapDots(
     dot.events.push(ev);
     byKey.set(key, dot);
   }
-  const dots = [...byKey.values()]
+  const blocks = [...byKey.values()]
     .map((d) => ({ d, xy: project(frame, d.lat, d.lng) }))
-    .sort((a, b) => a.xy[1] - b.xy[1] || a.xy[0] - b.xy[0])
-    .map(({ d }, i) => ({ n: i + 1, ...d }));
+    .sort((a, b) => a.xy[1] - b.xy[1] || a.xy[0] - b.xy[0]);
+  // Two dots nearer than two hit radii overlap, and one of them cannot be
+  // tapped. In reading order, a block that near an earlier place joins it.
+  const kept: typeof blocks = [];
+  for (const b of blocks) {
+    const near = kept.find((k) => Math.hypot(k.xy[0] - b.xy[0], k.xy[1] - b.xy[1]) < DOT_MERGE);
+    if (!near) {
+      kept.push(b);
+      continue;
+    }
+    near.d.events.push(...b.d.events);
+    near.d.exact = near.d.exact && b.d.exact;
+  }
+  const dots = kept.map(({ d }, i) => ({ n: i + 1, ...d }));
   return { dots, unplaced };
 }
 
@@ -474,7 +498,7 @@ function dotHref(d: MapDot): string {
   return `#amap-dot-${d.n}`;
 }
 
-function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets?: string): string {
+function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets: string): string {
   const frame = frameForCells([cell], W, H);
   const fx = (v: number) => v.toFixed(1);
   const ring = cellToBoundary(cell)
@@ -492,7 +516,7 @@ function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets?: string): st
       return (
         `<a href="${dotHref(d)}" class="${escapeHtml(cls)}" data-testid="amap-dot" data-exact="${d.exact ? 1 : 0}" data-count="${d.events.length}">` +
         `<title>${escapeHtml(title)}</title>` +
-        `<circle class="amap-hit" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_HIT_R}"/>` +
+        `<circle class="amap-hit" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_HIT_R}" fill-opacity="0"/>` +
         `<circle class="amap-dot" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_R}"/>` +
         `<text class="amap-dn" x="${fx(x)}" y="${fx(y)}" text-anchor="middle" dominant-baseline="central">${d.n}</text>` +
         `</a>`
@@ -501,7 +525,7 @@ function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets?: string): st
     .join('');
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="group" aria-labelledby="amap-caption" data-testid="amap-svg">` +
-    `${streets ?? ''}<polygon class="amap-zone" points="${ring}" data-testid="amap-zone" data-cell="${cell}"/>${marks}</svg>`
+    `${streets}<polygon class="amap-zone" points="${ring}" data-testid="amap-zone" data-cell="${cell}"/>${marks}</svg>`
   );
 }
 
@@ -518,7 +542,7 @@ function zoomLegend(
   const rows = dots
     .map(
       (d) =>
-        `<li value="${d.n}" class="${escapeHtml(`amap-f ${dotClasses(d.events)}`.trim())}" data-testid="amap-legend-dot">${row(d.events)}</li>`
+        `<li value="${d.n}" class="${escapeHtml(`amap-f ${dotClasses(d.events)}`.trim())}" data-testid="amap-legend-dot"><a class="amap-zoom" href="${dotHref(d)}" data-testid="amap-place-link">${fmt(lang, 'map.place', { n: d.n })}</a>: ${row(d.events)}</li>`
     )
     .join('');
   const rest = unplaced.length
@@ -527,7 +551,10 @@ function zoomLegend(
   return `<ol class="amap-legend" id="amap-places" data-testid="amap-legend">${rows}</ol>${rest}`;
 }
 
-/** The landing's zoomed area: one hexagon, its streets, a dot per place. */
+/**
+ * The landing's zoomed area: one hexagon, its streets, a dot per place. With no
+ * street map: the same places as a list, and their panels, with no dot map.
+ */
 function renderZoom(
   zoom: AreaZoom,
   now: Date,
@@ -557,13 +584,18 @@ function renderZoom(
     ? `<p class="amap-credit" data-testid="amap-credit">${fmt(lang, 'map.credit', { osm: OSM_LINK })}</p>`
     : '';
   const events = eventCount(inArea.length, lang);
+  const days = CORRIDOR_WINDOW_DAYS;
   const caption = area.name
-    ? fmt(lang, 'map.zoomCaptionNamed', {
+    ? fmt(lang, streets ? 'map.zoomCaptionNamed' : 'map.listCaptionNamed', {
         events,
         name: escapeHtml(area.name),
-        days: CORRIDOR_WINDOW_DAYS,
+        days,
       })
-    : fmt(lang, 'map.zoomCaption', { events, days: CORRIDOR_WINDOW_DAYS });
+    : fmt(lang, streets ? 'map.zoomCaption' : 'map.listCaption', { events, days });
+  // No street map, no floating dots (OSE-1894): the places are the list below.
+  const drawing = streets
+    ? zoomSvg(cell, dots, lang, streets)
+    : `<div class="map-placeholder" data-testid="amap-no-tiles" role="status"><p>${msg(lang, 'map.noTiles')}</p></div>`;
   const byId = new Map(inArea.map((e) => [str(e.id), e]));
   const places: PanelPlace[] = dots.map((d) => ({
     n: d.n,
@@ -574,7 +606,7 @@ function renderZoom(
   const html = `<div class="amap-wrap" data-testid="amap-wrap"><figure class="amap" data-testid="amap" data-zoom="${cell}">
               ${MAP_STYLE}${ZOOM_STYLE}${streets ? STREET_STYLE : ''}
               ${back}
-              ${zoomSvg(cell, dots, lang, streets)}
+              ${drawing}
               ${zoomLegend(dots, unplaced, lang, sponsorTitles)}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>${credit}
             </figure>${panels}</div>`;
@@ -617,7 +649,7 @@ export function renderAttendeeMap(
     /** Zoomed in: each event's direct links and share code (lib/map-place-links.ts). */
     placeLinks?: PanelOptions['placeLinks'];
     /** Zoomed in: the site's origin, for the link a Share button carries. */
-    origin?: string;
+    origin?: string | null;
   }
 ): RenderedAttendeeMap {
   const lang = opts?.lang ?? DEFAULT_LANG;

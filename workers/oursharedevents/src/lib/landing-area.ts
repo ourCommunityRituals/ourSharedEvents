@@ -322,7 +322,7 @@ export function renderLandingArea(
     /** Zoomed in: each event's direct links and share code, for its panel card. */
     placeLinks?: ReadonlyMap<string, PlaceLinks>;
     /** Zoomed in: the site's origin, for the link a Share button carries. */
-    origin?: string;
+    origin?: string | null;
   }
 ): RenderedLandingArea {
   const lang = opts?.lang ?? DEFAULT_LANG;

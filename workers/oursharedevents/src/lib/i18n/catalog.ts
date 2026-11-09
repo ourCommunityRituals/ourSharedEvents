@@ -288,9 +288,15 @@ const en = {
   'map.zoomIn': 'Zoom in',
   'map.allAreas': 'Back to all areas',
   'map.zoomCaption':
-    '{events} in this area over the next {days} days. A solid dot is the place itself; a pale dot marks only its block.',
+    '{events} in this area over the next {days} days. A solid dot is a named place, shown on its block; a pale dot marks only its block.',
   'map.zoomCaptionNamed':
-    '{events} in this area ({name}) over the next {days} days. A solid dot is the place itself; a pale dot marks only its block.',
+    '{events} in this area ({name}) over the next {days} days. A solid dot is a named place, shown on its block; a pale dot marks only its block.',
+  'map.listCaption':
+    '{events} in this area over the next {days} days, listed by place. A place is a block, never a street address.',
+  'map.listCaptionNamed':
+    '{events} in this area ({name}) over the next {days} days, listed by place. A place is a block, never a street address.',
+  'map.noTiles':
+    '<strong>The street map for this area is not here yet.</strong> Its places are listed below. Open a place to see its events.',
   'map.zoomEmpty': '<strong>No upcoming events in this area.</strong>',
   'map.unplaced': 'Somewhere in this area',
   'map.dotTitle': 'Spot {n}: {count}',
@@ -601,9 +607,15 @@ const es: Record<MessageKey, string> = {
   'map.zoomIn': 'Acercar',
   'map.allAreas': 'Volver a todas las zonas',
   'map.zoomCaption':
-    '{events} en esta zona en los próximos {days} días. Un punto sólido es el lugar exacto; un punto claro marca solo su cuadra.',
+    '{events} en esta zona en los próximos {days} días. Un punto sólido es un lugar con nombre, mostrado en su cuadra; un punto claro marca solo su cuadra.',
   'map.zoomCaptionNamed':
-    '{events} en esta zona ({name}) en los próximos {days} días. Un punto sólido es el lugar exacto; un punto claro marca solo su cuadra.',
+    '{events} en esta zona ({name}) en los próximos {days} días. Un punto sólido es un lugar con nombre, mostrado en su cuadra; un punto claro marca solo su cuadra.',
+  'map.listCaption':
+    '{events} en esta zona en los próximos {days} días, por lugar. Un lugar es una cuadra, nunca una dirección.',
+  'map.listCaptionNamed':
+    '{events} en esta zona ({name}) en los próximos {days} días, por lugar. Un lugar es una cuadra, nunca una dirección.',
+  'map.noTiles':
+    '<strong>El mapa de calles de esta zona todavía no está disponible.</strong> Sus lugares aparecen abajo. Abre un lugar para ver sus eventos.',
   'map.zoomEmpty': '<strong>No hay eventos próximos en esta zona.</strong>',
   'map.unplaced': 'En algún lugar de esta zona',
   'map.dotTitle': 'Punto {n}: {count}',

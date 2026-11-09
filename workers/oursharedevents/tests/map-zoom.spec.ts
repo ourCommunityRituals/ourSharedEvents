@@ -3,13 +3,15 @@
  *
  * A hexagon on the landing links to `?area=<res-7 cell>`. That view draws the
  * one area over the street map with a numbered dot per place that holds an
- * event: a business or landmark (`place_kind` 'business') at its exact point,
- * anything else at the centre of its res-9 block. One event per dot links to
- * its page; more link to their row in the list. The dots carry the cards'
- * filter classes, so the landing's pills filter them with no JS.
+ * event, every one at the centre of its res-9 block (invariant 3; epic
+ * OSE-1880). A business or landmark (`place_kind` 'business') is marked, never
+ * pinpointed. Dots nearer than two touch targets are one place. Every dot
+ * opens its place panel under the map. The dots carry the cards' filter
+ * classes, so the landing's pills filter them with no JS. With no street map
+ * there is no dot map: the places are a list, with the same panels.
  *
  * Node project: pure rendering. The page itself (`/?area=` through the
- * Worker) is covered in event-place.spec.ts.
+ * Worker, where no street map is bound) is covered in event-place.spec.ts.
  *
  * @born-red map zoom | method: 21 faults injected one at a time (all dots exact,
  *   none exact, kind always address, kind not saved, kinds asked for events placed
@@ -20,10 +22,18 @@
  *   old kind, an unescaped dot title, a small touch target, other areas drawn,
  *   blocks not shared); each turned map-zoom.spec.ts or event-place.spec.ts red
  *   | date: 2026-11-09
+ * @born-red merged dots, no-tiles list, neutral outline | method: 11 faults
+ *   injected one at a time (near blocks not merged, the merge taking every
+ *   block, a merged place marked as a business, dots drawn with no street map,
+ *   the no-street-map note dropped, the list rows without their place link, the
+ *   dot caption kept on the list, and its named form, the outline back on the
+ *   accent colour, the fill too, the touch target without its fill-opacity);
+ *   each turned this file red | date: 2026-11-09
  */
 import { describe, expect, test } from 'vitest';
 import { cellToChildren, cellToLatLng, cellToParent, latLngToCell } from 'h3-js';
 import {
+  DOT_MERGE,
   MAP_STYLE,
   ZOOM_STYLE,
   mapDots,
@@ -31,6 +41,7 @@ import {
   type ZoomEvent,
 } from '../src/lib/attendee-map';
 import { landingZoom, renderLandingArea } from '../src/lib/landing-area';
+import { PLACE_PANEL_CSS } from '../src/lib/event-list';
 import { MAP_H, MAP_W, cellsKey, frameForCells, project } from '../src/lib/street-map';
 
 const NOW = Date.parse('2026-11-09T12:00:00Z');
@@ -55,12 +66,22 @@ function ev(id: string, over: Partial<ZoomEvent> = {}): ZoomEvent {
   };
 }
 
+// The street map drawn for this one area. Without it no dot map is drawn.
+const STREETS = { cellsKey: cellsKey([CELL]), svg: '<g data-testid="amap-streets"></g>' };
+
 const zoomed = (events: ZoomEvent[], extra: Record<string, unknown> = {}) =>
   renderAttendeeMap([], {
     now: NOW,
     zoom: { cell: CELL, events, backHref: '/?zip=60406' },
+    streets: STREETS,
     ...extra,
   });
+
+/** Where a block's dot is drawn, in map units. */
+const FRAME = frameForCells([CELL], MAP_W, MAP_H);
+const xyOf = (lat: number, lon: number) =>
+  project(FRAME, ...cellToLatLng(latLngToCell(lat, lon, 9)));
+const apart = (a: number[], b: number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!);
 
 describe('where a dot sits', () => {
   // Place, not person (AGENTS.md invariant 3; owner 2026-11-09, epic OSE-1880):
@@ -220,18 +241,201 @@ describe('the zoomed map', () => {
   });
 
   test('streets are drawn only when they were drawn for this one cell', () => {
-    const streets = { cellsKey: cellsKey([CELL]), svg: '<g data-testid="amap-streets"></g>' };
-    const yes = zoomed([ev('a')], { streets }).html;
+    const yes = zoomed([ev('a')]).html;
     expect(yes).toContain('data-testid="amap-streets"');
     expect(yes).toContain('data-testid="amap-credit"');
-    const no = zoomed([ev('a')], { streets: { ...streets, cellsKey: cellsKey([OTHER]) } }).html;
+    const no = zoomed([ev('a')], { streets: { ...STREETS, cellsKey: cellsKey([OTHER]) } }).html;
     expect(no).not.toContain('data-testid="amap-streets"');
     expect(no).not.toContain('data-testid="amap-credit"');
+    // Streets for another area are no street map for this one: no dots either.
+    expect(no).not.toContain('data-testid="amap-dot"');
+    expect(no).toContain('data-testid="amap-no-tiles"');
   });
 
   test('the caption says what the dots mean, in English and Spanish', () => {
     expect(zoomed([ev('a')]).html).toContain('a pale dot marks only its block');
     expect(zoomed([ev('a')], { lang: 'es' }).html).toContain('un punto claro marca solo su cuadra');
+  });
+});
+
+// OSE-1889: two dots nearer than two touch targets overlap, and one of them
+// cannot be tapped. They are one place.
+describe('dots too near to tap apart are one place', () => {
+  // One block north is nearer than two hit radii; 0.01 of latitude is not.
+  const next = { lat: RIPH.lat + 0.003, lon: RIPH.lon };
+  const far = { lat: RIPH.lat + 0.01, lon: RIPH.lon };
+
+  test('the fixtures: the next block is a different block, nearer than two hit radii', () => {
+    expect(latLngToCell(next.lat, next.lon, 9)).not.toBe(latLngToCell(RIPH.lat, RIPH.lon, 9));
+    const here = xyOf(RIPH.lat, RIPH.lon);
+    expect(apart(here, xyOf(next.lat, next.lon))).toBeLessThan(DOT_MERGE);
+    expect(apart(here, xyOf(far.lat, far.lon))).toBeGreaterThanOrEqual(DOT_MERGE);
+  });
+
+  test('sunny: two near blocks share one numbered place, at the first block centre', () => {
+    const { dots } = mapDots(CELL, [ev('south'), ev('north', next)]);
+    expect(dots).toHaveLength(1);
+    expect(dots[0]!.n).toBe(1);
+    // Reading order: the northern block is first, and the place stays on it.
+    expect(dots[0]!.events.map((e) => e.id)).toEqual(['north', 'south']);
+    expect([dots[0]!.lat, dots[0]!.lng]).toEqual(cellToLatLng(latLngToCell(next.lat, next.lon, 9)));
+    const html = zoomed([ev('south'), ev('north', next)]).html;
+    expect(html.match(/data-testid="amap-dot"/g)).toHaveLength(1);
+    expect(html).toMatch(/data-testid="amap-dot" data-exact="1" data-count="2"/);
+    expect(html.match(/data-testid="amap-panel"/g)).toHaveLength(1);
+  });
+
+  test('rainy: blocks two hit radii apart or more stay separate places', () => {
+    const { dots } = mapDots(CELL, [ev('south'), ev('north', far)]);
+    expect(dots.map((d) => d.events.map((e) => e.id))).toEqual([['north'], ['south']]);
+  });
+
+  test('edge: a merged place is marked as a business only when every event in it is one', () => {
+    const mixed = mapDots(CELL, [ev('biz'), ev('home', { place_kind: 'address', ...next })]).dots;
+    expect(mixed).toHaveLength(1);
+    expect(mixed[0]!.exact).toBe(false);
+    // The pale block joins a business that comes first in reading order, too.
+    const other = mapDots(CELL, [ev('home', { place_kind: 'address' }), ev('biz', next)]).dots;
+    expect(other).toHaveLength(1);
+    expect(other[0]!.exact).toBe(false);
+  });
+
+  test('edge: an event on every block of the area: no two touch targets overlap, no event is lost', () => {
+    const events = cellToChildren(CELL, 9).map((block, i) => {
+      const [lat, lon] = cellToLatLng(block);
+      return ev(`e${i}`, { lat, lon });
+    });
+    const { dots, unplaced } = mapDots(CELL, events);
+    expect(unplaced).toEqual([]);
+    expect(dots.flatMap((d) => d.events.map((e) => e.id)).sort()).toEqual(
+      events.map((e) => String(e.id)).sort()
+    );
+    expect(dots.length).toBeGreaterThan(1);
+    expect(dots.length).toBeLessThan(events.length);
+    expect(dots.map((d) => d.n)).toEqual(dots.map((_, i) => i + 1));
+    const at = dots.map((d) => project(FRAME, d.lat, d.lng));
+    for (let i = 0; i < at.length; i += 1) {
+      for (let j = i + 1; j < at.length; j += 1) {
+        expect(apart(at[i]!, at[j]!), `${i + 1} and ${j + 1}`).toBeGreaterThanOrEqual(DOT_MERGE);
+      }
+    }
+    // Every place is still a res-9 block centre, never a point between blocks.
+    for (const d of dots) {
+      expect([d.lat, d.lng]).toEqual(cellToLatLng(latLngToCell(d.lat, d.lng, 9)));
+    }
+  });
+});
+
+// OSE-1894 (owner 2026-11-09, merged decision 6): no street tiles, no floating
+// dots. Staging and production have no MAP_TILES binding today.
+describe('no street map: the places are a list, with their panels', () => {
+  const far = { lat: RIPH.lat + 0.01, lon: RIPH.lon };
+  const bare = (events: ZoomEvent[], extra: Record<string, unknown> = {}) =>
+    zoomed(events, { streets: null, origin: 'https://stg.example', ...extra });
+
+  test('rainy: no dot map is drawn: no svg, no outline, no dot, and it says why', () => {
+    const r = bare([ev('a'), ev('b', far)]);
+    expect(r.state).toBe('map');
+    expect(r.count).toBe(2);
+    expect(r.html).toContain(`data-zoom="${CELL}"`);
+    expect(r.html).not.toContain('<svg');
+    expect(r.html).not.toContain('<circle');
+    expect(r.html).not.toContain('data-testid="amap-dot"');
+    expect(r.html).not.toContain('data-testid="amap-zone"');
+    expect(r.html).not.toContain('data-testid="amap-credit"');
+    expect(r.html).toContain(
+      '<div class="map-placeholder" data-testid="amap-no-tiles" role="status"><p><strong>The street map for this area is not here yet.</strong>'
+    );
+    expect(zoomed([ev('a')]).html).not.toContain('amap-no-tiles');
+  });
+
+  test('sunny: every place is a row that opens its panel, and the panels are all there', () => {
+    const html = bare([ev('a'), ev('b', far)]).html;
+    for (const n of [1, 2]) {
+      expect(html).toContain(
+        `<a class="amap-zoom" href="#amap-dot-${n}" data-testid="amap-place-link">Place ${n}</a>: `
+      );
+      expect(html).toContain(
+        `<span class="amap-t" id="amap-dot-${n}"></span><section class="amap-p`
+      );
+    }
+    expect(html.match(/data-testid="amap-legend-dot"/g)).toHaveLength(2);
+    expect(html.match(/data-testid="amap-panel"/g)).toHaveLength(2);
+    expect(html).toContain('data-testid="amap-open"');
+    expect(html).toContain('data-testid="share-btn"');
+    expect(html).toContain('data-testid="amap-back"');
+  });
+
+  test('sunny: with a street map the list rows open the same panels as the dots', () => {
+    const html = zoomed([ev('a'), ev('b', far)]).html;
+    expect(html.match(/href="#amap-dot-2" data-testid="amap-place-link"/g)).toHaveLength(1);
+    expect(html).toMatch(/<a href="#amap-dot-2" class="[^"]*" data-testid="amap-dot"/);
+  });
+
+  test('the caption speaks of places, not dots, in English and Spanish', () => {
+    const caption = (html: string) => /<figcaption[^>]*>(.*?)<\/figcaption>/s.exec(html)![1]!;
+    const en = caption(bare([ev('a')]).html);
+    expect(en).toContain('listed by place. A place is a block, never a street address.');
+    expect(en).not.toContain('dot');
+    const named = caption(
+      bare([ev('a', { where_address: '1 Main St, Blue Island, IL 60406' })]).html
+    );
+    expect(named).toContain('in this area (Blue Island) over the next');
+    expect(named).toContain('listed by place.');
+    const es = bare([ev('a')], { lang: 'es' }).html;
+    expect(caption(es)).toContain('por lugar. Un lugar es una cuadra, nunca una dirección.');
+    expect(caption(es)).not.toContain('punto');
+    expect(es).toContain('El mapa de calles de esta zona todavía no está disponible.');
+  });
+
+  test('edge: the places and their numbers are the same with and without the street map', () => {
+    const events = [ev('a'), ev('b', far), ev('c', { lat: RIPH.lat + 0.003, lon: RIPH.lon })];
+    const ids = (html: string) =>
+      [...html.matchAll(/data-testid="amap-panel" data-n="(\d+)"/g)].map((m) => m[1]);
+    expect(ids(bare(events).html)).toEqual(ids(zoomed(events).html));
+    expect(ids(bare(events).html)).toEqual(['1', '2']);
+  });
+
+  test('edge: an event with no coordinates is still listed, and the pills still filter the rows', () => {
+    const html = bare([
+      ev('a', { classes: ['type-bingo', 'when-month'] }),
+      ev('nowhere', { lat: null, lon: null }),
+    ]).html;
+    expect(html).toContain('data-testid="amap-unplaced"');
+    expect(html).toMatch(
+      /<li value="1" class="amap-f type-bingo when-month" data-testid="amap-legend-dot">/
+    );
+  });
+
+  test('never who: no coordinate reaches the page, and no link reaches tracking', () => {
+    const html = bare([ev('a'), ev('b', far)]).html;
+    expect(html).not.toContain(String(RIPH.lat));
+    expect(html).not.toContain(String(RIPH.lon));
+    for (const m of html.matchAll(/href="([^"]*)"/g)) {
+      expect(m[1], m[1]).not.toMatch(/^\/(q|s|e|r|c)\//);
+    }
+  });
+
+  test('the landing, zoomed with no street map: the list and panels, opened on the map view', () => {
+    const area = renderLandingArea([{ ...ev('here'), template_id: 'trivia' }], {
+      now: NOW,
+      zoom: { cell: CELL, backHref: '/' },
+      origin: 'https://stg.example',
+    });
+    expect(area.defaultView).toBe('map');
+    expect(area.mapCells).toEqual([CELL]);
+    expect(area.html).toContain('data-testid="amap-no-tiles"');
+    expect(area.html).not.toContain('data-testid="amap-dot"');
+    expect(area.html).toContain('data-testid="amap-panel"');
+    expect(area.html).toContain('data-share-url="https://stg.example/events/here"');
+    // No origin (no request): no Share button, and nothing else changes.
+    const quiet = renderLandingArea([{ ...ev('here'), template_id: 'trivia' }], {
+      now: NOW,
+      zoom: { cell: CELL, backHref: '/' },
+      origin: null,
+    });
+    expect(quiet.html).not.toContain('share-btn');
+    expect(quiet.html).toContain('data-testid="amap-panel"');
   });
 });
 
@@ -294,7 +498,7 @@ describe('the landing, zoomed', () => {
         { ...ev('here'), event_type_id: 'etr-art-music' },
         { ...ev('two'), event_type_id: 'etr-biz-mixer' },
       ],
-      { now: NOW, zoom: { cell: CELL, backHref: '/' }, typeCategories }
+      { now: NOW, zoom: { cell: CELL, backHref: '/' }, typeCategories, streets: STREETS }
     );
     expect(area.html).toContain(
       '#cat-art:checked ~ .area .event-card:not(.cat-art),#cat-art:checked ~ .area .amap-f:not(.cat-art){display:none}'
@@ -395,6 +599,29 @@ describe('design budget', () => {
     const html = zoomed([ev('a')]).html;
     const r = Number(/class="amap-hit" [^>]*r="(\d+)"/.exec(html)![1]);
     expect(2 * r * (343 / MAP_W)).toBeGreaterThanOrEqual(44);
+    // Two targets that do not overlap are two radii apart: the merge distance.
+    expect(DOT_MERGE).toBe(2 * r);
+    // The target is invisible but still takes the tap (a fill of none would not).
+    expect(html).toMatch(/<circle class="amap-hit" [^>]*fill-opacity="0"\/>/);
+  });
+
+  test("an outlined panel button's hover keeps its accent text readable", () => {
+    // Seen in a browser (2026-11-09): the filled button's hover, the accent
+    // itself, went under the outlined buttons' accent text. On a phone a hover
+    // stays after the tap, so Share turned unreadable once pressed.
+    expect(PLACE_PANEL_CSS).toContain(
+      '.event-card .amap-acts .cta-secondary:hover { background: var(--surface-hover); }'
+    );
+    expect(PLACE_PANEL_CSS).not.toMatch(/#[0-9a-f]{3,8}/i);
+  });
+
+  test('the area outline is neutral; the accent colour is for the dots alone', () => {
+    // Design system README (2026-10-08): map cells are never the button colour.
+    expect(ZOOM_STYLE).toContain(
+      '.amap-zone{fill:var(--border-strong);fill-opacity:.06;stroke:var(--border-strong);stroke-width:3}'
+    );
+    expect(ZOOM_STYLE).toContain('.amap-dot{fill:var(--accent);');
+    expect(/\.amap-zone\{[^}]*\}/.exec(ZOOM_STYLE)![0]).not.toContain('--accent');
   });
 });
 

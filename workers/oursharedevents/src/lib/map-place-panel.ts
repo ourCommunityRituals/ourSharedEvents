@@ -48,8 +48,8 @@ export interface PanelOptions {
   sponsorTitles?: ReadonlyMap<string, string>;
   /** Event id → its map links and share code. */
   placeLinks?: ReadonlyMap<string, PlaceLinks>;
-  /** The site's origin, for the absolute link a Share carries. */
-  origin?: string;
+  /** The site's origin, for the absolute link a Share carries; none, no Share. */
+  origin?: string | null;
 }
 
 function str(v: unknown): string {

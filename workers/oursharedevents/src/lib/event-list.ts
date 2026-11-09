@@ -310,6 +310,11 @@ export const PLACE_PANEL_CSS = `
       .event-card .amap-acts .cta { width: 100%; min-height: 48px; box-sizing: border-box; white-space: normal; text-align: center; font: inherit; font-weight: 600; border: 0; cursor: pointer; }
       .event-card .amap-acts .cta:first-child, .event-card .amap-acts > :last-child:nth-child(even) { grid-column: 1 / -1; }
       .event-card .amap-acts .ose-share-btn:focus-visible { outline: 3px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }
+      /* An outlined button keeps its accent text, so its hover is the quiet
+         surface, not the filled button's (seen in a browser 2026-11-09: accent
+         text on the accent hover could not be read, and on a phone the hover
+         stays after a tap). */
+      .event-card .amap-acts .cta-secondary:hover { background: var(--surface-hover); }
       @media (min-width: 600px) {
         .event-card .amap-acts { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
         .event-card .amap-acts .cta:first-child, .event-card .amap-acts > :last-child:nth-child(even) { grid-column: auto; }
