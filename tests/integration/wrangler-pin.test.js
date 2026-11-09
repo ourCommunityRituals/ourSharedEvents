@@ -36,7 +36,12 @@ describe('wrangler is pinned exactly', () => {
   });
 
   test('the test pool is held to the same wrangler, not its own', () => {
-    expect(manifest.overrides['@cloudflare/vitest-pool-workers'].wrangler).toBe('$wrangler');
+    // The override is either "$wrangler" or, when wrangler under the pool
+    // needs its own overrides (its miniflare), the nested form whose "."
+    // key holds the version: { ".": "$wrangler", "miniflare": "..." }.
+    const override = manifest.overrides['@cloudflare/vitest-pool-workers'].wrangler;
+    const spec = typeof override === 'string' ? override : override?.['.'];
+    expect(spec).toBe('$wrangler');
   });
 
   test('no workflow fetches wrangler by another route', () => {
