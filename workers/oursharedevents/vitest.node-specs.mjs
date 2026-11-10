@@ -233,6 +233,7 @@ export const NODE_SPECS = [
   'tests/admin-sponsors-switch.spec.ts',
   'tests/admin-create-core-values.spec.ts',
   'tests/admin-wizard-tv.spec.ts',
+  'tests/admin-wizard-uniform.spec.ts',
   'tests/admin-wizard-preview-review.spec.ts',
   'tests/admin-wizard-what-and-missing.spec.ts',
   'tests/poster-preview-mode.spec.ts',

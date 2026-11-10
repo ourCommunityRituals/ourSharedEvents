@@ -291,9 +291,9 @@ describe('wizard TV section: saving', () => {
 });
 
 describe('wizard step 4 controls are finger-sized', () => {
-  test('Copy, Preview and Show me share a 44px-tall target', () => {
+  test('Copy, Preview and Show me share a 48px-tall target', () => {
     const rule = /\.wizard-copy-btn \{([^}]*)\}/.exec(ADMIN_HTML)?.[1] ?? '';
-    expect(rule).toContain('min-height: 44px');
+    expect(rule).toContain('min-height: 48px');
     expect(rule).toContain('display: inline-flex');
   });
 });

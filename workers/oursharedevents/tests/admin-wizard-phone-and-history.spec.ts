@@ -96,11 +96,13 @@ describe('OSE-1314 — wizard choice cards stack one per row on phones', () => {
     expect(m).not.toBeNull();
   });
 
-  test('cards can shrink inside the panel and keep a 44px target', () => {
+  test('cards can shrink inside the panel and keep at least a 44px target', () => {
     const rules = topLevelRulesFor('.wizard-template-card');
     const card = rules.find((r) => /flex-direction:\s*column/.test(r)) ?? '';
     expect(card).toMatch(/min-width:\s*0/);
-    expect(card).toMatch(/min-height:\s*44px/);
+    // The org floor is 44px; the flow's choice cards are 56px (2026-11-10).
+    const minHeight = Number(/min-height:\s*(\d+)px/.exec(card)?.[1]);
+    expect(minHeight).toBeGreaterThanOrEqual(44);
   });
 
   test('.create-publish-label keeps its own flex row (the merge is undone, not moved)', () => {

@@ -268,16 +268,11 @@
         .timeline { grid-template-columns: repeat(6, 1fr); gap: 0.75rem; }
         .tl-step { grid-template-columns: 1fr; }
       }
-      .wizard-go-live {
-        padding: 0.75rem 1rem;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        margin-bottom: 1rem;
-      }
-      .wizard-go-live .create-btn.is-live {
-        background: var(--success);
-        color: var(--bg);
-      }
+      .wizard-go-live { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; padding: 1rem; background: var(--surface-hover); border: 1px solid var(--border-strong); border-radius: 12px; margin-bottom: 1rem; }
+      .wizard-go-live > p { flex: 1 1 100%; margin: 0; }
+      /* The status line keeps its live region but takes no room until it speaks. */
+      .wizard-go-live > .create-msg { min-height: 0; }
+      .wizard-go-live .create-btn.is-live { background: var(--success); color: var(--bg); }
       .feature-locked {
         position: relative;
         opacity: 0.5;
@@ -702,110 +697,21 @@
         color: var(--text-muted);
         margin-bottom: 1rem;
       }
-      .create-form {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.75rem;
-      }
-      .create-form .full-width {
-        grid-column: 1 / -1;
-      }
-      .create-form label {
-        display: block;
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        margin-bottom: 0.25rem;
-      }
-      /* Mobile floor (OSE-1236). font-size is 16px, not 0.9rem: below 16px iOS
-         Safari auto-zooms on focus and does not zoom back out, leaving the
-         operator on a zoomed, horizontally-scrolling form mid-entry. 0.9rem
-         computed to 14.4px on every field. min-height 44px is WCAG 2.5.5; the
-         0.5rem padding rendered 34px. textarea is included here because it had
-         no font-size rule at all and fell to the UA default, 13.3px — the
-         smallest text on the surface, on the two longest fields (who-story,
-         why-purpose). Measured on the mobile-workability gate's first run
-         against /admin, which had never been audited: OSE-302's staging bearer
-         has been unset since May, so the surface was skipped on every run. */
-      .create-form input,
-      .create-form select,
-      .create-form textarea {
-        width: 100%;
-        min-height: 44px;
-        padding: 0.5rem 0.75rem;
-        border: 1px solid var(--border-strong);
-        border-radius: 6px;
-        font-size: 16px;
-        background: var(--surface);
-        color: var(--text);
-      }
-      /* input[type=date] on iOS Safari (OSE-1237, reported from a phone).
-         Safari gives a date input an INTRINSIC width from its rendered value
-         and centres the text, so "Sep 4, 2026" rendered ~25px wider than the
-         name and venue fields beside it and broke the right margin. Chromium
-         does not do this — measured at 393px, all three inputs are 318px wide
-         with text-align:start — so it is invisible to the Chromium gate.
-
-         -webkit-appearance:none opts out of the native box so the width:100%
-         and box-sizing:border-box above actually apply; min-width:0 stops the
-         intrinsic width winning inside a flex/grid parent; text-align:left
-         matches the siblings. The native date picker still opens on tap — this
-         changes the box, not the control.
-
-         NOT VERIFIED IN WEBKIT: this container cannot install it (missing
-         system libraries), so the fix is applied from the documented Safari
-         behaviour and the screenshot, not from a local repro. */
-      .type-picker-msg {
-        margin: 0;
-        font-size: 0.9375rem;
-        color: var(--text-muted);
-      }
-      .create-form input[type='date'],
-      .create-form input[type='time'] {
-        -webkit-appearance: none;
-        appearance: none;
-        min-width: 0;
-        text-align: left;
-      }
-
-      .create-form input:focus,
-      .create-form select:focus,
-      .create-form textarea:focus {
-        border-color: var(--accent);
-        outline: 2px solid var(--accent);
-        outline-offset: 0;
-      }
-      .create-btn {
-        min-height: 44px; /* WCAG 2.5.5 — 0.6rem padding rendered 35px (OSE-1236) */
-        padding: 0.6rem 1.5rem;
-        background: var(--success);
-        color: var(--bg);
-        border: none;
-        border-radius: 6px;
-        font-size: 0.9rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
-      }
-      .create-btn:hover {
-        background: color-mix(in srgb, var(--success) 85%, var(--text));
-      }
-      .create-btn:disabled {
-        background: var(--surface-hover);
-        color: var(--text-muted);
-        cursor: not-allowed;
-      }
-      .create-msg {
-        font-size: 0.85rem;
-        margin-top: 0.5rem;
-        min-height: 1.25rem;
-      }
-      .create-msg.success {
-        color: var(--success);
-      }
-      .create-msg.error {
-        color: var(--error);
-      }
+      .create-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+      .create-form .full-width { grid-column: 1 / -1; }
+      .create-form label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+      /* Mobile floor (OSE-1236). font-size is 16px, not 0.9rem: below 16px iOS Safari auto-zooms on focus and does not zoom back out, leaving the operator on a zoomed, horizontally-scrolling form mid-entry. 0.9rem computed to 14.4px on every field. min-height 44px is WCAG 2.5.5; the 0.5rem padding rendered 34px. textarea is included here because it had no font-size rule at all and fell to the UA default, 13.3px — the smallest text on the surface, on the two longest fields (who-story, why-purpose). Measured on the mobile-workability gate's first run against /admin, which had never been audited: OSE-302's staging bearer has been unset since May, so the surface was skipped on every run. */
+      .create-form input, .create-form select, .create-form textarea { width: 100%; min-height: 44px; padding: 0.5rem 0.75rem; border: 1px solid var(--border-strong); border-radius: 6px; font-size: 16px; background: var(--surface); color: var(--text); }
+      /* input[type=date] on iOS Safari (OSE-1237, reported from a phone). Safari gives a date input an INTRINSIC width from its rendered value and centres the text, so "Sep 4, 2026" rendered ~25px wider than the name and venue fields beside it and broke the right margin. Chromium does not do this — measured at 393px, all three inputs are 318px wide with text-align:start — so it is invisible to the Chromium gate. -webkit-appearance:none opts out of the native box so the width:100% and box-sizing:border-box above actually apply; min-width:0 stops the intrinsic width winning inside a flex/grid parent; text-align:left matches the siblings. The native date picker still opens on tap — this changes the box, not the control. NOT VERIFIED IN WEBKIT: this container cannot install it (missing system libraries), so the fix is applied from the documented Safari behaviour and the screenshot, not from a local repro. */
+      .type-picker-msg { margin: 0; font-size: 0.9375rem; color: var(--text-muted); }
+      .create-form input[type='date'], .create-form input[type='time'] { -webkit-appearance: none; appearance: none; min-width: 0; text-align: left; }
+      .create-form input:focus, .create-form select:focus, .create-form textarea:focus { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 0; }
+      .create-btn { min-height: 44px; /* WCAG 2.5.5 — 0.6rem padding rendered 35px (OSE-1236) */ padding: 0.6rem 1.5rem; background: var(--success); color: var(--bg); border: none; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+      .create-btn:hover { background: color-mix(in srgb, var(--success) 85%, var(--text)); }
+      .create-btn:disabled { background: var(--surface-hover); color: var(--text-muted); cursor: not-allowed; }
+      .create-msg { font-size: 0.85rem; margin-top: 0.5rem; min-height: 1.25rem; }
+      .create-msg.success { color: var(--success); }
+      .create-msg.error { color: var(--error); }
       /* Shared assertive status toast (replaces blocking dialogs). Sticky at the
          top of the admin main column on mobile; top-right on wide screens. */
       /* OSE-673: persistent context bar + sticky card nav. */
@@ -1583,436 +1489,123 @@
         display: none;
       }
 
-      .path-chooser {
-        background: var(--surface);
-        border-radius: 8px;
-        padding: 1.25rem 1.5rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        margin-bottom: 2rem;
-        border-left: 3px solid var(--accent);
-      }
-      .path-chooser h2 {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        margin-bottom: 0.25rem;
-      }
-      .path-chooser-sub {
-        font-size: 0.85rem;
-        color: var(--text-muted);
-        margin-bottom: 1rem;
-      }
-      .path-chooser-options {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.75rem;
-      }
-      /* The third way out, deliberately quiet (OSE-1240). It is a destination
-         for someone who already knows where they are going, not a third
-         question. Full 44px target so "quiet" never means "hard to hit". */
-      .path-option-quiet {
-        display: block;
-        width: 100%;
-        min-height: 44px;
-        margin-top: 0.75rem;
-        padding: 0.5rem;
-        background: none;
-        border: none;
-        color: var(--text-muted);
-        font-family: inherit;
-        font-size: 0.85rem;
-        text-decoration: underline;
-        cursor: pointer;
-      }
-      .path-option-quiet:hover,
-      .path-option-quiet:focus-visible {
-        color: var(--accent);
-      }
-      .path-option {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        text-align: left;
-        padding: 1rem;
-        background: var(--surface-hover);
-        border: 2px solid var(--border);
-        border-radius: 8px;
-        cursor: pointer;
-        transition: border-color 0.15s, background 0.15s;
-      }
-      .path-option:hover,
-      .path-option:focus-visible {
-        border-color: var(--accent);
-        background: var(--surface);
-      }
-      .path-option-title {
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: var(--text);
-      }
-      .path-option-desc {
-        font-size: 0.8rem;
-        color: var(--text-muted);
-      }
-      .launch-wizard {
-        background: var(--surface);
-        border-radius: 8px;
-        padding: 1.25rem 1.5rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        margin-bottom: 2rem;
-        border-left: 3px solid var(--success);
-      }
-      .launch-wizard h2 {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        margin-bottom: 1rem;
-      }
-      .wizard-progress {
-        display: flex;
-        justify-content: space-between;
-        position: relative;
-        margin-bottom: 1.5rem;
-      }
-      .wizard-progress::before {
-        content: '';
-        position: absolute;
-        top: 14px;
-        left: 10%;
-        right: 10%;
-        height: 2px;
-        background: var(--surface-hover);
-      }
-      .wizard-progress-step {
-        position: relative;
-        z-index: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.3rem;
-        flex: 1;
-        min-height: 44px;
-        background: none;
-        border: none;
-        padding: 0;
-        cursor: default;
-      }
-      .wizard-progress-step .step-number {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        background: var(--surface-hover);
-        border: 2px solid var(--border);
-        color: var(--text-muted);
-        font-size: 0.8rem;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .wizard-progress-step .step-label {
-        font-size: 0.7rem;
-        color: var(--text-muted);
-      }
-      .wizard-progress-step.active .step-number {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: var(--on-accent);
-      }
-      .wizard-progress-step.active .step-label {
-        color: var(--text);
-        font-weight: 600;
-      }
-      .wizard-progress-step.completed {
-        cursor: pointer;
-      }
-      .wizard-progress-step.completed .step-number {
-        background: var(--success);
-        border-color: var(--success);
-        color: var(--bg);
-      }
-      .wizard-step {
-        display: none;
-      }
-      .wizard-step.active {
-        display: block;
-      }
-      .wizard-step-help {
-        font-size: 0.85rem;
-        color: var(--text-muted);
-        margin-bottom: 1rem;
-      }
-      .create-publish-label {
-        display: flex;
-        align-items: center;
-        gap: 0.625rem;
-        min-height: 44px;
-        font-size: 1rem;
-        cursor: pointer;
-      }
-      .create-publish-label input[type='checkbox'] {
-        width: 20px;
-        height: 20px;
-        min-height: 20px;
-        flex: 0 0 auto;
-        margin: 0;
-      }
-      .create-publish-hint {
-        margin: 0.25rem 0 0 1.875rem;
-        font-size: 0.875rem;
-        line-height: 1.5;
-        color: var(--text-muted);
-      }
+      .path-chooser-sub { font-size: 1rem; color: var(--text-muted); margin-bottom: 1.25rem; }
+      .path-chooser-options { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+      /* The third way out, deliberately quiet (OSE-1240). It is a destination for someone who already knows where they are going, not a third question. Full 44px target so "quiet" never means "hard to hit". */
+      .path-option-quiet { display: block; width: 100%; min-height: 48px; margin-top: 0.75rem; padding: 0.5rem; background: none; border: none; color: var(--text-muted); font-family: inherit; font-size: 0.9375rem; text-decoration: underline; cursor: pointer; }
+      .path-option-quiet:hover, .path-option-quiet:focus-visible { color: var(--accent-text); }
+      .path-option-title { font-size: 1.0625rem; font-weight: 700; color: var(--text); }
+      .path-option-desc { font-size: 0.9375rem; line-height: 1.45; color: var(--text-muted); }
+      /* Create & Launch, front door included: one card, title, choice card, info card, primary and secondary button (2026-11-10). */
+      .launch-wizard, .path-chooser { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; }
+      .launch-wizard h2, .path-chooser h2 { font-size: 1.5rem; font-weight: 700; line-height: 1.25; color: var(--text); margin: 0 0 0.25rem; }
+      .wizard-step-caption { margin: 0 0 1.25rem; font-size: 1rem; color: var(--text-muted); }
+      .wizard-step-caption strong { color: var(--text); font-weight: 600; }
+      .wizard-progress { display: flex; justify-content: space-between; position: relative; margin-bottom: 1rem; }
+      .wizard-progress::before { content: ''; position: absolute; top: 16px; left: 10%; right: 10%; height: 2px; background: var(--border-strong); }
+      .wizard-progress-step { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 0.3rem; flex: 1; min-height: 44px; background: none; border: none; padding: 0; cursor: default; }
+      .wizard-progress-step .step-number { width: 32px; height: 32px; border-radius: 50%; background: var(--surface-hover); border: 2px solid var(--border-strong); color: var(--text-muted); font-size: 0.875rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+      .wizard-progress-step .step-label { font-size: 0.8125rem; line-height: 1.2; text-align: center; color: var(--text-muted); }
+      .wizard-progress-step.active .step-number { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+      .wizard-progress-step.active .step-label { color: var(--text); font-weight: 600; }
+      .wizard-progress-step.completed { cursor: pointer; }
+      .wizard-progress-step.completed .step-number { background: var(--success); border-color: var(--success); color: var(--bg); }
+      .wizard-step { display: none; }
+      .wizard-step.active { display: block; }
+      .wizard-step-help { font-size: 0.9375rem; line-height: 1.5; color: var(--text-muted); margin-bottom: 1rem; }
+      /* A step's question is its largest text. */
+      .wizard-step-help.wizard-question { font-size: 1.125rem; font-weight: 700; line-height: 1.35; color: var(--text); margin: 0 0 0.75rem; }
+      * + .wizard-step-help.wizard-question { margin-top: 1.5rem; }
+      .launch-wizard .create-form { gap: 1rem; }
+      .launch-wizard .create-form label { font-size: 0.9375rem; color: var(--text); margin-bottom: 0.375rem; }
+      .launch-wizard .create-form input, .launch-wizard .create-form select { min-height: 48px; border-radius: 8px; }
+      .launch-wizard .muted-sm { font-size: 0.8125rem; }
+      .create-publish-label { display: flex; align-items: center; gap: 0.625rem; min-height: 44px; font-size: 1rem; cursor: pointer; }
+      .create-publish-label input[type='checkbox'] { width: 20px; height: 20px; min-height: 20px; flex: 0 0 auto; margin: 0; }
+      .create-publish-hint { margin: 0.25rem 0 0 1.875rem; font-size: 0.875rem; line-height: 1.5; color: var(--text-muted); }
       /* R3/R5 (OSE-1319) — typed external-link controls + poster-slot preview. */
-      .create-linkctl {
-        padding: 0.75rem 0.875rem;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--surface-hover);
-      }
-      .create-linkctl-fields {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 0.75rem;
-        margin-top: 0.5rem;
-      }
+      .create-linkctl { padding: 0.75rem 0.875rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-hover); }
+      .create-linkctl-fields { display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin-top: 0.5rem; }
       @media (min-width: 640px) {
-        .create-linkctl-fields {
-          grid-template-columns: minmax(10rem, 14rem) 1fr;
-        }
+        .create-linkctl-fields { grid-template-columns: minmax(10rem, 14rem) 1fr; }
       }
-      .create-linkctl-fields label {
-        display: block;
-        margin-bottom: 0.25rem;
-        font-size: 0.9375rem;
-      }
-      /* Explicit sizing so the new select + url input clear the mobile-workability
-         gate (>=44px target, >=16px font) regardless of the create-form base rule. */
-      .create-linkctl select,
-      .create-linkctl input[type='url'] {
-        width: 100%;
-        min-height: 44px;
-        font-size: 16px;
-        padding: 0.5rem 0.625rem;
-        border: 1px solid var(--border-strong);
-        border-radius: 6px;
-        background: var(--surface);
-        color: var(--text);
-      }
-      .create-field-error {
-        margin: 0.5rem 0 0;
-        font-size: 0.875rem;
-        line-height: 1.4;
-        color: var(--error);
-        font-weight: 600;
-      }
-      .create-slot-preview {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem;
-        margin-top: 0.75rem;
-        font-size: 0.875rem;
-        color: var(--text-muted);
-      }
-      .create-slot-preview-label {
-        font-weight: 600;
-      }
-      .create-slot-chip {
-        display: inline-block;
-        padding: 0.15rem 0.6rem;
-        border-radius: 999px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        color: var(--text);
-        font-size: 0.8125rem;
-        line-height: 1.4;
-      }
-      .create-slot-chip--typed {
-        border-color: var(--success);
-        color: var(--success);
-        font-weight: 600;
-      }
-      .wizard-publish {
-        margin-top: 1.25rem;
-        padding-top: 1.25rem;
-        border-top: 1px solid var(--border);
-      }
-      .wizard-publish-note {
-        margin: 0.75rem 0 0;
-        font-size: 0.875rem;
-        line-height: 1.5;
-        color: var(--text-muted);
-      }
+      .create-linkctl-fields label { display: block; margin-bottom: 0.25rem; font-size: 0.9375rem; }
+      /* Explicit sizing so the new select + url input clear the mobile-workability gate (>=44px target, >=16px font) regardless of the create-form base rule. */
+      .create-linkctl select, .create-linkctl input[type='url'] { width: 100%; min-height: 44px; font-size: 16px; padding: 0.5rem 0.625rem; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
+      .create-field-error { margin: 0.5rem 0 0; font-size: 0.875rem; line-height: 1.4; color: var(--error); font-weight: 600; }
+      .create-slot-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.75rem; font-size: 0.875rem; color: var(--text-muted); }
+      .create-slot-preview-label { font-weight: 600; }
+      .create-slot-chip { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 0.8125rem; line-height: 1.4; }
+      .create-slot-chip--typed { border-color: var(--success); color: var(--success); font-weight: 600; }
+      .wizard-publish { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+      .wizard-publish-note { margin: 0.75rem 0 0; font-size: 0.9375rem; line-height: 1.5; color: var(--text-muted); }
       /* OSE-1314: one card per row on phones; side by side from 640px. */
-      .wizard-template-grid,
-      .wizard-signup-grid,
-      .wizard-links-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 0.75rem;
-        margin-bottom: 1rem;
-      }
+      .wizard-template-grid, .wizard-signup-grid, .wizard-links-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin-bottom: 1rem; }
       @media (min-width: 640px) {
-        .wizard-template-grid,
-        .wizard-signup-grid,
-        .wizard-links-grid {
-          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        }
+        .wizard-template-grid, .wizard-signup-grid, .wizard-links-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
       }
-      .wizard-template-card,
-      .wizard-signup-option,
-      .wizard-publish-option {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        min-width: 0;
-        min-height: 44px;
-        text-align: left;
-        padding: 0.9rem;
-        background: var(--surface-hover);
-        border: 2px solid var(--border-strong);
-        border-radius: 8px;
-        cursor: pointer;
-        transition: border-color 0.15s;
-      }
+      .path-option, .wizard-template-card, .wizard-signup-option, .wizard-publish-option { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; min-height: 56px; text-align: left; padding: 1rem; background: var(--surface-hover); border: 2px solid var(--border-strong); border-radius: 12px; font-family: inherit; cursor: pointer; transition: border-color 0.15s; }
       /* Focus is the global button:focus-visible outline, not a border tint. */
-      .wizard-template-card:hover,
-      .wizard-signup-option:hover,
-      .wizard-publish-option:hover {
-        border-color: var(--accent);
-      }
+      .path-option:hover, .path-option:focus-visible, .wizard-template-card:hover, .wizard-signup-option:hover, .wizard-publish-option:hover { border-color: var(--accent); }
       /* OSE-1340: selected = tint + edge + check glyph (not colour alone). */
-      .wizard-template-card.selected,
-      .wizard-signup-option.selected,
-      .wizard-publish-option.selected {
-        border-color: var(--success);
-        background: color-mix(in srgb, var(--success) 15%, var(--surface));
+      .wizard-template-card.selected, .wizard-signup-option.selected, .wizard-publish-option.selected { border-color: var(--success); background: color-mix(in srgb, var(--success) 15%, var(--surface)); }
+      .selected > .wizard-card-title::before { content: '\2713 '; color: var(--success); }
+      .selected > .wizard-card-desc { color: var(--text); }
+      .wizard-card-title { font-size: 1rem; font-weight: 700; line-height: 1.3; color: var(--text); }
+      .wizard-card-desc { font-size: 0.9375rem; line-height: 1.45; color: var(--text-muted); }
+      /* Action bar: pinned to the screen bottom at every width; primary on the right. */
+      .wizard-nav { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: 0.75rem; margin-top: 1.5rem; padding: 1rem 0; background: var(--surface); border-top: 1px solid var(--border); }
+      .wizard-nav > .create-btn { order: 2; margin-left: auto; }
+      .launch-wizard .create-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 56px; padding: 0.75rem 1.75rem; background: var(--accent); color: var(--on-accent); border: 2px solid var(--accent); border-radius: 8px; font-family: inherit; font-size: 1.125rem; font-weight: 700; line-height: 1.2; }
+      .launch-wizard .create-btn:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+      .launch-wizard .create-btn:disabled { background: var(--surface-hover); border-color: var(--border-strong); color: var(--text-muted); }
+      .wizard-link-card, .wizard-tv, .wizard-review { background: var(--surface-hover); border: 1px solid var(--border-strong); border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+      .wizard-tv, .wizard-review { margin-bottom: 1rem; }
+      .wizard-tv > p, .wizard-review > p { margin: 0; }
+      /* display:flex beats the UA's [hidden]{display:none} — restore it so the sign-up card genuinely disappears when the organizer skips sign-ups. */
+      .wizard-link-card[hidden] { display: none; }
+      .wizard-link-card .wizard-card-url { font-size: 0.875rem; color: var(--accent-text); word-break: break-all; }
+      .wizard-link-card img { width: 110px; height: 110px; background: var(--surface); border-radius: 6px; align-self: flex-start; }
+      .wizard-back-btn, .wizard-skip-btn, .wizard-copy-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0.625rem 1.25rem; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; font-family: inherit; font-size: 1rem; font-weight: 600; line-height: 1.2; color: var(--text); text-decoration: none; cursor: pointer; }
+      .wizard-copy-btn { align-self: flex-start; padding: 0.5rem 1rem; }
+      .wizard-back-btn:hover, .wizard-skip-btn:hover, .wizard-copy-btn:hover { border-color: var(--accent); }
+      /* Copy and Preview side by side; the rest full width. */
+      .wizard-link-card { display: grid; grid-template-columns: auto auto 1fr; column-gap: 0.75rem; row-gap: 0.5rem; align-items: start; }
+      .wizard-link-card > *:not(.wizard-copy-btn) { grid-column: 1 / -1; }
+      /* Display rules beat the UA [hidden]; restore it. */
+      .launch-wizard .create-btn[hidden], .wizard-back-btn[hidden], .wizard-skip-btn[hidden], .wizard-copy-btn[hidden], .wizard-go-live[hidden], .wizard-tv[hidden], .wizard-review[hidden] { display: none; }
+      .wizard-checklist { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+      .wizard-checklist li { font-size: 1rem; line-height: 1.45; color: var(--text); }
+      .wizard-summary { background: color-mix(in srgb, var(--success) 15%, var(--surface)); border: 1px solid var(--success); border-radius: 12px; padding: 1rem; font-size: 1rem; color: var(--text); margin-bottom: 1rem; }
+      .wizard-summary:empty { display: none; }
+      .wizard-layout { display:grid; gap:1.5rem; }
+      .wizard-main,.wizard-preview { min-width:0; }
+      .wizard-preview { display:flex; flex-direction:column; gap:0.75rem; }
+      .wizard-preview > * { margin:0; }
+      @media (min-width:768px) {
+        .wizard-layout { grid-template-columns:minmax(0,1fr) minmax(16rem,20rem); align-items:start; }
+        .wizard-preview { position:sticky; top:1rem; }
+        .wizard-preview-toggle { display:none; }
+        .wizard-preview-body[hidden] { display:flex; }
       }
-      .selected > .wizard-card-title::before {
-        content: '\2713  ';
-        color: var(--success);
-      }
-      .selected > .wizard-card-desc {
-        color: var(--text);
-      }
-      .wizard-card-title {
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--text);
-      }
-      .wizard-card-desc {
-        font-size: 0.875rem;
-        color: var(--text-muted);
-      }
-      .wizard-nav {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 0.75rem;
-        margin-top: 1rem;
-      }
-      .wizard-back-btn,
-      .wizard-skip-btn {
-        padding: 0.6rem 1.25rem;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-size: 0.9rem;
-        color: var(--text-muted);
-        cursor: pointer;
-      }
-      .wizard-back-btn:hover,
-      .wizard-skip-btn:hover {
-        background: var(--surface-hover);
-      }
-      .wizard-link-card {
-        background: var(--surface-hover);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 0.9rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.4rem;
-      }
-      /* display:flex beats the UA's [hidden]{display:none} — restore it so the
-         sign-up card genuinely disappears when the organizer skips sign-ups. */
-      .wizard-link-card[hidden] {
-        display: none;
-      }
-      .wizard-link-card .wizard-card-url {
-        font-size: 0.75rem;
-        color: var(--accent);
-        word-break: break-all;
-      }
-      .wizard-link-card img {
-        width: 110px;
-        height: 110px;
-        background: var(--surface);
-        border-radius: 6px;
-        align-self: flex-start;
-      }
-      .wizard-copy-btn {
-        display: inline-flex;
-        align-items: center;
-        min-height: 44px;
-        align-self: flex-start;
-        padding: 0.35rem 0.9rem;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-size: 0.78rem;
-        color: var(--text-muted);
-        cursor: pointer;
-      }
-      .wizard-copy-btn:hover {
-        background: var(--surface-hover);
-        border-color: var(--success);
-      }
-      .wizard-checklist {
-        list-style: none;
-        padding: 0;
-        margin: 0 0 1rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      .wizard-checklist li {
-        font-size: 0.9rem;
-        color: var(--text);
-      }
-      .wizard-summary {
-        background: color-mix(in srgb, var(--success) 15%, var(--surface));
-        border: 1px solid var(--success);
-        border-radius: 8px;
-        padding: 0.9rem;
-        font-size: 0.95rem;
-        color: var(--text);
-        margin-bottom: 1rem;
-      }
-      .wizard-layout{display:grid;gap:1rem}
-      .wizard-main,.wizard-preview{min-width:0}
-      @media (min-width:768px){
-        .wizard-layout{grid-template-columns:minmax(0,1fr) minmax(16rem,20rem);align-items:start}
-        .wizard-preview{position:sticky;top:1rem}
-        .wizard-preview-toggle{display:none}
-        .wizard-preview-body[hidden]{display:flex}
+      /* Phone: one bar, one height, primary widest, clear of the home indicator. */
+      @media (max-width: 639px) {
+        .launch-wizard { padding: 1.25rem 1rem 0; }
+        .launch-wizard h2 { font-size: 1.375rem; }
+        .wizard-nav { align-items: stretch; margin: 1.5rem -1rem 0; padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border-strong); }
+        .wizard-nav > button { flex: 1 1 0; min-width: 0; padding-left: 0.75rem; padding-right: 0.75rem; }
+        .wizard-nav > .create-btn { flex-grow: 2; margin-left: 0; }
+        .wizard-preview { padding-bottom: 1.25rem; }
+        .wizard-go-live .create-btn, .wizard-go-live .wizard-back-btn { width: 100%; }
       }
       @media (max-width: 480px) {
-        .path-chooser-options {
-          grid-template-columns: 1fr;
-        }
-        .form-row {
-          align-items: flex-start;
-          flex-direction: column;
-        }
-        .form-row-actions {
-          justify-content: space-between;
-          width: 100%;
-        }
-        .wizard-progress-step .step-label {
-          display: none;
-        }
+        .path-chooser-options { grid-template-columns: 1fr; }
+        .form-row { align-items: flex-start; flex-direction: column; }
+        .form-row-actions { justify-content: space-between; width: 100%; }
+      }
+      /* Under 400px the caption names the step. */
+      @media (max-width: 399px) {
+        .wizard-progress-step .step-label { display: none; }
       }
     </style>
   </head>
@@ -2426,21 +2019,23 @@
         hidden
       >
         <h2>Create &amp; Launch</h2>
+        <!-- Names the step in words; the rail below hides its labels on narrow phones. -->
+        <p class="wizard-step-caption" id="wizard-step-caption" data-testid="wizard-step-caption">Step 1 of 5: <strong>Basic info</strong></p>
 
         <!-- Progress rail — completed steps are clickable to go back (only
              before the event is created; afterwards steps 1–3 are history). -->
         <div class="wizard-progress" role="group" aria-label="Setup steps">
           <button type="button" class="wizard-progress-step active" data-step="1" aria-current="step" data-testid="wizard-progress-1">
-            <span class="step-number">1</span><span class="step-label">Basic Info</span>
+            <span class="step-number">1</span><span class="step-label">Basic info</span>
           </button>
           <button type="button" class="wizard-progress-step" data-step="2" data-testid="wizard-progress-2">
             <span class="step-number">2</span><span class="step-label">Template</span>
           </button>
           <button type="button" class="wizard-progress-step" data-step="3" data-testid="wizard-progress-3">
-            <span class="step-number">3</span><span class="step-label">Sign-Ups</span>
+            <span class="step-number">3</span><span class="step-label">Sign-ups</span>
           </button>
           <button type="button" class="wizard-progress-step" data-step="4" data-testid="wizard-progress-4">
-            <span class="step-number">4</span><span class="step-label">Your Links</span>
+            <span class="step-number">4</span><span class="step-label">Your links</span>
           </button>
           <button type="button" class="wizard-progress-step" data-step="5" data-testid="wizard-progress-5">
             <span class="step-number">5</span><span class="step-label">Launch</span>
@@ -2528,7 +2123,7 @@
                checkbox — a checkbox invites you past the decision, and this
                decision is not symmetric. -->
           <div class="wizard-publish" data-testid="wizard-publish">
-            <p class="wizard-step-help">
+            <p class="wizard-step-help wizard-question">
               Should this show up when neighbors look for something to do?
             </p>
             <div class="wizard-signup-grid">
@@ -2568,7 +2163,7 @@
              pre-fills the same optional "what/why" fields the dashboard form
              sends; nothing tier-gated, nothing saved until step 3's create. -->
         <div class="wizard-step" id="wizard-step-2" data-testid="wizard-step-2">
-          <p class="wizard-step-help">What kind of event is this?</p>
+          <p class="wizard-step-help wizard-question">What kind of event is this?</p>
           <!-- OSE-1344 — Category → Type. The SAME two-level picker the advanced
                form uses (one loader, one catalog, lib/event-type-catalog.ts on
                the server). Optional: an event with only a name still saves. The
@@ -2593,7 +2188,7 @@
             </div>
             <p class="type-picker-msg full-width" data-testid="wizard-type-picker-msg" hidden></p>
           </div>
-          <p class="wizard-step-help">Want a head start on the description? Pick one, or start blank.</p>
+          <p class="wizard-step-help wizard-question">Want a head start on the description? Pick one, or start blank.</p>
           <div class="wizard-template-grid" id="wizardTemplatePicker">
             <button aria-pressed="false" type="button" class="wizard-template-card" data-template="trivia" data-testid="wizard-template-trivia">
               <span class="wizard-card-title">Trivia Night</span>
@@ -2635,7 +2230,7 @@
         <div class="wizard-step" id="wizard-step-3" data-testid="wizard-step-3">
           <!-- OSE-1518 (PO 2026-10-03): ask, do not block. Create stays enabled. -->
           <p class="wizard-step-help" id="wizard-missing" data-testid="wizard-missing" role="status" hidden></p>
-          <p class="wizard-step-help">Want people to sign up ahead of time?</p>
+          <p class="wizard-step-help wizard-question">Want people to sign up ahead of time?</p>
           <div class="wizard-signup-grid">
             <button aria-pressed="true" type="button" class="wizard-signup-option selected" data-option="create" data-testid="wizard-signup-create">
               <span class="wizard-card-title">Yes — use the built-in sign-up page</span>
@@ -2756,7 +2351,7 @@
             </button>
             <p class="create-msg" id="wizard-go-live-msg" data-testid="wizard-go-live-msg" role="status" aria-live="polite"></p>
           </div>
-          <p class="wizard-step-help">Once it's live:</p>
+          <p class="wizard-step-help wizard-question">Once it's live:</p>
           <ul class="wizard-checklist">
             <li id="wizardCheckPublic">📱 Share the event page link with your regulars</li>
             <li id="wizardCheckPoster">📄 Print the poster and hang it where people will see it</li>
@@ -3020,6 +2615,16 @@
               // Completed = behind us AND still revisitable (pre-create only).
               el.classList.toggle('completed', n < wiz.step && !wiz.createdId);
             });
+            // Caption names the step in words (the rail hides labels on narrow
+            // phones). Built with textContent, never innerHTML (#1).
+            var caption = document.getElementById('wizard-step-caption');
+            var stepLabel = document.querySelector('.wizard-progress-step[data-step="' + wiz.step + '"] .step-label');
+            if (caption && stepLabel) {
+              var strong = document.createElement('strong');
+              strong.textContent = stepLabel.textContent;
+              caption.textContent = 'Step ' + wiz.step + ' of 5: ';
+              caption.appendChild(strong);
+            }
             var back = document.getElementById('wizardBackBtn');
             var skip = document.getElementById('wizardSkipBtn');
             var next = document.getElementById('wizard-next-btn');

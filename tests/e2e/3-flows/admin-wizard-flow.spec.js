@@ -45,10 +45,10 @@ test.describe('🚀 S08: Admin "10-Minute Event" Wizard Flow', () => {
     await expect(steps).toHaveCount(5);
 
     // Verify step labels
-    await expect(steps.nth(0).locator('.step-label')).toContainText('Basic Info');
+    await expect(steps.nth(0).locator('.step-label')).toContainText('Basic info');
     await expect(steps.nth(1).locator('.step-label')).toContainText('Template');
-    await expect(steps.nth(2).locator('.step-label')).toContainText('Sign-Ups');
-    await expect(steps.nth(3).locator('.step-label')).toContainText('Your Links');
+    await expect(steps.nth(2).locator('.step-label')).toContainText('Sign-ups');
+    await expect(steps.nth(3).locator('.step-label')).toContainText('Your links');
     await expect(steps.nth(4).locator('.step-label')).toContainText('Launch');
 
     // Step 1 should be active initially
