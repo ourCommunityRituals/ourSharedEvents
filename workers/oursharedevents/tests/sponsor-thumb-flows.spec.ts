@@ -207,15 +207,23 @@ function items(strip: string): string[] {
   );
 }
 
-/** Every proxy src the page names, decoded from the HTML attribute. */
+const ENTITIES: Record<string, string> = {
+  '&amp;': '&',
+  '&#39;': "'",
+  '&quot;': '"',
+  '&lt;': '<',
+  '&gt;': '>',
+};
+
+/** Every proxy src the page names, decoded from the HTML attribute in one pass (no double unescape). */
 function thumbSrcs(html: string): string[] {
   return [...html.matchAll(/data-testid="sponsor-thumb" src="([^"]*)"/g)].map((m) =>
-    m[1]
-      .replace(/&amp;/g, '&')
-      .replace(/&#39;/g, "'")
-      .replace(/&quot;/g, '"')
+    m[1].replace(/&(?:amp|#39|quot|lt|gt);/g, (e) => ENTITIES[e])
   );
 }
+
+/** A string as a literal inside a RegExp: every metacharacter, the backslash included. */
+const reEscape = (s: string) => s.replace(/[\\^$.*+?()[\]{}|/-]/g, '\\$&');
 
 /** Attribute names an element really has: quoted values removed first, so text inside alt cannot count. */
 function handlerAttrs(markup: string): string[] {
@@ -468,7 +476,7 @@ describe('OSE-1955 edge', () => {
     await seedSponsor(ev, { id: `${ev}_sp`, name: 'Box Co', compact: logo(ev) });
     const { html } = await page(ev);
     const css = (sel: string) => {
-      const m = html.match(new RegExp(`${sel.replace(/[.[\]]/g, '\\$&')}\\s*\\{([^}]*)\\}`));
+      const m = html.match(new RegExp(`${reEscape(sel)}\\s*\\{([^}]*)\\}`));
       expect(m, `${sel} is styled`).not.toBeNull();
       return m![1];
     };
