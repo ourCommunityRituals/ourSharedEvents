@@ -1004,7 +1004,7 @@ const SPONSOR_LIST_CSS = `
     .ose-sponsor-list { list-style: none; margin: 0; padding: 0; }
     .ose-sponsor-item { display: flex; align-items: center; min-height: 44px; border-bottom: 1px solid var(--border); }
     .ose-sponsor-item:last-child { border-bottom: none; }
-    .ose-sponsor-link { color: var(--accent); font-weight: 600; }
+    .ose-sponsor-link { color: var(--accent); font-weight: 600; display: inline-flex; align-items: center; min-height: 44px; }
     .ose-sponsor-link[data-thumb] { display: inline-flex; align-items: center; min-height: 44px; padding: 0.25rem 0; }
     .ose-sponsor-thumb { display: block; height: 64px; width: auto; max-width: 160px; object-fit: contain; }
     .ose-sponsor-name { color: var(--text); font-weight: 600; }`;

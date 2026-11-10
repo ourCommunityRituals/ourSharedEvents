@@ -1,0 +1,28 @@
+info:
+  name: OSE-1955 | happy | logo proxy | compact only serves an image with nosniff
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_thumb_compact/logo?slot=sidebar"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-1955 happy: 200 for the src the page names', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-1955 happy: an allowlisted image type', function () { expect(String(res.getHeader('content-type') || '')).to.match(/^image\//); });
+        test('OSE-1955 happy: X-Content-Type-Options: nosniff', function () { expect(String(res.getHeader('x-content-type-options') || '')).to.eql('nosniff'); });
+        test('OSE-1955 security: the proxy sets no cookie', function () { expect(res.getHeader('set-cookie')).to.eql(undefined); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

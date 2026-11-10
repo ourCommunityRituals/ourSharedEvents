@@ -1,0 +1,50 @@
+info:
+  name: OSE-1955 | happy | post page | art and a name
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/thumb-post-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const html = String(res.getBody() || '');
+        const ids = ['pre-sponsor-strip', 'live-sponsor-strip', 'post-sponsor-thanks'];
+        let start = -1;
+        for (const id of ids) {
+          const at = html.indexOf('data-testid="' + id + '"');
+          if (at > -1) { start = at; break; }
+        }
+        const strip = start < 0 ? '' : html.slice(start, html.indexOf('</section>', start));
+        const items = strip.split('data-testid="sponsor-item"').slice(1);
+        const itemOf = (needle) => items.find((i) => i.includes(needle)) || '';
+        const src = (id) => 'src="/api/v2/sponsors/' + id + '/logo?slot=sidebar"';
+        const want = 'post-sponsor-thanks';
+        test('OSE-1955 happy (post): 200 and the post sponsor section', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(html).to.include('data-testid="' + want + '"');
+        });
+        test('OSE-1955 happy (post): the logo sponsor is art with its title as alt, no visible name', function () {
+          const it = itemOf('sb_thumb_compact');
+          expect(it).to.include(src('sb_thumb_compact'));
+          expect(it).to.include('alt="Thumb Compact"');
+          expect(it).to.not.include('>Thumb Compact<');
+        });
+        test('OSE-1955 happy (post): the sponsor without a logo is its name', function () {
+          expect(itemOf('Thumb Name Hardware')).to.include('>Thumb Name Hardware</a>');
+          expect(items.length).to.eql(2);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

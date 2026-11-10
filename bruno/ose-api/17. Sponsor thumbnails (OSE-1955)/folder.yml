@@ -1,0 +1,22 @@
+info:
+  name: Sponsor thumbnails (OSE-1955)
+  type: folder
+request: {}
+docs:
+  content: |-
+    The event page's "Supported by" thumbnails on staging (feature OSE-1948,
+    owner 2026-11-09): a sponsor with a logo is thumbnail art only, through the
+    same-origin proxy /api/v2/sponsors/<id>/logo?slot=sidebar, its title as alt;
+    a sponsor without one is its name. Each page request is paired with the
+    proxy request for the src it names.
+
+    Every request is credential-free (X-Test-No-Auth): public routes.
+
+    Fixture: bruno/fixtures/sponsor-thumb-seed.sql, applied by CI before this
+    run. One sponsor per case, fixed ids (sb_thumb_*), on four unlisted events
+    (pre, live, post, switch off).
+
+    Not here on purpose: the 429 on a proxy miss and a failed sponsor read (both
+    would disturb shared staging), and the 502 of a dead logo host (folder 14).
+    Mock-layer twin: workers/oursharedevents/tests/sponsor-thumb-flows.spec.ts.
+  type: text/markdown
