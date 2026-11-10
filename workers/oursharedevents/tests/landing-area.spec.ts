@@ -189,10 +189,10 @@ describe('the Type row is the event-type categories (owner 2026-11-09)', () => {
         )?.[1]
         ?.split(' ') ?? [];
     expect(typeCss(html)).toContain(
-      '#cat-art:checked ~ .area .event-card:not(.cat-art){display:none}'
+      '#cat-art:checked ~ .area .event-card:not(.cat-art),#cat-art:checked ~ .area .amap-f:not(.cat-art){display:none}'
     );
     expect(typeCss(html)).toContain(
-      '#cat-biz:checked ~ .area .event-card:not(.cat-biz){display:none}'
+      '#cat-biz:checked ~ .area .event-card:not(.cat-biz),#cat-biz:checked ~ .area .amap-f:not(.cat-biz){display:none}'
     );
     // Both Arts types carry .cat-art, so #cat-art hides neither; the mixer does not.
     expect(cls('a')).toContain('cat-art');

@@ -124,7 +124,12 @@ export interface EventCardOptions {
    * The landing page keeps its own test ids for the card, its name and its
    * date line (existing selectors); every other id is the same on both pages.
    */
-  variant?: 'events' | 'landing';
+  variant?: 'events' | 'landing' | 'panel';
+  /**
+   * The map's place panel (owner, 2026-11-09): its own test ids, and a grid of
+   * buttons (`actions`, already escaped markup) in place of the one button.
+   */
+  actions?: string;
   /** Extra classes the landing's CSS-only filters hang on the card. */
   extraClasses?: readonly string[];
   /** Shown in place of a venue when the event has none (the landing says "Online"). */
@@ -139,7 +144,12 @@ export interface EventCardOptions {
  * string out; every value is escaped here, once.
  */
 export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): string {
-  const landing = opts.variant === 'landing';
+  const panel = opts.variant === 'panel';
+  // The panel keeps the landing's untitled fallback; its ids are its own, so a
+  // test counting the landing's list cards never counts a panel's copy.
+  const landing = opts.variant === 'landing' || panel;
+  const id = (landingId: string, eventsId: string) =>
+    panel ? landingId.replace(/^area-card/, 'amap-card') : landing ? landingId : eventsId;
   const lang = opts.lang ?? DEFAULT_LANG;
   const safeId = escapeHtml(str(e.id));
   // OSE-871 (P-1): ONE canonical name per value. The API emits
@@ -172,17 +182,18 @@ export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): 
   // default (lib/event-thumb.ts). Decorative: the name sits beside it.
   // The box shows the default behind the picture, so one that fails to load
   // leaves the default in view (no script).
-  const thumb = `<span class="event-thumb-box"><img class="event-thumb" src="${escapeHtml(eventThumbSrc(e.cover_image_url))}" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="${landing ? 'area-card-thumb' : 'public-event-thumb'}"></span>`;
+  const thumb = `<span class="event-thumb-box"><img class="event-thumb" src="${escapeHtml(eventThumbSrc(e.cover_image_url))}" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="${id('area-card-thumb', 'public-event-thumb')}"></span>`;
+  const buttons = panel && opts.actions !== undefined ? opts.actions : cta;
   return `
-          <article class="${classes}" data-testid="${landing ? 'area-card' : 'public-event-card'}" data-event-id="${safeId}" data-phase="${phase}">
+          <article class="${classes}" data-testid="${id('area-card', 'public-event-card')}" data-event-id="${safeId}" data-phase="${phase}">
             <a class="event-card-link" href="${eventHref}" data-testid="public-event-card-link" aria-label="${fmt(lang, 'card.open', { name: safeName })}"></a>
             ${thumb}
             <div class="event-info" data-testid="public-event-info">
-              <h3 data-testid="${landing ? 'area-card-name' : 'public-event-name'}">${safeName}${wrappedTag}</h3>
-              <p class="meta" data-testid="${landing ? 'area-card-meta' : 'public-event-meta'}">${datePart}${venuePart}</p>
+              <h3 data-testid="${id('area-card-name', 'public-event-name')}">${safeName}${wrappedTag}</h3>
+              <p class="meta" data-testid="${id('area-card-meta', 'public-event-meta')}">${datePart}${venuePart}</p>
               ${sponsorLine}
             </div>
-            ${cta}
+            ${buttons}
           </article>`;
 }
 
@@ -285,10 +296,51 @@ export const EVENT_CARD_CSS = `
       .disc-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); padding: 0; margin: 0 0.25rem 0 0; align-self: center; }
       .disc-summary { font-size: 0.95rem; color: var(--text-muted); margin: 0 0 0.75rem; }`;
 
-/** Place the shared stylesheet at its marker. A template without the marker is untouched. */
-export function injectEventCardCss(html: string): string {
+/**
+ * The map's place panels (owner 2026-11-09; lib/map-place-panel.ts). Only the
+ * landing carries them, so only the landing gets these rules; /events is
+ * unchanged. Tokens only.
+ */
+export const PLACE_PANEL_CSS = `
+      /* The map's place panel (owner 2026-11-09): the card's buttons in a grid,
+         phone first. "Open event" across the top, the rest two to a row with
+         12px between, 48px tall; a lone last button takes the row. Wider
+         screens fit them on one row where they can. */
+      .event-card .amap-acts { position: relative; z-index: 3; flex: 1 1 100%; display: grid; grid-template-columns: 1fr 1fr; gap: var(--tap-gap, 12px); }
+      .event-card .amap-acts .cta { width: 100%; min-height: 48px; box-sizing: border-box; white-space: normal; text-align: center; font: inherit; font-weight: 600; border: 0; cursor: pointer; }
+      .event-card .amap-acts .cta:first-child, .event-card .amap-acts > :last-child:nth-child(even) { grid-column: 1 / -1; }
+      .event-card .amap-acts .ose-share-btn:focus-visible { outline: 3px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }
+      /* An outlined button keeps its accent text, so its hover is the quiet
+         surface, not the filled button's (seen in a browser 2026-11-09: accent
+         text on the accent hover could not be read, and on a phone the hover
+         stays after a tap). */
+      .event-card .amap-acts .cta-secondary:hover { background: var(--surface-hover); }
+      @media (min-width: 600px) {
+        .event-card .amap-acts { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+        .event-card .amap-acts .cta:first-child, .event-card .amap-acts > :last-child:nth-child(even) { grid-column: auto; }
+      }
+      /* The place panels themselves (lib/map-place-panel.ts): hidden until
+         their dot is tapped; the tapped place's target sits at the top of the
+         map, so the map stays on screen with the panel under it. */
+      .amap-wrap { position: relative; }
+      .amap-t { position: absolute; top: 0; left: 0; width: 1px; height: 1px; }
+      .amap-p { display: none; margin-top: 1rem; padding-top: 0.75rem; border-top: 3px solid var(--accent); }
+      .amap-t:target + .amap-p { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+      .amap-wrap:has(.amap-t:target) .amap-legend, .amap-wrap:has(.amap-t:target) [data-testid="amap-unplaced"] { display: none; }
+      .amap-ph { font-size: 1.25rem; margin: 0; color: var(--text); }
+      .amap-pm { font-size: 0.95rem; color: var(--text-muted); margin: 0; }
+      .amap-pn { display: grid; grid-template-columns: 1fr 1fr; gap: var(--tap-gap, 12px); }
+      .amap-pn .disc-chip { justify-content: center; color: var(--text); }
+      .amap-all { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent-text, var(--accent)); }
+      .amap svg a:focus-visible .amap-dot { stroke: var(--focus-ring, var(--text)); stroke-width: 6; }`;
+
+/**
+ * Place the shared stylesheet at its marker. A template without the marker is
+ * untouched. `extra` rides along for a page with more of its own (the landing).
+ */
+export function injectEventCardCss(html: string, extra = ''): string {
   return html.includes(EVENT_CARD_CSS_MARKER)
-    ? injectMarker(html, EVENT_CARD_CSS_MARKER, EVENT_CARD_CSS)
+    ? injectMarker(html, EVENT_CARD_CSS_MARKER, EVENT_CARD_CSS + extra)
     : html;
 }
 

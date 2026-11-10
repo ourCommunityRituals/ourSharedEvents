@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0105; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0106; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,15 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0106: events.place_kind (business or address), how the zoomed map marks an
+-- event's place (epic OSE-1880). Additive, nullable; a nightly job fills it.
+-- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMN. The older Worker has
+-- no zoomed map and reads no place_kind; a kind already filled stays in the
+-- row, unused, until the newer Worker returns.
+--
+-- Surgical reverse, only if the column itself must go:
+ALTER TABLE events DROP COLUMN place_kind;
+
 -- 0105: sponsor_business.header_image_url + header_text, the sponsor's header
 -- block on the digital poster (OSE-1826). Additive, nullable, no backfill. THE
 -- ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS. The older Worker reads

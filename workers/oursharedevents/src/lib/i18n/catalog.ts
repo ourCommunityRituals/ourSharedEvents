@@ -284,6 +284,39 @@ const en = {
   'map.caption':
     '{events} in {areas}, every kind, over the next {days} days (the filters above change the list, not the map). Each hexagon is a few square kilometres, never a street address.',
   'map.credit': 'Street map data © {osm} contributors.',
+  'map.tapToZoom': 'Tap a hexagon to see its events on the map.',
+  'map.zoomIn': 'Zoom in',
+  'map.allAreas': 'Back to all areas',
+  'map.zoomCaption':
+    '{events} in this area over the next {days} days. A solid dot is a named place, shown on its block; a pale dot marks only its block.',
+  'map.zoomCaptionNamed':
+    '{events} in this area ({name}) over the next {days} days. A solid dot is a named place, shown on its block; a pale dot marks only its block.',
+  'map.listCaption':
+    '{events} in this area over the next {days} days, listed by place. A place is a block, never a street address.',
+  'map.listCaptionNamed':
+    '{events} in this area ({name}) over the next {days} days, listed by place. A place is a block, never a street address.',
+  'map.noTiles':
+    '<strong>The street map for this area is not here yet.</strong> Its places are listed below. Open a place to see its events.',
+  'map.zoomEmpty': '<strong>No upcoming events in this area.</strong>',
+  'map.unplaced': 'Somewhere in this area',
+  'map.dotTitle': 'Spot {n}: {count}',
+  'map.place': 'Place {n}',
+  'map.placeNamed': 'Place {n} · {name}',
+  'map.events': '{n} events',
+  'map.eventsOne': '{n} event',
+  'map.atVenue': 'at {venue}',
+  'map.onBlock': 'somewhere on this block',
+  'map.prevPlace': '‹ Place {n}',
+  'map.nextPlace': 'Place {n} ›',
+  'map.placesNav': 'Places in this area',
+  'map.allPlaces': 'Show all places',
+  'map.openEvent': 'Open event',
+  'map.morePlace': '{n} more here, in the list of all places.',
+  'map.external': '{label} (opens another site)',
+  'map.link.signup': 'Sign up →',
+  'map.link.sponsor': 'Sponsor this event →',
+  'map.link.ow': 'Listen →',
+  'map.link.more': 'More →',
   // The landing's where-are-you form (lib/landing-where.ts).
   'where.unknownZip': "We couldn't find zip {zip}. Check it and try again.",
   'where.noUsZip': "We couldn't find a US zip where you are. Type your town or zip instead.",
@@ -570,6 +603,39 @@ const es: Record<MessageKey, string> = {
   'map.caption':
     '{events} en {areas}, de todo tipo, en los próximos {days} días (los filtros de arriba cambian la lista, no el mapa). Cada hexágono mide unos pocos kilómetros cuadrados y nunca es una dirección.',
   'map.credit': 'Datos del mapa de calles © colaboradores de {osm}.',
+  'map.tapToZoom': 'Toca un hexágono para ver sus eventos en el mapa.',
+  'map.zoomIn': 'Acercar',
+  'map.allAreas': 'Volver a todas las zonas',
+  'map.zoomCaption':
+    '{events} en esta zona en los próximos {days} días. Un punto sólido es un lugar con nombre, mostrado en su cuadra; un punto claro marca solo su cuadra.',
+  'map.zoomCaptionNamed':
+    '{events} en esta zona ({name}) en los próximos {days} días. Un punto sólido es un lugar con nombre, mostrado en su cuadra; un punto claro marca solo su cuadra.',
+  'map.listCaption':
+    '{events} en esta zona en los próximos {days} días, por lugar. Un lugar es una cuadra, nunca una dirección.',
+  'map.listCaptionNamed':
+    '{events} en esta zona ({name}) en los próximos {days} días, por lugar. Un lugar es una cuadra, nunca una dirección.',
+  'map.noTiles':
+    '<strong>El mapa de calles de esta zona todavía no está disponible.</strong> Sus lugares aparecen abajo. Abre un lugar para ver sus eventos.',
+  'map.zoomEmpty': '<strong>No hay eventos próximos en esta zona.</strong>',
+  'map.unplaced': 'En algún lugar de esta zona',
+  'map.dotTitle': 'Punto {n}: {count}',
+  'map.place': 'Lugar {n}',
+  'map.placeNamed': 'Lugar {n} · {name}',
+  'map.events': '{n} eventos',
+  'map.eventsOne': '{n} evento',
+  'map.atVenue': 'en {venue}',
+  'map.onBlock': 'en algún lugar de esta cuadra',
+  'map.prevPlace': '‹ Lugar {n}',
+  'map.nextPlace': 'Lugar {n} ›',
+  'map.placesNav': 'Lugares de esta zona',
+  'map.allPlaces': 'Ver todos los lugares',
+  'map.openEvent': 'Abrir el evento',
+  'map.morePlace': '{n} más aquí, en la lista de todos los lugares.',
+  'map.external': '{label} (abre otro sitio)',
+  'map.link.signup': 'Inscribirse →',
+  'map.link.sponsor': 'Patrocinar este evento →',
+  'map.link.ow': 'Escuchar →',
+  'map.link.more': 'Más →',
   'where.unknownZip': 'No encontramos el código postal {zip}. Revísalo e inténtalo de nuevo.',
   'where.noUsZip':
     'No encontramos un código postal de EE. UU. donde estás. Escribe tu ciudad o código postal.',
