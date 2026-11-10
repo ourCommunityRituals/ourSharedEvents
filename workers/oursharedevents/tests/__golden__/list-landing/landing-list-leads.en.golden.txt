@@ -31,18 +31,8 @@
         line-height: 1.5;
         overflow-wrap: anywhere;
       }
-      .skip-link {
-        position: absolute;
-        inset-inline-start: -9999px;
-      }
-      .skip-link:focus {
-        inset-inline-start: 1rem;
-        top: 1rem;
-        background: var(--accent);
-        color: var(--on-accent);
-        padding: 0.5rem 1rem;
-        z-index: 10;
-      }
+      .skip-link { position: absolute; inset-inline-start: -9999px; }
+      .skip-link:focus { inset-inline-start: 1rem; top: 1rem; background: var(--accent); color: var(--on-accent); padding: 0.5rem 1rem; z-index: 10; }
       header {
         display: flex;
         align-items: center;

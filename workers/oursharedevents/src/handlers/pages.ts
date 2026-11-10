@@ -1345,10 +1345,9 @@ ${buildOgMeta({ lang, title, description: whatShort, url: esc(shareUrl), twitter
        [data-brand] on <html> swaps the whole surface. No raw hex here. */
     [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     /* OSE-298: no sideways scroll at 375px; long strings (URLs in the 5W
        fields, sponsor links) wrap inside the 720px column. */
-    html, body { overflow-x: hidden; }
+    html, body { background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; overflow-x: hidden; }
     body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; overflow-wrap: anywhere; word-break: break-word; }
     .ose-skip { position: absolute; inset-inline-start: -9999px; }
     .ose-skip:focus { inset-inline-start: 1rem; top: 1rem; background: var(--ose-accent); color: var(--on-accent); padding: 0.5rem 1rem; border-radius: 4px; }
@@ -1556,10 +1555,9 @@ ${buildSearchMeta(row, shareUrl)}
        swaps the surface. --ose-live -> teal --live (colorblind-safe). No hex. */
     [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
        public event page (live phase mirror of renderPreEventHtml). */
-    html, body { overflow-x: hidden; }
+    html, body { background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; overflow-x: hidden; }
     body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; overflow-wrap: anywhere; word-break: break-word; }
     .ose-skip { position: absolute; inset-inline-start: -9999px; }
     .ose-skip:focus { inset-inline-start: 1rem; top: 1rem; background: var(--ose-accent); color: var(--on-accent); padding: 0.5rem 1rem; border-radius: 4px; }
