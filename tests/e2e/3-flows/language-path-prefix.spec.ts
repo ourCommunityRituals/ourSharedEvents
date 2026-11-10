@@ -321,7 +321,17 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
     // What staging lists changes day to day, so the page is read as it is: a card
     // reads its date in Spanish, offers a Spanish button and leads to the Spanish
     // page; with no card, the empty state is Spanish. Either way it asserts.
+    // `count()` does not wait, and the URL and `lang` checks above pass as soon
+    // as the top of the page arrives. So wait for the list itself, a card or the
+    // empty state, before counting: with 50 cards still loading the count read
+    // 0 and the test waited on an empty state that never came (main, 0dd790c9).
     const cards = page.locator('[data-testid="public-event-card"]');
+    await expect(
+      page
+        .locator('[data-testid="public-event-card"], [data-testid="public-events-empty"]')
+        .first(),
+      'the list has rendered: a card or the empty state'
+    ).toBeVisible();
     if ((await cards.count()) === 0) {
       await expect(page.locator('[data-testid="public-events-empty"]')).toContainText(
         /^(Todavía no hay nada en los próximos 90 días\.|No hay eventos programados\.)/
