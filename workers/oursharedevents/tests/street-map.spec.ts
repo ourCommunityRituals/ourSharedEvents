@@ -885,7 +885,7 @@ describe('street map | on the attendee map', () => {
     expect(hexAt).toBeGreaterThan(streetsAt);
     expect(out.html).toContain(STREET_STYLE);
     expect(out.html).toContain('data-testid="amap-credit"');
-    expect(out.html).toContain('href="https://www.openstreetmap.org/copyright"');
+    expect(out.html).toContain('href="https://www.openstreetmap.org/copyright/en"');
     expect(out.html).not.toContain('Calumet <Park>');
   });
 

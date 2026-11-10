@@ -15,8 +15,12 @@
  *     (location-precision CCR, F41)
  */
 // @born-red archive with no tile for the area | method: both cases seen failing before the guard in buildStreetLayer (the landing carried a blank street layer and its credit; the zoomed area drew its dot with no "amap-no-tiles" list) | date: 2026-11-09
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { latLngToCell } from 'h3-js';
+import { OSM_COPYRIGHT_URL } from '../src/lib/attendee-map';
+import { LANGUAGES, type Lang } from '../src/lib/i18n/languages';
 import { resetPmtilesCache } from '../src/lib/pmtiles';
 import { DEFAULT_ARCHIVE } from '../src/lib/street-map';
 import {
@@ -46,11 +50,12 @@ const LOS_ANGELES = latLngToCell(34.05, -118.25, 7);
 const cellsOf = (html: string) =>
   [...html.matchAll(/data-testid="amap-area" data-cell="([0-9a-f]+)"/g)].map((m) => m[1]!);
 
-async function landing(env: Record<string, unknown>, path = '/'): Promise<string> {
+async function landing(env: Record<string, unknown>, path = '/', pathLang?: Lang): Promise<string> {
   const res = await handleLandingPage(
     env as never,
     null,
-    new Request(`https://oursharedevents.com${path}`)
+    new Request(`https://oursharedevents.com${path}`),
+    pathLang
   );
   expect(res.status).toBe(200);
   return res.text();
@@ -211,5 +216,87 @@ describe('street map | the landing page handler', () => {
     );
     const drawn = await landing({ MAP_TILES: good, MAP_TILES_ARCHIVE: right });
     expect(drawn).toContain('data-testid="amap-streets"');
+  });
+});
+
+// The credit for the street data (owner 2026-11-10): wherever streets are drawn,
+// in the page's language, with a link that opens OpenStreetMap's own copyright
+// page in that language. OpenStreetMap's address without a language follows the
+// visitor's browser, not the language chosen here, so each language names its page.
+// @born-red street-map credit follows the page language | method: the new and changed cases seen failing before the change (6 red); then 7 faults injected one at a time in src/lib/attendee-map.ts (Spanish linked to the English page, both languages linked to the page with no language, the zoomed area without its credit, the landing map without its credit, the credit shown without streets, the credit always in English, a second module given the street layer); each turned cases here red | date: 2026-11-10
+describe('street map | the credit, in the page language, wherever streets are drawn', () => {
+  const CREDIT: Record<Lang, string> = {
+    en: '<p class="amap-credit" data-testid="amap-credit">Street map data © <a href="https://www.openstreetmap.org/copyright/en">OpenStreetMap</a> contributors.</p>',
+    es: '<p class="amap-credit" data-testid="amap-credit">Datos del mapa de calles © colaboradores de <a href="https://www.openstreetmap.org/copyright/es">OpenStreetMap</a>.</p>',
+  };
+
+  it('every language has its own OpenStreetMap page, on openstreetmap.org over https', () => {
+    expect(Object.keys(OSM_COPYRIGHT_URL).sort()).toEqual([...LANGUAGES].sort());
+    for (const lang of LANGUAGES) {
+      expect(OSM_COPYRIGHT_URL[lang]).toBe(`https://www.openstreetmap.org/copyright/${lang}`);
+    }
+  });
+
+  it.each(LANGUAGES)(
+    '%s: the landing map and the zoomed area each carry the credit once, in that language, linked to that language',
+    async (lang) => {
+      const plain = await landing({}, '/', lang);
+      // No streets, no credit, and no link to OpenStreetMap, in this language too.
+      expect(plain).not.toContain('data-testid="amap-credit"');
+      expect(plain).not.toContain('openstreetmap.org');
+
+      const views: [string, string[]][] = [
+        ['/', cellsOf(plain)],
+        [`/?area=${BLUE_ISLAND}`, [BLUE_ISLAND]],
+      ];
+      for (const [path, cells] of views) {
+        resetPmtilesCache();
+        const bucket = fakeBucket(
+          DEFAULT_ARCHIVE,
+          await pmtilesArchive(tilesForCells(cells).tiles, { gzip: true })
+        );
+        const html = await landing({ MAP_TILES: bucket }, path, lang);
+        expect(html, path).toContain('data-testid="amap-streets"');
+        expect(html.split('data-testid="amap-credit"'), path).toHaveLength(2);
+        expect(html, path).toContain(CREDIT[lang]);
+        for (const other of LANGUAGES) {
+          if (other !== lang) expect(html, path).not.toContain(OSM_COPYRIGHT_URL[other]);
+        }
+      }
+    }
+  );
+
+  // Throughout the site. The street layer reaches a page through these modules
+  // and no others, and lib/attendee-map.ts is the only one that draws it. A new
+  // surface that draws streets turns this red: give it the credit (streetCredit)
+  // and a case above, then add it here.
+  it('only the landing map draws the street layer, and each drawing is paired with the credit', () => {
+    const SRC = join(__dirname, '..', 'src');
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (/\.(ts|html)$/.test(entry)) files.push(full);
+      }
+    };
+    walk(SRC);
+    const touches = files
+      .filter((f) => /StreetLayer|amap-streets/.test(readFileSync(f, 'utf8')))
+      .map((f) => relative(SRC, f).split(sep).join('/'))
+      .sort();
+    expect(touches).toEqual([
+      'handlers/pages.ts',
+      'lib/attendee-map.ts',
+      'lib/landing-area.ts',
+      'lib/street-map.ts',
+    ]);
+    const map = readFileSync(join(SRC, 'lib', 'attendee-map.ts'), 'utf8');
+    const drawn = map.match(/\b(?:streetLayer|opts\.streets)\.svg\b/g) ?? [];
+    const credited = map.match(/\? streetCredit\(lang\)/g) ?? [];
+    expect(drawn).toHaveLength(2);
+    expect(credited).toHaveLength(drawn.length);
+    // The credit is built in one place.
+    expect(map.split('data-testid="amap-credit"')).toHaveLength(2);
   });
 });
