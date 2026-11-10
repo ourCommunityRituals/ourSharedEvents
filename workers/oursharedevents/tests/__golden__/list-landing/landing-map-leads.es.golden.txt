@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-surface="ose-landing">
+<html lang="es" dir="ltr" data-surface="ose-landing">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -31,18 +31,8 @@
         line-height: 1.5;
         overflow-wrap: anywhere;
       }
-      .skip-link {
-        position: absolute;
-        left: -9999px;
-      }
-      .skip-link:focus {
-        left: 1rem;
-        top: 1rem;
-        background: var(--accent);
-        color: var(--on-accent);
-        padding: 0.5rem 1rem;
-        z-index: 10;
-      }
+      .skip-link { position: absolute; inset-inline-start: -9999px; }
+      .skip-link:focus { inset-inline-start: 1rem; top: 1rem; background: var(--accent); color: var(--on-accent); padding: 0.5rem 1rem; z-index: 10; }
       header {
         display: flex;
         align-items: center;
@@ -104,7 +94,7 @@
       .where-change {
         font-size: 1rem;
         font-weight: 400;
-        margin-left: 0.5rem;
+        margin-inline-start: 0.5rem;
       }
       .doors {
         display: flex;
@@ -150,7 +140,7 @@
       }
       
       #events, .view-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-      .event-card { min-height: var(--tap-min); position: relative; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 1.25rem 1.5rem; transition: background 0.15s; }
+      .event-card { min-height: var(--tap-min); position: relative; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border); border-inline-start: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 1.25rem 1.5rem; transition: background 0.15s; }
       .event-card:hover { background: var(--surface-hover); }
       .event-card-link { position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-sm); }
       .event-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -169,7 +159,7 @@
         .event-card .cta { flex: 1 1 100%; }
       }
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-      .tag-wrapped { display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; background: var(--bg); color: var(--text-muted); }
+      .tag-wrapped { display: inline-block; margin-inline-start: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; background: var(--bg); color: var(--text-muted); }
       .events-subheading { font-size: 1.1rem; font-weight: 600; color: var(--text-muted); margin: 0.75rem 0 0; }
       .empty { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 1.5rem 1rem; text-align: center; color: var(--text-muted); font-size: 1rem; }
       .empty a { color: var(--accent); font-weight: 600; }
@@ -179,7 +169,7 @@
       .disc-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.5rem; padding: 0; border: 0; min-inline-size: 0; }
       .disc-chip, .disc-clear { flex: 0 1 auto; display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.95rem; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted); font-size: 0.95rem; font-weight: 600; text-decoration: none; cursor: pointer; }
       .disc-chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-      .disc-chip.active::before { content: '\2713'; margin-right: 0.35rem; }
+      .disc-chip.active::before { content: '\2713'; margin-inline-end: 0.35rem; }
       .disc-clear { color: var(--text); text-decoration: underline; }
       .disc-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); padding: 0; margin: 0 0.25rem 0 0; align-self: center; }
       .disc-summary { font-size: 0.95rem; color: var(--text-muted); margin: 0 0 0.75rem; }
@@ -241,7 +231,7 @@
     .ose-langmenu-caret { font-size: 0.875rem; }
     .ose-langmenu details[open] > summary .ose-langmenu-caret { transform: rotate(180deg); }
     .ose-langmenu-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 0; padding: 0.375rem; list-style: none; }
-    .ose-langmenu-desktop > .ose-langmenu-list, .ose-langmenu-panel { position: absolute; top: calc(100% + 0.5rem); left: 0; z-index: 50; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
+    .ose-langmenu-desktop > .ose-langmenu-list, .ose-langmenu-panel { position: absolute; top: calc(100% + 0.5rem); inset-inline-start: 0; z-index: 50; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
     .ose-langmenu-desktop > .ose-langmenu-list { min-width: 12rem; }
     .ose-langmenu-panel { width: min(18rem, calc(100vw - 2rem)); padding: 0.375rem; }
     .ose-langmenu-item { display: flex; align-items: center; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
@@ -249,7 +239,8 @@
     .ose-langmenu-check { display: inline-block; width: 1.25em; }
     .ose-langmenu-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
     .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(90deg); }
-    .ose-langmenu-sub > .ose-langmenu-list { padding: 0.25rem 0 0 0.75rem; }
+    [dir="rtl"] .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(-90deg); }
+    .ose-langmenu-sub > .ose-langmenu-list { padding-block: 0.25rem 0; padding-inline: 0.75rem 0; }
     .ose-langmenu-bar { display: flex; align-items: center; gap: 0.75rem; }
     .ose-langmenu-mobile { display: none; }
     @media (max-width: 640px) {
@@ -272,6 +263,8 @@
     <link rel="canonical" href="https://oursharedevents.com/es/" />
   <link rel="alternate" hreflang="en" href="https://oursharedevents.com/" />
   <link rel="alternate" hreflang="es" href="https://oursharedevents.com/es/" />
+  <link rel="alternate" hreflang="pl" href="https://oursharedevents.com/pl/" />
+  <link rel="alternate" hreflang="ar" href="https://oursharedevents.com/ar/" />
   <link rel="alternate" hreflang="x-default" href="https://oursharedevents.com/" />
   <meta property="og:locale" content="es_US" />
 </head>
@@ -282,14 +275,14 @@
         <div class="ose-langmenu" data-testid="language-menu">
       <details class="ose-langmenu-desktop" data-testid="language-menu-desktop">
         <summary class="ose-langmenu-button" data-testid="language-menu-button"><span>Idioma</span><span class="ose-langmenu-caret" aria-hidden="true">▾</span></summary>
-        <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="language-menu-en" href="/"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="language-menu-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li></ul>
+        <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="language-menu-en" href="/"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="language-menu-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li><li><a class="ose-langmenu-item" lang="es" hreflang="pl" data-testid="language-menu-pl" href="/pl/"><span class="ose-langmenu-check" aria-hidden="true"></span>Polaco</a></li><li><a class="ose-langmenu-item" lang="es" hreflang="ar" data-testid="language-menu-ar" href="/ar/"><span class="ose-langmenu-check" aria-hidden="true"></span>Árabe</a></li></ul>
       </details>
       <details class="ose-langmenu-mobile" data-testid="site-menu">
         <summary class="ose-langmenu-button" aria-label="Menú" data-testid="site-menu-button"><span aria-hidden="true">☰</span></summary>
         <div class="ose-langmenu-panel" data-testid="site-menu-panel">
           <details class="ose-langmenu-sub" data-testid="site-menu-language">
             <summary class="ose-langmenu-row" data-testid="site-menu-language-button"><span>Idioma</span><span class="ose-langmenu-caret" aria-hidden="true">›</span></summary>
-            <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="site-menu-language-en" href="/"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="site-menu-language-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li></ul>
+            <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="site-menu-language-en" href="/"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="site-menu-language-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li><li><a class="ose-langmenu-item" lang="es" hreflang="pl" data-testid="site-menu-language-pl" href="/pl/"><span class="ose-langmenu-check" aria-hidden="true"></span>Polaco</a></li><li><a class="ose-langmenu-item" lang="es" hreflang="ar" data-testid="site-menu-language-ar" href="/ar/"><span class="ose-langmenu-check" aria-hidden="true"></span>Árabe</a></li></ul>
           </details>
         </div>
       </details>
@@ -339,21 +332,21 @@
         <h2 class="area-heading" data-testid="area-heading">Próximamente</h2>
         <input type="radio" name="view" id="view-list" class="toggle-radio" /><input type="radio" name="view" id="view-map" class="toggle-radio" checked /><input type="radio" name="win" id="win-weekend" class="toggle-radio" /><input type="radio" name="win" id="win-week" class="toggle-radio" /><input type="radio" name="win" id="win-month" class="toggle-radio" /><input type="radio" name="win" id="win-next-90" class="toggle-radio" checked /><input type="radio" name="type" id="type-all" class="toggle-radio" checked /><input type="radio" name="type" id="cat-rec" class="toggle-radio" /><input type="radio" name="type" id="cat-ent" class="toggle-radio" /><input type="radio" name="type" id="cat-mkt" class="toggle-radio" /><input type="radio" name="type" id="cat-lit" class="toggle-radio" /><input type="radio" name="mod" id="mod-all" class="toggle-radio" checked /><input type="radio" name="mod" id="mod-online" class="toggle-radio" /><input type="radio" name="mod" id="mod-inperson" class="toggle-radio" />
         <style data-testid="area-window-css">
-#view-list:checked ~ .toggles label[for='view-list']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-list:checked ~ .toggles label[for='view-list']::before{content:'\2713';margin-right:.35rem}#view-list:focus-visible ~ .toggles label[for='view-list']{outline:3px solid var(--accent);outline-offset:2px}
-#view-map:checked ~ .toggles label[for='view-map']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-map:checked ~ .toggles label[for='view-map']::before{content:'\2713';margin-right:.35rem}#view-map:focus-visible ~ .toggles label[for='view-map']{outline:3px solid var(--accent);outline-offset:2px}
-#win-weekend:checked ~ .toggles label[for='win-weekend']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-weekend:checked ~ .toggles label[for='win-weekend']::before{content:'\2713';margin-right:.35rem}#win-weekend:focus-visible ~ .toggles label[for='win-weekend']{outline:3px solid var(--accent);outline-offset:2px}#win-weekend:checked ~ .area .event-card:not(.when-weekend),#win-weekend:checked ~ .area .amap-f:not(.when-weekend){display:none}
-#win-week:checked ~ .toggles label[for='win-week']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-week:checked ~ .toggles label[for='win-week']::before{content:'\2713';margin-right:.35rem}#win-week:focus-visible ~ .toggles label[for='win-week']{outline:3px solid var(--accent);outline-offset:2px}#win-week:checked ~ .area .event-card:not(.when-week),#win-week:checked ~ .area .amap-f:not(.when-week){display:none}
-#win-month:checked ~ .toggles label[for='win-month']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-month:checked ~ .toggles label[for='win-month']::before{content:'\2713';margin-right:.35rem}#win-month:focus-visible ~ .toggles label[for='win-month']{outline:3px solid var(--accent);outline-offset:2px}#win-month:checked ~ .area .event-card:not(.when-month),#win-month:checked ~ .area .amap-f:not(.when-month){display:none}
-#win-next-90:checked ~ .toggles label[for='win-next-90']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-next-90:checked ~ .toggles label[for='win-next-90']::before{content:'\2713';margin-right:.35rem}#win-next-90:focus-visible ~ .toggles label[for='win-next-90']{outline:3px solid var(--accent);outline-offset:2px}#win-next-90:checked ~ .area .event-card:not(.when-next-90),#win-next-90:checked ~ .area .amap-f:not(.when-next-90){display:none}
-#mod-all:checked ~ .toggles label[for='mod-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#mod-all:checked ~ .toggles label[for='mod-all']::before{content:'\2713';margin-right:.35rem}#mod-all:focus-visible ~ .toggles label[for='mod-all']{outline:3px solid var(--accent);outline-offset:2px}
-#mod-online:checked ~ .toggles label[for='mod-online']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#mod-online:checked ~ .toggles label[for='mod-online']::before{content:'\2713';margin-right:.35rem}#mod-online:focus-visible ~ .toggles label[for='mod-online']{outline:3px solid var(--accent);outline-offset:2px}#mod-online:checked ~ .area .event-card:not(.modality-online),#mod-online:checked ~ .area .amap-f:not(.modality-online){display:none}
-#mod-inperson:checked ~ .toggles label[for='mod-inperson']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#mod-inperson:checked ~ .toggles label[for='mod-inperson']::before{content:'\2713';margin-right:.35rem}#mod-inperson:focus-visible ~ .toggles label[for='mod-inperson']{outline:3px solid var(--accent);outline-offset:2px}#mod-inperson:checked ~ .area .event-card:not(.modality-inperson),#mod-inperson:checked ~ .area .amap-f:not(.modality-inperson){display:none}
+#view-list:checked ~ .toggles label[for='view-list']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-list:checked ~ .toggles label[for='view-list']::before{content:'\2713';margin-inline-end:.35rem}#view-list:focus-visible ~ .toggles label[for='view-list']{outline:3px solid var(--accent);outline-offset:2px}
+#view-map:checked ~ .toggles label[for='view-map']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-map:checked ~ .toggles label[for='view-map']::before{content:'\2713';margin-inline-end:.35rem}#view-map:focus-visible ~ .toggles label[for='view-map']{outline:3px solid var(--accent);outline-offset:2px}
+#win-weekend:checked ~ .toggles label[for='win-weekend']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-weekend:checked ~ .toggles label[for='win-weekend']::before{content:'\2713';margin-inline-end:.35rem}#win-weekend:focus-visible ~ .toggles label[for='win-weekend']{outline:3px solid var(--accent);outline-offset:2px}#win-weekend:checked ~ .area .event-card:not(.when-weekend),#win-weekend:checked ~ .area .amap-f:not(.when-weekend){display:none}
+#win-week:checked ~ .toggles label[for='win-week']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-week:checked ~ .toggles label[for='win-week']::before{content:'\2713';margin-inline-end:.35rem}#win-week:focus-visible ~ .toggles label[for='win-week']{outline:3px solid var(--accent);outline-offset:2px}#win-week:checked ~ .area .event-card:not(.when-week),#win-week:checked ~ .area .amap-f:not(.when-week){display:none}
+#win-month:checked ~ .toggles label[for='win-month']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-month:checked ~ .toggles label[for='win-month']::before{content:'\2713';margin-inline-end:.35rem}#win-month:focus-visible ~ .toggles label[for='win-month']{outline:3px solid var(--accent);outline-offset:2px}#win-month:checked ~ .area .event-card:not(.when-month),#win-month:checked ~ .area .amap-f:not(.when-month){display:none}
+#win-next-90:checked ~ .toggles label[for='win-next-90']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-next-90:checked ~ .toggles label[for='win-next-90']::before{content:'\2713';margin-inline-end:.35rem}#win-next-90:focus-visible ~ .toggles label[for='win-next-90']{outline:3px solid var(--accent);outline-offset:2px}#win-next-90:checked ~ .area .event-card:not(.when-next-90),#win-next-90:checked ~ .area .amap-f:not(.when-next-90){display:none}
+#mod-all:checked ~ .toggles label[for='mod-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#mod-all:checked ~ .toggles label[for='mod-all']::before{content:'\2713';margin-inline-end:.35rem}#mod-all:focus-visible ~ .toggles label[for='mod-all']{outline:3px solid var(--accent);outline-offset:2px}
+#mod-online:checked ~ .toggles label[for='mod-online']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#mod-online:checked ~ .toggles label[for='mod-online']::before{content:'\2713';margin-inline-end:.35rem}#mod-online:focus-visible ~ .toggles label[for='mod-online']{outline:3px solid var(--accent);outline-offset:2px}#mod-online:checked ~ .area .event-card:not(.modality-online),#mod-online:checked ~ .area .amap-f:not(.modality-online){display:none}
+#mod-inperson:checked ~ .toggles label[for='mod-inperson']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#mod-inperson:checked ~ .toggles label[for='mod-inperson']::before{content:'\2713';margin-inline-end:.35rem}#mod-inperson:focus-visible ~ .toggles label[for='mod-inperson']{outline:3px solid var(--accent);outline-offset:2px}#mod-inperson:checked ~ .area .event-card:not(.modality-inperson),#mod-inperson:checked ~ .area .amap-f:not(.modality-inperson){display:none}
 </style><style data-testid="area-type-css">
-#type-all:checked ~ .toggles label[for='type-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-all:checked ~ .toggles label[for='type-all']::before{content:'\2713';margin-right:.35rem}#type-all:focus-visible ~ .toggles label[for='type-all']{outline:3px solid var(--accent);outline-offset:2px}
-#cat-rec:checked ~ .toggles label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-rec:checked ~ .toggles label[for='cat-rec']::before{content:'\2713';margin-right:.35rem}#cat-rec:focus-visible ~ .toggles label[for='cat-rec']{outline:3px solid var(--accent);outline-offset:2px}#cat-rec:checked ~ .area .event-card:not(.cat-rec),#cat-rec:checked ~ .area .amap-f:not(.cat-rec){display:none}
-#cat-ent:checked ~ .toggles label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .toggles label[for='cat-ent']::before{content:'\2713';margin-right:.35rem}#cat-ent:focus-visible ~ .toggles label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent),#cat-ent:checked ~ .area .amap-f:not(.cat-ent){display:none}
-#cat-mkt:checked ~ .toggles label[for='cat-mkt']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-mkt:checked ~ .toggles label[for='cat-mkt']::before{content:'\2713';margin-right:.35rem}#cat-mkt:focus-visible ~ .toggles label[for='cat-mkt']{outline:3px solid var(--accent);outline-offset:2px}#cat-mkt:checked ~ .area .event-card:not(.cat-mkt),#cat-mkt:checked ~ .area .amap-f:not(.cat-mkt){display:none}
-#cat-lit:checked ~ .toggles label[for='cat-lit']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-lit:checked ~ .toggles label[for='cat-lit']::before{content:'\2713';margin-right:.35rem}#cat-lit:focus-visible ~ .toggles label[for='cat-lit']{outline:3px solid var(--accent);outline-offset:2px}#cat-lit:checked ~ .area .event-card:not(.cat-lit),#cat-lit:checked ~ .area .amap-f:not(.cat-lit){display:none}
+#type-all:checked ~ .toggles label[for='type-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-all:checked ~ .toggles label[for='type-all']::before{content:'\2713';margin-inline-end:.35rem}#type-all:focus-visible ~ .toggles label[for='type-all']{outline:3px solid var(--accent);outline-offset:2px}
+#cat-rec:checked ~ .toggles label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-rec:checked ~ .toggles label[for='cat-rec']::before{content:'\2713';margin-inline-end:.35rem}#cat-rec:focus-visible ~ .toggles label[for='cat-rec']{outline:3px solid var(--accent);outline-offset:2px}#cat-rec:checked ~ .area .event-card:not(.cat-rec),#cat-rec:checked ~ .area .amap-f:not(.cat-rec){display:none}
+#cat-ent:checked ~ .toggles label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .toggles label[for='cat-ent']::before{content:'\2713';margin-inline-end:.35rem}#cat-ent:focus-visible ~ .toggles label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent),#cat-ent:checked ~ .area .amap-f:not(.cat-ent){display:none}
+#cat-mkt:checked ~ .toggles label[for='cat-mkt']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-mkt:checked ~ .toggles label[for='cat-mkt']::before{content:'\2713';margin-inline-end:.35rem}#cat-mkt:focus-visible ~ .toggles label[for='cat-mkt']{outline:3px solid var(--accent);outline-offset:2px}#cat-mkt:checked ~ .area .event-card:not(.cat-mkt),#cat-mkt:checked ~ .area .amap-f:not(.cat-mkt){display:none}
+#cat-lit:checked ~ .toggles label[for='cat-lit']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-lit:checked ~ .toggles label[for='cat-lit']::before{content:'\2713';margin-inline-end:.35rem}#cat-lit:focus-visible ~ .toggles label[for='cat-lit']{outline:3px solid var(--accent);outline-offset:2px}#cat-lit:checked ~ .area .event-card:not(.cat-lit),#cat-lit:checked ~ .area .amap-f:not(.cat-lit){display:none}
 </style>
         <div class="toggles" data-testid="area-toggles">
           <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">Vista</legend><label class="disc-chip" for="view-list">Lista</label><label class="disc-chip" for="view-map">Mapa</label></fieldset>
@@ -364,7 +357,7 @@
         <div class="area" data-testid="area">
           <div class="view-map" data-testid="area-map">
             <figure class="amap" data-testid="amap">
-              <style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-credit a,.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style><style>.amap-zone{fill:var(--border-strong);fill-opacity:.06;stroke:var(--border-strong);stroke-width:3}.amap-dot{fill:var(--accent);stroke:var(--bg);stroke-width:3}.amap-blk .amap-dot{fill-opacity:.45;stroke-dasharray:4 3}.amap-dn{fill:var(--on-accent);font:700 15px system-ui}.amap-back,.amap-zoom{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>
+              <style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-inline-start:1.5rem}.amap-credit a,.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style><style>.amap-zone{fill:var(--border-strong);fill-opacity:.06;stroke:var(--border-strong);stroke-width:3}.amap-dot{fill:var(--accent);stroke:var(--bg);stroke-width:3}.amap-blk .amap-dot{fill-opacity:.45;stroke-dasharray:4 3}.amap-dn{fill:var(--on-accent);font:700 15px system-ui}.amap-back,.amap-zoom{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" role="img" aria-labelledby="amap-caption" data-testid="amap-svg"><g data-testid="amap-area" data-cell="872664544ffffff" data-count="7"><a href="/es/?area=872664544ffffff" data-testid="amap-area-link"><title>Zona 1, Blue Island: 7 eventos</title><polygon class="amap-cell" points="293.8,240.7 258.5,271.5 269.9,316.7 316.6,331.2 351.9,300.5 340.5,255.2" fill-opacity="0.80" stroke-width="1.5"/><text class="amap-num" x="305.2" y="286.0" text-anchor="middle" dominant-baseline="central">1<tspan x="305.2" dy="1.15em" data-testid="amap-area-name">Blue Island</tspan></text></a></g><g data-testid="amap-area" data-cell="872664cdbffffff" data-count="4"><a href="/es/?area=872664cdbffffff" data-testid="amap-area-link"><title>Zona 2, Chicago: 4 eventos</title><polygon class="amap-cell" points="283.5,28.8 248.1,59.6 259.6,104.9 306.3,119.4 341.6,88.6 330.2,43.3" fill-opacity="0.54" stroke-width="1.5"/><text class="amap-num" x="294.9" y="74.1" text-anchor="middle" dominant-baseline="central">2<tspan x="294.9" dy="1.15em" data-testid="amap-area-name">Chicago</tspan></text></a></g></svg>
               <ol class="amap-legend" data-testid="amap-legend"><li value="1" data-testid="amap-legend-area"><strong><span data-testid="amap-legend-name">Blue Island</span> &middot; 7 eventos:</strong> <a href="/es/events/evt_g13" data-testid="amap-event">Morning Market</a> &middot; <a href="/es/events/evt_g09" data-testid="amap-event">Golden Event 9</a> &middot; <a href="/es/events/evt_g10" data-testid="amap-event">Golden Event 10</a> &middot; <a href="/es/events/evt_g01" data-testid="amap-event">Trivia Night</a> &middot; <a href="/es/events/evt_g02" data-testid="amap-event">Bocce League</a> <span data-testid="amap-event-sponsor">(Con el apoyo de Beggars Pizza)</span> &middot; <a href="/es/events/evt_g05" data-testid="amap-event">Golden Event 5</a> &middot; <a href="/es/events/evt_g07" data-testid="amap-event">Golden Event 7</a> <a class="amap-zoom" href="/es/?area=872664544ffffff" data-testid="amap-zoom">Acercar</a></li><li value="2" data-testid="amap-legend-area"><strong><span data-testid="amap-legend-name">Chicago</span> &middot; 4 eventos:</strong> <a href="/es/events/evt_g03" data-testid="amap-event">Vinyl Swap</a> &middot; <a href="/es/events/evt_g04" data-testid="amap-event">Golden Event 4</a> &middot; <a href="/es/events/evt_g06" data-testid="amap-event">Golden Event 6</a> &middot; <a href="/es/events/evt_g08" data-testid="amap-event">Golden Event 8</a> <a class="amap-zoom" href="/es/?area=872664cdbffffff" data-testid="amap-zoom">Acercar</a></li></ol>
               <figcaption id="amap-caption" data-testid="amap-caption">11 eventos en 2 barrios, de todo tipo, en los próximos 90 días (los filtros de arriba cambian la lista, no el mapa). Cada hexágono mide unos pocos kilómetros cuadrados y nunca es una dirección. Toca un hexágono para ver sus eventos en el mapa.</figcaption>
@@ -519,6 +512,8 @@
 
       <nav class="ose-lang" data-testid="language-switch" aria-label="Idioma">
       <a lang="es" hreflang="en" data-testid="language-switch-en" href="/">Inglés</a>
+      <a lang="es" hreflang="pl" data-testid="language-switch-pl" href="/pl/">Polaco</a>
+      <a lang="es" hreflang="ar" data-testid="language-switch-ar" href="/ar/">Árabe</a>
     </nav>
       <details class="ose-never-who" data-testid="landing-privacy" data-never-who="landing">
     <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Nunca quién, solo cuántos.</span> <span class="ose-never-who-trigger">Cómo funciona</span></summary>

@@ -470,7 +470,7 @@ function chipRules(id: string): string {
   const label = `.toggles label[for='${id}']`;
   return (
     `#${id}:checked ~ ${label}{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}` +
-    `#${id}:checked ~ ${label}::before{content:'\\2713';margin-right:.35rem}` +
+    `#${id}:checked ~ ${label}::before{content:'\\2713';margin-inline-end:.35rem}` +
     `#${id}:focus-visible ~ ${label}{outline:3px solid var(--accent);outline-offset:2px}`
   );
 }

@@ -262,7 +262,7 @@ export const EVENT_CARD_CSS_MARKER = '/*OCR_EVENT_CARD_CSS*/';
 // under the text at phone width instead of squeezing the title.
 export const EVENT_CARD_CSS = `
       #events, .view-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-      .event-card { min-height: var(--tap-min); position: relative; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 1.25rem 1.5rem; transition: background 0.15s; }
+      .event-card { min-height: var(--tap-min); position: relative; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border); border-inline-start: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 1.25rem 1.5rem; transition: background 0.15s; }
       .event-card:hover { background: var(--surface-hover); }
       .event-card-link { position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-sm); }
       .event-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -281,7 +281,7 @@ export const EVENT_CARD_CSS = `
         .event-card .cta { flex: 1 1 100%; }
       }
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-      .tag-wrapped { display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; background: var(--bg); color: var(--text-muted); }
+      .tag-wrapped { display: inline-block; margin-inline-start: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; background: var(--bg); color: var(--text-muted); }
       .events-subheading { font-size: 1.1rem; font-weight: 600; color: var(--text-muted); margin: 0.75rem 0 0; }
       .empty { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 1.5rem 1rem; text-align: center; color: var(--text-muted); font-size: 1rem; }
       .empty a { color: var(--accent); font-weight: 600; }
@@ -291,7 +291,7 @@ export const EVENT_CARD_CSS = `
       .disc-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.5rem; padding: 0; border: 0; min-inline-size: 0; }
       .disc-chip, .disc-clear { flex: 0 1 auto; display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.95rem; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted); font-size: 0.95rem; font-weight: 600; text-decoration: none; cursor: pointer; }
       .disc-chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-      .disc-chip.active::before { content: '\\2713'; margin-right: 0.35rem; }
+      .disc-chip.active::before { content: '\\2713'; margin-inline-end: 0.35rem; }
       .disc-clear { color: var(--text); text-decoration: underline; }
       .disc-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); padding: 0; margin: 0 0.25rem 0 0; align-self: center; }
       .disc-summary { font-size: 0.95rem; color: var(--text-muted); margin: 0 0 0.75rem; }`;

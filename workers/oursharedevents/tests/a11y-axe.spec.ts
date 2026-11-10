@@ -347,3 +347,97 @@ describe('A11Y-7 / OSE-1762: the event list and the landing in Spanish', () => {
     });
   }
 });
+
+// Polish (OSE-1957) and Arabic, the first right-to-left language (epic OSE-1959,
+// story OSE-1971). Every page on the layer, menu closed and with every part of
+// it open, in both. axe checks `lang` is a valid code (html-lang-valid,
+// valid-lang on each menu item) and that nothing in the right-to-left page is a
+// critical or serious violation. Then the menu rules from OSE-1937, and `dir`
+// on <html>: rtl for Arabic, ltr for Polish.
+describe('A11Y-7 / OSE-1957, OSE-1971: Polish and Arabic pages, menu closed and open', () => {
+  const row = {
+    id: 'evt_a11y',
+    brand_id: 'root',
+    title: 'Bocce Night #3!',
+    slug: 'bocce-night',
+    status: 'active',
+    description: 'A neighborhood night.',
+    location: 'St. Gerald Hall',
+    start_date: '2026-10-24',
+    end_date: '2026-10-24',
+    timezone: 'America/Chicago',
+    starts_at: '2026-10-24T23:00:00Z',
+    what_short: 'Come and play.',
+    who_host: 'Oak Lawn Bocce Club',
+    why_purpose: null,
+    how_details: null,
+    where_address: '9500 S Cook Ave',
+    who_story: null,
+    who_image_url: null,
+    what_video_url: null,
+    what_url: null,
+    what_url_enabled: 0,
+    what_url_type: null,
+    lat: 41.7,
+    lon: -87.7,
+    price_cents: null,
+    price_model: null,
+    price_note: null,
+  } as PublicEventRow;
+  const open = (html: string) =>
+    html.replace(/<details class="ose-langmenu-/g, '<details open class="ose-langmenu-');
+
+  for (const lang of ['pl', 'ar'] as const) {
+    const dir = lang === 'ar' ? 'rtl' : 'ltr';
+    const share = `https://t.test/${lang}/events/evt_a11y/bocce-night`;
+    const pages: [string, () => Promise<string> | string][] = [
+      ['pre-event', () => renderPreEventHtml(row, share, undefined, { lang, pageQuery: '' })],
+      ['live', () => renderEventLiveHtml(row, share, undefined, { lang, pageQuery: '' })],
+      ['post-event', () => renderPostEventHtml(row, share, [], undefined, { lang, pageQuery: '' })],
+      [
+        '/events',
+        async () =>
+          (
+            await handlePublicPage(
+              {} as never,
+              null,
+              new Request(`https://t.test/${lang}/events`),
+              lang
+            )
+          ).text(),
+      ],
+      [
+        'landing',
+        async () =>
+          (
+            await handleLandingPage({} as never, null, new Request(`https://t.test/${lang}/`), lang)
+          ).text(),
+      ],
+    ];
+    for (const [name, render] of pages) {
+      for (const menu of ['closed', 'open'] as const) {
+        test(`${lang} ${name}, menu ${menu}`, async () => {
+          const html = await render();
+          await scanPage(`${lang} ${name}, menu ${menu}`, menu === 'open' ? open(html) : html);
+          expect(document.documentElement.getAttribute('lang')).toBe(lang);
+          expect(document.documentElement.getAttribute('dir')).toBe(dir);
+          expect(document.querySelectorAll('h1').length).toBe(1);
+          const extra = await axe.run(document, {
+            runOnly: {
+              type: 'rule',
+              values: [
+                'valid-lang',
+                'landmark-unique',
+                'summary-name',
+                'link-name',
+                'aria-allowed-attr',
+                'duplicate-id',
+              ],
+            },
+          });
+          expect(extra.violations.map((v) => v.id)).toEqual([]);
+        });
+      }
+    }
+  }
+});

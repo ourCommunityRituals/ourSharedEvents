@@ -26,14 +26,31 @@
  *   planted fault; the faults and what they turned red are in
  *   `docs/ccr-archive/CCR-SPINE-KEYS-2026-10-12.md` | date: 2026-10-12
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import { SPINE_KEY_INPUT_COLUMNS, SPINE_KEYS_CLEAR_SQL } from '../src/lib/spine-keys-store';
 
 const WORKER = join(__dirname, '..');
-const REPO = join(WORKER, '..', '..');
 const SRC = join(WORKER, 'src');
+
+/**
+ * The repository root: the nearest folder at or above `workers/oursharedevents/..`
+ * that holds `bruno/fixtures`. Not a fixed depth, because Stryker runs this spec
+ * from a copy of the Worker at `workers/oursharedevents/.stryker-tmp/sandbox-*`,
+ * two levels deeper. It runs there whenever a mutate target is in this spec's
+ * import graph (`event-datetime.ts` imports `i18n/languages.ts`).
+ */
+function findRepo(): string {
+  let dir = join(WORKER, '..', '..');
+  while (!existsSync(join(dir, 'bruno', 'fixtures'))) {
+    const up = dirname(dir);
+    if (up === dir) throw new Error(`no bruno/fixtures above ${WORKER}`);
+    dir = up;
+  }
+  return dir;
+}
+const REPO = findRepo();
 
 function filesUnder(dir: string, ext: string): string[] {
   const out: string[] = [];
@@ -45,7 +62,14 @@ function filesUnder(dir: string, ext: string): string[] {
   return out;
 }
 
-const rel = (path: string) => relative(REPO, path).replace(/\\/g, '/');
+/** A path from the repository root; a Worker file reads as under `workers/oursharedevents/` from a sandbox copy too. */
+const rel = (path: string) => {
+  const inWorker = relative(WORKER, path);
+  const out = inWorker.startsWith('..')
+    ? relative(REPO, path)
+    : join('workers', 'oursharedevents', inWorker);
+  return out.replace(/\\/g, '/');
+};
 
 /** Source with its comments blanked, so prose about a statement is not a statement. */
 function code(path: string): string {

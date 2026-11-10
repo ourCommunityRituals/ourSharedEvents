@@ -15,7 +15,7 @@ import { LANGUAGES, DEFAULT_LANG, isLang } from '../src/lib/i18n/languages';
 
 // Languages declared complete. A new language is added here once it is finished;
 // until then it may be partial and falls back to English per key.
-const COMPLETE: readonly string[] = ['en', 'es'];
+const COMPLETE: readonly string[] = ['en', 'es', 'pl', 'ar'];
 
 const KEYS = Object.keys(CATALOG.en) as MessageKey[];
 

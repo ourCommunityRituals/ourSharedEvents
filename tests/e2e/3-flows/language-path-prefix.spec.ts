@@ -531,3 +531,189 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
     });
   }
 });
+
+// ── Polish and Arabic, pairwise (OSE-1957, epic OSE-1959, story OSE-1972) ────
+// The full set is 4 languages x 5 pages x 5 viewports x 4 menu states x 2
+// themes = 800 cells. The node layer runs all 800
+// (workers/oursharedevents/tests/language-permutations.spec.ts). A real browser
+// runs the pairwise subset: every pair of values in at least one row (owner
+// 2026-11-08: pairs, not every combination). On staging the page factor is the
+// three pages a fresh run can reach (the event page before it starts, /events,
+// the landing); the live and recap phases are covered at the node layer.
+
+const PW_LANGS = ['en', 'es', 'pl', 'ar'] as const;
+const PW_PAGES = ['event', 'events', 'landing'] as const;
+const PW_VIEWPORTS = [320, 375, 640, 641, 1280] as const;
+const PW_MENUS = ['closed', 'wide-open', 'phone-open', 'phone-language-open'] as const;
+const PW_THEMES = ['dark', 'light'] as const;
+type PwRow = {
+  lang: (typeof PW_LANGS)[number];
+  page: (typeof PW_PAGES)[number];
+  viewport: (typeof PW_VIEWPORTS)[number];
+  menu: (typeof PW_MENUS)[number];
+  theme: (typeof PW_THEMES)[number];
+};
+const PW_FACTORS = ['lang', 'page', 'viewport', 'menu', 'theme'] as const;
+
+/** Every pair of values two factors take in a row, as strings. */
+function pairsOf(row: PwRow): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < PW_FACTORS.length; i++) {
+    for (let j = i + 1; j < PW_FACTORS.length; j++) {
+      out.push(`${PW_FACTORS[i]}=${row[PW_FACTORS[i]]}|${PW_FACTORS[j]}=${row[PW_FACTORS[j]]}`);
+    }
+  }
+  return out;
+}
+
+function allCells(): PwRow[] {
+  const all: PwRow[] = [];
+  for (const lang of PW_LANGS)
+    for (const page of PW_PAGES)
+      for (const viewport of PW_VIEWPORTS)
+        for (const menu of PW_MENUS)
+          for (const theme of PW_THEMES) all.push({ lang, page, viewport, menu, theme });
+  return all;
+}
+
+/** Greedy all-pairs: deterministic, so the same rows run every time. */
+function pairwiseRows(): PwRow[] {
+  const all = allCells();
+  const left = new Set(all.flatMap(pairsOf));
+  const rows: PwRow[] = [];
+  while (left.size) {
+    let best = all[0];
+    let bestHits = -1;
+    for (const r of all) {
+      const hits = pairsOf(r).filter((p) => left.has(p)).length;
+      if (hits > bestHits) [best, bestHits] = [r, hits];
+    }
+    rows.push(best);
+    for (const p of pairsOf(best)) left.delete(p);
+  }
+  return rows;
+}
+
+const PW_ROWS = pairwiseRows();
+
+test.describe('Polish and Arabic on staging, pairwise rows (OSE-1972)', () => {
+  let eventId: string | null = null;
+  let slug = '';
+
+  test('the rows cover every pair of values, in far fewer rows than the cells', () => {
+    const covered = new Set(PW_ROWS.flatMap(pairsOf));
+    const missing = [...new Set(allCells().flatMap(pairsOf))].filter((p) => !covered.has(p));
+    expect(missing).toEqual([]);
+    expect(PW_ROWS.length).toBeLessThan(40);
+  });
+
+  test.beforeAll(async ({ request }) => {
+    precondition(!ADMIN_KEY, 'ADMIN_KEY or X_OCR_INTERNAL is required');
+    slug = `language-pairwise-${RUN_ID}`;
+    const created = await adminFetch(request, 'POST', '/api/v2/admin/events', {
+      brand_id: 'root',
+      title: `Bocce Night #3! ${RUN_ID}`,
+      slug,
+      status: 'active',
+      is_published: true,
+      description: 'Temporary pairwise language event.',
+      location: 'Pairwise Hall',
+      start_date: '2099-03-01',
+      end_date: '2099-03-01',
+      timezone: 'America/Chicago',
+    });
+    expect(created.status(), 'create event').toBe(201);
+    eventId = (await created.json()).id;
+  });
+
+  test.afterAll(async ({ request }) => {
+    if (!eventId) return;
+    try {
+      await adminFetch(request, 'DELETE', `/api/v2/admin/events/${encodeURIComponent(eventId)}`);
+    } catch {
+      // Best-effort: the slug is per-run unique and the date is 2099.
+    }
+  });
+
+  for (const row of PW_ROWS) {
+    const name = `${row.lang} ${row.page} ${row.viewport}px ${row.menu} ${row.theme}`;
+    test(name, async ({ browser }, testInfo) => {
+      const context = await browser.newContext({
+        viewport: { width: row.viewport, height: 800 },
+        colorScheme: row.theme,
+      });
+      try {
+        const page = await context.newPage();
+        await page.route('**/cdn-cgi/challenge-platform/**', (route) => route.abort());
+        const prefix = row.lang === 'en' ? '' : `/${row.lang}`;
+        const path =
+          row.page === 'event'
+            ? `${prefix}/events/${eventId}/${slug}`
+            : row.page === 'events'
+              ? `${prefix}/events`
+              : `${prefix}/`;
+        const res = await page.goto(`${BASE_URL}${path}`, { waitUntil: 'load' });
+        expect(res?.status(), `${path} is served`).toBe(200);
+        expect((await res?.allHeaders())?.['set-cookie'], 'no cookie').toBeUndefined();
+
+        const rtl = row.lang === 'ar';
+        await expect(page.locator('html')).toHaveAttribute('lang', row.lang);
+        await expect(page.locator('html')).toHaveAttribute('dir', rtl ? 'rtl' : 'ltr');
+
+        const phone = row.viewport <= 640;
+        const wideButton = page.locator('[data-testid="language-menu-button"]');
+        const burger = page.locator('[data-testid="site-menu-button"]');
+        const control = phone ? burger : wideButton;
+        await expect(control).toBeVisible();
+        await expect(phone ? wideButton : burger).toBeHidden();
+
+        // The menu sits at the reading start: the left half in ltr, the right in rtl.
+        const box = (await control.boundingBox())!;
+        const centre = box.x + box.width / 2;
+        if (rtl) expect(centre, 'menu on the right in rtl').toBeGreaterThan(row.viewport / 2);
+        else expect(centre, 'menu on the left in ltr').toBeLessThan(row.viewport / 2);
+        expect(box.height, 'target height').toBeGreaterThanOrEqual(44);
+
+        const family = phone ? 'site-menu-language' : 'language-menu';
+        const listOpen =
+          (row.menu === 'wide-open' && !phone) || (row.menu === 'phone-language-open' && phone);
+        if (row.menu === 'wide-open' && !phone) await wideButton.click();
+        if (row.menu.startsWith('phone') && phone) {
+          await burger.click();
+          await expect(page.locator('[data-testid="site-menu-language-button"]')).toBeVisible();
+          if (row.menu === 'phone-language-open') {
+            await page.locator('[data-testid="site-menu-language-button"]').click();
+          }
+        }
+        for (const l of PW_LANGS) {
+          const item = page.locator(`[data-testid="${family}-${l}"]`);
+          if (listOpen) await expect(item).toBeVisible();
+          else await expect(item).toBeHidden();
+        }
+        if (listOpen) {
+          const current = page.locator(`[data-testid="${family}-${row.lang}"]`);
+          await expect(current).toHaveAttribute('aria-current', 'true');
+          // The open list stays on the screen.
+          const list = (await current.boundingBox())!;
+          expect(list.x, 'list inside the left edge').toBeGreaterThanOrEqual(0);
+          expect(list.x + list.width, 'list inside the right edge').toBeLessThanOrEqual(
+            row.viewport
+          );
+        }
+
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+        );
+        expect(overflow, 'no sideways scroll').toBeLessThanOrEqual(0);
+        if (rtl) {
+          await testInfo.attach(`${name}.png`, {
+            body: await page.screenshot({ fullPage: false }),
+            contentType: 'image/png',
+          });
+        }
+      } finally {
+        await context.close();
+      }
+    });
+  }
+});

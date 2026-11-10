@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{lang}}" data-surface="ose-landing">
+<html lang="{{lang}}" dir="{{dir}}" data-surface="ose-landing">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -31,18 +31,8 @@
         line-height: 1.5;
         overflow-wrap: anywhere;
       }
-      .skip-link {
-        position: absolute;
-        left: -9999px;
-      }
-      .skip-link:focus {
-        left: 1rem;
-        top: 1rem;
-        background: var(--accent);
-        color: var(--on-accent);
-        padding: 0.5rem 1rem;
-        z-index: 10;
-      }
+      .skip-link { position: absolute; inset-inline-start: -9999px; }
+      .skip-link:focus { inset-inline-start: 1rem; top: 1rem; background: var(--accent); color: var(--on-accent); padding: 0.5rem 1rem; z-index: 10; }
       header {
         display: flex;
         align-items: center;
@@ -104,7 +94,7 @@
       .where-change {
         font-size: 1rem;
         font-weight: 400;
-        margin-left: 0.5rem;
+        margin-inline-start: 0.5rem;
       }
       .doors {
         display: flex;

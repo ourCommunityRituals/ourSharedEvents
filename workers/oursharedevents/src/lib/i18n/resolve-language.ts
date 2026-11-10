@@ -27,6 +27,7 @@ function parse(header: string): Entry[] {
   parts.forEach((part, order) => {
     const [rawTag, ...params] = part.split(';');
     const tag = rawTag.trim().toLowerCase();
+    // Stryker disable next-line ConditionalExpression,LogicalOperator,StringLiteral: equivalent mutants (OSE-1970) — '' and '*' are never in LANGUAGES and match() turns either into null, so an entry kept here is skipped by the lookup instead; this line only saves that work.
     if (!tag || tag === '*') return;
     let q = 1;
     for (const param of params) {
@@ -42,6 +43,7 @@ function parse(header: string): Entry[] {
     entries.push({ tag, q, order });
   });
   // Highest quality first; a tie keeps the order the browser listed them in.
+  // Stryker disable next-line ArithmeticOperator: equivalent mutant (OSE-1970) — `a.order + b.order` is positive for every tie, which V8's stable sort reads as "keep b first"; at most 32 entries are sorted, all by binary insertion, so ties keep their listed order either way (checked with 2 to 12 tied tags).
   return entries.sort((a, b) => b.q - a.q || a.order - b.order);
 }
 
@@ -51,6 +53,7 @@ function match(tag: string): Lang | null {
   for (;;) {
     if ((LANGUAGES as readonly string[]).includes(candidate)) return candidate as Lang;
     const cut = candidate.lastIndexOf('-');
+    // Stryker disable next-line EqualityOperator: equivalent mutant (OSE-1970) — at cut 0 the next candidate is '', which is never a language, so stopping one step early returns the same null.
     if (cut < 0) return null;
     candidate = candidate.slice(0, cut);
   }

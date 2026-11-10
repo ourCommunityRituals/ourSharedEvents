@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-surface="ose-public">
+<html lang="es" dir="ltr" data-surface="ose-public">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -18,6 +18,8 @@
   <link rel="canonical" href="https://oursharedevents.com/events/evt_golden" />
   <link rel="alternate" hreflang="en" href="https://oursharedevents.com/events/evt_golden/parish-spring-fundraiser" />
   <link rel="alternate" hreflang="es" href="https://oursharedevents.com/es/events/evt_golden/parish-spring-fundraiser" />
+  <link rel="alternate" hreflang="pl" href="https://oursharedevents.com/pl/events/evt_golden/parish-spring-fundraiser" />
+  <link rel="alternate" hreflang="ar" href="https://oursharedevents.com/ar/events/evt_golden/parish-spring-fundraiser" />
   <link rel="alternate" hreflang="x-default" href="https://oursharedevents.com/events/evt_golden/parish-spring-fundraiser" />
   <meta name="description" content="Come support the cause." />
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"Event","name":"Parish Spring Fundraiser","url":"https://oursharedevents.com/events/evt_golden","startDate":"2026-10-24T23:00:00Z","endDate":"2026-10-25T04:59:59.999Z","eventStatus":"https://schema.org/EventScheduled","location":{"@type":"Place","name":"St. Barnabas Hall","address":"123 Main St"},"description":"Come support the cause."}</script>
@@ -27,13 +29,12 @@
        swaps the surface. --ose-live -> teal --live (colorblind-safe). No hex. */
     [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
        public event page (live phase mirror of renderPreEventHtml). */
-    html, body { overflow-x: hidden; }
+    html, body { background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; overflow-x: hidden; }
     body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; overflow-wrap: anywhere; word-break: break-word; }
-    .ose-skip { position: absolute; left: -9999px; }
-    .ose-skip:focus { left: 1rem; top: 1rem; background: var(--ose-accent); color: var(--on-accent); padding: 0.5rem 1rem; border-radius: 4px; }
+    .ose-skip { position: absolute; inset-inline-start: -9999px; }
+    .ose-skip:focus { inset-inline-start: 1rem; top: 1rem; background: var(--ose-accent); color: var(--on-accent); padding: 0.5rem 1rem; border-radius: 4px; }
     .ose-live-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--ose-live); color: var(--ose-bg); padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; }
     .ose-live-dot { width: 0.6rem; height: 0.6rem; background: #fff; border-radius: 50%; animation: ose-pulse 1.5s ease-in-out infinite; }
     @keyframes ose-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
@@ -76,7 +77,7 @@
     .ose-langmenu-caret { font-size: 0.875rem; }
     .ose-langmenu details[open] > summary .ose-langmenu-caret { transform: rotate(180deg); }
     .ose-langmenu-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 0; padding: 0.375rem; list-style: none; }
-    .ose-langmenu-desktop > .ose-langmenu-list, .ose-langmenu-panel { position: absolute; top: calc(100% + 0.5rem); left: 0; z-index: 50; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
+    .ose-langmenu-desktop > .ose-langmenu-list, .ose-langmenu-panel { position: absolute; top: calc(100% + 0.5rem); inset-inline-start: 0; z-index: 50; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
     .ose-langmenu-desktop > .ose-langmenu-list { min-width: 12rem; }
     .ose-langmenu-panel { width: min(18rem, calc(100vw - 2rem)); padding: 0.375rem; }
     .ose-langmenu-item { display: flex; align-items: center; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
@@ -84,7 +85,8 @@
     .ose-langmenu-check { display: inline-block; width: 1.25em; }
     .ose-langmenu-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
     .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(90deg); }
-    .ose-langmenu-sub > .ose-langmenu-list { padding: 0.25rem 0 0 0.75rem; }
+    [dir="rtl"] .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(-90deg); }
+    .ose-langmenu-sub > .ose-langmenu-list { padding-block: 0.25rem 0; padding-inline: 0.75rem 0; }
     .ose-langmenu-bar { display: flex; align-items: center; gap: 0.75rem; }
     .ose-langmenu-mobile { display: none; }
     @media (max-width: 640px) {
@@ -92,7 +94,7 @@
       .ose-langmenu-mobile { display: block; }
     }
     .ose-topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: 0 0 0.75rem; }
-    @media (min-width: 1024px) { .ose-topbar-solo { position: absolute; top: 1rem; left: 1rem; margin: 0; } }
+    @media (min-width: 1024px) { .ose-topbar-solo { position: absolute; top: 1rem; inset-inline-start: 1rem; margin: 0; } }
 
     .ose-suggestions-heading { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; color: var(--ose-muted); margin: 0 0 0.5rem; }
     .ose-suggestion-list { list-style: none; margin: 0 0 0.75rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
@@ -136,14 +138,14 @@
     <div class="ose-langmenu" data-testid="language-menu">
       <details class="ose-langmenu-desktop" data-testid="language-menu-desktop">
         <summary class="ose-langmenu-button" data-testid="language-menu-button"><span>Idioma</span><span class="ose-langmenu-caret" aria-hidden="true">▾</span></summary>
-        <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="language-menu-en" href="/events/evt_golden/parish-spring-fundraiser"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="language-menu-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li></ul>
+        <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="language-menu-en" href="/events/evt_golden/parish-spring-fundraiser"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="language-menu-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li><li><a class="ose-langmenu-item" lang="es" hreflang="pl" data-testid="language-menu-pl" href="/pl/events/evt_golden/parish-spring-fundraiser"><span class="ose-langmenu-check" aria-hidden="true"></span>Polaco</a></li><li><a class="ose-langmenu-item" lang="es" hreflang="ar" data-testid="language-menu-ar" href="/ar/events/evt_golden/parish-spring-fundraiser"><span class="ose-langmenu-check" aria-hidden="true"></span>Árabe</a></li></ul>
       </details>
       <details class="ose-langmenu-mobile" data-testid="site-menu">
         <summary class="ose-langmenu-button" aria-label="Menú" data-testid="site-menu-button"><span aria-hidden="true">☰</span></summary>
         <div class="ose-langmenu-panel" data-testid="site-menu-panel">
           <details class="ose-langmenu-sub" data-testid="site-menu-language">
             <summary class="ose-langmenu-row" data-testid="site-menu-language-button"><span>Idioma</span><span class="ose-langmenu-caret" aria-hidden="true">›</span></summary>
-            <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="site-menu-language-en" href="/events/evt_golden/parish-spring-fundraiser"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="site-menu-language-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li></ul>
+            <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="site-menu-language-en" href="/events/evt_golden/parish-spring-fundraiser"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="site-menu-language-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li><li><a class="ose-langmenu-item" lang="es" hreflang="pl" data-testid="site-menu-language-pl" href="/pl/events/evt_golden/parish-spring-fundraiser"><span class="ose-langmenu-check" aria-hidden="true"></span>Polaco</a></li><li><a class="ose-langmenu-item" lang="es" hreflang="ar" data-testid="site-menu-language-ar" href="/ar/events/evt_golden/parish-spring-fundraiser"><span class="ose-langmenu-check" aria-hidden="true"></span>Árabe</a></li></ul>
           </details>
         </div>
       </details>
@@ -221,6 +223,8 @@
 
     <nav class="ose-lang" data-testid="language-switch" aria-label="Idioma">
       <a lang="es" hreflang="en" data-testid="language-switch-en" href="/events/evt_golden/parish-spring-fundraiser">Inglés</a>
+      <a lang="es" hreflang="pl" data-testid="language-switch-pl" href="/pl/events/evt_golden/parish-spring-fundraiser">Polaco</a>
+      <a lang="es" hreflang="ar" data-testid="language-switch-ar" href="/ar/events/evt_golden/parish-spring-fundraiser">Árabe</a>
     </nav>
 
     <nav class="ose-back" aria-label="Volver">

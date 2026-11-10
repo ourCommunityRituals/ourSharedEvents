@@ -235,7 +235,7 @@ describe('the event pages carry the menu at the top, left', () => {
     const post = pages.post('en');
     expect(post).toContain('<div class="ose-topbar ose-topbar-solo" data-testid="event-topbar">');
     expect(post).toContain(
-      '@media (min-width: 1024px) { .ose-topbar-solo { position: absolute; top: 1rem; left: 1rem; margin: 0; } }'
+      '@media (min-width: 1024px) { .ose-topbar-solo { position: absolute; top: 1rem; inset-inline-start: 1rem; margin: 0; } }'
     );
   });
 

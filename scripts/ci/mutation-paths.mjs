@@ -97,6 +97,22 @@ export const MUTATION_PATHS = Object.freeze([
   'workers/oursharedevents/tests/language-menu-third-language.spec.ts',
   'workers/oursharedevents/tests/language-menu-close.spec.ts',
   'workers/oursharedevents/tests/language-layer-golden.spec.ts',
+  // Polish (OSE-1957) and Arabic (epic OSE-1959): the language layer's files on
+  // Stryker and the node specs that kill their mutants.
+  'workers/oursharedevents/src/lib/i18n/languages.ts',
+  'workers/oursharedevents/src/lib/i18n/bidi.ts',
+  'workers/oursharedevents/src/lib/i18n/path-prefix.ts',
+  'workers/oursharedevents/src/lib/i18n/template.ts',
+  'workers/oursharedevents/src/lib/i18n/resolve-language.ts',
+  'workers/oursharedevents/src/lib/i18n/language-switch.ts',
+  'workers/oursharedevents/src/lib/i18n/catalog.ts',
+  'workers/oursharedevents/src/lib/i18n/catalog-pl.ts',
+  'workers/oursharedevents/src/lib/i18n/catalog-ar.ts',
+  'workers/oursharedevents/tests/language-permutations.spec.ts',
+  'workers/oursharedevents/tests/i18n-polish-arabic.spec.ts',
+  'workers/oursharedevents/tests/i18n-catalog.spec.ts',
+  'workers/oursharedevents/tests/i18n-path-prefix.spec.ts',
+  'workers/oursharedevents/tests/i18n-resolve-language.spec.ts',
   // OSE-1952: the event page's sponsor-art rule (a marker range of pages.ts,
   // listed above) and the node spec that kills its mutants.
   'workers/oursharedevents/tests/sponsor-thumb-render.spec.ts',

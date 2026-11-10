@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-surface="ose-landing">
+<html lang="es" dir="ltr" data-surface="ose-landing">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -31,18 +31,8 @@
         line-height: 1.5;
         overflow-wrap: anywhere;
       }
-      .skip-link {
-        position: absolute;
-        left: -9999px;
-      }
-      .skip-link:focus {
-        left: 1rem;
-        top: 1rem;
-        background: var(--accent);
-        color: var(--on-accent);
-        padding: 0.5rem 1rem;
-        z-index: 10;
-      }
+      .skip-link { position: absolute; inset-inline-start: -9999px; }
+      .skip-link:focus { inset-inline-start: 1rem; top: 1rem; background: var(--accent); color: var(--on-accent); padding: 0.5rem 1rem; z-index: 10; }
       header {
         display: flex;
         align-items: center;
@@ -104,7 +94,7 @@
       .where-change {
         font-size: 1rem;
         font-weight: 400;
-        margin-left: 0.5rem;
+        margin-inline-start: 0.5rem;
       }
       .doors {
         display: flex;
@@ -150,7 +140,7 @@
       }
       
       #events, .view-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-      .event-card { min-height: var(--tap-min); position: relative; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 1.25rem 1.5rem; transition: background 0.15s; }
+      .event-card { min-height: var(--tap-min); position: relative; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border); border-inline-start: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 1.25rem 1.5rem; transition: background 0.15s; }
       .event-card:hover { background: var(--surface-hover); }
       .event-card-link { position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-sm); }
       .event-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -169,7 +159,7 @@
         .event-card .cta { flex: 1 1 100%; }
       }
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-      .tag-wrapped { display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; background: var(--bg); color: var(--text-muted); }
+      .tag-wrapped { display: inline-block; margin-inline-start: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; background: var(--bg); color: var(--text-muted); }
       .events-subheading { font-size: 1.1rem; font-weight: 600; color: var(--text-muted); margin: 0.75rem 0 0; }
       .empty { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 1.5rem 1rem; text-align: center; color: var(--text-muted); font-size: 1rem; }
       .empty a { color: var(--accent); font-weight: 600; }
@@ -179,7 +169,7 @@
       .disc-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.5rem; padding: 0; border: 0; min-inline-size: 0; }
       .disc-chip, .disc-clear { flex: 0 1 auto; display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.95rem; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted); font-size: 0.95rem; font-weight: 600; text-decoration: none; cursor: pointer; }
       .disc-chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-      .disc-chip.active::before { content: '\2713'; margin-right: 0.35rem; }
+      .disc-chip.active::before { content: '\2713'; margin-inline-end: 0.35rem; }
       .disc-clear { color: var(--text); text-decoration: underline; }
       .disc-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); padding: 0; margin: 0 0.25rem 0 0; align-self: center; }
       .disc-summary { font-size: 0.95rem; color: var(--text-muted); margin: 0 0 0.75rem; }
@@ -241,7 +231,7 @@
     .ose-langmenu-caret { font-size: 0.875rem; }
     .ose-langmenu details[open] > summary .ose-langmenu-caret { transform: rotate(180deg); }
     .ose-langmenu-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 0; padding: 0.375rem; list-style: none; }
-    .ose-langmenu-desktop > .ose-langmenu-list, .ose-langmenu-panel { position: absolute; top: calc(100% + 0.5rem); left: 0; z-index: 50; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
+    .ose-langmenu-desktop > .ose-langmenu-list, .ose-langmenu-panel { position: absolute; top: calc(100% + 0.5rem); inset-inline-start: 0; z-index: 50; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
     .ose-langmenu-desktop > .ose-langmenu-list { min-width: 12rem; }
     .ose-langmenu-panel { width: min(18rem, calc(100vw - 2rem)); padding: 0.375rem; }
     .ose-langmenu-item { display: flex; align-items: center; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
@@ -249,7 +239,8 @@
     .ose-langmenu-check { display: inline-block; width: 1.25em; }
     .ose-langmenu-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
     .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(90deg); }
-    .ose-langmenu-sub > .ose-langmenu-list { padding: 0.25rem 0 0 0.75rem; }
+    [dir="rtl"] .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(-90deg); }
+    .ose-langmenu-sub > .ose-langmenu-list { padding-block: 0.25rem 0; padding-inline: 0.75rem 0; }
     .ose-langmenu-bar { display: flex; align-items: center; gap: 0.75rem; }
     .ose-langmenu-mobile { display: none; }
     @media (max-width: 640px) {
@@ -272,6 +263,8 @@
     <link rel="canonical" href="https://oursharedevents.com/es/" />
   <link rel="alternate" hreflang="en" href="https://oursharedevents.com/" />
   <link rel="alternate" hreflang="es" href="https://oursharedevents.com/es/" />
+  <link rel="alternate" hreflang="pl" href="https://oursharedevents.com/pl/" />
+  <link rel="alternate" hreflang="ar" href="https://oursharedevents.com/ar/" />
   <link rel="alternate" hreflang="x-default" href="https://oursharedevents.com/" />
   <meta property="og:locale" content="es_US" />
 </head>
@@ -282,14 +275,14 @@
         <div class="ose-langmenu" data-testid="language-menu">
       <details class="ose-langmenu-desktop" data-testid="language-menu-desktop">
         <summary class="ose-langmenu-button" data-testid="language-menu-button"><span>Idioma</span><span class="ose-langmenu-caret" aria-hidden="true">▾</span></summary>
-        <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="language-menu-en" href="/?zip=60406"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="language-menu-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li></ul>
+        <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="language-menu-en" href="/?zip=60406"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="language-menu-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li><li><a class="ose-langmenu-item" lang="es" hreflang="pl" data-testid="language-menu-pl" href="/pl/?zip=60406"><span class="ose-langmenu-check" aria-hidden="true"></span>Polaco</a></li><li><a class="ose-langmenu-item" lang="es" hreflang="ar" data-testid="language-menu-ar" href="/ar/?zip=60406"><span class="ose-langmenu-check" aria-hidden="true"></span>Árabe</a></li></ul>
       </details>
       <details class="ose-langmenu-mobile" data-testid="site-menu">
         <summary class="ose-langmenu-button" aria-label="Menú" data-testid="site-menu-button"><span aria-hidden="true">☰</span></summary>
         <div class="ose-langmenu-panel" data-testid="site-menu-panel">
           <details class="ose-langmenu-sub" data-testid="site-menu-language">
             <summary class="ose-langmenu-row" data-testid="site-menu-language-button"><span>Idioma</span><span class="ose-langmenu-caret" aria-hidden="true">›</span></summary>
-            <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="site-menu-language-en" href="/?zip=60406"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="site-menu-language-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li></ul>
+            <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="site-menu-language-en" href="/?zip=60406"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="site-menu-language-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li><li><a class="ose-langmenu-item" lang="es" hreflang="pl" data-testid="site-menu-language-pl" href="/pl/?zip=60406"><span class="ose-langmenu-check" aria-hidden="true"></span>Polaco</a></li><li><a class="ose-langmenu-item" lang="es" hreflang="ar" data-testid="site-menu-language-ar" href="/ar/?zip=60406"><span class="ose-langmenu-check" aria-hidden="true"></span>Árabe</a></li></ul>
           </details>
         </div>
       </details>
@@ -339,16 +332,16 @@
         <h2 class="area-heading" data-testid="area-heading">Cerca de 60406 <a class="where-change" href="/es/?change=1" data-testid="where-change">Cambiar</a></h2>
         <input type="radio" name="view" id="view-list" class="toggle-radio" checked /><input type="radio" name="view" id="view-map" class="toggle-radio" /><input type="radio" name="win" id="win-weekend" class="toggle-radio" /><input type="radio" name="win" id="win-week" class="toggle-radio" /><input type="radio" name="win" id="win-month" class="toggle-radio" /><input type="radio" name="win" id="win-next-90" class="toggle-radio" checked /><input type="radio" name="type" id="type-all" class="toggle-radio" checked /><input type="radio" name="type" id="cat-rec" class="toggle-radio" /><input type="radio" name="type" id="cat-ent" class="toggle-radio" />
         <style data-testid="area-window-css">
-#view-list:checked ~ .toggles label[for='view-list']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-list:checked ~ .toggles label[for='view-list']::before{content:'\2713';margin-right:.35rem}#view-list:focus-visible ~ .toggles label[for='view-list']{outline:3px solid var(--accent);outline-offset:2px}
-#view-map:checked ~ .toggles label[for='view-map']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-map:checked ~ .toggles label[for='view-map']::before{content:'\2713';margin-right:.35rem}#view-map:focus-visible ~ .toggles label[for='view-map']{outline:3px solid var(--accent);outline-offset:2px}
-#win-weekend:checked ~ .toggles label[for='win-weekend']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-weekend:checked ~ .toggles label[for='win-weekend']::before{content:'\2713';margin-right:.35rem}#win-weekend:focus-visible ~ .toggles label[for='win-weekend']{outline:3px solid var(--accent);outline-offset:2px}#win-weekend:checked ~ .area .event-card:not(.when-weekend),#win-weekend:checked ~ .area .amap-f:not(.when-weekend){display:none}
-#win-week:checked ~ .toggles label[for='win-week']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-week:checked ~ .toggles label[for='win-week']::before{content:'\2713';margin-right:.35rem}#win-week:focus-visible ~ .toggles label[for='win-week']{outline:3px solid var(--accent);outline-offset:2px}#win-week:checked ~ .area .event-card:not(.when-week),#win-week:checked ~ .area .amap-f:not(.when-week){display:none}
-#win-month:checked ~ .toggles label[for='win-month']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-month:checked ~ .toggles label[for='win-month']::before{content:'\2713';margin-right:.35rem}#win-month:focus-visible ~ .toggles label[for='win-month']{outline:3px solid var(--accent);outline-offset:2px}#win-month:checked ~ .area .event-card:not(.when-month),#win-month:checked ~ .area .amap-f:not(.when-month){display:none}
-#win-next-90:checked ~ .toggles label[for='win-next-90']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-next-90:checked ~ .toggles label[for='win-next-90']::before{content:'\2713';margin-right:.35rem}#win-next-90:focus-visible ~ .toggles label[for='win-next-90']{outline:3px solid var(--accent);outline-offset:2px}#win-next-90:checked ~ .area .event-card:not(.when-next-90),#win-next-90:checked ~ .area .amap-f:not(.when-next-90){display:none}
+#view-list:checked ~ .toggles label[for='view-list']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-list:checked ~ .toggles label[for='view-list']::before{content:'\2713';margin-inline-end:.35rem}#view-list:focus-visible ~ .toggles label[for='view-list']{outline:3px solid var(--accent);outline-offset:2px}
+#view-map:checked ~ .toggles label[for='view-map']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-map:checked ~ .toggles label[for='view-map']::before{content:'\2713';margin-inline-end:.35rem}#view-map:focus-visible ~ .toggles label[for='view-map']{outline:3px solid var(--accent);outline-offset:2px}
+#win-weekend:checked ~ .toggles label[for='win-weekend']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-weekend:checked ~ .toggles label[for='win-weekend']::before{content:'\2713';margin-inline-end:.35rem}#win-weekend:focus-visible ~ .toggles label[for='win-weekend']{outline:3px solid var(--accent);outline-offset:2px}#win-weekend:checked ~ .area .event-card:not(.when-weekend),#win-weekend:checked ~ .area .amap-f:not(.when-weekend){display:none}
+#win-week:checked ~ .toggles label[for='win-week']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-week:checked ~ .toggles label[for='win-week']::before{content:'\2713';margin-inline-end:.35rem}#win-week:focus-visible ~ .toggles label[for='win-week']{outline:3px solid var(--accent);outline-offset:2px}#win-week:checked ~ .area .event-card:not(.when-week),#win-week:checked ~ .area .amap-f:not(.when-week){display:none}
+#win-month:checked ~ .toggles label[for='win-month']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-month:checked ~ .toggles label[for='win-month']::before{content:'\2713';margin-inline-end:.35rem}#win-month:focus-visible ~ .toggles label[for='win-month']{outline:3px solid var(--accent);outline-offset:2px}#win-month:checked ~ .area .event-card:not(.when-month),#win-month:checked ~ .area .amap-f:not(.when-month){display:none}
+#win-next-90:checked ~ .toggles label[for='win-next-90']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-next-90:checked ~ .toggles label[for='win-next-90']::before{content:'\2713';margin-inline-end:.35rem}#win-next-90:focus-visible ~ .toggles label[for='win-next-90']{outline:3px solid var(--accent);outline-offset:2px}#win-next-90:checked ~ .area .event-card:not(.when-next-90),#win-next-90:checked ~ .area .amap-f:not(.when-next-90){display:none}
 </style><style data-testid="area-type-css">
-#type-all:checked ~ .toggles label[for='type-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-all:checked ~ .toggles label[for='type-all']::before{content:'\2713';margin-right:.35rem}#type-all:focus-visible ~ .toggles label[for='type-all']{outline:3px solid var(--accent);outline-offset:2px}
-#cat-rec:checked ~ .toggles label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-rec:checked ~ .toggles label[for='cat-rec']::before{content:'\2713';margin-right:.35rem}#cat-rec:focus-visible ~ .toggles label[for='cat-rec']{outline:3px solid var(--accent);outline-offset:2px}#cat-rec:checked ~ .area .event-card:not(.cat-rec),#cat-rec:checked ~ .area .amap-f:not(.cat-rec){display:none}
-#cat-ent:checked ~ .toggles label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .toggles label[for='cat-ent']::before{content:'\2713';margin-right:.35rem}#cat-ent:focus-visible ~ .toggles label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent),#cat-ent:checked ~ .area .amap-f:not(.cat-ent){display:none}
+#type-all:checked ~ .toggles label[for='type-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-all:checked ~ .toggles label[for='type-all']::before{content:'\2713';margin-inline-end:.35rem}#type-all:focus-visible ~ .toggles label[for='type-all']{outline:3px solid var(--accent);outline-offset:2px}
+#cat-rec:checked ~ .toggles label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-rec:checked ~ .toggles label[for='cat-rec']::before{content:'\2713';margin-inline-end:.35rem}#cat-rec:focus-visible ~ .toggles label[for='cat-rec']{outline:3px solid var(--accent);outline-offset:2px}#cat-rec:checked ~ .area .event-card:not(.cat-rec),#cat-rec:checked ~ .area .amap-f:not(.cat-rec){display:none}
+#cat-ent:checked ~ .toggles label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .toggles label[for='cat-ent']::before{content:'\2713';margin-inline-end:.35rem}#cat-ent:focus-visible ~ .toggles label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent),#cat-ent:checked ~ .area .amap-f:not(.cat-ent){display:none}
 </style>
         <div class="toggles" data-testid="area-toggles">
           <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">Vista</legend><label class="disc-chip" for="view-list">Lista</label><label class="disc-chip" for="view-map">Mapa</label></fieldset>
@@ -362,7 +355,7 @@
               <p><strong>El mapa aparece cuando esta zona tiene 10 eventos en los próximos 90 días.</strong> Hay 7 por ahora &mdash; todos los eventos aparecen abajo.</p>
             </div>
             <figure class="amap" data-testid="amap-example">
-              <style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-credit a,.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>
+              <style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-inline-start:1.5rem}.amap-credit a,.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" role="img" aria-label="Mapa de ejemplo: tres barrios dibujados como hexágonos numerados; el de más actividad, con el tono más oscuro" data-testid="amap-example-svg"><polygon class="amap-cell" points="231,20 300.3,60 300.3,140 231,180 161.7,140 161.7,60" fill-opacity="0.80" stroke-width="1.5"/><text class="amap-num" x="231" y="100" text-anchor="middle" dominant-baseline="central">1</text><polygon class="amap-cell" points="369.6,20 438.90000000000003,60 438.90000000000003,140 369.6,180 300.3,140 300.3,60" fill-opacity="0.50" stroke-width="1.5"/><text class="amap-num" x="369.6" y="100" text-anchor="middle" dominant-baseline="central">2</text><polygon class="amap-cell" points="300.3,140 369.6,180 369.6,260 300.3,300 231,260 231,180" fill-opacity="0.30" stroke-width="1.5"/><text class="amap-num" x="300.3" y="220" text-anchor="middle" dominant-baseline="central">3</text></svg>
               <figcaption data-testid="amap-example-caption"><strong>Ejemplo.</strong> Así se verá el mapa cuando se llenen los barrios: un hexágono numerado para cada uno, de unos pocos kilómetros cuadrados, nunca una dirección.</figcaption>
             </figure>
@@ -466,6 +459,8 @@
 
       <nav class="ose-lang" data-testid="language-switch" aria-label="Idioma">
       <a lang="es" hreflang="en" data-testid="language-switch-en" href="/?zip=60406">Inglés</a>
+      <a lang="es" hreflang="pl" data-testid="language-switch-pl" href="/pl/?zip=60406">Polaco</a>
+      <a lang="es" hreflang="ar" data-testid="language-switch-ar" href="/ar/?zip=60406">Árabe</a>
     </nav>
       <details class="ose-never-who" data-testid="landing-privacy" data-never-who="landing">
     <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Nunca quién, solo cuántos.</span> <span class="ose-never-who-trigger">Cómo funciona</span></summary>

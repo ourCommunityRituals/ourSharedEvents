@@ -48,8 +48,9 @@ import {
   NEVER_WHO_MARKER,
 } from '../lib/never-who';
 import { BACK_BUTTON_CSS, renderBackButton } from '../lib/back-button';
-import { DEFAULT_LANG, OG_LOCALE, type Lang } from '../lib/i18n/languages';
+import { DEFAULT_LANG, DIRECTION, OG_LOCALE, type Lang } from '../lib/i18n/languages';
 import { fmt, msg, msgAll, WHAT_TYPES } from '../lib/i18n/catalog';
+import { isolateTyped } from '../lib/i18n/bidi';
 import { resolveLanguage } from '../lib/i18n/resolve-language';
 import { languageAlternates, withLangPrefix } from '../lib/i18n/path-prefix';
 import { LANGUAGE_SWITCH_CSS, renderLanguageSwitch } from '../lib/i18n/language-switch';
@@ -1020,7 +1021,7 @@ const SPONSOR_LIST_CSS = `
  */
 const EVENT_TOPBAR_CSS = `
     .ose-topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: 0 0 0.75rem; }
-    @media (min-width: 1024px) { .ose-topbar-solo { position: absolute; top: 1rem; left: 1rem; margin: 0; } }`;
+    @media (min-width: 1024px) { .ose-topbar-solo { position: absolute; top: 1rem; inset-inline-start: 1rem; margin: 0; } }`;
 
 /**
  * The top bar of a public event page, the Language menu first. A draft preview
@@ -1332,7 +1333,7 @@ export function renderPreEventHtml(
   );
 
   return `<!DOCTYPE html>
-<html lang="${lang}" data-surface="ose-public">
+<html lang="${lang}" dir="${DIRECTION[lang]}" data-surface="ose-public">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1344,13 +1345,12 @@ ${buildOgMeta({ lang, title, description: whatShort, url: esc(shareUrl), twitter
        [data-brand] on <html> swaps the whole surface. No raw hex here. */
     [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     /* OSE-298: no sideways scroll at 375px; long strings (URLs in the 5W
        fields, sponsor links) wrap inside the 720px column. */
-    html, body { overflow-x: hidden; }
+    html, body { background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; overflow-x: hidden; }
     body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; overflow-wrap: anywhere; word-break: break-word; }
-    .ose-skip { position: absolute; left: -9999px; }
-    .ose-skip:focus { left: 1rem; top: 1rem; background: var(--ose-accent); color: var(--on-accent); padding: 0.5rem 1rem; border-radius: 4px; }
+    .ose-skip { position: absolute; inset-inline-start: -9999px; }
+    .ose-skip:focus { inset-inline-start: 1rem; top: 1rem; background: var(--ose-accent); color: var(--on-accent); padding: 0.5rem 1rem; border-radius: 4px; }
     h1 { font-size: 1.875rem; margin: 0 0 0.5rem; line-height: 1.2; }
     h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; color: var(--ose-text); }
     .ose-meta { color: var(--ose-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
@@ -1387,7 +1387,7 @@ ${SPONSOR_LIST_CSS}
   })()}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
     <header data-testid="event-header">
-      <h1 id="event-title" data-testid="event-title">${title}</h1>
+      <h1 id="event-title" data-testid="event-title">${isolateTyped(lang, title)}</h1>
       ${renderEventTypeMeta(row, 'event-type', lang)}
       ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}${countdown.html}</p>${countdown.script}` : ''}
       ${renderTrustLine(row, 'event-trust', lang)}
@@ -1398,7 +1398,7 @@ ${SPONSOR_LIST_CSS}
       whatShort || whatVideo || whatLink
         ? `<section class="ose-card ose-section" data-testid="event-what" aria-labelledby="what-heading">
            <h2 id="what-heading">${msg(lang, 'section.what')}</h2>
-           ${whatShort ? `<p>${whatShort}</p>` : ''}
+           ${whatShort ? `<p>${isolateTyped(lang, whatShort)}</p>` : ''}
            ${whatVideo ? `<p><a class="ose-what-video" data-testid="event-what-video" href="${esc(whatVideo)}" target="_blank" rel="noopener noreferrer nofollow">${msg(lang, 'video.watch')}</a></p>` : ''}
            ${whatLink}
          </section>`
@@ -1410,8 +1410,8 @@ ${SPONSOR_LIST_CSS}
         ? `<section class="ose-card ose-section" data-testid="event-where" aria-labelledby="where-heading">
            <h2 id="where-heading">${msg(lang, 'section.where')}</h2>
            ${mapImg}
-           ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
-           ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
+           ${venueDisplay ? `<p><strong>${isolateTyped(lang, venueDisplay)}</strong></p>` : ''}
+           ${whereAddress && whereAddress !== venueDisplay ? `<p>${isolateTyped(lang, whereAddress)}</p>` : ''}
            ${geoLink}
          </section>`
         : ''
@@ -1422,8 +1422,8 @@ ${SPONSOR_LIST_CSS}
         ? `<section class="ose-card ose-section" data-testid="event-who" aria-labelledby="who-heading">
            <h2 id="who-heading">${msg(lang, 'section.who')}</h2>
            ${whoImage ? `<img class="ose-who-image" data-testid="event-who-image" src="${esc(whoImage)}" alt="${whoHost ? fmt(lang, 'who.photoOf', { host: whoHost }) : msg(lang, 'who.host')}" loading="lazy" width="120" height="120" />` : ''}
-           ${whoHost ? `<p data-testid="event-who-host">${whoHost}</p>` : ''}
-           ${whoStory ? `<p class="ose-who-story" data-testid="event-who-story">${whoStory}</p>` : ''}
+           ${whoHost ? `<p data-testid="event-who-host">${isolateTyped(lang, whoHost)}</p>` : ''}
+           ${whoStory ? `<p class="ose-who-story" data-testid="event-who-story">${isolateTyped(lang, whoStory)}</p>` : ''}
          </section>`
         : ''
     }
@@ -1542,7 +1542,7 @@ export function renderEventLiveHtml(
   );
 
   return `<!DOCTYPE html>
-<html lang="${lang}" data-surface="ose-public">
+<html lang="${lang}" dir="${DIRECTION[lang]}" data-surface="ose-public">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1555,13 +1555,12 @@ ${buildSearchMeta(row, shareUrl)}
        swaps the surface. --ose-live -> teal --live (colorblind-safe). No hex. */
     [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
        public event page (live phase mirror of renderPreEventHtml). */
-    html, body { overflow-x: hidden; }
+    html, body { background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; overflow-x: hidden; }
     body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; overflow-wrap: anywhere; word-break: break-word; }
-    .ose-skip { position: absolute; left: -9999px; }
-    .ose-skip:focus { left: 1rem; top: 1rem; background: var(--ose-accent); color: var(--on-accent); padding: 0.5rem 1rem; border-radius: 4px; }
+    .ose-skip { position: absolute; inset-inline-start: -9999px; }
+    .ose-skip:focus { inset-inline-start: 1rem; top: 1rem; background: var(--ose-accent); color: var(--on-accent); padding: 0.5rem 1rem; border-radius: 4px; }
     .ose-live-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--ose-live); color: var(--ose-bg); padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; }
     .ose-live-dot { width: 0.6rem; height: 0.6rem; background: #fff; border-radius: 50%; animation: ose-pulse 1.5s ease-in-out infinite; }
     @keyframes ose-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
@@ -1604,7 +1603,7 @@ ${SPONSOR_LIST_CSS}
       <span class="ose-live-badge" data-testid="event-live-badge" aria-label="${msg(lang, 'live.badgeLabel')}">
         <span class="ose-live-dot" aria-hidden="true"></span>${msg(lang, 'live.badge')}
       </span>
-      <h1 id="event-title" data-testid="event-title-live">${title}</h1>
+      <h1 id="event-title" data-testid="event-title-live">${isolateTyped(lang, title)}</h1>
       ${renderEventTypeMeta(row, 'event-type-live', lang)}
       ${liveWhen ? `<p class="ose-meta" data-testid="event-when-live">${esc(liveWhen)}</p>` : ''}
       ${renderTrustLine(row, 'event-trust-live', lang)}
@@ -1615,7 +1614,7 @@ ${SPONSOR_LIST_CSS}
       whatShort || whatLink
         ? `<section class="ose-card ose-section" data-testid="event-what-live" aria-labelledby="what-heading-live">
            <h2 id="what-heading-live">${msg(lang, 'section.what')}</h2>
-           ${whatShort ? `<p>${whatShort}</p>` : ''}
+           ${whatShort ? `<p>${isolateTyped(lang, whatShort)}</p>` : ''}
            ${whatLink}
          </section>`
         : ''
@@ -1626,8 +1625,8 @@ ${SPONSOR_LIST_CSS}
         ? `<section class="ose-card ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
            <h2 id="where-heading-live">${msg(lang, 'section.where')}</h2>
            ${mapImg}
-           ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
-           ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
+           ${venueDisplay ? `<p><strong>${isolateTyped(lang, venueDisplay)}</strong></p>` : ''}
+           ${whereAddress && whereAddress !== venueDisplay ? `<p>${isolateTyped(lang, whereAddress)}</p>` : ''}
            ${geoLink}
          </section>`
         : ''
@@ -1637,7 +1636,7 @@ ${SPONSOR_LIST_CSS}
       whoHost
         ? `<section class="ose-card ose-section" data-testid="event-who-live" aria-labelledby="who-heading-live">
            <h2 id="who-heading-live">${msg(lang, 'section.who')}</h2>
-           <p>${whoHost}</p>
+           <p>${isolateTyped(lang, whoHost)}</p>
          </section>`
         : ''
     }
@@ -1736,7 +1735,7 @@ ${NEVER_WHO_CSS}
 function renderTrustLine(row: PublicEventRow, testid: string, lang: Lang = DEFAULT_LANG): string {
   const host = esc(row.who_host);
   return host
-    ? `<p class="ose-meta" data-testid="${testid}">${fmt(lang, 'event.hostedBy', { host })}</p>`
+    ? `<p class="ose-meta" data-testid="${testid}">${fmt(lang, 'event.hostedBy', { host: isolateTyped(lang, host) })}</p>`
     : '';
 }
 
@@ -1842,7 +1841,7 @@ export function renderPostEventHtml(
         <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="${withLangPrefix(lang, '/events')}">${msg(lang, 'next.browse')}</a>`;
 
   return `<!DOCTYPE html>
-<html lang="${lang}" data-surface="ose-public">
+<html lang="${lang}" dir="${DIRECTION[lang]}" data-surface="ose-public">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1888,7 +1887,7 @@ ${SPONSOR_LIST_CSS}
   ${renderEventTopbar('', lang, eventPagePath(row.id, row.slug), opts?.pageQuery, nonce)}
   <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
     <span class="ose-phase-chip" data-testid="event-phase-chip">${msg(lang, calledOff ? 'recap.chipCalledOff' : 'recap.chip')}</span>
-    <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>
+    <h1 id="event-title-post" data-testid="event-title-post">${isolateTyped(lang, title)}</h1>
     ${renderEventTypeMeta(row, 'event-type-post', lang)}
     <p class="ose-when" data-testid="event-when-post">${whenLine}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
     ${
@@ -1913,7 +1912,7 @@ ${SPONSOR_LIST_CSS}
       <!-- WHAT — keeps the event-recap-card testid the recap-first invariant asserts. -->
       <section class="ose-card ose-section" data-testid="event-recap-card" aria-labelledby="recap-heading">
         <h2 id="recap-heading">${msg(lang, 'recap.whatHeading')}</h2>
-        ${whatShort ? `<p data-testid="recap-what">${whatShort}</p>` : ''}
+        ${whatShort ? `<p data-testid="recap-what">${isolateTyped(lang, whatShort)}</p>` : ''}
         ${!whatShort && !whoHost && !whyPurpose ? `<p data-testid="recap-empty">${msg(lang, calledOff ? 'recap.emptyCalledOff' : 'recap.empty')}</p>` : ''}
         ${whatLink}
       </section>
@@ -1923,8 +1922,8 @@ ${SPONSOR_LIST_CSS}
           ? `<section class="ose-card ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
              <h2 id="where-heading-post">${msg(lang, 'section.where')}</h2>
              ${mapImg}
-             ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
-             ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
+             ${venueDisplay ? `<p><strong>${isolateTyped(lang, venueDisplay)}</strong></p>` : ''}
+             ${whereAddress && whereAddress !== venueDisplay ? `<p>${isolateTyped(lang, whereAddress)}</p>` : ''}
            </section>`
           : ''
       }
@@ -1934,8 +1933,8 @@ ${SPONSOR_LIST_CSS}
           ? `<section class="ose-card ose-section" data-testid="event-who-post" aria-labelledby="who-heading-post">
              <h2 id="who-heading-post">${msg(lang, 'section.who')}</h2>
              ${whoImage ? `<img class="ose-who-image" data-testid="event-who-image-post" src="${esc(whoImage)}" alt="${whoHost ? fmt(lang, 'who.photoOf', { host: whoHost }) : msg(lang, 'who.host')}" loading="lazy" width="120" height="120" />` : ''}
-             ${whoHost ? `<p data-testid="event-who-host-post">${whoHost}</p>` : ''}
-             ${whoStory ? `<p class="ose-who-story" data-testid="event-who-story-post">${whoStory}</p>` : ''}
+             ${whoHost ? `<p data-testid="event-who-host-post">${isolateTyped(lang, whoHost)}</p>` : ''}
+             ${whoStory ? `<p class="ose-who-story" data-testid="event-who-story-post">${isolateTyped(lang, whoStory)}</p>` : ''}
            </section>`
           : ''
       }

@@ -2,7 +2,15 @@
  * The Language menu in the header bar (owner 2026-11-10).
  *
  * The footer switch (`language-switch.ts`) was the only way to change language,
- * at the foot of the page. This menu sits on the left of the header bar:
+ * at the foot of the page. This menu sits at the start of the header bar: the
+ * left in a left-to-right page, the right in a right-to-left one (Arabic, epic
+ * OSE-1959). Its CSS uses logical properties only (`inset-inline-start`,
+ * `padding-inline-start`), so `<html dir>` alone moves it; there is no
+ * physical `left` or `right` here, and a test keeps it that way.
+ *
+ * The phone row's caret is `›`. In a right-to-left page the browser mirrors it
+ * to `‹` by itself (Unicode Bidi_Mirrored), so it still points the reading way;
+ * only its open rotation is turned the other way for `rtl`.
  *
  * - Wide screen: a button that says "Language" ("Idioma"). It opens the list of
  *   every language the pages render, with the page's own language marked.
@@ -42,7 +50,7 @@ export const LANGUAGE_MENU_CSS = `
     .ose-langmenu-caret { font-size: 0.875rem; }
     .ose-langmenu details[open] > summary .ose-langmenu-caret { transform: rotate(180deg); }
     .ose-langmenu-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 0; padding: 0.375rem; list-style: none; }
-    .ose-langmenu-desktop > .ose-langmenu-list, .ose-langmenu-panel { position: absolute; top: calc(100% + 0.5rem); left: 0; z-index: 50; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
+    .ose-langmenu-desktop > .ose-langmenu-list, .ose-langmenu-panel { position: absolute; top: calc(100% + 0.5rem); inset-inline-start: 0; z-index: 50; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
     .ose-langmenu-desktop > .ose-langmenu-list { min-width: 12rem; }
     .ose-langmenu-panel { width: min(18rem, calc(100vw - 2rem)); padding: 0.375rem; }
     .ose-langmenu-item { display: flex; align-items: center; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
@@ -50,7 +58,8 @@ export const LANGUAGE_MENU_CSS = `
     .ose-langmenu-check { display: inline-block; width: 1.25em; }
     .ose-langmenu-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
     .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(90deg); }
-    .ose-langmenu-sub > .ose-langmenu-list { padding: 0.25rem 0 0 0.75rem; }
+    [dir="rtl"] .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(-90deg); }
+    .ose-langmenu-sub > .ose-langmenu-list { padding-block: 0.25rem 0; padding-inline: 0.75rem 0; }
     .ose-langmenu-bar { display: flex; align-items: center; gap: 0.75rem; }
     .ose-langmenu-mobile { display: none; }
     @media (max-width: 640px) {

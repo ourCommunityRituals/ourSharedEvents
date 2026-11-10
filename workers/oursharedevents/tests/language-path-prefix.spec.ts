@@ -328,7 +328,7 @@ describe('OSE-1762 | /es/ and /es/events through the router', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('Vary')).toBeNull();
     const html = await res.text();
-    expect(html).toContain('<html lang="es">');
+    expect(html).toContain('<html lang="es" dir="ltr">');
     expect(html).toContain(`<link rel="canonical" href="${ORIGIN}/es/events" />`);
     expect(html).toContain('<meta property="og:locale" content="es_US" />');
     expect(html).toContain('Próximos eventos');
@@ -341,7 +341,7 @@ describe('OSE-1762 | /es/ and /es/events through the router', () => {
       expect(res.status, path).toBe(200);
       expect(res.headers.get('Permissions-Policy') ?? '', path).toContain('geolocation=(self)');
       const html = await res.text();
-      expect(html, path).toContain('<html lang="es" data-surface="ose-landing">');
+      expect(html, path).toContain('<html lang="es" dir="ltr" data-surface="ose-landing">');
       expect(html, path).toContain('¿Qué pasa cerca de ti?');
       expect(html, path).toContain(`<link rel="canonical" href="${ORIGIN}/es/" />`);
     }

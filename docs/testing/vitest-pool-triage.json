@@ -6,7 +6,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 19
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/admin-664-who-rich-content.spec.ts",
@@ -1542,7 +1542,21 @@
       "testCount": 10
     },
     {
+      "file": "workers/oursharedevents/tests/i18n-layer-mutants.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 9
+    },
+    {
       "file": "workers/oursharedevents/tests/i18n-path-prefix.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 24
+    },
+    {
+      "file": "workers/oursharedevents/tests/i18n-polish-arabic.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
@@ -1659,6 +1673,20 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 26
+    },
+    {
+      "file": "workers/oursharedevents/tests/language-permutations.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 13
+    },
+    {
+      "file": "workers/oursharedevents/tests/language-switch-single.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 1
     },
     {
       "file": "workers/oursharedevents/tests/legal-footer.spec.ts",
@@ -3304,6 +3332,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): env.DB",
       "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/template-js-escape.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 2
     },
     {
       "file": "workers/oursharedevents/tests/template-script-names.spec.ts",
