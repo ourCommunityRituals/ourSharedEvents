@@ -184,6 +184,14 @@ export const OSM_COPYRIGHT_URL: Record<Lang, string> = {
 };
 
 /**
+ * Protomaps prepares the archive the streets are read from, out of
+ * OpenStreetMap's data. It asks for a credit and its licence does not require
+ * one; the owner chose to give it (2026-11-10). Its site has one language. A
+ * link a visitor may tap: nothing is ever loaded from this host.
+ */
+const PROTOMAPS_LINK = '<a href="https://protomaps.com">Protomaps</a>';
+
+/**
  * The credit under a map that draws streets. OpenStreetMap's licence (ODbL)
  * asks for it wherever its data shows, so it goes with the street layer and
  * never without it. In the page's language; the link opens OpenStreetMap's own
@@ -191,7 +199,8 @@ export const OSM_COPYRIGHT_URL: Record<Lang, string> = {
  */
 function streetCredit(lang: Lang): string {
   const osm = `<a href="${OSM_COPYRIGHT_URL[lang]}">OpenStreetMap</a>`;
-  return `<p class="amap-credit" data-testid="amap-credit">${fmt(lang, 'map.credit', { osm })}</p>`;
+  const credit = fmt(lang, 'map.credit', { osm, protomaps: PROTOMAPS_LINK });
+  return `<p class="amap-credit" data-testid="amap-credit">${credit}</p>`;
 }
 
 function str(v: unknown): string {

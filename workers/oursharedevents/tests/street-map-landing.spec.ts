@@ -223,11 +223,14 @@ describe('street map | the landing page handler', () => {
 // in the page's language, with a link that opens OpenStreetMap's own copyright
 // page in that language. OpenStreetMap's address without a language follows the
 // visitor's browser, not the language chosen here, so each language names its page.
-// @born-red street-map credit follows the page language | method: the new and changed cases seen failing before the change (6 red); then 7 faults injected one at a time in src/lib/attendee-map.ts (Spanish linked to the English page, both languages linked to the page with no language, the zoomed area without its credit, the landing map without its credit, the credit shown without streets, the credit always in English, a second module given the street layer); each turned cases here red | date: 2026-11-10
+// Protomaps, which prepares the file from that data, is credited beside it with
+// a link to its own site (owner 2026-11-10: it asks for the credit, its licence
+// does not require it).
+// @born-red street-map credit follows the page language | method: the new and changed cases seen failing before the change (6 red); then 7 faults injected one at a time in src/lib/attendee-map.ts (Spanish linked to the English page, both languages linked to the page with no language, the zoomed area without its credit, the landing map without its credit, the credit shown without streets, the credit always in English, a second module given the street layer); each turned cases here red. Protomaps in the credit: the 4 credit cases seen failing before it was added, then 4 more faults (left out, linked to another address, named with no link, a tile loaded from a Protomaps host beside the credit), each red | date: 2026-11-10
 describe('street map | the credit, in the page language, wherever streets are drawn', () => {
   const CREDIT: Record<Lang, string> = {
-    en: '<p class="amap-credit" data-testid="amap-credit">Street map data © <a href="https://www.openstreetmap.org/copyright/en">OpenStreetMap</a> contributors.</p>',
-    es: '<p class="amap-credit" data-testid="amap-credit">Datos del mapa de calles © colaboradores de <a href="https://www.openstreetmap.org/copyright/es">OpenStreetMap</a>.</p>',
+    en: '<p class="amap-credit" data-testid="amap-credit">Street map data © <a href="https://www.openstreetmap.org/copyright/en">OpenStreetMap</a> contributors, prepared by <a href="https://protomaps.com">Protomaps</a>.</p>',
+    es: '<p class="amap-credit" data-testid="amap-credit">Datos del mapa de calles © colaboradores de <a href="https://www.openstreetmap.org/copyright/es">OpenStreetMap</a>, preparados por <a href="https://protomaps.com">Protomaps</a>.</p>',
   };
 
   it('every language has its own OpenStreetMap page, on openstreetmap.org over https', () => {
@@ -244,6 +247,7 @@ describe('street map | the credit, in the page language, wherever streets are dr
       // No streets, no credit, and no link to OpenStreetMap, in this language too.
       expect(plain).not.toContain('data-testid="amap-credit"');
       expect(plain).not.toContain('openstreetmap.org');
+      expect(plain.toLowerCase()).not.toContain('protomaps');
 
       const views: [string, string[]][] = [
         ['/', cellsOf(plain)],
@@ -262,6 +266,14 @@ describe('street map | the credit, in the page language, wherever streets are dr
         for (const other of LANGUAGES) {
           if (other !== lang) expect(html, path).not.toContain(OSM_COPYRIGHT_URL[other]);
         }
+        // Protomaps is named once, as a link a visitor may tap. Nothing on the
+        // page is loaded from it or from any other map host: the same rule the
+        // staging case holds (bruno/ose-pages, "draws streets under the map").
+        expect(html.toLowerCase().split('protomaps'), path).toHaveLength(3);
+        expect(html, path).toContain('<a href="https://protomaps.com">Protomaps</a>');
+        expect(html.replace('<a href="https://protomaps.com">Protomaps</a>', ''), path).not.toMatch(
+          /(src|href)="https?:\/\/[^"]*(tile\.openstreetmap|protomaps|maplibre|mapbox|maptiler|maps\.googleapis\.com\/maps\/api\/js)/i
+        );
       }
     }
   );
