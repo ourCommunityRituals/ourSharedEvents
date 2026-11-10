@@ -208,6 +208,9 @@ export async function createSponsorRequest(
   try {
     // The cap is re-checked INSIDE the insert (INSERT … SELECT … WHERE count < cap)
     // so two concurrent asks cannot both pass the pre-check above and exceed it.
+    // OSE-1900: the event's own yes is asked again in the same statement, so an
+    // organizer turning sponsors off between the check above and this write
+    // leaves no request on an event that no longer wants sponsors.
     const res = await db
       .prepare(
         `INSERT INTO sponsor_placement
@@ -220,7 +223,8 @@ export async function createSponsorRequest(
                     AND EXISTS (
               SELECT 1 FROM events le WHERE le.id = sponsor_placement.event_id
                  AND le.brand_id = ? AND le.is_published = 1 AND le.status = 'active' AND le.start_date >= ?
-            )) < ?`
+            )) < ?
+            AND EXISTS (SELECT 1 FROM events e WHERE e.id = ? AND ${eventUsesSponsorsSql('e')})`
       )
       .bind(
         placementId,
@@ -236,7 +240,8 @@ export async function createSponsorRequest(
         SPONSOR_REQUEST_SOURCE,
         sponsor.brand_id,
         floorDate(now),
-        MAX_OPEN_REQUESTS
+        MAX_OPEN_REQUESTS,
+        ev.id
       )
       .run();
     inserted = res.meta?.changes ?? 0;
@@ -247,7 +252,17 @@ export async function createSponsorRequest(
     }
     throw err;
   }
-  if (inserted === 0) return { ok: false, code: 'TOO_MANY_OPEN' };
+  if (inserted === 0) {
+    // Nothing was written: either the cap was reached, or the event stopped
+    // taking sponsors in between. The second answers like any event a sponsor
+    // cannot ask, so the two refusals stay what they are everywhere else.
+    const still = await db
+      .prepare(`SELECT ${eventUsesSponsorsSql('e')} AS uses_sponsors FROM events e WHERE e.id = ?`)
+      .bind(ev.id)
+      .first<{ uses_sponsors: number | null }>();
+    if (Number(still?.uses_sponsors) !== 1) return { ok: false, code: 'NOT_DISCOVERABLE' };
+    return { ok: false, code: 'TOO_MANY_OPEN' };
+  }
   return { ok: true, placement_id: placementId, event_id: ev.id };
 }
 

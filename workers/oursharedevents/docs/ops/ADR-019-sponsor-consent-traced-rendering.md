@@ -130,4 +130,4 @@ has not yet answered.
 
 **Not decided here.** Whether an organizer adding a sponsor in the admin should turn the switch on by that act (today it does not: the sponsor is saved and stays hidden until the switch is on), and the admin wording. Both are listed for the owner on the pull request.
 
-**Consequences.** A new event shows no sponsor anywhere until its organizer turns sponsors on and both sides accept a placement. Coverage: `tests/sponsor-opt-in-gate.spec.ts` (every reader, the pairwise consent matrix, discovery, the admin switch and its audit rows, the backfill) and, on staging, the Bruno folder "17. Opt-in sponsors (OSE-1900)".
+**Consequences.** A new event shows no sponsor anywhere until its organizer turns sponsors on and both sides accept a placement. Coverage: `tests/sponsor-opt-in-gate.spec.ts` (every reader, the pairwise consent matrix, discovery, the admin switch and its audit rows, the backfill), `tests/admin-sponsors-switch.spec.ts` (the control in the admin's sponsors card) and, on staging, the Bruno folder "16. Opt-in sponsors (OSE-1900)".

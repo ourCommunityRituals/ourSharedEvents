@@ -62,8 +62,9 @@ beforeAll(async () => {
   // The poster bundle reads the forms side for its codes.
   await applyMigrations(tenv.FORMS_DB, tenv.TEST_FORMS_MIGRATION_STATEMENTS);
   await env.DB.prepare(
-    `INSERT INTO events (id, brand_id, title, slug, status, start_date)
-     VALUES (?, ?, 'Header Night', ?, 'active', '2026-11-11') ON CONFLICT(id) DO NOTHING`
+    // OSE-1900: the event chose to have sponsors, so its sponsor is on show.
+    `INSERT INTO events (id, brand_id, title, slug, status, start_date, settings_json)
+     VALUES (?, ?, 'Header Night', ?, 'active', '2026-11-11', '{"useSponsors":true}') ON CONFLICT(id) DO NOTHING`
   )
     .bind(EVENT, BRAND, EVENT)
     .run();

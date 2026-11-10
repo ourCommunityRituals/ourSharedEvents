@@ -23,7 +23,7 @@
  *   6. THE BACKFILL (migration 0107): events that already had an
  *      organizer-accepted active placement are switched on; nothing else is.
  *
- * The staging layer is bruno/ose-api "17. Opt-in sponsors (OSE-1900)".
+ * The staging layer is bruno/ose-api "16. Opt-in sponsors (OSE-1900)".
  *
  * @born-red OSE-1900 | method: this file was run against main's readers with
  * only the settings key added (no gate): every "off"/"absent" reader case, the
@@ -37,10 +37,12 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { fetchSponsorTitles } from '../src/lib/sponsor-titles';
 import { resolveSponsorsForEvent } from '../src/lib/sponsor-resolver';
-import { readDiscoverableEvents } from '../src/lib/sponsor-discovery';
+import { createSponsorRequest, readDiscoverableEvents } from '../src/lib/sponsor-discovery';
 import { mintSponsorHomeToken } from '../src/lib/sponsor-home-auth';
 import { mintBeaconToken } from '../src/lib/beacon-token';
 import { handleSponsorAsset } from '../src/handlers/sponsor-asset-route';
+import { makeCacheKey, readCfCache, writeCfCache } from '@ocr/data-provider';
+import { sponsorsCacheKeyPath } from '../src/lib/data-provider';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { BRANDS, callAs, seedBrandFixture } from './helpers/brand-matrix';
 
@@ -145,6 +147,11 @@ const READERS: Record<string, Reader> = {
   // sponsor that is on show answers 422 with no outbound fetch; hidden is 404.
   'GET /api/v2/sponsors/:id/logo': async (t) =>
     (await SELF.fetch(`https://t.test/api/v2/sponsors/${t.sponsorId}/logo`)).status !== 404,
+  // OSE-1826: the poster's sponsor header image is served by the same route and
+  // the same statement (?slot=header), so it follows the switch like the logo.
+  'GET /api/v2/sponsors/:id/logo?slot=header (the poster header image)': async (t) =>
+    (await SELF.fetch(`https://t.test/api/v2/sponsors/${t.sponsorId}/logo?slot=header`)).status !==
+    404,
   'GET /api/v2/sponsors/:id/asset/square (creative or monogram)': async (t) =>
     (
       await handleSponsorAsset(
@@ -200,6 +207,10 @@ async function seedAccepted(t: Target, settingsJson: string): Promise<void> {
     name: t.name,
     logoUrl: 'https://localhost/logo.png',
   });
+  // The header image lives on the business (0105); the seed helper has no field for it.
+  await tenv.DB.prepare('UPDATE sponsor_business SET header_image_url = ? WHERE id = ?')
+    .bind('https://localhost/header.png', t.sponsorId)
+    .run();
 }
 
 // ── The pairwise consent matrix ──────────────────────────────────────────────
@@ -426,6 +437,51 @@ describe('sponsor discovery: a sponsor can ask only an event that opted in', () 
     expect(audit?.n).toBe(0);
   });
 
+  test('the switch is asked again inside the insert: off between the check and the write leaves no row', async () => {
+    const eventId = 'optin-race';
+    await seedEvent(eventId, SETTINGS.on);
+    // A database that turns the switch off at the last moment: after the
+    // request's own check has passed, just before its insert runs.
+    const wrap = <T extends object>(o: T, over: Record<string, unknown>): T =>
+      new Proxy(o, {
+        get(t, p) {
+          if (typeof p === 'string' && p in over) return over[p];
+          const v = Reflect.get(t, p) as unknown;
+          return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(t) : v;
+        },
+      });
+    let flipped = 0;
+    const racing = wrap(tenv.DB, {
+      prepare: (sql: string) => {
+        const stmt = tenv.DB.prepare(sql);
+        if (!/^\s*INSERT INTO sponsor_placement/.test(sql)) return stmt;
+        return wrap(stmt, {
+          bind: (...args: unknown[]) => {
+            const bound = stmt.bind(...args);
+            return wrap(bound, {
+              run: async () => {
+                await tenv.DB.prepare('UPDATE events SET settings_json = ? WHERE id = ?')
+                  .bind(SETTINGS.off, eventId)
+                  .run();
+                flipped++;
+                return bound.run();
+              },
+            });
+          },
+        });
+      },
+    });
+    const out = await createSponsorRequest(
+      racing,
+      { id: SEEKER, brand_id: BRAND, tier: 'primary', lat: null, lon: null },
+      eventId,
+      'spl-optin-race'
+    );
+    expect(flipped, 'the switch went off between the check and the insert').toBe(1);
+    expect(out).toEqual({ ok: false, code: 'NOT_DISCOVERABLE' });
+    expect(await rowsFor(eventId)).toBe(0);
+  });
+
   test('a request to the opted-in event is taken, and stays off every surface until approved', async () => {
     const { status } = await ask(ON.eventId);
     expect(status).toBe(201);
@@ -534,6 +590,18 @@ describe('the admin switch (PUT /api/v2/admin/events/:id settings.useSponsors)',
     await put({ useSponsors: true });
   });
 
+  test('a switch write drops the cached public sponsor list: off hides on the next read, not when the entry runs out', async () => {
+    // The public sponsor list is cache-fronted for 30 seconds. Put an entry under
+    // the event's key the way the read path does, and check that this runtime
+    // keeps it: without that the rest of this test would prove nothing.
+    const key = () => makeCacheKey(sponsorsCacheKeyPath(T.eventId));
+    await writeCfCache(key(), [{ id: 'stale-entry' }], { ttlSeconds: 30 });
+    expect(await readCfCache(key()), 'the cache holds the entry').not.toBeNull();
+    expect((await put({ useSponsors: false })).status).toBe(200);
+    expect(await readCfCache(key()), 'the write dropped the entry').toBeNull();
+    await put({ useSponsors: true });
+  });
+
   test('the switch does not disturb the other settings, and they do not disturb it', async () => {
     expect((await put({ showQRSection: false })).status).toBe(200);
     expect(await settingsOf(T.eventId)).toMatchObject({ useSponsors: true, showQRSection: false });
@@ -622,8 +690,21 @@ describe('the admin switch (PUT /api/v2/admin/events/:id settings.useSponsors)',
       expect(res.status).toBe(201);
       return ((await res.json()) as { id: string }).id;
     };
-    expect((await settingsOf(await make())).useSponsors).toBeUndefined();
-    expect((await settingsOf(await make({ useSponsors: true }))).useSponsors).toBe(true);
+    const plain = await make();
+    expect((await settingsOf(plain)).useSponsors).toBeUndefined();
+    const on = await make({ useSponsors: true });
+    expect((await settingsOf(on)).useSponsors).toBe(true);
+    const off = await make({ useSponsors: false });
+    expect((await settingsOf(off)).useSponsors).toBe(false);
+
+    // A create that names the switch is a write of it, so it is audited like a
+    // later change; a create that does not name it writes no switch row.
+    const details = async (id: string) =>
+      (await switchAudit(id)).map((r) => ({ ...JSON.parse(r.details), outcome: r.outcome }));
+    expect(await details(plain)).toEqual([]);
+    expect(await details(on)).toEqual([{ use_sponsors: true, outcome: 'success' }]);
+    expect(await details(off)).toEqual([{ use_sponsors: false, outcome: 'success' }]);
+    expect((await switchAudit(on))[0].brand_id).toBe(MATRIX_BRAND);
   });
 });
 

@@ -540,6 +540,37 @@ function slugify(text: string): string {
 }
 
 /**
+ * OSE-1900: record one write of the sponsors switch. It is a consent decision,
+ * so each write gets its own audit row saying which way it went (the router's
+ * CREATE_EVENT or UPDATE_EVENT row says only that the event changed). Call it
+ * once the write has landed and before any later step that can fail, so the
+ * log neither claims a change that did not happen nor misses one that did.
+ *
+ * It also drops the event's cached sponsor list, as every sponsor write does.
+ * No public reader serves that list from the cache today (each asks for a live
+ * read), so the drop is what keeps the rule true if one ever does: off hides
+ * every placement on the next read, not when a cache entry runs out.
+ */
+async function recordSponsorsSwitch(
+  request: Request,
+  env: EventsEnv,
+  eventId: string,
+  on: boolean,
+  rid: string
+): Promise<void> {
+  await invalidateSponsorsCache(eventId);
+  await logAdminAction(env as { DB: D1Database }, {
+    action: 'EVENT_SPONSORS_SWITCH',
+    actor: extractAdminActor(request, env),
+    resource_type: 'event',
+    resource_id: eventId,
+    request_id: rid,
+    outcome: 'success',
+    details: { use_sponsors: on },
+  });
+}
+
+/**
  * POST /api/v2/admin/events
  *
  * Creates a new event. Required: title. Optional: all other fields.
@@ -823,10 +854,13 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // OSE-869 — per-event section switches (lib/event-settings.ts). Optional; a
   // body without `settings` stores '{}' (every section on). Strict on write.
   let settingsJson = '{}';
+  // OSE-1900: set when the create names the sponsors switch (true or false).
+  let useSponsorsAtCreate: boolean | undefined;
   if ('settings' in body && body.settings !== undefined) {
     const v = validateSettingsPatch(body.settings);
     if (!v.ok) return errorResponse('INVALID_SETTINGS', v.error, 400, rid);
     settingsJson = JSON.stringify(v.value);
+    useSponsorsAtCreate = v.value.useSponsors;
   }
 
   // OSE-489: capture-time H3 tagging — computation happens here (admin create),
@@ -936,6 +970,13 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       );
       return errorResponse('DB_ERROR', 'Failed to create event', 503, rid);
     }
+  }
+
+  // OSE-1900: a create that names the sponsors switch is a write of it, so it
+  // gets the same audit row as a later change. The row is in, so it is recorded
+  // before the steps below, none of which can undo the create.
+  if (useSponsorsAtCreate !== undefined) {
+    await recordSponsorsSwitch(request, env, id, useSponsorsAtCreate, rid);
   }
 
   // OSE-240: generate a shortlink for every newly-created event. The
@@ -1606,6 +1647,14 @@ export async function handleUpdateEvent(
       return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
     }
 
+    // OSE-1900: the UPDATE landed, so the switch has changed. Its audit row is
+    // written here, before the steps below, so a later failure (the cell
+    // recompute, the place lookup) cannot leave a changed switch with no row.
+    // A refused write (400, 404, 409) returned above and wrote nothing.
+    if (useSponsorsWrite !== undefined) {
+      await recordSponsorsSwitch(request, env, eventId, useSponsorsWrite, rid);
+    }
+
     // OSE-489: if lat or lon changed, re-fetch merged coords and recompute H3.
     // Two-step avoids a read-modify-write race on partial coord updates.
     if (geoUpdated) {
@@ -1653,26 +1702,6 @@ export async function handleUpdateEvent(
   }
 
   if (spineKeysStale) await refreshSpineKeys(env.DB, eventId);
-
-  // OSE-1900 — the sponsors switch is a consent decision, so each write of it
-  // gets its own audit row saying which way it went (the router's UPDATE_EVENT
-  // row says only that the event changed). Written after the UPDATE landed, so
-  // the log never claims a change that did not happen; a refused write (400,
-  // 404, 409, 503) returned above and is the router's 'denied' UPDATE_EVENT.
-  // The public sponsor list is cache-fronted, so it is dropped here: off hides
-  // every placement on the next read, not when a cache entry runs out.
-  if (useSponsorsWrite !== undefined) {
-    await invalidateSponsorsCache(eventId);
-    await logAdminAction(env as { DB: D1Database }, {
-      action: 'EVENT_SPONSORS_SWITCH',
-      actor: extractAdminActor(request, env),
-      resource_type: 'event',
-      resource_id: eventId,
-      request_id: rid,
-      outcome: 'success',
-      details: { use_sponsors: useSponsorsWrite },
-    });
-  }
 
   return Response.json(
     {

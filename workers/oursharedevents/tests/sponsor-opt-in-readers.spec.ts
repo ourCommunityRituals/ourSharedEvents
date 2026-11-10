@@ -152,6 +152,45 @@ describe('every statement that carries the consent rule carries the opt-in gate'
   });
 });
 
+describe('a write of the switch is recorded where it cannot be lost', () => {
+  const text = codeLines(join(SRC, 'handlers', 'events.ts')).join('\n');
+
+  // Dr of Security, 2026-11-09: the audit row used to be written after the
+  // cell recompute and the place lookup, so a failure there left a changed
+  // switch with no row.
+  test('the update records it as soon as the UPDATE has landed, before any later step', () => {
+    const update = text.indexOf("env.DB.prepare('UPDATE events SET ' + sets.join(', ') + where)");
+    const record = text.indexOf(
+      'await recordSponsorsSwitch(request, env, eventId, useSponsorsWrite, rid);'
+    );
+    expect(update).toBeGreaterThan(-1);
+    expect(record).toBeGreaterThan(update);
+    expect(text.indexOf('if (geoUpdated) {', update)).toBeGreaterThan(record);
+    expect(text.indexOf('lookUpEventPlace(env, newPlace', update)).toBeGreaterThan(record);
+  });
+
+  test('the create records it once the row is in, before the shortlink and the place lookup', () => {
+    const record = text.indexOf(
+      'await recordSponsorsSwitch(request, env, id, useSponsorsAtCreate, rid);'
+    );
+    expect(record).toBeGreaterThan(text.indexOf('INSERT INTO events (id, brand_id, title, slug'));
+    expect(text.indexOf('await createShortlink(env, id)')).toBeGreaterThan(record);
+  });
+
+  test('one helper writes the row, and it is the only place the action is named', () => {
+    expect(text.split("action: 'EVENT_SPONSORS_SWITCH'")).toHaveLength(2);
+    expect(text.split('await recordSponsorsSwitch(')).toHaveLength(3);
+  });
+
+  test('the request insert asks the event’s own yes again, in the same statement', () => {
+    const disc = codeLines(join(SRC, 'lib', 'sponsor-discovery.ts')).join('\n');
+    const insert = disc.indexOf('INSERT INTO sponsor_placement');
+    const end = disc.indexOf('.bind(', insert);
+    expect(insert).toBeGreaterThan(-1);
+    expect(disc.slice(insert, end)).toContain("${eventUsesSponsorsSql('e')}");
+  });
+});
+
 describe('the shared rules include the gate', () => {
   test('PLACEMENT_ON_SHOW_SQL asks the placement’s event', () => {
     expect(PLACEMENT_ON_SHOW_SQL).toContain(useSponsorsSql('e'));
