@@ -194,6 +194,11 @@ export const NODE_SPECS = [
   'tests/language-menu.spec.ts',
   'tests/language-menu-third-language.spec.ts',
   'tests/language-menu-close.spec.ts',
+  'tests/language-permutations.spec.ts',
+  'tests/i18n-polish-arabic.spec.ts',
+  'tests/i18n-layer-mutants.spec.ts',
+  'tests/language-switch-single.spec.ts',
+  'tests/template-js-escape.spec.ts',
   // H1 (CCR-PR567) — marker-injection $-splice guard. Pure over the exported
   // inject* functions + the injectMarker helper (no DOM / cloudflare:test / D1).
   'tests/inject-marker.spec.ts',

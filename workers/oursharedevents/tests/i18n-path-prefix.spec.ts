@@ -158,6 +158,8 @@ describe('OSE-1761 languageAlternates', () => {
     expect(languageAlternates('https://oursharedevents.com', '/events/abc/spring')).toEqual([
       { hreflang: 'en', href: 'https://oursharedevents.com/events/abc/spring' },
       { hreflang: 'es', href: 'https://oursharedevents.com/es/events/abc/spring' },
+      { hreflang: 'pl', href: 'https://oursharedevents.com/pl/events/abc/spring' },
+      { hreflang: 'ar', href: 'https://oursharedevents.com/ar/events/abc/spring' },
       { hreflang: 'x-default', href: 'https://oursharedevents.com/events/abc/spring' },
     ]);
   });

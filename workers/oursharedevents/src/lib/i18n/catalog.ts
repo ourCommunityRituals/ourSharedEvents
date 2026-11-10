@@ -14,7 +14,13 @@
  * Organizer-entered text (titles, descriptions, venues) is never in here: it
  * shows as typed. Legal and civic text is translated by a person and reviewed;
  * a machine draft may start it and never ships alone.
+ *
+ * Polish and Arabic live in their own files (`catalog-pl.ts`, `catalog-ar.ts`),
+ * typed against `MessageKey` the same way. Both are machine drafts awaiting a
+ * native read (OSE-1968).
  */
+import { ar } from './catalog-ar';
+import { pl } from './catalog-pl';
 import { DEFAULT_LANG, INTL_LOCALE, LANGUAGES, type Lang } from './languages';
 
 const en = {
@@ -666,7 +672,12 @@ const es: Record<MessageKey, string> = {
 };
 
 /** One catalog per language. A language still being written may omit keys. */
-export const CATALOG: Record<Lang, Partial<Record<MessageKey, string>>> = { en, es };
+export const CATALOG: Record<Lang, Partial<Record<MessageKey, string>>> = {
+  en,
+  es,
+  pl,
+  ar,
+};
 
 /** The type names a WHAT link can carry; each has a `what.<type>` key. */
 export const WHAT_TYPES = [

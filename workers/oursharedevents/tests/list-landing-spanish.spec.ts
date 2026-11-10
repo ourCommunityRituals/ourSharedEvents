@@ -282,7 +282,9 @@ describe('Spanish /events and landing | no English of ours', () => {
   function englishLinks(html: string): string[] {
     const hrefs = [...html.matchAll(/<(?:a|link)\b([^>]*)>/g)]
       .map((m) => m[1])
-      .filter((attrs) => !/\shreflang="(en|x-default)"/.test(attrs))
+      // A language link (switch, menu, alternate) leads to another language on
+      // purpose; only a link with no hreflang, or to Spanish, must stay Spanish.
+      .filter((attrs) => !/\shreflang="(?!es")[^"]*"/.test(attrs))
       .map((attrs) => /\shref="([^"]*)"/.exec(attrs)?.[1])
       .filter((h): h is string => h !== undefined);
     return hrefs

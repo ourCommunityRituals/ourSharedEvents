@@ -27,6 +27,19 @@ export const FLOORS = {
   // when they are killed; never lower.
   'src/lib/count-floor.ts': 89.78,
   'src/lib/report-depth.ts': 95,
+  // Polish (OSE-1957) and Arabic (epic OSE-1959, story OSE-1970), 2026-11-10:
+  // the language layer's files. A local run of these targets scored 100 (311
+  // mutants: 275 killed, 36 timed out, 0 survived), with equivalent mutants
+  // on three lines of resolve-language.ts disabled in the source with reasons.
+  // The floor is the 95% break, so a slower CI runner that turns a timeout
+  // into a survivor is not a false red; raise it once CI confirms. Never lower.
+  'src/lib/i18n/languages.ts': 95,
+  'src/lib/i18n/bidi.ts': 95,
+  'src/lib/i18n/path-prefix.ts': 95,
+  'src/lib/i18n/template.ts': 95,
+  'src/lib/i18n/resolve-language.ts': 95,
+  'src/lib/i18n/language-switch.ts': 95,
+  'src/lib/i18n/catalog.ts': 95,
   'src/lib/pii.ts': 95,
   // OSE-1824 (2026-11-09): the landing's Type row by event-type category, at
   // the scores of the run that added them. One equivalent mutant in the catalog

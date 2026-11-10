@@ -5,7 +5,9 @@
  * written as slots, and this fills them in the page's language:
  *
  *   {{lang}}          the language tag, for `<html lang>`
- *   {{langdir}}       the language's folder in an address: nothing in the
+ *   {{dir}}           the language's direction, `ltr` or `rtl`, for `<html dir>`
+ *                     (epic OSE-1959)
+ *   {{langdir}}      the language's folder in an address: nothing in the
  *                     default language, `es/` in Spanish. It always follows a
  *                     literal slash (`href="/{{langdir}}events"`), so an address
  *                     in a shell starts with `/` and a slot never begins a URL
@@ -19,10 +21,10 @@
  * Shells are filled on each request: a few kilobytes of text, one pass.
  */
 import { CATALOG, msg, type MessageKey } from './catalog';
-import { DEFAULT_LANG, type Lang } from './languages';
+import { DEFAULT_LANG, DIRECTION, type Lang } from './languages';
 import { withLangPrefix } from './path-prefix';
 
-const SLOT = /\{\{(?:(lang|langdir)|(t|js):([^{}\s]+))\}\}/g;
+const SLOT = /\{\{(?:(lang|langdir|dir)|(t|js):([^{}\s]+))\}\}/g;
 
 // U+2028 and U+2029 end a line inside a script string, so they are written as
 // escapes. Split and joined: a regex literal cannot hold them.
@@ -52,6 +54,7 @@ export function fillTemplate(html: string, lang: Lang): string {
     SLOT,
     (_slot, bare: string | undefined, kind: string | undefined, name: string | undefined) => {
       if (bare === 'lang') return lang;
+      if (bare === 'dir') return DIRECTION[lang];
       // `/es/` without its leading slash; the default language has no folder.
       if (bare === 'langdir') return withLangPrefix(lang, '/').slice(1);
       const text = msg(lang, key(name as string));

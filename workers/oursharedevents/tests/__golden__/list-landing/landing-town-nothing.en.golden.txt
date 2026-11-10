@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-surface="ose-landing">
+<html lang="en" dir="ltr" data-surface="ose-landing">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -33,10 +33,10 @@
       }
       .skip-link {
         position: absolute;
-        left: -9999px;
+        inset-inline-start: -9999px;
       }
       .skip-link:focus {
-        left: 1rem;
+        inset-inline-start: 1rem;
         top: 1rem;
         background: var(--accent);
         color: var(--on-accent);
@@ -104,7 +104,7 @@
       .where-change {
         font-size: 1rem;
         font-weight: 400;
-        margin-left: 0.5rem;
+        margin-inline-start: 0.5rem;
       }
       .doors {
         display: flex;
@@ -150,7 +150,7 @@
       }
       
       #events, .view-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-      .event-card { min-height: var(--tap-min); position: relative; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 1.25rem 1.5rem; transition: background 0.15s; }
+      .event-card { min-height: var(--tap-min); position: relative; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border); border-inline-start: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 1.25rem 1.5rem; transition: background 0.15s; }
       .event-card:hover { background: var(--surface-hover); }
       .event-card-link { position: absolute; inset: 0; z-index: 1; border-radius: var(--radius-sm); }
       .event-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -169,7 +169,7 @@
         .event-card .cta { flex: 1 1 100%; }
       }
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-      .tag-wrapped { display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; background: var(--bg); color: var(--text-muted); }
+      .tag-wrapped { display: inline-block; margin-inline-start: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; background: var(--bg); color: var(--text-muted); }
       .events-subheading { font-size: 1.1rem; font-weight: 600; color: var(--text-muted); margin: 0.75rem 0 0; }
       .empty { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 1.5rem 1rem; text-align: center; color: var(--text-muted); font-size: 1rem; }
       .empty a { color: var(--accent); font-weight: 600; }
@@ -179,7 +179,7 @@
       .disc-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.5rem; padding: 0; border: 0; min-inline-size: 0; }
       .disc-chip, .disc-clear { flex: 0 1 auto; display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.95rem; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted); font-size: 0.95rem; font-weight: 600; text-decoration: none; cursor: pointer; }
       .disc-chip.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-      .disc-chip.active::before { content: '\2713'; margin-right: 0.35rem; }
+      .disc-chip.active::before { content: '\2713'; margin-inline-end: 0.35rem; }
       .disc-clear { color: var(--text); text-decoration: underline; }
       .disc-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); padding: 0; margin: 0 0.25rem 0 0; align-self: center; }
       .disc-summary { font-size: 0.95rem; color: var(--text-muted); margin: 0 0 0.75rem; }
@@ -241,7 +241,7 @@
     .ose-langmenu-caret { font-size: 0.875rem; }
     .ose-langmenu details[open] > summary .ose-langmenu-caret { transform: rotate(180deg); }
     .ose-langmenu-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 0; padding: 0.375rem; list-style: none; }
-    .ose-langmenu-desktop > .ose-langmenu-list, .ose-langmenu-panel { position: absolute; top: calc(100% + 0.5rem); left: 0; z-index: 50; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
+    .ose-langmenu-desktop > .ose-langmenu-list, .ose-langmenu-panel { position: absolute; top: calc(100% + 0.5rem); inset-inline-start: 0; z-index: 50; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
     .ose-langmenu-desktop > .ose-langmenu-list { min-width: 12rem; }
     .ose-langmenu-panel { width: min(18rem, calc(100vw - 2rem)); padding: 0.375rem; }
     .ose-langmenu-item { display: flex; align-items: center; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
@@ -249,7 +249,8 @@
     .ose-langmenu-check { display: inline-block; width: 1.25em; }
     .ose-langmenu-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
     .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(90deg); }
-    .ose-langmenu-sub > .ose-langmenu-list { padding: 0.25rem 0 0 0.75rem; }
+    [dir="rtl"] .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(-90deg); }
+    .ose-langmenu-sub > .ose-langmenu-list { padding-block: 0.25rem 0; padding-inline: 0.75rem 0; }
     .ose-langmenu-bar { display: flex; align-items: center; gap: 0.75rem; }
     .ose-langmenu-mobile { display: none; }
     @media (max-width: 640px) {
@@ -272,6 +273,8 @@
     <link rel="canonical" href="https://oursharedevents.com/" />
   <link rel="alternate" hreflang="en" href="https://oursharedevents.com/" />
   <link rel="alternate" hreflang="es" href="https://oursharedevents.com/es/" />
+  <link rel="alternate" hreflang="pl" href="https://oursharedevents.com/pl/" />
+  <link rel="alternate" hreflang="ar" href="https://oursharedevents.com/ar/" />
   <link rel="alternate" hreflang="x-default" href="https://oursharedevents.com/" />
 </head>
   <body>
@@ -281,14 +284,14 @@
         <div class="ose-langmenu" data-testid="language-menu">
       <details class="ose-langmenu-desktop" data-testid="language-menu-desktop">
         <summary class="ose-langmenu-button" data-testid="language-menu-button"><span>Language</span><span class="ose-langmenu-caret" aria-hidden="true">▾</span></summary>
-        <ul class="ose-langmenu-list" aria-label="Language"><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="en" data-testid="language-menu-en"><span class="ose-langmenu-check" aria-hidden="true">✓</span>English</span></li><li><a class="ose-langmenu-item" lang="es" hreflang="es" data-testid="language-menu-es" href="/es/?where=Oak%20Lawn%2C%20IL"><span class="ose-langmenu-check" aria-hidden="true"></span>Español</a></li></ul>
+        <ul class="ose-langmenu-list" aria-label="Language"><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="en" data-testid="language-menu-en"><span class="ose-langmenu-check" aria-hidden="true">✓</span>English</span></li><li><a class="ose-langmenu-item" lang="es" hreflang="es" data-testid="language-menu-es" href="/es/?where=Oak%20Lawn%2C%20IL"><span class="ose-langmenu-check" aria-hidden="true"></span>Español</a></li><li><a class="ose-langmenu-item" lang="pl" hreflang="pl" data-testid="language-menu-pl" href="/pl/?where=Oak%20Lawn%2C%20IL"><span class="ose-langmenu-check" aria-hidden="true"></span>Polski</a></li><li><a class="ose-langmenu-item" lang="ar" hreflang="ar" data-testid="language-menu-ar" href="/ar/?where=Oak%20Lawn%2C%20IL"><span class="ose-langmenu-check" aria-hidden="true"></span>العربية</a></li></ul>
       </details>
       <details class="ose-langmenu-mobile" data-testid="site-menu">
         <summary class="ose-langmenu-button" aria-label="Menu" data-testid="site-menu-button"><span aria-hidden="true">☰</span></summary>
         <div class="ose-langmenu-panel" data-testid="site-menu-panel">
           <details class="ose-langmenu-sub" data-testid="site-menu-language">
             <summary class="ose-langmenu-row" data-testid="site-menu-language-button"><span>Language</span><span class="ose-langmenu-caret" aria-hidden="true">›</span></summary>
-            <ul class="ose-langmenu-list" aria-label="Language"><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="en" data-testid="site-menu-language-en"><span class="ose-langmenu-check" aria-hidden="true">✓</span>English</span></li><li><a class="ose-langmenu-item" lang="es" hreflang="es" data-testid="site-menu-language-es" href="/es/?where=Oak%20Lawn%2C%20IL"><span class="ose-langmenu-check" aria-hidden="true"></span>Español</a></li></ul>
+            <ul class="ose-langmenu-list" aria-label="Language"><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="en" data-testid="site-menu-language-en"><span class="ose-langmenu-check" aria-hidden="true">✓</span>English</span></li><li><a class="ose-langmenu-item" lang="es" hreflang="es" data-testid="site-menu-language-es" href="/es/?where=Oak%20Lawn%2C%20IL"><span class="ose-langmenu-check" aria-hidden="true"></span>Español</a></li><li><a class="ose-langmenu-item" lang="pl" hreflang="pl" data-testid="site-menu-language-pl" href="/pl/?where=Oak%20Lawn%2C%20IL"><span class="ose-langmenu-check" aria-hidden="true"></span>Polski</a></li><li><a class="ose-langmenu-item" lang="ar" hreflang="ar" data-testid="site-menu-language-ar" href="/ar/?where=Oak%20Lawn%2C%20IL"><span class="ose-langmenu-check" aria-hidden="true"></span>العربية</a></li></ul>
           </details>
         </div>
       </details>
@@ -365,6 +368,8 @@
 
       <nav class="ose-lang" data-testid="language-switch" aria-label="Language">
       <a lang="es" hreflang="es" data-testid="language-switch-es" href="/es/?where=Oak%20Lawn%2C%20IL">Español</a>
+      <a lang="pl" hreflang="pl" data-testid="language-switch-pl" href="/pl/?where=Oak%20Lawn%2C%20IL">Polski</a>
+      <a lang="ar" hreflang="ar" data-testid="language-switch-ar" href="/ar/?where=Oak%20Lawn%2C%20IL">العربية</a>
     </nav>
       <details class="ose-never-who" data-testid="landing-privacy" data-never-who="landing">
     <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Never who, only how many.</span> <span class="ose-never-who-trigger">How this works</span></summary>
