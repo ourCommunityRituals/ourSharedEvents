@@ -1,0 +1,35 @@
+info:
+  name: Uploaded logo | 3 a path that climbs out of uploads is refused
+  type: http
+  seq: 17
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/sponsors/sb_pcard_upload"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"sidebar_logo_url":"/api/v2/uploads/events/../../secret.png"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Only an uploads path of the event-art shape is an uploaded logo (no "." or ".."
+        // segment, no query): the same rule as events.cover_image_url (lib/event-thumb.ts).
+        test('400 INVALID_SIDEBAR_LOGO_URL', function () {
+          expect(res.getStatus()).to.eql(400);
+          expect(res.getBody().code).to.eql('INVALID_SIDEBAR_LOGO_URL');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

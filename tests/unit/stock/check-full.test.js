@@ -105,6 +105,14 @@ const MAP_FIRST =
 const DOORS_FIRST =
   '<section data-testid="landing-doors"></section><section data-testid="landing-area"></section>';
 
+// An event page's sponsor strip as pages.ts renders it: one sponsor as art.
+const THUMB = '/api/v2/sponsors/sp_x/logo?slot=sidebar';
+const thumbTag = (src) =>
+  `<img class="ose-sponsor-thumb" data-testid="sponsor-thumb" src="${src}" alt="X" loading="lazy">`;
+const STRIP_WITH_ART = `<section data-testid="pre-sponsor-strip">${thumbTag(THUMB.replace(/&/g, '&amp;'))}</section>`;
+const STRIP_NAMES_ONLY =
+  '<section data-testid="pre-sponsor-strip"><a href="/sponsors/sp_x">X</a></section>';
+
 function site({ listed, override = {}, listFails = false }) {
   const calls = [];
   const client = {
@@ -124,9 +132,10 @@ function site({ listed, override = {}, listFails = false }) {
     m = p.match(/^\/s\/SC_(.+)$/);
     if (m) return redirect(`${BASE}/events/${m[1]}`);
     if (/^\/events\/[^/]+$/.test(p)) {
-      return html('<section data-testid="pre-sponsor-strip"></section>');
+      return html(STRIP_WITH_ART);
     }
     if (p.startsWith('/api/v2/uploads/')) return status(200);
+    if (p.startsWith('/api/v2/sponsors/')) return status(200);
     return status(404);
   };
   return { client, fetchPublic, calls };
@@ -468,6 +477,55 @@ describe('checkNodes: anchor, zip, QR, pages and art', () => {
       manifest
     );
     expect(r[A].reasons).toEqual([`art-broken:${broken.id}`]);
+  });
+
+  // Owner 2026-11-10: with art on the day, every stock sponsor shows a picture
+  // from the same pool (build-full.mjs giveSponsorsArt).
+  describe('sponsor art', () => {
+    const pageOf = (listed, body) =>
+      Object.fromEntries(listed.map((e) => [`/events/${e.id}`, html(body)]));
+
+    test('a day with art: a strip that shows only names fails, event by event', async () => {
+      const { manifest, listed } = day({ [A]: PER_NODE });
+      const r = await run(site({ listed, override: pageOf(listed, STRIP_NAMES_ONLY) }), manifest);
+      expect(r[A].reasons).toEqual(listed.map((e) => `no-sponsor-art:${e.id}`));
+    });
+
+    test('a day with no art: names only is right, and passes', async () => {
+      const { manifest, listed } = day({ [A]: PER_NODE });
+      for (const e of listed) delete e.cover_image_url;
+      const r = await run(site({ listed, override: pageOf(listed, STRIP_NAMES_ONLY) }), manifest);
+      expect(r[A]).toMatchObject({ pass: true, reasons: [] });
+    });
+
+    test('a picture that does not load fails every event that shows it', async () => {
+      const { manifest, listed } = day({ [A]: PER_NODE });
+      const r = await run(site({ listed, override: { [THUMB]: status(404) } }), manifest);
+      expect(r[A].reasons).toEqual(listed.map((e) => `sponsor-art-broken:${e.id}`));
+    });
+
+    test('each picture is read once per run, however many pages show it', async () => {
+      const { manifest, listed } = day({ [A]: PER_NODE });
+      const s = site({ listed });
+      const r = await run(s, manifest);
+      expect(r[A].pass).toBe(true);
+      expect(s.calls.filter((c) => String(c.url) === `${BASE}${THUMB}`)).toHaveLength(1);
+    });
+
+    test('a picture on another host is refused, never fetched', async () => {
+      const { manifest, listed } = day({ [A]: PER_NODE });
+      const off = `<section data-testid="pre-sponsor-strip">${thumbTag('//elsewhere.example/a.png')}</section>`;
+      const s = site({ listed, override: pageOf(listed, off) });
+      const r = await run(s, manifest);
+      expect(r[A].reasons).toEqual(listed.map((e) => `sponsor-art-off-site:${e.id}`));
+      expect(s.calls.some((c) => String(c.url).includes('elsewhere'))).toBe(false);
+    });
+
+    test('a challenged picture read is named as the edge, not as broken art', async () => {
+      const { manifest, listed } = day({ [A]: PER_NODE });
+      const r = await run(site({ listed, override: { [THUMB]: challenge } }), manifest);
+      expect(r[A].reasons).toEqual(listed.map(() => `edge-challenged:${THUMB} ray=${RAY}`));
+    });
   });
 
   test('art on another host is refused, never fetched', async () => {

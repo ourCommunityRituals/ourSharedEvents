@@ -13,6 +13,9 @@
 --                                                   yet it passes isBlockedLogoHost — a named host)
 --   sb_pcard_pool      active, has a logo, NO placement   card 404, logo 404 (the gate, not the data)
 --   sb_pcard_draft     accepted placement on a DRAFT event only   card 404
+--   sb_pcard_upload    on show, no logo yet      Bruno sets an uploaded-image logo (owner
+--                                                   2026-11-10): write 200, read 404 no-store from R2
+--                                                   (no object), a climbing path refused 400
 --
 -- OWN EVENT, NOT test-event-001. The covenant block (section 11) asserts the
 -- sponsor ORDER on test-event-001; extra on-show sponsors there would change it.
@@ -35,13 +38,13 @@
 
 -- ── idempotency: clear prior fixed-id rows (child -> parent) ──
 DELETE FROM sponsor_displays WHERE sponsor_id IN
-  ('sb_pcard_onshow','sb_pcard_nologo','sb_pcard_deadlogo','sb_pcard_pool','sb_pcard_draft');
+  ('sb_pcard_onshow','sb_pcard_nologo','sb_pcard_deadlogo','sb_pcard_pool','sb_pcard_draft','sb_pcard_upload');
 DELETE FROM sponsor_asset WHERE sponsor_business_id IN
-  ('sb_pcard_onshow','sb_pcard_nologo','sb_pcard_deadlogo','sb_pcard_pool','sb_pcard_draft');
+  ('sb_pcard_onshow','sb_pcard_nologo','sb_pcard_deadlogo','sb_pcard_pool','sb_pcard_draft','sb_pcard_upload');
 DELETE FROM sponsor_placement WHERE sponsor_business_id IN
-  ('sb_pcard_onshow','sb_pcard_nologo','sb_pcard_deadlogo','sb_pcard_pool','sb_pcard_draft');
+  ('sb_pcard_onshow','sb_pcard_nologo','sb_pcard_deadlogo','sb_pcard_pool','sb_pcard_draft','sb_pcard_upload');
 DELETE FROM sponsor_business WHERE id IN
-  ('sb_pcard_onshow','sb_pcard_nologo','sb_pcard_deadlogo','sb_pcard_pool','sb_pcard_draft');
+  ('sb_pcard_onshow','sb_pcard_nologo','sb_pcard_deadlogo','sb_pcard_pool','sb_pcard_draft','sb_pcard_upload');
 
 -- ── events: one live-but-unlisted, one draft (brand 'root') ──
 INSERT INTO events (id, brand_id, title, slug, status, is_published, start_date, end_date, timezone, data_class)
@@ -61,7 +64,8 @@ INSERT INTO sponsor_business (id, brand_id, name, display_name, address_line, ti
   ('sb_pcard_nologo',   'root', 'Public Card NoLogo',     NULL,                  NULL,                        'gold', 1),
   ('sb_pcard_deadlogo', 'root', 'Public Card DeadLogo',   NULL,                  NULL,                        'gold', 1),
   ('sb_pcard_pool',     'root', 'Public Card Pool',       NULL,                  NULL,                        'gold', 1),
-  ('sb_pcard_draft',    'root', 'Public Card Draft',      NULL,                  NULL,                        'gold', 1);
+  ('sb_pcard_draft',    'root', 'Public Card Draft',      NULL,                  NULL,                        'gold', 1),
+  ('sb_pcard_upload',   'root', 'Public Card Upload',     NULL,                  NULL,                        'gold', 1);
 
 -- ── logos (sponsor_asset, format 'logo' = the header logo) ──
 INSERT INTO sponsor_asset (id, sponsor_business_id, format, url) VALUES
@@ -74,7 +78,8 @@ INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, tier, source, 
   ('spl_pcard_onshow',   'sb_pcard_onshow',   'pcard-live-evt',  'gold', 'organizer', 1, 1, 1),
   ('spl_pcard_nologo',   'sb_pcard_nologo',   'pcard-live-evt',  'gold', 'organizer', 1, 1, 1),
   ('spl_pcard_deadlogo', 'sb_pcard_deadlogo', 'pcard-live-evt',  'gold', 'organizer', 1, 1, 1),
-  ('spl_pcard_draft',    'sb_pcard_draft',    'pcard-draft-evt', 'gold', 'organizer', 1, 1, 1);
+  ('spl_pcard_draft',    'sb_pcard_draft',    'pcard-draft-evt', 'gold', 'organizer', 1, 1, 1),
+  ('spl_pcard_upload',   'sb_pcard_upload',   'pcard-live-evt',  'gold', 'organizer', 1, 1, 1);
 
 -- OSE-1900: a sponsor shows only on an event that chose to have sponsors (the
 -- event switch `useSponsors` in settings_json, where absent means off). Both
