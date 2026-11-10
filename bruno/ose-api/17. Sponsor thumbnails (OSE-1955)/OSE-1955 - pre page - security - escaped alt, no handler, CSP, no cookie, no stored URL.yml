@@ -43,7 +43,7 @@ runtime:
         test('OSE-1955 security: no stored logo URL and no credential reaches the page', function () {
           expect(html).to.not.include('avatars.githubusercontent.com');
           expect(html).to.not.include('127.0.0.1/ose-1955');
-          expect(html).to.not.include('hunter2');
+          expect(html).to.not.include('made-up-pass');
           expect(html).to.not.include('ose1955:');
         });
         test("OSE-1955 security: the CSP keeps img-src to 'self' data:", function () {

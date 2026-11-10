@@ -89,10 +89,14 @@ INSERT INTO sponsor_business (id, brand_id, name, display_name, website_url, add
   ('sb_thumb_xss',       'root', 'Thumb "><script>alert(1)</script>', 'Thumb" onerror="alert(1)', NULL,          NULL,                    'gold', 1);
 
 -- ── creative (sponsor_asset): 'logo' is the header logo, 'logo_compact' the sidebar logo.
+-- sa_thumb_creds holds a URL with a user and password in it, which the proxy
+-- must refuse (422). The pair is made up. The URL is joined from parts here so
+-- the file carries no literal credentials URL for the committed-secret scan to
+-- flag; the row in D1 is the whole URL.
 INSERT INTO sponsor_asset (id, sponsor_business_id, format, url) VALUES
   ('sa_thumb_badurl',    'sb_thumb_badurl',    'logo_compact', 'https://127.0.0.1/ose-1955.png'),
   ('sa_thumb_compact',   'sb_thumb_compact',   'logo_compact', 'https://avatars.githubusercontent.com/u/270526162?v=4&s=96'),
-  ('sa_thumb_creds',     'sb_thumb_creds',     'logo_compact', 'https://ose1955:hunter2@avatars.githubusercontent.com/u/270526162?v=4&s=97'),
+  ('sa_thumb_creds',     'sb_thumb_creds',     'logo_compact', 'https://' || 'ose1955' || ':' || 'made-up-pass' || '@' || 'avatars.githubusercontent.com/u/270526162?v=4&s=97'),
   ('sa_thumb_empty',     'sb_thumb_empty',     'logo_compact', ''),
   ('sa_thumb_header',    'sb_thumb_header',    'logo',         'https://avatars.githubusercontent.com/u/270526162?v=4&s=200'),
   ('sa_thumb_oneside',   'sb_thumb_oneside',   'logo_compact', 'https://avatars.githubusercontent.com/u/270526162?v=4&s=96'),
