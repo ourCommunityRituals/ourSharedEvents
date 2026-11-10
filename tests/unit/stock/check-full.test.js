@@ -109,7 +109,7 @@ const DOORS_FIRST =
 const THUMB = '/api/v2/sponsors/sp_x/logo?slot=sidebar';
 const thumbTag = (src) =>
   `<img class="ose-sponsor-thumb" data-testid="sponsor-thumb" src="${src}" alt="X" loading="lazy">`;
-const STRIP_WITH_ART = `<section data-testid="pre-sponsor-strip">${thumbTag(THUMB.replace('&', '&amp;'))}</section>`;
+const STRIP_WITH_ART = `<section data-testid="pre-sponsor-strip">${thumbTag(THUMB.replace(/&/g, '&amp;'))}</section>`;
 const STRIP_NAMES_ONLY =
   '<section data-testid="pre-sponsor-strip"><a href="/sponsors/sp_x">X</a></section>';
 
