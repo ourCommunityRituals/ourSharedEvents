@@ -1008,13 +1008,20 @@ const SPONSOR_LIST_CSS = `
 /**
  * The bar at the top of an event page: the Language menu on the left, then the
  * site links (owner 2026-11-10). It wraps on a narrow phone.
+ *
+ * A bar that holds only the menu (the page after the event) floats into the
+ * empty left margin on a wide screen, so it does not push the page down. The
+ * page column is 640 px wide; at 1024 px the margin beside it is 192 px, room
+ * for the button. Narrower screens keep the bar above the page.
  */
 const EVENT_TOPBAR_CSS = `
-    .ose-topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: 0 0 0.75rem; }`;
+    .ose-topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: 0 0 0.75rem; }
+    @media (min-width: 1024px) { .ose-topbar-solo { position: absolute; top: 1rem; left: 1rem; margin: 0; } }`;
 
 /**
  * The top bar of a public event page, the Language menu first. A draft preview
- * has no public address, so it keeps the bare nav it always had.
+ * has no public address, so it keeps the bare nav it always had. With no site
+ * links the bar is the menu alone (`ose-topbar-solo`).
  */
 function renderEventTopbar(
   nav: string,
@@ -1023,7 +1030,7 @@ function renderEventTopbar(
   query: string | undefined,
   nonce: string
 ): string {
-  return `<div class="ose-topbar" data-testid="event-topbar">
+  return `<div class="ose-topbar${nav ? '' : ' ose-topbar-solo'}" data-testid="event-topbar">
     ${renderLanguageMenu({ lang, path, query, nonce })}
     ${nav}
   </div>`;

@@ -95,6 +95,7 @@
       .ose-langmenu-mobile { display: block; }
     }
     .ose-topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: 0 0 0.75rem; }
+    @media (min-width: 1024px) { .ose-topbar-solo { position: absolute; top: 1rem; left: 1rem; margin: 0; } }
 
     .ose-never-who { margin: 2rem 0 0; border-top: 1px solid var(--border); font-size: 0.95rem; color: var(--text-muted); }
     .ose-never-who-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; min-height: 44px; padding: 0.5rem 0; cursor: pointer; list-style: none; }
@@ -123,7 +124,7 @@
   </style>
 </head>
 <body>
-  <div class="ose-topbar" data-testid="event-topbar">
+  <div class="ose-topbar ose-topbar-solo" data-testid="event-topbar">
     <div class="ose-langmenu" data-testid="language-menu">
       <details class="ose-langmenu-desktop" data-testid="language-menu-desktop">
         <summary class="ose-langmenu-button" data-testid="language-menu-button"><span>Language</span><span class="ose-langmenu-caret" aria-hidden="true">▾</span></summary>

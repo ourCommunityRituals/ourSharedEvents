@@ -226,6 +226,19 @@ describe('the event pages carry the menu at the top, left', () => {
     });
   }
 
+  it('after the event the bar is the menu alone, and floats beside the page on a wide screen', () => {
+    // Before and during the event the bar also holds the site links, so it stays
+    // above the page. After it, the bar is only the menu; floating it keeps the
+    // recap's first action above an 800 px laptop fold (OSE-292 workability).
+    expect(pages.pre('en')).toContain('<div class="ose-topbar" data-testid="event-topbar">');
+    expect(pages.live('en')).toContain('<div class="ose-topbar" data-testid="event-topbar">');
+    const post = pages.post('en');
+    expect(post).toContain('<div class="ose-topbar ose-topbar-solo" data-testid="event-topbar">');
+    expect(post).toContain(
+      '@media (min-width: 1024px) { .ose-topbar-solo { position: absolute; top: 1rem; left: 1rem; margin: 0; } }'
+    );
+  });
+
   it('an admin draft preview has no public address, so it shows no menu', () => {
     const html = renderPreEventHtml(row(), SHARE, undefined, {
       nonce: 'n',
