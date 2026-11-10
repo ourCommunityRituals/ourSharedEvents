@@ -172,8 +172,27 @@ const DOT_R = 13;
 /** Dots nearer than two hit radii overlap as touch targets, so they are one place. */
 export const DOT_MERGE = 2 * DOT_HIT_R;
 
-/** OpenStreetMap's licence (ODbL) asks for this credit wherever its data shows. */
-const OSM_LINK = '<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+/**
+ * OpenStreetMap's copyright page, one per language of this site. Its address
+ * without a language follows the visitor's browser, not the language chosen
+ * here, so each language names its own page (owner 2026-11-10). A new language
+ * does not compile until it has one.
+ */
+export const OSM_COPYRIGHT_URL: Record<Lang, string> = {
+  en: 'https://www.openstreetmap.org/copyright/en',
+  es: 'https://www.openstreetmap.org/copyright/es',
+};
+
+/**
+ * The credit under a map that draws streets. OpenStreetMap's licence (ODbL)
+ * asks for it wherever its data shows, so it goes with the street layer and
+ * never without it. In the page's language; the link opens OpenStreetMap's own
+ * page, which says the data is under the Open Database License.
+ */
+function streetCredit(lang: Lang): string {
+  const osm = `<a href="${OSM_COPYRIGHT_URL[lang]}">OpenStreetMap</a>`;
+  return `<p class="amap-credit" data-testid="amap-credit">${fmt(lang, 'map.credit', { osm })}</p>`;
+}
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v : v == null ? '' : String(v);
@@ -585,9 +604,7 @@ function renderZoom(
   const { dots, unplaced } = mapDots(cell, inArea, lang);
   const streets =
     streetLayer && streetLayer.cellsKey === cellsKey([cell]) ? streetLayer.svg : undefined;
-  const credit = streets
-    ? `<p class="amap-credit" data-testid="amap-credit">${fmt(lang, 'map.credit', { osm: OSM_LINK })}</p>`
-    : '';
+  const credit = streets ? streetCredit(lang) : '';
   const events = eventCount(inArea.length, lang);
   const days = CORRIDOR_WINDOW_DAYS;
   const caption = area.name
@@ -700,9 +717,7 @@ export function renderAttendeeMap(
     opts?.streets && opts.streets.cellsKey === cellsKey(drawn.map((a) => a.cell))
       ? opts.streets.svg
       : undefined;
-  const credit = streets
-    ? `<p class="amap-credit" data-testid="amap-credit">${fmt(lang, 'map.credit', { osm: OSM_LINK })}</p>`
-    : '';
+  const credit = streets ? streetCredit(lang) : '';
   const html = `<figure class="amap" data-testid="amap">
               ${MAP_STYLE}${streets ? STREET_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}
               ${svgFor(drawn, lang, streets, opts?.zoomHref)}

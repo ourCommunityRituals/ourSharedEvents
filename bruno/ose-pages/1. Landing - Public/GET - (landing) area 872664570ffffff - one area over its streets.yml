@@ -58,6 +58,10 @@ runtime:
 
           test('The OpenStreetMap credit shows with the streets', function () {
             expect(has('amap-credit')).to.equal(true);
+            // The link opens OpenStreetMap's own page in the page's language
+            // (lib/attendee-map.ts, OSM_COPYRIGHT_URL).
+            const lang = (/<html lang="([a-z]{2})"/.exec(body) || [])[1];
+            expect(body).to.include('href="https://www.openstreetmap.org/copyright/' + lang + '"');
           });
         } else {
           test('Without streets the places are a list: no dot, no bare hexagon, no credit', function () {
