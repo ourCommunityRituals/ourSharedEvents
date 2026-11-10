@@ -185,3 +185,18 @@ Linear team key is **OSE** (not `OUR`). EPIC = Linear project `Doc→Code→Proc
 | F3         | OSE-1291  | Story   | Add ADR↔invariant back-references                                             |
 | F14        | OSE-1292  | Story   | Refresh OW CLAUDE.md                                                          |
 | F12/F15/F5 | OSE-1293  | Story   | Brain silent-pass hardening + 3rd-layer labeling + ADR axis cross-ref         |
+
+## Feature — Event-page sponsors as thumbnail art · created 2026-11-10
+
+Feature 8 of epic OSE-1880 (hyperlocal map; sponsors only if the event chose them). Owner request 2026-11-09: between the header and "What", each sponsor is thumbnail art only (compact logo, else header logo, name as alt), and a sponsor with no logo keeps its name. Sources of truth: OSE ADR-019 (consent before render), OSE ADR-013 (order carries no size meaning), OSE ADR-002 (structural gates), `docs/brain/STORY-FORMAT.md`.
+
+| Kind          | Linear ID | Title                                                                            | Evidence / status                                                                   |
+| ------------- | --------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Feature       | OSE-1948  | Event-page sponsors as thumbnail art (logo only, name as alt; name when no logo) | In Progress                                                                         |
+| Story (Dev)   | OSE-1949  | A sponsor with a logo shows as thumbnail art; without one, its name              | PR #1156 merged as `58cb36cb`; T1–T4 green, run 42811646812; Done waits on OSE-1955 |
+| Story (Dev)   | OSE-1950  | A logo that fails to load falls back to the name                                 | Backlog (known gap from PR #1156)                                                   |
+| Story (Ops)   | OSE-1951  | Deploy through the staging chain; production stays held                          | Done: T1–T4 green on `58cb36cb`; no migration, binding or setting                   |
+| Story (Test)  | OSE-1952  | Mutation: the sponsor-art rule is a Stryker target with a per-file floor         | Backlog; blocks OSE-1955                                                            |
+| CI/CD         | OSE-1955  | Happy, rainy, edge, fat-finger, security and e2e flows, mutation-backed          | Backlog; the feature's CI/CD testing ticket                                         |
+| Story (CCR)   | OSE-1953  | Extended scrum team CCR (5 loops, Dr of Security)                                | Backlog; open PO question on equal prominence (art beside a name)                   |
+| Story (Scrum) | OSE-1954  | Linear, ROLE-STATE and LINEAR-MAP match main                                     | In Review: this table and `docs/brain/ROLE-STATE.md` (PR #1167)                     |
