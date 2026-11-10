@@ -14,7 +14,10 @@
  *   - never who: the archive is the only object read; town names are escaped;
  *     no event coordinate reaches the markup
  *   - the OpenStreetMap credit shows whenever the streets do
+ *   - an archive with no tile in the frame is no layer (location-precision CCR,
+ *     F41), and a planet-sized archive draws (two leaf levels, far offsets)
  */
+// @born-red no tile in the frame, planet-sized archive | method: "an archive with no tile in the frame is no layer" seen failing before the guard in buildStreetLayer (it returned a layer of one blank rectangle); "one tile of the frame is enough" is its control; the planet case seen failing on 4 of the 6 reader faults listed in pmtiles.spec.ts | date: 2026-11-09
 import { describe, it, expect, beforeEach } from 'vitest';
 import { cellToLatLng, latLngToCell } from 'h3-js';
 import {
@@ -41,7 +44,9 @@ import { resetPmtilesCache } from '../src/lib/pmtiles';
 import {
   fakeBucket,
   memSource,
+  planetArchive,
   pmtilesArchive,
+  sparseBucket,
   tilesForCells,
 } from './helpers/street-map-fixtures';
 
@@ -51,6 +56,8 @@ const BLUE = { lat: 41.6573, lon: -87.68 };
 const NORTH = { lat: 41.75, lon: -87.66 };
 const BLUE7 = latLngToCell(BLUE.lat, BLUE.lon, 7);
 const NORTH7 = latLngToCell(NORTH.lat, NORTH.lon, 7);
+// Los Angeles: no tile in common with the Chicago cells at any zoom the map reads.
+const FAR7 = latLngToCell(34.05, -118.25, 7);
 
 beforeEach(() => resetPmtilesCache());
 
@@ -392,6 +399,62 @@ describe('street map | loading (fail soft)', () => {
     expect(
       await loadStreetLayer({ MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) }, [BLUE7])
     ).toBeNull();
+  });
+
+  // Born red 2026-11-09 (location-precision CCR, F41): before the guard in
+  // buildStreetLayer this returned a layer of one blank rectangle, and the
+  // zoomed area drew its dots on it.
+  it('an archive with no tile in the frame is no layer', async () => {
+    // A sound archive, with tiles, for another part of the world.
+    const { tiles } = tilesForCells([FAR7]);
+    const archive = await pmtilesArchive(tiles, { gzip: true, leaf: true });
+    expect(await buildStreetLayer(memSource(archive), [BLUE7])).toBeNull();
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, archive);
+    expect(await loadStreetLayer({ MAP_TILES: bucket }, [BLUE7])).toBeNull();
+    // It was read, and it is not a damaged file: its own cells draw.
+    expect(bucket.gets.length).toBeGreaterThan(0);
+    const own = await loadStreetLayer({ MAP_TILES: bucket }, [FAR7]);
+    expect(own?.svg).toContain('data-testid="amap-streets"');
+  });
+
+  // The whole-planet build's layout, without the planet (helpers: planetArchive):
+  // every tile two leaf directories down, tile bytes more than 128 GiB in.
+  it('draws from a planet-sized archive, and asks R2 for the exact far offsets', async () => {
+    const GIB = 2 ** 30;
+    const { tiles } = tilesForCells([BLUE7]);
+    const { file, dirs } = await planetArchive(
+      tiles.map((t, i) => ({ ...t, at: 128 * GIB + i * 2 ** 20 })),
+      { leafSize: 4, fanOut: 2, leafAt: 3 * 2 ** 20, dataAt: 5 * GIB }
+    );
+    const name = 'planet-20261109.pmtiles';
+    const bucket = sparseBucket(name, file);
+    const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: name };
+    const layer = await loadStreetLayer(env, [BLUE7]);
+    expect(layer?.svg).toContain('class="as-r as-3"');
+    expect(layer?.svg).toContain('class="as-w"');
+    const tileGets = bucket.gets.filter((g) => g.range!.offset >= 5 * GIB);
+    expect(tileGets).toHaveLength(tiles.length);
+    for (const g of tileGets) {
+      expect(g.range!.offset).toBeGreaterThan(2 ** 37);
+      expect(Number.isInteger(g.range!.offset)).toBe(true);
+      expect((g.range!.offset - 133 * GIB) % 2 ** 20).toBe(0);
+    }
+    // The first map pays for the header and the directories on the way down.
+    const first = bucket.gets.length;
+    expect(first).toBeGreaterThan(tiles.length + 2);
+    expect(first).toBeLessThanOrEqual(1 + dirs.length + tiles.length);
+    // The next map of the same area, in the same isolate, reads only its tiles.
+    expect(await loadStreetLayer(env, [BLUE7])).toEqual(layer);
+    expect(bucket.gets.length - first).toBe(tiles.length);
+  });
+
+  it('one tile of the frame is enough for a layer', async () => {
+    const { tiles } = tilesForCells([BLUE7]);
+    expect(tiles.length).toBeGreaterThan(1);
+    const layer = await buildStreetLayer(memSource(await pmtilesArchive(tiles.slice(0, 1))), [
+      BLUE7,
+    ]);
+    expect(layer?.svg).toContain('data-testid="amap-streets"');
   });
 
   it('a slow archive: null, on time', async () => {

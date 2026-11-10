@@ -1,0 +1,82 @@
+info:
+  name: GET / (landing) - draws streets under the map
+  type: http
+  seq: 26
+
+http:
+  method: GET
+  url: "{{baseUrl}}/"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The street map under the hexagons (lib/street-map.ts), on staging. The
+        // Worker draws it from the archive in the MAP_TILES bucket; nothing in the
+        // browser asks for a tile. Owner steps and the build name:
+        // docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md.
+        //
+        // Three states, and none of them passes quietly:
+        //   streets drawn        every street assertion runs.
+        //   no streets, and the environment says the archive is not loaded
+        //   (streetMapArchiveLoaded is not "true")
+        //                        the fail-soft page is asserted (hexagons only, no
+        //                        credit) and the street assertions print NOT RUN.
+        //   no streets, and the environment says the archive is loaded
+        //                        a named test fails.
+        const body = String(res.getBody());
+        const has = function (id) { return body.includes('data-testid="' + id + '"'); };
+        const at = function (id) { return body.indexOf('data-testid="' + id + '"'); };
+        const loaded = String(bru.getEnvVar('streetMapArchiveLoaded')) === 'true';
+
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        if (!has('amap-svg')) {
+          // Under 10 events in the area the landing leads with the list, and no map
+          // is drawn to put streets under. The area case (next request) does not
+          // depend on that count.
+          console.log('NOT RUN (the landing draws no map: fewer than 10 events on this environment): street layer under the hexagons');
+        } else if (has('amap-streets')) {
+          test('The street layer is inside the map, under the hexagons', function () {
+            expect(at('amap-streets')).to.be.above(at('amap-svg'));
+            expect(at('amap-area')).to.be.above(at('amap-streets'));
+          });
+
+          test('The street layer holds drawn paths, not a blank rectangle', function () {
+            const from = at('amap-streets');
+            const layer = body.slice(from, body.indexOf('</g>', from));
+            expect(layer).to.match(/<path class="as-(w|v|r as-[123])" d="M/);
+          });
+
+          test('The OpenStreetMap credit shows with the streets', function () {
+            expect(has('amap-credit')).to.equal(true);
+            expect(body).to.include('href="https://www.openstreetmap.org/copyright"');
+          });
+
+          test('No map script, image or tile is loaded from another host', function () {
+            expect(body).to.not.match(/(src|href)="https?:\/\/[^"]*(tile\.openstreetmap|protomaps|maplibre|mapbox|maptiler|maps\.googleapis\.com\/maps\/api\/js)/i);
+          });
+        } else {
+          test('Without streets the map is hexagons only, with no OpenStreetMap credit', function () {
+            expect(has('amap-area')).to.equal(true);
+            expect(has('amap-credit')).to.equal(false);
+          });
+
+          if (loaded) {
+            test('The street layer is drawn (streetMapArchiveLoaded is true for this environment)', function () {
+              expect(has('amap-streets'), 'the environment file says the street-map archive is loaded, and the landing drew no street layer').to.equal(true);
+            });
+          } else {
+            console.log('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): street layer under the hexagons, OpenStreetMap credit, no third-party host');
+          }
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

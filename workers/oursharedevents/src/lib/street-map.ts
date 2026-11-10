@@ -17,9 +17,9 @@
 // The server, not the visitor, chooses which tiles to read, so no tile request
 // says what a person looked at, and nothing here logs.
 //
-// FAIL SOFT. No binding, no archive, a damaged tile, or a slow read: the map is
-// drawn as before, hexagons only. The street layer is never a reason the page
-// fails.
+// FAIL SOFT. No binding, no archive, no tile for the frame, a damaged tile, or a
+// slow read: the map is drawn as before, hexagons only. The street layer is
+// never a reason the page fails.
 
 import { cellToBoundary, cellToLatLng } from 'h3-js';
 import {
@@ -314,13 +314,17 @@ function pathOf(pts: readonly [number, number][], closed: boolean): string {
   return closed ? `${d}Z` : d;
 }
 
-/** Read, decode and draw the street layer for these cells. Throws on bad data. */
+/**
+ * Read, decode and draw the street layer for these cells. Throws on bad data.
+ * Null when the archive holds no tile for the frame: a layer with nothing read
+ * is a blank rectangle, and the zoomed area would draw its dots on it.
+ */
 export async function buildStreetLayer(
   src: RangeSource,
   cells: readonly string[],
   w = MAP_W,
   h = MAP_H
-): Promise<StreetLayer> {
+): Promise<StreetLayer | null> {
   const header = await archiveHeader(src);
   const f = frameForCells(cells, w, h);
   const r = tilesFor(f, header.minZoom, header.maxZoom);
@@ -335,6 +339,7 @@ export async function buildStreetLayer(
     }
   }
   const tiles = (await Promise.all(jobs)).filter((t): t is DecodedTile => t !== null);
+  if (tiles.length === 0) return null;
   return { cellsKey: cellsKey(cells), svg: drawStreets(f, r.z, tiles, cells) };
 }
 
@@ -350,7 +355,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 /**
  * The street layer for these cells, or null when it cannot be drawn (no
- * binding, no archive, bad data, too slow). Never throws.
+ * binding, no archive, no tile for the frame, bad data, too slow). Never throws.
  */
 export async function loadStreetLayer(
   env: StreetMapEnv | null | undefined,

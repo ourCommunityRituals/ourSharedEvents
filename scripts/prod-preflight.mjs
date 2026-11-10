@@ -49,6 +49,16 @@ export const STAGING_ONLY_VARS = [
   'CI_SERVICE_ACTOR_BRAND',
 ];
 
+/**
+ * Bindings staging may have while production has none yet, as `kind/name`.
+ * Each is a resource the owner brings to staging first; production stays dark
+ * for it until it has its own. Remove a line in the PR that binds production.
+ *   r2_buckets/MAP_TILES  the street-map archive (owner 2026-11-09: staging
+ *     first). With no binding production draws hexagons only
+ *     (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md).
+ */
+export const DARK_ON_PRODUCTION = ['r2_buckets/MAP_TILES'];
+
 /** Job names of the staging chain, as the CI workflow prints them. */
 export const STAGING_JOBS = [
   'T1 Deploy → Staging',
@@ -249,6 +259,7 @@ export function checkProductionBindings(toml) {
   for (const b of staging) {
     // The scan queue is dark on production until it has queues of its own.
     if (b.kind.startsWith('queues.')) continue;
+    if (DARK_ON_PRODUCTION.includes(`${b.kind}/${b.name}`)) continue;
     if (!have.has(`${b.kind}/${b.name}`))
       problems.push(`${b.name} (${b.kind}) is on staging but not on production`);
   }

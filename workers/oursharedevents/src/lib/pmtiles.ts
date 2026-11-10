@@ -178,16 +178,32 @@ export async function decompress(bytes: Uint8Array, compression: number): Promis
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
+interface Leaf {
+  dir: Promise<DirEntry[]>;
+  /** Entries it holds; 0 until it is decoded. */
+  entries: number;
+}
+
 interface Opened {
   header: PmtilesHeader;
   root: DirEntry[];
-  leaves: Map<number, Promise<DirEntry[]>>;
+  /** By offset in the file, oldest first. */
+  leaves: Map<number, Leaf>;
 }
 
 /** Header and directories per archive, kept for the life of the isolate. */
 const OPENED = new Map<string, Promise<Opened>>();
 /** Leaf directories kept per archive; past this the oldest goes. */
 const MAX_LEAVES = 64;
+/**
+ * Directory entries kept in those leaves, in all. A regional file's leaves hold
+ * a few thousand entries each; a whole-planet build spreads hundreds of millions
+ * of entries over the few thousand pointers a 16 KB root can hold, so one leaf
+ * can hold a hundred thousand. Counting leaves alone, 64 of those would outgrow
+ * a Worker's memory. An entry measured about 82 bytes in Node, so this budget is
+ * about 25 MB. The newest leaf always stays, whatever its size.
+ */
+export const MAX_LEAF_ENTRIES = 300_000;
 
 async function open(src: RangeSource): Promise<Opened> {
   const hit = OPENED.get(src.key);
@@ -215,15 +231,37 @@ export function resetPmtilesCache(): void {
 async function leaf(src: RangeSource, o: Opened, e: DirEntry): Promise<DirEntry[]> {
   const at = o.header.leafDirectoryOffset + e.offset;
   const hit = o.leaves.get(at);
-  if (hit) return hit;
-  const p = src
-    .read(at, e.length)
-    .then((raw) => decompress(raw, o.header.internalCompression))
-    .then(decodeDirectory);
+  if (hit) return hit.dir;
+  const slot: Leaf = {
+    dir: src
+      .read(at, e.length)
+      .then((raw) => decompress(raw, o.header.internalCompression))
+      .then(decodeDirectory),
+    entries: 0,
+  };
   if (o.leaves.size >= MAX_LEAVES) o.leaves.delete(o.leaves.keys().next().value!);
-  o.leaves.set(at, p);
-  p.catch(() => o.leaves.delete(at));
-  return p;
+  o.leaves.set(at, slot);
+  slot.dir.then(
+    (entries) => {
+      slot.entries = entries.length;
+      trimLeaves(o.leaves, slot);
+    },
+    // A failed leaf read is not kept: the next tile tries again.
+    () => o.leaves.delete(at)
+  );
+  return slot.dir;
+}
+
+/** Drop the oldest leaves until those kept fit MAX_LEAF_ENTRIES; `keep` stays. */
+function trimLeaves(leaves: Map<number, Leaf>, keep: Leaf): void {
+  let total = 0;
+  for (const l of leaves.values()) total += l.entries;
+  for (const [at, l] of leaves) {
+    if (total <= MAX_LEAF_ENTRIES) return;
+    if (l === keep) continue;
+    total -= l.entries;
+    leaves.delete(at);
+  }
 }
 
 /** Header of the archive (zoom range, tile type). */
