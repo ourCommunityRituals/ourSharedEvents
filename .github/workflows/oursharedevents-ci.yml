@@ -1610,6 +1610,21 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/opt-in-sponsors-seed.sql
 
+      # OSE-1955: the event page's sponsor thumbnails, for Bruno folder 17. One
+      # sponsor per case (compact, header, none, empty URL, refused URL, a URL with
+      # credentials, one side only, switch off, markup in the title) on four
+      # unlisted events (pre, live, post, switch off). Idempotent; the dates move
+      # with each pass. NOT continue-on-error: a missing fixture fails here by name.
+      - name: 'Seed sponsor thumbnail fixtures (OSE-1955)'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/sponsor-thumb-seed.sql
+
       # OSE-1644: a draft with no start time and no event type, for the Bruno
       # request that asserts the 409 CORE_VALUES_MISSING contract (folder 12).
       # The upsert resets it to that state on every run. NOT continue-on-error:
@@ -2169,8 +2184,8 @@ jobs:
       # OSE-1436: one public, upcoming event with three sponsors (logos + website;
       # no logo but a public card; a logo that cannot load), so the sponsor
       # surfaces can be looked at on staging with real logos, the CSP, COEP and
-      # the edge cache together. No spec depends on it yet, so a failed seed does
-      # not hide a red test; it is still not continue-on-error, so it is seen.
+      # the edge cache together. T4j (OSE-1955) reads it, with the ten-sponsor
+      # event the same file seeds; not continue-on-error, so a failed seed reds here.
       - name: Seed sponsor logo check fixture (OSE-1436)
         if: matrix.section == 'surfaces'
         timeout-minutes: 5
@@ -2508,6 +2523,25 @@ jobs:
             tests/e2e/3-flows/language-path-prefix.spec.ts
         timeout-minutes: 6
 
+      # OSE-1955: the event page's sponsor thumbnails in a browser against the
+      # deployed Worker, on the OSE-1436 fixture seeded above (evt_sponsor_logo_check
+      # and evt_sponsor_thumb_ten). Only a browser can prove these: the art really
+      # loads under the CSP, the tap leaves for the website, any shape of logo stays
+      # in its 160 x 64 box, ten sponsors fit a 320 px phone with 44 px targets, and
+      # axe passes on the strip in both themes. Read-only. Markup and the proxy are
+      # proved in the workers pool and Bruno folder 17.
+      - name: 'T4j: Sponsor Thumbnails'
+        if: matrix.section == 'surfaces'
+        id: sponsor-thumbnails
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
+        run: |
+          PW_LABEL='T4j: Sponsor Thumbnails' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/3-flows/sponsor-thumbnails.spec.ts
+        timeout-minutes: 6
+
       # OSE-1470: the T4 suites send CF Access / admin credentials and mint a
       # CF_Authorization cookie. Refuse to upload anything that recorded one.
       # Prints only the file + pattern name; the upload runs only if this passes.
@@ -2567,6 +2601,7 @@ jobs:
           echo "| T4g Launch Story Smoke | \`${{ steps.launch-story-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4h Poster Print Layout | \`${{ steps.poster-print-layout.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4i Language Path Prefix | \`${{ steps.language-path-prefix.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4j Sponsor Thumbnails | \`${{ steps.sponsor-thumbnails.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
       # ── OSE-1171: per-gate NAMED CHECKS ──────────────────────────────────────────
       # Each leg publishes a check-run for the gates IT ran, so a red names its own
@@ -2613,6 +2648,7 @@ jobs:
               post "T4g: Launch Story Smoke"                          "${{ steps.launch-story-smoke.outcome }}"
               post "T4h: Poster Print Layout"                         "${{ steps.poster-print-layout.outcome }}"
               post "T4i: Language Path Prefix"                        "${{ steps.language-path-prefix.outcome }}"
+              post "T4j: Sponsor Thumbnails"                          "${{ steps.sponsor-thumbnails.outcome }}"
               ;;
           esac
       # ── S2 Post-execution integrity — the tamper tripwire, IN THE SAME VM that ran

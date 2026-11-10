@@ -91,3 +91,65 @@ UPDATE events
          CASE WHEN json_valid(settings_json) THEN settings_json ELSE '{}' END,
          '$.useSponsors', json('true'))
  WHERE id IN ('evt_sponsor_logo_check');
+
+-- ── OSE-1955: ten sponsors on one event, for the thumbnail layout check ──────
+-- /events/evt_sponsor_thumb_ten at 320 and 375 px: ten items, art and names
+-- mixed, one very long name, no horizontal page scroll and every tap target at
+-- least 44 px (tests/e2e/3-flows/sponsor-thumbnails.spec.ts, T4j). Unlisted
+-- (is_published = 0): its page opens by link and it stays off the landing list.
+INSERT INTO events
+  (id, brand_id, title, slug, status, is_published, location, start_date, end_date,
+   timezone, what_short, settings_json, data_class)
+VALUES
+  ('evt_sponsor_thumb_ten', 'root', 'Ten Sponsor Thumbnails (fixture)', 'sponsor-thumb-ten',
+   'active', 0, 'Beverly Arts Center, Chicago IL', date('now', '+21 days'), date('now', '+21 days'),
+   'America/Chicago', 'A staging fixture for ten sponsor thumbnails. Not a real event.',
+   '{"useSponsors":true}', 'synthetic')
+ON CONFLICT(id) DO UPDATE SET
+  status = 'active', is_published = 0, data_class = 'synthetic',
+  start_date = date('now', '+21 days'), end_date = date('now', '+21 days'),
+  settings_json = '{"useSponsors":true}',
+  venue_canonical_id = NULL, event_correlation_id = NULL;
+
+INSERT INTO sponsor_business (id, brand_id, name, display_name, website_url, address_line, tier, is_active)
+VALUES
+  ('sp_thumb_ten_00', 'root', 'Ten Art Zero',  NULL, 'https://example.com', NULL, 'gold', 1),
+  ('sp_thumb_ten_01', 'root', 'Ten Name One',  NULL, NULL, '2407 W 111th St, Chicago IL', 'gold', 1),
+  ('sp_thumb_ten_02', 'root', 'Ten Art Two',   NULL, 'https://example.com', NULL, 'gold', 1),
+  ('sp_thumb_ten_03', 'root',
+   'The Very Long and Proud Neighbourhood Co-operative Bakery, Bookshop and Bicycle Repair Collective of Beverly',
+   NULL, NULL, NULL, 'gold', 1),
+  ('sp_thumb_ten_04', 'root', 'Ten Art Four',  NULL, NULL, NULL, 'gold', 1),
+  ('sp_thumb_ten_05', 'root', 'Ten Name Five', NULL, 'https://example.com', NULL, 'gold', 1),
+  ('sp_thumb_ten_06', 'root', 'Ten Art Six',   NULL, 'https://example.com', NULL, 'gold', 1),
+  ('sp_thumb_ten_07', 'root', 'Ten Name Seven', NULL, NULL, NULL, 'gold', 1),
+  ('sp_thumb_ten_08', 'root', 'Ten Art Eight', NULL, NULL, NULL, 'gold', 1),
+  ('sp_thumb_ten_09', 'root', 'Ten Art Nine',  NULL, 'https://example.com', NULL, 'gold', 1)
+ON CONFLICT(id) DO UPDATE SET
+  name = excluded.name, display_name = excluded.display_name,
+  website_url = excluded.website_url, address_line = excluded.address_line, is_active = 1;
+
+INSERT INTO sponsor_asset (id, sponsor_business_id, format, url) VALUES
+  ('sa_thumb_ten_00', 'sp_thumb_ten_00', 'logo_compact', 'https://avatars.githubusercontent.com/u/270526162?v=4&s=96'),
+  ('sa_thumb_ten_02', 'sp_thumb_ten_02', 'logo',         'https://avatars.githubusercontent.com/u/270526162?v=4&s=200'),
+  ('sa_thumb_ten_04', 'sp_thumb_ten_04', 'logo_compact', 'https://avatars.githubusercontent.com/u/270526162?v=4&s=96'),
+  ('sa_thumb_ten_06', 'sp_thumb_ten_06', 'logo_compact', 'https://avatars.githubusercontent.com/u/270526162?v=4&s=96'),
+  ('sa_thumb_ten_08', 'sp_thumb_ten_08', 'logo',         'https://avatars.githubusercontent.com/u/270526162?v=4&s=200'),
+  ('sa_thumb_ten_09', 'sp_thumb_ten_09', 'logo_compact', 'https://avatars.githubusercontent.com/u/270526162?v=4&s=96')
+ON CONFLICT(id) DO UPDATE SET url = excluded.url;
+
+INSERT INTO sponsor_placement
+  (id, sponsor_business_id, event_id, tier, source, click_token, display_token,
+   is_active, sponsor_accepted, organizer_accepted)
+VALUES
+  ('spl_thumb_ten_00', 'sp_thumb_ten_00', 'evt_sponsor_thumb_ten', 'gold', 'organizer', 'ctok_thumb_ten_00', 'dtok_thumb_ten_00', 1, 1, 1),
+  ('spl_thumb_ten_01', 'sp_thumb_ten_01', 'evt_sponsor_thumb_ten', 'gold', 'organizer', 'ctok_thumb_ten_01', 'dtok_thumb_ten_01', 1, 1, 1),
+  ('spl_thumb_ten_02', 'sp_thumb_ten_02', 'evt_sponsor_thumb_ten', 'gold', 'organizer', 'ctok_thumb_ten_02', 'dtok_thumb_ten_02', 1, 1, 1),
+  ('spl_thumb_ten_03', 'sp_thumb_ten_03', 'evt_sponsor_thumb_ten', 'gold', 'organizer', 'ctok_thumb_ten_03', 'dtok_thumb_ten_03', 1, 1, 1),
+  ('spl_thumb_ten_04', 'sp_thumb_ten_04', 'evt_sponsor_thumb_ten', 'gold', 'organizer', 'ctok_thumb_ten_04', 'dtok_thumb_ten_04', 1, 1, 1),
+  ('spl_thumb_ten_05', 'sp_thumb_ten_05', 'evt_sponsor_thumb_ten', 'gold', 'organizer', 'ctok_thumb_ten_05', 'dtok_thumb_ten_05', 1, 1, 1),
+  ('spl_thumb_ten_06', 'sp_thumb_ten_06', 'evt_sponsor_thumb_ten', 'gold', 'organizer', 'ctok_thumb_ten_06', 'dtok_thumb_ten_06', 1, 1, 1),
+  ('spl_thumb_ten_07', 'sp_thumb_ten_07', 'evt_sponsor_thumb_ten', 'gold', 'organizer', 'ctok_thumb_ten_07', 'dtok_thumb_ten_07', 1, 1, 1),
+  ('spl_thumb_ten_08', 'sp_thumb_ten_08', 'evt_sponsor_thumb_ten', 'gold', 'organizer', 'ctok_thumb_ten_08', 'dtok_thumb_ten_08', 1, 1, 1),
+  ('spl_thumb_ten_09', 'sp_thumb_ten_09', 'evt_sponsor_thumb_ten', 'gold', 'organizer', 'ctok_thumb_ten_09', 'dtok_thumb_ten_09', 1, 1, 1)
+ON CONFLICT(id) DO UPDATE SET is_active = 1, sponsor_accepted = 1, organizer_accepted = 1;

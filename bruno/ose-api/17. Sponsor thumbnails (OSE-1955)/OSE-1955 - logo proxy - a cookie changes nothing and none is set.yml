@@ -1,0 +1,34 @@
+info:
+  name: OSE-1955 | security | logo proxy | a cookie changes nothing and none is set
+  type: http
+  seq: 15
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_thumb_compact/logo?slot=sidebar"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: Cookie
+      value: "ose_anon=bruno-1955; session=never-read"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-1955 security: the same 200 image with a cookie sent', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(String(res.getHeader('content-type') || '')).to.match(/^image\//);
+        });
+        test('OSE-1955 security: no cookie is set and the response does not vary on one', function () {
+          expect(res.getHeader('set-cookie')).to.eql(undefined);
+          expect(String(res.getHeader('vary') || '')).to.not.match(/cookie/i);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

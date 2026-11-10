@@ -1,0 +1,29 @@
+info:
+  name: OSE-1955 | happy | logo proxy | header only is the fallback for the thumbnail
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_thumb_header/logo?slot=sidebar"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-1955 happy: 200, an image, nosniff', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(String(res.getHeader('content-type') || '')).to.match(/^image\//);
+          expect(String(res.getHeader('x-content-type-options') || '')).to.eql('nosniff');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

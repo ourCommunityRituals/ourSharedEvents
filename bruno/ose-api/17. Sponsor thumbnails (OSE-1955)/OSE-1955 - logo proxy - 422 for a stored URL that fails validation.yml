@@ -1,0 +1,26 @@
+info:
+  name: OSE-1955 | rainy | logo proxy | 422 for a stored URL that fails validation
+  type: http
+  seq: 9
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_thumb_badurl/logo?slot=sidebar"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-1955 rainy: 422, never fetched (a private address)', function () { expect(res.getStatus()).to.eql(422); });
+        test('OSE-1955 rainy: no body to render as an image', function () { expect(String(res.getBody() || '')).to.eql(''); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

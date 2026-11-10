@@ -1,0 +1,75 @@
+info:
+  name: OSE-1955 | happy | pre page | a logo is art with the title as alt, no logo is the name
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/thumb-pre-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const html = String(res.getBody() || '');
+        const ids = ['pre-sponsor-strip', 'live-sponsor-strip', 'post-sponsor-thanks'];
+        let start = -1;
+        for (const id of ids) {
+          const at = html.indexOf('data-testid="' + id + '"');
+          if (at > -1) { start = at; break; }
+        }
+        const strip = start < 0 ? '' : html.slice(start, html.indexOf('</section>', start));
+        const items = strip.split('data-testid="sponsor-item"').slice(1);
+        const itemOf = (needle) => items.find((i) => i.includes(needle)) || '';
+        const src = (id) => 'src="/api/v2/sponsors/' + id + '/logo?slot=sidebar"';
+        test('OSE-1955 happy: 200 and the pre-event sponsor strip renders', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(html).to.include('data-testid="pre-sponsor-strip"');
+        });
+        test('OSE-1955 happy: compact only is art through the proxy, the display name as alt, no visible name', function () {
+          const it = itemOf('sb_thumb_compact');
+          expect(it).to.include(src('sb_thumb_compact'));
+          expect(it).to.include('alt="Thumb Compact"');
+          expect(it).to.not.include('>Thumb Compact<');
+          expect(it).to.not.include('Thumb Compact Co LLC');
+        });
+        test('OSE-1955 happy: its https website is the link, with rel noopener noreferrer nofollow', function () {
+          const it = itemOf('sb_thumb_compact');
+          expect(it).to.include('href="https://example.com"');
+          expect(it).to.include('rel="noopener noreferrer nofollow"');
+        });
+        test('OSE-1955 happy: header only is art too (the fallback)', function () {
+          expect(itemOf('sb_thumb_header')).to.include(src('sb_thumb_header'));
+          expect(itemOf('sb_thumb_header')).to.include('alt="Thumb Header Only"');
+        });
+        test('OSE-1955 happy: no logo is the name as text, with its address line, and no proxy src', function () {
+          const it = itemOf('Thumb Name Hardware');
+          expect(it).to.include('>Thumb Name Hardware</a>');
+          expect(it).to.include('data-testid="sponsor-item-address">1 Fixture Way, Chicago IL<');
+          expect(html).to.not.include('/api/v2/sponsors/sb_thumb_name/logo');
+        });
+        test('OSE-1955 happy: art beside names, in sponsor order (compact before header before name)', function () {
+          const a = strip.indexOf(src('sb_thumb_compact'));
+          const b = strip.indexOf(src('sb_thumb_header'));
+          const c = strip.indexOf('>Thumb Name Hardware</a>');
+          expect(a).to.be.above(-1);
+          expect(b).to.be.above(a);
+          expect(c).to.be.above(b);
+        });
+        test('OSE-1955 happy: the strip sits below the title and above "What"', function () {
+          const title = html.indexOf('data-testid="event-title"');
+          expect(start).to.be.above(title);
+          const what = html.indexOf('data-testid="event-what"');
+          if (what > -1) expect(start).to.be.below(what);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

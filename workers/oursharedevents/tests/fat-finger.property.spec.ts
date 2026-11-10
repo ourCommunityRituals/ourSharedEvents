@@ -30,6 +30,8 @@ import { allocateShares, SPONSOR_ALLOCATION } from '../src/lib/sponsor-allocatio
 import type { RotationSponsor } from '../src/lib/sponsor-allocation';
 import { cellToCenterChild, cellToParent, getResolution, isValidCell, latLngToCell } from 'h3-js';
 import { landingZoom } from '../src/lib/landing-area';
+import { renderPreEventHtml, type PublicEventRow } from '../src/handlers/pages';
+import { validateProxiedLogoUrl, isBlockedLogoHost } from '../src/lib/sponsor-logo';
 
 const RUNS = Number(process.env.FC_RUNS ?? 200);
 const opts = { numRuns: RUNS } as const;
@@ -340,6 +342,167 @@ describe('fat-finger | ?area= — the landing map zoom (landingZoom)', () => {
         const followed = landingZoom(new URL(first.href(cell), BASE), '/');
         expect(followed.cell).toBe(cell);
         expect(followed.href()).toBe(first.href());
+      }),
+      opts
+    );
+  });
+});
+
+// ── OSE-1955: the event page's sponsor thumbnails, for any title, id and link ──
+//
+// The killer spec (sponsor-thumb-render.spec.ts) pins each branch with chosen
+// inputs. These properties hold the same rule for ANY input an admin or a
+// sponsor can type: the item is always well-formed markup with one link, the
+// title is always escaped text (alt or link text), the src always names the
+// same-origin proxy, and no logo URL that would leave the Worker as written
+// passes the write check. The oracles below are written here, not imported.
+
+/** Independent oracle for the five-character HTML escape. */
+const oracleEsc = (s: string): string =>
+  s.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!
+  );
+
+function thumbRow(): PublicEventRow {
+  return {
+    id: 'evt_prop',
+    brand_id: 'root',
+    title: 'Prop Party',
+    slug: 'prop-party',
+    status: 'active',
+    location: 'Hall',
+    start_date: '2026-10-24',
+    end_date: '2026-10-24',
+    timezone: 'America/Chicago',
+    starts_at: '2026-10-24T23:00:00Z',
+    is_published: 1,
+  } as PublicEventRow;
+}
+
+type ThumbSponsor = NonNullable<Parameters<typeof renderPreEventHtml>[2]>['sponsors'][number];
+
+/** The one rendered <li> body for one sponsor, exactly as the page carries it. */
+function renderOneItem(s: ThumbSponsor): string {
+  const html = renderPreEventHtml(
+    thumbRow(),
+    'https://oursharedevents.com/events/evt_prop',
+    { sponsors: [s], regCount: 0, checkinCount: 0, surveyCount: 0, emailCount: 0 },
+    { nonce: 'n', lang: 'en' }
+  );
+  const open = '<li class="ose-sponsor-item" data-testid="sponsor-item">';
+  const at = html.indexOf(open);
+  expect(at).toBeGreaterThan(-1);
+  expect(html.indexOf(open, at + 1), 'one item per sponsor').toBe(-1);
+  return html.slice(at + open.length, html.indexOf('</li>', at));
+}
+
+const printable = fc.string({ minLength: 1, maxLength: 40 }).filter((s) => !hasLoneSurrogate(s));
+const sponsorArb = fc.record({
+  id: printable,
+  name: printable,
+  display_name: fc.option(
+    fc.string({ maxLength: 30 }).filter((s) => !hasLoneSurrogate(s)),
+    { nil: null }
+  ),
+  website_url: fc.option(
+    fc.oneof(
+      fc.webUrl(),
+      fc.constantFrom(
+        'javascript:alert(1)',
+        'http://plain.example',
+        'HTTPS://UP.EXAMPLE',
+        'https://a.example/"><x'
+      ),
+      printable
+    ),
+    { nil: null }
+  ),
+  address_line: fc.option(printable, { nil: null }),
+  has_logo: fc.constantFrom(0, 1, null),
+});
+
+describe('fat-finger | OSE-1955 sponsor thumbnail — any title, any id, any link', () => {
+  test('the item is one link of known tags, with no handler attribute', () => {
+    fc.assert(
+      fc.property(sponsorArb, (s) => {
+        const item = renderOneItem(s);
+        const bare = item.replace(/="[^"]*"/g, '=""');
+        const tags = [...bare.matchAll(/<\/?([a-zA-Z][\w-]*)/g)].map((m) => m[1].toLowerCase());
+        expect(new Set(tags)).toEqual(
+          new Set(tags.filter((t) => ['a', 'img', 'div', 'small'].includes(t)))
+        );
+        expect(tags.filter((t) => t === 'a')).toHaveLength(2); // <a …> and </a>
+        expect(bare).not.toMatch(/\son[a-z]+\s*=/i);
+      }),
+      opts
+    );
+  });
+
+  test('art when there is a logo: the proxy src for the id, the escaped title as alt, no address', () => {
+    fc.assert(
+      fc.property(sponsorArb, (s) => {
+        const item = renderOneItem(s);
+        const title = (s.display_name ?? '').trim() || s.name;
+        if (s.has_logo) {
+          const src = `/api/v2/sponsors/${encodeURIComponent(s.id)}/logo?slot=sidebar`;
+          expect(item).toContain(`src="${oracleEsc(src)}" alt="${oracleEsc(title)}"`);
+          expect(item).not.toContain('sponsor-item-address');
+        } else {
+          expect(item).not.toContain('<img');
+          expect(item).toContain(`>${oracleEsc(title)}</a>`);
+        }
+      }),
+      opts
+    );
+  });
+
+  test('the tap goes to an https website with noreferrer, or to the sponsor card — never elsewhere', () => {
+    fc.assert(
+      fc.property(sponsorArb, (s) => {
+        const item = renderOneItem(s);
+        const href = item.match(/<a href="([^"]*)"/)![1];
+        if ((s.website_url ?? '').startsWith('https://')) {
+          expect(href).toBe(oracleEsc(s.website_url!));
+          expect(item).toContain('rel="noopener noreferrer nofollow"');
+        } else {
+          expect(href).toBe(oracleEsc(`/sponsors/${encodeURIComponent(s.id)}`));
+          expect(item).not.toContain('rel=');
+        }
+      }),
+      opts
+    );
+  });
+});
+
+describe('fat-finger | OSE-1955 a logo URL the Worker will fetch (validateProxiedLogoUrl)', () => {
+  const urlArb = fc.oneof(
+    fc.webUrl({
+      authoritySettings: { withUserInfo: true, withIPv4: true, withIPv6: true, withPort: true },
+    }),
+    fc.webUrl().map((u) => `  ${u}  `),
+    fc.webUrl().map((u) => u.toUpperCase()),
+    fc.webUrl().map((u) => u.replace(/^https?:/, 'javascript:')),
+    fc.webUrl().map((u) => u.replace(/^https?:/, 'data:')),
+    fc.webUrl().map((u) => `${u}/${'a'.repeat(500)}`),
+    fc.string({ unit: 'binary' })
+  );
+
+  test('anything accepted is http(s), at most 500 characters, carries no credentials, on a public host', () => {
+    fc.assert(
+      fc.property(urlArb, (raw) => {
+        const r = validateProxiedLogoUrl(raw);
+        if (!r.valid) {
+          expect(r.url).toBeNull();
+          return;
+        }
+        if (r.url === null) return; // empty means "no logo"
+        expect(r.url.length).toBeLessThanOrEqual(500);
+        const u = new URL(r.url);
+        expect(['http:', 'https:']).toContain(u.protocol);
+        expect(u.username).toBe('');
+        expect(u.password).toBe('');
+        expect(isBlockedLogoHost(u.hostname)).toBe(false);
       }),
       opts
     );

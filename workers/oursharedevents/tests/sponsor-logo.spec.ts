@@ -277,6 +277,28 @@ describe('OSE-1433 | a logo host must be a public DNS name', () => {
     (u) => expect(validateProxiedLogoUrl(u).valid).toBe(true)
   );
 
+  // OSE-1955 (fat-finger): a pasted URL with a user or password in it is refused
+  // at write, and a stored one is never fetched (the proxy re-validates, 422).
+  // Without this the Worker sent the pair to the sponsor's host as Basic auth.
+  test.each([
+    'https://user:secret@cdn.example.com/l.png',
+    'https://user@cdn.example.com/l.png',
+    'https://:secret@cdn.example.com/l.png',
+    'HTTP://USER:SECRET@CDN.EXAMPLE.COM/L.PNG',
+  ])('refuses a URL with credentials: %s (INVALID_URL)', (u) => {
+    const r = validateProxiedLogoUrl(u);
+    expect(r).toEqual({ valid: false, url: null, error: 'INVALID_URL' });
+  });
+
+  test('an @ in the path or query is not a credential', () => {
+    for (const u of [
+      'https://cdn.example.com/@brand/l.png',
+      'https://cdn.example.com/l.png?by=a@b',
+    ]) {
+      expect(validateProxiedLogoUrl(u), u).toEqual({ valid: true, url: u });
+    }
+  });
+
   test('the proxied validator keeps every base check (scheme, parse, length)', () => {
     expect(validateProxiedLogoUrl('javascript:alert(1)').error).toBe('INVALID_SCHEME');
     expect(validateProxiedLogoUrl('not a url').error).toBe('INVALID_URL');

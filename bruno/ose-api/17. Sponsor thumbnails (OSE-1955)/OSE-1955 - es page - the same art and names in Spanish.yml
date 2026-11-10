@@ -1,0 +1,47 @@
+info:
+  name: OSE-1955 | happy | es page | the same art and names in Spanish
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{baseUrl}}/es/events/thumb-pre-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const html = String(res.getBody() || '');
+        const ids = ['pre-sponsor-strip', 'live-sponsor-strip', 'post-sponsor-thanks'];
+        let start = -1;
+        for (const id of ids) {
+          const at = html.indexOf('data-testid="' + id + '"');
+          if (at > -1) { start = at; break; }
+        }
+        const strip = start < 0 ? '' : html.slice(start, html.indexOf('</section>', start));
+        const items = strip.split('data-testid="sponsor-item"').slice(1);
+        const itemOf = (needle) => items.find((i) => i.includes(needle)) || '';
+        const src = (id) => 'src="/api/v2/sponsors/' + id + '/logo?slot=sidebar"';
+        test('OSE-1955 happy (es): 200, a Spanish page, and the pre-event strip', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(html).to.match(/<html lang="es"/);
+          expect(start).to.be.above(-1);
+        });
+        test('OSE-1955 happy (es): the same art; the title is the sponsor\'s own words, not translated', function () {
+          expect(itemOf('sb_thumb_compact')).to.include(src('sb_thumb_compact'));
+          expect(itemOf('sb_thumb_compact')).to.include('alt="Thumb Compact"');
+        });
+        test('OSE-1955 happy (es): no logo is the name', function () {
+          expect(itemOf('Thumb Name Hardware')).to.include('>Thumb Name Hardware</a>');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

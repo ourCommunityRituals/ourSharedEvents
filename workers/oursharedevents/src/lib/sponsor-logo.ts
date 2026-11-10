@@ -113,7 +113,13 @@ export function validateLogoUrl(raw: unknown): LogoUrlValidation {
 export function validateProxiedLogoUrl(raw: unknown): LogoUrlValidation {
   const base = validateLogoUrl(raw);
   if (!base.valid || base.url === null) return base;
-  if (isBlockedLogoHost(new URL(base.url).hostname)) {
+  const parsed = new URL(base.url);
+  // OSE-1955: a user or password in the URL would go to the sponsor's host as
+  // Basic auth on every fetch. Refused at write; a stored one is never fetched.
+  if (parsed.username || parsed.password) {
+    return { valid: false, url: null, error: 'INVALID_URL' };
+  }
+  if (isBlockedLogoHost(parsed.hostname)) {
     return { valid: false, url: null, error: 'INVALID_HOST' };
   }
   return base;

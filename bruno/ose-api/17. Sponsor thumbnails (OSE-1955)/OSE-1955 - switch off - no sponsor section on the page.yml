@@ -1,0 +1,44 @@
+info:
+  name: OSE-1955 | rainy | switch off | no sponsor section on the page
+  type: http
+  seq: 13
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/thumb-off-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const html = String(res.getBody() || '');
+        const ids = ['pre-sponsor-strip', 'live-sponsor-strip', 'post-sponsor-thanks'];
+        let start = -1;
+        for (const id of ids) {
+          const at = html.indexOf('data-testid="' + id + '"');
+          if (at > -1) { start = at; break; }
+        }
+        const strip = start < 0 ? '' : html.slice(start, html.indexOf('</section>', start));
+        const items = strip.split('data-testid="sponsor-item"').slice(1);
+        const itemOf = (needle) => items.find((i) => i.includes(needle)) || '';
+        const src = (id) => 'src="/api/v2/sponsors/' + id + '/logo?slot=sidebar"';
+        test('OSE-1955 rainy: the page renders (200) with its title', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(html).to.include('Thumbnail Fixture (switch off)');
+        });
+        test('OSE-1955 rainy: no sponsor section, no art and no name', function () {
+          expect(start).to.eql(-1);
+          expect(html).to.not.include('data-testid="sponsor-thumb"');
+          expect(html).to.not.include('Thumb Switch Off');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
