@@ -655,6 +655,26 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
     expect(html).not.toContain('data-testid="event-stats-card"');
   });
 
+  test('post-sponsor-thanks shows a logo sponsor as art and a logo-less one as its name', async () => {
+    const id = 'evt_ssp1_post_sponsor_thumb';
+    await seedEvent(id, { startOffsetDays: -7, endOffsetDays: -6 });
+    const sid = await seedSponsor(id, {
+      name: 'Post Art',
+      websiteUrl: 'https://postart.example.com',
+      logoUrl: 'https://cdn.example.com/post.png',
+    });
+    await seedSponsor(id, { name: 'Post Plain', websiteUrl: 'https://postplain.example.com' });
+
+    const strip = stripOf(
+      await (await SELF.fetch(`https://t.test/events/${id}`)).text(),
+      'post-sponsor-thanks'
+    );
+    expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
+    expect(strip).toContain('alt="Post Art"');
+    expect(strip).not.toContain('>Post Art<');
+    expect(strip).toContain('>Post Plain</a>');
+  });
+
   test('post-sponsor-thanks renders when active sponsors exist', async () => {
     const id = 'evt_ssp1_post_sponsor_yes';
     await seedEvent(id, { startOffsetDays: -7, endOffsetDays: -6 });

@@ -21,10 +21,18 @@ runtime:
         // sponsor with no logo keeps its name as text. Fixture:
         // bruno/fixtures/sponsor-public-card-seed.sql (sb_pcard_onshow has a header logo,
         // sb_pcard_nologo has none, sb_pcard_deadlogo has one that cannot load).
+        // pcard-live-evt is dated 2026-05-01, so its page is the post-event one and the
+        // sponsors sit in post-sponsor-thanks. All three phases share one sponsor list
+        // renderer, so the check reads whichever sponsor section the phase renders.
         const body = String(res.getBody() || '');
-        const start = body.indexOf('data-testid="pre-sponsor-strip"');
+        const ids = ['pre-sponsor-strip', 'live-sponsor-strip', 'post-sponsor-thanks'];
+        let start = -1;
+        for (const id of ids) {
+          const at = body.indexOf('data-testid="' + id + '"');
+          if (at > -1) { start = at; break; }
+        }
         const strip = start < 0 ? '' : body.slice(start, body.indexOf('</section>', start));
-        test('200 and the sponsor strip renders', function () {
+        test('200 and the sponsor section renders', function () {
           expect(res.getStatus()).to.eql(200);
           expect(start).to.be.above(-1);
         });

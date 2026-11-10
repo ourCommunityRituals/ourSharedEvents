@@ -2197,7 +2197,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 32
+      "testCount": 33
     },
     {
       "file": "workers/oursharedevents/tests/public-list-api-parity.contract.spec.ts",
