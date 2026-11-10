@@ -104,6 +104,58 @@ describe('OSE-1255 — findViolations (legit-skip rule)', () => {
     ).toBe(true);
   });
 
+  test('PR where T0 Gate (tests) FAILED so local vetting skipped → no violation (honest cascade)', () => {
+    expect(
+      V(
+        { eventName: 'pull_request', headRef: 'ci/x' },
+        {
+          security: 'success',
+          gate: 'success',
+          'gate-tests': 'failure',
+          'local-vetting': 'skipped',
+        }
+      )
+    ).toBe(false);
+  });
+
+  test('PR where T0 Gate (tests) passed but local vetting skipped → VIOLATION', () => {
+    expect(
+      V(
+        { eventName: 'pull_request', headRef: 'ci/x' },
+        {
+          security: 'success',
+          gate: 'success',
+          'gate-tests': 'success',
+          'local-vetting': 'skipped',
+        }
+      )
+    ).toBe(true);
+  });
+
+  test('T0 Gate (tests) is an upstream signal, not an expected gate', () => {
+    for (const ctx of [
+      { eventName: 'pull_request', headRef: 'ci/x' },
+      { eventName: 'push', ref: 'refs/heads/main' },
+      { eventName: 'workflow_dispatch', inputs: { deploy_staging: 'true' } },
+    ]) {
+      expect(expectedGates(ctx).has('gate-tests')).toBe(false);
+    }
+  });
+
+  test('a cancelled T0 Gate (tests) does not explain a skipped gate', () => {
+    expect(
+      V(
+        { eventName: 'pull_request', headRef: 'ci/x' },
+        {
+          security: 'success',
+          gate: 'success',
+          'gate-tests': 'cancelled',
+          'local-vetting': 'skipped',
+        }
+      )
+    ).toBe(true);
+  });
+
   test('push to main does not expect local vetting (PR-only gate)', () => {
     expect(expectedGates({ eventName: 'push', ref: 'refs/heads/main' }).has('local-vetting')).toBe(
       false
