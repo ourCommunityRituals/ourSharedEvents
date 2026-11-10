@@ -66,8 +66,12 @@ function languageList(opts: LanguageSwitchOptions, idPrefix: string): string {
     // Its own name ("Español") is in that language; any other is in the page's.
     const textLang = name === LANGUAGE_NAMES[l] ? l : opts.lang;
     if (l === opts.lang) {
+      // Every value is escaped (esc) or a code from the fixed LANGUAGES list.
+      // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
       return `<li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="${textLang}" data-testid="${idPrefix}-${l}"><span class="ose-langmenu-check" aria-hidden="true">✓</span>${esc(name)}</span></li>`;
     }
+    // Every value is escaped (esc) or a code from the fixed LANGUAGES list.
+    // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
     return `<li><a class="ose-langmenu-item" lang="${textLang}" hreflang="${l}" data-testid="${idPrefix}-${l}" href="${esc(withLangPrefix(l, opts.path) + query)}"><span class="ose-langmenu-check" aria-hidden="true"></span>${esc(name)}</a></li>`;
   }).join('');
   return `<ul class="ose-langmenu-list" aria-label="${label}">${items}</ul>`;

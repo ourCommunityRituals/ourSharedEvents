@@ -105,8 +105,8 @@ describe('renderLanguageMenu | safety', () => {
     // 2026-11-10; behavior in language-menu-close.spec.ts). Opening and
     // switching never need it: <details> and plain links do both.
     const html = renderLanguageMenu({ lang: 'en', path: PATH });
-    expect(html.match(/<script\b/g)?.length).toBe(1);
-    const markup = html.replace(/<script>[\s\S]*?<\/script>/, '');
+    expect(html.match(/<script\b/gi)?.length).toBe(1);
+    const markup = html.replace(/<script>[\s\S]*?<\/script>/i, '');
     expect(markup).not.toMatch(/<script|<form|<button|onclick|cookie/i);
   });
 

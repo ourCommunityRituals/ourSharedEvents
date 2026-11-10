@@ -120,12 +120,12 @@ describe('F6 | Escape closes an open menu and returns focus to its button', () =
 describe('the closing script under the page CSP', () => {
   it('carries the page nonce when it is given one (event pages)', () => {
     const html = renderLanguageMenu({ lang: 'en', path: '/events/abc', nonce: 'n0nce' });
-    expect(html.match(/<script\b[^>]*>/g)).toEqual(['<script nonce="n0nce">']);
+    expect(html.match(/<script\b[^>]*>/gi)).toEqual(['<script nonce="n0nce">']);
   });
 
   it('is a bare <script> without one, for html() to nonce (/events, landing)', () => {
     const html = renderLanguageMenu({ lang: 'en', path: '/events' });
-    expect(html.match(/<script\b[^>]*>/g)).toEqual(['<script>']);
+    expect(html.match(/<script\b[^>]*>/gi)).toEqual(['<script>']);
   });
 
   it('escapes a nonce it is handed', () => {
@@ -135,7 +135,7 @@ describe('the closing script under the page CSP', () => {
 
   it('touches only the menu: no storage, cookie, network or HTML writing', () => {
     const script = renderLanguageMenu({ lang: 'en', path: '/events' }).match(
-      /<script>([\s\S]*?)<\/script>/
+      /<script>([\s\S]*?)<\/script>/i
     )?.[1];
     expect(script).toBeTruthy();
     expect(script).not.toMatch(
