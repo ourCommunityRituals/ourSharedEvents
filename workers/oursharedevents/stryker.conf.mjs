@@ -115,6 +115,14 @@ export default {
     'src/lib/i18n/language-menu.ts',
     rangeOf('src/handlers/pages.ts', 'function renderEventTopbar(', '</div>`;'),
     rangeOf('src/handlers/pages.ts', 'function withLanguageSwitch(', 'const LANGUAGE_MENU_MARKER'),
+    // OSE-1952 (feature OSE-1948, owner 2026-11-09) — the event page's sponsor
+    // art: art or name, website or card link, the rel set, alt = the escaped
+    // title, the encoded proxy src, the address line only without art, and the
+    // list around them. Only this range of pages.ts; the has_logo SQL is a string
+    // Stryker does not mutate (its branches are pinned by the workers-pool
+    // public-event-stakeholder-surfaces.spec.ts). Killed by
+    // sponsor-thumb-render.spec.ts and the language-layer goldens.
+    rangeOf('src/handlers/pages.ts', 'function renderSponsorItem(', 'const SPONSOR_LIST_CSS'),
   ],
   coverageAnalysis: 'perTest',
   // Stryker writes `// @ts-nocheck` into its sandbox copy of each file this

@@ -953,6 +953,10 @@ interface EventPageSocialData {
 
 function renderSponsorItem(s: SponsorBasicRow): string {
   const name = esc(sponsorTitle(s));
+  // Stryker disable next-line StringLiteral: equivalent (OSE-1952). `url` is read
+  // only by startsWith('https://') and, past it, in the https branch; '' and any
+  // non-https stand-in both fail that test, so a null website renders the same
+  // card link. The `??` operator mutant on this line stays live and is killed.
   const url = s.website_url ?? '';
   // A website when there is one; otherwise a tap opens the sponsor's own card
   // (title, location, contact).

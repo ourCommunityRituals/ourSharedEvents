@@ -39,6 +39,10 @@ export const FLOORS = {
   'src/lib/event-type-catalog.ts': 100,
   'src/lib/event-type-catalog-read.ts': 100,
   'src/lib/landing-area.ts': 99.35,
+  // pages.ts is one score over all its marker ranges. OSE-1952 (2026-11-10)
+  // added the sponsor-art range (renderSponsorItem / renderSponsorList) at 23 of
+  // 23, with one equivalent mutant disabled in the source with its reason (the
+  // '' fallback of the website, read only by startsWith('https://')).
   'src/handlers/pages.ts': 100,
   'src/handlers/events.ts': 100,
   // Epic OSE-1880 (owner, 2026-11-09): the map's deterministic rules, at the
