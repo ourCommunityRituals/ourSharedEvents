@@ -176,6 +176,9 @@ export async function buildDay({
           brand_id: 'root',
           status: 'active',
           is_published: true,
+          // OSE-1900: a sponsor shows only on an event that opted in, and every
+          // stock event is given sponsors below (check-full requires the strip).
+          settings: { useSponsors: true },
           title: row.title,
           description: row.summary,
           location: row.venue,

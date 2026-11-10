@@ -1,0 +1,37 @@
+info:
+  name: OSE-1900 | rainy | discovery | a request to an event that has not opted in is refused (404)
+  type: http
+  seq: 18
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/sponsor/requests"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"token":"{{optinSeekerToken}}","event_id":"optin-off-evt"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // optin-off-evt is listed, active and upcoming, so before OSE-1900 this was a
+        // 201. The answer is the one an unknown event gets: no oracle.
+        test('OSE-1900 rainy: 404 NOT_DISCOVERABLE', function () {
+          expect(res.getStatus()).to.eql(404);
+          expect(res.getBody().code).to.eql('NOT_DISCOVERABLE');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

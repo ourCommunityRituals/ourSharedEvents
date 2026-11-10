@@ -1,0 +1,33 @@
+info:
+  name: OSE-1900 | sunny | switch | PUT settings.useSponsors true turns sponsors on
+  type: http
+  seq: 21
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/optin-toggle-evt"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"settings":{"useSponsors":true}}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-1900 sunny: turn on: 200', function () { expect(res.getStatus()).to.eql(200); expect(res.getBody().ok).to.eql(true); });
+        test('OSE-1900 sunny: turn on: the answer says sponsors are on', function () { expect(res.getBody().sponsors).to.eql({ on: true }); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

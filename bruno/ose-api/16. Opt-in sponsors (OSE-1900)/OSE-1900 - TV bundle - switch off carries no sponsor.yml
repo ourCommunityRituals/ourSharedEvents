@@ -1,0 +1,27 @@
+info:
+  name: OSE-1900 | rainy | TV sponsor bundle | switch off, the display gets no sponsor
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/optin-off-evt/sponsor-bundle?surface=display"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const raw = JSON.stringify(res.getBody());
+        test('OSE-1900 rainy: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-1900 rainy: the TV bundle of an event that has not opted in names no sponsor', function () {
+          expect(raw).to.not.include('sb_optin_hidden');
+          expect(raw).to.not.include('Opt-in Hidden Sponsor');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

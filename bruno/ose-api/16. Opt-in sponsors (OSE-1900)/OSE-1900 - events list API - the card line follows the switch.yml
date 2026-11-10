@@ -1,0 +1,33 @@
+info:
+  name: OSE-1900 | sunny + rainy | events list API | sponsor_titles has the opted-in event and not the other
+  type: http
+  seq: 9
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events?brand=root"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // sponsor_titles feeds the card line on the landing, the map list, /events and
+        // the TV. Both fixture events are listed, so the only difference is the switch.
+        const body = res.getBody();
+        const listed = (body.items || []).map(function (e) { return e.id; });
+        const titles = body.sponsor_titles || {};
+        test('OSE-1900: 200 and both fixture events are in the list', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(listed).to.include('optin-on-evt');
+          expect(listed).to.include('optin-off-evt');
+        });
+        test('OSE-1900 sunny: the opted-in event carries its sponsor title', function () { expect(titles['optin-on-evt']).to.eql('Opt-in Shown Sponsor'); });
+        test('OSE-1900 rainy: the event that has not opted in carries none', function () { expect(titles).to.not.have.property('optin-off-evt'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -47,8 +47,10 @@ const DRAFT = 'ose1438-draft'; // draft: a placement here is not "on show"
 
 async function seedEvent(id: string, status: string, templateId: string | null) {
   await env.DB.prepare(
-    `INSERT INTO events (id, brand_id, title, slug, status, template_id)
-     VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`
+    // OSE-1900: every event here chose to have sponsors, so each case still turns
+    // on the placement and the event's status, which is what it names.
+    `INSERT INTO events (id, brand_id, title, slug, status, template_id, settings_json)
+     VALUES (?, ?, ?, ?, ?, ?, '{"useSponsors":true}') ON CONFLICT(id) DO NOTHING`
   )
     .bind(id, BRAND, `Event ${id}`, id, status, templateId)
     .run();

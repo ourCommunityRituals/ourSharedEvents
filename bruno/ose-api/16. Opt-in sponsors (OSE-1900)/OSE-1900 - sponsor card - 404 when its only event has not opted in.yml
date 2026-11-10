@@ -1,0 +1,27 @@
+info:
+  name: OSE-1900 | rainy | sponsor card | 404 for a sponsor whose only event has the switch off
+  type: http
+  seq: 11
+
+http:
+  method: GET
+  url: "{{baseUrl}}/sponsors/sb_optin_hidden"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const body = String(res.getBody() || '');
+        test('OSE-1900 rainy: 404, like a sponsor that is on show nowhere', function () { expect(res.getStatus()).to.eql(404); });
+        test('OSE-1900 rainy: nothing of the sponsor leaks into the 404', function () { expect(body).to.not.include('Opt-in Hidden Sponsor'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

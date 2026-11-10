@@ -106,6 +106,15 @@ export default {
     // one statement returns null) is outside it. Killed by street-map.spec.ts.
     rangeOf('src/lib/street-map.ts', 'export const DEFAULT_ARCHIVE', 'const ARCHIVE_NAME'),
     rangeOf('src/lib/street-map.ts', 'export async function buildStreetLayer(', '} catch {'),
+    // OSE-1936 (epic OSE-1927, owner 2026-11-10) — the header Language menu: the
+    // whole renderer, and in pages.ts only the two places that put it on a page
+    // (the event top bar, and the marker on /events and the landing). Killed by
+    // language-menu.spec.ts, language-menu-third-language.spec.ts,
+    // list-landing-spanish.spec.ts and the two golden specs; each mutant maps to
+    // a scenario id (H/N/E/F) in OSE-1936.
+    'src/lib/i18n/language-menu.ts',
+    rangeOf('src/handlers/pages.ts', 'function renderEventTopbar(', '</div>`;'),
+    rangeOf('src/handlers/pages.ts', 'function withLanguageSwitch(', 'const LANGUAGE_MENU_MARKER'),
   ],
   coverageAnalysis: 'perTest',
   // Stryker writes `// @ts-nocheck` into its sandbox copy of each file this

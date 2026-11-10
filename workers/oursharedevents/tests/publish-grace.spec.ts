@@ -49,9 +49,11 @@ function inDays(n: number): string {
 
 async function insertEvent(id: string, status: string, opts: { h3_res7?: string } = {}) {
   await E.DB.prepare(
+    // OSE-1900: the events chose to have sponsors, so sponsor discovery below
+    // turns on the listing window alone.
     `INSERT OR REPLACE INTO events (id, brand_id, title, slug, status, is_published, start_date,
-            h3_res7, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 1, ?, ?, datetime('now'), datetime('now'))`
+            h3_res7, settings_json, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 1, ?, ?, '{"useSponsors":true}', datetime('now'), datetime('now'))`
   )
     .bind(id, BRAND, `Grace ${id}`, id, status, inDays(3), opts.h3_res7 ?? null)
     .run();

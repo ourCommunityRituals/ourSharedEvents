@@ -107,3 +107,27 @@ has not yet answered.
 - **Path 2 (geo auto-match, still DEFERRED).** Its `NOT EXISTS (… organizer_accepted = 0 OR sponsor_accepted = 0 …)` means a **declined** request also suppresses template-matched rendering of that sponsor on that event, which is the intended reading. A **waiting** request does not; that is part of Path 2's existing event-side consent gap and must be closed with it before Path 2 is ever enabled.
 
 **Consequences.** Organizers see requests in the Event checklist inbox ("N sponsors asked to join") and on the sponsors card (Approve / Decline). Sponsors see them under "Your requests" (waiting / the organizer said no). Coverage: `tests/sponsor-discovery.spec.ts` (including "not on any public surface until approved", verified red by making requests born switched on), `tests/playwright/sponsor-home-flow.spec.ts` (ask → approve → public, in a browser).
+
+## Amendment, 2026-11-09: the event's own yes comes first (`useSponsors`, OSE-1900)
+
+**Context.** Everything above is consent per placement: the sponsor accepted, and the organizer accepted. Nothing asked whether the event wanted sponsors at all. Sponsor discovery let a sponsor ask to back any listed event of its brand, including one whose organizer had never chosen to have sponsors, and the section above on Path 2 names the same gap ("there is no event-side opt-in"). Owner decision, 2026-11-09: sponsors show only if the event chose them.
+
+**Decision.** Each event has a switch, `useSponsors`, in `events.settings_json` (`src/lib/event-settings.ts`). It is opt-in, so **absent means off**. That is the one exception to that module's "absent means on" rule, and only a stored JSON `true` turns it on. A placement shows when all three hold:
+
+| The event opted in | The sponsor accepted | The organizer accepted (source-aware, as above) | Shows publicly |
+| ------------------ | -------------------- | ----------------------------------------------- | -------------- |
+| yes                | yes                  | yes                                             | yes            |
+| no, or never set   | any                  | any                                             | no             |
+| yes                | no, or not answered  | any                                             | no             |
+| yes                | yes                  | no                                              | no             |
+
+- **One gate.** `eventUsesSponsorsSql` and `PLACEMENT_EVENT_USES_SPONSORS_SQL` in `src/lib/sponsor-card.ts`, beside `PLACEMENT_ON_SHOW_SQL` and `SPONSOR_ON_SHOW_SQL`, which now include it. Every reader goes through it: the card line on the landing, `/events` and the list API (`fetchSponsorTitles`); the resolver behind the event API, the TV bundle and the poster (it returns nothing before either path runs); the event page strip; the public sponsor card; the logo and creative routes; the display and click beacons (nothing is recorded for an event that did not opt in); and sponsor discovery. `tests/sponsor-opt-in-readers.spec.ts` fails when a statement in `src/` carries the consent rule without the gate.
+- **Discovery.** An event that has not opted in is not offered to a sponsor, and a request to it is refused with the same 404 as an event that does not exist. No row is written.
+- **Off hides, it does not delete.** Turning the switch off hides every placement of the event on the next read. The placement rows and both sides' answers stay, so turning it back on restores what was agreed.
+- **Who sets it.** The event's own admins, through the existing `PUT /api/v2/admin/events/:id` (`settings.useSponsors`, true or false only): the admin write guard, the brand scope (`guardAdminObjectScope`) and the audit log apply as to any admin write, and each write of the switch adds its own audit row, `EVENT_SPONSORS_SWITCH`, saying which way it went. No tier or plan is read (invariant 7).
+- **Existing events.** Migration `0107` switches on the events whose organizer had already chosen a sponsor (a placement that is on and organizer-accepted under the rule above), so no sponsor disappears. Every other event, and every new one, starts off. A copy made with "Repeat this event" starts off as well, since it carries no placements.
+- **Path 2 (geo auto-match, still DEFERRED and dark).** It now sits behind the same gate, so if it is ever lit it reaches only events that opted in. This is the event-side signal the section above asks for. It does not by itself make Path 2 ready: the sponsor's per-event yes is still missing there.
+
+**Not decided here.** Whether an organizer adding a sponsor in the admin should turn the switch on by that act (today it does not: the sponsor is saved and stays hidden until the switch is on), and the admin wording. Both are listed for the owner on the pull request.
+
+**Consequences.** A new event shows no sponsor anywhere until its organizer turns sponsors on and both sides accept a placement. Coverage: `tests/sponsor-opt-in-gate.spec.ts` (every reader, the pairwise consent matrix, discovery, the admin switch and its audit rows, the backfill), `tests/admin-sponsors-switch.spec.ts` (the control in the admin's sponsors card) and, on staging, the Bruno folder "16. Opt-in sponsors (OSE-1900)".

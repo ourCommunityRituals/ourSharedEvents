@@ -1,0 +1,26 @@
+info:
+  name: OSE-1900 | rainy | switch | before anyone turns it on, the accepted sponsor does not show
+  type: http
+  seq: 20
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/optin-toggle-evt/sponsors"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const ids = (res.getBody().items || []).map(function (s) { return s.id; });
+        test('OSE-1900 rainy: a new event (settings {}) shows no sponsor, even one both sides accepted', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(ids).to.eql([]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

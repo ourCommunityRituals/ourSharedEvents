@@ -39,8 +39,9 @@ beforeAll(async () => {
   }
   try {
     await tenv.DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, start_date, end_date)
-       VALUES ('bt-evt', 'bt-brand', 'Beacon Token Test Event', 'beacon-token-test-event', 'active', '2026-01-01', '2026-12-31')`
+      // OSE-1900: the event chose to have sponsors, so its sponsor resolves.
+      `INSERT INTO events (id, brand_id, title, slug, status, start_date, end_date, settings_json)
+       VALUES ('bt-evt', 'bt-brand', 'Beacon Token Test Event', 'beacon-token-test-event', 'active', '2026-01-01', '2026-12-31', '{"useSponsors":true}')`
     ).run();
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

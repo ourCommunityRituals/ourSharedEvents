@@ -60,10 +60,11 @@ async function insertEvent(opts: {
     opts.endOffsetDays != null ? new Date(now + opts.endOffsetDays * 86400000).toISOString() : null;
   await tenv.DB.prepare('DELETE FROM events WHERE id = ?').bind(opts.id).run();
   await tenv.DB.prepare(
+    // OSE-1900: the events chose to have sponsors, so the recap's sponsor line renders.
     `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, end_date,
-                         what_short, who_host, why_purpose,
+                         what_short, who_host, why_purpose, settings_json,
                          created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{"useSponsors":true}', datetime('now'), datetime('now'))`
   )
     .bind(
       opts.id,

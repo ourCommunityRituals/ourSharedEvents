@@ -1,0 +1,33 @@
+info:
+  name: OSE-1900 | rainy | discovery | Events you could back does not offer the event that has not opted in
+  type: http
+  seq: 17
+
+http:
+  method: GET
+  url: "{{baseUrl}}/sponsor?t={{optinSeekerToken}}"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const html = String(res.getBody() || '');
+        test('OSE-1900: 200, the sponsor page opens', function () { expect(res.getStatus()).to.eql(200); });
+        // Whether the opted-in event is among the 20 soonest the page offers depends on
+        // what else is on staging that day, so its button is held at the mock layer.
+        // The request after this one is the hard gate: it asks for the event by id.
+        test('OSE-1900 rainy: the event that has not opted in is not offered', function () {
+          expect(html).to.not.include('data-event-id="optin-off-evt"');
+          expect(html).to.not.include('Opt-in Fixture (sponsors off)');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

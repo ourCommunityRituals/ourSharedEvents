@@ -237,6 +237,18 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
       '`e_show.id = sp_show.event_id AND e_show.brand_id = sb.brand_id`, so it only ' +
       "reads the one event each placement points at, inside the sponsor's own brand.",
   ],
+
+  [
+    "lib/sponsor-card.ts > PLACEMENT_EVENT_USES_SPONSORS_SQL: SELECT 1 FROM events e_uses WHERE e_uses.id = sp.event_id AND ${eventUsesSponsorsSql('e_uses')})`;",
+    'PLACEMENT_EVENT_USES_SPONSORS_SQL (OSE-1900), a boolean fragment, never a ' +
+      'query on its own. Its `events e_uses` sub-select is correlated by ' +
+      "`e_uses.id = sp.event_id` to the caller's outer `sponsor_placement sp`, so it " +
+      'reads the one event that placement points at and asks one thing: did that ' +
+      'event opt in to sponsors. All three callers fence the outer row by an id the ' +
+      'request holds: the event page strip by `sp.event_id = ?`, the creative route ' +
+      'and the logo route by `sb.id = ?`. It can only remove rows from what those ' +
+      'statements already returned; not enumeration.',
+  ],
   // ── src/lib reads (scan extended to lib/ 2026-09-17, CCR-PR567 re-run item 4). ──
   // The reporting corridor, the sponsor resolver and the draft-expiry cron read
   // tenant tables from lib/. Each is a scheduled BI/aggregation job (cross-brand

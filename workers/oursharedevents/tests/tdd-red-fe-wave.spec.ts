@@ -38,10 +38,11 @@ const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString(
 
 async function seedEvent(id: string, status: string, title = `Event ${id}`): Promise<void> {
   await E.DB.prepare(
+    // OSE-1900: the events chose to have sponsors, so a consented sponsor can show.
     `INSERT OR REPLACE INTO events (id, brand_id, title, slug, status, is_published, start_date,
-            what_short, who_host, where_address, location, created_at, updated_at)
+            what_short, who_host, where_address, location, settings_json, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, 1, ?, 'A weekly game night', 'The Host', '1 Main St', 'The Venue',
-             datetime('now'), datetime('now'))`
+             '{"useSponsors":true}', datetime('now'), datetime('now'))`
   )
     .bind(id, BRAND, title, id, status, inDays(3))
     .run();

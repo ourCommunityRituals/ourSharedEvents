@@ -2178,6 +2178,9 @@
           'event-map': function (el) {
             if (window.changeEventMap) window.changeEventMap(argOf(el, 'event-id'), el.getAttribute('data-want-on') === '1', el);
           },
+          'event-sponsors': function (el) {
+            if (window.changeEventSponsors) window.changeEventSponsors(argOf(el, 'event-id'), el.getAttribute('data-want-on') === '1', el);
+          },
           'reload-page': function () {
             location.reload();
           },
@@ -5533,6 +5536,21 @@
         </div>
       </div>
 
+      <!-- OSE-1900: the event's own yes. Sponsors show only if the event chose
+           them, so the switch sits here, outside the folded list, in view
+           without opening anything. Hidden until an event is selected.
+           Styled by classes that already exist (@ocr/ui's form-field,
+           card-title, btn and sub-line): this page adds no CSS for it. -->
+      <div class="mcard-body form-field" id="spon-switch" data-testid="sponsors-switch" role="group" aria-labelledby="spon-switch-label" hidden>
+        <h3 class="card-title" id="spon-switch-label">Sponsors (you choose)</h3>
+        <p id="spon-switch-state" data-testid="sponsors-switch-state"></p>
+        <div class="flex-row">
+          <button type="button" class="btn btn-secondary" id="spon-switch-toggle" data-action="event-sponsors" data-testid="sponsors-switch-toggle" aria-describedby="spon-switch-hint"></button>
+        </div>
+        <p class="sub-line" id="spon-switch-hint" data-testid="sponsors-switch-hint">Turning sponsors on lets a sponsor show with this event once you and the sponsor have both said yes.</p>
+        <p class="create-msg" id="spon-switch-msg" data-testid="sponsors-switch-msg" role="status" aria-live="polite"></p>
+      </div>
+
       <div class="mcard-body" id="spon-card-body" data-testid="sponsors-card-body" hidden>
       <div id="spon-form-wrap" class="spon-form-wrap" hidden data-testid="sponsor-form-wrap">
         <form id="spon-create-form" data-testid="sponsor-create-form" novalidate>
@@ -8374,9 +8392,88 @@
         window.renderEventStatus(eventId);
         window.renderEventTimeline(eventId);
       };
+      /**
+       * OSE-1900: the sponsors switch in words, from an admin list row. Sponsors
+       * are opt-in, so only a 1 from the list reads as on. A row with no value
+       * reads as off (the opposite of the map setting above).
+       */
+      window.sponsorsSwitchView = function (e) {
+        var on = e.use_sponsors === 1 || e.use_sponsors === '1';
+        return {
+          on: on,
+          text: on
+            ? 'Sponsors are on for this event.'
+            : 'Sponsors are off for this event. No sponsor shows with it, and none can ask to join.',
+          actionLabel: on ? 'Turn off sponsors' : 'Turn on sponsors',
+          wantOn: !on,
+        };
+      };
+      /** OSE-1900: fill the switch in the sponsors card from the selected event's row. */
+      window.renderSponsorsSwitch = function (id) {
+        var box = document.getElementById('spon-switch');
+        if (!box) return;
+        var e = window._oseList && window._oseList.byId[String(id)];
+        if (!e) { box.hidden = true; return; }
+        var view = window.sponsorsSwitchView(e);
+        var state = document.getElementById('spon-switch-state');
+        var toggle = document.getElementById('spon-switch-toggle');
+        if (state) state.textContent = view.text;
+        if (toggle) {
+          toggle.textContent = view.actionLabel;
+          toggle.setAttribute('data-event-id', String(e.id));
+          toggle.setAttribute('data-want-on', view.wantOn ? '1' : '0');
+          toggle.disabled = false;
+        }
+        var msg = document.getElementById('spon-switch-msg');
+        if (msg) { msg.textContent = ''; msg.className = 'create-msg'; }
+        box.hidden = false;
+      };
+      /**
+       * OSE-1900: turn sponsors on or off for an event. One PUT that names only
+       * the switch, then the card says what the server stored. Off hides every
+       * sponsor of the event and deletes none.
+       */
+      window.changeEventSponsors = async function (id, wantOn, btn) {
+        var e = window._oseList.byId[String(id)];
+        if (!e) return;
+        if (btn) btn.disabled = true;
+        var failure = '';
+        try {
+          var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings: { useSponsors: !!wantOn } }),
+          });
+          var data = null;
+          try { data = await res.json(); } catch (x) { data = null; }
+          if (!res.ok || !data || !data.ok) {
+            throw new Error((data && (data.error || data.code)) || 'Could not change the sponsors setting (server said ' + res.status + ')');
+          }
+          // The server answers which way the switch now is. Without that answer
+          // the card does not guess a yes.
+          if (!data.sponsors || typeof data.sponsors.on !== 'boolean') {
+            throw new Error('Could not confirm the sponsors setting. Reload the page to see what was saved.');
+          }
+          e.use_sponsors = data.sponsors.on ? 1 : 0;
+        } catch (err) {
+          failure = err && err.message ? err.message : 'Could not change the sponsors setting.';
+        }
+        window.renderSponsorsSwitch(id);
+        var m = document.getElementById('spon-switch-msg');
+        if (m) {
+          if (failure) { m.textContent = failure; m.className = 'create-msg error'; }
+          else {
+            m.textContent = Number(e.use_sponsors) === 1
+              ? 'Sponsors are on. A sponsor shows once you and the sponsor have both said yes.'
+              : 'Sponsors are off. Nothing was deleted. Turn them back on and what you both agreed shows again.';
+            m.className = 'create-msg success';
+          }
+        }
+      };
       window.addEventListener('ose:event-selected', function (ev) {
         var d = ev.detail || {};
         window.renderEventStatus(d.id);
+        window.renderSponsorsSwitch(d.id);
         window.renderEventTimeline(d.id);
         window.renderPreEventWindow(d.id);
       });

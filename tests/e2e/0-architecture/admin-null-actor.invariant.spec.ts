@@ -93,6 +93,11 @@ const SITES: Record<string, { kind: Kind; count: number; why: string }> = {
     count: 1,
     why: 'created_by on the new row.',
   },
+  'handlers/events.ts: actor: extractAdminActor(request, env),': {
+    kind: 'attribution-only',
+    count: 1,
+    why: 'Audit attribution for a write of the sponsors switch (recordSponsorsSwitch, OSE-1900), called only after the create or update it records has passed requireAdmin and the brand scope.',
+  },
   'handlers/sponsors.ts: const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);':
     { kind: 'scope-denies-null', count: 3, why: 'Sponsor list, pool brand, sponsor reads.' },
   'handlers/sponsors.ts: const actor = extractAdminActor(request, env);': {

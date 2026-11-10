@@ -1,0 +1,30 @@
+info:
+  name: OSE-1900 | rainy | discovery | the refused request wrote no placement row
+  type: http
+  seq: 19
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/sponsors?eventId=optin-off-evt"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const ids = (res.getBody().items || []).map(function (s) { return s.id; });
+        test('OSE-1900: 200, the admin list of the event', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-1900 rainy: the asking sponsor is not on the event in any state', function () { expect(ids).to.not.include('sb_optin_seeker'); });
+        test('OSE-1900: the placement the organizer made is still there, hidden and not deleted', function () { expect(ids).to.include('sb_optin_hidden'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

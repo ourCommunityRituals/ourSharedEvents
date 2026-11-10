@@ -1,0 +1,33 @@
+info:
+  name: OSE-1900 | rainy | event page | switch off, the page renders with no sponsor strip
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/optin-off-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const html = String(res.getBody() || '');
+        test('OSE-1900 rainy: the page renders (200) with its title', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(html).to.include('Opt-in Fixture (sponsors off)');
+        });
+        test('OSE-1900 rainy: no sponsor strip and no sponsor name on the page', function () {
+          expect(html).to.not.include('data-testid="pre-sponsor-strip"');
+          expect(html).to.not.include('Opt-in Hidden Sponsor');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -20,6 +20,7 @@ import { formatEventPrice } from '../lib/event-price';
 import { validateLogoUrl } from '../lib/sponsor-logo';
 import { sponsorTitle, sponsorCardPath } from '../lib/sponsor-card';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
+import { PLACEMENT_EVENT_USES_SPONSORS_SQL } from '../lib/sponsor-card';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 import { hashEmail, encryptText } from '../lib/pii';
 import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
@@ -52,6 +53,7 @@ import { fmt, msg, msgAll, WHAT_TYPES } from '../lib/i18n/catalog';
 import { resolveLanguage } from '../lib/i18n/resolve-language';
 import { languageAlternates, withLangPrefix } from '../lib/i18n/path-prefix';
 import { LANGUAGE_SWITCH_CSS, renderLanguageSwitch } from '../lib/i18n/language-switch';
+import { LANGUAGE_MENU_CSS, renderLanguageMenu } from '../lib/i18n/language-menu';
 import {
   parseDiscoveryFilters,
   type DiscoveryFilters,
@@ -456,13 +458,24 @@ export async function handlePublicPage(
  * OSE-1762: the language switch on a shell page, above the never-who disclosure
  * (on the event page it sits above Back, which these pages do not have). Its
  * stylesheet goes in with the disclosure's. `query` is already vetted.
+ *
+ * The header's Language menu (owner 2026-11-10) goes in at the template's
+ * `LANGUAGE_MENU_MARKER`, on the left of the header bar.
  */
 function withLanguageSwitch(page: string, lang: Lang, path: string, query: string): string {
   const nav = renderLanguageSwitch({ lang, path, query });
+  const menu = renderLanguageMenu({ lang, path, query });
   return page
-    .replace(NEVER_WHO_CSS_MARKER, () => `${LANGUAGE_SWITCH_CSS}\n      ${NEVER_WHO_CSS_MARKER}`)
+    .replace(LANGUAGE_MENU_MARKER, () => menu)
+    .replace(
+      NEVER_WHO_CSS_MARKER,
+      () => `${LANGUAGE_SWITCH_CSS}${LANGUAGE_MENU_CSS}\n      ${NEVER_WHO_CSS_MARKER}`
+    )
     .replace(NEVER_WHO_MARKER, () => `${nav}\n      ${NEVER_WHO_MARKER}`);
 }
+
+/** Where a shell template's header takes the Language menu. */
+const LANGUAGE_MENU_MARKER = '<!--OCR_LANGUAGE_MENU-->';
 
 /**
  * The filters a switch carries to the same list in another language: only the
@@ -924,6 +937,8 @@ interface SponsorBasicRow {
   /** 0083: optional public title and location (sponsor-entered, public). */
   display_name?: string | null;
   address_line?: string | null;
+  /** 1 when the sponsor has a compact or header logo on file (sponsor_asset). */
+  has_logo?: number | null;
 }
 
 interface EventPageSocialData {
@@ -941,9 +956,24 @@ function renderSponsorItem(s: SponsorBasicRow): string {
   const url = s.website_url ?? '';
   // A website when there is one; otherwise a tap opens the sponsor's own card
   // (title, location, contact).
-  const link = url.startsWith('https://')
-    ? `<a href="${esc(url)}" class="ose-sponsor-link" rel="noopener noreferrer nofollow">${name}</a>`
-    : `<a href="${esc(sponsorCardPath(s.id))}" class="ose-sponsor-link" data-testid="sponsor-card-link">${name}</a>`;
+  // Each anchor stays one complete <a …> literal: the click-out invariant
+  // (sponsor-signal-never-who) reads these tags from source to prove rel=noreferrer.
+  const anchor = (inner: string, extra = ''): string =>
+    url.startsWith('https://')
+      ? `<a href="${esc(url)}" class="ose-sponsor-link" rel="noopener noreferrer nofollow"${extra}>${inner}</a>`
+      : `<a href="${esc(sponsorCardPath(s.id))}" class="ose-sponsor-link" data-testid="sponsor-card-link"${extra}>${inner}</a>`;
+  // Owner 2026-11-09: a sponsor with a logo shows as thumbnail art only — the
+  // compact logo (falling back to the header logo) through the same-origin,
+  // consent-gated proxy. The name stays the image's alt text, so it is still
+  // read out; the location stays on the sponsor's card. No logo → the name.
+  if (s.has_logo) {
+    const src = `/api/v2/sponsors/${encodeURIComponent(s.id)}/logo?slot=sidebar`;
+    return anchor(
+      `<img class="ose-sponsor-thumb" data-testid="sponsor-thumb" src="${esc(src)}" alt="${name}" loading="lazy" decoding="async">`,
+      ' data-thumb="1"'
+    );
+  }
+  const link = anchor(name);
   if (!s.address_line) return link;
   // 0083 / OSE-1435: the location the sponsor chose to show, as its own muted
   // line under the name. The list item is a flex row, so name and location sit
@@ -971,7 +1001,40 @@ const SPONSOR_LIST_CSS = `
     .ose-sponsor-item { display: flex; align-items: center; min-height: 44px; border-bottom: 1px solid var(--border); }
     .ose-sponsor-item:last-child { border-bottom: none; }
     .ose-sponsor-link { color: var(--accent); font-weight: 600; }
+    .ose-sponsor-link[data-thumb] { display: inline-flex; align-items: center; min-height: 44px; padding: 0.25rem 0; }
+    .ose-sponsor-thumb { display: block; height: 64px; width: auto; max-width: 160px; object-fit: contain; }
     .ose-sponsor-name { color: var(--text); font-weight: 600; }`;
+
+/**
+ * The bar at the top of an event page: the Language menu on the left, then the
+ * site links (owner 2026-11-10). It wraps on a narrow phone.
+ *
+ * A bar that holds only the menu (the page after the event) floats into the
+ * empty left margin on a wide screen, so it does not push the page down. The
+ * page column is 640 px wide; at 1024 px the margin beside it is 192 px, room
+ * for the button. Narrower screens keep the bar above the page.
+ */
+const EVENT_TOPBAR_CSS = `
+    .ose-topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: 0 0 0.75rem; }
+    @media (min-width: 1024px) { .ose-topbar-solo { position: absolute; top: 1rem; left: 1rem; margin: 0; } }`;
+
+/**
+ * The top bar of a public event page, the Language menu first. A draft preview
+ * has no public address, so it keeps the bare nav it always had. With no site
+ * links the bar is the menu alone (`ose-topbar-solo`).
+ */
+function renderEventTopbar(
+  nav: string,
+  lang: Lang,
+  path: string,
+  query: string | undefined,
+  nonce: string
+): string {
+  return `<div class="ose-topbar${nav ? '' : ' ose-topbar-solo'}" data-testid="event-topbar">
+    ${renderLanguageMenu({ lang, path, query, nonce })}
+    ${nav}
+  </div>`;
+}
 
 /**
  * Share + Add to calendar: one pair on a row. At phone width each takes half
@@ -989,7 +1052,9 @@ const EVENT_ACTIONS_CSS =
     .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
     .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }` +
   BACK_BUTTON_CSS +
-  LANGUAGE_SWITCH_CSS;
+  LANGUAGE_SWITCH_CSS +
+  LANGUAGE_MENU_CSS +
+  EVENT_TOPBAR_CSS;
 
 /**
  * OSE-1518: the plain choices. Register (or check-in while the event is on)
@@ -1305,7 +1370,17 @@ ${SPONSOR_LIST_CSS}
 </head>
 <body>
   <a href="#main" class="ose-skip">${msg(lang, 'page.skip')}</a>
-  ${renderEventNav(row.id, 'event', { live: (row.status || '').toLowerCase() === 'active', allEventsTestId: 'event-nav-events', lang })}
+  ${(() => {
+    const nav = renderEventNav(row.id, 'event', {
+      live: (row.status || '').toLowerCase() === 'active',
+      allEventsTestId: 'event-nav-events',
+      lang,
+      inBar: !preview,
+    });
+    return preview
+      ? nav
+      : renderEventTopbar(nav, lang, eventPagePath(row.id, row.slug), opts?.pageQuery, nonce);
+  })()}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
     <header data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">${title}</h1>
@@ -1508,7 +1583,18 @@ ${SPONSOR_LIST_CSS}
 </head>
 <body>
   <a href="#main" class="ose-skip">${msg(lang, 'page.skip')}</a>
-  ${renderEventNav(row.id, 'event', { live: (row.status || '').toLowerCase() === 'active', allEventsTestId: 'event-nav-events-live', lang })}
+  ${renderEventTopbar(
+    renderEventNav(row.id, 'event', {
+      live: (row.status || '').toLowerCase() === 'active',
+      allEventsTestId: 'event-nav-events-live',
+      lang,
+      inBar: true,
+    }),
+    lang,
+    eventPagePath(row.id, row.slug),
+    opts?.pageQuery,
+    nonce
+  )}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
     <header data-testid="event-header-live">
       <span class="ose-live-badge" data-testid="event-live-badge" aria-label="${msg(lang, 'live.badgeLabel')}">
@@ -1795,6 +1881,7 @@ ${SPONSOR_LIST_CSS}
   </style>
 </head>
 <body>
+  ${renderEventTopbar('', lang, eventPagePath(row.id, row.slug), opts?.pageQuery, nonce)}
   <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
     <span class="ose-phase-chip" data-testid="event-phase-chip">${msg(lang, calledOff ? 'recap.chipCalledOff' : 'recap.chip')}</span>
     <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>
@@ -1961,13 +2048,21 @@ async function fetchEventPageSocialData(
             // OSE-799 A2: reconstruct the public sponsor list from the split model —
             // active placements on this event, joined to their business identity.
             `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url,
-                    sb.display_name AS display_name, sb.address_line AS address_line
+                    sb.display_name AS display_name, sb.address_line AS address_line,
+                    -- The same pick as the logo proxy's ?slot=sidebar (compact,
+                    -- else header), so the page asks only for art it will get.
+                    COALESCE((SELECT a.url FROM sponsor_asset a
+                               WHERE a.sponsor_business_id = sb.id AND a.format = 'logo_compact'),
+                             (SELECT a.url FROM sponsor_asset a
+                               WHERE a.sponsor_business_id = sb.id AND a.format = 'logo'),
+                             '') <> '' AS has_logo
                FROM sponsor_placement sp
                JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
               WHERE sp.event_id = ? AND sp.is_active = 1
                 AND sb.is_active = 1
                 AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
                 AND sp.sponsor_accepted = 1
+                AND ${PLACEMENT_EVENT_USES_SPONSORS_SQL}
               ORDER BY sb.id ASC`
           )
             .bind(eventId)

@@ -1,8 +1,8 @@
-# Production migration plan: main 77 to 106, forms 14 to 18
+# Production migration plan: main 77 to 107, forms 14 to 18
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0106, forms 0015–0018.
+Covers: main 0078–0107, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 106              | 29       |
+| Main (`ocr-db-production`)        | 77               | 107              | 30       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -88,7 +88,7 @@ a line in this document.
   old Worker keeps working. Nobody has tested the old production build against the new
   tables, because nobody knows which commit that build is.
 
-## Main database, 0078 to 0106
+## Main database, 0078 to 0107
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -123,6 +123,7 @@ a line in this document.
 | `0104_event_spine_keys.sql`                               | Adds `events.venue_canonical_id` and `events.event_correlation_id`, each with an index. Writes no row (a nightly job fills them). | No   |
 | `0105_sponsor_header_block.sql`                           | Adds `sponsor_business.header_image_url` and `header_text`, the sponsor's optional header block. Old sponsors keep none.          | No   |
 | `0106_event_place_kind.sql`                               | Adds `events.place_kind` (business or address), how the zoomed map marks its place. Writes no row (the nightly job fills it).     | No   |
+| `0107_events_use_sponsors_backfill.sql`                   | Switches sponsors on (`useSponsors` in `events.settings_json`) for events whose organizer already chose a sponsor. No new column. | Yes  |
 
 ## Forms database, 0015 to 0018
 
@@ -135,7 +136,7 @@ a line in this document.
 
 ## The migrations that write or remove rows
 
-Twelve files. Each is listed with what it changes, why it is safe on production as it is
+Thirteen files. Each is listed with what it changes, why it is safe on production as it is
 today, and what would be different if production held data.
 
 ### `0081_sponsor_tier_and_compact_logo.sql`
@@ -237,6 +238,26 @@ today, and what would be different if production held data.
   Nothing to copy.
 - **If it did copy:** every row survives; only the label of the render value changes.
 
+### `0107_events_use_sponsors_backfill.sql`
+
+- **`UPDATE events`**: adds one key, `useSponsors: true`, to `settings_json` on each
+  event that already has a sponsor its organizer chose: a placement that is on, that the
+  organizer accepted (silence counts only for a placement the organizer made), with an
+  active sponsor of the event's own brand. It reads `sponsor_placement` and
+  `sponsor_business` and writes neither. Every other key in `settings_json` is kept.
+- **Why:** from this release a sponsor shows only on an event that chose to have
+  sponsors, and an event with no `useSponsors` key reads as off (owner, 2026-11-09,
+  OSE-1900). Without this step every sponsor already showing would disappear at deploy.
+- **Safe because** production has no events, so there is nothing to update (0 rows).
+- **If it did update:** an event that already holds the key, on or off, is left alone,
+  so a second run changes nothing and an organizer's off is never undone. An event with
+  no such sponsor stays off, like a new event.
+- **Between the migration and the new Worker:** the old Worker does not read the key.
+  A sponsor an organizer adds in that window, to an event that had none, is not switched
+  on by this step: the organizer turns sponsors on in the event's admin.
+- **Check:** `SELECT COUNT(*) FROM events WHERE json_extract(settings_json, '$.useSponsors') = 1;`
+  is the number of events with a sponsor the organizer chose (0 on production today).
+
 ### `0097_event_type_watch_party.sql`
 
 - **`INSERT INTO event_type_registry`**: adds one row, `SOC-WATCHPARTY-001` "Watch
@@ -299,7 +320,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0106_event_place_kind.sql` and `106`;
+2. **The level.** Expected: `0107_events_use_sponsors_backfill.sql` and `107`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash

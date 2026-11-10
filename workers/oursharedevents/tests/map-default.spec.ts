@@ -379,7 +379,11 @@ describe('a sponsor asking never changes the map; the organizer approving does',
   async function seedRequestable(opts: { marker: boolean; published: number }) {
     const eventId = uid('req-ev');
     const sponsorId = uid('req-sp');
-    const settings = opts.marker ? '{"mapDefault":true}' : '{}';
+    // OSE-1900: a sponsor can ask only an event that chose to have sponsors, so
+    // the event has. What is under test here is the map and its marker.
+    const settings = opts.marker
+      ? '{"mapDefault":true,"useSponsors":true}'
+      : '{"useSponsors":true}';
     const future = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
     await E.DB.batch([
       E.DB.prepare(
@@ -420,7 +424,7 @@ describe('a sponsor asking never changes the map; the organizer approving does',
     await E.DB.batch([
       E.DB.prepare(
         `INSERT INTO events (id, brand_id, title, slug, status, start_date, is_published, settings_json)
-         VALUES (?, ?, 'Off', ?, 'active', date('now','+10 day'), 0, '{"mapDefault":true}')`
+         VALUES (?, ?, 'Off', ?, 'active', date('now','+10 day'), 0, '{"mapDefault":true,"useSponsors":true}')`
       ).bind(eventId, BRAND, eventId),
       E.DB.prepare(
         `INSERT INTO sponsor_business (id, brand_id, name, tier) VALUES (?, ?, 'Asker', 'primary')`

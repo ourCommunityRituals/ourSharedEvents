@@ -75,3 +75,16 @@ INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, tier, source, 
   ('spl_pcard_nologo',   'sb_pcard_nologo',   'pcard-live-evt',  'gold', 'organizer', 1, 1, 1),
   ('spl_pcard_deadlogo', 'sb_pcard_deadlogo', 'pcard-live-evt',  'gold', 'organizer', 1, 1, 1),
   ('spl_pcard_draft',    'sb_pcard_draft',    'pcard-draft-evt', 'gold', 'organizer', 1, 1, 1);
+
+-- OSE-1900: a sponsor shows only on an event that chose to have sponsors (the
+-- event switch `useSponsors` in settings_json, where absent means off). Both
+-- fixture events opt in, so the draft sponsor's card still answers 404 because
+-- its event is a draft, not because of the switch.
+-- An UPDATE, not a column on the insert: the event insert never overwrites
+-- settings_json on a row that already exists, and this must hold on every pass.
+-- Every other key in settings_json is kept.
+UPDATE events
+   SET settings_json = json_set(
+         CASE WHEN json_valid(settings_json) THEN settings_json ELSE '{}' END,
+         '$.useSponsors', json('true'))
+ WHERE id IN ('pcard-live-evt', 'pcard-draft-evt');

@@ -38,9 +38,11 @@ import { enrichWithPhase } from '../lib/event-enrich.js';
 import {
   clearMapDefaultSql,
   mapStillDefaultSql,
+  useSponsorsSql,
   validateSettingsPatch,
   withMapDefaultMarker,
 } from '../lib/event-settings';
+import { logAdminAction } from '../lib/audit-log';
 import { toPublicEvent } from '../lib/public-event-projection.js';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { createShortlink } from '../lib/shortlinks';
@@ -60,7 +62,11 @@ import {
   suppliedSpineKeyField,
   touchesSpineKeyInputs,
 } from '../lib/spine-keys-store';
-import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
+import {
+  getDataProvider,
+  invalidateSponsorsCache,
+  type DataProviderEnv,
+} from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
 import {
   extractAdminActor,
@@ -396,7 +402,10 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       ' e.is_published, e.created_by, e.listed_from, e.data_class,' +
       // OSE-1560 — is the map setting still the default (the organizer has not
       // chosen)? A flag, not the raw settings blob.
-      ` CASE WHEN ${mapStillDefaultSql('e')} THEN 1 ELSE 0 END AS map_default`;
+      ` CASE WHEN ${mapStillDefaultSql('e')} THEN 1 ELSE 0 END AS map_default,` +
+      // OSE-1900 — has the event opted in to sponsors (absent means off)? A
+      // flag for the admin's switch, not the raw settings blob.
+      ` CASE WHEN ${useSponsorsSql('e')} THEN 1 ELSE 0 END AS use_sponsors`;
 
     // WHERE is composed from server-derived scope, the allowlisted lifecycle
     // filters, and the opaque cursor only — never a caller-chosen brand.
@@ -528,6 +537,37 @@ function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 100);
+}
+
+/**
+ * OSE-1900: record one write of the sponsors switch. It is a consent decision,
+ * so each write gets its own audit row saying which way it went (the router's
+ * CREATE_EVENT or UPDATE_EVENT row says only that the event changed). Call it
+ * once the write has landed and before any later step that can fail, so the
+ * log neither claims a change that did not happen nor misses one that did.
+ *
+ * It also drops the event's cached sponsor list, as every sponsor write does.
+ * No public reader serves that list from the cache today (each asks for a live
+ * read), so the drop is what keeps the rule true if one ever does: off hides
+ * every placement on the next read, not when a cache entry runs out.
+ */
+async function recordSponsorsSwitch(
+  request: Request,
+  env: EventsEnv,
+  eventId: string,
+  on: boolean,
+  rid: string
+): Promise<void> {
+  await invalidateSponsorsCache(eventId);
+  await logAdminAction(env as { DB: D1Database }, {
+    action: 'EVENT_SPONSORS_SWITCH',
+    actor: extractAdminActor(request, env),
+    resource_type: 'event',
+    resource_id: eventId,
+    request_id: rid,
+    outcome: 'success',
+    details: { use_sponsors: on },
+  });
 }
 
 /**
@@ -814,10 +854,13 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // OSE-869 — per-event section switches (lib/event-settings.ts). Optional; a
   // body without `settings` stores '{}' (every section on). Strict on write.
   let settingsJson = '{}';
+  // OSE-1900: set when the create names the sponsors switch (true or false).
+  let useSponsorsAtCreate: boolean | undefined;
   if ('settings' in body && body.settings !== undefined) {
     const v = validateSettingsPatch(body.settings);
     if (!v.ok) return errorResponse('INVALID_SETTINGS', v.error, 400, rid);
     settingsJson = JSON.stringify(v.value);
+    useSponsorsAtCreate = v.value.useSponsors;
   }
 
   // OSE-489: capture-time H3 tagging — computation happens here (admin create),
@@ -927,6 +970,13 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       );
       return errorResponse('DB_ERROR', 'Failed to create event', 503, rid);
     }
+  }
+
+  // OSE-1900: a create that names the sponsors switch is a write of it, so it
+  // gets the same audit row as a later change. The row is in, so it is recorded
+  // before the steps below, none of which can undo the create.
+  if (useSponsorsAtCreate !== undefined) {
+    await recordSponsorsSwitch(request, env, id, useSponsorsAtCreate, rid);
   }
 
   // OSE-240: generate a shortlink for every newly-created event. The
@@ -1181,10 +1231,13 @@ export async function handleUpdateEvent(
   // OSE-869 — per-event section switches. A partial patch: keys the body does
   // not name keep their stored value. Strict on write (400 INVALID_SETTINGS).
   let settingsPatchJson: string | null = null;
+  // OSE-1900 — set when this PUT names the sponsors switch (true or false).
+  let useSponsorsWrite: boolean | undefined;
   if ('settings' in body) {
     const v = validateSettingsPatch(body.settings);
     if (!v.ok) return errorResponse('INVALID_SETTINGS', v.error, 400, rid);
     settingsPatchJson = JSON.stringify(v.value);
+    useSponsorsWrite = v.value.useSponsors;
   }
 
   // Set when this PUT turns listing on (see the grace window below).
@@ -1594,6 +1647,14 @@ export async function handleUpdateEvent(
       return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
     }
 
+    // OSE-1900: the UPDATE landed, so the switch has changed. Its audit row is
+    // written here, before the steps below, so a later failure (the cell
+    // recompute, the place lookup) cannot leave a changed switch with no row.
+    // A refused write (400, 404, 409) returned above and wrote nothing.
+    if (useSponsorsWrite !== undefined) {
+      await recordSponsorsSwitch(request, env, eventId, useSponsorsWrite, rid);
+    }
+
     // OSE-489: if lat or lon changed, re-fetch merged coords and recompute H3.
     // Two-step avoids a read-modify-write race on partial coord updates.
     if (geoUpdated) {
@@ -1647,6 +1708,7 @@ export async function handleUpdateEvent(
       ok: true,
       status: 200,
       id: eventId,
+      ...(useSponsorsWrite !== undefined ? { sponsors: { on: useSponsorsWrite } } : {}),
       ...(place !== undefined ? { place } : {}),
       // A status write says the status it moved FROM (the one the guarded
       // UPDATE matched), so the admin's Undo returns there even when its own

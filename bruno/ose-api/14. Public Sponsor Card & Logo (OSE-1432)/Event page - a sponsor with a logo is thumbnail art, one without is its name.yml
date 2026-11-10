@@ -1,0 +1,60 @@
+info:
+  name: Event page | a sponsor with a logo is thumbnail art, one without is its name
+  type: http
+  seq: 14
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/pcard-live-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Owner 2026-11-09: on the event page, between the header and "What", each sponsor
+        // with a logo shows as thumbnail art only: the compact logo (else the header logo)
+        // through the same-origin logo proxy, with the name as the image's alt text. A
+        // sponsor with no logo keeps its name as text. Fixture:
+        // bruno/fixtures/sponsor-public-card-seed.sql (sb_pcard_onshow has a header logo,
+        // sb_pcard_nologo has none, sb_pcard_deadlogo has one that cannot load).
+        // pcard-live-evt is dated 2026-05-01, so its page is the post-event one and the
+        // sponsors sit in post-sponsor-thanks. All three phases share one sponsor list
+        // renderer, so the check reads whichever sponsor section the phase renders.
+        const body = String(res.getBody() || '');
+        const ids = ['pre-sponsor-strip', 'live-sponsor-strip', 'post-sponsor-thanks'];
+        let start = -1;
+        for (const id of ids) {
+          const at = body.indexOf('data-testid="' + id + '"');
+          if (at > -1) { start = at; break; }
+        }
+        const strip = start < 0 ? '' : body.slice(start, body.indexOf('</section>', start));
+        test('200 and the sponsor section renders', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(start).to.be.above(-1);
+        });
+        test('the sponsor with a logo is a thumbnail through the proxy', function () {
+          expect(strip).to.include('src="/api/v2/sponsors/sb_pcard_onshow/logo?slot=sidebar"');
+        });
+        test('its name is the alt text, not visible text', function () {
+          expect(strip).to.include('alt="Public Card On Show"');
+          expect(strip).to.not.include('>Public Card On Show<');
+        });
+        test('the sponsor with no logo shows its name as text', function () {
+          expect(strip).to.include('>Public Card NoLogo</a>');
+          expect(strip).to.not.include('/api/v2/sponsors/sb_pcard_nologo/logo');
+        });
+        test('a stored logo URL never reaches the page', function () {
+          expect(body).to.not.include('avatars.githubusercontent.com');
+          expect(body).to.not.include('logo.invalid');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

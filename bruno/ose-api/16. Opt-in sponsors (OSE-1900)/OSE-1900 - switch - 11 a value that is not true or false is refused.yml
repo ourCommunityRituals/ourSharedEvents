@@ -1,0 +1,35 @@
+info:
+  name: OSE-1900 | fat finger | switch | a value that is not true or false is refused (400)
+  type: http
+  seq: 30
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/optin-toggle-evt"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"settings":{"useSponsors":"yes"}}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-1900 fat finger: 400 INVALID_SETTINGS', function () {
+          expect(res.getStatus()).to.eql(400);
+          expect(res.getBody().code).to.eql('INVALID_SETTINGS');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

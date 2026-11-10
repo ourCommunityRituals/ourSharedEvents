@@ -77,6 +77,7 @@ seed bruno/fixtures/covenant-event-geo.sql
 seed bruno/fixtures/covenant-sponsors-reset.sql
 seed bruno/fixtures/covenant-sponsors-seed.sql
 seed bruno/fixtures/sponsor-public-card-seed.sql
+seed bruno/fixtures/opt-in-sponsors-seed.sql
 seed bruno/fixtures/core-values-draft-seed.sql
 seed bruno/fixtures/report-plan-cap-seed.sql
 seed bruno/fixtures/ci-brand-seed.sql

@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0106; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0107; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,21 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0107: switches sponsors on (`useSponsors: true` in events.settings_json) for
+-- events whose organizer had already chosen a sponsor (OSE-1900). Data only: no
+-- table, column, index or trigger. THE ROLLBACK IS: revert the Worker and LEAVE
+-- THE KEY. The older Worker does not read it and its settings reader drops keys
+-- it does not know, so sponsors show as they did before the gate existed.
+--
+-- Surgical reverse, only if the key itself must go. It removes the switch from
+-- EVERY event, including the ones an organizer turned on or off by hand after
+-- the deploy, and those choices cannot be told apart from the backfill
+-- afterwards. If the newer Worker is deployed again, run migration 0107's
+-- UPDATE again by hand first, or every sponsor is hidden until its organizer
+-- turns sponsors on:
+UPDATE events SET settings_json = json_remove(settings_json, '$.useSponsors')
+ WHERE json_valid(settings_json) AND json_type(settings_json, '$.useSponsors') IS NOT NULL;
+
 -- 0106: events.place_kind (business or address), how the zoomed map marks an
 -- event's place (epic OSE-1880). Additive, nullable; a nightly job fills it.
 -- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMN. The older Worker has

@@ -293,9 +293,11 @@ const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString(
 
 async function seedEvent(id: string, title: string, startDate: string): Promise<void> {
   await E.DB.prepare(
+    // OSE-1900: every event here chose to have sponsors, so each case below still
+    // turns on the one thing it names (draft, unlisted, not accepted).
     `INSERT OR REPLACE INTO events (id, brand_id, title, slug, status, is_published, start_date,
-            location, created_at, updated_at)
-     VALUES (?, 'root', ?, ?, 'active', 1, ?, 'The Venue', datetime('now'), datetime('now'))`
+            location, settings_json, created_at, updated_at)
+     VALUES (?, 'root', ?, ?, 'active', 1, ?, 'The Venue', '{"useSponsors":true}', datetime('now'), datetime('now'))`
   )
     .bind(id, title, id, startDate)
     .run();
