@@ -181,6 +181,8 @@ export const DOT_MERGE = 2 * DOT_HIT_R;
 export const OSM_COPYRIGHT_URL: Record<Lang, string> = {
   en: 'https://www.openstreetmap.org/copyright/en',
   es: 'https://www.openstreetmap.org/copyright/es',
+  pl: 'https://www.openstreetmap.org/copyright/pl',
+  ar: 'https://www.openstreetmap.org/copyright/ar',
 };
 
 /**

@@ -231,6 +231,8 @@ describe('street map | the credit, in the page language, wherever streets are dr
   const CREDIT: Record<Lang, string> = {
     en: '<p class="amap-credit" data-testid="amap-credit">Street map data © <a href="https://www.openstreetmap.org/copyright/en">OpenStreetMap</a> contributors, prepared by <a href="https://protomaps.com">Protomaps</a>.</p>',
     es: '<p class="amap-credit" data-testid="amap-credit">Datos del mapa de calles © colaboradores de <a href="https://www.openstreetmap.org/copyright/es">OpenStreetMap</a>, preparados por <a href="https://protomaps.com">Protomaps</a>.</p>',
+    pl: '<p class="amap-credit" data-testid="amap-credit">Dane mapy ulic © współtwórcy <a href="https://www.openstreetmap.org/copyright/pl">OpenStreetMap</a>, przygotowane przez <a href="https://protomaps.com">Protomaps</a>.</p>',
+    ar: '<p class="amap-credit" data-testid="amap-credit">بيانات خريطة الشوارع © المساهمون في <a href="https://www.openstreetmap.org/copyright/ar">OpenStreetMap</a>، من إعداد <a href="https://protomaps.com">Protomaps</a>.</p>',
   };
 
   it('every language has its own OpenStreetMap page, on openstreetmap.org over https', () => {
