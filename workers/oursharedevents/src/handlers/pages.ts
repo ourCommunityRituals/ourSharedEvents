@@ -924,6 +924,8 @@ interface SponsorBasicRow {
   /** 0083: optional public title and location (sponsor-entered, public). */
   display_name?: string | null;
   address_line?: string | null;
+  /** 1 when the sponsor has a compact or header logo on file (sponsor_asset). */
+  has_logo?: number | null;
 }
 
 interface EventPageSocialData {
@@ -941,9 +943,18 @@ function renderSponsorItem(s: SponsorBasicRow): string {
   const url = s.website_url ?? '';
   // A website when there is one; otherwise a tap opens the sponsor's own card
   // (title, location, contact).
-  const link = url.startsWith('https://')
-    ? `<a href="${esc(url)}" class="ose-sponsor-link" rel="noopener noreferrer nofollow">${name}</a>`
-    : `<a href="${esc(sponsorCardPath(s.id))}" class="ose-sponsor-link" data-testid="sponsor-card-link">${name}</a>`;
+  const open = url.startsWith('https://')
+    ? `<a href="${esc(url)}" class="ose-sponsor-link" rel="noopener noreferrer nofollow"`
+    : `<a href="${esc(sponsorCardPath(s.id))}" class="ose-sponsor-link" data-testid="sponsor-card-link"`;
+  // Owner 2026-11-09: a sponsor with a logo shows as thumbnail art only — the
+  // compact logo (falling back to the header logo) through the same-origin,
+  // consent-gated proxy. The name stays the image's alt text, so it is still
+  // read out; the location stays on the sponsor's card. No logo → the name.
+  if (s.has_logo) {
+    const src = `/api/v2/sponsors/${encodeURIComponent(s.id)}/logo?slot=sidebar`;
+    return `${open} data-thumb="1"><img class="ose-sponsor-thumb" data-testid="sponsor-thumb" src="${esc(src)}" alt="${name}" loading="lazy" decoding="async"></a>`;
+  }
+  const link = `${open}>${name}</a>`;
   if (!s.address_line) return link;
   // 0083 / OSE-1435: the location the sponsor chose to show, as its own muted
   // line under the name. The list item is a flex row, so name and location sit
@@ -971,6 +982,8 @@ const SPONSOR_LIST_CSS = `
     .ose-sponsor-item { display: flex; align-items: center; min-height: 44px; border-bottom: 1px solid var(--border); }
     .ose-sponsor-item:last-child { border-bottom: none; }
     .ose-sponsor-link { color: var(--accent); font-weight: 600; }
+    .ose-sponsor-link[data-thumb] { display: inline-flex; align-items: center; min-height: 44px; padding: 0.25rem 0; }
+    .ose-sponsor-thumb { display: block; height: 64px; width: auto; max-width: 160px; object-fit: contain; }
     .ose-sponsor-name { color: var(--text); font-weight: 600; }`;
 
 /**
@@ -1961,7 +1974,14 @@ async function fetchEventPageSocialData(
             // OSE-799 A2: reconstruct the public sponsor list from the split model —
             // active placements on this event, joined to their business identity.
             `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url,
-                    sb.display_name AS display_name, sb.address_line AS address_line
+                    sb.display_name AS display_name, sb.address_line AS address_line,
+                    -- The same pick as the logo proxy's ?slot=sidebar (compact,
+                    -- else header), so the page asks only for art it will get.
+                    COALESCE((SELECT a.url FROM sponsor_asset a
+                               WHERE a.sponsor_business_id = sb.id AND a.format = 'logo_compact'),
+                             (SELECT a.url FROM sponsor_asset a
+                               WHERE a.sponsor_business_id = sb.id AND a.format = 'logo'),
+                             '') <> '' AS has_logo
                FROM sponsor_placement sp
                JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
               WHERE sp.event_id = ? AND sp.is_active = 1
