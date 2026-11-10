@@ -33,9 +33,9 @@ on:
   # needs the run is decided inside each job, by scripts/ci/mutation-paths.mjs:
   # the list that used to be written here twice, with its reasons, moved there.
   # A change that touches nothing on the list passes in seconds without running
-  # Stryker, and says so in the job summary. The run itself is a few minutes
-  # (the guard files plus, since OSE-1824, the landing's category filter, all on
-  # the node project). If you add a mutate target in stryker.conf.mjs, add its
+  # Stryker, and says so in the job summary. The run itself is about 25 minutes
+  # since the language layer joined (see the job's timeout-minutes); all on the
+  # node project. If you add a mutate target in stryker.conf.mjs, add its
   # source and specs to that list; tests/unit/ci/mutation-paths.test.js fails
   # on a mutated or floored file the list lacks.
   pull_request:
@@ -58,7 +58,13 @@ concurrency:
 jobs:
   mutation:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # 45, not 20 (2026-11-10, Polish and Arabic, OSE-1970). The language layer
+    # (i18n/languages.ts, the CATALOG range) is imported by most of the Worker,
+    # so the related-tests dry run grew from 1,460 to 3,711 tests, and each
+    # static mutant (a module-level constant such as the DIRECTION map) reruns
+    # all of them. The run went from about 9 minutes to past 20; it was
+    # cancelled at 2,788 of 2,829 mutants. A longer limit, not fewer mutants.
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: workers/oursharedevents
