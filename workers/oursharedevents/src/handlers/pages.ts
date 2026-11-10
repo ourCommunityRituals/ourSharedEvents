@@ -943,18 +943,24 @@ function renderSponsorItem(s: SponsorBasicRow): string {
   const url = s.website_url ?? '';
   // A website when there is one; otherwise a tap opens the sponsor's own card
   // (title, location, contact).
-  const open = url.startsWith('https://')
-    ? `<a href="${esc(url)}" class="ose-sponsor-link" rel="noopener noreferrer nofollow"`
-    : `<a href="${esc(sponsorCardPath(s.id))}" class="ose-sponsor-link" data-testid="sponsor-card-link"`;
+  // Each anchor stays one complete <a …> literal: the click-out invariant
+  // (sponsor-signal-never-who) reads these tags from source to prove rel=noreferrer.
+  const anchor = (inner: string, extra = ''): string =>
+    url.startsWith('https://')
+      ? `<a href="${esc(url)}" class="ose-sponsor-link" rel="noopener noreferrer nofollow"${extra}>${inner}</a>`
+      : `<a href="${esc(sponsorCardPath(s.id))}" class="ose-sponsor-link" data-testid="sponsor-card-link"${extra}>${inner}</a>`;
   // Owner 2026-11-09: a sponsor with a logo shows as thumbnail art only — the
   // compact logo (falling back to the header logo) through the same-origin,
   // consent-gated proxy. The name stays the image's alt text, so it is still
   // read out; the location stays on the sponsor's card. No logo → the name.
   if (s.has_logo) {
     const src = `/api/v2/sponsors/${encodeURIComponent(s.id)}/logo?slot=sidebar`;
-    return `${open} data-thumb="1"><img class="ose-sponsor-thumb" data-testid="sponsor-thumb" src="${esc(src)}" alt="${name}" loading="lazy" decoding="async"></a>`;
+    return anchor(
+      `<img class="ose-sponsor-thumb" data-testid="sponsor-thumb" src="${esc(src)}" alt="${name}" loading="lazy" decoding="async">`,
+      ' data-thumb="1"'
+    );
   }
-  const link = `${open}>${name}</a>`;
+  const link = anchor(name);
   if (!s.address_line) return link;
   // 0083 / OSE-1435: the location the sponsor chose to show, as its own muted
   // line under the name. The list item is a flex row, so name and location sit
