@@ -439,6 +439,48 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
     }
   });
 
+  // F5 and F6 (owner D4, 2026-11-10): an open menu closes on a tap outside it and
+  // on Escape, under the real page CSP (the closing script carries the nonce; a
+  // refused script would leave the menu open and this test red).
+  test('an open menu closes on a tap outside it and on Escape, with no CSP refusal', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+    try {
+      const page = await context.newPage();
+      const refused: string[] = [];
+      page.on('console', (m) => {
+        if (/Content Security Policy|Refused to execute/i.test(m.text())) refused.push(m.text());
+      });
+      await page.route('**/cdn-cgi/challenge-platform/**', (route) => route.abort());
+      await page.goto(`${BASE_URL}/es/events/${eventId}/${slug}`, { waitUntil: 'load' });
+
+      const menu = page.locator('[data-testid="site-menu"]');
+      const isOpen = () => menu.evaluate((d) => (d as HTMLDetailsElement).open);
+
+      await page.locator('[data-testid="site-menu-button"]').click();
+      await page.locator('[data-testid="site-menu-language-button"]').click();
+      // F2: a tap on the current language leaves the menu open.
+      await page.locator('[data-testid="site-menu-language-es"]').click();
+      expect(await isOpen(), 'a tap on the current language keeps it open').toBe(true);
+      // F5: a tap outside closes it. The spot is inside <main> (the title), to
+      // the right of the open panel (it is at most 18rem wide), and not a link.
+      await page.locator('main').click({ position: { x: 330, y: 4 } });
+      expect(await isOpen(), 'a tap outside closes it').toBe(false);
+
+      // F6: Escape closes it and focus returns to the menu button.
+      await page.locator('[data-testid="site-menu-button"]').click();
+      expect(await isOpen()).toBe(true);
+      await page.keyboard.press('Escape');
+      expect(await isOpen(), 'Escape closes it').toBe(false);
+      await expect(page.locator('[data-testid="site-menu-button"]')).toBeFocused();
+
+      expect(refused, 'no script refused by the page CSP').toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
+
   // The longest Spanish strings these pages show (the doors, the chips, the
   // search placeholder, the summary) on a 320 px phone: nothing scrolls sideways,
   // inputs keep 16 px text and the controls keep a 44 px target.

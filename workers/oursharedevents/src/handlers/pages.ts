@@ -1020,10 +1020,11 @@ function renderEventTopbar(
   nav: string,
   lang: Lang,
   path: string,
-  query: string | undefined
+  query: string | undefined,
+  nonce: string
 ): string {
   return `<div class="ose-topbar" data-testid="event-topbar">
-    ${renderLanguageMenu({ lang, path, query })}
+    ${renderLanguageMenu({ lang, path, query, nonce })}
     ${nav}
   </div>`;
 }
@@ -1371,7 +1372,7 @@ ${SPONSOR_LIST_CSS}
     });
     return preview
       ? nav
-      : renderEventTopbar(nav, lang, eventPagePath(row.id, row.slug), opts?.pageQuery);
+      : renderEventTopbar(nav, lang, eventPagePath(row.id, row.slug), opts?.pageQuery, nonce);
   })()}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
     <header data-testid="event-header">
@@ -1584,7 +1585,8 @@ ${SPONSOR_LIST_CSS}
     }),
     lang,
     eventPagePath(row.id, row.slug),
-    opts?.pageQuery
+    opts?.pageQuery,
+    nonce
   )}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
     <header data-testid="event-header-live">
@@ -1872,7 +1874,7 @@ ${SPONSOR_LIST_CSS}
   </style>
 </head>
 <body>
-  ${renderEventTopbar('', lang, eventPagePath(row.id, row.slug), opts?.pageQuery)}
+  ${renderEventTopbar('', lang, eventPagePath(row.id, row.slug), opts?.pageQuery, nonce)}
   <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
     <span class="ose-phase-chip" data-testid="event-phase-chip">${msg(lang, calledOff ? 'recap.chipCalledOff' : 'recap.chip')}</span>
     <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>

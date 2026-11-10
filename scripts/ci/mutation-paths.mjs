@@ -91,6 +91,7 @@ export const MUTATION_PATHS = Object.freeze([
   'workers/oursharedevents/src/lib/i18n/language-menu.ts',
   'workers/oursharedevents/tests/language-menu.spec.ts',
   'workers/oursharedevents/tests/language-menu-third-language.spec.ts',
+  'workers/oursharedevents/tests/language-menu-close.spec.ts',
   'workers/oursharedevents/tests/language-layer-golden.spec.ts',
   WORKER_STRYKER_CONFIG,
   // OSE-1695: the CI security rules that keep secrets off branch pushes, their

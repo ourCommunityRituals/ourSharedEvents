@@ -297,6 +297,7 @@
         </div>
       </details>
     </div>
+    <script nonce="N">(function(){function o(){return document.querySelectorAll('.ose-langmenu details[open]');}document.addEventListener('click',function(e){var d=o();for(var i=0;i<d.length;i++){if(!d[i].contains(e.target))d[i].open=false;}});document.addEventListener('keydown',function(e){if(e.key!=='Escape')return;var d=o();if(!d.length)return;var s=d[0].querySelector('summary');for(var i=0;i<d.length;i++)d[i].open=false;if(s)s.focus();});})();</script>
         <a href="/" class="logo" data-testid="landing-logo" aria-label="OurSharedEvents home"
           >OurSharedEvents</a
         >

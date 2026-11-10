@@ -192,6 +192,7 @@
         </div>
       </details>
     </div>
+    <script nonce="N">(function(){function o(){return document.querySelectorAll('.ose-langmenu details[open]');}document.addEventListener('click',function(e){var d=o();for(var i=0;i<d.length;i++){if(!d[i].contains(e.target))d[i].open=false;}});document.addEventListener('keydown',function(e){if(e.key!=='Escape')return;var d=o();if(!d.length)return;var s=d[0].querySelector('summary');for(var i=0;i<d.length;i++)d[i].open=false;if(s)s.focus();});})();</script>
       <h1 data-testid="public-title"><a href="/" data-testid="public-home-link" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;min-height:44px">OurSharedEvents</a></h1>
     </header>
     <main id="main-content" data-testid="public-main" aria-label="Upcoming community events">

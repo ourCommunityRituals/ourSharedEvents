@@ -144,6 +144,7 @@
         </div>
       </details>
     </div>
+    <script nonce="goldennonce">(function(){function o(){return document.querySelectorAll('.ose-langmenu details[open]');}document.addEventListener('click',function(e){var d=o();for(var i=0;i<d.length;i++){if(!d[i].contains(e.target))d[i].open=false;}});document.addEventListener('keydown',function(e){if(e.key!=='Escape')return;var d=o();if(!d.length)return;var s=d[0].querySelector('summary');for(var i=0;i<d.length;i++)d[i].open=false;if(s)s.focus();});})();</script>
     <nav aria-label="Site" data-testid="event-nav" style="display:flex;flex-wrap:wrap;gap:0 1.25rem;margin:0"><a href="/events" data-testid="event-nav-events" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">&larr; All events</a><span aria-current="page" data-testid="event-nav-event" style="color:inherit;font-weight:700;display:inline-flex;align-items:center;min-height:44px">Event page</span><a href="/events/evt_golden/poster?kind=digital" data-testid="event-nav-poster" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">Poster</a></nav>
   </div>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">

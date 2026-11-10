@@ -11,8 +11,10 @@
  *
  * Picking a language that is not the current one follows a plain link to the
  * same page in that language, so the whole page loads again in it. The current
- * language is not a link. Like the footer switch it is plain markup: `<details>`
- * opens and closes it, with no script, no cookie and nothing stored.
+ * language is not a link. Opening it and switching are plain markup: `<details>`
+ * and links, no cookie and nothing stored. One small script only closes an open
+ * menu on a tap outside it or on Escape (owner D4, 2026-11-10, OSE-1934); with
+ * script off the menu still opens, switches and closes from its own button.
  *
  * The list comes from `LANGUAGES`, so a new language appears here with no
  * change to this file. Names come from `LANGUAGE_SWITCH_NAMES`, as in the
@@ -71,7 +73,26 @@ function languageList(opts: LanguageSwitchOptions, idPrefix: string): string {
   return `<ul class="ose-langmenu-list" aria-label="${label}">${items}</ul>`;
 }
 
-export function renderLanguageMenu(opts: LanguageSwitchOptions): string {
+export interface LanguageMenuOptions extends LanguageSwitchOptions {
+  /**
+   * The page's CSP nonce, for pages that write their own `<script nonce>` (the
+   * event pages). Left out, the script is a bare `<script>` and `html()` adds
+   * the response's nonce (`/events`, the landing).
+   */
+  nonce?: string;
+}
+
+/**
+ * Closes every open menu part on a click outside it, and all of them on Escape
+ * with focus back on the outermost button. It reads and sets `details.open` and
+ * focus only: no storage, no network, no HTML written.
+ */
+const LANGUAGE_MENU_SCRIPT =
+  "(function(){function o(){return document.querySelectorAll('.ose-langmenu details[open]');}" +
+  "document.addEventListener('click',function(e){var d=o();for(var i=0;i<d.length;i++){if(!d[i].contains(e.target))d[i].open=false;}});" +
+  "document.addEventListener('keydown',function(e){if(e.key!=='Escape')return;var d=o();if(!d.length)return;var s=d[0].querySelector('summary');for(var i=0;i<d.length;i++)d[i].open=false;if(s)s.focus();});})();";
+
+export function renderLanguageMenu(opts: LanguageMenuOptions): string {
   const label = esc(msg(opts.lang, 'language.label'));
   const menu = esc(msg(opts.lang, 'menu.label'));
   return `<div class="ose-langmenu" data-testid="language-menu">
@@ -88,5 +109,6 @@ export function renderLanguageMenu(opts: LanguageSwitchOptions): string {
           </details>
         </div>
       </details>
-    </div>`;
+    </div>
+    <script${opts.nonce === undefined ? '' : ` nonce="${esc(opts.nonce)}"`}>${LANGUAGE_MENU_SCRIPT}</script>`;
 }

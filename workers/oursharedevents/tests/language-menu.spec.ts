@@ -100,9 +100,14 @@ describe('renderLanguageMenu | phone', () => {
 });
 
 describe('renderLanguageMenu | safety', () => {
-  it('is plain markup: no script, no form, no cookie', () => {
+  it('opens and switches as plain markup: no form, button, handler attribute or cookie', () => {
+    // One script closes an open menu on an outside tap or Escape (owner D4,
+    // 2026-11-10; behavior in language-menu-close.spec.ts). Opening and
+    // switching never need it: <details> and plain links do both.
     const html = renderLanguageMenu({ lang: 'en', path: PATH });
-    expect(html).not.toMatch(/<script|<form|<button|onclick|cookie/i);
+    expect(html.match(/<script\b/g)?.length).toBe(1);
+    const markup = html.replace(/<script>[\s\S]*?<\/script>/, '');
+    expect(markup).not.toMatch(/<script|<form|<button|onclick|cookie/i);
   });
 
   it('carries the query it is given, escaped, onto every link', () => {
@@ -112,7 +117,9 @@ describe('renderLanguageMenu | safety', () => {
 
   it('escapes a path it is handed', () => {
     const html = renderLanguageMenu({ lang: 'en', path: '/events/"><script>x</script>' });
-    expect(html).not.toContain('<script>');
+    // The menu's own closing script is the only <script>; the hostile one is text.
+    expect(html).not.toContain('<script>x</script>');
+    expect(html).toContain('&quot;&gt;&lt;script&gt;x&lt;/script&gt;');
   });
 
   it('N4: escapes a hostile query, so no tag or attribute breaks out of the href', () => {
@@ -214,6 +221,8 @@ describe('the event pages carry the menu at the top, left', () => {
       expect(html).toContain('.ose-langmenu-mobile { display: block; }');
       expect(html).toMatch(/aria-current="true" lang="es" data-testid="language-menu-es"/);
       expect(html).toContain('href="/events/evt_menu/spring-fair"');
+      // F5/F6: the closing script carries this page's CSP nonce.
+      expect(html).toMatch(/data-testid="event-topbar"[\s\S]*?<script nonce="n">[\s\S]*?Escape/);
     });
   }
 
