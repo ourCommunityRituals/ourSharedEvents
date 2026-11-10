@@ -13,6 +13,7 @@
     "test:node": "vitest run --config vitest.node.config.mts",
     "test:workers": "vitest run --config vitest.workers.config.mts",
     "test:mutation": "stryker run",
+    "test:mutation:language": "stryker run stryker.language.conf.mjs",
     "test:partition": "node scripts/vitest-projects-partition.mjs",
     "test:schema": "vitest run tests/schema.spec.ts",
     "test:constraints": "vitest run tests/constraints.spec.ts",

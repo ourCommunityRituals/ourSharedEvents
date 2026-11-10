@@ -55,6 +55,7 @@ let decideMutationRun;
 let readChangedFiles;
 let uncoveredMutationInputs;
 let workerConfig;
+let languageConfig;
 let ciScriptsConfig;
 let FLOORS;
 
@@ -62,6 +63,8 @@ beforeAll(async () => {
   ({ MUTATION_PATHS, decideMutationRun, readChangedFiles, uncoveredMutationInputs } =
     await import('../../../scripts/ci/mutation-paths.mjs'));
   workerConfig = (await import('../../../workers/oursharedevents/stryker.conf.mjs')).default;
+  languageConfig = (await import('../../../workers/oursharedevents/stryker.language.conf.mjs'))
+    .default;
   ciScriptsConfig = (await import('../../../stryker.ci-scripts.conf.mjs')).default;
   ({ FLOORS } = await import('../../../scripts/ci/mutation-file-floor.mjs'));
 });
@@ -79,6 +82,9 @@ describe('a change the mutation run measures runs it', () => {
     ['a red-team spec', `${W}tests/red-team/auth-guard-mutation.spec.ts`],
     ['a spec helper', `${W}tests/helpers/list-landing-rows.ts`],
     ['the Worker Stryker config', `${W}stryker.conf.mjs`],
+    ['the language Stryker config', `${W}stryker.language.conf.mjs`],
+    ['the language pass Vitest project', `${W}vitest.language-mutation.config.mts`],
+    ['a language spec that kills mutants', `${W}tests/i18n-layer-mutants.spec.ts`],
     ['the Worker lockfile', `${W}package-lock.json`],
     ['a CI security rule', 'scripts/ci/branch-push-secret-exposure.mjs'],
     ['the test of a CI security rule', 'tests/unit/ci/no-secret-echo.test.js'],
@@ -359,8 +365,13 @@ describe('the list itself', () => {
 describe('every mutated file and every floor is on the list (proven against planted faults)', () => {
   const worker = (mutate) => ({ mutate, vitest: { configFile: 'vitest.node.config.mts' } });
   const ci = (mutate) => ({ mutate, vitest: { configFile: 'vitest.ci-scripts.config.mjs' } });
+  const language = (mutate) => ({
+    mutate,
+    vitest: { configFile: 'vitest.language-mutation.config.mts' },
+  });
   const good = () => ({
     workerConfig: worker(['src/lib/pii.ts']),
+    languageConfig: language(['src/lib/i18n/bidi.ts']),
     ciScriptsConfig: ci(['scripts/ci/secret-echo-exposure.mjs']),
     floors: { 'src/lib/pii.ts': 95 },
   });
@@ -429,17 +440,42 @@ describe('every mutated file and every floor is on the list (proven against plan
     );
   });
 
+  test('a new language-pass target with no path is caught', () => {
+    const c = good();
+    c.languageConfig = language(['src/lib/i18n/bidi.ts', 'src/lib/i18n/new-rule.ts']);
+    const f = uncoveredMutationInputs(c);
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatch(
+      /src\/lib\/i18n\/new-rule\.ts \(a mutate target in .*stryker\.language\.conf\.mjs\)/
+    );
+  });
+
+  test('leaving the language config out is caught, not skipped', () => {
+    const c = good();
+    delete c.languageConfig;
+    expect(uncoveredMutationInputs(c).join('\n')).toMatch(
+      /stryker\.language\.conf\.mjs has no mutate targets/
+    );
+  });
+
   test('an empty or missing mutate list is reported (a config that could not be read)', () => {
     const c = good();
     c.workerConfig = { vitest: { configFile: 'vitest.node.config.mts' } };
     expect(uncoveredMutationInputs(c).join('\n')).toMatch(/no mutate targets/);
   });
 
-  test('the real configs: stryker.conf.mjs, stryker.ci-scripts.conf.mjs and FLOORS', () => {
+  test('the real configs: stryker.conf.mjs, stryker.language.conf.mjs, stryker.ci-scripts.conf.mjs and FLOORS', () => {
     expect(workerConfig.mutate.length).toBeGreaterThan(0);
+    expect(languageConfig.mutate.length).toBeGreaterThan(0);
     expect(ciScriptsConfig.mutate.length).toBeGreaterThan(0);
     expect(Object.keys(FLOORS).length).toBeGreaterThan(0);
-    expect(uncoveredMutationInputs({ workerConfig, ciScriptsConfig, floors: FLOORS })).toEqual([]);
+    expect(
+      uncoveredMutationInputs({ workerConfig, languageConfig, ciScriptsConfig, floors: FLOORS })
+    ).toEqual([]);
+    // A file belongs to one pass (mutation-file-floor.mjs fails a path in two reports).
+    const files = (cfg) => cfg.mutate.map((e) => String(e).replace(/:\d+-\d+$/, ''));
+    const shared = files(workerConfig).filter((f) => files(languageConfig).includes(f));
+    expect(shared).toEqual([]);
   });
 });
 
@@ -536,7 +572,12 @@ describe('the mutation workflow reports on every pull request', () => {
   test('both jobs have real work behind the decision', () => {
     const wf = load();
     const runs = (key) => wf.jobs[key].steps.map((s) => String(s.run || '')).join('\n');
-    expect(runs('mutation')).toMatch(/npm run test:mutation/);
+    expect(runs('mutation')).toMatch(/npm run test:mutation$/m);
+    expect(runs('mutation')).toMatch(/npm run test:mutation:language$/m);
+    // The floor reads both reports, so a language file missing from its pass fails.
+    expect(runs('mutation')).toMatch(
+      /mutation-file-floor\.mjs reports\/mutation\/mutation\.json reports\/mutation-language\/mutation\.json/
+    );
     expect(runs('mutation')).toMatch(/mutation-file-floor\.mjs/);
     expect(runs('mutation-ci-scripts')).toMatch(/stryker\.js run stryker\.ci-scripts\.conf\.mjs/);
   });
