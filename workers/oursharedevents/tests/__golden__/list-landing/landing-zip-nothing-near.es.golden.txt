@@ -51,6 +51,11 @@
         padding: 0.75rem 1.25rem;
         border-bottom: 1px solid var(--line);
       }
+      .header-start {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
       .logo,
       nav a {
         display: inline-flex;
@@ -231,6 +236,30 @@
     .ose-lang { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin: 1.5rem 0 0; }
     .ose-lang a { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0.5rem 1rem; color: var(--accent); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: underline; }
     .ose-lang a:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .ose-langmenu { position: relative; display: inline-flex; align-items: center; flex: 0 0 auto; }
+    .ose-langmenu details { position: relative; }
+    .ose-langmenu summary { list-style: none; cursor: pointer; }
+    .ose-langmenu summary::-webkit-details-marker { display: none; }
+    .ose-langmenu-button { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; box-sizing: border-box; min-height: 48px; min-width: 48px; padding: 0.5rem 0.875rem; border: 1.5px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
+    .ose-langmenu-button:hover, .ose-langmenu-row:hover, a.ose-langmenu-item:hover { outline: 2px solid var(--border-strong); outline-offset: -2px; }
+    .ose-langmenu summary:focus-visible, .ose-langmenu-item:focus-visible { outline: 3px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }
+    .ose-langmenu-caret { font-size: 0.875rem; }
+    .ose-langmenu details[open] > summary .ose-langmenu-caret { transform: rotate(180deg); }
+    .ose-langmenu-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 0; padding: 0.375rem; list-style: none; }
+    .ose-langmenu-desktop > .ose-langmenu-list, .ose-langmenu-panel { position: absolute; top: calc(100% + 0.5rem); left: 0; z-index: 50; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
+    .ose-langmenu-desktop > .ose-langmenu-list { min-width: 12rem; }
+    .ose-langmenu-panel { width: min(18rem, calc(100vw - 2rem)); padding: 0.375rem; }
+    .ose-langmenu-item { display: flex; align-items: center; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
+    .ose-langmenu-current { background: var(--accent); color: var(--on-accent); }
+    .ose-langmenu-check { display: inline-block; width: 1.25em; }
+    .ose-langmenu-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
+    .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(90deg); }
+    .ose-langmenu-sub > .ose-langmenu-list { padding: 0.25rem 0 0 0.75rem; }
+    .ose-langmenu-mobile { display: none; }
+    @media (max-width: 640px) {
+      .ose-langmenu-desktop { display: none; }
+      .ose-langmenu-mobile { display: block; }
+    }
       
     .ose-never-who { margin: 2rem 0 0; border-top: 1px solid var(--border); font-size: 0.95rem; color: var(--text-muted); }
     .ose-never-who-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; min-height: 44px; padding: 0.5rem 0; cursor: pointer; list-style: none; }
@@ -253,9 +282,26 @@
   <body>
     <a href="#main-content" class="skip-link" data-testid="landing-skip-link">Ir al contenido</a>
     <header data-testid="landing-header">
-      <a href="/es/" class="logo" data-testid="landing-logo" aria-label="Inicio de OurSharedEvents"
-        >OurSharedEvents</a
-      >
+      <div class="header-start">
+        <div class="ose-langmenu" data-testid="language-menu">
+      <details class="ose-langmenu-desktop" data-testid="language-menu-desktop">
+        <summary class="ose-langmenu-button" data-testid="language-menu-button"><span>Idioma</span><span class="ose-langmenu-caret" aria-hidden="true">▾</span></summary>
+        <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="language-menu-en" href="/?zip=60453"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="language-menu-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li></ul>
+      </details>
+      <details class="ose-langmenu-mobile" data-testid="site-menu">
+        <summary class="ose-langmenu-button" aria-label="Menú" data-testid="site-menu-button"><span aria-hidden="true">☰</span></summary>
+        <div class="ose-langmenu-panel" data-testid="site-menu-panel">
+          <details class="ose-langmenu-sub" data-testid="site-menu-language">
+            <summary class="ose-langmenu-row" data-testid="site-menu-language-button"><span>Idioma</span><span class="ose-langmenu-caret" aria-hidden="true">›</span></summary>
+            <ul class="ose-langmenu-list" aria-label="Idioma"><li><a class="ose-langmenu-item" lang="es" hreflang="en" data-testid="site-menu-language-en" href="/?zip=60453"><span class="ose-langmenu-check" aria-hidden="true"></span>Inglés</a></li><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="es" data-testid="site-menu-language-es"><span class="ose-langmenu-check" aria-hidden="true">✓</span>Español</span></li></ul>
+          </details>
+        </div>
+      </details>
+    </div>
+        <a href="/es/" class="logo" data-testid="landing-logo" aria-label="Inicio de OurSharedEvents"
+          >OurSharedEvents</a
+        >
+      </div>
       <nav data-testid="landing-nav" aria-label="Principal">
         <a href="/es/events" data-testid="nav-events">Eventos</a>
       </nav>

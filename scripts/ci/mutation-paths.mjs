@@ -86,6 +86,12 @@ export const MUTATION_PATHS = Object.freeze([
   'workers/oursharedevents/tests/street-map.spec.ts',
   'workers/oursharedevents/tests/street-map-landing.spec.ts',
   'workers/oursharedevents/tests/fat-finger.property.spec.ts',
+  // OSE-1936: the header Language menu and the node specs that kill its mutants
+  // (pages.ts and the list/landing specs are listed above).
+  'workers/oursharedevents/src/lib/i18n/language-menu.ts',
+  'workers/oursharedevents/tests/language-menu.spec.ts',
+  'workers/oursharedevents/tests/language-menu-third-language.spec.ts',
+  'workers/oursharedevents/tests/language-layer-golden.spec.ts',
   WORKER_STRYKER_CONFIG,
   // OSE-1695: the CI security rules that keep secrets off branch pushes, their
   // tests and config.

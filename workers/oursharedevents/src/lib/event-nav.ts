@@ -33,6 +33,11 @@ export interface EventNavOptions {
   allEventsTestId?: string;
   /** The page language; the poster and TV pages are English and leave it unset. */
   lang?: Lang;
+  /**
+   * Sits in the event page's top bar, beside the Language menu (owner
+   * 2026-11-10): the bar spaces it, so it drops its own bottom margin.
+   */
+  inBar?: boolean;
 }
 
 /** Paths of an event's public screens, keyed by screen. */
@@ -69,5 +74,5 @@ export function renderEventNav(
   const allEvents = `<a href="${withLangPrefix(lang, '/events')}" data-testid="${escapeHtml(opts.allEventsTestId ?? 'event-nav-events')}" style="${LINK_STYLE}">${msg(lang, 'nav.allEvents')}</a>`;
   // With nothing else to go to, the nav is the single link it always was.
   const rest = opts.live ? links : '';
-  return `<nav aria-label="${msg(lang, 'nav.site')}" data-testid="event-nav" style="display:flex;flex-wrap:wrap;gap:0 1.25rem;margin:0 0 0.5rem">${allEvents}${rest}</nav>`;
+  return `<nav aria-label="${msg(lang, 'nav.site')}" data-testid="event-nav" style="display:flex;flex-wrap:wrap;gap:0 1.25rem;margin:${opts.inBar ? '0' : '0 0 0.5rem'}">${allEvents}${rest}</nav>`;
 }

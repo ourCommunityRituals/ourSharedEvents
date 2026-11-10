@@ -327,6 +327,30 @@ describe('Spanish /events and landing | no English of ours', () => {
     );
   });
 
+  it('the header carries the Language menu on its left, the page language marked (owner 2026-11-10)', async () => {
+    for (const [html, header, first] of [
+      [await events('?when=weekend', ROWS), 'public-header', 'data-testid="public-title"'],
+      [await landing('?zip=60406', ROWS), 'landing-header', 'data-testid="landing-logo"'],
+    ] as const) {
+      const bar =
+        html.match(new RegExp(`<header data-testid="${header}"[\\s\\S]*?</header>`))?.[0] ?? '';
+      const menuAt = bar.indexOf('data-testid="language-menu"');
+      expect(menuAt, `${header}: menu in the header`).toBeGreaterThan(-1);
+      expect(menuAt, `${header}: menu on the left`).toBeLessThan(bar.indexOf(first));
+      expect(bar).toMatch(/aria-current="true" lang="es" data-testid="language-menu-es"/);
+      expect(bar).toContain('<span>Idioma</span>');
+      expect(bar).toContain('aria-label="Menú"');
+      expect(html, `${header}: the menu's styles`).toContain(
+        '.ose-langmenu-mobile { display: block; }'
+      );
+      expect(html, 'no marker left behind').not.toContain('OCR_LANGUAGE_MENU');
+    }
+    // The links keep the filters, as the footer switch does.
+    expect(await events('?when=weekend', ROWS)).toContain(
+      'data-testid="language-menu-en" href="/events?when=weekend">'
+    );
+  });
+
   it('the English pages offer Spanish by its own name', async () => {
     const list = await events('?when=past', ROWS, 'en');
     expect(list).toContain(

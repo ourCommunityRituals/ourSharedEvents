@@ -352,6 +352,93 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
     await expect(page.locator('[data-testid="language-switch-en"]')).toHaveText('Inglés');
   });
 
+  // ── The header Language menu (owner 2026-11-10) ───────────────────────────
+  // Wide screen: a "Language" button opens the list, the page's language marked;
+  // picking another loads the whole page in it. Phone: the menu button's first
+  // option is Language, which opens the same list.
+
+  test('wide screen: the header Language button lists the languages and switches the page', async ({
+    browser,
+  }) => {
+    const readable = `/events/${eventId}/${slug}`;
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    try {
+      const page = await context.newPage();
+      await page.route('**/cdn-cgi/challenge-platform/**', (route) => route.abort());
+      await page.goto(`${BASE_URL}/es${readable}`, { waitUntil: 'domcontentloaded' });
+
+      const button = page.locator('[data-testid="language-menu-button"]');
+      await expect(button).toBeVisible();
+      await expect(button).toHaveText(/Idioma/);
+      await expect(page.locator('[data-testid="site-menu-button"]')).toBeHidden();
+      // On the left: the button starts left of the site links in the top bar.
+      const navBox = await page.locator('[data-testid="event-nav"]').boundingBox();
+      const btnBox = await button.boundingBox();
+      expect(btnBox!.x, 'Language sits left of the site links').toBeLessThan(navBox!.x);
+      expect(btnBox!.height, 'target height').toBeGreaterThanOrEqual(44);
+
+      await button.click();
+      const current = page.locator('[data-testid="language-menu-es"]');
+      await expect(current).toBeVisible();
+      await expect(current).toHaveAttribute('aria-current', 'true');
+      await expect(current).toHaveText(/Español/);
+      expect(await current.evaluate((el) => el.tagName), 'the current language is not a link').toBe(
+        'SPAN'
+      );
+
+      await page.locator('[data-testid="language-menu-en"]').click();
+      await expect(page).toHaveURL(`${BASE_URL}${readable}`);
+      await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+      await expect(page.locator('[data-testid="language-menu-button"]')).toHaveText(/Language/);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('phone: the menu button opens Language first, then the list, and switches the page', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+    try {
+      const page = await context.newPage();
+      await page.route('**/cdn-cgi/challenge-platform/**', (route) => route.abort());
+      await page.goto(`${BASE_URL}/events?when=next-90`, { waitUntil: 'domcontentloaded' });
+
+      await expect(page.locator('[data-testid="language-menu-button"]')).toBeHidden();
+      const burger = page.locator('[data-testid="site-menu-button"]');
+      await expect(burger).toBeVisible();
+      await expect(burger).toHaveAttribute('aria-label', 'Menu');
+      const titleBox = await page.locator('[data-testid="public-title"]').boundingBox();
+      expect(
+        (await burger.boundingBox())!.x,
+        'the menu button sits left of the title'
+      ).toBeLessThan(titleBox!.x);
+
+      await burger.click();
+      const firstOption = page.locator('[data-testid="site-menu-panel"] > :first-child');
+      await expect(firstOption).toHaveAttribute('data-testid', 'site-menu-language');
+      await page.locator('[data-testid="site-menu-language-button"]').click();
+      await expect(page.locator('[data-testid="site-menu-language-en"]')).toHaveAttribute(
+        'aria-current',
+        'true'
+      );
+
+      await page.locator('[data-testid="site-menu-language-es"]').click();
+      await expect(page).toHaveURL(`${BASE_URL}/es/events?when=next-90`);
+      await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+      await expect(page.locator('[data-testid="site-menu-button"]')).toHaveAttribute(
+        'aria-label',
+        'Menú'
+      );
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      );
+      expect(overflow, 'no sideways scroll on a phone').toBeLessThanOrEqual(0);
+    } finally {
+      await context.close();
+    }
+  });
+
   // The longest Spanish strings these pages show (the doors, the chips, the
   // search placeholder, the summary) on a 320 px phone: nothing scrolls sideways,
   // inputs keep 16 px text and the controls keep a 44 px target.

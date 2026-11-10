@@ -53,6 +53,7 @@ import { fmt, msg, msgAll, WHAT_TYPES } from '../lib/i18n/catalog';
 import { resolveLanguage } from '../lib/i18n/resolve-language';
 import { languageAlternates, withLangPrefix } from '../lib/i18n/path-prefix';
 import { LANGUAGE_SWITCH_CSS, renderLanguageSwitch } from '../lib/i18n/language-switch';
+import { LANGUAGE_MENU_CSS, renderLanguageMenu } from '../lib/i18n/language-menu';
 import {
   parseDiscoveryFilters,
   type DiscoveryFilters,
@@ -457,13 +458,24 @@ export async function handlePublicPage(
  * OSE-1762: the language switch on a shell page, above the never-who disclosure
  * (on the event page it sits above Back, which these pages do not have). Its
  * stylesheet goes in with the disclosure's. `query` is already vetted.
+ *
+ * The header's Language menu (owner 2026-11-10) goes in at the template's
+ * `LANGUAGE_MENU_MARKER`, on the left of the header bar.
  */
 function withLanguageSwitch(page: string, lang: Lang, path: string, query: string): string {
   const nav = renderLanguageSwitch({ lang, path, query });
+  const menu = renderLanguageMenu({ lang, path, query });
   return page
-    .replace(NEVER_WHO_CSS_MARKER, () => `${LANGUAGE_SWITCH_CSS}\n      ${NEVER_WHO_CSS_MARKER}`)
+    .replace(LANGUAGE_MENU_MARKER, () => menu)
+    .replace(
+      NEVER_WHO_CSS_MARKER,
+      () => `${LANGUAGE_SWITCH_CSS}${LANGUAGE_MENU_CSS}\n      ${NEVER_WHO_CSS_MARKER}`
+    )
     .replace(NEVER_WHO_MARKER, () => `${nav}\n      ${NEVER_WHO_MARKER}`);
 }
+
+/** Where a shell template's header takes the Language menu. */
+const LANGUAGE_MENU_MARKER = '<!--OCR_LANGUAGE_MENU-->';
 
 /**
  * The filters a switch carries to the same list in another language: only the
@@ -994,6 +1006,29 @@ const SPONSOR_LIST_CSS = `
     .ose-sponsor-name { color: var(--text); font-weight: 600; }`;
 
 /**
+ * The bar at the top of an event page: the Language menu on the left, then the
+ * site links (owner 2026-11-10). It wraps on a narrow phone.
+ */
+const EVENT_TOPBAR_CSS = `
+    .ose-topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: 0 0 0.75rem; }`;
+
+/**
+ * The top bar of a public event page, the Language menu first. A draft preview
+ * has no public address, so it keeps the bare nav it always had.
+ */
+function renderEventTopbar(
+  nav: string,
+  lang: Lang,
+  path: string,
+  query: string | undefined
+): string {
+  return `<div class="ose-topbar" data-testid="event-topbar">
+    ${renderLanguageMenu({ lang, path, query })}
+    ${nav}
+  </div>`;
+}
+
+/**
  * Share + Add to calendar: one pair on a row. At phone width each takes half
  * (flex-basis 120px, so two fit even at 320px); a single control takes the row.
  */
@@ -1009,7 +1044,9 @@ const EVENT_ACTIONS_CSS =
     .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
     .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }` +
   BACK_BUTTON_CSS +
-  LANGUAGE_SWITCH_CSS;
+  LANGUAGE_SWITCH_CSS +
+  LANGUAGE_MENU_CSS +
+  EVENT_TOPBAR_CSS;
 
 /**
  * OSE-1518: the plain choices. Register (or check-in while the event is on)
@@ -1325,7 +1362,17 @@ ${SPONSOR_LIST_CSS}
 </head>
 <body>
   <a href="#main" class="ose-skip">${msg(lang, 'page.skip')}</a>
-  ${renderEventNav(row.id, 'event', { live: (row.status || '').toLowerCase() === 'active', allEventsTestId: 'event-nav-events', lang })}
+  ${(() => {
+    const nav = renderEventNav(row.id, 'event', {
+      live: (row.status || '').toLowerCase() === 'active',
+      allEventsTestId: 'event-nav-events',
+      lang,
+      inBar: !preview,
+    });
+    return preview
+      ? nav
+      : renderEventTopbar(nav, lang, eventPagePath(row.id, row.slug), opts?.pageQuery);
+  })()}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
     <header data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">${title}</h1>
@@ -1528,7 +1575,17 @@ ${SPONSOR_LIST_CSS}
 </head>
 <body>
   <a href="#main" class="ose-skip">${msg(lang, 'page.skip')}</a>
-  ${renderEventNav(row.id, 'event', { live: (row.status || '').toLowerCase() === 'active', allEventsTestId: 'event-nav-events-live', lang })}
+  ${renderEventTopbar(
+    renderEventNav(row.id, 'event', {
+      live: (row.status || '').toLowerCase() === 'active',
+      allEventsTestId: 'event-nav-events-live',
+      lang,
+      inBar: true,
+    }),
+    lang,
+    eventPagePath(row.id, row.slug),
+    opts?.pageQuery
+  )}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
     <header data-testid="event-header-live">
       <span class="ose-live-badge" data-testid="event-live-badge" aria-label="${msg(lang, 'live.badgeLabel')}">
@@ -1815,6 +1872,7 @@ ${SPONSOR_LIST_CSS}
   </style>
 </head>
 <body>
+  ${renderEventTopbar('', lang, eventPagePath(row.id, row.slug), opts?.pageQuery)}
   <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
     <span class="ose-phase-chip" data-testid="event-phase-chip">${msg(lang, calledOff ? 'recap.chipCalledOff' : 'recap.chip')}</span>
     <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>
