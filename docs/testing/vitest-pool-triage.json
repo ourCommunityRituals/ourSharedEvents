@@ -3194,6 +3194,13 @@
       "testCount": 1
     },
     {
+      "file": "workers/oursharedevents/tests/sponsor-thumb-render.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 18
+    },
+    {
       "file": "workers/oursharedevents/tests/sponsor-title-surfaces.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

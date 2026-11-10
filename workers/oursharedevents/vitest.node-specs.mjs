@@ -177,6 +177,10 @@ export const NODE_SPECS = [
   // A Spanish event page, every phase and every optional part, shows no English
   // of ours (catalog values or common English words). Pure over the renderers.
   'tests/event-page-spanish.spec.ts',
+  // OSE-1952 — the event page's sponsor-art rule (renderSponsorItem / List in
+  // pages.ts), exact markup per case: the Stryker killer for that marker range.
+  // Pure over the exported phase renderers. No cloudflare:test.
+  'tests/sponsor-thumb-render.spec.ts',
   // OSE-1762 — /events and the landing: golden renders in English and Spanish,
   // and the Spanish render shows no English of ours. Pure over the handlers,
   // with the data provider replaced.
