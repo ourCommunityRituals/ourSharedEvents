@@ -372,6 +372,157 @@ describe('the street map reaches staging before production', () => {
   });
 });
 
+// Fat fingers (owner 2026-11-10). The bucket and the object key are typed by
+// hand three times: in wrangler.toml, and in the two commands the runbook gives
+// the owner (create the bucket, upload the file). A slip in any one of them is
+// silent: the deploy passes, the Worker finds no object, and the map stays
+// hexagons only. These rules compare the three.
+// @born-red street-map names typed by hand | method: each rule is fed the slip that turns it red, in the cases below; "the real files agree" seen failing with the runbook's upload key changed to planet-20261019.pmtiles | date: 2026-11-10
+describe('the street-map names the owner types are the names the Worker binds', () => {
+  const root = (p) => fs.readFileSync(path.join(__dirname, '../../../', p), 'utf8');
+  const RUNBOOK = 'docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md';
+  const toml = () => root('workers/oursharedevents/wrangler.toml');
+  const runbook = () => root(RUNBOOK);
+  const workerRule = () => {
+    const src = root('workers/oursharedevents/src/lib/street-map.ts');
+    const m = /^const ARCHIVE_NAME = \/(.+)\/;\r?$/m.exec(src);
+    if (!m) throw new Error('ARCHIVE_NAME not found in lib/street-map.ts');
+    return new RegExp(m[1]);
+  };
+
+  /** What does not agree, as sentences. Pure: takes the files' text. */
+  function nameProblems(tomlText, runbookText, rule) {
+    const out = [];
+    const stg = tomlText.slice(
+      tomlText.search(/^\[env\.staging\]/m),
+      tomlText.search(/^\[env\.production\]/m)
+    );
+    const bucket =
+      /^\[\[env\.staging\.r2_buckets\]\]\r?\nbinding = "MAP_TILES"\r?\nbucket_name = "([^"]*)"/m.exec(
+        stg
+      )?.[1];
+    const key = /^MAP_TILES_ARCHIVE = "([^"]*)"\r?$/m.exec(stg)?.[1];
+    if (bucket === undefined) return ['staging has no MAP_TILES bucket_name'];
+    if (key === undefined) return ['staging has no MAP_TILES_ARCHIVE'];
+    if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(bucket)) {
+      out.push(`"${bucket}" is not a bucket name R2 accepts`);
+    }
+    if (!rule.test(key)) out.push(`the Worker refuses the archive name "${key}"`);
+    const others = [...tomlText.matchAll(/^bucket_name = "([^"]*)"\r?$/gm)].map((m) => m[1]);
+    if (others.filter((b) => b === bucket).length > 1) {
+      out.push(`"${bucket}" is bound more than once: staging must have a bucket of its own`);
+    }
+    const created = /wrangler r2 bucket create (\S+)/.exec(runbookText)?.[1];
+    if (created !== bucket) {
+      out.push(`the runbook creates "${created}", wrangler.toml binds "${bucket}"`);
+    }
+    const target = /rclone copyto \S+ r2:(\S+)/.exec(runbookText)?.[1];
+    if (target !== `${bucket}/${key}`) {
+      out.push(`the runbook uploads to "${target}", the Worker reads "${bucket}/${key}"`);
+    }
+    // The sentence wraps in the runbook, so compare with the line breaks folded.
+    const oneLine = runbookText.replace(/\s+/g, ' ');
+    if (!oneLine.includes(`scoped to \`${bucket}\` only`)) {
+      out.push(`the runbook's token is not scoped to "${bucket}"`);
+    }
+    return out;
+  }
+
+  test('the real files agree', () => {
+    expect(nameProblems(toml(), runbook(), workerRule())).toEqual([]);
+  });
+
+  test('the rule read from the Worker is its own: it takes the key in wrangler.toml and refuses a path', () => {
+    const rule = workerRule();
+    expect(rule.test('planet-20261109.pmtiles')).toBe(true);
+    expect(rule.test('../planet-20261109.pmtiles')).toBe(false);
+  });
+
+  test.each([
+    ['a letter dropped from the bucket', 'ose-map-tiles-staging', 'ose-map-tiles-stagin'],
+    ['the dev bucket copied down', 'ose-map-tiles-staging', 'ose-map-tiles-dev'],
+    ['a capital in the bucket', 'ose-map-tiles-staging', 'Ose-map-tiles-staging'],
+    ['an underscore in the bucket', 'ose-map-tiles-staging', 'ose_map_tiles_staging'],
+  ])('fat finger in wrangler.toml: %s', (_, from, to) => {
+    const slipped = toml().replace(
+      `binding = "MAP_TILES"\nbucket_name = "${from}"`,
+      `binding = "MAP_TILES"\nbucket_name = "${to}"`
+    );
+    const slippedCrlf = toml().replace(
+      `binding = "MAP_TILES"\r\nbucket_name = "${from}"`,
+      `binding = "MAP_TILES"\r\nbucket_name = "${to}"`
+    );
+    const text = slipped === toml() ? slippedCrlf : slipped;
+    expect(text).not.toBe(toml());
+    expect(nameProblems(text, runbook(), workerRule())).not.toEqual([]);
+  });
+
+  test.each([
+    ['two digits of the date swapped', 'planet-20261019.pmtiles'],
+    ['the extension in capitals', 'planet-20261109.PMTILES'],
+    ['a space after', 'planet-20261109.pmtiles '],
+    ['the bucket pasted in front', 'ose-map-tiles-staging/planet-20261109.pmtiles'],
+  ])('fat finger in wrangler.toml: the archive name with %s', (_, to) => {
+    const stgAt = toml().search(/^\[env\.staging\]/m);
+    const text =
+      toml().slice(0, stgAt) +
+      toml()
+        .slice(stgAt)
+        .replace('MAP_TILES_ARCHIVE = "planet-20261109.pmtiles"', `MAP_TILES_ARCHIVE = "${to}"`);
+    expect(text).not.toBe(toml());
+    expect(nameProblems(text, runbook(), workerRule())).not.toEqual([]);
+  });
+
+  test.each([
+    [
+      'the upload key with two digits swapped',
+      'r2:ose-map-tiles-staging/planet-20261109.pmtiles',
+      'r2:ose-map-tiles-staging/planet-20261019.pmtiles',
+    ],
+    [
+      'the upload to the production bucket',
+      'r2:ose-map-tiles-staging/planet-20261109.pmtiles',
+      'r2:ose-map-tiles-production/planet-20261109.pmtiles',
+    ],
+    [
+      'the upload under the bare build name',
+      'r2:ose-map-tiles-staging/planet-20261109.pmtiles',
+      'r2:ose-map-tiles-staging/20261109.pmtiles',
+    ],
+    [
+      'another bucket created',
+      'bucket create ose-map-tiles-staging',
+      'bucket create ose-map-tiles-stg',
+    ],
+    [
+      'the token scoped to another bucket',
+      '`ose-map-tiles-staging` only',
+      '`ose-uploads-staging` only',
+    ],
+  ])('fat finger in the runbook: %s', (_, from, to) => {
+    const text = runbook().replace(from, to);
+    expect(text).not.toBe(runbook());
+    expect(nameProblems(toml(), text, workerRule())).not.toEqual([]);
+  });
+
+  test('rainy: a wrangler.toml with no staging bucket, or no archive name, is named, not passed', () => {
+    const noBucket = toml().replace(
+      /\[\[env\.staging\.r2_buckets\]\]\r?\nbinding = "MAP_TILES"/,
+      '[[env.staging.r2_buckets]]\nbinding = "OTHER"'
+    );
+    expect(nameProblems(noBucket, runbook(), workerRule())).toEqual([
+      'staging has no MAP_TILES bucket_name',
+    ]);
+    const stgAt = toml().search(/^\[env\.staging\]/m);
+    const noKey =
+      toml().slice(0, stgAt) +
+      toml().slice(stgAt).replace('MAP_TILES_ARCHIVE = ', 'MAP_TILES_ARCHIV = ');
+    expect(nameProblems(noKey, runbook(), workerRule())).toEqual([
+      'staging has no MAP_TILES_ARCHIVE',
+    ]);
+  });
+});
+
 describe('the CI step', () => {
   const wf = () =>
     fs.readFileSync(

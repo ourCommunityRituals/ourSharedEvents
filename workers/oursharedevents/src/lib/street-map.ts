@@ -163,13 +163,17 @@ export interface DecodedTile {
 
 const WANTED = new Set(['water', 'roads', 'places']);
 
-/** Road classes, finest first. Older Protomaps builds say medium_road. */
-const ROAD_CLASS: Record<string, 'r1' | 'r2' | 'r3'> = {
-  minor_road: 'r1',
-  medium_road: 'r2',
-  major_road: 'r2',
-  highway: 'r3',
-};
+/**
+ * Road classes, finest first. Older Protomaps builds say medium_road. A Map,
+ * not a plain object: the kind comes from the tile, and a plain object answers
+ * "constructor" or "__proto__" with its own members, which are not a class.
+ */
+const ROAD_CLASS = new Map<string, 'r1' | 'r2' | 'r3'>([
+  ['minor_road', 'r1'],
+  ['medium_road', 'r2'],
+  ['major_road', 'r2'],
+  ['highway', 'r3'],
+]);
 
 interface Label {
   text: string;
@@ -221,7 +225,7 @@ export function drawStreets(
         let bucket: keyof typeof buckets | null = null;
         if (layer.name === 'water') bucket = feat.type === 3 ? 'w' : feat.type === 2 ? 'v' : null;
         else if (layer.name === 'roads' && feat.type === 2) {
-          bucket = ROAD_CLASS[String(feat.props.kind)] ?? null;
+          bucket = ROAD_CLASS.get(String(feat.props.kind)) ?? null;
         }
         if (!bucket) continue;
         const parts: string[] = [];
@@ -344,13 +348,14 @@ export async function buildStreetLayer(
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timer: ReturnType<typeof setTimeout> | null = null;
   const timeout = new Promise<never>((_, reject) => {
+    // Stryker disable next-line StringLiteral: the message is never read; the catch in loadStreetLayer turns every failure into null.
     timer = setTimeout(() => reject(new Error('street map timed out')), ms);
   });
-  return Promise.race([p, timeout]).finally(() => {
-    if (timer !== undefined) clearTimeout(timer);
-  });
+  // The executor above has run by now, so the timer is set. Clearing it means a
+  // read that finished leaves nothing running in the isolate.
+  return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -362,9 +367,9 @@ export async function loadStreetLayer(
   cells: readonly string[],
   opts?: { timeoutMs?: number }
 ): Promise<StreetLayer | null> {
-  const bucket = env?.MAP_TILES;
-  if (!bucket || cells.length === 0) return null;
-  const name = env?.MAP_TILES_ARCHIVE || DEFAULT_ARCHIVE;
+  if (!env?.MAP_TILES || cells.length === 0) return null;
+  const bucket = env.MAP_TILES;
+  const name = env.MAP_TILES_ARCHIVE || DEFAULT_ARCHIVE;
   if (!ARCHIVE_NAME.test(name)) return null;
   try {
     return await withTimeout(

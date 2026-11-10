@@ -80,6 +80,10 @@ export const MUTATION_PATHS = Object.freeze([
   'workers/oursharedevents/src/lib/attendee-map.ts',
   'workers/oursharedevents/src/lib/mvt.ts',
   'workers/oursharedevents/src/lib/pmtiles.ts',
+  // The street layer's loader in street-map.ts (two marker ranges, see rangeOf
+  // in stryker.conf.mjs); the fixtures are the fake buckets its specs read.
+  'workers/oursharedevents/src/lib/street-map.ts',
+  'workers/oursharedevents/tests/helpers/street-map-fixtures.ts',
   'workers/oursharedevents/tests/attendee-map.spec.ts',
   'workers/oursharedevents/tests/mvt.spec.ts',
   'workers/oursharedevents/tests/pmtiles.spec.ts',

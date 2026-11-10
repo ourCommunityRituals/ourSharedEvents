@@ -18,7 +18,7 @@
  *     F41), and a planet-sized archive draws (two leaf levels, far offsets)
  */
 // @born-red no tile in the frame, planet-sized archive | method: "an archive with no tile in the frame is no layer" seen failing before the guard in buildStreetLayer (it returned a layer of one blank rectangle); "one tile of the frame is enough" is its control; the planet case seen failing on 4 of the 6 reader faults listed in pmtiles.spec.ts | date: 2026-11-09
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { cellToLatLng, latLngToCell } from 'h3-js';
 import {
   DEFAULT_ARCHIVE,
@@ -27,6 +27,7 @@ import {
   MAX_TILES,
   MAX_ZOOM,
   STREET_STYLE,
+  STREET_TIMEOUT_MS,
   buildStreetLayer,
   cellsKey,
   drawStreets,
@@ -46,6 +47,7 @@ import {
   memSource,
   planetArchive,
   pmtilesArchive,
+  scriptedBucket,
   sparseBucket,
   tilesForCells,
 } from './helpers/street-map-fixtures';
@@ -305,6 +307,72 @@ describe('street map | drawing', () => {
     expect(svg).not.toContain('Edge of the frame');
   });
 
+  // The archive is someone else's data. Nothing a tile says may become markup:
+  // a name is text, a road kind picks one of three fixed classes or is dropped.
+  it('security: a hostile tile adds no element, attribute, link or script to the layer', () => {
+    const line = (kind: string) => ({
+      type: 2,
+      props: { kind, name: '"><script>alert(1)</script>', ref: 'javascript:alert(1)' },
+      geometry: [
+        [
+          [0, 400],
+          [2000, 400],
+        ] as [number, number][],
+      ],
+    });
+    const shape = (layers: DecodedTile['layers']) => {
+      const svg = drawStreets(big, 0, tile(layers));
+      return {
+        svg,
+        tags: [...new Set([...svg.matchAll(/<([a-zA-Z]+)/g)].map((m) => m[1]))].sort(),
+        attrs: [...new Set([...svg.matchAll(/\s([a-zA-Z-]+)="/g)].map((m) => m[1]))].sort(),
+        classes: [...new Set([...svg.matchAll(/class="([^"]*)"/g)].map((m) => m[1]))].sort(),
+      };
+    };
+    const clean = shape([
+      { name: 'roads', extent: 4096, features: [line('highway')] },
+      { name: 'places', extent: 4096, features: [town('Blue Island', 9, 300, 180)] },
+    ]);
+    const hostile = shape([
+      {
+        name: 'roads',
+        extent: 4096,
+        features: [
+          line('highway'),
+          line('highway" onload="alert(1)'),
+          line('</path><script>alert(1)</script>'),
+          line('__proto__'),
+          line('constructor'),
+        ],
+      },
+      {
+        name: 'places',
+        extent: 4096,
+        features: [town('Tom & "Jerry" <b onmouseover=alert(1)>\'s', 9, 300, 180)],
+      },
+    ]);
+    // The same elements, attributes and classes as a layer from honest data.
+    expect(hostile.tags).toEqual(clean.tags);
+    expect(hostile.attrs).toEqual(clean.attrs);
+    expect(hostile.classes).toEqual(clean.classes);
+    // Only the one known road kind was drawn; the four made-up kinds were dropped.
+    expect(hostile.svg.match(/<path /g)).toHaveLength(clean.svg.match(/<path /g)!.length);
+    // The name is there, as text.
+    expect(hostile.svg).toContain('Tom &amp; &quot;Jerry&quot; &lt;b onmouseover=alert(1)&gt;');
+    for (const bad of [
+      '<script',
+      '<b ',
+      'javascript:',
+      'href',
+      'http',
+      'onload="',
+      '<image',
+      '<use',
+    ]) {
+      expect(hostile.svg).not.toContain(bad);
+    }
+  });
+
   it('a town name does not sit on a hexagon number', () => {
     const cellF = frameForCells([BLUE7]);
     const [cx, cy] = project(cellF, ...cellToLatLng(BLUE7));
@@ -463,6 +531,286 @@ describe('street map | loading (fail soft)', () => {
     const t0 = Date.now();
     expect(await loadStreetLayer({ MAP_TILES: slow }, [BLUE7], { timeoutMs: 50 })).toBeNull();
     expect(Date.now() - t0).toBeLessThan(180);
+  });
+});
+
+// The archive read, class by class (owner 2026-11-10): what a hand can mistype
+// in MAP_TILES_ARCHIVE, what a hostile name may not reach, and how a read over
+// the network goes wrong. Every one ends the same way: no layer, no throw, so
+// the page draws its hexagons. Sunny and rainy cases are in the block above.
+describe('street map | the archive read: fat fingers, security, network', () => {
+  const PLANET = 'planet-20261109.pmtiles';
+  const sound = async (opts: { gzip?: boolean; leaf?: boolean } = { gzip: true, leaf: true }) =>
+    pmtilesArchive(tilesForCells([BLUE7]).tiles, opts);
+  const drawn = (layer: Awaited<ReturnType<typeof loadStreetLayer>>) =>
+    layer?.svg.includes('data-testid="amap-streets"') === true;
+
+  /** How many gets a first map costs, and which get is which. */
+  async function dryRun(archive: Uint8Array) {
+    const b = scriptedBucket(PLANET, archive, () => 'ok');
+    expect(drawn(await loadStreetLayer({ MAP_TILES: b, MAP_TILES_ARCHIVE: PLANET }, [BLUE7]))).toBe(
+      true
+    );
+    resetPmtilesCache();
+    return b.gets.length;
+  }
+
+  // ── fat fingers ────────────────────────────────────────────────────────────
+  // The bucket holds a sound archive under the mistyped name itself, so a
+  // reader that skipped the name rule would draw it.
+  it.each([
+    ['a capital letter', 'Planet-20261109.pmtiles'],
+    ['the extension in capitals', 'planet-20261109.PMTILES'],
+    ['a space in front', ' planet-20261109.pmtiles'],
+    ['a space after', 'planet-20261109.pmtiles '],
+    ['a line break after', 'planet-20261109.pmtiles\n'],
+    ['a tab after', 'planet-20261109.pmtiles\t'],
+    ['a space inside', 'planet 20261109.pmtiles'],
+    ['a comma for the full stop', 'planet-20261109,pmtiles'],
+    ['no extension', 'planet-20261109'],
+    ['the extension cut short', 'planet-20261109.pmtile'],
+    ['a second extension', 'planet-20261109.pmtiles.bak'],
+    ['only the extension', '.pmtiles'],
+    ['a hyphen first', '-planet-20261109.pmtiles'],
+    ['the quotes kept', '"planet-20261109.pmtiles"'],
+    ['the bucket pasted in front', 'ose-map-tiles-staging/planet-20261109.pmtiles'],
+    ['the rclone target pasted whole', 'r2:ose-map-tiles-staging/planet-20261109.pmtiles'],
+    ['the download address pasted', 'https://build.protomaps.com/20261109.pmtiles'],
+    ['spaces only', '   '],
+  ])(
+    'fat finger: %s is not an archive name: no layer, and the bucket is never asked',
+    async (_, name) => {
+      const bucket = fakeBucket(name, await sound());
+      expect(
+        await loadStreetLayer({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: name }, [BLUE7])
+      ).toBeNull();
+      expect(bucket.gets).toHaveLength(0);
+    }
+  );
+
+  it('fat finger: a well-formed name with the wrong date finds no object: no layer, one read, no throw', async () => {
+    const bucket = fakeBucket(PLANET, await sound());
+    const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: 'planet-20261190.pmtiles' };
+    expect(await loadStreetLayer(env, [BLUE7])).toBeNull();
+    expect(bucket.gets.map((g) => g.key)).toEqual(['planet-20261190.pmtiles']);
+    // Control: the right date draws from the same bucket.
+    expect(drawn(await loadStreetLayer({ ...env, MAP_TILES_ARCHIVE: PLANET }, [BLUE7]))).toBe(true);
+  });
+
+  it('edge: an empty setting reads the default regional file; a name of 89 characters draws and 90 does not', async () => {
+    const archive = await sound();
+    const byDefault = fakeBucket(DEFAULT_ARCHIVE, archive);
+    expect(
+      drawn(await loadStreetLayer({ MAP_TILES: byDefault, MAP_TILES_ARCHIVE: '' }, [BLUE7]))
+    ).toBe(true);
+    expect(new Set(byDefault.gets.map((g) => g.key))).toEqual(new Set([DEFAULT_ARCHIVE]));
+
+    // One first character, up to 80 more, then ".pmtiles".
+    const longest = `a${'b'.repeat(80)}.pmtiles`;
+    const tooLong = `a${'b'.repeat(81)}.pmtiles`;
+    expect(longest).toHaveLength(89);
+    resetPmtilesCache();
+    const ok = fakeBucket(longest, archive);
+    expect(
+      drawn(await loadStreetLayer({ MAP_TILES: ok, MAP_TILES_ARCHIVE: longest }, [BLUE7]))
+    ).toBe(true);
+    const over = fakeBucket(tooLong, archive);
+    expect(
+      await loadStreetLayer({ MAP_TILES: over, MAP_TILES_ARCHIVE: tooLong }, [BLUE7])
+    ).toBeNull();
+    expect(over.gets).toHaveLength(0);
+  });
+
+  it('edge: a read that has finished leaves no timer running, drawn or not', async () => {
+    const archive = await sound();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const good = fakeBucket(PLANET, archive);
+      expect(
+        drawn(await loadStreetLayer({ MAP_TILES: good, MAP_TILES_ARCHIVE: PLANET }, [BLUE7]))
+      ).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+      resetPmtilesCache();
+      const junk = fakeBucket(PLANET, new Uint8Array(4096).fill(7));
+      expect(
+        await loadStreetLayer({ MAP_TILES: junk, MAP_TILES_ARCHIVE: PLANET }, [BLUE7])
+      ).toBeNull();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('edge: the limit for the whole read is 1.5 s, and a read inside it draws', async () => {
+    expect(STREET_TIMEOUT_MS).toBe(1500);
+    const bucket = scriptedBucket(PLANET, await sound(), () => ({ delayMs: 5 }));
+    expect(
+      drawn(await loadStreetLayer({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: PLANET }, [BLUE7]))
+    ).toBe(true);
+  });
+
+  // ── security ───────────────────────────────────────────────────────────────
+  // MAP_TILES_ARCHIVE is a deploy setting, not visitor input. The rule still
+  // holds against a hostile value: one object, by a plain name, and no other.
+  it.each([
+    ['a path up and out', '../uploads/x.pmtiles'],
+    ['a path up and out, percent-encoded', '..%2fuploads%2fx.pmtiles'],
+    ['a path through a folder', 'a/../planet.pmtiles'],
+    ['a leading slash', '/planet.pmtiles'],
+    ['a backslash path', '..\\uploads\\x.pmtiles'],
+    ['a NUL before the extension', 'planet\u0000.pmtiles'],
+    ['a NUL after the extension', 'planet.pmtiles\u0000'],
+    ['a query string', 'planet.pmtiles?versionId=1'],
+    ['a fragment', 'planet.pmtiles#x'],
+    ['a percent-encoded letter', '%70lanet.pmtiles'],
+    ['a Cyrillic letter that looks Latin', 'plаnet.pmtiles'],
+    ['a full-width letter', 'ｐlanet.pmtiles'],
+    ['a second line that is a good name', 'x\nplanet.pmtiles'],
+    ['a good name on the first of two lines', 'planet.pmtiles\nx'],
+  ])('security: %s is refused before any read', async (_, name) => {
+    const bucket = fakeBucket(name, await sound());
+    expect(
+      await loadStreetLayer({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: name }, [BLUE7])
+    ).toBeNull();
+    expect(bucket.gets).toHaveLength(0);
+  });
+
+  // Born red 2026-11-10: the road class was looked up on a plain object, so a
+  // kind named after an Object property found Object's own member, not a class,
+  // and the draw threw. Fail soft held (no layer, the page stood), but one odd
+  // feature in one tile took the streets away from the whole area.
+  it.each(['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf'])(
+    'security: a road whose kind is "%s" is dropped, and the rest of the layer still draws',
+    async (kind) => {
+      const { tiles } = tilesForCells([BLUE7], () => [
+        {
+          name: 'roads',
+          features: [
+            {
+              type: 2,
+              props: { kind },
+              parts: [
+                [
+                  [0, 1000],
+                  [4096, 1000],
+                ],
+              ],
+            },
+          ],
+        },
+      ]);
+      const honest = await loadStreetLayer(
+        { MAP_TILES: fakeBucket(PLANET, await sound()), MAP_TILES_ARCHIVE: PLANET },
+        [BLUE7]
+      );
+      resetPmtilesCache();
+      const bucket = fakeBucket(PLANET, await pmtilesArchive(tiles, { gzip: true, leaf: true }));
+      const layer = await loadStreetLayer({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: PLANET }, [
+        BLUE7,
+      ]);
+      expect(drawn(layer)).toBe(true);
+      // The odd road added nothing: the layer is the one honest tiles give.
+      expect(layer).toEqual(honest);
+    }
+  );
+
+  it('security: only MAP_TILES is read; a bucket bound beside it is never asked', async () => {
+    const archive = await sound();
+    const tilesBucket = fakeBucket(PLANET, archive);
+    const uploads = fakeBucket(PLANET, archive);
+    const env = { MAP_TILES: tilesBucket, MAP_TILES_ARCHIVE: PLANET, UPLOADS_BUCKET: uploads };
+    expect(drawn(await loadStreetLayer(env, [BLUE7]))).toBe(true);
+    expect(uploads.gets).toHaveLength(0);
+    expect(new Set(tilesBucket.gets.map((g) => g.key))).toEqual(new Set([PLANET]));
+    // With no MAP_TILES, the other bucket is still not a fallback.
+    resetPmtilesCache();
+    expect(
+      await loadStreetLayer({ MAP_TILES_ARCHIVE: PLANET, UPLOADS_BUCKET: uploads } as never, [
+        BLUE7,
+      ])
+    ).toBeNull();
+    expect(uploads.gets).toHaveLength(0);
+  });
+
+  it('security: never who: the reads depend on the cells alone, and no read names a place finer than a tile', async () => {
+    const a = fakeBucket(PLANET, await sound());
+    const b = fakeBucket(PLANET, await sound());
+    await loadStreetLayer({ MAP_TILES: a, MAP_TILES_ARCHIVE: PLANET }, [BLUE7]);
+    resetPmtilesCache();
+    await loadStreetLayer({ MAP_TILES: b, MAP_TILES_ARCHIVE: PLANET }, [BLUE7]);
+    // Two cold isolates asked for the same area ask R2 for the same byte ranges.
+    const ranges = (g: typeof a.gets) =>
+      g.map((x) => `${x.range!.offset}+${x.range!.length}`).sort();
+    expect(ranges(b.gets)).toEqual(ranges(a.gets));
+    // A get carries a key and a byte range, nothing else.
+    for (const g of a.gets) expect(Object.keys(g).sort()).toEqual(['key', 'range']);
+  });
+
+  // ── network ────────────────────────────────────────────────────────────────
+  it('network: R2 fails on the first read: no layer, no throw; the next request opens the archive again and draws', async () => {
+    const bucket = scriptedBucket(PLANET, await sound(), (n) => (n === 0 ? 'throw' : 'ok'));
+    const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: PLANET };
+    expect(await loadStreetLayer(env, [BLUE7])).toBeNull();
+    expect(bucket.gets).toHaveLength(1);
+    expect(drawn(await loadStreetLayer(env, [BLUE7]))).toBe(true);
+  });
+
+  it.each([
+    ['R2 fails', 'throw'],
+    ['R2 says the object is gone', 'missing'],
+    ['the body breaks after the answer began', 'body-fails'],
+  ] as const)(
+    'network: %s on the last tile read: no layer (nothing half-drawn); the next request draws',
+    async (_, step) => {
+      const archive = await sound();
+      const last = (await dryRun(archive)) - 1;
+      expect(last).toBeGreaterThan(1);
+      const bucket = scriptedBucket(PLANET, archive, (n) => (n === last ? step : 'ok'));
+      const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: PLANET };
+      expect(await loadStreetLayer(env, [BLUE7])).toBeNull();
+      expect(bucket.gets).toHaveLength(last + 1);
+      expect(drawn(await loadStreetLayer(env, [BLUE7]))).toBe(true);
+    }
+  );
+
+  it.each([
+    ['the header (100 of its 127 bytes)', 0, 100],
+    ['the leaf directory (half of it)', 1, null],
+    ['a tile (half of it)', -1, null],
+  ] as const)('network: a short answer for %s is no layer, no throw', async (_, which, to) => {
+    const archive = await sound();
+    const count = await dryRun(archive);
+    const at = which < 0 ? count + which : which;
+    const bucket = scriptedBucket(PLANET, archive, (n, range) =>
+      n === at ? { shortTo: to ?? Math.floor(range!.length / 2) } : 'ok'
+    );
+    expect(
+      await loadStreetLayer({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: PLANET }, [BLUE7])
+    ).toBeNull();
+    expect(bucket.gets.length).toBeGreaterThan(at);
+  });
+
+  it('network: one late tile read makes the whole layer late: no layer, on time; the next request draws', async () => {
+    const archive = await sound();
+    const last = (await dryRun(archive)) - 1;
+    const bucket = scriptedBucket(PLANET, archive, (n) => (n === last ? { delayMs: 400 } : 'ok'));
+    const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: PLANET };
+    const t0 = Date.now();
+    expect(await loadStreetLayer(env, [BLUE7], { timeoutMs: 60 })).toBeNull();
+    expect(Date.now() - t0).toBeLessThan(300);
+    expect(drawn(await loadStreetLayer(env, [BLUE7], { timeoutMs: 2000 }))).toBe(true);
+  });
+
+  it('network: two requests for one area in a cold isolate read the header once', async () => {
+    const bucket = scriptedBucket(PLANET, await sound(), () => ({ delayMs: 5 }));
+    const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: PLANET };
+    const [one, two] = await Promise.all([
+      loadStreetLayer(env, [BLUE7]),
+      loadStreetLayer(env, [BLUE7]),
+    ]);
+    expect(drawn(one)).toBe(true);
+    expect(two).toEqual(one);
+    expect(bucket.gets.filter((g) => g.range!.offset === 0)).toHaveLength(1);
   });
 });
 

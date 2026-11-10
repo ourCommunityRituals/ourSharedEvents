@@ -62,6 +62,12 @@ export const FLOORS = {
   'src/lib/attendee-map.ts': 98.9,
   'src/lib/mvt.ts': 99.02,
   'src/lib/pmtiles.ts': 99.63,
+  // The street layer's loader (owner, 2026-11-10): two marker ranges of
+  // street-map.ts, the archive name rule and buildStreetLayer to the catch in
+  // loadStreetLayer. 50 of 50: 48 killed, and 2 that never end (`x++` and `y++`
+  // to `--` in the tile loop, so the run stops them). One mutant is disabled
+  // in the source with its reason: the text of an error nobody reads.
+  'src/lib/street-map.ts': 100,
 };
 
 /** One file's score from its mutants, or null when it has no valid mutant. */

@@ -1,0 +1,48 @@
+info:
+  name: GET /?area=<markup> (landing) - is not echoed and never zooms
+  type: http
+  seq: 29
+
+http:
+  method: GET
+  url: "{{baseUrl}}/?area=872664570ffffff%22%3E%3Csvg%20onload%3Dosemapprobe(1)%3E"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Security (owner 2026-11-10): ?area= is the one thing a visitor can type
+        // into the map. Here a real res-7 cell is followed by markup:
+        //   872664570ffffff"><svg onload=osemapprobe(1)>
+        // The value is not a res-7 cell, so it is ignored whole: no zoom on the
+        // cell it starts with, and the markup never reaches the page, in the
+        // body, in a link or in the canonical URL.
+        const body = String(res.getBody());
+        const has = function (id) { return body.includes('data-testid="' + id + '"'); };
+
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        test('Is the landing, not the error page', function () {
+          expect(body).to.include('<!DOCTYPE html>');
+          expect(has('public-error')).to.equal(false);
+        });
+
+        test('The markup is nowhere in the page, raw or encoded', function () {
+          expect(body).to.not.include('osemapprobe');
+        });
+
+        test('Opens no area, not even the cell the value starts with', function () {
+          expect(body).to.not.include('data-zoom="');
+          expect(has('amap-back')).to.equal(false);
+          expect(has('amap-dot')).to.equal(false);
+        });
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -98,6 +98,14 @@ export default {
     'src/lib/attendee-map.ts',
     'src/lib/mvt.ts',
     'src/lib/pmtiles.ts',
+    // The street layer's loader, same epic (owner 2026-11-10). Which object is
+    // read (the archive name rule), no layer without a tile, and one failed,
+    // short or late read is no layer and never a throw. Only these two ranges:
+    // the frame, the tile choice and the SVG drawing in the same file are not
+    // mutated. The second range stops at the catch line, so the catch body (its
+    // one statement returns null) is outside it. Killed by street-map.spec.ts.
+    rangeOf('src/lib/street-map.ts', 'export const DEFAULT_ARCHIVE', 'const ARCHIVE_NAME'),
+    rangeOf('src/lib/street-map.ts', 'export async function buildStreetLayer(', '} catch {'),
   ],
   coverageAnalysis: 'perTest',
   // Stryker writes `// @ts-nocheck` into its sandbox copy of each file this

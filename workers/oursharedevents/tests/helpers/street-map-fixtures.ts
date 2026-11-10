@@ -243,6 +243,52 @@ export function fakeBucket(
   };
 }
 
+/**
+ * What a scripted bucket does with one get. `ok` answers; the rest are the ways
+ * a read over the network goes wrong: the call rejects, R2 says the object is
+ * not there, the answer holds fewer bytes than asked, the body breaks after the
+ * answer started, or the answer is late.
+ */
+export type GetStep =
+  'ok' | 'throw' | 'missing' | 'body-fails' | { shortTo: number } | { delayMs: number };
+
+/**
+ * A fake R2 bucket holding one object, whose every get is decided by
+ * `plan(n, range)`, n counting gets from 0. Records every get.
+ */
+export function scriptedBucket(
+  name: string,
+  bytes: Uint8Array,
+  plan: (n: number, range?: { offset: number; length: number }) => GetStep
+): RangeBucket & { gets: { key: string; range?: { offset: number; length: number } }[] } {
+  const gets: { key: string; range?: { offset: number; length: number } }[] = [];
+  return {
+    gets,
+    async get(k, o) {
+      const step = plan(gets.length, o?.range);
+      gets.push({ key: k, range: o?.range });
+      if (step === 'throw') throw new TypeError('Network connection lost.');
+      if (step === 'missing' || k !== name) return null;
+      if (typeof step === 'object' && 'delayMs' in step) {
+        await new Promise((r) => setTimeout(r, step.delayMs));
+      }
+      if (step === 'body-fails') {
+        return {
+          arrayBuffer: async () => {
+            throw new TypeError('The body stream was cut short.');
+          },
+        };
+      }
+      const off = o?.range?.offset ?? 0;
+      const len = o?.range?.length ?? bytes.length;
+      const asked =
+        typeof step === 'object' && 'shortTo' in step ? Math.min(len, step.shortTo) : len;
+      const slice = bytes.slice(off, off + asked);
+      return { arrayBuffer: async () => slice.buffer };
+    },
+  };
+}
+
 // ── a planet-sized layout ───────────────────────────────────────────────────
 //
 // The whole-planet Protomaps build is about 138.5 GB: far more tiles than fit
