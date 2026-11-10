@@ -26,130 +26,24 @@ on:
     # 08:40 UTC — clear of overnight-fuzz (07:00) and the 08:00 jobs.
     - cron: '40 8 * * *'
   workflow_dispatch:
-  # Per-PR gate, but ONLY for changes that can hollow a mutated file. The run is
-  # a few minutes (the guard files plus, since OSE-1824, the landing's category
-  # filter, all on the node project), so gating the handful of
-  # PRs that touch these files closes the ~24h post-merge hollowing window
-  # without taxing every other PR. If you add a mutate target in stryker.conf.mjs,
-  # add its source + spec here too — a stale filter is a gate that never fires.
+  # No `paths:` filter on pull_request or push (owner 2026-11-09: the mutation
+  # checks are to be required on `main`). A required check whose workflow does
+  # not start leaves the pull request waiting on it for good, so this workflow
+  # starts on every pull request and both jobs always report. Whether a change
+  # needs the run is decided inside each job, by scripts/ci/mutation-paths.mjs:
+  # the list that used to be written here twice, with its reasons, moved there.
+  # A change that touches nothing on the list passes in seconds without running
+  # Stryker, and says so in the job summary. The run itself is a few minutes
+  # (the guard files plus, since OSE-1824, the landing's category filter, all on
+  # the node project). If you add a mutate target in stryker.conf.mjs, add its
+  # source and specs to that list; tests/unit/ci/mutation-paths.test.js fails
+  # on a mutated or floored file the list lacks.
   pull_request:
-    paths:
-      - 'workers/oursharedevents/src/lib/count-floor.ts'
-      - 'workers/oursharedevents/src/lib/report-depth.ts'
-      - 'workers/oursharedevents/src/lib/pii.ts'
-      - 'workers/oursharedevents/src/auth/admin.ts'
-      - 'workers/oursharedevents/tests/count-floor.spec.ts'
-      - 'workers/oursharedevents/tests/report-depth.spec.ts'
-      - 'workers/oursharedevents/tests/pii-crypto.spec.ts'
-      - 'workers/oursharedevents/tests/red-team/auth-jwks-verify.spec.ts'
-      - 'workers/oursharedevents/tests/red-team/auth-guard-mutation.spec.ts'
-      - 'workers/oursharedevents/tests/red-team/auth-jwt-verify-memo.spec.ts'
-      - 'workers/oursharedevents/tests/red-team/ci-service-actor.spec.ts'
-      - 'workers/oursharedevents/tests/admin-actor-memo.spec.ts'
-      # OSE-1824: the landing's Type row by event-type category — its sources
-      # (two handler files are mutated only in a marker range, see rangeOf in
-      # stryker.conf.mjs) and the node specs and goldens that kill its mutants.
-      - 'workers/oursharedevents/src/lib/event-type-catalog.ts'
-      - 'workers/oursharedevents/src/lib/event-type-catalog-read.ts'
-      - 'workers/oursharedevents/src/lib/landing-area.ts'
-      - 'workers/oursharedevents/src/handlers/pages.ts'
-      - 'workers/oursharedevents/src/handlers/events.ts'
-      - 'workers/oursharedevents/tests/landing-area.spec.ts'
-      - 'workers/oursharedevents/tests/landing-category-scenarios.spec.ts'
-      - 'workers/oursharedevents/tests/list-landing-language-golden.spec.ts'
-      - 'workers/oursharedevents/tests/list-landing-spanish.spec.ts'
-      - 'workers/oursharedevents/tests/helpers/list-landing-rows.ts'
-      # Epic OSE-1880: the zoomed map. Its specs kill the zoom mutants in
-      # landing-area.ts and the panel-link lines in the pages.ts range.
-      - 'workers/oursharedevents/tests/map-zoom.spec.ts'
-      - 'workers/oursharedevents/tests/map-place-links.spec.ts'
-      # Epic OSE-1880: the map's own rules (dot placement, the tile archive reader,
-      # the vector tile decoder) and the specs that kill their mutants. The
-      # property spec holds the ?area= fat-finger rules for landing-area.ts.
-      - 'workers/oursharedevents/src/lib/attendee-map.ts'
-      - 'workers/oursharedevents/src/lib/mvt.ts'
-      - 'workers/oursharedevents/src/lib/pmtiles.ts'
-      - 'workers/oursharedevents/tests/attendee-map.spec.ts'
-      - 'workers/oursharedevents/tests/mvt.spec.ts'
-      - 'workers/oursharedevents/tests/pmtiles.spec.ts'
-      - 'workers/oursharedevents/tests/street-map.spec.ts'
-      - 'workers/oursharedevents/tests/street-map-landing.spec.ts'
-      - 'workers/oursharedevents/tests/fat-finger.property.spec.ts'
-      - 'workers/oursharedevents/stryker.conf.mjs'
-      # OSE-1695: the CI security rule that keeps secrets off branch pushes, its test and config.
-      - 'scripts/ci/branch-push-secret-exposure.mjs'
-      - 'scripts/ci/secret-echo-exposure.mjs'
-      - 'tests/unit/ci/no-secret-on-branch-push.test.js'
-      - 'tests/unit/ci/no-secret-echo.test.js'
-      - 'stryker.ci-scripts.conf.mjs'
-      - 'vitest.ci-scripts.config.mjs'
-      - 'workers/oursharedevents/vitest.node.config.mts'
-      - 'workers/oursharedevents/vitest.node-specs.mjs'
-      - 'workers/oursharedevents/package.json'
-      - 'workers/oursharedevents/package-lock.json'
-      - 'scripts/ci/mutation-file-floor.mjs'
-      - '.github/workflows/mutation-testing.yml'
-  # OSE-1801 (CCR 2026-11-04 S-2): the same filter on a push to main, so a PR
-  # that merged before its mutation run finished (or skipped it) is still
-  # measured on main, not only at 08:40 the next day.
+  # OSE-1801 (CCR 2026-11-04 S-2): the same decision on a push to main, so a PR
+  # that merged before its mutation run finished is still measured on main, not
+  # only at 08:40 the next day. The nightly and workflow_dispatch always run.
   push:
     branches: [main]
-    paths:
-      - 'workers/oursharedevents/src/lib/count-floor.ts'
-      - 'workers/oursharedevents/src/lib/report-depth.ts'
-      - 'workers/oursharedevents/src/lib/pii.ts'
-      - 'workers/oursharedevents/src/auth/admin.ts'
-      - 'workers/oursharedevents/tests/count-floor.spec.ts'
-      - 'workers/oursharedevents/tests/report-depth.spec.ts'
-      - 'workers/oursharedevents/tests/pii-crypto.spec.ts'
-      - 'workers/oursharedevents/tests/red-team/auth-jwks-verify.spec.ts'
-      - 'workers/oursharedevents/tests/red-team/auth-guard-mutation.spec.ts'
-      - 'workers/oursharedevents/tests/red-team/auth-jwt-verify-memo.spec.ts'
-      - 'workers/oursharedevents/tests/red-team/ci-service-actor.spec.ts'
-      - 'workers/oursharedevents/tests/admin-actor-memo.spec.ts'
-      # OSE-1824: the landing's Type row by event-type category — its sources
-      # (two handler files are mutated only in a marker range, see rangeOf in
-      # stryker.conf.mjs) and the node specs and goldens that kill its mutants.
-      - 'workers/oursharedevents/src/lib/event-type-catalog.ts'
-      - 'workers/oursharedevents/src/lib/event-type-catalog-read.ts'
-      - 'workers/oursharedevents/src/lib/landing-area.ts'
-      - 'workers/oursharedevents/src/handlers/pages.ts'
-      - 'workers/oursharedevents/src/handlers/events.ts'
-      - 'workers/oursharedevents/tests/landing-area.spec.ts'
-      - 'workers/oursharedevents/tests/landing-category-scenarios.spec.ts'
-      - 'workers/oursharedevents/tests/list-landing-language-golden.spec.ts'
-      - 'workers/oursharedevents/tests/list-landing-spanish.spec.ts'
-      - 'workers/oursharedevents/tests/helpers/list-landing-rows.ts'
-      # Epic OSE-1880: the zoomed map. Its specs kill the zoom mutants in
-      # landing-area.ts and the panel-link lines in the pages.ts range.
-      - 'workers/oursharedevents/tests/map-zoom.spec.ts'
-      - 'workers/oursharedevents/tests/map-place-links.spec.ts'
-      # Epic OSE-1880: the map's own rules (dot placement, the tile archive reader,
-      # the vector tile decoder) and the specs that kill their mutants. The
-      # property spec holds the ?area= fat-finger rules for landing-area.ts.
-      - 'workers/oursharedevents/src/lib/attendee-map.ts'
-      - 'workers/oursharedevents/src/lib/mvt.ts'
-      - 'workers/oursharedevents/src/lib/pmtiles.ts'
-      - 'workers/oursharedevents/tests/attendee-map.spec.ts'
-      - 'workers/oursharedevents/tests/mvt.spec.ts'
-      - 'workers/oursharedevents/tests/pmtiles.spec.ts'
-      - 'workers/oursharedevents/tests/street-map.spec.ts'
-      - 'workers/oursharedevents/tests/street-map-landing.spec.ts'
-      - 'workers/oursharedevents/tests/fat-finger.property.spec.ts'
-      - 'workers/oursharedevents/stryker.conf.mjs'
-      # OSE-1695: the CI security rule that keeps secrets off branch pushes, its test and config.
-      - 'scripts/ci/branch-push-secret-exposure.mjs'
-      - 'scripts/ci/secret-echo-exposure.mjs'
-      - 'tests/unit/ci/no-secret-on-branch-push.test.js'
-      - 'tests/unit/ci/no-secret-echo.test.js'
-      - 'stryker.ci-scripts.conf.mjs'
-      - 'vitest.ci-scripts.config.mjs'
-      - 'workers/oursharedevents/vitest.node.config.mts'
-      - 'workers/oursharedevents/vitest.node-specs.mjs'
-      - 'workers/oursharedevents/package.json'
-      - 'workers/oursharedevents/package-lock.json'
-      - 'scripts/ci/mutation-file-floor.mjs'
-      - '.github/workflows/mutation-testing.yml'
 
 permissions:
   contents: read
@@ -168,10 +62,33 @@ jobs:
     defaults:
       run:
         working-directory: workers/oursharedevents
+    # No job-level `if:` and no `needs:` — this check must report on every pull
+    # request so it can be a required check (tests/unit/ci/branch-protection-contract.test.js
+    # counts a job that can skip as one that may not report).
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 2, not the default 1: the scope step reads a pull request's changes as
+          # the merge commit against its first parent (HEAD^1).
+          fetch-depth: 2
+
+      # Decides whether this change needs the run (scripts/ci/mutation-paths.mjs).
+      # FAIL CLOSED: every step below runs unless this step said `run=false`,
+      # and it says that only when it read the changed files and none is on the
+      # list. If the list cannot be read (git fails, the checkout is not the
+      # merge commit, the push has no before sha) it says `run=true`; if this
+      # step prints nothing the steps still run; if it fails, the job is red.
+      # The nightly and workflow_dispatch always get `run=true`.
+      - name: Does this change need a mutation run?
+        id: scope
+        working-directory: ${{ github.workspace }}
+        env:
+          MUTATION_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MUTATION_BEFORE_SHA: ${{ github.event.before }}
+        run: node scripts/ci/mutation-paths.mjs
 
       - uses: actions/setup-node@v4
+        if: steps.scope.outputs.run != 'false'
         with:
           # StrykerJS 10 requires Node >= 22 (the rest of CI runs on 20; this job
           # is isolated). A lower version fails fast in stryker-cli's engine guard.
@@ -180,6 +97,7 @@ jobs:
           cache-dependency-path: workers/oursharedevents/package-lock.json
 
       - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        if: steps.scope.outputs.run != 'false'
         # ADR-008 Phase 0: this job installs/builds/tests the Worker, which
         # bundles @ocr/ui from the hub commit pinned in .ocr-hub-ref. REQUIRED —
         # never continue-on-error: npm ci would succeed with a dangling @ocr/ui
@@ -193,17 +111,20 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - run: npm ci
+        if: steps.scope.outputs.run != 'false'
 
       - name: Run Stryker mutation testing
+        if: steps.scope.outputs.run != 'false'
         run: npm run test:mutation
 
       - name: Per-file mutation floor
+        if: steps.scope.outputs.run != 'false'
         # The break threshold in stryker.conf.mjs is global; this fails when any one
         # guard file is under its own floor (admin.ts: 100%). OSE-1801, CCR S-2.
         run: node ../../scripts/ci/mutation-file-floor.mjs reports/mutation/mutation.json
 
       - name: Upload mutation report
-        if: always()
+        if: always() && steps.scope.outputs.run != 'false'
         uses: actions/upload-artifact@v4
         with:
           name: mutation-report
@@ -224,26 +145,47 @@ jobs:
   mutation-ci-scripts:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # No job-level `if:` and no `needs:`, for the same reason as the job above.
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          # 2: the scope step reads HEAD^1, as in the job above.
+          fetch-depth: 2
+
+      # Decides whether this change needs the run (scripts/ci/mutation-paths.mjs).
+      # FAIL CLOSED: every step below runs unless this step said `run=false`,
+      # and it says that only when it read the changed files and none is on the
+      # list. If the list cannot be read (git fails, the checkout is not the
+      # merge commit, the push has no before sha) it says `run=true`; if this
+      # step prints nothing the steps still run; if it fails, the job is red.
+      # The nightly and workflow_dispatch always get `run=true`.
+      - name: Does this change need a mutation run?
+        id: scope
+        env:
+          MUTATION_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MUTATION_BEFORE_SHA: ${{ github.event.before }}
+        run: node scripts/ci/mutation-paths.mjs
 
       - uses: actions/setup-node@v4
+        if: steps.scope.outputs.run != 'false'
         with:
           node-version: 22
 
       - name: Install StrykerJS, Vitest and js-yaml into a separate folder
+        if: steps.scope.outputs.run != 'false'
         run: npm install --prefix "$RUNNER_TEMP/stryker" --legacy-peer-deps --no-audit --no-fund --ignore-scripts @stryker-mutator/core@10.0.0 @stryker-mutator/vitest-runner@10.0.0 vitest@4.1.11 js-yaml@4.3.2
 
       - name: Link node_modules to it
+        if: steps.scope.outputs.run != 'false'
         run: ln -s "$RUNNER_TEMP/stryker/node_modules" node_modules
 
       - name: Run Stryker on the CI security rules
+        if: steps.scope.outputs.run != 'false'
         run: node node_modules/@stryker-mutator/core/bin/stryker.js run stryker.ci-scripts.conf.mjs
 
       - name: Upload mutation report
-        if: always()
+        if: always() && steps.scope.outputs.run != 'false'
         uses: actions/upload-artifact@v4
         with:
           name: mutation-report-ci-scripts
