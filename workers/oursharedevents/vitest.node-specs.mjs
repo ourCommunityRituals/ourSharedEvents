@@ -186,6 +186,10 @@ export const NODE_SPECS = [
   'tests/i18n-resolve-language.spec.ts',
   'tests/i18n-catalog.spec.ts',
   'tests/i18n-path-prefix.spec.ts',
+  // The header Language menu (owner 2026-11-10). Pure over the renderers.
+  'tests/language-menu.spec.ts',
+  'tests/language-menu-third-language.spec.ts',
+  'tests/language-menu-close.spec.ts',
   // H1 (CCR-PR567) — marker-injection $-splice guard. Pure over the exported
   // inject* functions + the injectMarker helper (no DOM / cloudflare:test / D1).
   'tests/inject-marker.spec.ts',

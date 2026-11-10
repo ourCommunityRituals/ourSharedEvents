@@ -6,7 +6,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 18
+      "testCount": 19
     },
     {
       "file": "workers/oursharedevents/tests/admin-664-who-rich-content.spec.ts",
@@ -1626,6 +1626,27 @@
       "testCount": 5
     },
     {
+      "file": "workers/oursharedevents/tests/language-menu-close.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/language-menu-third-language.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 2
+    },
+    {
+      "file": "workers/oursharedevents/tests/language-menu.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 18
+    },
+    {
       "file": "workers/oursharedevents/tests/language-path-prefix.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1658,7 +1679,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 19
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/listing-card-links.spec.ts",

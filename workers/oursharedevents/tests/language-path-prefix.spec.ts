@@ -157,6 +157,12 @@ describe('OSE-1761 | the prefix renders the page in that language', () => {
     );
     const html = await res.text();
     expect(html).toContain(`href="/es${readablePath(e)}?type=checkin&amp;deployment=dep_abc123"`);
+    // N8 (OSE-1935): the header Language menu carries the same vetted query, on both layouts.
+    for (const id of ['language-menu-es', 'site-menu-language-es']) {
+      expect(html).toContain(
+        `data-testid="${id}" href="/es${readablePath(e)}?type=checkin&amp;deployment=dep_abc123"`
+      );
+    }
     expect(html).not.toContain('utm=');
   });
 

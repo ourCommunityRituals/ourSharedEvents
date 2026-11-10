@@ -27,6 +27,8 @@ const en = {
   'video.watch': '▶ Watch the video',
   'back.label': 'Back',
   'language.label': 'Language',
+  // The phone header's menu button (lib/i18n/language-menu.ts).
+  'menu.label': 'Menu',
   'choices.heading': 'How would you like to take part?',
   'choices.registerNote': 'Asks for your name and email.',
   'choices.checkinLabel': 'Count me in, anon',
@@ -355,6 +357,7 @@ const es: Record<MessageKey, string> = {
   'video.watch': '▶ Ver el video',
   'back.label': 'Volver',
   'language.label': 'Idioma',
+  'menu.label': 'Menú',
   'choices.heading': '¿Cómo quieres participar?',
   'choices.registerNote': 'Pide tu nombre y correo.',
   'choices.checkinLabel': 'Cuenta conmigo, de forma anónima',

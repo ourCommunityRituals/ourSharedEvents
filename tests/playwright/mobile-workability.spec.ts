@@ -190,8 +190,12 @@ const SURFACES: Surface[] = [
   {
     path: '/',
     name: 'landing',
+    // `header a` skips the Language menu's own links (owner 2026-11-10). They
+    // sit first in the header but show only once the menu is open: on a phone
+    // they have no box, and on a laptop a closed menu still gives them one, so
+    // the check passed on a link nobody could see.
     primaryCtaSelector:
-      '[data-testid="subscribe-submit"], [data-testid="cta-primary"], header a, .hero a, .hero button',
+      '[data-testid="subscribe-submit"], [data-testid="cta-primary"], header a:not(.ose-langmenu-item), .hero a, .hero button',
   },
   {
     path: '/events',

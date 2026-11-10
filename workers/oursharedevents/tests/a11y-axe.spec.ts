@@ -253,6 +253,47 @@ describe('A11Y-7 / OSE-1761: event page in Spanish with the language switch', ()
     expect(link?.textContent).toBe('Inglés');
   });
 
+  // OSE-1937 (epic OSE-1927): the header Language menu with every part open, the
+  // wide-screen list, the phone menu and its Language list, so axe sees all of it.
+  // Then the rules a menu can break that are not in wcag2a/aa: a second
+  // "Language" landmark beside the footer switch (E8), and a summary with no name.
+  for (const lang of ['es', 'en'] as const) {
+    test(`pre-event page with the header menu open, ${lang}`, async () => {
+      const html = renderPreEventHtml(row, SHARE, undefined, { lang, pageQuery: '' }).replace(
+        /<details class="ose-langmenu-/g,
+        '<details open class="ose-langmenu-'
+      );
+      expect(html.match(/<details open class="ose-langmenu-/g)?.length, 'all three opened').toBe(3);
+      await scanPage(`${lang} pre-event page, header menu open`, html);
+
+      const extra = await axe.run(document, {
+        runOnly: {
+          type: 'rule',
+          values: [
+            'landmark-unique',
+            'summary-name',
+            'link-name',
+            'aria-allowed-attr',
+            'duplicate-id',
+          ],
+        },
+      });
+      expect(extra.violations.map((v) => v.id)).toEqual([]);
+
+      const label = lang === 'es' ? 'Idioma' : 'Language';
+      expect(document.querySelector('[data-testid="language-menu-button"]')?.textContent).toBe(
+        `${label}▾`
+      );
+      expect(
+        document.querySelector('[data-testid="site-menu-button"]')?.getAttribute('aria-label')
+      ).toBe(lang === 'es' ? 'Menú' : 'Menu');
+      // The current language is text, not a link, so it is not a tab stop.
+      const current = document.querySelector(`[data-testid="language-menu-${lang}"]`);
+      expect(current?.tagName).toBe('SPAN');
+      expect(current?.getAttribute('aria-current')).toBe('true');
+    });
+  }
+
   test('live page', async () => {
     await scanPage(
       'Spanish live page',
