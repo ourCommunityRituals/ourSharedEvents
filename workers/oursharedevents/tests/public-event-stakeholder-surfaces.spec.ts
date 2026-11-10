@@ -104,8 +104,14 @@ async function seedEvent(
 
 async function seedSponsor(
   eventId: string,
-  opts: { name: string; websiteUrl?: string | null; isActive?: number }
-): Promise<void> {
+  opts: {
+    name: string;
+    websiteUrl?: string | null;
+    isActive?: number;
+    logoUrl?: string | null;
+    compactLogoUrl?: string | null;
+  }
+): Promise<string> {
   const id = `spon_${eventId}_${opts.name.replace(/\s+/g, '_').toLowerCase()}`;
   // OSE-799 A2: split model (helper is idempotent — clears prior rows for this id).
   await seedSplitSponsor(tenv().DB, {
@@ -115,7 +121,18 @@ async function seedSponsor(
     tier: 'gold',
     websiteUrl: opts.websiteUrl ?? null,
     isActive: opts.isActive ?? 1,
+    logoUrl: opts.logoUrl ?? null,
+    compactLogoUrl: opts.compactLogoUrl ?? null,
   });
+  return id;
+}
+
+/** The strip's own markup, so a check cannot pass on text elsewhere in the page. */
+function stripOf(html: string, testid: string): string {
+  const start = html.indexOf(`data-testid="${testid}"`);
+  expect(start, `${testid} must render`).toBeGreaterThan(-1);
+  const end = html.indexOf('</section>', start);
+  return html.slice(start, end);
 }
 
 async function seedRegistration(
@@ -207,6 +224,87 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     const html = await res.text();
     expect(html).not.toContain('data-testid="pre-sponsor-strip"');
     expect(html).not.toContain('Supported by');
+  });
+
+  // Owner 2026-11-09: between the header and "What", each sponsor with a logo is
+  // thumbnail art only (compact logo, header logo as fallback), via the proxy.
+  test('a sponsor with a logo shows as thumbnail art only, through the proxy', async () => {
+    const id = 'evt_ssp1_pre_sponsor_thumb';
+    await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
+    const sid = await seedSponsor(id, {
+      name: 'Thumb Art Co',
+      websiteUrl: 'https://thumb.example.com',
+      logoUrl: 'https://cdn.example.com/thumb-wide.png',
+    });
+
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    const strip = stripOf(html, 'pre-sponsor-strip');
+    expect(strip).toContain('Supported by');
+    expect(strip).toContain('data-testid="sponsor-thumb"');
+    expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
+    expect(strip, 'the name is the alt text').toContain('alt="Thumb Art Co"');
+    expect(strip, 'no visible name text beside the art').not.toContain('>Thumb Art Co<');
+    expect(strip).toContain('href="https://thumb.example.com"');
+    expect(html, 'the stored logo URL never reaches the page').not.toContain('cdn.example.com');
+  });
+
+  test('a compact logo alone is enough for a thumbnail', async () => {
+    const id = 'evt_ssp1_pre_sponsor_compact';
+    await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
+    await seedSponsor(id, {
+      name: 'Compact Only',
+      compactLogoUrl: 'https://cdn.example.com/compact.png',
+    });
+
+    const strip = stripOf(
+      await (await SELF.fetch(`https://t.test/events/${id}`)).text(),
+      'pre-sponsor-strip'
+    );
+    expect(strip).toContain('data-testid="sponsor-thumb"');
+    expect(strip).toContain('alt="Compact Only"');
+    expect(strip, 'no website: the art opens the sponsor card').toContain(
+      'data-testid="sponsor-card-link"'
+    );
+  });
+
+  test('Ad 1 with art and Ad 2 without: art for one, the name for the other', async () => {
+    const id = 'evt_ssp1_pre_sponsor_mixed';
+    await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
+    await seedSponsor(id, {
+      name: 'Ad One',
+      websiteUrl: 'https://one.example.com',
+      compactLogoUrl: 'https://cdn.example.com/one.png',
+    });
+    await seedSponsor(id, { name: 'Ad Two', websiteUrl: 'https://two.example.com' });
+
+    const strip = stripOf(
+      await (await SELF.fetch(`https://t.test/events/${id}`)).text(),
+      'pre-sponsor-strip'
+    );
+    expect(strip.match(/data-testid="sponsor-item"/g) ?? []).toHaveLength(2);
+    expect(strip.match(/data-testid="sponsor-thumb"/g) ?? []).toHaveLength(1);
+    expect(strip).toContain('alt="Ad One"');
+    expect(strip, 'no art: the name stays as text').toContain('>Ad Two</a>');
+  });
+
+  test('an empty logo URL is not art: the name shows', async () => {
+    const id = 'evt_ssp1_pre_sponsor_emptylogo';
+    await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
+    const sid = await seedSponsor(id, { name: 'Blank Logo', websiteUrl: 'https://b.example.com' });
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO sponsor_asset (id, sponsor_business_id, format, url, created_at, updated_at)
+         VALUES (?, ?, 'logo_compact', '', datetime('now'), datetime('now'))`
+      )
+      .bind(`sa_${sid}_blank`, sid)
+      .run();
+
+    const strip = stripOf(
+      await (await SELF.fetch(`https://t.test/events/${id}`)).text(),
+      'pre-sponsor-strip'
+    );
+    expect(strip).not.toContain('data-testid="sponsor-thumb"');
+    expect(strip).toContain('>Blank Logo</a>');
   });
 
   test('inactive sponsors are excluded from the strip', async () => {
@@ -352,6 +450,24 @@ describe('OSE-ssp1: live-event sponsor strip', () => {
     const html = await res.text();
     expect(html).toContain('data-testid="live-sponsor-strip"');
     expect(html).toContain('Live Sponsor');
+  });
+
+  test('live-sponsor-strip shows a sponsor with a logo as thumbnail art', async () => {
+    const id = 'evt_ssp1_live_sponsor_thumb';
+    await seedEvent(id, { startOffsetDays: -1 / 24, endOffsetDays: 1 / 24 });
+    const sid = await seedSponsor(id, {
+      name: 'Live Art',
+      websiteUrl: 'https://liveart.example.com',
+      logoUrl: 'https://cdn.example.com/live.png',
+    });
+
+    const strip = stripOf(
+      await (await SELF.fetch(`https://t.test/events/${id}`)).text(),
+      'live-sponsor-strip'
+    );
+    expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
+    expect(strip).toContain('alt="Live Art"');
+    expect(strip).not.toContain('>Live Art<');
   });
 
   test('live-sponsor-strip absent when no sponsors', async () => {
@@ -538,6 +654,26 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
     const html = await res.text();
     expect(html).toContain('data-testid="event-main-post"');
     expect(html).not.toContain('data-testid="event-stats-card"');
+  });
+
+  test('post-sponsor-thanks shows a logo sponsor as art and a logo-less one as its name', async () => {
+    const id = 'evt_ssp1_post_sponsor_thumb';
+    await seedEvent(id, { startOffsetDays: -7, endOffsetDays: -6 });
+    const sid = await seedSponsor(id, {
+      name: 'Post Art',
+      websiteUrl: 'https://postart.example.com',
+      logoUrl: 'https://cdn.example.com/post.png',
+    });
+    await seedSponsor(id, { name: 'Post Plain', websiteUrl: 'https://postplain.example.com' });
+
+    const strip = stripOf(
+      await (await SELF.fetch(`https://t.test/events/${id}`)).text(),
+      'post-sponsor-thanks'
+    );
+    expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
+    expect(strip).toContain('alt="Post Art"');
+    expect(strip).not.toContain('>Post Art<');
+    expect(strip).toContain('>Post Plain</a>');
   });
 
   test('post-sponsor-thanks renders when active sponsors exist', async () => {

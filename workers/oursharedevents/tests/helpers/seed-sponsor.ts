@@ -27,6 +27,8 @@ export interface SeedSponsorOpts {
   tier?: string;
   websiteUrl?: string | null;
   logoUrl?: string | null;
+  /** The compact (sidebar) logo → sponsor_asset format 'logo_compact' (0081). */
+  compactLogoUrl?: string | null;
   /** → sponsor_placement.is_active (default 1). */
   isActive?: number;
   /**
@@ -134,6 +136,7 @@ export async function seedSplitSponsor(db: D1Database, opts: SeedSponsorOpts): P
 
   const assets: Array<[string, string | null | undefined]> = [
     ['logo', opts.logoUrl],
+    ['logo_compact', opts.compactLogoUrl],
     ['poster', opts.posterUrl],
     ['banner', opts.bannerUrl],
     ['vertical', opts.verticalUrl],
