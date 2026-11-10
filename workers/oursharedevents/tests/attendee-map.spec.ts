@@ -572,6 +572,9 @@ describe('attendee map | area names, order and shading, edge by edge', () => {
     expect(townOf('Venue, Chicago IL 60406-9100')).toBe('Chicago');
     expect(townOf('Venue, Chicago IL  60406')).toBe('Chicago');
     expect(townOf('1 Main St, Blue Island, IL  60406')).toBe('Blue Island');
+    // A pasted address can break the line before the state. The gap is then a
+    // line break and a space: more than one character, and not one `.` can span.
+    expect(townOf('Venue, Chicago\n IL')).toBe('Chicago');
   });
 
   it('townOf: a state that is not two capitals, or a country inside a longer part, is no name', () => {

@@ -14,8 +14,8 @@
 # collisions and duplicate uploads to the same language category.
 #
 # When this runs:
-#   - Push to main or claude/* branches
-#   - Pull requests targeting main
+#   - Every pull request, whatever its base branch, with no paths filter
+#   - Push to main (the merged result)
 #   - Weekly (Sundays 00:00 UTC) - deep vulnerability discovery
 #   - Manual trigger - for security audits
 #
@@ -32,13 +32,18 @@
 name: CodeQL Security Analysis
 
 on:
+  # One run per PR commit. Push and pull_request both used to match every
+  # branch, so each PR listed both jobs twice for the same SHA. The PR run is
+  # the scan that gates a merge; push keeps main scanned after merge.
+  # tests/integration/security-scan-triggers.test.js fails if push widens
+  # again or pull_request narrows.
   push:
-    # Trigger on ALL branches, every push — no paths filter per security-unconditional rule.
-    # (S0 Security must run unconditionally; paths filters only on Gate/Deploy/Smoke.)
     branches:
-      - '**'
+      - main
   pull_request:
-    # Scan all PRs regardless of target branch
+    # Every PR, whatever its base branch. No paths filter, per the
+    # security-unconditional rule (S0 security runs on every PR; paths filters
+    # only on Gate/Deploy/Smoke).
     branches:
       - '**'
   schedule:
@@ -54,10 +59,9 @@ on:
         type: boolean
 
 # Sweep 9 #4 (2026-05-14): cancel superseded runs.
-# This workflow triggers on EVERY branch + EVERY PR with no paths filter
-# (per security-unconditional doctrine). Without concurrency cancel, a
-# rapid push storm to a single branch would queue N analyses on the
-# 3-runner pool. Group by PR number when available, else by ref, so
+# This workflow triggers on EVERY PR (and pushes to main) with no paths
+# filter (per security-unconditional doctrine). Without concurrency cancel,
+# a rapid push storm to a single PR would queue N analyses. Group by PR number when available, else by ref, so
 # distinct branches don't interfere with each other.
 concurrency:
   group: security-scan-${{ github.event.pull_request.number || github.ref }}
