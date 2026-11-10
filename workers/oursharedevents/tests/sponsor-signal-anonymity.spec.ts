@@ -60,8 +60,9 @@ async function applyMigrations(): Promise<void> {
 async function seedEvent(id: string): Promise<void> {
   const tenv = env as unknown as TestEnv;
   await tenv.DB.prepare(
-    `INSERT OR IGNORE INTO events (id, brand_id, title, slug, status, h3_res7)
-     VALUES (?, 'nw-test', ?, ?, 'active', '872664544ffffff')`
+    // OSE-1900: the event chose to have sponsors, so a beacon for its sponsor is written.
+    `INSERT OR IGNORE INTO events (id, brand_id, title, slug, status, h3_res7, settings_json)
+     VALUES (?, 'nw-test', ?, ?, 'active', '872664544ffffff', '{"useSponsors":true}')`
   )
     .bind(id, `Never-Who Test ${id}`, `nw-test-${id}`)
     .run();

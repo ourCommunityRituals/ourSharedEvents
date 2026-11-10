@@ -84,8 +84,9 @@ async function seedEvent(
   await tenv().DB.prepare(`DELETE FROM events WHERE id = ?`).bind(id).run();
   await tenv()
     .DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, end_date, what_short, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+      // OSE-1900: the events chose to have sponsors, so the strips below can render.
+      `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, end_date, what_short, settings_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '{"useSponsors":true}', datetime('now'), datetime('now'))`
     )
     .bind(
       id,

@@ -41,7 +41,8 @@ async function applyMigrations(): Promise<void> {
 beforeAll(async () => {
   await applyMigrations();
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO events (id, brand_id, title, slug) VALUES ('evt_asset', 'b', 'E', 'evt-asset')"
+    // OSE-1900: the event chose to have sponsors, so its sponsors' creative is served.
+    `INSERT OR IGNORE INTO events (id, brand_id, title, slug, settings_json) VALUES ('evt_asset', 'b', 'E', 'evt-asset', '{"useSponsors":true}')`
   ).run();
   // A 1-format sponsor: only 'poster' set (points at an R2 key), no logo_url.
   // OSE-799 A2: per-format creative is a sponsor_asset row (format='poster').

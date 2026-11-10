@@ -14,6 +14,8 @@
  * custom image, a display name and the card are available at every tier.
  */
 
+import { useSponsorsSql } from './event-settings';
+
 // ── Field rules ───────────────────────────────────────────────────────────────
 
 export const DISPLAY_NAME_MAX = 80;
@@ -130,22 +132,60 @@ export const SPONSOR_ON_SHOW_SQL = `(sb.is_active = 1 AND EXISTS (
      AND COALESCE(sp_show.organizer_accepted, CASE WHEN sp_show.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
      AND sp_show.sponsor_accepted = 1
      AND EXISTS (SELECT 1 FROM events e_show WHERE e_show.id = sp_show.event_id
-                 AND e_show.brand_id = sb.brand_id AND e_show.status = 'active')
+                 AND e_show.brand_id = sb.brand_id AND e_show.status = 'active'
+                 AND ${eventUsesSponsorsSql('e_show')})
 ))`;
+
+/**
+ * THE EVENT'S OWN YES (OSE-1900, owner 2026-11-09): sponsors show only if the
+ * event chose them. This is the one gate, and every sponsor reader goes through
+ * it, in one of three forms:
+ *
+ *   eventUsesSponsorsSql(alias)       a boolean over an `events` row the query
+ *                                     already has in scope (default alias `e`)
+ *   PLACEMENT_EVENT_USES_SPONSORS_SQL the same, for a query that has only the
+ *                                     placement (`sp`) in scope
+ *   SPONSOR_ON_SHOW_SQL / PLACEMENT_ON_SHOW_SQL, which include it
+ *
+ * The switch is `useSponsors` in events.settings_json, and it is opt-in: absent
+ * means OFF (lib/event-settings.ts holds the key, that rule and the JSON SQL).
+ * It comes before the two-sided placement consent and replaces neither side of
+ * it: a placement shows when the event opted in AND the sponsor accepted AND
+ * the organizer accepted. Turning the switch off hides every placement of the
+ * event at once and deletes none.
+ *
+ * Who must use it: any statement that shows a sponsor on a public surface,
+ * serves a sponsor's logo or creative, records a display or click, or offers
+ * an event to a sponsor (lib/sponsor-discovery.ts). The Path 2 geo auto-match
+ * in lib/sponsor-resolver.ts is dark (ADR-019) and sits behind the same gate.
+ * tests/sponsor-opt-in-readers.spec.ts reads `src/` and fails when a statement
+ * carries the consent rule without this gate.
+ *
+ * No tier is read here, and none may be: consent is never tier-gated
+ * (invariant 7).
+ */
+export function eventUsesSponsorsSql(alias = 'e'): string {
+  return useSponsorsSql(alias);
+}
+
+/** The gate for a query with only the placement (`sp`) in scope. */
+export const PLACEMENT_EVENT_USES_SPONSORS_SQL = `EXISTS (
+  SELECT 1 FROM events e_uses WHERE e_uses.id = sp.event_id AND ${eventUsesSponsorsSql('e_uses')})`;
 
 /**
  * The same on-show rule per PLACEMENT, for counting (OSE-1468 dashboards). A
  * boolean over a row with `sp` (sponsor_placement), `sb` (its sponsor_business)
  * and `e` (its event) in scope: active placement, active business, sponsor
- * accepted, organizer accepted under the source-aware rule, live event, and the
+ * accepted, organizer accepted under the source-aware rule, live event, the
  * event in the sponsor's own brand (the schema does not enforce that; the card
- * does). Keep in step with SPONSOR_ON_SHOW_SQL above; tests/dashboards.spec.ts
- * pins the cases.
+ * does), and the event opted in to sponsors (OSE-1900, the gate above). Keep in
+ * step with SPONSOR_ON_SHOW_SQL above; tests/dashboards.spec.ts pins the cases.
  */
 export const PLACEMENT_ON_SHOW_SQL = `(sp.is_active = 1 AND sb.is_active = 1
   AND sp.sponsor_accepted = 1
   AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
-  AND e.status = 'active' AND e.brand_id = sb.brand_id)`;
+  AND e.status = 'active' AND e.brand_id = sb.brand_id
+  AND ${eventUsesSponsorsSql('e')})`;
 
 /** The public card for a sponsor (no website → a tap lands here). */
 export function sponsorCardPath(sponsorId: string): string {

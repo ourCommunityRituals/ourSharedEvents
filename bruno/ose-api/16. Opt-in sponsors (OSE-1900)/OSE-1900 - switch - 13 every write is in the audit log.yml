@@ -1,0 +1,39 @@
+info:
+  name: OSE-1900 | audit | switch | each write of the switch has its own audit row
+  type: http
+  seq: 32
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/audit-log?action=EVENT_SPONSORS_SWITCH&resource_type=event&limit=50"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The five accepted writes above (on, on, off, off, on) each wrote a row. The
+        // refused one wrote none of this kind. Rows from earlier runs are older, so the
+        // newest five for this event are this run's, newest first.
+        const rows = (res.getBody().entries || []).filter(function (r) { return r.resource_id === 'optin-toggle-evt'; });
+        test('OSE-1900 audit: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-1900 audit: at least the five writes of this run are logged, all as success', function () {
+          expect(rows.length).to.be.at.least(5);
+          rows.slice(0, 5).forEach(function (r) { expect(r.outcome).to.eql('success'); expect(r.action).to.eql('EVENT_SPONSORS_SWITCH'); });
+        });
+        test('OSE-1900 audit: the rows say which way the switch went, newest first: on, off, off, on, on', function () {
+          const went = rows.slice(0, 5).map(function (r) { return r.details && r.details.use_sponsors; });
+          expect(went).to.eql([true, false, false, true, true]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

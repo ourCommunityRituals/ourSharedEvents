@@ -305,6 +305,28 @@ describe('POST /api/v2/admin/events/:id/repeat — the copy', () => {
     }
   });
 
+  test('OSE-1900: sponsors are chosen per event, so the copy starts with sponsors off', async () => {
+    // @born-red: with the `delete out.useSponsors` line removed from settingsForCopy in
+    // lib/event-settings.ts the copy carried `useSponsors: true` (2026-11-09).
+    await tenv.DB.prepare(
+      `UPDATE events SET settings_json = '{"showQRSection":false,"useSponsors":true}' WHERE id = ?`
+    )
+      .bind(SRC)
+      .run();
+    try {
+      const res = await repeat(SRC, asEmail(OWNER_A));
+      expect(res.status).toBe(201);
+      const row = await rowOf(((await res.json()) as { id: string }).id);
+      expect(JSON.parse(row.settings_json as string)).toEqual({ showQRSection: false });
+    } finally {
+      await tenv.DB.prepare(
+        `UPDATE events SET settings_json = '{"showQRSection":false,"displayPanes":["event","sponsors"],"displayDwellSeconds":20}' WHERE id = ?`
+      )
+        .bind(SRC)
+        .run();
+    }
+  });
+
   test('the date moves to the same weekday ahead; the start time and zone stay', async () => {
     const body = (await (await repeat(SRC, asEmail(OWNER_A))).json()) as {
       id: string;

@@ -60,8 +60,11 @@ async function seedEvent(
   } = {}
 ) {
   await tenv.DB.prepare(
-    `INSERT INTO events (id, brand_id, title, slug, status, start_date, location, is_published, h3_res7)
-     VALUES (?, ?, ?, ?, ?, ?, 'Eagles Hall', ?, ?)`
+    // OSE-1900: every event here chose to have sponsors, so each case still turns
+    // on the one thing it names (brand, status, date, listing). The switch itself
+    // is covered in tests/sponsor-opt-in-gate.spec.ts.
+    `INSERT INTO events (id, brand_id, title, slug, status, start_date, location, is_published, h3_res7, settings_json)
+     VALUES (?, ?, ?, ?, ?, ?, 'Eagles Hall', ?, ?, '{"useSponsors":true}')`
   )
     .bind(
       id,

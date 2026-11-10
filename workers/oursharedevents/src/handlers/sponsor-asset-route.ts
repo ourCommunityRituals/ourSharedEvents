@@ -29,6 +29,7 @@ import {
   type AssetResolvable,
 } from '../lib/sponsor-asset';
 import { fetchAndProxyLogo } from '../lib/sponsor-logo';
+import { PLACEMENT_EVENT_USES_SPONSORS_SQL } from '../lib/sponsor-card';
 
 export interface SponsorAssetRouteEnv {
   DB: D1Database;
@@ -122,6 +123,8 @@ export async function handleSponsorAsset(
              AND sp.is_active = 1
              AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
              AND sp.sponsor_accepted = 1
+             -- OSE-1900: and on an event that chose to have sponsors.
+             AND ${PLACEMENT_EVENT_USES_SPONSORS_SQL}
         )
       GROUP BY sb.id, sb.name`
   )

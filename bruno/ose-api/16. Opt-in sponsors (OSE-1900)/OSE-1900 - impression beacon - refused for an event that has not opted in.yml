@@ -1,0 +1,34 @@
+info:
+  name: OSE-1900 | rainy | impression beacon | 404 and nothing recorded when the switch is off
+  type: http
+  seq: 15
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/events/optin-off-evt/sponsors/sb_optin_hidden/impression"
+  headers:
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"surface":"public","placement":"mobileBanner"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // A display or click is recorded only for a sponsor that is on show. With the
+        // switch off the pair is not a placement on show, so the answer is the same 404
+        // a made-up pair gets, and nothing is written.
+        test('OSE-1900 rainy: 404 NOT_FOUND, not a counted or filtered beacon', function () {
+          expect(res.getStatus()).to.eql(404);
+          expect(res.getBody().code).to.eql('NOT_FOUND');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

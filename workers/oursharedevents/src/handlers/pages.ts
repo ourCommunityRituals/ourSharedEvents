@@ -20,6 +20,7 @@ import { formatEventPrice } from '../lib/event-price';
 import { validateLogoUrl } from '../lib/sponsor-logo';
 import { sponsorTitle, sponsorCardPath } from '../lib/sponsor-card';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
+import { PLACEMENT_EVENT_USES_SPONSORS_SQL } from '../lib/sponsor-card';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 import { hashEmail, encryptText } from '../lib/pii';
 import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
@@ -1967,6 +1968,7 @@ async function fetchEventPageSocialData(
                 AND sb.is_active = 1
                 AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
                 AND sp.sponsor_accepted = 1
+                AND ${PLACEMENT_EVENT_USES_SPONSORS_SQL}
               ORDER BY sb.id ASC`
           )
             .bind(eventId)

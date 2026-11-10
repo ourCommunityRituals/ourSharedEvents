@@ -65,8 +65,9 @@ const NOW = '2026-08-01T00:00:00.000Z';
 async function seedEvent(): Promise<void> {
   await tenv()
     .DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
-       VALUES (?, 'wkrp', '0068 fixture event', 'evt-0068-fixture', 'published', ?, ?)`
+      // OSE-1900: the event chose to have sponsors; the two sides are what is under test.
+      `INSERT INTO events (id, brand_id, title, slug, status, settings_json, created_at, updated_at)
+       VALUES (?, 'wkrp', '0068 fixture event', 'evt-0068-fixture', 'published', '{"useSponsors":true}', ?, ?)`
     )
     .bind(EVENT_ID, NOW, NOW)
     .run();

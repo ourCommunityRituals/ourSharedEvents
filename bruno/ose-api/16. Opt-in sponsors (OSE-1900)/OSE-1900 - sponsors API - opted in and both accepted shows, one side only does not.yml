@@ -1,0 +1,28 @@
+info:
+  name: OSE-1900 | sunny + rainy | sponsors API | opted in, both accepted shows, one side only does not
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/optin-on-evt/sponsors"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // optin-on-evt chose sponsors. Three placements are on it: one both sides
+        // accepted, one the sponsor has not answered, one the organizer declined.
+        const ids = (res.getBody().items || []).map(function (s) { return s.id; });
+        test('OSE-1900 sunny: 200 with a list', function () { expect(res.getStatus()).to.eql(200); expect(res.getBody().items).to.be.an('array'); });
+        test('OSE-1900 sunny: opted in and both sides accepted, so the sponsor shows', function () { expect(ids).to.include('sb_optin_shown'); });
+        test('OSE-1900 rainy: the sponsor has not accepted, so it does not show', function () { expect(ids).to.not.include('sb_optin_pending'); });
+        test('OSE-1900 rainy: the organizer declined, so it does not show', function () { expect(ids).to.not.include('sb_optin_declined'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

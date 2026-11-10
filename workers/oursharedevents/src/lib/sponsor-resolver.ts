@@ -34,6 +34,11 @@
  * resolve. That is what lets Path 2 match generously — an unwanted sponsor costs
  * one tap, once.
  *
+ * ─── The event's own yes (OSE-1900) ──────────────────────────────────────────────
+ * Both paths run only for an event that opted in to sponsors (`useSponsors`,
+ * absent means off). The gate is `eventUsesSponsorsSql` in lib/sponsor-card.ts;
+ * it comes before the two sides above and replaces neither.
+ *
  * ─── Business lifecycle (0068) ──────────────────────────────────────────────────
  * BOTH paths require sb.is_active = 1. Deleting a sponsor soft-deletes the
  * BUSINESS; it used to cascade is_active = 0 onto placements while leaving
@@ -54,7 +59,12 @@
  */
 
 import { allocateShares, sovTierOf } from './sponsor-allocation';
-import { sponsorTitle, sponsorCardPath, SPONSOR_ON_SHOW_SQL } from './sponsor-card';
+import {
+  sponsorTitle,
+  sponsorCardPath,
+  SPONSOR_ON_SHOW_SQL,
+  eventUsesSponsorsSql,
+} from './sponsor-card';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -188,8 +198,14 @@ export async function resolveSponsorsForEvent(
 ): Promise<SponsorRow[]> {
   // Fetch event context: brand_id (Path-2 tenant fence, INV #9), template_id,
   // geo, and corridor cell (h3_res7) for the OSE-799 locality_band derivation.
+  // OSE-1900: the same read answers "did this event choose to have sponsors?"
+  // (the one gate, lib/sponsor-card.ts). It is asked before either path runs.
   const event = await db
-    .prepare('SELECT brand_id, template_id, zip_code, lat, lon, h3_res7 FROM events WHERE id = ?')
+    .prepare(
+      `SELECT brand_id, template_id, zip_code, lat, lon, h3_res7,
+              ${eventUsesSponsorsSql('')} AS uses_sponsors
+         FROM events WHERE id = ?`
+    )
     .bind(eventId)
     .first<{
       brand_id: string;
@@ -198,9 +214,13 @@ export async function resolveSponsorsForEvent(
       lat: number | null;
       lon: number | null;
       h3_res7: string | null;
+      uses_sponsors: number | null;
     }>();
 
   if (!event) return [];
+  // The event's own yes comes first. Without it there is nothing to resolve:
+  // not a direct placement (Path 1), and not a template match (Path 2, dark).
+  if (Number(event.uses_sponsors) !== 1) return [];
 
   // ── OSE-799 A2: read the split model ──
   // A "sponsor row" for an event is now a JOIN: identity from sponsor_business,

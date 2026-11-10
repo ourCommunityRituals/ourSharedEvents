@@ -1,0 +1,23 @@
+info:
+  name: OSE-1900 | rainy | poster bundle | switch off, the poster gets no sponsor
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/optin-off-evt/poster-bundle"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-1900 rainy: 200, the poster still builds', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-1900 rainy: the poster of an event that has not opted in has an empty sponsor strip', function () { expect(res.getBody().sponsors).to.eql([]); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

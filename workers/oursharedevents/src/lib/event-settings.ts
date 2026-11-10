@@ -16,6 +16,8 @@
 // its poster must stay exactly as it was. The only value that turns a section
 // off is an explicit `false`; anything unreadable fails toward showing it,
 // because a missing section is a worse surprise than an extra one.
+// (One key is the other way round: `useSponsors`, further down, is opt-in, and
+// for it absent means OFF. OSE-1900.)
 //
 // Suppressing a section is a VISIBILITY decision, never a rendering one: the
 // codes are still minted and coloured exactly as before (Invariant #3); the
@@ -73,6 +75,58 @@ export function withMapDefaultMarker(settingsJson: string): string {
   return JSON.stringify({ ...JSON.parse(settingsJson), [MAP_DEFAULT_KEY]: true });
 }
 
+// OSE-1900 (owner, 2026-11-09). `useSponsors`: sponsors show only if the event
+// chose them. THE ONE EXCEPTION TO "ABSENT MEANS ON": this key is opt-in, so
+// absent, unreadable, or anything other than an explicit JSON `true` means OFF.
+// A sponsor on an event that never asked for one is the worse surprise here, so
+// this switch fails toward hiding. It is the event's own yes, and it comes
+// before the two-sided placement consent (sponsor accepted, organizer
+// accepted): with the switch off no placement shows anywhere and no sponsor can
+// ask to back the event; turning it off deletes nothing, and turning it back on
+// restores what both sides had already agreed. No tier gates it (invariant 7).
+//
+// It is deliberately NOT in EVENT_SETTING_KEYS: resolveEventSettings() resolves
+// those as on when absent, which is the opposite of this key's rule.
+//
+// The SQL lives here with the other settings_json readers so the column keeps
+// one home; the sponsor consent gate that every reader uses is built from it in
+// lib/sponsor-card.ts, beside PLACEMENT_ON_SHOW_SQL.
+export const USE_SPONSORS_KEY = 'useSponsors';
+
+/**
+ * SQL boolean (on the events table, optional alias): this event has opted in to
+ * sponsors. True only for a stored JSON `true`. An absent key, `false`, a
+ * number, a string, NULL or text that is not JSON all read as off, and none of
+ * them makes the statement fail (json_type on malformed text would throw, so
+ * json_valid guards it).
+ */
+export function useSponsorsSql(alias = ''): string {
+  const col = alias ? `${alias}.settings_json` : 'settings_json';
+  return `(CASE WHEN json_valid(${col}) THEN json_type(${col}, '$.${USE_SPONSORS_KEY}') = 'true' ELSE 0 END)`;
+}
+
+/** Has this event opted in to sponsors? Absent or unreadable means no. */
+export function usesSponsors(settings: EventSettings): boolean {
+  return settings.useSponsors === true;
+}
+
+/**
+ * The settings a copy of an event starts with ("Repeat this event"). What the
+ * organizer set up carries over. Two keys belong to one event and do not:
+ *
+ *   mapDefault   the server's own "the organizer did not choose the map" marker.
+ *                A client may not write it, and a copy states its map choice.
+ *   useSponsors  OSE-1900: sponsors are chosen per event. A copy carries no
+ *                placements, so it starts like any new event, with sponsors off,
+ *                until its organizer turns them on.
+ */
+export function settingsForCopy(settings: EventSettings): EventSettings {
+  const out = { ...settings };
+  delete out.mapDefault;
+  delete out.useSponsors;
+  return out;
+}
+
 /** The boolean section switches. Additions are decisions. */
 export const EVENT_SETTING_KEYS = ['showQRSection'] as const;
 export type EventSettingKey = (typeof EVENT_SETTING_KEYS)[number];
@@ -116,6 +170,8 @@ export const MAX_LINK_BYTES = 154;
 export type EventSettings = Partial<Record<EventSettingKey, boolean>> & {
   /** Server-managed (OSE-1560): the map setting is still the default. */
   mapDefault?: true;
+  /** OSE-1900: the event chose to have sponsors. Absent means OFF (opt-in). */
+  useSponsors?: boolean;
   displayPanes?: DisplayPane[];
   displayDwellSeconds?: number;
   leagueLinks?: LeagueLinks;
@@ -124,6 +180,8 @@ export type EventSettings = Partial<Record<EventSettingKey, boolean>> & {
 
 /** A stored settings write: like EventSettings, but null clears a key. */
 export type EventSettingsPatch = Partial<Record<EventSettingKey, boolean>> & {
+  /** OSE-1900: true or false only. There is no null: off is the stored `false`. */
+  useSponsors?: boolean;
   displayPanes?: DisplayPane[] | null;
   displayDwellSeconds?: number | null;
   leagueLinks?: Partial<Record<LeagueLinkKind, string | null>> | null;
@@ -185,6 +243,9 @@ export function parseEventSettings(raw: unknown): EventSettings {
     if (KNOWN.has(k) && typeof v === 'boolean') out[k as EventSettingKey] = v;
     else if (k === MAP_DEFAULT_KEY) {
       if (v === true) out.mapDefault = true;
+    } else if (k === USE_SPONSORS_KEY) {
+      // Opt-in: only a real boolean is kept, and only `true` turns it on.
+      if (typeof v === 'boolean') out.useSponsors = v;
     } else if (k === 'displayPanes') {
       const panes = cleanPanes(v);
       if (panes) out.displayPanes = panes;
@@ -250,6 +311,11 @@ export function validateSettingsPatch(
       if (typeof v !== 'boolean')
         return { ok: false, error: `settings.${k} must be true or false` };
       out[k as EventSettingKey] = v;
+    } else if (k === USE_SPONSORS_KEY) {
+      // Strict: a consent switch takes true or false, never a truthy stand-in.
+      if (typeof v !== 'boolean')
+        return { ok: false, error: `settings.${k} must be true or false` };
+      out.useSponsors = v;
     } else if (k === 'displayPanes') {
       if (v === null) {
         out.displayPanes = null;

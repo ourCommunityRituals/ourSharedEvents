@@ -45,8 +45,10 @@ async function seedEvent(
   opts: { templateId?: string; zipCode?: string; lat?: number; lon?: number } = {}
 ): Promise<void> {
   await env.DB.prepare(
-    `INSERT INTO events (id, brand_id, title, slug, status, template_id, zip_code, lat, lon)
-     VALUES (?, 'root', ?, ?, 'active', ?, ?, ?, ?)`
+    // OSE-1900: every event here chose to have sponsors, so each case still turns
+    // on the template, the geography or the placement it names.
+    `INSERT INTO events (id, brand_id, title, slug, status, template_id, zip_code, lat, lon, settings_json)
+     VALUES (?, 'root', ?, ?, 'active', ?, ?, ?, ?, '{"useSponsors":true}')`
   )
     .bind(
       id,

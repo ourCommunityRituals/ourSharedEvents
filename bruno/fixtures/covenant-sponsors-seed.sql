@@ -56,3 +56,15 @@ INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, tier, source, 
   ('spl_cov_local_platinum',  'sb_cov_local_platinum',  'test-event-001', 'platinum', 'organizer', 1, 1, 1, 1),
   ('spl_cov_nonlocal_bronze', 'sb_cov_nonlocal_bronze', 'test-event-001', 'bronze',   'organizer', 0, 1, 1, 1),
   ('spl_cov_nonlocal_title',  'sb_cov_nonlocal_title',  'test-event-001', 'title',    'organizer', 0, 1, 1, 1);
+
+-- OSE-1900: a sponsor shows only on an event that chose to have sponsors (the
+-- event switch `useSponsors` in settings_json, where absent means off). The four
+-- covenant sponsors above are meant to be seen on test-event-001, so it opts in.
+-- An UPDATE, not a column on the insert: the event insert never overwrites
+-- settings_json on a row that already exists, and this must hold on every pass.
+-- Every other key in settings_json is kept.
+UPDATE events
+   SET settings_json = json_set(
+         CASE WHEN json_valid(settings_json) THEN settings_json ELSE '{}' END,
+         '$.useSponsors', json('true'))
+ WHERE id IN ('test-event-001');

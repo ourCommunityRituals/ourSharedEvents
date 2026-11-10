@@ -57,11 +57,14 @@ export async function createLiveEvent(
     await request.post('/api/v2/admin/events', {
       headers,
       // OSE-1560: a new event is off the map unless asked; these journeys need it on (discoverable, listed).
+      // OSE-1900: a new event has sponsors off unless asked; these journeys show a
+      // sponsor and let one ask to join, so the event opts in as its organizer would.
       data: {
         title,
         start_date: start,
         location: 'Eagles Hall',
         is_published: true,
+        settings: { useSponsors: true },
         ...(where ?? {}),
       },
     }),

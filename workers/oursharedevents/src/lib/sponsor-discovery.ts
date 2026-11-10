@@ -20,8 +20,8 @@
 //
 // SCOPE (#9 tenant isolation): everything is keyed to the brand in the SIGNED
 // sponsor-home claim. A sponsor sees and can ask for only its own brand's
-// events — published (`is_published = 1`), active, and not over — which is
-// exactly what /events already lists publicly. Nothing here is about
+// events — published (`is_published = 1`), active, not over, and opted in to
+// sponsors (OSE-1900, `useSponsors`; the gate is in lib/sponsor-card.ts). Nothing here is about
 // attendees; tier never enters (Invariant #5).
 //
 // LIMITS: MAX_OPEN_REQUESTS waiting requests per sponsor at a time (a request
@@ -32,6 +32,7 @@ import { maybeTag } from './h3-tagging';
 import { toPublicEvent } from './public-event-projection';
 import { listedSql } from './publish-grace';
 import { flipFired, mapFlipStatement } from './map-default';
+import { eventUsesSponsorsSql } from './sponsor-card';
 
 /** Waiting (organizer has not answered) requests one sponsor may hold at once. */
 export const MAX_OPEN_REQUESTS = 5;
@@ -65,8 +66,10 @@ function floorDate(now: Date): string {
 
 /**
  * The shared predicate for "an event this sponsor may ask to back": same brand
- * as the claim, listed, active, dated today-or-later, and no placement of any
- * kind (offered, requested, declined) already linking this sponsor to it.
+ * as the claim, listed, active, dated today-or-later, opted in to sponsors
+ * (OSE-1900: an event that did not choose sponsors is never offered and cannot
+ * be asked), and no placement of any kind (offered, requested, declined)
+ * already linking this sponsor to it.
  * Used by BOTH the list and the request write, so the button can never offer
  * an event the write would refuse, or the reverse. The brand clause is written
  * literally in each query (`e.brand_id = ? AND ${DISCOVERABLE_REST}`) so the
@@ -74,6 +77,7 @@ function floorDate(now: Date): string {
  */
 const DISCOVERABLE_REST = `e.is_published = 1
           AND e.status = 'active' AND ${listedSql('e')}
+          AND ${eventUsesSponsorsSql('e')}
           AND e.start_date IS NOT NULL AND e.start_date >= ?
           AND NOT EXISTS (
             SELECT 1 FROM sponsor_placement px

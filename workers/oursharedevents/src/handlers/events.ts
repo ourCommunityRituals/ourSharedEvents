@@ -38,9 +38,11 @@ import { enrichWithPhase } from '../lib/event-enrich.js';
 import {
   clearMapDefaultSql,
   mapStillDefaultSql,
+  useSponsorsSql,
   validateSettingsPatch,
   withMapDefaultMarker,
 } from '../lib/event-settings';
+import { logAdminAction } from '../lib/audit-log';
 import { toPublicEvent } from '../lib/public-event-projection.js';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { createShortlink } from '../lib/shortlinks';
@@ -60,7 +62,11 @@ import {
   suppliedSpineKeyField,
   touchesSpineKeyInputs,
 } from '../lib/spine-keys-store';
-import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
+import {
+  getDataProvider,
+  invalidateSponsorsCache,
+  type DataProviderEnv,
+} from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
 import {
   extractAdminActor,
@@ -396,7 +402,10 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       ' e.is_published, e.created_by, e.listed_from, e.data_class,' +
       // OSE-1560 — is the map setting still the default (the organizer has not
       // chosen)? A flag, not the raw settings blob.
-      ` CASE WHEN ${mapStillDefaultSql('e')} THEN 1 ELSE 0 END AS map_default`;
+      ` CASE WHEN ${mapStillDefaultSql('e')} THEN 1 ELSE 0 END AS map_default,` +
+      // OSE-1900 — has the event opted in to sponsors (absent means off)? A
+      // flag for the admin's switch, not the raw settings blob.
+      ` CASE WHEN ${useSponsorsSql('e')} THEN 1 ELSE 0 END AS use_sponsors`;
 
     // WHERE is composed from server-derived scope, the allowlisted lifecycle
     // filters, and the opaque cursor only — never a caller-chosen brand.
@@ -1181,10 +1190,13 @@ export async function handleUpdateEvent(
   // OSE-869 — per-event section switches. A partial patch: keys the body does
   // not name keep their stored value. Strict on write (400 INVALID_SETTINGS).
   let settingsPatchJson: string | null = null;
+  // OSE-1900 — set when this PUT names the sponsors switch (true or false).
+  let useSponsorsWrite: boolean | undefined;
   if ('settings' in body) {
     const v = validateSettingsPatch(body.settings);
     if (!v.ok) return errorResponse('INVALID_SETTINGS', v.error, 400, rid);
     settingsPatchJson = JSON.stringify(v.value);
+    useSponsorsWrite = v.value.useSponsors;
   }
 
   // Set when this PUT turns listing on (see the grace window below).
@@ -1641,11 +1653,32 @@ export async function handleUpdateEvent(
 
   if (spineKeysStale) await refreshSpineKeys(env.DB, eventId);
 
+  // OSE-1900 — the sponsors switch is a consent decision, so each write of it
+  // gets its own audit row saying which way it went (the router's UPDATE_EVENT
+  // row says only that the event changed). Written after the UPDATE landed, so
+  // the log never claims a change that did not happen; a refused write (400,
+  // 404, 409, 503) returned above and is the router's 'denied' UPDATE_EVENT.
+  // The public sponsor list is cache-fronted, so it is dropped here: off hides
+  // every placement on the next read, not when a cache entry runs out.
+  if (useSponsorsWrite !== undefined) {
+    await invalidateSponsorsCache(eventId);
+    await logAdminAction(env as { DB: D1Database }, {
+      action: 'EVENT_SPONSORS_SWITCH',
+      actor: extractAdminActor(request, env),
+      resource_type: 'event',
+      resource_id: eventId,
+      request_id: rid,
+      outcome: 'success',
+      details: { use_sponsors: useSponsorsWrite },
+    });
+  }
+
   return Response.json(
     {
       ok: true,
       status: 200,
       id: eventId,
+      ...(useSponsorsWrite !== undefined ? { sponsors: { on: useSponsorsWrite } } : {}),
       ...(place !== undefined ? { place } : {}),
       // A status write says the status it moved FROM (the one the guarded
       // UPDATE matched), so the admin's Undo returns there even when its own

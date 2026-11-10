@@ -332,6 +332,14 @@ describe('buildDay', () => {
     expect(body).not.toHaveProperty('lng');
   });
 
+  test('each event opts in to sponsors, or the sponsors it is given would never show (OSE-1900)', async () => {
+    // Born red 2026-11-09: failed with the `settings` line taken out of build-full.mjs.
+    const site = fakeSite();
+    await buildDay(args(site, { accepted: [row('beverly', 'private', 10)] }));
+    const body = callsTo(site, 'POST', /^\/api\/v2\/admin\/events$/)[0].body;
+    expect(body.settings).toEqual({ useSponsors: true });
+  });
+
   test('one poster deployment and one short-links call per event, with the QR recorded', async () => {
     const site = fakeSite();
     const manifest = await buildDay(args(site, { accepted: rowsFor('beverly', 2, 1) }));

@@ -30,6 +30,9 @@ export const NODE_SPECS = [
   'tests/sponsor-home-xss.spec.ts',
   // Owner 2026-10-11: less text on the sponsor page (pure render + template).
   'tests/sponsor-home-less-text.spec.ts',
+  // OSE-1900 — derived gate: every statement in src/ that carries the sponsor
+  // consent rule also carries the event's opt-in gate (reads src/; no runtime).
+  'tests/sponsor-opt-in-readers.spec.ts',
   // Toast adoption in admin and sponsor home: the pages' scripts and the
   // @ocr/ui toast script in jsdom, plus one handler called directly. No runtime.
   'tests/toast-adoption.spec.ts',
@@ -220,6 +223,8 @@ export const NODE_SPECS = [
   'tests/admin-surface-links-not-live.spec.ts',
   // OSE-1560 - the map setting: wizard default, status panel control (jsdom + extracted helpers).
   'tests/admin-map-setting.spec.ts',
+  // OSE-1900 - the sponsors switch in the sponsors card (jsdom + extracted helpers).
+  'tests/admin-sponsors-switch.spec.ts',
   'tests/admin-create-core-values.spec.ts',
   'tests/admin-wizard-tv.spec.ts',
   'tests/admin-wizard-preview-review.spec.ts',
