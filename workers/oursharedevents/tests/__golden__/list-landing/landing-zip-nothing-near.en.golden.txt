@@ -51,11 +51,6 @@
         padding: 0.75rem 1.25rem;
         border-bottom: 1px solid var(--line);
       }
-      .header-start {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-      }
       .logo,
       nav a {
         display: inline-flex;
@@ -255,6 +250,7 @@
     .ose-langmenu-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
     .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(90deg); }
     .ose-langmenu-sub > .ose-langmenu-list { padding: 0.25rem 0 0 0.75rem; }
+    .ose-langmenu-bar { display: flex; align-items: center; gap: 0.75rem; }
     .ose-langmenu-mobile { display: none; }
     @media (max-width: 640px) {
       .ose-langmenu-desktop { display: none; }
@@ -281,7 +277,7 @@
   <body>
     <a href="#main-content" class="skip-link" data-testid="landing-skip-link">Skip to content</a>
     <header data-testid="landing-header">
-      <div class="header-start">
+      <div class="ose-langmenu-bar">
         <div class="ose-langmenu" data-testid="language-menu">
       <details class="ose-langmenu-desktop" data-testid="language-menu-desktop">
         <summary class="ose-langmenu-button" data-testid="language-menu-button"><span>Language</span><span class="ose-langmenu-caret" aria-hidden="true">▾</span></summary>

@@ -51,28 +51,36 @@ export const LANGUAGE_MENU_CSS = `
     .ose-langmenu-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
     .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(90deg); }
     .ose-langmenu-sub > .ose-langmenu-list { padding: 0.25rem 0 0 0.75rem; }
+    .ose-langmenu-bar { display: flex; align-items: center; gap: 0.75rem; }
     .ose-langmenu-mobile { display: none; }
     @media (max-width: 640px) {
       .ose-langmenu-desktop { display: none; }
       .ose-langmenu-mobile { display: block; }
     }`;
 
-/** The list of languages; `idPrefix` names each entry's test id. */
-function languageList(opts: LanguageSwitchOptions, idPrefix: string): string {
+/**
+ * The list of languages, for the phone menu (`phone`) or the wide-screen
+ * button. Each test id is written out whole per layout, so the test-id drift
+ * gate (`tests/_shared/testid-inventory.js`) can see both families are emitted.
+ */
+function languageList(opts: LanguageSwitchOptions, phone: boolean): string {
   const query = opts.query ?? '';
   const label = esc(msg(opts.lang, 'language.label'));
   const items = LANGUAGES.map((l) => {
+    const testId = phone
+      ? `data-testid="site-menu-language-${l}"`
+      : `data-testid="language-menu-${l}"`;
     const name = LANGUAGE_SWITCH_NAMES[opts.lang][l];
     // Its own name ("Español") is in that language; any other is in the page's.
     const textLang = name === LANGUAGE_NAMES[l] ? l : opts.lang;
     if (l === opts.lang) {
       // Every value is escaped (esc) or a code from the fixed LANGUAGES list.
       // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
-      return `<li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="${textLang}" data-testid="${idPrefix}-${l}"><span class="ose-langmenu-check" aria-hidden="true">✓</span>${esc(name)}</span></li>`;
+      return `<li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="${textLang}" ${testId}><span class="ose-langmenu-check" aria-hidden="true">✓</span>${esc(name)}</span></li>`;
     }
     // Every value is escaped (esc) or a code from the fixed LANGUAGES list.
     // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
-    return `<li><a class="ose-langmenu-item" lang="${textLang}" hreflang="${l}" data-testid="${idPrefix}-${l}" href="${esc(withLangPrefix(l, opts.path) + query)}"><span class="ose-langmenu-check" aria-hidden="true"></span>${esc(name)}</a></li>`;
+    return `<li><a class="ose-langmenu-item" lang="${textLang}" hreflang="${l}" ${testId} href="${esc(withLangPrefix(l, opts.path) + query)}"><span class="ose-langmenu-check" aria-hidden="true"></span>${esc(name)}</a></li>`;
   }).join('');
   return `<ul class="ose-langmenu-list" aria-label="${label}">${items}</ul>`;
 }
@@ -102,14 +110,14 @@ export function renderLanguageMenu(opts: LanguageMenuOptions): string {
   return `<div class="ose-langmenu" data-testid="language-menu">
       <details class="ose-langmenu-desktop" data-testid="language-menu-desktop">
         <summary class="ose-langmenu-button" data-testid="language-menu-button"><span>${label}</span><span class="ose-langmenu-caret" aria-hidden="true">▾</span></summary>
-        ${languageList(opts, 'language-menu')}
+        ${languageList(opts, false)}
       </details>
       <details class="ose-langmenu-mobile" data-testid="site-menu">
         <summary class="ose-langmenu-button" aria-label="${menu}" data-testid="site-menu-button"><span aria-hidden="true">☰</span></summary>
         <div class="ose-langmenu-panel" data-testid="site-menu-panel">
           <details class="ose-langmenu-sub" data-testid="site-menu-language">
             <summary class="ose-langmenu-row" data-testid="site-menu-language-button"><span>${label}</span><span class="ose-langmenu-caret" aria-hidden="true">›</span></summary>
-            ${languageList(opts, 'site-menu-language')}
+            ${languageList(opts, true)}
           </details>
         </div>
       </details>

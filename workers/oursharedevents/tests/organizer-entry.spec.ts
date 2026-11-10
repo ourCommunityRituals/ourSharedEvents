@@ -110,14 +110,17 @@ describe('OSE-1529 | landing create cards', () => {
     expect(html.match(/data-testid="doors-signin-note"/g)?.length).toBe(1);
   });
 
-  // One script since 2026-10-10: "Use my location" (its limits:
-  // tests/landing-where-unit.spec.ts). Nothing else runs here.
-  it('still exactly one <h1>, one script (the location button), no style attribute', () => {
+  // Two scripts, both inline. "Use my location" since 2026-10-10 (its limits:
+  // tests/landing-where-unit.spec.ts), and since 2026-11-10 the header Language
+  // menu's closer, which only shuts an open menu (tests/language-menu-close.spec.ts).
+  // Nothing else runs here.
+  it('still exactly one <h1>, two scripts (location button, menu closer), no style attribute', () => {
     expect(html.match(/<h1\b/g)?.length).toBe(1);
     const scripts = html.match(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi) ?? [];
-    expect(scripts.length).toBe(1);
-    expect(scripts[0]).toContain('[data-testid="near-me"]');
-    expect(scripts[0]).not.toMatch(/<script\b[^>]*\bsrc=/i);
+    expect(scripts.length).toBe(2);
+    expect(scripts.filter((s) => s.includes('[data-testid="near-me"]'))).toHaveLength(1);
+    expect(scripts.filter((s) => s.includes('.ose-langmenu details[open]'))).toHaveLength(1);
+    for (const s of scripts) expect(s).not.toMatch(/<script\b[^>]*\bsrc=/i);
     expect(html).not.toMatch(/\sstyle=/i);
   });
 
