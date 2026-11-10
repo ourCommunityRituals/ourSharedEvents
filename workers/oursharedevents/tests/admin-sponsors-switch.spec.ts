@@ -8,9 +8,10 @@
  * uses to say yes or no:
  *
  *   1. The sponsors card states the setting in words and offers one control
- *      that names its outcome, 48 px tall with 16 px text, with one line on what
- *      turning it on means. It sits outside the folded list, so it is in view
- *      without opening anything.
+ *      that names its outcome, with one line on what turning it on means. It
+ *      sits outside the folded list, so it is in view without opening anything.
+ *      It is styled by classes @ocr/ui ships (a 48 px `.btn`) and the page adds
+ *      no CSS of its own for it (the check-spoke-styles ratchet in T0 lint).
  *   2. It reads `use_sponsors` from the admin events list row. A row with no
  *      value reads as OFF (the opposite of the map setting, which reads as on).
  *   3. It writes PUT /api/v2/admin/events/:id with
@@ -24,10 +25,16 @@
  * @born-red OSE-1900 | method: ran against the template before the control was
  * added (no helper, no markup, no click action): every test below failed |
  * date: 2026-11-09
+ * @born-red styles moved to @ocr/ui | method: ran the styles test against the
+ * template that still carried its own `.spon-switch*` rules and classes: red on
+ * the class names and on "no rule of its own". Also planted: the inline rules
+ * put back, a `style=` attribute on the button, `btn-secondary` dropped | date:
+ * 2026-11-09
  */
 
 import { describe, test, expect } from 'vitest';
 import { JSDOM } from 'jsdom';
+import { componentStyles, structural } from '@ocr/ui';
 import ADMIN_HTML_RAW from '../src/templates/admin.html';
 
 // The checkout may be CRLF (Windows); CI is LF. The slices below look for LF.
@@ -57,19 +64,29 @@ function viewHelper(): (e: Record<string, unknown>) => SwitchView {
 
 /** The sponsors card from its opening tag to the folded body (the part in view). */
 function cardHead(): string {
-  const from = ADMIN_HTML.indexOf('id="sponsors-card"');
+  // The leading space matters: without it this also matches the text
+  // data-testid="sponsors-card" in the page's script, far above the card.
+  const from = ADMIN_HTML.indexOf(' id="sponsors-card"');
   const to = ADMIN_HTML.indexOf('id="spon-card-body"', from);
   expect(from, 'the sponsors card').toBeGreaterThan(-1);
   expect(to, 'the folded body').toBeGreaterThan(from);
   return ADMIN_HTML.slice(ADMIN_HTML.lastIndexOf('<div', from), ADMIN_HTML.lastIndexOf('<div', to));
 }
 
-/** The CSS rule body for one selector, from the page's own stylesheet. */
-function cssRule(selector: string): string {
-  const re = new RegExp(`\\n\\s*${selector.replace(/[.\\-]/g, '\\$&')}\\s*\\{([^}]*)\\}`);
-  const m = re.exec(ADMIN_HTML);
-  expect(m, `a CSS rule for ${selector}`).not.toBeNull();
-  return m![1]!;
+/** The body of one @ocr/ui rule (the stylesheet the page links as /ui.css), or ''. */
+function uiRule(sel: string): string {
+  for (const before of ['\n', '}']) {
+    const at = componentStyles.indexOf(`${before}${sel}{`);
+    if (at === -1) continue;
+    const start = at + before.length + sel.length + 1;
+    return componentStyles.slice(start, componentStyles.indexOf('}', start));
+  }
+  return '';
+}
+
+/** Everything the page styles for itself: the text of every <style> block. */
+function pageCss(): string {
+  return [...ADMIN_HTML.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
 }
 
 describe('the switch in words, from an admin list row', () => {
@@ -159,26 +176,39 @@ describe('the control is in the sponsors card, in view without opening the list'
     expect(body).toContain("el.getAttribute('data-want-on') === '1'");
   });
 
-  test('48 px tall, 16 px text, a strong line, and colours from tokens only', () => {
-    const btn = cssRule('.spon-switch-btn');
-    expect(btn).toMatch(/min-height:\s*48px/);
-    expect(btn).toMatch(/font-size:\s*16px/);
-    expect(btn).toMatch(/border:\s*1px solid var\(--border-strong\)/);
-    for (const sel of [
-      '.spon-switch',
-      '.spon-switch-label',
-      '.spon-switch-state',
-      '.spon-switch-hint',
-      '.spon-switch-btn',
-    ]) {
-      const rule = cssRule(sel);
-      expect(rule, `${sel} has no raw hex`).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-      expect(rule, `${sel} has no rgb()/hsl()`).not.toMatch(/\b(rgb|hsl)a?\(/);
-      // Nothing below the 13 px floor: these all set 16px or inherit.
-      for (const m of rule.matchAll(/font-size:\s*([\d.]+)(px|rem)/g)) {
-        const px = m[2] === 'rem' ? Number(m[1]) * 16 : Number(m[1]);
-        expect(px, `${sel} font-size`).toBeGreaterThanOrEqual(16);
-      }
+  // The page may not grow a stylesheet of its own (check-spoke-styles against
+  // .ocr-design-check.json, T0 lint), so the switch wears classes @ocr/ui ships.
+  // The label size and the line of a `.btn` are @ocr/ui's to set, not this page's.
+  test('styled by @ocr/ui classes: a 48 px button, and no CSS of its own on the page', () => {
+    const dom = new JSDOM(`<body>${cardHead()}</div></body>`);
+    const doc = dom.window.document;
+    const q = (id: string) => doc.querySelector<HTMLElement>(`[data-testid="${id}"]`)!;
+
+    expect(q('sponsors-switch-toggle').className).toBe('btn btn-secondary');
+    expect(q('sponsors-switch-hint').className).toBe('sub-line');
+    expect(doc.getElementById('spon-switch-label')!.className).toBe('card-title');
+    // The state line is plain body text: the page's own size and text colour.
+    expect(q('sponsors-switch-state').className).toBe('');
+    expect(q('sponsors-switch').classList.contains('form-field')).toBe(true);
+
+    for (const sel of ['.btn', '.btn-secondary', '.sub-line', '.card-title', '.form-field']) {
+      expect(uiRule(sel), `@ocr/ui ships ${sel}`).not.toBe('');
+    }
+    // 48 px: the button's height is the design system's tap target.
+    expect(uiRule('.btn')).toContain('min-height:var(--tap-min)');
+    expect(Number(/^(\d+)px$/.exec(structural['--tap-min'])?.[1])).toBeGreaterThanOrEqual(48);
+    // Colours are tokens: nothing raw in the rules it wears.
+    for (const sel of ['.btn-secondary', '.sub-line']) {
+      expect(uiRule(sel), sel).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/);
+      expect(uiRule(sel), sel).toMatch(/var\(--/);
+    }
+
+    // No rule of its own, in any <style> block, and no inline style either.
+    expect(pageCss()).not.toMatch(/\.spon-switch[\w-]*[^{};]*\{/);
+    const group = q('sponsors-switch');
+    for (const el of [group, ...group.querySelectorAll<HTMLElement>('*')]) {
+      expect(el.getAttribute('style'), `${el.id || el.tagName} inline style`).toBeNull();
+      expect(el.className, `${el.id || el.tagName} class`).not.toMatch(/spon-switch/);
     }
   });
 

@@ -230,48 +230,6 @@
         opacity: 0.6;
         cursor: wait;
       }
-      /* OSE-1900: the sponsors switch in the sponsors card. A control is 48px
-         tall with 16px text (design system), and a strong line marks it as a
-         control. Colours are tokens only. */
-      .spon-switch {
-        display: grid;
-        gap: 0.5rem;
-        justify-items: start;
-        margin-top: 0.75rem;
-        padding-top: 0.75rem;
-        border-top: 1px solid var(--border);
-      }
-      .spon-switch-label {
-        margin: 0;
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--text);
-      }
-      .spon-switch-state {
-        margin: 0;
-        font-size: 16px;
-        color: var(--text);
-      }
-      .spon-switch-hint {
-        margin: 0;
-        font-size: 16px;
-        color: var(--text-muted);
-      }
-      .spon-switch-btn {
-        min-height: 48px;
-        padding: 0.5rem 1rem;
-        border: 1px solid var(--border-strong);
-        border-radius: 8px;
-        background: var(--surface);
-        color: var(--text);
-        font-size: 16px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .spon-switch-btn:disabled {
-        opacity: 0.6;
-        cursor: wait;
-      }
       /* Event timeline — six steps, phone-first (vertical), big glanceable state. */
       .timeline {
         list-style: none;
@@ -5580,12 +5538,16 @@
 
       <!-- OSE-1900: the event's own yes. Sponsors show only if the event chose
            them, so the switch sits here, outside the folded list, in view
-           without opening anything. Hidden until an event is selected. -->
-      <div class="spon-switch" id="spon-switch" data-testid="sponsors-switch" role="group" aria-labelledby="spon-switch-label" hidden>
-        <h3 class="spon-switch-label" id="spon-switch-label">Sponsors (you choose)</h3>
-        <p class="spon-switch-state" id="spon-switch-state" data-testid="sponsors-switch-state"></p>
-        <button type="button" class="spon-switch-btn" id="spon-switch-toggle" data-action="event-sponsors" data-testid="sponsors-switch-toggle" aria-describedby="spon-switch-hint"></button>
-        <p class="spon-switch-hint" id="spon-switch-hint" data-testid="sponsors-switch-hint">Turning sponsors on lets a sponsor show with this event once you and the sponsor have both said yes.</p>
+           without opening anything. Hidden until an event is selected.
+           Styled by classes that already exist (@ocr/ui's form-field,
+           card-title, btn and sub-line): this page adds no CSS for it. -->
+      <div class="mcard-body form-field" id="spon-switch" data-testid="sponsors-switch" role="group" aria-labelledby="spon-switch-label" hidden>
+        <h3 class="card-title" id="spon-switch-label">Sponsors (you choose)</h3>
+        <p id="spon-switch-state" data-testid="sponsors-switch-state"></p>
+        <div class="flex-row">
+          <button type="button" class="btn btn-secondary" id="spon-switch-toggle" data-action="event-sponsors" data-testid="sponsors-switch-toggle" aria-describedby="spon-switch-hint"></button>
+        </div>
+        <p class="sub-line" id="spon-switch-hint" data-testid="sponsors-switch-hint">Turning sponsors on lets a sponsor show with this event once you and the sponsor have both said yes.</p>
         <p class="create-msg" id="spon-switch-msg" data-testid="sponsors-switch-msg" role="status" aria-live="polite"></p>
       </div>
 
