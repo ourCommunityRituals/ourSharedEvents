@@ -1,4 +1,4 @@
--- Migration 0105: switch sponsors on for the events whose organizer already
+-- Migration 0107: switch sponsors on for the events whose organizer already
 -- chose one (OSE-1900, owner decision 2026-11-09, "sponsors only if the event
 -- chose them").
 --
@@ -32,7 +32,7 @@
 --
 -- Rollback: revert the Worker. The older Worker does not read the key and its
 -- settings reader drops keys it does not know, so the stored key is inert. To
--- remove it as well, see ROLLBACK_PLAN.md, 0105.
+-- remove it as well, see ROLLBACK_PLAN.md, 0107.
 
 UPDATE events
    SET settings_json = json_set(

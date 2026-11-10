@@ -5724,6 +5724,47 @@
                 Must start with https://. Leave blank and a tap opens the sponsor's card instead.
               </p>
             </div>
+            <!-- OSE-1826 (0105): the sponsor's header block on the digital poster:
+                 a wide header image and a short line of text. Optional, the same
+                 for every tier. Collapsed like the card details so the short path
+                 stays short; opened on an edit that has values and before
+                 focusing a field the server rejected. -->
+            <details class="pd-advanced full-width" id="spon-header-details" data-testid="spon-header-details">
+              <summary data-testid="spon-header-details-summary">Poster header (optional)</summary>
+              <div class="create-form">
+                <div class="full-width">
+                  <label for="spon-header-image">Header image</label>
+                  <input
+                    type="text"
+                    inputmode="url"
+                    id="spon-header-image"
+                    name="header_image_url"
+                    data-testid="spon-header-image"
+                    placeholder="https://acme.com/poster-header.jpg"
+                    maxlength="500"
+                    aria-describedby="spon-header-image-hint"
+                  />
+                  <p class="spon-covenant-note" id="spon-header-image-hint" data-testid="spon-header-image-hint">
+                    Wide, about 3:1 (e.g. 1200&times;400), shown full width above your logo on the digital poster.
+                  </p>
+                </div>
+                <div class="full-width">
+                  <label for="spon-header-text">Header text</label>
+                  <input
+                    type="text"
+                    id="spon-header-text"
+                    name="header_text"
+                    data-testid="spon-header-text"
+                    placeholder="Fresh bread every morning, two blocks from the square."
+                    maxlength="140"
+                    aria-describedby="spon-header-text-hint"
+                  />
+                  <p class="spon-covenant-note" id="spon-header-text-hint" data-testid="spon-header-text-hint">
+                    One or two short lines, up to 140 characters. Shown as plain text.
+                  </p>
+                </div>
+              </div>
+            </details>
             <!-- 0083: the public card. A sponsor is complete with a name and a
                  tier; these four are optional and shown publicly. Collapsed so
                  the short path stays short on a phone (OSE-1434). `.pd-advanced`
@@ -6066,6 +6107,11 @@
         function showCardDetails(open) {
           document.getElementById('spon-card-details').open = !!open;
         }
+        // OSE-1826: the poster header's two fields, in their own <details>.
+        const SPON_HEADER_FIELDS = ['spon-header-image', 'spon-header-text'];
+        function showHeaderDetails(open) {
+          document.getElementById('spon-header-details').open = !!open;
+        }
 
         function openForm() {
           if (window.oseSponsorsCard) window.oseSponsorsCard.open();
@@ -6084,8 +6130,9 @@
           document.getElementById('spon-edit-id').value = '';
           document.getElementById('spon-create-form').reset();
           showCardDetails(false);
+          showHeaderDetails(false);
           syncImageChoice();
-          ['spon-name', 'spon-tier', 'spon-website', 'spon-logo', 'spon-sidebar-logo'].concat(SPON_CARD_FIELDS).forEach(function(fid) { document.getElementById(fid).removeAttribute('aria-invalid'); });
+          ['spon-name', 'spon-tier', 'spon-website', 'spon-logo', 'spon-sidebar-logo'].concat(SPON_CARD_FIELDS, SPON_HEADER_FIELDS).forEach(function(fid) { document.getElementById(fid).removeAttribute('aria-invalid'); });
           const msg = document.getElementById('spon-form-msg');
           msg.textContent = '';
           msg.className = 'create-msg';
@@ -6158,6 +6205,9 @@
             document.getElementById('spon-phone').value = s.contact_phone || '';
             document.getElementById('spon-email').value = s.contact_email || '';
             showCardDetails(SPON_CARD_FIELDS.some(function(fid) { return !!document.getElementById(fid).value; }));
+            document.getElementById('spon-header-image').value = s.header_image_url || '';
+            document.getElementById('spon-header-text').value = s.header_text || '';
+            showHeaderDetails(SPON_HEADER_FIELDS.some(function(fid) { return !!document.getElementById(fid).value; }));
             // OSE-670 (#25): placement is uniform — no slot checkboxes. Show the
             // geo-derived is_local classification read-only (non-purchasable).
             const localPill = document.getElementById('spon-is-local-pill');
@@ -6324,7 +6374,8 @@
           if (siteVal || editId) body.website_url = siteVal || null;
           // Public card fields: optional; on an edit a blank field clears it.
           [['spon-display-name', 'display_name'], ['spon-address', 'address_line'],
-           ['spon-phone', 'contact_phone'], ['spon-email', 'contact_email']].forEach(function(pair) {
+           ['spon-phone', 'contact_phone'], ['spon-email', 'contact_email'],
+           ['spon-header-image', 'header_image_url'], ['spon-header-text', 'header_text']].forEach(function(pair) {
             const v = document.getElementById(pair[0]).value.trim();
             if (v || editId) body[pair[1]] = v || null;
           });
@@ -6344,11 +6395,13 @@
                 INVALID_DISPLAY_NAME: 'spon-display-name', INVALID_ADDRESS_LINE: 'spon-address',
                 INVALID_CONTACT_PHONE: 'spon-phone', INVALID_CONTACT_EMAIL: 'spon-email',
                 INVALID_WEBSITE_URL: 'spon-website', INVALID_LOGO_URL: 'spon-logo',
-                INVALID_SIDEBAR_LOGO_URL: 'spon-sidebar-logo', MISSING_TIER: 'spon-tier', INVALID_TIER: 'spon-tier'
+                INVALID_SIDEBAR_LOGO_URL: 'spon-sidebar-logo', MISSING_TIER: 'spon-tier', INVALID_TIER: 'spon-tier',
+                INVALID_HEADER_IMAGE_URL: 'spon-header-image', INVALID_HEADER_TEXT: 'spon-header-text'
               }[data.code];
               const fieldEl = fieldFor ? document.getElementById(fieldFor) : null;
               if (fieldEl) {
                 if (SPON_CARD_FIELDS.indexOf(fieldFor) !== -1) showCardDetails(true);
+                if (SPON_HEADER_FIELDS.indexOf(fieldFor) !== -1) showHeaderDetails(true);
                 fieldEl.setAttribute('aria-invalid', 'true');
                 fieldEl.focus();
               }

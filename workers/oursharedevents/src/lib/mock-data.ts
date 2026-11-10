@@ -49,6 +49,8 @@ export interface MockEvent {
   lon: number | null;
   h3_res9: string | null;
   h3_res7: string | null;
+  /** Migration 0105: 'business' or 'address'; absent in fixtures. */
+  place_kind?: string | null;
   corridor_id: string | null;
   legal_clearance_tier: string | null;
 }

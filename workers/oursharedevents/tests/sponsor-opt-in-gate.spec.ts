@@ -20,7 +20,7 @@
  *      nothing; no tier is read.
  *   5. FAILURES: unreadable settings read as off and break no statement; a
  *      failed read leaves the page rendering with no sponsor line.
- *   6. THE BACKFILL (migration 0105): events that already had an
+ *   6. THE BACKFILL (migration 0107): events that already had an
  *      organizer-accepted active placement are switched on; nothing else is.
  *
  * The staging layer is bruno/ose-api "17. Opt-in sponsors (OSE-1900)".
@@ -657,12 +657,12 @@ describe('failures', () => {
   });
 });
 
-describe('the backfill (migration 0105)', () => {
+describe('the backfill (migration 0107)', () => {
   const BF = 'ose-optin-backfill';
   const statement = (): string => {
     const all = JSON.parse(tenv.TEST_MIGRATION_STATEMENTS) as string[];
     const mine = all.filter((s) => s.includes('useSponsors'));
-    expect(mine, 'migration 0105 is one UPDATE').toHaveLength(1);
+    expect(mine, 'migration 0107 is one UPDATE').toHaveLength(1);
     return mine[0];
   };
   const seed = async (

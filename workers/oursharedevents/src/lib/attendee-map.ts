@@ -8,8 +8,9 @@
 // holds at least one attendable event in the forward window, shaded by how
 // many, numbered, with a legend listing each area's events as links. That is
 // the same precision `GET /api/v2/events/map` serves and no finer: the map is
-// drawn from `h3_res7` alone. An event's `lat`/`lon` is NEVER read here, so no
-// coordinate — the event's or the reader's — can reach the markup. The hex
+// drawn from `h3_res7` alone. The hexagon view never reads an event's
+// `lat`/`lon` (only the zoomed area does, below), and no reader's position is
+// read anywhere. The hex
 // outline comes from the cell id (`cellToBoundary`), which says "somewhere in
 // this tile" and nothing more.
 //
@@ -54,9 +55,30 @@
 // The landing's type / modality / product radios do not re-draw the map (it is
 // CSS-only, no JS), so the caption says what the map shows: every kind, the
 // next CORRIDOR_WINDOW_DAYS days. The filtered list sits right below.
+//
+// ZOOMED IN ON ONE AREA (owner, 2026-11-09). On the landing each hexagon links
+// to `?area=<cell>`, which draws that one res-7 area over the street map with a
+// numbered dot per place that holds an event. Where a dot sits is the owner's
+// rule, merged with invariant 3 (place, not person; epic OSE-1880): every place
+// at the centre of its res-9 cell, about one block, a business too. A place the
+// lookup named a business or landmark (`place_kind` 'business',
+// lib/event-place.ts) is marked (solid dot, named in its panel), never
+// pinpointed; anything else, which can be a home, is a pale dashed dot. A
+// missing kind is drawn as a block. Dots nearer than two touch targets are one
+// place, so every dot can be tapped. Every dot opens its place panel under the
+// map (lib/map-place-panel.ts). Dots carry the same type, window and modality
+// classes as the cards, so the landing's pills filter them too, still with no
+// JS. This is the one place this module reads an event's lat/lon, and only to
+// find the event's own block; no coordinate is written to the page and no
+// viewer location is read.
+//
+// NO STREET MAP, NO FLOATING DOTS (owner, 2026-11-09; OSE-1894). Dots on a bare
+// hexagon tell nobody where anything is. Where the street map is missing (no
+// `MAP_TILES` binding, or a failed read), the zoomed area is the list of its
+// places and their panels, and no dot map is drawn.
 
-import { cellToBoundary, cellToLatLng, getResolution, isValidCell } from 'h3-js';
-import { CORRIDOR_RES } from './h3-tagging.js';
+import { cellToBoundary, cellToLatLng, getResolution, isValidCell, latLngToCell } from 'h3-js';
+import { CORRIDOR_RES, NODE_RES } from './h3-tagging.js';
 import {
   CORRIDOR_READY_MIN_EVENTS,
   CORRIDOR_WINDOW_DAYS,
@@ -133,6 +155,23 @@ const H = MAP_H;
 export const MAP_STYLE =
   '<style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-left:1.5rem}.amap-credit a,.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>';
 
+// The zoomed area's style lives in its own module: the ADR-008 design check
+// gives each source file one 400-char inline budget, and MAP_STYLE uses this one.
+export { ZOOM_STYLE } from './map-zoom-style.js';
+import { ZOOM_STYLE } from './map-zoom-style.js';
+import {
+  renderPlacePanels,
+  type PanelEvent,
+  type PanelOptions,
+  type PanelPlace,
+} from './map-place-panel.js';
+
+/** Touch target round a dot, in map units: 44 px on a 343 px wide phone map. */
+const DOT_HIT_R = 39;
+const DOT_R = 13;
+/** Dots nearer than two hit radii overlap as touch targets, so they are one place. */
+export const DOT_MERGE = 2 * DOT_HIT_R;
+
 /** OpenStreetMap's licence (ODbL) asks for this credit wherever its data shows. */
 const OSM_LINK = '<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
@@ -143,6 +182,7 @@ function str(v: unknown): string {
 /** Is this a cell the map may draw — valid, and exactly corridor resolution? */
 function corridorCell(v: unknown): string | null {
   const cell = str(v);
+  // Stryker disable next-line LogicalOperator: h3-js getResolution returns -1 for any invalid cell, empty included, so with && the next line still returns null for them.
   if (!cell || !isValidCell(cell)) return null;
   return getResolution(cell) === CORRIDOR_RES ? cell : null;
 }
@@ -157,6 +197,7 @@ const SVG_NAME_MAX_CHARS = 16;
 
 /** A town is letters, spaces and a little punctuation — never a street number. */
 function asTown(v: string): string | null {
+  // Stryker disable next-line MethodExpression: every caller passes a trimmed part, or a lazy (.+?) capture that starts the trimmed part and cannot end in a space, so trim() changes nothing.
   const t = v.trim();
   return t.length >= 2 && t.length <= NAME_MAX && /^[\p{L} .'-]+$/u.test(t) ? t : null;
 }
@@ -197,6 +238,7 @@ export function attendeeMapAreas(
 ): { areas: AttendeeMapArea[]; count: number } {
   const byCell = new Map<string, { id: string; name: string }[]>();
   const places = new Map<string, { town: string | null; venue: string | null }[]>();
+  // Stryker disable next-line ArrayDeclaration: a filler string in place of [] has no phase, so isInForwardWindow drops it and the result is the same empty map.
   for (const e of items ?? []) {
     if (!isInForwardWindow(e, now)) continue;
     const cell = corridorCell(e.h3_res7);
@@ -206,6 +248,7 @@ export function attendeeMapAreas(
     byCell.set(cell, list);
     const venueLine = str(e.venue) || str(e.location);
     const venue = venueLine.split(',')[0]!.trim().slice(0, NAME_MAX) || null;
+    // Stryker disable next-line ArrayDeclaration: a filler string in place of [] has no town or venue, and mostCommon skips empty values, so the name is the same.
     const seen = places.get(cell) ?? [];
     seen.push({ town: townOf(e.where_address) ?? townOf(venueLine), venue });
     places.set(cell, seen);
@@ -216,6 +259,7 @@ export function attendeeMapAreas(
   const areas = sorted.map(([cell, events], i) => ({
     cell,
     n: i + 1,
+    // Stryker disable next-line ArrayDeclaration: places gets an entry for every cell byCell does, in the same loop, so this fallback is never taken.
     name: areaName(places.get(cell) ?? [], lang),
     events,
   }));
@@ -277,7 +321,12 @@ function eventCount(n: number, lang: Lang): string {
   return fmtCount(lang, n, { one: 'when.all.countOne', other: 'when.all.count' });
 }
 
-function svgFor(areas: AttendeeMapArea[], lang: Lang, streets?: string): string {
+function svgFor(
+  areas: AttendeeMapArea[],
+  lang: Lang,
+  streets?: string,
+  zoomHref?: (cell: string) => string
+): string {
   // Web Mercator, the street map's projection, so the hexagons sit on its
   // streets. The frame comes from the cell ids alone.
   const frame = frameForCells(
@@ -310,43 +359,272 @@ function svgFor(areas: AttendeeMapArea[], lang: Lang, streets?: string): string 
         a.name && areas.length <= SVG_NAME_MAX_AREAS
           ? `<tspan x="${fx(mid[0])}" dy="1.15em" data-testid="amap-area-name">${escapeHtml(short)}</tspan>`
           : '';
-      return (
-        `<g data-testid="amap-area" data-cell="${a.cell}" data-count="${k}">` +
+      const body =
         `<title>${escapeHtml(label)}</title>` +
         `<polygon class="amap-cell" points="${points}" fill-opacity="${opacity}" stroke-width="1.5"/>` +
-        `<text class="amap-num" x="${fx(mid[0])}" y="${fx(mid[1])}" text-anchor="middle" dominant-baseline="central">${a.n}${nameLine}</text>` +
-        `</g>`
-      );
+        `<text class="amap-num" x="${fx(mid[0])}" y="${fx(mid[1])}" text-anchor="middle" dominant-baseline="central">${a.n}${nameLine}</text>`;
+      // On the landing a hexagon opens its area, zoomed in (owner, 2026-11-09).
+      const inner = zoomHref
+        ? `<a href="${escapeHtml(zoomHref(a.cell))}" data-testid="amap-area-link">${body}</a>`
+        : body;
+      return `<g data-testid="amap-area" data-cell="${a.cell}" data-count="${k}">${inner}</g>`;
     })
     .join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="amap-caption" data-testid="amap-svg">${streets ?? ''}${shapes}</svg>`;
 }
 
+/** One event's link in a legend, with its consented sponsor (OSE-1522). */
+function eventLink(
+  e: { id: string; name: string },
+  lang: Lang,
+  sponsorTitles?: ReadonlyMap<string, string>,
+  classes?: string
+): string {
+  const sponsor = sponsorTitles?.get(e.id);
+  const by = sponsor
+    ? ` <span data-testid="amap-event-sponsor">${fmt(lang, 'map.sponsor', { sponsor: escapeHtml(sponsor) })}</span>`
+    : '';
+  const link = `<a href="${withLangPrefix(lang, `/events/${escapeHtml(e.id)}`)}" data-testid="amap-event">${escapeHtml(e.name)}</a>${by}`;
+  return classes ? `<span class="${escapeHtml(classes)}">${link}</span>` : link;
+}
+
 function legendFor(
   areas: AttendeeMapArea[],
   lang: Lang,
-  sponsorTitles?: ReadonlyMap<string, string>
+  sponsorTitles?: ReadonlyMap<string, string>,
+  zoomHref?: (cell: string) => string
 ): string {
   const rows = areas
     .map((a) => {
-      // OSE-1522: an event title shown here carries its consented sponsor.
-      const links = a.events
-        .map((e) => {
-          const sponsor = sponsorTitles?.get(e.id);
-          const by = sponsor
-            ? ` <span data-testid="amap-event-sponsor">${fmt(lang, 'map.sponsor', { sponsor: escapeHtml(sponsor) })}</span>`
-            : '';
-          return `<a href="${withLangPrefix(lang, `/events/${escapeHtml(e.id)}`)}" data-testid="amap-event">${escapeHtml(e.name)}</a>${by}`;
-        })
-        .join(' &middot; ');
+      const links = a.events.map((e) => eventLink(e, lang, sponsorTitles)).join(' &middot; ');
       const k = a.events.length;
       const place = a.name
         ? `<span data-testid="amap-legend-name">${escapeHtml(a.name)}</span> &middot; `
         : '';
-      return `<li value="${a.n}" data-testid="amap-legend-area"><strong>${place}${eventCount(k, lang)}:</strong> ${links}</li>`;
+      const zoom = zoomHref
+        ? ` <a class="amap-zoom" href="${escapeHtml(zoomHref(a.cell))}" data-testid="amap-zoom">${msg(lang, 'map.zoomIn')}</a>`
+        : '';
+      return `<li value="${a.n}" data-testid="amap-legend-area"><strong>${place}${eventCount(k, lang)}:</strong> ${links}${zoom}</li>`;
     })
     .join('');
   return `<ol class="amap-legend" data-testid="amap-legend">${rows}</ol>`;
+}
+
+// ── zoomed in on one area ────────────────────────────────────────────────────
+
+/** An event as the zoomed map needs it: its place and the landing's filter classes. */
+export interface ZoomEvent extends AttendeeMapItem {
+  lat?: unknown;
+  lon?: unknown;
+  /** 'business' is marked (solid, named); every kind sits at its block centre. */
+  place_kind?: unknown;
+  /** The card's filter classes (type, window, modality), so the pills filter the dot. */
+  classes?: readonly string[];
+}
+
+export interface MapDot {
+  /** 1-based, top to bottom then left to right; printed in the dot and the list. */
+  n: number;
+  lat: number;
+  lng: number;
+  /** True when every event here is at a business (drawn solid, named). Always a block centre. */
+  exact: boolean;
+  events: { id: string; name: string; classes: string[] }[];
+}
+
+function finite(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+/**
+ * Where each event of one area sits (owner, 2026-11-09): at its res-9 block's
+ * centre, a business too. Events on one block share a dot, and so do blocks
+ * nearer than two touch targets (DOT_MERGE), at the centre of the first of them
+ * in reading order. Events with no coordinates are returned as `unplaced`.
+ */
+export function mapDots(
+  cell: string,
+  events: readonly ZoomEvent[],
+  lang: Lang = DEFAULT_LANG
+): { dots: MapDot[]; unplaced: { id: string; name: string; classes: string[] }[] } {
+  const frame = frameForCells([cell], W, H);
+  const byKey = new Map<string, Omit<MapDot, 'n'>>();
+  const unplaced: { id: string; name: string; classes: string[] }[] = [];
+  for (const e of events) {
+    const ev = {
+      id: str(e.id),
+      name: str(e.name) || msg(lang, 'card.untitled'),
+      classes: [...(e.classes ?? [])],
+    };
+    const lat = finite(e.lat);
+    const lon = finite(e.lon);
+    if (lat === null || lon === null || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+      unplaced.push(ev);
+      continue;
+    }
+    // Place, not person (AGENTS.md invariant 3; owner 2026-11-09, epic OSE-1880):
+    // every place sits at its res-9 block centre, a business too. A business is
+    // marked (solid dot, named in its panel), never pinpointed.
+    const business = e.place_kind === 'business';
+    const block = latLngToCell(lat, lon, NODE_RES);
+    const at = cellToLatLng(block);
+    const key = `b:${block}`;
+    const dot = byKey.get(key) ?? { lat: at[0], lng: at[1], exact: true, events: [] };
+    dot.exact = dot.exact && business;
+    dot.events.push(ev);
+    byKey.set(key, dot);
+  }
+  const blocks = [...byKey.values()]
+    .map((d) => ({ d, xy: project(frame, d.lat, d.lng) }))
+    .sort((a, b) => a.xy[1] - b.xy[1] || a.xy[0] - b.xy[0]);
+  // Two dots nearer than two hit radii overlap, and one of them cannot be
+  // tapped. In reading order, a block that near an earlier place joins it.
+  const kept: typeof blocks = [];
+  for (const b of blocks) {
+    const near = kept.find((k) => Math.hypot(k.xy[0] - b.xy[0], k.xy[1] - b.xy[1]) < DOT_MERGE);
+    if (!near) {
+      kept.push(b);
+      continue;
+    }
+    near.d.events.push(...b.d.events);
+    near.d.exact = near.d.exact && b.d.exact;
+  }
+  const dots = kept.map(({ d }, i) => ({ n: i + 1, ...d }));
+  return { dots, unplaced };
+}
+
+/** Every filter class the dot's events carry, so a pill hides it only when none match. */
+function dotClasses(events: { classes: string[] }[]): string {
+  return [...new Set(events.flatMap((e) => e.classes))].join(' ');
+}
+
+/** Every dot opens its place panel under the map (lib/map-place-panel.ts). */
+function dotHref(d: MapDot): string {
+  return `#amap-dot-${d.n}`;
+}
+
+function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets: string): string {
+  const frame = frameForCells([cell], W, H);
+  const fx = (v: number) => v.toFixed(1);
+  const ring = cellToBoundary(cell)
+    .map(([lat, lng]) => project(frame, lat, lng))
+    .map(([x, y]) => `${fx(x)},${fx(y)}`)
+    .join(' ');
+  const marks = dots
+    .map((d) => {
+      const [x, y] = project(frame, d.lat, d.lng);
+      const title =
+        d.events.length === 1
+          ? d.events[0]!.name
+          : fmt(lang, 'map.dotTitle', { n: d.n, count: eventCount(d.events.length, lang) });
+      const cls = `amap-f amap-d${d.n}${d.exact ? '' : ' amap-blk'} ${dotClasses(d.events)}`.trim();
+      return (
+        `<a href="${dotHref(d)}" class="${escapeHtml(cls)}" data-testid="amap-dot" data-exact="${d.exact ? 1 : 0}" data-count="${d.events.length}">` +
+        `<title>${escapeHtml(title)}</title>` +
+        `<circle class="amap-hit" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_HIT_R}" fill-opacity="0"/>` +
+        `<circle class="amap-dot" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_R}"/>` +
+        `<text class="amap-dn" x="${fx(x)}" y="${fx(y)}" text-anchor="middle" dominant-baseline="central">${d.n}</text>` +
+        `</a>`
+      );
+    })
+    .join('');
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="group" aria-labelledby="amap-caption" data-testid="amap-svg">` +
+    `${streets}<polygon class="amap-zone" points="${ring}" data-testid="amap-zone" data-cell="${cell}"/>${marks}</svg>`
+  );
+}
+
+function zoomLegend(
+  dots: MapDot[],
+  unplaced: { id: string; name: string; classes: string[] }[],
+  lang: Lang,
+  sponsorTitles?: ReadonlyMap<string, string>
+): string {
+  const row = (events: { id: string; name: string; classes: string[] }[]) =>
+    events
+      .map((e) => eventLink(e, lang, sponsorTitles, ['amap-f', ...e.classes].join(' ')))
+      .join(' ');
+  const rows = dots
+    .map(
+      (d) =>
+        `<li value="${d.n}" class="${escapeHtml(`amap-f ${dotClasses(d.events)}`.trim())}" data-testid="amap-legend-dot"><a class="amap-zoom" href="${dotHref(d)}" data-testid="amap-place-link">${fmt(lang, 'map.place', { n: d.n })}</a>: ${row(d.events)}</li>`
+    )
+    .join('');
+  const rest = unplaced.length
+    ? `<p class="amap-f ${escapeHtml(dotClasses(unplaced))}" data-testid="amap-unplaced"><strong>${msg(lang, 'map.unplaced')}:</strong> ${row(unplaced)}</p>`
+    : '';
+  return `<ol class="amap-legend" id="amap-places" data-testid="amap-legend">${rows}</ol>${rest}`;
+}
+
+/**
+ * The landing's zoomed area: one hexagon, its streets, a dot per place. With no
+ * street map: the same places as a list, and their panels, with no dot map.
+ */
+function renderZoom(
+  zoom: AreaZoom,
+  now: Date,
+  lang: Lang,
+  sponsorTitles?: ReadonlyMap<string, string>,
+  streetLayer?: StreetLayer | null,
+  panel?: Pick<PanelOptions, 'placeLinks' | 'origin'>
+): RenderedAttendeeMap {
+  const back = `<p><a class="amap-back" href="${escapeHtml(zoom.backHref)}" data-testid="amap-back">${msg(lang, 'map.allAreas')}</a></p>`;
+  const cell = corridorCell(zoom.cell);
+  const inArea = cell
+    ? zoom.events.filter((e) => isInForwardWindow(e, now) && corridorCell(e.h3_res7) === cell)
+    : [];
+  if (!cell || inArea.length === 0) {
+    return {
+      html: `<div class="map-placeholder" data-testid="amap-zoom-empty" role="status"><p>${msg(lang, 'map.zoomEmpty')}</p></div>${ZOOM_STYLE}${back}`,
+      state: 'thin',
+      count: 0,
+      areas: [],
+    };
+  }
+  const area = attendeeMapAreas(inArea, now, lang).areas[0]!;
+  const { dots, unplaced } = mapDots(cell, inArea, lang);
+  const streets =
+    streetLayer && streetLayer.cellsKey === cellsKey([cell]) ? streetLayer.svg : undefined;
+  const credit = streets
+    ? `<p class="amap-credit" data-testid="amap-credit">${fmt(lang, 'map.credit', { osm: OSM_LINK })}</p>`
+    : '';
+  const events = eventCount(inArea.length, lang);
+  const days = CORRIDOR_WINDOW_DAYS;
+  const caption = area.name
+    ? fmt(lang, streets ? 'map.zoomCaptionNamed' : 'map.listCaptionNamed', {
+        events,
+        name: escapeHtml(area.name),
+        days,
+      })
+    : fmt(lang, streets ? 'map.zoomCaption' : 'map.listCaption', { events, days });
+  // No street map, no floating dots (OSE-1894): the places are the list below.
+  const drawing = streets
+    ? zoomSvg(cell, dots, lang, streets)
+    : `<div class="map-placeholder" data-testid="amap-no-tiles" role="status"><p>${msg(lang, 'map.noTiles')}</p></div>`;
+  const byId = new Map(inArea.map((e) => [str(e.id), e]));
+  const places: PanelPlace[] = dots.map((d) => ({
+    n: d.n,
+    business: d.exact,
+    events: d.events.map((ev) => ({ ...(byId.get(ev.id) as PanelEvent), classes: ev.classes })),
+  }));
+  const panels = renderPlacePanels(places, { lang, sponsorTitles, ...panel });
+  const html = `<div class="amap-wrap" data-testid="amap-wrap"><figure class="amap" data-testid="amap" data-zoom="${cell}">
+              ${MAP_STYLE}${ZOOM_STYLE}${streets ? STREET_STYLE : ''}
+              ${back}
+              ${drawing}
+              ${zoomLegend(dots, unplaced, lang, sponsorTitles)}
+              <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>${credit}
+            </figure>${panels}</div>`;
+  return { html, state: 'map', count: inArea.length, areas: [{ ...area, n: 1 }] };
+}
+
+/** The landing's zoom request: one res-7 area and the way back. */
+export interface AreaZoom {
+  cell: string;
+  /** The area's events (already the page's list), with place and filter classes. */
+  events: readonly ZoomEvent[];
+  /** The landing without `area`, the search kept. */
+  backHref: string;
 }
 
 /**
@@ -369,10 +647,24 @@ export function renderAttendeeMap(
      * was drawn for exactly the cells this map draws, so the two frames match.
      */
     streets?: StreetLayer | null;
+    /** The landing: each hexagon links here to open its area zoomed in. */
+    zoomHref?: (cell: string) => string;
+    /** The landing, zoomed in on one area: drawn in place of the hexagons. */
+    zoom?: AreaZoom;
+    /** Zoomed in: each event's direct links and share code (lib/map-place-links.ts). */
+    placeLinks?: PanelOptions['placeLinks'];
+    /** Zoomed in: the site's origin, for the link a Share button carries. */
+    origin?: string | null;
   }
 ): RenderedAttendeeMap {
   const lang = opts?.lang ?? DEFAULT_LANG;
   const now = new Date(opts?.now ?? Date.now());
+  // A zoom was asked for by a tap, so the area gate does not apply to it.
+  if (opts?.zoom)
+    return renderZoom(opts.zoom, now, lang, opts.sponsorTitles, opts.streets, {
+      placeLinks: opts.placeLinks,
+      origin: opts.origin,
+    });
   const latched = opts?.latched ?? new Set<string>();
   const all = attendeeMapAreas(items, now, lang).areas;
   const gate = opts?.area;
@@ -398,11 +690,12 @@ export function renderAttendeeMap(
     return { html: thinHtml(note, lang), state: 'thin', count: 0, areas: [] };
   }
 
-  const caption = fmt(lang, 'map.caption', {
-    events: eventCount(count, lang),
-    areas: fmtCount(lang, drawn.length, { one: 'map.areasOne', other: 'map.areas' }),
-    days: CORRIDOR_WINDOW_DAYS,
-  });
+  const caption =
+    fmt(lang, 'map.caption', {
+      events: eventCount(count, lang),
+      areas: fmtCount(lang, drawn.length, { one: 'map.areasOne', other: 'map.areas' }),
+      days: CORRIDOR_WINDOW_DAYS,
+    }) + (opts?.zoomHref ? ` ${msg(lang, 'map.tapToZoom')}` : '');
   const streets =
     opts?.streets && opts.streets.cellsKey === cellsKey(drawn.map((a) => a.cell))
       ? opts.streets.svg
@@ -411,9 +704,9 @@ export function renderAttendeeMap(
     ? `<p class="amap-credit" data-testid="amap-credit">${fmt(lang, 'map.credit', { osm: OSM_LINK })}</p>`
     : '';
   const html = `<figure class="amap" data-testid="amap">
-              ${MAP_STYLE}${streets ? STREET_STYLE : ''}
-              ${svgFor(drawn, lang, streets)}
-              ${legendFor(drawn, lang, opts?.sponsorTitles)}
+              ${MAP_STYLE}${streets ? STREET_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}
+              ${svgFor(drawn, lang, streets, opts?.zoomHref)}
+              ${legendFor(drawn, lang, opts?.sponsorTitles, opts?.zoomHref)}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>${credit}
             </figure>`;
   return { html, state: 'map', count, areas: drawn };

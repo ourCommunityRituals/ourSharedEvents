@@ -86,6 +86,15 @@ export interface SponsorRow {
    */
   display_name?: string | null;
   address_line?: string | null;
+  /**
+   * OSE-1826 (0105): the sponsor's header block. header_text is its short text;
+   * has_header_image says only THAT it has a header image. The image's address
+   * never leaves the server: surfaces load it through the consent-gated logo
+   * proxy (/api/v2/sponsors/:id/logo?slot=header). Set to a boolean at the
+   * public seam.
+   */
+  header_text?: string | null;
+  has_header_image?: boolean | number;
   /** Public title: display_name, else name. Set at the public seam. */
   title?: string;
   /** Where a tap goes when there is no https website. Set at the public seam. */
@@ -235,6 +244,8 @@ export async function resolveSponsorsForEvent(
     sb.name AS name,
     sb.display_name AS display_name,
     sb.address_line AS address_line,
+    sb.header_text AS header_text,
+    CASE WHEN COALESCE(sb.header_image_url, '') <> '' THEN 1 ELSE 0 END AS has_header_image,
     la.url AS logo_url,
     lc.url AS sidebar_logo_url,
     sb.website_url AS website_url,
@@ -290,6 +301,8 @@ export async function resolveSponsorsForEvent(
       .prepare(
         `SELECT sb.id AS id, sb.name AS name, sb.display_name AS display_name,
                 sb.address_line AS address_line, sb.website_url AS website_url,
+                sb.header_text AS header_text,
+                CASE WHEN COALESCE(sb.header_image_url, '') <> '' THEN 1 ELSE 0 END AS has_header_image,
                 sb.h3_res7 AS h3_res7, la.url AS logo_url,
                 ${SPONSOR_ON_SHOW_SQL} AS has_card,
                 (SELECT lc.url FROM sponsor_asset lc WHERE lc.sponsor_business_id = sb.id
@@ -318,6 +331,8 @@ export async function resolveSponsorsForEvent(
         display_name: string | null;
         address_line: string | null;
         website_url: string | null;
+        header_text: string | null;
+        has_header_image: number;
         h3_res7: string | null;
         logo_url: string | null;
         sidebar_logo_url: string | null;
@@ -332,6 +347,8 @@ export async function resolveSponsorsForEvent(
       name: b.name,
       display_name: b.display_name,
       address_line: b.address_line,
+      header_text: b.header_text,
+      has_header_image: b.has_header_image,
       logo_url: b.logo_url,
       sidebar_logo_url: b.sidebar_logo_url,
       website_url: b.website_url,
@@ -414,6 +431,8 @@ export async function resolveSponsorsForEvent(
         ...row,
         website_url: publicWebsiteUrl(s.website_url),
         title: sponsorTitle(s),
+        header_text: s.header_text ?? null,
+        has_header_image: Number(s.has_header_image) === 1,
         ...(Number(has_card) === 1 ? { card_url: sponsorCardPath(s.id) } : {}),
       });
     }

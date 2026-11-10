@@ -192,6 +192,15 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
       'row back by id and returns nothing to any caller; not reachable from any ' +
       'request path.',
   ],
+  [
+    'lib/event-place.ts > runPlaceKindBackfill: `SELECT id, where_address, location FROM events',
+    'Nightly place-kind fill (runPlaceKindBackfill, owner 2026-11-09: a business dot sits ' +
+      'at its point, anything else at its res-9 block). Cross-brand BY DESIGN, like ' +
+      'runEventPlaceBackfill above: it records whether an already-placed event is a ' +
+      'business or an address, for every brand, inside the same 25-lookup night. It ' +
+      'writes each row back by id, never moves coordinates, returns nothing to any ' +
+      'caller, and is not reachable from any request path.',
+  ],
 
   [
     'handlers/bigquery.ts > runBigQueryBackup: FROM events e',

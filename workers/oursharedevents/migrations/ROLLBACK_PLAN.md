@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0105; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0107; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,7 +110,7 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
--- 0105: switches sponsors on (`useSponsors: true` in events.settings_json) for
+-- 0107: switches sponsors on (`useSponsors: true` in events.settings_json) for
 -- events whose organizer had already chosen a sponsor (OSE-1900). Data only: no
 -- table, column, index or trigger. THE ROLLBACK IS: revert the Worker and LEAVE
 -- THE KEY. The older Worker does not read it and its settings reader drops keys
@@ -119,11 +119,26 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 -- Surgical reverse, only if the key itself must go. It removes the switch from
 -- EVERY event, including the ones an organizer turned on or off by hand after
 -- the deploy, and those choices cannot be told apart from the backfill
--- afterwards. If the newer Worker is deployed again, run migration 0105's
+-- afterwards. If the newer Worker is deployed again, run migration 0107's
 -- UPDATE again by hand first, or every sponsor is hidden until its organizer
 -- turns sponsors on:
 UPDATE events SET settings_json = json_remove(settings_json, '$.useSponsors')
  WHERE json_valid(settings_json) AND json_type(settings_json, '$.useSponsors') IS NOT NULL;
+
+-- 0106: events.place_kind (business or address), how the zoomed map marks an
+-- event's place (epic OSE-1880). Additive, nullable; a nightly job fills it.
+-- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMN. The older Worker has
+-- no zoomed map and reads no place_kind; a kind already filled stays in the
+-- row, unused, until the newer Worker returns.
+--
+-- Surgical reverse, only if the column itself must go:
+ALTER TABLE events DROP COLUMN place_kind;
+
+-- 0105: sponsor_business.header_image_url + header_text, the sponsor's header
+-- block on the digital poster (OSE-1826). Additive, nullable, no backfill. THE
+-- ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS. The older Worker reads
+-- neither column, so the poster shows the logo and name as before; any header a
+-- sponsor saved stays in the row, unused, until the newer Worker returns.
 
 -- 0104: events.venue_canonical_id + events.event_correlation_id, each with an
 -- index (OSE-1615). Additive. THE ROLLBACK IS: revert the Worker and LEAVE THE

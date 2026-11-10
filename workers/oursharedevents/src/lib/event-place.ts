@@ -42,6 +42,21 @@ export const SPOT_TYPES: ReadonlySet<string> = new Set([
   'intersection',
 ]);
 
+/**
+ * Google result types that name a business or landmark (owner, 2026-11-09).
+ * The zoomed landing map draws such a place at its exact point. Any other spot
+ * (a street address, a building, an intersection) can be a home, so it is
+ * drawn at the centre of its res-9 cell, about one block (lib/attendee-map.ts).
+ */
+export const BUSINESS_TYPES: ReadonlySet<string> = new Set(['establishment', 'point_of_interest']);
+
+/** 'business' (exact point on the map) or 'address' (block centre). */
+export type PlaceKind = 'business' | 'address';
+
+export function placeKindOf(types: readonly string[] | undefined): PlaceKind {
+  return (types ?? []).some((t) => BUSINESS_TYPES.has(t)) ? 'business' : 'address';
+}
+
 /** The text an event's place is looked up by: its address, else its place. */
 export function eventPlaceText(whereAddress: unknown, location: unknown): string | null {
   for (const v of [whereAddress, location]) {
@@ -51,7 +66,7 @@ export function eventPlaceText(whereAddress: unknown, location: unknown): string
 }
 
 export type PlaceLookup =
-  | { found: true; lat: number; lon: number }
+  | { found: true; lat: number; lon: number; kind: PlaceKind }
   | {
       found: false;
       /**
@@ -100,7 +115,7 @@ export async function lookUpEventPlace(
   const isSpot = (types ?? []).some((t) => SPOT_TYPES.has(t));
   if (!isSpot || partial_match === true) return { found: false, reason: 'NOT_A_SPOT' };
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { found: false, reason: 'NOT_FOUND' };
-  return { found: true, lat, lon: lng };
+  return { found: true, lat, lon: lng, kind: placeKindOf(types) };
 }
 
 /**
@@ -118,16 +133,16 @@ export async function savePlaceLookup(
     const tags = maybeTag(r.lat, r.lon);
     await db
       .prepare(
-        'UPDATE events SET lat = ?, lon = ?, h3_res9 = ?, h3_res7 = ?, place_checked_at = ?, venue_canonical_id = NULL, event_correlation_id = NULL WHERE id = ?'
+        'UPDATE events SET lat = ?, lon = ?, h3_res9 = ?, h3_res7 = ?, place_kind = ?, place_checked_at = ?, venue_canonical_id = NULL, event_correlation_id = NULL WHERE id = ?'
       )
-      .bind(r.lat, r.lon, tags?.h3_res9 ?? null, tags?.h3_res7 ?? null, now, eventId)
+      .bind(r.lat, r.lon, tags?.h3_res9 ?? null, tags?.h3_res7 ?? null, r.kind, now, eventId)
       .run();
     return;
   }
   if (!lookupWasAnswered(r)) return;
   await db
     .prepare(
-      'UPDATE events SET lat = NULL, lon = NULL, h3_res9 = NULL, h3_res7 = NULL, place_checked_at = ?, venue_canonical_id = NULL, event_correlation_id = NULL WHERE id = ?'
+      'UPDATE events SET lat = NULL, lon = NULL, h3_res9 = NULL, h3_res7 = NULL, place_kind = NULL, place_checked_at = ?, venue_canonical_id = NULL, event_correlation_id = NULL WHERE id = ?'
     )
     .bind(now, eventId)
     .run();
@@ -144,6 +159,8 @@ export interface EventPlaceBackfillResult {
   checked: number;
   found: number;
   errors: number;
+  /** Place kinds filled for events placed before kinds were kept. */
+  kinds?: number;
 }
 
 /**
@@ -196,8 +213,64 @@ export async function runEventPlaceBackfill(
       result.errors++;
     }
   }
+  // What is left of the night's lookups goes to place kinds (migration 0106).
+  const kinds = await runPlaceKindBackfill(env, PLACE_BACKFILL_MAX - rows.length, fetcher);
+  result.kinds = kinds.kinds;
+  result.errors += kinds.errors;
   console.log(
     JSON.stringify({ type: 'EVENT_PLACE_BACKFILL', ...result, timestamp: new Date().toISOString() })
   );
   return result;
+}
+
+/**
+ * Nightly, after the place backfill: the kind of place (business or address)
+ * for events a lookup already placed before kinds were kept. It looks the same
+ * text up again and stores ONLY the kind; the event's coordinates and cells
+ * are never touched, so a changed answer from Google cannot move or unplace an
+ * event. An answer that names no business stores 'address' (block centre), so
+ * the row is not paid for again. No answer (Google down) leaves it for the next
+ * night. Events placed from coordinates (never looked up) are left alone and
+ * stay at the block centre.
+ */
+export async function runPlaceKindBackfill(
+  env: EventPlaceBackfillEnv,
+  limit: number,
+  fetcher: typeof fetch = globalThis.fetch
+): Promise<{ kinds: number; errors: number }> {
+  const out = { kinds: 0, errors: 0 };
+  if (!env.DB || !env.GOOGLE_MAPS_API_KEY || limit <= 0) return out;
+  let rows: { id: string; where_address: string | null; location: string | null }[] = [];
+  try {
+    const res = await env.DB.prepare(
+      `SELECT id, where_address, location FROM events
+        WHERE status != 'archived'
+          AND lat IS NOT NULL AND lon IS NOT NULL
+          AND place_kind IS NULL
+          AND place_checked_at IS NOT NULL
+          AND (TRIM(COALESCE(where_address, '')) != '' OR TRIM(COALESCE(location, '')) != '')
+          AND (start_date IS NULL OR substr(COALESCE(end_date, start_date), 1, 10) >= date('now', '-1 day'))
+        ORDER BY start_date IS NULL, start_date, id
+        LIMIT ?`
+    )
+      .bind(limit)
+      .all<{ id: string; where_address: string | null; location: string | null }>();
+    rows = res.results ?? [];
+  } catch {
+    out.errors++;
+    return out;
+  }
+  for (const row of rows) {
+    try {
+      const r = await lookUpEventPlace(env, row.where_address, row.location, fetcher);
+      if (!lookupWasAnswered(r)) continue;
+      await env.DB.prepare('UPDATE events SET place_kind = ? WHERE id = ? AND place_kind IS NULL')
+        .bind(r.found ? r.kind : 'address', row.id)
+        .run();
+      out.kinds++;
+    } catch {
+      out.errors++;
+    }
+  }
+  return out;
 }

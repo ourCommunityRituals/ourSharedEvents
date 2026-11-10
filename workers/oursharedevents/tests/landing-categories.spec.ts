@@ -121,7 +121,9 @@ describe('GET / Type row: one chip per category, named from the catalog', () => 
     expect(cardClassOf('cat-test-mixer')).not.toContain('cat-art');
     expect(cardClassOf('cat-test-untyped')).toContain('cat-other');
     const css = body.match(/<style data-testid="area-type-css">([\s\S]*?)<\/style>/)?.[1] ?? '';
-    expect(css).toContain('#cat-art:checked ~ .area .event-card:not(.cat-art){display:none}');
+    expect(css).toContain(
+      '#cat-art:checked ~ .area .event-card:not(.cat-art),#cat-art:checked ~ .area .amap-f:not(.cat-art){display:none}'
+    );
   });
 
   test('still CSS-only: no script in the area and no cookie', async () => {

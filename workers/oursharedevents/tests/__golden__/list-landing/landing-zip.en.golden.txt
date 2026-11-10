@@ -183,6 +183,37 @@
       .disc-clear { color: var(--text); text-decoration: underline; }
       .disc-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); padding: 0; margin: 0 0.25rem 0 0; align-self: center; }
       .disc-summary { font-size: 0.95rem; color: var(--text-muted); margin: 0 0 0.75rem; }
+      /* The map's place panel (owner 2026-11-09): the card's buttons in a grid,
+         phone first. "Open event" across the top, the rest two to a row with
+         12px between, 48px tall; a lone last button takes the row. Wider
+         screens fit them on one row where they can. */
+      .event-card .amap-acts { position: relative; z-index: 3; flex: 1 1 100%; display: grid; grid-template-columns: 1fr 1fr; gap: var(--tap-gap, 12px); }
+      .event-card .amap-acts .cta { width: 100%; min-height: 48px; box-sizing: border-box; white-space: normal; text-align: center; font: inherit; font-weight: 600; border: 0; cursor: pointer; }
+      .event-card .amap-acts .cta:first-child, .event-card .amap-acts > :last-child:nth-child(even) { grid-column: 1 / -1; }
+      .event-card .amap-acts .ose-share-btn:focus-visible { outline: 3px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }
+      /* An outlined button keeps its accent text, so its hover is the quiet
+         surface, not the filled button's (seen in a browser 2026-11-09: accent
+         text on the accent hover could not be read, and on a phone the hover
+         stays after a tap). */
+      .event-card .amap-acts .cta-secondary:hover { background: var(--surface-hover); }
+      @media (min-width: 600px) {
+        .event-card .amap-acts { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+        .event-card .amap-acts .cta:first-child, .event-card .amap-acts > :last-child:nth-child(even) { grid-column: auto; }
+      }
+      /* The place panels themselves (lib/map-place-panel.ts): hidden until
+         their dot is tapped; the tapped place's target sits at the top of the
+         map, so the map stays on screen with the panel under it. */
+      .amap-wrap { position: relative; }
+      .amap-t { position: absolute; top: 0; left: 0; width: 1px; height: 1px; }
+      .amap-p { display: none; margin-top: 1rem; padding-top: 0.75rem; border-top: 3px solid var(--accent); }
+      .amap-t:target + .amap-p { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+      .amap-wrap:has(.amap-t:target) .amap-legend, .amap-wrap:has(.amap-t:target) [data-testid="amap-unplaced"] { display: none; }
+      .amap-ph { font-size: 1.25rem; margin: 0; color: var(--text); }
+      .amap-pm { font-size: 0.95rem; color: var(--text-muted); margin: 0; }
+      .amap-pn { display: grid; grid-template-columns: 1fr 1fr; gap: var(--tap-gap, 12px); }
+      .amap-pn .disc-chip { justify-content: center; color: var(--text); }
+      .amap-all { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent-text, var(--accent)); }
+      .amap svg a:focus-visible .amap-dot { stroke: var(--focus-ring, var(--text)); stroke-width: 6; }
       .empty-state,
       .near-empty,
       .map-placeholder {
@@ -265,14 +296,14 @@
         <style data-testid="area-window-css">
 #view-list:checked ~ .toggles label[for='view-list']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-list:checked ~ .toggles label[for='view-list']::before{content:'\2713';margin-right:.35rem}#view-list:focus-visible ~ .toggles label[for='view-list']{outline:3px solid var(--accent);outline-offset:2px}
 #view-map:checked ~ .toggles label[for='view-map']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-map:checked ~ .toggles label[for='view-map']::before{content:'\2713';margin-right:.35rem}#view-map:focus-visible ~ .toggles label[for='view-map']{outline:3px solid var(--accent);outline-offset:2px}
-#win-weekend:checked ~ .toggles label[for='win-weekend']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-weekend:checked ~ .toggles label[for='win-weekend']::before{content:'\2713';margin-right:.35rem}#win-weekend:focus-visible ~ .toggles label[for='win-weekend']{outline:3px solid var(--accent);outline-offset:2px}#win-weekend:checked ~ .area .event-card:not(.when-weekend){display:none}
-#win-week:checked ~ .toggles label[for='win-week']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-week:checked ~ .toggles label[for='win-week']::before{content:'\2713';margin-right:.35rem}#win-week:focus-visible ~ .toggles label[for='win-week']{outline:3px solid var(--accent);outline-offset:2px}#win-week:checked ~ .area .event-card:not(.when-week){display:none}
-#win-month:checked ~ .toggles label[for='win-month']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-month:checked ~ .toggles label[for='win-month']::before{content:'\2713';margin-right:.35rem}#win-month:focus-visible ~ .toggles label[for='win-month']{outline:3px solid var(--accent);outline-offset:2px}#win-month:checked ~ .area .event-card:not(.when-month){display:none}
-#win-next-90:checked ~ .toggles label[for='win-next-90']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-next-90:checked ~ .toggles label[for='win-next-90']::before{content:'\2713';margin-right:.35rem}#win-next-90:focus-visible ~ .toggles label[for='win-next-90']{outline:3px solid var(--accent);outline-offset:2px}#win-next-90:checked ~ .area .event-card:not(.when-next-90){display:none}
+#win-weekend:checked ~ .toggles label[for='win-weekend']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-weekend:checked ~ .toggles label[for='win-weekend']::before{content:'\2713';margin-right:.35rem}#win-weekend:focus-visible ~ .toggles label[for='win-weekend']{outline:3px solid var(--accent);outline-offset:2px}#win-weekend:checked ~ .area .event-card:not(.when-weekend),#win-weekend:checked ~ .area .amap-f:not(.when-weekend){display:none}
+#win-week:checked ~ .toggles label[for='win-week']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-week:checked ~ .toggles label[for='win-week']::before{content:'\2713';margin-right:.35rem}#win-week:focus-visible ~ .toggles label[for='win-week']{outline:3px solid var(--accent);outline-offset:2px}#win-week:checked ~ .area .event-card:not(.when-week),#win-week:checked ~ .area .amap-f:not(.when-week){display:none}
+#win-month:checked ~ .toggles label[for='win-month']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-month:checked ~ .toggles label[for='win-month']::before{content:'\2713';margin-right:.35rem}#win-month:focus-visible ~ .toggles label[for='win-month']{outline:3px solid var(--accent);outline-offset:2px}#win-month:checked ~ .area .event-card:not(.when-month),#win-month:checked ~ .area .amap-f:not(.when-month){display:none}
+#win-next-90:checked ~ .toggles label[for='win-next-90']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-next-90:checked ~ .toggles label[for='win-next-90']::before{content:'\2713';margin-right:.35rem}#win-next-90:focus-visible ~ .toggles label[for='win-next-90']{outline:3px solid var(--accent);outline-offset:2px}#win-next-90:checked ~ .area .event-card:not(.when-next-90),#win-next-90:checked ~ .area .amap-f:not(.when-next-90){display:none}
 </style><style data-testid="area-type-css">
 #type-all:checked ~ .toggles label[for='type-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-all:checked ~ .toggles label[for='type-all']::before{content:'\2713';margin-right:.35rem}#type-all:focus-visible ~ .toggles label[for='type-all']{outline:3px solid var(--accent);outline-offset:2px}
-#cat-rec:checked ~ .toggles label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-rec:checked ~ .toggles label[for='cat-rec']::before{content:'\2713';margin-right:.35rem}#cat-rec:focus-visible ~ .toggles label[for='cat-rec']{outline:3px solid var(--accent);outline-offset:2px}#cat-rec:checked ~ .area .event-card:not(.cat-rec){display:none}
-#cat-ent:checked ~ .toggles label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .toggles label[for='cat-ent']::before{content:'\2713';margin-right:.35rem}#cat-ent:focus-visible ~ .toggles label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent){display:none}
+#cat-rec:checked ~ .toggles label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-rec:checked ~ .toggles label[for='cat-rec']::before{content:'\2713';margin-right:.35rem}#cat-rec:focus-visible ~ .toggles label[for='cat-rec']{outline:3px solid var(--accent);outline-offset:2px}#cat-rec:checked ~ .area .event-card:not(.cat-rec),#cat-rec:checked ~ .area .amap-f:not(.cat-rec){display:none}
+#cat-ent:checked ~ .toggles label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .toggles label[for='cat-ent']::before{content:'\2713';margin-right:.35rem}#cat-ent:focus-visible ~ .toggles label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent),#cat-ent:checked ~ .area .amap-f:not(.cat-ent){display:none}
 </style>
         <div class="toggles" data-testid="area-toggles">
           <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">View</legend><label class="disc-chip" for="view-list">List</label><label class="disc-chip" for="view-map">Map</label></fieldset>

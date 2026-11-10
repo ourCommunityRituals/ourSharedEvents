@@ -87,6 +87,7 @@ export function zxyToTileId(z: number, x: number, y: number): number {
   let d = 0;
   let tx = x;
   let ty = y;
+  // Stryker disable next-line ArithmeticOperator: starting at s = n * 2 adds two rounds (s = 2n, then n) where x, y < n have those bits clear, so each adds 0 and swaps tx/ty, the two swaps cancel, and the walk from n / 2 on is unchanged
   for (let s = n / 2; s >= 1; s /= 2) {
     const rx = (tx & s) > 0 ? 1 : 0;
     const ry = (ty & s) > 0 ? 1 : 0;

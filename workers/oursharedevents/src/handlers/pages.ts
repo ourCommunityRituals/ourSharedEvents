@@ -68,6 +68,7 @@ import {
   renderEventListError,
   injectEventList,
   injectEventCardCss,
+  PLACE_PANEL_CSS,
   type EventListItem,
   type RenderedEventList,
 } from '../lib/event-list.js';
@@ -75,11 +76,14 @@ import {
   renderLandingArea,
   renderEmptyLandingArea,
   injectLandingArea,
+  landingZoom,
   type LandingAreaItem,
 } from '../lib/landing-area.js';
 import { categoryByTypeId, type TypeCategory } from '../lib/event-type-catalog.js';
 import { readEventTypeCatalog } from '../lib/event-type-catalog-read.js';
 import { loadStreetLayer, type StreetMapEnv } from '../lib/street-map.js';
+import { renderShareButton } from '../lib/share-button.js';
+import { fetchPlaceLinks } from '../lib/map-place-links.js';
 import {
   readWhere,
   injectWhere,
@@ -803,15 +807,12 @@ function renderShareBlock(
   lang: Lang,
   inert = false
 ): string {
-  const shareLabel = msg(lang, 'share.label');
   const copiedLabel = msg(lang, 'share.copied');
   // OSE-1355: in an admin draft preview the button is shown (it is what the
   // public will see) but switched off — no URL, no script. A draft's link is
-  // not public yet, so there is nothing to share.
-  const attrs = inert
-    ? 'disabled aria-disabled="true" data-preview-inert="true"'
-    : `data-share-url="${esc(shareUrl)}" data-share-title="${esc(title)}"`;
-  const button = `<button class="ose-share-btn" data-testid="share-btn" type="button" ${attrs}>${shareLabel}</button>`;
+  // not public yet, so there is nothing to share. The button is the one the
+  // map's place panel shows too (lib/share-button.ts, owner 2026-11-09).
+  const button = renderShareButton(shareUrl, title, lang, { inert });
   if (inert) return button;
   return `${button}
 <script nonce="${nonce}">(function(){var btn=document.querySelector('.ose-share-btn');if(!btn)return;var orig=btn.textContent;btn.addEventListener('click',function(){var u=btn.dataset.shareUrl,t=btn.dataset.shareTitle;if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){btn.textContent='${jsStr(copiedLabel)}';setTimeout(function(){btn.textContent=orig;},2000);}).catch(function(){});}});})();</script>`;
@@ -2767,6 +2768,15 @@ export async function handleLandingPage(
   }
   // A zip, one place, or the places a name means: results come first.
   const searched = where.kind === 'zip' || where.kind === 'place' || where.kind === 'choose';
+  // A tapped hexagon: `?area=<res-7 cell>` opens that area zoomed in (owner,
+  // 2026-11-09). The links keep the visitor's search; anything but a res-7 cell
+  // is ignored.
+  let zoom: ReturnType<typeof landingZoom>;
+  try {
+    zoom = landingZoom(request ? new URL(request.url) : null, withLangPrefix(lang, '/'));
+  } catch {
+    zoom = landingZoom(null, withLangPrefix(lang, '/'));
+  }
   let area;
   try {
     const dp = getDataProvider(env as LandingEnv, ctx ?? null);
@@ -2808,11 +2818,25 @@ export async function handleLandingPage(
       // A failed read only folds every event into "Other" (one choice, so no
       // row); the cards still show. tests/landing-category-scenarios.spec.ts.
     }
+    // Zoomed in: each event's own links and share code, for its panel card.
+    // Direct destinations only; a map tap is never counted (OSE-1897).
+    const zoomCell = zoom.cell;
+    const placeLinks = zoomCell
+      ? await fetchPlaceLinks(
+          (env as LandingEnv).DB,
+          items.filter((e) => e.h3_res7 === zoomCell).map((e) => String(e.id))
+        )
+      : undefined;
+    const origin = canonicalOrigin(request, env);
     const areaOpts = {
+      placeLinks,
+      origin,
       latched,
       areaLatched: searched ? false : areaLatched,
       sponsorTitles,
       lang,
+      zoomHref: (cell: string) => zoom.href(cell),
+      zoom: zoom.cell ? { cell: zoom.cell, backHref: zoom.href() } : undefined,
       typeCategories,
     };
     area = renderLandingArea(items as LandingAreaItem[], areaOpts);
@@ -2826,7 +2850,7 @@ export async function handleLandingPage(
   } catch {
     area = renderEmptyLandingArea(lang);
   }
-  if (searched && area.windowCount === 0 && area.categories.length === 0) {
+  if (searched && !zoom.cell && area.windowCount === 0 && area.categories.length === 0) {
     const empty =
       where.kind === 'zip'
         ? renderNearEmpty(where.area.zip, lang)
@@ -2852,7 +2876,8 @@ export async function handleLandingPage(
         lang,
         CANONICAL_PATH.landing,
         switchQuery(where)
-      )
+      ),
+      PLACE_PANEL_CSS
     ),
     'landing',
     lang
@@ -2861,7 +2886,11 @@ export async function handleLandingPage(
     injectLanguageHead(
       injectLanguageAlternates(
         injectCanonical(
-          injectWhere(injectLandingArea(shell, area, { areaFirst: searched }), where, lang),
+          injectWhere(
+            injectLandingArea(shell, area, { areaFirst: searched || zoom.cell !== null }),
+            where,
+            lang
+          ),
           request,
           env,
           withLangPrefix(lang, CANONICAL_PATH.landing)

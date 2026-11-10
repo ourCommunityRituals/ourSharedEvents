@@ -1,8 +1,8 @@
-# Production migration plan: main 77 to 105, forms 14 to 18
+# Production migration plan: main 77 to 107, forms 14 to 18
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0105, forms 0015–0018.
+Covers: main 0078–0107, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 105              | 28       |
+| Main (`ocr-db-production`)        | 77               | 107              | 30       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -88,7 +88,7 @@ a line in this document.
   old Worker keeps working. Nobody has tested the old production build against the new
   tables, because nobody knows which commit that build is.
 
-## Main database, 0078 to 0105
+## Main database, 0078 to 0107
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -121,7 +121,9 @@ a line in this document.
 | `0102_rename_sponsor_impressions_to_sponsor_displays.sql` | Rebuilds `sponsor_impressions` as `sponsor_displays`, with its indexes; the stored value `impression` becomes `display`.          | Yes  |
 | `0103_rename_visit_count_to_return_count.sql`             | Renames `anon_id_returns.visit_count` to `return_count` and its index. No row changes.                                            | No   |
 | `0104_event_spine_keys.sql`                               | Adds `events.venue_canonical_id` and `events.event_correlation_id`, each with an index. Writes no row (a nightly job fills them). | No   |
-| `0105_events_use_sponsors_backfill.sql`                   | Switches sponsors on (`useSponsors` in `events.settings_json`) for events whose organizer already chose a sponsor. No new column. | Yes  |
+| `0105_sponsor_header_block.sql`                           | Adds `sponsor_business.header_image_url` and `header_text`, the sponsor's optional header block. Old sponsors keep none.          | No   |
+| `0106_event_place_kind.sql`                               | Adds `events.place_kind` (business or address), how the zoomed map marks its place. Writes no row (the nightly job fills it).     | No   |
+| `0107_events_use_sponsors_backfill.sql`                   | Switches sponsors on (`useSponsors` in `events.settings_json`) for events whose organizer already chose a sponsor. No new column. | Yes  |
 
 ## Forms database, 0015 to 0018
 
@@ -236,7 +238,7 @@ today, and what would be different if production held data.
   Nothing to copy.
 - **If it did copy:** every row survives; only the label of the render value changes.
 
-### `0105_events_use_sponsors_backfill.sql`
+### `0107_events_use_sponsors_backfill.sql`
 
 - **`UPDATE events`**: adds one key, `useSponsors: true`, to `settings_json` on each
   event that already has a sponsor its organizer chose: a placement that is on, that the
@@ -318,7 +320,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0105_events_use_sponsors_backfill.sql` and `105`;
+2. **The level.** Expected: `0107_events_use_sponsors_backfill.sql` and `107`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash

@@ -161,6 +161,8 @@ export const NODE_SPECS = [
   'tests/mvt.spec.ts',
   'tests/street-map.spec.ts',
   'tests/street-map-landing.spec.ts',
+  'tests/map-zoom.spec.ts',
+  'tests/map-place-links.spec.ts',
   // WHAT external link — event-page render fns emit the optional outbound link
   // on all three phases. Pure unit over renderPre/Live/PostEventHtml (no
   // cloudflare:test / D1); node-clean like the other pages.ts render specs.
@@ -346,6 +348,9 @@ export const NODE_SPECS = [
   // OSE-1825 - the digital poster's When / Where / Share block: the served
   // page in jsdom (address line, button actions, Web Share and its fallback).
   'tests/poster-digital-actions.spec.ts',
+  // OSE-1826 - the digital poster's sponsor header block: the served page in
+  // jsdom (header image through the proxy, text, fallback, print row).
+  'tests/poster-sponsor-header.spec.ts',
   // OSE-1441 - the /poster picker drops a late bundle answer for the event it
   // left: the page script in jsdom with one answer held back.
   'tests/poster-picker-stale-response.spec.ts',

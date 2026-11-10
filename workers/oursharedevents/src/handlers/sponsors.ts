@@ -266,6 +266,7 @@ export async function handleAdminListSponsors(
   const cols = `sb.id AS id, sp.event_id AS event_id, sb.name AS name,
                 sb.display_name AS display_name, sb.address_line AS address_line,
                 sb.contact_phone AS contact_phone, sb.contact_email AS contact_email,
+                sb.header_text AS header_text, sb.header_image_url AS header_image_url,
                 la.url AS logo_url, lc.url AS sidebar_logo_url,
                 sb.website_url AS website_url, COALESCE(sp.tier, sb.tier) AS tier,
                 '[]' AS placement_formats, sp.click_token AS click_token,
@@ -417,6 +418,7 @@ export async function handleAdminGetSponsor(
       `SELECT sb.id AS id, sp.event_id AS event_id, sb.name AS name,
               sb.display_name AS display_name, sb.address_line AS address_line,
               sb.contact_phone AS contact_phone, sb.contact_email AS contact_email,
+              sb.header_text AS header_text, sb.header_image_url AS header_image_url,
               la.url AS logo_url, lc.url AS sidebar_logo_url,
               sb.website_url AS website_url, COALESCE(sp.tier, sb.tier) AS tier,
               '[]' AS placement_formats, sp.click_token AS click_token,
@@ -453,6 +455,26 @@ export async function handleAdminGetSponsor(
 }
 
 // ─── Admin: Create Sponsor ──────────────────────────────────────────────────────
+
+/**
+ * OSE-1826 (0105): the sponsor's header image. Optional; '' / null clears it.
+ * The same rule as the logos (an http(s) address on a public host, max 500),
+ * because it is served the same way: fetched by the logo proxy, never put in a
+ * page as an external src. Returns the stored value or an error response.
+ */
+function checkHeaderImage(raw: unknown, rid: string): string | null | Response {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const v = typeof raw === 'string' ? validateProxiedLogoUrl(raw) : { valid: false };
+  if (!v.valid || !('url' in v) || !v.url) {
+    return errorResponse(
+      'INVALID_HEADER_IMAGE_URL',
+      'Header image must be an http:// or https:// URL on a public web host (max 500 chars)',
+      400,
+      rid
+    );
+  }
+  return v.url;
+}
 
 export async function handleAdminCreateSponsor(
   request: Request,
@@ -517,12 +539,17 @@ export async function handleAdminCreateSponsor(
     address_line: null,
     contact_phone: null,
     contact_email: null,
+    header_text: null,
   };
   for (const field of CARD_FIELDS) {
     const r = checkCardField(field, body[field]);
     if (!r.ok) return errorResponse(r.code, r.message, 400, rid);
     card[field] = r.value;
   }
+  // OSE-1826 (0105): the header image, validated like the logos. It is only
+  // ever served through the consent-gated logo proxy (?slot=header).
+  const headerImage = checkHeaderImage(body.header_image_url, rid);
+  if (headerImage instanceof Response) return headerImage;
   // OSE-670/OSE-799 (#25): placement is UNIFORM and non-purchasable. The client
   // CANNOT choose a named slot — that was the covenant violation. sponsor_placement
   // carries NO placement_formats column at all now (the split retired it); the
@@ -624,8 +651,9 @@ export async function handleAdminCreateSponsor(
     env.DB.prepare(
       `INSERT INTO sponsor_business
          (id, brand_id, name, website_url, tier, display_name, address_line,
-          contact_phone, contact_email, lat, lon, h3_res9, h3_res7, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          contact_phone, contact_email, header_text, header_image_url,
+          lat, lon, h3_res9, h3_res7, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       businessId,
       brandId,
@@ -636,6 +664,8 @@ export async function handleAdminCreateSponsor(
       card.address_line,
       card.contact_phone,
       card.contact_email,
+      card.header_text,
+      headerImage,
       sponsorLat,
       sponsorLon,
       sponsorH3Res9,
@@ -840,6 +870,13 @@ export async function handleAdminUpdateSponsor(
     if (!r.ok) return errorResponse(r.code, r.message, 400, rid);
     businessSets.push(`${field} = ?`);
     businessVals.push(r.value);
+  }
+  // OSE-1826 (0105): the header image; '' / null clears it.
+  if ('header_image_url' in body) {
+    const headerImage = checkHeaderImage(body.header_image_url, rid);
+    if (headerImage instanceof Response) return headerImage;
+    businessSets.push('header_image_url = ?');
+    businessVals.push(headerImage);
   }
 
   for (const [field, spec] of Object.entries(fieldSpecs)) {
@@ -1143,6 +1180,7 @@ export async function handleAdminDeleteSponsor(
     await env.DB.prepare(
       `UPDATE sponsor_business
           SET is_active = 0, address_line = NULL, contact_phone = NULL, contact_email = NULL,
+              header_text = NULL, header_image_url = NULL,
               updated_at = ?
         WHERE id = ?`
     )
@@ -1671,14 +1709,19 @@ export async function handleSponsorLogo(
   // OSE-1317: ?slot=sidebar serves the compact (side-rail) logo, falling back to
   // the header logo — the same preference the display side rail applies. Any
   // other value (or none) is the header logo, so the OSE-288 contract holds.
-  const sidebar = new URL(request.url).searchParams.get('slot') === 'sidebar';
+  const slot = new URL(request.url).searchParams.get('slot');
+  const sidebar = slot === 'sidebar';
+  // OSE-1826 (0105): ?slot=header serves the sponsor's header image, behind the
+  // same consent gate and edge cache. No header image is a 404, never a logo:
+  // the poster asks for it only when the sponsor has one.
+  const header = slot === 'header';
 
   let row: Record<string, unknown> | null;
   try {
     // OSE-799 A2: the logo lives in sponsor_asset on the durable business;
     // serve it only for a sponsor that is on show (see the gate below).
     row = await env.DB.prepare(
-      `SELECT ${sidebar ? 'COALESCE(lc.url, la.url)' : 'la.url'} AS logo_url
+      `SELECT ${header ? 'sb.header_image_url' : sidebar ? 'COALESCE(lc.url, la.url)' : 'la.url'} AS logo_url
          FROM sponsor_business sb
          LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
          LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'

@@ -85,6 +85,19 @@ export default {
       'export async function handleAdminListEventTypes(',
       'Failed to list event types'
     ),
+    // Epic OSE-1880 (owner, 2026-11-09) — the map's deterministic rules. Where a
+    // dot sits is AGENTS.md invariant 3 (place, not person): every event at its
+    // res-9 block centre, no coordinate on the page, no dot map without a street
+    // map (attendee-map.ts). The street map under it is drawn by the Worker from
+    // bytes it decodes itself, so a hollow decoder test is a hollow map
+    // (pmtiles.ts reads the archive, mvt.ts the tile). `landingZoom`, the one
+    // thing a visitor can type into the map, is in landing-area.ts above, with
+    // its fat-finger properties in fat-finger.property.spec.ts. Killed by
+    // attendee-map.spec.ts, map-zoom.spec.ts, mvt.spec.ts, pmtiles.spec.ts and
+    // the two street-map specs.
+    'src/lib/attendee-map.ts',
+    'src/lib/mvt.ts',
+    'src/lib/pmtiles.ts',
   ],
   coverageAnalysis: 'perTest',
   // Stryker writes `// @ts-nocheck` into its sandbox copy of each file this
