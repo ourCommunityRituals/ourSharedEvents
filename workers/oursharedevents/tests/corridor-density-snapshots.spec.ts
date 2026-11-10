@@ -115,17 +115,24 @@ async function seedCorridorAndEvent(opts: {
     .run();
 }
 
+/**
+ * Seeds five people (K) under `hashSuffix`. ADR-026 rule B: the baseline counts
+ * only events whose own count is published, so an event needs K people to
+ * reach it at all.
+ */
 async function seedAnonIdReturn(eventId: string, hashSuffix: string): Promise<void> {
   const nowIso = new Date().toISOString();
-  const hash = hashSuffix.padStart(32, 'a');
-  await tenv()
-    .DB.prepare(
-      `INSERT OR IGNORE INTO anon_id_returns
-         (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
-       VALUES (?, ?, ?, ?, 1, ?)`
-    )
-    .bind(hash, eventId, nowIso, nowIso, nowIso)
-    .run();
+  for (let i = 0; i < 5; i++) {
+    const hash = `${hashSuffix}${i}`.padStart(32, 'a');
+    await tenv()
+      .DB.prepare(
+        `INSERT OR IGNORE INTO anon_id_returns
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
+         VALUES (?, ?, ?, ?, 1, ?)`
+      )
+      .bind(hash, eventId, nowIso, nowIso, nowIso)
+      .run();
+  }
 }
 
 async function resetForTest(): Promise<void> {

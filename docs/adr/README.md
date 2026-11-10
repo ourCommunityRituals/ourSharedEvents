@@ -41,6 +41,7 @@ See [ADR-RECONCILIATION-PROCESS.md](ADR-RECONCILIATION-PROCESS.md) for the full 
 | [ADR-023](ADR-023-public-entity-tenants-entity-decides.md)       | Public-entity tenants: the entity decides about its data                                                                  | Proposed   | 2026-10-03 |
 | [ADR-024](ADR-024-ose-anon-cookie-and-invariant-4.md)            | The `ose_anon` cookie and "no cookies on public surfaces"                                                                 | Proposed   | 2026-10-22 |
 | [ADR-025](ADR-025-density-aware-resolution.md)                   | Published resolution follows census population density, not our own data                                                  | Proposed   | 2026-11-10 |
+| [ADR-026](ADR-026-analytic-layer-privacy-jurisdiction.md)        | The analytic layer has its own privacy control; ADR-014 and COST-101 do not reach it                                      | Proposed   | 2026-11-10 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 

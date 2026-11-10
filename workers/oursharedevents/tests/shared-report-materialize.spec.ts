@@ -162,6 +162,31 @@ beforeAll(async () => {
 // running migrations every time is the safe path. Idempotency is
 // guaranteed by `CREATE TABLE IF NOT EXISTS` + the ALTER-table re-run
 // guard in applyMigrations.
+/**
+ * Seeds `n` distinct people at an event (default five, K). ADR-026 rule B: the
+ * corridor baseline counts only events whose own count is published, so an
+ * event a test expects in the baseline needs K people.
+ */
+async function seedReturners(venueId: string, prefix: string, n = 5): Promise<void> {
+  const nowIso = new Date().toISOString();
+  for (let i = 0; i < n; i++) {
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO anon_id_returns
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
+         VALUES (?, ?, ?, ?, 1, ?)`
+      )
+      .bind(
+        `${prefix}${String(i).padStart(2, '0')}`.padEnd(32, '0'),
+        venueId,
+        nowIso,
+        nowIso,
+        nowIso
+      )
+      .run();
+  }
+}
+
 async function resetForTest(): Promise<void> {
   await applyMigrations();
   await clearPipelineTables();
@@ -523,7 +548,8 @@ describe('OSE-272 Phase 2: refreshCorridorBaselines', () => {
     // savings per design); to assert a row IS written, we need at least
     // one hash linked to this event via venue_id.
     const nowIso = new Date().toISOString();
-    for (let i = 0; i < 3; i++) {
+    // Five people (K): rule B counts only events whose own count is published.
+    for (let i = 0; i < 5; i++) {
       await db
         .prepare(
           `INSERT INTO anon_id_returns
@@ -672,15 +698,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       .prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`)
       .bind('872664544ffffff', 'test-evt-mat-h3-only')
       .run();
-    const nowIso = new Date().toISOString();
-    await db
-      .prepare(
-        `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
-         VALUES (?, ?, ?, ?, 1, ?)`
-      )
-      .bind('a'.repeat(32), 'test-evt-mat-h3-only', nowIso, nowIso, nowIso)
-      .run();
+    await seedReturners('test-evt-mat-h3-only', 'a');
 
     const r = await refreshCorridorBaselines({ DB: db });
     expect(r.errors).toBe(0);
@@ -709,15 +727,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
         .prepare(`UPDATE events SET h3_res7 = ?, start_date = ? WHERE id = ?`)
         .bind(spelling, startIso, id)
         .run();
-      const nowIso = new Date().toISOString();
-      await db
-        .prepare(
-          `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
-           VALUES (?, ?, ?, ?, 1, ?)`
-        )
-        .bind(anon.repeat(32), id, nowIso, nowIso, nowIso)
-        .run();
+      await seedReturners(id, anon);
     }
     // A stale row left under the uppercase spelling by an earlier run, and a
     // legacy key that only LOOKS H3-shaped (15 chars, leading 8, not lowercase).
@@ -742,7 +752,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       )
       .bind(cell)
       .all<{ corridor_id: string; window_90d_count: number }>();
-    expect(rows.results).toEqual([{ corridor_id: cell, window_90d_count: 2 }]);
+    expect(rows.results).toEqual([{ corridor_id: cell, window_90d_count: 10 }]);
     // Not a real cell → not ours to delete; the export withholds it instead.
     const legacy = await db
       .prepare(`SELECT COUNT(*) AS n FROM corridor_density_baseline WHERE corridor_id = ?`)
@@ -753,6 +763,61 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       .prepare(`DELETE FROM corridor_density_baseline WHERE corridor_id = '8NORTH-CORRIDOR'`)
       .run();
   });
+
+  // ADR-026 rule B (OSE-1946). The report shows an event's own count exactly
+  // (this_event_count) beside the rounded baseline of its bucket. If the bucket
+  // also held an event whose own count is withheld, 11 beside a baseline of 15
+  // would say the other event had 4. So an event under K adds nothing to the
+  // baseline; an event of exactly K does (pair).
+  test.each([
+    [4, 11],
+    [5, 16],
+  ])(
+    'rule B: a bucket of an 11-person event and a %i-person event stores %i',
+    async (other, expected) => {
+      const db = tenv().DB;
+      const cell = '872664544ffffff';
+      const startIso = new Date(Date.now() - 24 * 10 * 3600_000).toISOString();
+      const nowIso = new Date().toISOString();
+      for (const [id, people, prefix] of [
+        ['test-evt-mat-ruleb-pub', 11, 'd'],
+        ['test-evt-mat-ruleb-other', other, 'e'],
+      ] as const) {
+        await seedEvent({ id, start_offset_hours: -24 * 10 });
+        await db
+          .prepare(`UPDATE events SET h3_res7 = ?, start_date = ? WHERE id = ?`)
+          .bind(cell, startIso, id)
+          .run();
+        for (let i = 0; i < people; i++) {
+          await db
+            .prepare(
+              `INSERT INTO anon_id_returns
+                 (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
+               VALUES (?, ?, ?, ?, 1, ?)`
+            )
+            .bind(
+              `${prefix}${String(i).padStart(2, '0')}`.padEnd(32, '0'),
+              id,
+              nowIso,
+              nowIso,
+              nowIso
+            )
+            .run();
+        }
+      }
+
+      const r = await refreshCorridorBaselines({ DB: db });
+      expect(r.errors).toBe(0);
+      const row = await db
+        .prepare(
+          `SELECT window_30d_count, window_90d_count FROM corridor_density_baseline
+            WHERE corridor_id = ?`
+        )
+        .bind(cell)
+        .first<{ window_30d_count: number; window_90d_count: number }>();
+      expect(row).toEqual({ window_30d_count: expected, window_90d_count: expected });
+    }
+  );
 
   test('h3_res7 wins over corridor_id when both are set (COALESCE left-priority)', async () => {
     const db = tenv().DB;
@@ -786,15 +851,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       .prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`)
       .bind('872664544ffffff', 'test-evt-mat-coalesce')
       .run();
-    const nowIso = new Date().toISOString();
-    await db
-      .prepare(
-        `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
-         VALUES (?, ?, ?, ?, 1, ?)`
-      )
-      .bind('b'.repeat(32), 'test-evt-mat-coalesce', nowIso, nowIso, nowIso)
-      .run();
+    await seedReturners('test-evt-mat-coalesce', 'b');
 
     const r = await refreshCorridorBaselines({ DB: db });
     expect(r.errors).toBe(0);
@@ -841,15 +898,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       corridor_id: 'test-corr-mat-legacy',
       start_offset_hours: -24 * 10,
     });
-    const nowIso = new Date().toISOString();
-    await db
-      .prepare(
-        `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
-         VALUES (?, ?, ?, ?, 1, ?)`
-      )
-      .bind('c'.repeat(32), 'test-evt-mat-legacy-compat', nowIso, nowIso, nowIso)
-      .run();
+    await seedReturners('test-evt-mat-legacy-compat', 'c');
 
     const r = await refreshCorridorBaselines({ DB: db });
     expect(r.errors).toBe(0);
@@ -870,25 +919,16 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
   // the whole suite. The 30d-vs-90d split is the entire product of this table,
   // so pin it: an event aged inside the 31–90 day band populates the 90-day
   // window while leaving the 30-day window empty.
-  test('rolling windows split — 45-day-old event: window_30d_count=0, window_90d_count=2', async () => {
+  test('rolling windows split — 45-day-old event: window_30d_count=0, window_90d_count=6', async () => {
     const db = tenv().DB;
     await seedEvent({ id: 'test-evt-mat-window-split', start_offset_hours: -45 * 24 });
     await db
       .prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`)
       .bind('872664540ffffff', 'test-evt-mat-window-split')
       .run();
-    // Two DISTINCT anon hashes → the 90-day window must count exactly 2.
-    const nowIso = new Date().toISOString();
-    for (const h of ['d'.repeat(32), 'e'.repeat(32)]) {
-      await db
-        .prepare(
-          `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
-           VALUES (?, ?, ?, ?, 1, ?)`
-        )
-        .bind(h, 'test-evt-mat-window-split', nowIso, nowIso, nowIso)
-        .run();
-    }
+    // Six DISTINCT anon hashes (over K, so rule B counts the event; not five, so
+    // a count that is only the floor cannot pass) → the 90-day window counts 6.
+    await seedReturners('test-evt-mat-window-split', 'd', 6);
 
     const r = await refreshCorridorBaselines({ DB: db });
     expect(r.errors).toBe(0);
@@ -905,7 +945,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       .first<{ window_30d_count: number; window_90d_count: number }>();
     expect(row).not.toBeNull();
     expect(row!.window_30d_count).toBe(0);
-    expect(row!.window_90d_count).toBe(2);
+    expect(row!.window_90d_count).toBe(6);
   });
 });
 
