@@ -1917,7 +1917,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 43
+      "testCount": 51
     },
     {
       "file": "workers/oursharedevents/tests/portfolio-rollup.invariant.spec.ts",
@@ -3226,14 +3226,14 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 4
+      "testCount": 8
     },
     {
       "file": "workers/oursharedevents/tests/street-map.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 22
+      "testCount": 40
     },
     {
       "file": "workers/oursharedevents/tests/subscribers.spec.ts",

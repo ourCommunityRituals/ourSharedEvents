@@ -24,6 +24,9 @@ database_id = "stg-id"
 name = "PUBLIC_READ_EDGE_LIMITER"
 namespace_id = "1"
 simple = { limit = 60, period = 10 }
+[[env.staging.r2_buckets]]
+binding = "MAP_TILES"
+bucket_name = "tiles-stg"
 [[env.staging.queues.producers]]
 binding = "SCAN_QUEUE"
 queue = "ose-scans"
@@ -89,6 +92,7 @@ describe('the intentional differences', () => {
       expect.arrayContaining([
         'binding:queues.producers:SCAN_QUEUE',
         'binding:queues.consumers:ose-scans',
+        'binding:r2_buckets:MAP_TILES',
       ])
     );
     expect(r.ok).toBe(true);
@@ -205,13 +209,317 @@ describe('the real wrangler.toml', () => {
     expect(keys(r, 'undecided').sort()).toEqual([
       'binding:queues.consumers:ose-scans',
       'binding:queues.producers:SCAN_QUEUE',
+      'binding:r2_buckets:MAP_TILES',
     ]);
+  });
+
+  // Staging first (owner 2026-11-09): the street-map bucket is bound on staging
+  // only, and the archive is named the same on both sides so that the later
+  // production PR adds a binding and nothing else.
+  test('the street-map archive: bound on staging only, named the same on both sides', () => {
+    const toml = real();
+    const stg = toml.slice(toml.indexOf('[env.staging]'), toml.indexOf('[env.production]'));
+    const prod = toml.slice(toml.indexOf('[env.production]'));
+    expect(stg).toMatch(/^\[\[env\.staging\.r2_buckets\]\]\r?\nbinding = "MAP_TILES"\r?$/m);
+    expect(prod).not.toMatch(/^binding = "MAP_TILES"\r?$/m);
+    const name = /^MAP_TILES_ARCHIVE = "(planet-\d{8}\.pmtiles)"\r?$/m;
+    expect(stg).toMatch(name);
+    expect(name.exec(prod)?.[1]).toBe(name.exec(stg)?.[1]);
+    // The parity check itself reports the one-sided binding as open, not as fine.
+    const open = parity
+      .compareEnvironments(toml)
+      .findings.find((f) => f.key === 'binding:r2_buckets:MAP_TILES');
+    expect(open?.level).toBe('undecided');
   });
 
   test('production pins the Access audience (OSE-1353)', () => {
     const toml = real();
     const prod = toml.slice(toml.indexOf('[env.production.vars]'));
     expect(prod).toMatch(/^CF_ACCESS_AUD = "[a-f0-9]{64}"$/m);
+  });
+});
+
+// Location-precision CCR, F33: nothing made staging get the street map before
+// production. The Bruno staging environment records whether the archive is
+// loaded there (streetMapArchiveLoaded). While it is "false" the two staging
+// street-map cases print NOT RUN when no streets are drawn; once it is "true"
+// they fail. Production may carry the binding only after that.
+// @born-red street map staging first | method: each rule is fed the fault that turns it red, in the cases below; the parity check itself seen failing (2 unlisted differences) with the staging binding and no open entry | date: 2026-11-09
+describe('the street map reaches staging before production', () => {
+  const STAGING_ENV = 'bruno/ose-pages/environments/ose-staging.yml';
+  const stagingEnv = () => fs.readFileSync(path.join(__dirname, '../../../', STAGING_ENV), 'utf8');
+  const real = () =>
+    fs.readFileSync(path.join(__dirname, '../../../workers/oursharedevents/wrangler.toml'), 'utf8');
+  const BINDS = {
+    staging: /^\[\[env\.staging\.r2_buckets\]\]\r?\nbinding = "MAP_TILES"/m,
+    production: /^\[\[env\.production\.r2_buckets\]\]\r?\nbinding = "MAP_TILES"/m,
+  };
+
+  /**
+   * What is wrong with the order, as sentences. Pure: takes the two files' text
+   * and the production preflight's list of bindings production may still lack.
+   */
+  function orderProblems(toml, envYaml, dark = []) {
+    const staging = BINDS.staging.test(toml);
+    const production = BINDS.production.test(toml);
+    const loaded = /name: streetMapArchiveLoaded\r?\n\s+value: "(true|false)"/.exec(envYaml)?.[1];
+    const out = [];
+    if (!loaded) {
+      out.push(`${STAGING_ENV} must set streetMapArchiveLoaded to "true" or "false"`);
+    }
+    if (production && !staging) {
+      out.push('production binds MAP_TILES and staging does not');
+    }
+    if (production && loaded !== 'true') {
+      out.push(
+        'production binds MAP_TILES while the staging cases can still print NOT RUN: set streetMapArchiveLoaded to "true" first, in a PR whose staging run drew streets'
+      );
+    }
+    if (!staging && loaded === 'true') {
+      out.push('streetMapArchiveLoaded is "true" and staging has no MAP_TILES binding');
+    }
+    if (production && dark.includes('r2_buckets/MAP_TILES')) {
+      out.push(
+        'production binds MAP_TILES and scripts/prod-preflight.mjs still lists it in DARK_ON_PRODUCTION: remove the line'
+      );
+    }
+    return out;
+  }
+
+  // Anchored: the file's opening comments name this header too.
+  const withProduction = (toml) =>
+    toml.replace(
+      /^\[env\.production\.triggers\]/m,
+      '[[env.production.r2_buckets]]\nbinding = "MAP_TILES"\nbucket_name = "ose-map-tiles-production"\n\n[env.production.triggers]'
+    );
+  const withFlag = (yaml, v) =>
+    yaml.replace(/(name: streetMapArchiveLoaded\r?\n\s+value: )"(true|false)"/, `$1"${v}"`);
+
+  test('the real files are in order', async () => {
+    const { DARK_ON_PRODUCTION } = await import('../../../scripts/prod-preflight.mjs');
+    expect(orderProblems(real(), stagingEnv(), DARK_ON_PRODUCTION)).toEqual([]);
+  });
+
+  test('production bound while the preflight still excuses it: refused', async () => {
+    const { DARK_ON_PRODUCTION } = await import('../../../scripts/prod-preflight.mjs');
+    expect(DARK_ON_PRODUCTION).toContain('r2_buckets/MAP_TILES');
+    const toml = withProduction(real());
+    const env = withFlag(stagingEnv(), 'true');
+    expect(orderProblems(toml, env, DARK_ON_PRODUCTION)).toEqual([
+      'production binds MAP_TILES and scripts/prod-preflight.mjs still lists it in DARK_ON_PRODUCTION: remove the line',
+    ]);
+    expect(orderProblems(toml, env, [])).toEqual([]);
+  });
+
+  test('production bound before the staging cases can fail: refused', () => {
+    const toml = withProduction(real());
+    expect(toml).not.toBe(real());
+    expect(orderProblems(toml, withFlag(stagingEnv(), 'false')).join(' ')).toMatch(
+      /production binds MAP_TILES while the staging cases can still print NOT RUN/
+    );
+    expect(orderProblems(toml, withFlag(stagingEnv(), 'true'))).toEqual([]);
+  });
+
+  test('production bound with no staging binding: refused', () => {
+    const toml = withProduction(real()).replace(
+      /\[\[env\.staging\.r2_buckets\]\]\r?\nbinding = "MAP_TILES"/,
+      '[[env.staging.r2_buckets]]\nbinding = "OTHER"'
+    );
+    expect(orderProblems(toml, withFlag(stagingEnv(), 'true')).join(' ')).toMatch(
+      /production binds MAP_TILES and staging does not/
+    );
+  });
+
+  test('the archive called loaded with no staging binding, or the setting missing: refused', () => {
+    const noStaging = real().replace(
+      /\[\[env\.staging\.r2_buckets\]\]\r?\nbinding = "MAP_TILES"/,
+      '[[env.staging.r2_buckets]]\nbinding = "OTHER"'
+    );
+    expect(orderProblems(noStaging, withFlag(stagingEnv(), 'true'))).toEqual([
+      'streetMapArchiveLoaded is "true" and staging has no MAP_TILES binding',
+    ]);
+    expect(orderProblems(noStaging, withFlag(stagingEnv(), 'false'))).toEqual([]);
+    expect(
+      orderProblems(real(), stagingEnv().replace('streetMapArchiveLoaded', 'renamed')).join(' ')
+    ).toMatch(/must set streetMapArchiveLoaded/);
+  });
+
+  test('both street-map cases read the setting and print NOT RUN by name', () => {
+    const dir = '../../../bruno/ose-pages/1. Landing - Public';
+    const cases = [
+      fs.readFileSync(
+        path.join(__dirname, dir, 'GET - (landing) - draws streets under the map.yml'),
+        'utf8'
+      ),
+      fs.readFileSync(
+        path.join(
+          __dirname,
+          dir,
+          'GET - (landing) area 872664570ffffff - one area over its streets.yml'
+        ),
+        'utf8'
+      ),
+    ];
+    for (const text of cases) {
+      expect(text).toContain("bru.getEnvVar('streetMapArchiveLoaded')");
+      expect(text).toMatch(/console\.log\('NOT RUN \(street-map archive not loaded/);
+      expect(text).toMatch(/streetMapArchiveLoaded is true for this environment/);
+    }
+  });
+
+  test('the wrangler.toml these cases read is the one the parity check reads', () => {
+    expect(parity.WRANGLER_PATH).toBe('workers/oursharedevents/wrangler.toml');
+  });
+});
+
+// Fat fingers (owner 2026-11-10). The bucket and the object key are typed by
+// hand three times: in wrangler.toml, and in the two commands the runbook gives
+// the owner (create the bucket, upload the file). A slip in any one of them is
+// silent: the deploy passes, the Worker finds no object, and the map stays
+// hexagons only. These rules compare the three.
+// @born-red street-map names typed by hand | method: each rule is fed the slip that turns it red, in the cases below; "the real files agree" seen failing with the runbook's upload key changed to planet-20261019.pmtiles | date: 2026-11-10
+describe('the street-map names the owner types are the names the Worker binds', () => {
+  const root = (p) => fs.readFileSync(path.join(__dirname, '../../../', p), 'utf8');
+  const RUNBOOK = 'docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md';
+  const toml = () => root('workers/oursharedevents/wrangler.toml');
+  const runbook = () => root(RUNBOOK);
+  const workerRule = () => {
+    const src = root('workers/oursharedevents/src/lib/street-map.ts');
+    const m = /^const ARCHIVE_NAME = \/(.+)\/;\r?$/m.exec(src);
+    if (!m) throw new Error('ARCHIVE_NAME not found in lib/street-map.ts');
+    return new RegExp(m[1]);
+  };
+
+  /** What does not agree, as sentences. Pure: takes the files' text. */
+  function nameProblems(tomlText, runbookText, rule) {
+    const out = [];
+    const stg = tomlText.slice(
+      tomlText.search(/^\[env\.staging\]/m),
+      tomlText.search(/^\[env\.production\]/m)
+    );
+    const bucket =
+      /^\[\[env\.staging\.r2_buckets\]\]\r?\nbinding = "MAP_TILES"\r?\nbucket_name = "([^"]*)"/m.exec(
+        stg
+      )?.[1];
+    const key = /^MAP_TILES_ARCHIVE = "([^"]*)"\r?$/m.exec(stg)?.[1];
+    if (bucket === undefined) return ['staging has no MAP_TILES bucket_name'];
+    if (key === undefined) return ['staging has no MAP_TILES_ARCHIVE'];
+    if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(bucket)) {
+      out.push(`"${bucket}" is not a bucket name R2 accepts`);
+    }
+    if (!rule.test(key)) out.push(`the Worker refuses the archive name "${key}"`);
+    const others = [...tomlText.matchAll(/^bucket_name = "([^"]*)"\r?$/gm)].map((m) => m[1]);
+    if (others.filter((b) => b === bucket).length > 1) {
+      out.push(`"${bucket}" is bound more than once: staging must have a bucket of its own`);
+    }
+    const created = /wrangler r2 bucket create (\S+)/.exec(runbookText)?.[1];
+    if (created !== bucket) {
+      out.push(`the runbook creates "${created}", wrangler.toml binds "${bucket}"`);
+    }
+    const target = /rclone copyto \S+ r2:(\S+)/.exec(runbookText)?.[1];
+    if (target !== `${bucket}/${key}`) {
+      out.push(`the runbook uploads to "${target}", the Worker reads "${bucket}/${key}"`);
+    }
+    // The sentence wraps in the runbook, so compare with the line breaks folded.
+    const oneLine = runbookText.replace(/\s+/g, ' ');
+    if (!oneLine.includes(`scoped to \`${bucket}\` only`)) {
+      out.push(`the runbook's token is not scoped to "${bucket}"`);
+    }
+    return out;
+  }
+
+  test('the real files agree', () => {
+    expect(nameProblems(toml(), runbook(), workerRule())).toEqual([]);
+  });
+
+  test('the rule read from the Worker is its own: it takes the key in wrangler.toml and refuses a path', () => {
+    const rule = workerRule();
+    expect(rule.test('planet-20261109.pmtiles')).toBe(true);
+    expect(rule.test('../planet-20261109.pmtiles')).toBe(false);
+  });
+
+  test.each([
+    ['a letter dropped from the bucket', 'ose-map-tiles-staging', 'ose-map-tiles-stagin'],
+    ['the dev bucket copied down', 'ose-map-tiles-staging', 'ose-map-tiles-dev'],
+    ['a capital in the bucket', 'ose-map-tiles-staging', 'Ose-map-tiles-staging'],
+    ['an underscore in the bucket', 'ose-map-tiles-staging', 'ose_map_tiles_staging'],
+  ])('fat finger in wrangler.toml: %s', (_, from, to) => {
+    const slipped = toml().replace(
+      `binding = "MAP_TILES"\nbucket_name = "${from}"`,
+      `binding = "MAP_TILES"\nbucket_name = "${to}"`
+    );
+    const slippedCrlf = toml().replace(
+      `binding = "MAP_TILES"\r\nbucket_name = "${from}"`,
+      `binding = "MAP_TILES"\r\nbucket_name = "${to}"`
+    );
+    const text = slipped === toml() ? slippedCrlf : slipped;
+    expect(text).not.toBe(toml());
+    expect(nameProblems(text, runbook(), workerRule())).not.toEqual([]);
+  });
+
+  test.each([
+    ['two digits of the date swapped', 'planet-20261019.pmtiles'],
+    ['the extension in capitals', 'planet-20261109.PMTILES'],
+    ['a space after', 'planet-20261109.pmtiles '],
+    ['the bucket pasted in front', 'ose-map-tiles-staging/planet-20261109.pmtiles'],
+  ])('fat finger in wrangler.toml: the archive name with %s', (_, to) => {
+    const stgAt = toml().search(/^\[env\.staging\]/m);
+    const text =
+      toml().slice(0, stgAt) +
+      toml()
+        .slice(stgAt)
+        .replace('MAP_TILES_ARCHIVE = "planet-20261109.pmtiles"', `MAP_TILES_ARCHIVE = "${to}"`);
+    expect(text).not.toBe(toml());
+    expect(nameProblems(text, runbook(), workerRule())).not.toEqual([]);
+  });
+
+  test.each([
+    [
+      'the upload key with two digits swapped',
+      'r2:ose-map-tiles-staging/planet-20261109.pmtiles',
+      'r2:ose-map-tiles-staging/planet-20261019.pmtiles',
+    ],
+    [
+      'the upload to the production bucket',
+      'r2:ose-map-tiles-staging/planet-20261109.pmtiles',
+      'r2:ose-map-tiles-production/planet-20261109.pmtiles',
+    ],
+    [
+      'the upload under the bare build name',
+      'r2:ose-map-tiles-staging/planet-20261109.pmtiles',
+      'r2:ose-map-tiles-staging/20261109.pmtiles',
+    ],
+    [
+      'another bucket created',
+      'bucket create ose-map-tiles-staging',
+      'bucket create ose-map-tiles-stg',
+    ],
+    [
+      'the token scoped to another bucket',
+      '`ose-map-tiles-staging` only',
+      '`ose-uploads-staging` only',
+    ],
+  ])('fat finger in the runbook: %s', (_, from, to) => {
+    const text = runbook().replace(from, to);
+    expect(text).not.toBe(runbook());
+    expect(nameProblems(toml(), text, workerRule())).not.toEqual([]);
+  });
+
+  test('rainy: a wrangler.toml with no staging bucket, or no archive name, is named, not passed', () => {
+    const noBucket = toml().replace(
+      /\[\[env\.staging\.r2_buckets\]\]\r?\nbinding = "MAP_TILES"/,
+      '[[env.staging.r2_buckets]]\nbinding = "OTHER"'
+    );
+    expect(nameProblems(noBucket, runbook(), workerRule())).toEqual([
+      'staging has no MAP_TILES bucket_name',
+    ]);
+    const stgAt = toml().search(/^\[env\.staging\]/m);
+    const noKey =
+      toml().slice(0, stgAt) +
+      toml().slice(stgAt).replace('MAP_TILES_ARCHIVE = ', 'MAP_TILES_ARCHIV = ');
+    expect(nameProblems(noKey, runbook(), workerRule())).toEqual([
+      'staging has no MAP_TILES_ARCHIVE',
+    ]);
   });
 });
 

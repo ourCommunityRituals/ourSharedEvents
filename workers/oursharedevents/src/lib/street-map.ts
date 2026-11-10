@@ -17,9 +17,9 @@
 // The server, not the visitor, chooses which tiles to read, so no tile request
 // says what a person looked at, and nothing here logs.
 //
-// FAIL SOFT. No binding, no archive, a damaged tile, or a slow read: the map is
-// drawn as before, hexagons only. The street layer is never a reason the page
-// fails.
+// FAIL SOFT. No binding, no archive, no tile for the frame, a damaged tile, or a
+// slow read: the map is drawn as before, hexagons only. The street layer is
+// never a reason the page fails.
 
 import { cellToBoundary, cellToLatLng } from 'h3-js';
 import {
@@ -163,13 +163,17 @@ export interface DecodedTile {
 
 const WANTED = new Set(['water', 'roads', 'places']);
 
-/** Road classes, finest first. Older Protomaps builds say medium_road. */
-const ROAD_CLASS: Record<string, 'r1' | 'r2' | 'r3'> = {
-  minor_road: 'r1',
-  medium_road: 'r2',
-  major_road: 'r2',
-  highway: 'r3',
-};
+/**
+ * Road classes, finest first. Older Protomaps builds say medium_road. A Map,
+ * not a plain object: the kind comes from the tile, and a plain object answers
+ * "constructor" or "__proto__" with its own members, which are not a class.
+ */
+const ROAD_CLASS = new Map<string, 'r1' | 'r2' | 'r3'>([
+  ['minor_road', 'r1'],
+  ['medium_road', 'r2'],
+  ['major_road', 'r2'],
+  ['highway', 'r3'],
+]);
 
 interface Label {
   text: string;
@@ -221,7 +225,7 @@ export function drawStreets(
         let bucket: keyof typeof buckets | null = null;
         if (layer.name === 'water') bucket = feat.type === 3 ? 'w' : feat.type === 2 ? 'v' : null;
         else if (layer.name === 'roads' && feat.type === 2) {
-          bucket = ROAD_CLASS[String(feat.props.kind)] ?? null;
+          bucket = ROAD_CLASS.get(String(feat.props.kind)) ?? null;
         }
         if (!bucket) continue;
         const parts: string[] = [];
@@ -314,13 +318,17 @@ function pathOf(pts: readonly [number, number][], closed: boolean): string {
   return closed ? `${d}Z` : d;
 }
 
-/** Read, decode and draw the street layer for these cells. Throws on bad data. */
+/**
+ * Read, decode and draw the street layer for these cells. Throws on bad data.
+ * Null when the archive holds no tile for the frame: a layer with nothing read
+ * is a blank rectangle, and the zoomed area would draw its dots on it.
+ */
 export async function buildStreetLayer(
   src: RangeSource,
   cells: readonly string[],
   w = MAP_W,
   h = MAP_H
-): Promise<StreetLayer> {
+): Promise<StreetLayer | null> {
   const header = await archiveHeader(src);
   const f = frameForCells(cells, w, h);
   const r = tilesFor(f, header.minZoom, header.maxZoom);
@@ -335,31 +343,33 @@ export async function buildStreetLayer(
     }
   }
   const tiles = (await Promise.all(jobs)).filter((t): t is DecodedTile => t !== null);
+  if (tiles.length === 0) return null;
   return { cellsKey: cellsKey(cells), svg: drawStreets(f, r.z, tiles, cells) };
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timer: ReturnType<typeof setTimeout> | null = null;
   const timeout = new Promise<never>((_, reject) => {
+    // Stryker disable next-line StringLiteral: the message is never read; the catch in loadStreetLayer turns every failure into null.
     timer = setTimeout(() => reject(new Error('street map timed out')), ms);
   });
-  return Promise.race([p, timeout]).finally(() => {
-    if (timer !== undefined) clearTimeout(timer);
-  });
+  // The executor above has run by now, so the timer is set. Clearing it means a
+  // read that finished leaves nothing running in the isolate.
+  return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
 }
 
 /**
  * The street layer for these cells, or null when it cannot be drawn (no
- * binding, no archive, bad data, too slow). Never throws.
+ * binding, no archive, no tile for the frame, bad data, too slow). Never throws.
  */
 export async function loadStreetLayer(
   env: StreetMapEnv | null | undefined,
   cells: readonly string[],
   opts?: { timeoutMs?: number }
 ): Promise<StreetLayer | null> {
-  const bucket = env?.MAP_TILES;
-  if (!bucket || cells.length === 0) return null;
-  const name = env?.MAP_TILES_ARCHIVE || DEFAULT_ARCHIVE;
+  if (!env?.MAP_TILES || cells.length === 0) return null;
+  const bucket = env.MAP_TILES;
+  const name = env.MAP_TILES_ARCHIVE || DEFAULT_ARCHIVE;
   if (!ARCHIVE_NAME.test(name)) return null;
   try {
     return await withTimeout(

@@ -11,11 +11,21 @@
  *   - no binding, or a broken archive: the page is served as before, same cells
  *   - zoomed in on one area (epic OSE-1880): the dots are drawn only over that
  *     area's street map; with no street map the places are a list (OSE-1894)
+ *   - a sound archive with no tile for the area counts as no street map
+ *     (location-precision CCR, F41)
  */
+// @born-red archive with no tile for the area | method: both cases seen failing before the guard in buildStreetLayer (the landing carried a blank street layer and its credit; the zoomed area drew its dot with no "amap-no-tiles" list) | date: 2026-11-09
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { latLngToCell } from 'h3-js';
 import { resetPmtilesCache } from '../src/lib/pmtiles';
 import { DEFAULT_ARCHIVE } from '../src/lib/street-map';
-import { fakeBucket, pmtilesArchive, tilesForCells } from './helpers/street-map-fixtures';
+import {
+  fakeBucket,
+  pmtilesArchive,
+  scriptedBucket,
+  tilesForCells,
+  type GetStep,
+} from './helpers/street-map-fixtures';
 import { BLUE_ISLAND, MANY, NOW, sentinel } from './helpers/list-landing-rows';
 
 const state = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[] }));
@@ -29,6 +39,9 @@ vi.mock('../src/lib/data-provider', async (importOriginal) => ({
 vi.mock('../src/lib/sponsor-titles', async () => ({ fetchSponsorTitles: async () => new Map() }));
 
 import { handleLandingPage } from '../src/handlers/pages';
+
+// No tile in common with the Chicago rows at any zoom the map reads.
+const LOS_ANGELES = latLngToCell(34.05, -118.25, 7);
 
 const cellsOf = (html: string) =>
   [...html.matchAll(/data-testid="amap-area" data-cell="([0-9a-f]+)"/g)].map((m) => m[1]!);
@@ -105,5 +118,98 @@ describe('street map | the landing page handler', () => {
       expect(html).toContain('<span class="amap-t" id="amap-dot-1"></span><section class="amap-p');
     }
     expect(broken.gets.length).toBeGreaterThan(0);
+  });
+
+  // Born red 2026-11-09 (location-precision CCR, F41): a sound archive that has
+  // no tile for the area gave a layer of one blank rectangle, so the zoomed
+  // area drew its dots on nothing and the landing credited a map it did not show.
+  const elsewhere = async () =>
+    fakeBucket(
+      DEFAULT_ARCHIVE,
+      await pmtilesArchive(tilesForCells([LOS_ANGELES]).tiles, { gzip: true })
+    );
+
+  it('an archive with no tile for the areas: the landing keeps its plain hexagons, with no credit', async () => {
+    const bucket = await elsewhere();
+    const plain = await landing({});
+    const html = await landing({ MAP_TILES: bucket });
+    expect(bucket.gets.length).toBeGreaterThan(0);
+    expect(html).not.toContain('data-testid="amap-streets"');
+    expect(html).not.toContain('data-testid="amap-credit"');
+    expect(cellsOf(html)).toEqual(cellsOf(plain));
+  });
+
+  it('an archive with no tile for the area: zoomed in, the places are listed and no dot floats', async () => {
+    const bucket = await elsewhere();
+    const zoomed = await landing({ MAP_TILES: bucket }, `/?area=${BLUE_ISLAND}`);
+    expect(bucket.gets.length).toBeGreaterThan(0);
+    expect(zoomed).toContain(`data-zoom="${BLUE_ISLAND}"`);
+    expect(zoomed).toContain('data-testid="amap-no-tiles"');
+    expect(zoomed).not.toContain('data-testid="amap-dot"');
+    expect(zoomed).not.toContain('data-testid="amap-zone"');
+    expect(zoomed).not.toContain('data-testid="amap-streets"');
+    expect(zoomed).not.toContain('data-testid="amap-credit"');
+    expect(zoomed).toContain('href="#amap-dot-1" data-testid="amap-place-link"');
+  });
+
+  // The page, class by class (owner 2026-11-10). The loader's own cases are in
+  // street-map.spec.ts; these pin that the page is served whatever the read does.
+  // Born red 2026-11-10: with the catch in loadStreetLayer rethrowing, the four
+  // network cases fail (the handler throws); with the archive name rule removed,
+  // the fat-finger case draws streets from the mistyped object.
+  const plans: [string, (n: number) => GetStep][] = [
+    ['R2 fails on the first read', (n) => (n === 0 ? 'throw' : 'ok')],
+    ['R2 fails on every read after the first', (n) => (n === 0 ? 'ok' : 'throw')],
+    ['the object is gone after the first read', (n) => (n === 0 ? 'ok' : 'missing')],
+    ['every answer is cut to 100 bytes', () => ({ shortTo: 100 })],
+  ];
+  it.each(plans)(
+    'network: %s: the landing and the zoomed area are served, without streets',
+    async (_, plan) => {
+      const plain = await landing({});
+      const cells = cellsOf(plain);
+      const bucketFor = async (c: string[]) =>
+        scriptedBucket(
+          DEFAULT_ARCHIVE,
+          await pmtilesArchive(tilesForCells(c).tiles, { gzip: true }),
+          plan
+        );
+      const a = await bucketFor(cells);
+      const html = await landing({ MAP_TILES: a });
+      expect(a.gets.length).toBeGreaterThan(0);
+      expect(html).not.toContain('data-testid="amap-streets"');
+      expect(html).not.toContain('data-testid="amap-credit"');
+      expect(cellsOf(html)).toEqual(cells);
+
+      resetPmtilesCache();
+      const b = await bucketFor([BLUE_ISLAND]);
+      const zoomed = await landing({ MAP_TILES: b }, `/?area=${BLUE_ISLAND}`);
+      expect(b.gets.length).toBeGreaterThan(0);
+      expect(zoomed).toContain('data-testid="amap-no-tiles"');
+      expect(zoomed).not.toContain('data-testid="amap-dot"');
+      expect(zoomed).not.toContain('data-testid="amap-streets"');
+    }
+  );
+
+  it('fat finger: a mistyped MAP_TILES_ARCHIVE leaves the page as it was, and the bucket is never asked', async () => {
+    const plain = await landing({});
+    const mistyped = 'Planet-20261109.PMTILES';
+    const bucket = fakeBucket(
+      mistyped,
+      await pmtilesArchive(tilesForCells(cellsOf(plain)).tiles, { gzip: true })
+    );
+    const html = await landing({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: mistyped });
+    expect(bucket.gets).toHaveLength(0);
+    expect(html).not.toContain('data-testid="amap-streets"');
+    expect(html).not.toContain('data-testid="amap-credit"');
+    expect(cellsOf(html)).toEqual(cellsOf(plain));
+    // Control: the same bucket under the name as typed correctly draws.
+    const right = 'planet-20261109.pmtiles';
+    const good = fakeBucket(
+      right,
+      await pmtilesArchive(tilesForCells(cellsOf(plain)).tiles, { gzip: true })
+    );
+    const drawn = await landing({ MAP_TILES: good, MAP_TILES_ARCHIVE: right });
+    expect(drawn).toContain('data-testid="amap-streets"');
   });
 });

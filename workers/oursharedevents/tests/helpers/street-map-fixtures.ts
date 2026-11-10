@@ -243,6 +243,181 @@ export function fakeBucket(
   };
 }
 
+/**
+ * What a scripted bucket does with one get. `ok` answers; the rest are the ways
+ * a read over the network goes wrong: the call rejects, R2 says the object is
+ * not there, the answer holds fewer bytes than asked, the body breaks after the
+ * answer started, or the answer is late.
+ */
+export type GetStep =
+  'ok' | 'throw' | 'missing' | 'body-fails' | { shortTo: number } | { delayMs: number };
+
+/**
+ * A fake R2 bucket holding one object, whose every get is decided by
+ * `plan(n, range)`, n counting gets from 0. Records every get.
+ */
+export function scriptedBucket(
+  name: string,
+  bytes: Uint8Array,
+  plan: (n: number, range?: { offset: number; length: number }) => GetStep
+): RangeBucket & { gets: { key: string; range?: { offset: number; length: number } }[] } {
+  const gets: { key: string; range?: { offset: number; length: number } }[] = [];
+  return {
+    gets,
+    async get(k, o) {
+      const step = plan(gets.length, o?.range);
+      gets.push({ key: k, range: o?.range });
+      if (step === 'throw') throw new TypeError('Network connection lost.');
+      if (step === 'missing' || k !== name) return null;
+      if (typeof step === 'object' && 'delayMs' in step) {
+        await new Promise((r) => setTimeout(r, step.delayMs));
+      }
+      if (step === 'body-fails') {
+        return {
+          arrayBuffer: async () => {
+            throw new TypeError('The body stream was cut short.');
+          },
+        };
+      }
+      const off = o?.range?.offset ?? 0;
+      const len = o?.range?.length ?? bytes.length;
+      const asked =
+        typeof step === 'object' && 'shortTo' in step ? Math.min(len, step.shortTo) : len;
+      const slice = bytes.slice(off, off + asked);
+      return { arrayBuffer: async () => slice.buffer };
+    },
+  };
+}
+
+// ── a planet-sized layout ───────────────────────────────────────────────────
+//
+// The whole-planet Protomaps build is about 138.5 GB: far more tiles than fit
+// in the root directory, so every tile sits behind leaf directories, and tile
+// bytes start many gigabytes into the file. No test holds such a file. A sparse
+// file gives the reader the same layout: a few byte ranges at their true
+// offsets, zeros everywhere else.
+
+export interface SparseFile {
+  segments: { at: number; bytes: Uint8Array }[];
+}
+
+function sparseRead(file: SparseFile, offset: number, length: number): Uint8Array {
+  const out = new Uint8Array(length);
+  for (const s of file.segments) {
+    const from = Math.max(offset, s.at);
+    const to = Math.min(offset + length, s.at + s.bytes.length);
+    if (from < to) out.set(s.bytes.subarray(from - s.at, to - s.at), from - offset);
+  }
+  return out;
+}
+
+/** A RangeSource over a sparse file, with a fresh cache key each time. */
+export function sparseSource(file: SparseFile): RangeSource & { reads: [number, number][] } {
+  const reads: [number, number][] = [];
+  return {
+    key: `sparse:${++sourceSeq}`,
+    reads,
+    async read(offset, length) {
+      reads.push([offset, length]);
+      return sparseRead(file, offset, length);
+    },
+  };
+}
+
+/** A fake R2 bucket holding one sparse object; records every get. */
+export function sparseBucket(
+  name: string,
+  file: SparseFile
+): RangeBucket & { gets: { key: string; range?: { offset: number; length: number } }[] } {
+  const gets: { key: string; range?: { offset: number; length: number } }[] = [];
+  return {
+    gets,
+    async get(k, o) {
+      gets.push({ key: k, range: o?.range });
+      if (k !== name || !o?.range) return null;
+      const slice = sparseRead(file, o.range.offset, o.range.length);
+      return { arrayBuffer: async () => slice.buffer as ArrayBuffer };
+    },
+  };
+}
+
+export interface PlanetTile extends FixtureTile {
+  /** Where the tile's bytes start, inside the tile data section. */
+  at: number;
+  /** Tiles in a row that share these bytes, as open water does. Default 1. */
+  run?: number;
+}
+
+export interface PlanetDir {
+  /** 1: holds pointers to level-2 directories. 2: holds tile entries. */
+  level: 1 | 2;
+  /** Absolute offset in the file. */
+  at: number;
+  length: number;
+  /** Tile entries (level 2) or pointers (level 1) it holds. */
+  entries: number;
+}
+
+/**
+ * A gzip PMTiles v3 archive laid out as a planet build is: the root holds only
+ * pointers, and every tile is two leaf directories down. `leafSize` tile
+ * entries go in each level-2 directory and `fanOut` pointers in each level-1
+ * directory. `dirGap` leaves that many bytes between leaf directories.
+ */
+export async function planetArchive(
+  tiles: PlanetTile[],
+  opts: { leafSize: number; fanOut: number; leafAt: number; dataAt: number; dirGap?: number }
+): Promise<{ file: SparseFile; dirs: PlanetDir[]; stored: Map<PlanetTile, [number, number]> }> {
+  const sorted = [...tiles]
+    .map((t) => ({ t, id: zxyToTileId(t.z, t.x, t.y) }))
+    .sort((a, b) => a.id - b.id);
+  const segments: SparseFile['segments'] = [];
+  const stored = new Map<PlanetTile, [number, number]>();
+  const entries: Entry[] = [];
+  for (const { t, id } of sorted) {
+    const bytes = await gzip(t.data);
+    segments.push({ at: opts.dataAt + t.at, bytes });
+    stored.set(t, [opts.dataAt + t.at, bytes.length]);
+    entries.push({ tileId: id, offset: t.at, length: bytes.length, runLength: t.run ?? 1 });
+  }
+  const dirs: PlanetDir[] = [];
+  let next = 0;
+  // Write one directory into the leaf section; return the pointer to it.
+  const put = async (level: 1 | 2, of: Entry[]): Promise<Entry> => {
+    const bytes = await gzip(new Uint8Array(dirBytes(of)));
+    const offset = next;
+    segments.push({ at: opts.leafAt + offset, bytes });
+    dirs.push({ level, at: opts.leafAt + offset, length: bytes.length, entries: of.length });
+    next += bytes.length + (opts.dirGap ?? 0);
+    return { tileId: of[0]!.tileId, offset, length: bytes.length, runLength: 0 };
+  };
+  const chunk = <T>(all: T[], n: number): T[][] =>
+    Array.from({ length: Math.ceil(all.length / n) }, (_, i) => all.slice(i * n, i * n + n));
+  const level2: Entry[] = [];
+  for (const c of chunk(entries, opts.leafSize)) level2.push(await put(2, c));
+  const level1: Entry[] = [];
+  for (const c of chunk(level2, opts.fanOut)) level1.push(await put(1, c));
+  const root = await gzip(new Uint8Array(dirBytes(level1)));
+
+  const head = new Uint8Array(127 + root.length);
+  head.set(new TextEncoder().encode('PMTiles'), 0);
+  head[7] = 3;
+  const view = new DataView(head.buffer);
+  setU64(view, 8, 127);
+  setU64(view, 16, root.length);
+  setU64(view, 40, opts.leafAt);
+  setU64(view, 48, next);
+  setU64(view, 56, opts.dataAt);
+  head[97] = 2;
+  head[98] = 2;
+  head[99] = 1;
+  head[100] = 0;
+  head[101] = 15;
+  head.set(root, 127);
+  segments.push({ at: 0, bytes: head });
+  return { file: { segments }, dirs, stored };
+}
+
 // ── a street map for real cells ─────────────────────────────────────────────
 
 /** A tile for every z/x/y the frame reads: a highway across the middle, a

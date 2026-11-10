@@ -1,0 +1,84 @@
+info:
+  name: GET /?area=872664570ffffff (landing) - one area over its streets
+  type: http
+  seq: 27
+
+http:
+  method: GET
+  url: "{{baseUrl}}/?area=872664570ffffff"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Tap a hexagon to zoom in (MAPPING-COST-STRUCTURE.md, decision 5): one
+        // res-7 area over its street map, a dot per place. 872664570ffffff is Mount
+        // Greenwood's cell; bruno/fixtures/landing-zip-own-area-seed.sql publishes
+        // one event there for this run, so the case does not depend on stock data.
+        //
+        // The rule under test in both states (location-precision CCR, F41): a dot is
+        // drawn only over a street layer. With no street layer the places are a list.
+        // The three states are the same as in the landing case before this one.
+        const body = String(res.getBody());
+        const has = function (id) { return body.includes('data-testid="' + id + '"'); };
+        const loaded = String(bru.getEnvVar('streetMapArchiveLoaded')) === 'true';
+
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        test('Opens that one area', function () {
+          expect(body).to.include('data-zoom="872664570ffffff"');
+          expect(has('amap-back')).to.equal(true);
+        });
+
+        test('Lists the event in that area (Mount Greenwood)', function () {
+          expect(body).to.include('Zip Own Area Check (Mount Greenwood)');
+          expect(has('amap-place-link')).to.equal(true);
+        });
+
+        test('Does not list the events of the neighbouring areas', function () {
+          expect(body).to.not.include('Zip Own Area Check (Oak Lawn)');
+          expect(body).to.not.include('Zip Own Area Check (Evergreen Park)');
+        });
+
+        if (has('amap-streets')) {
+          test('The dot is drawn over the street layer of that area', function () {
+            expect(body).to.include('data-testid="amap-zone" data-cell="872664570ffffff"');
+            expect(has('amap-dot')).to.equal(true);
+            expect(has('amap-no-tiles')).to.equal(false);
+          });
+
+          test('The street layer holds drawn paths, not a blank rectangle', function () {
+            const from = body.indexOf('data-testid="amap-streets"');
+            const layer = body.slice(from, body.indexOf('</g>', from));
+            expect(layer).to.match(/<path class="as-(w|v|r as-[123])" d="M/);
+          });
+
+          test('The OpenStreetMap credit shows with the streets', function () {
+            expect(has('amap-credit')).to.equal(true);
+          });
+        } else {
+          test('Without streets the places are a list: no dot, no bare hexagon, no credit', function () {
+            expect(has('amap-no-tiles')).to.equal(true);
+            expect(has('amap-dot')).to.equal(false);
+            expect(has('amap-zone')).to.equal(false);
+            expect(has('amap-credit')).to.equal(false);
+          });
+
+          if (loaded) {
+            test('The street layer is drawn (streetMapArchiveLoaded is true for this environment)', function () {
+              expect(has('amap-streets'), 'the environment file says the street-map archive is loaded, and the zoomed area drew no street layer').to.equal(true);
+            });
+          } else {
+            console.log('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): dots over the street layer, OpenStreetMap credit');
+          }
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

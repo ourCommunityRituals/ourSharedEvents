@@ -13,8 +13,12 @@
  *   - a file that is not PMTiles v3 is refused
  *   - every range check at its exact boundary, the per-archive and leaf caches
  *     (counted reads on a fake source), and the R2 source
+ *   - a whole-planet build's layout, on a sparse file: every tile two leaf
+ *     directories down, byte offsets past 4 GiB and 128 GiB, an open-water run
+ *   - the leaf cache is bounded by the entries it keeps, not only by its count
  */
 // @born-red pmtiles reader mutants | method: StrykerJS mutants of src/lib/pmtiles.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
+// @born-red planet-sized layout and leaf entry budget | method: 6 faults injected one at a time in src/lib/pmtiles.ts (header offsets cut to 32 bits, directory offsets cut to 32 bits, one leaf level only, a run covering only its first tile, leaves never kept, the entry budget never applied), each planet and budget case seen failing on at least one; the budget cases also seen failing before the budget existed. "is laid out as meant" checks the fixture, not the reader | date: 2026-11-09
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   archiveHeader,
@@ -28,10 +32,20 @@ import {
   zxyToTileId,
   PmtilesError,
   HEADER_BYTES,
+  MAX_LEAF_ENTRIES,
   type DirEntry,
   type RangeSource,
 } from '../src/lib/pmtiles';
-import { fakeBucket, gzip, memSource, pmtilesArchive, varint } from './helpers/street-map-fixtures';
+import {
+  fakeBucket,
+  gzip,
+  memSource,
+  planetArchive,
+  pmtilesArchive,
+  sparseSource,
+  varint,
+  type PlanetTile,
+} from './helpers/street-map-fixtures';
 
 const bytes = (s: string) => new TextEncoder().encode(s);
 const text = (b: Uint8Array | null) => (b ? new TextDecoder().decode(b) : null);
@@ -600,6 +614,201 @@ describe('pmtiles | reading from an archive', () => {
     expect(text(await readTile(three, 3, 2, 5))).toBe('tile-325');
     const four = memSource(chainArchive(4, t325));
     await expect(readTile(four, 3, 2, 5)).rejects.toThrow(/directory nesting too deep/);
+  });
+});
+
+// The whole-planet build (owner 2026-11-09) is about 138.5 GB. The reader had
+// only ever met a 0.464 GB regional file, where every offset fits in 32 bits and
+// a leaf directory holds a few thousand entries. These give it a planet's
+// layout without the planet: a sparse file with the byte ranges at their true
+// offsets (tests/helpers/street-map-fixtures.ts, planetArchive).
+describe('pmtiles | a planet-sized layout', () => {
+  const GIB = 2 ** 30;
+  const LEAF_AT = 3 * 2 ** 20;
+  const DATA_AT = 5 * GIB;
+  // z15's last tile: the largest tile id a Protomaps build holds.
+  const LAST_Z15 = (4 ** 16 - 1) / 3 - 1;
+
+  const world: PlanetTile = { z: 0, x: 0, y: 0, data: bytes('world'), at: 0 };
+  // Open water: one stored tile for the first 64 × 64 block of z13.
+  const water: PlanetTile = { z: 13, x: 0, y: 0, data: bytes('water'), at: 2 * GIB, run: 4 ** 6 };
+  const city: PlanetTile = { z: 14, x: 4201, y: 6092, data: bytes('city'), at: 40 * GIB };
+  const next: PlanetTile = { z: 14, x: 4202, y: 6092, data: bytes('next'), at: 40 * GIB + 70_000 };
+  const last: PlanetTile = { z: 15, x: 32767, y: 0, data: bytes('last'), at: 130 * GIB };
+  const all = [world, water, city, next, last];
+
+  const planet = (dirGap = 0) =>
+    planetArchive(all, { leafSize: 2, fanOut: 2, leafAt: LEAF_AT, dataAt: DATA_AT, dirGap });
+
+  it('is laid out as meant: two leaf levels, a tile id past 2^30, bytes past 2^37', async () => {
+    const { dirs, stored } = await planet(2 * GIB);
+    expect(dirs.filter((d) => d.level === 2)).toHaveLength(3);
+    expect(dirs.filter((d) => d.level === 1)).toHaveLength(2);
+    expect(zxyToTileId(last.z, last.x, last.y)).toBe(LAST_Z15);
+    expect(LAST_Z15).toBeGreaterThan(2 ** 30);
+    expect(stored.get(last)![0]).toBe(135 * GIB);
+    expect(stored.get(last)![0]).toBeGreaterThan(2 ** 37);
+    // With the gap, leaf directories themselves start past 4 GiB.
+    expect(Math.max(...dirs.map((d) => d.at))).toBeGreaterThan(2 ** 32);
+  });
+
+  for (const dirGap of [0, 2 * GIB]) {
+    it(`finds every tile two leaf levels down, at its exact byte offset (directory gap ${dirGap})`, async () => {
+      const { file, stored } = await planet(dirGap);
+      const src = sparseSource(file);
+      for (const t of all) {
+        expect(text(await readTile(src, t.z, t.x, t.y))).toBe(text(t.data));
+        // The read asked for the tile's true offset: nothing was cut to 32 bits.
+        expect(src.reads).toContainEqual(stored.get(t));
+      }
+    });
+  }
+
+  it('reads one stored tile for every tile of an open-water run, and none past it', async () => {
+    const { file, stored } = await planet();
+    const src = sparseSource(file);
+    for (const [x, y] of [
+      [0, 0],
+      [17, 40],
+      [63, 63],
+    ]) {
+      expect(text(await readTile(src, 13, x!, y!))).toBe('water');
+    }
+    expect(src.reads.filter(([off]) => off === stored.get(water)![0])).toHaveLength(3);
+    expect(await readTile(src, 13, 64, 0)).toBeNull();
+    expect(await readTile(src, 13, 0, 64)).toBeNull();
+  });
+
+  it('a tile the planet does not hold is null: before, between and after the stored ones', async () => {
+    const { file } = await planet();
+    const src = sparseSource(file);
+    expect(await readTile(src, 1, 0, 0)).toBeNull();
+    expect(await readTile(src, 14, 4203, 6092)).toBeNull();
+    expect(await readTile(src, 15, 32766, 0)).toBeNull();
+    // None of these read tile bytes.
+    expect(src.reads.every(([off]) => off < DATA_AT)).toBe(true);
+  });
+
+  it('reads the header once and each directory once, however many tiles follow', async () => {
+    const { file, dirs } = await planet();
+    const src = sparseSource(file);
+    for (let pass = 0; pass < 3; pass++) {
+      for (const t of all) await readTile(src, t.z, t.x, t.y);
+    }
+    expect(src.reads.filter(([off]) => off === 0)).toHaveLength(1);
+    for (const d of dirs) {
+      expect(src.reads.filter(([off, len]) => off === d.at && len === d.length)).toHaveLength(1);
+    }
+    // Header, five directories, then only tiles.
+    expect(src.reads).toHaveLength(1 + dirs.length + 3 * all.length);
+  });
+
+  it('two neighbouring tiles cost one walk down the directories between them', async () => {
+    const { file } = await planet();
+    const src = sparseSource(file);
+    await Promise.all([
+      readTile(src, city.z, city.x, city.y),
+      readTile(src, next.z, next.x, next.y),
+    ]);
+    // Header, one level-1 directory, one level-2 directory, two tiles.
+    expect(src.reads).toHaveLength(5);
+  });
+});
+
+// A planet's leaf directories are large (its tile entries divided among the few
+// thousand pointers a 16 KB root can hold), so the cache is bounded by the
+// entries it keeps, not only by how many directories.
+describe('pmtiles | leaf directory cache budget', () => {
+  const HALF = MAX_LEAF_ENTRIES / 2;
+  const A = { z: 12, x: 0, y: 0 };
+  const B = { z: 12, x: 10, y: 3000 };
+  const C = { z: 12, x: 3000, y: 3000 };
+  const D = { z: 12, x: 4095, y: 0 };
+
+  /** One leaf directory per start tile: `count` entries in a row from its id. */
+  function bigLeaves(starts: { t: { z: number; x: number; y: number }; count: number }[]) {
+    const sorted = starts
+      .map((s) => ({ ...s, id: zxyToTileId(s.t.z, s.t.x, s.t.y) }))
+      .sort((a, b) => a.id - b.id);
+    const leaves: Uint8Array[] = [];
+    const pointers: DirEntry[] = [];
+    let leafOffset = 0;
+    let dataOffset = 0;
+    sorted.forEach((s, i) => {
+      const nextId = sorted[i + 1]?.id ?? Infinity;
+      if (s.id + s.count > nextId) throw new Error('leaves overlap: pick tiles further apart');
+      const entries = Array.from({ length: s.count }, (_, k) => ({
+        tileId: s.id + k,
+        offset: dataOffset + k,
+        length: 1,
+        runLength: 1,
+      }));
+      const leaf = dirOf(entries);
+      pointers.push({ tileId: s.id, offset: leafOffset, length: leaf.length, runLength: 0 });
+      leaves.push(leaf);
+      leafOffset += leaf.length;
+      dataOffset += s.count;
+    });
+    const section = new Uint8Array(leafOffset);
+    let at = 0;
+    for (const l of leaves) {
+      section.set(l, at);
+      at += l.length;
+    }
+    const raw = rawArchive({
+      root: dirOf(pointers),
+      leaves: section,
+      data: new Uint8Array(dataOffset).fill(7),
+    });
+    const src = memSource(raw.archive);
+    const leafAt = new Map(sorted.map((s, i) => [s.t, raw.leafAt + pointers[i]!.offset] as const));
+    const read = async (t: { z: number; x: number; y: number }) => {
+      expect(await readTile(src, t.z, t.x, t.y)).toEqual(new Uint8Array([7]));
+    };
+    const leafReads = (t: { z: number; x: number; y: number }) =>
+      src.reads.filter(([off]) => off === leafAt.get(t)).length;
+    return { read, leafReads };
+  }
+
+  it('keeps leaves that fill the budget exactly, and drops only the oldest when one more arrives', async () => {
+    const { read, leafReads } = bigLeaves([
+      { t: A, count: HALF },
+      { t: B, count: HALF },
+      { t: C, count: HALF },
+    ]);
+    await read(A);
+    await read(B);
+    // Two halves are the whole budget: both are kept.
+    await read(A);
+    expect(leafReads(A)).toBe(1);
+    // A third half is over: the oldest (A) goes, and that is enough.
+    await read(C);
+    await read(B);
+    await read(C);
+    expect(leafReads(B)).toBe(1);
+    expect(leafReads(C)).toBe(1);
+    // A comes back as the newest, and now B is the oldest and goes.
+    await read(A);
+    expect(leafReads(A)).toBe(2);
+    await read(C);
+    expect(leafReads(C)).toBe(1);
+    await read(B);
+    expect(leafReads(B)).toBe(2);
+  });
+
+  it('keeps one leaf larger than the whole budget until another arrives', async () => {
+    const { read, leafReads } = bigLeaves([
+      { t: A, count: 10 },
+      { t: D, count: MAX_LEAF_ENTRIES + 1 },
+    ]);
+    await read(D);
+    await read(D);
+    expect(leafReads(D)).toBe(1);
+    await read(A);
+    await read(A);
+    expect(leafReads(A)).toBe(1);
+    await read(D);
+    expect(leafReads(D)).toBe(2);
   });
 });
 

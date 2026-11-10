@@ -12,22 +12,22 @@
 
 ## The three map layers
 
-| Layer                             | What it is                                                                                                                     | Status                                                                    |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| **H3 hexagons**                   | Server-drawn SVG from res-7 cell ids (`lib/attendee-map.ts`, `lib/corridor-map.ts`). No tiles, no JS, no outside request.      | Shipped                                                                   |
-| **Venue image**                   | One Google Static Maps image per venue, fetched by the Worker (`GET /api/v2/maps/venue-image`, `lib/maps.ts`).                 | Shipped on event pages                                                    |
-| **Street map under the hexagons** | Water, roads and town names drawn by the Worker as SVG under the hexagons (`lib/street-map.ts`), from a PMTiles archive in R2. | Built on the landing map; off until `MAP_TILES` is bound (see decision 4) |
-| **Zoomed area with event dots**   | A tapped hexagon drawn alone over its streets, one dot per place (`lib/attendee-map.ts`, `/?area=`).                           | Built on the landing map (see decision 5); streets need `MAP_TILES`       |
+| Layer                             | What it is                                                                                                                     | Status                                                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| **H3 hexagons**                   | Server-drawn SVG from res-7 cell ids (`lib/attendee-map.ts`, `lib/corridor-map.ts`). No tiles, no JS, no outside request.      | Shipped                                                                                              |
+| **Venue image**                   | One Google Static Maps image per venue, fetched by the Worker (`GET /api/v2/maps/venue-image`, `lib/maps.ts`).                 | Shipped on event pages                                                                               |
+| **Street map under the hexagons** | Water, roads and town names drawn by the Worker as SVG under the hexagons (`lib/street-map.ts`), from a PMTiles archive in R2. | Built on the landing map; bound on staging first, after the owner loads the archive (see decision 4) |
+| **Zoomed area with event dots**   | A tapped hexagon drawn alone over its streets, one dot per place (`lib/attendee-map.ts`, `/?area=`).                           | Built on the landing map (see decision 5); streets need `MAP_TILES`                                  |
 
 ## Cost lines
 
-| Line                                     | Fixed / month                                                                      | Variable                                                                                                                               | Driver                                                                                                                                  | Who triggers it                           | Who pays                             |
-| ---------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------ |
-| H3 hexagons                              | $0                                                                                 | $0 beyond Worker compute                                                                                                               | page views                                                                                                                              | everyone                                  | platform (inside the Workers plan)   |
-| Place names on hexagons (first release)  | $0                                                                                 | $0                                                                                                                                     | page views                                                                                                                              | everyone                                  | platform                             |
-| Google venue image (today)               | $0                                                                                 | first 10,000 loads/month free, then **$2.00 per 1,000**                                                                                | one load per venue, per Cloudflare location, per day (edge-cached)                                                                      | **attendees on public event pages**       | platform — not tied to any paid tier |
-| Google place lookup (Geocoding)          | $0                                                                                 | Google's Geocoding list price after its free monthly allowance is **$5.00 per 1,000** (not re-read for this change; check the console) | one lookup per event save that changes the place, plus at most **25 a night** for events saved before 2026-10-11 (`lib/event-place.ts`) | **organizers** saving events (admin only) | platform                             |
-| Self-hosted street map (Protomaps on R2) | storage: **$0.015/GB-month** (whole planet ≈ 120 GB ≈ **$1.80**; first 10 GB free) | reads: **$0.36 per million** after 10 million free; no egress fee                                                                      | tile reads per map view (estimate 10–30)                                                                                                | whoever sees the street map               | funded by Mid revenue (see below)    |
+| Line                                     | Fixed / month                                                                                                                                                     | Variable                                                                                                                               | Driver                                                                                                                                  | Who triggers it                           | Who pays                             |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------ |
+| H3 hexagons                              | $0                                                                                                                                                                | $0 beyond Worker compute                                                                                                               | page views                                                                                                                              | everyone                                  | platform (inside the Workers plan)   |
+| Place names on hexagons (first release)  | $0                                                                                                                                                                | $0                                                                                                                                     | page views                                                                                                                              | everyone                                  | platform                             |
+| Google venue image (today)               | $0                                                                                                                                                                | first 10,000 loads/month free, then **$2.00 per 1,000**                                                                                | one load per venue, per Cloudflare location, per day (edge-cached)                                                                      | **attendees on public event pages**       | platform — not tied to any paid tier |
+| Google place lookup (Geocoding)          | $0                                                                                                                                                                | Google's Geocoding list price after its free monthly allowance is **$5.00 per 1,000** (not re-read for this change; check the console) | one lookup per event save that changes the place, plus at most **25 a night** for events saved before 2026-10-11 (`lib/event-place.ts`) | **organizers** saving events (admin only) | platform                             |
+| Self-hosted street map (Protomaps on R2) | storage: **$0.015/GB-month**; the whole planet (138.5 GB measured) is about **$1.93** for the first environment after the free 10 GB and **$2.08** for the second | reads: **$0.36 per million** after 10 million free; no egress fee                                                                      | tile reads per map view (estimate 10–30)                                                                                                | whoever sees the street map               | funded by Mid revenue (see below)    |
 
 ## What each option costs at volume (estimates)
 
@@ -70,11 +70,19 @@ share one load, so the real figure is lower.
    about $0.75 a month after the free 10 million. Any failure, or a read slower than
    1.5 s, draws the hexagons alone. The OpenStreetMap credit shows whenever streets do.
 
-   **Turning it on (owner steps):** create an R2 bucket per environment, load the
-   regional archive (`proofs/street-map/README.md`, step 1), then add a `MAP_TILES`
-   binding to `[env.staging]` and `[env.production]` in `wrangler.toml` in one PR
-   (`MAP_TILES_ARCHIVE` names the file; the default is `chicago-region.pmtiles`).
-   Until then staging and production show hexagons only. Local dev has the binding.
+   **Turning it on (owner steps, 2026-11-09):** the archive is the whole-planet
+   build, on our own Cloudflare account, and staging gets it before production.
+   The steps, the names and the way back to hexagons only are in
+   [`../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md`](../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md):
+   the owner creates the staging bucket and loads the archive, then the `MAP_TILES`
+   binding for `[env.staging]` merges (`MAP_TILES_ARCHIVE` names the file).
+   Production gets the same binding in its own PR afterwards; until then
+   `scripts/ci/env-parity.mjs` lists the difference as open and production shows
+   hexagons only. Local dev has its own binding and reads the regional file.
+
+   **A layer needs tiles** (2026-11-09): when the archive holds no tile for the
+   frame, the Worker draws no street layer at all, so the zoomed area lists its
+   places and never puts dots on a blank rectangle.
 
 5. **Tap a hexagon to zoom in; events show as dots** (owner, 2026-11-09). On the
    landing each hexagon links to `/?area=<res-7 cell>`, which the Worker draws as
@@ -147,6 +155,7 @@ one tile route to count the same way.
 - Google Maps Static API: 10,000 free loads/month, then $2.00 per 1,000 — <https://developers.google.com/maps/billing-and-pricing/pricing>
 - Cloudflare R2: $0.015/GB-month, Class B $0.36/million, 10 GB and 10 million Class B free, no egress fee — <https://developers.cloudflare.com/r2/platform/pricing/>
 - Protomaps: planet file about 120 GB; R2 recommended for hosting — <https://docs.protomaps.com/basemaps/downloads>, <https://docs.protomaps.com/pmtiles/cloud-storage>
+- Read again on 2026-11-09 for the whole-planet load (upload limits, the S3 token, multipart operations): see the list in [`../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md`](../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md). R2's prices were unchanged.
 
 ## Measured in the street-map proof (2026-10-03)
 

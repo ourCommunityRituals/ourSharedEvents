@@ -71,9 +71,9 @@ bucket_name = "ose-uploads-dev"
 # (lib/street-map.ts). Local only: `wrangler dev` keeps it on disk. Load the
 # archive once (proofs/street-map/README.md, step 1, makes the file):
 #   wrangler r2 object put ose-map-tiles-dev/chicago-region.pmtiles --file <file> --local
-# Staging and production have no binding yet, so their maps stay hexagons only.
-# The owner creates the bucket and loads the archive before the binding is added
-# to the staging and production blocks (docs/positioning/MAPPING-COST-STRUCTURE.md).
+# With no MAP_TILES_ARCHIVE here, local dev reads the default regional file.
+# Staging has its own binding below; production has none yet and stays hexagons
+# only (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md).
 [[r2_buckets]]
 binding = "MAP_TILES"
 bucket_name = "ose-map-tiles-dev"
@@ -189,6 +189,21 @@ migrations_dir = "migrations-forms"
 binding = "UPLOADS_BUCKET"
 bucket_name = "ose-uploads-staging"
 
+# ── Street map tiles (staging) ───────────────────────────────────────────────
+# The self-hosted OpenStreetMap archive the landing map draws its streets from
+# (lib/street-map.ts): the whole-planet Protomaps build (owner 2026-11-09), read
+# by byte range. The Worker is its only reader; the bucket has no public URL.
+# OWNER STEPS FIRST (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md): the bucket
+# exists and the archive named by MAP_TILES_ARCHIVE below is loaded before this
+# block reaches main. An agent never creates the bucket or loads the file.
+# Staging first: production gets the same binding in its own PR, after the
+# staging street-map cases have passed. Until then scripts/ci/env-parity.mjs
+# lists the difference as open, and production draws hexagons only.
+# Back to hexagons only: remove this block and redeploy.
+[[env.staging.r2_buckets]]
+binding = "MAP_TILES"
+bucket_name = "ose-map-tiles-staging"
+
 # ── Rate Limit KV (staging) ───────────────────────────────────────────────────
 # Provisioned 2026-08-18 (OSE-813) in account c4dee735… — namespace `rate-limit-staging`.
 [[env.staging.kv_namespaces]]
@@ -260,6 +275,11 @@ SCAN_RETURNS_RETENTION_DAYS = "365"
 # so Undo leaves no public trace. 0 turns it off; capped at 60.
 PUBLISH_GRACE_MINUTES = "10"
 SPONSOR_GEO_MATCH_ENABLED = "0"
+# The street-map archive's object key in the MAP_TILES bucket (lib/street-map.ts):
+# the whole-planet Protomaps build, named by its build date. A refresh is a new
+# key and a PR that changes this value, never an overwrite: the Worker keeps an
+# archive's directories for the life of an isolate, keyed by this name.
+MAP_TILES_ARCHIVE = "planet-20261109.pmtiles"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
 # Allow Bearer token fallback in staging (for local testing without CF Access)
@@ -419,6 +439,10 @@ SCAN_RETURNS_RETENTION_DAYS = "365"
 # so Undo leaves no public trace. 0 turns it off; capped at 60.
 PUBLISH_GRACE_MINUTES = "10"
 SPONSOR_GEO_MATCH_ENABLED = "0"
+# The street-map archive's object key (see the staging block). The same value as
+# staging, so the two stay in sync. It does nothing here yet: production has no
+# MAP_TILES binding, so lib/street-map.ts returns before it reads this name.
+MAP_TILES_ARCHIVE = "planet-20261109.pmtiles"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
 # ALLOW_OCR_INTERNAL is deliberately absent in production (ADR-012 gate R2,

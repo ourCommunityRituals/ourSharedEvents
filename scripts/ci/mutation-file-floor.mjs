@@ -56,11 +56,18 @@ export const FLOORS = {
   // before the state tells the two apart, and a test now does.) mvt.ts, 305 of 308:
   // `cur.length > 0` at ClosePath (a ring is never empty once it exists, two
   // mutants) and `k + 1 < tags.length` to `<=` (the extra pass reads past the
-  // end and sets nothing). pmtiles.ts, 260 of 261: `3 * rx` to `3 / rx` in the
-  // Hilbert step (rx is 0 or 1, and `^` turns Infinity into 0). Never lower.
+  // end and sets nothing). pmtiles.ts, 275 of 276 since the leaf cache took an
+  // entry budget (was 260 of 261): `3 * rx` to `3 / rx` in the Hilbert step (rx
+  // is 0 or 1, and `^` turns Infinity into 0). Never lower.
   'src/lib/attendee-map.ts': 98.9,
   'src/lib/mvt.ts': 99.02,
-  'src/lib/pmtiles.ts': 99.61,
+  'src/lib/pmtiles.ts': 99.63,
+  // The street layer's loader (owner, 2026-11-10): two marker ranges of
+  // street-map.ts, the archive name rule and buildStreetLayer to the catch in
+  // loadStreetLayer. 50 of 50: 48 killed, and 2 that never end (`x++` and `y++`
+  // to `--` in the tile loop, so the run stops them). One mutant is disabled
+  // in the source with its reason: the text of an error nobody reads.
+  'src/lib/street-map.ts': 100,
 };
 
 /** One file's score from its mutants, or null when it has no valid mutant. */

@@ -75,6 +75,11 @@ export const UNDECIDED = [
     key: 'binding:queues.consumers:ose-scans',
     reason: 'the consumer side of the same scan queue; decided together with SCAN_QUEUE.',
   },
+  {
+    key: 'binding:r2_buckets:MAP_TILES',
+    reason:
+      'staging has the street-map archive bucket (MAP_TILES, ose-map-tiles-staging); production has none, so production draws hexagons only. The order is decided (owner 2026-11-09: staging first); what is open is the production side. Production gets the same binding in its own PR once the staging street-map cases have passed and the owner has created and loaded the production bucket (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md). Remove this entry in that PR.',
+  },
 ];
 
 const VAR_HEADER = (env) => `env.${env}.vars`;

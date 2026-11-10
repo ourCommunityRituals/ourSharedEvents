@@ -293,6 +293,42 @@ describe('production bindings', () => {
     expect(pf.checkProductionBindings(TOML).detail).not.toContain('SCAN_QUEUE');
   });
 
+  // Staging first (owner 2026-11-09): the street-map bucket is bound on staging
+  // before production has a bucket of its own. Named, so no other bucket rides in.
+  // @born-red street-map bucket staging only | method: the first case seen failing before DARK_ON_PRODUCTION existed ("MAP_TILES (r2_buckets) is on staging but not on production", also red in tests/integration/prod-preflight-cli.test.js on the real file); the other two are the faults | date: 2026-11-09
+  const STAGING_QUEUE = '[[env.staging.queues.producers]]';
+  const stagingBucket = (binding) =>
+    swap(
+      TOML,
+      STAGING_QUEUE,
+      `[[env.staging.r2_buckets]]\nbinding = "${binding}"\nbucket_name = "tiles-stg"\n\n${STAGING_QUEUE}`
+    );
+
+  test('the street-map bucket is allowed to be staging only, by name', () => {
+    expect(pf.DARK_ON_PRODUCTION).toEqual(['r2_buckets/MAP_TILES']);
+    const r = pf.checkProductionBindings(stagingBucket('MAP_TILES'));
+    expect(r.detail).not.toContain('MAP_TILES');
+    expect(r.status).toBe('pass');
+  });
+
+  test('fault: any other bucket only staging has still fails', () => {
+    const r = pf.checkProductionBindings(stagingBucket('OTHER_TILES'));
+    expect(r.status).toBe('fail');
+    expect(r.detail).toContain('OTHER_TILES (r2_buckets) is on staging but not on production');
+  });
+
+  test("fault: production's own street-map bucket is still checked, and staging's name is refused", () => {
+    const r = pf.checkProductionBindings(
+      swap(
+        stagingBucket('MAP_TILES'),
+        '[env.production.triggers]',
+        '[[env.production.r2_buckets]]\nbinding = "MAP_TILES"\nbucket_name = "tiles-stg"\n\n[env.production.triggers]'
+      )
+    );
+    expect(r.status).toBe('fail');
+    expect(r.detail).toContain('MAP_TILES: bucket_name "tiles-stg" is staging\'s');
+  });
+
   test('fault: there is no production section at all', () => {
     const r = pf.checkProductionBindings(TOML.split('[env.production]')[0]);
     expect(r.status).toBe('fail');
