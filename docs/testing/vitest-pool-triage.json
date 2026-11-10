@@ -429,6 +429,13 @@
       "testCount": 24
     },
     {
+      "file": "workers/oursharedevents/tests/admin-wizard-uniform.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 18
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-wizard-what-and-missing.spec.ts",
       "bucket": "node",
       "needsReview": false,
