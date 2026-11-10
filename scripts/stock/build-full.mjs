@@ -67,6 +67,32 @@ async function downloadArt(fetchFn, url) {
   };
 }
 
+// One picture, however many events it was uploaded for: a local photo by its
+// file, an Instagram post by its id (else its media address).
+function artKey(post) {
+  return String(post.file ?? post.id ?? post.mediaUrl);
+}
+
+// Owner 2026-11-10: the stock sponsors show art from the same pool as the stock
+// events (the pictures this build uploaded as poster art) until a real sponsor
+// uploads its own. Each sponsor gets one of those uploads as its logo, round-robin in
+// creation order so the sponsors show the variety of the pool. The Worker reads an
+// uploaded logo from R2 (lib/sponsor-logo.ts serveUploadedLogo); the purge
+// removes the asset rows of the sponsors and the uploads together. No art uploaded
+// (an art failure is already named): the sponsors keep the standard image. A
+// refused logo is named, never fatal.
+export async function giveSponsorsArt(client, manifest, pool) {
+  if (pool.length === 0) return;
+  const sponsors = manifest.items.filter((i) => i.kind === 'sponsor').map((i) => i.id);
+  for (const [i, id] of sponsors.entries()) {
+    try {
+      await client.put(`/api/v2/admin/sponsors/${id}`, { logo_url: pool[i % pool.length] });
+    } catch (err) {
+      manifest.warnings.push(`sponsor art not set for ${id}: ${err.message}`);
+    }
+  }
+}
+
 export async function buildDay({
   client,
   accepted,
@@ -105,6 +131,9 @@ export async function buildDay({
     manifest.items.push({ kind, id, node, ...extra });
     onRecord(manifest);
   };
+
+  // picture -> the address of its first upload in this build (the art for the sponsors)
+  const artPool = new Map();
 
   try {
     // Sponsors first: one per business, into the root brand's pool.
@@ -261,6 +290,9 @@ export async function buildDay({
               if (typeof file.url === 'string' && file.url !== '') {
                 await client.put(`/api/v2/admin/events/${ev.id}`, { cover_image_url: file.url });
                 if (planned && post.orientation) qr.orientation = post.orientation;
+                // the first upload of each picture joins the art pool for the sponsors
+                const art = artKey(post);
+                if (!artPool.has(art)) artPool.set(art, file.url);
               } else {
                 manifest.warnings.push(`art skipped for ${ev.id}: the upload answer has no url`);
               }
@@ -298,6 +330,8 @@ export async function buildDay({
         }
       }
     }
+
+    await giveSponsorsArt(client, manifest, [...artPool.values()]);
   } catch (err) {
     // Keep what was created so the purge can still remove it.
     err.manifest = manifest;

@@ -1,0 +1,36 @@
+info:
+  name: Uploaded logo | 1 an uploaded image path is accepted as the logo
+  type: http
+  seq: 15
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/sponsors/sb_pcard_upload"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"logo_url":"/api/v2/uploads/events/pcard-live-evt/bruno-no-such-object.png"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // Owner 2026-11-10: a sponsor logo may be an image uploaded to OSE, from the
+        // same R2 pool as event poster art (the stock sponsors take theirs from the
+        // stock events' art). Before this change the write was refused 400. The
+        // fixture (sponsor-public-card-seed.sql) clears this logo on every run.
+        test('200: an uploaded image path is a valid logo', function () {
+          expect(res.getStatus()).to.eql(200);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

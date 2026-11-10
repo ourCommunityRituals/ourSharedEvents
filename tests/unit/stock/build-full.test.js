@@ -29,6 +29,10 @@ function fakeSite({
   eventWarnings = [],
   // the upload answer's file object, as the Worker would send it (null: no file)
   uploadFile,
+  // each upload answers its own address (art_<n>.png) instead of one shared one
+  distinctUploads = false,
+  // PUT /api/v2/admin/sponsors/:id with a logo_url: its HTTP status
+  logoStatus = 200,
   // PUT poster-codes: its HTTP status, and (optional) the codes it answers with
   codesStatus = 200,
   codesAnswer,
@@ -68,12 +72,23 @@ function fakeSite({
     }
     if (method === 'POST' && path.endsWith('/uploads')) {
       if (failUpload) return reply(500, {});
-      const good = W.upload({ key: next('events/up'), url: '/api/v2/uploads/events/x/art.png' });
+      const key = next('events/up');
+      const url = distinctUploads
+        ? `/api/v2/uploads/events/x/art_${n}.png`
+        : '/api/v2/uploads/events/x/art.png';
+      const good = W.upload({ key, url });
       if (uploadFile === undefined) return reply(201, good);
       return reply(201, { ...good, file: uploadFile });
     }
     if (method === 'POST' && path === '/api/v2/admin/sponsors') {
       return reply(201, W.sponsorCreate({ id: next('sp') }));
+    }
+    if (
+      method === 'PUT' &&
+      /^\/api\/v2\/admin\/sponsors\/[^/]+$/.test(path) &&
+      'logo_url' in body
+    ) {
+      return logoStatus === 200 ? reply(200, { ok: true }) : reply(logoStatus, { ok: false });
     }
     if (method === 'PUT' && /^\/api\/v2\/admin\/sponsors\/[^/]+$/.test(path)) {
       placementOf.set(`${path.split('/').pop()}|${body.event_id}`, next('spl'));
@@ -532,6 +547,98 @@ describe('buildDay', () => {
     const placements = manifest.items.filter((i) => i.kind === 'placement');
     expect(placements).toHaveLength(9);
     expect(manifest.acceptSql).toEqual(placements.map((p) => p.id));
+  });
+
+  // Owner 2026-11-10: the stock sponsors show art from the same pool as the stock
+  // events, until a real sponsor uploads its own.
+  describe('sponsor art from the event art pool', () => {
+    const readFile = async () => new Uint8Array([0xff, 0xd8, 0xff]);
+    const artTags = { tags: { typea: 'type-a', typeb: 'type-b' } };
+    const photo = (id, tag) => ({
+      id,
+      caption: 'x',
+      hashtags: [tag],
+      file: `/repo/stock/art/${id}.jpg`,
+    });
+    const logoCalls = (site) =>
+      callsTo(site, 'PUT', /^\/api\/v2\/admin\/sponsors\//).filter((c) => 'logo_url' in c.body);
+    // two events, each matching one of two photos, so the pool holds two pictures
+    const twoPictures = (site, over = {}) =>
+      buildDay(
+        args(site, {
+          accepted: [
+            row('beverly', 'private', 10),
+            { ...row('beverly', 'private', 11), event_type_id: 'type-b' },
+          ],
+          posts: [photo('mural', 'typea'), photo('court', 'typeb')],
+          artTags,
+          readFile,
+          ...over,
+        })
+      );
+
+    test('every sponsor gets an uploaded event picture as its logo, round-robin in creation order', async () => {
+      const site = fakeSite({ distinctUploads: true });
+      const manifest = await twoPictures(site);
+      const covers = callsTo(site, 'PUT', /^\/api\/v2\/admin\/events\/evt_/).map(
+        (c) => c.body.cover_image_url
+      );
+      expect(new Set(covers).size).toBe(2);
+      const sponsorIds = manifest.items.filter((i) => i.kind === 'sponsor').map((i) => i.id);
+      expect(logoCalls(site).map((c) => [c.path.split('/').pop(), c.body])).toEqual([
+        [sponsorIds[0], { logo_url: covers[0] }],
+        [sponsorIds[1], { logo_url: covers[1] }],
+        [sponsorIds[2], { logo_url: covers[0] }],
+      ]);
+      expect(manifest.warnings).toEqual([]);
+    });
+
+    test('one picture uploaded for several events counts once: its first upload is the logo', async () => {
+      const site = fakeSite({ distinctUploads: true });
+      await buildDay(
+        args(site, {
+          accepted: [row('beverly', 'private', 10), row('beverly', 'private', 11)],
+          posts: [photo('mural', 'typea')],
+          artTags,
+          readFile,
+        })
+      );
+      const covers = callsTo(site, 'PUT', /^\/api\/v2\/admin\/events\/evt_/).map(
+        (c) => c.body.cover_image_url
+      );
+      expect(covers).toHaveLength(2);
+      expect(covers[0]).not.toBe(covers[1]);
+      expect(logoCalls(site).map((c) => c.body.logo_url)).toEqual([
+        covers[0],
+        covers[0],
+        covers[0],
+      ]);
+    });
+
+    test('no picture uploaded: no sponsor is given a logo, and the build says nothing of it', async () => {
+      const site = fakeSite();
+      const manifest = await buildDay(args(site, { accepted: rowsFor('beverly', 2, 1) }));
+      expect(logoCalls(site)).toEqual([]);
+      expect(manifest.warnings).toEqual([]);
+    });
+
+    test('a logo the Worker refuses is named, and the other sponsors still get theirs', async () => {
+      const site = fakeSite({ distinctUploads: true, logoStatus: 400 });
+      const manifest = await twoPictures(site);
+      expect(logoCalls(site)).toHaveLength(3);
+      expect(manifest.warnings.filter((w) => /^sponsor art not set for sp_/.test(w))).toHaveLength(
+        3
+      );
+    });
+
+    test('the logos are set after every placement, so a refused logo cannot cost a placement', async () => {
+      const site = fakeSite({ distinctUploads: true });
+      await twoPictures(site);
+      const sponsorPuts = callsTo(site, 'PUT', /^\/api\/v2\/admin\/sponsors\//);
+      const firstLogo = sponsorPuts.findIndex((c) => 'logo_url' in c.body);
+      expect(firstLogo).toBeGreaterThan(0);
+      expect(sponsorPuts.slice(firstLogo).every((c) => 'logo_url' in c.body)).toBe(true);
+    });
   });
 
   describe('regional and local sponsors', () => {

@@ -22,7 +22,12 @@
  *     ranges from the edge, which is the backstop for that case.
  */
 
+import { isUploadedArtworkPath } from './event-thumb';
+
 export const ALLOWED_LOGO_SCHEMES = new Set(['https:', 'http:']);
+
+/** Where an uploaded file is served (handlers/upload.ts); the rest is its R2 key. */
+const UPLOADS_PREFIX = '/api/v2/uploads/';
 
 export const ALLOWED_LOGO_CONTENT_TYPES = new Set([
   'image/jpeg',
@@ -132,6 +137,19 @@ export function validateHttpsUrl(raw: unknown): LogoUrlValidation {
   return base;
 }
 
+/**
+ * A sponsor logo as it may be stored (owner 2026-11-10): an outside address the
+ * proxy fetches (validateProxiedLogoUrl), or an image already uploaded to OSE —
+ * the same R2 pool as an event's poster art, `/api/v2/uploads/…`. An upload is
+ * read from the bucket, never fetched, so the host rule has nothing to guard.
+ * The path rule is the event-art one (lib/event-thumb.ts): no `.`/`..` segment,
+ * nothing but the uploads prefix and safe characters.
+ */
+export function validateSponsorLogoInput(raw: unknown): LogoUrlValidation {
+  if (isUploadedArtworkPath(raw)) return { valid: true, url: raw };
+  return validateProxiedLogoUrl(raw);
+}
+
 // ── Proxy path ────────────────────────────────────────────────────────────────
 
 export function sponsorLogoPath(sponsorId: string): string {
@@ -215,18 +233,49 @@ async function fetchLogo(externalUrl: string, signal: AbortSignal): Promise<Logo
 
   return {
     ok: true,
-    response: new Response(bytes, {
-      status: 200,
-      headers: {
-        'Content-Type': ct,
-        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
-        'Content-Security-Policy': "default-src 'none'",
-        'Referrer-Policy': 'no-referrer',
-        'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'DENY',
-        'Content-Length': String(bytes.byteLength),
-      },
-    }),
+    response: new Response(bytes, { status: 200, headers: logoHeaders(ct, bytes.byteLength) }),
+  };
+}
+
+/** The hardened headers every served logo carries, fetched or uploaded. */
+function logoHeaders(contentType: string, length: number): Record<string, string> {
+  return {
+    'Content-Type': contentType,
+    'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
+    'Content-Security-Policy': "default-src 'none'",
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Content-Length': String(length),
+  };
+}
+
+/**
+ * Serve a logo uploaded to OSE (validateSponsorLogoInput) from R2. The same
+ * rules as a fetched logo: an image type on the allowlist, at most
+ * LOGO_MAX_BYTES, the same hardened headers. The upload route takes PDFs and
+ * video too, so the type is checked here, not assumed. No bucket or no object
+ * is NOT_FOUND: the sponsor simply has no art to show.
+ */
+export async function serveUploadedLogo(
+  bucket: R2Bucket | undefined,
+  path: string
+): Promise<LogoProxyResult> {
+  if (!bucket || !isUploadedArtworkPath(path)) return { ok: false, error: 'NOT_FOUND' };
+  const obj = await bucket.get(path.slice(UPLOADS_PREFIX.length));
+  if (!obj) return { ok: false, error: 'NOT_FOUND' };
+  const ct = (obj.httpMetadata?.contentType ?? '').split(';')[0].trim().toLowerCase();
+  if (!ALLOWED_LOGO_CONTENT_TYPES.has(ct)) {
+    await obj.body.cancel();
+    return { ok: false, error: 'CONTENT_TYPE_NOT_ALLOWED' };
+  }
+  if (obj.size > LOGO_MAX_BYTES) {
+    await obj.body.cancel();
+    return { ok: false, error: 'RESPONSE_TOO_LARGE' };
+  }
+  return {
+    ok: true,
+    response: new Response(obj.body, { status: 200, headers: logoHeaders(ct, obj.size) }),
   };
 }
 

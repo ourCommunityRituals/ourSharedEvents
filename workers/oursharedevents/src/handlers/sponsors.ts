@@ -34,10 +34,13 @@ import {
 } from '../lib/sponsor-resolver';
 import {
   validateProxiedLogoUrl,
+  validateSponsorLogoInput,
   validateHttpsUrl,
   fetchAndProxyLogo,
+  serveUploadedLogo,
   LOGO_MAX_IN_FLIGHT,
 } from '../lib/sponsor-logo';
+import { isUploadedArtworkPath } from '../lib/event-thumb';
 import {
   CARD_FIELDS,
   checkCardField,
@@ -75,6 +78,8 @@ export interface SponsorsEnv
   WORKER_ENV?: string;
   DB?: D1Database;
   PUBLISH_GRACE_MINUTES?: string;
+  /** R2: a logo uploaded to OSE is served from here (serveUploadedLogo). */
+  UPLOADS_BUCKET?: R2Bucket;
 }
 
 function requestId(): string {
@@ -507,21 +512,21 @@ export async function handleAdminCreateSponsor(
   // Two logos, both optional: the header logo (wide) stays format 'logo' so every
   // existing reader keeps working; the sidebar logo (square/compact) is its own
   // format 'logo_compact' (migration 0081). No logo → surfaces render the name.
-  const logoValidation = validateProxiedLogoUrl(body.logo_url ?? null);
+  const logoValidation = validateSponsorLogoInput(body.logo_url ?? null);
   if (!logoValidation.valid) {
     return errorResponse(
       'INVALID_LOGO_URL',
-      'Header logo must be an http:// or https:// URL on a public web host (max 500 chars)',
+      'Header logo must be an http:// or https:// URL on a public web host, or an uploaded image (max 500 chars)',
       400,
       rid
     );
   }
   const logoUrl = logoValidation.url;
-  const compactValidation = validateProxiedLogoUrl(body.sidebar_logo_url ?? null);
+  const compactValidation = validateSponsorLogoInput(body.sidebar_logo_url ?? null);
   if (!compactValidation.valid) {
     return errorResponse(
       'INVALID_SIDEBAR_LOGO_URL',
-      'Sidebar logo must be an http:// or https:// URL on a public web host (max 500 chars)',
+      'Sidebar logo must be an http:// or https:// URL on a public web host, or an uploaded image (max 500 chars)',
       400,
       rid
     );
@@ -911,11 +916,11 @@ export async function handleAdminUpdateSponsor(
     if (val === null || val === '') {
       logoUpdates.push({ format, url: null });
     } else if (typeof val === 'string') {
-      const logoValidation = validateProxiedLogoUrl(val);
+      const logoValidation = validateSponsorLogoInput(val);
       if (!logoValidation.valid) {
         return errorResponse(
           format === 'logo' ? 'INVALID_LOGO_URL' : 'INVALID_SIDEBAR_LOGO_URL',
-          `${label} must be an http:// or https:// URL on a public web host (max 500 chars)`,
+          `${label} must be an http:// or https:// URL on a public web host, or an uploaded image (max 500 chars)`,
           400,
           rid
         );
@@ -1755,6 +1760,23 @@ export async function handleSponsorLogo(
   }
 
   const logoUrl = row.logo_url as string;
+  // Owner 2026-11-10: a logo may be an image uploaded to OSE, from the same R2
+  // pool as event poster art. It is read from the bucket, not fetched, so the
+  // edge cache, limiter and in-flight cap below (all about outbound fetches)
+  // do not apply. The consent gate above does.
+  if (isUploadedArtworkPath(logoUrl)) {
+    const served = await serveUploadedLogo(env.UPLOADS_BUCKET, logoUrl);
+    if (!served.ok || !served.response) {
+      logLogoOutcome('r2_refused', sidebar);
+      return new Response(null, {
+        status: served.error === 'NOT_FOUND' ? 404 : 422,
+        headers: { 'X-Request-Id': rid, 'Cache-Control': 'no-store' },
+      });
+    }
+    logLogoOutcome('r2', sidebar);
+    served.response.headers.set('X-Request-Id', rid);
+    return served.response;
+  }
   const validation = validateProxiedLogoUrl(logoUrl);
   if (!validation.valid || !validation.url) {
     return new Response(null, { status: 422, headers: { 'X-Request-Id': rid } });
@@ -1843,7 +1865,8 @@ export async function handleSponsorLogo(
  * never the sponsor id, the URL, or anything about the caller (never-who).
  */
 function logLogoOutcome(
-  outcome: 'hit' | 'miss' | 'limited' | 'upstream_error' | 'failed_cached' | 'busy',
+  outcome:
+    'hit' | 'miss' | 'limited' | 'upstream_error' | 'failed_cached' | 'busy' | 'r2' | 'r2_refused',
   sidebar: boolean
 ): void {
   console.log(

@@ -39,6 +39,8 @@ import {
   LOGO_MAX_IN_FLIGHT,
   LOGO_MAX_BYTES,
   LOGO_MAX_REDIRECTS,
+  validateSponsorLogoInput,
+  serveUploadedLogo,
 } from '../src/lib/sponsor-logo';
 
 afterEach(() => {
@@ -531,5 +533,115 @@ describe('OSE-1433 | the in-flight cap lives in the shared fetcher (Copilot revi
     vi.stubGlobal('fetch', after);
     expect((await fetchAndProxyLogo('https://cdn.example.com/after.png')).ok).toBe(true);
     expect(after).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Uploaded logos (owner 2026-11-10) ─────────────────────────────────────────
+// A sponsor logo may be an image uploaded to OSE: the same R2 pool as event
+// poster art. It is read from the bucket, never fetched.
+
+describe('validateSponsorLogoInput', () => {
+  test('an uploaded image path is valid as it is', () => {
+    const p = '/api/v2/uploads/events/evt_1/1-art.png';
+    expect(validateSponsorLogoInput(p)).toEqual({ valid: true, url: p });
+  });
+
+  test.each([
+    '/api/v2/uploads/events/../secret.png',
+    '/api/v2/uploads/./x.png',
+    '/api/v2/uploads/x.png?y=1',
+    '/api/v2/admin/x.png',
+    'events/x.png',
+  ])('%s is not an upload, and not a URL either: refused', (raw) => {
+    expect(validateSponsorLogoInput(raw).valid).toBe(false);
+  });
+
+  test('anything else meets the outside-logo rule unchanged', () => {
+    expect(validateSponsorLogoInput('https://cdn.example.com/l.png')).toEqual({
+      valid: true,
+      url: 'https://cdn.example.com/l.png',
+    });
+    expect(validateSponsorLogoInput('http://127.0.0.1/l.png').error).toBe('INVALID_HOST');
+    expect(validateSponsorLogoInput(null)).toEqual({ valid: true, url: null });
+  });
+});
+
+describe('serveUploadedLogo', () => {
+  const PATH = '/api/v2/uploads/events/evt_1/1-art.png';
+  const bucketWith = (obj: unknown) => {
+    const keys: string[] = [];
+    const bucket = {
+      get: async (k: string) => {
+        keys.push(k);
+        return obj;
+      },
+    } as unknown as R2Bucket;
+    return { bucket, keys };
+  };
+  const object = (contentType: string | undefined, size: number) => {
+    const cancel = vi.fn(async () => {});
+    return {
+      cancel,
+      obj: {
+        size,
+        httpMetadata: contentType === undefined ? {} : { contentType },
+        body: Object.assign(new Blob([new Uint8Array(size > 64 ? 1 : size)]).stream(), { cancel }),
+      },
+    };
+  };
+
+  test('reads the R2 key after the uploads prefix and serves it with the hardened headers', async () => {
+    const { obj } = object('image/png; charset=binary', 4);
+    const { bucket, keys } = bucketWith(obj);
+    const r = await serveUploadedLogo(bucket, PATH);
+    expect(keys).toEqual(['events/evt_1/1-art.png']);
+    expect(r.ok).toBe(true);
+    const h = r.response!.headers;
+    expect(r.response!.status).toBe(200);
+    expect(h.get('content-type')).toBe('image/png');
+    expect(h.get('content-length')).toBe('4');
+    expect(h.get('content-security-policy')).toBe("default-src 'none'");
+    expect(h.get('x-content-type-options')).toBe('nosniff');
+    expect(h.get('x-frame-options')).toBe('DENY');
+    expect(h.get('referrer-policy')).toBe('no-referrer');
+    expect(h.get('cache-control')).toBe('public, max-age=86400, stale-while-revalidate=3600');
+  });
+
+  test('no bucket, or no object: NOT_FOUND', async () => {
+    expect(await serveUploadedLogo(undefined, PATH)).toEqual({ ok: false, error: 'NOT_FOUND' });
+    expect(await serveUploadedLogo(bucketWith(null).bucket, PATH)).toEqual({
+      ok: false,
+      error: 'NOT_FOUND',
+    });
+  });
+
+  test('a path that is not an upload is never read from the bucket', async () => {
+    const { bucket, keys } = bucketWith(object('image/png', 4).obj);
+    expect(await serveUploadedLogo(bucket, '/api/v2/uploads/../x.png')).toEqual({
+      ok: false,
+      error: 'NOT_FOUND',
+    });
+    expect(keys).toEqual([]);
+  });
+
+  test.each(['application/pdf', 'video/mp4', 'text/html', undefined])(
+    'a %s object is not an image: refused, its body released',
+    async (ct) => {
+      const { obj, cancel } = object(ct, 4);
+      const r = await serveUploadedLogo(bucketWith(obj).bucket, PATH);
+      expect(r).toEqual({ ok: false, error: 'CONTENT_TYPE_NOT_ALLOWED' });
+      expect(cancel).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  test('over LOGO_MAX_BYTES is refused; exactly the cap is served', async () => {
+    const big = object('image/jpeg', LOGO_MAX_BYTES + 1);
+    expect(await serveUploadedLogo(bucketWith(big.obj).bucket, PATH)).toEqual({
+      ok: false,
+      error: 'RESPONSE_TOO_LARGE',
+    });
+    expect(big.cancel).toHaveBeenCalledTimes(1);
+    const cap = object('image/jpeg', LOGO_MAX_BYTES);
+    expect((await serveUploadedLogo(bucketWith(cap.obj).bucket, PATH)).ok).toBe(true);
   });
 });

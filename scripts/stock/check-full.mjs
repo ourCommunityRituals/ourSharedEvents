@@ -23,6 +23,8 @@ const WINDOW_DAYS = 90;
 const MIN_GAP_MS = 200;
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const STRIP_RE = /data-testid="(?:pre|live)-sponsor-strip"/;
+// A sponsor's thumbnail art on the event page (pages.ts renderSponsorItem).
+const THUMB_SRC_RE = /data-testid="sponsor-thumb" src="([^"]+)"/g;
 const AREA_MARK = 'data-testid="landing-area"';
 const DOORS_MARK = 'data-testid="landing-doors"';
 
@@ -199,6 +201,39 @@ export async function checkNodes({
   const qrs = Array.isArray(manifest.qr) ? manifest.qr : [];
   const results = {};
 
+  // Owner 2026-11-10: when the day's events carry art, the build gave every
+  // stock sponsor one of those pictures as its logo (build-full.mjs
+  // giveSponsorsArt). So each event page's sponsor strip shows art, and each
+  // picture loads from this site. A picture is read once per run.
+  const stockArt = items.some(
+    (i) => i.kind === 'event' && listedById.get(String(i.id))?.cover_image_url
+  );
+  const artLoads = new Map();
+  async function checkSponsorArt(eventId, page, reasons) {
+    const srcs = [...page.matchAll(THUMB_SRC_RE)].map((m) => m[1].replace(/&amp;/g, '&'));
+    if (srcs.length === 0) {
+      reasons.push(`no-sponsor-art:${eventId}`);
+      return;
+    }
+    for (const src of new Set(srcs)) {
+      const url = siteUrl(src);
+      if (!url) {
+        reasons.push(`sponsor-art-off-site:${eventId}`);
+        continue;
+      }
+      if (!artLoads.has(url.href)) {
+        const got = await publicGet(url);
+        artLoads.set(
+          url.href,
+          readFault(got, src) || (got && got.status === 200 ? null : 'broken')
+        );
+      }
+      const outcome = artLoads.get(url.href);
+      if (outcome === 'broken') reasons.push(`sponsor-art-broken:${eventId}`);
+      else if (outcome) reasons.push(outcome);
+    }
+  }
+
   const stockIds = items.filter((i) => i.kind === 'event').map((i) => String(i.id));
 
   for (const node of nodeList) {
@@ -308,6 +343,7 @@ export async function checkNodes({
       const fault = readFault(res, eventPath);
       if (fault) reasons.push(fault);
       else if (!STRIP_RE.test(page)) reasons.push(`no-sponsor-strip:${id}`);
+      else if (stockArt) await checkSponsorArt(id, page, reasons);
 
       // art, when the event has some, loads from this site
       const art = listedById.get(String(id))?.cover_image_url;

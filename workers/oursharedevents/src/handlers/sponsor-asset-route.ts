@@ -28,7 +28,8 @@ import {
   type AssetFormat,
   type AssetResolvable,
 } from '../lib/sponsor-asset';
-import { fetchAndProxyLogo } from '../lib/sponsor-logo';
+import { fetchAndProxyLogo, serveUploadedLogo } from '../lib/sponsor-logo';
+import { isUploadedArtworkPath } from '../lib/event-thumb';
 import { PLACEMENT_EVENT_USES_SPONSORS_SQL } from '../lib/sponsor-card';
 
 export interface SponsorAssetRouteEnv {
@@ -152,7 +153,10 @@ export async function handleSponsorAsset(
 
   // proxy → the existing OSE-288 logo proxy. On any failure, fall through.
   if (sponsor.logo_url) {
-    const proxied = await fetchAndProxyLogo(sponsor.logo_url);
+    // A logo uploaded to OSE (owner 2026-11-10) is read from R2, not fetched.
+    const proxied = isUploadedArtworkPath(sponsor.logo_url)
+      ? await serveUploadedLogo(env.UPLOADS_BUCKET, sponsor.logo_url)
+      : await fetchAndProxyLogo(sponsor.logo_url);
     if (proxied.ok && proxied.response) return proxied.response;
   }
 
