@@ -54,9 +54,10 @@ beforeAll(async () => {
   try {
     await tenv()
       .DB.prepare(
-        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, timezone, starts_at)
+        // OSE-1900: the event chose to have sponsors, so the strip rides in the bundle.
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, timezone, starts_at, settings_json)
          VALUES (?, 'pb-brand', 'Bocce at Eagles', 'bocce-at-eagles', 'active', 'Eagles Hall',
-                 '2026-10-24', 'America/Chicago', '2026-10-24T23:00:00.000Z')`
+                 '2026-10-24', 'America/Chicago', '2026-10-24T23:00:00.000Z', '{"useSponsors":true}')`
       )
       .bind(EVENT_ID)
       .run();

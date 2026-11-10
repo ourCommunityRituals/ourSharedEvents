@@ -1,0 +1,38 @@
+info:
+  name: OSE-1900 | sunny | event page | opted in, the sponsor strip is below the title and above the content
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/optin-on-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const html = String(res.getBody() || '');
+        test('OSE-1900 sunny: 200 and the accepted sponsor is on the page', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(html).to.include('data-testid="pre-sponsor-strip"');
+          expect(html).to.include('Opt-in Shown Sponsor');
+        });
+        test('OSE-1900 sunny: the strip sits below the title (invariant 6)', function () {
+          expect(html.indexOf('<h1')).to.be.above(-1);
+          expect(html.indexOf('data-testid="pre-sponsor-strip"')).to.be.above(html.indexOf('<h1'));
+        });
+        test('OSE-1900 rainy: the two one-sided placements are not on the page', function () {
+          expect(html).to.not.include('Opt-in Pending Sponsor');
+          expect(html).to.not.include('Opt-in Declined Sponsor');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

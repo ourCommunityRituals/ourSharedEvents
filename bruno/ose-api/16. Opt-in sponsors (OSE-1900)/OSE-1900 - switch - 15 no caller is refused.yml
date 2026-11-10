@@ -1,0 +1,32 @@
+info:
+  name: OSE-1900 | rainy | switch | a caller with no admin identity cannot flip it
+  type: http
+  seq: 34
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/optin-toggle-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"settings":{"useSponsors":false}}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // With no identity the edge (Cloudflare Access) or the Worker refuses. Either
+        // way it is not a 2xx, and the next request shows the switch did not move.
+        test('OSE-1900 rainy: not accepted (never a 2xx)', function () { expect(res.getStatus()).to.be.at.least(300); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

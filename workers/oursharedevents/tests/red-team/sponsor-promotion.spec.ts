@@ -75,7 +75,8 @@ async function seedDraft(
 beforeAll(async () => {
   await applyMigrations();
   await env.DB.prepare(
-    "INSERT INTO events (id, brand_id, title, slug, status) VALUES ('evt-P','brand-P','P','slug-p','active')"
+    // OSE-1900: the event chose to have sponsors, so a promoted draft can be resolver-visible.
+    `INSERT INTO events (id, brand_id, title, slug, status, settings_json) VALUES ('evt-P','brand-P','P','slug-p','active','{"useSponsors":true}')`
   ).run();
 });
 

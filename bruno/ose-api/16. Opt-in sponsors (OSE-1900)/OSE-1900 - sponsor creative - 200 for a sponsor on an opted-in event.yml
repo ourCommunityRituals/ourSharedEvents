@@ -1,0 +1,25 @@
+info:
+  name: OSE-1900 | sunny | sponsor creative | 200 for a sponsor on an opted-in event
+  type: http
+  seq: 14
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_optin_shown/asset/square"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-1900 sunny: 200 (the monogram, since the fixture has no artwork)', function () { expect(res.getStatus()).to.eql(200); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

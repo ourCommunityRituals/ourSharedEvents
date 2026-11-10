@@ -130,6 +130,23 @@ async function resolveJourneyEvent(page: any, listed: JourneyEvent[]): Promise<s
   return listed.find(isOnTheBoard)?.id;
 }
 
+/**
+ * OSE-1900: a sponsor shows only on an event that chose to have sponsors, and a
+ * new event has them off. The journey is the organizer's: turn sponsors on for
+ * the event, add a sponsor, the sponsor accepts, it shows. The seeded fixture
+ * is already on; the fallback (a listed event) may not be, so this is the first
+ * step either way, and it is idempotent.
+ */
+async function turnSponsorsOn(request: any, eventId: string): Promise<void> {
+  const res = await adminFetch(
+    request,
+    'PUT',
+    `/api/v2/admin/events/${encodeURIComponent(eventId)}`,
+    { settings: { useSponsors: true } }
+  );
+  expect(res.status, 'the organizer turns sponsors on for the journey event').toBe(200);
+}
+
 // The bare /display features the first listed event; the journey must look at
 // the event it attached its sponsor to.
 function displayUrl(eventId: string): string {
@@ -190,6 +207,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     const pickedEventId = await resolveJourneyEvent(page, items);
     expect(pickedEventId, 'an event that has not finished, so the TV can feature it').toBeTruthy();
     eventId = pickedEventId!;
+    await turnSponsorsOn(request, eventId);
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -588,6 +606,7 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     const pickedEventId = await resolveJourneyEvent(page, res.body.items || []);
     expect(pickedEventId, 'an event that has not finished, so the TV can feature it').toBeTruthy();
     eventId = pickedEventId!;
+    await turnSponsorsOn(request, eventId);
   });
 
   test('Step 1: Create bronze sponsor', async ({ page, request }) => {
@@ -706,6 +725,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     const pickedEventId = await resolveJourneyEvent(page, evRes.body.items || []);
     expect(pickedEventId, 'an event that has not finished, so the TV can feature it').toBeTruthy();
     eventId = pickedEventId!;
+    await turnSponsorsOn(request, eventId);
 
     const res = await adminFetch(request, 'POST', '/api/v2/admin/sponsors', {
       name: `Cross Surface ${timestamp}`,

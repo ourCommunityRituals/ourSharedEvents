@@ -60,8 +60,10 @@ beforeAll(async () => {
 
   // 1. Real event.
   await env.DB.prepare(
-    `INSERT OR IGNORE INTO events (id, brand_id, title, slug, status)
-     VALUES (?, 'brand_invis', 'Invisibility Test', 'invisibility-test', 'active')`
+    // OSE-1900: the event chose to have sponsors, so the live sponsor resolves
+    // and the draft's absence is the draft's own.
+    `INSERT OR IGNORE INTO events (id, brand_id, title, slug, status, settings_json)
+     VALUES (?, 'brand_invis', 'Invisibility Test', 'invisibility-test', 'active', '{"useSponsors":true}')`
   )
     .bind(EVENT_ID)
     .run();

@@ -1,0 +1,32 @@
+info:
+  name: OSE-1900 | sunny + rainy | events page | Supported by shows for the opted-in event only
+  type: http
+  seq: 10
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const html = String(res.getBody() || '');
+        test('OSE-1900: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-1900 rainy: the hidden sponsor is named nowhere on the list', function () { expect(html).to.not.include('Opt-in Hidden Sponsor'); });
+        test('OSE-1900 sunny: when the opted-in event is on the page, its card names its sponsor', function () {
+          // The list shows a window of events. The API request before this one holds
+          // the rule without a window, so this only reads the card when it is there.
+          if (html.includes('Opt-in Fixture (sponsors on)')) expect(html).to.include('Opt-in Shown Sponsor');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

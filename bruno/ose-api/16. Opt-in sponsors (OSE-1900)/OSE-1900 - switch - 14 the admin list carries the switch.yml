@@ -1,0 +1,35 @@
+info:
+  name: OSE-1900 | admin | switch | the admin events list says whether each event uses sponsors
+  type: http
+  seq: 33
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events?limit=100"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const items = res.getBody().items || [];
+        test('OSE-1900: 200 ok', function () { expect(res.getStatus()).to.eql(200); expect(res.getBody().ok).to.eql(true); });
+        test('OSE-1900: every item carries use_sponsors as 0 or 1, never the raw settings', function () {
+          expect(items).to.be.an('array');
+          items.forEach(function (e) {
+            expect([0, 1]).to.include(e.use_sponsors);
+            expect(e).to.not.have.property('settings_json');
+          });
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

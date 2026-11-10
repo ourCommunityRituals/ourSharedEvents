@@ -75,3 +75,15 @@ VALUES
 -- the accepted state on all three explicitly — idempotent, effective on re-seed.
 UPDATE sponsor_placement SET sponsor_accepted = 1
  WHERE id IN ('spl_tiers_local', 'spl_tiers_mid', 'spl_tiers_premium');
+
+-- OSE-1900: a sponsor shows only on an event that chose to have sponsors (the
+-- event switch `useSponsors` in settings_json, where absent means off). The
+-- tier sponsors above are meant to be seen on evt_smoke_tiers, so it opts in.
+-- An UPDATE, not a column on the insert: the event insert never overwrites
+-- settings_json on a row that already exists, and this must hold on every pass.
+-- Every other key in settings_json is kept.
+UPDATE events
+   SET settings_json = json_set(
+         CASE WHEN json_valid(settings_json) THEN settings_json ELSE '{}' END,
+         '$.useSponsors', json('true'))
+ WHERE id IN ('evt_smoke_tiers');

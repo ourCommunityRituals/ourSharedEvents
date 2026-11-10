@@ -63,8 +63,9 @@ const EVENT = 'ose0083-evt';
 beforeAll(async () => {
   await applyMigrations();
   await env.DB.prepare(
-    `INSERT INTO events (id, brand_id, title, slug, status)
-     VALUES (?, ?, 'Card Night', ?, 'active') ON CONFLICT(id) DO NOTHING`
+    // OSE-1900: the event chose to have sponsors, so its sponsor's card and logo are served.
+    `INSERT INTO events (id, brand_id, title, slug, status, settings_json)
+     VALUES (?, ?, 'Card Night', ?, 'active', '{"useSponsors":true}') ON CONFLICT(id) DO NOTHING`
   )
     .bind(EVENT, BRAND, EVENT)
     .run();
@@ -443,8 +444,9 @@ async function auditRows(id: string) {
 describe('CCR PR #699 | gates, audit, retention', () => {
   beforeAll(async () => {
     await env.DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status)
-       VALUES (?, ?, 'Draft Night', ?, 'draft') ON CONFLICT(id) DO NOTHING`
+      // OSE-1900: opted in, so what keeps this one off the card is the draft status alone.
+      `INSERT INTO events (id, brand_id, title, slug, status, settings_json)
+       VALUES (?, ?, 'Draft Night', ?, 'draft', '{"useSponsors":true}') ON CONFLICT(id) DO NOTHING`
     )
       .bind(DRAFT_EVENT, BRAND, DRAFT_EVENT)
       .run();

@@ -1,0 +1,44 @@
+info:
+  name: OSE-1900 | rainy | switch | an admin of another brand gets 404 and cannot flip it
+  type: http
+  seq: 36
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/optin-toggle-evt"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{ciBrandClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{ciBrandClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"settings":{"useSponsors":false}}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1800: the CI service actor (a brand admin of ci-brand, never platform).
+        // Inert until the owner creates the Access service token and adds its secrets.
+        // Until then this request is skipped and logs NOT RUN; it records no passing test.
+        if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
+          console.log('NOT RUN (OSE-1800 setup pending): no CI brand service token configured');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        // optin-toggle-evt belongs to brand root: brand scoping answers 404, like an unknown id.
+        test('OSE-1900 rainy: 404 for an event outside the caller\'s brand', function () { expect(res.getStatus()).to.eql(404); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

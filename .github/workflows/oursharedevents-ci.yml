@@ -1594,6 +1594,22 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/sponsor-public-card-seed.sql
 
+      # OSE-1900: one event per state of the sponsors switch (on, off, never set,
+      # and one the folder toggles), each with an accepted sponsor, for Bruno
+      # folder 16 "Opt-in sponsors". The upserts put every row back to its
+      # starting state, the switch included, so a run that stopped half way cannot
+      # leave the next one wrong. NOT continue-on-error: a missing fixture fails
+      # here by name, not as a 404 in the contract run.
+      - name: 'Seed opt-in sponsor fixtures (OSE-1900)'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/opt-in-sponsors-seed.sql
+
       # OSE-1644: a draft with no start time and no event type, for the Bruno
       # request that asserts the 409 CORE_VALUES_MISSING contract (folder 12).
       # The upsert resets it to that state on every run. NOT continue-on-error:

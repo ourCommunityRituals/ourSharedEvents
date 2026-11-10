@@ -1,0 +1,32 @@
+info:
+  name: OSE-1900 | rainy | switch | off hides the placement and deletes nothing
+  type: http
+  seq: 27
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/sponsors?eventId=optin-toggle-evt"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const mine = (res.getBody().items || []).filter(function (s) { return s.id === 'sb_optin_toggle'; });
+        test('OSE-1900: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-1900 rainy: the placement is still on the event, with both answers as they were', function () {
+          expect(mine).to.have.length(1);
+          expect(mine[0].sponsor_accepted).to.eql(1);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

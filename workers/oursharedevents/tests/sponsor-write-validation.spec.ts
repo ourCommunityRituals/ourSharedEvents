@@ -51,8 +51,10 @@ async function seedEvent(id: string, brandId: string): Promise<void> {
   await tenv().DB.prepare('DELETE FROM events WHERE id = ?').bind(id).run();
   await tenv()
     .DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, start_date, end_date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'active', datetime('now','+7 days'), datetime('now','+8 days'), datetime('now'), datetime('now'))`
+      // OSE-1900: every event here chose to have sponsors, so each refusal below
+      // still turns on the placement, the brand or the consent it names.
+      `INSERT INTO events (id, brand_id, title, slug, status, start_date, end_date, settings_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'active', datetime('now','+7 days'), datetime('now','+8 days'), '{"useSponsors":true}', datetime('now'), datetime('now'))`
     )
     .bind(id, brandId, `Event ${id}`, id)
     .run();

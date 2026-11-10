@@ -76,8 +76,9 @@ async function seedEvent(eventId: string): Promise<void> {
   // each test self-contained.
   await tenv()
     .DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))
+      // OSE-1900: the event chose to have sponsors, so the rotation has sponsors to share out.
+      `INSERT INTO events (id, brand_id, title, slug, status, settings_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'active', '{"useSponsors":true}', datetime('now'), datetime('now'))
        ON CONFLICT(id) DO NOTHING`
     )
     .bind(eventId, BRAND, 'tier-equity test event', eventId)

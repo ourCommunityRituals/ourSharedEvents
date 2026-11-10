@@ -1,0 +1,27 @@
+info:
+  name: OSE-1900 | rainy | sponsor creative | 404 (no image, no monogram) when the switch is off
+  type: http
+  seq: 13
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_optin_absent/asset/square"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The creative route answers 200 with a name-bearing monogram for any sponsor
+        // that is on show. sb_optin_absent is accepted, on an event that never opted in.
+        test('OSE-1900 rainy: 404, so not even the monogram names the sponsor', function () { expect(res.getStatus()).to.eql(404); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

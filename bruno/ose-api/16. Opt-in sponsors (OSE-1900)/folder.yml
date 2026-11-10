@@ -1,0 +1,16 @@
+info:
+  name: Opt-in sponsors (OSE-1900)
+  type: folder
+request: {}
+docs: |-
+  Sponsors show only if the event chose them (owner, 2026-11-09). The event
+  switch is `useSponsors` in the event's settings, and absent means off. It
+  comes before the two-sided placement consent (ADR-019, amendment 2026-11-09).
+
+  Fixture: bruno/fixtures/opt-in-sponsors-seed.sql, applied before this run. It
+  puts every row back to its starting state, the switch included.
+
+  The requests run in `seq` order. The switch requests (seq 20 on) change
+  optin-toggle-evt and nothing else.
+
+  Mock-layer twin: workers/oursharedevents/tests/sponsor-opt-in-gate.spec.ts.

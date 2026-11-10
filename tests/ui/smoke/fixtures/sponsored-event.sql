@@ -74,3 +74,15 @@ UPDATE events
       venue_canonical_id = NULL,
       event_correlation_id = NULL
   WHERE id = 'evt_smoke_sponsored';
+
+-- OSE-1900: a sponsor shows only on an event that chose to have sponsors (the
+-- event switch `useSponsors` in settings_json, where absent means off). This
+-- event exists to show its sponsor, so it opts in.
+-- An UPDATE, not a column on the insert: the event insert never overwrites
+-- settings_json on a row that already exists, and this must hold on every pass.
+-- Every other key in settings_json is kept.
+UPDATE events
+   SET settings_json = json_set(
+         CASE WHEN json_valid(settings_json) THEN settings_json ELSE '{}' END,
+         '$.useSponsors', json('true'))
+ WHERE id IN ('evt_smoke_sponsored');

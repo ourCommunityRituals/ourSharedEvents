@@ -14,7 +14,7 @@
  * left behind until someone decides it should travel.
  */
 
-import { parseEventSettings } from './event-settings';
+import { parseEventSettings, settingsForCopy } from './event-settings';
 import { zonedTimePart } from './event-datetime';
 import { isUploadedArtworkPath } from './event-thumb';
 
@@ -155,10 +155,10 @@ export function buildRepeatBody(
     if (time) body.start_time = time;
   }
 
-  const settings = parseEventSettings(src.settings_json);
-  // `mapDefault` is the server's own "the organizer did not choose the map" marker. A client
-  // may not write it, and the copy's map choice is the explicit `is_published: false` above.
-  delete settings.mapDefault;
+  // What the organizer set up carries over. The choices that belong to one event
+  // do not: lib/event-settings.ts says which, and why. The copy's map choice is the
+  // explicit `is_published: false` above.
+  const settings = settingsForCopy(parseEventSettings(src.settings_json));
   if (Object.keys(settings).length > 0) body.settings = settings;
 
   return body;

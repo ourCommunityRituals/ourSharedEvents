@@ -1,0 +1,26 @@
+info:
+  name: OSE-1900 | sunny | switch | on again, the sponsor is back without anyone accepting again
+  type: http
+  seq: 29
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/optin-toggle-evt/sponsors"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const ids = (res.getBody().items || []).map(function (s) { return s.id; });
+        test('OSE-1900 sunny: turning it back on restores the sponsor', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(ids).to.eql(['sb_optin_toggle']);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

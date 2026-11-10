@@ -38,7 +38,13 @@ import {
   fetchAndProxyLogo,
   LOGO_MAX_IN_FLIGHT,
 } from '../lib/sponsor-logo';
-import { CARD_FIELDS, checkCardField, type CardField } from '../lib/sponsor-card';
+import {
+  CARD_FIELDS,
+  checkCardField,
+  eventUsesSponsorsSql,
+  PLACEMENT_EVENT_USES_SPONSORS_SQL,
+  type CardField,
+} from '../lib/sponsor-card';
 import { isPublicReadLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
 import {
   getDataProvider,
@@ -1537,7 +1543,8 @@ export async function handleGetSponsorBundle(
 
 /**
  * D3 (CCR 2026-09-14): an impression/click may be logged ONLY for a sponsor that
- * is actually placed on this event, brand-matched, and renderable. Returns the
+ * is actually placed on this event, brand-matched, and renderable (which since
+ * OSE-1900 includes the event having opted in to sponsors). Returns the
  * event's h3_res7 when the (event, sponsor) pair is a resolved active placement,
  * or `{ ok:false }` when it is not — the caller then rejects with 404 and writes
  * nothing, so a fabricated (event, sponsor) pair can't pollute the proof layer
@@ -1561,6 +1568,7 @@ async function resolvePlacementGeo(
          AND sb.brand_id = e.brand_id
          AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
          AND sp.sponsor_accepted = 1
+         AND ${eventUsesSponsorsSql('e')}
        LIMIT 1`
     )
     .bind(eventId, sponsorId)
@@ -1730,6 +1738,8 @@ export async function handleSponsorLogo(
                -- an unanswered sponsor_request is not served.
                AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
                AND sp.sponsor_accepted = 1
+               -- OSE-1900: and on an event that chose to have sponsors.
+               AND ${PLACEMENT_EVENT_USES_SPONSORS_SQL}
           )`
     )
       .bind(sponsorId, sponsorId)

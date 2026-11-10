@@ -79,3 +79,15 @@ VALUES
   ('spl_logo_check_c', 'sp_logo_check_c', 'evt_sponsor_logo_check', 'gold', 'organizer',
    'ctok_logo_check_c', 'dtok_logo_check_c', 1, 1, 1)
 ON CONFLICT(id) DO UPDATE SET is_active = 1, sponsor_accepted = 1, organizer_accepted = 1;
+
+-- OSE-1900: a sponsor shows only on an event that chose to have sponsors (the
+-- event switch `useSponsors` in settings_json, where absent means off). This
+-- event exists to show its three sponsors, so it opts in.
+-- An UPDATE, not a column on the insert: the event insert never overwrites
+-- settings_json on a row that already exists, and this must hold on every pass.
+-- Every other key in settings_json is kept.
+UPDATE events
+   SET settings_json = json_set(
+         CASE WHEN json_valid(settings_json) THEN settings_json ELSE '{}' END,
+         '$.useSponsors', json('true'))
+ WHERE id IN ('evt_sponsor_logo_check');

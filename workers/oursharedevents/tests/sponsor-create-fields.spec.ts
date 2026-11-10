@@ -57,8 +57,9 @@ beforeAll(async () => {
     [OTHER_BRAND_EVENT, 'ose1316-other'],
   ]) {
     await env.DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status)
-       VALUES (?, ?, 'Sponsor Fields', ?, 'active') ON CONFLICT(id) DO NOTHING`
+      // OSE-1900: the events chose to have sponsors, so a public read returns them.
+      `INSERT INTO events (id, brand_id, title, slug, status, settings_json)
+       VALUES (?, ?, 'Sponsor Fields', ?, 'active', '{"useSponsors":true}') ON CONFLICT(id) DO NOTHING`
     )
       .bind(id, brand, id)
       .run();

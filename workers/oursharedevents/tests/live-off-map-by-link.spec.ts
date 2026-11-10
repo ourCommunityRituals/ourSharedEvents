@@ -102,9 +102,11 @@ async function seed(status: Status, opts: SeedOpts = {}) {
         ? longAgo()
         : null;
   await E.DB.prepare(
+    // OSE-1900: every event here chose to have sponsors, so sponsor discovery
+    // below turns on the map setting alone, which is what this spec is about.
     `INSERT INTO events (id, brand_id, title, slug, status, is_published, start_date, end_date,
-                         location, h3_res7, listed_from, qr_verified, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+                         location, h3_res7, listed_from, qr_verified, settings_json, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{"useSponsors":true}', datetime('now'), datetime('now'))`
   )
     .bind(
       id,

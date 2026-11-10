@@ -49,9 +49,11 @@ interface SeedEvent {
 async function insertEvent(db: D1Database, e: SeedEvent): Promise<void> {
   await db
     .prepare(
+      // OSE-1900: every fixture event chose to have sponsors, so a sponsor that is
+      // not on show below is off for the one reason its row names.
       `INSERT INTO events (id, brand_id, title, slug, status, is_published, data_class,
-                           event_type_id, start_date, h3_res7, series_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                           event_type_id, start_date, h3_res7, series_id, settings_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{"useSponsors":true}')`
     )
     .bind(
       e.id,
