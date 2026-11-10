@@ -60,6 +60,8 @@ import {
   isCorridorId,
 } from '../src/lib/export-geography';
 import { phaseTimesFor } from '../src/lib/event-datetime';
+import { pepperEpoch } from '../src/lib/anon-id-hash';
+import { refreshCorridorBaselines } from '../src/lib/shared-report';
 import { bigQueryInsertRows } from '../src/cloud/bigquery';
 import { gridDisk } from 'h3-js';
 import { poolSchemaViolations } from './helpers/bigquery-pool-schema';
@@ -362,11 +364,14 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     expect(ret.results).toHaveLength(1);
     expect(ret.results![0].return_count).toBe(1);
 
-    // Corridor baseline: keyed by the res7 corridor node, never the res9 node.
+    // Corridor baseline: ADR-026 rule B (OSE-1946). One person is under K, so
+    // the SharedReport withholds this event's own count, and an event whose own
+    // count is withheld adds no one to the corridor baseline. Hop 5 brings the
+    // event to K and shows the row the job keys, at res7.
     const base = await tenv()
       .DB.prepare('SELECT corridor_id, window_30d_count FROM corridor_density_baseline')
       .all<{ corridor_id: string; window_30d_count: number }>();
-    expect(base.results).toEqual([{ corridor_id: EAGLES_RES7, window_30d_count: 1 }]);
+    expect(base.results).toEqual([]);
   });
 
   test('hop 5 — one scanner crosses nothing; ten would cross at the res7 corridor, nothing finer', async () => {
@@ -375,11 +380,10 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
 
     const byTable = Object.fromEntries(bqCalls.map((c) => [c.table, c]));
-    // OSE-1460: one scanner is a group of one, under the k-floor. The return
-    // counts withhold it (the returns table gets only its snapshot marker),
-    // and so does the corridor baseline: its counts are distinct people, and
-    // one person is under CORRIDOR_BASELINE_MIN_SAMPLE. Nothing about the
-    // lone scanner crosses.
+    // One person is under K, so the event adds no one to any group (ADR-026
+    // rule B): the returns table gets only its snapshot marker, with no group
+    // left to withhold, and the corridor baseline has no row to send. Nothing
+    // about the lone scanner crosses.
     expect(Object.keys(byTable).sort()).toEqual(['corridor_returns_export']);
     const returnRows = byTable.corridor_returns_export.rows.map((r) => r.json);
     expect(returnRows).toEqual([
@@ -387,22 +391,42 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     ]);
     const returns = run.phases.find((p) => p.phase === 'anon_id_returns');
     expect(returns?.rowsExported).toBe(0);
-    expect(returns?.rowsSkipped).toBe(1);
+    expect(returns?.rowsSkipped).toBe(0);
     const baseline = run.phases.find((p) => p.phase === 'corridor_density_baseline');
     expect(baseline?.rowsExported).toBe(0);
-    expect(baseline?.rowsSkipped).toBe(1);
+    expect(baseline?.rowsSkipped).toBe(0);
     for (const c of bqCalls) expect(c.dataset).toBe('oureventring_general_stg');
 
-    // The same baseline row, as if ten more people had scanned that hour
-    // (counts raised in place, a newer computed_at so it is past the
-    // watermark), crosses keyed by the res7 corridor node and nothing finer.
-    await tenv()
-      .DB.prepare(
-        `UPDATE corridor_density_baseline
-            SET window_30d_count = 12, window_90d_count = 12, computed_at = ?`
-      )
-      .bind(new Date(Date.now() + 1000).toISOString())
-      .run();
+    // As if eleven more people had scanned that hour (rows as the nightly job
+    // writes them, under the same pepper): twelve people are past K and past
+    // CORRIDOR_BASELINE_MIN_SAMPLE, so the job keys a baseline row, and it
+    // crosses keyed by the res7 corridor node and nothing finer.
+    const epoch = await pepperEpoch(TRACE_PEPPER);
+    const seen = new Date().toISOString();
+    for (let i = 0; i < 11; i++) {
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO anon_id_returns
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at,
+              pepper_epoch)
+           VALUES (?, ?, ?, ?, 1, ?, ?)`
+        )
+        .bind(
+          `trace-more-${String(i).padStart(2, '0')}`.padEnd(32, '0'),
+          eventId,
+          seen,
+          seen,
+          seen,
+          epoch
+        )
+        .run();
+    }
+    const refreshed = await refreshCorridorBaselines({ DB: tenv().DB });
+    expect(refreshed.errors).toBe(0);
+    const keyed = await tenv()
+      .DB.prepare('SELECT corridor_id, window_30d_count FROM corridor_density_baseline')
+      .all<{ corridor_id: string; window_30d_count: number }>();
+    expect(keyed.results).toEqual([{ corridor_id: EAGLES_RES7, window_30d_count: 12 }]);
     bqCalls.length = 0;
     const raised = await exportCorridorDensityBaseline(exportEnv());
     vi.restoreAllMocks();

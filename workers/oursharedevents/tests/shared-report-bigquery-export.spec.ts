@@ -659,19 +659,21 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(markerRows()).toHaveLength(0);
   });
 
-  test('tiers that share a pool are one group: 3 + 3 people at tiers 1 and 2 export (rounded) as 5', async () => {
+  test('tiers that share a pool are one group: 5 + 5 people at tiers 1 and 2 export as one row of 10', async () => {
+    // Five each (K): rule B (ADR-026) leaves out an event whose own count is
+    // withheld. Split by tier, this would be two rows of 5.
     await seedCorridorEvent('test-evt-exp-t1', 1);
     await seedCorridorEvent('test-evt-exp-t2', 2);
     await tenv()
       .DB.prepare(`UPDATE events SET legal_clearance_tier = 2 WHERE id = 'test-evt-exp-t2'`)
       .run();
-    await seedPeople('test-evt-exp-t1', [1, 1, 1], { prefix: 'ta' });
-    await seedPeople('test-evt-exp-t2', [1, 1, 1], { prefix: 'tb' });
+    await seedPeople('test-evt-exp-t1', [1, 1, 1, 1, 1], { prefix: 'ta' });
+    await seedPeople('test-evt-exp-t2', [1, 1, 1, 1, 1], { prefix: 'tb' });
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
     expect(groupCalls()).toHaveLength(1);
     expect(groupCalls()[0].rows).toHaveLength(1);
-    expect(groupCalls()[0].rows[0].json.people_count).toBe(5); // 6, rounded down to a multiple of 5
+    expect(groupCalls()[0].rows[0].json.people_count).toBe(10);
   });
 
   test('the SQL pool key agrees with phaseToPool for every tier', async () => {
@@ -746,13 +748,109 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     ]);
   });
 
-  test('a group under the floor is withheld, not exported', async () => {
+  test('an event the export sees under K adds no one, so no group forms', async () => {
+    // Five rows, but two are hashed under a retired pepper: the export sees
+    // three. Rule B gates on the rows the export sums, so the event adds no one
+    // and there is no group to withhold. (The group floor stays as a backstop.)
     await seedCorridorEvent('test-evt-exp-small');
-    await seedPeople('test-evt-exp-small', [3, 3, 3, 3]);
+    await seedPeople('test-evt-exp-small', [3, 3, 3]);
+    await seedPeople('test-evt-exp-small', [3, 3], { prefix: 'r', pepper: 'retired-pepper' });
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
-    expect(r.rowsSkipped).toBe(1);
     expect(groupCalls()).toHaveLength(0);
+  });
+
+  // ADR-026 rule B, the population: the gate must count the same rows the group
+  // sums. The materializer purges retired-pepper rows in bounded chunks, so for
+  // a while an event can hold rows of two peppers; the export sums only the
+  // current one, and rows last seen before the window are not summed either.
+  // Gating on every row let an event of 3 retired + 2 current through, and
+  // its 2 then sat inside a group beside a published count.
+  test('rule B gates on current-pepper rows: 13 + (2 current, 3 retired) exports as 10, not 15', async () => {
+    await seedCorridorEvent('test-evt-exp-pub');
+    await seedCorridorEvent('test-evt-exp-mixed');
+    await seedPeople('test-evt-exp-pub', Array<number>(13).fill(1), { prefix: 'pa' });
+    await seedPeople('test-evt-exp-mixed', [1, 1], { prefix: 'mc' });
+    await seedPeople('test-evt-exp-mixed', [1, 1, 1], { prefix: 'mr', pepper: 'retired-pepper' });
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    const rows = groupCalls().flatMap((c) => c.rows.map((x) => x.json));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].people_count).toBe(10);
+  });
+
+  test('rule B gates on rows in the window: 13 + (2 recent, 3 seen before the window) exports as 10, not 15', async () => {
+    await seedCorridorEvent('test-evt-exp-pub');
+    await seedCorridorEvent('test-evt-exp-stale');
+    await seedPeople('test-evt-exp-pub', Array<number>(13).fill(1), { prefix: 'pa' });
+    await seedPeople('test-evt-exp-stale', [1, 1], { prefix: 'sr' });
+    await seedPeople('test-evt-exp-stale', [1, 1, 1], {
+      prefix: 'so',
+      lastSeen: new Date(Date.now() - 120 * 86_400_000).toISOString(),
+    });
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    const rows = groupCalls().flatMap((c) => c.rows.map((x) => x.json));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].people_count).toBe(10);
+  });
+
+  // ADR-026 rule B (OSE-1946). The SharedReport publishes an event's own people
+  // count exactly from K up. If a group also held an event whose own count is
+  // withheld, the published count subtracted from the rounded group would name
+  // the withheld one: 11 published, group 15, so the other event had 4. An
+  // event under K therefore adds nothing to any group. K itself counts (pair).
+  test('an event whose own count is withheld adds nothing to its group: 11 + 4 exports as 10, not 15', async () => {
+    await seedCorridorEvent('test-evt-exp-pub');
+    await seedCorridorEvent('test-evt-exp-held');
+    await seedPeople('test-evt-exp-pub', Array<number>(11).fill(1), { prefix: 'pa' });
+    await seedPeople('test-evt-exp-held', [1, 1, 1, 1], { prefix: 'pb' });
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    const rows = groupCalls().flatMap((c) => c.rows.map((x) => x.json));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].people_count).toBe(10);
+  });
+
+  test('an event of exactly K people does count toward its group: 11 + 5 exports as 15', async () => {
+    await seedCorridorEvent('test-evt-exp-pub');
+    await seedCorridorEvent('test-evt-exp-atk');
+    await seedPeople('test-evt-exp-pub', Array<number>(11).fill(1), { prefix: 'pa' });
+    await seedPeople('test-evt-exp-atk', [1, 1, 1, 1, 1], { prefix: 'pc' });
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(r.errors).toBe(0);
+    const rows = groupCalls().flatMap((c) => c.rows.map((x) => x.json));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].people_count).toBe(15);
+  });
+
+  test('a person seen at a withheld event is not a return through it: 2+ is 5, not 10', async () => {
+    // Ten people at one published event; six of them also at a second published
+    // event; the other four also at an event of four, whose own count is
+    // withheld. Through the withheld event they would be returners (2+ = 10).
+    await seedCorridorEvent('test-evt-exp-pub');
+    await seedCorridorEvent('test-evt-exp-pub2');
+    await seedCorridorEvent('test-evt-exp-held');
+    await seedPeople('test-evt-exp-pub', Array<number>(10).fill(1), { prefix: 'pd' });
+    await seedPeople('test-evt-exp-pub2', Array<number>(6).fill(1), { prefix: 'pd' });
+    const db = tenv().DB;
+    const epoch = await pepperEpoch(TEST_PEPPER);
+    const seen = recent(2);
+    for (let i = 6; i < 10; i++) {
+      await db
+        .prepare(
+          `INSERT INTO anon_id_returns
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at,
+              pepper_epoch)
+           VALUES (?, 'test-evt-exp-held', ?, ?, 1, ?, ?)`
+        )
+        .bind(`pd${String(i).padStart(2, '0')}`.padEnd(32, '0'), seen, seen, recent(1), epoch)
+        .run();
+    }
+    await exportAnonIdReturns(makeEnv());
+    const row = groupCalls()[0].rows[0].json;
+    expect(row.people_count).toBe(10);
+    expect(row.returned_2plus).toBe(5);
   });
 
   test('one person at two events in a corridor counts once, as a return', async () => {
@@ -841,16 +939,17 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns → corridor return cou
     expect(markerRows().length).toBeGreaterThan(0);
   });
 
-  test('one corridor stored in two letter cases is one group: 3 + 3 people export (rounded) as 5', async () => {
+  test('one corridor stored in two letter cases is one group: 5 + 5 people export as one row of 10', async () => {
+    // Five each (K), so rule B counts both events; split by case, two rows of 5.
     await seedCorridorEvent('test-evt-exp-case-lo', 1, RES7_A);
     await seedCorridorEvent('test-evt-exp-case-up', 1, RES7_A.toUpperCase());
-    await seedPeople('test-evt-exp-case-lo', [1, 1, 1], { prefix: 'lo' });
-    await seedPeople('test-evt-exp-case-up', [1, 1, 1], { prefix: 'up' });
+    await seedPeople('test-evt-exp-case-lo', [1, 1, 1, 1, 1], { prefix: 'lo' });
+    await seedPeople('test-evt-exp-case-up', [1, 1, 1, 1, 1], { prefix: 'up' });
     const r = await exportAnonIdReturns(makeEnv());
     expect(r.errors).toBe(0);
     const rows = groupCalls().flatMap((c) => c.rows.map((x) => x.json));
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ corridor_id: RES7_A, people_count: 5 }); // 6, rounded
+    expect(rows[0]).toMatchObject({ corridor_id: RES7_A, people_count: 10 });
   });
 
   test('an event rescheduled into the future is not counted, even with earlier rows', async () => {

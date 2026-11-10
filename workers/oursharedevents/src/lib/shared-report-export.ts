@@ -492,6 +492,15 @@ export async function exportAnonIdReturns(
                   AND substr(COALESCE(e.end_date, e.start_date), 1, 10) >= ?2
                   AND substr(COALESCE(e.end_date, e.start_date), 1, 10) <= ?3
                   AND air.pepper_epoch = ?4
+                  -- ADR-026 rule B: an event under K adds no one to a group and
+                  -- makes no one a returner. The gate counts the rows this query
+                  -- sums (current pepper, seen in the window), a subset of the
+                  -- report's sample, so a passing event is also published.
+                  AND air.venue_id IN (
+                    SELECT venue_id FROM anon_id_returns
+                     WHERE pepper_epoch = ?4 AND last_seen_at >= ?1
+                     GROUP BY venue_id
+                    HAVING COUNT(DISTINCT anon_id_hash) >= ${CORRIDOR_MAP_MIN_COUNT})
                   -- The page key, applied before both GROUP BYs so each page
                   -- only aggregates the groups still ahead of the cursor.
                   AND (?5 = 1 OR (

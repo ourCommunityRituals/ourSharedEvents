@@ -100,17 +100,63 @@ because the snapshots exist whether or not anyone queries them. The options are:
    spike's conditions: sealed periods, values that never change once published, and every total
    derived from the noisy values.
 
-Options 1 and 2 hold against a read-only reader. Against organizers, which the owner's threat scope
-includes, only option 3 holds.
+Options 1 and 2 hold against a reader who only reads the dataset. Against organizers, which the
+owner's threat scope includes, only option 3 holds. (Section 5 adds a second reason option 1 is
+needed.)
 
-## 5. Not checked here
+## 5. Checked later the same day
 
-- Whether the public SharedReport publishes a corridor or type total of the same returns measure.
-  If it does, the public total minus the sum of the exported groups reveals the withheld groups,
-  and section 3's one-snapshot result no longer holds.
-- Whether `/q` is still forgeable and still has no rate limit (OSE-1496's state on `main`).
+### 5.1 An exact SharedReport figure beside a rounded export figure (computed)
+
+The SharedReport publishes no corridor or type total of the returns measure, so there is no total
+to subtract the exported groups from. But it does publish each event's `return_rate.sample_size`
+(and `corridor_density.this_event_count`) **exactly** once it reaches 5, without rounding
+(`shared-report-builder.ts`, steps 3 and 4). The export rounds the corridor × type group that the
+same people fall into. When an exact figure and a rounded figure cover overlapping people, the
+rounding stops protecting.
+
+Take one snapshot and a corridor × type group holding two events in its 90-day window. The events
+table names them both. E1's report shows its sample size, s1, exactly. E2's report withholds its own
+because E2 had x₂ people, fewer than 5, none of whom were at E1. The reader knows s1, the group's
+rounded value and that x₂ is 0 to 4.
+
+| Outcome over s1 = 5…104, x₂ = 0…4                                          | Share     |
+| -------------------------------------------------------------------------- | --------- |
+| x₂ recovered exactly (for example s1 = 11, group shows 15, so x₂ = 4)      | **8.0%**  |
+| x₂ narrowed to fewer than five values, which says more than "fewer than 5" | **72.0%** |
+| Nothing learned                                                            | 20.0%     |
+
+This needs no injected scans and only one snapshot. It does need a reader who holds E1's
+SharedReport (E1's organizer, or its sponsor at a depth that shows sample size) and the dataset
+values. That breaks invariant 2 directly. **So option 1 (dataset values never reach anyone who
+reads a SharedReport) is required on its own merits, or the export's group must be built only from
+parts that are themselves published** (the `floorTotalOfParts` rule the SharedReport already uses
+for its own totals). Under that rule a withheld event adds nothing to the group, and the script
+finds no case that leaks.
+
+Rounding the SharedReport's sample size the way the export does is **not** enough. With both
+figures rounded, x₂ is never recovered exactly, but in 200 of the 500 cases (40%) the reader still
+learns that x₂ is at least 1: someone was at E2, which is the presence bit.
+
+### 5.2 OSE-1496 on `main` (still In Progress)
+
+- **`/q` now has a per-caller count limit** (#852, `publicCountLimited`, `PUBLIC_READ_MAX` = 360 per
+  window). Scans past it are not counted.
+- **The cookie is still unsigned.** `getOrCreateAnonId` (`src/lib/anonymous-id.ts`) accepts any
+  `ose_anon=anon_<letters, digits, _ or ->` value, so a caller can present as many distinct ids as
+  they like.
+
+The attack in section 4 needs at most about ten forged ids over three weeks, which is far below any
+per-minute limit, so the bound stands as computed.
+
+## 6. Still not checked
+
 - Real churn. Every number above assumes no real people arrive or leave between snapshots. A
   simulation on seed-shaped data should give the real success rate by density.
+- Differences in filters between the two surfaces. The export's group counts only rows under the
+  current pepper epoch and inside the 90-day `last_seen_at` window; the sample size counts every row
+  for the event. Section 5.1 assumes both cover the same people, which is the usual case for a recent
+  event.
 
 ## Appendix: the script (re-derive with `node probe.mjs`)
 
@@ -145,3 +191,32 @@ for (const floor of [5, 10]) {
 
 At each smaller depth the search fails (2 snapshots for floor 5, 3 for floor 10). That failure is
 the check that the minimum is real and is not just the first depth the loop tried.
+
+## Appendix: the section 5.1 script (re-derive with `node mix.mjs`)
+
+```js
+// One snapshot. SharedReport publishes E1's sample size s1 exactly (5 or more). The export
+// publishes the corridor x type group (E1 + E2) rounded down to 5. E2 has x2 < 5 people, none
+// of them at E1. The reader knows s1, the rounded group value, and that x2 is 0 to 4.
+const f5 = (n) => Math.floor(n / 5) * 5;
+let exact = 0,
+  narrowed = 0,
+  total = 0;
+for (let s1 = 5; s1 < 105; s1++)
+  for (let x2 = 0; x2 < 5; x2++) {
+    total++;
+    const pub = f5(s1 + x2);
+    const cands = [0, 1, 2, 3, 4].filter((x) => f5(s1 + x) === pub);
+    if (cands.length === 1) exact++;
+    else if (cands.length < 5) narrowed++;
+  }
+console.log({ total, exact, narrowed }); // 500, 40 (8.0%), 360 (72.0%)
+```
+
+Three variants, run to check that the script can tell the cases apart:
+
+- **The export publishes the group exactly** (`f5 = (n) => n`): 500 of 500 cases are recovered
+  exactly.
+- **The SharedReport also rounds s1:** no case is recovered exactly, but 200 of 500 still show that
+  x₂ is at least 1.
+- **The group is built only from published parts:** 0 of 500 leak.

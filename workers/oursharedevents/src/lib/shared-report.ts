@@ -91,6 +91,28 @@ export const CORRIDOR_BASELINE_MIN_SAMPLE = 10;
 // builder.ts, corridor-map.ts, and any future consumer share one constant.
 export const CORRIDOR_MAP_MIN_COUNT = 5;
 
+/**
+ * ADR-026 rule B (OSE-1946): a corridor group is built only from events whose
+ * own people count is published. The SharedReport publishes an event's count
+ * exactly from K up (`sample_size`, `this_event_count`: distinct anon_id_hash
+ * per venue_id, every row). If a group also held an event under K, that exact
+ * count beside the rounded group would name the other: 11 published, a group
+ * of 15, so the other event had 4. An event whose own count is withheld
+ * therefore adds nothing to any group: not to the corridor baseline, not to the
+ * corridor returns export, and no one becomes a returner through it.
+ *
+ * The gate must count the same rows its consumer sums for the event. Here that
+ * is every row, as in the report and in `refreshCorridorBaselines`. The returns
+ * export sums only current-pepper rows seen in its window, so it gates on those
+ * (inline in `exportAnonIdReturns`). A subset at K or more implies the report
+ * publishes the event too.
+ *
+ * Use as `venue_id IN (${PUBLISHED_EVENT_IDS_SQL})`. Uncorrelated, so SQLite
+ * evaluates it once per statement; it reads the (venue_id, …) index.
+ */
+export const PUBLISHED_EVENT_IDS_SQL = `SELECT venue_id FROM anon_id_returns
+       GROUP BY venue_id HAVING COUNT(DISTINCT anon_id_hash) >= ${CORRIDOR_MAP_MIN_COUNT}`;
+
 // Auto-detector clustering window: look back 8 weeks of events per venue.
 const SERIES_DETECTOR_LOOKBACK_DAYS = 56;
 
@@ -361,7 +383,9 @@ export async function refreshCorridorBaselines(
            CASE WHEN e.start_date >= ? THEN air.anon_id_hash END
          ) AS window_90d_count
        FROM events e
+       -- ADR-026 rule B: an event whose own count is withheld adds no one.
        LEFT JOIN anon_id_returns air ON air.venue_id = e.id
+         AND air.venue_id IN (${PUBLISHED_EVENT_IDS_SQL})
        WHERE (e.h3_res7 IS NOT NULL OR e.corridor_id IS NOT NULL)
          AND e.start_date IS NOT NULL
          AND e.start_date >= ?
