@@ -14,12 +14,22 @@
  *
  * BORN RED: the surrogate property below FAILS against current trimStr().
  * That is deliberate — fail first, then pass.
+ *
+ * @born-red ?area= properties (landingZoom) | method: 5 faults injected in
+ *   src/lib/landing-area.ts one at a time (the 15-hex shape check removed, the
+ *   resolution check removed, toLowerCase removed, every query parameter
+ *   carried into the links, the area always written into the link); each
+ *   turned a property here red. A sixth, the isValidCell check removed, cannot
+ *   go red: h3-js getResolution answers -1 for a string that is not a cell, so
+ *   the resolution check refuses it too | date: 2026-11-09
  */
 import { describe, test, expect } from 'vitest';
 import fc from 'fast-check';
 import { trimStr, isValidEventId } from '../src/lib/form-validation';
 import { allocateShares, SPONSOR_ALLOCATION } from '../src/lib/sponsor-allocation';
 import type { RotationSponsor } from '../src/lib/sponsor-allocation';
+import { cellToCenterChild, cellToParent, getResolution, isValidCell, latLngToCell } from 'h3-js';
+import { landingZoom } from '../src/lib/landing-area';
 
 const RUNS = Number(process.env.FC_RUNS ?? 200);
 const opts = { numRuns: RUNS } as const;
@@ -188,6 +198,148 @@ describe('fat-finger | allocateShares — Invariant #25 walls at EVERY demand le
     fc.assert(
       fc.property(rosterArb, (roster) => {
         expect(allocateShares(roster)).toEqual(allocateShares(roster));
+      }),
+      opts
+    );
+  });
+});
+
+// The landing map's zoom reads one thing a visitor can type: `?area=<cell>`
+// (owner, 2026-11-09). The rule: it is a res-7 H3 cell written as exactly 15 hex
+// digits, or it is nothing; and the links the page builds from the address carry
+// the search (where, zip, nozip) and nothing else. map-zoom.spec.ts holds the
+// chosen examples; these hold the rule for input nobody chose.
+describe('fat-finger | ?area= — the landing map zoom (landingZoom)', () => {
+  const KEPT = ['where', 'zip', 'nozip'] as const;
+  const BASE = 'https://t.test/';
+
+  /** The landing address with these parameters, encoded as a browser would. */
+  const address = (params: readonly (readonly [string, string])[]): URL => {
+    const u = new URL(BASE);
+    for (const [k, v] of params) u.searchParams.append(k, v);
+    return u;
+  };
+  const read = (area: string) => landingZoom(address([['area', area]]), '/');
+
+  /** Any real res-7 cell: a point anywhere on Earth, tagged at the area resolution. */
+  const cellArb = fc
+    .tuple(
+      fc.double({ min: -90, max: 90, noNaN: true }),
+      fc.double({ min: -180, max: 180, noNaN: true })
+    )
+    .map(([lat, lng]) => latLngToCell(lat, lng, 7));
+  /** Fifteen hex digits in either case: the right shape, almost never a real cell. */
+  const hex15Arb = fc
+    .array(fc.constantFrom(...'0123456789abcdefABCDEF'), { minLength: 15, maxLength: 15 })
+    .map((a) => a.join(''));
+  /** What a slip adds round a cell: zeros, spaces, a prefix, a pasted character. */
+  const noiseArb = fc.oneof(
+    fc.string({ minLength: 1, maxLength: 12 }),
+    fc.string({ unit: 'binary', minLength: 1, maxLength: 12 }),
+    fc.constantFrom('0', '00', ' ', '\t', '\n', '0x', '%00', '​', '+', 'f'),
+    fc.integer({ min: 1, max: 3000 }).map((n) => '0'.repeat(n))
+  );
+  const searchArb = fc.record(
+    { where: fc.string(), zip: fc.string(), nozip: fc.string() },
+    { requiredKeys: [] }
+  );
+  const searchPairs = (s: Partial<Record<(typeof KEPT)[number], string>>) =>
+    KEPT.filter((k) => s[k] !== undefined).map((k) => [k, s[k]!] as const);
+
+  test('whatever is typed, the answer is nothing or the typed res-7 cell itself', () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(fc.string(), fc.string({ unit: 'binary' }), hex15Arb, cellArb),
+        (typed) => {
+          const { cell } = read(typed);
+          if (cell === null) return;
+          expect(cell).toMatch(/^[0-9a-f]{15}$/);
+          expect(isValidCell(cell)).toBe(true);
+          expect(getResolution(cell)).toBe(7);
+          expect(cell).toBe(typed.toLowerCase());
+        }
+      ),
+      opts
+    );
+  });
+
+  test('a real res-7 cell zooms, typed in either case, and comes back lower case', () => {
+    fc.assert(
+      fc.property(cellArb, fc.boolean(), (cell, upper) => {
+        expect(read(upper ? cell.toUpperCase() : cell).cell).toBe(cell);
+      }),
+      opts
+    );
+  });
+
+  test('a real cell with anything before or after it never zooms', () => {
+    fc.assert(
+      fc.property(cellArb, noiseArb, fc.boolean(), (cell, noise, before) => {
+        expect(read(before ? noise + cell : cell + noise).cell).toBeNull();
+      }),
+      opts
+    );
+  });
+
+  test('a real cell cut short never zooms', () => {
+    fc.assert(
+      fc.property(cellArb, fc.integer({ min: 0, max: 14 }), (cell, keep) => {
+        expect(read(cell.slice(0, keep)).cell).toBeNull();
+      }),
+      opts
+    );
+  });
+
+  test('a cell at any other resolution never zooms', () => {
+    fc.assert(
+      fc.property(
+        cellArb,
+        fc.integer({ min: 0, max: 15 }).filter((r) => r !== 7),
+        (cell, res) => {
+          const other = res < 7 ? cellToParent(cell, res) : cellToCenterChild(cell, res);
+          expect(getResolution(other)).toBe(res);
+          expect(read(other).cell).toBeNull();
+        }
+      ),
+      opts
+    );
+  });
+
+  test('the links carry the search and nothing else, whatever else is in the address', () => {
+    fc.assert(
+      fc.property(
+        searchArb,
+        fc.array(fc.tuple(fc.string(), fc.string()), { maxLength: 6 }),
+        fc.oneof(fc.string(), cellArb),
+        cellArb,
+        (search, others, typedArea, target) => {
+          const kept = searchPairs(search);
+          const extra = others.filter(([k]) => !(KEPT as readonly string[]).includes(k));
+          const z = landingZoom(address([...extra, ['area', typedArea], ...kept]), '/');
+
+          const back = new URL(z.href(), BASE);
+          expect(back.pathname).toBe('/');
+          expect([...back.searchParams.entries()]).toEqual(kept.map(([k, v]) => [k, v]));
+
+          const zoomIn = new URL(z.href(target), BASE);
+          expect(zoomIn.pathname).toBe('/');
+          expect([...zoomIn.searchParams.entries()]).toEqual([
+            ...kept.map(([k, v]) => [k, v]),
+            ['area', target],
+          ]);
+        }
+      ),
+      opts
+    );
+  });
+
+  test('a zoom link, followed, zooms on that cell and keeps the same way back', () => {
+    fc.assert(
+      fc.property(searchArb, cellArb, (search, cell) => {
+        const first = landingZoom(address(searchPairs(search)), '/');
+        const followed = landingZoom(new URL(first.href(cell), BASE), '/');
+        expect(followed.cell).toBe(cell);
+        expect(followed.href()).toBe(first.href());
       }),
       opts
     );

@@ -142,6 +142,7 @@ function readFeature(
   values: (string | number | boolean | null)[]
 ): MvtFeature {
   let type = 0;
+  // Stryker disable next-line ArrayDeclaration: tags is read only by the pair loop below, and a one-element default fails k + 1 < 1 just as [] fails k + 1 < 0, so no pair is ever read.
   let tags: number[] = [];
   let geom: number[] = [];
   while (p.pos < end) {
@@ -154,6 +155,7 @@ function readFeature(
     else p.skip(wire);
   }
   const props: Props = {};
+  // Stryker disable next-line ArithmeticOperator: k - 1 < length adds only passes where tags[k] or tags[k + 1] is past the end (undefined), so the key or value lookup is undefined and no prop is set.
   for (let k = 0; k + 1 < tags.length; k += 2) {
     const key = keys[tags[k]!];
     const val = values[tags[k + 1]!];

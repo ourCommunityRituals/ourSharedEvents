@@ -41,6 +41,26 @@ export const FLOORS = {
   'src/lib/landing-area.ts': 99.35,
   'src/handlers/pages.ts': 100,
   'src/handlers/events.ts': 100,
+  // Epic OSE-1880 (owner, 2026-11-09): the map's deterministic rules, at the
+  // scores of the run that added them (rounded down, so the same run passes).
+  // Every survivor is equivalent, and sits on a line where another mutant of
+  // the same mutator is killed, so a `// Stryker disable` would hide a killable
+  // one. attendee-map.ts, 542 of 548: `typeof v === 'string'` in str() (String()
+  // returns a string unchanged, two mutants); `!cell || !isValidCell(cell)` to
+  // false and `typeof v === 'number'` to true (h3 getResolution and
+  // Number.isFinite refuse the same values on the next step); `<` to `<=`
+  // against DOT_MERGE (needs two block centres exactly 78.0 map units apart);
+  // the `[]` of a branch that returns before it is read. (The first CI run had
+  // a seventh, `\s+` to `\s` in TOWN_STATE, which a loaded workstation had
+  // counted as a timeout. It was not equivalent: a line break and a space
+  // before the state tells the two apart, and a test now does.) mvt.ts, 305 of 308:
+  // `cur.length > 0` at ClosePath (a ring is never empty once it exists, two
+  // mutants) and `k + 1 < tags.length` to `<=` (the extra pass reads past the
+  // end and sets nothing). pmtiles.ts, 260 of 261: `3 * rx` to `3 / rx` in the
+  // Hilbert step (rx is 0 or 1, and `^` turns Infinity into 0). Never lower.
+  'src/lib/attendee-map.ts': 98.9,
+  'src/lib/mvt.ts': 99.02,
+  'src/lib/pmtiles.ts': 99.61,
 };
 
 /** One file's score from its mutants, or null when it has no valid mutant. */

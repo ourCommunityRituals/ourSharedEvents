@@ -38,8 +38,9 @@ function triggerProblems(wf) {
     problems.push('push trigger is missing: main must be scanned after merge');
   } else {
     const push = on.push || {};
-    if (push['branches-ignore'])
+    if (push['branches-ignore']) {
       problems.push('push uses branches-ignore (pushes to every other branch)');
+    }
     const branches = push.branches;
     if (!Array.isArray(branches) || branches.length === 0) {
       problems.push('push has no branch filter, so it runs on every branch');

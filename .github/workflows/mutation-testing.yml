@@ -63,6 +63,18 @@ on:
       # landing-area.ts and the panel-link lines in the pages.ts range.
       - 'workers/oursharedevents/tests/map-zoom.spec.ts'
       - 'workers/oursharedevents/tests/map-place-links.spec.ts'
+      # Epic OSE-1880: the map's own rules (dot placement, the tile archive reader,
+      # the vector tile decoder) and the specs that kill their mutants. The
+      # property spec holds the ?area= fat-finger rules for landing-area.ts.
+      - 'workers/oursharedevents/src/lib/attendee-map.ts'
+      - 'workers/oursharedevents/src/lib/mvt.ts'
+      - 'workers/oursharedevents/src/lib/pmtiles.ts'
+      - 'workers/oursharedevents/tests/attendee-map.spec.ts'
+      - 'workers/oursharedevents/tests/mvt.spec.ts'
+      - 'workers/oursharedevents/tests/pmtiles.spec.ts'
+      - 'workers/oursharedevents/tests/street-map.spec.ts'
+      - 'workers/oursharedevents/tests/street-map-landing.spec.ts'
+      - 'workers/oursharedevents/tests/fat-finger.property.spec.ts'
       - 'workers/oursharedevents/stryker.conf.mjs'
       # OSE-1695: the CI security rule that keeps secrets off branch pushes, its test and config.
       - 'scripts/ci/branch-push-secret-exposure.mjs'
@@ -112,6 +124,18 @@ on:
       # landing-area.ts and the panel-link lines in the pages.ts range.
       - 'workers/oursharedevents/tests/map-zoom.spec.ts'
       - 'workers/oursharedevents/tests/map-place-links.spec.ts'
+      # Epic OSE-1880: the map's own rules (dot placement, the tile archive reader,
+      # the vector tile decoder) and the specs that kill their mutants. The
+      # property spec holds the ?area= fat-finger rules for landing-area.ts.
+      - 'workers/oursharedevents/src/lib/attendee-map.ts'
+      - 'workers/oursharedevents/src/lib/mvt.ts'
+      - 'workers/oursharedevents/src/lib/pmtiles.ts'
+      - 'workers/oursharedevents/tests/attendee-map.spec.ts'
+      - 'workers/oursharedevents/tests/mvt.spec.ts'
+      - 'workers/oursharedevents/tests/pmtiles.spec.ts'
+      - 'workers/oursharedevents/tests/street-map.spec.ts'
+      - 'workers/oursharedevents/tests/street-map-landing.spec.ts'
+      - 'workers/oursharedevents/tests/fat-finger.property.spec.ts'
       - 'workers/oursharedevents/stryker.conf.mjs'
       # OSE-1695: the CI security rule that keeps secrets off branch pushes, its test and config.
       - 'scripts/ci/branch-push-secret-exposure.mjs'

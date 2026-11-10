@@ -182,6 +182,7 @@ function str(v: unknown): string {
 /** Is this a cell the map may draw — valid, and exactly corridor resolution? */
 function corridorCell(v: unknown): string | null {
   const cell = str(v);
+  // Stryker disable next-line LogicalOperator: h3-js getResolution returns -1 for any invalid cell, empty included, so with && the next line still returns null for them.
   if (!cell || !isValidCell(cell)) return null;
   return getResolution(cell) === CORRIDOR_RES ? cell : null;
 }
@@ -196,6 +197,7 @@ const SVG_NAME_MAX_CHARS = 16;
 
 /** A town is letters, spaces and a little punctuation — never a street number. */
 function asTown(v: string): string | null {
+  // Stryker disable next-line MethodExpression: every caller passes a trimmed part, or a lazy (.+?) capture that starts the trimmed part and cannot end in a space, so trim() changes nothing.
   const t = v.trim();
   return t.length >= 2 && t.length <= NAME_MAX && /^[\p{L} .'-]+$/u.test(t) ? t : null;
 }
@@ -236,6 +238,7 @@ export function attendeeMapAreas(
 ): { areas: AttendeeMapArea[]; count: number } {
   const byCell = new Map<string, { id: string; name: string }[]>();
   const places = new Map<string, { town: string | null; venue: string | null }[]>();
+  // Stryker disable next-line ArrayDeclaration: a filler string in place of [] has no phase, so isInForwardWindow drops it and the result is the same empty map.
   for (const e of items ?? []) {
     if (!isInForwardWindow(e, now)) continue;
     const cell = corridorCell(e.h3_res7);
@@ -245,6 +248,7 @@ export function attendeeMapAreas(
     byCell.set(cell, list);
     const venueLine = str(e.venue) || str(e.location);
     const venue = venueLine.split(',')[0]!.trim().slice(0, NAME_MAX) || null;
+    // Stryker disable next-line ArrayDeclaration: a filler string in place of [] has no town or venue, and mostCommon skips empty values, so the name is the same.
     const seen = places.get(cell) ?? [];
     seen.push({ town: townOf(e.where_address) ?? townOf(venueLine), venue });
     places.set(cell, seen);
@@ -255,6 +259,7 @@ export function attendeeMapAreas(
   const areas = sorted.map(([cell, events], i) => ({
     cell,
     n: i + 1,
+    // Stryker disable next-line ArrayDeclaration: places gets an entry for every cell byCell does, in the same loop, so this fallback is never taken.
     name: areaName(places.get(cell) ?? [], lang),
     events,
   }));

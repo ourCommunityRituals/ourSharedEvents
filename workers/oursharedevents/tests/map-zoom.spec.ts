@@ -30,8 +30,9 @@
  *   accent colour, the fill too, the touch target without its fill-opacity);
  *   each turned this file red | date: 2026-11-09
  */
+// @born-red attendee-map mutants | method: StrykerJS mutants of src/lib/attendee-map.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
 import { describe, expect, test } from 'vitest';
-import { cellToChildren, cellToLatLng, cellToParent, latLngToCell } from 'h3-js';
+import { cellToBoundary, cellToChildren, cellToLatLng, cellToParent, latLngToCell } from 'h3-js';
 import {
   DOT_MERGE,
   MAP_STYLE,
@@ -42,7 +43,15 @@ import {
 } from '../src/lib/attendee-map';
 import { landingZoom, renderLandingArea } from '../src/lib/landing-area';
 import { PLACE_PANEL_CSS } from '../src/lib/event-list';
-import { MAP_H, MAP_W, cellsKey, frameForCells, project } from '../src/lib/street-map';
+import { CORRIDOR_WINDOW_DAYS } from '../src/lib/corridor-readiness';
+import {
+  MAP_H,
+  MAP_W,
+  STREET_STYLE,
+  cellsKey,
+  frameForCells,
+  project,
+} from '../src/lib/street-map';
 
 const NOW = Date.parse('2026-11-09T12:00:00Z');
 const SOON = '2026-11-20';
@@ -722,5 +731,142 @@ describe('the place panel under the map', () => {
     expect(css).toContain('.amap-wrap:has(#amap-dot-1:target) .amap-d1 .amap-dot');
     expect(css).toContain('.amap-wrap:has(#amap-dot-2:target) .amap-d2 .amap-dot');
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b(?!:)/i);
+  });
+});
+
+describe('the zoomed area, edge by edge', () => {
+  const far = { lat: RIPH.lat + 0.01, lon: RIPH.lon };
+  const back =
+    '<p><a class="amap-back" href="/?zip=60406" data-testid="amap-back">Back to all areas</a></p>';
+  const caption = (html: string) => /<figcaption[^>]*>(.*?)<\/figcaption>/s.exec(html)![1]!;
+
+  test('an event with no name is untitled, a named one keeps its name, and no classes is none', () => {
+    const { dots } = mapDots(CELL, [
+      ev('a', { name: '' }),
+      ev('b', { ...far, classes: undefined }),
+    ]);
+    expect(dots.map((d) => d.events)).toEqual([
+      [{ id: 'b', name: 'Event b', classes: [] }],
+      [{ id: 'a', name: 'Untitled event', classes: ['type-trivia', 'when-week'] }],
+    ]);
+  });
+
+  test('only real numbers on the globe are placed: a numeric string, NaN, Infinity, a missing or out-of-range longitude are not', () => {
+    const { dots, unplaced } = mapDots(CELL, [
+      ev('text', { lat: String(RIPH.lat) as unknown as number }),
+      ev('nan', { lat: Number.NaN }),
+      ev('inf', { lon: Number.POSITIVE_INFINITY }),
+      ev('nolon', { lon: null }),
+      ev('lon', { lon: 180.5 }),
+      ev('lat', { lat: -90.5 }),
+    ]);
+    expect(dots).toEqual([]);
+    expect(unplaced.map((e) => e.id)).toEqual(['text', 'nan', 'inf', 'nolon', 'lon', 'lat']);
+  });
+
+  test('latitude 90 and longitude 180 are still on the globe, so they are placed', () => {
+    const { dots, unplaced } = mapDots(CELL, [
+      ev('pole', { lat: 90, lon: 0 }),
+      ev('dateline', { lat: 0, lon: 180 }),
+    ]);
+    expect(unplaced).toEqual([]);
+    expect(dots.flatMap((d) => d.events.map((e) => e.id)).sort()).toEqual(['dateline', 'pole']);
+  });
+
+  test('dots in one row are numbered left to right', () => {
+    // Web Mercator stops near 85°, so two blocks that far north share one row.
+    const { dots } = mapDots(CELL, [
+      ev('east', { lat: 89, lon: 10 }),
+      ev('west', { lat: 89, lon: -10 }),
+    ]);
+    expect(dots.map((d) => [d.n, d.events[0]!.id])).toEqual([
+      [1, 'west'],
+      [2, 'east'],
+    ]);
+  });
+
+  test('one dot, written out in full: its link, title, touch target, dot and number', () => {
+    const html = zoomed([ev('solo')]).html;
+    const [x, y] = xyOf(RIPH.lat, RIPH.lon).map((v) => v.toFixed(1));
+    expect(html).toContain(
+      '<a href="#amap-dot-1" class="amap-f amap-d1 type-trivia when-week" data-testid="amap-dot" data-exact="1" data-count="1">' +
+        '<title>Event solo</title>' +
+        `<circle class="amap-hit" cx="${x}" cy="${y}" r="39" fill-opacity="0"/>` +
+        `<circle class="amap-dot" cx="${x}" cy="${y}" r="13"/>` +
+        `<text class="amap-dn" x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central">1</text>` +
+        '</a></svg>'
+    );
+  });
+
+  test('the area outline is the cell boundary, point by point', () => {
+    const ring = cellToBoundary(CELL)
+      .map(([lat, lng]) => project(FRAME, lat, lng))
+      .map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`)
+      .join(' ');
+    expect(zoomed([ev('a')]).html).toContain(
+      `<polygon class="amap-zone" points="${ring}" data-testid="amap-zone" data-cell="${CELL}"/>`
+    );
+  });
+
+  test('a shared dot is titled with its count; a pale one is marked; no classes, no stray space', () => {
+    const html = zoomed([
+      ev('a', { classes: [] }),
+      ev('b', { classes: [] }),
+      ev('n', { ...far, classes: [], place_kind: 'address' }),
+    ]).html;
+    expect(html).toContain(
+      '<a href="#amap-dot-1" class="amap-f amap-d1 amap-blk" data-testid="amap-dot" data-exact="0" data-count="1"><title>Event n</title>'
+    );
+    expect(html).toContain(
+      '</a><a href="#amap-dot-2" class="amap-f amap-d2" data-testid="amap-dot" data-exact="1" data-count="2"><title>Spot 2: 2 events</title>'
+    );
+    expect(html).toContain('<li value="1" class="amap-f" data-testid="amap-legend-dot">');
+    expect(html).toContain('</li><li value="2" class="amap-f" data-testid="amap-legend-dot">');
+    expect(html).toContain(
+      'data-testid="amap-event">Event a</a></span> <span class="amap-f"><a href="/events/b"'
+    );
+    // Every event is placed, so nothing sits between the list and the caption.
+    expect(html).toMatch(/<\/li><\/ol>\s*<figcaption id="amap-caption"/);
+  });
+
+  test('the way back, word for word', () => {
+    expect(zoomed([ev('a')]).html).toContain(back);
+  });
+
+  test('an area with nothing upcoming, or no area at all, is the note and the way back alone', () => {
+    const empty =
+      '<div class="map-placeholder" data-testid="amap-zoom-empty" role="status"><p><strong>No upcoming events in this area.</strong></p></div>' +
+      `${ZOOM_STYLE}${back}`;
+    for (const cell of [CELL, latLngToCell(RIPH.lat, RIPH.lon, 9), 'x']) {
+      const r = renderAttendeeMap([], {
+        now: NOW,
+        zoom: { cell, events: cell === CELL ? [] : [ev('a')], backHref: '/?zip=60406' },
+        streets: STREETS,
+      });
+      expect(r.html, cell).toBe(empty);
+      expect(r.count).toBe(0);
+    }
+  });
+
+  test('with streets: the OpenStreetMap credit, their style, and the dot caption', () => {
+    const html = zoomed([ev('a')]).html;
+    expect(html).toContain(
+      '<p class="amap-credit" data-testid="amap-credit">Street map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.</p>'
+    );
+    expect(html).toContain(`${MAP_STYLE}${ZOOM_STYLE}${STREET_STYLE}\n`);
+    expect(caption(html)).toBe(
+      `1 event in this area over the next ${CORRIDOR_WINDOW_DAYS} days. A solid dot is a named place, shown on its block; a pale dot marks only its block.`
+    );
+  });
+
+  test('without streets: no credit, no street style, and the list caption', () => {
+    const html = zoomed([ev('a')], { streets: null }).html;
+    expect(html).not.toContain('data-testid="amap-credit"');
+    expect(html).not.toContain(STREET_STYLE);
+    expect(html).toContain(`${MAP_STYLE}${ZOOM_STYLE}\n`);
+    expect(html).toMatch(/<\/figcaption>\s*<\/figure>/);
+    expect(caption(html)).toBe(
+      `1 event in this area over the next ${CORRIDOR_WINDOW_DAYS} days, listed by place. A place is a block, never a street address.`
+    );
   });
 });
