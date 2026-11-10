@@ -165,13 +165,35 @@ areas: zoom 11, 14 reads, 0.88 MB, 1,456 ms from cold. One area: zoom 14, 13
 reads, 0.40 MB, 862 ms. So that build's directories, gzip and layer names are
 ones the reader handles.
 
+Measured again on 2026-11-10, the same way (a workstation, HTTPS byte ranges,
+build `20261109`), after tiles that sit together in the file became one read:
+
+| View                     | Reads, first map | Reads, next map | Bytes, first map    |
+| ------------------------ | ---------------- | --------------- | ------------------- |
+| One area (zoom 14)       | 3 (was 14)       | 1 (was 12)      | 0.41 MB (unchanged) |
+| Seven areas (zoom 12)    | 3 (was 8)        | 1 (was 6)       | 0.77 MB (was 0.42)  |
+| Nineteen areas (zoom 11) | 3 (was 8)        | 1 (was 6)       | 0.51 MB (unchanged) |
+
+The 12 tiles of the zoomed area sit back to back in the file. At zoom 12 two gaps
+of about 180 KB lie between the tiles and are read through, which is the extra
+0.35 MB. The drawing is the same, character for character, in all three.
+
+The time from cold did not change from the workstation: about 1.4 s before and
+after. A first map is three round trips one after another (header, leaf
+directory, tiles), each about 0.45 s over the internet, and reading the tiles
+together removes requests, not round trips. With the network taken out, one
+layer took about 15 ms of processing from cold and 9 ms after, in Node on the
+workstation. The two leaf directories read held 61,239 entries each (115 KB and
+129 KB gzipped, about 0.32 MB unpacked), so the 300,000-entry budget keeps four
+of that size.
+
 Still unmeasured:
 
 - the first map in a new Worker instance, reading from R2. The workstation's
-  1,456 ms sits just under the 1.5 s limit that turns a slow read into hexagons
+  1.4 s sits just under the 1.5 s limit that turns a slow read into hexagons
   only; it went over the public internet, so it says nothing about R2, and this
   is the number to read on staging first;
 - R2 range reads at offsets past 4 GiB through the Worker binding;
-- how large the planet's leaf directories are, and memory in the Worker with
-  many areas read (the reader keeps at most 300,000 directory entries, an
-  estimate of about 25 MB).
+- memory in the Worker with many areas read (the reader keeps at most 300,000
+  directory entries, about 25 MB by an estimate made in Node), and whether four
+  leaf directories are enough for the areas one isolate serves.

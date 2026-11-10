@@ -25,7 +25,7 @@ import { cellToBoundary, cellToLatLng } from 'h3-js';
 import {
   archiveHeader,
   r2Source,
-  readTile,
+  readTiles,
   type RangeBucket,
   type RangeSource,
 } from './pmtiles.js';
@@ -332,17 +332,17 @@ export async function buildStreetLayer(
   const header = await archiveHeader(src);
   const f = frameForCells(cells, w, h);
   const r = tilesFor(f, header.minZoom, header.maxZoom);
-  const jobs: Promise<DecodedTile | null>[] = [];
+  const want: [number, number][] = [];
   for (let x = r.xMin; x <= r.xMax; x++) {
-    for (let y = r.yMin; y <= r.yMax; y++) {
-      jobs.push(
-        readTile(src, r.z, x, y).then((bytes) =>
-          bytes ? { x, y, layers: decodeTile(bytes, WANTED) } : null
-        )
-      );
-    }
+    for (let y = r.yMin; y <= r.yMax; y++) want.push([x, y]);
   }
-  const tiles = (await Promise.all(jobs)).filter((t): t is DecodedTile => t !== null);
+  // One call for the whole frame, so tiles that sit together in the file come
+  // from one read (lib/pmtiles.ts, readTiles).
+  const read = await readTiles(src, r.z, want);
+  const tiles: DecodedTile[] = [];
+  read.forEach((bytes, i) => {
+    if (bytes) tiles.push({ x: want[i]![0], y: want[i]![1], layers: decodeTile(bytes, WANTED) });
+  });
   if (tiles.length === 0) return null;
   return { cellsKey: cellsKey(cells), svg: drawStreets(f, r.z, tiles, cells) };
 }

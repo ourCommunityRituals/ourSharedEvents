@@ -1924,7 +1924,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 51
+      "testCount": 71
     },
     {
       "file": "workers/oursharedevents/tests/portfolio-rollup.invariant.spec.ts",
@@ -3240,7 +3240,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 40
+      "testCount": 41
     },
     {
       "file": "workers/oursharedevents/tests/subscribers.spec.ts",
