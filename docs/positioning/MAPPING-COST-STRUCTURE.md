@@ -21,13 +21,13 @@
 
 ## Cost lines
 
-| Line                                     | Fixed / month                                                                                                                                                     | Variable                                                                                                                               | Driver                                                                                                                                  | Who triggers it                           | Who pays                             |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------ |
-| H3 hexagons                              | $0                                                                                                                                                                | $0 beyond Worker compute                                                                                                               | page views                                                                                                                              | everyone                                  | platform (inside the Workers plan)   |
-| Place names on hexagons (first release)  | $0                                                                                                                                                                | $0                                                                                                                                     | page views                                                                                                                              | everyone                                  | platform                             |
-| Google venue image (today)               | $0                                                                                                                                                                | first 10,000 loads/month free, then **$2.00 per 1,000**                                                                                | one load per venue, per Cloudflare location, per day (edge-cached)                                                                      | **attendees on public event pages**       | platform — not tied to any paid tier |
-| Google place lookup (Geocoding)          | $0                                                                                                                                                                | Google's Geocoding list price after its free monthly allowance is **$5.00 per 1,000** (not re-read for this change; check the console) | one lookup per event save that changes the place, plus at most **25 a night** for events saved before 2026-10-11 (`lib/event-place.ts`) | **organizers** saving events (admin only) | platform                             |
-| Self-hosted street map (Protomaps on R2) | storage: **$0.015/GB-month**; the whole planet (138.5 GB measured) is about **$1.93** for the first environment after the free 10 GB and **$2.08** for the second | reads: **$0.36 per million** after 10 million free; no egress fee                                                                      | tile reads per map view (estimate 10–30)                                                                                                | whoever sees the street map               | funded by Mid revenue (see below)    |
+| Line                                     | Fixed / month                                                                                                                                                                                                                                                                                         | Variable                                                                                                                               | Driver                                                                                                                                  | Who triggers it                           | Who pays                             |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------ |
+| H3 hexagons                              | $0                                                                                                                                                                                                                                                                                                    | $0 beyond Worker compute                                                                                                               | page views                                                                                                                              | everyone                                  | platform (inside the Workers plan)   |
+| Place names on hexagons (first release)  | $0                                                                                                                                                                                                                                                                                                    | $0                                                                                                                                     | page views                                                                                                                              | everyone                                  | platform                             |
+| Google venue image (today)               | $0                                                                                                                                                                                                                                                                                                    | first 10,000 loads/month free, then **$2.00 per 1,000**                                                                                | one load per venue, per Cloudflare location, per day (edge-cached)                                                                      | **attendees on public event pages**       | platform — not tied to any paid tier |
+| Google place lookup (Geocoding)          | $0                                                                                                                                                                                                                                                                                                    | Google's Geocoding list price after its free monthly allowance is **$5.00 per 1,000** (not re-read for this change; check the console) | one lookup per event save that changes the place, plus at most **25 a night** for events saved before 2026-10-11 (`lib/event-place.ts`) | **organizers** saving events (admin only) | platform                             |
+| Self-hosted street map (Protomaps on R2) | storage: **$0.015/GB-month** after the free 10 GB per account. What is loaded is the United States subset; **its size is not measured yet**, so its storage line is open. The ceiling is the whole planet (138.5 GB measured): about **$1.93** for the first environment and **$2.08** for the second | reads: **$0.36 per million** after 10 million free; no egress fee                                                                      | tile reads per map view (estimate 10–30)                                                                                                | whoever sees the street map               | funded by Mid revenue (see below)    |
 
 ## What each option costs at volume (estimates)
 
@@ -41,6 +41,10 @@ share one load, so the real figure is lower.
 | 10,000            | $0                 | about $2 (storage only)                         |
 | 100,000           | about $180         | about $2                                        |
 | 1,000,000         | about $1,980       | about $5–10 (storage + reads + Worker requests) |
+
+The storage in the right-hand column is the whole planet's, the ceiling. The
+file loaded is the United States subset (owner, 2026-11-10), which is smaller;
+its size is not measured yet (decision 4).
 
 ## Where each line sits in the tiers
 
@@ -74,12 +78,18 @@ share one load, so the real figure is lower.
    Any failure, or a read slower than 1.5 s, draws the hexagons alone. The
    OpenStreetMap credit shows whenever streets do.
 
-   **Turning it on (owner steps, 2026-11-09):** the archive is the whole-planet
-   build, on our own Cloudflare account, and staging gets it before production.
-   The steps, the names and the way back to hexagons only are in
-   [`../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md`](../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md):
-   the owner creates the staging bucket and loads the archive, then the `MAP_TILES`
-   binding for `[env.staging]` merges (`MAP_TILES_ARCHIVE` names the file).
+   **Turning it on (owner steps, 2026-11-09 and 2026-11-10):** the archive is on
+   our own Cloudflare account, and staging gets it before production. It is the
+   **United States subset** of a Protomaps build: the 50 states, DC, Puerto Rico
+   and the US Virgin Islands, cut out with `pmtiles extract` (owner, 2026-11-10,
+   in place of the whole planet chosen on 2026-11-09). Areas outside it draw
+   hexagons only. **The size of that file is not measured yet**; the owner
+   records it when the file is cut, and the storage figures here are then
+   replaced. The steps, the names, the region and the way back to hexagons only
+   are in
+   [`../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md`](../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md).
+   The `MAP_TILES` binding for `[env.staging]` is on `main` and its bucket
+   exists, empty; the owner loads the file `MAP_TILES_ARCHIVE` names.
    Production gets the same binding in its own PR afterwards; until then
    `scripts/ci/env-parity.mjs` lists the difference as open and production shows
    hexagons only. Local dev has its own binding and reads the regional file.
@@ -159,13 +169,15 @@ one tile route to count the same way.
 - Google Maps Static API: 10,000 free loads/month, then $2.00 per 1,000 — <https://developers.google.com/maps/billing-and-pricing/pricing>
 - Cloudflare R2: $0.015/GB-month, Class B $0.36/million, 10 GB and 10 million Class B free, no egress fee — <https://developers.cloudflare.com/r2/platform/pricing/>
 - Protomaps: planet file about 120 GB; R2 recommended for hosting — <https://docs.protomaps.com/basemaps/downloads>, <https://docs.protomaps.com/pmtiles/cloud-storage>
-- Read again on 2026-11-09 for the whole-planet load (upload limits, the S3 token, multipart operations): see the list in [`../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md`](../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md). R2's prices were unchanged.
+- Read again on 2026-11-09 for the load (upload limits, the S3 token, multipart operations), and on 2026-11-10 for cutting the United States subset (`pmtiles extract`): see the list in [`../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md`](../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md). R2's prices were unchanged.
 
 ## Measured in the street-map proof (2026-10-03)
 
 The self-hosted line above was written from published figures. A local proof
 (`proofs/street-map/`, not shipped, nothing on staging or production) measured it
-for one region. These replace the estimates for that region only.
+for one region. These replace the estimates for that region only. The planet
+rows are kept as the ceiling: the file loaded is the United States subset, and
+**its size and storage cost are not measured until the owner records them**.
 
 | Item                                 | Measured                                                                       |
 | ------------------------------------ | ------------------------------------------------------------------------------ |

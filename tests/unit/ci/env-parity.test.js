@@ -215,14 +215,15 @@ describe('the real wrangler.toml', () => {
 
   // Staging first (owner 2026-11-09): the street-map bucket is bound on staging
   // only, and the archive is named the same on both sides so that the later
-  // production PR adds a binding and nothing else.
+  // production PR adds a binding and nothing else. The archive is the United
+  // States subset (owner 2026-11-10), so the name starts "us-", not "planet-".
   test('the street-map archive: bound on staging only, named the same on both sides', () => {
     const toml = real();
     const stg = toml.slice(toml.indexOf('[env.staging]'), toml.indexOf('[env.production]'));
     const prod = toml.slice(toml.indexOf('[env.production]'));
     expect(stg).toMatch(/^\[\[env\.staging\.r2_buckets\]\]\r?\nbinding = "MAP_TILES"\r?$/m);
     expect(prod).not.toMatch(/^binding = "MAP_TILES"\r?$/m);
-    const name = /^MAP_TILES_ARCHIVE = "(planet-\d{8}\.pmtiles)"\r?$/m;
+    const name = /^MAP_TILES_ARCHIVE = "(us-\d{8}\.pmtiles)"\r?$/m;
     expect(stg).toMatch(name);
     expect(name.exec(prod)?.[1]).toBe(name.exec(stg)?.[1]);
     // The parity check itself reports the one-sided binding as open, not as fine.
@@ -373,11 +374,11 @@ describe('the street map reaches staging before production', () => {
 });
 
 // Fat fingers (owner 2026-11-10). The bucket and the object key are typed by
-// hand three times: in wrangler.toml, and in the two commands the runbook gives
-// the owner (create the bucket, upload the file). A slip in any one of them is
-// silent: the deploy passes, the Worker finds no object, and the map stays
-// hexagons only. These rules compare the three.
-// @born-red street-map names typed by hand | method: each rule is fed the slip that turns it red, in the cases below; "the real files agree" seen failing with the runbook's upload key changed to planet-20261019.pmtiles | date: 2026-11-10
+// hand: in wrangler.toml, and in the commands the runbook gives the owner (check
+// the bucket is private, cut the United States file out of a build, upload it).
+// A slip in any one of them is silent: the deploy passes, the Worker finds no
+// object, and the map stays hexagons only. These rules compare them.
+// @born-red street-map names typed by hand | method: each rule is fed the slip that turns it red, in the cases below; "the real files agree" seen failing with wrangler.toml changed to us-20261109.pmtiles while the runbook still uploaded planet-20261109.pmtiles; each rule on the runbook's commands (private check, public command, extract output, extract build, upload file, upload target) switched off in turn, and its cases below went red | date: 2026-11-10
 describe('the street-map names the owner types are the names the Worker binds', () => {
   const root = (p) => fs.readFileSync(path.join(__dirname, '../../../', p), 'utf8');
   const RUNBOOK = 'docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md';
@@ -412,13 +413,37 @@ describe('the street-map names the owner types are the names the Worker binds', 
     if (others.filter((b) => b === bucket).length > 1) {
       out.push(`"${bucket}" is bound more than once: staging must have a bucket of its own`);
     }
-    const created = /wrangler r2 bucket create (\S+)/.exec(runbookText)?.[1];
-    if (created !== bucket) {
-      out.push(`the runbook creates "${created}", wrangler.toml binds "${bucket}"`);
+    // The bucket exists (the staging deploy of 2026-11-10 made it), so the
+    // runbook checks it instead of creating it: no r2.dev URL, no custom domain.
+    const privacyChecks = [
+      ['dev-url get', /wrangler r2 bucket dev-url get (\S+)/],
+      ['domain list', /wrangler r2 bucket domain list (\S+)/],
+    ];
+    for (const [check, command] of privacyChecks) {
+      const checked = command.exec(runbookText)?.[1];
+      if (checked !== bucket) {
+        out.push(`the runbook runs "${check}" on "${checked}", wrangler.toml binds "${bucket}"`);
+      }
     }
-    const target = /rclone copyto \S+ r2:(\S+)/.exec(runbookText)?.[1];
-    if (target !== `${bucket}/${key}`) {
-      out.push(`the runbook uploads to "${target}", the Worker reads "${bucket}/${key}"`);
+    if (/wrangler r2 bucket (?:dev-url enable|domain add)/.test(runbookText)) {
+      out.push('the runbook has a command that makes a bucket public');
+    }
+    // The file is cut from a build, then uploaded: one name from end to end.
+    const cut = /pmtiles extract https:\/\/build\.protomaps\.com\/(\d{8})\.pmtiles (\S+)/.exec(
+      runbookText
+    );
+    if (cut?.[2] !== key) {
+      out.push(`the runbook extracts to "${cut?.[2]}", the Worker reads "${key}"`);
+    }
+    if (cut && !key.includes(cut[1])) {
+      out.push(`the runbook cuts build ${cut[1]}, the archive name "${key}" says another date`);
+    }
+    const upload = /rclone copyto (\S+) r2:(\S+)/.exec(runbookText);
+    if (upload?.[1] !== key) {
+      out.push(`the runbook uploads the file "${upload?.[1]}", the extract is "${key}"`);
+    }
+    if (upload?.[2] !== `${bucket}/${key}`) {
+      out.push(`the runbook uploads to "${upload?.[2]}", the Worker reads "${bucket}/${key}"`);
     }
     // The sentence wraps in the runbook, so compare with the line breaks folded.
     const oneLine = runbookText.replace(/\s+/g, ' ');
@@ -434,8 +459,8 @@ describe('the street-map names the owner types are the names the Worker binds', 
 
   test('the rule read from the Worker is its own: it takes the key in wrangler.toml and refuses a path', () => {
     const rule = workerRule();
-    expect(rule.test('planet-20261109.pmtiles')).toBe(true);
-    expect(rule.test('../planet-20261109.pmtiles')).toBe(false);
+    expect(rule.test('us-20261109.pmtiles')).toBe(true);
+    expect(rule.test('../us-20261109.pmtiles')).toBe(false);
   });
 
   test.each([
@@ -458,17 +483,19 @@ describe('the street-map names the owner types are the names the Worker binds', 
   });
 
   test.each([
-    ['two digits of the date swapped', 'planet-20261019.pmtiles'],
-    ['the extension in capitals', 'planet-20261109.PMTILES'],
-    ['a space after', 'planet-20261109.pmtiles '],
-    ['the bucket pasted in front', 'ose-map-tiles-staging/planet-20261109.pmtiles'],
+    ['two digits of the date swapped', 'us-20261019.pmtiles'],
+    ['the extension in capitals', 'us-20261109.PMTILES'],
+    ['a capital in the name', 'US-20261109.pmtiles'],
+    ['a space after', 'us-20261109.pmtiles '],
+    ['the bucket pasted in front', 'ose-map-tiles-staging/us-20261109.pmtiles'],
+    ['the planet name of 2026-11-09 left in', 'planet-20261109.pmtiles'],
   ])('fat finger in wrangler.toml: the archive name with %s', (_, to) => {
     const stgAt = toml().search(/^\[env\.staging\]/m);
     const text =
       toml().slice(0, stgAt) +
       toml()
         .slice(stgAt)
-        .replace('MAP_TILES_ARCHIVE = "planet-20261109.pmtiles"', `MAP_TILES_ARCHIVE = "${to}"`);
+        .replace('MAP_TILES_ARCHIVE = "us-20261109.pmtiles"', `MAP_TILES_ARCHIVE = "${to}"`);
     expect(text).not.toBe(toml());
     expect(nameProblems(text, runbook(), workerRule())).not.toEqual([]);
   });
@@ -476,23 +503,58 @@ describe('the street-map names the owner types are the names the Worker binds', 
   test.each([
     [
       'the upload key with two digits swapped',
-      'r2:ose-map-tiles-staging/planet-20261109.pmtiles',
-      'r2:ose-map-tiles-staging/planet-20261019.pmtiles',
+      'r2:ose-map-tiles-staging/us-20261109.pmtiles',
+      'r2:ose-map-tiles-staging/us-20261019.pmtiles',
     ],
     [
       'the upload to the production bucket',
-      'r2:ose-map-tiles-staging/planet-20261109.pmtiles',
-      'r2:ose-map-tiles-production/planet-20261109.pmtiles',
+      'r2:ose-map-tiles-staging/us-20261109.pmtiles',
+      'r2:ose-map-tiles-production/us-20261109.pmtiles',
     ],
     [
       'the upload under the bare build name',
-      'r2:ose-map-tiles-staging/planet-20261109.pmtiles',
+      'r2:ose-map-tiles-staging/us-20261109.pmtiles',
       'r2:ose-map-tiles-staging/20261109.pmtiles',
     ],
     [
-      'another bucket created',
-      'bucket create ose-map-tiles-staging',
-      'bucket create ose-map-tiles-stg',
+      'the upload under the planet key of 2026-11-09',
+      'r2:ose-map-tiles-staging/us-20261109.pmtiles',
+      'r2:ose-map-tiles-staging/planet-20261109.pmtiles',
+    ],
+    [
+      'a whole build uploaded in place of the extract',
+      'rclone copyto us-20261109.pmtiles',
+      'rclone copyto 20261109.pmtiles',
+    ],
+    [
+      'the extract written under another name',
+      '20261109.pmtiles us-20261109.pmtiles --region',
+      '20261109.pmtiles usa-20261109.pmtiles --region',
+    ],
+    [
+      'the extract cut from another build',
+      'build.protomaps.com/20261109.pmtiles us-',
+      'build.protomaps.com/20261108.pmtiles us-',
+    ],
+    [
+      'another bucket checked for a public URL',
+      'dev-url get ose-map-tiles-staging',
+      'dev-url get ose-map-tiles-stg',
+    ],
+    [
+      'another bucket checked for a custom domain',
+      'domain list ose-map-tiles-staging',
+      'domain list ose-uploads-staging',
+    ],
+    [
+      'a command that turns the public URL on, added under the checks',
+      'domain list ose-map-tiles-staging',
+      'domain list ose-map-tiles-staging\n   npx wrangler r2 bucket dev-url enable ose-map-tiles-staging',
+    ],
+    [
+      'a command that gives the bucket a custom domain, added under the checks',
+      'domain list ose-map-tiles-staging',
+      'domain list ose-map-tiles-staging\n   npx wrangler r2 bucket domain add ose-map-tiles-staging',
     ],
     [
       'the token scoped to another bucket',
@@ -503,6 +565,68 @@ describe('the street-map names the owner types are the names the Worker binds', 
     const text = runbook().replace(from, to);
     expect(text).not.toBe(runbook());
     expect(nameProblems(toml(), text, workerRule())).not.toEqual([]);
+  });
+
+  // The area the extract keeps (owner 2026-11-10): 50 states, DC, Puerto Rico
+  // and the US Virgin Islands, as boxes. The runbook's command names the file;
+  // a place left out of it draws hexagons only, with no error anywhere.
+  // @born-red street-map region file | method: 4 faults injected one at a time: the Puerto Rico box's east edge moved from -64.5 to -65.5 (two places reported left out), the box east of 180 removed (Attu left out), a ring left open, the path in the runbook's command mistyped; each turned this test red | date: 2026-11-10
+  test('the region the runbook cuts is a file in this repo, and holds the United States and not the rest', () => {
+    const file = /--region=(\S+)/.exec(runbook())?.[1];
+    expect(file).toBe('docs/runbooks/street-map-us-region.geojson');
+    const region = JSON.parse(root(file));
+    expect(region.type).toBe('Feature');
+    expect(region.geometry.type).toBe('MultiPolygon');
+    const rings = region.geometry.coordinates.map((polygon) => polygon[0]);
+    for (const ring of rings) {
+      expect(ring.length).toBeGreaterThanOrEqual(4);
+      expect(ring.at(-1)).toEqual(ring[0]);
+      for (const [lon, lat] of ring) {
+        expect(Math.abs(lon)).toBeLessThanOrEqual(180);
+        expect(Math.abs(lat)).toBeLessThanOrEqual(90);
+      }
+    }
+    // Even-odd ray casting, so the rule holds if a box is redrawn as a border.
+    const inRing = (ring, lon, lat) => {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    };
+    const held = ([lon, lat]) => rings.some((ring) => inRing(ring, lon, lat));
+    const inside = {
+      Chicago: [-87.63, 41.88],
+      'Sawyer, Michigan': [-86.59, 41.89],
+      'Key West': [-81.78, 24.56],
+      'Eastport, Maine': [-66.98, 44.91],
+      'Neah Bay, Washington': [-124.62, 48.37],
+      'Brownsville, Texas': [-97.5, 25.9],
+      'Washington, DC': [-77.04, 38.91],
+      Anchorage: [-149.9, 61.22],
+      'Utqiagvik, Alaska': [-156.79, 71.29],
+      'Ketchikan, Alaska': [-131.65, 55.34],
+      'Attu, Alaska (east of 180)': [172.9, 52.9],
+      Honolulu: [-157.86, 21.31],
+      'Hilo, Hawaii': [-155.09, 19.71],
+      'San Juan, Puerto Rico': [-66.11, 18.47],
+      'Charlotte Amalie, US Virgin Islands': [-64.93, 18.34],
+      'Christiansted, US Virgin Islands': [-64.7, 17.75],
+    };
+    const outside = {
+      London: [-0.13, 51.51],
+      'Mexico City': [-99.13, 19.43],
+      Tokyo: [139.69, 35.69],
+      Sydney: [151.21, -33.87],
+      Havana: [-82.37, 23.11],
+      Reykjavik: [-21.94, 64.15],
+    };
+    expect(Object.keys(inside).filter((name) => !held(inside[name]))).toEqual([]);
+    expect(Object.keys(outside).filter((name) => held(outside[name]))).toEqual([]);
   });
 
   test('rainy: a wrangler.toml with no staging bucket, or no archive name, is named, not passed', () => {

@@ -4,28 +4,58 @@ The landing map draws its streets from one file: an OpenStreetMap archive
 (Protomaps build, PMTiles) in an R2 bucket bound to the Worker as `MAP_TILES`
 (`lib/street-map.ts`; decision 4 in
 [`../positioning/MAPPING-COST-STRUCTURE.md`](../positioning/MAPPING-COST-STRUCTURE.md)).
-Owner decisions, 2026-11-09: the archive is the **whole planet**, it lives on our
-own Cloudflare account, and **staging gets it before production**.
+Owner decisions:
 
-**Every step here is the owner's.** An agent never creates a bucket, never loads
-or downloads the archive, never holds the R2 token, and never touches production
-(`AGENTS.md`, Human approval).
+- 2026-11-09: the archive lives on our own Cloudflare account, and **staging gets
+  it before production**.
+- 2026-11-10: the archive is the **United States subset** of a Protomaps build
+  (the 50 states, DC, Puerto Rico and the US Virgin Islands), cut out with
+  `pmtiles extract`. This replaces the whole planet chosen on 2026-11-09.
+  Areas outside the subset draw hexagons only.
+
+**Every step here is the owner's.** An agent never creates a bucket, never cuts,
+loads or downloads the archive, never holds the R2 token, and never touches
+production (`AGENTS.md`, Human approval).
 
 ## Names
 
-| What                | Staging                   | Production (later, its own PR) |
-| ------------------- | ------------------------- | ------------------------------ |
-| Bucket              | `ose-map-tiles-staging`   | `ose-map-tiles-production`     |
-| Object key          | `planet-YYYYMMDD.pmtiles` | the same key, the same build   |
-| Binding             | `MAP_TILES`               | `MAP_TILES`                    |
-| Setting for the key | `MAP_TILES_ARCHIVE`       | `MAP_TILES_ARCHIVE`            |
+| What                | Staging                 | Production (later, its own PR) |
+| ------------------- | ----------------------- | ------------------------------ |
+| Bucket              | `ose-map-tiles-staging` | `ose-map-tiles-production`     |
+| Object key          | `us-YYYYMMDD.pmtiles`   | the same key, the same file    |
+| Binding             | `MAP_TILES`             | `MAP_TILES`                    |
+| Setting for the key | `MAP_TILES_ARCHIVE`     | `MAP_TILES_ARCHIVE`            |
 
-`YYYYMMDD` is the Protomaps build date. `wrangler.toml` carries
-`planet-20261109.pmtiles` as a placeholder; if you load another build, change
-that value (both environment blocks) before the binding PR merges. The key must
-match `^[a-z0-9][a-z0-9._-]{0,80}\.pmtiles$` or the Worker refuses it.
+`YYYYMMDD` is the date of the Protomaps build the file was cut from.
+`wrangler.toml` carries `us-20261109.pmtiles`. If you cut another build, change
+that value (both environment blocks) and the commands in steps 2 and 4 in one
+PR: `tests/unit/ci/env-parity.test.js` fails when they name different files. The
+key must match `^[a-z0-9][a-z0-9._-]{0,80}\.pmtiles$` or the Worker refuses it.
 
-## What the docs say (read 2026-11-09; re-read before you rely on a number)
+## The region
+
+The area kept is [`street-map-us-region.geojson`](street-map-us-region.geojson),
+next to this runbook: one GeoJSON feature of five boxes (degrees).
+
+| Box                                   | West   | South | East   | North |
+| ------------------------------------- | ------ | ----- | ------ | ----- |
+| The 48 contiguous states and DC       | -125.1 | 24.3  | -66.8  | 49.5  |
+| Alaska, west of 180°                  | -180.0 | 51.0  | -129.9 | 71.6  |
+| Alaska, the Aleutians east of 180°    | 172.0  | 51.0  | 180.0  | 53.5  |
+| Hawaii                                | -160.4 | 18.8  | -154.6 | 22.4  |
+| Puerto Rico and the US Virgin Islands | -67.4  | 17.6  | -64.5  | 18.6  |
+
+They are boxes, not borders, so a strip of Canada and Mexico along the borders
+is inside. Not inside: Guam, the Northern Mariana Islands, American Samoa, and
+outliers such as Mona Island and the Hawaiian islands north-west of Niihau.
+
+**Outside the region the map draws hexagons only.** The file holds no detailed
+tile there, and the Worker draws no street layer for a frame it has no tile for
+(decision 4 in the cost structure, "A layer needs tiles"). No page fails and
+nothing is logged as an error. An area that straddles a box's edge draws the
+streets of the tiles the file has.
+
+## What the docs say (read 2026-11-09 and 2026-11-10; re-read before you rely on a number)
 
 - **Wrangler cannot load this file.** `wrangler r2 object put` takes files up to
   315 MB. For larger files Cloudflare points to rclone or another S3-compatible
@@ -44,40 +74,77 @@ match `^[a-z0-9][a-z0-9._-]{0,80}\.pmtiles$` or the Worker refuses it.
 - **Protomaps.** Daily builds are listed at <https://maps.protomaps.com/builds>.
   The past week's builds are kept, plus the latest of each patch version, so a
   build date older than a week may be gone. The page gives the planet as about
-  120 GB; build `20261003` measured 138.5 GB in our proof. Its upload
+  120 GB; build `20261003` measured 138.5 GB in our proof. We no longer load the
+  whole file, only the part cut from it. Its upload
   example is `rclone copyto <file> <remote>:<bucket>/<key> --progress --s3-chunk-size=256M`.
   <https://docs.protomaps.com/basemaps/downloads>, <https://docs.protomaps.com/pmtiles/cloud-storage>
+- **Cutting a region (`pmtiles extract`, the go-pmtiles CLI).** Read 2026-11-10.
+  The command is `pmtiles extract <input> <output>`; the input may be a file or
+  an `https` address, and must be a clustered archive. `--region` takes a local
+  GeoJSON file: a Polygon, a MultiPolygon, a Feature or a FeatureCollection.
+  `--download-threads` sets the parallel requests (4 by default).
+  <https://docs.protomaps.com/pmtiles/cli>
+  From the CLI's source (`main.go`, `pmtiles/extract.go`, `pmtiles/bitmap.go` on
+  its `main` branch, not on the docs page): `--dry-run` works out the tiles and
+  prints the size of the archive without downloading them; tiles are copied as
+  they are, so gzip tiles stay gzip, and the new directories are written gzip;
+  every parent tile of a kept tile is kept whole, so the low zooms still show the
+  land around the region. A region that crosses longitude 180 gets no special
+  handling, which is why the Aleutians are two boxes.
 - **Builds go away.** Seen on 2026-11-09 by the session that read the real
   file (not on a docs page): `https://build.protomaps.com/20261003.pmtiles`, the
   build our proof used, answers 404; build `20261109` is 139.4 GB; the builds
   still offered are listed, with checksums, at
   <https://build-metadata.protomaps.dev/builds.json>. So the copy we load is the
-  copy we keep: there is no going back to Protomaps for an old build.
+  copy we keep: there is no going back to Protomaps for an old build, and the
+  same file cannot be cut a second time once its build is gone.
 - **Cost.** Storage $0.015 per GB-month, first 10 GB free per account. Each
   uploaded part is one Class A operation ($4.50 per million, first million free):
-  at 256 MB parts the planet is about 520 parts, so the upload itself costs
+  at 256 MB parts a file is four parts per GB, so the upload itself costs
   nothing. <https://developers.cloudflare.com/r2/platform/pricing/>
 
 ## Staging, in order
 
-1. **Create the bucket** (your terminal, your Cloudflare login):
+1. **Check the bucket is private.** The bucket is already there, and you did not
+   make it: the PR that added the binding merged before the bucket existed, and
+   its staging deploy created `ose-map-tiles-staging`, empty (run 42865404464,
+   `T1 Deploy → Staging`, 2026-11-10 17:41 UTC: the log reads "Creating new R2
+   Bucket"). Nobody chose its settings, so read them (your terminal, your
+   Cloudflare login):
 
    ```bash
-   npx wrangler r2 bucket create ose-map-tiles-staging
+   npx wrangler r2 bucket dev-url get ose-map-tiles-staging
    ```
 
-   Leave it private: no `r2.dev` public URL and no custom domain. The Worker is
-   its only reader.
+   ```bash
+   npx wrangler r2 bucket domain list ose-map-tiles-staging
+   ```
 
-2. **Get the build.** Pick a build date at <https://maps.protomaps.com/builds> and
-   download the planet file to a disk with about 150 GB free. Check the download
-   against the checksum Protomaps lists for that build, and **keep your own
-   copy**: the build will not stay on their side. Record on the owner-step
-   ticket the build name, its byte size, its checksum, and what
-   `pmtiles show <file>` prints (CLI: github.com/protomaps/go-pmtiles): the zoom
-   range, the compression of tiles and directories, and the tile entry count.
-   The reader reads **gzip** only; a build with other compression draws hexagons
-   only.
+   The first must report the `r2.dev` public URL as off, the second no custom
+   domain. If either is on, turn it off before anything is loaded. The Worker is
+   the bucket's only reader.
+
+2. **Cut the United States file.** Install the `pmtiles` CLI
+   (github.com/protomaps/go-pmtiles), pick a build date at
+   <https://maps.protomaps.com/builds>, and run from the root of this repo:
+
+   ```bash
+   pmtiles extract https://build.protomaps.com/20261109.pmtiles us-20261109.pmtiles --region=docs/runbooks/street-map-us-region.geojson
+   ```
+
+   The command reads the build at Protomaps by byte range and writes only the
+   region's tiles, so the whole planet is never downloaded. **The size of the
+   file is not measured yet.** Run the same command with `--dry-run` added first:
+   it prints the archive size without fetching the tiles, which is the free disk
+   you need. The file is ours, so Protomaps lists no checksum for it: take its
+   SHA-256 yourself, and **keep your own copy**, because the build will not stay
+   on their side. Record on the owner-step ticket the build date, the file's
+   byte size, its SHA-256, and what `pmtiles show us-20261109.pmtiles` prints:
+   the zoom range, the tile and internal compression, and the tile entries
+   count. The reader reads **gzip** only; a file with other compression draws
+   hexagons only. The byte size then goes into
+   [`../positioning/MAPPING-COST-STRUCTURE.md`](../positioning/MAPPING-COST-STRUCTURE.md),
+   which carries it as unmeasured until then.
 
 3. **Create an R2 API token** in the dashboard: "Object Read & Write", scoped to
    `ose-map-tiles-staging` only. Put the key pair in your own rclone config. It
@@ -86,35 +153,39 @@ match `^[a-z0-9][a-z0-9._-]{0,80}\.pmtiles$` or the Worker refuses it.
 4. **Upload** under the dated key:
 
    ```bash
-   rclone copyto 20261109.pmtiles r2:ose-map-tiles-staging/planet-20261109.pmtiles --progress --s3-chunk-size=256M
+   rclone copyto us-20261109.pmtiles r2:ose-map-tiles-staging/us-20261109.pmtiles --progress --s3-chunk-size=256M
    ```
 
    Check that the bucket lists the key at the exact byte size of the file.
 
 5. **Delete the token.** The Worker reads through its binding, not the token.
 
-6. **Confirm the two names on the binding PR** (bucket and key), then merge it.
-   CI deploys staging. Do not merge first: see "If the binding lands before the
-   bucket".
+6. **Check the name the Worker reads.** `MAP_TILES_ARCHIVE` on `main`, in both
+   environment blocks of `wrangler.toml`, must be the key you uploaded. The
+   merge of that name and the upload can come in either order: until both are
+   done the Worker finds no object under the name it reads and draws hexagons
+   only, as it does today. After both, the next landing request should draw
+   streets: a read that found no object is not remembered.
 
-7. **Look at staging.** The landing shows streets under the hexagons and the
-   OpenStreetMap credit, and a tapped hexagon shows its dots over streets. In the
-   run's `T2: Bruno Pages contract` log, the two street-map requests print their
-   street assertions and no `NOT RUN` line.
+7. **Look at staging.** For areas in the United States, the landing shows
+   streets under the hexagons and the OpenStreetMap credit, and a tapped hexagon
+   shows its dots over streets. In the run's `T2: Bruno Pages contract` log, the
+   two street-map requests print their street assertions and no `NOT RUN` line.
 
 8. **Make the staging cases binding.** One-line PR: `streetMapArchiveLoaded` to
    `"true"` in `bruno/ose-pages/environments/ose-staging.yml`. From then on a
    staging run that draws no streets is red, not a printed `NOT RUN`.
 
-## If the binding lands before the bucket
+## When the binding lands before the bucket
 
-Do not find out on `main`. Cloudflare's documentation does not say what
+It did, on staging, on 2026-11-10. Cloudflare's documentation does not say what
 `wrangler deploy` does when a binding names a bucket that does not exist; it
 documents creating the bucket first. The wrangler this repo pins (4.158.0) has
-resource provisioning on by default, and its code tries to create a missing
-named bucket with the deploy token. So the likely result is an empty bucket made
-by CI, which is a provisioning step that belongs to the owner, or a failed
-staging deploy if the token may not create buckets. Neither was run.
+resource provisioning on by default: the staging deploy listed `MAP_TILES` as a
+binding to provision and created the bucket with the deploy token (run
+42865404464). So a bucket named in a merged binding is made by CI, with default
+settings, which is a provisioning step that belongs to the owner. For
+production, create the bucket before the binding PR merges.
 
 With the bucket present and the archive missing, the Worker finds no object and
 the map stays hexagons only. The two staging cases then print `NOT RUN`, or fail
@@ -125,7 +196,7 @@ once step 8 is done.
 Production has no `MAP_TILES` binding, and `scripts/ci/env-parity.mjs` lists that
 as an open difference (`--strict`, the check before production is announced,
 fails on it). After step 8: create `ose-map-tiles-production`, load the **same
-build under the same key**, then one PR adds `[[env.production.r2_buckets]]` and
+file under the same key**, then one PR adds `[[env.production.r2_buckets]]` and
 removes the open entry from `env-parity.mjs`. `tests/unit/ci/env-parity.test.js`
 refuses a production binding while `streetMapArchiveLoaded` is not `"true"`.
 Loading a bucket is not a launch: production stays closed and no
@@ -133,11 +204,13 @@ Loading a bucket is not a launch: production stays closed and no
 
 ## Refreshing the archive
 
-Upload the new build under its **own dated key**, then change `MAP_TILES_ARCHIVE`
-in both environment blocks in one PR. Never overwrite an object in place: a
+Cut the new build with the same region file, upload it under its **own dated
+key**, then change `MAP_TILES_ARCHIVE` in both environment blocks, and the
+commands in steps 2 and 4, in one PR. Never overwrite an object in place: a
 running Worker keeps an archive's directories in memory, by key, and would read
 the new file with the old directories. Delete the old object only after the new
-one has drawn on staging.
+one has drawn on staging. Changing the region is the same steps with a new
+region file.
 
 ## Back to hexagons only
 
@@ -187,8 +260,15 @@ workstation. The two leaf directories read held 61,239 entries each (115 KB and
 129 KB gzipped, about 0.32 MB unpacked), so the 300,000-entry budget keeps four
 of that size.
 
+Every measure above was made on the whole build, at Protomaps. The United States
+file holds the same tiles for its area, but `pmtiles extract` writes it new
+directories, and the reader has not read that file yet.
+
 Still unmeasured:
 
+- the United States file itself: its size, how its directories are laid out
+  (how many leaf directories, how many entries in each), and the reader drawing
+  from it;
 - the first map in a new Worker instance, reading from R2. The workstation's
   1.4 s sits just under the 1.5 s limit that turns a slow read into hexagons
   only; it went over the public internet, so it says nothing about R2, and this

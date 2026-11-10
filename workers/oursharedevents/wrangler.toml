@@ -191,11 +191,14 @@ bucket_name = "ose-uploads-staging"
 
 # ── Street map tiles (staging) ───────────────────────────────────────────────
 # The self-hosted OpenStreetMap archive the landing map draws its streets from
-# (lib/street-map.ts): the whole-planet Protomaps build (owner 2026-11-09), read
-# by byte range. The Worker is its only reader; the bucket has no public URL.
-# OWNER STEPS FIRST (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md): the bucket
-# exists and the archive named by MAP_TILES_ARCHIVE below is loaded before this
-# block reaches main. An agent never creates the bucket or loads the file.
+# (lib/street-map.ts): the United States subset of a Protomaps build (owner
+# 2026-11-10, in place of the whole planet chosen 2026-11-09), read by byte
+# range. The Worker is its only reader; the bucket must have no public URL
+# (the runbook, step 1, reads its settings).
+# OWNER STEPS (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md): the bucket exists,
+# made empty by the staging deploy of 2026-11-10; the owner loads the archive
+# named by MAP_TILES_ARCHIVE below. Until it is there the map draws hexagons
+# only. An agent never creates the bucket or loads the file.
 # Staging first: production gets the same binding in its own PR, after the
 # staging street-map cases have passed. Until then scripts/ci/env-parity.mjs
 # lists the difference as open, and production draws hexagons only.
@@ -276,10 +279,11 @@ SCAN_RETURNS_RETENTION_DAYS = "365"
 PUBLISH_GRACE_MINUTES = "10"
 SPONSOR_GEO_MATCH_ENABLED = "0"
 # The street-map archive's object key in the MAP_TILES bucket (lib/street-map.ts):
-# the whole-planet Protomaps build, named by its build date. A refresh is a new
-# key and a PR that changes this value, never an overwrite: the Worker keeps an
-# archive's directories for the life of an isolate, keyed by this name.
-MAP_TILES_ARCHIVE = "planet-20261109.pmtiles"
+# the United States subset of a Protomaps build (owner 2026-11-10), named by the
+# build date. Areas outside it have no tiles and draw hexagons only. A refresh is
+# a new key and a PR that changes this value, never an overwrite: the Worker keeps
+# an archive's directories for the life of an isolate, keyed by this name.
+MAP_TILES_ARCHIVE = "us-20261109.pmtiles"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
 # Allow Bearer token fallback in staging (for local testing without CF Access)
@@ -442,7 +446,7 @@ SPONSOR_GEO_MATCH_ENABLED = "0"
 # The street-map archive's object key (see the staging block). The same value as
 # staging, so the two stay in sync. It does nothing here yet: production has no
 # MAP_TILES binding, so lib/street-map.ts returns before it reads this name.
-MAP_TILES_ARCHIVE = "planet-20261109.pmtiles"
+MAP_TILES_ARCHIVE = "us-20261109.pmtiles"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
 # ALLOW_OCR_INTERNAL is deliberately absent in production (ADR-012 gate R2,
