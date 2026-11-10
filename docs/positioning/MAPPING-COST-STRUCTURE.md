@@ -66,9 +66,13 @@ share one load, so the real figure is lower.
    no browser fetch), and the server, not the visitor, picks which tiles to read, so
    no tile request says where a person looked. The Worker reads at most 12 tiles
    (zoom 14 or coarser) per landing render where the map draws, plus directories it
-   keeps per isolate: at 1 million such views that is about 12 million R2 reads,
-   about $0.75 a month after the free 10 million. Any failure, or a read slower than
-   1.5 s, draws the hexagons alone. The OpenStreetMap credit shows whenever streets do.
+   keeps per isolate. Tiles that sit together in the file come from one R2 read
+   (2026-11-10). Measured on build `20261109` for three views: 3 reads for a first
+   map and 1 for the next, where reading each tile by itself took 8 to 14 and 6
+   to 12. At 1 million such views that is 1 to 3 million R2 reads, inside the
+   free 10 million; tile by tile it was about 12 million, about $0.75 a month.
+   Any failure, or a read slower than 1.5 s, draws the hexagons alone. The
+   OpenStreetMap credit shows whenever streets do.
 
    **Turning it on (owner steps, 2026-11-09):** the archive is the whole-planet
    build, on our own Cloudflare account, and staging gets it before production.

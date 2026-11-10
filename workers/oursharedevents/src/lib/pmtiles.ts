@@ -202,6 +202,9 @@ const MAX_LEAVES = 64;
  * can hold a hundred thousand. Counting leaves alone, 64 of those would outgrow
  * a Worker's memory. An entry measured about 82 bytes in Node, so this budget is
  * about 25 MB. The newest leaf always stays, whatever its size.
+ * Measured on build 20261109 (2026-11-10, two leaves, from a workstation): each
+ * held 61,239 entries (115 KB and 129 KB gzipped, about 0.32 MB unpacked, 5 ms
+ * to unpack and decode), so this budget keeps four leaves of that size.
  */
 export const MAX_LEAF_ENTRIES = 300_000;
 
@@ -269,30 +272,107 @@ export async function archiveHeader(src: RangeSource): Promise<PmtilesHeader> {
   return (await open(src)).header;
 }
 
+/** The directory entry that holds this tile's bytes, or null when the archive has none. */
+async function tileEntry(src: RangeSource, o: Opened, id: number): Promise<DirEntry | null> {
+  let dir = o.root;
+  for (let depth = 0; depth <= MAX_DEPTH; depth++) {
+    const e = findEntry(dir, id);
+    if (!e) return null;
+    if (e.runLength > 0) return e;
+    dir = await leaf(src, o, e);
+  }
+  throw new PmtilesError('directory nesting too deep');
+}
+
+export interface ByteRange {
+  offset: number;
+  length: number;
+}
+
 /**
- * One tile's bytes, decompressed, or null when the archive has no tile there
- * (open water and empty land are often left out).
+ * Two wanted ranges this close are read in one request, the bytes between them
+ * included. A Protomaps build stores tiles in Hilbert order, so the tiles of
+ * one map frame sit back to back or a tile or two apart (measured on build
+ * 20261109: 12 of 12 back to back at z14, and gaps of about 180 KB at z12).
+ * Reading a gap through costs bytes that R2 does not charge for; skipping it
+ * costs a second request.
  */
+export const MAX_READ_GAP = 262_144;
+/** One merged read is at most this long. A single range longer than this is read alone. */
+export const MAX_READ_BYTES = 2_097_152;
+
+/**
+ * The fewest reads that cover every wanted range: sorted, repeats dropped,
+ * neighbours joined while the gap between them is at most `maxGap` and the
+ * joined read is at most `maxBytes`. Pure.
+ */
+export function planReads(
+  wanted: readonly ByteRange[],
+  maxGap = MAX_READ_GAP,
+  maxBytes = MAX_READ_BYTES
+): ByteRange[] {
+  const sorted = [...wanted].sort((a, b) => a.offset - b.offset);
+  const out: ByteRange[] = [];
+  for (const r of sorted) {
+    const cur = out[out.length - 1];
+    if (cur) {
+      const curEnd = cur.offset + cur.length;
+      const end = Math.max(curEnd, r.offset + r.length);
+      if (r.offset - curEnd <= maxGap && end - cur.offset <= maxBytes) {
+        cur.length = end - cur.offset;
+        continue;
+      }
+    }
+    out.push({ offset: r.offset, length: r.length });
+  }
+  return out;
+}
+
+/**
+ * These tiles' bytes, decompressed, in the order asked; null where the archive
+ * has no tile (open water and empty land are often left out). Tiles that sit
+ * near each other in the file come from one read (planReads), and tiles that
+ * share one stored tile (a run) are read and decompressed once.
+ */
+export async function readTiles(
+  src: RangeSource,
+  z: number,
+  tiles: readonly (readonly [x: number, y: number])[]
+): Promise<(Uint8Array | null)[]> {
+  const o = await open(src);
+  if (z < o.header.minZoom || z > o.header.maxZoom) return tiles.map(() => null);
+  const entries = await Promise.all(tiles.map(([x, y]) => tileEntry(src, o, zxyToTileId(z, x, y))));
+  const at = (e: DirEntry): number => o.header.tileDataOffset + e.offset;
+  // Tiles of one run share one entry: it is wanted once.
+  const stored = [...new Set(entries)].filter((e): e is DirEntry => e !== null);
+  const reads = planReads(stored.map((e) => ({ offset: at(e), length: e.length })));
+  const chunks = await Promise.all(reads.map((r) => src.read(r.offset, r.length)));
+  const done = new Map<DirEntry, Promise<Uint8Array>>();
+  const bytesOf = (e: DirEntry): Promise<Uint8Array> => {
+    const hit = done.get(e);
+    if (hit) return hit;
+    // The reads are in file order and each starts at a wanted tile, so the first
+    // one that reaches this tile's end is the one that holds it.
+    const i = reads.findIndex((r) => at(e) + e.length <= r.offset + r.length);
+    const from = at(e) - reads[i]!.offset;
+    const chunk = chunks[i]!;
+    // The source answered with fewer bytes than asked: half a tile is no tile.
+    if (from + e.length > chunk.length) throw new PmtilesError('short read');
+    const p = decompress(chunk.subarray(from, from + e.length), o.header.tileCompression);
+    done.set(e, p);
+    return p;
+  };
+  return Promise.all(entries.map((e) => (e ? bytesOf(e) : null)));
+}
+
+/** One tile's bytes, decompressed, or null when the archive has no tile there. */
 export async function readTile(
   src: RangeSource,
   z: number,
   x: number,
   y: number
 ): Promise<Uint8Array | null> {
-  const o = await open(src);
-  if (z < o.header.minZoom || z > o.header.maxZoom) return null;
-  const id = zxyToTileId(z, x, y);
-  let dir = o.root;
-  for (let depth = 0; depth <= MAX_DEPTH; depth++) {
-    const e = findEntry(dir, id);
-    if (!e) return null;
-    if (e.runLength > 0) {
-      const raw = await src.read(o.header.tileDataOffset + e.offset, e.length);
-      return decompress(raw, o.header.tileCompression);
-    }
-    dir = await leaf(src, o, e);
-  }
-  throw new PmtilesError('directory nesting too deep');
+  return (await readTiles(src, z, [[x, y]]))[0]!;
 }
 
 /** Minimal shape of the R2 binding this module reads (`R2Bucket` satisfies it). */

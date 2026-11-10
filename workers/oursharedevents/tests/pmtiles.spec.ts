@@ -26,13 +26,17 @@ import {
   decompress,
   findEntry,
   parseHeader,
+  planReads,
   r2Source,
   readTile,
+  readTiles,
   resetPmtilesCache,
   zxyToTileId,
   PmtilesError,
   HEADER_BYTES,
   MAX_LEAF_ENTRIES,
+  MAX_READ_BYTES,
+  MAX_READ_GAP,
   type DirEntry,
   type RangeSource,
 } from '../src/lib/pmtiles';
@@ -809,6 +813,230 @@ describe('pmtiles | leaf directory cache budget', () => {
     expect(leafReads(A)).toBe(1);
     await read(D);
     expect(leafReads(D)).toBe(2);
+  });
+});
+
+// Tiles that sit near each other in the file come from one read (2026-11-10).
+// Measured on the planet build (20261109): the 12 tiles of a zoomed area are
+// back to back, and read one by one a first map cost 14 reads; it costs 3 now.
+// @born-red reads planned and tiles read together | method: StrykerJS mutants of planReads and readTiles in src/lib/pmtiles.ts, each case seen failing against the mutant it kills (status Killed in the report); the loader's read count in street-map.spec.ts seen failing on the reader that read each tile by itself (14 reads, 3 expected) | date: 2026-11-10
+describe('pmtiles | planning reads', () => {
+  const R = (offset: number, length: number) => ({ offset, length });
+
+  it('nothing wanted is no read', () => {
+    expect(planReads([])).toEqual([]);
+  });
+
+  it('ranges back to back are one read, whatever order they come in', () => {
+    expect(planReads([R(300, 50), R(100, 100), R(200, 100)])).toEqual([R(100, 250)]);
+  });
+
+  it('a gap of exactly the limit is read through; one byte more is a second read', () => {
+    expect(planReads([R(0, 10), R(10 + 64, 5)], 64, 1000)).toEqual([R(0, 79)]);
+    expect(planReads([R(0, 10), R(10 + 65, 5)], 64, 1000)).toEqual([R(0, 10), R(75, 5)]);
+  });
+
+  it('a joined read of exactly the size limit is one read; one byte more is two', () => {
+    expect(planReads([R(0, 60), R(60, 40)], 0, 100)).toEqual([R(0, 100)]);
+    expect(planReads([R(0, 60), R(60, 41)], 0, 100)).toEqual([R(0, 60), R(60, 41)]);
+    // Near enough, but too much to hold: the size limit decides alone.
+    expect(planReads([R(0, 60), R(70, 41)], 500, 100)).toEqual([R(0, 60), R(70, 41)]);
+  });
+
+  it('a range longer than the size limit is read alone and whole', () => {
+    expect(planReads([R(0, 500)], 0, 100)).toEqual([R(0, 500)]);
+    expect(planReads([R(0, 500), R(500, 10)], 0, 100)).toEqual([R(0, 500), R(500, 10)]);
+  });
+
+  it('a repeat, and a range inside another, add nothing; an overlap reaches the further end', () => {
+    expect(planReads([R(100, 100), R(100, 100), R(120, 30)])).toEqual([R(100, 100)]);
+    expect(planReads([R(100, 100), R(150, 100)])).toEqual([R(100, 150)]);
+  });
+
+  it('the gap is measured from the end of the read so far, not from the last range', () => {
+    // 10..20 lies inside 0..100. The next range starts 64 past 100, not past 20.
+    expect(planReads([R(0, 100), R(10, 10), R(164, 5)], 64, 1000)).toEqual([R(0, 169)]);
+    expect(planReads([R(0, 100), R(10, 10), R(165, 5)], 64, 1000)).toEqual([R(0, 100), R(165, 5)]);
+  });
+
+  it('leaves what it was given as it was', () => {
+    const wanted = Object.freeze([
+      Object.freeze(R(300, 50)),
+      Object.freeze(R(100, 100)),
+      Object.freeze(R(200, 100)),
+    ]);
+    expect(planReads(wanted)).toEqual([R(100, 250)]);
+    expect(wanted.map((r) => r.offset)).toEqual([300, 100, 200]);
+    expect(wanted[1]).toEqual(R(100, 100));
+  });
+
+  it('by default reads through 256 KiB and stops a read at 2 MiB', () => {
+    expect(MAX_READ_GAP).toBe(256 * 1024);
+    expect(MAX_READ_BYTES).toBe(2 * 1024 * 1024);
+    expect(planReads([R(0, 1), R(1 + MAX_READ_GAP, 1)])).toHaveLength(1);
+    expect(planReads([R(0, 1), R(2 + MAX_READ_GAP, 1)])).toHaveLength(2);
+    expect(planReads([R(0, MAX_READ_BYTES - 1), R(MAX_READ_BYTES - 1, 1)])).toHaveLength(1);
+    expect(planReads([R(0, MAX_READ_BYTES - 1), R(MAX_READ_BYTES - 1, 2)])).toHaveLength(2);
+  });
+});
+
+describe('pmtiles | reading several tiles at once', () => {
+  const GIB = 2 ** 30;
+  const DATA_AT = 5 * GIB;
+  const OPTS = { leafSize: 4, fanOut: 2, leafAt: 3 * 2 ** 20, dataAt: DATA_AT };
+  const ROW = 6092;
+  const xy = (t: PlanetTile): [number, number] => [t.x, t.y];
+  const tileReads = (src: { reads: [number, number][] }) =>
+    src.reads.filter(([off]) => off >= DATA_AT);
+
+  /** Tiles of one z14 row, each `gaps[i]` bytes after the one before it. */
+  async function row(words: string[], gaps: number[] = []) {
+    const tiles: PlanetTile[] = [];
+    let at = 0;
+    for (const [i, w] of words.entries()) {
+      at += gaps[i] ?? 0;
+      const data = bytes(w);
+      tiles.push({ z: 14, x: 4201 + i, y: ROW, data, at });
+      at += (await gzip(data)).length;
+    }
+    const { file, stored } = await planetArchive(tiles, OPTS);
+    return { tiles, stored, src: sparseSource(file) };
+  }
+
+  it('tiles back to back are one read, and each tile gets its own bytes in the order asked', async () => {
+    const { tiles, stored, src } = await row(['alpha', 'bravo-bravo', 'charlie']);
+    const [a, b, c] = tiles as [PlanetTile, PlanetTile, PlanetTile];
+    const got = await readTiles(src, 14, [xy(c), xy(a), xy(b)]);
+    expect(got.map(text)).toEqual(['charlie', 'alpha', 'bravo-bravo']);
+    const from = stored.get(a)![0];
+    const to = stored.get(c)![0] + stored.get(c)![1];
+    expect(tileReads(src)).toEqual([[from, to - from]]);
+  });
+
+  it('a gap of exactly the limit is read through, and the bytes on both sides are cut right', async () => {
+    const { tiles, stored, src } = await row(['near', 'far-side'], [0, MAX_READ_GAP]);
+    const got = await readTiles(src, 14, tiles.map(xy));
+    expect(got.map(text)).toEqual(['near', 'far-side']);
+    const [a, b] = tiles.map((t) => stored.get(t)!) as [[number, number], [number, number]];
+    expect(b[0] - (a[0] + a[1])).toBe(MAX_READ_GAP);
+    expect(tileReads(src)).toEqual([[a[0], b[0] + b[1] - a[0]]]);
+  });
+
+  it('one byte past the limit is two reads, each tile from its own, in either order', async () => {
+    const { tiles, stored, src } = await row(['near', 'far-side'], [0, MAX_READ_GAP + 1]);
+    const [a, b] = tiles as [PlanetTile, PlanetTile];
+    expect((await readTiles(src, 14, [xy(b), xy(a)])).map(text)).toEqual(['far-side', 'near']);
+    expect(tileReads(src)).toHaveLength(2);
+    expect(tileReads(src)).toContainEqual(stored.get(a));
+    expect(tileReads(src)).toContainEqual(stored.get(b));
+  });
+
+  it('a tile longer than the gap before it is cut from its own read, not from the read before', async () => {
+    // Bytes that do not compress, so the stored tile is longer than the gap.
+    const noise = new Uint8Array(300_000);
+    let s = 20261110;
+    for (let i = 0; i < noise.length; i++) {
+      s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+      noise[i] = s >>> 24;
+    }
+    const small: PlanetTile = { z: 14, x: 4201, y: ROW, data: bytes('near'), at: 0 };
+    const smallLen = (await gzip(small.data)).length;
+    const big: PlanetTile = {
+      z: 14,
+      x: 4202,
+      y: ROW,
+      data: noise,
+      at: smallLen + MAX_READ_GAP + 1,
+    };
+    const { file, stored } = await planetArchive([small, big], OPTS);
+    const src = sparseSource(file);
+    const [a, b] = [stored.get(small)!, stored.get(big)!];
+    // The tile's start, less its own length, falls before the first read's end.
+    expect(b[1]).toBeGreaterThan(b[0] - (a[0] + a[1]));
+    const got = await readTiles(src, 14, [xy(small), xy(big)]);
+    expect(text(got[0]!)).toBe('near');
+    expect(got[1]!.length).toBe(noise.length);
+    expect(got[1]!.every((v, i) => v === noise[i])).toBe(true);
+    expect(tileReads(src)).toEqual([a, b]);
+  });
+
+  it('a run: three tiles of open water are one stored tile, read once and unpacked once', async () => {
+    const water: PlanetTile = { z: 13, x: 0, y: 0, data: bytes('water'), at: 0, run: 4 ** 6 };
+    const { file, stored } = await planetArchive([water], OPTS);
+    const src = sparseSource(file);
+    const got = await readTiles(src, 13, [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+    ]);
+    expect(got.map(text)).toEqual(['water', 'water', 'water']);
+    expect(got[1]).toBe(got[0]);
+    expect(got[2]).toBe(got[0]);
+    expect(tileReads(src)).toEqual([stored.get(water)]);
+  });
+
+  it('a tile the archive does not hold is null in its place and costs no read', async () => {
+    const { tiles, src } = await row(['alpha', 'bravo']);
+    const [a, b] = tiles as [PlanetTile, PlanetTile];
+    const got = await readTiles(src, 14, [xy(a), [9000, 9000], xy(b), [0, 0]]);
+    expect(got.map(text)).toEqual(['alpha', null, 'bravo', null]);
+    expect(tileReads(src)).toHaveLength(1);
+  });
+
+  it('nothing held, or nothing asked: no tile read', async () => {
+    const { src } = await row(['alpha']);
+    expect(
+      await readTiles(src, 14, [
+        [9000, 9000],
+        [0, 0],
+      ])
+    ).toEqual([null, null]);
+    expect(await readTiles(src, 14, [])).toEqual([]);
+    expect(tileReads(src)).toHaveLength(0);
+  });
+
+  it('a zoom outside the archive is null for every tile, after the header read alone', async () => {
+    const { tiles, src } = await row(['alpha', 'bravo']);
+    expect(await readTiles(src, 16, tiles.map(xy))).toEqual([null, null]);
+    expect(src.reads).toHaveLength(1);
+  });
+
+  it('a tile address outside its zoom is refused before any tile read', async () => {
+    const { tiles, src } = await row(['alpha']);
+    await expect(readTiles(src, 14, [xy(tiles[0]!), [2 ** 14, 0]])).rejects.toThrow(
+      'tile out of range'
+    );
+    expect(tileReads(src)).toHaveLength(0);
+  });
+
+  it('a short answer is refused by name: part of a read is no tile', async () => {
+    const { tiles, src } = await row(['alpha', 'bravo', 'charlie']);
+    const short: RangeSource = {
+      key: 'short',
+      read: async (offset, length) => {
+        const all = await src.read(offset, length);
+        return offset >= DATA_AT ? all.subarray(0, length - 1) : all;
+      },
+    };
+    const err = await readTiles(short, 14, tiles.map(xy)).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PmtilesError);
+    expect((err as Error).message).toBe('short read');
+    // The same for one tile asked by itself.
+    const lastOnly = await readTiles(short, 14, [xy(tiles[2]!)]).catch((e: unknown) => e);
+    expect((lastOnly as Error).message).toBe('short read');
+  });
+
+  it('a read that fails fails the call: no tile is handed back alone', async () => {
+    const { tiles, src } = await row(['near', 'far-side'], [0, MAX_READ_GAP + 1]);
+    let n = 0;
+    const flaky: RangeSource = {
+      key: 'flaky',
+      read: async (offset, length) => {
+        if (offset >= DATA_AT && ++n === 2) throw new Error('network');
+        return src.read(offset, length);
+      },
+    };
+    await expect(readTiles(flaky, 14, tiles.map(xy))).rejects.toThrow('network');
   });
 });
 

@@ -49,6 +49,7 @@ import {
   pmtilesArchive,
   scriptedBucket,
   sparseBucket,
+  sparseSource,
   tilesForCells,
 } from './helpers/street-map-fixtures';
 
@@ -514,6 +515,36 @@ describe('street map | loading (fail soft)', () => {
     // The next map of the same area, in the same isolate, reads only its tiles.
     expect(await loadStreetLayer(env, [BLUE7])).toEqual(layer);
     expect(bucket.gets.length - first).toBe(tiles.length);
+  });
+
+  // Tiles that sit back to back in the file are one read, not one read each
+  // (2026-11-10). In the planet build the 12 tiles of a zoomed area are back to
+  // back; read one by one a first map cost 14 reads. Born red: on the reader
+  // that read each tile by itself this case counted 14 reads from cold and 12 warm.
+  it('a first map is three reads (header, leaf directory, the tiles together); the next map of the area is one', async () => {
+    const { tiles } = tilesForCells([BLUE7]);
+    expect(tiles.length).toBeGreaterThan(6);
+    const archive = await pmtilesArchive(tiles, { gzip: true, leaf: true });
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, archive);
+    const first = await loadStreetLayer({ MAP_TILES: bucket }, [BLUE7]);
+    expect(first?.svg).toContain('data-testid="amap-streets"');
+    expect(bucket.gets).toHaveLength(3);
+    // The same drawing as when every tile is a read of its own (the tiles 1 MiB
+    // apart in the file, past the gap that is read through).
+    const apart = await planetArchive(
+      tiles.map((t, i) => ({ ...t, at: i * 2 ** 20 })),
+      { leafSize: 4, fanOut: 2, leafAt: 3 * 2 ** 20, dataAt: 5 * 2 ** 30 }
+    );
+    const apartSrc = sparseSource(apart.file);
+    expect(await buildStreetLayer(apartSrc, [BLUE7])).toEqual(first);
+    expect(apartSrc.reads.filter(([off]) => off >= 5 * 2 ** 30)).toHaveLength(tiles.length);
+    expect(first!.svg.match(/M-?\d+ -?\d+L/g)!.length).toBeGreaterThanOrEqual(tiles.length);
+    expect(await loadStreetLayer({ MAP_TILES: bucket }, [BLUE7])).toEqual(first);
+    expect(bucket.gets).toHaveLength(4);
+    // The one tile read is every tile's bytes and nothing else.
+    const tileRead = bucket.gets[3]!.range!;
+    expect(tileRead.length).toBeLessThan(archive.length);
+    expect(tileRead.offset + tileRead.length).toBeLessThanOrEqual(archive.length);
   });
 
   it('one tile of the frame is enough for a layer', async () => {
