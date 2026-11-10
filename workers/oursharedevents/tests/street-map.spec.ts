@@ -527,10 +527,21 @@ describe('street map | loading (fail soft)', () => {
 
   it('a slow archive: null, on time', async () => {
     const { tiles } = tilesForCells([BLUE7]);
-    const slow = fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles), { delayMs: 200 });
+    // Its own archive name. A read that times out is abandoned, not stopped: it
+    // goes on in the background, and 200 ms later opens the archive again under
+    // its name. Under the default name that handed this bucket's directories to
+    // whichever later case read the default file next (seen in CI, 2026-11-10).
+    const name = 'slow.pmtiles';
+    const slow = fakeBucket(name, await pmtilesArchive(tiles), { delayMs: 200 });
     const t0 = Date.now();
-    expect(await loadStreetLayer({ MAP_TILES: slow }, [BLUE7], { timeoutMs: 50 })).toBeNull();
+    expect(
+      await loadStreetLayer({ MAP_TILES: slow, MAP_TILES_ARCHIVE: name }, [BLUE7], {
+        timeoutMs: 50,
+      })
+    ).toBeNull();
     expect(Date.now() - t0).toBeLessThan(180);
+    // It was the read that was slow, not the name that was refused.
+    expect(slow.gets.length).toBeGreaterThan(0);
   });
 });
 
