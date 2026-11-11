@@ -420,6 +420,15 @@ export async function refreshCorridorBaselines(
 
     for (const c of cells.results ?? []) {
       if ((c.window_30d_count ?? 0) === 0 && (c.window_90d_count ?? 0) === 0) {
+        // ADR-026 rule B: a bucket whose events are all withheld counts no one.
+        // A row an earlier run stored here would keep counting them, and the
+        // report reads it, so the bucket must hold no row at all.
+        await env.DB.prepare(
+          `DELETE FROM corridor_density_baseline
+             WHERE corridor_id = ? AND bucket_dow = ? AND bucket_hour = ?`
+        )
+          .bind(c.corridor_id, c.bucket_dow, c.bucket_hour)
+          .run();
         result.rowsSkipped++;
         continue;
       }

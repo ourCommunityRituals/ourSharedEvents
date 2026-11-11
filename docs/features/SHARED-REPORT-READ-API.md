@@ -147,6 +147,9 @@ interface SharedReport {
   } | null;
 
   // 3. Corridor density — vs. rolling 30d/90d baseline
+  //    The baselines hold people only from events whose own count is published
+  //    (ADR-026 rule B): an event under K = 5 adds no one, so this_event_count,
+  //    exact, cannot be subtracted from a baseline to recover a withheld event.
   corridor_density: {
     this_event_count: number | null;
     baseline_30d: number | null;

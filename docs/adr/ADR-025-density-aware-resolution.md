@@ -133,7 +133,7 @@ A moving average of density across the cells in play, applied back to the data, 
 - OCR-docs ADR-011: H3 resolution by signal (the layer this changes)
 - OSE-1460 (hourly grain), OSE-491 (resolution-floor invariant candidate), OSE-498 (suppression at the
   resolution floor), OSE-945 (adaptive time bucketing, deferred), OSE-1780 (the organizer probe),
-  OSE-1946 (the analytic layer), OSE-797 (ACS already cited on the sponsor card)
+  OSE-1946 / [ADR-026](ADR-026-analytic-layer-privacy-jurisdiction.md) (the analytic layer), OSE-797 (ACS already cited on the sponsor card)
 - AGENTS.md invariants 2 and 3
 
 ## Revisit criteria

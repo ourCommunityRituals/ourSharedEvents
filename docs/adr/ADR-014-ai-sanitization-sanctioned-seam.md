@@ -185,6 +185,9 @@ enforcement that survives contributor turnover and agent-authored PRs.
   allowlist of
 - COST-102 (OSE-772) — this decision (ADR + CODEOWNERS review-lock)
 - OSE-578 — original AI input-sanitization seam
+- [ADR-026](ADR-026-analytic-layer-privacy-jurisdiction.md) (Proposed) — this
+  ADR and COST-101 govern the Worker only; the BigQuery analytic layer and its
+  readers are governed by ADR-026, which does not loosen this decision
 - [ADR-002](ADR-002-static-invariant-gates.md) — establishes static-invariant
   gates as the load-bearing enforcement pattern this decision applies
 - `docs/cost-sustainability/BACKLOG.md` (monorepo) — the free-forever
