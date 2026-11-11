@@ -18,7 +18,8 @@
  * expected gate FAILED, the downstream skips are an honest cascade (the failed
  * gate is already the red signal), so the reconciler stays quiet and just logs
  * them. An expected gate that skipped while nothing upstream failed = the
- * false-green hole this gate exists to catch.
+ * false-green hole this gate exists to catch. A failed upstream signal that is
+ * not an expected gate (UPSTREAM_SIGNALS: T0 Gate (tests)) explains a skip too.
  *
  * A gate that ran and FAILED counts as EXECUTED — outcome is that gate's own
  * concern; this reconciler only asserts coverage (did it run), not pass/fail.
@@ -35,6 +36,15 @@
  */
 
 const EXECUTED = new Set(['success', 'failure']);
+
+/**
+ * Upstream signals: jobs whose FAILURE explains a downstream skip, but which are
+ * not themselves expected gates here. `gate-tests` (T0 Gate (tests)) is the
+ * aggregate of the T0 test shards; `local-vetting` and `deploy-staging` need it,
+ * so a red test shard skips them as an honest cascade. Its own red is the signal,
+ * and it is a required check in its own right.
+ */
+const UPSTREAM_SIGNALS = ['gate-tests'];
 
 /** The set of job keys expected to EXECUTE for this trigger. */
 export function expectedGates({ eventName, ref, headRef, inputs } = {}) {
@@ -73,7 +83,7 @@ export function findViolations(expected, results) {
     if (EXECUTED.has(res[g])) executed.push(g);
     else missing.push(g); // skipped | cancelled | absent
   }
-  const anyExpectedFailed = [...expected].some((g) => res[g] === 'failure');
+  const anyExpectedFailed = [...expected, ...UPSTREAM_SIGNALS].some((g) => res[g] === 'failure');
   // Unexplained missing = a gate skipped/absent with no upstream failure to explain it.
   const violation = missing.length > 0 && !anyExpectedFailed;
   return { violation, executed, missing, explainedByFailure: anyExpectedFailed };
@@ -105,6 +115,9 @@ function runSelfTest() {
     ['PR (ci/*), local vetting SILENTLY skipped, nothing upstream failed → VIOLATION', pr, { security: 'success', gate: 'success', 'local-vetting': 'skipped' }, true],
     ['PR (ci/*), local vetting executed-but-FAILED → OK (executed, outcome is its own concern)', pr, { security: 'success', gate: 'success', 'local-vetting': 'failure' }, false],
     ['PR (ci/*), T0 FAILED so local vetting skipped → OK (explained cascade)', pr, { security: 'success', gate: 'failure', 'local-vetting': 'skipped' }, false],
+    ['PR (ci/*), T0 Gate (tests) FAILED so local vetting skipped → OK (explained cascade)', pr, { security: 'success', gate: 'success', 'gate-tests': 'failure', 'local-vetting': 'skipped' }, false],
+    ['PR (ci/*), T0 Gate (tests) passed, local vetting silently skipped → VIOLATION', pr, { security: 'success', gate: 'success', 'gate-tests': 'success', 'local-vetting': 'skipped' }, true],
+    ['PR (ci/*), T0 Gate (tests) skipped/absent alone → OK (not an expected gate)', pr, { security: 'success', gate: 'success', 'gate-tests': 'skipped', 'local-vetting': 'success' }, false],
     ['main-push, local vetting absent → OK (PR-only gate)', main, allRan, false],
     ['PR (ci/*), S0 skipped → VIOLATION (S0 always expected)', pr, { security: 'skipped', gate: 'success' }, true],
     ['full-pipeline/* PR, everything ran → OK', fp, allRan, false],
