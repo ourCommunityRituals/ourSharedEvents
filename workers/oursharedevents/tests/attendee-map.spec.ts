@@ -688,11 +688,11 @@ describe('attendee map | area names, order and shading, edge by edge', () => {
     expect(opacity(over, BLUE7)).toBe('0.50');
     expect(opacity(over, BEV7)).toBe('0.27');
     expect(over).toContain(
-      '<p class="amap-credit" data-testid="amap-credit">Street map data © <a href="https://www.openstreetmap.org/copyright/en">OpenStreetMap</a> contributors.</p>'
+      '<p class="amap-credit" data-testid="amap-credit">Street map data © <a href="https://www.openstreetmap.org/copyright/en">OpenStreetMap</a> contributors, prepared by <a href="https://protomaps.com">Protomaps</a>.</p>'
     );
     // The credit is in the page's language, and so is the page its link opens.
     expect(renderAttendeeMap(items, { ...opts, streets, lang: 'es' }).html).toContain(
-      '<p class="amap-credit" data-testid="amap-credit">Datos del mapa de calles © colaboradores de <a href="https://www.openstreetmap.org/copyright/es">OpenStreetMap</a>.</p>'
+      '<p class="amap-credit" data-testid="amap-credit">Datos del mapa de calles © colaboradores de <a href="https://www.openstreetmap.org/copyright/es">OpenStreetMap</a>, preparados por <a href="https://protomaps.com">Protomaps</a>.</p>'
     );
     // Streets drawn for other cells would not line up: they are left out.
     const elsewhere = renderAttendeeMap(items, {
