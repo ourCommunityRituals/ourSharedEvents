@@ -134,13 +134,33 @@ export function checkFloors(report, floors = FLOORS) {
   return failures;
 }
 
+/**
+ * One report from several Stryker passes (stryker.conf.mjs and
+ * stryker.language.conf.mjs each write their own). A file belongs to one pass:
+ * a path in two reports is a failure, not a merge, so two passes can never
+ * average one file's score.
+ */
+export function mergeReports(reports) {
+  const files = {};
+  const failures = [];
+  for (const report of reports) {
+    for (const [path, file] of Object.entries(report?.files ?? {})) {
+      const key = path.replace(/\\/g, '/');
+      if (key in files) failures.push(`${key}: in more than one mutation report`);
+      else files[key] = file;
+    }
+  }
+  return { report: { files }, failures };
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  const reportPath = process.argv[2];
-  if (!reportPath) {
-    console.error('usage: mutation-file-floor.mjs <mutation.json>');
+  const reportPaths = process.argv.slice(2);
+  if (!reportPaths.length) {
+    console.error('usage: mutation-file-floor.mjs <mutation.json> [<mutation.json> ...]');
     process.exit(2);
   }
-  const failures = checkFloors(JSON.parse(readFileSync(reportPath, 'utf8')));
+  const merged = mergeReports(reportPaths.map((p) => JSON.parse(readFileSync(p, 'utf8'))));
+  const failures = [...merged.failures, ...checkFloors(merged.report)];
   if (failures.length) {
     console.error('Per-file mutation floor failed:\n' + failures.join('\n'));
     process.exit(1);

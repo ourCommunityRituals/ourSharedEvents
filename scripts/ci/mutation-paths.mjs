@@ -40,6 +40,7 @@ const SELF = 'scripts/ci/mutation-paths.mjs';
 const FLOOR_SCRIPT = 'scripts/ci/mutation-file-floor.mjs';
 const WORKER_STRYKER_CONFIG = `${WORKER}stryker.conf.mjs`;
 const CI_SCRIPTS_STRYKER_CONFIG = 'stryker.ci-scripts.conf.mjs';
+const LANGUAGE_STRYKER_CONFIG = `${WORKER}stryker.language.conf.mjs`;
 
 /** Exact repository-relative paths. A change to any of them needs a mutation run. */
 export const MUTATION_PATHS = Object.freeze([
@@ -97,8 +98,10 @@ export const MUTATION_PATHS = Object.freeze([
   'workers/oursharedevents/tests/language-menu-third-language.spec.ts',
   'workers/oursharedevents/tests/language-menu-close.spec.ts',
   'workers/oursharedevents/tests/language-layer-golden.spec.ts',
-  // Polish (OSE-1957) and Arabic (epic OSE-1959): the language layer's files on
-  // Stryker and the node specs that kill their mutants.
+  // Polish (OSE-1957) and Arabic (epic OSE-1959): the language layer's files,
+  // mutated in their own pass (stryker.language.conf.mjs, with the Vitest
+  // project vitest.language-mutation.config.mts), and the node specs that kill
+  // their mutants.
   'workers/oursharedevents/src/lib/i18n/languages.ts',
   'workers/oursharedevents/src/lib/i18n/bidi.ts',
   'workers/oursharedevents/src/lib/i18n/path-prefix.ts',
@@ -113,6 +116,12 @@ export const MUTATION_PATHS = Object.freeze([
   'workers/oursharedevents/tests/i18n-catalog.spec.ts',
   'workers/oursharedevents/tests/i18n-path-prefix.spec.ts',
   'workers/oursharedevents/tests/i18n-resolve-language.spec.ts',
+  'workers/oursharedevents/tests/i18n-layer-mutants.spec.ts',
+  'workers/oursharedevents/tests/language-switch-single.spec.ts',
+  'workers/oursharedevents/tests/template-js-escape.spec.ts',
+  'workers/oursharedevents/tests/event-page-spanish.spec.ts',
+  LANGUAGE_STRYKER_CONFIG,
+  'workers/oursharedevents/vitest.language-mutation.config.mts',
   // OSE-1952: the event page's sponsor-art rule (a marker range of pages.ts,
   // listed above) and the node spec that kills its mutants.
   'workers/oursharedevents/tests/sponsor-thumb-render.spec.ts',
@@ -244,11 +253,12 @@ const PATTERN = /[*?{}[\]!]/;
  * a `:start-end` line range; a glob or a negation is reported, because this
  * cannot say which files it covers.
  *
- * @param {{workerConfig: any, ciScriptsConfig: any, floors: Record<string, number>}} inputs
- *   the default exports of the two Stryker configs and FLOORS of mutation-file-floor.mjs
+ * @param {{workerConfig: any, languageConfig: any, ciScriptsConfig: any, floors: Record<string, number>}} inputs
+ *   the default exports of the three Stryker configs and FLOORS of mutation-file-floor.mjs.
+ *   Each config is required: one left out reads as a config with no mutate targets.
  */
 export function uncoveredMutationInputs(
-  { workerConfig, ciScriptsConfig, floors } = {},
+  { workerConfig, languageConfig, ciScriptsConfig, floors } = {},
   paths = MUTATION_PATHS
 ) {
   const listed = new Set(paths);
@@ -275,6 +285,7 @@ export function uncoveredMutationInputs(
   };
 
   needTargets(workerConfig, WORKER_STRYKER_CONFIG, WORKER);
+  needTargets(languageConfig, LANGUAGE_STRYKER_CONFIG, WORKER);
   needTargets(ciScriptsConfig, CI_SCRIPTS_STRYKER_CONFIG, '');
   for (const file of Object.keys(floors || {})) {
     need(`${WORKER}${file}`, `a per-file floor in ${FLOOR_SCRIPT}`);
