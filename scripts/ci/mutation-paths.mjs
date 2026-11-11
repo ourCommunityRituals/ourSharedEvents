@@ -125,6 +125,15 @@ export const MUTATION_PATHS = Object.freeze([
   // OSE-1952: the event page's sponsor-art rule (a marker range of pages.ts,
   // listed above) and the node spec that kills its mutants.
   'workers/oursharedevents/tests/sponsor-thumb-render.spec.ts',
+  // OSE-1955: the rest of the sponsor thumbnails. The logo URL rules (a marker
+  // range of sponsor-logo.ts), the logo proxy's pick (a marker range of
+  // sponsors.ts) and the page's sponsor query (pages.ts, listed above), and the
+  // node specs that kill their mutants, the SQLite stand-in for D1 included.
+  'workers/oursharedevents/src/lib/sponsor-logo.ts',
+  'workers/oursharedevents/src/handlers/sponsors.ts',
+  'workers/oursharedevents/tests/sponsor-logo.spec.ts',
+  'workers/oursharedevents/tests/sponsor-thumb-sql.spec.ts',
+  'workers/oursharedevents/tests/helpers/sqlite-d1.ts',
   WORKER_STRYKER_CONFIG,
   // OSE-1695: the CI security rules that keep secrets off branch pushes, their
   // tests and config.

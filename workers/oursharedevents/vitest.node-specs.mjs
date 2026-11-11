@@ -181,6 +181,10 @@ export const NODE_SPECS = [
   // pages.ts), exact markup per case: the Stryker killer for that marker range.
   // Pure over the exported phase renderers. No cloudflare:test.
   'tests/sponsor-thumb-render.spec.ts',
+  // OSE-1955 — the SQL behind the sponsor thumbnails (the page's sponsor list and
+  // has_logo, the logo proxy's pick, the consent gate) on node:sqlite with every
+  // migration applied (tests/helpers/sqlite-d1.ts). No cloudflare:test, no D1 binding.
+  'tests/sponsor-thumb-sql.spec.ts',
   // OSE-1762 — /events and the landing: golden renders in English and Spanish,
   // and the Spanish render shows no English of ours. Pure over the handlers,
   // with the data provider replaced.

@@ -126,6 +126,19 @@ export default {
     // OSE-1966: the price note and the type label isolated on a right-to-left
     // page. Killed by event-page-arabic-bidi.spec.ts.
     rangeOf('src/handlers/pages.ts', 'function eventPriceHtml(', "fmt(lang, 'event.type'"),
+    // OSE-1955 (owner 2026-11-10: "adding mutation executions") — the rest of the
+    // sponsor thumbnails. sponsor-logo.ts: the host rule and the two URL checks a
+    // sponsor logo passes at write and before every proxy fetch, the credentials
+    // refusal included (killed by sponsor-logo.spec.ts and the fat-finger
+    // properties). In pages.ts, the sponsor query of fetchEventPageSocialData (not
+    // the lines that read its result: every way they can fail falls back to the
+    // same empty list, so their mutants are equivalent); in sponsors.ts, the logo proxy's slot pick and its
+    // consent-gated query. The SQL text itself is one string to Stryker (it can
+    // only empty it); its clauses are pinned case by case, and were each watched
+    // failing, by sponsor-thumb-sql.spec.ts on node:sqlite with the real migrations.
+    rangeOf('src/lib/sponsor-logo.ts', 'export function isBlockedLogoHost(', 'https-only variant for PUBLIC OUTBOUND'),
+    rangeOf('src/handlers/pages.ts', 'const [sponsorsResult, regResult', '.all<SponsorBasicRow>()'),
+    rangeOf('src/handlers/sponsors.ts', 'OSE-1317: ?slot=sidebar serves the compact', 'if (!row || !row.logo_url) {'),
     // The language layer (Polish OSE-1957, Arabic epic OSE-1959) is mutated in
     // its own pass, stryker.language.conf.mjs: its files run on every page
     // render, so here each mutant reran thousands of unrelated specs.

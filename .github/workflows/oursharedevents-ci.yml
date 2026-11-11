@@ -917,6 +917,13 @@ jobs:
       # not open inside the 30 s test limit on either worker, and every later
       # one did. The warm-up loads no page of the app; retries stay at 0 and
       # the test limit at 30 s, so a page that hangs still fails.
+      #
+      # sponsor-thumbnails.component.spec.ts (OSE-1955) needs no worker: it
+      # renders the event page with the real renderer and @ocr/ui stylesheet
+      # (tests/e2e/helpers/render-event-page.ts, bundled with the worker's own
+      # esbuild) and answers every request from page routes. It is the component
+      # layer under T4j: logo box, 44 px targets, no sideways scroll at 320/375,
+      # focus ring and axe, light and dark.
       - name: 'Component: viewport specs vs local worker'
         if: matrix.shard == 'component'
         run: |
@@ -926,7 +933,8 @@ jobs:
             --config=playwright.component.config.ts \
             tests/e2e/2-pages/poster-print.spec.ts \
             tests/e2e/2-pages/form-pages-responsive.spec.ts \
-            tests/e2e/2-pages/a11y-axe-surfaces.spec.ts
+            tests/e2e/2-pages/a11y-axe-surfaces.spec.ts \r
+            tests/e2e/2-pages/sponsor-thumbnails.component.spec.ts
 
       # Post-job cleanup: delete _diag/pages/ so the next run's runner agent
       # can create fresh log files without "file already exists" collisions.

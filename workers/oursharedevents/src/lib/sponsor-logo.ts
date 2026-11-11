@@ -70,7 +70,11 @@ export interface LogoUrlValidation {
  */
 export function isBlockedLogoHost(hostname: string): boolean {
   const h = hostname.toLowerCase().replace(/\.$/, '');
-  if (h === '' || h === 'localhost' || h.endsWith('.localhost')) return true;
+  // Stryker disable next-line all: equivalent (OSE-1955). Neither '' nor 'localhost'
+  // has a dot, so the single-label rule below refuses both anyway; the line names
+  // them for the reader. The `.localhost` rule on the next line is mutated.
+  if (h === '' || h === 'localhost') return true;
+  if (h.endsWith('.localhost')) return true;
   if (h.startsWith('[') || h.includes(':')) return true; // IPv6 literal
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return true; // IPv4 literal
   if (!h.includes('.')) return true; // single-label (intranet) name
