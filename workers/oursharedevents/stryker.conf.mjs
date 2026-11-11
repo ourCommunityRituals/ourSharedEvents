@@ -123,9 +123,6 @@ export default {
     // public-event-stakeholder-surfaces.spec.ts). Killed by
     // sponsor-thumb-render.spec.ts and the language-layer goldens.
     rangeOf('src/handlers/pages.ts', 'function renderSponsorItem(', 'const SPONSOR_LIST_CSS'),
-    // OSE-1966: the price note and the type label isolated on a right-to-left
-    // page. Killed by event-page-arabic-bidi.spec.ts.
-    rangeOf('src/handlers/pages.ts', 'function eventPriceHtml(', "fmt(lang, 'event.type'"),
     // OSE-1955 (owner 2026-11-10: "adding mutation executions") — the rest of the
     // sponsor thumbnails. sponsor-logo.ts: the host rule and the two URL checks a
     // sponsor logo passes at write and before every proxy fetch, the credentials

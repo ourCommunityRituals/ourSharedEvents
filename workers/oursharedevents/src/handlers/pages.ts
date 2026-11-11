@@ -16,7 +16,7 @@ import { isValidDeploymentId } from '../lib/form-validation';
 import { publicEventCacheControl } from '../lib/phase-cache';
 import { renderGeoLink } from '../lib/geo-link';
 import { renderEventNav } from '../lib/event-nav';
-import { formatEventPriceParts } from '../lib/event-price';
+import { formatEventPrice } from '../lib/event-price';
 import { validateLogoUrl } from '../lib/sponsor-logo';
 import { sponsorTitle, sponsorCardPath } from '../lib/sponsor-card';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
@@ -614,28 +614,15 @@ function esc(s: string | null | undefined): string {
     .replace(/'/g, '&#39;');
 }
 
-/**
- * The HOW MUCH line as HTML, or null when the event has no price. The amount or
- * word is ours; the note in parentheses is what the organizer typed, so a
- * right-to-left page isolates it (OSE-1966) and "(cash only)" reads in order.
- */
-function eventPriceHtml(row: PublicEventRow, lang: Lang): string | null {
-  const parts = formatEventPriceParts(row, lang);
-  if (parts === null) return null;
-  const base = esc(parts.base);
-  return parts.note ? `${base} (${isolateTyped(lang, esc(parts.note))})` : base;
-}
-
 function renderEventTypeMeta(
   row: PublicEventRow,
-  testId: string,
+  testId = 'event-type',
   lang: Lang = DEFAULT_LANG
 ): string {
   // The type's own name is catalog data; its labels per language are OSE-1764.
-  // Until then it is English, so a right-to-left page isolates it (OSE-1966).
   const label = esc(row.event_type_name) || esc(row.event_type_id);
   if (!label) return '';
-  return `<p class="ose-meta" data-testid="${testId}">${fmt(lang, 'event.type', { type: isolateTyped(lang, label) })}</p>`;
+  return `<p class="ose-meta" data-testid="${testId}">${fmt(lang, 'event.type', { type: label })}</p>`;
 }
 
 /**
@@ -965,7 +952,7 @@ interface EventPageSocialData {
   emailCount: number;
 }
 
-function renderSponsorItem(s: SponsorBasicRow, lang: Lang = DEFAULT_LANG): string {
+function renderSponsorItem(s: SponsorBasicRow): string {
   const name = esc(sponsorTitle(s));
   // Stryker disable next-line StringLiteral: equivalent (OSE-1952). `url` is read
   // only by startsWith('https://') and, past it, in the https branch; '' and any
@@ -991,15 +978,12 @@ function renderSponsorItem(s: SponsorBasicRow, lang: Lang = DEFAULT_LANG): strin
       ' data-thumb="1"'
     );
   }
-  // OSE-1966: the name and location are what the sponsor typed; on a
-  // right-to-left page each is isolated, so "9333 S Cicero Ave" keeps its
-  // house number at the front.
-  const link = anchor(isolateTyped(lang, name));
+  const link = anchor(name);
   if (!s.address_line) return link;
   // 0083 / OSE-1435: the location the sponsor chose to show, as its own muted
   // line under the name. The list item is a flex row, so name and location sit
   // in one block: .sub-line (@ocr/ui) is display:block and takes the next line.
-  return `<div>${link}<small class="sub-line" data-testid="sponsor-item-address">${isolateTyped(lang, esc(s.address_line))}</small></div>`;
+  return `<div>${link}<small class="sub-line" data-testid="sponsor-item-address">${esc(s.address_line)}</small></div>`;
 }
 
 /**
@@ -1007,11 +991,10 @@ function renderSponsorItem(s: SponsorBasicRow, lang: Lang = DEFAULT_LANG): strin
  * <a>/<span> siblings in a bare <div> with no styling, so the names ran into one
  * another ("Covenant Local BronzeCovenant Local Platinum…") on every phase.
  */
-function renderSponsorList(sponsors: SponsorBasicRow[], lang: Lang = DEFAULT_LANG): string {
+function renderSponsorList(sponsors: SponsorBasicRow[]): string {
   const items = sponsors
     .map(
-      (s) =>
-        `<li class="ose-sponsor-item" data-testid="sponsor-item">${renderSponsorItem(s, lang)}</li>`
+      (s) => `<li class="ose-sponsor-item" data-testid="sponsor-item">${renderSponsorItem(s)}</li>`
     )
     .join('');
   return `<ul class="ose-sponsor-list" data-testid="sponsor-list">${items}</ul>`;
@@ -1112,7 +1095,7 @@ function renderSuggestionItems(
       const t = ids(i);
       return `<li class="ose-suggestion" data-testid="${t.item}">
           <a class="ose-suggestion-link" data-testid="${t.link}" href="${withLangPrefix(lang, `/events/${esc(ev.id)}`)}">
-            <span class="ose-suggestion-title">${isolateTyped(lang, esc(ev.title))}</span>
+            <span class="ose-suggestion-title">${esc(ev.title)}</span>
             <span class="ose-suggestion-when">${formatHumanDate(ev.start_date, lang)}</span>
           </a>
         </li>`;
@@ -1133,7 +1116,7 @@ function renderNextAtVenue(
   const curated = (events ?? []).slice(0, MAX_POST_EVENT_SUGGESTIONS);
   if (!curated.length) return '';
   return `<aside class="ose-venue-next" data-testid="venue-next-events" aria-labelledby="venue-next-heading">
-      <h2 id="venue-next-heading" class="ose-suggestions-heading">${fmt(lang, 'next.atVenue', { venue: venue ? isolateTyped(lang, venue) : msg(lang, 'next.thisVenue') })}</h2>
+      <h2 id="venue-next-heading" class="ose-suggestions-heading">${fmt(lang, 'next.atVenue', { venue: venue || msg(lang, 'next.thisVenue') })}</h2>
       <ul class="ose-suggestion-list">${renderSuggestionItems(curated, (i) => ({ item: `venue-next-event-${i}`, link: `venue-next-event-link-${i}` }), lang)}</ul>
     </aside>`;
 }
@@ -1231,7 +1214,7 @@ function renderSponsorStrip(
   if (!sponsors.length) return '';
   return `<section class="ose-sponsor-strip" data-testid="${testid}" aria-label="${msg(lang, 'sponsors.label')}">
     <p class="ose-sponsor-label">${heading}</p>
-    ${renderSponsorList(sponsors, lang)}
+    ${renderSponsorList(sponsors)}
   </section>`;
 }
 
@@ -1450,12 +1433,12 @@ ${SPONSOR_LIST_CSS}
       // HOW MUCH — the event's own price (display only; #6 inert_monetization
       // holds — no charge logic). Sits right before the CTA: cost is the last
       // fact a recipient weighs before the ask (order: What → Where → Who → How much → CTA).
-      const howMuch = eventPriceHtml(row, lang);
+      const howMuch = formatEventPrice(row, lang);
       return howMuch === null
         ? ''
         : `<section class="ose-card ose-section" data-testid="event-how-much" aria-labelledby="how-much-heading">
            <h2 id="how-much-heading">${msg(lang, 'section.howMuch')}</h2>
-           <p>${howMuch}</p>
+           <p>${esc(howMuch)}</p>
          </section>`;
     })()}
 
@@ -1473,7 +1456,7 @@ ${SPONSOR_LIST_CSS}
       whyPurpose
         ? `<section class="ose-card ose-section" data-testid="event-why" aria-labelledby="why-heading">
            <h2 id="why-heading">${msg(lang, 'section.why')}</h2>
-           <p>${isolateTyped(lang, whyPurpose)}</p>
+           <p>${whyPurpose}</p>
          </section>`
         : ''
     }
@@ -1482,7 +1465,7 @@ ${SPONSOR_LIST_CSS}
       howDetails
         ? `<section class="ose-card ose-section" data-testid="event-how" aria-labelledby="how-heading">
            <h2 id="how-heading">${msg(lang, 'section.how')}</h2>
-           <p>${isolateTyped(lang, howDetails)}</p>
+           <p>${howDetails}</p>
          </section>`
         : ''
     }
@@ -1663,12 +1646,12 @@ ${SPONSOR_LIST_CSS}
       // HOW MUCH — mirrors the pre-event render so the order is identical across
       // phases (What → Where → Who → How much → CTA). Display only; #6
       // inert_monetization holds — no charge logic.
-      const howMuch = eventPriceHtml(row, lang);
+      const howMuch = formatEventPrice(row, lang);
       return howMuch === null
         ? ''
         : `<section class="ose-card ose-section" data-testid="event-how-much-live" aria-labelledby="how-much-heading-live">
            <h2 id="how-much-heading-live">${msg(lang, 'section.howMuch')}</h2>
-           <p>${howMuch}</p>
+           <p>${esc(howMuch)}</p>
          </section>`;
     })()}
 
@@ -1680,7 +1663,7 @@ ${SPONSOR_LIST_CSS}
       whyPurpose
         ? `<section class="ose-card ose-section" data-testid="event-why-live" aria-labelledby="why-heading-live">
            <h2 id="why-heading-live">${msg(lang, 'section.why')}</h2>
-           <p>${isolateTyped(lang, whyPurpose)}</p>
+           <p>${whyPurpose}</p>
          </section>`
         : ''
     }
@@ -1689,7 +1672,7 @@ ${SPONSOR_LIST_CSS}
       howDetails
         ? `<section class="ose-card ose-section" data-testid="event-how-live" aria-labelledby="how-heading-live">
            <h2 id="how-heading-live">${msg(lang, 'section.how')}</h2>
-           <p>${isolateTyped(lang, howDetails)}</p>
+           <p>${howDetails}</p>
          </section>`
         : ''
     }
@@ -1825,7 +1808,7 @@ export function renderPostEventHtml(
     : formatHumanDate(row.start_date, lang);
   // HOW MUCH — the event's own price, display-only (#6 inert_monetization holds:
   // it is a label, never a payment primitive). Same source the pre/live renders use.
-  const howMuch = eventPriceHtml(row, lang);
+  const howMuch = formatEventPrice(row, lang);
   const mapImg = venueMapImg(row, 'venue-map-post', lang);
   // Archived before its day: it never happened. Same page shape (nothing to
   // join), but no "Happened", no "wrap" and no numbers that say it took place.
@@ -1852,7 +1835,7 @@ export function renderPostEventHtml(
     lang
   );
   const suggestionsInner = curated.length
-    ? `<h2 id="next-heading" class="ose-suggestions-heading">${fmt(lang, 'next.atVenue', { venue: venueDisplay ? isolateTyped(lang, venueDisplay) : msg(lang, 'next.thisVenue') })}</h2>
+    ? `<h2 id="next-heading" class="ose-suggestions-heading">${fmt(lang, 'next.atVenue', { venue: venueDisplay || msg(lang, 'next.thisVenue') })}</h2>
         <ul class="ose-suggestion-list">${suggestionItems}</ul>`
     : `<h2 id="next-heading" class="ose-suggestions-heading" data-testid="next-event-fallback">${msg(lang, 'next.fallbackHeading')}</h2>
         <p class="ose-suggestions-note">${msg(lang, 'next.fallbackNote')}</p>
@@ -1907,14 +1890,14 @@ ${SPONSOR_LIST_CSS}
     <span class="ose-phase-chip" data-testid="event-phase-chip">${msg(lang, calledOff ? 'recap.chipCalledOff' : 'recap.chip')}</span>
     <h1 id="event-title-post" data-testid="event-title-post">${isolateTyped(lang, title)}</h1>
     ${renderEventTypeMeta(row, 'event-type-post', lang)}
-    <p class="ose-when" data-testid="event-when-post">${whenLine}${venueDisplay ? ` &middot; ${isolateTyped(lang, venueDisplay)}` : ''}</p>
+    <p class="ose-when" data-testid="event-when-post">${whenLine}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
     ${
       // OSE-1513: sponsors sit by the title on every phase. Still spend-blind
       // here (names/links only, no tier/spend).
       social && social.sponsors.length
         ? `<section class="ose-card ose-sponsor-thanks" data-testid="post-sponsor-thanks" aria-labelledby="thanks-heading">
             <h2 id="thanks-heading">${msg(lang, 'sponsors.thanks')}</h2>
-            ${renderSponsorList(social.sponsors, lang)}
+            ${renderSponsorList(social.sponsors)}
           </section>`
         : ''
     }
@@ -1964,7 +1947,7 @@ ${SPONSOR_LIST_CSS}
           ? ''
           : `<section class="ose-card ose-section" data-testid="event-how-much-post" aria-labelledby="how-much-heading-post">
              <h2 id="how-much-heading-post">${msg(lang, 'section.howMuch')}</h2>
-             <p>${howMuch}</p>
+             <p>${esc(howMuch)}</p>
            </section>`
       }
 
@@ -2035,7 +2018,7 @@ ${SPONSOR_LIST_CSS}
       whyPurpose
         ? `<section class="ose-card ose-section" data-testid="event-why-post" aria-labelledby="why-heading-post">
            <h2 id="why-heading-post">${msg(lang, 'section.why')}</h2>
-           <p>${isolateTyped(lang, whyPurpose)}</p>
+           <p>${whyPurpose}</p>
          </section>`
         : ''
     }
