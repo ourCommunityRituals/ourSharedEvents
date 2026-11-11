@@ -89,7 +89,9 @@ export async function renderEventPage(sponsors: SponsorRow[]): Promise<string> {
   const r = await load();
   return r.renderPreEventHtml(
     eventRow(),
-    'https://oursharedevents.com/events/evt_component',
+    // Not the production host: ADR-021 keeps it out of test code
+    // (tests/integration/production-read-only.test.js).
+    'http://sponsor-thumbs.component.test/events/evt_component',
     { sponsors, regCount: 0, checkinCount: 0, surveyCount: 0, emailCount: 0 },
     { nonce: 'component', lang: 'en' }
   );
