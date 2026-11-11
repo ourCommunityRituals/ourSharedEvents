@@ -123,9 +123,6 @@ export default {
     // public-event-stakeholder-surfaces.spec.ts). Killed by
     // sponsor-thumb-render.spec.ts and the language-layer goldens.
     rangeOf('src/handlers/pages.ts', 'function renderSponsorItem(', 'const SPONSOR_LIST_CSS'),
-    // OSE-1966: the price note and the type label isolated on a right-to-left
-    // page. Killed by event-page-arabic-bidi.spec.ts.
-    rangeOf('src/handlers/pages.ts', 'function eventPriceHtml(', "fmt(lang, 'event.type'"),
     // The language layer (Polish OSE-1957, Arabic epic OSE-1959) is mutated in
     // its own pass, stryker.language.conf.mjs: its files run on every page
     // render, so here each mutant reran thousands of unrelated specs.

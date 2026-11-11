@@ -1101,13 +1101,6 @@
       "testCount": 3
     },
     {
-      "file": "workers/oursharedevents/tests/event-page-arabic-bidi.spec.ts",
-      "bucket": "node",
-      "needsReview": false,
-      "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 15
-    },
-    {
       "file": "workers/oursharedevents/tests/event-page-choices.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1119,7 +1112,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 11
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/event-phase-coherence.spec.ts",
