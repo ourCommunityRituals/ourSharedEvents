@@ -444,6 +444,144 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
   });
 });
 
+// ── A store blip never fails a poster scan (OSE-1988) ────────────────────────
+// Staging T4 saw one bare 500 on /q (run 42915081731). The lookup and the dedup
+// calls ran outside any try/catch. A blip in either must still answer the
+// visitor, and the answer must carry no new cookie and log no IP or token.
+
+/** D1 whose `prepare(...).bind(...).first()` throws `failures` times, then works. */
+function dbWithFlakyLookup(failures: number): { db: D1Database; calls: () => number } {
+  const real = tenv().DB;
+  let lookups = 0;
+  const db = new Proxy(real, {
+    get(target, prop) {
+      if (prop === 'prepare') {
+        return (sql: string) => {
+          const stmt = target.prepare(sql);
+          if (!/FROM poster_deployments/.test(sql)) return stmt;
+          return {
+            bind: (...args: unknown[]) => {
+              const bound = stmt.bind(...args);
+              return {
+                first: async <T>() => {
+                  lookups += 1;
+                  if (lookups <= failures) throw new Error('D1_ERROR: Network connection lost.');
+                  return bound.first<T>();
+                },
+              };
+            },
+          };
+        };
+      }
+      const v = Reflect.get(target, prop);
+      return typeof v === 'function' ? v.bind(target) : v;
+    },
+  });
+  return { db, calls: () => lookups };
+}
+
+/** In-memory KV whose get and/or put reject, like a KV blip. */
+function kvThatThrows(on: { get?: boolean; put?: boolean }): KVNamespace {
+  const base = makeInMemoryKV();
+  return new Proxy(base, {
+    get(target, prop) {
+      if ((prop === 'get' && on.get) || (prop === 'put' && on.put)) {
+        return () => Promise.reject(new Error('KV GET/PUT failed: 503 Service Unavailable'));
+      }
+      return Reflect.get(target, prop);
+    },
+  });
+}
+
+describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
+  test('OSE-1988 | RAINY | deployment lookup throws once | retried, visitor reaches the event, scan counted', async () => {
+    const { db, calls } = dbWithFlakyLookup(1);
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const res = await handleQrScan(
+        makeRequest(VALID_QR_TOKEN, { type: 'checkin' }),
+        { ...makeEnv(makeInMemoryKV()), DB: db },
+        VALID_QR_TOKEN
+      );
+      expect(res.status).toBe(302);
+      const location = res.headers.get('Location') ?? '';
+      expect(location).toContain(`/events/${TEST_EVENT_ID}`);
+      expect(location).toContain('type=checkin');
+      expect(calls()).toBe(2);
+      expect(await countScans(tenv().DB)).toBe(1);
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+
+  test('OSE-1988 | RAINY | deployment lookup keeps throwing | 302 home, no-store, no cookie, no scan, safe log', async () => {
+    const { db, calls } = dbWithFlakyLookup(Number.POSITIVE_INFINITY);
+    const logged: string[] = [];
+    const errSpy = vi.spyOn(console, 'error').mockImplementation((...a) => {
+      logged.push(a.map(String).join(' '));
+    });
+    try {
+      const res = await handleQrScan(
+        makeRequest(VALID_QR_TOKEN, { country: 'US' }),
+        { ...makeEnv(makeInMemoryKV()), DB: db },
+        VALID_QR_TOKEN
+      );
+      expect(res.status).toBe(302);
+      expect(res.headers.get('Location')).toBe('/');
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+      // Invariant 4: no visitor was resolved, so no anonymous token is minted.
+      expect(res.headers.get('Set-Cookie')).toBeNull();
+      expect(calls()).toBe(2); // one retry, then give up: no unbounded loop
+      expect(await countScans(tenv().DB)).toBe(0);
+      // The line names the failure only: no token, no country, no IP header.
+      expect(logged.some((l) => l.includes('SCAN_LOOKUP_ERROR'))).toBe(true);
+      for (const line of logged) {
+        expect(line).not.toContain(VALID_QR_TOKEN);
+        expect(line).not.toContain('"US"');
+      }
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+
+  test('OSE-1988 | RAINY | KV get throws | dedup skipped, scan written, visitor sent to the event', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const res = await handleQrScan(
+        makeRequest(VALID_QR_TOKEN),
+        makeEnv(kvThatThrows({ get: true })),
+        VALID_QR_TOKEN
+      );
+      expect(res.status).toBe(302);
+      expect(res.headers.get('Location') ?? '').toContain(`/events/${TEST_EVENT_ID}`);
+      expect(res.headers.get('Set-Cookie') ?? '').toContain('ose_anon=');
+      expect(await countScans(tenv().DB)).toBe(1);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('OSE-1988 | RAINY | KV put throws | dedup skipped, scan written, visitor sent to the event', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const res = await handleQrScan(
+        makeRequest(VALID_QR_TOKEN, {
+          existingCookie: 'anon_66666666-6666-6666-6666-666666666666',
+        }),
+        makeEnv(kvThatThrows({ put: true })),
+        VALID_QR_TOKEN
+      );
+      expect(res.status).toBe(302);
+      expect(res.headers.get('Location') ?? '').toContain(`/events/${TEST_EVENT_ID}`);
+      // A returning visitor: still no new cookie on the blip path.
+      expect(res.headers.get('Set-Cookie')).toBeNull();
+      expect(await countScans(tenv().DB)).toBe(1);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+});
+
 // ── Static invariant gate ────────────────────────────────────────────────────
 // Verifies that qr-scan.ts does NOT import h3-js at the module level.
 // Adding h3-js to the hot scan path would break SCAN_PATH bundle invariant.
