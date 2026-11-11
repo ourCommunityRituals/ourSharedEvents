@@ -3086,9 +3086,12 @@ jobs:
     # An expected gate skipped as an honest cascade of an upstream FAILURE is not a
     # violation (the failed gate is the real signal). Advisory for now; owner then
     # requires this check in branch protection to make it the enforcement anchor.
+    # gate-tests is here so a red T0 test shard explains the skipped local-vetting
+    # and staging tiers; it is an upstream signal, not an expected gate.
     needs:
       - security
       - gate
+      - gate-tests
       - local-vetting
       - deploy-staging
       - contract-staging

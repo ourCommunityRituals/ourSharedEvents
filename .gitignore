@@ -68,6 +68,7 @@ lifecycle-out/
 # Test reports
 newman-reports/
 **/reports/mutation/
+**/reports/mutation-language/
 .stryker-tmp/
 playwright-report/
 playwright-report-*/

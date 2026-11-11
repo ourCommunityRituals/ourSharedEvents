@@ -33,9 +33,10 @@ on:
   # needs the run is decided inside each job, by scripts/ci/mutation-paths.mjs:
   # the list that used to be written here twice, with its reasons, moved there.
   # A change that touches nothing on the list passes in seconds without running
-  # Stryker, and says so in the job summary. The run itself is about 25 minutes
-  # since the language layer joined (see the job's timeout-minutes); all on the
-  # node project. If you add a mutate target in stryker.conf.mjs, add its
+  # Stryker, and says so in the job summary. The run itself is two passes on the
+  # node project, about 10 minutes and 2 minutes (stryker.conf.mjs, then the
+  # language layer's stryker.language.conf.mjs). If you add a mutate target in
+  # stryker.conf.mjs or stryker.language.conf.mjs, add its
   # source and specs to that list; tests/unit/ci/mutation-paths.test.js fails
   # on a mutated or floored file the list lacks.
   pull_request:
@@ -58,13 +59,12 @@ concurrency:
 jobs:
   mutation:
     runs-on: ubuntu-24.04
-    # 45, not 20 (2026-11-10, Polish and Arabic, OSE-1970). The language layer
-    # (i18n/languages.ts, the CATALOG range) is imported by most of the Worker,
-    # so the related-tests dry run grew from 1,460 to 3,711 tests, and each
-    # static mutant (a module-level constant such as the DIRECTION map) reruns
-    # all of them. The run went from about 9 minutes to past 20; it was
-    # cancelled at 2,788 of 2,829 mutants. A longer limit, not fewer mutants.
-    timeout-minutes: 45
+    # 25: the main pass (about 10 minutes) plus the language pass (about 2),
+    # with room for a slow runner. Polish and Arabic (OSE-1970, 2026-11-10)
+    # first put the language layer in the main pass. It is imported by most of
+    # the Worker, so its mutants reran up to 3,711 specs each and the job ran
+    # past 35 minutes. Its own pass runs the specs written to kill them.
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: workers/oursharedevents
@@ -123,18 +123,27 @@ jobs:
         if: steps.scope.outputs.run != 'false'
         run: npm run test:mutation
 
+      # The language layer (Polish OSE-1957, Arabic epic OSE-1959): its own pass,
+      # against the specs written to kill its mutants. See stryker.language.conf.mjs.
+      - name: Run Stryker on the language layer
+        if: steps.scope.outputs.run != 'false'
+        run: npm run test:mutation:language
+
       - name: Per-file mutation floor
         if: steps.scope.outputs.run != 'false'
         # The break threshold in stryker.conf.mjs is global; this fails when any one
         # guard file is under its own floor (admin.ts: 100%). OSE-1801, CCR S-2.
-        run: node ../../scripts/ci/mutation-file-floor.mjs reports/mutation/mutation.json
+        # Both passes' reports: a floored file missing from both, or in both, fails.
+        run: node ../../scripts/ci/mutation-file-floor.mjs reports/mutation/mutation.json reports/mutation-language/mutation.json
 
       - name: Upload mutation report
         if: always() && steps.scope.outputs.run != 'false'
         uses: actions/upload-artifact@v4
         with:
           name: mutation-report
-          path: workers/oursharedevents/reports/mutation/**
+          path: |
+            workers/oursharedevents/reports/mutation/**
+            workers/oursharedevents/reports/mutation-language/**
           retention-days: 30
           if-no-files-found: warn
 
