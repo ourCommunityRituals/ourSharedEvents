@@ -122,8 +122,11 @@ test.describe('landing: what the visitor sees first', () => {
     await page.getByTestId('where-submit').click();
     await expect(page).toHaveURL(/[?&]where=Springfield/);
     await expect(page.getByTestId('where-msg')).toHaveCount(0);
+    // The box is a plain GET form, so toHaveURL passes when the navigation
+    // commits, before the new page has parsed its list. A one-shot count()
+    // there could read 0; poll until the list is in.
     const choices = page.getByTestId('where-choice');
-    expect(await choices.count()).toBeGreaterThanOrEqual(20);
+    await expect.poll(() => choices.count()).toBeGreaterThanOrEqual(20);
     await expect(page.getByTestId('where-choices')).toContainText('places are called Springfield');
     await page.getByRole('link', { name: 'Springfield, IL', exact: true }).click();
     await expect(page).toHaveURL(/[?&]where=Springfield%2C(%20|\+)IL/);
