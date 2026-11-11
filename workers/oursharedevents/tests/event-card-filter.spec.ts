@@ -406,6 +406,42 @@ describe('served pages', () => {
     expect(html).not.toContain('ECF Pending Sponsor');
   });
 
+  // Owner 2026-11-09: "Omit sponsors from the search criteria". A sponsor shows by
+  // the title (OSE-1522) but is never something a visitor searches or filters by.
+  // Born red: with the sponsor title added to the /events search text, the
+  // sponsor's name found its event; with a sponsor tag added to the landing card
+  // and a sponsor chip to the filter row, the landing checks failed.
+  test('/events: a search for the sponsor finds nothing, though the card names it', async () => {
+    // Not vacuous: the event is found by its own name, and its card shows the sponsor.
+    const own = await page('/events?q=ECF+Landing+Night');
+    const card = own.split('data-event-id="evt_ecf_landing"')[1]?.split('</article>')[0] ?? '';
+    expect(card, 'the event is found by its own name').not.toBe('');
+    expect(card).toContain('Supported by ECF Landing Sponsor');
+
+    for (const q of ['ECF+Landing+Sponsor', 'Landing+Sponsor', 'Sponsor']) {
+      const html = await page(`/events?q=${q}`);
+      expect(ids(html), `q=${q} matches no event by its sponsor`).toEqual([]);
+      expect(html).not.toContain('Supported by');
+    }
+  });
+
+  test('landing: no filter is a sponsor, and no card is tagged by its sponsor', async () => {
+    const html = await page('/');
+    expect(html).toContain('Supported by ECF Landing Sponsor');
+    const toggles = html.split('data-testid="area-toggles"')[1]?.split('</div>')[0] ?? '';
+    expect(toggles, 'the filter row is on the landing').toContain('toggle-window');
+    expect(toggles).not.toMatch(/sponsor/i);
+    // No radio, rule or card class the CSS-only filters hang on names a sponsor.
+    const radios = [...html.matchAll(/<input[^>]*type="radio"[^>]*>/g)].map((m) => m[0]);
+    expect(radios.length).toBeGreaterThan(0);
+    for (const r of radios) expect(r).not.toMatch(/sponsor/i);
+    const card = html.match(/<article class="([^"]*)"[^>]*data-event-id="evt_ecf_landing"/)?.[1];
+    expect(card, 'the sponsored card is on the landing').toBeDefined();
+    expect(card).not.toMatch(/sponsor/i);
+    const typeCss = html.split('data-testid="area-type-css"')[1]?.split('</style>')[0] ?? '';
+    expect(typeCss).not.toMatch(/sponsor/i);
+  });
+
   test('GET /api/v2/events carries consented sponsor titles by event id, for the TV', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/events');
     const body = (await res.json()) as {
