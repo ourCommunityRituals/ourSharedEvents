@@ -74,24 +74,21 @@ Three corners and a derived layer. Any entity can plug into any corner. The Tria
 
 Open-ended examples of pluggable entities — drawn from code comments — include sports, school, church, museum, civic, tourism, bars, government, travel partners, faith organizations, university research nodes, healthcare clinics, and small business collectives. Matt's earlier examples (Bars, Schools, Hospitals, Recreational Centers, Business Meetings/Conventions, Sports, Art/Cultural, Political Rallies, Research Opportunities) fit this same shape — they are entity examples, not a fixed enum.
 
-### 6.2 The ten invariants
+### 6.2 The invariants
 
-Each invariant is (or will be) enforced by an executable test file in `ourSharedEvents/tests/e2e/0-architecture/`. A new product personality (OW, future verticals) must pass these to plug into the Triangle.
+The invariant register has one home: `ocr-docs-brain/architectural-invariants.yaml` (schema 1.2.0). **This document does not copy it, so it cannot drift from it.**
 
-**Status legend**: ✅ in code · ⚙️ partial (CI gate or related tests exist; promote to 0-architecture suite) · 📋 proposed (write the spec)
+**Method.** Parse that file and count `invariants[]` by `status`. Read 2026-11-11: **29 invariants — 17 live, 10 partial, 2 retired**, ids running 1 to 29. Numbers are never reused or renumbered, and a retired entry keeps its number.
 
-| # | Invariant | Test file | Status | Enforces |
-|---|-----------|-----------|--------|----------|
-| 1 | **Anonymous ID** | `anonymous-id.invariant.spec.ts` | ⚙️ | Zero-PII scan system, two-database separation (DB / FORMS_DB), `ose_anon` cookie contract (HttpOnly, Secure, SameSite=Lax), no cross-linking. **Partial as of 2026-10-02:** the raw anonymous id is stored in FORMS_DB form rows and the split scan tables share a second-precision timestamp, so cross-linking is possible today (ADR-012 gate §D2, N-DS-1 and N-DS-2; OSE-1493, OSE-923). Back to ✅ when Phase 2 of that plan merges |
-| 2 | **Hyper-local Geo-Resolution** | `geo-resolution.invariant.spec.ts` | ✅ | `sponsor_areas` + `sponsor_event_types` tables, corridor-level resolution, zip+radius matching |
-| 3 | **UEC Encoding** | `uec-codes.invariant.spec.ts` | ✅ | 7 color-semantic QR codes + 4 extensions; canonical hex values; URL path semantics |
-| 4 | **NCR Data Accumulation** | `ncr-accumulation.invariant.spec.ts` | ✅ | `poster_deployments` lat/lng, `scan_aggregates` pipeline, permanent storage (no PII = no TTL) |
-| 5 | **Tier Equity / Pricing Governance** | `tier-equity.invariant.spec.ts` | 📋 | Pricing tiers govern display priority within events only — never platform access. Same QR system, same form quality, same privacy protection, same real-time counts at every tier (Free / Mid / Enterprise). **Local stays in at all flag levels.** |
-| 6 | **Inert Monetization Hooks** | `monetization-inert.invariant.spec.ts` | ⚙️ | `X-Monetization-Inert: true` header on every response. No billing logic executes. Billable units are read-only. Existing CI gate `checkMonetizationHooksInert` + contract test `story-f4-monetization-hooks_MOCK.test.js` already enforce; promote to 0-architecture suite |
-| 7 | **Aggregate-Only Reporting** | `aggregate-only.invariant.spec.ts` | 📋 | SharedReport endpoints return aggregates only — never individual records. Closes the privacy story on the output side; the Anonymous ID invariant guards the data; this invariant guards the reports |
-| 8 | **Bounded PII Retention** | `pii-retention.invariant.spec.ts` | ⚙️ | All opt-in PII has a finite TTL (`expires_at`, `retention_expires_at`). Daily lifecycle cron deletes expired registrations (90d), scrubs survey PII, deletes expired email signups (30d). No PII has unbounded retention. Cron + TTL columns + PRIVACY.md exist; promote unified test to 0-architecture suite |
-| 9 | **Tenant Isolation** | `tenant-isolation.invariant.spec.ts` | ⚙️ | Dual-key pattern (`id` + `brandId`) on every multi-tenant table. No cross-tenant data leakage in queries. Brand-scoped URLs maintain isolation. Schema pattern exists; needs the cross-cutting test |
-| 10 | **Deprecation Lock** | `deprecation-lock.invariant.spec.ts` | ⚙️ | Once a runtime is removed (GAS, Sheets, etc.), CI forbids its re-introduction. Generalizes the existing `scripts/guard-no-gas.js` and the no-GAS CI gate. Future deprecations (e.g., embedded HTML when Phase 3 Firebase lands) inherit this pattern |
+Enforcement lives in code, in three places:
+
+- `ourSharedEvents/tests/e2e/0-architecture/` — the structural gates.
+- Each spoke's own security tier, where a spoke carries its invariants there rather than in a dedicated architecture directory (ourWKRP does).
+- The brain-conformance job, which checks each repo against the register on every pull request and blocks.
+
+A new product personality (OW, future verticals) must pass the register's applicable invariants to plug into the Triangle.
+
+> **Table removed 2026-11-11.** This section previously held a table of ten invariants with its own status legend, which had drifted from the register in both count and content. The pointer treatment applied to `CLAUDE.md` on 2026-10-21 is applied here for the same reason.
 
 **UEC color contract** (from the test file). The seven core codes:
 
@@ -135,7 +132,9 @@ A new entity instance (a Hospital partner, a faith kitchen, a DJ profile) is hyd
 
 OA serves at every scale: corridor, venue, partner, individual creator. Every DJ profile is effectively a single-person OA deployment.
 
-**Provisioning identity + a premium solution-architecting service.** The flywheel does not just spin up default instances — it is a **solution-architecting tool**. OSM provisions the **anonymous** class (the OSE-class back: Postman API + FE **elements**); OA provisions the **named** class (the OW-class front). Pairing OSM's API + elements with **specs** stands up **custom front ends fast, for a premium** — OCR can build bespoke client sites for a fee on top of the core platform. Example (OA / named class): a DJ stands up a site in the infra, captures per-song QR scans during a set, and the SharedReport — promotion, shown interest, captured setlist traffic — is both the value proof and the upsell path from small venues to larger ones. Generalizes to any arts exploration: art walks, farmers markets, and beyond.
+**Both doors serve both platforms.** The back/front split is **mechanism versus presentation**, not anonymous versus named. OSM is the API door and OA is the interface door, and either can stand up an instance of either identity class. OA's front is also where the hybrid is shown, with both sides of the choice network visible in one view, which is only possible because it is not tied to one of them. Pricing follows **who does the labour**, not which capabilities are unlocked: a tenant who works through the API pays less and does more; a tenant who wants the interface buys that labour back.
+
+**A premium solution-architecting service.** The flywheel does not just spin up default instances — it is a **solution-architecting tool**. Pairing OSM's API + elements with **specs** stands up **custom front ends fast, for a premium** — OCR can build bespoke client sites for a fee on top of the core platform. Example (OA / named class): a DJ stands up a site in the infra, captures per-song QR scans during a set, and the SharedReport — promotion, shown interest, captured setlist traffic — is both the value proof and the upsell path from small venues to larger ones. Generalizes to any arts exploration: art walks, farmers markets, and beyond.
 
 ### 6.5 Platform symmetry — OSE and OW
 
@@ -156,8 +155,8 @@ OSE-anonymous and OW-named are the two poles. The platform provides a third — 
 
 | Implementation | Identity model | Spokes |
 |---|---|---|
-| **Anonymous** | Zero-PII, aggregates-only (Invariant 1) | **OSE** (canonical); **OSM** provisions this class |
-| **Non-anonymous / named** | Named identity, voluntary attribution (OW-class) | **OW**; **OA** provisions this class |
+| **Anonymous** | Zero-PII, aggregates-only | **OSE** (canonical) |
+| **Non-anonymous / named** | Named identity, voluntary attribution (OW-class) | **OW** (canonical) |
 | **Hybrid** | Anonymous participation/voting/aggregates **+** named public personalities | **OW, OSG, OSR** (and OSE × OW) |
 
 - **OSG and OSR inherit OSE's anonymous architecture** ("the setup to be OSE"). OW, OSG, and OSR are **hybrid-capable**.
