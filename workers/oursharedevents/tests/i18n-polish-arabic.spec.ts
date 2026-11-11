@@ -221,10 +221,19 @@ describe('the Polish and Arabic catalogs', () => {
   it('Arabic has no Latin letters but the names it must keep', () => {
     // OSE-1850: a product name (Google Calendar) and the example address in an
     // email field's placeholder, which is Latin by the nature of an address.
+    // Markup, slots and entities are allowed too. Each Latin word must sit
+    // inside one of these; the check lists the words that do not (nothing is
+    // stripped from the text, it is only read).
     const NAMES =
       /OurSharedEvents|Cloudflare Access|Apple|Outlook|Google|\b[a-z]+@example\.com\b|<[^>]+>|\{\w+\}|&\w+;/g;
+    const latinOutsideNames = (text: string): string[] => {
+      const allowed = [...text.matchAll(NAMES)].map((m) => [m.index, m.index + m[0].length]);
+      return [...text.matchAll(/[A-Za-z]+/g)]
+        .filter((w) => !allowed.some(([a, b]) => w.index >= a && w.index + w[0].length <= b))
+        .map((w) => w[0]);
+    };
     for (const k of KEYS) {
-      expect((CATALOG.ar[k] as string).replace(NAMES, ''), k).not.toMatch(/[A-Za-z]/);
+      expect(latinOutsideNames(CATALOG.ar[k] as string), k).toEqual([]);
     }
   });
 
