@@ -12,10 +12,13 @@ The fleet has one AI invariant. COST-101
 model SDK and model API out of `workers/oursharedevents/src`, apart from one dormant seam. It governs
 the Worker's cost and its injection posture. **It says nothing about the analytic layer**: the
 BigQuery dataset `oureventring_general` that OSE exports to, and that ourEventRings (OER) is meant to
-read as a RAG. Invariant 17 (`oer_emission_boundary`) governs what OSE _emits_ (corridor grain,
-floors), not who reads it or what they may combine.
+read as a RAG. Invariant 17 (`oer_emission_boundary`) is a binding lock: the Worker binds only `DB`
+and `FORMS_DB` and has no service bindings. What OSE may emit (corridor grain, floors) is set by the
+boundary document it cites, OCR-docs `docs/architecture/OCR_ARCHITECTURE_oerAggregationBoundary.md`.
+Neither says who may read the dataset or what they may combine.
 
-Nothing reads the dataset today. The `ourEventRings` repository holds an empty README (`989feea`), so
+Nothing reads the dataset today. The `ourEventRings` repository (`origin/main` `7b1de37`, read
+2026-11-10) holds a one-line README, CI and design-check config, and no code, so
 the only readers are people with GCP access. The exposure is latent, and this ADR sets the rule
 before the first reader is built.
 

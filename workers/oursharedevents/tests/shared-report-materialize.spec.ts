@@ -819,6 +819,50 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
     }
   );
 
+  // Rule B must also hold for a row an earlier run left behind. A bucket whose
+  // events are all withheld now counts 0; skipping it kept the old count, which
+  // the report still read: a baseline made only of withheld events (three of 4
+  // people publishing 10). The bucket must hold no row. An event of K rewrites it.
+  // @born-red TL-094 | method: deliberate-fixture-break | date: 2026-11-10
+  test.each([
+    [4, null],
+    [5, { window_30d_count: 5, window_90d_count: 5 }],
+  ])(
+    'rule B: a stored baseline of 15 over a lone %i-person event becomes %j',
+    async (people, expected) => {
+      const db = tenv().DB;
+      const cell = '872664544ffffff';
+      const startIso = new Date(Date.now() - 24 * 10 * 3600_000).toISOString();
+      const start = new Date(startIso);
+      const id = 'test-evt-mat-ruleb-stale';
+      await seedEvent({ id, start_offset_hours: -24 * 10 });
+      await db
+        .prepare(`UPDATE events SET h3_res7 = ?, start_date = ? WHERE id = ?`)
+        .bind(cell, startIso, id)
+        .run();
+      await seedReturners(id, 'f', people);
+      await db
+        .prepare(
+          `INSERT INTO corridor_density_baseline
+             (corridor_id, bucket_dow, bucket_hour, window_30d_count, window_90d_count, computed_at)
+           VALUES (?, ?, ?, 15, 15, '2026-01-01T00:00:00.000Z')`
+        )
+        .bind(cell, start.getUTCDay(), start.getUTCHours())
+        .run();
+
+      const r = await refreshCorridorBaselines({ DB: db });
+      expect(r.errors).toBe(0);
+      const row = await db
+        .prepare(
+          `SELECT window_30d_count, window_90d_count FROM corridor_density_baseline
+            WHERE corridor_id = ? AND bucket_dow = ? AND bucket_hour = ?`
+        )
+        .bind(cell, start.getUTCDay(), start.getUTCHours())
+        .first<{ window_30d_count: number; window_90d_count: number }>();
+      expect(row).toEqual(expected);
+    }
+  );
+
   test('h3_res7 wins over corridor_id when both are set (COALESCE left-priority)', async () => {
     const db = tenv().DB;
     await db

@@ -200,6 +200,14 @@ used, because the materializer bumps it on every re-run. Tiers that share a pool
 (NULL and 1–3 are `general`) are one group before the floor applies
 (`RETURNS_POOL_KEY_SQL`). A declined regime is withheld (OSE-1220).
 
+**Only published events count (ADR-026 rule B, OSE-1946, #1173):** an event adds
+people to a group only if it has at least 5 current-pepper rows seen in the
+window, the same rows this export sums (inline in `exportAnonIdReturns`). An
+event under that adds no one to any group, and no one becomes a returner through
+it. Otherwise the SharedReport's exact count for one event beside the rounded
+group would give away the other: 11 published, a group of 15, so the other event
+had 4.
+
 **Floor:** a group with fewer than `RETURNS_MIN_COUNT` people (5, the same
 floor as `CORRIDOR_MAP_MIN_COUNT`) is not exported. Inside an exported group,
 the counts are nested (`people_count` ⊇ `returned_2plus` ⊇ `returned_3plus` ⊇
@@ -292,6 +300,12 @@ event-backup route (`handlers/bigquery.ts`) applies the same two rules.
 and the pair is floored as a chain (90d ⊇ 30d): the 30-day count is `null`
 when it sits 1–4 below the 90-day count, so `90d − 30d` never names fewer than
 5 people. A row with both windows `null` is withheld.
+
+**Only published events count (ADR-026 rule B):** the table is built by
+`refreshCorridorBaselines`, which adds people only from events whose own count
+the SharedReport publishes (5 or more, every row: `PUBLISHED_EVENT_IDS_SQL` in
+`lib/shared-report.ts`). An event under 5 adds no one to any baseline row, so
+these figures can be lower than the raw corridor traffic in small corridors.
 
 **Routing:** Baselines are cross-event aggregates. **Default to `general` pool** for v1 — these are corridor-level density signals that don't encode per-attendee state. If a corridor's events span multiple pools, the baseline is intentionally less-precise on routing (it's a baseline; it summarizes mixed traffic). This is a deliberate v1 simplification documented for revisit if a HIPAA/COPPA corridor surfaces a routing issue.
 

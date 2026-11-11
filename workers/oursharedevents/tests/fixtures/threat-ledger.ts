@@ -1995,6 +1995,79 @@ const ADMIN_IDENTITY_HARDENING: ThreatEntry[] = [
   },
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Layer: the analytic layer (ADR-026, OSE-1946). TL-094..TL-097.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ANALYTIC_LAYER: ThreatEntry[] = [
+  {
+    id: 'TL-094',
+    layer: 'export_boundary',
+    threat:
+      "A withheld event recovered by subtraction: the SharedReport publishes an event's count exactly from 5 up, while the corridor baseline and the BigQuery returns export round a group that also held an event under 5. 11 published beside a group of 15 says the other event had 4 (OSE-1946 analysis: exact in 8% of cases, narrowed in 72%). Mitigated by ADR-026 rule B: an event whose own count is withheld adds no one to any group (PUBLISHED_EVENT_IDS_SQL in refreshCorridorBaselines; inline current-pepper gate in exportAnonIdReturns), and a baseline bucket whose events are all withheld holds no row, so a count an earlier run stored there cannot stay readable.",
+    severity: 'HIGH',
+    target_invariant: { number: 7, name: 'aggregate_only_reporting' },
+    mitigation_story: 'OSE-1946',
+    test_ref:
+      'tests/shared-report-materialize.spec.ts > OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path > rule B: a stored baseline of 15 over a lone %i-person event becomes %j',
+    status: 'tested',
+    red_birth: {
+      date: '2026-11-10',
+      method: 'deliberate-fixture-break',
+      notes:
+        'Run on the code as merged in #1173 (40dd851d): the 4-person case was red, the stored 15 survived the refresh because a bucket that counts 0 was skipped, not cleared. Green once the skip deletes the row; the 5-person pair rewrites it to 5. The #1173 tests (11 + 4 exports as 10, not 15; an event of 4 adds no one to the baseline, an event of 5 does; the current-pepper gate) were each seen red on the code before #1173.',
+    },
+    last_run_green: '2026-11-10',
+    notes:
+      'Staging layer not covered: the baseline refresh runs only on the 03:00 cron and no route triggers it, and the staging smoke writes its baseline row directly. A row whose events all aged out of the 90-day window before #1173 deployed is not rewritten (the refresh only sees events in the window).',
+  },
+  {
+    id: 'TL-095',
+    layer: 'export_boundary',
+    threat:
+      'Read-side composition of the analytic layer: a dataset reader compares daily baseline snapshots and learns that someone attended an event; a reader who can also forge scans (OSE-1496) recovers an exact count under K in about log2(K) snapshots (3 weeks for a returns group, 4 days for a baseline bucket). Rule B does not stop two published events being compared either.',
+    severity: 'MEDIUM',
+    target_invariant: { number: 7, name: 'aggregate_only_reporting' },
+    mitigation_story: 'OSE-1946',
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      "ADR-026 rules A (only internal, named readers), C (noise before any outward-facing consumer; the epsilon is the owner's choice, shared with OSE-1780) and D (one baseline snapshot per sealed week) are Proposed and not built. Latent: nothing reads the dataset yet.",
+  },
+  {
+    id: 'TL-096',
+    layer: 'pipeline',
+    threat:
+      "The SharedReport's own return rates (venue_pct, corridor_pct) count someone as a returner through another event whose own count is withheld. ADR-026 extends rule B inside the report only to baseline_90d.",
+    severity: 'MEDIUM',
+    target_invariant: { number: 7, name: 'aggregate_only_reporting' },
+    mitigation_story: 'OSE-1946',
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'Owner decides whether rule B covers the report\'s return rates (shared-report-builder.ts return-rate queries). Each rate is already floored on its own (flooredRatePct); what is open is whether a withheld event may be the "other" event.',
+  },
+  {
+    id: 'TL-097',
+    layer: 'pipeline',
+    threat:
+      "The baseline's rule B gate counts hashes across peppers, as the report's sample_size does, so after a pepper rotation one person can be two hashes and lift an event of 4 to 5. The returns export gate counts the current pepper only and is not affected.",
+    severity: 'LOW',
+    target_invariant: { number: 7, name: 'aggregate_only_reporting' },
+    mitigation_story: 'OSE-1946',
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      "Same window as the report's own sample_size, so fixing it means changing what the report counts too, while retired-pepper rows wait to be purged. Owner decision.",
+  },
+];
+
 export const THREAT_LEDGER: ThreatEntry[] = [
   ...D1_BOUNDARY,
   ...WORKER_SURFACE,
@@ -2017,12 +2090,13 @@ export const THREAT_LEDGER: ThreatEntry[] = [
   ...FORM_PAGE_INJECTION,
   ...ADMIN_ACTOR_ONCE,
   ...ADMIN_IDENTITY_HARDENING,
+  ...ANALYTIC_LAYER,
 ];
 
 export const THREAT_LEDGER_META = {
   schema_version: '1.0.0',
   story: 'OSE-564',
-  last_updated: '2026-11-05',
+  last_updated: '2026-11-10',
   total_entries: THREAT_LEDGER.length,
   layers: 8,
 } as const;
