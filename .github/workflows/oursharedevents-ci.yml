@@ -933,7 +933,7 @@ jobs:
             --config=playwright.component.config.ts \
             tests/e2e/2-pages/poster-print.spec.ts \
             tests/e2e/2-pages/form-pages-responsive.spec.ts \
-            tests/e2e/2-pages/a11y-axe-surfaces.spec.ts \r
+            tests/e2e/2-pages/a11y-axe-surfaces.spec.ts \
             tests/e2e/2-pages/sponsor-thumbnails.component.spec.ts
 
       # Post-job cleanup: delete _diag/pages/ so the next run's runner agent
