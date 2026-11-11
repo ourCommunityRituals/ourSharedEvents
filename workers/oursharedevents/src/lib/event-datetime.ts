@@ -16,7 +16,7 @@
  * 1 de mayo de 2026" and "6:00 p.m. CDT".
  */
 
-import { DEFAULT_LANG, INTL_LOCALE, type Lang } from './i18n/languages';
+import { DEFAULT_LANG, INTL_LOCALE, ZONE_NAME_STYLE, type Lang } from './i18n/languages';
 
 /**
  * The platform's home zone (the Blue Island / south-Chicagoland corridor). The
@@ -160,7 +160,7 @@ export function formatEventTime(
     timeZone: zone,
     hour: 'numeric',
     minute: '2-digit',
-    timeZoneName: 'short',
+    timeZoneName: ZONE_NAME_STYLE[lang],
   }).format(d);
 }
 

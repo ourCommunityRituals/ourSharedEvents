@@ -196,6 +196,8 @@ export const NODE_SPECS = [
   'tests/language-menu-close.spec.ts',
   'tests/language-permutations.spec.ts',
   'tests/i18n-polish-arabic.spec.ts',
+  // OSE-1966: every Latin-script value on an Arabic event page sits in a <bdi>.
+  'tests/event-page-arabic-bidi.spec.ts',
   'tests/i18n-layer-mutants.spec.ts',
   'tests/language-switch-single.spec.ts',
   'tests/template-js-escape.spec.ts',

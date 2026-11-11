@@ -305,3 +305,53 @@ describe('Spanish event page | no English of ours on any phase', () => {
     expect(statLine(2, 'inscritos', 'x', 'es')).toBe('<p data-testid="x">Menos de 5 inscritos</p>');
   });
 });
+
+/**
+ * Owner 2026-11-10: "I am showing the elements which are not translating in
+ * the selected language. This is across any language." The same two checks,
+ * on the Polish and Arabic pages (epic OSE-1959). Organizer fields are the ZZ
+ * sentinels above, so what is left is ours.
+ */
+/** Words a language spells as English does: Polish "Menu" is Polish. */
+const SAME_IN_LANG: Partial<Record<'pl' | 'ar', readonly MessageKey[]>> = { pl: ['menu.label'] };
+
+describe('Polish and Arabic event pages | no English of ours on any phase', () => {
+  for (const lang of ['pl', 'ar'] as const) {
+    const pages: { name: string; html: () => string }[] = [
+      {
+        name: 'pre-event, with a countdown',
+        html: () =>
+          renderPreEventHtml(
+            row({ starts_at: soon(), start_date: soon().slice(0, 10) }),
+            SHARE,
+            SOCIAL,
+            { nonce: NONCE, lang, nextEvents: NEXT }
+          ),
+      },
+      {
+        name: 'live',
+        html: () =>
+          renderEventLiveHtml(row(), SHARE, SOCIAL, { nonce: NONCE, lang, nextEvents: NEXT }),
+      },
+      {
+        name: 'recap',
+        html: () => renderPostEventHtml(row(), SHARE, NEXT, SOCIAL, { nonce: NONCE, lang }),
+      },
+    ];
+    for (const page of pages) {
+      it(`${lang} ${page.name}: every word of ours is in the page language`, () => {
+        const html = page.html();
+        expect(html).toContain(`<html lang="${lang}"`);
+        const left = englishLeft(readerText(html)).filter(
+          (f) => !(SAME_IN_LANG[lang] ?? []).some((key) => f.startsWith(`catalog ${key}:`))
+        );
+        expect(left).toEqual([]);
+      });
+    }
+    it(`${lang}: the countdown script the browser runs has no English`, () => {
+      for (const english of ["'Starts", "'Starting", "' minute", "' hour", "' days'"]) {
+        expect(countdownClientScript(lang)).not.toContain(english);
+      }
+    });
+  }
+});

@@ -123,6 +123,9 @@ export default {
     // public-event-stakeholder-surfaces.spec.ts). Killed by
     // sponsor-thumb-render.spec.ts and the language-layer goldens.
     rangeOf('src/handlers/pages.ts', 'function renderSponsorItem(', 'const SPONSOR_LIST_CSS'),
+    // OSE-1966: the price note and the type label isolated on a right-to-left
+    // page. Killed by event-page-arabic-bidi.spec.ts.
+    rangeOf('src/handlers/pages.ts', 'function eventPriceHtml(', "fmt(lang, 'event.type'"),
     // Polish (OSE-1957) and Arabic, the first right-to-left language (epic
     // OSE-1959, story OSE-1970; owner 2026-11-10: "mutation executions through
     // the all permutations"). The language list and its chosen values, the
