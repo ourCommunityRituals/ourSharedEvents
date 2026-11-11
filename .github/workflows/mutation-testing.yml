@@ -64,6 +64,10 @@ jobs:
     # first put the language layer in the main pass. It is imported by most of
     # the Worker, so its mutants reran up to 3,711 specs each and the job ran
     # past 35 minutes. Its own pass runs the specs written to kill them.
+    # 2026-11-11: the main pass ran about 24 minutes and the limit cut off the
+    # language pass, because one spec rendered pages outside a test and made
+    # most render-path mutants static. vitest.mutation.config.mts keeps that
+    # spec out of the main pass, so the about-10-minute figure holds again.
     timeout-minutes: 25
     defaults:
       run:

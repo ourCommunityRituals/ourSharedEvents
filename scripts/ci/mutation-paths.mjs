@@ -134,8 +134,10 @@ export const MUTATION_PATHS = Object.freeze([
   'tests/unit/ci/no-secret-echo.test.js',
   CI_SCRIPTS_STRYKER_CONFIG,
   'vitest.ci-scripts.config.mjs',
-  // What the Worker run is built from: the node project, its spec list, the deps.
+  // What the Worker run is built from: the node project, its spec list, the
+  // main pass's own Vitest project (the node project less a listed few), the deps.
   'workers/oursharedevents/vitest.node.config.mts',
+  'workers/oursharedevents/vitest.mutation.config.mts',
   'workers/oursharedevents/vitest.node-specs.mjs',
   'workers/oursharedevents/package.json',
   'workers/oursharedevents/package-lock.json',
