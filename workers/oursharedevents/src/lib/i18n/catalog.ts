@@ -291,7 +291,7 @@ const en = {
   'map.areasOne': '{n} neighborhood',
   'map.caption':
     '{events} in {areas}, every kind, over the next {days} days (the filters above change the list, not the map). Each hexagon is a few square kilometres, never a street address.',
-  'map.credit': 'Street map data © {osm} contributors.',
+  'map.credit': 'Street map data © {osm} contributors, prepared by {protomaps}.',
   'map.tapToZoom': 'Tap a hexagon to see its events on the map.',
   'map.zoomIn': 'Zoom in',
   'map.allAreas': 'Back to all areas',
@@ -611,7 +611,7 @@ const es: Record<MessageKey, string> = {
   'map.areasOne': '{n} barrio',
   'map.caption':
     '{events} en {areas}, de todo tipo, en los próximos {days} días (los filtros de arriba cambian la lista, no el mapa). Cada hexágono mide unos pocos kilómetros cuadrados y nunca es una dirección.',
-  'map.credit': 'Datos del mapa de calles © colaboradores de {osm}.',
+  'map.credit': 'Datos del mapa de calles © colaboradores de {osm}, preparados por {protomaps}.',
   'map.tapToZoom': 'Toca un hexágono para ver sus eventos en el mapa.',
   'map.zoomIn': 'Acercar',
   'map.allAreas': 'Volver a todas las zonas',

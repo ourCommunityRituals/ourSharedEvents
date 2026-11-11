@@ -62,6 +62,8 @@ runtime:
             // (lib/attendee-map.ts, OSM_COPYRIGHT_URL).
             const lang = (/<html lang="([a-z]{2})"/.exec(body) || [])[1];
             expect(body).to.include('href="https://www.openstreetmap.org/copyright/' + lang + '"');
+            // Protomaps, which prepares the file, is credited beside it.
+            expect(body).to.include('<a href="https://protomaps.com">Protomaps</a>');
           });
         } else {
           test('Without streets the places are a list: no dot, no bare hexagon, no credit', function () {

@@ -851,11 +851,11 @@ describe('the zoomed area, edge by edge', () => {
   test('with streets: the OpenStreetMap credit, their style, and the dot caption', () => {
     const html = zoomed([ev('a')]).html;
     expect(html).toContain(
-      '<p class="amap-credit" data-testid="amap-credit">Street map data © <a href="https://www.openstreetmap.org/copyright/en">OpenStreetMap</a> contributors.</p>'
+      '<p class="amap-credit" data-testid="amap-credit">Street map data © <a href="https://www.openstreetmap.org/copyright/en">OpenStreetMap</a> contributors, prepared by <a href="https://protomaps.com">Protomaps</a>.</p>'
     );
     // The credit is in the page's language, and so is the page its link opens.
     expect(zoomed([ev('a')], { lang: 'es' }).html).toContain(
-      '<p class="amap-credit" data-testid="amap-credit">Datos del mapa de calles © colaboradores de <a href="https://www.openstreetmap.org/copyright/es">OpenStreetMap</a>.</p>'
+      '<p class="amap-credit" data-testid="amap-credit">Datos del mapa de calles © colaboradores de <a href="https://www.openstreetmap.org/copyright/es">OpenStreetMap</a>, preparados por <a href="https://protomaps.com">Protomaps</a>.</p>'
     );
     expect(html).toContain(`${MAP_STYLE}${ZOOM_STYLE}${STREET_STYLE}\n`);
     expect(caption(html)).toBe(

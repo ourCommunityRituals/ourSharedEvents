@@ -271,7 +271,7 @@ export const pl: Record<MessageKey, string> = {
   'map.areasOne': '{n} okolica',
   'map.caption':
     '{events}; {areas}; wszystkie rodzaje, w ciągu najbliższych {days} dni (filtry powyżej zmieniają listę, nie mapę). Każdy sześciokąt to kilka kilometrów kwadratowych, nigdy adres ulicy.',
-  'map.credit': 'Dane mapy ulic © współtwórcy {osm}.',
+  'map.credit': 'Dane mapy ulic © współtwórcy {osm}, przygotowane przez {protomaps}.',
   'map.tapToZoom': 'Dotknij sześciokąta, aby zobaczyć jego wydarzenia na mapie.',
   'map.zoomIn': 'Przybliż',
   'map.allAreas': 'Wróć do wszystkich obszarów',
