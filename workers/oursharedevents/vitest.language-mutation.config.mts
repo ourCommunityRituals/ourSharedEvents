@@ -42,6 +42,7 @@ export const LANGUAGE_MUTATION_SPECS = [
   'tests/language-menu-third-language.spec.ts',
   'tests/language-menu-close.spec.ts',
   'tests/event-page-spanish.spec.ts',
+  'tests/event-page-arabic-bidi.spec.ts',
   'tests/list-landing-spanish.spec.ts',
   'tests/language-layer-golden.spec.ts',
   'tests/list-landing-language-golden.spec.ts',

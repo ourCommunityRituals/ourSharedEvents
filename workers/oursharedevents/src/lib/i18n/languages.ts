@@ -66,6 +66,22 @@ export const INTL_LOCALE: Record<Lang, string> = {
   ar: 'ar-u-nu-latn',
 };
 
+/**
+ * How an event's time names its zone, by language (OSE-1966). English and
+ * Spanish use the abbreviation ("10:00 AM CST", "10:00 a.m. CST"). Arabic has
+ * no such abbreviation: `short` gives the offset "غرينتش-6" ("GMT-6"), which an
+ * Oak Lawn reader does not say and which sits beside "CST" on the English page.
+ * `shortGeneric` names the zone by its city, "10:00 ص توقيت شيكاغو" ("Chicago
+ * time"), right for standard and summer time alike. Polish keeps `short` for
+ * now ("10:00 GMT-6"); its reader decides (OSE-1968).
+ */
+export const ZONE_NAME_STYLE: Record<Lang, 'short' | 'shortGeneric'> = {
+  en: 'short',
+  es: 'short',
+  pl: 'short',
+  ar: 'shortGeneric',
+};
+
 /** The `og:locale` value of a page in each language. */
 export const OG_LOCALE: Record<Lang, string> = {
   en: 'en_US',
