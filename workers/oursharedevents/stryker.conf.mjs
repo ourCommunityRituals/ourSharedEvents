@@ -126,24 +126,9 @@ export default {
     // OSE-1966: the price note and the type label isolated on a right-to-left
     // page. Killed by event-page-arabic-bidi.spec.ts.
     rangeOf('src/handlers/pages.ts', 'function eventPriceHtml(', "fmt(lang, 'event.type'"),
-    // Polish (OSE-1957) and Arabic, the first right-to-left language (epic
-    // OSE-1959, story OSE-1970; owner 2026-11-10: "mutation executions through
-    // the all permutations"). The language list and its chosen values, the
-    // direction map, the address prefix, header negotiation, the `{{lang}}` /
-    // `{{dir}}` slots, the footer switch, the `<bdi>` rule, and the catalog's
-    // lookup functions. The catalog text itself (catalog.ts above the range,
-    // catalog-pl.ts, catalog-ar.ts) is data: every value is pinned by the
-    // completeness, slot-parity and no-English checks, not by mutants. Killed by
-    // language-permutations.spec.ts (the generated 800-cell set),
-    // i18n-polish-arabic.spec.ts, i18n-catalog.spec.ts, i18n-path-prefix.spec.ts,
-    // i18n-resolve-language.spec.ts and the goldens.
-    'src/lib/i18n/languages.ts',
-    'src/lib/i18n/bidi.ts',
-    'src/lib/i18n/path-prefix.ts',
-    'src/lib/i18n/template.ts',
-    'src/lib/i18n/resolve-language.ts',
-    'src/lib/i18n/language-switch.ts',
-    rangeOf('src/lib/i18n/catalog.ts', 'export const CATALOG', 'export { DEFAULT_LANG }'),
+    // The language layer (Polish OSE-1957, Arabic epic OSE-1959) is mutated in
+    // its own pass, stryker.language.conf.mjs: its files run on every page
+    // render, so here each mutant reran thousands of unrelated specs.
   ],
   coverageAnalysis: 'perTest',
   // Stryker writes `// @ts-nocheck` into its sandbox copy of each file this

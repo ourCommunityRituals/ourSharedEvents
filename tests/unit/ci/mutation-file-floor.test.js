@@ -9,11 +9,17 @@
  *   verified: with the `score < floor` check removed, the under-floor case passed
  *   wrongly and failed here; with the missing-file branch removed, the
  *   not-in-report case failed here.
+ * @born-red mergeReports | method: deliberate-fixture-break | date: 2026-11-10 |
+ *   verified: with the duplicate-path branch removed, the second report's copy
+ *   replaced the first and the "in two reports" case failed here; reading only
+ *   the first report failed the "both passes" case.
  */
 let checkFloors;
 let fileScore;
+let mergeReports;
 beforeAll(async () => {
-  ({ checkFloors, fileScore } = await import('../../../scripts/ci/mutation-file-floor.mjs'));
+  ({ checkFloors, fileScore, mergeReports } =
+    await import('../../../scripts/ci/mutation-file-floor.mjs'));
 });
 
 const m = (status, line = 1) => ({ status, mutatorName: 'X', location: { start: { line } } });
@@ -78,5 +84,30 @@ describe('checkFloors', () => {
       'src\\lib\\pii.ts': { mutants: [m('Killed')] },
     });
     expect(checkFloors(r, floors)).toEqual([]);
+  });
+});
+
+describe('mergeReports (stryker.conf.mjs and stryker.language.conf.mjs each write one)', () => {
+  const floors = { 'src/auth/admin.ts': 100, 'src/lib/i18n/bidi.ts': 95 };
+
+  test('both passes together meet the floors; either one alone does not', () => {
+    const main = report({ 'src/auth/admin.ts': { mutants: [m('Killed')] } });
+    const language = report({ 'src/lib/i18n/bidi.ts': { mutants: [m('Killed')] } });
+    const merged = mergeReports([main, language]);
+    expect(merged.failures).toEqual([]);
+    expect(checkFloors(merged.report, floors)).toEqual([]);
+    expect(checkFloors(mergeReports([main]).report, floors)).toEqual([
+      'src/lib/i18n/bidi.ts: not in the mutation report (was it mutated?)',
+    ]);
+  });
+
+  test('a file in two reports fails, and the second copy does not hide the first', () => {
+    const a = report({ 'src\\lib\\i18n\\bidi.ts': { mutants: [m('Survived', 7)] } });
+    const b = report({ 'src/lib/i18n/bidi.ts': { mutants: [m('Killed')] } });
+    const merged = mergeReports([a, b]);
+    expect(merged.failures).toEqual(['src/lib/i18n/bidi.ts: in more than one mutation report']);
+    expect(checkFloors(merged.report, { 'src/lib/i18n/bidi.ts': 95 })[0]).toMatch(
+      /below its floor/
+    );
   });
 });
