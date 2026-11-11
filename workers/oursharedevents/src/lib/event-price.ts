@@ -57,32 +57,15 @@ export function resolvePriceModel(p: EventPriceInput): PriceModel | null {
 }
 
 /**
- * Human-readable price for the HOW MUCH card: the base, then the note in
- * parentheses. Returns null when unset (render nothing — no broken card). The
- * returned string is PLAIN TEXT; callers that embed it in HTML MUST escape it
- * (`price_note` is organizer-authored).
+ * Human-readable price for the HOW MUCH card. Returns null when unset (render
+ * nothing — no broken card). The returned string is PLAIN TEXT; callers that
+ * embed it in HTML MUST escape it (`price_note` is organizer-authored).
  */
 export function formatEventPrice(p: EventPriceInput, lang: Lang = DEFAULT_LANG): string | null {
-  const parts = formatEventPriceParts(p, lang);
-  if (parts === null) return null;
-  return parts.note ? `${parts.base} (${parts.note})` : parts.base;
-}
-
-/**
- * The HOW MUCH card's two parts: `base` is ours (a catalog word or "$25"),
- * `note` is what the organizer typed, trimmed ('' when none). Null when unset.
- * The event page isolates the note on a right-to-left page (OSE-1966), so
- * "(cash only)" keeps its own order. Both are PLAIN TEXT; a caller that embeds
- * them in HTML MUST escape them.
- */
-export function formatEventPriceParts(
-  p: EventPriceInput,
-  lang: Lang = DEFAULT_LANG
-): { base: string; note: string } | null {
   const model = resolvePriceModel(p);
   if (model === null) return null;
   const note = (p.price_note || '').trim();
-  const withNote = (base: string) => ({ base, note });
+  const withNote = (base: string) => (note ? `${base} (${note})` : base);
 
   switch (model) {
     case 'free':
