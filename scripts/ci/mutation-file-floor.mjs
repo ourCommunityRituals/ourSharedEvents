@@ -58,6 +58,18 @@ export const FLOORS = {
   // '' fallback of the website, read only by startsWith('https://')).
   'src/handlers/pages.ts': 100,
   'src/handlers/events.ts': 100,
+  // OSE-1850 and OSE-1943 (2026-11-11): the form pages on the language layer,
+  // mutated only in their marker ranges. Two local runs scored 100 on both
+  // (form-pages.ts 207 mutants, 0 survived; event-staleness.ts 3 of 3). Five
+  // equivalent mutants carry a written `// Stryker disable` reason in
+  // form-pages.ts: the four `nonce = ''` defaults (formPage always passes one)
+  // and `'register'` to privacyNotice (its default branch is the same notice).
+  // form-pages.ts timed out 12 and then 23 of its 207 on the same workstation,
+  // so its floor is the 95% break, as for the language files above: a slower
+  // runner that turns a timeout into a survivor is not a false red. Raise it to
+  // 100 once CI confirms. Never lower.
+  'src/handlers/form-pages.ts': 95,
+  'src/lib/event-staleness.ts': 100,
   // Epic OSE-1880 (owner, 2026-11-09): the map's deterministic rules, at the
   // scores of the run that added them (rounded down, so the same run passes).
   // Every survivor is equivalent, and sits on a line where another mutant of

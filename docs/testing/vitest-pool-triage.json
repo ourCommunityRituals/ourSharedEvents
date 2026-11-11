@@ -1374,6 +1374,20 @@
       "testCount": 20
     },
     {
+      "file": "workers/oursharedevents/tests/form-pages-language-golden.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 1
+    },
+    {
+      "file": "workers/oursharedevents/tests/form-pages-language.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 49
+    },
+    {
       "file": "workers/oursharedevents/tests/form-pages-less-text.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -1560,7 +1574,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 24
+      "testCount": 26
     },
     {
       "file": "workers/oursharedevents/tests/i18n-polish-arabic.spec.ts",
@@ -1679,7 +1693,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 26
+      "testCount": 37
     },
     {
       "file": "workers/oursharedevents/tests/language-permutations.spec.ts",

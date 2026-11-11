@@ -13,9 +13,17 @@
  *
  * Born-red: take the prefix block out of the router and every "renders Spanish"
  * test fails; let it match any path and the "ordinary 404" tests fail.
+ *
+ * OSE-1850 born-red (2026-11-11): with the router's `kind === 'form'` branch
+ * taken out, 7 of the form-page cases fail (every screen and language, the
+ * event page to form hop, Arabic, HEAD, the write, the archived forward, the
+ * staging band). The list-card link and the bare-address header case fail on
+ * main's event-list.ts and form-pages.ts instead.
  */
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { msg } from '../src/lib/i18n/catalog';
+import { injectTestSiteNotice } from '../src/lib/test-site-notice';
 
 const ORIGIN = 'https://t.test';
 const KEY = { Authorization: 'Bearer test-admin-key-e2e-2026' };
@@ -267,10 +275,12 @@ describe('OSE-1761 | everything else under a prefix is the ordinary 404', () => 
       '/es/privacy',
       `/es/events/${e.id}/tv`,
       `/es/events/${e.id}/poster`,
-      `/es/events/${e.id}/register`,
-      `/es/events/${e.id}/checkin`,
+      // OSE-1850: the form screens are pages now (below); a near miss is not.
+      `/es/events/${e.id}/Checkin`,
+      `/es/events/${e.id}/checkin/`,
       `/es/events/${e.id}/calendar.ics`,
       `/es/forms/${e.id}`,
+      `/en/events/${e.id}/checkin`,
       `/es/sponsors/abc`,
       `/es${readablePath(e)}/`,
     ];
@@ -391,6 +401,135 @@ describe('OSE-1762 | /es/ and /es/events through the router', () => {
       const res = await post(`g=dp3su&lang=${lang}`);
       expect(res.headers.get('Location'), lang).toBe('/?zip=60469');
     }
+  });
+});
+
+// OSE-1850: the owner's report (2026-11-10), "Does not translate to the selected
+// language": a reader who picked a language on the event page and tapped into
+// check-in got an English page. The event page's form links had no prefix, and
+// no form page existed under one.
+describe('OSE-1850 | the form pages under a prefix, through the router', () => {
+  const SCREENS = ['register', 'checkin', 'survey', 'updates'] as const;
+  const DIR = { es: 'ltr', pl: 'ltr', ar: 'rtl' } as const;
+
+  test('every form screen in every language: 200, lang and dir, the menu, no Vary', async () => {
+    const e = await publicEvent('Formularios');
+    for (const lang of ['es', 'pl', 'ar'] as const) {
+      for (const screen of SCREENS) {
+        const path = `/${lang}/events/${e.id}/${screen}`;
+        const res = await get(path, { 'Accept-Language': 'en-US' });
+        expect(res.status, path).toBe(200);
+        expect(res.headers.get('Vary'), path).toBeNull();
+        const html = await res.text();
+        expect(html, path).toContain(`<html lang="${lang}" dir="${DIR[lang]}">`);
+        expect(html, path).toContain('data-testid="language-menu"');
+        // The menu leads back to the English form at its bare address.
+        expect(html, path).toContain(
+          `data-testid="language-menu-en" href="/events/${e.id}/${screen}"`
+        );
+      }
+    }
+  });
+
+  test('the Spanish event page links to the Spanish form, and that form is Spanish', async () => {
+    const e = await publicEvent('Registro en español');
+    const page = await (await get(`/es${readablePath(e)}`)).text();
+    const href = page.match(/data-testid="event-rsvp" href="([^"]+)"/)?.[1];
+    expect(href).toBe(`/es/events/${e.id}/register`);
+    const form = await get(href as string);
+    expect(form.status).toBe(200);
+    const html = await form.text();
+    expect(html).toContain('<html lang="es" dir="ltr">');
+    expect(html).toContain('Inscríbete en este evento');
+    // The second choice, check-in, keeps the language too.
+    expect(page).toContain(`href="/es/events/${e.id}/checkin"`);
+  });
+
+  test('the Arabic check-in is right to left, with the Arabic words', async () => {
+    const e = await publicEvent('Arabic check-in');
+    const html = await (await get(`/ar/events/${e.id}/checkin`)).text();
+    expect(html).toContain('<html lang="ar" dir="rtl">');
+    expect(html).toContain('تسجيل الحضور');
+    expect(html).toContain(`<bdi>Arabic check-in</bdi>`);
+  });
+
+  test('the Spanish list card links to the Spanish form', async () => {
+    const e = await publicEvent('Tarjeta con registro');
+    const html = await (await get('/es/events')).text();
+    expect(html).toContain(`href="/es/events/${e.id}/register"`);
+    expect(html).not.toContain(`href="/events/${e.id}/register"`);
+  });
+
+  test('a bare form address negotiates by header and says it varies by it', async () => {
+    const e = await publicEvent('Bare form');
+    const res = await get(`/events/${e.id}/checkin`, { 'Accept-Language': 'pl-PL,pl;q=0.9' });
+    expect(res.headers.get('Vary')).toBe('Accept-Language');
+    expect(await res.text()).toContain('<html lang="pl" dir="ltr">');
+    const en = await get(`/events/${e.id}/checkin`);
+    expect(await en.text()).toContain('<html lang="en" dir="ltr">');
+  });
+
+  test('a HEAD request is answered', async () => {
+    const e = await publicEvent('Head form');
+    const res = await SELF.fetch(`${ORIGIN}/es/events/${e.id}/checkin`, { method: 'HEAD' });
+    expect(res.status).toBe(200);
+  });
+
+  test('a write is not served under a prefix: the form posts to the unprefixed API', async () => {
+    const e = await publicEvent('Form write');
+    const res = await SELF.fetch(`${ORIGIN}/es/events/${e.id}/checkin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    expect(res.status).toBe(404);
+    await res.text();
+    const page = await (await get(`/es/events/${e.id}/checkin`)).text();
+    expect(page).toContain("fetch('/api/v2/events/' + eventId + '/forms/' + formType");
+  });
+
+  test('an archived event forwards to the list in the same language', async () => {
+    const e = await publicEvent('Archived form');
+    await db().prepare(`UPDATE events SET status = 'archived' WHERE id = ?`).bind(e.id).run();
+    const res = await get(`/es/events/${e.id}/register`);
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location')).toBe(`${ORIGIN}/es/events`);
+  });
+
+  test('the same cookie answer as the bare form: the language adds none', async () => {
+    const e = await publicEvent('Form cookies');
+    for (const screen of SCREENS) {
+      const bare = await get(`/events/${e.id}/${screen}`);
+      const prefixed = await get(`/es/events/${e.id}/${screen}`);
+      expect(prefixed.headers.get('Set-Cookie'), screen).toBe(bare.headers.get('Set-Cookie'));
+      await bare.text();
+      await prefixed.text();
+    }
+  });
+
+  test('the staging "Testing purposes only." band reads in the form page language', async () => {
+    const e = await publicEvent('Staging band');
+    for (const [lang, headline] of [
+      ['es', 'Solo para pruebas.'],
+      ['pl', msg('pl', 'testSite.headline')],
+      ['ar', msg('ar', 'testSite.headline')],
+    ] as const) {
+      const res = injectTestSiteNotice(await get(`/${lang}/events/${e.id}/checkin`), {
+        WORKER_ENV: 'staging',
+      });
+      const html = await res.text();
+      expect(html, lang).toContain(`<p><strong>${headline}</strong></p>`);
+      expect(html, lang).not.toContain('Testing purposes only.');
+    }
+  });
+
+  test('the identified side stores no language: no FORMS_DB column names one', () => {
+    const stmts: string[] = JSON.parse(
+      (env as unknown as { TEST_FORMS_MIGRATION_STATEMENTS: string })
+        .TEST_FORMS_MIGRATION_STATEMENTS
+    );
+    expect(stmts.length).toBeGreaterThan(0);
+    for (const s of stmts) expect(s).not.toMatch(/\b(lang|language|locale|accept_language)\b/i);
   });
 });
 

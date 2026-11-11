@@ -24,6 +24,9 @@
  *                                  stays unprefixed. Only pages on the language layer exist under a
  *                                  prefix (lib/i18n/path-prefix.ts); any other path under one is a 404.
  *   GET /es/e/:code              → 302 to the Spanish event page; counted as /e/:code is
+ *   GET /es/events/:id/register|checkin|survey|updates → the form page in that language
+ *                                  (OSE-1850); /es stands for any listed language. The form posts
+ *                                  to the unprefixed API; no language is stored.
  *   GET /events/:id/calendar.ics → public event calendar download
  *   GET /api/v2/events/map       → attendee map, cell-scoped (OSE-1242).
  *                                  Accepts ?cell=<h3 res7>; REFUSES lat/lon.
@@ -658,6 +661,12 @@ export async function route(
     const page = matchLanguagePage(langPrefix.rest);
     if (page?.kind === 'event') {
       return handlePublicEventPage(request, env, page.id, page.name, langPrefix.lang);
+    }
+    if (page?.kind === 'form') {
+      // OSE-1850: the same form page as /events/<id>/<screen>, in the path's
+      // language. The form still posts to the unprefixed API, which stores
+      // nothing about the language.
+      return handleFormPage(request, env, page.id, 1, page.screen, langPrefix.lang);
     }
     if (page?.kind === 'landing') {
       return handleLandingPage(env, ctx, request, langPrefix.lang);

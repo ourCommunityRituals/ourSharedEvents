@@ -1170,7 +1170,9 @@ function renderEventChoices(
   };
   const first = phase === 'pre' ? 'event-rsvp' : 'event-checkin';
   const href = (type: EventFormType) =>
-    inert ? '' : ` href="${esc(eventFormHref(row.id, { type, deploymentId: ctx.deploymentId }))}"`;
+    inert
+      ? ''
+      : ` href="${esc(withLangPrefix(lang, eventFormHref(row.id, { type, deploymentId: ctx.deploymentId })))}"`;
   const off = inert ? ' data-preview-inert="true" aria-disabled="true"' : '';
   const choice = (
     testid: string,
@@ -2025,7 +2027,7 @@ ${SPONSOR_LIST_CSS}
       <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
         <h2 id="connect-heading" class="ose-suggestions-heading">${msg(lang, 'connect.heading')}</h2>
         <p class="ose-suggestions-note">${msg(lang, 'connect.note')}</p>
-        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="${esc(eventFormPath(row.id, 'email-signup'))}">${msg(lang, 'connect.cta')}</a>
+        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="${esc(withLangPrefix(lang, eventFormPath(row.id, 'email-signup')))}">${msg(lang, 'connect.cta')}</a>
       </section>
     </aside>
 

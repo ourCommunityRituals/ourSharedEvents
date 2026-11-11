@@ -24,7 +24,11 @@
  * for stable Playwright automation. These IDs survive CSS/layout changes.
  */
 
-import { isStaleForPublicLanding, staleEventForward } from '../lib/event-staleness';
+import {
+  isStaleForPublicLanding,
+  staleEventForward,
+  STALE_FORWARD_PATH,
+} from '../lib/event-staleness';
 import { HARDENING_HEADERS } from '../lib/security-headers';
 import { escapeHtml, jsonForScript } from '../lib/html-escape';
 import { isValidDeploymentId, isValidEventId, repairEventIdTypo } from '../lib/form-validation';
@@ -39,6 +43,12 @@ import {
   EVENT_FORM_SCREENS,
   type EventFormScreen,
 } from '../lib/canonical';
+import { fmt, msg, type MessageKey } from '../lib/i18n/catalog';
+import { isolateTyped } from '../lib/i18n/bidi';
+import { DEFAULT_LANG, DIRECTION, type Lang } from '../lib/i18n/languages';
+import { LANGUAGE_MENU_CSS, renderLanguageMenu } from '../lib/i18n/language-menu';
+import { withLangPrefix } from '../lib/i18n/path-prefix';
+import { resolveLanguage } from '../lib/i18n/resolve-language';
 import {
   turnstileScriptTag,
   turnstileWidgetHtml,
@@ -89,11 +99,15 @@ function buildSecurityHeaders(nonce: string, env?: FormPagesEnv): Record<string,
 /**
  * The one line under each form: what that form keeps, and for how long. Each
  * line matches the retention in the details below it (owner 2026-10-11).
+ *
+ * OSE-1850: these lines are privacy text, so they stay in English until a human
+ * translation and a legal read. The check-in line is the one exception: it is
+ * the same promise the event page's check-in choice already makes in every
+ * language (`choices.checkinNote`), so the reader who tapped it reads it again
+ * here in the same words.
  */
 function privacySummary(formType: string): string {
   switch (formType) {
-    case 'checkin':
-      return 'Counted, never named.';
     case 'survey':
       return 'Comments are cleaned of personal details within 24 hours.';
     case 'email':
@@ -104,7 +118,7 @@ function privacySummary(formType: string): string {
   }
 }
 
-function privacyNotice(formType: string, legalTier = 1): string {
+function privacyNotice(formType: string, legalTier = 1, lang: Lang = DEFAULT_LANG): string {
   let purpose: string;
   let legalBasis: string;
   let retention: string;
@@ -146,11 +160,24 @@ function privacyNotice(formType: string, legalTier = 1): string {
   // Tiers 4 and 5 (HIPAA, COPPA) are declined regimes (ADR-018): no notice may
   // promise their safeguards. The tier is capped at 3, so these never render.
 
+  // OSE-1850: on a page not in English, the legal text below keeps its English
+  // and says so (`lang="en"`, so a screen reader reads it as English), and a
+  // plain note in the page's language explains why. No machine translation.
+  const translated = lang !== DEFAULT_LANG;
+  const en = translated ? ' lang="en"' : '';
+  const summary =
+    formType === 'checkin'
+      ? `<p class="privacy-summary" data-testid="privacy-summary">${msg(lang, 'choices.checkinNote')}</p>`
+      : `<p class="privacy-summary" data-testid="privacy-summary"${en}>${privacySummary(formType)}</p>`;
+  const note = translated
+    ? `\n    <p class="privacy-lang-note" data-testid="privacy-english-note">${msg(lang, 'form.privacy.englishNote')}</p>`
+    : '';
+
   return `<div class="privacy-notice" data-testid="privacy-notice">
-    <p class="privacy-summary" data-testid="privacy-summary">${privacySummary(formType)}</p>
+    ${summary}${note}
     <details class="privacy-details" data-testid="privacy-details">
-      <summary>Privacy details</summary>
-      <p>
+      <summary>${msg(lang, 'form.privacy.details')}</summary>
+      <p${en}>
         ${purpose} Legal basis: ${legalBasis} ${retention}
         You have the right to access, correct, or erase your data, and to lodge a complaint with your local data protection
         <strong>supervisory authority</strong>.
@@ -242,6 +269,11 @@ const FORM_CSS = `
   .next-step ul { list-style: none; margin: 0; padding: 0; }
   .next-step-link { display: flex; justify-content: space-between; align-items: center; gap: .75rem; min-height: 44px; padding: .4rem 0; color: var(--accent); font-weight: 600; text-decoration: none; border-bottom: 1px solid var(--border); }
   .next-step-when { font-size: .8rem; font-weight: 400; color: var(--text-muted); white-space: nowrap; }
+  /* OSE-1850 / OSE-1943: the Language menu at the start of the header (the left
+     in a left-to-right page, the right in Arabic), and the note that the privacy
+     text is in English. Logical properties only. */
+  .form-topbar { display: flex; justify-content: flex-start; text-align: start; margin: 0 0 .5rem; }
+  .privacy-lang-note { margin-bottom: .25rem; }
 `;
 
 // ── Form JS: shared submit logic ─────────────────────────────────────────────
@@ -261,7 +293,14 @@ const FORM_CSS = `
 //   • Status-code fallback (429 rate limit, 4xx, 5xx) for codes that aren't
 //     mapped.
 
-const FORM_JS_SUBMIT = `
+/** A catalog message as a script string literal (quoted, `<` escaped). */
+function js(lang: Lang, key: MessageKey): string {
+  return jsonForScript(msg(lang, key));
+}
+
+// OSE-1850: the copy is the page's language. Keys stay unquoted (`CODE: "..."`),
+// the shape tests/form-error-friendly-copy.spec.ts reads.
+const formJsSubmit = (lang: Lang): string => `
   // FE-15: broken sponsor logos hide gracefully. Inline onerror= is CSP-blocked
   // (script-src 'nonce-…' does not cover inline event handlers), so sponsor <img>s
   // carry data-hide-on-error and this ONE capture-phase listener hides them. The
@@ -282,23 +321,22 @@ const FORM_JS_SUBMIT = `
   // OSE-R-002: code → friendly copy. Update both this map AND the standard
   // doc tests when a new server code is added.
   var FORM_ERROR_FRIENDLY_COPY = {
-    INVALID_EVENT_ID: "This event link doesn't look right. Try the original link or contact the host.",
-    INVALID_BODY: "We couldn't read your response. Please refresh the page and try again.",
-    PAYLOAD_TOO_LARGE: "Your message is too long. Please shorten it and try again.",
-    MISSING_FIELD: "Please fill out all required fields and try again.",
-    INVALID_EMAIL: "That email doesn't look right. Please check and try again.",
-    CONFIG_ERROR: "Something's not set up on our side. Please try again in a few minutes.",
-    DB_ERROR: "We're having trouble right now. Please try again in a moment.",
-    METHOD_NOT_ALLOWED: "This action isn't available right now."
+    INVALID_EVENT_ID: ${js(lang, 'form.error.invalidEventId')},
+    INVALID_BODY: ${js(lang, 'form.error.invalidBody')},
+    PAYLOAD_TOO_LARGE: ${js(lang, 'form.error.payloadTooLarge')},
+    MISSING_FIELD: ${js(lang, 'form.error.missingField')},
+    INVALID_EMAIL: ${js(lang, 'form.error.invalidEmail')},
+    CONFIG_ERROR: ${js(lang, 'form.error.configError')},
+    DB_ERROR: ${js(lang, 'form.error.busy')},
+    METHOD_NOT_ALLOWED: ${js(lang, 'form.error.methodNotAllowed')}
   };
 
   function friendlyFormError(code, status) {
-    if (code && FORM_ERROR_FRIENDLY_COPY[code]) return FORM_ERROR_FRIENDLY_COPY[code];
-    if (status === 429) return "Too many tries. Please wait a moment and try again.";
-    if (status === 503) return "We're having trouble right now. Please try again in a moment.";
-    if (status >= 500) return "Sorry, something went wrong on our end. Please try again.";
-    if (status >= 400) return "Sorry, something went wrong. Please try again.";
-    return "Sorry, something went wrong. Please try again.";
+    if (code && Object.prototype.hasOwnProperty.call(FORM_ERROR_FRIENDLY_COPY, code)) return FORM_ERROR_FRIENDLY_COPY[code];
+    if (status === 429) return ${js(lang, 'form.error.tooMany')};
+    if (status === 503) return ${js(lang, 'form.error.busy')};
+    if (status >= 500) return ${js(lang, 'form.error.server')};
+    return ${js(lang, 'form.error.generic')};
   }
 
   async function submitForm(eventId, formType, data) {
@@ -385,13 +423,16 @@ const FORM_JS_SUBMIT = `
           return { '<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;' }[c];
         });
       };
+      // OSE-1850: a sponsor name shows as typed; on a right-to-left page it is
+      // isolated (<bdi>) so its own punctuation stays where it was typed.
+      var rtl = document.documentElement.dir === 'rtl';
       var items = cache.slice(0, 3).map(function(s) {
         var name = escAttr(s.title || s.name);
         // 0083: no logo → the OSE default; a failing logo swaps to it too.
         var logo = '<img src="' + (s.logo_url && s.id ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg') + '" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" />';
-        return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
+        return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + (rtl ? '<bdi>' + name + '</bdi>' : name) + '</span></span>';
       }).join('');
-      thanks = '<div class="form-sponsor-thanks" data-testid="form-sponsor-thanks"><span class="thanks-label">Event supported by</span><div class="sponsor-row">' + items + '</div></div>';
+      thanks = '<div class="form-sponsor-thanks" data-testid="form-sponsor-thanks"><span class="thanks-label">' + ${js(lang, 'form.sponsorThanks')} + '</span><div class="sponsor-row">' + items + '</div></div>';
     }
     // F5.3: the next step the server put in the #form-next-step template
     // (outside #form-area, so the swap below keeps it) joins the confirmation
@@ -417,7 +458,7 @@ const FORM_JS_SUBMIT = `
 // contract; this is a non-critical brand-presence overlay that any
 // individual form can include or skip without coupling.
 
-const FORM_JS_SPONSOR = `
+const formJsSponsor = (eventId: string, lang: Lang): string => `
   (function loadFormSponsors(eventId) {
     window.__formSponsorCache = null;
     fetch('/api/v2/events/' + eventId + '/sponsor-bundle?surface=public')
@@ -436,12 +477,14 @@ const FORM_JS_SPONSOR = `
             return { '<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;' }[c];
           });
         };
+        // OSE-1850: typed names isolated on a right-to-left page, as above.
+        var rtl = document.documentElement.dir === 'rtl';
         var items = banner.slice(0, 3).map(function(s) {
           var name = escAttr(s.title || s.name);
           var logo = '<img src="' + (s.logo_url && s.id ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg') + '" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" />';
-          return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
+          return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + (rtl ? '<bdi>' + name + '</bdi>' : name) + '</span></span>';
         }).join('');
-        strip.innerHTML = '<span class="strip-label">Supported by</span>' + items;
+        strip.innerHTML = '<span class="strip-label">' + ${js(lang, 'sponsors.supportedBy')} + '</span>' + items;
         strip.classList.add('has-sponsors');
         // OSE-1566: the strip owns its fallback. It does not lean on the capture
         // listener in the form script (a different script block), and it also
@@ -455,7 +498,7 @@ const FORM_JS_SPONSOR = `
         });
       })
       .catch(function() { /* silently no-op — sponsor strip is non-critical */ });
-  })(EVENT_ID_PLACEHOLDER);
+  })(${jsonForScript(eventId)});
 `;
 
 // ── Registration form ────────────────────────────────────────────────────────
@@ -464,28 +507,32 @@ function registrationForm(
   eventId: string,
   legalTier = 1,
   deploymentId?: string,
-  nonce = ''
+  // Stryker disable next-line StringLiteral: equivalent, formPage always passes the page's nonce, so the default is never read.
+  nonce = '',
+  lang: Lang = DEFAULT_LANG
 ): string {
   const hiddenDeployment = deploymentId
     ? `<input type="hidden" name="deploymentId" data-testid="form-deployment-id" value="${escapeHtml(deploymentId)}" />`
     : '';
+  // Stryker disable next-line StringLiteral: equivalent, privacyNotice's default branch is the registration notice.
+  const privacy = privacyNotice('register', legalTier, lang);
   return `
     <div class="form-card" id="form-area" data-testid="form-register">
-      <h2>Register for this event</h2>
+      <h2>${msg(lang, 'form.register.heading')}</h2>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <form data-testid="register-form">
         ${hiddenDeployment}
-        <label for="name">Your name</label>
-        <input type="text" id="name" data-testid="register-name-input" placeholder="Jane Smith" maxlength="200" required autocomplete="name" aria-required="true" aria-describedby="error-msg" />
-        <label for="email">Email (optional)</label>
-        <p class="field-note" id="register-email-note" data-testid="register-email-note">Only to tell you if plans change.</p>
-        <input type="email" id="email" data-testid="register-email-input" placeholder="jane@example.com" maxlength="320" autocomplete="email" aria-describedby="register-email-note error-msg" />
-        <button type="submit" data-testid="register-submit">Register</button>
-        ${privacyNotice('register', legalTier)}
+        <label for="name">${msg(lang, 'form.register.name')}</label>
+        <input type="text" id="name" data-testid="register-name-input" placeholder="${msg(lang, 'form.register.namePlaceholder')}" maxlength="200" required autocomplete="name" aria-required="true" aria-describedby="error-msg" />
+        <label for="email">${msg(lang, 'form.register.email')}</label>
+        <p class="field-note" id="register-email-note" data-testid="register-email-note">${msg(lang, 'form.register.emailNote')}</p>
+        <input type="email" id="email" data-testid="register-email-input" placeholder="${msg(lang, 'form.register.emailPlaceholder')}" maxlength="320" autocomplete="email" aria-describedby="register-email-note error-msg" />
+        <button type="submit" data-testid="register-submit">${msg(lang, 'cta.register')}</button>
+        ${privacy}
       </form>
     </div>
     <script nonce="${nonce}">
-      ${FORM_JS_SUBMIT}
+      ${formJsSubmit(lang)}
       async function handleRegister(e) {
         e.preventDefault();
         // submitForm has already shown the friendly error on a refusal, so a
@@ -499,7 +546,7 @@ function registrationForm(
         } catch (_) {
           return;
         }
-        showSuccess('You\\'re registered!');
+        showSuccess(${js(lang, 'form.register.done')});
       }
       document.querySelector('[data-testid="register-form"]').addEventListener('submit', handleRegister);
     </script>`;
@@ -507,20 +554,27 @@ function registrationForm(
 
 // ── Check-in form (tap counter) ──────────────────────────────────────────────
 
-function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonce = ''): string {
+function checkinForm(
+  eventId: string,
+  legalTier = 1,
+  deploymentId?: string,
+  // Stryker disable next-line StringLiteral: equivalent, formPage always passes the page's nonce, so the default is never read.
+  nonce = '',
+  lang: Lang = DEFAULT_LANG
+): string {
   return `
     <div class="checkin-tap" id="form-area" data-testid="form-checkin">
-      <h2>Check In</h2>
+      <h2>${msg(lang, 'form.checkin.heading')}</h2>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
-      <button type="button" id="checkin-btn" data-testid="checkin-submit">Tap to<br/>Check In</button>
-      <p class="walk-in-row">Didn't register?
-        <button type="button" id="walk-in-btn" class="walk-in-btn" data-testid="checkin-walk-in-submit">Check in as a walk-in</button>
+      <button type="button" id="checkin-btn" data-testid="checkin-submit">${msg(lang, 'form.checkin.tap')}</button>
+      <p class="walk-in-row">${msg(lang, 'form.checkin.noRegistration')}
+        <button type="button" id="walk-in-btn" class="walk-in-btn" data-testid="checkin-walk-in-submit">${msg(lang, 'form.checkin.walkIn')}</button>
       </p>
       <div class="count" id="count" data-testid="checkin-count" role="status" aria-live="polite"></div>
-      ${privacyNotice('checkin', legalTier)}
+      ${privacyNotice('checkin', legalTier, lang)}
     </div>
     <script nonce="${nonce}">
-      ${FORM_JS_SUBMIT}
+      ${formJsSubmit(lang)}
       let tapping = false;
       // OSE-1736: once a check-in has gone through, the page takes no more. The
       // answer carries no count (OSE-1657), so a second tap would add one the
@@ -548,14 +602,14 @@ function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonc
           // OSE-1657: counts are post-event only, so the page confirms the
           // check-in and shows no tally.
           checkedIn = true;
-          document.getElementById('count').textContent = "You're checked in.";
+          document.getElementById('count').textContent = ${js(lang, 'form.checkin.done')};
           // Both buttons read as spent, not just inert: dimmed, the label says
           // why, and a plain cursor. The status line above is a live region, so
           // a screen reader announces the same sentence.
           // Not aria-disabled/disabled on purpose: the held journey test taps
           // again and requires that tap to be a real, harmless one (it must
           // send nothing), and it must stay a >= 44px target.
-          btn.textContent = 'Checked in';
+          btn.textContent = ${js(lang, 'form.checkin.doneButton')};
           [btn, walkInBtn].forEach(function (b) {
             b.style.cursor = 'default';
           });
@@ -586,32 +640,38 @@ function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonc
 
 // ── Survey form ──────────────────────────────────────────────────────────────
 
-function surveyForm(eventId: string, legalTier = 1, deploymentId?: string, nonce = ''): string {
+function surveyForm(
+  eventId: string,
+  legalTier = 1,
+  deploymentId?: string,
+  // Stryker disable next-line StringLiteral: equivalent, formPage always passes the page's nonce, so the default is never read.
+  nonce = '',
+  lang: Lang = DEFAULT_LANG
+): string {
   const hiddenDeployment = deploymentId
     ? `<input type="hidden" name="deploymentId" data-testid="form-deployment-id" value="${escapeHtml(deploymentId)}" />`
     : '';
+  // Each rating button says what it does: "Rate 3 out of 5", in the page's language.
+  const rate = (n: number) =>
+    `<button type="button" data-testid="survey-rating-${n}" aria-label="${fmt(lang, 'form.survey.rate', { n })}" aria-pressed="false">${n}</button>`;
   return `
     <div class="form-card" id="form-area" data-testid="form-survey">
-      <h2>How was the event?</h2>
+      <h2>${msg(lang, 'form.survey.heading')}</h2>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <form data-testid="survey-form">
         ${hiddenDeployment}
-        <label id="rating-label">Overall rating</label>
+        <label id="rating-label">${msg(lang, 'form.survey.rating')}</label>
         <div class="rating-row" id="rating-overall" data-testid="survey-rating-overall" role="group" aria-labelledby="rating-label">
-          <button type="button" data-testid="survey-rating-1" aria-label="Rate 1 out of 5" aria-pressed="false">1</button>
-          <button type="button" data-testid="survey-rating-2" aria-label="Rate 2 out of 5" aria-pressed="false">2</button>
-          <button type="button" data-testid="survey-rating-3" aria-label="Rate 3 out of 5" aria-pressed="false">3</button>
-          <button type="button" data-testid="survey-rating-4" aria-label="Rate 4 out of 5" aria-pressed="false">4</button>
-          <button type="button" data-testid="survey-rating-5" aria-label="Rate 5 out of 5" aria-pressed="false">5</button>
+          ${[1, 2, 3, 4, 5].map(rate).join('\n          ')}
         </div>
-        <label for="comments">Comments (optional)</label>
-        <textarea id="comments" data-testid="survey-comments-input" placeholder="Tell us what you thought..." maxlength="1000" aria-describedby="error-msg"></textarea>
-        <button type="submit" data-testid="survey-submit">Submit Feedback</button>
-        ${privacyNotice('survey', legalTier)}
+        <label for="comments">${msg(lang, 'form.survey.comments')}</label>
+        <textarea id="comments" data-testid="survey-comments-input" placeholder="${msg(lang, 'form.survey.commentsPlaceholder')}" maxlength="1000" aria-describedby="error-msg"></textarea>
+        <button type="submit" data-testid="survey-submit">${msg(lang, 'form.survey.submit')}</button>
+        ${privacyNotice('survey', legalTier, lang)}
       </form>
     </div>
     <script nonce="${nonce}">
-      ${FORM_JS_SUBMIT}
+      ${formJsSubmit(lang)}
       const ratings = {};
       function setRating(key, val) {
         ratings[key] = val;
@@ -629,7 +689,7 @@ function surveyForm(eventId: string, legalTier = 1, deploymentId?: string, nonce
           responses: { ...ratings, ...(comments ? { comments } : {}) },
           sourcePlacementId: ${jsonForScript(deploymentId ?? null)},
         });
-        showSuccess('Thanks for your feedback!');
+        showSuccess(${js(lang, 'form.survey.done')});
       }
       document.querySelector('[data-testid="survey-form"]').addEventListener('submit', handleSurvey);
       document.querySelectorAll('#rating-overall button').forEach(function(btn, i) {
@@ -644,26 +704,28 @@ function emailSignupForm(
   eventId: string,
   legalTier = 1,
   deploymentId?: string,
-  nonce = ''
+  // Stryker disable next-line StringLiteral: equivalent, formPage always passes the page's nonce, so the default is never read.
+  nonce = '',
+  lang: Lang = DEFAULT_LANG
 ): string {
   const hiddenDeployment = deploymentId
     ? `<input type="hidden" name="deploymentId" data-testid="form-deployment-id" value="${escapeHtml(deploymentId)}" />`
     : '';
   return `
     <div class="form-card" id="form-area" data-testid="form-email">
-      <h2>Stay in the loop</h2>
-      <p class="form-intro">One email when something's coming up. Never shared.</p>
+      <h2>${msg(lang, 'form.email.heading')}</h2>
+      <p class="form-intro">${msg(lang, 'form.email.intro')}</p>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <form data-testid="email-form">
         ${hiddenDeployment}
-        <label for="email">Your email</label>
-        <input type="email" id="email" data-testid="email-email-input" placeholder="you@example.com" maxlength="320" required autocomplete="email" aria-required="true" aria-describedby="error-msg" />
-        <button type="submit" data-testid="email-submit">Sign me up</button>
-        ${privacyNotice('email', legalTier)}
+        <label for="email">${msg(lang, 'form.email.label')}</label>
+        <input type="email" id="email" data-testid="email-email-input" placeholder="${msg(lang, 'form.email.placeholder')}" maxlength="320" required autocomplete="email" aria-required="true" aria-describedby="error-msg" />
+        <button type="submit" data-testid="email-submit">${msg(lang, 'form.email.submit')}</button>
+        ${privacyNotice('email', legalTier, lang)}
       </form>
     </div>
     <script nonce="${nonce}">
-      ${FORM_JS_SUBMIT}
+      ${formJsSubmit(lang)}
       async function handleEmail(e) {
         e.preventDefault();
         let body;
@@ -675,7 +737,7 @@ function emailSignupForm(
         } catch (_) {
           return; // the friendly error is already on screen
         }
-        showSuccess(body.duplicate ? 'You\\'re already signed up!' : 'You\\'re on the list!');
+        showSuccess(body.duplicate ? ${js(lang, 'form.email.already')} : ${js(lang, 'form.email.done')});
       }
       document.querySelector('[data-testid="email-form"]').addEventListener('submit', handleEmail);
     </script>`;
@@ -690,7 +752,7 @@ function emailSignupForm(
 // event fields from DB.
 
 /** The event fields the form page reads (all public, all from DB). */
-interface FormEventRow {
+export interface FormEventRow {
   id: string;
   brand_id: string | null;
   title: string | null;
@@ -714,19 +776,20 @@ function nextStepTemplate(inner: string): string {
  * existing server .ics, plus the Google Calendar link the event page offers for
  * Android), go back to the event page, and know how check-in works.
  */
-function registerNextStep(row: FormEventRow, shareUrl: string): string {
+function registerNextStep(row: FormEventRow, shareUrl: string, lang: Lang = DEFAULT_LANG): string {
   const id = encodeURIComponent(row.id);
   const google = buildGoogleCalendarUrl(row, shareUrl);
+  // The calendar file is not a page and has no language; the event page does.
   const calendar = row.start_date
-    ? `<a class="next-step-link" data-testid="register-next-calendar" href="/events/${escapeHtml(id)}/calendar.ics" download>Add to calendar</a>${
+    ? `<a class="next-step-link" data-testid="register-next-calendar" href="/events/${escapeHtml(id)}/calendar.ics" download>${msg(lang, 'calendar.label')}</a>${
         google
-          ? `<a class="next-step-link" data-testid="register-next-calendar-google" href="${escapeHtml(google)}" target="_blank" rel="noopener noreferrer">Add to Google Calendar</a>`
+          ? `<a class="next-step-link" data-testid="register-next-calendar-google" href="${escapeHtml(google)}" target="_blank" rel="noopener noreferrer">${msg(lang, 'form.next.googleCalendar')}</a>`
           : ''
       }`
     : '';
   return nextStepTemplate(`<div class="next-step" data-testid="register-next-step">
-      ${calendar}<a class="next-step-link" data-testid="register-next-event-page" href="${escapeHtml(eventPagePath(id, row.slug))}">Back to the event page</a>
-      <p data-testid="register-next-checkin">On the day, check in with one tap.</p>
+      ${calendar}<a class="next-step-link" data-testid="register-next-event-page" href="${escapeHtml(withLangPrefix(lang, eventPagePath(id, row.slug)))}">${msg(lang, 'form.next.eventPage')}</a>
+      <p data-testid="register-next-checkin">${msg(lang, 'form.next.checkin')}</p>
     </div>`);
 }
 
@@ -735,25 +798,34 @@ function registerNextStep(row: FormEventRow, shareUrl: string): string {
  * straight away (the same list as the event page and its recap,
  * lib/next-at-venue.ts). None listed: a link to everything coming up.
  */
-function emailNextStep(row: FormEventRow, next: NextEventRow[]): string {
+// Exported for its unit test: the handler asks for the list only when the
+// event has a venue, so the "this venue" fallback is reached directly there.
+export function emailNextStep(
+  row: FormEventRow,
+  next: NextEventRow[],
+  lang: Lang = DEFAULT_LANG
+): string {
   if (!next.length) {
     return nextStepTemplate(`<div class="next-step" data-testid="email-next-step">
-      <a class="next-step-link" data-testid="email-next-browse" href="/events">See what else is coming up</a>
+      <a class="next-step-link" data-testid="email-next-browse" href="${withLangPrefix(lang, '/events')}">${msg(lang, 'form.next.browse')}</a>
     </div>`);
   }
+  // Titles and the venue are typed by organizers and show as typed (isolated on
+  // a right-to-left page); the date is in the page's language.
   const items = next
     .map(
       (
         ev,
         i
-      ) => `<li><a class="next-step-link" data-testid="email-next-venue-link-${i}" href="/events/${escapeHtml(encodeURIComponent(ev.id))}">
-          <span>${escapeHtml(ev.title)}</span><span class="next-step-when">${escapeHtml(formatHumanDate(ev.start_date))}</span>
+      ) => `<li><a class="next-step-link" data-testid="email-next-venue-link-${i}" href="${escapeHtml(withLangPrefix(lang, `/events/${encodeURIComponent(ev.id)}`))}">
+          <span>${isolateTyped(lang, escapeHtml(ev.title))}</span><span class="next-step-when">${escapeHtml(formatHumanDate(ev.start_date, lang))}</span>
         </a></li>`
     )
     .join('');
+  const venue = isolateTyped(lang, escapeHtml(row.location)) || msg(lang, 'next.thisVenue');
   return nextStepTemplate(`<div class="next-step" data-testid="email-next-step">
       <aside data-testid="email-next-venue" aria-labelledby="email-next-heading">
-        <h3 id="email-next-heading">Next at ${escapeHtml(row.location) || 'this venue'}</h3>
+        <h3 id="email-next-heading">${fmt(lang, 'next.atVenue', { venue })}</h3>
         <ul>${items}</ul>
       </aside>
     </div>`);
@@ -769,22 +841,23 @@ function formPage(
   deploymentId?: string,
   nonce = '',
   env?: FormPagesEnv,
-  nextStep = ''
+  nextStep = '',
+  lang: Lang = DEFAULT_LANG
 ): string {
   let formHtml: string;
   switch (formType) {
     case 'checkin':
-      formHtml = checkinForm(eventId, legalTier, deploymentId, nonce);
+      formHtml = checkinForm(eventId, legalTier, deploymentId, nonce, lang);
       break;
     case 'survey':
-      formHtml = surveyForm(eventId, legalTier, deploymentId, nonce);
+      formHtml = surveyForm(eventId, legalTier, deploymentId, nonce, lang);
       break;
     case 'email':
     case 'email-signup':
-      formHtml = emailSignupForm(eventId, legalTier, deploymentId, nonce);
+      formHtml = emailSignupForm(eventId, legalTier, deploymentId, nonce, lang);
       break;
     default:
-      formHtml = registrationForm(eventId, legalTier, deploymentId, nonce);
+      formHtml = registrationForm(eventId, legalTier, deploymentId, nonce, lang);
       break;
   }
 
@@ -814,30 +887,37 @@ function formPage(
     }
   }
 
+  // OSE-1850 / OSE-1943: the header Language menu leads to this same form in
+  // each other language, at the event's own form address, carrying only a
+  // vetted ?deployment= (the one parameter the page reads besides its screen).
+  const menuPath = eventFormPath(eventId, formType, deploymentId);
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}" dir="${DIRECTION[lang]}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${eventName} – OurSharedEvents</title>
   <link rel="stylesheet" href="/ui.css" />
-  <style>${FORM_CSS}${BACK_BUTTON_CSS}</style>
+  <style>${FORM_CSS}${BACK_BUTTON_CSS}${LANGUAGE_MENU_CSS}</style>
   ${turnstileScript}
 </head>
 <body>
-  <a href="#main-content" class="skip-link">Skip to content</a>
+  <a href="#main-content" class="skip-link">${msg(lang, 'page.skipContent')}</a>
   <header data-testid="form-header">
+    <div class="form-topbar" data-testid="form-topbar">
+    ${renderLanguageMenu({ lang, path: menuPath, nonce })}
+    </div>
     <h1>OurSharedEvents</h1>
-    <div class="event-name" data-testid="form-event-name">${eventName}</div>
+    <div class="event-name" data-testid="form-event-name">${isolateTyped(lang, eventName)}</div>
   </header>
   <!-- OSE-222: sponsor logo strip — hidden by default. Populated on
-       page load by FORM_JS_SPONSOR using the surface=public bundle.
+       page load by formJsSponsor using the surface=public bundle.
        Renders as a thin row under the dark header. Non-critical;
        silently absent if no sponsors are configured for this event. -->
-  <div class="form-sponsor-strip" id="form-sponsor-strip" data-testid="form-sponsor-strip" role="complementary" aria-label="Event sponsors"></div>
+  <div class="form-sponsor-strip" id="form-sponsor-strip" data-testid="form-sponsor-strip" role="complementary" aria-label="${msg(lang, 'sponsors.label')}"></div>
   <main id="main-content" data-testid="form-main">${formHtml}${nextStep}
-  ${renderBackButton({ fallbackHref: `/events/${encodeURIComponent(eventId)}`, nonce, testid: 'form-back' })}</main>
-  <script nonce="${nonce}">${FORM_JS_SPONSOR.replace('EVENT_ID_PLACEHOLDER', () => jsonForScript(eventId))}</script>
+  ${renderBackButton({ fallbackHref: withLangPrefix(lang, `/events/${encodeURIComponent(eventId)}`), nonce, testid: 'form-back', lang })}</main>
+  <script nonce="${nonce}">${formJsSponsor(eventId, lang)}</script>
 </body>
 </html>`;
 }
@@ -851,8 +931,13 @@ export async function handleFormPage(
   legalTier = 1,
   // /events/<id>/<screen> (OSE-1684): the screen names the form, so the
   // `?type=` of the old /forms/ address is not read.
-  screen?: EventFormScreen
+  screen?: EventFormScreen,
+  // OSE-1850: the language in the path (`/es/events/<id>/checkin`), the
+  // visitor's explicit choice. Without one, the Accept-Language header picks
+  // it, as on the event page. Read and forgotten: never stored, never posted.
+  pathLang?: Lang
 ): Promise<Response> {
+  const lang = pathLang ?? resolveLanguage(request.headers.get('Accept-Language'));
   // OSE-1754: /forms/<id> takes any segment without a slash, undecoded, so a
   // raw quote can arrive here. An id the form endpoints would refuse
   // (validateFormRequest) gets no form at all: the page could never submit it,
@@ -869,10 +954,15 @@ export async function handleFormPage(
       return new Response(null, {
         status: 302,
         headers: {
-          Location: eventFormPath(
-            meant,
-            asked.get('type'),
-            isValidDeploymentId(deployment) ? deployment : null
+          // A bare address stays bare (the header picks the language again); a
+          // prefixed one keeps its prefix.
+          Location: withLangPrefix(
+            pathLang ?? DEFAULT_LANG,
+            eventFormPath(
+              meant,
+              asked.get('type'),
+              isValidDeploymentId(deployment) ? deployment : null
+            )
           ),
           'Cache-Control': 'no-store',
         },
@@ -930,7 +1020,14 @@ export async function handleFormPage(
         // every public link stays consistent. Only applies to a KNOWN event:
         // unknown/un-seeded ids keep the permissive fallback below (OSE-R-007).
         if (isStaleForPublicLanding(row.status)) {
-          return staleEventForward(url.origin, eventId, row.status, 'form');
+          // OSE-1850: a prefixed form forwards to the list in the same language.
+          return staleEventForward(
+            url.origin,
+            eventId,
+            row.status,
+            'form',
+            withLangPrefix(pathLang ?? DEFAULT_LANG, STALE_FORWARD_PATH)
+          );
         }
         if (typeof row.title === 'string' && row.title.length > 0) {
           canonicalTitle = row.title;
@@ -945,18 +1042,20 @@ export async function handleFormPage(
   }
   // Defense in depth: even though the DB column is admin-controlled and
   // shouldn't contain HTML, escape the value and cap length before render.
-  const eventName = escapeHtml((canonicalTitle ?? 'Event').slice(0, 200));
+  const eventName = escapeHtml((canonicalTitle ?? msg(lang, 'form.eventFallback')).slice(0, 200));
 
   // F5.3: the next step under the confirmation, for a known live event only
   // (an unknown id has no event page to link back to).
   let nextStep = '';
   if (row) {
     if (formType === 'email' || formType === 'email-signup') {
-      nextStep = emailNextStep(row, await fetchNextEventsAtVenue(env.DB, row));
+      nextStep = emailNextStep(row, await fetchNextEventsAtVenue(env.DB, row), lang);
     } else if (formType !== 'checkin' && formType !== 'survey') {
       // Any other ?type= renders the registration form (formPage's default).
+      // The calendar entry's link is the bare event page: it is read later, by
+      // whoever opens the calendar, so their own browser picks the language.
       const shareUrl = `${canonicalOrigin(request, env) ?? url.origin}${eventPagePath(row.id, row.slug)}`;
-      nextStep = registerNextStep(row, shareUrl);
+      nextStep = registerNextStep(row, shareUrl, lang);
     }
   }
 
@@ -969,13 +1068,17 @@ export async function handleFormPage(
     deploymentId ?? undefined,
     nonce,
     env,
-    nextStep
+    nextStep,
+    lang
   );
   return new Response(html, {
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       ...buildSecurityHeaders(nonce, env),
+      // A bare address answers in the header's language, so a cache keeps one
+      // copy per language. Under a prefix the address alone decides it.
+      ...(pathLang ? {} : { Vary: 'Accept-Language' }),
     },
   });
 }

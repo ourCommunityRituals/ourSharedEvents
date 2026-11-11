@@ -125,6 +125,12 @@ export const MUTATION_PATHS = Object.freeze([
   // OSE-1952: the event page's sponsor-art rule (a marker range of pages.ts,
   // listed above) and the node spec that kills its mutants.
   'workers/oursharedevents/tests/sponsor-thumb-render.spec.ts',
+  // OSE-1850: the form pages on the language layer (marker ranges of
+  // form-pages.ts and event-staleness.ts) and the node specs that kill them.
+  'workers/oursharedevents/src/handlers/form-pages.ts',
+  'workers/oursharedevents/src/lib/event-staleness.ts',
+  'workers/oursharedevents/tests/form-pages-language.spec.ts',
+  'workers/oursharedevents/tests/form-pages-language-golden.spec.ts',
   WORKER_STRYKER_CONFIG,
   // OSE-1695: the CI security rules that keep secrets off branch pushes, their
   // tests and config.

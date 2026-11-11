@@ -349,6 +349,61 @@ const en = {
   'provenance.degradedChip': 'DATA UNAVAILABLE',
   'provenance.degradedText': 'Showing sample content while the live data reconnects.',
   'provenance.degradedLabel': 'Data temporarily unavailable notice',
+  // The form pages (handlers/form-pages.ts, OSE-1850). Labels, buttons, help,
+  // confirmations and error copy. The privacy and consent text under each form
+  // is not here: it stays in English until a human translation and a legal
+  // read, and `form.privacy.englishNote` says so in the page's language.
+  'form.eventFallback': 'Event',
+  'form.sponsorThanks': 'Event supported by',
+  'form.register.heading': 'Register for this event',
+  'form.register.name': 'Your name',
+  'form.register.namePlaceholder': 'Jane Smith',
+  'form.register.email': 'Email (optional)',
+  'form.register.emailNote': 'Only to tell you if plans change.',
+  'form.register.emailPlaceholder': 'jane@example.com',
+  'form.register.done': "You're registered!",
+  'form.checkin.heading': 'Check In',
+  'form.checkin.tap': 'Tap to<br/>Check In',
+  'form.checkin.noRegistration': "Didn't register?",
+  'form.checkin.walkIn': 'Check in as a walk-in',
+  'form.checkin.done': "You're checked in.",
+  'form.checkin.doneButton': 'Checked in',
+  'form.survey.heading': 'How was the event?',
+  'form.survey.rating': 'Overall rating',
+  'form.survey.rate': 'Rate {n} out of 5',
+  'form.survey.comments': 'Comments (optional)',
+  'form.survey.commentsPlaceholder': 'Tell us what you thought...',
+  'form.survey.submit': 'Submit Feedback',
+  'form.survey.done': 'Thanks for your feedback!',
+  'form.email.heading': 'Stay in the loop',
+  'form.email.intro': "One email when something's coming up. Never shared.",
+  'form.email.label': 'Your email',
+  'form.email.placeholder': 'you@example.com',
+  'form.email.submit': 'Sign me up',
+  'form.email.already': "You're already signed up!",
+  'form.email.done': "You're on the list!",
+  'form.error.invalidEventId':
+    "This event link doesn't look right. Try the original link or contact the host.",
+  'form.error.invalidBody':
+    "We couldn't read your response. Please refresh the page and try again.",
+  'form.error.payloadTooLarge': 'Your message is too long. Please shorten it and try again.',
+  'form.error.missingField': 'Please fill out all required fields and try again.',
+  'form.error.invalidEmail': "That email doesn't look right. Please check and try again.",
+  'form.error.configError':
+    "Something's not set up on our side. Please try again in a few minutes.",
+  'form.error.busy': "We're having trouble right now. Please try again in a moment.",
+  'form.error.methodNotAllowed': "This action isn't available right now.",
+  'form.error.tooMany': 'Too many tries. Please wait a moment and try again.',
+  'form.error.server': 'Sorry, something went wrong on our end. Please try again.',
+  'form.error.generic': 'Sorry, something went wrong. Please try again.',
+  'form.next.googleCalendar': 'Add to Google Calendar',
+  'form.next.eventPage': 'Back to the event page',
+  'form.next.checkin': 'On the day, check in with one tap.',
+  'form.next.browse': 'See what else is coming up',
+  'form.privacy.details': 'Privacy details',
+  // Shown only on a page that is not in English, beside the English notice.
+  'form.privacy.englishNote':
+    'This privacy notice is in English until a reviewed translation is ready.',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -669,6 +724,59 @@ const es: Record<MessageKey, string> = {
   'provenance.degradedText':
     'Mostramos contenido de ejemplo mientras se restablecen los datos reales.',
   'provenance.degradedLabel': 'Aviso de datos no disponibles por el momento',
+  // The form pages (OSE-1850). MACHINE DRAFT, awaiting a native read. No
+  // privacy or consent text here: that waits for a human translation and a
+  // legal read, and shows in English with `form.privacy.englishNote`.
+  'form.eventFallback': 'Evento',
+  'form.sponsorThanks': 'Evento con el apoyo de',
+  'form.register.heading': 'Inscríbete en este evento',
+  'form.register.name': 'Tu nombre',
+  'form.register.namePlaceholder': 'Ana García',
+  'form.register.email': 'Correo electrónico (opcional)',
+  'form.register.emailNote': 'Solo para avisarte si cambian los planes.',
+  'form.register.emailPlaceholder': 'ana@ejemplo.com',
+  'form.register.done': '¡Ya estás inscrito!',
+  'form.checkin.heading': 'Registrar llegada',
+  'form.checkin.tap': 'Toca para<br/>registrar tu llegada',
+  'form.checkin.noRegistration': '¿No te inscribiste?',
+  'form.checkin.walkIn': 'Registrar llegada sin inscripción',
+  'form.checkin.done': 'Tu llegada quedó registrada.',
+  'form.checkin.doneButton': 'Llegada registrada',
+  'form.survey.heading': '¿Qué tal estuvo el evento?',
+  'form.survey.rating': 'Calificación general',
+  'form.survey.rate': 'Calificar con {n} de 5',
+  'form.survey.comments': 'Comentarios (opcional)',
+  'form.survey.commentsPlaceholder': 'Cuéntanos qué te pareció...',
+  'form.survey.submit': 'Enviar comentarios',
+  'form.survey.done': '¡Gracias por tus comentarios!',
+  'form.email.heading': 'Mantente al tanto',
+  'form.email.intro': 'Un correo cuando se acerque algo. Nunca lo compartimos.',
+  'form.email.label': 'Tu correo electrónico',
+  'form.email.placeholder': 'tu@ejemplo.com',
+  'form.email.submit': 'Suscribirme',
+  'form.email.already': '¡Ya estabas suscrito!',
+  'form.email.done': '¡Ya estás en la lista!',
+  'form.error.invalidEventId':
+    'Este enlace del evento no parece correcto. Prueba el enlace original o contacta al organizador.',
+  'form.error.invalidBody':
+    'No pudimos leer tu respuesta. Actualiza la página e inténtalo de nuevo.',
+  'form.error.payloadTooLarge': 'Tu mensaje es demasiado largo. Acórtalo e inténtalo de nuevo.',
+  'form.error.missingField': 'Completa todos los campos obligatorios e inténtalo de nuevo.',
+  'form.error.invalidEmail': 'Ese correo no parece correcto. Revísalo e inténtalo de nuevo.',
+  'form.error.configError':
+    'Falta configurar algo de nuestro lado. Inténtalo de nuevo en unos minutos.',
+  'form.error.busy': 'Tenemos problemas en este momento. Inténtalo de nuevo en un momento.',
+  'form.error.methodNotAllowed': 'Esta acción no está disponible en este momento.',
+  'form.error.tooMany': 'Demasiados intentos. Espera un momento e inténtalo de nuevo.',
+  'form.error.server': 'Lo sentimos, algo falló de nuestro lado. Inténtalo de nuevo.',
+  'form.error.generic': 'Lo sentimos, algo falló. Inténtalo de nuevo.',
+  'form.next.googleCalendar': 'Agregar a Google Calendar',
+  'form.next.eventPage': 'Volver a la página del evento',
+  'form.next.checkin': 'El día del evento, registra tu llegada con un toque.',
+  'form.next.browse': 'Ver qué más se acerca',
+  'form.privacy.details': 'Detalles de privacidad',
+  'form.privacy.englishNote':
+    'Este aviso de privacidad está en inglés hasta que tengamos una traducción revisada.',
 };
 
 /** One catalog per language. A language still being written may omit keys. */

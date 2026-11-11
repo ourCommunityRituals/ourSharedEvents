@@ -378,6 +378,7 @@ export const NODE_SPECS = [
   // OSE-1850: the form pages in every language. Golden renders through
   // handleFormPage with a stub DB, and the forms' scripts in jsdom; no runtime.
   'tests/form-pages-language-golden.spec.ts',
+  'tests/form-pages-language.spec.ts',
   // The error label a log line may carry: a pure function, no runtime.
   'tests/error-label.spec.ts',
 ];

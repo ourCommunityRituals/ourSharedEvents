@@ -195,11 +195,11 @@
 
     <section class="ose-choices" data-testid="event-choices" aria-label="¿Cómo quieres participar?">
     <div class="ose-choice">
-      <a class="ose-choice-btn ose-choice-primary" data-testid="event-checkin" href="/events/evt_golden/checkin" aria-describedby="choice-note-first">Registrar mi llegada</a>
+      <a class="ose-choice-btn ose-choice-primary" data-testid="event-checkin" href="/es/events/evt_golden/checkin" aria-describedby="choice-note-first">Registrar mi llegada</a>
       <p class="ose-choice-note" id="choice-note-first">Te contamos, nunca te nombramos.</p>
     </div>
     <div class="ose-choice">
-      <a class="ose-choice-btn" data-testid="event-choice-register" href="/events/evt_golden/register" aria-describedby="choice-note-register">Inscribirse</a>
+      <a class="ose-choice-btn" data-testid="event-choice-register" href="/es/events/evt_golden/register" aria-describedby="choice-note-register">Inscribirse</a>
       <p class="ose-choice-note" id="choice-note-register">Pide tu nombre y correo.</p>
     </div>
   </section>

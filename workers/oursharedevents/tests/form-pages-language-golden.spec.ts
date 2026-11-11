@@ -17,6 +17,8 @@
 import { describe, it, expect } from 'vitest';
 import { handleFormPage, type FormPagesEnv } from '../src/handlers/form-pages';
 import type { EventFormScreen } from '../src/lib/canonical';
+import { DEFAULT_LANG, LANGUAGES, type Lang } from '../src/lib/i18n/languages';
+import { withLangPrefix } from '../src/lib/i18n/path-prefix';
 
 const EVENT = {
   id: 'evt_form_golden',
@@ -56,13 +58,17 @@ function stubDb(): D1Database {
 
 const SCREENS: EventFormScreen[] = ['register', 'checkin', 'survey', 'updates'];
 
-async function render(screen: EventFormScreen): Promise<string> {
+async function render(screen: EventFormScreen, lang: Lang = DEFAULT_LANG): Promise<string> {
+  // English at its bare address; every other language under its prefix, the way
+  // the router hands it over.
+  const path = withLangPrefix(lang, `/events/${EVENT.id}/${screen}`);
   const res = await handleFormPage(
-    new Request(`https://t.test/events/${EVENT.id}/${screen}?deployment=dep_golden1`),
+    new Request(`https://t.test${path}?deployment=dep_golden1`),
     { DB: stubDb() } as FormPagesEnv,
     EVENT.id,
     1,
-    screen
+    screen,
+    lang === DEFAULT_LANG ? undefined : lang
   );
   return (await res.text()).replace(/nonce="[^"]*"/g, 'nonce="N"');
 }
@@ -70,9 +76,13 @@ async function render(screen: EventFormScreen): Promise<string> {
 const dir = './__golden__/form-pages';
 
 describe('OSE-1850 form pages | golden renders', () => {
-  for (const screen of SCREENS) {
-    it(`${screen}, en`, async () => {
-      await expect(await render(screen)).toMatchFileSnapshot(`${dir}/${screen}.en.golden.txt`);
-    });
+  for (const lang of LANGUAGES) {
+    for (const screen of SCREENS) {
+      it(`${screen}, ${lang}`, async () => {
+        await expect(await render(screen, lang)).toMatchFileSnapshot(
+          `${dir}/${screen}.${lang}.golden.txt`
+        );
+      });
+    }
   }
 });

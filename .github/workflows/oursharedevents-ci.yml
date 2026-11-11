@@ -2506,6 +2506,8 @@ jobs:
       # Worker: the /es/ page, the switch as a plain link, a shared link that keeps
       # its prefix, a printed code that does not change, and the paths a prefix must
       # never reach. The router itself is proved at the worker layer.
+      # OSE-1850: the form pages too. Event page in es, pl and ar, tap check-in, the
+      # form in that language with its menu, then a check-in submitted in it.
       - name: 'T4i: Language Path Prefix'
         if: matrix.section == 'surfaces'
         id: language-path-prefix
@@ -2521,7 +2523,8 @@ jobs:
           PW_LABEL='T4i: Language Path Prefix' scripts/pw-guarded.sh \
             --config=playwright.e2e-smoke.config.ts \
             tests/e2e/3-flows/language-path-prefix.spec.ts
-        timeout-minutes: 6
+        # 8, not 6: four form rows (OSE-1850), each a fresh phone context and a submit.
+        timeout-minutes: 8
 
       # OSE-1955: the event page's sponsor thumbnails in a browser against the
       # deployed Worker, on the OSE-1436 fixture seeded above (evt_sponsor_logo_check

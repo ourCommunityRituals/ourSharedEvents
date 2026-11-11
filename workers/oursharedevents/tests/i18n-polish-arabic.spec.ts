@@ -219,7 +219,10 @@ describe('the Polish and Arabic catalogs', () => {
   });
 
   it('Arabic has no Latin letters but the names it must keep', () => {
-    const NAMES = /OurSharedEvents|Cloudflare Access|Apple|Outlook|<[^>]+>|\{\w+\}|&\w+;/g;
+    // OSE-1850: a product name (Google Calendar) and the example address in an
+    // email field's placeholder, which is Latin by the nature of an address.
+    const NAMES =
+      /OurSharedEvents|Cloudflare Access|Apple|Outlook|Google|\b[a-z]+@example\.com\b|<[^>]+>|\{\w+\}|&\w+;/g;
     for (const k of KEYS) {
       expect((CATALOG.ar[k] as string).replace(NAMES, ''), k).not.toMatch(/[A-Za-z]/);
     }

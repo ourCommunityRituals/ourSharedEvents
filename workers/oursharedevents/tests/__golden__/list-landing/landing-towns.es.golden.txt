@@ -372,7 +372,7 @@
               <p class="meta" data-testid="area-card-meta"><span data-testid="public-event-date">martes, 27 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Beverly Records</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g03/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Vinyl Swap">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g03/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Vinyl Swap">Inscribirse</a>
           </article>
           <article class="event-card when-next-90 cat-mkt product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g04" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g04/golden-4" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 4"></a>
@@ -382,7 +382,7 @@
               <p class="meta" data-testid="area-card-meta"><span data-testid="public-event-date">jueves, 5 de noviembre de 2026</span> &middot; <span data-testid="public-event-venue">Beverly Records</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g04/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 4">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g04/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 4">Inscribirse</a>
           </article>
           <article class="event-card when-next-90 cat-mkt product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g06" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g06/golden-6" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 6"></a>
@@ -392,7 +392,7 @@
               <p class="meta" data-testid="area-card-meta"><span data-testid="public-event-date">jueves, 19 de noviembre de 2026</span> &middot; <span data-testid="public-event-venue">Beverly Records</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g06/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 6">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g06/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 6">Inscribirse</a>
           </article>
           <article class="event-card when-next-90 cat-mkt product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g08" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g08/golden-8" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 8"></a>
@@ -402,7 +402,7 @@
               <p class="meta" data-testid="area-card-meta"><span data-testid="public-event-date">jueves, 10 de diciembre de 2026</span> &middot; <span data-testid="public-event-venue">Beverly Records</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g08/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 8">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g08/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 8">Inscribirse</a>
           </article>
           </div>
         </div>
