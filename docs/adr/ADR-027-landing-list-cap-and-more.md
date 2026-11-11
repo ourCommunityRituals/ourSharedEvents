@@ -1,7 +1,8 @@
 # ADR-027: Cap the landing list at 10 and add a More action
 
-**Status:** Proposed (2026-11-10). The owner decided D1, D1a, D3 and D4 on 2026-11-10. D2, D5 and
-D7 are open; D6 follows from D1a. Nothing in it is built.
+**Status:** Proposed. Every owner decision is in (D1, D1a, D3 and D4 on 2026-11-10; D2, D5, D7 and
+the D4 label rule on 2026-11-11; D6 follows from D1a). It moves to Accepted when the code lands.
+Nothing in it is built yet.
 **Date:** 2026-11-10
 **Deciders:** Owner (PO). Dr of Security advises on D7; the Data Scientist confirms the count rule.
 **Ticket:** OSE-1977 (Feature OSE-1976, epic OSE-1320)
@@ -46,9 +47,8 @@ must keep:
 
 ## Decision
 
-Items 1, 2, 4 and 5 are decided by the owner (2026-11-10). Items 3, 6, 7 and 8 are this ADR's
-recommendations; each becomes the decision only when the owner answers it. Answers are recorded in the **Owner answers**
-table, and the status moves to Accepted when the code lands.
+Every item below is the owner's decision (2026-11-10 and 2026-11-11), quoted in the **Owner
+answers** table. Item 7 follows from D1a.
 
 1. **Mechanism (D1, decided): reveal in place (option B).** The server keeps rendering every card,
    as today, so the filters stay correct. A small block added to the landing's one inline script
@@ -57,19 +57,19 @@ table, and the status moves to Accepted when the code lands.
    no cookie. "The next 10 will load" means **they appear**, not that they are fetched.
 2. **No-JS behaviour (D1a, decided): every card shows**, exactly as today (variant B1). There is no
    `?n=` parameter, no parser and no new route.
-3. **Scope (D2): the landing first** (`/`, `/es/`, `/pl/`, `/ar/`, including a zoomed area and a
-   searched place). `/events` follows in its own story.
+3. **Scope (D2, decided): the landing first** (`/`, `/es/`, `/pl/`, `/ar/`, including a zoomed area
+   and a searched place). `/events` follows in its own story, OSE-1987.
 4. **The card list under the map (D3, decided): the same cap**, on a page led by the map and in a
    zoomed area. The map itself still draws every area.
-5. **Wording (D4, decided):** the button reads "Show 10 more events", and "Show 1 more event" or
-   "Show the last 3 events" when fewer remain. After a tap an `aria-live="polite"` line reads
-   "Showing 20 of 34 events", and focus moves to the first new card. The text is in every page
-   language. One detail is still to confirm: which label applies when 2 to 10 remain (see D4).
-6. **Filter change (D5):** changing window, Type or Where resets the cap to 10 inside the new filter.
-   Switching between List and Map does not.
+5. **Wording (D4, decided):** with more than 10 left the button reads "Show 10 more events"; with
+   2 to 10 left, "Show the last N events"; with 1 left, "Show 1 more event". After a tap an
+   `aria-live="polite"` line reads "Showing 20 of 34 events", and focus moves to the first new
+   card. The text is in every page language.
+6. **Filter change (D5, decided):** changing window, Type or Where resets the cap to 10 inside the
+   new filter. Switching between List and Map does not.
 7. **Step (D6):** a fixed step of 10, named `LIST_STEP` and kept separate from `LIST_MAX`.
-8. **Rate limit (D7):** a separate story. Paging under B does not change what a request to `/`
-   costs; the landing's missing rate limit is a real gap, but not this Feature's.
+8. **Rate limit (D7, decided): a separate story**, OSE-1986. Paging under B does not change what a
+   request to `/` costs; the landing's missing rate limit is a real gap, but not this Feature's.
 
 ### How option B works (for the code stories)
 
@@ -159,12 +159,13 @@ Each lists the options, the trade-offs, and the recommendation.
   which breaks the filter rule unless the filters become a GET form), and C (fetch, a new public
   read and cursor contract for a list the page already holds).
 
-### D2. Scope
+### D2. Scope (decided 2026-11-11)
 
-- **Landing only, `/events` as a follow-up story (recommended).** `/events` filters are already in
-  the address (`?when=`, `?q=`), so a server `?page=` fits there and is a different design; doing
-  both at once doubles the test matrix.
-- Both now, on one shared pattern: one story, but the two pages work differently.
+- **Owner: "Landing first".** `/events` follows in its own story, OSE-1987. `/events` filters are
+  already in the address (`?when=`, `?q=`), so a server `?page=` is correct there and the design may
+  differ.
+- Weighed and not chosen: both now, which doubles the test matrix for two pages that work
+  differently.
 
 ### D3. The card list under the map (decided 2026-11-10)
 
@@ -181,23 +182,22 @@ Each lists the options, the trade-offs, and the recommendation.
   `aria-live="polite"` line says "Showing 20 of 34 events" and focus moves to the first new card.
 - The strings are in every page language (en, es, pl, ar), with the full CLDR plural forms Polish
   and Arabic need.
-- **One detail to confirm.** Scenario H1 expects "Show 5 more events" with 5 left, but the decided
-  wording uses "Show the last N events" when fewer than 10 remain. Proposed rule: more than 10 left,
-  "Show 10 more events"; 2 to 10 left, "Show the last N events"; 1 left, "Show 1 more event". H1
-  then reads "Show the last 5 events".
+- **The label rule (owner, 2026-11-11: "Show the last N events").** More than 10 left: "Show 10
+  more events". 2 to 10 left: "Show the last N events". 1 left: "Show 1 more event". Scenario H1
+  (15 events) therefore reads "Show the last 5 events".
 - Weighed and not chosen: a single "Show N more events" form, and a plain "Show more events" with no
   number.
 - These are counts of **events**, never of people (AGENTS invariant 1). The under-5 floor is for
   counts of people, and anyone can count the cards; `/events` already prints "3 upcoming events".
   The Data Scientist confirms this in the backend story (OSE-1978).
 
-### D5. A filter change after More
+### D5. A filter change after More (decided 2026-11-11)
 
-- **Reset to 10 inside the new filter (recommended).** Each filter starts a fresh list; the first
+- **Owner: "Reset to 10".** Each filter starts a fresh list at 10 inside the new filter; the first
   page is never empty while matches exist.
-- Keep the revealed count (for example 20) across filter changes: fewer taps for someone who
-  compares filters, but a filter change can then open a long list.
-- List ↔ Map does not reset either way: it is the same list.
+- List ↔ Map does not reset: it is the same list.
+- Weighed and not chosen: keeping the revealed count (for example 20) across filter changes, which
+  saves taps but can open a long list on a filter change.
 
 ### D6. Step and ceiling
 
@@ -210,7 +210,9 @@ Each lists the options, the trade-offs, and the recommendation.
 - "Show all" after the first 10: one tap, but a 35-card list comes back in one go, which the cut-off
   exists to avoid.
 
-### D7. Rate limit on `/`
+### D7. Rate limit on `/` (decided 2026-11-11)
+
+**Owner: "Separate story"**, OSE-1986. The read and the options that led to it follow.
 
 The Dr of Security read (2026-11-10, from source, no tests run):
 
@@ -290,21 +292,22 @@ spine PR (OSE-1980).
 The stories under OSE-1976, in dependency order: docs (OSE-1984), invariants (OSE-1980), backend
 (OSE-1978), frontend (OSE-1979), CI/CD wiring (OSE-1982), the test pyramid (OSE-1981), mutation
 (OSE-1983). Their criteria were updated on 2026-11-10 to match D1a: no `n` parameter, no parser,
-and F1 is "an unknown query parameter on `/` is ignored". D3–D5 block the frontend story. The
+and F1 is "an unknown query parameter on `/` is ignored". Every owner decision is in, so no story waits on D1–D7. The
 scenario matrix (H1–H5, R1–R4, E1–E10, F1–F5, S1–S7) is on OSE-1976.
 
 ## Owner answers
 
-| Decision | Answer                                                                                        | Date       |
-| -------- | --------------------------------------------------------------------------------------------- | ---------- |
-| D1       | "B: reveal in place"                                                                          | 2026-11-10 |
-| D1a      | "No, show all cards" (without JS every card shows; no `?n=`)                                  | 2026-11-10 |
-| D2       | open                                                                                          |            |
-| D3       | "Yes, same cap"                                                                               | 2026-11-10 |
-| D4       | "Yes, use it" (the wording recommended on OSE-1976; the label for 2 to 10 left is to confirm) | 2026-11-10 |
-| D5       | open                                                                                          |            |
-| D6       | follows from D1a: a step of 10, applied by the script; no URL parameter                       | 2026-11-10 |
-| D7       | open                                                                                          |            |
+| Decision | Answer                                                                  | Date       |
+| -------- | ----------------------------------------------------------------------- | ---------- |
+| D1       | "B: reveal in place"                                                    | 2026-11-10 |
+| D1a      | "No, show all cards" (without JS every card shows; no `?n=`)            | 2026-11-10 |
+| D2       | "Landing first" (`/events` in OSE-1987)                                 | 2026-11-11 |
+| D3       | "Yes, same cap"                                                         | 2026-11-10 |
+| D4       | "Yes, use it" (the wording recommended on OSE-1976)                     | 2026-11-10 |
+| D4 label | "Show the last N events" for 2 to 10 left                               | 2026-11-11 |
+| D5       | "Reset to 10"                                                           | 2026-11-11 |
+| D6       | follows from D1a: a step of 10, applied by the script; no URL parameter | 2026-11-10 |
+| D7       | "Separate story" (OSE-1986)                                             | 2026-11-11 |
 
 ## References
 
