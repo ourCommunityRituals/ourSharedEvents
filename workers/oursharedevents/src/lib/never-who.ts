@@ -62,8 +62,7 @@ export function renderNeverWho(surface: NeverWhoSurface, lang: Lang = DEFAULT_LA
  * --text-muted, --accent, --border) so it follows the page's theme in both
  * modes and a [data-brand] reaches it. The summary is a 44px tap target
  * (mobile-workability, OSE-1236); the marker is our own chevron so it reads the
- * same in every engine. Closed, it points along the reading direction: ▸ on a
- * left-to-right page, ◂ on a right-to-left one (OSE-1966); open, it points down.
+ * same in every engine.
  */
 export const NEVER_WHO_CSS = `
     .ose-never-who { margin: 2rem 0 0; border-top: 1px solid var(--border); font-size: 0.95rem; color: var(--text-muted); }
@@ -72,7 +71,6 @@ export const NEVER_WHO_CSS = `
     .ose-never-who-line { color: var(--text); font-weight: 600; }
     .ose-never-who-trigger { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
     .ose-never-who-trigger::after { content: " \\25B8"; display: inline-block; text-decoration: none; }
-    [dir="rtl"] .ose-never-who-trigger::after { content: " \\25C2"; }
     .ose-never-who[open] .ose-never-who-trigger::after { content: " \\25BE"; }
     .ose-never-who-summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
     .ose-never-who-body { padding: 0 0 0.75rem; }
