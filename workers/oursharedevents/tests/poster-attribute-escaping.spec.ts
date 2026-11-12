@@ -850,10 +850,12 @@ describe('the page has one escaper, and it escapes quote marks', () => {
 //   - two addresses that leave the site: the venue's map searches, Google Maps
 //     and Apple Maps (owner 2026-10-11). Each start is fixed text and the venue
 //     follows it through encodeURIComponent;
-//   - three addresses that come whole from the bundle. Each passes a function
-//     on the page first (posterArtAddress, slotLink, slotPicture) and is then
+//   - four addresses that come whole from the bundle. Each passes a function
+//     on the page first (posterArtAddress, slotLink, slotPicture, and, OSE-1991,
+//     posterSponsorSite for a sponsor's own site or card page) and is then
 //     escaped. The source check only sees THAT each address goes through its
-//     function; WHAT each function lets through is tested above, by address.
+//     function; WHAT each function lets through is tested above, by address
+//     (posterSponsorSite: poster-sponsor-header.spec.ts).
 
 const HELPER = 'escapePosterHtml';
 const MAP_START = 'https://www.google.com/maps/search/?api=1&amp;query=';
@@ -874,13 +876,13 @@ const SHARE_STARTS = [
 const RULES: MarkupRules = {
   helper: HELPER,
   addressStarts: [MAP_START, APPLE_MAP_START, ...SHARE_STARTS],
-  addressMakers: ['posterArtAddress', 'slotLink', 'slotPicture'],
+  addressMakers: ['posterArtAddress', 'slotLink', 'slotPicture', 'posterSponsorSite'],
 };
 const checkPage = (page: string) => checkMarkupPage(page, RULES);
 /** A piece of code on a page that has this page's escaper and address makers. */
 const checkCode = (code: string) =>
   checkMarkupCode(
-    `function posterArtAddress(raw) { return ''; }\nfunction slotLink(s) { return ''; }\nfunction slotPicture(s) { return ''; }\n${code}`,
+    `function posterArtAddress(raw) { return ''; }\nfunction slotLink(s) { return ''; }\nfunction slotPicture(s) { return ''; }\nfunction posterSponsorSite(s) { return ''; }\n${code}`,
     RULES
   );
 
@@ -915,6 +917,9 @@ describe('the source: every value written into an attribute goes through the esc
         'div[data-uec] esc(uecId)',
         'div[data-testid] esc(kind)',
         'a[href] esc(link)',
+        'a[href] esc(site)',
+        'a[aria-label] esc(title)',
+        'span[data-testid] esc(testid)',
         'a[aria-label] esc(label)',
         'img[src] esc(picture)',
         'img[alt] esc(label)',
@@ -957,6 +962,9 @@ describe('the source: every value written into an attribute goes through the esc
         '`esc(link)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
         '`esc(link)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
         '`esc(picture)` is written into an address, <img src="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
+        // OSE-1991: a sponsor's own site, and its card page.
+        '`esc(site)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
+        '`esc(site)` is written into an address, <a href="…">: only encodeURIComponent(...) after a fixed path that starts with one "/" is allowed',
       ].sort()
     );
   });

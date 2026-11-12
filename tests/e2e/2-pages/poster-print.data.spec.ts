@@ -112,17 +112,20 @@ test.describe('Poster Page — Poster Content (Data Present)', () => {
   });
 
   test('poster has meta section', async ({ page }) => {
-    await expect(page.locator('[data-testid="poster-area"] .poster-meta')).toBeVisible();
+    // OSE-1991: print and digital both show the When / Where cards.
+    await expect(
+      page.locator('[data-testid="poster-area"] [data-testid="poster-meta"]')
+    ).toBeVisible();
   });
 
-  test('meta rows have icon + text structure', async ({ page }) => {
-    const rows = page.locator('[data-testid="poster-area"] .meta-row');
+  test('detail cards have label + text structure', async ({ page }) => {
+    const rows = page.locator('[data-testid="poster-area"] .detail-card');
     const count = await rows.count();
-    // May have 0 meta rows if event has no date/venue — that's valid
+    // May have 0 cards if event has no date/venue — that's valid
     if (count > 0) {
       const firstRow = rows.first();
-      await expect(firstRow.locator('.meta-icon')).toBeVisible();
-      await expect(firstRow.locator('.meta-text')).toBeVisible();
+      await expect(firstRow.locator('.detail-card-label')).toBeVisible();
+      await expect(firstRow.locator('.detail-card-main')).toBeVisible();
     }
   });
 

@@ -63,6 +63,20 @@ runtime:
               expect(s).to.not.have.property('beacon_token');
             });
           });
+
+          // OSE-1991: the digital poster links a sponsor's thumbnail and name to
+          // its own site. Only an https address ever leaves the resolver, and a
+          // card address is only ever this site's own /sponsors/<id> page.
+          test('a sponsor site is https or absent; a card page is our own /sponsors/ path', function() {
+            json.sponsors.forEach(function(s) {
+              if (s.website_url != null) {
+                expect(s.website_url).to.match(/^https:\/\/[^\s"'<>]+$/i);
+              }
+              if (s.card_url != null) {
+                expect(s.card_url).to.match(/^\/sponsors\/[^\s"'<>\/\\?#]+$/);
+              }
+            });
+          });
         } else if (res.getStatus() === 403 || res.getStatus() === 404) {
           test('refusal is an ok:false envelope with a numeric status', function() {
             expect(json.ok).to.eql(false);

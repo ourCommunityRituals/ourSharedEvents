@@ -66,7 +66,7 @@ test.describe('OSE-R-006 — poster print colors in browser', () => {
     page,
   }) => {
     await gotoPosterPrint(page);
-    const img = page.locator('.poster-sponsor img').first();
+    const img = page.locator('[data-testid="poster-sponsor-logo"]').first();
     const has = await img.isVisible().catch(() => false);
     test.skip(!has, 'No sponsor logos seeded — nothing to assert against');
 
@@ -128,7 +128,7 @@ test.describe('OSE-R-006 — poster print colors in browser', () => {
     await page.goto(`${BASE_URL}/poster`, { waitUntil: 'domcontentloaded' });
     await page.emulateMedia({ media: 'screen' });
 
-    const img = page.locator('.poster-sponsor img').first();
+    const img = page.locator('[data-testid="poster-sponsor-logo"]').first();
     const has = await img.isVisible().catch(() => false);
     test.skip(!has, 'No sponsor logos seeded');
 

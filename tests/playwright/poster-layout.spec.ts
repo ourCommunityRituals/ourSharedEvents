@@ -271,13 +271,21 @@ test.describe('OSE-1516 poster layout, measured', () => {
     if (t.step < 4) expect(t.over).toBeLessThanOrEqual(1);
   });
 
-  test('date, start time and venue are one line on a desktop screen', async ({ page }) => {
+  // OSE-1991 (owner 2026-11-11): print shows the When / Where cards, as digital
+  // does; on paper the two sit side by side, below the artwork and codes.
+  test('print: the When and Where cards sit side by side on paper, under the art', async ({
+    page,
+  }) => {
     await page.setViewportSize(VIEWPORTS[3]);
     await load(page, { n: 2 });
+    await expect(page.getByTestId('poster-meta-date')).toContainText('6:00 PM CDT');
+    await page.emulateMedia({ media: 'print' });
     const d = await box(page, '[data-testid="poster-meta-date"]');
     const v = await box(page, '[data-testid="poster-meta-venue"]');
-    expect(Math.abs(d!.y - v!.y)).toBeLessThan(6);
-    await expect(page.getByTestId('poster-meta-date')).toContainText('6:00 PM CDT');
+    const stage = await box(page, '[data-testid="poster-stage"]');
+    expect(Math.abs(d!.y - v!.y)).toBeLessThan(2);
+    expect(v!.x).toBeGreaterThan(d!.x + d!.w - 1);
+    expect(d!.y).toBeGreaterThanOrEqual(stage!.y + stage!.h - 1);
   });
 
   test('artwork that fails to load drops out and the poster is laid out again', async ({

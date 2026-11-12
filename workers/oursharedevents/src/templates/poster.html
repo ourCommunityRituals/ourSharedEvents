@@ -136,23 +136,6 @@ body {
 .poster-body {
   padding: 2rem;
 }
-.poster-meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: baseline;
-  column-gap: 0.6rem;
-  margin-bottom: 1.25rem;
-  text-align: center;
-}
-.meta-item + .meta-item::before {
-  content: '\00b7';
-  margin-right: 0.6rem;
-  color: var(--text-muted);
-}
-.poster[data-art='0'] .poster-meta .meta-text {
-  font-size: 1.35rem;
-}
 .meta-text {
   font-size: 1rem;
   color: var(--text-muted);
@@ -295,7 +278,6 @@ body {
   max-width: none;
   font-size: 0.85rem;
 }
-.meta-text a,
 .poster--digital .qr-slot-code {
   display: inline-flex;
   align-items: center;
@@ -444,45 +426,14 @@ body {
   background: var(--surface);
   color: var(--text);
 }
+/* The strip's padding. Its blocks are @ocr/ui's sponsor panel: ONE thumbnail
+   box for every sponsor at every tier (OSE-864/#25, WALL-3b). */
 .poster-sponsors {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1.5rem;
-  padding: 1rem 2rem;
-  flex-wrap: wrap;
+  padding: 0.75rem 2rem;
 }
 .poster-sponsors:empty {
   display: none;
 }
-.poster-sponsor {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-/* OSE-864/#25: ONE uniform logo box for every sponsor regardless of tier.
-   Responsive (clamp) across viewports, tier-blind — money buys frequency,
-   never size. WALL-3b (OSE-835) fails CI on any tier-keyed sponsor geometry. */
-.poster-sponsor img {
-  height: clamp(24px, 4.5vw, 40px);
-  width: auto;
-  max-width: clamp(80px, 14vw, 140px);
-  object-fit: contain;
-}
-.poster-sponsor-name {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-.poster-sponsor-label {
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  text-align: center;
-  margin-bottom: 0.35rem;
-}
-/* OSE-864/#25: no tier-keyed sponsor CSS (WALL-3b). */
 .page-header a:focus-visible,
 .page-header .print-btn:focus-visible {
   outline: 2px solid var(--text);
@@ -527,16 +478,6 @@ body {
   .poster-header {
     padding: 1.75rem 1.25rem 1.5rem;
   }
-  .poster-meta {
-    flex-direction: column;
-    align-items: center;
-  }
-  .meta-item + .meta-item::before {
-    content: none;
-  }
-  .poster[data-art='0'] .poster-meta .meta-text {
-    font-size: 1.1rem;
-  }
   .poster-body {
     padding: 1.25rem 1rem;
   }
@@ -561,8 +502,7 @@ body {
     word-break: break-all;
   }
   .poster-sponsors {
-    padding: 1rem;
-    gap: 1rem;
+    padding: 0.75rem 1rem;
   }
 }
 @media print {
@@ -593,8 +533,7 @@ body {
   .poster,
   .poster-header,
   .poster-sponsors,
-  .poster-sponsor,
-  .poster-sponsor img,
+  .poster-sponsors img,
   .code-card {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
@@ -615,8 +554,10 @@ body {
     page-break-inside: avoid;
     min-height: 13.25in;
   }
+  /* OSE-1991: the sponsor block and the When / Where cards take room on the
+     sheet, so the padding around them is tight (measured in print, 2026-11-12). */
   .poster-header {
-    padding: 0.45in 0.35in 0.3in;
+    padding: 0.3in 0.35in 0.18in;
   }
   .poster {
     --title-base: 38pt;
@@ -630,43 +571,35 @@ body {
     white-space: normal;
   }
   .poster-body {
-    padding: 0.3in 0.35in 0.25in;
+    padding: 0.12in 0.35in 0.12in;
   }
-  .poster-meta {
-    margin-bottom: 0.2in;
+  .poster-stage {
+    margin: 0 0 0.12in;
   }
-  .poster .poster-meta .meta-text {
-    font-size: 14pt;
+  .poster-body > :last-child {
+    margin-bottom: 0;
   }
-  .poster[data-art='0'] .poster-meta .meta-text {
-    font-size: 18pt;
+  .poster-footer {
+    padding: 0.06in;
   }
   .qr-section {
     page-break-inside: avoid;
     padding: 0.18in 0;
     gap: 0.3in;
   }
+  /* OSE-R-006: NO grayscale on sponsor logos in print. OSE-1991 (owner
+     2026-11-11): the thumbnails print at their full panel size, not the old
+     20px clamp; the panel takes the page's ink (@ocr/ui print rules). */
   .poster-sponsors {
     page-break-inside: avoid;
-    border-top: 1px solid #ccc;
-    padding: 0.75rem 1rem;
-  }
-  /* OSE-R-006: NO grayscale on sponsor logos in print. Keep the
-   max-height clamp so logos still fit a printed A4 page — that part
-   was a layout decision, separate from the color issue. */
-  .poster-sponsor img {
-    max-height: 20px;
-  }
-  .poster-sponsor-name,
-  .poster-sponsor-label {
-    color: #000;
+    padding: 0.06in 0.35in 0;
   }
   .qr-loading {
     display: none !important;
   }
   .poster-art {
     page-break-inside: avoid;
-    margin: 0.12in 0 0.2in;
+    margin: 0 0 0.1in;
   }
   .poster-art-img {
     max-height: 7in;
@@ -817,8 +750,6 @@ body {
   border-color: var(--border-strong);
   color: var(--text);
 }
-.poster-sponsor-name,
-.poster-sponsor-label,
 .skip-link:focus {
   background: var(--surface);
   color: var(--text);
@@ -995,8 +926,12 @@ body {
       var POSTER_CODE_FLOOR_PX = 100;
       var POSTER_SHEET_IN = 13.3; // 14in sheet less its 0.35in margins
       var POSTER_ART_FULL_IN = 7;
-      var POSTER_CHROME_IN = 3.25; // title, details, footer and padding (measured in print, 2026-10-04)
-      var POSTER_SPONSORS_IN = 0.5; // the sponsor strip
+      // Measured in print, 2026-11-12 (OSE-1991): title, When / Where cards,
+      // footer and padding 2.42in, the sponsor block 1.16in; each is rounded up
+      // so every grid sheet keeps about a tenth of an inch spare (fonts differ
+      // a little between machines).
+      var POSTER_CHROME_IN = 2.6; // title, When / Where cards, footer and padding
+      var POSTER_SPONSORS_IN = 1.2; // the sponsor block: label, then one row of thumbnails
       var POSTER_GRID_PAD_IN = 0.3; // the code section's own padding
       var POSTER_GRID_ROW_IN = 1.85; // one row of two codes, label and link included
       // What scanning each kind does, by kind. Allowlist; unknown kinds read as
@@ -1151,13 +1086,19 @@ body {
         // name, not `art`: posterLayout() has a yes/no of that name.)
         const artAddress = posterArtAddress(event.cover_image_url || event.coverImageUrl);
 
-        // Print has nothing to tap, so the date and venue stay one plain line.
-        // Digital (OSE-1825, owner 2026-11-09) gives each its own small card
-        // with its actions as buttons: When + Add to calendar, Where (name and
-        // street address) + Google Maps / Apple Maps, then Share. Every address
-        // is a fixed start with one encoded value after it.
+        // OSE-1825 (owner 2026-11-09): the date and the place are each a small
+        // card with its actions as buttons: When + Add to calendar, Where (name
+        // and street address) + Google Maps / Apple Maps, then Share. Every
+        // address is a fixed start with one encoded value after it.
+        // OSE-1991 (owner 2026-11-11): print shows the same cards and buttons,
+        // but nothing on paper is tapped: each button is a <span> picture of
+        // one (.btn-static), with no address, hidden from screen readers. Share
+        // is digital only (on paper the event's own code shares it).
         const digital = KIND === 'digital';
-        const whenText = esc(startDate) + (startTime ? ' &mdash; ' + esc(startTime) : '');
+        // Fixed words and test ids only: nothing typed goes through here.
+        const staticBtn = function (label, testid) {
+          return '<span class="btn btn-outline btn-static" data-testid="' + esc(testid) + '">' + esc(label) + '</span>';
+        };
         // The venue's street address (events.where_address, in the public
         // projection): shown under the name when it adds something.
         const address = String(event.where_address || '').trim();
@@ -1179,9 +1120,11 @@ body {
               '<span class="detail-card-main" data-testid="poster-when-date">' + esc(startDate) + '</span>' +
               (startTime ? '<span class="detail-card-sub" data-testid="poster-when-time">' + esc(startTime) + '</span>' : '') +
               '</div>' +
-              (event.id
-                ? '<div class="detail-card-actions"><a class="btn btn-outline" href="/events/' + encodeURIComponent(event.id) + '/calendar.ics" download data-testid="poster-add-to-calendar">Add to calendar</a></div>'
-                : '') +
+              (!digital
+                ? '<div class="detail-card-actions" aria-hidden="true">' + staticBtn('Add to calendar', 'poster-add-to-calendar') + '</div>'
+                : event.id
+                  ? '<div class="detail-card-actions"><a class="btn btn-outline" href="/events/' + encodeURIComponent(event.id) + '/calendar.ics" download data-testid="poster-add-to-calendar">Add to calendar</a></div>'
+                  : '') +
               '</div>'
             : '') +
           (where
@@ -1191,16 +1134,20 @@ body {
               (showAddress && venue ? '<span class="detail-card-sub" data-testid="poster-venue-address">' + esc(address) + '</span>' : '') +
               '</div>' +
               // Owner 2026-10-11: two choices, Google Maps and Apple Maps.
-              '<div class="detail-card-actions" role="group" aria-label="Directions" data-testid="poster-directions">' +
-              '<a class="btn btn-outline" href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">Google Maps</a>' +
-              '<a class="btn btn-outline" href="https://maps.apple.com/?q=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map-apple">Apple Maps</a>' +
-              '</div>' +
+              (digital
+                ? '<div class="detail-card-actions" role="group" aria-label="Directions" data-testid="poster-directions">' +
+                  '<a class="btn btn-outline" href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">Google Maps</a>' +
+                  '<a class="btn btn-outline" href="https://maps.apple.com/?q=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map-apple">Apple Maps</a>' +
+                  '</div>'
+                : '<div class="detail-card-actions" aria-hidden="true" data-testid="poster-directions">' +
+                  staticBtn('Google Maps', 'poster-open-map') + staticBtn('Apple Maps', 'poster-open-map-apple') +
+                  '</div>') +
               '</div>'
             : '') +
           // OSE-1825 / OSE-1371: Web Share first; without it, plain share
           // links (owner 2026-09-28: no SDK, no tracker, no cookie). A draft
           // preview shows the button switched off: its link is not public yet.
-          '<div class="share-row section no-print" data-testid="poster-share" data-share-url="' + esc(shareUrl) + '" data-share-title="' + esc(name) + '" data-share-text="' + esc(shareLine) + '">' +
+          (digital ? '<div class="share-row section no-print" data-testid="poster-share" data-share-url="' + esc(shareUrl) + '" data-share-title="' + esc(name) + '" data-share-text="' + esc(shareLine) + '">' +
           (shareOff
             ? '<button type="button" class="btn btn-primary btn-block" data-testid="poster-share-btn" disabled aria-disabled="true">Share this event</button>'
             : '<button type="button" class="btn btn-primary btn-block" data-testid="poster-share-btn" aria-expanded="false" aria-controls="poster-share-links">Share this event</button>' +
@@ -1216,7 +1163,7 @@ body {
               '<button type="button" class="share-chip" data-testid="poster-share-copy">Copy link</button>' +
               '</div>' +
               '<p class="share-status" data-testid="poster-share-status" role="status" aria-live="polite"></p>') +
-          '</div>' +
+          '</div>' : '') +
           '</div>';
 
         // OSE-1516: the layout starts from the artwork alone (the codes are not
@@ -1227,17 +1174,11 @@ body {
           '<div class="poster-header" data-testid="poster-card-header">' +
             '<h2 data-testid="poster-title">' + esc(name) + '</h2>' +
           '</div>' +
-          // Sponsors sit directly below the title, above the details, artwork
-          // and codes — the same place as on the public event page.
-          '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
+          // Sponsors sit directly below the title, above the artwork, codes
+          // and details. OSE-1991 (owner 2026-11-11): the art comes between the
+          // sponsor block and the When card, on both kinds.
+          '<div id="poster-sponsor-strip" class="poster-sponsors sponsor-panel" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
           '<div class="poster-body" data-testid="poster-body">' +
-            // OSE-1516: on print, date, start time and venue are ONE line.
-            (digital
-              ? detailsHtml
-              : '<div class="poster-meta" data-testid="poster-meta">' +
-                (startDate ? '<span class="meta-item" data-testid="poster-meta-date"><span class="meta-text">' + whenText + '</span></span>' : '') +
-                (venue ? '<span class="meta-item" data-testid="poster-meta-venue"><span class="meta-text">' + esc(venue) + '</span></span>' : '') +
-                '</div>') +
             // The stage holds the artwork and the codes. No artwork: the art area
             // is not drawn at all (nothing dashed, nothing to hide in print).
             '<div class="poster-stage" data-testid="poster-stage">' +
@@ -1255,6 +1196,7 @@ body {
               '<div id="poster-qr-slots" class="qr-slots" data-testid="poster-qr-slots"><div class="qr-loading" aria-busy="true">&#x23F3;</div></div>' +
             '</div>' +
             '</div>' +
+            detailsHtml +
           '</div>' +
           '<div class="poster-footer" data-testid="poster-footer"><span data-testid="poster-org">OurSharedEvents</span> &middot; oursharedevents.com</div>' +
         '</div>';
@@ -1315,9 +1257,24 @@ body {
           area.innerHTML = '<p class="error" data-testid="poster-error" role="alert">Could not load events.</p>';
         }
       }
+      // Where a sponsor's thumbnail and name lead (OSE-1991, owner 2026-11-11):
+      // the https website the sponsor saved (validated on save, and only https
+      // ever leaves the resolver), else the sponsor's own card page here, else
+      // nowhere. The same rule as the public event page. The bundle only
+      // carries sponsors on show (both sides said yes). Checked again here:
+      // an address that is not https, or a card path that is not ours, is no
+      // link at all.
+      // Returns the address, or '' for none.
+      function posterSponsorSite(s) {
+        const web = String(s == null || s.website_url == null ? '' : s.website_url);
+        if (/^https:\/\/[^\s"'<>]+$/i.test(web)) return web;
+        const card = String(s == null || s.card_url == null ? '' : s.card_url);
+        if (/^\/sponsors\/[^\s"'<>\/\\?#]+$/.test(card)) return card;
+        return '';
+      }
       // The sponsor strip, rendered from the bundle's `sponsors` (OSE-867 —
-      // the same set sponsor-bundle?surface=poster serves). Print-safe: no
-      // links; logos hide themselves on error (see the capture listener below).
+      // the same set sponsor-bundle?surface=poster serves). Logos hide
+      // themselves on error (see the capture listener below).
       function renderPosterSponsors(sponsors) {
         const strip = document.getElementById('poster-sponsor-strip');
         if (!strip) return;
@@ -1328,11 +1285,12 @@ body {
         // then its short text, all from the sponsor's own settings. A sponsor
         // with neither shows its logo and name as before. The image loads only
         // through the consent-gated proxy (?slot=header), never from the
-        // sponsor's host. Same block for every tier (WALL-3b). Print keeps the
-        // compact row of logos: the sheet has half an inch for sponsors.
+        // sponsor's host. Same block for every tier (WALL-3b).
+        // OSE-1991: print uses the same block, all sponsors side by side, with
+        // the thumbnail and name only (no header image or text: the sheet's
+        // room goes to the art and codes) and no link (paper is not tapped).
         const digital = KIND === 'digital';
-        strip.classList.toggle('sponsor-panel', digital);
-        strip.innerHTML = '<div class="' + (digital ? 'sponsor-panel-label' : 'poster-sponsor-label') + '" data-testid="poster-sponsor-label">Sponsored By</div>' +
+        strip.innerHTML = '<div class="sponsor-panel-label" data-testid="poster-sponsor-label">Sponsored By</div>' +
           sponsors.map(function(s) {
             // OSE-R-015 (2026-05-15): referrerpolicy + data-hide-on-error.
             // 0083: logo via the same-origin proxy (external URLs are CSP-
@@ -1344,16 +1302,23 @@ body {
             // data-tier retained for rotation/frequency-share identity only; NO
             // poster-sponsor--<tier> class — #25 forbids tier-keyed geometry (OSE-864).
             const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
-            const identity = logo + '<span class="' + (digital ? 'sponsor-panel-name' : 'poster-sponsor-name') + '" data-testid="poster-sponsor-name">' + esc(title) + '</span>';
-            if (!digital) {
-              return '<div class="poster-sponsor" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(title) + '">' + identity + '</div>';
-            }
-            const headerText = String(s.header_text == null ? '' : s.header_text).trim();
-            return '<div class="sponsor-panel-block" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(title) + '">' +
-              (s.has_header_image === true
+            const identity = '<div class="sponsor-panel-id">' + logo + '<span class="sponsor-panel-name" data-testid="poster-sponsor-name">' + esc(title) + '</span></div>';
+            const headerText = digital ? String(s.header_text == null ? '' : s.header_text).trim() : '';
+            const main = (digital && s.has_header_image === true
                 ? '<img class="sponsor-panel-header" src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo?slot=header" alt="" referrerpolicy="no-referrer" data-testid="poster-sponsor-header">'
-                : '') +
-              '<div class="sponsor-panel-id">' + identity + '</div>' +
+                : '') + identity;
+            // Print: no sponsor, so no address.
+            const site = posterSponsorSite(digital ? s : null);
+            // The link names the sponsor (its visible name is in it, WCAG 2.5.3)
+            // and, for the website, says it opens a new tab. noreferrer: the
+            // sponsor's site learns neither the visitor nor this poster (OSE-1164).
+            const wrapped = !site
+              ? '<div class="sponsor-panel-main">' + main + '</div>'
+              : site.charAt(0) !== '/'
+                ? '<a class="sponsor-panel-main" href="' + esc(site) + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc(title) + ' (opens the sponsor’s site in a new tab)" data-testid="poster-sponsor-link">' + main + '</a>'
+                : '<a class="sponsor-panel-main" href="' + esc(site) + '" aria-label="' + esc(title) + '" data-testid="poster-sponsor-card-link">' + main + '</a>';
+            return '<div class="sponsor-panel-block" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(title) + '">' +
+              wrapped +
               (headerText ? '<p class="sponsor-panel-text" data-testid="poster-sponsor-text">' + esc(headerText) + '</p>' : '') +
               '</div>';
           }).join('');

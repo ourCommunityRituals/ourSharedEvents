@@ -12,7 +12,8 @@
  * Verifies:
  *   - NO .poster-sponsor--<tier> modifier classes exist (all six removed)
  *   - NO tier-keyed logo heights or name typography remain
- *   - Every sponsor renders at the ONE uniform responsive .poster-sponsor img box
+ *   - Every sponsor renders at the ONE uniform thumbnail box (@ocr/ui's
+ *     .sponsor-panel-id img since OSE-1991; the poster sizes no sponsor image)
  *   - The renderer emits no tier class; data-tier remains for rotation identity
  */
 
@@ -49,11 +50,14 @@ describe('OSE-864 / #25: Poster CSS — uniform sponsor treatment (no tier geome
     expect(body).not.toMatch(/\.poster-sponsor--\w+ \.poster-sponsor-name/);
   });
 
-  test('every sponsor logo uses the ONE uniform, responsive box', async () => {
+  test('every sponsor logo uses the ONE uniform box: @ocr/ui’s panel, none of the poster’s own', async () => {
+    // OSE-1991: both kinds draw @ocr/ui's sponsor panel, whose one tier-blind
+    // thumbnail rule is .sponsor-panel-id img (held in sponsor-panel tests). The
+    // poster sizes no sponsor image itself, so no tier can be given a size here.
     const body = await posterHtml();
-    // A single tier-blind rule: clamp() height + max-width on .poster-sponsor img.
-    expect(body).toMatch(/\.poster-sponsor img\s*\{[\s\S]*?height:\s*clamp\(/);
-    expect(body).toMatch(/\.poster-sponsor img\s*\{[\s\S]*?max-width:\s*clamp\(/);
+    const css = [...body.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join('\n');
+    expect(css).not.toMatch(/sponsor[^{}]*\{[^}]*\b(?:height|width|max-height|max-width)\s*:/);
+    expect(body).toContain('<div class="sponsor-panel-id">');
   });
 });
 
@@ -61,7 +65,8 @@ describe('OSE-864 / #25: Poster renderer — no tier class, data-tier retained',
   test('renderer does NOT emit a poster-sponsor--<tier> class', async () => {
     const body = await posterHtml();
     expect(body).not.toContain("poster-sponsor poster-sponsor--' + esc(tier)");
-    expect(body).toContain('class="poster-sponsor"');
+    expect(body).not.toMatch(/class="[^"]*' \+ [^"]*tier/);
+    expect(body).toContain('class="sponsor-panel-block" data-tier="');
   });
 
   test('renderer still reads s.tier (rotation identity)', async () => {

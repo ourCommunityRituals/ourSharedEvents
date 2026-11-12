@@ -469,8 +469,10 @@ describe('/poster | each code says what scanning it does', () => {
   });
 });
 
-describe('/poster | date, start time and venue share one line', () => {
-  test('one meta line holds the date, the start time in the event zone, and the venue', async () => {
+// OSE-1991 (owner 2026-11-11): print's one plain line became the When and Where
+// cards the digital poster has (nothing tapped on paper): one list, two cards.
+describe('/poster | date, start time and venue: the When and Where cards', () => {
+  test('one list holds the date with the start time in the event zone, and the venue', async () => {
     const { doc } = await mount(2);
     const meta = doc.querySelector('[data-testid="poster-meta"]')!;
     const date = meta.querySelector('[data-testid="poster-meta-date"]')!;
@@ -478,7 +480,7 @@ describe('/poster | date, start time and venue share one line', () => {
     expect(date.textContent).toContain('October 24, 2026');
     expect(date.textContent).toContain('6:00 PM CDT');
     expect(venue.textContent).toContain('Harbor Hall, Sawyer');
-    // One line: the two facts are items of the same row, not stacked rows.
+    // The two facts are siblings in one list, not separate sections.
     expect(date.parentElement).toBe(venue.parentElement);
     expect(meta.querySelectorAll('.meta-row')).toHaveLength(0);
   });
