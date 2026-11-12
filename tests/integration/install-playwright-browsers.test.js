@@ -172,6 +172,16 @@ describe('install-playwright-browsers.sh', { timeout: 60_000 }, () => {
     expect(r.out).toContain('::error title=Ubuntu package mirror too slow::');
   });
 
+  // 2026-11-11: both 150 s attempts stalled on PR 1188 (twice) and PR 1190,
+  // while a warm-cache download normally takes 7-8 s. A stall clears on a
+  // retry, so the default makes a third attempt rather than one longer wait.
+  test('by default a download is tried three times before the job fails', () => {
+    const r = run(undefined, { STUB_DEPS_EXIT: '100', PW_APT_ATTEMPT_SECONDS: undefined });
+    expect(r.code).toBe(1);
+    expect(r.calls.filter((c) => c.startsWith('install-deps'))).toHaveLength(3);
+    expect(r.out).toContain('in 3 attempts (limits: 150 150 150 seconds)');
+  });
+
   test('no browser named is a usage error', () => {
     const r = run([]);
     expect(r.code).toBe(2);
@@ -221,12 +231,27 @@ describe('jobs that install WebKit go through the script and the package cache',
     const install = steps[index(steps, 'Install Playwright browsers')];
     expect(install.env.BROWSERS).toBe("${{ matrix.webkit && 'chromium webkit' || 'chromium' }}");
     expect(install.run.trim()).toBe(`bash ${SCRIPT_REL} $BROWSERS`);
-    // The step limit must leave room for both download attempts and the install.
+    // The step limit must leave room for every download attempt and the install.
     expect(install['timeout-minutes']).toBeGreaterThanOrEqual(8);
     expect(
       steps.filter((s) => s && /playwright install/.test(s.run || '')),
       'pr-code must not call `playwright install` outside the script'
     ).toEqual([]);
+  });
+
+  // If the default attempts outgrow the step, the step is killed first and the
+  // job ends without the script's "mirror too slow" message.
+  test('phone audit: the default download attempts plus 2 minutes fit the install step limit', () => {
+    const script = readFileSync(SCRIPT, 'utf-8');
+    const match = script.match(/\$\{PW_APT_ATTEMPT_SECONDS:-([0-9 ]+)\}/);
+    expect(match, 'the script must set a default for PW_APT_ATTEMPT_SECONDS').not.toBeNull();
+    const limits = match[1].trim().split(/\s+/).map(Number);
+    expect(limits.length).toBeGreaterThanOrEqual(1);
+    const worstCaseSeconds = limits.reduce((a, b) => a + b, 0) + 120;
+
+    const steps = load('mobile-workability-audit.yml').jobs['pr-code'].steps;
+    const install = steps[index(steps, 'Install Playwright browsers')];
+    expect(worstCaseSeconds).toBeLessThanOrEqual(install['timeout-minutes'] * 60);
   });
 
   test('the script is executable in git and has LF line endings', () => {
