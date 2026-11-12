@@ -19,6 +19,7 @@ Required status checks = the CI jobs that **always run to completion on a `pull_
 | `Mobile workability — PR code (375×812, blocking)`                       | The phone audit of the PR's own code on a local worker. A phone is the first screen (PO 2026-10-06)   |
 | `Gate-execution reconciler`                                              | Fails when a gate expected for the trigger silently did not run (`scripts/assert-gate-execution.mjs`) |
 | `Invariant #22 cross-repo isolation gate`                                | The cross-repo import guard, in its own job (`.github/workflows/inv22-cross-repo-gate.yml`)           |
+| `mutation`                                                               | Every mutation group passed and each mutated file met its floor (owner 2026-11-06)                    |
 
 `S2 Post-Execution Security` is **not** required and must not come back: it is a step at the tail of the
 T4 functional job, so no check with that name ever reports on a pull request (OSE-1216, OSE-1260).
