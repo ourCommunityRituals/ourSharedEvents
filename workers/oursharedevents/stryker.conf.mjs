@@ -51,8 +51,9 @@ export default {
   testRunner: 'vitest',
   vitest: {
     // Only the fast Node project — the covenant guards are pure logic; keep the
-    // workerd pool out of the per-mutant loop.
-    configFile: 'vitest.node.config.mts',
+    // workerd pool out of the per-mutant loop. vitest.mutation.config.mts is the
+    // node project less the specs it lists, with the reason for each.
+    configFile: 'vitest.mutation.config.mts',
   },
   mutate: [
     'src/lib/count-floor.ts',

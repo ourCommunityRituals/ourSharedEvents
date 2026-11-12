@@ -84,6 +84,7 @@ describe('a change the mutation run measures runs it', () => {
     ['the Worker Stryker config', `${W}stryker.conf.mjs`],
     ['the language Stryker config', `${W}stryker.language.conf.mjs`],
     ['the language pass Vitest project', `${W}vitest.language-mutation.config.mts`],
+    ['the main pass Vitest project', `${W}vitest.mutation.config.mts`],
     ['a language spec that kills mutants', `${W}tests/i18n-layer-mutants.spec.ts`],
     ['the Worker lockfile', `${W}package-lock.json`],
     ['a CI security rule', 'scripts/ci/branch-push-secret-exposure.mjs'],
