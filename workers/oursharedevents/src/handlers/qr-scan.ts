@@ -24,7 +24,11 @@
  *     One person counts once per poster per hour, so an hourly poster count is
  *     a count of people (OSE-1459): the K-floor on poster cells and on
  *     poster_attribution then means "at least K people", not "K requests".
- *   - KV missing → still write scan (dedup is best-effort).
+ *   - KV missing, or a KV get/put error → still write scan (dedup is best-effort).
+ *
+ * Backend blips (OSE-1988): no D1 or KV error becomes a 500. The deployment
+ * lookup is retried once, then the visitor is sent home (no cookie, no scan);
+ * a KV error skips dedup; a scan write error is logged and the redirect stands.
  *
  * Structured log (SCAN_RECORDED) contains only aggregated signals: no raw
  * anon_id, no exact timestamp, no lat/lng.
@@ -129,12 +133,27 @@ export async function handleQrScan(
     });
   }
 
-  // Resolve poster deployment by qr_token unique index.
-  const deployment = await env.DB.prepare(
-    `SELECT id, event_id FROM poster_deployments WHERE qr_token = ? AND is_active = 1 LIMIT 1`
-  )
-    .bind(qrToken)
-    .first<{ id: string; event_id: string }>();
+  // Resolve poster deployment by qr_token unique index. A read is safe to
+  // retry, so a D1 blip gets one more try (OSE-1988). The event is known only
+  // from this row, so if both tries fail the visitor gets the same answer as
+  // "infrastructure not ready" above: home, not a 500. No anon id is minted and
+  // no cookie set on that path, and the log names the failure, not the token.
+  const lookupDeployment = () =>
+    env.DB.prepare(
+      `SELECT id, event_id FROM poster_deployments WHERE qr_token = ? AND is_active = 1 LIMIT 1`
+    )
+      .bind(qrToken)
+      .first<{ id: string; event_id: string }>();
+  let deployment: { id: string; event_id: string } | null;
+  try {
+    deployment = await lookupDeployment().catch(() => lookupDeployment());
+  } catch (err) {
+    console.error(JSON.stringify({ type: 'SCAN_LOOKUP_ERROR', error: errorLabel(err) }));
+    return new Response(null, {
+      status: 302,
+      headers: { Location: '/', 'Cache-Control': 'no-store' },
+    });
+  }
 
   if (!deployment) {
     // Unknown or inactive token — safe to redirect home rather than 404.
@@ -176,13 +195,26 @@ export async function handleQrScan(
   let isDuplicate = false;
   let dedupKey: string | null = null;
   if (env.RATE_LIMIT_KV) {
-    dedupKey = scanDedupKey(scanKey ?? anonId, deploymentId, scanBucket(nowDate));
-    const existing = await env.RATE_LIMIT_KV.get(dedupKey);
-    if (existing !== null) {
-      isDuplicate = true;
-    } else {
-      // The key names its hour, so a 1-hour TTL always outlives that hour.
-      await env.RATE_LIMIT_KV.put(dedupKey, '1', { expirationTtl: 3600 });
+    const key = scanDedupKey(scanKey ?? anonId, deploymentId, scanBucket(nowDate));
+    try {
+      const existing = await env.RATE_LIMIT_KV.get(key);
+      if (existing !== null) {
+        isDuplicate = true;
+      } else {
+        // The key names its hour, so a 1-hour TTL always outlives that hour.
+        await env.RATE_LIMIT_KV.put(key, '1', { expirationTtl: 3600 });
+        dedupKey = key;
+      }
+    } catch (err) {
+      // OSE-1988: dedup is best-effort, as when KV is unbound. A KV blip skips
+      // it and the scan is written; no marker is held, so none is released.
+      console.warn(
+        JSON.stringify({
+          type: 'SCAN_DEDUP_SKIPPED',
+          deployment_id: deploymentId,
+          error: errorLabel(err),
+        })
+      );
     }
   }
 

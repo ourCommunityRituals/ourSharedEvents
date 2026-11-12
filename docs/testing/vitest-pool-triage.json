@@ -993,7 +993,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 31
+      "testCount": 33
     },
     {
       "file": "workers/oursharedevents/tests/event-card-thumbnail.spec.ts",
@@ -2351,7 +2351,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 20
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/qr-staleness.spec.ts",
