@@ -139,6 +139,79 @@ test('the scan card says "Distinct Scanners", in the lexicon', async ({ page }) 
   expect(text).not.toContain('distinct gatherings');
 });
 
+// On a phone the three summary cards stack, each the full width of the row.
+// @ocr/ui's .stats-row (loaded after the page's own rules) is a sideways
+// strip of flex:1 cards; at 375px that squeezed all three into one row and
+// wrapped their notes a word or two per line. Nothing may scroll sideways.
+test('on a phone the summary cards stack full width, with no sideways scroll', async ({ page }) => {
+  await openReport(page);
+  const row = page.getByTestId('signed-link-stats');
+  const cards = row.locator(':scope > .stat-card');
+  await expect(cards).toHaveCount(3);
+  const rowBox = await row.boundingBox();
+  expect(rowBox, 'summary row has a box').not.toBeNull();
+  const boxes = await cards.evaluateAll((els) =>
+    els.map((e) => e.getBoundingClientRect().toJSON())
+  );
+  for (const [i, b] of boxes.entries()) {
+    expect(
+      b.width,
+      `card ${i + 1} is ${Math.round(b.width)}px of a ${Math.round(rowBox!.width)}px row`
+    ).toBeGreaterThan(rowBox!.width * 0.9);
+    if (i > 0)
+      expect(b.top, `card ${i + 1} sits below card ${i}`).toBeGreaterThanOrEqual(
+        boxes[i - 1].bottom
+      );
+  }
+  const sideways = await row.evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(sideways, 'the summary row scrolls sideways').toBeLessThanOrEqual(1);
+});
+
+// On a phone each table row is a card: it fills the table's width, and every
+// cell names its field. A missing data-label printed a bare ": "; a tbody left
+// as a table group shrank each card to its content.
+test('on a phone the report tables read as full-width labelled cards', async ({ page }) => {
+  await openReport(page);
+  const tables = page.locator('[data-testid="signed-link-report-article"] table.funnel-table');
+  expect(await tables.count(), 'the report has at least one table').toBeGreaterThan(0);
+  const problems = await tables.evaluateAll((els) =>
+    els.flatMap((table) => {
+      const name = table.getAttribute('aria-label') ?? 'table';
+      const tw = table.getBoundingClientRect().width;
+      const out: string[] = [];
+      for (const tr of table.querySelectorAll('tbody tr')) {
+        const w = tr.getBoundingClientRect().width;
+        if (w < tw * 0.9) out.push(`${name}: a row is ${Math.round(w)}px of ${Math.round(tw)}px`);
+        for (const td of tr.querySelectorAll('td')) {
+          const label = getComputedStyle(td, '::before').content;
+          if (!td.getAttribute('data-label') && label !== 'none' && label !== '""')
+            out.push(`${name}: a cell has no data-label but prints ${label}`);
+        }
+      }
+      return out;
+    })
+  );
+  expect(problems).toEqual([]);
+});
+
+// The phone fix must not stack them on a laptop: there they share one row, equal width.
+test('on a laptop the summary cards share one row, equal width', async ({ page }) => {
+  await openReport(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const cards = page.getByTestId('signed-link-stats').locator(':scope > .stat-card');
+  await expect(cards).toHaveCount(3);
+  const boxes = await cards.evaluateAll((els) =>
+    els.map((e) => e.getBoundingClientRect().toJSON())
+  );
+  const tops = new Set(boxes.map((b) => Math.round(b.top)));
+  expect(tops.size, 'all three cards start on the same line').toBe(1);
+  const widths = boxes.map((b) => b.width);
+  expect(
+    Math.max(...widths) - Math.min(...widths),
+    'the cards are the same width'
+  ).toBeLessThanOrEqual(1);
+});
+
 test('before any screen has shown the sponsor, the report counts nothing', async ({ page }) => {
   await openReport(page);
   await expect(page.getByTestId('premium-sponsor-count')).toHaveText('0');

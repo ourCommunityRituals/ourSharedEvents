@@ -106,4 +106,18 @@ describe('SR-25 | Sponsor Competitive View gate', () => {
     const sectionContent = src.slice(sectionStart, sectionEnd);
     expect(sectionContent).toContain('signed link');
   });
+
+  // OSE-1993: on a phone each cell prints its data-label (td::before); a cell
+  // without one printed a bare ": " before "Local", "0", "0".
+  test('every cell in the three class rows carries a non-empty data-label', () => {
+    const src = getSharedReportHtml();
+    for (const cls of ['local', 'mid', 'premium']) {
+      const start = src.indexOf(`data-testid="sponsor-class-row-${cls}"`);
+      expect(start, `row ${cls} found`).toBeGreaterThan(-1);
+      const row = src.slice(start, src.indexOf('</tr>', start));
+      const cells = row.match(/<td\b[^>]*>/g) ?? [];
+      expect(cells, `row ${cls} has three cells`).toHaveLength(3);
+      for (const td of cells) expect(td, `row ${cls}: ${td}`).toMatch(/data-label="[^"]+"/);
+    }
+  });
 });
