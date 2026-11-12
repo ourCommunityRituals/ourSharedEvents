@@ -1006,6 +1006,7 @@ const SPONSOR_LIST_CSS = `
     .ose-sponsor-item { display: flex; align-items: center; min-height: 44px; border-bottom: 1px solid var(--border); }
     .ose-sponsor-item:last-child { border-bottom: none; }
     .ose-sponsor-link { color: var(--accent); font-weight: 600; display: inline-flex; align-items: center; min-height: 44px; }
+    .ose-sponsor-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .ose-sponsor-link[data-thumb] { display: inline-flex; align-items: center; min-height: 44px; padding: 0.25rem 0; }
     .ose-sponsor-thumb { display: block; height: 64px; width: auto; max-width: 160px; object-fit: contain; }
     .ose-sponsor-name { color: var(--text); font-weight: 600; }`;
@@ -2034,7 +2035,9 @@ ${SPONSOR_LIST_CSS}
 </html>`;
 }
 
-async function fetchEventPageSocialData(
+// Exported for tests/sponsor-thumb-sql.spec.ts (OSE-1955): the sponsor query runs there
+// against node:sqlite, so Stryker can mutate the code around it.
+export async function fetchEventPageSocialData(
   env: PublicEventEnv,
   eventId: string
 ): Promise<EventPageSocialData> {

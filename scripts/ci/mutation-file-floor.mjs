@@ -55,8 +55,17 @@ export const FLOORS = {
   // pages.ts is one score over all its marker ranges. OSE-1952 (2026-11-10)
   // added the sponsor-art range (renderSponsorItem / renderSponsorList) at 23 of
   // 23, with one equivalent mutant disabled in the source with its reason (the
-  // '' fallback of the website, read only by startsWith('https://')).
+  // '' fallback of the website, read only by startsWith('https://')). OSE-1955
+  // (2026-11-11) added the sponsor query of fetchEventPageSocialData at 1 of 1.
   'src/handlers/pages.ts': 100,
+  // OSE-1955 (2026-11-11): the rest of the sponsor thumbnails, at the scores of
+  // the run that added them. sponsor-logo.ts (the host rule, validateLogoUrl and
+  // validateProxiedLogoUrl, credentials refusal included) 110 of 110, with one line
+  // disabled in the source with its reason ('' and 'localhost' are also refused by
+  // the single-label rule). sponsors.ts (the logo proxy's slot pick and its
+  // consent-gated query) 22 of 22. Never lower.
+  'src/lib/sponsor-logo.ts': 100,
+  'src/handlers/sponsors.ts': 100,
   'src/handlers/events.ts': 100,
   // OSE-1850 and OSE-1943 (2026-11-11): the form pages on the language layer,
   // mutated only in their marker ranges. Two local runs scored 100 on both

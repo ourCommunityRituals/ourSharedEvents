@@ -667,3 +667,55 @@ describe('serveUploadedLogo', () => {
     expect((await serveUploadedLogo(bucketWith(cap.obj).bucket, PATH)).ok).toBe(true);
   });
 });
+
+/**
+ * OSE-1955 (owner 2026-11-10: "adding mutation executions"): the host rule and
+ * the two URL checks, case by case, so each clause has a case only it decides.
+ * isBlockedLogoHost is exported and takes any string, so several cases call it
+ * directly with a hostname `new URL` would never hand it; that is the rule's own
+ * contract, and the only way to show that each clause still does its part.
+ */
+describe('OSE-1955 | every clause of the host rule decides a case on its own', () => {
+  test.each([
+    // `.localhost` is a dotted name: only the localhost-suffix clause refuses it.
+    ['app.localhost', true],
+    // A trailing dot is dropped first, so a FQDN form meets the suffix rules.
+    ['printer.local.', true],
+    ['db.internal.', true],
+    ['nas.home.arpa.', true],
+    // A literal inside a dotted name: only the IPv6 clause (`:` or `[`) refuses it.
+    ['fe80::1.example', true],
+    ['[v1.example]', true],
+    // IPv4 means the whole name: a dotted quad at the start or the end of a
+    // longer public name is not a literal (wildcard DNS names look like this).
+    ['1.2.3.4.nip.io', false],
+    ['x1.2.3.4', false],
+    ['cdn.example.com.', false],
+  ])('isBlockedLogoHost(%j) is %s', (host, blocked) => {
+    expect(isBlockedLogoHost(host)).toBe(blocked);
+  });
+});
+
+describe('OSE-1955 | the URL checks take a string, at most 500 characters', () => {
+  const at = (n: number) => {
+    const head = 'https://cdn.example.com/';
+    return head + 'a'.repeat(n - head.length);
+  };
+
+  test('exactly 500 characters is accepted, 501 is TOO_LONG', () => {
+    expect(at(500)).toHaveLength(500);
+    expect(validateLogoUrl(at(500))).toEqual({ valid: true, url: at(500) });
+    expect(validateProxiedLogoUrl(at(500))).toEqual({ valid: true, url: at(500) });
+    expect(validateLogoUrl(at(501))).toEqual({ valid: false, url: null, error: 'TOO_LONG' });
+  });
+
+  test.each([
+    ['an array holding a URL', ['https://cdn.example.com/l.png']],
+    ['an object that prints as a URL', { toString: () => 'https://cdn.example.com/l.png' }],
+    ['a URL object', new URL('https://cdn.example.com/l.png')],
+    ['a number', 404],
+  ])('%s is INVALID_URL, never coerced to a string', (_what, raw) => {
+    expect(validateLogoUrl(raw)).toEqual({ valid: false, url: null, error: 'INVALID_URL' });
+    expect(validateProxiedLogoUrl(raw)).toEqual({ valid: false, url: null, error: 'INVALID_URL' });
+  });
+});
