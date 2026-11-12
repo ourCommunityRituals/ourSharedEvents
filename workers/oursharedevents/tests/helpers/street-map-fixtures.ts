@@ -222,18 +222,42 @@ export function memSource(bytes: Uint8Array): RangeSource & { reads: [number, nu
   };
 }
 
-/** A fake R2 bucket holding one object; records every get. */
+/**
+ * A fake R2 bucket holding one object; records every get.
+ *
+ * `settle()` is for a test that abandons a slow read. A read that times out is
+ * not stopped: it goes on in the background and asks for its next range when
+ * the delayed one lands. If that happens after a later test has switched on
+ * fake timers, the next delay is a fake timer the later test counts (CI,
+ * 2026-11-12: "a read that has finished leaves no timer running" saw 1).
+ * `settle()` waits for the delays already running, and from then on every get
+ * answers at once, with no timer, so the abandoned read ends inside its test.
+ */
 export function fakeBucket(
   name: string,
   bytes: Uint8Array,
   opts: { delayMs?: number } = {}
-): RangeBucket & { gets: { key: string; range?: { offset: number; length: number } }[] } {
+): RangeBucket & {
+  gets: { key: string; range?: { offset: number; length: number } }[];
+  settle(): Promise<void>;
+} {
   const gets: { key: string; range?: { offset: number; length: number } }[] = [];
+  const delays = new Set<Promise<void>>();
+  let settled = false;
   return {
     gets,
+    async settle() {
+      settled = true;
+      while (delays.size) await Promise.all([...delays]);
+    },
     async get(k, o) {
       gets.push({ key: k, range: o?.range });
-      if (opts.delayMs) await new Promise((r) => setTimeout(r, opts.delayMs));
+      if (opts.delayMs && !settled) {
+        const delay = new Promise<void>((r) => setTimeout(r, opts.delayMs));
+        delays.add(delay);
+        await delay;
+        delays.delete(delay);
+      }
       if (k !== name) return null;
       const off = o?.range?.offset ?? 0;
       const len = o?.range?.length ?? bytes.length;
