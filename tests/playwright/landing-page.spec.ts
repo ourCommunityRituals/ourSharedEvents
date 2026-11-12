@@ -19,7 +19,12 @@
  * local worker that config starts. Relative URLs only: the config owns the host.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { createLiveEvent, waitUntilListed } from './helpers/sponsor-home-seed';
+import {
+  createLiveEvent,
+  seedSponsorCard,
+  waitUntilListed,
+  type SeededSponsorHome,
+} from './helpers/sponsor-home-seed';
 
 const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER || '';
 
@@ -285,5 +290,61 @@ test.describe('landing: the Type row is the event categories', () => {
     await page.locator('label[for="type-all"]').click();
     await expect(card(titles.mixer)).toBeVisible();
     expect(requestsAfterLoad, 'choosing a category stays on the device').toEqual([]);
+  });
+});
+
+// Owner 2026-11-09: "Omit sponsors from the search criteria". The consented
+// sponsor shows by the title (OSE-1522), but a visitor never finds or filters an
+// event by its sponsor.
+// @born-red sponsor-not-search-criterion | method: the sponsor title added to the
+//   /events search text (the sponsor name then found its event), and a sponsor
+//   class on the landing card — each turned it red | date: 2026-11-11
+test.describe('search and filters: a sponsor is never a search criterion', () => {
+  let seeded: SeededSponsorHome;
+
+  test.beforeAll(async ({ request }) => {
+    test.setTimeout(150_000);
+    expect(ADMIN_BEARER, 'OSE_ADMIN_BEARER is set by playwright.mobile.config.ts').not.toBe('');
+    // An accepted placement on a live event: the card shows "Supported by <sponsor>".
+    seeded = await seedSponsorCard(request, ADMIN_BEARER, 'Omit');
+    await waitUntilListed(seeded.listedFrom);
+  });
+
+  async function search(page: Page, q: string): Promise<void> {
+    await page.goto('/events');
+    await page.getByTestId('disc-q').fill(q);
+    await page.getByTestId('disc-go').click();
+    await page.waitForURL(/[?&]q=/);
+  }
+
+  test('/events: the sponsor name finds nothing, though the card shows the sponsor', async ({
+    page,
+  }) => {
+    const card = page.locator(`[data-event-id="${seeded.eventId}"]`);
+    // Not vacuous: the event is found by its own name, and its card names the sponsor.
+    await search(page, seeded.eventTitle);
+    await expect(card).toBeVisible();
+    await expect(card).toContainText(`Supported by ${seeded.sponsorName}`);
+
+    await search(page, seeded.sponsorName);
+    await expect(page.getByTestId('disc-q')).toHaveValue(seeded.sponsorName);
+    await expect(card).toHaveCount(0);
+    await expect(page.getByText(`Supported by ${seeded.sponsorName}`)).toHaveCount(0);
+  });
+
+  test('landing: no filter names a sponsor, and the card is not tagged by it', async ({ page }) => {
+    await loadAndRecord(page);
+    const card = page.locator(`[data-testid="area-list"] [data-event-id="${seeded.eventId}"]`);
+    await expect(card).toBeVisible();
+    await expect(card).toContainText(`Supported by ${seeded.sponsorName}`);
+    expect(await card.getAttribute('class')).not.toMatch(/sponsor/i);
+    const toggles = page.getByTestId('area-toggles');
+    await expect(toggles).toBeVisible();
+    await expect(toggles).not.toContainText(seeded.sponsorName);
+    for (const id of await toggles
+      .locator('label')
+      .evaluateAll((ls) => ls.map((l) => l.getAttribute('for') ?? ''))) {
+      expect(id, 'a filter choice is never a sponsor').not.toMatch(/sponsor/i);
+    }
   });
 });
