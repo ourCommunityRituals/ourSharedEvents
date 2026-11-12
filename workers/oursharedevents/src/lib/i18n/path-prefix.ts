@@ -14,7 +14,7 @@
  *
  * Nothing here reads or stores anything about a visitor.
  */
-import { EVENT_SCREEN_SEGMENTS } from '../canonical';
+import { EVENT_SCREEN_SEGMENTS, type EventFormScreen } from '../canonical';
 import { DEFAULT_LANG, LANGUAGES, type Lang } from './languages';
 
 export interface LangPrefix {
@@ -46,11 +46,15 @@ export type LanguagePage =
   | { kind: 'event'; id: string; name?: string }
   | { kind: 'share'; code: string }
   | { kind: 'landing' }
-  | { kind: 'events' };
+  | { kind: 'events' }
+  // OSE-1850: an event's form screens (register, check in, feedback, updates).
+  | { kind: 'form'; id: string; screen: EventFormScreen };
 
 const EVENT_PAGE = /^\/events\/([A-Za-z0-9_-]{1,128})$/;
 const EVENT_PAGE_NAMED = /^\/events\/([A-Za-z0-9_-]{1,128})\/([a-z0-9-]{1,100})$/;
 const SHARE_LINK = /^\/e\/([^/]{1,40})$/;
+// The same shape as the router's own form route: /events/<id>/<screen>.
+const EVENT_FORM = /^\/events\/([A-Za-z0-9_-]{1,128})\/(register|checkin|survey|updates)$/;
 
 /**
  * Which language-layer page a prefix-free path is, or null when none. The shapes
@@ -61,6 +65,10 @@ export function matchLanguagePage(rest: string): LanguagePage | null {
   // OSE-1762: the landing (`/es/`, `/es`) and the event list (`/es/events`).
   if (rest === '/') return { kind: 'landing' };
   if (rest === '/events') return { kind: 'events' };
+  // OSE-1850: a form screen is a page under a prefix. The other screens (tv,
+  // poster, calendar) are not: they have not joined the language layer.
+  const form = rest.match(EVENT_FORM);
+  if (form) return { kind: 'form', id: form[1], screen: form[2] as EventFormScreen };
   const plain = rest.match(EVENT_PAGE);
   if (plain) return { kind: 'event', id: plain[1] };
   const named = rest.match(EVENT_PAGE_NAMED);

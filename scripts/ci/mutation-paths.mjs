@@ -126,6 +126,12 @@ export const MUTATION_PATHS = Object.freeze([
   // OSE-1952: the event page's sponsor-art rule (a marker range of pages.ts,
   // listed above) and the node spec that kills its mutants.
   'workers/oursharedevents/tests/sponsor-thumb-render.spec.ts',
+  // OSE-1850: the form pages on the language layer (marker ranges of
+  // form-pages.ts and event-staleness.ts) and the node specs that kill them.
+  'workers/oursharedevents/src/handlers/form-pages.ts',
+  'workers/oursharedevents/src/lib/event-staleness.ts',
+  'workers/oursharedevents/tests/form-pages-language.spec.ts',
+  'workers/oursharedevents/tests/form-pages-language-golden.spec.ts',
   // OSE-1955: the rest of the sponsor thumbnails. The logo URL rules (a marker
   // range of sponsor-logo.ts), the logo proxy's pick (a marker range of
   // sponsors.ts) and the page's sponsor query (pages.ts, listed above), and the

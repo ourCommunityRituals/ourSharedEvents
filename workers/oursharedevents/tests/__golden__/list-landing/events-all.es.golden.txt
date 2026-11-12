@@ -218,7 +218,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">martes, 20 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g13/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Morning Market">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g13/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Morning Market">Inscribirse</a>
           </article>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g09" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g09/golden-9" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 9"></a>
@@ -228,7 +228,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">miércoles, 21 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g09/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 9">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g09/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 9">Inscribirse</a>
           </article>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g10" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g10/golden-10" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 10"></a>
@@ -238,7 +238,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">jueves, 22 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g10/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 10">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g10/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 10">Inscribirse</a>
           </article>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g01" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g01/golden-1" data-testid="public-event-card-link" aria-label="Abrir la página pública de Trivia Night"></a>
@@ -248,7 +248,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">viernes, 23 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g01/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Trivia Night">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g01/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Trivia Night">Inscribirse</a>
           </article>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g02" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g02/golden-2" data-testid="public-event-card-link" aria-label="Abrir la página pública de Bocce League"></a>
@@ -258,7 +258,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">sábado, 24 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               <p class="meta" data-testid="public-event-sponsor">Con el apoyo de Beggars Pizza</p>
             </div>
-            <a class="cta" href="/events/evt_g02/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Bocce League">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g02/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Bocce League">Inscribirse</a>
           </article>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g03" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g03/golden-3" data-testid="public-event-card-link" aria-label="Abrir la página pública de Vinyl Swap"></a>
@@ -268,7 +268,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">martes, 27 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Beverly Records</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g03/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Vinyl Swap">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g03/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Vinyl Swap">Inscribirse</a>
           </article>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g11" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g11/golden-11" data-testid="public-event-card-link" aria-label="Abrir la página pública de Online Book Club"></a>
@@ -278,7 +278,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">viernes, 30 de octubre de 2026</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g11/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Online Book Club">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g11/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Online Book Club">Inscribirse</a>
           </article>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g04" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g04/golden-4" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 4"></a>
@@ -288,7 +288,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">jueves, 5 de noviembre de 2026</span> &middot; <span data-testid="public-event-venue">Beverly Records</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g04/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 4">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g04/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 4">Inscribirse</a>
           </article>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g05" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g05/golden-5" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 5"></a>
@@ -298,7 +298,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">jueves, 12 de noviembre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g05/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 5">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g05/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 5">Inscribirse</a>
           </article>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g06" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g06/golden-6" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 6"></a>
@@ -308,7 +308,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">jueves, 19 de noviembre de 2026</span> &middot; <span data-testid="public-event-venue">Beverly Records</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g06/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 6">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g06/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 6">Inscribirse</a>
           </article>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g07" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g07/golden-7" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 7"></a>
@@ -318,7 +318,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">jueves, 3 de diciembre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g07/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 7">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g07/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 7">Inscribirse</a>
           </article>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g08" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g08/golden-8" data-testid="public-event-card-link" aria-label="Abrir la página pública de Golden Event 8"></a>
@@ -328,7 +328,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">jueves, 10 de diciembre de 2026</span> &middot; <span data-testid="public-event-venue">Beverly Records</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g08/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 8">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g08/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 8">Inscribirse</a>
           </article><h2 class="events-subheading" data-testid="public-events-wrapped-heading">Terminados</h2>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g12" data-phase="post_event">
             <a class="event-card-link" href="/es/events/evt_g12/golden-12" data-testid="public-event-card-link" aria-label="Abrir la página pública de Fall Fest"></a>

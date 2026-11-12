@@ -218,7 +218,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">viernes, 23 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g01/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Trivia Night">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g01/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Trivia Night">Inscribirse</a>
           </article>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g02" data-phase="pre_event">
             <a class="event-card-link" href="/es/events/evt_g02/golden-2" data-testid="public-event-card-link" aria-label="Abrir la página pública de Bocce League"></a>
@@ -228,7 +228,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">sábado, 24 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               <p class="meta" data-testid="public-event-sponsor">Con el apoyo de Beggars Pizza</p>
             </div>
-            <a class="cta" href="/events/evt_g02/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Bocce League">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g02/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Bocce League">Inscribirse</a>
           </article>
         </div>
       </section>

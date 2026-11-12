@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Danceventures in Toyland – OurSharedEvents</title>
+  <link rel="stylesheet" href="/ui.css" />
+  <style>
+  body { line-height: 1.4; }
+  header { background: var(--surface); color: var(--text); border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; text-align: center; }
+  header h1 { overflow-wrap: anywhere; font-size: 1.1rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+  header .event-name { font-size: 1.4rem; font-weight: 700; margin-top: .25rem; overflow-wrap: anywhere; }
+  main { max-width: 480px; margin: 0 auto; padding: 1.5rem 1rem; }
+  .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+  .form-card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 1rem; color: var(--text); }
+  .form-intro { color: var(--text-muted); font-size: .9rem; margin-bottom: 1rem; }
+  .field-note { color: var(--text-muted); font-size: .85rem; margin: -.25rem 0 .4rem; }
+  label { display: block; font-size: .85rem; font-weight: 500; color: var(--text); margin-bottom: .25rem; }
+  /* Walkthrough 2026-09-03: inputs measured 42px at 390px — under the 44px floor
+     (OCR_STANDARD_mobileWorkability #2). min-height holds the floor regardless of font metrics.
+     16px text stops iOS zooming on focus; the edge is --border-strong (WCAG 1.4.11). */
+  input, textarea, select { width: 100%; min-height: 44px; padding: .65rem .75rem; background: var(--surface); color: var(--text); border: 1.5px solid var(--border-strong); border-radius: 8px; font-size: 16px; margin-bottom: .75rem; font-family: inherit; }
+  input::placeholder, textarea::placeholder { color: var(--text-muted); }
+  input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 80px; }
+  /* OSE-292 (2026-05-16): min-height 44px on every button to meet
+     WCAG 2.5.5 + Apple HIG touch-target floor. */
+  button { width: 100%; padding: .75rem; min-height: 44px; background: var(--accent); color: var(--on-accent); border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: .5rem; font-family: inherit; }
+  button:active { background: var(--accent-hover); }
+  button:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+  .success { text-align: center; padding: 2rem 1rem; }
+  .success .icon { font-size: 3rem; margin-bottom: .5rem; }
+  .success h2 { color: var(--success); font-size: 1.2rem; }
+  .success p { color: var(--text-muted); font-size: .9rem; margin-top: .5rem; }
+  .error-msg { color: var(--error); font-size: .85rem; margin-bottom: .5rem; display: none; }
+  .privacy-notice { font-size: .85rem; color: var(--text-muted); margin-top: .75rem; line-height: 1.5; }
+  .privacy-summary { margin-bottom: .25rem; color: var(--text); font-weight: 600; }
+  .privacy-details summary { min-height: 44px; display: inline-flex; align-items: center; color: var(--accent); cursor: pointer; font-weight: 600; }
+  .privacy-details p { margin-top: .25rem; }
+  /* OSE-292: privacy-policy link must be a real tap target on phones —
+     inline-block + padding gives a 44px+ touch area without breaking
+     the inline text flow visually. */
+  .privacy-notice a { color: var(--accent); display: inline-block; min-height: 44px; padding: .5rem .25rem; line-height: 1.4; }
+  .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+  .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: var(--surface); color: var(--text); font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid var(--accent); }
+  summary:focus-visible, a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .rating-row { display: flex; gap: .5rem; margin-bottom: .75rem; }
+  /* OSE-292: 44px floor for survey rating tap targets. The unselected edge is
+     --border-strong so each button is findable against the card (WCAG 1.4.11). */
+  .rating-row button { width: auto; flex: 1; padding: .5rem; min-height: 44px; font-size: 1.1rem; background: var(--surface); color: var(--text); border: 2px solid var(--border-strong); }
+  .rating-row button.selected { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .checkin-tap { text-align: center; padding: 3rem 1rem; }
+  .checkin-tap button { font-size: 1.5rem; padding: 1.5rem; border-radius: 50%; width: 180px; height: 180px; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s, opacity 0.1s; user-select: none; }
+  .walk-in-row { color: var(--text-muted); font-size: .9rem; }
+  .checkin-tap .walk-in-btn { width: auto; height: auto; min-height: 44px; margin: .5rem auto 0; padding: .6rem 1.1rem; border-radius: 8px; font-size: 1rem; background: var(--surface); color: var(--text); border: 1.5px solid var(--border-strong); }
+  .checkin-tap .count { font-size: 2rem; font-weight: 700; color: var(--text); margin-top: 1rem; }
+  /* OSE-222: sponsor logo strip in form header. Renders hidden by
+     default; gets .has-sponsors class via JS only if sponsor-bundle
+     for this event returns mobileBanner sponsors. Non-critical
+     load — silently no-ops on fetch failure. */
+  .form-sponsor-strip { display: none; padding: 0.5rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .form-sponsor-strip.has-sponsors { display: flex; align-items: center; justify-content: center; gap: 0.75rem; flex-wrap: wrap; }
+  .form-sponsor-strip .strip-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+  .form-sponsor-strip .sponsor-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .form-sponsor-strip img { height: 24px; width: auto; max-width: 80px; object-fit: contain; }
+  .form-sponsor-strip .sponsor-name { font-size: 0.8rem; color: var(--text); }
+  /* OSE-223: sponsor acknowledgment on form success state. Renders
+     inside .success block below the "you can close this page" line.
+     Uses the same fetched sponsor bundle (cached on page load by
+     the strip loader) — no second fetch. */
+  .form-sponsor-thanks { margin-top: 1.25rem; padding: 1rem; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; text-align: center; }
+  .form-sponsor-thanks .thanks-label { display: block; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; margin-bottom: 0.5rem; }
+  .form-sponsor-thanks .sponsor-row { display: inline-flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; justify-content: center; }
+  .form-sponsor-thanks .sponsor-item { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .form-sponsor-thanks img { height: 32px; width: auto; max-width: 120px; object-fit: contain; }
+  .form-sponsor-thanks .sponsor-name { font-size: 0.85rem; color: var(--text); font-weight: 500; }
+  /* F5.3: the next step under a confirmation (register: calendar, event page,
+     check-in line; email signup: next at this venue). 44px rows, tokens only. */
+  .next-step { margin-top: 1.25rem; text-align: left; }
+  .next-step h3 { font-size: .85rem; font-weight: 600; color: var(--text-muted); }
+  .next-step ul { list-style: none; margin: 0; padding: 0; }
+  .next-step-link { display: flex; justify-content: space-between; align-items: center; gap: .75rem; min-height: 44px; padding: .4rem 0; color: var(--accent); font-weight: 600; text-decoration: none; border-bottom: 1px solid var(--border); }
+  .next-step-when { font-size: .8rem; font-weight: 400; color: var(--text-muted); white-space: nowrap; }
+  /* OSE-1850 / OSE-1943: the Language menu at the start of the header (the left
+     in a left-to-right page, the right in Arabic), and the note that the privacy
+     text is in English. Logical properties only. */
+  .form-topbar { display: flex; justify-content: flex-start; text-align: start; margin: 0 0 .5rem; }
+  .privacy-lang-note { margin-bottom: .25rem; }
+
+    .ose-back { margin: 1.5rem 0 0.5rem; }
+    .ose-back-btn { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; min-height: 44px; padding: 0.75rem 1.5rem; border: 1.5px solid var(--accent); border-radius: 6px; background: transparent; color: var(--accent); font-size: 1.05rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
+    .ose-back-btn:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .ose-langmenu { position: relative; display: inline-flex; align-items: center; flex: 0 0 auto; }
+    .ose-langmenu details { position: relative; }
+    .ose-langmenu summary { list-style: none; cursor: pointer; }
+    .ose-langmenu summary::-webkit-details-marker { display: none; }
+    .ose-langmenu-button { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; box-sizing: border-box; min-height: 48px; min-width: 48px; padding: 0.5rem 0.875rem; border: 1.5px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
+    .ose-langmenu-button:hover, .ose-langmenu-row:hover, a.ose-langmenu-item:hover { outline: 2px solid var(--border-strong); outline-offset: -2px; }
+    .ose-langmenu summary:focus-visible, .ose-langmenu-item:focus-visible { outline: 3px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }
+    .ose-langmenu-caret { font-size: 0.875rem; }
+    .ose-langmenu details[open] > summary .ose-langmenu-caret { transform: rotate(180deg); }
+    .ose-langmenu-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 0; padding: 0.375rem; list-style: none; }
+    .ose-langmenu-desktop > .ose-langmenu-list, .ose-langmenu-panel { position: absolute; top: calc(100% + 0.5rem); inset-inline-start: 0; z-index: 50; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
+    .ose-langmenu-desktop > .ose-langmenu-list { min-width: 12rem; }
+    .ose-langmenu-panel { width: min(18rem, calc(100vw - 2rem)); padding: 0.375rem; }
+    .ose-langmenu-item { display: flex; align-items: center; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
+    .ose-langmenu-current { background: var(--accent); color: var(--on-accent); }
+    .ose-langmenu-check { display: inline-block; width: 1.25em; }
+    .ose-langmenu-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
+    .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(90deg); }
+    [dir="rtl"] .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(-90deg); }
+    .ose-langmenu-sub > .ose-langmenu-list { padding-block: 0.25rem 0; padding-inline: 0.75rem 0; }
+    .ose-langmenu-bar { display: flex; align-items: center; gap: 0.75rem; }
+    .ose-langmenu-mobile { display: none; }
+    @media (max-width: 640px) {
+      .ose-langmenu-desktop { display: none; }
+      .ose-langmenu-mobile { display: block; }
+    }</style>
+  
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+  <header data-testid="form-header">
+    <div class="form-topbar" data-testid="form-topbar">
+    <div class="ose-langmenu" data-testid="language-menu">
+      <details class="ose-langmenu-desktop" data-testid="language-menu-desktop">
+        <summary class="ose-langmenu-button" data-testid="language-menu-button"><span>Language</span><span class="ose-langmenu-caret" aria-hidden="true">▾</span></summary>
+        <ul class="ose-langmenu-list" aria-label="Language"><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="en" data-testid="language-menu-en"><span class="ose-langmenu-check" aria-hidden="true">✓</span>English</span></li><li><a class="ose-langmenu-item" lang="es" hreflang="es" data-testid="language-menu-es" href="/es/events/evt_form_golden/checkin?deployment=dep_golden1"><span class="ose-langmenu-check" aria-hidden="true"></span>Español</a></li><li><a class="ose-langmenu-item" lang="pl" hreflang="pl" data-testid="language-menu-pl" href="/pl/events/evt_form_golden/checkin?deployment=dep_golden1"><span class="ose-langmenu-check" aria-hidden="true"></span>Polski</a></li><li><a class="ose-langmenu-item" lang="ar" hreflang="ar" data-testid="language-menu-ar" href="/ar/events/evt_form_golden/checkin?deployment=dep_golden1"><span class="ose-langmenu-check" aria-hidden="true"></span>العربية</a></li></ul>
+      </details>
+      <details class="ose-langmenu-mobile" data-testid="site-menu">
+        <summary class="ose-langmenu-button" aria-label="Menu" data-testid="site-menu-button"><span aria-hidden="true">☰</span></summary>
+        <div class="ose-langmenu-panel" data-testid="site-menu-panel">
+          <details class="ose-langmenu-sub" data-testid="site-menu-language">
+            <summary class="ose-langmenu-row" data-testid="site-menu-language-button"><span>Language</span><span class="ose-langmenu-caret" aria-hidden="true">›</span></summary>
+            <ul class="ose-langmenu-list" aria-label="Language"><li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="en" data-testid="site-menu-language-en"><span class="ose-langmenu-check" aria-hidden="true">✓</span>English</span></li><li><a class="ose-langmenu-item" lang="es" hreflang="es" data-testid="site-menu-language-es" href="/es/events/evt_form_golden/checkin?deployment=dep_golden1"><span class="ose-langmenu-check" aria-hidden="true"></span>Español</a></li><li><a class="ose-langmenu-item" lang="pl" hreflang="pl" data-testid="site-menu-language-pl" href="/pl/events/evt_form_golden/checkin?deployment=dep_golden1"><span class="ose-langmenu-check" aria-hidden="true"></span>Polski</a></li><li><a class="ose-langmenu-item" lang="ar" hreflang="ar" data-testid="site-menu-language-ar" href="/ar/events/evt_form_golden/checkin?deployment=dep_golden1"><span class="ose-langmenu-check" aria-hidden="true"></span>العربية</a></li></ul>
+          </details>
+        </div>
+      </details>
+    </div>
+    <script nonce="N">(function(){function o(){return document.querySelectorAll('.ose-langmenu details[open]');}document.addEventListener('click',function(e){var d=o();for(var i=0;i<d.length;i++){if(!d[i].contains(e.target))d[i].open=false;}});document.addEventListener('keydown',function(e){if(e.key!=='Escape')return;var d=o();if(!d.length)return;var s=d[0].querySelector('summary');for(var i=0;i<d.length;i++)d[i].open=false;if(s)s.focus();});})();</script>
+    </div>
+    <h1>OurSharedEvents</h1>
+    <div class="event-name" data-testid="form-event-name">Danceventures in Toyland</div>
+  </header>
+  <!-- OSE-222: sponsor logo strip — hidden by default. Populated on
+       page load by formJsSponsor using the surface=public bundle.
+       Renders as a thin row under the dark header. Non-critical;
+       silently absent if no sponsors are configured for this event. -->
+  <div class="form-sponsor-strip" id="form-sponsor-strip" data-testid="form-sponsor-strip" role="complementary" aria-label="Event sponsors"></div>
+  <main id="main-content" data-testid="form-main">
+    <div class="checkin-tap" id="form-area" data-testid="form-checkin">
+      <h2>Check In</h2>
+      <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
+      <button type="button" id="checkin-btn" data-testid="checkin-submit">Tap to<br/>Check In</button>
+      <p class="walk-in-row">Didn't register?
+        <button type="button" id="walk-in-btn" class="walk-in-btn" data-testid="checkin-walk-in-submit">Check in as a walk-in</button>
+      </p>
+      <div class="count" id="count" data-testid="checkin-count" role="status" aria-live="polite"></div>
+      <div class="privacy-notice" data-testid="privacy-notice">
+    <p class="privacy-summary" data-testid="privacy-summary">Counted, never named.</p>
+    <details class="privacy-details" data-testid="privacy-details">
+      <summary>Privacy details</summary>
+      <p>
+        We record an <strong>anonymous count only</strong> — no personal data is stored. Legal basis: GDPR Art. 6(1)(f) — legitimate interest in knowing attendance numbers. Anonymous aggregate counts are kept for event reporting only.
+        You have the right to access, correct, or erase your data, and to lodge a complaint with your local data protection
+        <strong>supervisory authority</strong>.
+        
+        <a href="/privacy" data-testid="privacy-policy-link">Full privacy policy</a>
+      </p>
+    </details>
+  </div>
+    </div>
+    <script nonce="N">
+      
+  // FE-15: broken sponsor logos hide gracefully. Inline onerror= is CSP-blocked
+  // (script-src 'nonce-…' does not cover inline event handlers), so sponsor <img>s
+  // carry data-hide-on-error and this ONE capture-phase listener hides them. The
+  // 'error' event does NOT bubble — capture phase is required for the dynamically
+  // added imgs (success-state thanks + the sponsor strip in FORM_JS_SPONSOR).
+  // Mirrors the public/display/poster surfaces.
+  document.addEventListener('error', function (ev) {
+    var el = ev.target;
+    if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
+      // 0083: swap a failing sponsor logo to the OSE default; hide only if
+      // the default itself fails.
+      // Fixed same-origin fallback; never read back from the DOM.
+      var d = '/sponsor-default-logo.svg';
+      if (el.hasAttribute('data-default-src') && el.getAttribute('src') !== d) el.setAttribute('src', d);
+      else el.style.display = 'none';
+    }
+  }, true);
+  // OSE-R-002: code → friendly copy. Update both this map AND the standard
+  // doc tests when a new server code is added.
+  var FORM_ERROR_FRIENDLY_COPY = {
+    INVALID_EVENT_ID: "This event link doesn't look right. Try the original link or contact the host.",
+    INVALID_BODY: "We couldn't read your response. Please refresh the page and try again.",
+    PAYLOAD_TOO_LARGE: "Your message is too long. Please shorten it and try again.",
+    MISSING_FIELD: "Please fill out all required fields and try again.",
+    INVALID_EMAIL: "That email doesn't look right. Please check and try again.",
+    CONFIG_ERROR: "Something's not set up on our side. Please try again in a few minutes.",
+    DB_ERROR: "We're having trouble right now. Please try again in a moment.",
+    METHOD_NOT_ALLOWED: "This action isn't available right now."
+  };
+
+  function friendlyFormError(code, status) {
+    if (code && Object.prototype.hasOwnProperty.call(FORM_ERROR_FRIENDLY_COPY, code)) return FORM_ERROR_FRIENDLY_COPY[code];
+    if (status === 429) return "Too many tries. Please wait a moment and try again.";
+    if (status === 503) return "We're having trouble right now. Please try again in a moment.";
+    if (status >= 500) return "Sorry, something went wrong on our end. Please try again.";
+    return "Sorry, something went wrong. Please try again.";
+  }
+
+  async function submitForm(eventId, formType, data) {
+    var errEl = document.getElementById('error-msg');
+    var btn = document.querySelector('[data-testid$="-submit"]');
+    if (errEl) {
+      errEl.style.display = 'none';
+      errEl.removeAttribute('data-error-code');
+    }
+    if (btn) btn.disabled = true;
+    // FE-10: cap the request so a stalled network can't leave the button
+    // disabled forever. On timeout the fetch rejects (AbortError) and the catch
+    // below shows the friendly network error and re-enables the button.
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
+    try {
+      // L4 (OSE-1378) Slice 2: attach the Turnstile token as a header when the
+      // widget is present (window.turnstile exists only when the loader ran). The
+      // server reads it via extractTurnstileToken (header fallback). Dark → no header.
+      var _headers = { 'Content-Type': 'application/json' };
+      var _tsToken = (window.turnstile && window.turnstile.getResponse) ? window.turnstile.getResponse() : '';
+      if (_tsToken) _headers['cf-turnstile-response'] = _tsToken;
+      var res = await fetch('/api/v2/events/' + eventId + '/forms/' + formType, {
+        method: 'POST',
+        headers: _headers,
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      });
+      var body;
+      try {
+        body = await res.json();
+      } catch (parseErr) {
+        // Non-JSON response — surface a generic friendly error, preserve
+        // status for triage via data attribute.
+        if (errEl) {
+          errEl.textContent = friendlyFormError(null, res.status);
+          errEl.setAttribute('data-error-code', 'NON_JSON_RESPONSE');
+          errEl.style.display = 'block';
+        }
+        if (btn) btn.disabled = false;
+        throw new Error('NON_JSON_RESPONSE');
+      }
+      if (!body.ok) {
+        // Friendly UI, raw code preserved for support
+        if (errEl) {
+          errEl.textContent = friendlyFormError(body.code, res.status);
+          errEl.setAttribute('data-error-code', body.code || 'UNKNOWN');
+          errEl.style.display = 'block';
+        }
+        if (btn) btn.disabled = false;
+        throw new Error(body.code || 'UNKNOWN');
+      }
+      return body;
+    } catch (err) {
+      // Network failure or thrown above. err.message holds the code OR a
+      // network-level error. Render generic friendly copy if errEl wasn't
+      // already populated by the parse/!body.ok branches.
+      if (errEl && !errEl.textContent) {
+        errEl.textContent = friendlyFormError(null, 0);
+        errEl.setAttribute('data-error-code', 'NETWORK_ERROR');
+        errEl.style.display = 'block';
+      }
+      if (btn) btn.disabled = false;
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+  function showSuccess(msg) {
+    // OSE-223: append sponsor-thanks block if sponsors were loaded for
+    // this event. window.__formSponsorCache is populated by the
+    // sponsor-strip loader on page init (see FORM_JS_SPONSOR). If the
+    // cache is empty (no sponsors / fetch failed / suppressed), the
+    // thanks block silently no-ops.
+    var thanks = '';
+    var cache = window.__formSponsorCache;
+    if (cache && cache.length) {
+      // OSE-R-015 (2026-05-15): escape every attribute value, set
+      // referrerpolicy="no-referrer" so the sponsor host cannot fingerprint
+      // the attendee, and mark data-hide-on-error (FE-15) so the capture-phase
+      // listener hides broken images — inline onerror= is CSP-blocked.
+      var escAttr = function(v) {
+        return String(v || '').replace(/[<>&"']/g, function(c) {
+          return { '<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;' }[c];
+        });
+      };
+      // OSE-1850: a sponsor name shows as typed; on a right-to-left page it is
+      // isolated (<bdi>) so its own punctuation stays where it was typed.
+      var rtl = document.documentElement.dir === 'rtl';
+      var items = cache.slice(0, 3).map(function(s) {
+        var name = escAttr(s.title || s.name);
+        // 0083: no logo → the OSE default; a failing logo swaps to it too.
+        var logo = '<img src="' + (s.logo_url && s.id ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg') + '" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" />';
+        return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + (rtl ? '<bdi>' + name + '</bdi>' : name) + '</span></span>';
+      }).join('');
+      thanks = '<div class="form-sponsor-thanks" data-testid="form-sponsor-thanks"><span class="thanks-label">' + "Event supported by" + '</span><div class="sponsor-row">' + items + '</div></div>';
+    }
+    // F5.3: the next step the server put in the #form-next-step template
+    // (outside #form-area, so the swap below keeps it) joins the confirmation
+    // only now, after the submit succeeded. A clone of inert server markup.
+    var next = document.getElementById('form-next-step');
+    document.getElementById('form-area').innerHTML =
+      '<div class="success" data-testid="form-success"><div class="icon">&#10003;</div><h2>' + msg + '</h2>' + thanks + '</div>';
+    var done = document.querySelector('[data-testid="form-success"]');
+    if (next && next.content && done) {
+      done.insertBefore(next.content.cloneNode(true), done.querySelector('.form-sponsor-thanks'));
+    }
+  }
+
+      let tapping = false;
+      // OSE-1736: once a check-in has gone through, the page takes no more. The
+      // answer carries no count (OSE-1657), so a second tap would add one the
+      // person could never see. A failed submit leaves this false and the
+      // buttons live, so someone who lost signal can try again.
+      let checkedIn = false;
+      // OSE-1373: the walk-in button declares its arrival path; the plain tap
+      // declares none. A category per check-in — never who checked in.
+      async function handleCheckin(e, walkIn) {
+        if (e) e.preventDefault();
+        if (tapping || checkedIn) return;
+        tapping = true;
+        const btn = document.getElementById('checkin-btn');
+        const walkInBtn = document.getElementById('walk-in-btn');
+        btn.style.transform = 'scale(0.93)';
+        btn.style.opacity = '0.7';
+        btn.setAttribute('aria-busy', 'true');
+        try {
+          await submitForm("evt_form_golden", 'checkin', walkIn ? {
+            sourcePlacementId: "dep_golden1",
+            arrival_path: 'walk_in',
+          } : {
+            sourcePlacementId: "dep_golden1",
+          });
+          // OSE-1657: counts are post-event only, so the page confirms the
+          // check-in and shows no tally.
+          checkedIn = true;
+          document.getElementById('count').textContent = "You're checked in.";
+          // Both buttons read as spent, not just inert: dimmed, the label says
+          // why, and a plain cursor. The status line above is a live region, so
+          // a screen reader announces the same sentence.
+          // Not aria-disabled/disabled on purpose: the held journey test taps
+          // again and requires that tap to be a real, harmless one (it must
+          // send nothing), and it must stay a >= 44px target.
+          btn.textContent = "Checked in";
+          [btn, walkInBtn].forEach(function (b) {
+            b.style.cursor = 'default';
+          });
+          walkInBtn.style.opacity = '0.5';
+        } catch (err) {
+          // submitForm already put the friendly error on the page; nothing
+          // more to say, and nothing to leave unhandled.
+        } finally {
+          tapping = false;
+          btn.removeAttribute('aria-busy');
+          btn.style.transform = 'scale(1)';
+          btn.style.opacity = checkedIn ? '0.5' : '1';
+          // submitForm disabled the button on the way in. A failed submit gets it
+          // back live so a retry is possible; a successful one is held by the
+          // checkedIn guard above, not by a second disable.
+          btn.disabled = false;
+        }
+      }
+      const _checkinBtn = document.getElementById('checkin-btn');
+      _checkinBtn.addEventListener('touchend', handleCheckin);
+      _checkinBtn.addEventListener('click', handleCheckin);
+      const _walkInBtn = document.getElementById('walk-in-btn');
+      const _walkIn = function (e) { return handleCheckin(e, true); };
+      _walkInBtn.addEventListener('touchend', _walkIn);
+      _walkInBtn.addEventListener('click', _walkIn);
+    </script>
+  <nav class="ose-back" aria-label="Back">
+      <a class="ose-back-btn" data-testid="form-back" href="/events/evt_form_golden">Back</a>
+    </nav>
+<script nonce="N">(function(){var a=document.querySelector('[data-testid="form-back"]');if(!a||!document.referrer||window.history.length<2)return;a.addEventListener('click',function(e){e.preventDefault();window.history.back();});})();</script></main>
+  <script nonce="N">
+  (function loadFormSponsors(eventId) {
+    window.__formSponsorCache = null;
+    fetch('/api/v2/events/' + eventId + '/sponsor-bundle?surface=public')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !data.ok || !data.bundle || !data.bundle.surface_sponsors) return;
+        var banner = data.bundle.surface_sponsors.mobileBanner;
+        if (!banner || !banner.length) return;
+        window.__formSponsorCache = banner;
+        var strip = document.getElementById('form-sponsor-strip');
+        if (!strip) return;
+        // OSE-R-015 (2026-05-15): see FORM_JS_SUBMIT counterpart above for
+        // the same escape + referrerpolicy + data-hide-on-error contract.
+        var escAttr = function(v) {
+          return String(v || '').replace(/[<>&"']/g, function(c) {
+            return { '<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;' }[c];
+          });
+        };
+        // OSE-1850: typed names isolated on a right-to-left page, as above.
+        var rtl = document.documentElement.dir === 'rtl';
+        var items = banner.slice(0, 3).map(function(s) {
+          var name = escAttr(s.title || s.name);
+          var logo = '<img src="' + (s.logo_url && s.id ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg') + '" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" />';
+          return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + (rtl ? '<bdi>' + name + '</bdi>' : name) + '</span></span>';
+        }).join('');
+        strip.innerHTML = '<span class="strip-label">' + "Supported by" + '</span>' + items;
+        strip.classList.add('has-sponsors');
+        // OSE-1566: the strip owns its fallback. It does not lean on the capture
+        // listener in the form script (a different script block), and it also
+        // covers an image that already failed before any listener could see it.
+        // Fixed same-origin default; never read back from the DOM.
+        var dflt = '/sponsor-default-logo.svg';
+        Array.prototype.forEach.call(strip.querySelectorAll('img[data-default-src]'), function(im) {
+          var swap = function() { if (im.getAttribute('src') !== dflt) im.setAttribute('src', dflt); };
+          im.addEventListener('error', swap);
+          if (im.complete && im.naturalWidth === 0) swap();
+        });
+      })
+      .catch(function() { /* silently no-op — sponsor strip is non-critical */ });
+  })("evt_form_golden");
+</script>
+</body>
+</html>

@@ -170,7 +170,7 @@ export function renderEventCard(e: EventListItem, opts: EventCardOptions = {}): 
   // A wrapped event links to its recap, never to a registration form.
   const cta = wrapped
     ? `<a class="cta cta-secondary" href="${eventHref}" data-testid="public-event-cta" data-cta="recap" aria-label="${fmt(lang, 'card.recapLabel', { name: safeName })}">${msg(lang, 'card.recap')}</a>`
-    : `<a class="cta" href="${escapeHtml(eventFormPath(str(e.id), 'register'))}" data-testid="public-event-cta" data-cta="register" aria-label="${fmt(lang, 'card.registerLabel', { name: safeName })}">${msg(lang, 'cta.register')}</a>`;
+    : `<a class="cta" href="${escapeHtml(withLangPrefix(lang, eventFormPath(str(e.id), 'register')))}" data-testid="public-event-cta" data-cta="register" aria-label="${fmt(lang, 'card.registerLabel', { name: safeName })}">${msg(lang, 'cta.register')}</a>`;
   const wrappedTag = wrapped
     ? ` <span class="tag-wrapped" data-testid="public-event-wrapped">${msg(lang, 'card.wrapped')}</span>`
     : '';

@@ -717,3 +717,170 @@ test.describe('Polish and Arabic on staging, pairwise rows (OSE-1972)', () => {
     });
   }
 });
+
+// ── The form pages in every language (OSE-1850, OSE-1943) ───────────────────
+// The owner's report, 2026-11-10, word for word: "Does not translate to the
+// selected language". A phone reader picked a language on the event page,
+// tapped check-in, and got an English page with no Language menu. Each row
+// here walks that path on staging at phone width, then submits in that
+// language. The words are the catalog's (workers/oursharedevents/src/lib/i18n).
+
+const FORM_ROWS = [
+  {
+    lang: 'es',
+    dir: 'ltr',
+    heading: 'Registrar llegada',
+    done: 'Tu llegada quedó registrada.',
+    band: 'Solo para pruebas.',
+  },
+  { lang: 'pl', dir: 'ltr', heading: 'Zamelduj się', done: 'Zameldowano.', band: null },
+  { lang: 'ar', dir: 'rtl', heading: 'تسجيل الحضور', done: 'تم تسجيل حضورك.', band: null },
+] as const;
+
+// English a reader of another language must not see outside the marked legal text.
+const ENGLISH_FORM_WORDS = [
+  'Tap to',
+  'Check In',
+  'Didn’t register?',
+  "Didn't register?",
+  'walk-in',
+  'Back',
+  'Privacy details',
+];
+
+test.describe('Form pages in every language on staging (OSE-1850)', () => {
+  let eventId: string | null = null;
+  let slug = '';
+
+  test.beforeAll(async ({ request }) => {
+    precondition(!ADMIN_KEY, 'ADMIN_KEY or X_OCR_INTERNAL is required');
+    slug = `language-forms-${RUN_ID}`;
+    const created = await adminFetch(request, 'POST', '/api/v2/admin/events', {
+      brand_id: 'root',
+      title: `Language Forms ${RUN_ID}`,
+      slug,
+      status: 'active',
+      is_published: true,
+      description: 'Temporary language form event.',
+      location: 'Language Forms Hall',
+      start_date: '2099-04-01',
+      end_date: '2099-04-01',
+      timezone: 'America/Chicago',
+    });
+    expect(created.status(), 'create event').toBe(201);
+    eventId = (await created.json()).id;
+  });
+
+  test.afterAll(async ({ request }) => {
+    if (!eventId) return;
+    try {
+      await adminFetch(request, 'DELETE', `/api/v2/admin/events/${encodeURIComponent(eventId)}`);
+    } catch {
+      // Best-effort: the slug is per-run unique and the date is 2099.
+    }
+  });
+
+  for (const row of FORM_ROWS) {
+    test(`${row.lang}: event page, tap check-in, the form is ${row.lang}, then check in`, async ({
+      browser,
+    }) => {
+      const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+      try {
+        const page = await context.newPage();
+        await page.route('**/cdn-cgi/challenge-platform/**', (route) => route.abort());
+        const eventPath = `/${row.lang}/events/${eventId}/${slug}`;
+        expect((await page.goto(`${BASE_URL}${eventPath}`))?.status(), eventPath).toBe(200);
+
+        const formPath = `/${row.lang}/events/${eventId}/checkin`;
+        const choice = page.locator('[data-testid="event-choice-checkin"]');
+        await expect(choice).toHaveAttribute('href', formPath);
+        await choice.click();
+        await page.waitForURL(`${BASE_URL}${formPath}`);
+
+        await expect(page.locator('html')).toHaveAttribute('lang', row.lang);
+        await expect(page.locator('html')).toHaveAttribute('dir', row.dir);
+        await expect(page.locator('[data-testid="form-checkin"] h2')).toHaveText(row.heading);
+        // The staging band reads in the page language too.
+        const band = page.locator('[data-testid="test-site-notice"]');
+        await expect(band).toBeVisible();
+        await expect(band).not.toContainText('Testing purposes only.');
+        if (row.band) await expect(band).toContainText(row.band);
+        const visible = await page.evaluate(() => {
+          const copy = document.body.cloneNode(true) as HTMLElement;
+          copy
+            .querySelectorAll('script, style, [lang="en"], [data-testid="language-menu"] li')
+            .forEach((el) => el.remove());
+          return copy.textContent ?? '';
+        });
+        for (const en of ENGLISH_FORM_WORDS) {
+          expect(visible, `"${en}" on the ${row.lang} page`).not.toContain(en);
+        }
+        // The privacy text says, in the page language, why it is in English.
+        await expect(page.locator('[data-testid="privacy-english-note"]')).toBeVisible();
+        await expect(page.locator('[data-testid="privacy-details"] p')).toHaveAttribute(
+          'lang',
+          'en'
+        );
+
+        // The phone menu, at the reading start, Language first, back to English.
+        const burger = page.locator('[data-testid="site-menu-button"]');
+        await expect(burger).toBeVisible();
+        const box = (await burger.boundingBox())!;
+        if (row.dir === 'rtl') expect(box.x + box.width / 2).toBeGreaterThan(375 / 2);
+        else expect(box.x + box.width / 2).toBeLessThan(375 / 2);
+        expect(box.height).toBeGreaterThanOrEqual(44);
+        await burger.click();
+        await page.locator('[data-testid="site-menu-language-button"]').click();
+        await expect(
+          page.locator(`[data-testid="site-menu-language-${row.lang}"]`)
+        ).toHaveAttribute('aria-current', 'true');
+        await expect(page.locator('[data-testid="site-menu-language-en"]')).toHaveAttribute(
+          'href',
+          `/events/${eventId}/checkin`
+        );
+        await page.keyboard.press('Escape');
+        await expect(page.locator('[data-testid="form-back"]')).toHaveAttribute(
+          'href',
+          `/${row.lang}/events/${eventId}`
+        );
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+        );
+        expect(overflow, 'no sideways scroll at 375 px').toBeLessThanOrEqual(0);
+
+        // Check in. The form posts to the unprefixed API and sends no language.
+        const posted = page.waitForRequest(
+          (r) =>
+            r.method() === 'POST' && r.url().includes(`/api/v2/events/${eventId}/forms/checkin`)
+        );
+        await page.locator('[data-testid="checkin-submit"]').click();
+        const req = await posted;
+        expect(new URL(req.url()).pathname).toBe(`/api/v2/events/${eventId}/forms/checkin`);
+        expect(Object.keys(req.postDataJSON() ?? {})).toEqual(['sourcePlacementId']);
+        await expect(page.locator('[data-testid="checkin-count"]')).toHaveText(row.done);
+      } finally {
+        await context.close();
+      }
+    });
+  }
+
+  test('a bare form address follows the browser language; a near miss under a prefix is a 404', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ locale: 'es-MX' });
+    try {
+      const page = await context.newPage();
+      await page.route('**/cdn-cgi/challenge-platform/**', (route) => route.abort());
+      await page.goto(`${BASE_URL}/events/${eventId}/register`);
+      await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+      await expect(page.locator('[data-testid="form-register"] h2')).toHaveText(
+        'Inscríbete en este evento'
+      );
+    } finally {
+      await context.close();
+    }
+    for (const path of [`/es/events/${eventId}/checkin/`, `/es/events/${eventId}/Checkin`]) {
+      expect((await open(browser, path)).status, path).toBe(404);
+    }
+  });
+});

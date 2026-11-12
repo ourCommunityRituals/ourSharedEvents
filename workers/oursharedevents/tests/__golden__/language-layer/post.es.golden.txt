@@ -204,7 +204,7 @@
       <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
         <h2 id="connect-heading" class="ose-suggestions-heading">Entérate del próximo</h2>
         <p class="ose-suggestions-note">Un correo cuando se acerque algo. Nada más.</p>
-        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="/events/evt_golden/updates">Avísame</a>
+        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="/es/events/evt_golden/updates">Avísame</a>
       </section>
     </aside>
 
