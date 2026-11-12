@@ -196,8 +196,8 @@ const config = {
   thresholds: { high: 95, low: 95, break: 95 },
 };
 
-// CI runs this pass as four jobs side by side, one per group in
-// mutation-groups.mjs (each a quarter of the work, with only the specs that can
+// CI runs this pass as five jobs side by side, one per group in
+// mutation-groups.mjs (each a share of the work, with only the specs that can
 // reach its files: vitest.mutation.config.mts). Every target above is checked to
 // be in exactly one group on every load, grouped run or not, so a new target
 // with no group fails here and never goes unmutated. MUTATION_GROUP unset (a

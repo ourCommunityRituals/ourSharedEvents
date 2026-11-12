@@ -15,6 +15,14 @@
 //            pmtiles.ts, street-map.ts, every pages.ts range, the
 //            Language menu, the sponsor art and logo rules
 //
+//   forms    the form pages on the language layer (PR 1192):     own job
+//            form-pages.ts and event-staleness.ts
+//
+// forms is a group of its own because of what it costs. Added to map, the
+// cheapest group, it took map from about 3 to 9 minutes locally (2026-11-12:
+// 207 mutants in form-pages.ts, 19 of them timeouts, each waiting out its
+// limit), which would have made the whole stage half as slow again.
+//
 // The language layer is the fifth job (stryker.language.conf.mjs), as before.
 //
 // RULES (each enforced below, so a mistake fails the run, never a quiet gap):
@@ -61,6 +69,7 @@ export const MUTATION_GROUPS = Object.freeze({
     'src/lib/sponsor-logo.ts',
     'src/handlers/sponsors.ts',
   ]),
+  forms: Object.freeze(['src/handlers/form-pages.ts', 'src/lib/event-staleness.ts']),
 });
 
 /** The file a mutate entry names: `src/x.ts` or a range `src/x.ts:10-20`. */

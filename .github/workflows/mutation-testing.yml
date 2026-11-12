@@ -33,8 +33,8 @@ on:
   # needs the run is decided inside each job, by scripts/ci/mutation-paths.mjs:
   # the list that used to be written here twice, with its reasons, moved there.
   # A change that touches nothing on the list passes in seconds without running
-  # Stryker, and says so in the job summary. The run itself is five jobs side by
-  # side on the node project: the main pass cut into four groups by cost
+  # Stryker, and says so in the job summary. The run itself is six jobs side by
+  # side on the node project: the main pass cut into five groups by cost
   # (workers/oursharedevents/mutation-groups.mjs), and the language layer's pass
   # (stryker.language.conf.mjs). If you add a mutate target in stryker.conf.mjs,
   # give it a group in mutation-groups.mjs (the config refuses a target with
@@ -64,7 +64,7 @@ jobs:
   # group is about a third of that. Each group runs only the specs whose imports
   # reach its files (vitest.mutation.config.mts): no other spec can kill its
   # mutants, and static mutants, which rerun every spec in the project, are most
-  # of the time. The language pass is the fifth group, as it was the second pass.
+  # of the time. The language pass is the sixth group, as it was the second pass.
   mutation-group:
     name: mutation (${{ matrix.group }})
     runs-on: ubuntu-24.04
@@ -83,13 +83,15 @@ jobs:
             script: test:mutation
           - group: render
             script: test:mutation
+          - group: forms
+            script: test:mutation
           - group: language
             script: test:mutation:language
     defaults:
       run:
         working-directory: workers/oursharedevents
     # No job-level `if:` and no `needs:`, so every group starts on every pull
-    # request; the required check is `mutation` below, which waits for all five.
+    # request; the required check is `mutation` below, which waits for all six.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -138,7 +140,7 @@ jobs:
       - run: npm ci
         if: steps.scope.outputs.run != 'false'
 
-      # The four main groups pick their targets and specs from MUTATION_GROUP
+      # The five main groups pick their targets and specs from MUTATION_GROUP
       # (stryker.conf.mjs, vitest.mutation.config.mts); the language pass has its
       # own config and reads it as "not a main group". An unknown name fails.
       - name: Run Stryker on this group
@@ -159,7 +161,7 @@ jobs:
           if-no-files-found: error
 
   # The required check. It waits for every group, fails if any group did not
-  # succeed, then scores every file against its own floor over all five reports
+  # succeed, then scores every file against its own floor over all six reports
   # (mutation-file-floor.mjs refuses a file missing from them, or in two).
   mutation:
     needs: mutation-group
@@ -204,8 +206,8 @@ jobs:
         if: steps.scope.outputs.run != 'false'
         # The break threshold in stryker.conf.mjs is per run; this fails when any
         # one guard file is under its own floor (admin.ts: 100%). OSE-1801, CCR S-2.
-        # All five reports: a floored file missing from all, or in two, fails.
-        run: node scripts/ci/mutation-file-floor.mjs reports/mutation-group-map/mutation.json reports/mutation-group-landing/mutation.json reports/mutation-group-guards/mutation.json reports/mutation-group-render/mutation.json reports/mutation-group-language/mutation.json
+        # All six reports: a floored file missing from all, or in two, fails.
+        run: node scripts/ci/mutation-file-floor.mjs reports/mutation-group-map/mutation.json reports/mutation-group-landing/mutation.json reports/mutation-group-guards/mutation.json reports/mutation-group-render/mutation.json reports/mutation-group-forms/mutation.json reports/mutation-group-language/mutation.json
 
   # OSE-1695 — mutation testing of the CI security rules in scripts/ci (repository root, not the
   # Worker). A surviving mutant in branch-push-secret-exposure.mjs means the test that keeps
