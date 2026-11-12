@@ -573,6 +573,30 @@ describe('street map | loading (fail soft)', () => {
     expect(Date.now() - t0).toBeLessThan(180);
     // It was the read that was slow, not the name that was refused.
     expect(slow.gets.length).toBeGreaterThan(0);
+    // The abandoned read ends here, not inside a later case (fakeBucket.settle).
+    await slow.settle();
+  });
+
+  it('a slow archive, settled: the abandoned read starts no timer after its case', async () => {
+    const { tiles } = tilesForCells([BLUE7]);
+    const slow = fakeBucket('settled.pmtiles', await pmtilesArchive(tiles), { delayMs: 200 });
+    expect(
+      await loadStreetLayer({ MAP_TILES: slow, MAP_TILES_ARCHIVE: 'settled.pmtiles' }, [BLUE7], {
+        timeoutMs: 50,
+      })
+    ).toBeNull();
+    await slow.settle();
+    // What the next case does: fake timers, then time passes. An unsettled read
+    // lands its first range within 200 ms and asks for the next one on a fake
+    // timer, which this count sees.
+    const realSetTimeout = globalThis.setTimeout;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await new Promise((r) => realSetTimeout(r, 450));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

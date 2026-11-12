@@ -15,7 +15,11 @@
  *   3. the list covers every file the two Stryker configs mutate and every file
  *      with a per-file floor, so a new target cannot be added without its path;
  *   4. the workflow's shape: no path filter, no job-level `if`, every step
- *      behind the decision, and only an explicit `false` skips.
+ *      behind the decision, and only an explicit `false` skips. Since
+ *      2026-11-12 the main pass runs as groups side by side (`mutation-group`,
+ *      a matrix) and the required `mutation` check waits for them with
+ *      `if: always()`, fails first on any group that did not succeed, and runs
+ *      the floor over every group's report.
  *
  * @born-red method: injected fault, 24 of them, one at a time in the script or the
  *   workflow, each watched failing here and then reverted | date: 2026-11-09 | verified:
@@ -34,6 +38,13 @@
  *     step without its condition, `== 'true'` in place of `!= 'false'`,
  *     fetch-depth removed, the scope step running something else -> "the real
  *     workflow holds the shape" fails.
+ * @born-red method: planted faults on the real workflow, in "planted faults" below,
+ *   each a case that must fail the shape | date: 2026-11-12 | verified: before the
+ *   workflow was split, "the real workflow holds the shape" failed on the old
+ *   single `mutation` job with ten findings (no mutation-group job, no needs, no
+ *   if: always(), no group-result step, scope not after checkout, the floor
+ *   reading none of the five group reports); after it, every planted case
+ *   returns exactly its own finding.
  *   Also seen red on a real change, not an injected one: merging the PR that
  *   added attendee-map.ts, mvt.ts and pmtiles.ts as mutate targets, before their
  *   paths were on the list, failed the real coverage case with six findings.
@@ -85,6 +96,7 @@ describe('a change the mutation run measures runs it', () => {
     ['the language Stryker config', `${W}stryker.language.conf.mjs`],
     ['the language pass Vitest project', `${W}vitest.language-mutation.config.mts`],
     ['the main pass Vitest project', `${W}vitest.mutation.config.mts`],
+    ['the group split of the main pass', `${W}mutation-groups.mjs`],
     ['a language spec that kills mutants', `${W}tests/i18n-layer-mutants.spec.ts`],
     ['the Worker lockfile', `${W}package-lock.json`],
     ['a CI security rule', 'scripts/ci/branch-push-secret-exposure.mjs'],
@@ -428,6 +440,7 @@ describe('every mutated file and every floor is on the list (proven against plan
         p !== WORKFLOW &&
         p !== 'scripts/ci/mutation-paths.mjs' &&
         p !== `${W}stryker.conf.mjs` &&
+        p !== `${W}mutation-groups.mjs` &&
         p !== 'vitest.ci-scripts.config.mjs'
     );
     const f = uncoveredMutationInputs(good(), paths).map((line) => line.split(' ')[0]);
@@ -436,6 +449,7 @@ describe('every mutated file and every floor is on the list (proven against plan
         WORKFLOW,
         'scripts/ci/mutation-paths.mjs',
         `${W}stryker.conf.mjs`,
+        `${W}mutation-groups.mjs`,
         'vitest.ci-scripts.config.mjs',
       ].sort()
     );
@@ -481,17 +495,71 @@ describe('every mutated file and every floor is on the list (proven against plan
 });
 
 // ── 4. the workflow's shape ────────────────────────────────────────────────
+//
+// Three kinds of job (2026-11-12, the main pass split into groups run side by side):
+//   - `mutation-group` (one per group, a matrix) and `mutation-ci-scripts`: no
+//     job-level `if`, no `needs`, checkout then the scope step, every later step
+//     behind the decision. Each always starts and reports.
+//   - `mutation`, the required check: `needs: mutation-group` with `if: always()`,
+//     so it reports whatever the groups did. Its first step fails it unless every
+//     group succeeded, and runs whatever the scope says (a group that decides
+//     "no run" succeeds, so a broken group must not hide behind that). Then
+//     checkout, scope, and the floor over every group's report, behind the decision.
+//   - the matrix lists exactly the groups of mutation-groups.mjs plus the language
+//     pass, and the floor reads a report from each one.
 
-const JOBS = ['mutation', 'mutation-ci-scripts'];
+const SCOPED_JOBS = {
+  'mutation-group': 'mutation (${{ matrix.group }})',
+  'mutation-ci-scripts': undefined,
+};
+const FINAL_JOB = 'mutation';
 const RUN_UNLESS_FALSE = "steps.scope.outputs.run != 'false'";
+const MAIN_SCRIPT = 'test:mutation';
+const LANGUAGE_SCRIPT = 'test:mutation:language';
 
 function triggers(wf) {
   // js-yaml 4 keeps `on` as a string key; tolerate a YAML 1.1 parser that turns it into `true`.
   return (wf && (wf.on !== undefined ? wf.on : wf[true])) || {};
 }
 
+function isAlways(expr) {
+  return typeof expr === 'string' && expr.replace(/^\$\{\{|\}\}$/g, '').trim() === 'always()';
+}
+
+/** Checkout (fetch-depth 2) then the scope step at `at`; every step after it behind the decision. */
+function scopeProblems(key, steps, at, before) {
+  const out = [];
+  const scope = steps[at];
+  if (scope.if !== undefined) out.push(`${key}: the scope step is conditional`);
+  if (scope['continue-on-error']) out.push(`${key}: the scope step may fail quietly`);
+  if (!/^node scripts\/ci\/mutation-paths\.mjs$/m.test(String(scope.run || '').trim())) {
+    out.push(`${key}: the scope step does not run scripts/ci/mutation-paths.mjs`);
+  }
+  const checkout = before.find((s) => String(s.uses || '').startsWith('actions/checkout@'));
+  if (!checkout || before[before.length - 1] !== checkout) {
+    out.push(`${key}: the scope step is not right after the checkout`);
+  } else if (Number((checkout.with || {})['fetch-depth']) !== 2) {
+    out.push(`${key}: checkout fetch-depth is not 2 (the pull_request diff reads HEAD^1)`);
+  }
+  const after = steps.slice(at + 1);
+  if (!after.length) out.push(`${key}: no step after the scope step`);
+  for (const s of after) {
+    const label = s.name || s.uses || s.run;
+    const cond = String(s.if === undefined ? '' : s.if);
+    if (!cond.includes(RUN_UNLESS_FALSE)) {
+      out.push(`${key}: step "${label}" is not behind ${RUN_UNLESS_FALSE}`);
+    }
+    // Only an explicit `false` may skip. `== 'true'` would skip when the output is missing.
+    if (/outputs\.run\s*==/.test(cond)) {
+      out.push(`${key}: step "${label}" skips on a missing output`);
+    }
+    if (cond.includes('||')) out.push(`${key}: step "${label}" has an || in its condition`);
+  }
+  return out;
+}
+
 /** @returns {string[]} one line per problem; empty = the shape holds */
-function workflowProblems(wf) {
+function workflowProblems(wf, groups) {
   const out = [];
   const on = triggers(wf);
 
@@ -512,148 +580,322 @@ function workflowProblems(wf) {
     out.push('no workflow_dispatch');
   }
 
-  for (const key of JOBS) {
-    const job = (wf.jobs || {})[key];
+  const jobs = wf.jobs || {};
+  for (const [key, name] of Object.entries(SCOPED_JOBS)) {
+    const job = jobs[key];
     if (!job) {
       out.push(`${key}: job is missing`);
       continue;
     }
-    if (job.name !== undefined && job.name !== key) {
-      out.push(`${key}: check name changed to "${job.name}"`);
-    }
+    if (job.name !== name) out.push(`${key}: check name changed to "${job.name}"`);
     // A job-level `if` or a `needs` can skip the whole job. The branch-protection
     // contract then counts the check as one that may not report.
     if (job.if !== undefined) out.push(`${key}: has a job-level if`);
     if (job.needs !== undefined) out.push(`${key}: has needs`);
-
     const steps = job.steps || [];
     const at = steps.findIndex((s) => s.id === 'scope');
     if (at < 0) {
       out.push(`${key}: no step with id scope`);
       continue;
     }
-    const scope = steps[at];
-    if (scope.if !== undefined) out.push(`${key}: the scope step is conditional`);
-    if (scope['continue-on-error']) out.push(`${key}: the scope step may fail quietly`);
-    if (!/^node scripts\/ci\/mutation-paths\.mjs$/m.test(String(scope.run || '').trim())) {
-      out.push(`${key}: the scope step does not run scripts/ci/mutation-paths.mjs`);
+    if (at !== 1) out.push(`${key}: the scope step is not right after the checkout`);
+    out.push(...scopeProblems(key, steps, at, steps.slice(0, at)).filter((p) => !out.includes(p)));
+  }
+
+  // The required check.
+  const final = jobs[FINAL_JOB];
+  if (!final) {
+    out.push(`${FINAL_JOB}: job is missing`);
+  } else {
+    if (final.name !== undefined && final.name !== FINAL_JOB) {
+      out.push(`${FINAL_JOB}: check name changed to "${final.name}"`);
     }
-    const before = steps.slice(0, at);
-    const checkout = before.find((s) => String(s.uses || '').startsWith('actions/checkout@'));
-    if (before.length !== 1 || !checkout) {
-      out.push(`${key}: the scope step is not right after the checkout`);
-    } else if (Number((checkout.with || {})['fetch-depth']) !== 2) {
-      out.push(`${key}: checkout fetch-depth is not 2 (the pull_request diff reads HEAD^1)`);
+    const needs = [].concat(final.needs || []);
+    if (needs.length !== 1 || needs[0] !== 'mutation-group') {
+      out.push(`${FINAL_JOB}: does not need exactly mutation-group`);
     }
-    const after = steps.slice(at + 1);
-    if (!after.length) out.push(`${key}: no step after the scope step`);
-    for (const s of after) {
-      const label = s.name || s.uses || s.run;
-      const cond = String(s.if === undefined ? '' : s.if);
-      if (!cond.includes(RUN_UNLESS_FALSE)) {
-        out.push(`${key}: step "${label}" is not behind ${RUN_UNLESS_FALSE}`);
+    if (!isAlways(final.if)) out.push(`${FINAL_JOB}: is not if: always()`);
+    const steps = final.steps || [];
+    const first = steps[0] || {};
+    const firstEnv = Object.values(first.env || {}).join(' ');
+    if (
+      first.if !== undefined ||
+      !firstEnv.includes('needs.mutation-group.result') ||
+      !/!=\s*"success"/.test(String(first.run || '')) ||
+      !/exit 1/.test(String(first.run || ''))
+    ) {
+      out.push(
+        `${FINAL_JOB}: the first step does not fail, unconditionally, on a group that did not succeed`
+      );
+    }
+    const at = steps.findIndex((s) => s.id === 'scope');
+    if (at < 0) {
+      out.push(`${FINAL_JOB}: no step with id scope`);
+    } else {
+      out.push(...scopeProblems(FINAL_JOB, steps, at, steps.slice(1, at)));
+    }
+    const floor = steps.find((s) => /mutation-file-floor\.mjs/.test(String(s.run || '')));
+    if (!floor) {
+      out.push(`${FINAL_JOB}: no per-file floor step`);
+    } else {
+      for (const g of groups) {
+        if (!String(floor.run).includes(`reports/mutation-group-${g}/mutation.json`)) {
+          out.push(`${FINAL_JOB}: the floor does not read the ${g} report`);
+        }
       }
-      // Only an explicit `false` may skip. `== 'true'` would skip when the output is missing.
-      if (/outputs\.run\s*==/.test(cond)) {
-        out.push(`${key}: step "${label}" skips on a missing output`);
+    }
+  }
+
+  // The groups: the matrix, what each runs, what each uploads.
+  const gj = jobs['mutation-group'];
+  if (gj) {
+    const strategy = gj.strategy || {};
+    if (strategy['fail-fast'] !== false) out.push('mutation-group: fail-fast is not false');
+    const include = (strategy.matrix || {}).include || [];
+    const listed = include.map((e) => e.group);
+    for (const g of groups) {
+      if (!listed.includes(g)) out.push(`mutation-group: group ${g} is not in the matrix`);
+    }
+    for (const g of listed) {
+      if (!groups.includes(g)) out.push(`mutation-group: matrix group ${g} is not a group`);
+      if (listed.filter((x) => x === g).length > 1) out.push(`mutation-group: group ${g} twice`);
+    }
+    for (const e of include) {
+      const want = e.group === LANGUAGE ? LANGUAGE_SCRIPT : MAIN_SCRIPT;
+      if (e.script !== want) {
+        out.push(`mutation-group: group ${e.group} runs ${e.script}, not ${want}`);
       }
-      if (cond.includes('||')) out.push(`${key}: step "${label}" has an || in its condition`);
+    }
+    const steps = gj.steps || [];
+    const run = steps.find((s) =>
+      /^npm run \$\{\{\s*matrix\.script\s*\}\}$/.test(String(s.run || '').trim())
+    );
+    if (!run) out.push('mutation-group: no step runs npm run ${{ matrix.script }}');
+    else if (
+      String((run.env || {}).MUTATION_GROUP || '').replace(/\s/g, '') !== '${{matrix.group}}'
+    ) {
+      out.push('mutation-group: the Stryker step does not set MUTATION_GROUP to the matrix group');
+    }
+    const up = steps.find((s) => String(s.uses || '').startsWith('actions/upload-artifact@'));
+    const w = (up && up.with) || {};
+    if (
+      String(w.name || '').replace(/\s/g, '') !== 'mutation-group-${{matrix.group}}' ||
+      !String(w.path || '')
+        .replace(/\s/g, '')
+        .includes('reports/mutation-${{matrix.group}}/') ||
+      w['if-no-files-found'] !== 'error'
+    ) {
+      out.push("mutation-group: the upload is not this group's report, or a missing report passes");
     }
   }
   return out;
 }
 
+let GROUPS;
+let LANGUAGE;
+beforeAll(async () => {
+  const m = await import('../../../workers/oursharedevents/mutation-groups.mjs');
+  LANGUAGE = m.LANGUAGE_GROUP;
+  GROUPS = [...Object.keys(m.MUTATION_GROUPS), m.LANGUAGE_GROUP];
+});
+
 describe('the mutation workflow reports on every pull request', () => {
   const load = () => yaml.load(readFileSync(join(ROOT, WORKFLOW), 'utf8'));
+  const problems = (wf) => workflowProblems(wf, GROUPS);
 
   test('the real workflow holds the shape', () => {
-    expect(workflowProblems(load())).toEqual([]);
+    expect(problems(load())).toEqual([]);
   });
 
-  test('both jobs have real work behind the decision', () => {
+  test('every job has real work behind the decision', () => {
     const wf = load();
     const runs = (key) => wf.jobs[key].steps.map((s) => String(s.run || '')).join('\n');
-    expect(runs('mutation')).toMatch(/npm run test:mutation$/m);
-    expect(runs('mutation')).toMatch(/npm run test:mutation:language$/m);
-    // The floor reads both reports, so a language file missing from its pass fails.
-    expect(runs('mutation')).toMatch(
-      /mutation-file-floor\.mjs reports\/mutation\/mutation\.json reports\/mutation-language\/mutation\.json/
-    );
-    expect(runs('mutation')).toMatch(/mutation-file-floor\.mjs/);
+    expect(runs('mutation-group')).toMatch(/^npm run \$\{\{ matrix\.script \}\}$/m);
+    expect(runs(FINAL_JOB)).toMatch(/mutation-file-floor\.mjs/);
     expect(runs('mutation-ci-scripts')).toMatch(/stryker\.js run stryker\.ci-scripts\.conf\.mjs/);
+    // The scripts the matrix names are the package's mutation scripts.
+    const pkg = JSON.parse(readFileSync(join(ROOT, W, 'package.json'), 'utf8'));
+    expect(pkg.scripts[MAIN_SCRIPT]).toBe('stryker run');
+    expect(pkg.scripts[LANGUAGE_SCRIPT]).toBe('stryker run stryker.language.conf.mjs');
   });
 
   describe('planted faults', () => {
     test('a paths filter on pull_request', () => {
       const wf = load();
       triggers(wf).pull_request = { paths: ['workers/**'] };
-      expect(workflowProblems(wf)).toEqual(['pull_request has a paths filter']);
+      expect(problems(wf)).toEqual(['pull_request has a paths filter']);
     });
 
     test('a paths filter on push (a second list)', () => {
       const wf = load();
       triggers(wf).push.paths = ['workers/**'];
-      expect(workflowProblems(wf)).toEqual(['push has a paths filter']);
+      expect(problems(wf)).toEqual(['push has a paths filter']);
     });
 
     test('no pull_request trigger', () => {
       const wf = load();
       delete triggers(wf).pull_request;
-      expect(workflowProblems(wf)).toEqual(['no pull_request trigger']);
+      expect(problems(wf)).toEqual(['no pull_request trigger']);
     });
 
     test('the nightly removed', () => {
       const wf = load();
       delete triggers(wf).schedule;
-      expect(workflowProblems(wf)).toEqual(['no nightly schedule']);
+      expect(problems(wf)).toEqual(['no nightly schedule']);
     });
 
-    test.each(JOBS)('%s: a job-level if', (key) => {
+    const SCOPED = Object.keys(SCOPED_JOBS);
+
+    test.each(SCOPED)('%s: a job-level if', (key) => {
       const wf = load();
       wf.jobs[key].if = "needs.scope.outputs.run == 'true'";
-      expect(workflowProblems(wf)).toEqual([`${key}: has a job-level if`]);
+      expect(problems(wf)).toEqual([`${key}: has a job-level if`]);
     });
 
-    test.each(JOBS)('%s: renamed', (key) => {
+    test.each(SCOPED)('%s: renamed', (key) => {
       const wf = load();
       wf.jobs[key].name = 'Mutation';
-      expect(workflowProblems(wf)).toEqual([`${key}: check name changed to "Mutation"`]);
+      expect(problems(wf)).toEqual([`${key}: check name changed to "Mutation"`]);
     });
 
-    test.each(JOBS)('%s: a step with no condition', (key) => {
+    test.each([...SCOPED, FINAL_JOB])('%s: a step with no condition', (key) => {
       const wf = load();
       const steps = wf.jobs[key].steps;
-      delete steps[steps.length - 2].if;
-      expect(workflowProblems(wf)).toHaveLength(1);
-      expect(workflowProblems(wf)[0]).toMatch(new RegExp(`^${key}: step ".*" is not behind`));
+      delete steps[steps.length - 1].if;
+      expect(problems(wf)).toHaveLength(1);
+      expect(problems(wf)[0]).toMatch(new RegExp(`^${key}: step ".*" is not behind`));
     });
 
-    test.each(JOBS)("%s: a step that runs only on 'true'", (key) => {
+    test.each([...SCOPED, FINAL_JOB])("%s: a step that runs only on 'true'", (key) => {
       const wf = load();
       const steps = wf.jobs[key].steps;
-      steps[steps.length - 2].if = "steps.scope.outputs.run == 'true'";
-      const problems = workflowProblems(wf);
-      expect(problems.some((p) => p.includes('skips on a missing output'))).toBe(true);
+      steps[steps.length - 1].if = "steps.scope.outputs.run == 'true'";
+      expect(problems(wf).some((p) => p.includes('skips on a missing output'))).toBe(true);
     });
 
-    test.each(JOBS)('%s: the scope step removed', (key) => {
+    test.each([...SCOPED, FINAL_JOB])('%s: the scope step removed', (key) => {
       const wf = load();
       wf.jobs[key].steps = wf.jobs[key].steps.filter((s) => s.id !== 'scope');
-      expect(workflowProblems(wf)).toEqual([`${key}: no step with id scope`]);
+      expect(problems(wf)).toContain(`${key}: no step with id scope`);
     });
 
-    test.each(JOBS)('%s: a shallow checkout of one commit', (key) => {
+    test.each([...SCOPED, FINAL_JOB])('%s: a shallow checkout of one commit', (key) => {
       const wf = load();
-      delete wf.jobs[key].steps[0].with['fetch-depth'];
-      expect(workflowProblems(wf)).toEqual([
+      const checkout = wf.jobs[key].steps.find((s) =>
+        String(s.uses || '').startsWith('actions/checkout@')
+      );
+      delete checkout.with['fetch-depth'];
+      expect(problems(wf)).toEqual([
         `${key}: checkout fetch-depth is not 2 (the pull_request diff reads HEAD^1)`,
       ]);
     });
 
-    test.each(JOBS)('%s: the scope step allowed to fail quietly', (key) => {
+    test.each([...SCOPED, FINAL_JOB])('%s: the scope step allowed to fail quietly', (key) => {
       const wf = load();
       wf.jobs[key].steps.find((s) => s.id === 'scope')['continue-on-error'] = true;
-      expect(workflowProblems(wf)).toEqual([`${key}: the scope step may fail quietly`]);
+      expect(problems(wf)).toEqual([`${key}: the scope step may fail quietly`]);
+    });
+
+    test('mutation: no longer waits for the groups', () => {
+      const wf = load();
+      delete wf.jobs[FINAL_JOB].needs;
+      expect(problems(wf)).toEqual([`${FINAL_JOB}: does not need exactly mutation-group`]);
+    });
+
+    test.each([undefined, 'success()', "github.event_name == 'pull_request'"])(
+      'mutation: if is %s, not always() (a red group would skip the check)',
+      (cond) => {
+        const wf = load();
+        if (cond === undefined) delete wf.jobs[FINAL_JOB].if;
+        else wf.jobs[FINAL_JOB].if = cond;
+        expect(problems(wf)).toEqual([`${FINAL_JOB}: is not if: always()`]);
+      }
+    );
+
+    test('mutation: renamed (the required check would never report)', () => {
+      const wf = load();
+      wf.jobs[FINAL_JOB].name = 'Mutation testing';
+      expect(problems(wf)).toEqual([`${FINAL_JOB}: check name changed to "Mutation testing"`]);
+    });
+
+    test.each([
+      ['made conditional', (s) => (s.if = RUN_UNLESS_FALSE)],
+      ['not reading the group result', (s) => (s.env = {})],
+      ['not failing', (s) => (s.run = 'echo "$GROUPS_RESULT"')],
+    ])('mutation: the group-result step %s', (_label, plant) => {
+      const wf = load();
+      plant(wf.jobs[FINAL_JOB].steps[0]);
+      expect(problems(wf)).toEqual([
+        `${FINAL_JOB}: the first step does not fail, unconditionally, on a group that did not succeed`,
+      ]);
+    });
+
+    test('mutation: the floor leaves out one group', () => {
+      const wf = load();
+      const floor = wf.jobs[FINAL_JOB].steps.find((s) =>
+        /mutation-file-floor/.test(String(s.run || ''))
+      );
+      floor.run = floor.run.replace(' reports/mutation-group-guards/mutation.json', '');
+      expect(problems(wf)).toEqual([`${FINAL_JOB}: the floor does not read the guards report`]);
+    });
+
+    test('a group dropped from the matrix', () => {
+      const wf = load();
+      const m = wf.jobs['mutation-group'].strategy.matrix;
+      m.include = m.include.filter((e) => e.group !== 'map');
+      expect(problems(wf)).toEqual(['mutation-group: group map is not in the matrix']);
+    });
+
+    test('a matrix group that is no group, or listed twice', () => {
+      const wf = load();
+      const m = wf.jobs['mutation-group'].strategy.matrix;
+      m.include.push({ group: 'maps', script: MAIN_SCRIPT }, { group: 'map', script: MAIN_SCRIPT });
+      expect(problems(wf).sort()).toEqual([
+        'mutation-group: group map twice',
+        'mutation-group: group map twice',
+        'mutation-group: matrix group maps is not a group',
+      ]);
+    });
+
+    test('the language group run with the main config, and the reverse', () => {
+      const wf = load();
+      for (const e of wf.jobs['mutation-group'].strategy.matrix.include) {
+        e.script = e.group === LANGUAGE ? MAIN_SCRIPT : e.script;
+      }
+      expect(problems(wf)).toEqual([
+        `mutation-group: group ${LANGUAGE} runs ${MAIN_SCRIPT}, not ${LANGUAGE_SCRIPT}`,
+      ]);
+      const wf2 = load();
+      wf2.jobs['mutation-group'].strategy.matrix.include[0].script = LANGUAGE_SCRIPT;
+      expect(problems(wf2)).toHaveLength(1);
+    });
+
+    test('fail-fast left on (one red group would cancel the others)', () => {
+      const wf = load();
+      wf.jobs['mutation-group'].strategy['fail-fast'] = true;
+      expect(problems(wf)).toEqual(['mutation-group: fail-fast is not false']);
+    });
+
+    test('the Stryker step without MUTATION_GROUP (every group would run every target)', () => {
+      const wf = load();
+      const run = wf.jobs['mutation-group'].steps.find((s) =>
+        /matrix\.script/.test(String(s.run || ''))
+      );
+      delete run.env;
+      expect(problems(wf)).toEqual([
+        'mutation-group: the Stryker step does not set MUTATION_GROUP to the matrix group',
+      ]);
+    });
+
+    test('a missing report allowed to upload nothing quietly', () => {
+      const wf = load();
+      const up = wf.jobs['mutation-group'].steps.find((s) =>
+        String(s.uses || '').startsWith('actions/upload-artifact@')
+      );
+      up.with['if-no-files-found'] = 'warn';
+      expect(problems(wf)).toEqual([
+        "mutation-group: the upload is not this group's report, or a missing report passes",
+      ]);
     });
   });
 });

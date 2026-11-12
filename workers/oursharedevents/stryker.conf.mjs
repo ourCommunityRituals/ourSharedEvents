@@ -27,6 +27,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { MUTATION_GROUPS, groupFromEnv, mutateForGroup } from './mutation-groups.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -46,7 +47,7 @@ export function rangeOf(file, from, to) {
 }
 
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
-export default {
+const config = {
   packageManager: 'npm',
   testRunner: 'vitest',
   vitest: {
@@ -134,9 +135,17 @@ export default {
     // consent-gated query. The SQL text itself is one string to Stryker (it can
     // only empty it); its clauses are pinned case by case, and were each watched
     // failing, by sponsor-thumb-sql.spec.ts on node:sqlite with the real migrations.
-    rangeOf('src/lib/sponsor-logo.ts', 'export function isBlockedLogoHost(', 'https-only variant for PUBLIC OUTBOUND'),
+    rangeOf(
+      'src/lib/sponsor-logo.ts',
+      'export function isBlockedLogoHost(',
+      'https-only variant for PUBLIC OUTBOUND'
+    ),
     rangeOf('src/handlers/pages.ts', 'const [sponsorsResult, regResult', '.all<SponsorBasicRow>()'),
-    rangeOf('src/handlers/sponsors.ts', 'OSE-1317: ?slot=sidebar serves the compact', 'if (!row || !row.logo_url) {'),
+    rangeOf(
+      'src/handlers/sponsors.ts',
+      'OSE-1317: ?slot=sidebar serves the compact',
+      'if (!row || !row.logo_url) {'
+    ),
     // The language layer (Polish OSE-1957, Arabic epic OSE-1959) is mutated in
     // its own pass, stryker.language.conf.mjs: its files run on every page
     // render, so here each mutant reran thousands of unrelated specs.
@@ -186,3 +195,20 @@ export default {
   // invariant-enforcing module fails loudly, not quietly.
   thresholds: { high: 95, low: 95, break: 95 },
 };
+
+// CI runs this pass as five jobs side by side, one per group in
+// mutation-groups.mjs (each a share of the work, with only the specs that can
+// reach its files: vitest.mutation.config.mts). Every target above is checked to
+// be in exactly one group on every load, grouped run or not, so a new target
+// with no group fails here and never goes unmutated. MUTATION_GROUP unset (a
+// local `npm run test:mutation`) runs every target into reports/mutation/.
+const ALL_TARGETS = config.mutate;
+mutateForGroup(ALL_TARGETS, Object.keys(MUTATION_GROUPS)[0]);
+const GROUP = groupFromEnv();
+if (GROUP) {
+  config.mutate = mutateForGroup(ALL_TARGETS, GROUP);
+  config.htmlReporter = { fileName: `reports/mutation-${GROUP}/index.html` };
+  config.jsonReporter = { fileName: `reports/mutation-${GROUP}/mutation.json` };
+}
+
+export default config;

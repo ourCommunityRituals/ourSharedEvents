@@ -69,6 +69,8 @@ lifecycle-out/
 newman-reports/
 **/reports/mutation/
 **/reports/mutation-language/
+# One report per mutation group (workers/oursharedevents/mutation-groups.mjs).
+**/reports/mutation-*/
 .stryker-tmp/
 playwright-report/
 playwright-report-*/

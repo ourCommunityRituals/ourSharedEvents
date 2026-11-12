@@ -39,6 +39,7 @@ const WORKFLOW = '.github/workflows/mutation-testing.yml';
 const SELF = 'scripts/ci/mutation-paths.mjs';
 const FLOOR_SCRIPT = 'scripts/ci/mutation-file-floor.mjs';
 const WORKER_STRYKER_CONFIG = `${WORKER}stryker.conf.mjs`;
+const MUTATION_GROUPS_FILE = `${WORKER}mutation-groups.mjs`;
 const CI_SCRIPTS_STRYKER_CONFIG = 'stryker.ci-scripts.conf.mjs';
 const LANGUAGE_STRYKER_CONFIG = `${WORKER}stryker.language.conf.mjs`;
 
@@ -141,6 +142,8 @@ export const MUTATION_PATHS = Object.freeze([
   'workers/oursharedevents/tests/sponsor-thumb-sql.spec.ts',
   'workers/oursharedevents/tests/helpers/sqlite-d1.ts',
   WORKER_STRYKER_CONFIG,
+  // Which group each main-pass target runs in, and which specs each group runs.
+  MUTATION_GROUPS_FILE,
   // OSE-1695: the CI security rules that keep secrets off branch pushes, their
   // tests and config.
   'scripts/ci/branch-push-secret-exposure.mjs',
@@ -308,6 +311,7 @@ export function uncoveredMutationInputs(
     need(`${WORKER}${file}`, `a per-file floor in ${FLOOR_SCRIPT}`);
   }
   need(FLOOR_SCRIPT, 'the per-file floor');
+  need(MUTATION_GROUPS_FILE, 'the group split of the main pass');
   need(WORKFLOW, 'the workflow');
   need(SELF, 'this rule');
   return findings;

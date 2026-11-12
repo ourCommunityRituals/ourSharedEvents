@@ -33,12 +33,14 @@ on:
   # needs the run is decided inside each job, by scripts/ci/mutation-paths.mjs:
   # the list that used to be written here twice, with its reasons, moved there.
   # A change that touches nothing on the list passes in seconds without running
-  # Stryker, and says so in the job summary. The run itself is two passes on the
-  # node project, about 17 minutes and 4 minutes on CI (stryker.conf.mjs, then the
-  # language layer's stryker.language.conf.mjs). If you add a mutate target in
-  # stryker.conf.mjs or stryker.language.conf.mjs, add its
-  # source and specs to that list; tests/unit/ci/mutation-paths.test.js fails
-  # on a mutated or floored file the list lacks.
+  # Stryker, and says so in the job summary. The run itself is six jobs side by
+  # side on the node project: the main pass cut into five groups by cost
+  # (workers/oursharedevents/mutation-groups.mjs), and the language layer's pass
+  # (stryker.language.conf.mjs). If you add a mutate target in stryker.conf.mjs,
+  # give it a group in mutation-groups.mjs (the config refuses a target with
+  # none); in either config, add its source and specs to that list;
+  # tests/unit/ci/mutation-paths.test.js fails on a mutated or floored file the
+  # list lacks.
   pull_request:
   # OSE-1801 (CCR 2026-11-04 S-2): the same decision on a push to main, so a PR
   # that merged before its mutation run finished is still measured on main, not
@@ -57,28 +59,39 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  mutation:
+  # One job per group, side by side. The main pass ran 17 to 25 minutes as one
+  # job and its limit cut it off (PR 1189); cut by measured cost, the slowest
+  # group is about a third of that. Each group runs only the specs whose imports
+  # reach its files (vitest.mutation.config.mts): no other spec can kill its
+  # mutants, and static mutants, which rerun every spec in the project, are most
+  # of the time. The language pass is the sixth group, as it was the second pass.
+  mutation-group:
+    name: mutation (${{ matrix.group }})
     runs-on: ubuntu-24.04
-    # 35: the main pass plus the language pass, with room for a slow runner and
-    # the next few mutate targets. Measured on CI 2026-11-11 (PR 1189, run
-    # 43052131567): main pass 17m22s, language pass 3m49s, job 21m44s, before
-    # the sponsor-thumbnail ranges (OSE-1955) joined the main pass. A run that
-    # needs more than 35 has a cause to find (see 2026-11-11 below), not a limit
-    # to raise again. Polish and Arabic (OSE-1970, 2026-11-10)
-    # first put the language layer in the main pass. It is imported by most of
-    # the Worker, so its mutants reran up to 3,711 specs each and the job ran
-    # past 35 minutes. Its own pass runs the specs written to kill them.
-    # 2026-11-11: the main pass ran about 24 minutes and the limit cut off the
-    # language pass, because one spec rendered pages outside a test and made
-    # most render-path mutants static. vitest.mutation.config.mts keeps that
-    # spec out of the main pass: 974 static mutants became 150.
-    timeout-minutes: 35
+    # 15: about twice the slowest group, for a slow runner.
+    timeout-minutes: 15
+    strategy:
+      # Every group reports, so one red group does not hide another's result.
+      fail-fast: false
+      matrix:
+        include:
+          - group: map
+            script: test:mutation
+          - group: landing
+            script: test:mutation
+          - group: guards
+            script: test:mutation
+          - group: render
+            script: test:mutation
+          - group: forms
+            script: test:mutation
+          - group: language
+            script: test:mutation:language
     defaults:
       run:
         working-directory: workers/oursharedevents
-    # No job-level `if:` and no `needs:` — this check must report on every pull
-    # request so it can be a required check (tests/unit/ci/branch-protection-contract.test.js
-    # counts a job that can skip as one that may not report).
+    # No job-level `if:` and no `needs:`, so every group starts on every pull
+    # request; the required check is `mutation` below, which waits for all six.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -127,33 +140,74 @@ jobs:
       - run: npm ci
         if: steps.scope.outputs.run != 'false'
 
-      - name: Run Stryker mutation testing
+      # The five main groups pick their targets and specs from MUTATION_GROUP
+      # (stryker.conf.mjs, vitest.mutation.config.mts); the language pass has its
+      # own config and reads it as "not a main group". An unknown name fails.
+      - name: Run Stryker on this group
         if: steps.scope.outputs.run != 'false'
-        run: npm run test:mutation
+        env:
+          MUTATION_GROUP: ${{ matrix.group }}
+        run: npm run ${{ matrix.script }}
 
-      # The language layer (Polish OSE-1957, Arabic epic OSE-1959): its own pass,
-      # against the specs written to kill its mutants. See stryker.language.conf.mjs.
-      - name: Run Stryker on the language layer
-        if: steps.scope.outputs.run != 'false'
-        run: npm run test:mutation:language
-
-      - name: Per-file mutation floor
-        if: steps.scope.outputs.run != 'false'
-        # The break threshold in stryker.conf.mjs is global; this fails when any one
-        # guard file is under its own floor (admin.ts: 100%). OSE-1801, CCR S-2.
-        # Both passes' reports: a floored file missing from both, or in both, fails.
-        run: node ../../scripts/ci/mutation-file-floor.mjs reports/mutation/mutation.json reports/mutation-language/mutation.json
-
-      - name: Upload mutation report
+      - name: Upload this group's report
         if: always() && steps.scope.outputs.run != 'false'
         uses: actions/upload-artifact@v4
         with:
-          name: mutation-report
-          path: |
-            workers/oursharedevents/reports/mutation/**
-            workers/oursharedevents/reports/mutation-language/**
-          retention-days: 30
-          if-no-files-found: warn
+          name: mutation-group-${{ matrix.group }}
+          path: workers/oursharedevents/reports/mutation-${{ matrix.group }}/**
+          # 14 days, not 30: the reports hold source and test names only, and
+          # the nightly makes a fresh one every day. Keep no more than is read.
+          retention-days: 14
+          if-no-files-found: error
+
+  # The required check. It waits for every group, fails if any group did not
+  # succeed, then scores every file against its own floor over all six reports
+  # (mutation-file-floor.mjs refuses a file missing from them, or in two).
+  mutation:
+    needs: mutation-group
+    # always(): it reports even when a group failed, was cancelled or timed out,
+    # and then it is red. The branch-protection contract counts `if: always()`
+    # behind a job that always starts as a check that always reports.
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # First and unconditional: a change that needs no run still fails here if
+      # a group job broke, because a group that decides "no run" succeeds.
+      - name: Every group succeeded
+        env:
+          GROUPS_RESULT: ${{ needs.mutation-group.result }}
+        run: |
+          if [ "$GROUPS_RESULT" != "success" ]; then
+            echo "::error title=Mutation groups::the group jobs ended $GROUPS_RESULT, not success. Read the red group above."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # The same decision the groups made, so this job knows whether reports exist.
+      - name: Does this change need a mutation run?
+        id: scope
+        env:
+          MUTATION_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MUTATION_BEFORE_SHA: ${{ github.event.before }}
+        run: node scripts/ci/mutation-paths.mjs
+
+      - name: Download every group's report
+        if: steps.scope.outputs.run != 'false'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mutation-group-*
+          path: reports
+
+      - name: Per-file mutation floor
+        if: steps.scope.outputs.run != 'false'
+        # The break threshold in stryker.conf.mjs is per run; this fails when any
+        # one guard file is under its own floor (admin.ts: 100%). OSE-1801, CCR S-2.
+        # All six reports: a floored file missing from all, or in two, fails.
+        run: node scripts/ci/mutation-file-floor.mjs reports/mutation-group-map/mutation.json reports/mutation-group-landing/mutation.json reports/mutation-group-guards/mutation.json reports/mutation-group-render/mutation.json reports/mutation-group-forms/mutation.json reports/mutation-group-language/mutation.json
 
   # OSE-1695 — mutation testing of the CI security rules in scripts/ci (repository root, not the
   # Worker). A surviving mutant in branch-push-secret-exposure.mjs means the test that keeps
