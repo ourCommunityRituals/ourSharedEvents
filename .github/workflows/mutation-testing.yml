@@ -34,7 +34,7 @@ on:
   # the list that used to be written here twice, with its reasons, moved there.
   # A change that touches nothing on the list passes in seconds without running
   # Stryker, and says so in the job summary. The run itself is two passes on the
-  # node project, about 10 minutes and 2 minutes (stryker.conf.mjs, then the
+  # node project, about 17 minutes and 4 minutes on CI (stryker.conf.mjs, then the
   # language layer's stryker.language.conf.mjs). If you add a mutate target in
   # stryker.conf.mjs or stryker.language.conf.mjs, add its
   # source and specs to that list; tests/unit/ci/mutation-paths.test.js fails
@@ -59,16 +59,20 @@ concurrency:
 jobs:
   mutation:
     runs-on: ubuntu-24.04
-    # 25: the main pass (about 10 minutes) plus the language pass (about 2),
-    # with room for a slow runner. Polish and Arabic (OSE-1970, 2026-11-10)
+    # 35: the main pass plus the language pass, with room for a slow runner and
+    # the next few mutate targets. Measured on CI 2026-11-11 (PR 1189, run
+    # 43052131567): main pass 17m22s, language pass 3m49s, job 21m44s, before
+    # the sponsor-thumbnail ranges (OSE-1955) joined the main pass. A run that
+    # needs more than 35 has a cause to find (see 2026-11-11 below), not a limit
+    # to raise again. Polish and Arabic (OSE-1970, 2026-11-10)
     # first put the language layer in the main pass. It is imported by most of
     # the Worker, so its mutants reran up to 3,711 specs each and the job ran
     # past 35 minutes. Its own pass runs the specs written to kill them.
     # 2026-11-11: the main pass ran about 24 minutes and the limit cut off the
     # language pass, because one spec rendered pages outside a test and made
     # most render-path mutants static. vitest.mutation.config.mts keeps that
-    # spec out of the main pass, so the about-10-minute figure holds again.
-    timeout-minutes: 25
+    # spec out of the main pass: 974 static mutants became 150.
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: workers/oursharedevents
