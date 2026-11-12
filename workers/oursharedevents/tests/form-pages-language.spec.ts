@@ -560,6 +560,26 @@ describe('H7 | typed text on a right-to-left page is isolated; left-to-right pag
     expect(name.querySelector('img')).toBeNull();
     expect(name.querySelector('bdi')?.textContent).toBe('<img src=x onerror=alert(1)>Night #3!');
   });
+
+  // Staging T4i, 2026-11-12: the ar check-in page scrolled 9999 px sideways at
+  // 375 px. The skip link sat at a physical `left: -9999px`, and on a
+  // right-to-left page the overflow past the left edge is the scrollable side.
+  // Placed by the reading start, as on the event page, it sits past the edge a
+  // reader never scrolls to, in either direction.
+  for (const lang of LANGUAGES) {
+    test(`${lang}: the skip link hides and shows by the reading start, never a physical side`, async () => {
+      for (const screen of SCREENS) {
+        const page = await html(screen, { lang });
+        const hidden = page.match(/\.skip-link\s*\{([^}]*)\}/)?.[1] ?? '';
+        const shown = page.match(/\.skip-link:focus\s*\{([^}]*)\}/)?.[1] ?? '';
+        expect(hidden, screen).toMatch(/inset-inline-start:\s*-9999px/);
+        expect(shown, screen).toMatch(/inset-inline-start:\s*0/);
+        for (const rule of [hidden, shown]) {
+          expect(rule, screen).not.toMatch(/(^|[\s;])(left|right)\s*:/);
+        }
+      }
+    });
+  }
 });
 
 // ── In the browser: confirmations, errors, what is posted ───────────────────

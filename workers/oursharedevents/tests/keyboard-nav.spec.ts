@@ -112,7 +112,8 @@ describe('A11Y-6: skip-link CSS hides off-screen and reveals on focus', () => {
 
   test('form page skip-link CSS: hidden by default, visible on focus', async () => {
     const body = await formHtml('register');
-    expect(body).toMatch(/\.skip-link\s*\{[^}]*left:\s*-9999px/);
+    // By the reading start, so a right-to-left page cannot scroll to it.
+    expect(body).toMatch(/\.skip-link\s*\{[^}]*inset-inline-start:\s*-9999px/);
     expect(body).toMatch(/\.skip-link:focus\s*\{[^}]*position:\s*fixed/);
   });
 });
