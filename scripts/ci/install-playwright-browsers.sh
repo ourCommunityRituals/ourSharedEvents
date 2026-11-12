@@ -25,7 +25,12 @@
 #   3. Install. The same `playwright install --with-deps` as before; every
 #      package file is already on disk.
 #
-# PW_APT_ATTEMPT_SECONDS: one limit per download attempt (default "150 150").
+# PW_APT_ATTEMPT_SECONDS: one limit per download attempt (default "150 150 150").
+# Three attempts, because a mirror stall clears on a retry: on 2026-11-11 a
+# warm-cache download took 7-8 s, yet both 150 s attempts stalled on three PR
+# runs and each re-run passed. A third attempt beats one longer wait, and the
+# worst case (7.5 minutes) still ends with the "mirror too slow" error inside
+# every calling step's or job's time limit.
 # Exit 0 installed, 1 the packages could not be downloaded in time, 2 bad usage.
 
 set -euo pipefail
@@ -41,7 +46,7 @@ ARCHIVES="${PW_APT_ARCHIVES_DIR:-/var/cache/apt/archives}"
 MIRRORS="${PW_APT_MIRRORS_FILE:-/etc/apt/apt-mirrors.txt}"
 PREFETCH_CONF="${PW_APT_CONF_DIR:-/etc/apt/apt.conf.d}/99-playwright-prefetch"
 SLOW_MIRROR="${PW_APT_SLOW_MIRROR:-azure.archive.ubuntu.com}"
-read -r -a LIMITS <<< "${PW_APT_ATTEMPT_SECONDS:-150 150}"
+read -r -a LIMITS <<< "${PW_APT_ATTEMPT_SECONDS:-150 150 150}"
 # Unset means sudo; set but empty means "already root" (and the tests).
 SUDO="${PW_SUDO-sudo}"
 
