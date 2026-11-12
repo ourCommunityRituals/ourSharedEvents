@@ -140,6 +140,30 @@ export default {
     // The language layer (Polish OSE-1957, Arabic epic OSE-1959) is mutated in
     // its own pass, stryker.language.conf.mjs: its files run on every page
     // render, so here each mutant reran thousands of unrelated specs.
+    // OSE-1850 (i18n slice C4) and OSE-1943 — the form pages on the language
+    // layer (owner report 2026-11-10: "Does not translate to the selected
+    // language"). In form-pages.ts only the code that decides or writes the
+    // page's language: the privacy notice (English legal text, marked, with the
+    // note), the catalog copy in the forms and their script, the next step's
+    // links and dates, the shell (lang, dir, menu, Back), and in the handler the
+    // language source, the mended-link and archived forwards, the fallback title
+    // and Vary. Turnstile, CSP and the sponsor fetch are not mutated. In pages.ts,
+    // the choice links that now carry the prefix. Killed by
+    // form-pages-language.spec.ts, form-pages-language-golden.spec.ts (16
+    // goldens), language-layer-golden.spec.ts and list-landing-language-golden.
+    rangeOf('src/handlers/form-pages.ts', 'function privacyNotice(', '// ── Shared CSS'),
+    rangeOf('src/handlers/form-pages.ts', 'function js(lang', '// ── Sponsor strip + cache loader'),
+    rangeOf('src/handlers/form-pages.ts', 'const formJsSponsor =', '})(${jsonForScript(eventId)});'),
+    rangeOf('src/handlers/form-pages.ts', 'function registrationForm(', '// ── Next step after a confirmation'),
+    rangeOf('src/handlers/form-pages.ts', 'function registerNextStep(', '// ── Page shell'),
+    rangeOf('src/handlers/form-pages.ts', 'const menuPath = eventFormPath(', '</html>`;'),
+    rangeOf('src/handlers/form-pages.ts', 'pathLang?: Lang', 'if (!isValidEventId(eventId))'),
+    rangeOf('src/handlers/form-pages.ts', 'Location: withLangPrefix(', "'Cache-Control': 'no-store',"),
+    rangeOf('src/handlers/form-pages.ts', 'if (isStaleForPublicLanding(row.status))', 'if (typeof row.title'),
+    rangeOf('src/handlers/form-pages.ts', 'const eventName = escapeHtml(', 'const nonce = generateNonce();'),
+    rangeOf('src/handlers/form-pages.ts', 'nextStep,', "Vary: 'Accept-Language' }),"),
+    rangeOf('src/lib/event-staleness.ts', 'path: string = STALE_FORWARD_PATH', 'Location: `${origin}${path}`'),
+    rangeOf('src/handlers/pages.ts', 'const href = (type: EventFormType) =>', 'const off = inert'),
   ],
   coverageAnalysis: 'perTest',
   // Stryker writes `// @ts-nocheck` into its sandbox copy of each file this

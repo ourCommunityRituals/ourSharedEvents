@@ -99,7 +99,7 @@ export function panelActions(e: PanelEvent, opts: PanelOptions = {}): string {
   );
   if (!wrapped) {
     out.push(
-      `<a class="cta cta-secondary" href="${escapeHtml(eventFormPath(id, 'register'))}" data-testid="amap-register">${msg(lang, 'cta.register')}</a>`
+      `<a class="cta cta-secondary" href="${escapeHtml(withLangPrefix(lang, eventFormPath(id, 'register')))}" data-testid="amap-register">${msg(lang, 'cta.register')}</a>`
     );
   }
   const links = opts.placeLinks?.get(id);

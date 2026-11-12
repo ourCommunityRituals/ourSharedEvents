@@ -218,7 +218,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">martes, 20 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               
             </div>
-            <a class="cta" href="/events/evt_g13/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Morning Market">Inscribirse</a>
+            <a class="cta" href="/es/events/evt_g13/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Morning Market">Inscribirse</a>
           </article>
         </div>
       </section>

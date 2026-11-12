@@ -182,7 +182,7 @@ describe('FE-15: sponsor logos hide gracefully without CSP-blocked inline onerro
   test('both sponsor-logo renderers mark data-hide-on-error on the img', async () => {
     const body = await html();
     // Two renderers emit a sponsor <img>: the success-state thanks block
-    // (FORM_JS_SUBMIT) and the header strip (FORM_JS_SPONSOR). Both must carry
+    // (FORM_JS_SUBMIT) and the header strip (formJsSponsor). Both must carry
     // the attribute the capture-phase listener keys off.
     const marks = body.match(/data-hide-on-error="1"/g) || [];
     expect(

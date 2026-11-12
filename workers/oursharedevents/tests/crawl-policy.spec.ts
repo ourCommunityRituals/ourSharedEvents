@@ -146,6 +146,13 @@ const MUST_BE_CRAWLABLE = [
   '/events/abc/register-night', // a readable name that starts like a form screen
   '/events/abc/survey-says',
   '/events/abc/calendar.ics',
+  // OSE-1850: the pages under a language prefix stay fetchable.
+  '/es/events',
+  '/es/events/abc',
+  '/ar/events/abc/trivia-night',
+  '/pl/events/abc/register-night',
+  '/es/events/abc/updates-weekly',
+  '/es/events/K7Q2PX', // an id that looks like a code
   '/tv', // the TV display alias stays fetchable (it answers noindex)
   '/sponsors/abc', // the public sponsor card, not the token page
   '/sponsor-default-logo.svg',
@@ -181,6 +188,15 @@ const MUST_BE_BLOCKED = [
   '/events/abc/survey?deployment=d1',
   '/events/abc/updates',
   '/events/abc/updates?deployment=d1',
+  // OSE-1850: the same form screens under a language prefix.
+  '/es/events/abc/register',
+  '/pl/events/abc/register?deployment=d1',
+  '/ar/events/abc/checkin',
+  '/es/events/abc/checkin?deployment=d1',
+  '/pl/events/abc/survey',
+  '/ar/events/abc/survey?deployment=d1',
+  '/es/events/abc/updates',
+  '/pl/events/abc/updates?deployment=d1',
   '/sharedReport',
   '/sharedReport?t=signed-token',
   '/report',

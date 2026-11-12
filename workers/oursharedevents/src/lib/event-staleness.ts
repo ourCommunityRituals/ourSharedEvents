@@ -74,7 +74,10 @@ export function staleEventForward(
   origin: string,
   eventId: string,
   status: unknown,
-  surface: string
+  surface: string,
+  // OSE-1850: a page in another language forwards to the list in that language
+  // (`/es/events`). Always a same-origin path the caller builds.
+  path: string = STALE_FORWARD_PATH
 ): Response {
   console.log(
     JSON.stringify({
@@ -87,7 +90,7 @@ export function staleEventForward(
   return new Response(null, {
     status: 302,
     headers: {
-      Location: `${origin}${STALE_FORWARD_PATH}`,
+      Location: `${origin}${path}`,
       'Cache-Control': 'no-store',
     },
   });

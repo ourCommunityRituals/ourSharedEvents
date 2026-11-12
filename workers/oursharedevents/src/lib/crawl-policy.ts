@@ -78,6 +78,16 @@ export const CRAWL_DISALLOW: readonly string[] = [
   '/events/*/survey?',
   '/events/*/updates$',
   '/events/*/updates?',
+  // OSE-1850: the same screens under a language prefix (/es/events/<id>/checkin).
+  // The leading `*` is the prefix; the same `$` / `?` ends keep readable names.
+  '/*/events/*/register$',
+  '/*/events/*/register?',
+  '/*/events/*/checkin$',
+  '/*/events/*/checkin?',
+  '/*/events/*/survey$',
+  '/*/events/*/survey?',
+  '/*/events/*/updates$',
+  '/*/events/*/updates?',
   '/sharedReport',
   '/report',
   '/analytics',

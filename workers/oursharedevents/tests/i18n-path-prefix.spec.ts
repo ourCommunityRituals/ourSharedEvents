@@ -100,10 +100,59 @@ describe('OSE-1761 matchLanguagePage | the pages that exist under a prefix', () 
   });
 
   it('an event’s screens are not event pages', () => {
-    for (const screen of ['tv', 'poster', 'register', 'checkin', 'survey', 'updates', 'calendar']) {
+    for (const screen of ['tv', 'poster', 'calendar']) {
       expect(matchLanguagePage(`/events/abc/${screen}`), screen).toBeNull();
     }
     expect(matchLanguagePage('/events/abc/calendar.ics')).toBeNull();
+  });
+
+  // OSE-1850: the four form screens joined the language layer.
+  it('an event’s form screens are form pages under a prefix, never event pages', () => {
+    for (const screen of ['register', 'checkin', 'survey', 'updates'] as const) {
+      expect(matchLanguagePage(`/events/abc_12-X/${screen}`), screen).toEqual({
+        kind: 'form',
+        id: 'abc_12-X',
+        screen,
+      });
+    }
+    // The longest id the router takes, and one more.
+    expect(matchLanguagePage(`/events/${'a'.repeat(128)}/checkin`)).toEqual({
+      kind: 'form',
+      id: 'a'.repeat(128),
+      screen: 'checkin',
+    });
+    expect(matchLanguagePage(`/events/${'a'.repeat(129)}/checkin`)).toBeNull();
+  });
+
+  it('fat finger: a form screen spelled otherwise is not a form page', () => {
+    const near = [
+      '/events/abc/Checkin',
+      '/events/abc/CHECKIN',
+      '/events/abc/checkin/',
+      '/events/abc/check-in',
+      '/events/abc/checkins',
+      '/events/abc/xcheckin',
+      '/events/abc/email-signup',
+      '/events/abc/email',
+      '/events//checkin',
+      '/events/a b/checkin',
+      '/events/abc/checkin/extra',
+      '/events/abc/checkin?type=survey',
+      '/forms/abc/checkin',
+      '/xevents/abc/checkin',
+      // Anchored at the start: a form path one segment down is not a form.
+      '/x/events/a/checkin',
+    ];
+    for (const p of near) {
+      const page = matchLanguagePage(p);
+      expect(page?.kind === 'form', p).toBe(false);
+    }
+    // A readable name that only starts like a screen is the event page.
+    expect(matchLanguagePage('/events/abc/register-night')).toEqual({
+      kind: 'event',
+      id: 'abc',
+      name: 'register-night',
+    });
   });
 
   it('the other short links are not pages under a prefix', () => {
@@ -150,6 +199,8 @@ describe('OSE-1761 matchLanguagePage | the pages that exist under a prefix', () 
     expect(matchLanguagePage('/events/abc/Spring')).toBeNull();
     expect(matchLanguagePage('/e/')).toBeNull();
     expect(matchLanguagePage('/e/a/b')).toBeNull();
+    // Anchored at the start: a share code one segment down is not a share link.
+    expect(matchLanguagePage('/x/e/abc')).toBeNull();
   });
 });
 
