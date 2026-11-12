@@ -865,7 +865,7 @@
       ".github/workflows/mutation-testing.yml": {
         "count": 1,
         "steps": [
-          "mutation :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+          "mutation-group :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
         ],
         "reason": "Stryker runs the Worker test suite, which imports the pinned hub @ocr/ui (ADR-008)."
       },
@@ -936,6 +936,12 @@
         "step": "deploy :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
         "reason": "Owner 2026-11-06: one staging site. The stock workflow no longer deploys a Worker of its own (stg runs main as T1 deployed it), so its deploy job and this hub-staging step were removed.",
         "story": "OSE-1803"
+      },
+      {
+        "file": ".github/workflows/mutation-testing.yml",
+        "step": "mutation :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+        "reason": "Moved, not removed: the main mutation pass now runs as groups side by side, so the step is in the mutation-group job (one per group). The mutation job only waits for the groups and reads their reports; it stages nothing.",
+        "story": "OSE-1970"
       }
     ]
   },

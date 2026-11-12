@@ -1,5 +1,8 @@
 import { readFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+import { MUTATION_GROUPS, groupFromEnv, relatedSpecs } from './mutation-groups.mjs';
 import { NODE_SPECS } from './vitest.node-specs.mjs';
 import { LANGUAGE_MUTATION_SPECS } from './vitest.language-mutation.config.mts';
 
@@ -52,12 +55,25 @@ for (const spec of MAIN_PASS_SKIPS) {
 
 export const MAIN_MUTATION_SPECS = NODE_SPECS.filter((s) => !MAIN_PASS_SKIPS.includes(s));
 
+// In a grouped CI run (MUTATION_GROUP, mutation-groups.mjs) only the specs whose
+// imports reach one of the group's files: no other spec can kill its mutants.
+// Static mutants rerun every spec in this project, so this is where most of the
+// group's time goes. A group no spec reaches is a mistake, not an empty pass.
+const HERE = dirname(fileURLToPath(import.meta.url));
+const GROUP = groupFromEnv();
+const SPECS = GROUP
+  ? relatedSpecs(MAIN_MUTATION_SPECS, [...MUTATION_GROUPS[GROUP]], HERE)
+  : MAIN_MUTATION_SPECS;
+if (!SPECS.length) {
+  throw new Error(`vitest.mutation.config: no spec reaches mutation group ${GROUP}`);
+}
+
 export default defineConfig({
   plugins: [htmlAsText],
   test: {
     name: 'main-mutation',
     environment: 'node',
     globals: true,
-    include: MAIN_MUTATION_SPECS,
+    include: SPECS,
   },
 });
