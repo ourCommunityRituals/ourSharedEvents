@@ -109,24 +109,31 @@ describe('OSE-R-006 poster print colors — API layer', () => {
     expect(printBlock).toMatch(/\.poster-sponsors\s*\{[^}]*page-break-inside:\s*avoid/);
   });
 
-  test('OSE-R-006 | API | GET /poster (any visitor) | sponsor logo size clamp survives the refactor', async () => {
-    // Layout decision (separate from the color fix): logos clamp to 20px
-    // max-height in print so they fit a printed A4 page. Removing the
-    // grayscale must NOT also remove this clamp.
+  test('OSE-R-006 | API | GET /poster (any visitor) | sponsor thumbnails are not shrunk on paper (OSE-1991)', async () => {
+    // Owner 2026-11-11 ("the sponsor thumbnail images need to be more
+    // prominent"): the old 20px print clamp is retired. The printed thumbnail
+    // is @ocr/ui's one panel box, the same for every sponsor (WALL-3b); the
+    // poster's print block sizes no sponsor image.
     const html = await fetchPosterHtml();
     const printBlock = extractPrintBlock(html);
-    expect(printBlock).toMatch(/\.poster-sponsor\s+img\s*\{[^}]*max-height:\s*20px/);
+    expect(printBlock).not.toMatch(/max-height:\s*20px/);
+    expect(printBlock).not.toMatch(/sponsor[^{}]*img\s*\{[^}]*(?:height|width)\s*:/);
   });
 
-  test('OSE-R-006 | API | GET /poster (any visitor) | poster-sponsor-name and label render in black ink', async () => {
-    // Existing contract preserved. Sponsor name/label text was dark navy
-    // on screen but rendered black on print so it survives without
-    // print-color-adjust. Holds through this fix.
+  test('OSE-R-006 | API | GET /poster (any visitor) | sponsor name and label print in the page’s dark ink (OSE-1991)', async () => {
+    // The sponsor block is @ocr/ui's panel on both kinds. On paper its label,
+    // name and the When / Where cards take the page's ink (color:inherit in
+    // @ocr/ui's print block, served as /ui.css), and the page's ink is dark,
+    // so a dark theme never prints light text on white paper.
     const html = await fetchPosterHtml();
     const printBlock = extractPrintBlock(html);
-    expect(printBlock).toMatch(
-      /\.poster-sponsor-name,\s*\.poster-sponsor-label\s*\{[^}]*color:\s*#000/
-    );
+    expect(printBlock).toMatch(/body\s*\{[^}]*color:\s*#1e293b\s*!important/);
+    const ui = await (await SELF.fetch('https://test.local/ui.css')).text();
+    const uiPrint = ui.slice(ui.indexOf('@media print{\n.detail-list{'));
+    expect(uiPrint.length, '@ocr/ui serves its print block').toBeGreaterThan(30);
+    expect(uiPrint).toMatch(/\.sponsor-panel-label,\.sponsor-panel-name[^{]*\{color:inherit\}/);
+    expect(uiPrint).toMatch(/\.detail-card-main[^{]*\{color:inherit\}/);
+    expect(uiPrint).toMatch(/\.sponsor-panel-block\{[^}]*background:transparent/);
   });
 
   test('OSE-R-006 | API | GET /poster (any visitor) | qr-loading placeholder is hidden in print', async () => {

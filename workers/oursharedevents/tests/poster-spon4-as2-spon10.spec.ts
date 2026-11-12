@@ -187,9 +187,13 @@ describe('SPON-10: Sponsor print stylesheet (OSE-183)', () => {
     expect(printBlock).not.toMatch(/filter:\s*grayscale/);
   });
 
-  test('print styles enforce black text for sponsor names', async () => {
+  test('print styles give sponsor names the page’s dark ink', async () => {
+    // OSE-1991: the names are @ocr/ui's .sponsor-panel-name, which on paper
+    // takes the page's ink (color:inherit, held in poster-print-colors.spec.ts);
+    // the page's printed ink is dark.
     const body = await posterHtml();
-    expect(body).toContain('poster-sponsor-name');
-    expect(body).toMatch(/poster-sponsor-name[^}]*color: #000|color: #000[^}]*poster-sponsor-name/);
+    expect(body).toContain('class="sponsor-panel-name" data-testid="poster-sponsor-name"');
+    const printMatch = body.match(/@media\s+print\s*\{([\s\S]*?)\}\s*<\/style>/);
+    expect(printMatch![1]).toMatch(/body\s*\{[^}]*color:\s*#1e293b\s*!important/);
   });
 });

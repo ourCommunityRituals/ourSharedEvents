@@ -101,10 +101,14 @@ describe('Print | Digital — the URL is the state', () => {
     expect(html).toContain(
       '\'<a class="btn btn-outline" href="https://www.google.com/maps/search/?api=1&amp;query=\' + encodeURIComponent(where) + \'" target="_blank" rel="noopener noreferrer"'
     );
-    // Print stays one plain line: nothing to tap on paper.
-    expect(html).toMatch(
-      /\(digital\s*\? detailsHtml\s*: '<div class="poster-meta" data-testid="poster-meta">'/
+    // OSE-1991: print draws the same cards, its buttons as <span> pictures
+    // (nothing to tap on paper), after the art; the old one plain line is gone.
+    expect(html).toContain(
+      "'<span class=\"btn btn-outline btn-static\" data-testid=\"' + esc(testid) + '\">' + esc(label) + '</span>'"
     );
+    expect(html).toContain("staticBtn('Add to calendar', 'poster-add-to-calendar')");
+    expect(html).not.toContain('<div class="poster-meta" data-testid="poster-meta">');
+    expect(html.indexOf('data-testid="poster-stage"')).toBeLessThan(html.indexOf('detailsHtml +'));
     // The old inline-text forms are gone.
     expect(html).not.toContain('&middot; Add to calendar');
     expect(html).not.toContain('&middot; Directions');

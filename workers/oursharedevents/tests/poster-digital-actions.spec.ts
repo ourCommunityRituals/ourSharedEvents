@@ -173,13 +173,34 @@ describe('digital: When and Where are cards with button actions', () => {
     expect(q(doc, 'poster-venue-address')).toBeNull();
   });
 
-  test('print is unchanged: one plain line, nothing to tap, no Share', async () => {
+  // OSE-1991 (owner 2026-11-11): "The print url should follow using the cards,
+  // titles, action buttons without the clicking."
+  test('print: the same When and Where cards and button shapes, nothing to tap, no Share', async () => {
     const { doc } = await openPoster('print', bundle());
     const meta = q(doc, 'poster-meta')!;
-    expect(meta.className).toBe('poster-meta');
-    expect(meta.querySelectorAll('a, button')).toHaveLength(0);
+    expect(meta.classList.contains('detail-list')).toBe(true);
+    expect(q(doc, 'poster-meta-date')!.className).toBe('detail-card');
+    expect(q(doc, 'poster-meta-venue')!.className).toBe('detail-card');
+    expect(q(doc, 'poster-when-date')!.textContent).toBe('Wednesday, November 11, 2026');
+    expect(q(doc, 'poster-when-time')!.textContent).toBe('5:00 PM CST');
+    expect(q(doc, 'poster-venue-name')!.textContent).toBe('Uptown Blue Island');
+    expect(q(doc, 'poster-venue-address')!.textContent).toBe(
+      '13001 S Western Ave, Blue Island, IL 60406'
+    );
+    // The same three buttons, as pictures: spans, no address, no tab stop.
+    const shapes = ['poster-add-to-calendar', 'poster-open-map', 'poster-open-map-apple'].map(
+      (id) => q(doc, id)!
+    );
+    expect(shapes.map((b) => [b.tagName, b.className, b.textContent])).toEqual([
+      ['SPAN', 'btn btn-outline btn-static', 'Add to calendar'],
+      ['SPAN', 'btn btn-outline btn-static', 'Google Maps'],
+      ['SPAN', 'btn btn-outline btn-static', 'Apple Maps'],
+    ]);
+    expect(meta.querySelectorAll('a, button, [href], [tabindex], [role="group"]')).toHaveLength(0);
+    // A screen reader is not told about buttons it cannot press.
+    for (const b of shapes) expect(b.closest('[aria-hidden="true"]')).not.toBeNull();
     expect(q(doc, 'poster-share')).toBeNull();
-    expect(q(doc, 'poster-meta-venue')!.textContent).toBe('Uptown Blue Island');
+    expect(q(doc, 'poster-share-btn')).toBeNull();
   });
 });
 

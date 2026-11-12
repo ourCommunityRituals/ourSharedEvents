@@ -111,6 +111,8 @@ const SAME_ORIGIN_SPONSOR_LINKS: Record<string, string> = {
   'sponsor-card-link': 'href is sponsorCardPath(id), a /sponsors/:id path',
   'sponsor-card-email': 'href is a mailto: built by mailtoHref',
   'sponsor-card-phone': 'href is a tel: built by telHref',
+  'poster-sponsor-card-link':
+    'href is posterSponsorSite(s), which returns a card path only when it matches /sponsors/<id>',
 };
 
 // Operator surfaces. The promise is made to attendees; these pages are behind
@@ -199,11 +201,13 @@ test.describe('Invariant: Sponsor Signal Never-Who — structural lock (OSE-1164
         }
       }
     }
-    // Negative control: the three surfaces known to link out to a sponsor.
+    // Negative control: the surfaces known to link out to a sponsor (the digital
+    // poster since OSE-1991).
     for (const known of [
       'templates/public.html',
       'handlers/pages.ts',
       'lib/sponsor-card-render.ts',
+      'templates/poster.html',
     ]) {
       expect(
         outbound,

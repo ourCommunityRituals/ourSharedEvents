@@ -17,6 +17,15 @@
  * | date: 2026-11-09
  * @born-red OSE-1826 | method: run against the parent commit's template (no
  * sponsor block) | date: 2026-11-09
+ *
+ * OSE-1991 (owner 2026-11-11): the sponsor's thumbnail and name lead to the
+ * sponsor's own https site (new tab, noopener noreferrer), else its card page
+ * here, else nowhere; the label is the smallest thing in the block and the
+ * thumbnail takes the room; the artwork sits between the sponsor block and the
+ * When card; print shows the same cards with pictures of the buttons, no links.
+ *
+ * @born-red OSE-1991 | method: run against main's template (2218bbbd: no
+ * sponsor link, 40px logo, art below the cards, print one plain line) | date: 2026-11-12
  */
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -35,13 +44,22 @@ const BAKERY = {
 const HEADER_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400"><rect width="1200" height="400" fill="#7a4"/></svg>';
 
+const ART_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000"><rect width="800" height="1000" fill="#47a"/></svg>';
+
 async function load(
   page: Page,
   kind: 'digital' | 'print' = 'digital',
-  sponsors: Record<string, unknown>[] = [{ id: 'sp1', name: 'Western Ave Bakery', tier: 'primary' }]
+  sponsors: Record<string, unknown>[] = [
+    { id: 'sp1', name: 'Western Ave Bakery', tier: 'primary' },
+  ],
+  art = false
 ) {
   await page.route('**/api/v2/sponsors/sp1/logo?slot=header', (route) =>
     route.fulfill({ contentType: 'image/svg+xml', body: HEADER_SVG })
+  );
+  await page.route('**/art-1991.svg', (route) =>
+    route.fulfill({ contentType: 'image/svg+xml', body: ART_SVG })
   );
   await page.setViewportSize({ width: 375, height: 812 });
   await page.route(`**/api/v2/events/${EVT}/poster-bundle`, (route) =>
@@ -57,6 +75,7 @@ async function load(
           startDateISO: '2026-11-11',
           starts_at: '2026-11-11T23:00:00.000Z',
           timezone: 'America/Chicago',
+          ...(art ? { cover_image_url: '/art-1991.svg' } : {}),
         },
         sponsors,
         slots: [],
@@ -169,11 +188,121 @@ test.describe('OSE-1825 digital poster: When / Where / Share at 375px', () => {
     expect(over).toBeLessThanOrEqual(1);
   });
 
-  test('print keeps one plain line: no buttons, no Share', async ({ page }) => {
-    await load(page, 'print');
-    await expect(page.getByTestId('poster-meta-venue')).toHaveText('Uptown Blue Island');
+  test('print shows the same cards, the buttons only as pictures: nothing to tap, no Share', async ({
+    page,
+  }) => {
+    await load(page, 'print', [{ ...BAKERY, website_url: 'https://westernavebakery.example' }]);
+    await expect(page.getByTestId('poster-when-date')).toHaveText('Wednesday, November 11, 2026');
+    await expect(page.getByTestId('poster-venue-name')).toHaveText('Uptown Blue Island');
+    await expect(page.getByTestId('poster-venue-address')).toHaveText(ADDRESS);
+    // The buttons are there to see, as <span>s hidden from screen readers.
+    for (const id of ['poster-add-to-calendar', 'poster-open-map', 'poster-open-map-apple']) {
+      const b = page.getByTestId(id);
+      await expect(b).toBeVisible();
+      expect(await b.evaluate((e) => e.tagName)).toBe('SPAN');
+      expect(await b.evaluate((e) => !!e.closest('[aria-hidden="true"]'))).toBe(true);
+    }
     await expect(page.getByTestId('poster-share')).toHaveCount(0);
-    await expect(page.locator('[data-testid="poster-meta"] a')).toHaveCount(0);
+    await expect(
+      page.locator('[data-testid="poster-meta"] a, [data-testid="poster-meta"] button')
+    ).toHaveCount(0);
+    // The sponsor is on the sheet, with no link and no header image or text.
+    await expect(page.getByTestId('poster-sponsor-name')).toHaveText('Western Ave Bakery');
+    await expect(page.locator('[data-testid="poster-sponsor-strip"] a')).toHaveCount(0);
+    await expect(page.getByTestId('poster-sponsor-header')).toHaveCount(0);
+    await expect(page.getByTestId('poster-sponsor-text')).toHaveCount(0);
+  });
+
+  for (const kind of ['digital', 'print'] as const) {
+    test(`OSE-1991 ${kind}: title, sponsor block, artwork, then the When card`, async ({
+      page,
+    }) => {
+      await load(page, kind, undefined, true);
+      await page.waitForFunction(() => {
+        const i = document.querySelector('[data-testid="poster-art-img"]') as HTMLImageElement;
+        return i && i.complete && i.naturalWidth > 0;
+      });
+      const title = await page.getByTestId('poster-title').boundingBox();
+      const strip = await page.getByTestId('poster-sponsor-strip').boundingBox();
+      const art = await page.getByTestId('poster-art-img').boundingBox();
+      const when = await page.getByTestId('poster-meta-date').boundingBox();
+      expect(strip!.y).toBeGreaterThanOrEqual(title!.y + title!.height - 1);
+      expect(strip!.y + strip!.height, 'sponsor block ends above the art').toBeLessThanOrEqual(
+        art!.y + 1
+      );
+      expect(art!.y + art!.height, 'art ends above the When card').toBeLessThanOrEqual(when!.y + 1);
+    });
+  }
+
+  test('OSE-1991: the sponsor block links to the sponsor’s own https site, in a new tab', async ({
+    page,
+  }) => {
+    const site = 'https://westernavebakery.example/menu';
+    await load(page, 'digital', [{ ...BAKERY, website_url: site, card_url: '/sponsors/sp1' }]);
+    const link = page.getByTestId('poster-sponsor-link');
+    await expect(link).toHaveAttribute('href', site);
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    // The link names the sponsor (its visible name starts the name, WCAG 2.5.3).
+    await expect(link).toHaveAttribute('aria-label', /^Western Ave Bakery/);
+    // One link per sponsor, holding the header image, thumbnail and name.
+    await expect(page.locator('[data-testid="poster-sponsor-strip"] a')).toHaveCount(1);
+    await expect(link.getByTestId('poster-sponsor-header')).toHaveCount(1);
+    await expect(link.getByTestId('poster-sponsor-logo')).toHaveCount(1);
+    await expect(link.getByTestId('poster-sponsor-name')).toHaveCount(1);
+    await expectTargets(page, '[data-testid="poster-sponsor-link"]');
+  });
+
+  test('OSE-1991: no https site leads to the sponsor’s card page here; with neither, no link', async ({
+    page,
+  }) => {
+    await load(page, 'digital', [
+      {
+        id: 'sp3',
+        name: 'Old Web Diner',
+        tier: 'primary',
+        website_url: 'http://oldweb.example',
+        card_url: '/sponsors/sp3',
+      },
+    ]);
+    const card = page.getByTestId('poster-sponsor-card-link');
+    await expect(card).toHaveAttribute('href', '/sponsors/sp3');
+    expect(await card.getAttribute('target')).toBeNull();
+    await expect(page.getByTestId('poster-sponsor-link')).toHaveCount(0);
+    await expectTargets(page, '[data-testid="poster-sponsor-card-link"]');
+
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await load(page, 'digital', [
+      {
+        id: 'sp4',
+        name: 'Quiet Shop',
+        tier: 'primary',
+        website_url: 'javascript:alert(1)',
+        card_url: 'https://elsewhere.example/x',
+      },
+    ]);
+    await expect(page.getByTestId('poster-sponsor-name')).toHaveText('Quiet Shop');
+    await expect(page.locator('[data-testid="poster-sponsor-strip"] a')).toHaveCount(0);
+  });
+
+  test('OSE-1991: a small label, a prominent thumbnail and name', async ({ page }) => {
+    await load(page, 'digital', [{ id: 'sp2', name: 'Plain Hardware', tier: 'primary' }]);
+    const m = await page.evaluate(() => {
+      const el = (id: string) => document.querySelector(`[data-testid="${id}"]`) as HTMLElement;
+      const cs = (id: string) => getComputedStyle(el(id));
+      return {
+        labelFs: parseFloat(cs('poster-sponsor-label').fontSize),
+        labelH: el('poster-sponsor-label').getBoundingClientRect().height,
+        nameFs: parseFloat(cs('poster-sponsor-name').fontSize),
+        logoH: parseFloat(cs('poster-sponsor-logo').height),
+      };
+    });
+    expect(m.labelFs).toBe(13);
+    // One tight line: the label takes no more room than its text.
+    expect(m.labelH).toBeLessThanOrEqual(17);
+    expect(m.nameFs).toBeGreaterThanOrEqual(20);
+    // The thumbnail box is 72px tall (it was 40).
+    expect(m.logoH).toBeGreaterThanOrEqual(72);
   });
 
   test('OSE-1826: the sponsor gets a header block: the image full width, then logo, name and text', async ({

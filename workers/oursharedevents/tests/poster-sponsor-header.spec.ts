@@ -19,6 +19,16 @@
  * @born-red styles moved to @ocr/ui | method: the inline OSE-1826 CSS put back,
  * the digital label left on its print class, a [data-tier] panel rule added to
  * @ocr/ui. Each turned the styles block red | date: 2026-11-09
+ *
+ * OSE-1991 (owner 2026-11-11): the sponsor's thumbnail and name link to the
+ * sponsor's own site (the https website it saved, else its card page here, else
+ * nothing); print shows the same block, every sponsor side by side, no link; the
+ * art sits between the sponsor block and the When card.
+ * @born-red OSE-1991 | method: run against the parent commit's template (no
+ * link, print on its own row classes, details above the art) and with planted
+ * faults: an http website let through, a website written without the escaper,
+ * the link drawn on print, target/rel dropped, a card path from another host
+ * let through. Each turned this file red | date: 2026-11-12
  */
 import { describe, test, expect } from 'vitest';
 import { JSDOM } from 'jsdom';
@@ -96,7 +106,9 @@ describe('digital: each sponsor gets a header block', () => {
     const [item] = items(doc);
     expect(item.className).toBe('sponsor-panel-block');
     const kids = [...item.children].map((c) => c.className);
-    expect(kids).toEqual(['sponsor-panel-header', 'sponsor-panel-id', 'sponsor-panel-text']);
+    expect(kids).toEqual(['sponsor-panel-main', 'sponsor-panel-text']);
+    const main = [...item.children[0].children].map((c) => c.className);
+    expect(main).toEqual(['sponsor-panel-header', 'sponsor-panel-id']);
     const img = item.querySelector('[data-testid="poster-sponsor-header"]')!;
     expect(img.getAttribute('src')).toBe('/api/v2/sponsors/sp_bakery/logo?slot=header');
     expect(img.getAttribute('referrerpolicy')).toBe('no-referrer');
@@ -119,15 +131,26 @@ describe('digital: each sponsor gets a header block', () => {
     expect(label.textContent).toBe('Sponsored By');
   });
 
-  test('the sponsor sits below the title and above the date, place and art', async () => {
-    const { doc } = await openPoster('digital', bundle([BAKERY]));
-    const order = [
-      ...doc.querySelectorAll(
-        '[data-testid="poster-title"], [data-testid="poster-sponsor-strip"], [data-testid="poster-meta"], [data-testid="poster-stage"]'
-      ),
-    ].map((e) => e.getAttribute('data-testid'));
-    expect(order).toEqual(['poster-title', 'poster-sponsor-strip', 'poster-meta', 'poster-stage']);
-  });
+  // OSE-1991 (owner 2026-11-11): "The art image placement should go in between
+  // the sponsor header and the When card." Both kinds.
+  for (const kind of ['digital', 'print'] as const) {
+    test(`${kind}: title, then the sponsor, then the art and codes, then When and Where`, async () => {
+      const { doc } = await openPoster(kind, bundle([BAKERY]));
+      const order = [
+        ...doc.querySelectorAll(
+          '[data-testid="poster-title"], [data-testid="poster-sponsor-strip"], [data-testid="poster-meta"], [data-testid="poster-stage"]'
+        ),
+      ].map((e) => e.getAttribute('data-testid'));
+      expect(order).toEqual([
+        'poster-title',
+        'poster-sponsor-strip',
+        'poster-stage',
+        'poster-meta',
+      ]);
+      const meta = doc.querySelector('[data-testid="poster-meta"]')!;
+      expect(meta.firstElementChild!.getAttribute('data-testid')).toBe('poster-meta-date');
+    });
+  }
 
   test('an unconfigured sponsor falls back to its logo and name: no empty image, no empty text', async () => {
     const { doc } = await openPoster(
@@ -197,15 +220,138 @@ describe('digital: each sponsor gets a header block', () => {
   });
 });
 
-describe('print keeps the compact row', () => {
-  test('no header image and no header text on the printed sheet', async () => {
+describe('print: the same block, every sponsor at once, nothing to tap', () => {
+  test('the panel block with thumbnail and name; no header image and no header text on paper', async () => {
     const { doc } = await openPoster('print', bundle([BAKERY]));
     const [item] = items(doc);
-    expect(item.className).toBe('poster-sponsor');
+    expect(item.className).toBe('sponsor-panel-block');
     expect(item.querySelector('.sponsor-panel-header, .sponsor-panel-text')).toBeNull();
+    expect(
+      item.querySelector('.sponsor-panel-id [data-testid="poster-sponsor-logo"]')
+    ).not.toBeNull();
     expect(item.querySelector('[data-testid="poster-sponsor-name"]')!.textContent).toBe(
       'Western Ave Bakery'
     );
+  });
+
+  test('a sponsor with a website is still not a link on the printed sheet', async () => {
+    const { doc } = await openPoster(
+      'print',
+      bundle([
+        { ...BAKERY, website_url: 'https://bakery.example.org/' },
+        { ...PLAIN, card_url: '/sponsors/sp_plain' },
+      ])
+    );
+    const strip = doc.querySelector('[data-testid="poster-sponsor-strip"]')!;
+    expect(items(doc)).toHaveLength(2);
+    expect(strip.querySelectorAll('a, button, [href], [tabindex]')).toHaveLength(0);
+    // Both show at once: print does not rotate.
+    for (const i of items(doc)) expect((i as HTMLElement).hidden).toBe(false);
+  });
+});
+
+// ─── OSE-1991: the thumbnail and name lead to the sponsor's own site ─────────
+
+const PLAIN: Sponsor = { id: 'sp_plain', name: 'Plain Hardware', tier: 'primary', logo_url: null };
+
+describe('digital: the thumbnail and name link to the sponsor’s own site', () => {
+  const linkOf = (doc: Document) => items(doc)[0].querySelector('a');
+
+  test('an https website: one link around the thumbnail and name, new tab, no referrer', async () => {
+    const site = 'https://bakery.example.org/visit?from=poster';
+    const { doc } = await openPoster('digital', bundle([{ ...BAKERY, website_url: site }]));
+    const a = linkOf(doc)!;
+    expect(a.getAttribute('data-testid')).toBe('poster-sponsor-link');
+    expect(a.className).toBe('sponsor-panel-main');
+    expect(a.getAttribute('href')).toBe(site);
+    expect(a.getAttribute('target')).toBe('_blank');
+    expect(a.getAttribute('rel')).toBe('noopener noreferrer');
+    // The thumbnail, the header image and the name are all inside the one link.
+    expect(a.querySelector('[data-testid="poster-sponsor-logo"]')).not.toBeNull();
+    expect(a.querySelector('[data-testid="poster-sponsor-header"]')).not.toBeNull();
+    expect(a.querySelector('[data-testid="poster-sponsor-name"]')!.textContent).toBe(
+      'Western Ave Bakery'
+    );
+    // Its name holds the visible name (WCAG 2.5.3) and says where it goes.
+    expect(a.getAttribute('aria-label')).toMatch(/^Western Ave Bakery \(opens the sponsor.s site/);
+    // The sponsor's short text is outside the link; one link per sponsor.
+    expect(a.querySelector('[data-testid="poster-sponsor-text"]')).toBeNull();
+    expect(items(doc)[0].querySelectorAll('a')).toHaveLength(1);
+  });
+
+  test('no website: the sponsor’s card page on this site, same tab', async () => {
+    const { doc } = await openPoster(
+      'digital',
+      bundle([{ ...PLAIN, card_url: '/sponsors/sp_plain' }])
+    );
+    const a = linkOf(doc)!;
+    expect(a.getAttribute('data-testid')).toBe('poster-sponsor-card-link');
+    expect(a.getAttribute('href')).toBe('/sponsors/sp_plain');
+    expect(a.getAttribute('target')).toBeNull();
+    expect(a.getAttribute('aria-label')).toBe('Plain Hardware');
+  });
+
+  test('neither: the thumbnail and name show, unlinked', async () => {
+    const { doc } = await openPoster('digital', bundle([PLAIN]));
+    expect(linkOf(doc)).toBeNull();
+    expect(items(doc)[0].querySelector('.sponsor-panel-main')!.tagName).toBe('DIV');
+    expect(items(doc)[0].querySelector('[data-testid="poster-sponsor-name"]')!.textContent).toBe(
+      'Plain Hardware'
+    );
+  });
+
+  // Anything but an https website or a card path here is no link at all. The
+  // server already sends only https (publicWebsiteUrl); this is the page's own
+  // check, so a bundle that ever carries more still draws nothing clickable.
+  test.each([
+    ['plain http', 'http://bakery.example.org/'],
+    ['javascript:', 'javascript:alert(1)'],
+    ['data:', 'data:text/html,<b>x</b>'],
+    ['no scheme', '//bakery.example.org/'],
+    ['a quote that would end the attribute', `https://bakery.example.org/${TAIL}`],
+    ['a space', 'https://bakery.example.org/a b'],
+    ['not a string', { href: 'https://bakery.example.org/' }],
+  ])('a website that is %s is not linked', async (_, website_url) => {
+    const { doc } = await openPoster('digital', bundle([{ ...BAKERY, website_url }]));
+    expect(linkOf(doc)).toBeNull();
+    expect(
+      doc.querySelector('[data-testid="poster-sponsor-strip"]')!.querySelectorAll('[x1], b')
+    ).toHaveLength(0);
+  });
+
+  test.each([
+    ['another host', '//evil.example/sponsors/x'],
+    ['a full address', 'https://evil.example/sponsors/x'],
+    ['another path here', '/admin'],
+    ['a deeper path', '/sponsors/x/edit'],
+    ['a query', '/sponsors/x?next=//evil.example'],
+    ['a back-slash', '/sponsors/x\\evil'],
+  ])('a card path that is %s is not linked', async (_, card_url) => {
+    const { doc } = await openPoster('digital', bundle([{ ...PLAIN, card_url }]));
+    expect(linkOf(doc)).toBeNull();
+  });
+
+  test('a refused website falls back to the card page when there is one', async () => {
+    const { doc } = await openPoster(
+      'digital',
+      bundle([{ ...PLAIN, website_url: 'http://plain.example/', card_url: '/sponsors/sp_plain' }])
+    );
+    expect(linkOf(doc)!.getAttribute('href')).toBe('/sponsors/sp_plain');
+  });
+
+  test('every tier gets the same linked block', async () => {
+    const shapes = new Set<string>();
+    for (const tier of ['title', 'platinum', 'gold', 'silver', 'bronze', 'primary']) {
+      const { doc } = await openPoster(
+        'digital',
+        bundle([{ ...BAKERY, tier, website_url: 'https://bakery.example.org/' }])
+      );
+      const [item] = items(doc);
+      shapes.add(
+        [...item.querySelectorAll('*')].map((e) => `${e.tagName}.${e.className}`).join(',')
+      );
+    }
+    expect(shapes.size).toBe(1);
   });
 });
 
@@ -231,6 +377,7 @@ describe('the block’s styles come from @ocr/ui', () => {
     '.sponsor-panel',
     '.sponsor-panel-label',
     '.sponsor-panel-block',
+    '.sponsor-panel-main',
     '.sponsor-panel-header',
     '.sponsor-panel-id',
     '.sponsor-panel-id img',
@@ -238,22 +385,28 @@ describe('the block’s styles come from @ocr/ui', () => {
     '.sponsor-panel-text',
   ];
 
-  test('the digital strip, label and name use the panel classes; print keeps its own', async () => {
-    const digital = await openPoster('digital', bundle([BAKERY]));
-    const strip = digital.doc.querySelector('[data-testid="poster-sponsor-strip"]')!;
-    expect(strip.classList.contains('sponsor-panel')).toBe(true);
-    expect(strip.querySelector('[data-testid="poster-sponsor-label"]')!.className).toBe(
-      'sponsor-panel-label'
-    );
-    expect(strip.querySelector('[data-testid="poster-sponsor-name"]')!.className).toBe(
-      'sponsor-panel-name'
-    );
-    const print = await openPoster('print', bundle([BAKERY]));
-    const printStrip = print.doc.querySelector('[data-testid="poster-sponsor-strip"]')!;
-    expect(printStrip.classList.contains('sponsor-panel')).toBe(false);
-    expect(printStrip.querySelector('[data-testid="poster-sponsor-label"]')!.className).toBe(
-      'poster-sponsor-label'
-    );
+  test('the strip, label and name use the panel classes on both kinds (OSE-1991)', async () => {
+    for (const kind of ['digital', 'print'] as const) {
+      const { doc } = await openPoster(kind, bundle([BAKERY]));
+      const strip = doc.querySelector('[data-testid="poster-sponsor-strip"]')!;
+      expect(strip.classList.contains('sponsor-panel'), kind).toBe(true);
+      expect(strip.querySelector('[data-testid="poster-sponsor-label"]')!.className).toBe(
+        'sponsor-panel-label'
+      );
+      expect(strip.querySelector('[data-testid="poster-sponsor-name"]')!.className).toBe(
+        'sponsor-panel-name'
+      );
+    }
+  });
+
+  test('the label is lighter and tighter than the sponsor; the thumbnail and name are larger (OSE-1991)', () => {
+    const px = (v: string) => (v.endsWith('rem') ? parseFloat(v) * 16 : parseFloat(v));
+    expect(uiRule('.sponsor-panel-label')).toContain('font-weight:500');
+    expect(uiRule('.sponsor-panel-label')).toContain('line-height:1.2');
+    const thumb = /(?:^|;)height:(\d+px)/.exec(uiRule('.sponsor-panel-id img'))!;
+    expect(px(thumb[1]), 'thumbnail height').toBeGreaterThanOrEqual(64);
+    const name = /font-size:([\d.]+(?:rem|px))/.exec(uiRule('.sponsor-panel-name'))!;
+    expect(px(name[1]), 'name size').toBeGreaterThanOrEqual(20);
   });
 
   test('@ocr/ui defines every class the block uses', () => {
