@@ -578,6 +578,12 @@
         .funnel-table {
           display: block;
         }
+        /* OSE-1993: the body too, or it stays a table group and each row card
+           shrinks to its content instead of filling the width. */
+        .report-table tbody,
+        .funnel-table tbody {
+          display: block;
+        }
         .funnel-table thead {
           display: none;
         }
@@ -678,6 +684,29 @@
       .stat-card .num,
       .stat-dl dd {
         color: var(--text);
+      }
+      /* OSE-1993: @ocr/ui's .stats-row (loaded just above) is a sideways strip of
+         flex:1 cards; at 375px it squeezed three cards to 94px each. Here the
+         summary cards stack one per row up to 768px (this page's mobile
+         breakpoint, where its tables also become cards), so their notes read
+         as sentences, and sit side by side above it. At 600px side by side they
+         were 165px wide and wrapped again. The admin page keeps its own grid
+         for the same reason. */
+      .stats-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1rem;
+        overflow-x: visible;
+      }
+      .stats-row > .stat-card {
+        min-width: 0;
+      }
+      @media (min-width: 769px) {
+        .stats-row {
+          grid-template-columns: none;
+          grid-auto-flow: column;
+          grid-auto-columns: minmax(0, 1fr);
+        }
       }
       .stat-card .label,
       .section-title,
@@ -1321,9 +1350,12 @@
                   '<table class="funnel-table" aria-label="Sponsor class breakdown" data-testid="sponsor-class-table">' +
                   '<thead><tr><th scope="col">Class</th><th scope="col">Sponsors</th><th scope="col">Displays</th></tr></thead>' +
                   '<tbody>' +
-                  '<tr data-testid="sponsor-class-row-local"><td>Local</td><td data-testid="local-sponsor-count">' + fmtInt(localSponsors) + '</td><td data-testid="local-displays">' + fmtInt(localImpr) + '</td></tr>' +
-                  '<tr data-testid="sponsor-class-row-mid"><td>Mid</td><td data-testid="mid-sponsor-count">' + fmtInt(midSponsors) + '</td><td data-testid="mid-displays">' + fmtInt(scb.mid ? scb.mid.total_displays : 0) + '</td></tr>' +
-                  '<tr data-testid="sponsor-class-row-premium"><td>Premium</td><td data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-testid="premium-displays">' + fmtInt(scb.premium ? scb.premium.total_displays : 0) + '</td></tr>' +
+                  // OSE-1993: data-label on every cell, as on every other table here; on a
+                  // phone the cell prints its label (td::before), and without one it
+                  // printed a bare ": ".
+                  '<tr data-testid="sponsor-class-row-local"><td data-label="Class">Local</td><td data-label="Sponsors" data-testid="local-sponsor-count">' + fmtInt(localSponsors) + '</td><td data-label="Displays" data-testid="local-displays">' + fmtInt(localImpr) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-mid"><td data-label="Class">Mid</td><td data-label="Sponsors" data-testid="mid-sponsor-count">' + fmtInt(midSponsors) + '</td><td data-label="Displays" data-testid="mid-displays">' + fmtInt(scb.mid ? scb.mid.total_displays : 0) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-premium"><td data-label="Class">Premium</td><td data-label="Sponsors" data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-label="Displays" data-testid="premium-displays">' + fmtInt(scb.premium ? scb.premium.total_displays : 0) + '</td></tr>' +
                   '</tbody></table>' +
                   '<div class="local-vs-paid-bar" data-testid="local-vs-paid-bar" aria-label="Local ' + esc(localPct) + '% vs Paid ' + esc(paidPct) + '%">' +
                   '<div class="bar-local" data-testid="bar-local" style="width:' + localPct + '%" title="Local ' + esc(localPct) + '%"></div>' +
