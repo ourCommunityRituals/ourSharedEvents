@@ -6,7 +6,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 20
+      "testCount": 21
     },
     {
       "file": "workers/oursharedevents/tests/admin-664-who-rich-content.spec.ts",
@@ -861,6 +861,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/demo-page-title.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 2
     },
     {
       "file": "workers/oursharedevents/tests/demo-registry.spec.ts",

@@ -123,7 +123,7 @@ const SECTION_LABELS: Record<string, string> = {
 const DEMO_STYLE = `<style>
   .demo-wrap { max-width: 960px; margin: 0 auto; padding: 1rem; }
   .demo-hero { padding: 1.5rem 0 0.5rem; }
-  .demo-hero h2 { margin: 0 0 0.25rem; }
+  .demo-hero h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
   .demo-lede { color: var(--text-muted); font-size: 1.05rem; margin: 0 0 1rem; }
   .demo-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 1.5rem; }
   .demo-tab {
@@ -146,7 +146,7 @@ const DEMO_STYLE = `<style>
     background: var(--accent); color: var(--bg); font-weight: 700; margin-right: 0.5rem;
   }
   .demo-section { margin: 2rem 0; }
-  .demo-section > h3 { border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+  .demo-section > h2 { border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; font-size: 1.17rem; }
   .flag-list { list-style: none; padding: 0; margin: 0; display: grid;
     gap: 0.35rem 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .flag-list li { display: flex; align-items: center; justify-content: space-between;
@@ -279,7 +279,7 @@ function fourFlowLoop(activeTier: DemoTier | null): string {
     )
     .join('');
   return `<section class="demo-section" aria-labelledby="loop-h">
-    <h3 id="loop-h">The four-flow loop</h3>
+    <h2 id="loop-h">The four-flow loop</h2>
     <div class="demo-grid">${cards}</div>
     <p class="demo-note">These surfaces render the demo dataset when the worker runs with mock mode on
     (<code>MOCK_MODE=1</code> on <code>wrangler dev</code>). Sponsor → Create → Attend → Report — the whole
@@ -294,7 +294,7 @@ function fourFlowLoop(activeTier: DemoTier | null): string {
  */
 function tierLadder(): string {
   return `<section class="demo-section" aria-labelledby="ladder-h">
-    <h3 id="ladder-h">One platform, three depths</h3>
+    <h2 id="ladder-h">One platform, three depths</h2>
     <table class="ladder">
       <caption>Everyone gets a real SharedReport. Paid unlocks the map; Premium reaches furthest — floored so no one is excluded.</caption>
       <thead>
@@ -342,7 +342,7 @@ function linkRegistry(): string {
       )}: ${esc(l.description)}</li>`
   ).join('');
   return `<section class="demo-section" aria-labelledby="registry-h">
-    <h3 id="registry-h">Canonical link registry <span class="depth-badge">v${esc(DEMO_REGISTRY_VERSION)}</span></h3>
+    <h2 id="registry-h">Canonical link registry <span class="depth-badge">v${esc(DEMO_REGISTRY_VERSION)}</span></h2>
     <p class="demo-note">The one address book. Every outward reference points here, and the CI gate
     (OSE-609) checks these exact paths — one list, never two. Slugs are permanent (Invariant #18 spirit).</p>
     <ul>${rows}</ul>
@@ -365,13 +365,13 @@ export function handleDemoIndex(): Response {
 
   const body = `
   <section class="demo-hero">
-    <h2>The demo site</h2>
+    <h1>The demo site</h1>
     <p class="demo-lede">Same night, same numbers — three depths. Tab between them.</p>
   </section>
   ${tierTabs(null)}
   ${tierLadder()}
   <section class="demo-section" aria-labelledby="trio-h">
-    <h3 id="trio-h">Three standing sites, one dataset</h3>
+    <h2 id="trio-h">Three standing sites, one dataset</h2>
     <div class="demo-grid">${cards}</div>
     <p class="demo-note">The differences you see between the three are the platform's real feature flags
     rendering at three tier configurations — one platform being configured, not three versions.
@@ -394,7 +394,7 @@ function flagPanel(flagTier: FlagTier): string {
     })
     .join('');
   return `<section class="demo-section" aria-labelledby="flags-h">
-    <h3 id="flags-h">Configuration driving this render</h3>
+    <h2 id="flags-h">Configuration driving this render</h2>
     <p class="demo-note">Read-only. This is the live flag set for this tier — the same
     <code>/api/v2/admin/flags</code> machinery, not a hardcoded list.</p>
     <ul class="flag-list">${items}</ul>
@@ -489,7 +489,7 @@ function depthExhibit(depth: ReportDepth): string {
     .join('');
 
   return `<section class="demo-section" aria-labelledby="depth-h">
-    <h3 id="depth-h">What this depth shows</h3>
+    <h2 id="depth-h">What this depth shows</h2>
     <p class="demo-note">Same materialized signal underneath (avg survey rating ${avgRating.toFixed(1)}★
     across ${surveys.length} responses). Dimmed cards are sections a deeper tier unlocks —
     the numbers already exist; the tier decides what renders.</p>
@@ -550,7 +550,7 @@ function sponsorRoster(): string {
     .join('');
 
   return `<section class="demo-section" aria-labelledby="roster-h">
-    <h3 id="roster-h">Sponsors — by campaign, grouped by tier</h3>
+    <h2 id="roster-h">Sponsors — by campaign, grouped by tier</h2>
     <p class="demo-note">The 15-minute script's opening view: the RIPH property's sponsors grouped by
     campaign within each tier class. Premium renders as a class (two campaigns), not a lone example.</p>
     <div class="demo-grid">${groups}</div>
@@ -586,7 +586,7 @@ function seasonSection(): string {
     : '';
 
   return `<section class="demo-section" aria-labelledby="season-h">
-    <h3 id="season-h">The RIPH season — four recurring containers</h3>
+    <h2 id="season-h">The RIPH season — four recurring containers</h2>
     <p class="demo-note">One venue, four recurring containers (trivia · bocce · pinball · cigar social club)
     across a mock season — consolidated so a sponsor's reach rolls up ACROSS them. Headcounts vary and
     climb, so the ladder shows real states — not a flat demo.</p>
@@ -599,7 +599,7 @@ export function handleDemoSite(tier: string): Response {
   const cfg = DEMO_TIERS[tier as DemoTier];
   if (!cfg) {
     const body = `<section class="demo-hero">
-      <h2>No such demo site</h2>
+      <h1>No such demo site</h1>
       <p class="demo-lede">Try one of the three standing sites.</p>
     </section>${tierTabs(null)}`;
     return demoHtml(body, 404);
@@ -607,7 +607,7 @@ export function handleDemoSite(tier: string): Response {
 
   const body = `
   <section class="demo-hero">
-    <h2>Demo — ${esc(cfg.label)}</h2>
+    <h1>Demo — ${esc(cfg.label)}</h1>
     <p class="demo-lede">${esc(cfg.tagline)}</p>
     <p class="demo-note">Venue: ${esc(RIPH_VENUE_NAME)} · one property, four recurring containers</p>
   </section>

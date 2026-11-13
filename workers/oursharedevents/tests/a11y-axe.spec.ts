@@ -21,6 +21,7 @@ import {
 } from '../src/handlers/pages';
 import { LANGUAGE_SWITCH_CSS } from '../src/lib/i18n/language-switch';
 import { handleFormPage } from '../src/handlers/form-pages';
+import { handleDemoIndex, handleDemoSite } from '../src/handlers/demo';
 import SPONSOR_HOME_HTML from '../src/templates/sponsor-home.html';
 import { renderSponsorHomePage, type PlacementRow } from '../src/lib/sponsor-home-render';
 import { renderSponsorCardPage } from '../src/lib/sponsor-card-render';
@@ -439,5 +440,39 @@ describe('A11Y-7 / OSE-1957, OSE-1971: Polish and Arabic pages, menu closed and 
         });
       }
     }
+  }
+});
+
+// The demo sites are the permanent reference installation (ADR-007), so they
+// meet the page rules every other surface meets. They were missing from this
+// file, which is how all four shipped with no <h1>: the page title was an <h2>
+// and nothing scanned it. Each page's title is its one <h1>, and no heading
+// below it skips a level.
+describe('A11Y-7: the demo sites, one <h1> each and no skipped heading level', () => {
+  const pages: Array<[string, string, () => Response]> = [
+    ['demo index', 'The demo site', () => handleDemoIndex()],
+    ['demo free', 'Demo — Free · Local', () => handleDemoSite('free')],
+    ['demo mid', 'Demo — Mid', () => handleDemoSite('mid')],
+    ['demo premium', 'Demo — Premium · Enterprise', () => handleDemoSite('premium')],
+    ['no such demo site', 'No such demo site', () => handleDemoSite('nope')],
+  ];
+
+  for (const [name, title, render] of pages) {
+    test(name, async () => {
+      await scanPage(name, await render().text());
+      expect(document.querySelector('h1')?.textContent?.trim()).toBe(title);
+      const levels = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6')).map((h) =>
+        Number(h.tagName.slice(1))
+      );
+      expect(levels[0], `${name}: the first heading is the page title`).toBe(1);
+      levels.forEach((level, i) => {
+        if (i > 0) {
+          expect(
+            level,
+            `${name}: heading ${i + 1} jumps from h${levels[i - 1]} to h${level}`
+          ).toBeLessThanOrEqual(levels[i - 1] + 1);
+        }
+      });
+    });
   }
 });
