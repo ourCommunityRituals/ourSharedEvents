@@ -1717,8 +1717,15 @@ jobs:
           # folder-6 "CI brand admin" requests skip, under a named test, until then.
           CF_ACCESS_CI_BRAND_CLIENT_ID: ${{ secrets.CF_ACCESS_CI_BRAND_CLIENT_ID }}
           CF_ACCESS_CI_BRAND_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CI_BRAND_CLIENT_SECRET }}
+          # OSE-2022: the calendar requests send X-OCR-CI so the stg skip rule lets
+          # them reach the Worker. CALENDAR_EDGE_STRICT=1 (the owner sets it once the
+          # rule covers /brands/) turns a challenged calendar read into a failure.
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+          CALENDAR_EDGE_STRICT: ${{ vars.CALENDAR_EDGE_STRICT }}
         run: |
           npx bru run . -r --env ose-staging \
+            --env-var "ocrCiEdgeToken=$OCR_CI_EDGE_TOKEN" \
+            --env-var "edgeStrict=$CALENDAR_EDGE_STRICT" \
             --env-var "adminKey=$ADMIN_KEY" \
             --env-var "ocrInternalSecret=$X_OCR_INTERNAL" \
             --env-var "cfAccessClientId=$CF_ACCESS_CLIENT_ID" \
@@ -2486,6 +2493,9 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           PW_REQUIRE_PRECONDITIONS: '1'
           PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
+          # OSE-2022: see the Bruno contract step for these two.
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+          CALENDAR_EDGE_STRICT: ${{ vars.CALENDAR_EDGE_STRICT }}
         run: |
           PW_LABEL='T4g: Launch Story Smoke' scripts/pw-guarded.sh \
             --config=playwright.e2e-smoke.config.ts \

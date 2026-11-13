@@ -8,6 +8,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { edgeChallenged, edgeHeaders, noteEdgeChallenge } from '../../../scripts/ci/edge-read.mjs';
 
 const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.X_OCR_INTERNAL || '';
@@ -258,16 +259,19 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     draftEventId = await createEvent(request, 'draft', false, 'feed-draft');
 
     // The Cloudflare edge can challenge a non-browser read before the Worker
-    // runs (403 with cf-mitigated, OSE-939). That is the only answer accepted
-    // besides the Worker's own; the Worker never answers 403 on this route.
-    const edgeChallenged = (resp: { status(): number; headers(): Record<string, string> }) =>
-      resp.status() === 403 && !!resp.headers()['cf-mitigated'];
-
-    const feed = await request.get(`${BASE_URL}/brands/root/calendar.ics`, { maxRedirects: 0 });
-    if (edgeChallenged(feed)) {
+    // runs (403 with cf-mitigated, OSE-939). The read sends X-OCR-CI, which the
+    // stg skip rule lets through. A challenge is still not a pass: it is written
+    // as a GitHub warning and a summary line, and with CALENDAR_EDGE_STRICT=1 it
+    // fails the test (scripts/ci/edge-read.mjs, OSE-2022).
+    const feedPath = '/brands/root/calendar.ics';
+    const feed = await request.get(`${BASE_URL}${feedPath}`, {
+      maxRedirects: 0,
+      headers: edgeHeaders(),
+    });
+    if (edgeChallenged(feed.status(), feed.headers())) {
       test.info().annotations.push({
         type: 'edge-challenge',
-        description: 'The edge challenged /brands/root/calendar.ics; the Worker did not answer.',
+        description: noteEdgeChallenge(feedPath),
       });
       return;
     }
@@ -304,17 +308,18 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
 
     // Another brand's feed never carries this brand's event. A brand nobody has
     // is a 404; if it existed, its feed still must not hold the root event.
-    const other = await request.get(
-      `${BASE_URL}/brands/launch-smoke-other-${RUN_ID}/calendar.ics`,
-      {
-        maxRedirects: 0,
-      }
-    );
-    if (!edgeChallenged(other)) {
-      expect(other.status(), 'a brand with nothing public').toBe(404);
-      expect(other.headers()['set-cookie'], 'no cookie on the refusal').toBeUndefined();
-      expect(await other.text()).not.toContain(publicEventId);
+    const otherPath = `/brands/launch-smoke-other-${RUN_ID}/calendar.ics`;
+    const other = await request.get(`${BASE_URL}${otherPath}`, {
+      maxRedirects: 0,
+      headers: edgeHeaders(),
+    });
+    if (edgeChallenged(other.status(), other.headers())) {
+      noteEdgeChallenge(otherPath);
+      return;
     }
+    expect(other.status(), 'a brand with nothing public').toBe(404);
+    expect(other.headers()['set-cookie'], 'no cookie on the refusal').toBeUndefined();
+    expect(await other.text()).not.toContain(publicEventId);
   });
 
   test('poster scan route replays to /events/:id with type and deployment context (OSE-1359)', async ({

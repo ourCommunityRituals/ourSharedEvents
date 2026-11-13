@@ -9,12 +9,14 @@ http:
   headers:
     - name: Accept
       value: text/calendar
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
   auth: inherit
 
 runtime:
   scripts:
     - type: after-response
-      code: "// Non-existent event blocked (worker 404 OR edge WAF 403), same unified contract as OSE-R-004's /events/:id error page (OSE-348).\ntest('404 worker OR 403 WAF block', function () { expect([404, 403]).to.include(res.getStatus()); });\nif (res.getStatus() === 404) {\n    test('404 code is NOT_FOUND', function () { expect(res.getBody().code).to.eql('NOT_FOUND'); });\n}"
+      code: "// Non-existent event blocked (worker 404 OR edge WAF 403), same unified contract as OSE-R-004's /events/:id error page (OSE-348).\ntest('404 worker OR 403 WAF block', function () { expect([404, 403]).to.include(res.getStatus()); });\nif (res.getStatus() === 404) {\n    test('404 code is NOT_FOUND', function () { expect(res.getBody().code).to.eql('NOT_FOUND'); });\n}\nif (res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0 && String(bru.getEnvVar('edgeStrict')) === '1') {\n    test('EDGE (strict, OSE-2022): the read reached the Worker, not an edge challenge', function () { expect('edge challenge').to.eql('the Worker'); });\n}"
 
 settings:
   encodeUrl: true

@@ -9,12 +9,14 @@ http:
   headers:
     - name: Accept
       value: text/calendar
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
   auth: inherit
 
 runtime:
   scripts:
     - type: after-response
-      code: "// A badly formed brand is refused by the Worker (404). 403 with cf-mitigated is the edge challenging the read before the Worker runs (OSE-939).\nvar edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;\ntest('404 from the Worker OR an edge challenge', function () { expect(res.getStatus() === 404 || edge).to.equal(true); });\nif (res.getStatus() === 404) {\n    test('404 code is NOT_FOUND', function () { expect(res.getBody().code).to.eql('NOT_FOUND'); });\n    test('no cookie is set', function () { expect(!res.getHeader('set-cookie')).to.equal(true); });\n    test('it is not a calendar', function () { expect(res.getHeader('Content-Type') || '').to.not.include('text/calendar'); });\n}"
+      code: "// A badly formed brand is refused by the Worker (404). 403 with cf-mitigated is the edge challenging the read before the Worker runs (OSE-939).\nvar edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;\ntest('404 from the Worker OR an edge challenge', function () { expect(res.getStatus() === 404 || edge).to.equal(true); });\nif (res.getStatus() === 404) {\n    test('404 code is NOT_FOUND', function () { expect(res.getBody().code).to.eql('NOT_FOUND'); });\n    test('no cookie is set', function () { expect(!res.getHeader('set-cookie')).to.equal(true); });\n    test('it is not a calendar', function () { expect(res.getHeader('Content-Type') || '').to.not.include('text/calendar'); });\n}\nif (res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0 && String(bru.getEnvVar('edgeStrict')) === '1') {\n    test('EDGE (strict, OSE-2022): the read reached the Worker, not an edge challenge', function () { expect('edge challenge').to.eql('the Worker'); });\n}"
 
 settings:
   encodeUrl: true
