@@ -77,14 +77,16 @@ may want a fictionalized venue. Decide when landing this doctrine.
 
 ### Implementation cross-reference (already built, OSE-605 branch)
 
-| Doctrine line                 | Where it lives in code                                          |
-| ----------------------------- | --------------------------------------------------------------- |
-| Three-site trio, flag-driven  | `src/handlers/demo.ts` (`/demo/{free,mid,premium}`)             |
-| `data_class` third class      | `src/lib/mock-data.ts` (`DataClass`, all RIPH rows `demo`)      |
-| Fail-closed pool routing      | `src/lib/pool-contract.ts` (`phaseToPool` / `PoolRoutingError`) |
-| Tier value model (map = paid) | `src/lib/report-depth.ts` (`corridor_map` in mid+premium)       |
-| Break-demo-break-build        | `tests/demo-ci-gate.spec.ts`                                    |
-| Canonical link registry       | `src/lib/demo-registry.ts`                                      |
+| Doctrine line                  | Where it lives in code                                                |
+| ------------------------------ | --------------------------------------------------------------------- |
+| Three-site trio, flag-driven   | `src/handlers/demo.ts` (`/demo/{free,mid,premium}`)                   |
+| `data_class` third class       | `src/lib/mock-data.ts` (`DataClass`, all RIPH rows `demo`)            |
+| Fail-closed pool routing       | `src/lib/pool-contract.ts` (`phaseToPool` / `PoolRoutingError`)       |
+| Tier value model (map = paid)  | `src/lib/report-depth.ts` (`corridor_map` in mid+premium)             |
+| Break-demo-break-build         | `tests/demo-ci-gate.spec.ts`                                          |
+| Canonical link registry        | `src/lib/demo-registry.ts`                                            |
+| One `<h1>` on every demo page  | `tests/demo-page-title.spec.ts`, `tests/page-surfaces-one-h1.spec.ts` |
+| Demo pages in the a11y profile | `tests/playwright/a11y-profile.spec.ts` (reflow, axe light and dark)  |
 
 **Remaining to fully honor this doctrine in production:** the `data_class` column
 migration on `events` (+ api-schema snapshot update), a `wrangler d1` seed that

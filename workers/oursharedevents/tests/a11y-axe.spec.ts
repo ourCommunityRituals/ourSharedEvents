@@ -464,6 +464,13 @@ describe('A11Y-7: the demo sites, one <h1> each and no skipped heading level', (
       const levels = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6')).map((h) =>
         Number(h.tagName.slice(1))
       );
+      // WCAG 2.5.3 Label in Name is not in the wcag2a/wcag2aa tags scanPage
+      // runs. The front door's "Enter" links carried a name without the word
+      // (OSE-2031), so the rule runs here by name.
+      const named = await axe.run(document, {
+        runOnly: { type: 'rule', values: ['label-content-name-mismatch'] },
+      });
+      expect(named.violations.map((v) => v.id)).toEqual([]);
       expect(levels[0], `${name}: the first heading is the page title`).toBe(1);
       levels.forEach((level, i) => {
         if (i > 0) {

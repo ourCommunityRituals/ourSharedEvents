@@ -94,6 +94,14 @@ for (const route of manifest.routes) {
         'viewport meta'
       ).toBeGreaterThan(0);
 
+      // 4b. One <h1> per page (AGENTS.md invariant 8). The mock layer asks the
+      // router for every page (workers/oursharedevents/tests/
+      // page-surfaces-one-h1.spec.ts); this is the same rule on what the
+      // browser draws on deployed staging, script-built headings included.
+      if (manifest.app === 'ose') {
+        await expect(testPage.locator('h1'), 'exactly one <h1>').toHaveCount(1);
+      }
+
       // 5. Mobile workability: no horizontal scroll
       if (!route.allowHScroll) {
         const overflow = await testPage.evaluate(

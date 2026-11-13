@@ -853,7 +853,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 33
+      "testCount": 35
     },
     {
       "file": "workers/oursharedevents/tests/demo-ci-gate.spec.ts",
@@ -881,7 +881,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 6
+      "testCount": 8
     },
     {
       "file": "workers/oursharedevents/tests/deprecation-lock.spec.ts",
@@ -979,7 +979,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 12
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/event-anon-key.spec.ts",
@@ -1904,6 +1904,20 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/page-surfaces-one-h1.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/page-surfaces-route-table.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 11
     },
     {
       "file": "workers/oursharedevents/tests/pagination-shape-invariant.spec.ts",

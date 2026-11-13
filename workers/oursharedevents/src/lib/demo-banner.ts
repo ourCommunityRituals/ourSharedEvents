@@ -74,6 +74,8 @@ export async function isDemoModeActive(env: DataProviderEnv): Promise<boolean> {
 function provenanceBar(o: {
   testid: string;
   bg: string;
+  /** Text colour. It pairs with `bg`, so a token background takes its own on-colour. */
+  fg: string;
   chip: string;
   text: string;
   label: string;
@@ -82,7 +84,7 @@ function provenanceBar(o: {
     `<div data-testid="${o.testid}" role="status" aria-label="${o.label}" ` +
     `style="position:sticky;top:0;left:0;right:0;z-index:2147483000;display:flex;gap:.5rem;` +
     `align-items:center;justify-content:center;padding:.4rem .75rem;` +
-    `background:${o.bg};color:#fff;text-align:center;` +
+    `background:${o.bg};color:${o.fg};text-align:center;` +
     `font:600 clamp(.72rem,2.6vw,.85rem)/1.2 system-ui,-apple-system,sans-serif;` +
     `letter-spacing:.01em;box-shadow:0 1px 3px rgba(0,0,0,.25);">` +
     `<span style="background:rgba(255,255,255,.22);border-radius:.2rem;padding:.05rem .4rem;` +
@@ -100,6 +102,9 @@ export function demoBannerMarkup(lang: Lang = DEFAULT_LANG): string {
   return provenanceBar({
     testid: DEMO_BANNER_TESTID,
     bg: 'var(--accent,#b45309)',
+    // The accent's own text colour: white on the light accent, dark on the dark
+    // theme's lighter accent, where white read at 2.86:1 (OSE-2031).
+    fg: 'var(--on-accent,#fff)',
     chip: msg(lang, 'provenance.demoChip'),
     text: msg(lang, 'provenance.demoText'),
     label: msg(lang, 'provenance.demoLabel'),
@@ -115,6 +120,7 @@ export function degradedBannerMarkup(lang: Lang = DEFAULT_LANG): string {
   return provenanceBar({
     testid: DEGRADED_BANNER_TESTID,
     bg: '#334155',
+    fg: '#fff',
     chip: msg(lang, 'provenance.degradedChip'),
     text: msg(lang, 'provenance.degradedText'),
     label: msg(lang, 'provenance.degradedLabel'),
