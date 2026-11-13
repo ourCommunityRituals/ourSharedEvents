@@ -152,6 +152,8 @@ function fakeSite(faults = {}) {
           e.cell = cellFor(b);
         }
         if ('is_published' in b && !faults.unpublishIgnored) e.published = b.is_published;
+        // Every change is late again: the next reads still show the page before it.
+        if (faults.staleAfterPut) staleReads = faults.staleAfterPut;
         return json({ ok: true, id });
       }
       if (method === 'DELETE') {
@@ -408,6 +410,35 @@ describe('a healthy site', () => {
   test('a change that reaches a read late still passes (the checks poll)', async () => {
     const r = await runAll({ staleReads: 2 });
     expect(failedNames(r)).toEqual([]);
+  });
+
+  test('every change gets its own wait: each late edit still passes', async () => {
+    const r = await runAll({ staleAfterPut: 2 });
+    expect(failedNames(r)).toEqual([]);
+  });
+
+  test('a change that never arrives: every check still reports, and the step waits once', async () => {
+    // Run 42575959758 (2026-11-09): each red check waited its own 90 s, so step 1
+    // hit its 8-minute timeout, and steps 2 to 4 have more checks than that fits.
+    let waits = 0;
+    const r = await runAll(
+      { createUnpublished: true },
+      { ctxOver: { attempts: 9, sleep: async () => void waits++ } }
+    );
+    const f = failedNames(r);
+    for (const n of [
+      'create: landing /',
+      'create: /events',
+      'create: public API /api/v2/events',
+      'create: landing ?zip=60453',
+      'create: /events ?q=Oak Lawn',
+      'create: /events ?q=60453',
+      `create: map cell ${r.state.from.cell}`,
+    ]) {
+      expect(f).toContain(n);
+    }
+    // One change, one wait: at most attempts - 1 sleeps across the whole step.
+    expect(waits).toBeLessThanOrEqual(8);
   });
 
   test('a 429 is waited out, not failed', async () => {

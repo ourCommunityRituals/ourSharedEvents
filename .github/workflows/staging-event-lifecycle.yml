@@ -67,7 +67,8 @@ env:
   LANDING_WHERE_SEARCH: 'on'
   WINDOW_PAST_DAYS: '0'
   WINDOW_FUTURE_DAYS: '90'
-  # A change gets 90 s to reach every read (the map answers with max-age=60).
+  # A change gets 80 s (8 waits of 10 s) to reach every read, shared by all the
+  # checks after it, never 80 s per check (the map answers with max-age=60).
   LIFECYCLE_POLL_ATTEMPTS: '9'
   LIFECYCLE_POLL_DELAY_MS: '10000'
 
