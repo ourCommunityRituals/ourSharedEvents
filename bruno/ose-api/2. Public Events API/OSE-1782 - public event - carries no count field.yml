@@ -20,6 +20,12 @@ runtime:
         // deployed answer. A count added later is declared in
         // PUBLIC_EVENT_COUNT_SOURCES and added to ALLOWED below, in the same change.
         //
+        // OSE-2012: one key has a count-shaped NAME and is not a count.
+        // attendance_mode says how an event is held. It is declared in
+        // PUBLIC_EVENT_WORD_FIELDS (ADR-028), and here in WORD_FIELDS with the
+        // only words it may hold. It is let through only while its value is one
+        // of them, so a number published under that name still fails.
+        //
         // Behind a Cloudflare Access challenge the answer is not JSON. That is
         // the same case the neighbouring GET /api/v2/events/:id request allows
         // for: it is named as its own test, so a run shows which case it met.
@@ -37,6 +43,7 @@ runtime:
           'walkin', 'walkins', 'capacity', 'headcount', 'returned',
         ];
         const ALLOWED = [];
+        const WORD_FIELDS = { attendance_mode: ['in_person', 'online', 'both'] };
         const COMPOUND = /checkins?|checkedin|walkins?|signups?|attendance|headcount/;
         function words(key) {
           return key
@@ -66,9 +73,16 @@ runtime:
         });
         test('the item has no count-shaped key that is not declared', function () {
           const found = countShaped(Object.keys(res.getBody().item)).filter(function (k) {
-            return ALLOWED.indexOf(k) === -1;
+            return ALLOWED.indexOf(k) === -1 && !WORD_FIELDS[k];
           });
           expect(found).to.eql([]);
+        });
+        test('OSE-2012: a word field holds one of its words, never a number', function () {
+          const item = res.getBody().item;
+          Object.keys(WORD_FIELDS).forEach(function (k) {
+            expect(countShaped([k]), k + ' is here only because its name is count-shaped').to.eql([k]);
+            expect(WORD_FIELDS[k], k + ' = ' + JSON.stringify(item[k])).to.include(item[k]);
+          });
         });
 
 settings:
