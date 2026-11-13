@@ -49,8 +49,8 @@ Fight Mode, browser integrity check). It skips nothing else, and no other path.
 
 **D2. The Worker's own limits are the control on those addresses.** Both routes are behind
 `publicReadLimited`: 60 requests per 10 seconds and 360 per minute, per caller
-(`lib/public-read-limit.ts`, `lib/edge-rate-limit.ts`). The per-event route was not rate-limited
-before this ADR; that is corrected in the same change if D1 is accepted (see Implementation Notes).
+(`lib/public-read-limit.ts`, `lib/edge-rate-limit.ts`). The per-event route had no limit until
+2026-11-13; it was added with this ADR (`tests/public-event-calendar.spec.ts`).
 
 **D3. Apply it to stg first, then to production when production is brought in line.** The owner
 runs the command. An agent does not write edge rules (AGENTS.md, Human approval).
@@ -127,13 +127,13 @@ Built already, and needing no decision:
 - Switch: repository variable `CALENDAR_EDGE_STRICT`. The owner sets it to `1` once a read of both
   addresses passes the edge. From then a challenged calendar read fails T2 and T4.
 - Runbook: `docs/runbooks/RUNBOOK-STG-CI-SKIP-RULE.md`.
+- Rate limit on `GET /events/:id/calendar.ics` (`publicReadLimited('event-calendar', …)` in
+  `workers/oursharedevents/src/router.ts`).
 
 Not built, waiting on D1 to D3:
 
 - The public rule itself, as a script the owner runs (dry run by default, in the manner of
   `cf-waf-stg-ci-skip.mjs`).
-- `publicReadLimited` on `GET /events/:id/calendar.ics`, which has no limit today
-  (`workers/oursharedevents/src/router.ts`).
 - A probe shape with no headers at all for the two calendar addresses, which is what a calendar app
   sends. Today's `plain` shape already reads them; it is not part of the verdict until D1 is applied.
 

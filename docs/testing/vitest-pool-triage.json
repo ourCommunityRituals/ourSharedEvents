@@ -2239,7 +2239,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 9
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/public-event-error-pages.spec.ts",

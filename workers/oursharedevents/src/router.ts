@@ -2233,7 +2233,10 @@ export async function route(
   // ── Public event calendar download (OSE-1358) ─────────────────────────────
   const eventCalendarMatch = pathname.match(/^\/events\/([^/]+)\/calendar\.ics$/);
   if (eventCalendarMatch && method === 'GET') {
-    return handleEventCalendar(request, env, eventCalendarMatch[1]);
+    // Rate-limited like every public read (OSE-2022). It had no limit before.
+    return publicReadLimited('event-calendar', (req, e: typeof env) =>
+      handleEventCalendar(req, e, eventCalendarMatch[1])
+    )(request, env);
   }
 
   // ── A brand's calendar feed (OSE-2013) ────────────────────────────────────
