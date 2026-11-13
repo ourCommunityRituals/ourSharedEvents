@@ -255,7 +255,7 @@ export class DataProvider {
               start_date, end_date, timezone, starts_at, cover_image_url, created_at, updated_at,
               legal_clearance_tier,
               what_short, who_host, why_purpose, how_details, where_address,
-              lat, lon, corridor_id, h3_res9, h3_res7
+              lat, lon, corridor_id, h3_res9, h3_res7, attendance_mode
        FROM events WHERE id = ?1 LIMIT 1`
     )
       .bind(eventId)
@@ -279,11 +279,15 @@ export class DataProvider {
       // category since 2026-11-09); template_id rides along. Additive to the list projection; the JSON API drops both via
       // its allowlist projection (public-event-projection), so this cannot leak.
       // place_kind (0106) marks the zoomed map's dots; the API drops it the same way.
+      // attendance_mode (0108, OSE-2012) IS published. This query does not
+      // filter on it: the brand API returns online events. The surfaces that
+      // leave them out (/events, the landing) do so with withoutLinkOnly
+      // (lib/attendance-mode.ts).
       `SELECT id, brand_id, title, slug, status, description, location,
               start_date, end_date, timezone, starts_at, cover_image_url, created_at, updated_at,
               legal_clearance_tier, template_id, event_type_id,
               what_short, who_host, why_purpose, how_details, where_address,
-              lat, lon, corridor_id, h3_res9, h3_res7, place_kind
+              lat, lon, corridor_id, h3_res9, h3_res7, place_kind, attendance_mode
        FROM events
        WHERE is_published = 1 AND brand_id = ? AND status = 'active' AND ${listedSql()}
        ORDER BY start_date ASC, starts_at ASC

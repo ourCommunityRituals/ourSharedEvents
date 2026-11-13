@@ -32,14 +32,17 @@ Some endpoints also include `requestId` for tracing.
 
 ### Input Validation Errors
 
-| Code                    | HTTP | Meaning                                                                        | What to Do                                                |
-| ----------------------- | ---- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| `INVALID_EVENT_ID`      | 400  | Event ID has invalid characters                                                | Use only letters, numbers, hyphens, underscores (max 128) |
-| `INVALID_BODY`          | 400  | Request body is not valid JSON or exceeds 16KB                                 | Check JSON syntax and body size                           |
-| `MISSING_FIELD`         | 400  | A required field is missing                                                    | Check which field the error message specifies             |
-| `INVALID_FLAG_KEY`      | 400  | Unknown feature flag key                                                       | Use a valid flag key from the 17 known keys               |
-| `INVALID_TIER`          | 400  | Invalid tier name                                                              | Use `free`, `mid`, or `enterprise`                        |
-| `SERVER_COMPUTED_FIELD` | 400  | An event create or update named `venue_canonical_id` or `event_correlation_id` | Remove the field: the server computes both                |
+| Code                      | HTTP | Meaning                                                                        | What to Do                                                |
+| ------------------------- | ---- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `INVALID_EVENT_ID`        | 400  | Event ID has invalid characters                                                | Use only letters, numbers, hyphens, underscores (max 128) |
+| `INVALID_BODY`            | 400  | Request body is not valid JSON or exceeds 16KB                                 | Check JSON syntax and body size                           |
+| `MISSING_FIELD`           | 400  | A required field is missing                                                    | Check which field the error message specifies             |
+| `INVALID_FLAG_KEY`        | 400  | Unknown feature flag key                                                       | Use a valid flag key from the 17 known keys               |
+| `INVALID_TIER`            | 400  | Invalid tier name                                                              | Use `free`, `mid`, or `enterprise`                        |
+| `SERVER_COMPUTED_FIELD`   | 400  | An event create or update named `venue_canonical_id` or `event_correlation_id` | Remove the field: the server computes both                |
+| `INVALID_ATTENDANCE_MODE` | 400  | `attendance_mode` is not `in_person`, `online` or `both`                       | Send one of the three values                              |
+| `LOCATION_REQUIRED`       | 400  | An in-person or both event would have no place                                 | Send `location` or `where_address`, or use `online`       |
+| `LOCATION_NOT_ALLOWED`    | 400  | An online event would have a place                                             | Clear the place, or use `both`                            |
 
 ### Feature Gating Errors
 

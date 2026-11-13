@@ -28,6 +28,7 @@ import * as countFloor from '../src/lib/count-floor';
 import {
   COUNT_PUBLISHERS,
   PUBLIC_EVENT_COUNT_SOURCES,
+  PUBLIC_EVENT_WORD_FIELDS,
   PUBLIC_EVENT_FIELDS,
   projectEvent,
   toPublicEvent,
@@ -146,13 +147,46 @@ describe('the public event projection publishes no count except through count-fl
 
   test('every count-shaped field is declared against a count-floor export', () => {
     const fields = [...PUBLIC_EVENT_FIELDS];
-    const undeclared = countShapedFields(fields).filter((f) => !(f in PUBLIC_EVENT_COUNT_SOURCES));
+    // OSE-2012: a count-shaped NAME whose value is a fixed word (attendance_mode)
+    // is declared in PUBLIC_EVENT_WORD_FIELDS instead; the next test holds it.
+    const undeclared = countShapedFields(fields).filter(
+      (f) => !(f in PUBLIC_EVENT_COUNT_SOURCES) && !(f in PUBLIC_EVENT_WORD_FIELDS)
+    );
     expect(
       undeclared,
       `count-shaped field(s) in the public projection with no count-floor source: ` +
         `${undeclared.join(', ')}. Produce the value with a count-floor.ts function and ` +
         `declare it in PUBLIC_EVENT_COUNT_SOURCES.`
     ).toEqual([]);
+  });
+
+  test('a word field never publishes a number, whatever the row holds (OSE-2012)', () => {
+    expect(Object.keys(PUBLIC_EVENT_WORD_FIELDS)).toEqual(['attendance_mode']);
+    for (const field of Object.keys(PUBLIC_EVENT_WORD_FIELDS)) {
+      const words = new Set<unknown>();
+      for (const hostile of [
+        3,
+        0,
+        4,
+        '3',
+        '12 people',
+        1e9,
+        null,
+        undefined,
+        true,
+        [4],
+        { n: 4 },
+      ]) {
+        const out = toPublicEvent({ id: 'e', [field]: hostile })[field];
+        expect(typeof out, `${field} <- ${String(hostile)}`).toBe('string');
+        expect(out, `${field} <- ${String(hostile)}`).not.toMatch(/\d/);
+        words.add(out);
+      }
+      // Every hostile value came out as the one default word.
+      expect(words.size).toBe(1);
+      // A word field is never also a count field.
+      expect(field in PUBLIC_EVENT_COUNT_SOURCES).toBe(false);
+    }
   });
 
   test('every declared field is produced by its helper: a sub-floor input never comes out raw', () => {

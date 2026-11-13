@@ -231,6 +231,7 @@ beforeAll(async () => {
     method: 'POST',
     headers: ADMIN,
     body: JSON.stringify({
+      attendance_mode: 'in_person',
       title: 'OSE-616 Trace — Eagles Hall',
       status: 'active',
       lat: EAGLES.lat,

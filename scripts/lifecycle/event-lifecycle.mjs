@@ -708,6 +708,8 @@ export async function stepCreate(ctx) {
         status: 'active',
         is_published: true,
         data_class: 'synthetic',
+        // OSE-2012: the create API requires the mode. The job's event is at a place.
+        attendance_mode: 'in_person',
         title: state.title,
         description:
           'A test event the nightly staging job makes and deletes. Testing purposes only.',

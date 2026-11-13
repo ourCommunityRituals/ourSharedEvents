@@ -144,6 +144,7 @@
 
     <section class="ose-card ose-section" data-testid="event-where" aria-labelledby="where-heading">
            <h2 id="where-heading">Dónde</h2>
+           <p data-testid="event-mode" data-mode="in_person">Presencial</p>
            
            <p><strong>St. Barnabas Hall</strong></p>
            <p>123 Main St</p>

@@ -244,6 +244,8 @@ describe('L2: admin mutations create audit entries', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
         id: `audit-test-evt-${Date.now()}`,
         brand_id: 'brand-audit',
         title: 'Audit Test Event',
@@ -268,6 +270,8 @@ describe('L2: admin mutations create audit entries', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
         id: `audit-actor-test-${Date.now()}`,
         brand_id: 'brand-audit',
         title: 'Actor Test',
@@ -290,7 +294,14 @@ describe('L2: admin mutations create audit entries', () => {
     await SELF.fetch('https://localhost/api/v2/admin/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: 'denied-x', brand_id: 'b', title: 't', slug: 's-denied' }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        id: 'denied-x',
+        brand_id: 'b',
+        title: 't',
+        slug: 's-denied',
+      }),
     });
 
     const auditRes = await adminFetch(

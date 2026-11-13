@@ -75,6 +75,8 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
         data: {
+          attendance_mode: 'in_person',
+          location: 'Test Hall',
           title: 'Test Event',
           date: new Date().toISOString().split('T')[0],
         },
@@ -89,6 +91,8 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
         data: {
+          attendance_mode: 'in_person',
+          location: 'Test Hall',
           title: 'Test Event',
           date: new Date().toISOString().split('T')[0],
         },
@@ -116,7 +120,7 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
     test('returns WWW-Authenticate header on 401', async ({ request }) => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
-        data: { title: 'Test Event' },
+        data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Test Event' },
       });
 
       expect(response.status()).toBe(401);
@@ -129,7 +133,7 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
     test('returns JSON content type on 401', async ({ request }) => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
-        data: { title: 'Test Event' },
+        data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Test Event' },
       });
 
       expect(response.status()).toBe(401);
@@ -141,7 +145,7 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
     test('returns X-Request-Id header on 401', async ({ request }) => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
-        data: { title: 'Test Event' },
+        data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Test Event' },
       });
 
       expect(response.status()).toBe(401);
@@ -154,7 +158,7 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
     test('returns 401 when token is invalid', async ({ request }) => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
-        data: { title: 'Test Event' },
+        data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Test Event' },
         headers: {
           Authorization: 'Bearer invalid-token-12345',
         },
@@ -170,7 +174,7 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
     test('returns 401 for malformed Bearer header', async ({ request }) => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
-        data: { title: 'Test Event' },
+        data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Test Event' },
         headers: {
           Authorization: 'NotBearer some-token',
         },
@@ -188,6 +192,8 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
         data: {
+          attendance_mode: 'in_person',
+          location: 'Test Hall',
           title: `Test Event ${Date.now()}`,
           date: new Date().toISOString().split('T')[0],
         },
@@ -208,6 +214,8 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
         data: {
+          attendance_mode: 'in_person',
+          location: 'Test Hall',
           title: `Test Event ${Date.now()}`,
           date: new Date().toISOString().split('T')[0],
         },
@@ -231,6 +239,8 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
         data: {
+          attendance_mode: 'in_person',
+          location: 'Test Hall',
           title: `OCR-Internal Test ${Date.now()}`,
           date: new Date().toISOString().split('T')[0],
         },
@@ -244,7 +254,7 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
     test('returns 401 with invalid X-OCR-Internal header', async ({ request }) => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
-        data: { title: 'Test Event' },
+        data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Test Event' },
         headers: { 'X-OCR-Internal': 'invalid-secret-value' },
       });
 
@@ -256,7 +266,7 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
     test('401 responses include CORS headers', async ({ request }) => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
-        data: { title: 'Test Event' },
+        data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Test Event' },
       });
 
       expect(response.status()).toBe(401);
@@ -271,12 +281,12 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
       // Make two requests and verify error format is deterministic
       const response1 = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
-        data: { title: 'Test Event 1' },
+        data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Test Event 1' },
       });
 
       const response2 = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
-        data: { title: 'Test Event 2' },
+        data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Test Event 2' },
       });
 
       expect(response1.status()).toBe(401);
@@ -342,7 +352,7 @@ test.describe('Story C1: ADMIN_KEY Configuration Errors (503)', () => {
     // Verify staging has key configured (returns 401, not 503)
     const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
       timeout: TIMEOUT,
-      data: { name: 'Test Event' },
+      data: { attendance_mode: 'in_person', location: 'Test Hall', name: 'Test Event' },
       // No Authorization header - should return 401 (key is configured)
     });
 

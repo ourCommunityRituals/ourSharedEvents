@@ -1,0 +1,43 @@
+info:
+  name: OSE-2012 | sunny | brand API | the list returns the online event, with its mode and no place
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events?brand=root"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const items = res.getBody().items || [];
+        const online = items.filter(function (i) { return i.id === 'mode-online-evt'; })[0];
+        test('OSE-2012: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-2012 sunny: the brand API still returns the online event', function () {
+          expect(online, 'mode-online-evt is missing from GET /api/v2/events?brand=root').to.be.an('object');
+          expect(online.attendance_mode).to.eql('online');
+        });
+        test('OSE-2012 place, not person: the online event has no place, coordinates or cell', function () {
+          expect([online.location, online.where_address, online.lat, online.lon, online.h3_res7, online.venue]).to.eql([null, null, null, null, null, null]);
+        });
+        test('OSE-2012: every listed event carries one of the three modes', function () {
+          expect(items.length).to.be.above(0);
+          items.forEach(function (i) { expect(['in_person', 'online', 'both'], i.id).to.include(i.attendance_mode); });
+        });
+        test('OSE-2012 allowlist: no listed event carries a meeting link or any field named like one', function () {
+          items.forEach(function (i) {
+            Object.keys(i).forEach(function (k) { expect(/meet|join|stream|zoom|webinar|online_url/i.test(k), i.id + '.' + k).to.eql(false); });
+          });
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

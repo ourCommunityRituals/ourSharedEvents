@@ -55,6 +55,31 @@ export const EXEMPT_IDENTIFIERS: ReadonlyMap<string, string> = new Map([
   // their exemptions are gone. The map is empty.
 ]);
 
+/**
+ * Whole identifiers that hold a banned token and are NOT the banned idea
+ * (docs/adr/ADR-028). This is not debt and has no ticket to remove it: each
+ * entry is a decision recorded in that ADR, and says why the name is not an
+ * audience count.
+ *
+ * The match is the exact identifier. `attendance_mode` passes; `attendance`,
+ * `attendance_count` and `attendance_mode_total` still fail.
+ *
+ * A name may be here only if it is a column held to a fixed list of words by a
+ * CHECK, and is listed in ADR-028. The structural invariant
+ * tests/e2e/0-architecture/lexicon-allowance.invariant.spec.ts holds both, so
+ * this list cannot grow by a one-line edit.
+ */
+export const ALLOWED_IDENTIFIERS: ReadonlyMap<string, string> = new Map([
+  [
+    'attendance_mode',
+    // Owner decision 2026-11-12 (OSE-2012). "Attendance mode" is schema.org's
+    // name for how an event is held: in person, online, or both. The column
+    // holds one of three words (a CHECK in migration 0108), never a number, so
+    // it can say nothing about how many people came.
+    'OSE-2012: how an event is held (in_person, online, both); a word, never a count',
+  ],
+]);
+
 export interface SchemaIdentifier {
   /** 'table' | 'column' | 'index' | 'view' | 'trigger' */
   kind: string;
@@ -133,11 +158,12 @@ export function tokenizeIdentifier(name: string): string[] {
 export function findBannedSchemaIdentifiers(
   identifiers: readonly SchemaIdentifier[],
   banned: ReadonlySet<string> = BANNED_SCHEMA_TERMS,
-  exempt: ReadonlyMap<string, string> = EXEMPT_IDENTIFIERS
+  exempt: ReadonlyMap<string, string> = EXEMPT_IDENTIFIERS,
+  allowed: ReadonlyMap<string, string> = ALLOWED_IDENTIFIERS
 ): LexiconViolation[] {
   const violations: LexiconViolation[] = [];
   for (const id of identifiers) {
-    if (exempt.has(id.name)) continue;
+    if (exempt.has(id.name) || allowed.has(id.name)) continue;
     for (const token of tokenizeIdentifier(id.name)) {
       if (banned.has(token)) {
         violations.push({ kind: id.kind, name: id.name, table: id.table, term: token });

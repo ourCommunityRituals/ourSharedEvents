@@ -412,14 +412,14 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 39
+      "testCount": 42
     },
     {
       "file": "workers/oursharedevents/tests/admin-wizard-step1.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 10
+      "testCount": 15
     },
     {
       "file": "workers/oursharedevents/tests/admin-wizard-tv.spec.ts",
@@ -504,6 +504,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 26
+    },
+    {
+      "file": "workers/oursharedevents/tests/attendance-mode.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 44
     },
     {
       "file": "workers/oursharedevents/tests/attendee-map.spec.ts",
@@ -762,7 +769,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 14
+      "testCount": 15
     },
     {
       "file": "workers/oursharedevents/tests/count-floor.spec.ts",
@@ -1147,7 +1154,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 25
+      "testCount": 26
     },
     {
       "file": "workers/oursharedevents/tests/event-screen-addresses.spec.ts",

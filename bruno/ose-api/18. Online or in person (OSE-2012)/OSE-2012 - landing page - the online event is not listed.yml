@@ -1,0 +1,30 @@
+info:
+  name: OSE-2012 | rainy | landing page | the online event is not in the list or on the map
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{baseUrl}}/?view=list"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const html = String(res.getBody() || '');
+        test('OSE-2012: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-2012 rainy: the landing page does not list the online event', function () {
+          expect(html).to.not.include('Mode Fixture (online)');
+          expect(html).to.not.include('mode-online-evt');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

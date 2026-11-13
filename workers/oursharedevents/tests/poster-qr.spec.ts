@@ -77,7 +77,12 @@ async function createEvent(title: string): Promise<string> {
       Authorization: `Bearer ${MOCK_ADMIN_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ title, status: 'active' }),
+    body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      title,
+      status: 'active',
+    }),
   });
   expect(res.status).toBe(201);
   const body = await json(res);

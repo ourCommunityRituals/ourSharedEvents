@@ -52,7 +52,7 @@ async function createDraft(title: string): Promise<string> {
   const res = await SELF.fetch('https://localhost/api/v2/admin/events', {
     method: 'POST',
     headers: { ...BEARER, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ attendance_mode: 'in_person', location: 'Test Hall', title }),
   });
   expect(res.status, 'creating a title-only draft must work').toBe(201);
   const body = (await res.json()) as { id?: string; item?: { id?: string } };

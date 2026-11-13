@@ -233,6 +233,8 @@ describe('Watch Party (0097)', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
       body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
         title: 'Watch the Bears game',
         brand_id: BRAND,
         slug: `watch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
@@ -254,6 +256,8 @@ describe('event_type_id is written on create and update', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
       body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
         title: 'OSE-1344',
         brand_id: BRAND,
         slug: `ose1344-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,

@@ -884,7 +884,8 @@ jobs:
             tests/e2e/0-architecture/qr-decode-matrix.invariant.spec.ts \
             tests/e2e/0-architecture/workflow-injection.invariant.spec.ts \
             tests/e2e/0-architecture/cookie-setters.invariant.spec.ts \
-            tests/e2e/0-architecture/timestamp-precision.invariant.spec.ts
+            tests/e2e/0-architecture/timestamp-precision.invariant.spec.ts \
+            tests/e2e/0-architecture/lexicon-allowance.invariant.spec.ts
 
       # ── Shard: component ───────────────────────────────────────────────────
       # Real browser engine, no deploy. The webServer in
@@ -1632,6 +1633,22 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/sponsor-thumb-seed.sql
+
+      # OSE-2012: one event per attendance mode for Bruno folder 18 "Online or in
+      # person": a listed online event (the brand API returns it; /events and the
+      # landing page do not), an in-person and a both event for the page label,
+      # and one the folder turns online and back. Needs migration 0108, which T1
+      # applied. Idempotent. NOT continue-on-error: a missing fixture fails here
+      # by name, not as a 404 in the contract run.
+      - name: 'Seed attendance mode fixtures (OSE-2012)'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/attendance-mode-seed.sql
 
       # OSE-1644: a draft with no start time and no event type, for the Bruno
       # request that asserts the 409 CORE_VALUES_MISSING contract (folder 12).

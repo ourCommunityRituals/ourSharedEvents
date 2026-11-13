@@ -172,6 +172,7 @@
 
       <section class="ose-card ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
              <h2 id="where-heading-post">Where</h2>
+             <p data-testid="event-mode" data-mode="in_person">In person</p>
              <img src="/api/v2/maps/venue-image?event=evt_golden" alt="Map of St. Barnabas Hall" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-post" />
              <p><strong>St. Barnabas Hall</strong></p>
              <p>123 Main St</p>

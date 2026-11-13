@@ -21,6 +21,8 @@ http:
       {
         "title": "ci-brand guard: must never be created",
         "brand_id": "root",
+        "attendance_mode": "in_person",
+        "location": "CI Brand Hall",
         "start_date": "2099-06-01"
       }
   auth: inherit

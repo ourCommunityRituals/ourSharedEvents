@@ -95,6 +95,33 @@ In Phase 2 (D1), this moves to a SQL table with identical fields.
 
 ---
 
+## Online or in person (`attendance_mode`)
+
+Every event says how people take part (owner, 2026-11-12; migration 0108). The
+create API requires the field. Events from before it are `in_person`.
+
+| Value       | Place                      | Where it shows                                                                                                                          |
+| ----------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `in_person` | Needed                     | The map (by its place), `/events`, the landing page, the sitemap.                                                                       |
+| `online`    | None: no text, no map cell | By link only. Not on the map, `/events`, the landing page or the sitemap. Its page, its `/q` and `/s` codes and the brand API all work. |
+| `both`      | Needed                     | As `in_person`.                                                                                                                         |
+
+- A place is `location`, `where_address`, or `lat` and `lon`.
+- The rule runs on create, and on an update that names the mode or the place.
+  An update that names neither is not checked, so an older event with no place
+  can still be renamed.
+- To turn an event online, clear its place in the same request:
+  `{"attendance_mode":"online","location":null,"where_address":null}`. The
+  server then clears its coordinates and cells.
+- The event page shows "In person", "Online" or "Online and in person".
+- The public event response carries `attendance_mode`. No meeting link is
+  stored or published. Visitors reach one through the event's own `/s` code.
+- `place_kind` is a different field: it says how the zoomed map marks a place.
+
+The code is `workers/oursharedevents/src/lib/attendance-mode.ts`.
+
+---
+
 ## Triangle Framework
 
 Events are the center of the data model triangle:

@@ -90,6 +90,14 @@ import { readEventTypeCatalog } from '../lib/event-type-catalog-read';
 import { isValidIanaTimezone, zonedDateTimeToUtcIso, zonedTimePart } from '../lib/event-datetime';
 import { listedFromForPublish } from '../lib/publish-grace';
 import { explicitMapChoice, mapState } from '../lib/map-default';
+import {
+  INVALID_ATTENDANCE_MODE_MESSAGE,
+  PLACE_RULE_MESSAGES,
+  attendanceModeOf,
+  isAttendanceMode,
+  placeRuleFault,
+  type AttendanceMode,
+} from '../lib/attendance-mode';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -687,6 +695,19 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     dataClass = body.data_class;
   }
 
+  // OSE-2012 (owner, 2026-11-12): every event says how people take part, at
+  // creation. There is no default here: a create that does not name the mode
+  // is refused, so "in person" is always something the organizer said. Checked
+  // after the brand checks, so a caller with no right to the brand hears that
+  // first.
+  if (body.attendance_mode === undefined || body.attendance_mode === null) {
+    return errorResponse('MISSING_FIELD', 'Missing required field: attendance_mode', 400, rid);
+  }
+  if (!isAttendanceMode(body.attendance_mode)) {
+    return errorResponse('INVALID_ATTENDANCE_MODE', INVALID_ATTENDANCE_MODE_MESSAGE, 400, rid);
+  }
+  const attendanceMode: AttendanceMode = body.attendance_mode;
+
   const id = `evt_${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
   // A slug the caller chose is kept as is (and still answers 409 when taken).
   // A derived one starts from the title; a title with no letters or digits
@@ -867,6 +888,19 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // never in the scan/read hot path.
   const lat = typeof body.lat === 'number' && Number.isFinite(body.lat) ? body.lat : null;
   const lon = typeof body.lon === 'number' && Number.isFinite(body.lon) ? body.lon : null;
+
+  // OSE-2012 — the place rule. In person and both need a place (a place name,
+  // a street address or coordinates). Online takes none, so an online event is
+  // stored with no place text, no coordinates and no cell: it has no place at
+  // all, never the visitor's. Refused, not trimmed: a place sent with "online"
+  // is a mistake the organizer should see.
+  const placeFault = placeRuleFault(
+    attendanceMode,
+    eventPlaceText(whereAddress, location) !== null || lat !== null || lon !== null
+  );
+  if (placeFault) return errorResponse(placeFault, PLACE_RULE_MESSAGES[placeFault], 400, rid);
+  const isOnline = attendanceMode === 'online';
+
   const h3Tags = maybeTag(lat, lon);
 
   // OSE-1245 — publication is an act (OCR_VISION.md §6.2c). The host decides
@@ -903,8 +937,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
                              what_url_enabled, what_url_type,
                              lat, lon, h3_res9, h3_res7, is_published, created_by,
                              event_type_id, settings_json, listed_from, data_class,
+                             attendance_mode,
                              created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           id,
@@ -913,7 +948,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
           slug,
           status,
           description,
-          location,
+          // Online: blank place text (the rule above let it through) is stored
+          // as no place.
+          isOnline ? null : location,
           startDate,
           endDate,
           timezone,
@@ -924,7 +961,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
           whoHost,
           whyPurpose,
           howDetails,
-          whereAddress,
+          isOnline ? null : whereAddress,
           whoStory,
           whoImageUrl,
           whatVideoUrl,
@@ -943,6 +980,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
           // recorded so the corridor latch's settling rule still applies.
           status === 'active' ? now : null,
           dataClass,
+          attendanceMode,
           now,
           now
         )
@@ -1039,8 +1077,10 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // Owner report 2026-10-11: the zip search lists an event only by its map
   // cell, and no create form sent coordinates. With none given, the place is
   // looked up once (lib/event-place.ts); a failed lookup never fails the create.
-  let place: PlaceState = h3Tags ? 'on_map' : 'not_looked_up';
-  if (!h3Tags) {
+  // OSE-2012: an online event has no place, so nothing is looked up and it
+  // never gets a cell.
+  let place: PlaceState = isOnline ? 'no_place' : h3Tags ? 'on_map' : 'not_looked_up';
+  if (!h3Tags && !isOnline) {
     try {
       const r = await lookUpEventPlace(env, whereAddress, location);
       await savePlaceLookup(env.DB, id, r, now);
@@ -1072,6 +1112,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       starts_at: startsAt,
       timezone,
       place,
+      attendance_mode: attendanceMode,
       data_class: dataClass,
       warnings,
       // OSE-1560 — what the admin shows as the heads-up (the toast is OSE-1564).
@@ -1118,6 +1159,15 @@ export async function handleUpdateEvent(
 
   const suppliedKey = suppliedSpineKeyField(body);
   if (suppliedKey) return spineKeyRefused(suppliedKey, rid);
+
+  // OSE-2012 — the mode can change, and it cannot be cleared.
+  let modeWrite: AttendanceMode | null = null;
+  if ('attendance_mode' in body) {
+    if (!isAttendanceMode(body.attendance_mode)) {
+      return errorResponse('INVALID_ATTENDANCE_MODE', INVALID_ATTENDANCE_MODE_MESSAGE, 400, rid);
+    }
+    modeWrite = body.attendance_mode;
+  }
 
   // Status validation (if provided)
   if ('status' in body && body.status !== null) {
@@ -1338,6 +1388,91 @@ export async function handleUpdateEvent(
         );
       }
     }
+  }
+
+  // OSE-2012 — the place rule, on the state this PUT would leave. It runs when
+  // the PUT names the mode or any part of the place, so an edit to a title or a
+  // switch never trips over an older event. In person and both must end up with
+  // a place; online must end up with none.
+  let becomesOnline = false;
+  if (
+    modeWrite !== null ||
+    'location' in body ||
+    'where_address' in body ||
+    'lat' in body ||
+    'lon' in body
+  ) {
+    const stored = await env.DB.prepare(
+      'SELECT attendance_mode, location, where_address, lat, lon FROM events WHERE id = ?'
+    )
+      .bind(eventId)
+      .first<{
+        attendance_mode: string | null;
+        location: string | null;
+        where_address: string | null;
+        lat: number | null;
+        lon: number | null;
+      }>();
+    // A missing row answers 404 below, as it always has.
+    if (stored) {
+      const mode = modeWrite ?? attendanceModeOf(stored.attendance_mode);
+      const text = (field: 'location' | 'where_address'): unknown =>
+        field in body ? (typeof body[field] === 'string' ? body[field] : null) : stored[field];
+      const coord = (field: 'lat' | 'lon'): unknown => {
+        const v = body[field];
+        const written =
+          field in body && (v === null || (typeof v === 'number' && Number.isFinite(v)));
+        return written ? v : stored[field];
+      };
+      const hasText = eventPlaceText(text('where_address'), text('location')) !== null;
+      const sendsCoords =
+        (typeof body.lat === 'number' && Number.isFinite(body.lat)) ||
+        (typeof body.lon === 'number' && Number.isFinite(body.lon));
+      // Turning an event online: the organizer clears the place text, and the
+      // coordinates that were looked up from it go with it (below). Coordinates
+      // sent in this same PUT are a place, so they are refused.
+      const hasPlace =
+        mode === 'online'
+          ? hasText || sendsCoords
+          : hasText || coord('lat') != null || coord('lon') != null;
+      const fault = placeRuleFault(mode, hasPlace);
+      if (fault) return errorResponse(fault, PLACE_RULE_MESSAGES[fault], 400, rid);
+      becomesOnline = mode === 'online';
+    }
+  }
+  if (modeWrite !== null) {
+    sets.push('attendance_mode = ?');
+    values.push(modeWrite);
+  }
+  if (becomesOnline) {
+    // No place at all: the point, both cells, the kind and the lookup stamp go
+    // in this same statement. A column is SET once, so only what this PUT has
+    // not already assigned.
+    const assigned = new Set(sets.map((s) => s.slice(0, s.indexOf(' ='))));
+    // Place text this PUT sent blank ('' or spaces; the rule let it through) is
+    // stored as none. `values` lines up with the `?` in `sets`, in order.
+    let at = 0;
+    for (const s of sets) {
+      const marks = s.split('?').length - 1;
+      const col = s.slice(0, s.indexOf(' ='));
+      if (marks === 1 && (col === 'location' || col === 'where_address')) values[at] = null;
+      at += marks;
+    }
+    for (const col of [
+      'location',
+      'where_address',
+      'lat',
+      'lon',
+      'h3_res9',
+      'h3_res7',
+      'place_kind',
+      'place_checked_at',
+    ]) {
+      if (!assigned.has(col)) sets.push(`${col} = NULL`);
+    }
+    // Nothing to look up, and no coordinates to tag.
+    placeChanged = false;
+    geoUpdated = false;
   }
 
   // OSE-664: media reference URLs — validated http(s)-only (born-red XSS wall)
@@ -1710,6 +1845,8 @@ export async function handleUpdateEvent(
       id: eventId,
       ...(useSponsorsWrite !== undefined ? { sponsors: { on: useSponsorsWrite } } : {}),
       ...(place !== undefined ? { place } : {}),
+      ...(becomesOnline ? { place: 'no_place' as PlaceState } : {}),
+      ...(modeWrite !== null ? { attendance_mode: modeWrite } : {}),
       // A status write says the status it moved FROM (the one the guarded
       // UPDATE matched), so the admin's Undo returns there even when its own
       // panel was showing an older status.

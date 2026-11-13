@@ -180,7 +180,7 @@ describe('the Polish and Arabic catalogs', () => {
       const same = KEYS.filter((k) => CATALOG[lang][k] === CATALOG.en[k]);
       // Words that are the same in Polish and English; nothing in Arabic.
       expect(same).toEqual(
-        lang === 'pl' ? ['menu.label', 'area.online', 'provenance.demoChip'] : []
+        lang === 'pl' ? ['menu.label', 'mode.online', 'area.online', 'provenance.demoChip'] : []
       );
     });
 

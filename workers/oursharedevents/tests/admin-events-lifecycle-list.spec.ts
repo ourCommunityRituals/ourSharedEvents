@@ -221,7 +221,12 @@ describe('POST create records created_by from the server-verified actor', () => 
     const req = new Request('https://x/api/v2/admin/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Cf-Access-Jwt-Assertion': jwtFor(ME) },
-      body: JSON.stringify({ title: 'Created by me', brand_id: BRAND }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'Created by me',
+        brand_id: BRAND,
+      }),
     });
     const res = await handleCreateEvent(req, eventsEnv);
     expect(res.status).toBe(201);

@@ -140,6 +140,8 @@ afterEach(() => {
 describe('OSE-1801 | a token that expires mid-request keeps the brand it started with', () => {
   test('event create: a brand-A admin cannot create in brand B (403), even if the token expires during the body read', async () => {
     const res = await postAsExpiring('/api/v2/admin/events', {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
       title: `${A.marker}race event`,
       brand_id: B.brandId,
       start_date: '2099-06-01',
@@ -173,6 +175,8 @@ describe('OSE-1801 | a token that expires mid-request keeps the brand it started
 describe('OSE-1801 | the actor is the one auth decided on', () => {
   test('event create in their own brand still works when the token expires during the body read', async () => {
     const res = await postAsExpiring('/api/v2/admin/events', {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
       title: `${A.marker}race own-brand event`,
       brand_id: A.brandId,
       start_date: '2099-06-01',
@@ -235,6 +239,8 @@ describe('OSE-1801 | controls: the same calls with a token that does not expire'
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
         title: `${A.marker}control`,
         brand_id: B.brandId,
         start_date: '2099-06-01',
@@ -332,6 +338,8 @@ describe('OSE-1801 | each deny site refuses a null actor on its own', () => {
     const { result: res, sites } = await denyLogsDuring(() =>
       handleCreateEvent(
         jsonPost('/api/v2/admin/events', {
+          attendance_mode: 'in_person',
+          location: 'Test Hall',
           title: `${A.marker}null actor`,
           brand_id: A.brandId,
           start_date: '2099-06-01',
@@ -384,6 +392,8 @@ describe('OSE-1801 | each deny site refuses a null actor on its own', () => {
   test('control: under the real local bypass the same event create is not refused', async () => {
     const res = await handleCreateEvent(
       jsonPost('/api/v2/admin/events', {
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
         title: `${A.marker}dev bypass`,
         brand_id: A.brandId,
         start_date: '2099-06-01',

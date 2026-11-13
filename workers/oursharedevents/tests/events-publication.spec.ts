@@ -181,7 +181,11 @@ describe('the create API honours the answer', () => {
       new Request('https://t.test/api/v2/admin/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          attendance_mode: 'in_person',
+          location: 'Test Hall',
+          ...(body as object),
+        }),
       }),
       captureDb(bound)
     );

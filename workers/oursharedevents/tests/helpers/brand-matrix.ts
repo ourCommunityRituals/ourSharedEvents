@@ -53,8 +53,8 @@ async function seedEvent(
 ): Promise<void> {
   await env.DB.prepare(
     `INSERT OR REPLACE INTO events
-       (id, brand_id, title, slug, status, is_published, data_class, start_date, h3_res7)
-     VALUES (?, ?, ?, ?, ?, ?, 'synthetic', '2099-06-01', ?)`
+       (id, brand_id, title, slug, status, is_published, data_class, start_date, h3_res7, location)
+     VALUES (?, ?, ?, ?, ?, ?, 'synthetic', '2099-06-01', ?, 'Fixture Hall')`
   )
     .bind(
       id,

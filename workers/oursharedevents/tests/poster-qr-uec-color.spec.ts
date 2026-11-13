@@ -165,7 +165,12 @@ describe('OSE-1200 L2 | /poster-bundle prints UEC hues', () => {
     const created = await SELF.fetch('https://t.test/api/v2/admin/events', {
       method: 'POST',
       headers: { Authorization: `Bearer ${MOCK_ADMIN_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'OSE-1200 hue check', status: 'active' }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'OSE-1200 hue check',
+        status: 'active',
+      }),
     });
     expect(created.status).toBe(201);
     const { id } = (await created.json()) as { id: string };

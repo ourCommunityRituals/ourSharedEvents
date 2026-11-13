@@ -1,11 +1,12 @@
 {
-  "version": "1.3.0",
-  "description": "Minimum required response columns for the public OSE events API. Removing any field from projected_columns MUST be accompanied by removing it here and bumping the version \u2014 that makes the change visible in a diff rather than silent. Adding new fields is always safe (additive). Computed fields are those injected by enrichWithPhase() at the handler layer, not projected from the DB SELECT. v1.1.0 (OSE-844/ADR-016): enrichWithPhase now also emits the canonical field names name/startDateISO/venue (mapped from the title/start_date/location columns) so every surface template reads one name per value \u2014 see computed_fields. v1.3.0 (OSE-1313): additive starts_at \u2014 the canonical UTC start instant (ISO-8601 Z) derived from start_date + start_time in the event's timezone; null for date-only events.",
+  "version": "1.4.0",
+  "description": "Minimum required response columns for the public OSE events API. Removing any field from projected_columns MUST be accompanied by removing it here and bumping the version \u2014 that makes the change visible in a diff rather than silent. Adding new fields is always safe (additive). Computed fields are those injected by enrichWithPhase() at the handler layer, not projected from the DB SELECT. v1.1.0 (OSE-844/ADR-016): enrichWithPhase now also emits the canonical field names name/startDateISO/venue (mapped from the title/start_date/location columns) so every surface template reads one name per value \u2014 see computed_fields. v1.3.0 (OSE-1313): additive starts_at \u2014 the canonical UTC start instant (ISO-8601 Z) derived from start_date + start_time in the event's timezone; null for date-only events. v1.4.0 (OSE-2012): additive attendance_mode \u2014 'in_person', 'online' or 'both'; every event from before the field is 'in_person'. An online event has no location, lat, lon or h3_res7. No meeting link is published.",
   "endpoints": {
     "GET /api/v2/events": {
       "handler": "handleListEvents",
       "envelope_keys": ["ok", "status", "items"],
       "projected_columns": [
+        "attendance_mode",
         "brand_id",
         "corridor_id",
         "cover_image_url",
@@ -37,6 +38,7 @@
       "handler": "handleGetEvent",
       "envelope_keys": ["ok", "status", "item"],
       "projected_columns": [
+        "attendance_mode",
         "brand_id",
         "corridor_id",
         "cover_image_url",

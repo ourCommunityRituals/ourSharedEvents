@@ -189,7 +189,7 @@ const LISTED: Listed[] = [
     method: 'POST',
     path: '/api/v2/admin/events',
     who: OWNER,
-    body: { title: 'Made by another site' },
+    body: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Made by another site' },
   },
   {
     name: 'events.ts: update event',
@@ -268,7 +268,7 @@ describe('a refused cross-site request changes nothing', () => {
       'POST',
       '/api/v2/admin/events',
       { ...OWNER, ...CROSS_SITE },
-      { title: 'Made by another site' },
+      { attendance_mode: 'in_person', location: 'Test Hall', title: 'Made by another site' },
       'text/plain; x=application/json'
     );
     expect(res.status).toBe(403);
@@ -718,7 +718,12 @@ describe('the loose match is gone from the handlers that had it', () => {
     }
 
     test.each([
-      ['events.ts create', 'POST', '/api/v2/admin/events', { title: 'x' }],
+      [
+        'events.ts create',
+        'POST',
+        '/api/v2/admin/events',
+        { attendance_mode: 'in_person', location: 'Test Hall', title: 'x' },
+      ],
       ['events.ts update', 'PUT', `/api/v2/admin/events/${EVT}`, { title: 'changed' }],
       ['sponsors.ts create', 'POST', '/api/v2/admin/sponsors', { name: 'x', tier: 'primary' }],
       [
@@ -765,7 +770,11 @@ describe('the admin page and the draft preview keep working (same-origin fetches
   const page: H = { ...OWNER, ...SAME_ORIGIN };
 
   test('create an event, then rename it, as the admin page does', async () => {
-    const made = await send('POST', '/api/v2/admin/events', page, { title: 'AWG from the page' });
+    const made = await send('POST', '/api/v2/admin/events', page, {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      title: 'AWG from the page',
+    });
     expect(made.status).toBe(201);
     const id = made.body.id as string;
     expect(

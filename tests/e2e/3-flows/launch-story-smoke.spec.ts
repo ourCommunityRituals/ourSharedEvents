@@ -65,6 +65,7 @@ async function createEvent(
 ): Promise<string> {
   const resp = await adminFetch(request, 'POST', '/api/v2/admin/events', {
     brand_id: 'root',
+    attendance_mode: 'in_person',
     title: `Launch Smoke ${suffix} ${RUN_ID}`,
     slug: `launch-smoke-${suffix}-${RUN_ID}`,
     status,

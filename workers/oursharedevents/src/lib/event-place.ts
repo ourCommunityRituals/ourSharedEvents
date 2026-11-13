@@ -86,9 +86,10 @@ export function lookupWasAnswered(r: PlaceLookup): boolean {
  * What the create and update answers say about the map, so the organizer can
  * be told when a place was not found: 'on_map', 'not_found' (looked up, no
  * spot), or 'not_looked_up' (no place text, lookups not set up, or Google did
- * not answer; the nightly job tries again).
+ * not answer; the nightly job tries again). 'no_place' is an online event
+ * (OSE-2012): it has no place, so nothing is looked up, now or nightly.
  */
-export type PlaceState = 'on_map' | 'not_found' | 'not_looked_up';
+export type PlaceState = 'on_map' | 'not_found' | 'not_looked_up' | 'no_place';
 
 export function placeState(r: PlaceLookup): PlaceState {
   if (r.found) return 'on_map';
@@ -184,6 +185,7 @@ export async function runEventPlaceBackfill(
           AND lat IS NULL AND lon IS NULL
           AND place_checked_at IS NULL
           AND (TRIM(COALESCE(where_address, '')) != '' OR TRIM(COALESCE(location, '')) != '')
+          AND attendance_mode != 'online'
           AND (start_date IS NULL OR substr(COALESCE(end_date, start_date), 1, 10) >= date('now', '-1 day'))
         ORDER BY start_date IS NULL, start_date, id
         LIMIT ?`
@@ -249,6 +251,7 @@ export async function runPlaceKindBackfill(
           AND place_kind IS NULL
           AND place_checked_at IS NOT NULL
           AND (TRIM(COALESCE(where_address, '')) != '' OR TRIM(COALESCE(location, '')) != '')
+          AND attendance_mode != 'online'
           AND (start_date IS NULL OR substr(COALESCE(end_date, start_date), 1, 10) >= date('now', '-1 day'))
         ORDER BY start_date IS NULL, start_date, id
         LIMIT ?`

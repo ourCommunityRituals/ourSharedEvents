@@ -1,0 +1,32 @@
+info:
+  name: OSE-2012 | sunny | event page | the both event says "Online and in person"
+  type: http
+  seq: 12
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/mode-both-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const html = String(res.getBody() || '');
+        test('OSE-2012 sunny: the page opens by its link', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-2012 sunny: it says "Online and in person", once', function () {
+          expect(html.split('data-testid="event-mode"').length - 1).to.eql(1);
+          expect(html).to.include('data-testid="event-mode" data-mode="both">Online and in person</p>');
+        });
+        test('OSE-2012: one h1', function () { expect((html.match(/<h1[\s>]/g) || []).length).to.eql(1); });
+        test('OSE-2012: the place is still shown', function () { expect(html).to.include('Mode Fixture Hall'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

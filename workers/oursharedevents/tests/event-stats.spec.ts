@@ -45,7 +45,12 @@ async function createEvent(title: string): Promise<string> {
   const res = await SELF.fetch('https://t.test/api/v2/admin/events', {
     method: 'POST',
     headers: { ...ADMIN, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, status: 'active' }),
+    body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      title,
+      status: 'active',
+    }),
   });
   expect(res.status).toBe(201);
   return ((await res.json()) as { id: string }).id;

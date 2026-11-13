@@ -42,7 +42,11 @@ async function createDraft(): Promise<string> {
   const res = await SELF.fetch('https://localhost/api/v2/admin/events', {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ title: `${TITLE} ${made}` }),
+    body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      title: `${TITLE} ${made}`,
+    }),
   });
   expect(res.status).toBe(201);
   const body = (await res.json()) as { id?: string; item?: { id?: string } };

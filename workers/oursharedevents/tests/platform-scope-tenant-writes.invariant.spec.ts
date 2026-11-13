@@ -201,6 +201,8 @@ describe('AUD-3 — platform-owned routes refuse brand-scoped admins', () => {
 describe('R-3 — event create resolves the caller’s brand scope', () => {
   test('S14: brand-A admin creating with brand_id = B is refused and no row is created', async () => {
     const res = await call('POST', '/api/v2/admin/events', asEmail(SCOPED_A), {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
       title: 'PST Cross Tenant Create',
       brand_id: BRAND_B,
     });
@@ -213,6 +215,8 @@ describe('R-3 — event create resolves the caller’s brand scope', () => {
 
   test('S14: brand-A admin with no brand_id gets their own brand, never root', async () => {
     const res = await call('POST', '/api/v2/admin/events', asEmail(SCOPED_A), {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
       title: 'PST Default Brand Create',
     });
     expect(res.status).toBe(201);
@@ -224,6 +228,8 @@ describe('R-3 — event create resolves the caller’s brand scope', () => {
 
   test('brand-A admin creating inside brand A still succeeds (no lock-out)', async () => {
     const res = await call('POST', '/api/v2/admin/events', asEmail(SCOPED_A), {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
       title: 'PST Own Brand Create',
       brand_id: BRAND_A,
     });
@@ -232,6 +238,8 @@ describe('R-3 — event create resolves the caller’s brand scope', () => {
 
   test('an unmapped admin (deny scope) cannot create an event at all', async () => {
     const res = await call('POST', '/api/v2/admin/events', asEmail('pst-nobody@example.com'), {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
       title: 'PST Deny Create',
     });
     expect(res.status).toBe(403);

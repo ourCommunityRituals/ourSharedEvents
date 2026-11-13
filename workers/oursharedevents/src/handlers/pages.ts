@@ -104,6 +104,7 @@ import {
   type DataProviderCtx,
 } from '../lib/data-provider.js';
 import { enrichWithPhase, eventPhaseOf } from '../lib/event-enrich.js';
+import { attendanceModeLabel, attendanceModeOf, withoutLinkOnly } from '../lib/attendance-mode';
 import { archivedBeforeStart } from '../lib/archived-before-start.js';
 import { flooredRatePct } from '../lib/count-floor.js';
 import { clearsFloor, statLine, walkInStatLine } from '../lib/recap-stat-lines';
@@ -383,7 +384,10 @@ export async function handlePublicPage(
     // Reading the rows without it renders nameless, dateless cards that invite
     // registration for events that already happened. Same seam the JSON API
     // uses, so the two cannot disagree.
-    const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
+    // OSE-2012: an online event is link only, so it is not listed here.
+    const items = withoutLinkOnly(result.data as unknown as Record<string, unknown>[]).map(
+      enrichWithPhase
+    );
     const filtered = applyDiscoveryFilters(items as EventListItem[], filters, undefined, lang);
     shown = filtered.length;
     wrappedShown = filtered.filter((e) => e.phase === 'post_event').length;
@@ -584,6 +588,8 @@ export interface PublicEventRow {
   why_purpose: string | null;
   how_details: string | null;
   where_address: string | null;
+  /** 0108 (OSE-2012): 'in_person', 'online' or 'both'. */
+  attendance_mode?: string | null;
   // OSE-664: rich WHO / WHAT supply for the pre-event funnel.
   who_story: string | null;
   who_image_url: string | null;
@@ -1262,6 +1268,16 @@ const ANONYMITY_AFFORDANCE = renderNeverWho('event');
  * only, so the admin preview of a draft passes over it rather than show a
  * broken image.
  */
+/**
+ * "In person", "Online" or "Online and in person" (OSE-2012), the first line of
+ * the Where card in every phase. Plain text in the card's own type: no colour
+ * of its own.
+ */
+function attendanceModeLine(row: PublicEventRow, lang: Lang = DEFAULT_LANG): string {
+  const mode = attendanceModeOf(row.attendance_mode);
+  return `<p data-testid="event-mode" data-mode="${mode}">${attendanceModeLabel(mode, lang)}</p>`;
+}
+
 function venueMapImg(row: PublicEventRow, testId: string, lang: Lang = DEFAULT_LANG): string {
   const venue = row.location || row.where_address;
   if (!venue) return '';
@@ -1409,15 +1425,15 @@ ${SPONSOR_LIST_CSS}
     }
 
     ${
-      venueDisplay || whereAddress
-        ? `<section class="ose-card ose-section" data-testid="event-where" aria-labelledby="where-heading">
+      // OSE-2012: every event says how people take part, so the card always shows.
+      `<section class="ose-card ose-section" data-testid="event-where" aria-labelledby="where-heading">
            <h2 id="where-heading">${msg(lang, 'section.where')}</h2>
+           ${attendanceModeLine(row, lang)}
            ${mapImg}
            ${venueDisplay ? `<p><strong>${isolateTyped(lang, venueDisplay)}</strong></p>` : ''}
            ${whereAddress && whereAddress !== venueDisplay ? `<p>${isolateTyped(lang, whereAddress)}</p>` : ''}
            ${geoLink}
          </section>`
-        : ''
     }
 
     ${
@@ -1624,15 +1640,15 @@ ${SPONSOR_LIST_CSS}
     }
 
     ${
-      venueDisplay || whereAddress
-        ? `<section class="ose-card ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
+      // OSE-2012: every event says how people take part, so the card always shows.
+      `<section class="ose-card ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
            <h2 id="where-heading-live">${msg(lang, 'section.where')}</h2>
+           ${attendanceModeLine(row, lang)}
            ${mapImg}
            ${venueDisplay ? `<p><strong>${isolateTyped(lang, venueDisplay)}</strong></p>` : ''}
            ${whereAddress && whereAddress !== venueDisplay ? `<p>${isolateTyped(lang, whereAddress)}</p>` : ''}
            ${geoLink}
          </section>`
-        : ''
     }
 
     ${
@@ -1921,14 +1937,14 @@ ${SPONSOR_LIST_CSS}
       </section>
 
       ${
-        venueDisplay || whereAddress
-          ? `<section class="ose-card ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
+        // OSE-2012: every event says how people take part, so the card always shows.
+        `<section class="ose-card ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
              <h2 id="where-heading-post">${msg(lang, 'section.where')}</h2>
+             ${attendanceModeLine(row, lang)}
              ${mapImg}
              ${venueDisplay ? `<p><strong>${isolateTyped(lang, venueDisplay)}</strong></p>` : ''}
              ${whereAddress && whereAddress !== venueDisplay ? `<p>${isolateTyped(lang, whereAddress)}</p>` : ''}
            </section>`
-          : ''
       }
 
       ${
@@ -2221,6 +2237,7 @@ export async function handlePublicEventPage(
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
               lat, lon, price_cents, price_model, price_note, is_published,
+              e.attendance_mode,
               e.event_type_id, etr.name AS event_type_name, e.listed_from,
               ec.code AS share_code
        FROM events e
@@ -2481,6 +2498,7 @@ export async function handleAdminEventPreviewPage(
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
               lat, lon, price_cents, price_model, price_note, is_published,
+              e.attendance_mode,
               e.event_type_id, etr.name AS event_type_name
        FROM events e
        LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
@@ -2882,7 +2900,11 @@ export async function handleLandingPage(
   try {
     const dp = getDataProvider(env as LandingEnv, ctx ?? null);
     const result = await dp.listEvents('root');
-    let items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
+    // OSE-2012: an online event is link only. It has no cell, so it could never
+    // be on the map; this keeps it out of the landing's list and counts too.
+    let items = withoutLinkOnly(result.data as unknown as Record<string, unknown>[]).map(
+      enrichWithPhase
+    );
     if (where.kind === 'zip') {
       // Owner 2026-11-05: the zip's own area, not the towns around it.
       items = items.filter(inZipOwnArea(where.area));

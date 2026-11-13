@@ -208,6 +208,8 @@ export async function buildDay({
           // OSE-1900: a sponsor shows only on an event that opted in, and every
           // stock event is given sponsors below (check-full requires the strip).
           settings: { useSponsors: true },
+          // OSE-2012: the create API requires the mode. Every stock event has a venue.
+          attendance_mode: 'in_person',
           title: row.title,
           description: row.summary,
           location: row.venue,

@@ -55,7 +55,13 @@ async function createEvent(extra: Record<string, unknown> = {}): Promise<string>
   const res = await SELF.fetch('https://t.test/api/v2/admin/events', {
     method: 'POST',
     headers: ADMIN,
-    body: JSON.stringify({ title: `QR switch ${crypto.randomUUID()}`, status: 'active', ...extra }),
+    body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      title: `QR switch ${crypto.randomUUID()}`,
+      status: 'active',
+      ...extra,
+    }),
   });
   const body = (await res.json()) as { item?: { id: string }; id?: string; error?: string };
   expect(res.status, JSON.stringify(body)).toBe(201);
@@ -144,7 +150,12 @@ describe('OSE-869 L2: the switch round-trips from admin write to the poster bund
     const create = await SELF.fetch('https://t.test/api/v2/admin/events', {
       method: 'POST',
       headers: ADMIN,
-      body: JSON.stringify({ title: 'bad settings', settings: { showQRSection: 1 } }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'bad settings',
+        settings: { showQRSection: 1 },
+      }),
     });
     expect(create.status).toBe(400);
     expect(((await create.json()) as { code: string }).code).toBe('INVALID_SETTINGS');

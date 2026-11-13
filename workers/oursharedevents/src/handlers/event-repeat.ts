@@ -88,6 +88,23 @@ export async function handleAdminRepeatEvent(
     created = await handleCreateEvent(createRequest, env);
     if (created.status !== 409) break; // 409 = the slug suffix collided: try another
   }
+  // OSE-2012: an in-person event needs a place, and a copy is a new event. A
+  // source from before the rule can have none, so say what to do in the
+  // organizer's words instead of handing back the create API's field names.
+  if (created && created.status === 400) {
+    const refusal = (await created
+      .clone()
+      .json()
+      .catch(() => null)) as { code?: string } | null;
+    if (refusal?.code === 'LOCATION_REQUIRED') {
+      return fail(
+        'SOURCE_HAS_NO_PLACE',
+        'This event has no place yet, so it cannot be repeated. Add where it happens, or mark it as an online event, then repeat it.',
+        409,
+        rid
+      );
+    }
+  }
   if (!created || created.status >= 400)
     return created ?? fail('DB_ERROR', 'Copy failed', 503, rid);
 
