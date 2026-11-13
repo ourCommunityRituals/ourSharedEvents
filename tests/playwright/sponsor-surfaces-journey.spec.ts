@@ -299,6 +299,22 @@ test('a forged answer changes nothing', async ({ page, request }) => {
 test.describe('poster with two sponsors', () => {
   let secondName = '';
 
+  // OSE-1991: the digital poster's turns follow each sponsor's share
+  // (`sponsor_rotation` in the poster bundle), so which sponsor shows first,
+  // and how many turns pass before the next one comes up, is read from the
+  // bundle, not assumed. Items are drawn in the order of `sponsors`.
+  async function firstChange(page: Page) {
+    const r = await page.request.get(
+      `/api/v2/events/${encodeURIComponent(seeded.eventId)}/poster-bundle`
+    );
+    expect(r.status()).toBe(200);
+    const d = (await r.json()) as { sponsors: { id: string }[]; sponsor_rotation: string[] };
+    const order = d.sponsor_rotation.map((id) => d.sponsors.findIndex((s) => s.id === id));
+    const steps = order.findIndex((i) => i !== order[0]);
+    expect(steps, 'a second sponsor comes up in the cycle').toBeGreaterThan(0);
+    return { from: order[0], to: order[steps], steps };
+  }
+
   test.beforeAll(async ({ request }) => {
     const headers = { Authorization: `Bearer ${ADMIN_BEARER}` };
     secondName = `Surfaces Hardware ${Date.now().toString(36)}`;
@@ -361,13 +377,30 @@ test.describe('poster with two sponsors', () => {
       return shown[0];
     };
 
-    const first = await visibleName();
-    await page.clock.fastForward(5_000);
-    const second = await visibleName();
-    expect(second, 'the other sponsor takes its turn').not.toBe(first);
-    await page.clock.fastForward(5_000);
-    expect(await visibleName(), 'and the cycle comes back round').toBe(first);
-    expect([first, second].sort()).toEqual([seeded.sponsorName, secondName].sort());
+    // OSE-1991: the turns follow each sponsor's share (the bundle's
+    // sponsor_rotation, the TV side rail's sequence), so a bigger share can
+    // come up twice running. Walk one whole cycle in that order and back round.
+    const bundle = await page.request.get(
+      `/api/v2/events/${encodeURIComponent(seeded.eventId)}/poster-bundle`
+    );
+    expect(bundle.status()).toBe(200);
+    const data = (await bundle.json()) as {
+      sponsors: { id: string; title?: string; name: string }[];
+      sponsor_rotation: string[];
+    };
+    const nameOf = (id: string) => {
+      const s = data.sponsors.find((x) => x.id === id)!;
+      return s.title || s.name;
+    };
+    const expected = data.sponsor_rotation.map(nameOf);
+    expect([...new Set(expected)].sort(), 'every sponsor has a turn').toEqual(
+      [seeded.sponsorName, secondName].sort()
+    );
+    for (let k = 0; k <= expected.length; k++) {
+      const label = k === expected.length ? 'and the cycle comes back round' : `turn ${k + 1}`;
+      expect(await visibleName(), label).toBe(expected[k % expected.length]);
+      await page.clock.fastForward(5_000);
+    }
   });
 
   test('a vignette plays first, and the sponsor changes when it lands', async ({ page }) => {
@@ -382,20 +415,22 @@ test.describe('poster with two sponsors', () => {
     await page.goto(`/poster?event=${encodeURIComponent(seeded.eventId)}&kind=digital`);
     const items = page.getByTestId('poster-sponsor-item');
     await expect(items).toHaveCount(2);
+    const { from, to, steps } = await firstChange(page);
     const vignette = page.getByTestId('poster-vignette');
-    await expect(items.nth(0)).toBeVisible();
+    await expect(items.nth(from)).toBeVisible();
     await expect(vignette).toHaveCount(0);
 
-    await page.clock.fastForward(5_000);
+    // A turn that keeps the same sponsor draws nothing and plays nothing.
+    await page.clock.fastForward(5_000 * steps);
     await expect(vignette).toHaveAttribute('data-vignette', 'bocce');
-    await expect(items.nth(0), 'the sponsor holds until the ball lands').toBeVisible();
-    await expect(items.nth(1)).toBeHidden();
+    await expect(items.nth(from), 'the sponsor holds until the ball lands').toBeVisible();
+    await expect(items.nth(to)).toBeHidden();
 
     await page.clock.fastForward(700);
     await expect(vignette).toHaveCount(0);
-    await expect(items.nth(1), 'the hit changes the sponsor').toBeVisible();
-    await expect(items.nth(0)).toBeHidden();
-    await expect(items.nth(1)).toHaveAttribute('data-effect', 'shake');
+    await expect(items.nth(to), 'the hit changes the sponsor').toBeVisible();
+    await expect(items.nth(from)).toBeHidden();
+    await expect(items.nth(to)).toHaveAttribute('data-effect', 'shake');
   });
 
   test('with reduce-motion on, no vignette plays and the sponsor still changes', async ({
@@ -410,9 +445,10 @@ test.describe('poster with two sponsors', () => {
     await page.goto(`/poster?event=${encodeURIComponent(seeded.eventId)}&kind=digital`);
     const items = page.getByTestId('poster-sponsor-item');
     await expect(items).toHaveCount(2);
-    await page.clock.fastForward(5_000);
+    const { to, steps } = await firstChange(page);
+    await page.clock.fastForward(5_000 * steps);
     await expect(page.getByTestId('poster-vignette')).toHaveCount(0);
-    await expect(items.nth(1)).toBeVisible();
+    await expect(items.nth(to)).toBeVisible();
   });
 
   test('the DJ vignette knocks the sponsor over before the next one comes up', async ({ page }) => {
@@ -425,20 +461,21 @@ test.describe('poster with two sponsors', () => {
     await page.goto(`/poster?event=${encodeURIComponent(seeded.eventId)}&kind=digital`);
     const items = page.getByTestId('poster-sponsor-item');
     await expect(items).toHaveCount(2);
+    const { from, to, steps } = await firstChange(page);
 
-    await page.clock.fastForward(5_000);
+    await page.clock.fastForward(5_000 * steps);
     await expect(page.getByTestId('poster-vignette')).toHaveAttribute('data-vignette', 'dj');
-    await expect(items.nth(0), 'the sponsor she bumps is the one on screen').toHaveAttribute(
+    await expect(items.nth(from), 'the sponsor she bumps is the one on screen').toHaveAttribute(
       'data-leaving',
       'topple'
     );
-    await expect(items.nth(1)).toBeHidden();
+    await expect(items.nth(to)).toBeHidden();
 
     await page.clock.fastForward(1_100);
     await expect(page.getByTestId('poster-vignette')).toHaveCount(0);
-    await expect(items.nth(0)).toBeHidden();
-    await expect(items.nth(0)).not.toHaveAttribute('data-leaving', 'topple');
-    await expect(items.nth(1), 'the next sponsor comes up').toBeVisible();
-    await expect(items.nth(1)).toHaveAttribute('data-effect', 'rise');
+    await expect(items.nth(from)).toBeHidden();
+    await expect(items.nth(from)).not.toHaveAttribute('data-leaving', 'topple');
+    await expect(items.nth(to), 'the next sponsor comes up').toBeVisible();
+    await expect(items.nth(to)).toHaveAttribute('data-effect', 'rise');
   });
 });
