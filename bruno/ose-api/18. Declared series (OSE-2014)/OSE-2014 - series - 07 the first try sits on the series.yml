@@ -1,0 +1,29 @@
+info:
+  name: OSE-2014 | sunny | promote | the first try now sits on the declared series
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-try1-evt/series"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2014 sunny: promote: the first try sits on the declared series', function () { expect(res.getStatus()).to.eql(200); expect(b.series.id).to.eql(bru.getVar('declaredSeriesId')); });
+        test('OSE-2014 sunny: promote: the series reads with nothing person-shaped', function () { expect(JSON.stringify(b)).to.not.match(/"(anon_id_hash|anonymous_id|anon_id|ip|ip_hash|user_agent|session_id|device_id|fingerprint|email|phone|attendees|lat|lon)":/); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

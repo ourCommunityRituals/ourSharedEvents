@@ -234,6 +234,8 @@ export async function snapshotFixture(): Promise<string> {
     `SELECT * FROM sponsor_asset WHERE sponsor_business_id LIKE 'bm-%' ORDER BY 1`
   ).all();
   out.sponsor_asset = assets.results;
+  // A refused cross-brand series write must leave no series row either (OSE ADR-028).
+  out.event_series = (await env.DB.prepare(`SELECT * FROM event_series ORDER BY id`).all()).results;
   // Rows a refused cross-brand create would have left behind.
   out.cross_events = (
     await env.DB.prepare(`SELECT id, brand_id FROM events WHERE title LIKE 'bm-cross-%'`).all()

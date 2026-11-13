@@ -1,0 +1,32 @@
+info:
+  name: OSE-2014 | rainy | reject | a rejection reason is a fixed word, never free text
+  type: http
+  seq: 15
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-sugg-evt/series/reject"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"series_id":"evtsrs_ci_decline","reason":"Ask Dana, she runs it"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2014 rainy: reject: 400 INVALID_REASON', function () { expect(res.getStatus()).to.eql(400); expect(res.getBody().code).to.eql('INVALID_REASON'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

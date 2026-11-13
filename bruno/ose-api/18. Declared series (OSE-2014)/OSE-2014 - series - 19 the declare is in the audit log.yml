@@ -1,0 +1,34 @@
+info:
+  name: OSE-2014 | audit | declare | the declare and its refusals are in the audit log
+  type: http
+  seq: 19
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/audit-log?action=DECLARE_SERIES&resource_type=event&limit=50"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // This run: two refused declares, one accepted, one refused (already on a series).
+        // Rows from earlier runs are older, so the newest four for this event are this run's.
+        const rows = (res.getBody().entries || []).filter(function (r) { return r.resource_id === 'series-ci-anchor-evt'; });
+        test('OSE-2014 audit: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-2014 audit: this run\'s four declares are logged, newest first: denied, success, denied, denied', function () {
+          expect(rows.length).to.be.at.least(4);
+          expect(rows.slice(0, 4).map(function (r) { return r.outcome; })).to.eql(['denied', 'success', 'denied', 'denied']);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

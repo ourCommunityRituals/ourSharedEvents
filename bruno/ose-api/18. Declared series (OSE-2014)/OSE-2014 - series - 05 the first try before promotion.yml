@@ -1,0 +1,24 @@
+info:
+  name: OSE-2014 | sunny | promote | the first try, read before it joins a series
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/series-ci-try1-evt"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const item = (res.getBody() || {}).item || {};
+        test('OSE-2014 sunny: promote: the first try is readable before promotion', function () { expect(res.getStatus()).to.eql(200); expect(item.start_date).to.be.a('string'); });
+        bru.setVar('seriesTry1Before', JSON.stringify([item.start_date, item.end_date, item.timezone, item.title]));
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

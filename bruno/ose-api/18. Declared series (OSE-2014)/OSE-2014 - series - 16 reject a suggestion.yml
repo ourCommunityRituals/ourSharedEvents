@@ -1,0 +1,33 @@
+info:
+  name: OSE-2014 | sunny | reject | reject the other suggestion
+  type: http
+  seq: 16
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-sugg-evt/series/reject"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"series_id":"evtsrs_ci_decline","reason":"not_recurring"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2014 sunny: reject: 200, rejected with its reason', function () { expect(res.getStatus()).to.eql(200); expect(b.series.state).to.eql('rejected'); expect(b.series.rejected_reason).to.eql('not_recurring'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

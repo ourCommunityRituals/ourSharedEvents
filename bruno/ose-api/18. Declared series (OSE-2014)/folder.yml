@@ -1,0 +1,18 @@
+info:
+  name: Declared series (OSE-2014)
+  type: folder
+request: {}
+docs: |-
+  A series an organizer declares (OSE ADR-028, showcase story S15). An admin
+  declares a series anchored on an event (no venue needed), attaches and
+  detaches events, and confirms or rejects a detector suggestion. Promoting a
+  trial is declaring with the earlier tries in `event_ids`.
+
+  Fixture: bruno/fixtures/declared-series-seed.sql, applied before this run. It
+  puts every row back to its starting state: events off every series, the
+  declared series gone, both suggestions pending.
+
+  The requests run in `seq` order and write only to the fixture's own brands
+  ('series-ci', 'series-ci-other').
+
+  Mock-layer twin: workers/oursharedevents/tests/event-series.spec.ts.

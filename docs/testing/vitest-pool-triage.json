@@ -1164,6 +1164,13 @@
       "testCount": 10
     },
     {
+      "file": "workers/oursharedevents/tests/event-series.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 41
+    },
+    {
       "file": "workers/oursharedevents/tests/event-start-datetime.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

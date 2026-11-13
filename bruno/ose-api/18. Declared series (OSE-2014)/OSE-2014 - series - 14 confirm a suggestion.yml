@@ -1,0 +1,34 @@
+info:
+  name: OSE-2014 | sunny | confirm | confirm a detector suggestion, with a new name
+  type: http
+  seq: 14
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-sugg-evt/series/confirm"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"series_id":"evtsrs_ci_suggest","name":"Thursday bocce","event_ids":["series-ci-sugg-evt"]}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2014 sunny: confirm: 200, confirmed, still of detected origin', function () { expect(res.getStatus()).to.eql(200); expect(b.series.state).to.eql('confirmed'); expect(b.series.origin).to.eql('detected'); expect(b.series.name).to.eql('Thursday bocce'); });
+        test('OSE-2014 sunny: confirm: the named event joined', function () { expect(b.attached).to.eql(['series-ci-sugg-evt']); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
