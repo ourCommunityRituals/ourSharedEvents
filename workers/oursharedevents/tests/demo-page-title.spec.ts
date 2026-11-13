@@ -25,7 +25,9 @@ interface Heading {
 function headings(html: string): Heading[] {
   return Array.from(html.matchAll(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi)).map((m) => ({
     level: Number(m[1]),
-    text: m[2].replace(/<[^>]+>/g, '').trim(),
+    // The heading's inner markup as served. A page title holds no markup, so
+    // it is compared whole; nothing here strips tags.
+    text: m[2].trim(),
   }));
 }
 
