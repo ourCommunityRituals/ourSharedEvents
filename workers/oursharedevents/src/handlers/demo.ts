@@ -123,7 +123,7 @@ const SECTION_LABELS: Record<string, string> = {
 const DEMO_STYLE = `<style>
   .demo-wrap { max-width: 960px; margin: 0 auto; padding: 1rem; }
   .demo-hero { padding: 1.5rem 0 0.5rem; }
-  .demo-hero h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+  .demo-hero h1 { margin: 0 0 0.25rem; }
   .demo-lede { color: var(--text-muted); font-size: 1.05rem; margin: 0 0 1rem; }
   .demo-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 1.5rem; }
   .demo-tab {
@@ -146,7 +146,7 @@ const DEMO_STYLE = `<style>
     background: var(--accent); color: var(--bg); font-weight: 700; margin-right: 0.5rem;
   }
   .demo-section { margin: 2rem 0; }
-  .demo-section > h2 { border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; font-size: 1.17rem; }
+  .demo-section > h2 { border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
   .flag-list { list-style: none; padding: 0; margin: 0; display: grid;
     gap: 0.35rem 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .flag-list li { display: flex; align-items: center; justify-content: space-between;
