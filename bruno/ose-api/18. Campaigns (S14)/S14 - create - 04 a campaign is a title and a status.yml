@@ -1,0 +1,41 @@
+info:
+  name: "S14 | happy | create | a campaign is created with a title and a status"
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/campaigns"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"title":"  Campaign   Fixture Created ","status":"paused","brand_id":"root"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody();
+        test('S14 create: 201', function () { expect(res.getStatus()).to.eql(201); });
+        test('S14 create: the id is one the showcase creator file accepts', function () {
+          expect(b.id).to.match(/^cmp_[A-Za-z0-9_-]{1,60}$/);
+        });
+        test('S14 create: the campaign is its brand, a title, a status and two timestamps', function () {
+          expect(Object.keys(b.item).sort()).to.eql(['brand_id', 'created_at', 'id', 'status', 'title', 'updated_at']);
+          expect(b.item.title).to.eql('Campaign Fixture Created');
+          expect(b.item.status).to.eql('paused');
+          expect(b.item.brand_id).to.eql('root');
+        });
+        bru.setVar('s14CampaignId', b.id);
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

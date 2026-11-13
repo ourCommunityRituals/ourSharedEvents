@@ -1674,6 +1674,21 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/ci-brand-seed.sql
 
+      # Showcase S14: campaigns, for Bruno folder 18. One campaign and one sponsor
+      # per case (shown, sponsor pending, organizer declined, paused, switch off,
+      # linked to another brand's campaign) on two root events and one ci-brand
+      # event, all unlisted. It also removes the campaign the folder creates.
+      # Idempotent. NOT continue-on-error: a missing fixture fails here by name.
+      - name: 'Seed campaign fixtures (S14)'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/campaigns-seed.sql
+
       # Owner 2026-11-05: a landing zip lookup shows the zip's own area. Three
       # synthetic events next to Mount Greenwood (60655), one per town; the Pages
       # collection's /?zip=60655 and /?zip=60453 requests read them. Upserts by id.

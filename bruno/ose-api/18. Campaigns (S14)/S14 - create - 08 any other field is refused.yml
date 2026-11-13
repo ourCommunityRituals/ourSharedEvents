@@ -1,0 +1,33 @@
+info:
+  name: "S14 | rainy | create | a field that is not a title or a status is refused"
+  type: http
+  seq: 8
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/campaigns"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"title":"Campaign Fixture Refused","description":"not a campaign field"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('S14 create: 400 UNKNOWN_FIELD', function () {
+          expect(res.getStatus()).to.eql(400);
+          expect(res.getBody().code).to.eql('UNKNOWN_FIELD');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
