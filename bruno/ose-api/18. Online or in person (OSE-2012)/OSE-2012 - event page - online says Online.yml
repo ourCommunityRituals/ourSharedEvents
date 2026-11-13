@@ -19,7 +19,7 @@ runtime:
         test('OSE-2012 sunny: the page opens by its link', function () { expect(res.getStatus()).to.eql(200); });
         test('OSE-2012 sunny: it says "Online", once', function () {
           expect(html.split('data-testid="event-mode"').length - 1).to.eql(1);
-          expect(html).to.include('data-testid="event-mode" data-mode="online">Online</p>');
+          expect(html).to.include('data-testid="event-mode" data-mode="online">Online</span>');
         });
         test('OSE-2012: one h1', function () { expect((html.match(/<h1[\s>]/g) || []).length).to.eql(1); });
         test('OSE-2012 place, not person: the online page shows no place and no map', function () {

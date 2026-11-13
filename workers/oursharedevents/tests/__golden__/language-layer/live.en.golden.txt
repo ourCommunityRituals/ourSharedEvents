@@ -174,9 +174,8 @@
 
     <section class="ose-card ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
            <h2 id="where-heading-live">Where</h2>
-           <p data-testid="event-mode" data-mode="in_person">In person</p>
            <img src="/api/v2/maps/venue-image?event=evt_golden" alt="Map of St. Barnabas Hall" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-live" />
-           <p><strong>St. Barnabas Hall</strong></p>
+           <p><span data-testid="event-mode" data-mode="in_person">In person</span> · <strong>St. Barnabas Hall</strong></p>
            <p>123 Main St</p>
            <details class="ose-calendar-menu ose-directions-menu" data-testid="geo-link-live">
     <summary class="ose-calendar-link ose-calendar-summary" data-testid="geo-link-live-summary">Navigate now</summary>

@@ -803,7 +803,7 @@ describe('10. the event page says how people take part', () => {
       expect(res.status, mode).toBe(200);
       const html = await res.text();
       const lines = [
-        ...html.matchAll(/<p data-testid="event-mode" data-mode="([a-z_]+)">([^<]*)<\/p>/g),
+        ...html.matchAll(/<span data-testid="event-mode" data-mode="([a-z_]+)">([^<]*)<\/span>/g),
       ];
       expect(lines, `${mode}: one mode line`).toHaveLength(1);
       expect([lines[0]![1], lines[0]![2]]).toEqual([mode, LABELS[mode]]);
@@ -813,6 +813,26 @@ describe('10. the event page says how people take part', () => {
       expect(where.indexOf('event-mode')).toBeGreaterThan(-1);
       expect(where.indexOf('event-mode')).toBeLessThan(where.indexOf('</section>'));
     }
+  });
+
+  test('with a place, the label and the place name share one line; online has the label alone', async () => {
+    // One line, so a page with a place is no taller than it was and its main
+    // action stays above the fold (the workability audit measures that).
+    await seedListed('evt-mode-page-line', 'both');
+    const html = await (
+      await SELF.fetch(`${ORIGIN}/events/evt-mode-page-line`, { headers: AS_PERSON })
+    ).text();
+    expect(html).toMatch(
+      /<p><span data-testid="event-mode" data-mode="both">Online and in person<\/span> · <strong>[^<]*(<[^>]+>)?Eagles Hall/
+    );
+
+    await seedListed('evt-mode-page-line-online', 'online');
+    const online = await (
+      await SELF.fetch(`${ORIGIN}/events/evt-mode-page-line-online`, { headers: AS_PERSON })
+    ).text();
+    expect(online).toContain(
+      '<p><span data-testid="event-mode" data-mode="online">Online</span></p>'
+    );
   });
 
   test('an online event’s page shows no place, no map and no directions', async () => {
@@ -830,7 +850,7 @@ describe('10. the event page says how people take part', () => {
     const html = await (
       await SELF.fetch(`${ORIGIN}/es/events/evt-mode-page-es`, { headers: AS_PERSON })
     ).text();
-    expect(html).toContain('data-mode="both">En línea y presencial</p>');
+    expect(html).toContain('data-mode="both">En línea y presencial</span>');
     for (const lang of ['en', 'es', 'pl', 'ar'] as const) {
       for (const mode of ATTENDANCE_MODES) {
         const label = attendanceModeLabel(mode, lang);

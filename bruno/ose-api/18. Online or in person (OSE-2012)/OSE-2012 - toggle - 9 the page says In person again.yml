@@ -18,7 +18,7 @@ runtime:
         const html = String(res.getBody() || '');
         test('OSE-2012 sunny: 200', function () { expect(res.getStatus()).to.eql(200); });
         test('OSE-2012 sunny: In person, at its place', function () {
-          expect(html).to.include('data-mode="in_person">In person</p>');
+          expect(html).to.include('data-mode="in_person">In person</span>');
           expect(html).to.include('Mode Fixture Hall');
         });
 

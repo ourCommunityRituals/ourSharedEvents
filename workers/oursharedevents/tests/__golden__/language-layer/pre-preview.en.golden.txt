@@ -144,9 +144,8 @@
 
     <section class="ose-card ose-section" data-testid="event-where" aria-labelledby="where-heading">
            <h2 id="where-heading">Where</h2>
-           <p data-testid="event-mode" data-mode="in_person">In person</p>
            
-           <p><strong>St. Barnabas Hall</strong></p>
+           <p><span data-testid="event-mode" data-mode="in_person">In person</span> · <strong>St. Barnabas Hall</strong></p>
            <p>123 Main St</p>
            <details class="ose-calendar-menu ose-directions-menu" data-testid="geo-link">
     <summary class="ose-calendar-link ose-calendar-summary" data-testid="geo-link-summary">Get directions</summary>

@@ -1270,12 +1270,20 @@ const ANONYMITY_AFFORDANCE = renderNeverWho('event');
  */
 /**
  * "In person", "Online" or "Online and in person" (OSE-2012), the first line of
- * the Where card in every phase. Plain text in the card's own type: no colour
- * of its own.
+ * the Where card in every phase. It shares its line with the place name, so a
+ * page with a place is no taller than it was and the main action stays above
+ * the fold. Plain text in the card's own type: no colour of its own.
  */
-function attendanceModeLine(row: PublicEventRow, lang: Lang = DEFAULT_LANG): string {
+function attendanceModeLine(
+  row: PublicEventRow,
+  lang: Lang = DEFAULT_LANG,
+  venueHtml: string = ''
+): string {
   const mode = attendanceModeOf(row.attendance_mode);
-  return `<p data-testid="event-mode" data-mode="${mode}">${attendanceModeLabel(mode, lang)}</p>`;
+  const label = `<span data-testid="event-mode" data-mode="${mode}">${attendanceModeLabel(mode, lang)}</span>`;
+  return venueHtml
+    ? `<p>${label} · <strong>${isolateTyped(lang, venueHtml)}</strong></p>`
+    : `<p>${label}</p>`;
 }
 
 function venueMapImg(row: PublicEventRow, testId: string, lang: Lang = DEFAULT_LANG): string {
@@ -1428,9 +1436,8 @@ ${SPONSOR_LIST_CSS}
       // OSE-2012: every event says how people take part, so the card always shows.
       `<section class="ose-card ose-section" data-testid="event-where" aria-labelledby="where-heading">
            <h2 id="where-heading">${msg(lang, 'section.where')}</h2>
-           ${attendanceModeLine(row, lang)}
            ${mapImg}
-           ${venueDisplay ? `<p><strong>${isolateTyped(lang, venueDisplay)}</strong></p>` : ''}
+           ${attendanceModeLine(row, lang, venueDisplay)}
            ${whereAddress && whereAddress !== venueDisplay ? `<p>${isolateTyped(lang, whereAddress)}</p>` : ''}
            ${geoLink}
          </section>`
@@ -1643,9 +1650,8 @@ ${SPONSOR_LIST_CSS}
       // OSE-2012: every event says how people take part, so the card always shows.
       `<section class="ose-card ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
            <h2 id="where-heading-live">${msg(lang, 'section.where')}</h2>
-           ${attendanceModeLine(row, lang)}
            ${mapImg}
-           ${venueDisplay ? `<p><strong>${isolateTyped(lang, venueDisplay)}</strong></p>` : ''}
+           ${attendanceModeLine(row, lang, venueDisplay)}
            ${whereAddress && whereAddress !== venueDisplay ? `<p>${isolateTyped(lang, whereAddress)}</p>` : ''}
            ${geoLink}
          </section>`
@@ -1940,9 +1946,8 @@ ${SPONSOR_LIST_CSS}
         // OSE-2012: every event says how people take part, so the card always shows.
         `<section class="ose-card ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
              <h2 id="where-heading-post">${msg(lang, 'section.where')}</h2>
-             ${attendanceModeLine(row, lang)}
              ${mapImg}
-             ${venueDisplay ? `<p><strong>${isolateTyped(lang, venueDisplay)}</strong></p>` : ''}
+             ${attendanceModeLine(row, lang, venueDisplay)}
              ${whereAddress && whereAddress !== venueDisplay ? `<p>${isolateTyped(lang, whereAddress)}</p>` : ''}
            </section>`
       }
