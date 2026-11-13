@@ -73,8 +73,9 @@ function campaignNotFound(request: Request, id: string, rid: string): Response {
   return errorResponse(request, 'NOT_FOUND', `Campaign not found: ${id}`, 404, rid);
 }
 
-function logDbError(handler: string, err: unknown): void {
-  console.error(JSON.stringify({ type: 'DB_ERROR', handler, error: errorLabel(err) }));
+/** `label` is errorLabel(err), never the error: a D1 message can quote a row. */
+function logDbError(handler: string, label: string): void {
+  console.error(JSON.stringify({ type: 'DB_ERROR', handler, error: label }));
 }
 
 // ─── List ───────────────────────────────────────────────────────────────────────
@@ -107,7 +108,7 @@ export async function handleAdminListCampaigns(
       { headers: headers(request, rid) }
     );
   } catch (err) {
-    logDbError('handleAdminListCampaigns', err);
+    logDbError('handleAdminListCampaigns', errorLabel(err));
     return errorResponse(request, 'DB_ERROR', 'Failed to list campaigns', 503, rid);
   }
 }
@@ -214,7 +215,7 @@ export async function handleAdminCreateCampaign(
       .bind(item.id, item.brand_id, item.title, item.status, item.created_at, item.updated_at)
       .run();
   } catch (err) {
-    logDbError('handleAdminCreateCampaign', err);
+    logDbError('handleAdminCreateCampaign', errorLabel(err));
     return errorResponse(request, 'DB_ERROR', 'Failed to create campaign', 503, rid);
   }
   return Response.json(
@@ -258,7 +259,7 @@ export async function handleAdminSetPlacementCampaign(
       { headers: headers(request, rid) }
     );
   } catch (err) {
-    logDbError('handleAdminSetPlacementCampaign', err);
+    logDbError('handleAdminSetPlacementCampaign', errorLabel(err));
     return errorResponse(request, 'DB_ERROR', 'Failed to update the placement', 503, rid);
   }
 }
