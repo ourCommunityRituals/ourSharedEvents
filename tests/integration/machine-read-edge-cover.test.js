@@ -29,6 +29,8 @@ function icsRoutes() {
   const src = readFileSync(ROUTER, 'utf8');
   const out = [];
   for (const m of src.matchAll(/pathname\.match\(\s*\/(\^[^\n]*?\\\.ics\$)\/\s*\)/g)) {
+    // The pattern is the router's own source text, read from this repository.
+    // eslint-disable-next-line security/detect-non-literal-regexp
     out.push(new RegExp(m[1]));
   }
   return out;
