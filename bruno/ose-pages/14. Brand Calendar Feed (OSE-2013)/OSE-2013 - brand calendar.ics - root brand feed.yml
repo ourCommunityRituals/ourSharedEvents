@@ -1,0 +1,24 @@
+info:
+  name: OSE-2013 | brand calendar.ics | root brand feed, public entries only, event-page links, no cookie
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/brands/root/calendar.ics"
+  headers:
+    - name: Accept
+      value: text/calendar
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// Contract (workers/oursharedevents/src/handlers/brand-calendar.ts): 200 is the root brand's public events as one calendar. 404 is the Worker saying the brand has nothing listed today. 403 with cf-mitigated is the Cloudflare edge challenging a non-browser read before the Worker runs (OSE-939); the Worker never answers 403 on this route.\nvar body = (typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody()));\nvar edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;\ntest('200 (feed) OR 404 (nothing listed) OR an edge challenge', function () { expect(res.getStatus() === 200 || res.getStatus() === 404 || edge).to.equal(true); });\nif (res.getStatus() === 200) {\n    var text = body.replace(/\\r\\n /g, '');\n    var lines = text.split('\\r\\n');\n    test('Content-Type is text/calendar', function () { expect(res.getHeader('Content-Type') || '').to.include('text/calendar'); });\n    test('no cookie is set', function () { expect(!res.getHeader('set-cookie')).to.equal(true); });\n    test('one VCALENDAR with at least one VEVENT', function () {\n        expect(text.split('BEGIN:VCALENDAR').length - 1).to.eql(1);\n        expect(text).to.include('BEGIN:VEVENT');\n        expect(text).to.include('END:VCALENDAR');\n    });\n    test('every entry links to an event page on this host, never a short link', function () {\n        var urls = lines.filter(function (l) { return l.indexOf('URL:') === 0; });\n        expect(urls.length).to.be.above(0);\n        var base = bru.getEnvVar('baseUrl');\n        urls.forEach(function (l) { expect(l.indexOf('URL:' + base + '/events/')).to.eql(0); });\n    });\n    test('an entry has only the eight public properties', function () {\n        var inEvent = false;\n        lines.forEach(function (l) {\n            if (l === 'BEGIN:VEVENT') { inEvent = true; return; }\n            if (l === 'END:VEVENT') { inEvent = false; return; }\n            if (inEvent) { expect(l).to.match(/^(UID|DTSTAMP|DTSTART|DTEND|SUMMARY|DESCRIPTION|LOCATION|URL)[;:]/); }\n        });\n    });\n    test('nothing about attendees or organizers as people', function () {\n        expect(text).to.not.match(/^(ATTENDEE|ORGANIZER|CONTACT)[;:]/m);\n        expect(text).to.not.match(/mailto:/i);\n    });\n} else if (res.getStatus() === 404) {\n    test('404 code is NOT_FOUND', function () { expect(res.getBody().code).to.eql('NOT_FOUND'); });\n}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

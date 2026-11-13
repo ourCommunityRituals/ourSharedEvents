@@ -28,6 +28,9 @@
  *                                  (OSE-1850); /es stands for any listed language. The form posts
  *                                  to the unprefixed API; no language is stored.
  *   GET /events/:id/calendar.ics → public event calendar download
+ *   GET /brands/:brand/calendar.ics → a brand's public events as one calendar feed (OSE-2013):
+ *                                  the rows GET /api/v2/events?brand= lists, through the public
+ *                                  projection; rate-limited; 404 for an unknown or invalid brand
  *   GET /api/v2/events/map       → attendee map, cell-scoped (OSE-1242).
  *                                  Accepts ?cell=<h3 res7>; REFUSES lat/lon.
  *   GET /api/v2/events/:id/shared-report     → SharedReport (signed-link auth, OSE-272 S5)
@@ -255,6 +258,7 @@ import { handleListSubscribers, type SubscribersAdminEnv } from './handlers/subs
 import { handleAdminGeocode, type GeocodeAdminEnv } from './handlers/geocode';
 import { handleShortlinkResolve, type ShortlinkResolveEnv } from './handlers/shortlink-resolve';
 import { handleEventCalendar, type CalendarEnv } from './handlers/calendar';
+import { handleBrandCalendar } from './handlers/brand-calendar';
 import { handleUecResolve } from './handlers/uec-resolve';
 import {
   handleV2AdminVerifyQr,
@@ -2232,7 +2236,16 @@ export async function route(
     return handleEventCalendar(request, env, eventCalendarMatch[1]);
   }
 
-  // ── One event's screens under its own address (OSE-1684) ─────────────────
+  // ── A brand's calendar feed (OSE-2013) ────────────────────────────────────
+  // The brand is read as typed: a segment that is not a brand id (an encoded
+  // character included) is a 404 from the handler, the same as an unknown brand.
+  const brandCalendarMatch = pathname.match(/^\/brands\/([^/]+)\/calendar\.ics$/);
+  if (brandCalendarMatch && method === 'GET') {
+    return publicReadLimited('brand-calendar', (req, e: typeof env) =>
+      handleBrandCalendar(req, e, brandCalendarMatch[1], ctx)
+    )(request, env);
+  }
+
   // /events/<id>/tv and /events/<id>/poster are the addresses the platform
   // writes for an event's TV and poster; the pages read the id from the path.
   // /display?event= and /poster?event= keep working (printed and saved links).

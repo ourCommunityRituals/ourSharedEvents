@@ -247,6 +247,76 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     }
   });
 
+  // OSE-2013: the brand calendar feed on the deployed Worker. The same four
+  // checks as the workers-pool spec (tests/brand-calendar-feed.spec.ts), on real
+  // rows: the public event is in its brand's feed, the draft is not, another
+  // brand's feed never carries it, and no cookie is set.
+  test('brand calendar feed lists the public event, not the draft, not for another brand (OSE-2013)', async ({
+    request,
+  }) => {
+    publicEventId = await createEvent(request, 'active', true, 'feed-public');
+    draftEventId = await createEvent(request, 'draft', false, 'feed-draft');
+
+    // The Cloudflare edge can challenge a non-browser read before the Worker
+    // runs (403 with cf-mitigated, OSE-939). That is the only answer accepted
+    // besides the Worker's own; the Worker never answers 403 on this route.
+    const edgeChallenged = (resp: { status(): number; headers(): Record<string, string> }) =>
+      resp.status() === 403 && !!resp.headers()['cf-mitigated'];
+
+    const feed = await request.get(`${BASE_URL}/brands/root/calendar.ics`, { maxRedirects: 0 });
+    if (edgeChallenged(feed)) {
+      test.info().annotations.push({
+        type: 'edge-challenge',
+        description: 'The edge challenged /brands/root/calendar.ics; the Worker did not answer.',
+      });
+      return;
+    }
+    expect(feed.status(), 'the root brand feed').toBe(200);
+    expect(feed.headers()['content-type']).toContain('text/calendar');
+    expect(feed.headers()['set-cookie'], 'no cookie on the feed').toBeUndefined();
+
+    // Folded lines joined again (RFC 5545 §3.1).
+    const body = (await feed.text()).replace(/\r\n /g, '');
+    expect(body.match(/BEGIN:VCALENDAR/g)).toHaveLength(1);
+
+    // The public event has an entry, and its link is its event page.
+    expect(body).toContain(`UID:ose-event-${publicEventId}@oursharedevents.com`);
+    expect(body).toContain(
+      `URL:${BASE_URL}/events/${publicEventId}/launch-smoke-feed-public-${RUN_ID}`
+    );
+    expect(body).toContain(`SUMMARY:Launch Smoke feed-public ${RUN_ID}`);
+
+    // The draft is left out: not its id, not its title.
+    expect(body).not.toContain(draftEventId);
+    expect(body).not.toContain(`Launch Smoke feed-draft ${RUN_ID}`);
+
+    // Every entry carries only the eight public properties, and every link is an
+    // event page on this host.
+    let inEvent = false;
+    for (const line of body.split('\r\n')) {
+      if (line === 'BEGIN:VEVENT') inEvent = true;
+      else if (line === 'END:VEVENT') inEvent = false;
+      else if (inEvent) {
+        expect(line).toMatch(/^(UID|DTSTAMP|DTSTART|DTEND|SUMMARY|DESCRIPTION|LOCATION|URL)[;:]/);
+        if (line.startsWith('URL:')) expect(line.startsWith(`URL:${BASE_URL}/events/`)).toBe(true);
+      }
+    }
+
+    // Another brand's feed never carries this brand's event. A brand nobody has
+    // is a 404; if it existed, its feed still must not hold the root event.
+    const other = await request.get(
+      `${BASE_URL}/brands/launch-smoke-other-${RUN_ID}/calendar.ics`,
+      {
+        maxRedirects: 0,
+      }
+    );
+    if (!edgeChallenged(other)) {
+      expect(other.status(), 'a brand with nothing public').toBe(404);
+      expect(other.headers()['set-cookie'], 'no cookie on the refusal').toBeUndefined();
+      expect(await other.text()).not.toContain(publicEventId);
+    }
+  });
+
   test('poster scan route replays to /events/:id with type and deployment context (OSE-1359)', async ({
     request,
   }) => {
