@@ -1,105 +1,86 @@
 opencollection: 1.0.0
-
 info:
   name: OSE API — Contract
-config:
-  proxy:
-    inherit: true
-    config:
-      protocol: http
-      hostname: ""
-      port: ""
-      auth:
-        username: ""
-        password: ""
-      bypassProxy: ""
-
 request:
-  variables:
-    - name: covAttempt
-      value:
-        type: number
-        data: "0"
   scripts:
-    - type: before-request
-      code: |-
-        // ADR-021 (OSE-906): production is read-only for tests. Writes may only go to
-        // a known non-production host; anything else (production, an unknown host, or
-        // a URL that does not parse cleanly) is refused before it is sent.
-        (function () {
-          var WRITE_HOSTS = ['stg.oursharedevents.com', 'localhost', '127.0.0.1'];
-          function host(url) {
-            var m = /^[a-z][a-z0-9+.-]*:\/\/([^\/?#]*)/i.exec(String(url || ''));
-            if (!m) return null;
-            var h = m[1].slice(m[1].lastIndexOf('@') + 1).replace(/:\d*$/, '');
-            return h.toLowerCase().replace(/\.$/, '');
-          }
-          var method = String(req.getMethod() || '').toUpperCase();
-          if (['GET', 'HEAD', 'OPTIONS'].indexOf(method) !== -1) return;
-          var targets = [bru.getEnvVar('baseUrl'), req.getUrl()].map(host).filter(function (h) {
-            return h !== null;
+  - type: before-request
+    code: |-
+      // ADR-021 (OSE-906): production is read-only for tests. Writes may only go to
+      // a known non-production host; anything else (production, an unknown host, or
+      // a URL that does not parse cleanly) is refused before it is sent.
+      (function () {
+        var WRITE_HOSTS = ['stg.oursharedevents.com', 'localhost', '127.0.0.1'];
+        function host(url) {
+          var m = /^[a-z][a-z0-9+.-]*:\/\/([^\/?#]*)/i.exec(String(url || ''));
+          if (!m) return null;
+          var h = m[1].slice(m[1].lastIndexOf('@') + 1).replace(/:\d*$/, '');
+          return h.toLowerCase().replace(/\.$/, '');
+        }
+        var method = String(req.getMethod() || '').toUpperCase();
+        if (['GET', 'HEAD', 'OPTIONS'].indexOf(method) !== -1) return;
+        var targets = [bru.getEnvVar('baseUrl'), req.getUrl()].map(host).filter(function (h) {
+          return h !== null;
+        });
+        var allowed = targets.length > 0 && targets.every(function (h) {
+          return WRITE_HOSTS.indexOf(h) !== -1;
+        });
+        if (!allowed) {
+          throw new Error('ADR-021: tests write only to staging or localhost; refusing ' + method + ' ' + req.getUrl());
+        }
+      })();
+
+      // Collection-level pre-request: set timing for latency measurement
+      bru.setVar('requestStartTime', Date.now());
+
+      // If ocrInternalSecret is set, prefer X-OCR-Internal header over Bearer.
+      // A request that declares X-Test-No-Auth opts OUT of this collection-wide
+      // injection so negative/unauthenticated tests are genuinely credential-less
+      // (OSE-1191: the blanket inject was silently authenticating the no-auth test).
+      var ocrSecret = bru.getEnvVar('ocrInternalSecret');
+      if (ocrSecret && !req.getHeader('X-Test-No-Auth')) {
+          req.setHeader('X-OCR-Internal', ocrSecret);
+      }
+  - type: after-response
+    code: |-
+      // Collection-level test: measure latency on every request
+      const elapsed = Date.now() - bru.getVar('requestStartTime');
+      const isAdminRegistrationsRead = req.getPath().includes('/forms/registrations');
+       // Admin registrations decrypts organizer-visible attendee names before responding;
+       // live staging can exceed the generic API budget while still staying usable.
+       if (isAdminRegistrationsRead) {
+           test(`Response time < 9000ms (actual: ${elapsed}ms)`, function() {
+               expect(elapsed).to.be.below(9000);
+           });
+       } else {
+           test(`Response time < 6000ms (actual: ${elapsed}ms)`, function() {
+               expect(elapsed).to.be.below(6000);
+           });
+       }
+
+      // Verify JSON content-type on API responses
+      // Skip: CORS preflight (204 no body), CF Access blocks (HTML instead of JSON),
+      // and the sponsor image routes under /api: the logo proxy and the asset route
+      // serve image bytes, or an empty-bodied 404/502 (OSE-1432).
+      const isImageRoute = /^\/api\/v2\/sponsors\/[^/]+\/(logo|asset\/)/.test(req.getPath());
+      const isApiPath = (req.getPath().startsWith('/api') && !isImageRoute) || req.getPath() === '/health';
+      const isCorsOptions = req.getMethod() === 'OPTIONS';
+      const ct = (res.getHeader('Content-Type') || '');
+      const isCfAccessBlocked = ct.includes('text/html') && !ct.includes('application/json');
+      if (isApiPath && !isCorsOptions && !isCfAccessBlocked) {
+          test('Content-Type is application/json', function() {
+              expect(ct).to.include('application/json');
           });
-          var allowed = targets.length > 0 && targets.every(function (h) {
-            return WRITE_HOSTS.indexOf(h) !== -1;
+      }
+
+      // Invariant #6 — Inert Monetization Hooks: every Worker response must carry
+      // X-Monetization-Inert: true. The header is set in index.ts fetch() wrapper,
+      // so it appears on every route — success, error, and 404. Skipped only when
+      // Cloudflare Access intercepts the request (worker never ran).
+      if (!isCorsOptions && !isCfAccessBlocked) {
+          test('Invariant #6: X-Monetization-Inert: true on every Worker response', function() {
+              expect(res.getHeader('X-Monetization-Inert')).to.eql('true');
           });
-          if (!allowed) {
-            throw new Error('ADR-021: tests write only to staging or localhost; refusing ' + method + ' ' + req.getUrl());
-          }
-        })();
-
-        // Collection-level pre-request: set timing for latency measurement
-        bru.setVar('requestStartTime', Date.now());
-
-        // If ocrInternalSecret is set, prefer X-OCR-Internal header over Bearer.
-        // A request that declares X-Test-No-Auth opts OUT of this collection-wide
-        // injection so negative/unauthenticated tests are genuinely credential-less
-        // (OSE-1191: the blanket inject was silently authenticating the no-auth test).
-        var ocrSecret = bru.getEnvVar('ocrInternalSecret');
-        if (ocrSecret && !req.getHeader('X-Test-No-Auth')) {
-            req.setHeader('X-OCR-Internal', ocrSecret);
-        }
-    - type: after-response
-      code: |-
-        // Collection-level test: measure latency on every request
-        const elapsed = Date.now() - bru.getVar('requestStartTime');
-        const isAdminRegistrationsRead = req.getPath().includes('/forms/registrations');
-         // Admin registrations decrypts organizer-visible attendee names before responding;
-         // live staging can exceed the generic API budget while still staying usable.
-         if (isAdminRegistrationsRead) {
-             test(`Response time < 9000ms (actual: ${elapsed}ms)`, function() {
-                 expect(elapsed).to.be.below(9000);
-             });
-         } else {
-             test(`Response time < 6000ms (actual: ${elapsed}ms)`, function() {
-                 expect(elapsed).to.be.below(6000);
-             });
-         }
-
-        // Verify JSON content-type on API responses
-        // Skip: CORS preflight (204 no body), CF Access blocks (HTML instead of JSON),
-        // and the sponsor image routes under /api: the logo proxy and the asset route
-        // serve image bytes, or an empty-bodied 404/502 (OSE-1432).
-        const isImageRoute = /^\/api\/v2\/sponsors\/[^/]+\/(logo|asset\/)/.test(req.getPath());
-        const isApiPath = (req.getPath().startsWith('/api') && !isImageRoute) || req.getPath() === '/health';
-        const isCorsOptions = req.getMethod() === 'OPTIONS';
-        const ct = (res.getHeader('Content-Type') || '');
-        const isCfAccessBlocked = ct.includes('text/html') && !ct.includes('application/json');
-        if (isApiPath && !isCorsOptions && !isCfAccessBlocked) {
-            test('Content-Type is application/json', function() {
-                expect(ct).to.include('application/json');
-            });
-        }
-
-        // Invariant #6 — Inert Monetization Hooks: every Worker response must carry
-        // X-Monetization-Inert: true. The header is set in index.ts fetch() wrapper,
-        // so it appears on every route — success, error, and 404. Skipped only when
-        // Cloudflare Access intercepts the request (worker never ran).
-        if (!isCorsOptions && !isCfAccessBlocked) {
-            test('Invariant #6: X-Monetization-Inert: true on every Worker response', function() {
-                expect(res.getHeader('X-Monetization-Inert')).to.eql('true');
-            });
-        }
-
+      }
 docs:
   content: |-
     Complete API collection for ourSharedEvents Worker.
