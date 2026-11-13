@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | sunny | promote | the first try, read before it joins a series
   type: http
-  seq: 5
+  seq: 50
 
 http:
   method: GET

@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | rainy | reject | a rejection reason is a fixed word, never free text
   type: http
-  seq: 15
+  seq: 150
 
 http:
   method: POST

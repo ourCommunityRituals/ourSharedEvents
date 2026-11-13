@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | sunny | attach | detach takes one event off the series
   type: http
-  seq: 11
+  seq: 110
 
 http:
   method: DELETE

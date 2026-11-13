@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | rainy | brand | an admin of another brand cannot read this event's series
   type: http
-  seq: 20
+  seq: 200
 
 http:
   method: GET

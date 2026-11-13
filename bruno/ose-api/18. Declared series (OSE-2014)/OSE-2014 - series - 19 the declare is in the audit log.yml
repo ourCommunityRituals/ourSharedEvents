@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | audit | declare | the declare and its refusals are in the audit log
   type: http
-  seq: 19
+  seq: 190
 
 http:
   method: GET

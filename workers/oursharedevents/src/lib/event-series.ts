@@ -11,8 +11,21 @@
  * No request, no DB: `tests/event-series.spec.ts` drives these directly.
  */
 
-/** The cadences a series can state. `event_series.cadence` (migration 0033). */
-export const SERIES_CADENCES = ['weekly', 'biweekly', 'monthly'] as const;
+/**
+ * The cadences a series can state. `event_series.cadence` (migration 0033; the
+ * column is free TEXT, so the list lives here).
+ *
+ * The first three name one weekday and one hour. `daily-weekdays` (a room open
+ * Monday to Thursday, say) names an hour and no single day. `as-announced`
+ * promises nothing about when: it names neither (OSE-2017).
+ */
+export const SERIES_CADENCES = [
+  'weekly',
+  'biweekly',
+  'monthly',
+  'daily-weekdays',
+  'as-announced',
+] as const;
 export type SeriesCadence = (typeof SERIES_CADENCES)[number];
 
 /** Why an organizer turned a suggestion down. A fixed list, never free text. */
@@ -158,10 +171,21 @@ function parseEventIds(raw: unknown): Parsed<string[]> {
 export interface DeclareInput {
   name: string;
   cadence: SeriesCadence;
-  day_of_week: number;
-  hour_of_day: number;
+  /** null for `daily-weekdays` and `as-announced`: they name no single day. */
+  day_of_week: number | null;
+  /** null for `as-announced`: it promises no time. */
+  hour_of_day: number | null;
   event_ids: string[];
 }
+
+/** Which of day and hour each cadence states. A field it does not state must be absent. */
+const CADENCE_STATES: Record<SeriesCadence, { day: boolean; hour: boolean }> = {
+  weekly: { day: true, hour: true },
+  biweekly: { day: true, hour: true },
+  monthly: { day: true, hour: true },
+  'daily-weekdays': { day: false, hour: true },
+  'as-announced': { day: false, hour: false },
+};
 
 export function parseDeclare(body: unknown): Parsed<DeclareInput> {
   const b = asRecord(body);
@@ -172,17 +196,29 @@ export function parseDeclare(body: unknown): Parsed<DeclareInput> {
   if (!name.ok) return name;
   if (!SERIES_CADENCES.includes(b.cadence as SeriesCadence))
     return bad('INVALID_CADENCE', `cadence must be one of: ${SERIES_CADENCES.join(', ')}`);
-  const day = parseIntIn(b.day_of_week, 0, 6);
-  if (day === null) return bad('INVALID_DAY', 'day_of_week must be 0 (Sunday) to 6 (Saturday)');
-  const hour = parseIntIn(b.hour_of_day, 0, 23);
-  if (hour === null) return bad('INVALID_HOUR', 'hour_of_day must be 0 to 23');
+  const cadence = b.cadence as SeriesCadence;
+  const states = CADENCE_STATES[cadence];
+  let day: number | null = null;
+  if (states.day) {
+    day = parseIntIn(b.day_of_week, 0, 6);
+    if (day === null) return bad('INVALID_DAY', 'day_of_week must be 0 (Sunday) to 6 (Saturday)');
+  } else if (b.day_of_week !== undefined && b.day_of_week !== null) {
+    return bad('INVALID_DAY', `A ${cadence} series names no single day; leave day_of_week out`);
+  }
+  let hour: number | null = null;
+  if (states.hour) {
+    hour = parseIntIn(b.hour_of_day, 0, 23);
+    if (hour === null) return bad('INVALID_HOUR', 'hour_of_day must be 0 to 23');
+  } else if (b.hour_of_day !== undefined && b.hour_of_day !== null) {
+    return bad('INVALID_HOUR', `A ${cadence} series promises no time; leave hour_of_day out`);
+  }
   const ids = parseEventIds(b.event_ids);
   if (!ids.ok) return ids;
   return {
     ok: true,
     value: {
       name: name.value,
-      cadence: b.cadence as SeriesCadence,
+      cadence,
       day_of_week: day,
       hour_of_day: hour,
       event_ids: ids.value,

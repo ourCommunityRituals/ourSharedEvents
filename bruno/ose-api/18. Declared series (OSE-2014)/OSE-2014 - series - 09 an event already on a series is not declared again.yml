@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | rainy | declare | an event already on a series cannot be declared again
   type: http
-  seq: 9
+  seq: 90
 
 http:
   method: POST

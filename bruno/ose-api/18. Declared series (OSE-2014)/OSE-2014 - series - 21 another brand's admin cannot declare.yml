@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | rainy | brand | an admin of another brand cannot declare on this event
   type: http
-  seq: 21
+  seq: 210
 
 http:
   method: POST

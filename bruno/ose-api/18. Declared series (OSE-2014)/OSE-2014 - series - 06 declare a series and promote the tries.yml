@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | sunny | promote | declare on an online event; its two earlier tries join
   type: http
-  seq: 6
+  seq: 60
 
 http:
   method: POST

@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | sunny | confirm | confirm a detector suggestion, with a new name
   type: http
-  seq: 14
+  seq: 140
 
 http:
   method: POST

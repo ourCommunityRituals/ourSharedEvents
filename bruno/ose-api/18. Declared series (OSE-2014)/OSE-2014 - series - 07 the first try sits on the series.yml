@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | sunny | promote | the first try now sits on the declared series
   type: http
-  seq: 7
+  seq: 70
 
 http:
   method: GET

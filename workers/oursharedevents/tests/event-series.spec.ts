@@ -37,6 +37,7 @@ import { route, type RouterEnv } from '../src/router';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { detectEventSeriesClusters } from '../src/lib/shared-report';
 import {
+  SERIES_CADENCES,
   SERIES_COLUMNS,
   SERIES_WRITE_KEYS,
   parseDeclare,
@@ -714,5 +715,124 @@ describe('the pure parser', () => {
 
   test('a body that is not an object is refused', () => {
     for (const body of [null, [], 'x', 3]) expect(parseDeclare(body).ok).toBe(false);
+  });
+});
+
+describe('cadence: the five a programme slot can state (OSE-2017)', () => {
+  const base = { name: 'The daily room' };
+
+  test('daily-weekdays takes an hour and no single day', async () => {
+    const res = await call('POST', seriesPath(A1), A, {
+      ...base,
+      cadence: 'daily-weekdays',
+      hour_of_day: 17,
+    });
+    expect(res.status).toBe(201);
+    expect(res.json.series).toMatchObject({
+      cadence: 'daily-weekdays',
+      day_of_week: null,
+      hour_of_day: 17,
+      state: 'confirmed',
+    });
+    expect((await seriesRows())[0]).toMatchObject({ day_of_week: null, hour_of_day: 17 });
+  });
+
+  test('daily-weekdays with a day is refused: it has no single day', async () => {
+    const res = await call('POST', seriesPath(A1), A, {
+      ...base,
+      cadence: 'daily-weekdays',
+      day_of_week: 1,
+      hour_of_day: 17,
+    });
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe('INVALID_DAY');
+    expect(await seriesRows()).toHaveLength(0);
+  });
+
+  test('daily-weekdays still needs its hour', async () => {
+    const res = await call('POST', seriesPath(A1), A, { ...base, cadence: 'daily-weekdays' });
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe('INVALID_HOUR');
+  });
+
+  test('as-announced takes neither day nor hour, and stores neither', async () => {
+    const res = await call('POST', seriesPath(A1), A, { ...base, cadence: 'as-announced' });
+    expect(res.status).toBe(201);
+    expect(res.json.series).toMatchObject({
+      cadence: 'as-announced',
+      day_of_week: null,
+      hour_of_day: null,
+    });
+  });
+
+  test.each([
+    ['a day', { day_of_week: 1 }, 'INVALID_DAY'],
+    ['an hour', { hour_of_day: 17 }, 'INVALID_HOUR'],
+  ])('as-announced with %s is refused: nothing is promised', async (_label, extra, code) => {
+    const res = await call('POST', seriesPath(A1), A, {
+      ...base,
+      cadence: 'as-announced',
+      ...extra,
+    });
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe(code);
+    expect(await seriesRows()).toHaveLength(0);
+  });
+
+  test.each([['weekly'], ['biweekly'], ['monthly']])(
+    '%s still requires both a day and an hour',
+    async (cadence) => {
+      const noDay = await call('POST', seriesPath(A1), A, { ...base, cadence, hour_of_day: 17 });
+      expect(noDay.json.code).toBe('INVALID_DAY');
+      const noHour = await call('POST', seriesPath(A1), A, { ...base, cadence, day_of_week: 1 });
+      expect(noHour.json.code).toBe('INVALID_HOUR');
+      expect(await seriesRows()).toHaveLength(0);
+    }
+  );
+
+  test('the list of cadences is exactly five', () => {
+    expect([...SERIES_CADENCES]).toEqual([
+      'weekly',
+      'biweekly',
+      'monthly',
+      'daily-weekdays',
+      'as-announced',
+    ]);
+  });
+
+  test('the trend reads a daily-weekdays series exactly as a weekly one', async () => {
+    const res = await call('POST', seriesPath(A1), A, {
+      ...base,
+      cadence: 'daily-weekdays',
+      hour_of_day: 17,
+      event_ids: [A2, A3],
+    });
+    expect(res.status).toBe(201);
+    const r = await buildSharedReport(tenv.DB, A2);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(
+      r.report.headcount_trend.instances.map((i) => [i.event_id, i.distinct_scanners])
+    ).toEqual([
+      [A1, 6],
+      [A2, 9],
+      [A3, 14],
+    ]);
+  });
+
+  test('the nightly detector still writes weekly, and nothing else', async () => {
+    const recent = (weeksAgo: number) => {
+      const d = new Date(Date.now() - weeksAgo * 7 * 86_400_000);
+      d.setUTCHours(19, 0, 0, 0);
+      return d.toISOString();
+    };
+    for (const [i, id] of ['evt-ser-d1', 'evt-ser-d2', 'evt-ser-d3'].entries()) {
+      await seedEvent(id, BRAND_A, recent(i + 1), 'Detector Hall');
+      await tenv.DB.prepare(`UPDATE events SET status = 'active' WHERE id = ?`).bind(id).run();
+    }
+    await detectEventSeriesClusters(tenv as never);
+    const rows = await seriesRows();
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    expect(rows.every((r) => r.cadence === 'weekly' && r.state === 'pending')).toBe(true);
   });
 });

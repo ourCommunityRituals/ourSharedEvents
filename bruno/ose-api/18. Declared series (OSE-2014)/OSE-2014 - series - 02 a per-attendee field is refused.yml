@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | rainy | never who | declare with a per-attendee field is refused
   type: http
-  seq: 2
+  seq: 20
 
 http:
   method: POST

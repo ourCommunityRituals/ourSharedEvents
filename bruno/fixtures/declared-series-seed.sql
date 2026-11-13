@@ -51,3 +51,19 @@ INSERT INTO event_series (id, venue_id, series_name, cadence, day_of_week, hour_
 VALUES
   ('evtsrs_ci_suggest', 'series-ci-sugg-evt', 'Thursday 7 PM (auto-detected)', 'weekly', 4, 19, 'pending', '2026-10-01T00:00:00.000Z'),
   ('evtsrs_ci_decline', 'series-ci-sugg-evt', 'Thursday 9 PM (auto-detected)', 'weekly', 4, 21, 'pending', '2026-10-01T00:00:00.000Z');
+
+-- OSE-2020: counts that promotion must leave alone. One poster on the first
+-- try, with six scans in one poster-hour (above the under-5 floor), so the
+-- folder can read the same count before and after the try joins a series.
+INSERT INTO poster_deployments (id, event_id, qr_token, placement_label, placement_type, is_active)
+VALUES ('series-ci-pd-1', 'series-ci-try1-evt', 'qrt_series_ci_pd_1', 'Series CI front door', 'venue', 1)
+ON CONFLICT(id) DO UPDATE SET event_id = 'series-ci-try1-evt', is_active = 1;
+
+INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket) VALUES
+  ('series-ci-scan-1', 'series-ci-try1-evt', 'series-ci-pd-1', '2026-09-07T19:00'),
+  ('series-ci-scan-2', 'series-ci-try1-evt', 'series-ci-pd-1', '2026-09-07T19:00'),
+  ('series-ci-scan-3', 'series-ci-try1-evt', 'series-ci-pd-1', '2026-09-07T19:00'),
+  ('series-ci-scan-4', 'series-ci-try1-evt', 'series-ci-pd-1', '2026-09-07T19:00'),
+  ('series-ci-scan-5', 'series-ci-try1-evt', 'series-ci-pd-1', '2026-09-07T19:00'),
+  ('series-ci-scan-6', 'series-ci-try1-evt', 'series-ci-pd-1', '2026-09-07T19:00')
+ON CONFLICT(id) DO NOTHING;

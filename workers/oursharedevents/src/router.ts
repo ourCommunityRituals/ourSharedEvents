@@ -17,8 +17,8 @@
  *   GET /robots.txt              → crawl policy (prod indexable; else Disallow: /)
  *   GET /sitemap.xml             → static pages + published/active events
  *   GET /api/status              → alias for /health
- *   GET /api/v2/events           → list active events
- *   GET /api/v2/events/:id       → single event
+ *   GET /api/v2/events           → list active events; `series` beside `items` maps an event id to its confirmed series (OSE ADR-028)
+ *   GET /api/v2/events/:id       → single event; `series` beside `item` is its confirmed series or null
  *   GET /es/events/:id[/:name]   → the event page in Spanish (OSE-1761). A language prefix is
  *                                  the visitor's explicit choice and beats Accept-Language; English
  *                                  stays unprefixed. Only pages on the language layer exist under a

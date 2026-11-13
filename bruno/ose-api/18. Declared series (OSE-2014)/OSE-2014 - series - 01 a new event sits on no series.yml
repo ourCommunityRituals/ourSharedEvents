@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | sunny | read | an event sits on no series, and its brand has two suggestions
   type: http
-  seq: 1
+  seq: 10
 
 http:
   method: GET

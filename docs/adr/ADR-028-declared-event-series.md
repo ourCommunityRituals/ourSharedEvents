@@ -32,9 +32,20 @@ programme: its past events join the series, and nothing about the past changes.
 ## Decision
 
 **D1. An organizer declares a series, and it is `confirmed` at once.** A declared series states a
-name, a cadence (`weekly`, `biweekly` or `monthly`), a weekday and an hour. Declaring is the
-organizer's yes, which is all that confirming a suggestion ever meant. `detected_at` stays NULL on a
-declared row; that is how the two origins are told apart (migration 0033 already said so).
+name and a cadence. Declaring is the organizer's yes, which is all that confirming a suggestion ever
+meant. `detected_at` stays NULL on a declared row; that is how the two origins are told apart
+(migration 0033 already said so).
+
+**D1a. Five cadences (amended 2026-11-13, OSE-2017).** Each states only what it can promise:
+
+| Cadence                         | Weekday        | Hour           |
+| ------------------------------- | -------------- | -------------- |
+| `weekly`, `biweekly`, `monthly` | required       | required       |
+| `daily-weekdays`                | must be absent | required       |
+| `as-announced`                  | must be absent | must be absent |
+
+A field a cadence does not state is refused, not ignored, and is stored as NULL. The detector still
+writes `weekly` only.
 
 **D2. The anchor is an event, not a venue.** `event_series.venue_id` has always held an event id.
 A declared series puts the event it was declared on there. No venue is needed, so an online
@@ -90,27 +101,61 @@ fixed words. A name that is email-shaped or phone-shaped is refused.
   other past event of the brand. Guessing would attach events the organizer did not mean.
 - **Free-text rejection reason.** It is the one field where a person's name would most easily land.
 
+## Amendments of 2026-11-13 (owner: "build the gaps")
+
+**D10. The public event reads say which series an event sits on (OSE-2018).**
+`GET /api/v2/events/:id` carries `series` beside `item`, and `GET /api/v2/events` carries a `series`
+map (event id to series) beside `items`. It is a sibling, as `sponsor_titles` is, so the public event
+projection, its API snapshot and brain invariant 16 are untouched and `series_id` stays off the
+public column list.
+
+- Five fields: `id`, `name`, `cadence`, `day_of_week`, `hour_of_day`.
+- Only a `confirmed` series whose anchor is in the event's own brand. A pending suggestion is the
+  detector's guess; a rejected one is the organizer's no. Neither is published.
+- Not shown: the state, the origin (declared or detected), the anchor event, any timestamp, the
+  rejection reason, any count.
+- The list map names a series only for an event the list itself carries.
+- It fails to empty: a read without its series is correct, a read that errors because of it is not.
+
+**D11. The admin has a Series card (OSE-2019).** It starts a series from the selected event, takes
+an event off one (with "Put it back"), and answers a suggestion. It is built from classes that
+already exist and adds no CSS. It shows a name and a schedule in words, never a count. Confirming
+from the card attaches the selected event, since that is the event the organizer is looking at.
+
+**D12. A structural gate holds the rules (OSE-2020).**
+`tests/e2e/0-architecture/event-series.invariant.spec.ts` runs in the T0 `invariants` step. It reads
+source, so it catches a writer added later.
+
 ## Consequences
 
 - A programme can sit on a series from its first event, online or in person.
+- A Monday-to-Thursday programme is one `daily-weekdays` series.
 - The trend of a promoted trial starts from its first try.
 - The detector does not suggest again what was declared at a venue: its lookup already skips a
-  cluster that a `confirmed` row covers.
-- `cadence` stays the three values the schema documents. ourWKRP's `daily-weekdays` and
-  `as-announced` slots have no OSE cadence; a Monday-to-Thursday programme is four weekly series, or
-  the owner adds a value later.
+  cluster that a `confirmed` row covers. A `daily-weekdays` or `as-announced` series has no weekday,
+  so it does not cover a detector cluster; the detector may still suggest a weekly series beside it.
 - `day_of_week` and `hour_of_day` on a declared row are what the organizer stated. On a detected row
   they come from `start_date` as stored. Nothing compares the two today.
-- The public event response does not carry `series_id`. A reader outside admin cannot yet see that
-  an event sits on a series.
-- There is no admin screen for this yet; the routes are the whole surface.
+- A series name becomes public once the series is confirmed. It is the organizer's own label, and
+  the name rule (no contact detail, 80 characters) applies at declare and at confirm. A detector's
+  auto-name ("Thursday 7 PM (auto-detected)") becomes public if confirmed without a new name.
+- The BigQuery export of confirmed series (`exportEventSeries`, table `event_series_export`) existed
+  before this ADR and had nothing to send. It now sends each declared or confirmed series, its name
+  included. No export code changed. The brain loop-back
+  (`.claude/outputs/BRAIN-LOOPBACK-event-series-2026-11-13.md`, finding F3) asks the owner to confirm
+  that a series name may leave OSE.
+- ourWKRP can check from the public API that a programme event sits on a series. It still cannot
+  tell a declared series from a confirmed suggestion, by design.
 
 ## Enforcement
 
-- Mock layer: `workers/oursharedevents/tests/event-series.spec.ts`. The three owner rules (another
-  brand's event never joins; never a per-attendee field; promotion changes no past date or count)
-  were each watched failing on an injected fault.
+- Structural, T0: `tests/e2e/0-architecture/event-series.invariant.spec.ts` (six rules, each seen
+  red on a planted fault).
+- Mock layer: `workers/oursharedevents/tests/event-series.spec.ts` (routes, the three owner rules,
+  cadences), `tests/public-event-series.spec.ts` (the public reads) and
+  `tests/admin-series-card.spec.ts` (the card). Each was watched failing before the code existed and
+  again on injected faults.
 - Brand matrix: the six routes are in `tests/helpers/brand-matrix-routes.ts`, and the matrix
-  snapshot now includes `event_series`.
+  snapshot includes `event_series`.
 - Staging: Bruno folder "18. Declared series (OSE-2014)", fixture
-  `bruno/fixtures/declared-series-seed.sql`.
+  `bruno/fixtures/declared-series-seed.sql`. It checks dates and counts before and after promotion.

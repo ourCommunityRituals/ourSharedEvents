@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | sunny | promote | promotion changed no date of the first try
   type: http
-  seq: 8
+  seq: 80
 
 http:
   method: GET

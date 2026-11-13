@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | rainy | brand | the two refused declares left no series behind
   type: http
-  seq: 4
+  seq: 40
 
 http:
   method: GET

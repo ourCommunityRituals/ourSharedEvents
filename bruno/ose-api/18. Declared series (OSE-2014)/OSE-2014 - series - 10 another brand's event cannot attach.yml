@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | rainy | brand | another brand's event cannot attach to this brand's series
   type: http
-  seq: 10
+  seq: 100
 
 http:
   method: PUT

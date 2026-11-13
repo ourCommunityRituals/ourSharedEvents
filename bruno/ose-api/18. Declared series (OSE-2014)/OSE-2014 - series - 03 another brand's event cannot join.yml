@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | rainy | brand | declare naming another brand's event is refused whole
   type: http
-  seq: 3
+  seq: 30
 
 http:
   method: POST

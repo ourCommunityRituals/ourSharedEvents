@@ -1,7 +1,7 @@
 info:
   name: OSE-2014 | rainy | attach | a suggestion cannot be joined before it is confirmed
   type: http
-  seq: 13
+  seq: 130
 
 http:
   method: PUT

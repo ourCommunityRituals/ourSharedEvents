@@ -44,6 +44,11 @@ import {
 } from '../lib/event-settings';
 import { logAdminAction } from '../lib/audit-log';
 import { toPublicEvent } from '../lib/public-event-projection.js';
+import {
+  fetchPublicSeriesByEvent,
+  fetchPublicSeriesOf,
+  type PublicSeries,
+} from '../lib/public-series.js';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { createShortlink } from '../lib/shortlinks';
 import { ensureEventCode } from '../lib/event-code';
@@ -204,8 +209,15 @@ export async function handleListEvents(
     for (const [eventId, title] of await fetchSponsorTitles(env.DB, brand)) {
       if (listed.has(eventId)) sponsor_titles[eventId] = title;
     }
+    // OSE-2018: the confirmed series each listed event sits on. A sibling of
+    // `items`, like `sponsor_titles`, so the event projection is untouched.
+    // Only `confirmed`, only the event's own brand (lib/public-series); fails to empty.
+    const series: Record<string, PublicSeries> = {};
+    for (const [eventId, s] of await fetchPublicSeriesByEvent(env.DB, brand)) {
+      if (listed.has(eventId)) series[eventId] = s;
+    }
     return Response.json(
-      { ok: true, status: 200, items, sponsor_titles },
+      { ok: true, status: 200, items, sponsor_titles, series },
       {
         headers: {
           ...corsHeaders(request),
@@ -268,7 +280,13 @@ export async function handleGetEvent(
       // the same event with different field sets, the narrower one would be
       // security theatre: a caller wanting the extra fields would just use the
       // other route.
-      { ok: true, status: 200, item: toPublicEvent(enrichWithPhase(row)) },
+      // OSE-2018: `series` is a sibling of `item`, never a field on it.
+      {
+        ok: true,
+        status: 200,
+        item: toPublicEvent(enrichWithPhase(row)),
+        series: await fetchPublicSeriesOf(env.DB, String(row.id ?? id)),
+      },
       {
         headers: {
           ...corsHeaders(request),
