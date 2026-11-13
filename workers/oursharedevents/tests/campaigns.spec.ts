@@ -31,7 +31,11 @@
  * the list: "the list order" failed; (g) the unknown-field check dropped: "only
  * a title and a status" failed; (h) the create brand check dropped and (i) the
  * list's brand scope dropped: "a list never carries" failed; (j) the detach not
- * tied to its campaign: both detach cases failed | date: 2026-11-13
+ * tied to its campaign: both detach cases failed; (k) the brand-matched
+ * subquery in lib/sponsor-promotion.ts replaced by the draft's own id: "a
+ * sign-up that names another brand's campaign" failed; (l) the brand match
+ * dropped from the report's campaign join: "the SharedReport names no campaign"
+ * failed | date: 2026-11-13
  *
  * Not killed, and why: dropping only the bundle's "attach to a sponsor it
  * already shows" step changes nothing a caller can see, because the read's
@@ -41,6 +45,8 @@
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { route } from '../src/router';
+import { buildSharedReport } from '../src/lib/shared-report-builder';
+import { promoteSponsorDraft, type PromotionEnv } from '../src/lib/sponsor-promotion';
 import {
   BRANDS,
   UNKNOWN_ID,
@@ -159,6 +165,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  await env.DB.prepare(`DELETE FROM sponsor_displays WHERE id LIKE 'cs-disp-%'`).run();
   await env.DB.prepare(
     `UPDATE sponsor_placement SET campaign_id = NULL
       WHERE campaign_id LIKE 'cmp_%' OR campaign_id LIKE 'cs-%'`
@@ -483,6 +490,79 @@ describe("S14 rule 1: another brand's campaign can never be attached or seen", (
     expect(sponsors[0].campaign).toBeUndefined();
     expect(raw).not.toContain(cmp(B));
     expect(raw).not.toContain(TITLE(B));
+  });
+});
+
+// ── rule 1, the older paths: a campaign id that arrives without the campaign API ──
+
+describe('S14 rule 1: the sponsor sign-up path and the report hold the same brand wall', () => {
+  // A sponsor's own sign-up draft may carry a campaign_id from its request body
+  // (handlers/sponsors-draft.ts). Promotion is the one place it becomes a placement.
+  // Its own event, so a promoted sponsor never joins the other cases' bundle.
+  const SIGNUP_EVT = 'cs-abc-signup-evt';
+  beforeEach(() => seedEvent(SIGNUP_EVT, A));
+
+  async function promote(token: string, campaignId: string): Promise<string | null> {
+    await env.DB.prepare(
+      `INSERT INTO sponsor_business_draft
+         (draft_token, brand_id, event_id, campaign_id, name, category_selections,
+          covenant_acknowledged_at, status, free_tier_eligible, eligibility_source)
+       VALUES (?, ?, ?, ?, ?, ?, '2026-08-12T00:00:00Z', 'draft', 1, 'community_benefit')`
+    )
+      .bind(
+        token,
+        A.brandId,
+        SIGNUP_EVT,
+        campaignId,
+        `Co ${token}`,
+        JSON.stringify([{ category: 'bar_events', mode: 'whole' }])
+      )
+      .run();
+    const res = await promoteSponsorDraft(env as unknown as PromotionEnv, token);
+    expect(res.ok, JSON.stringify(res)).toBe(true);
+    if (!res.ok) return null;
+    const row = await env.DB.prepare(
+      'SELECT campaign_id FROM sponsor_placement WHERE sponsor_business_id = ? AND event_id = ?'
+    )
+      .bind(res.sponsor_id, SIGNUP_EVT)
+      .first<{ campaign_id: string | null }>();
+    expect(row, 'the promotion wrote a placement').not.toBeNull();
+    return row?.campaign_id ?? null;
+  }
+
+  test("a sign-up that names another brand's campaign is promoted with no campaign", async () => {
+    expect(await promote(`cs-draft-cross-${Date.now()}`, cmp(B))).toBeNull();
+  });
+
+  test("a sign-up that names its own brand's campaign keeps it (positive control)", async () => {
+    expect(await promote(`cs-draft-own-${Date.now()}`, cmp(A))).toBe(cmp(A));
+  });
+
+  async function reportFor(campaignId: string): Promise<string> {
+    await setPlacement(plc(A), 'campaign_id = ?', campaignId);
+    await env.DB.prepare('DELETE FROM sponsor_displays WHERE event_id = ?').bind(evt(A)).run();
+    for (let i = 0; i < 6; i++) {
+      await env.DB.prepare(
+        `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, created_at)
+         VALUES (?, ?, ?, 'public', 'mobileBanner', 'impression', '2026-06-01T12:00:00Z')`
+      )
+        .bind(`cs-disp-${i}`, spo(A), evt(A))
+        .run();
+    }
+    return JSON.stringify(await buildSharedReport(env.DB, evt(A)));
+  }
+
+  test("the SharedReport names no campaign for a placement linked to another brand's campaign", async () => {
+    const raw = await reportFor(cmp(B));
+    expect(raw).toContain(spo(A)); // the sponsor's displays are still counted
+    expect(raw).not.toContain(cmp(B));
+    expect(raw).not.toContain(TITLE(B));
+  });
+
+  test("the SharedReport names the brand's own campaign (positive control)", async () => {
+    const raw = await reportFor(cmp(A));
+    expect(raw).toContain(cmp(A));
+    expect(raw).toContain(TITLE(A));
   });
 });
 

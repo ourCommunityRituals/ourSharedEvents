@@ -636,7 +636,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): env.DB, createExecutionContext, waitOnExecutionContext",
-      "testCount": 30
+      "testCount": 35
     },
     {
       "file": "workers/oursharedevents/tests/canonical-link.spec.ts",

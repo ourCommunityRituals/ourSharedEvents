@@ -867,6 +867,7 @@ jobs:
             tests/e2e/0-architecture/slug-permanence.invariant.spec.ts \
             tests/e2e/0-architecture/shared-report-schema.invariant.spec.ts \
             tests/e2e/0-architecture/tenant-isolation.invariant.spec.ts \
+            tests/e2e/0-architecture/campaign-brand-and-consent.invariant.spec.ts \
             tests/e2e/0-architecture/admin-null-actor.invariant.spec.ts \
             tests/e2e/0-architecture/admin-guard-order.invariant.spec.ts \
             tests/e2e/0-architecture/tier-equity.invariant.spec.ts \
