@@ -1,0 +1,24 @@
+info:
+  name: "OSE-1998 | sunny | public | GET /api/v2/events?brand= stays lean: no booths key"
+  type: http
+  seq: 182
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events?brand={{brandId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 public list: 200 with items', function () { expect(res.getStatus()).to.eql(200); expect(b.items).to.be.an('array'); });
+        test('OSE-1998 public list: no booths key', function () { expect(b).to.not.have.property('booths'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

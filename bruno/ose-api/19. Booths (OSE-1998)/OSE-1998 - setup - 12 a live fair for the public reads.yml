@@ -1,0 +1,37 @@
+info:
+  name: "OSE-1998 | setup | a synthetic live fair, off the map, for the public stall reads"
+  type: http
+  seq: 12
+
+# Automation may create an event live (OSE-1425). It is synthetic and unlisted;
+# the folder deletes it at seq 905, and the daily staging rebuild clears a leftover.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"attendance_mode\": \"in_person\", \"location\": \"OSE-1998 Hall\", \"title\": \"OSE-1998 public stall fair (staging, synthetic)\", \"status\": \"active\", \"is_published\": false, \"data_class\": \"synthetic\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 setup: the live fair is created', function () { expect(res.getStatus()).to.eql(201); expect(b.event_status).to.eql('active'); expect(b.id).to.be.a('string'); });
+        bru.setVar('boothLiveFairId', b.id || 'missing-live-fair');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
