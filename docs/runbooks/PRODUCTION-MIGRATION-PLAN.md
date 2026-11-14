@@ -88,6 +88,30 @@ a line in this document.
   old Worker keeps working. Nobody has tested the old production build against the new
   tables, because nobody knows which commit that build is.
 
+## Dry runs
+
+A migration can carry a dry-run file: read-only counts that say what the migration will mean for
+the rows that are there. The file sits beside the worker's scripts and is named for its migration:
+
+- `workers/oursharedevents/scripts/dry-run-NNNN-<words>.sql` for the main database
+- `workers/oursharedevents/scripts/dry-run-forms-NNNN-<words>.sql` for the forms database
+
+**On staging, CI runs it.** The T1 staging deploy has a step, before the two apply steps, that asks
+staging which migrations are pending and runs the dry-run file of each one
+(`scripts/ci/migration-dry-run.mjs --pending --env staging --remote`). The counts are in that job's
+summary. The script sends nothing unless every statement in the file is a `SELECT`, and a dry-run
+file that cannot be run stops the job before anything is applied
+(`tests/unit/ci/migration-dry-run.test.js`).
+
+**On demand:** the workflow "Migration dry run (staging)" runs one named file against staging.
+
+**On production, nothing runs it yet.** The script refuses any remote environment but staging. Adding
+the same step to the production deploy is a decision for the owner.
+
+0108 has a dry-run file. It was applied on staging on 2026-11-14 before the step existed, so its
+counts were not taken first. What was read after: 100 public events, 99 `in_person` and 1 `online`
+(the test fixture).
+
 ## Main database, 0078 to 0108
 
 "Rows" answers: does it write or remove rows that already exist?
