@@ -517,6 +517,22 @@ const RUN_UNLESS_FALSE = "steps.scope.outputs.run != 'false'";
 const MAIN_SCRIPT = 'test:mutation';
 const LANGUAGE_SCRIPT = 'test:mutation:language';
 
+/**
+ * A job's steps without a leading step-security/harden-runner. That step only starts egress
+ * auditing: it runs none of this repo's code, and with no `if:` it cannot skip anything, so
+ * the shape below is read from the step after it (tests/unit/ci/checkout-persist-credentials.test.js
+ * requires it first in every job that runs pull-request code). A harden-runner with an `if:`
+ * is not looked past.
+ */
+const HARDEN_RUNNER = new RegExp('^step-security/harden-runner@');
+
+function jobSteps(job) {
+  const steps = (job && job.steps) || [];
+  const first = steps[0] || {};
+  const lead = HARDEN_RUNNER.test(String(first.uses || '')) && first.if === undefined;
+  return lead ? steps.slice(1) : steps;
+}
+
 function triggers(wf) {
   // js-yaml 4 keeps `on` as a string key; tolerate a YAML 1.1 parser that turns it into `true`.
   return (wf && (wf.on !== undefined ? wf.on : wf[true])) || {};
@@ -592,7 +608,7 @@ function workflowProblems(wf, groups) {
     // contract then counts the check as one that may not report.
     if (job.if !== undefined) out.push(`${key}: has a job-level if`);
     if (job.needs !== undefined) out.push(`${key}: has needs`);
-    const steps = job.steps || [];
+    const steps = jobSteps(job);
     const at = steps.findIndex((s) => s.id === 'scope');
     if (at < 0) {
       out.push(`${key}: no step with id scope`);
@@ -615,7 +631,7 @@ function workflowProblems(wf, groups) {
       out.push(`${FINAL_JOB}: does not need exactly mutation-group`);
     }
     if (!isAlways(final.if)) out.push(`${FINAL_JOB}: is not if: always()`);
-    const steps = final.steps || [];
+    const steps = jobSteps(final);
     const first = steps[0] || {};
     const firstEnv = Object.values(first.env || {}).join(' ');
     if (
@@ -824,11 +840,22 @@ describe('the mutation workflow reports on every pull request', () => {
       ['not failing', (s) => (s.run = 'echo "$GROUPS_RESULT"')],
     ])('mutation: the group-result step %s', (_label, plant) => {
       const wf = load();
-      plant(wf.jobs[FINAL_JOB].steps[0]);
+      plant(jobSteps(wf.jobs[FINAL_JOB])[0]);
       expect(problems(wf)).toEqual([
         `${FINAL_JOB}: the first step does not fail, unconditionally, on a group that did not succeed`,
       ]);
     });
+
+    test.each([...SCOPED, FINAL_JOB])(
+      '%s: a harden-runner made conditional is not looked past',
+      (key) => {
+        const wf = load();
+        const first = wf.jobs[key].steps[0];
+        expect(first.uses).toMatch(HARDEN_RUNNER);
+        first.if = "github.event_name == 'push'";
+        expect(problems(wf).length).toBeGreaterThan(0);
+      }
+    );
 
     test('mutation: the floor leaves out one group', () => {
       const wf = load();

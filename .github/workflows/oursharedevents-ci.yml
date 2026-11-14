@@ -215,6 +215,10 @@ jobs:
       contents: read
       actions: read
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -459,6 +463,10 @@ jobs:
         # were gated by nothing while T2→T3→T4 sat behind staging.
         shard: [lint, typecheck, a11y, invariants, component]
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       # Self-hosted runner cleanup: stale _diag/pages/ log files left by
       # cancelled runs cause checkout to fail with "file already exists".
       # Run on every shard — concurrent rm -rf is safe (idempotent).
@@ -1046,6 +1054,10 @@ jobs:
               tests/poster-qr.spec.ts
               tests/tier-equity-sort.spec.ts
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - name: 'Clear stale runner diag files'
         shell: bash
         run: rm -rf "$RUNNER_WORKSPACE/../../_diag/pages" 2>/dev/null || true
@@ -1173,6 +1185,10 @@ jobs:
       needs.gate.result == 'success' &&
       needs.gate-tests.result == 'success'
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -1249,6 +1265,10 @@ jobs:
       url: ${{ env.STG_BASE_URL }}
 
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -1500,6 +1520,10 @@ jobs:
             collection: bruno/ose-pages
             junit: bru-pages-junit.xml
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -1944,6 +1968,10 @@ jobs:
             label: 'T3: Forms endpoint smoke'
             installBrowser: false
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -2118,6 +2146,10 @@ jobs:
       checks: write
 
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -3219,6 +3251,10 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -3278,6 +3314,10 @@ jobs:
       ]
     if: always()
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false

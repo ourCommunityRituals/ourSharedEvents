@@ -93,6 +93,10 @@ jobs:
     # No job-level `if:` and no `needs:`, so every group starts on every pull
     # request; the required check is `mutation` below, which waits for all six.
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
@@ -173,6 +177,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       # First and unconditional: a change that needs no run still fails here if
       # a group job broke, because a group that decides "no run" succeeds.
       - name: Every group succeeded
@@ -226,6 +234,10 @@ jobs:
     timeout-minutes: 15
     # No job-level `if:` and no `needs:`, for the same reason as the job above.
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false

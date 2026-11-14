@@ -101,8 +101,14 @@ jobs:
       startsWith(github.head_ref, 'full-pipeline/')
 
     steps:
+    - name: Harden runner
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+      with:
+        egress-policy: audit
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        persist-credentials: false
 
     - name: Display configuration
       env:
@@ -250,8 +256,14 @@ jobs:
     if: ${{ !cancelled() && needs.security-regression.result != 'failure' }}
 
     steps:
+    - name: Harden runner
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+      with:
+        egress-policy: audit
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        persist-credentials: false
 
     - name: Setup Node.js
       uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
