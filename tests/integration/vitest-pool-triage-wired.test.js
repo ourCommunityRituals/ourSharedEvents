@@ -184,6 +184,9 @@ describe('the pool triage check is wired into the pull request pipeline', () => 
 
   test('a job it waits on gets an `if:`', () => {
     const ci = clone(ci0);
+    // [Claude] T0 waits on nothing since S0 and T0 run side by side, so plant the
+    // wait as well as the condition.
+    ci.jobs.gate.needs = ['security'];
     ci.jobs.security.if = "github.actor != 'x'";
     expect(wiringProblems(ci)).toEqual([
       `${AT}: job \`security\` has an \`if:\` and can skip on a pull request`,
