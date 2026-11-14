@@ -1,4 +1,6 @@
-# CCR: how closely the build matches the vision and the documentation
+# Assessment: how closely the build matches the vision and the documentation
+
+> **What this is, and is not.** [Claude] This follows the owner's assessment template: nine reviewer roles working independently, then one reconciliation pass. It is **not** a CCR worksheet under this repo's protocol (`.claude/skills/ccr/SKILL.md`), which needs the loops run in order (Critical, Conservative, Recursive, or five for architecture) and is checked by `scripts/ci/ccr-worksheet-check.mjs`. Only the first round was run. The file was first committed under a `CCR-` name; the worksheet gate correctly refused it, and it was renamed instead of being given a header it had not earned. To make it a binding CCR, the remaining loops have to be run.
 
 Date: 2026-11-14. Pass 1 of 3. Written by [Claude]; findings are tagged [Agent] with the role that raised them.
 Scope: OurSharedEvents (OSE), OurWKRP (OW), OCR-docs and the hub, each read at `origin/main`.
@@ -16,7 +18,7 @@ Nothing in code, config or Linear was changed for this assessment.
 | **Overall (equal weight)** | 111 | 57 | **51%** | **fails the 95% threshold** |
 
 - Overall = mean of the five area percentages (55 + 60 + 44 + 56.5 + 38.9) / 5 = 50.9%. Pooled, 57 of 111 = 51.4%.
-- CCR protocol score (100 minus weighted open findings): 10 High findings × 10 already reach 100, so the score is 0. No Security Critical or Regulatory finding was raised.
+- Score by the CCR weights, for comparison only (100 minus weighted open findings): 10 High findings × 10 already reach 100, so the score is 0. No Security Critical or Regulatory finding was raised.
 - Assessment confidence: about 75%. Reasons are under "What was not checked".
 - **Read this number with care.** "Met" means fully met. A partly met intention counts as not met. The sample leans toward places a reviewer found a problem, so the true figure is probably higher than 51% and is certainly well under 95%.
 
