@@ -1,0 +1,64 @@
+info:
+  name: OSE-1896 | GET /?area=872664405ffffff | organizer links are https and on the poster only
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{baseUrl}}/?area=872664405ffffff"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The organizer's own links in a place panel (OSE-1897, lib/map-place-links.ts):
+        // only codes still on the poster, only https, straight to the saved target.
+        // Fixture: bruno/fixtures/map-zoom-area-seed.sql. map-zoom-a has
+        //   tickets  https, on the poster   -> offered
+        //   donation https, on the poster   -> offered
+        //   menu     http,  on the poster   -> refused (saved past the admin rule by the seed)
+        //   website  https, off the poster  -> not offered
+        const body = String(res.getBody());
+        const cardA = body.slice(body.indexOf('data-event-id="map-zoom-a"'), body.indexOf('id="amap-dot-2"'));
+        const links = Array.from(cardA.matchAll(/<a [^>]*data-testid="amap-link"[^>]*>/g)).map(function (m) { return m[0]; });
+
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        test('The card of map-zoom-a was found', function () {
+          expect(cardA).to.include('data-testid="amap-acts"');
+        });
+
+        test('The two https links on the poster are offered, in poster order', function () {
+          expect(links.length).to.equal(2);
+          expect(links[0]).to.include('href="https://tickets.map-zoom.example/a"');
+          expect(links[0]).to.include('data-kind="tickets"');
+          expect(links[1]).to.include('href="https://give.map-zoom.example/a"');
+          expect(links[1]).to.include('data-kind="donation"');
+        });
+
+        test('A link taken off the poster is absent', function () {
+          expect(body).to.not.include('off-poster.map-zoom.example');
+        });
+
+        test('A link that is not https is absent', function () {
+          expect(body).to.not.include('not-https.map-zoom.example');
+          expect(body).to.not.match(/href="http:\/\/[^"]*map-zoom/);
+        });
+
+        test('An outside link opens apart from this site and says so', function () {
+          for (const a of links) {
+            expect(a).to.include('target="_blank"');
+            expect(a).to.match(/rel="[^"]*\bnoopener\b[^"]*"/);
+            expect(a).to.match(/aria-label="[^"]*\(opens another site\)"/);
+          }
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

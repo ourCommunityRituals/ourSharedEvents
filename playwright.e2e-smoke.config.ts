@@ -14,6 +14,15 @@ const { guardProduction } = require('./config/production-read-only');
 
 const { getBaseUrl } = require('./config/environments');
 
+/** tests/e2e/2-pages/map-place-panel-layout.spec.ts: the one spec the map-* projects run. */
+const MAP_LAYOUT = /2-pages[\\/]map-place-panel-layout\.spec\.ts$/;
+const MAP_PROFILES = [
+  { name: 'map-phone', width: 375, height: 812, hasTouch: true },
+  { name: 'map-tablet', width: 768, height: 1024, hasTouch: true },
+  { name: 'map-desktop', width: 1280, height: 800, hasTouch: false },
+  { name: 'map-tv', width: 1920, height: 1080, hasTouch: false },
+];
+
 const config = defineConfig({
   // No git commit or diff in reports (OSE-1470): uploaded artifacts must not
   // carry commit messages or source diffs. CI defaults both to true.
@@ -92,8 +101,21 @@ const config = defineConfig({
   projects: [
     {
       name: 'e2e-smoke',
+      // The map layout contract runs on its own device-profile projects below.
+      testIgnore: MAP_LAYOUT,
       use: { ...devices['Desktop Chrome'] },
     },
+    // One project per device profile, for the map's place-panel layout contract
+    // ONLY (owner 2026-10-07: a layout contract per device, never the whole suite
+    // times the devices). `testMatch` keeps every other spec off them, so a step
+    // that names another spec still runs on `e2e-smoke` alone. Chromium at each
+    // size; no device descriptor is spread in, so the real-browser user agent set
+    // in `use` above still applies (OSE-1310).
+    ...MAP_PROFILES.map(({ name, width, height, hasTouch }) => ({
+      name,
+      testMatch: MAP_LAYOUT,
+      use: { browserName: 'chromium' as const, viewport: { width, height }, hasTouch },
+    })),
   ],
 });
 

@@ -1,0 +1,39 @@
+info:
+  name: OSE-1886 | GET /?area=872664405FFFFFF (upper case) | zooms on the canonical cell
+  type: http
+  seq: 9
+
+http:
+  method: GET
+  url: "{{baseUrl}}/?area=872664405FFFFFF"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Fat-finger ?area= (OSE-1886): the same cell typed in capitals. It is the
+        // same area, so it zooms, on the canonical lower-case id; the capitals are
+        // echoed nowhere (lib/landing-area.ts landingZoom lower-cases it).
+        // Fixture: bruno/fixtures/map-zoom-area-seed.sql.
+        const body = String(res.getBody());
+
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        test('Zooms on the canonical lower-case cell, with its three panels', function () {
+          expect(body).to.include('data-zoom="872664405ffffff"');
+          expect((body.match(/data-testid="amap-panel"/g) || []).length).to.equal(3);
+        });
+
+        test('The capitals are echoed nowhere', function () {
+          expect(body).to.not.include('872664405FFFFFF');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
