@@ -67,7 +67,7 @@ async function createEvent(title: string): Promise<Created> {
   const res = await SELF.fetch(`${ORIGIN}/api/v2/admin/events`, {
     method: 'POST',
     headers: JSON_KEY,
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ attendance_mode: 'in_person', location: 'Test Hall', title }),
   });
   expect(res.status).toBe(201);
   return (await res.json()) as Created;

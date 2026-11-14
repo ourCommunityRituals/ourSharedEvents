@@ -54,6 +54,75 @@ function mount() {
   return { w, doc, $, type, enter, onStep };
 }
 
+describe('OSE-2012: step 1 asks how people take part', () => {
+  const choose = (m: ReturnType<typeof mount>, value: string) => {
+    const el = m.$<HTMLSelectElement>('wizard-event-mode');
+    el.value = value;
+    el.dispatchEvent(new m.w.Event('change', { bubbles: true }));
+  };
+
+  test('the question is there, required, with the three choices and no meeting-link field', () => {
+    const { $, doc } = mount();
+    const mode = $<HTMLSelectElement>('wizard-event-mode');
+    expect(mode.getAttribute('aria-required')).toBe('true');
+    expect(Array.from(mode.options).map((o) => [o.value, o.textContent])).toEqual([
+      ['in_person', 'In person'],
+      ['online', 'Online'],
+      ['both', 'Online and in person'],
+    ]);
+    // It starts on in person: the step has always asked for a place.
+    expect(mode.value).toBe('in_person');
+    expect(doc.querySelector(`label[for="${mode.id}"]`)?.textContent).toContain(
+      'How do people take part?'
+    );
+    // No field in the whole admin asks for a meeting link: none is stored.
+    const linkish = Array.from(doc.querySelectorAll('input, textarea, select'))
+      .map((e) => `${e.id} ${e.getAttribute('name') ?? ''} ${e.getAttribute('placeholder') ?? ''}`)
+      .filter((s) => /meeting|zoom|join[ _-]?(link|url)|stream/i.test(s));
+    expect(linkish).toEqual([]);
+  });
+
+  test('online: the place goes away, is emptied, and is no longer needed', () => {
+    const m = mount();
+    m.type('wizard-event-name', 'Data class');
+    m.type('wizard-event-venue', 'Eagles Hall');
+    choose(m, 'online');
+    const venue = m.$<HTMLInputElement>('wizard-event-venue');
+    expect(m.doc.getElementById('wizard-event-venue-field')!.hidden).toBe(true);
+    expect(venue.value).toBe('');
+    expect(venue.required).toBe(false);
+    expect(m.$('wizard-event-mode-note').hidden).toBe(false);
+    // The map question goes too: an online event is never on the map or the list.
+    expect(m.$('wizard-publish').hidden).toBe(true);
+    m.$('wizard-next-btn').click();
+    expect(m.onStep(2), 'an online event needs no place').toBe(true);
+  });
+
+  test('in person and both still need the place, and the message says so', () => {
+    for (const mode of ['in_person', 'both']) {
+      const m = mount();
+      m.type('wizard-event-name', 'Bocce Night');
+      choose(m, 'online');
+      choose(m, mode);
+      expect(m.doc.getElementById('wizard-event-venue-field')!.hidden, mode).toBe(false);
+      expect(m.$('wizard-event-mode-note').hidden, mode).toBe(true);
+      expect(m.$('wizard-publish').hidden, mode).toBe(false);
+      m.$('wizard-next-btn').click();
+      expect(m.onStep(1), mode).toBe(true);
+      expect(m.$('wizard-msg').textContent, mode).toBe('Add a place to continue');
+      expect(m.$('wizard-event-venue').getAttribute('aria-invalid'), mode).toBe('true');
+    }
+  });
+
+  test('online with no name: only the name is asked for', () => {
+    const m = mount();
+    choose(m, 'online');
+    m.$('wizard-next-btn').click();
+    expect(m.onStep(1)).toBe(true);
+    expect(m.$('wizard-msg').textContent).toBe('Add a name to continue');
+  });
+});
+
 function isoDaysFromNow(days: number): string {
   const d = new Date(Date.now() + days * 86_400_000);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -149,7 +218,8 @@ describe('OSE-1515: Enter acts as Next on step 1', () => {
     type('wizard-event-name', 'Bocce Night');
     enter('wizard-event-name');
     expect(onStep(1)).toBe(true);
-    expect($('wizard-msg').textContent).toBe('Add a name and a place to continue');
+    // OSE-2012: the message names what is missing.
+    expect($('wizard-msg').textContent).toBe('Add a place to continue');
   });
 
   test('Enter in the place field with both filled moves to step 2', () => {

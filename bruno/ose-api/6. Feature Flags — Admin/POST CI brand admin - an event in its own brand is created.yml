@@ -21,6 +21,8 @@ http:
       {
         "title": "ci-brand: own-brand create (staging, rebuilt daily)",
         "brand_id": "ci-brand",
+        "attendance_mode": "in_person",
+        "location": "CI Brand Hall",
         "start_date": "2099-06-01",
         "is_published": false
       }

@@ -80,6 +80,10 @@ export const ar: Record<MessageKey, string> = {
   'price.sliding': 'سعر حسب القدرة',
   'price.donation': 'ادفع ما تستطيع',
   'price.varies': 'يختلف',
+  // OSE-2012: how people take part (lib/attendance-mode.ts).
+  'mode.in_person': 'حضوريًا',
+  'mode.online': 'عبر الإنترنت',
+  'mode.both': 'عبر الإنترنت وحضوريًا',
   'countdown.now': 'تبدأ الآن',
   'countdown.today': 'تبدأ اليوم',
   'countdown.tomorrow': 'تبدأ غدًا',

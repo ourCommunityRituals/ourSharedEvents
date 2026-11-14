@@ -101,6 +101,7 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
     slug = `language-prefix-${RUN_ID}`;
     const created = await adminFetch(request, 'POST', '/api/v2/admin/events', {
       brand_id: 'root',
+      attendance_mode: 'in_person',
       title: `Language Prefix ${RUN_ID}`,
       slug,
       status: 'active',
@@ -612,6 +613,7 @@ test.describe('Polish and Arabic on staging, pairwise rows (OSE-1972)', () => {
     slug = `language-pairwise-${RUN_ID}`;
     const created = await adminFetch(request, 'POST', '/api/v2/admin/events', {
       brand_id: 'root',
+      attendance_mode: 'in_person',
       title: `Bocce Night #3! ${RUN_ID}`,
       slug,
       status: 'active',
@@ -757,6 +759,7 @@ test.describe('Form pages in every language on staging (OSE-1850)', () => {
     slug = `language-forms-${RUN_ID}`;
     const created = await adminFetch(request, 'POST', '/api/v2/admin/events', {
       brand_id: 'root',
+      attendance_mode: 'in_person',
       title: `Language Forms ${RUN_ID}`,
       slug,
       status: 'active',

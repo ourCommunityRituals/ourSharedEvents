@@ -99,6 +99,8 @@ test.describe('Story C5: Create Event Smoke Gate', () => {
     const createResponse = await request.post('/api/v2/admin/events', {
       timeout: TIMEOUT,
       data: {
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
         title: uniqueName,
         brand_id: BRAND,
         slug: uniqueSlug,
@@ -167,6 +169,8 @@ test.describe('Story C5: Create Event Smoke Gate', () => {
     const response = await request.post('/api/v2/admin/events', {
       timeout: TIMEOUT,
       data: {
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
         name: 'Unauthorized Test Event',
       },
       // No CF-Access headers - should fail auth

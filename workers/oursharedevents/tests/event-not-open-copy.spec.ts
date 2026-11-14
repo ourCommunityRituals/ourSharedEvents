@@ -60,6 +60,8 @@ describe('the closed event page', () => {
         method: 'POST',
         headers: JSON_KEY,
         body: JSON.stringify({
+          attendance_mode: 'in_person',
+          location: 'Test Hall',
           title: 'Bears, Big Screens and Barricades',
           ...(status ? { status } : {}),
         }),
@@ -86,7 +88,11 @@ describe('the closed event page', () => {
     const res = await SELF.fetch(`${ORIGIN}/api/v2/admin/events`, {
       method: 'POST',
       headers: JSON_KEY,
-      body: JSON.stringify({ title: 'Watch the Bears game' }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'Watch the Bears game',
+      }),
     });
     const { id, event_code } = (await res.json()) as { id: string; event_code: string | null };
     expect(event_code).toBeTruthy();

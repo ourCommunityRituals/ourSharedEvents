@@ -1,0 +1,29 @@
+info:
+  name: OSE-2012 | sunny | update | the event turned online has no place, coordinates or cell
+  type: http
+  seq: 34
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/mode-toggle-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const item = res.getBody().item || {};
+        test('OSE-2012 sunny: it reads online', function () { expect(res.getStatus()).to.eql(200); expect(item.attendance_mode).to.eql('online'); });
+        test('OSE-2012 place, not person: no place, coordinates or cell is left', function () {
+          expect([item.location, item.where_address, item.lat, item.lon, item.h3_res7]).to.eql([null, null, null, null, null]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

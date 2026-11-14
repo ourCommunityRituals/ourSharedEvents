@@ -224,6 +224,8 @@ describe('Publish starts the window; the event is live by link but not listed', 
       headers: { ...BEARER, 'Content-Type': 'application/json' },
       // OSE-1560: a new event is off the map unless asked; this one asks.
       body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
         title: 'Created live',
         status: 'active',
         start_date: inDays(3),
@@ -371,6 +373,8 @@ describe('Corridor latch counts settled events only (OSE-1508)', () => {
         headers: { ...BEARER, 'Content-Type': 'application/json' },
         // OSE-1560: a new event is off the map unless asked; the latch counts listed events.
         body: JSON.stringify({
+          attendance_mode: 'in_person',
+          location: 'Test Hall',
           title: `Live ${i}`,
           status: 'active',
           start_date: inDays(2),

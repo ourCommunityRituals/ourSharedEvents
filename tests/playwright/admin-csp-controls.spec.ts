@@ -49,6 +49,7 @@ async function seedEvent(page: Page): Promise<string> {
   const res = await page.request.post('/api/v2/admin/events', {
     headers: { Authorization: `Bearer ${ADMIN_BEARER}`, 'Content-Type': 'application/json' },
     data: {
+      attendance_mode: 'in_person',
       title: `CSP control check ${Date.now()}`,
       start_date: '2026-10-02',
       location: 'Rock Island Public House',
@@ -242,6 +243,7 @@ test.describe('OSE-1239 admin controls fire under the nonce CSP', () => {
       const res = await page.request.post('/api/v2/admin/events', {
         headers: { Authorization: `Bearer ${ADMIN_BEARER}`, 'Content-Type': 'application/json' },
         data: {
+          attendance_mode: 'in_person',
           title: `Soonest ${label} ${Date.now()}`,
           start_date: new Date(Date.now() + daysOut * 86_400_000).toISOString().slice(0, 10),
           location: 'Eagles Hall',

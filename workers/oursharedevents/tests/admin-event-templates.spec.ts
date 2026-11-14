@@ -120,7 +120,13 @@ describe('OSE-868 G3 — selecting a template sets template_id and preserves the
     const createRes = await SELF.fetch('https://t.test/api/v2/admin/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
-      body: JSON.stringify({ title: 'OSE-868 template round-trip', brand_id: BRAND, slug }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'OSE-868 template round-trip',
+        brand_id: BRAND,
+        slug,
+      }),
     });
     expect(createRes.status).toBe(201);
     const created = (await createRes.json()) as { id: string; slug: string };

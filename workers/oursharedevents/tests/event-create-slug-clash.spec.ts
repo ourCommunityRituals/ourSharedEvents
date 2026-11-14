@@ -40,7 +40,11 @@ async function create(body: Record<string, unknown>) {
   const res = await SELF.fetch(`${ORIGIN}/api/v2/admin/events`, {
     method: 'POST',
     headers: AUTH,
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      ...(body as object),
+    }),
   });
   return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 }

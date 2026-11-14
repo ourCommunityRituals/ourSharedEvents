@@ -597,6 +597,8 @@ describe('AUD-3 B — no leak through pagination, no N+1, creates and deletes at
 
   test('CREATE_EVENT and DELETE_EVENT rows carry the brand', async () => {
     const created = await call('POST', '/api/v2/admin/events', asEmail(OWNER_A), {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
       title: 'ALB Created Event',
       brand_id: BRAND_A,
     });

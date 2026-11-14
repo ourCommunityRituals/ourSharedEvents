@@ -632,6 +632,7 @@ describe('OSE-243a + OSE-263: anonymity-principle source gate (L1 static)', () =
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
       body: JSON.stringify({
+        attendance_mode: 'in_person',
         title: 'OSE-243a chain test',
         brand_id: BRAND,
         status: 'active',

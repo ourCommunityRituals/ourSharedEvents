@@ -66,6 +66,7 @@ async function createEventInPhase(
     await request.post('/api/v2/admin/events', {
       headers,
       data: {
+        attendance_mode: 'in_person',
         title,
         start_date: day,
         end_date: day,

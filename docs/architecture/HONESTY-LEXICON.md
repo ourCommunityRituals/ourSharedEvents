@@ -131,6 +131,14 @@ only hides the problem.
   (`src/lib/schema-lexicon.ts`) and a "no stale exemptions" test forces their
   removal once the rename lands. **Do not weaken the banned set to go green** —
   rename, or add a ticketed exemption.
+- **A decided name that holds a banned word without the banned meaning**
+  (ADR-032): `ALLOWED_IDENTIFIERS` in the same file. One entry,
+  `events.attendance_mode`: how an event is held (in person, online or both).
+  It is one of three words, held by a CHECK, and can never be a number. The
+  match is the exact name; `attendance_count` still fails. This is not an
+  exemption: it has no removal ticket, and it needs an ADR entry.
+  `tests/e2e/0-architecture/lexicon-allowance.invariant.spec.ts` holds the list
+  to what the ADR lists. The word still never appears on a rendered page.
 - **Surface:** honest labels on every rendered surface, both languages.
 - **Do not** silently drop a banned word from the list to pass — that is the
   "honesty lexicon lying by omission" the doctrine exists to prevent.

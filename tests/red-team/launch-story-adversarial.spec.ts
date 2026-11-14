@@ -80,6 +80,7 @@ async function plantEvent(
   const res = await request.post(`${BASE_URL}/api/v2/admin/events`, {
     headers: adminHeaders(),
     data: {
+      attendance_mode: 'in_person',
       title: `RT-LNCH ${Date.now()}`,
       brand_id: 'root',
       status: 'draft',

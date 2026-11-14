@@ -698,7 +698,12 @@ describe('Scenario 10: Full organizer flow (QA-4 — admin→configure→QR→su
         Authorization: `Bearer ${MOCK_ADMIN_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ title: 'QA Flow Event', status: 'active' }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'QA Flow Event',
+        status: 'active',
+      }),
     });
     expect(createRes.status).toBe(201);
     const createBody = await json(createRes);

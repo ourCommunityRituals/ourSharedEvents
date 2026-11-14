@@ -2116,7 +2116,21 @@
                 <option value="UTC">UTC</option>
               </select>
             </div>
+            <!-- OSE-2012 (owner, 2026-11-12): every event says how people take
+                 part, and the organizer says it here. It starts on "In person",
+                 which is what this step has always meant: it asks for a place.
+                 Online takes no place, so the place field goes away. No meeting
+                 link is asked for: it is never stored. -->
             <div>
+              <label for="wizard-event-mode">How do people take part? <span class="required-star">*</span></label>
+              <select id="wizard-event-mode" data-testid="wizard-event-mode" required aria-required="true" aria-describedby="wizard-event-mode-note">
+                <option value="in_person" selected>In person</option>
+                <option value="online">Online</option>
+                <option value="both">Online and in person</option>
+              </select>
+              <p class="muted-sm" id="wizard-event-mode-note" data-testid="wizard-event-mode-note" hidden>An online event has no place. It stays off the map and the events list; people open it by its link.</p>
+            </div>
+            <div id="wizard-event-venue-field">
               <label for="wizard-event-venue">Where is it? <span class="required-star">*</span></label>
               <input
                 type="text"
@@ -2675,19 +2689,60 @@
           // Next stays enabled (OSE-1515): a disabled button is skipped by Tab
           // and silent to a screen reader, so the gate speaks when Next is
           // pressed (step1Blocked) and this only clears what it said.
-          var STEP1_REQUIRED = ['wizard-event-name', 'wizard-event-venue'];
-          var STEP1_MSG = 'Add a name and a place to continue';
+          // OSE-2012: how people take part is the third. An online event takes
+          // no place, so the place is asked for only when the event has one.
+          var STEP1_FIELDS = ['wizard-event-name', 'wizard-event-mode', 'wizard-event-venue'];
+          var STEP1_NAMES = {
+            'wizard-event-name': 'a name',
+            'wizard-event-mode': 'how people take part',
+            'wizard-event-venue': 'a place',
+          };
+          function wizardMode() {
+            return document.getElementById('wizard-event-mode').value;
+          }
+          function step1Required() {
+            return STEP1_FIELDS.filter(function (id) {
+              return id !== 'wizard-event-venue' || wizardMode() !== 'online';
+            });
+          }
+          // "Add a name, how people take part and a place to continue"
+          function step1Msg(emptyIds) {
+            var names = emptyIds.map(function (id) { return STEP1_NAMES[id]; });
+            var last = names.pop();
+            return 'Add ' + (names.length ? names.join(', ') + ' and ' : '') + last + ' to continue';
+          }
+          function isStep1Msg(text) {
+            return /^Add .+ to continue$/.test(String(text || ''));
+          }
+          // Online: the place field is hidden, emptied and not required.
+          function syncWizardMode() {
+            var online = wizardMode() === 'online';
+            var venue = document.getElementById('wizard-event-venue');
+            document.getElementById('wizard-event-venue-field').hidden = online;
+            document.getElementById('wizard-event-mode-note').hidden = !online;
+            // The map question has nothing to ask: an online event is never on
+            // the map or the list.
+            var mapQuestion = document.querySelector('[data-testid="wizard-publish"]');
+            if (mapQuestion) mapQuestion.hidden = online;
+            venue.required = !online;
+            venue.setAttribute('aria-required', online ? 'false' : 'true');
+            if (online && venue.value) {
+              venue.value = '';
+              venue.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            if (online) venue.removeAttribute('aria-invalid');
+          }
           function validate() {
             document.getElementById('wizard-next-btn').disabled = false;
             if (wiz.step !== 1) return;
             var missing = 0;
-            STEP1_REQUIRED.forEach(function (id) {
+            step1Required().forEach(function (id) {
               var el = document.getElementById(id);
               if (el.value.trim()) el.removeAttribute('aria-invalid');
               else missing += 1;
             });
             var msg = document.getElementById('wizard-msg');
-            if (!missing && msg && msg.textContent === STEP1_MSG) setMsg('');
+            if (!missing && msg && isStep1Msg(msg.textContent)) setMsg('');
           }
 
           // Step 3 is the last screen before Create. Say what the public page
@@ -2716,7 +2771,7 @@
 
           // True when step 1 may not move on yet; says why and puts focus there.
           function step1Blocked() {
-            var empty = STEP1_REQUIRED.map(function (id) {
+            var empty = step1Required().map(function (id) {
               return document.getElementById(id);
             }).filter(function (el) {
               return !el.value.trim();
@@ -2725,7 +2780,7 @@
               empty.forEach(function (el) {
                 el.setAttribute('aria-invalid', 'true');
               });
-              setMsg(STEP1_MSG, 'error');
+              setMsg(step1Msg(empty.map(function (el) { return el.id; })), 'error');
               empty[0].focus();
               return true;
             }
@@ -2847,7 +2902,10 @@
               return;
             }
             if (timeVal) body.start_time = timeVal;
-            var venueVal = document.getElementById('wizard-event-venue').value.trim();
+            // OSE-2012 — as the organizer chose it; the API refuses a create
+            // without it. An online event sends no place.
+            body.attendance_mode = wizardMode();
+            var venueVal = body.attendance_mode === 'online' ? '' : document.getElementById('wizard-event-venue').value.trim();
             if (venueVal) body.location = venueVal;
             // OSE-1245 / OSE-1560 — sent exactly as the organizer chose it, and
             // omitted when they did not (the API then keeps the event off the
@@ -2957,7 +3015,7 @@
                   }
                   wiz.summaryBase =
                     '✅ "' + body.title + '" is saved' +
-                    (venueVal ? ' at ' + venueVal : '') +
+                    (venueVal ? ' at ' + venueVal : body.attendance_mode === 'online' ? ' as an online event' : '') +
                     (whenTxt ? ' for ' + whenTxt : '');
                   summary.textContent = wiz.summaryBase + ' as a draft.';
                 }
@@ -3178,7 +3236,7 @@
           // and returns to the review; it never reaches createEvent. The fields
           // are the ones already on steps 1-2, so the preview beside them
           // follows every keystroke.
-          var EDIT_FIELDS = ['wizard-event-name', 'wizard-event-date', 'wizard-event-time', 'wizard-event-tz', 'wizard-event-venue', 'wizard-event-what', 'wizard-category'];
+          var EDIT_FIELDS = ['wizard-event-name', 'wizard-event-date', 'wizard-event-time', 'wizard-event-tz', 'wizard-event-mode', 'wizard-event-venue', 'wizard-event-what', 'wizard-category'];
           function fire(el, type) {
             el.dispatchEvent(new Event(type, { bubbles: true }));
           }
@@ -3194,7 +3252,7 @@
             EDIT_FIELDS.forEach(function (id) {
               var el = document.getElementById(id);
               el.value = snap[id] || '';
-              fire(el, id === 'wizard-category' || id === 'wizard-event-tz' ? 'change' : 'input');
+              fire(el, id === 'wizard-category' || id === 'wizard-event-tz' || id === 'wizard-event-mode' ? 'change' : 'input');
             });
             var typeEl = document.getElementById('wizard-event-type');
             typeEl.value = snap['wizard-event-type'] || '';
@@ -3241,11 +3299,15 @@
             if (!wiz.createdId || wiz.saving) return;
             if (wiz.step === 1 && step1Blocked()) return;
             var title = document.getElementById('wizard-event-name').value.trim();
-            var venueVal = document.getElementById('wizard-event-venue').value.trim();
+            var modeVal = wizardMode();
+            var online = modeVal === 'online';
+            var venueVal = online ? '' : document.getElementById('wizard-event-venue').value.trim();
             var dateVal = document.getElementById('wizard-event-date').value;
             var timeVal = document.getElementById('wizard-event-time').value.slice(0, 5);
-            if (!title || !venueVal) {
-              setMsg(STEP1_MSG, 'error');
+            if (!title || !modeVal || (!online && !venueVal)) {
+              setMsg(step1Msg(step1Required().filter(function (id) {
+                return !document.getElementById(id).value.trim();
+              })), 'error');
               return;
             }
             if (timeVal && !dateVal) {
@@ -3254,12 +3316,15 @@
             }
             var body = {
               title: title,
-              location: venueVal,
+              // OSE-2012: an event turned online gives up its place.
+              attendance_mode: modeVal,
+              location: online ? null : venueVal,
               timezone: document.getElementById('wizard-event-tz').value,
               start_date: dateVal || null,
               start_time: timeVal || null,
               what_short: document.getElementById('wizard-event-what').value.trim() || null,
             };
+            if (online) body.where_address = null;
             var typeId = window.oseTypePicker ? window.oseTypePicker.value('wizard-event-type') : '';
             if (typeId) body.event_type_id = typeId;
             var save = document.getElementById('wizard-save-edit-btn');
@@ -3287,7 +3352,7 @@
             if (status >= 200 && status < 300 && data && data.ok) {
               var whenTxt = timeVal && window.oseWizardPreview ? window.oseWizardPreview.whenText() : '';
               wiz.summaryBase =
-                '✅ "' + title + '" is saved' + ' at ' + venueVal + (whenTxt ? ' for ' + whenTxt : '');
+                '✅ "' + title + '" is saved' + (online ? ' as an online event' : ' at ' + venueVal) + (whenTxt ? ' for ' + whenTxt : '');
               syncWizardSummary();
               setMsg('');
               leaveEdit();
@@ -3583,7 +3648,11 @@
           });
           // Live-validate step 1 as the organizer types, and let Enter act as
           // Next there (OSE-1515).
-          STEP1_REQUIRED.forEach(function (id) {
+          document.getElementById('wizard-event-mode').addEventListener('change', function () {
+            syncWizardMode();
+            validate();
+          });
+          STEP1_FIELDS.forEach(function (id) {
             var el = document.getElementById(id);
             if (!el) return;
             el.addEventListener('input', validate);
@@ -3847,8 +3916,16 @@
             put('wizard-preview-what', what, !what);
             var whatEl = q('wizard-preview-what');
             if (whatEl) whatEl.hidden = !what;
-            put('wizard-preview-where', venue || 'Add a place.', !venue);
-            put('wizard-preview-map', mapOn()
+            // OSE-2012: the page's Where card starts with how people take part.
+            var mode = val('wizard-event-mode');
+            if (mode === 'online') {
+              put('wizard-preview-where', 'Online', false);
+            } else {
+              put('wizard-preview-where', venue ? (mode === 'both' ? 'Online and in person · ' : 'In person · ') + venue : 'Add a place.', !venue);
+            }
+            put('wizard-preview-map', mode === 'online'
+              ? 'Off the map and list. An online event opens by its link and codes.'
+              : mapOn()
               ? 'On the map and list. The place above is shown publicly.'
               : 'Off the map and list. Only your links and codes reach it.', false);
             var p5 = byId('wizard-step-5');
@@ -3901,8 +3978,10 @@
               row('when', 'When', whenText() + (m.indexOf('time') >= 0 ? ' (no start time yet)' : ''), m.indexOf('time') >= 0,
                 { step: 1, focus: val('wizard-event-date') ? 'wizard-event-time' : 'wizard-event-date' }),
               row('type', 'Event type', t || 'not chosen', m.indexOf('event_type') >= 0, { step: 2, focus: 'wizard-category' }),
-              row('where', 'Where', val('wizard-event-venue') || 'not set', !val('wizard-event-venue'), { step: 1, focus: 'wizard-event-venue' }),
-              row('map', 'Map', mapOn() ? 'on the map and list' : 'off the map and list', false, null),
+              val('wizard-event-mode') === 'online'
+                ? row('where', 'Where', 'Online', false, { step: 1, focus: 'wizard-event-mode' })
+                : row('where', 'Where', (val('wizard-event-venue') || 'not set') + (val('wizard-event-mode') === 'both' ? ' and online' : ''), !val('wizard-event-venue'), { step: 1, focus: 'wizard-event-venue' }),
+              row('map', 'Map', val('wizard-event-mode') === 'online' ? 'off the map and list: an online event opens by its link' : mapOn() ? 'on the map and list' : 'off the map and list', false, null),
               row('codes', 'Codes', codes, false, null),
             ];
             list.replaceChildren.apply(list, rows);
@@ -4156,6 +4235,17 @@
                 <option value="Asia/Kolkata">India (Kolkata)</option>
                 <option value="UTC">UTC</option>
               </select>
+            </div>
+            <!-- OSE-2012: how people take part. It starts on "In person"; the
+                 API refuses a create without it. Online takes no place. -->
+            <div>
+              <label for="create-event-mode">How do people take part? <span class="required-star">*</span></label>
+              <select id="create-event-mode" name="attendance_mode" data-testid="create-event-mode" required aria-required="true" aria-describedby="create-event-mode-note">
+                <option value="in_person" selected>In person</option>
+                <option value="online">Online</option>
+                <option value="both">Online and in person</option>
+              </select>
+              <p class="muted-sm" id="create-event-mode-note" data-testid="create-event-mode-note" hidden>An online event has no place. It stays off the map and the events list; people open it by its link.</p>
             </div>
             <div>
               <label for="create-venue">Venue</label>
@@ -8927,6 +9017,20 @@
         return true;
       };
 
+      // OSE-2012 — online takes no place: the two place fields are emptied and
+      // switched off, and a line says what "online" means for discovery.
+      document.getElementById('create-event-mode').addEventListener('change', function (ev) {
+        var online = ev.target.value === 'online';
+        ['create-venue', 'create-where-address'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.disabled = online;
+          if (online) { el.value = ''; el.removeAttribute('aria-invalid'); }
+        });
+        document.getElementById('create-event-mode-note').hidden = !online;
+        if (ev.target.value) ev.target.removeAttribute('aria-invalid');
+      });
+
       document.getElementById('create-event-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = document.getElementById('create-submit-btn');
@@ -8962,6 +9066,29 @@
           return;
         }
 
+        // OSE-2012 — how people take part, and the place it needs. In person
+        // and both need a venue or an address; online takes neither.
+        const modeEl = document.getElementById('create-event-mode');
+        const modeVal = modeEl.value;
+        const createVenueEl = document.getElementById('create-venue');
+        const createAddressEl = document.getElementById('create-where-address');
+        if (!modeVal) {
+          msg.textContent = 'Choose how people take part: in person, online, or both.';
+          msg.className = 'create-msg error';
+          modeEl.setAttribute('aria-invalid', 'true');
+          modeEl.focus();
+          return;
+        }
+        modeEl.removeAttribute('aria-invalid');
+        if (modeVal !== 'online' && !createVenueEl.value.trim() && !createAddressEl.value.trim()) {
+          msg.textContent = 'Add a venue or an address. An event with no place is an online event.';
+          msg.className = 'create-msg error';
+          createVenueEl.setAttribute('aria-invalid', 'true');
+          createVenueEl.focus();
+          return;
+        }
+        createVenueEl.removeAttribute('aria-invalid');
+
         if (window.oseCreateCoreCheck(document)) return;
 
         btn.disabled = true;
@@ -8970,7 +9097,7 @@
         msg.className = 'create-msg';
 
         try {
-          const body = { title };
+          const body = { title, attendance_mode: modeVal };
           const dateVal = document.getElementById('create-date').value;
           if (dateVal) body.start_date = dateVal;
           // OSE-1313 — event time zone + optional start time (needs a date).
@@ -8979,7 +9106,7 @@
           const timeInput = document.getElementById('create-time');
           const timeVal = timeInput && timeInput.value ? timeInput.value.slice(0, 5) : '';
           if (timeVal && dateVal) body.start_time = timeVal;
-          const venueVal = document.getElementById('create-venue').value.trim();
+          const venueVal = modeVal === 'online' ? '' : document.getElementById('create-venue').value.trim();
           if (venueVal) body.location = venueVal;
 
           // OSE-239a: collect 5W content fields. Each is optional; only
@@ -9001,6 +9128,8 @@
             const val = el && el.value ? el.value.trim() : '';
             if (val) body[apiField] = val;
           }
+          // Online: no place of any kind is sent (the fields are disabled too).
+          if (modeVal === 'online') delete body.where_address;
 
           // OSE-1245 / OSE-1560 — sent as the operator set it once they have
           // touched the box, omitted when they have not (the API then keeps the
@@ -9048,6 +9177,8 @@
             const createTimeEl = document.getElementById('create-time');
             if (createTimeEl) createTimeEl.value = '';
             document.getElementById('create-venue').value = '';
+            modeEl.value = 'in_person';
+            modeEl.dispatchEvent(new Event('change', { bubbles: true }));
             if (window.oseTypePicker) window.oseTypePicker.reset('create-category');
             for (const [domId] of fivew) {
               const el = document.getElementById(domId);

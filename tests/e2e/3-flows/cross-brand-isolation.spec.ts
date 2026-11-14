@@ -118,6 +118,7 @@ async function seedEvent(request: any, brand: string, suffix: string): Promise<s
   // unique slug remains the crash-safety net (see RUN_ID).
   const body = {
     brand_id: brand,
+    attendance_mode: 'in_person',
     title: `Cross-Brand Isolation Test (${suffix} ${RUN_ID})`,
     slug: `isolation-test-${suffix}-${RUN_ID}`,
     status: 'active',

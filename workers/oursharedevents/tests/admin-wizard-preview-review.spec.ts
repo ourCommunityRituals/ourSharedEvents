@@ -606,7 +606,8 @@ describe('OSE-1528: Change goes back to the right field, and Save returns to the
     m.$('wizard-save-edit-btn').click();
     await m.flush();
     expect(m.calls.filter((c) => c.method === 'PUT')).toEqual([]);
-    expect(m.txt('wizard-msg')).toBe('Add a name and a place to continue');
+    // OSE-2012: the message names what is missing; here the place is still there.
+    expect(m.txt('wizard-msg')).toBe('Add a name to continue');
     expect(m.doc.activeElement).toBe(m.$('wizard-event-name'));
   });
 
@@ -638,5 +639,66 @@ describe('OSE-1528: Change goes back to the right field, and Save returns to the
       m.calls.filter((c) => c.method === 'POST' && c.url.endsWith('/admin/events'))
     ).toHaveLength(1);
     expect(m.calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+  });
+});
+
+describe('OSE-2012: the create flow says how people take part', () => {
+  const posts = (m: M) =>
+    m.calls.filter((c) => c.method === 'POST' && c.url.endsWith('/admin/events'));
+  const choose = (m: M, value: string) => {
+    const el = m.$<HTMLSelectElement>('wizard-event-mode');
+    el.value = value;
+    el.dispatchEvent(new m.w.Event('change', { bubbles: true }));
+  };
+
+  test('the create names the mode the organizer chose, with the place', async () => {
+    const m = mount();
+    await toReview(m, { time: '18:00', withType: true });
+    expect(posts(m)).toHaveLength(1);
+    expect(posts(m)[0]!.body).toMatchObject({
+      attendance_mode: 'in_person',
+      location: 'Eagles Hall',
+    });
+  });
+
+  test('an online create sends the mode, no place and no link of any kind', async () => {
+    const m = mount();
+    m.type('wizard-event-name', 'Data class');
+    m.type('wizard-event-venue', 'Eagles Hall');
+    choose(m, 'online');
+    m.type('wizard-event-date', isoDaysFromNow(14));
+    m.type('wizard-event-time', '18:00');
+    expect(m.txt('wizard-preview-where')).toBe('Online');
+    m.next();
+    await m.chooseType();
+    m.next();
+    m.next(); // Create Event
+    await m.flush();
+    expect(posts(m)).toHaveLength(1);
+    const body = posts(m)[0]!.body as Record<string, unknown>;
+    expect(body.attendance_mode).toBe('online');
+    for (const key of Object.keys(body)) {
+      expect(key, `an online create sent ${key}`).not.toMatch(
+        /location|address|lat|lon|meet|join|stream|url/i
+      );
+    }
+  });
+
+  test('the review says Online, and a save from the review sends the mode with the place cleared', async () => {
+    const m = mount();
+    await toReview(m, { time: '18:00', withType: true });
+    m.$('wizard-review-change-where').click();
+    expect(m.onStep(1)).toBe(true);
+    choose(m, 'online');
+    m.$('wizard-save-edit-btn').click();
+    await m.flush();
+    const puts = m.calls.filter((c) => c.method === 'PUT');
+    expect(puts.at(-1)!.body).toMatchObject({
+      attendance_mode: 'online',
+      location: null,
+      where_address: null,
+    });
+    expect(m.onStep(5)).toBe(true);
+    expect(m.txt('wizard-review-row-where')).toContain('Online');
   });
 });

@@ -157,7 +157,11 @@ async function createRaw(e: EventsEnv, body: Record<string, unknown>): Promise<R
     new Request('https://t.test/api/v2/admin/events', {
       method: 'POST',
       headers: ADMIN,
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        ...(body as object),
+      }),
     }),
     e
   );

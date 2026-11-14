@@ -113,6 +113,8 @@ async function createEvent(request, fields) {
     maxRedirects: 0,
     headers: adminHeaders(),
     data: {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
       brand_id: BRAND,
       status: 'active',
       is_published: true,
@@ -275,7 +277,12 @@ test.describe('🔒 SECURITY: Admin key validation', () => {
         timeout: TIMEOUT,
         maxRedirects: 0,
         headers: { ...edgeHeaders(), Authorization: authorization },
-        data: { title: `${RUN} must-not-exist`, brand_id: BRAND },
+        data: {
+          attendance_mode: 'in_person',
+          location: 'Test Hall',
+          title: `${RUN} must-not-exist`,
+          brand_id: BRAND,
+        },
       });
       const json = await res.json().catch(() => null);
       if (json && json.id) createdIds.push(json.id);

@@ -1,0 +1,34 @@
+-- Migration 0108: events.attendance_mode — in person, online or both
+-- (OSE-2012, owner decision 2026-11-12, showcase plan S13).
+--
+-- Every event says how people take part:
+--   'in_person'  it happens at a place. The event keeps its H3 cell and shows
+--                on the map, as before.
+--   'online'     it has no place at all, never the visitor's ("place, not
+--                person"). No cell, so it is off the map, and it is left out
+--                of /events, the landing page and the sitemap: it opens by
+--                link only. Its /q and /s codes still count.
+--   'both'       a place and an online side. It is on the map by its place.
+--
+-- Every existing row becomes 'in_person', because every OSE event so far is a
+-- physical one. The column default does that: SQLite gives an added NOT NULL
+-- column its default on every existing row, so there is no UPDATE and no row
+-- is rewritten. The CHECK refuses any other value at the database, whatever
+-- wrote it.
+--
+-- The default also covers a row inserted without the column (the stock seed's
+-- SQL, a test fixture). The create API does not lean on it: it refuses a
+-- create that does not name the mode (src/lib/attendance-mode.ts).
+--
+-- What it does not touch: place_kind (0106) describes the spot on the zoomed
+-- map and stays as it is. No meeting link is stored: there is no column for
+-- one, here or anywhere.
+--
+-- Dry run before deploy: workers/oursharedevents/scripts/dry-run-0108-attendance-mode.sql holds the
+-- read-only counts to take on staging first (PRODUCTION-MIGRATION-PLAN.md).
+--
+-- Rollback: revert the Worker and leave the column. The older Worker does not
+-- read it. See ROLLBACK_PLAN.md, 0108.
+
+ALTER TABLE events ADD COLUMN attendance_mode TEXT NOT NULL DEFAULT 'in_person'
+  CHECK (attendance_mode IN ('in_person', 'online', 'both'));

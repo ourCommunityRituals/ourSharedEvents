@@ -35,7 +35,13 @@ const authHeaders = (): Record<string, string> => {
 async function seedEvent(request: any, overrides: Record<string, unknown> = {}): Promise<string> {
   const res = await request.post('/api/v2/admin/events', {
     timeout: TIMEOUT,
-    data: { title: `Update Seed ${Date.now()}`, status: 'draft', ...overrides },
+    data: {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      title: `Update Seed ${Date.now()}`,
+      status: 'draft',
+      ...overrides,
+    },
     headers: authHeaders(),
   });
   expect(res.status()).toBe(201);

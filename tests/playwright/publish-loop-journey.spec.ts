@@ -55,7 +55,8 @@ test.describe('publish loop: draft → preview → publish → undo → republis
     // Name only, Enter: the wizard says why and puts focus on the place.
     await page.keyboard.type(`Keyboard night ${Date.now()}`);
     await page.keyboard.press('Enter');
-    await expect(page.getByTestId('wizard-msg')).toHaveText('Add a name and a place to continue');
+    // OSE-2012: the message names what is missing; here only the place is.
+    await expect(page.getByTestId('wizard-msg')).toHaveText('Add a place to continue');
     await expect(venue).toHaveAttribute('aria-invalid', 'true');
     await expect(venue).toBeFocused();
     await expect(page.getByTestId('wizard-step-1')).toBeVisible();

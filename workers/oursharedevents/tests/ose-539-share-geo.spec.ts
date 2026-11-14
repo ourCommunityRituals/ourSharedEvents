@@ -67,6 +67,8 @@ async function createEventWithGeo(
     method: 'POST',
     headers: { Authorization: `Bearer ${MOCK_ADMIN_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      // OSE-2012: an event with no place at all is an online event.
+      attendance_mode: lat == null && lon == null && !location ? 'online' : 'in_person',
       title,
       status: 'active',
       // OSE-1560: a new event is off the map unless asked.

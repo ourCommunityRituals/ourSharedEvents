@@ -47,6 +47,8 @@ export const REPEAT_SOURCE_COLUMNS = [
   'lon',
   'event_type_id',
   'settings_json',
+  // OSE-2012: the repeat is held the way the source was.
+  'attendance_mode',
 ] as const;
 
 export type RepeatSource = Record<(typeof REPEAT_SOURCE_COLUMNS)[number], unknown>;
@@ -125,6 +127,8 @@ export function buildRepeatBody(
     'what_url_type',
     'event_type_id',
     'timezone',
+    // OSE-2012: the create API requires it; the copy keeps the source's mode.
+    'attendance_mode',
   ] as const) {
     const v = str(src[k]);
     // OSE-1658: artwork saved before the upload-only rule may be an outside

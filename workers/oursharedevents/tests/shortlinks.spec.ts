@@ -393,7 +393,12 @@ describe('OSE-240: POST /api/v2/admin/events returns shortcode', () => {
     const res = await SELF.fetch('https://t.test/api/v2/admin/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
-      body: JSON.stringify({ title: 'OSE-240 e2e create', brand_id: BRAND }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'OSE-240 e2e create',
+        brand_id: BRAND,
+      }),
     });
     expect(res.status).toBe(201);
     const body = (await res.json()) as CreateEventResponse;
@@ -410,7 +415,12 @@ describe('OSE-240: GET /s/:code redirect + click counter', () => {
     const create = await SELF.fetch('https://t.test/api/v2/admin/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
-      body: JSON.stringify({ title: 'OSE-240 redirect target', brand_id: BRAND }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'OSE-240 redirect target',
+        brand_id: BRAND,
+      }),
     });
     const created = (await create.json()) as CreateEventResponse;
     expect(created.shortcode).toBeTruthy();
@@ -434,7 +444,12 @@ describe('OSE-240: GET /s/:code redirect + click counter', () => {
     const create = await SELF.fetch('https://t.test/api/v2/admin/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
-      body: JSON.stringify({ title: 'OSE-240 counter test', brand_id: BRAND }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'OSE-240 counter test',
+        brand_id: BRAND,
+      }),
     });
     const created = (await create.json()) as CreateEventResponse;
     const code = created.shortcode as string;
@@ -561,7 +576,12 @@ describe('link-preview robots open a short link but are not counted (owner 2026-
     const create = await SELF.fetch('https://t.test/api/v2/admin/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
-      body: JSON.stringify({ title, brand_id: BRAND }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title,
+        brand_id: BRAND,
+      }),
     });
     const created = (await create.json()) as CreateEventResponse;
     return created.shortcode as string;
@@ -621,7 +641,12 @@ describe('guessing short links is limited; a right code never is (2026-10-10)', 
     const create = await SELF.fetch('https://t.test/api/v2/admin/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
-      body: JSON.stringify({ title, brand_id: BRAND }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title,
+        brand_id: BRAND,
+      }),
     });
     return ((await create.json()) as CreateEventResponse).shortcode as string;
   }

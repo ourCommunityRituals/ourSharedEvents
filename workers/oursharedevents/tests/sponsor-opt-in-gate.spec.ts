@@ -683,6 +683,8 @@ describe('the admin switch (PUT /api/v2/admin/events/:id settings.useSponsors)',
   test('an event created with the switch on is on; one created without it is off', async () => {
     const make = async (settings?: unknown) => {
       const res = await callAs({ kind: 'key-all' }, 'POST', '/api/v2/admin/events', {
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
         title: `Optin created ${Math.random().toString(36).slice(2, 8)}`,
         brand_id: MATRIX_BRAND,
         ...(settings ? { settings } : {}),

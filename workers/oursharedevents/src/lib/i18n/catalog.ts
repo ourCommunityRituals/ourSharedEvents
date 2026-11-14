@@ -77,6 +77,10 @@ const en = {
   'price.sliding': 'Sliding scale',
   'price.donation': 'Pay what you can',
   'price.varies': 'Varies',
+  // OSE-2012: how people take part (lib/attendance-mode.ts).
+  'mode.in_person': 'In person',
+  'mode.online': 'Online',
+  'mode.both': 'Online and in person',
   'countdown.now': 'Starting now',
   'countdown.today': 'Starts today',
   'countdown.tomorrow': 'Starts tomorrow',
@@ -459,6 +463,10 @@ const es: Record<MessageKey, string> = {
   'price.sliding': 'Precio escalonado',
   'price.donation': 'Paga lo que puedas',
   'price.varies': 'Varía',
+  // OSE-2012: how people take part (lib/attendance-mode.ts).
+  'mode.in_person': 'Presencial',
+  'mode.online': 'En línea',
+  'mode.both': 'En línea y presencial',
   'countdown.now': 'Empieza ahora',
   'countdown.today': 'Empieza hoy',
   'countdown.tomorrow': 'Empieza mañana',

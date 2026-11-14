@@ -49,6 +49,8 @@ export interface MockEvent {
   lon: number | null;
   h3_res9: string | null;
   h3_res7: string | null;
+  /** Migration 0108 (OSE-2012): 'in_person', 'online' or 'both'. */
+  attendance_mode?: string | null;
   /** Migration 0105: 'business' or 'address'; absent in fixtures. */
   place_kind?: string | null;
   corridor_id: string | null;
@@ -195,6 +197,7 @@ export function getEventFixture(): MockEvent {
     h3_res9: '89266454447ffff',
     h3_res7: '872664544ffffff',
     corridor_id: 'blue-island',
+    attendance_mode: 'in_person',
 
     legal_clearance_tier: 'tier-1',
   };

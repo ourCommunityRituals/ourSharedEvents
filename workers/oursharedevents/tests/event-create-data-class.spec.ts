@@ -30,7 +30,11 @@ function asKey(body: unknown): Request {
   return new Request('https://ose.test/api/v2/admin/events', {
     method: 'POST',
     headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      ...(body as object),
+    }),
   });
 }
 
@@ -48,7 +52,11 @@ function asPerson(email: string, body: unknown): Request {
       'Sec-Fetch-Site': 'same-origin',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      ...(body as object),
+    }),
   });
 }
 

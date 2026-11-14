@@ -79,6 +79,7 @@ seed bruno/fixtures/covenant-sponsors-seed.sql
 seed bruno/fixtures/sponsor-public-card-seed.sql
 seed bruno/fixtures/opt-in-sponsors-seed.sql
 seed bruno/fixtures/sponsor-thumb-seed.sql
+seed bruno/fixtures/attendance-mode-seed.sql
 seed bruno/fixtures/declared-series-seed.sql
 seed bruno/fixtures/core-values-draft-seed.sql
 seed bruno/fixtures/report-plan-cap-seed.sql
