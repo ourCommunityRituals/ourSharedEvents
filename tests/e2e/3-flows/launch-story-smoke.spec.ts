@@ -176,6 +176,10 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
       [200, 403],
       'public event page is reachable by the Worker OR blocked by the staging WAF edge'
     ).toContain(eventPageStatus);
+    // A 403 here is the edge, not the Worker. It is not a silent pass: it is
+    // written as a GitHub warning and a summary line, and fails when
+    // CALENDAR_EDGE_STRICT is 1 (scripts/ci/edge-read.mjs, OSE-2022).
+    if (eventPageStatus !== 200) noteEdgeChallenge(readablePath);
     if (eventPageStatus === 200) {
       await expect(page.locator('[data-testid="event-actions"]')).toBeVisible();
       await expect(page.locator('[data-testid="share-btn"]')).toBeVisible();
@@ -207,6 +211,9 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
         'href',
         `${BASE_URL}/brands/root/calendar.ics`
       );
+      // Say so in the log: without this line a run that reached the page and a
+      // run the edge blocked print the same thing (found reading run 43563260636).
+      console.log(`OSE-2045: Subscribe menu checked on the event page ${readablePath}`);
     }
   });
 
