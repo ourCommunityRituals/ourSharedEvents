@@ -558,16 +558,19 @@ describe('D1 staging database health', () => {
 //
 // The S0 Security job's "Fix @ocr/flags for SBOM resolution" step strips
 // devDependencies from node_modules/@ocr/flags/package.json IN PLACE so
-// CycloneDX SBOM only inventories prod deps. Self-hosted runners persist
-// node_modules between runs. Without guards, a subsequent run honors the
-// install-stamp (keyed only on package-lock.json hash, unchanged), skips
-// `npm ci`, and `npm audit` submits the mutated tree to the npm registry —
-// which rejects it with `400 — Invalid package tree`.
+// CycloneDX SBOM only inventories prod deps. If `npm audit` ever submitted
+// that mutated tree, the npm registry would reject it with
+// `400 — Invalid package tree`.
 //
-// Two guards prevent this. These tests lock both so a future workflow edit
-// can't silently remove them (the failure mode is sporadic — only when a
-// runner happens to carry mutated state — so it would not be caught
-// deterministically by CI execution alone).
+// On the old self-hosted runners node_modules outlived the job, so two
+// install-stamp guards kept a later run from reusing the mutated tree. Every
+// job now runs on a fresh GitHub-hosted VM and the stamp is gone (2026-11-14),
+// so the guards are these instead, and each is held below:
+//   1. S0 always runs `npm ci`: there is no skip path that could reuse a tree.
+//   2. `npm audit` reads the lockfile only and runs BEFORE the mutation, so it
+//      never sees the mutated tree even inside the one job.
+//   3. No step anywhere in the pipeline reads or writes an install stamp
+//      (next describe), so the skip cannot come back by copy-paste.
 describe('npm audit resilience — @ocr/flags SBOM mutation guards', () => {
   const yaml = require('js-yaml');
   const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
@@ -576,10 +579,16 @@ describe('npm audit resilience — @ocr/flags SBOM mutation guards', () => {
   const advisorySbomSteps =
     (advisoryWf.jobs && advisoryWf.jobs.sbom && advisoryWf.jobs.sbom.steps) || [];
   const installStep = s0Steps.find((s) => s && s.name === 'Install dependencies');
+  const auditStep = s0Steps.find((s) => s && s.name === 'npm audit');
   const sbomFixStep = s0Steps.find((s) => s && s.name === 'Fix @ocr/flags for SBOM resolution');
   const advisoryGenerateSbomStep = advisorySbomSteps.find(
     (s) => s && s.name === 'Generate CycloneDX SBOM'
   );
+  const codeLines = (step) =>
+    String((step && step.run) || '')
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith('#'));
 
   test('S0 Security job has the "Install dependencies" step', () => {
     expect(installStep, 'security job must have an "Install dependencies" step').toBeDefined();
@@ -592,30 +601,24 @@ describe('npm audit resilience — @ocr/flags SBOM mutation guards', () => {
     ).toBeDefined();
   });
 
-  test('GUARD 1 (self-healing): Install step detects a mutated @ocr/flags and forces fresh npm ci', () => {
-    const run = (installStep && installStep.run) || '';
-    // The detection must compute a flags_mutated signal...
-    expect(run, 'install step must compute a flags_mutated signal').toMatch(/flags_mutated/);
-    // ...by inspecting @ocr/flags devDependencies...
+  test('GUARD 1: the S0 install always runs npm ci, with no skip path', () => {
     expect(
-      run,
-      'install step must inspect @ocr/flags devDependencies to detect the SBOM mutation'
-    ).toMatch(/devDependencies/);
-    // ...AND the skip-npm-ci condition MUST actually consult flags_mutated.
-    // If the detection is computed but the skip condition ignores it, the
-    // guard is dead code and npm audit will still hit the mutated tree.
-    expect(
-      run,
-      'the skip-npm-ci condition MUST gate on flags_mutated=false — otherwise the detection is computed but never used'
-    ).toMatch(/flags_mutated"?\s*=\s*'false'/);
+      codeLines(installStep),
+      'S0 "Install dependencies" must be the plain install; a skip path could reuse a mutated tree'
+    ).toEqual(['npm ci --prefer-offline || npm ci']);
+    expect(installStep && installStep.if, 'the S0 install must not be conditional').toBeUndefined();
   });
 
-  test('GUARD 2 (belt-and-suspenders): SBOM fix step invalidates the install stamp', () => {
-    const run = (sbomFixStep && sbomFixStep.run) || '';
+  test('GUARD 2: npm audit reads the lockfile only, before the SBOM step mutates node_modules', () => {
+    expect(auditStep, 'security job must have the "npm audit" step').toBeDefined();
     expect(
-      run,
-      'the SBOM @ocr/flags fix step must `rm -f node_modules/.install-stamp` so the next run reinstalls against the canonical lockfile-derived tree'
-    ).toMatch(/rm\s+-f\s+node_modules\/\.install-stamp/);
+      codeLines(auditStep).join(' '),
+      'npm audit must use --package-lock-only so the installed (mutated) tree is never submitted'
+    ).toMatch(/\bnpm audit\b.*--package-lock-only/);
+    expect(
+      s0Steps.indexOf(auditStep),
+      'npm audit must run before "Fix @ocr/flags for SBOM resolution"'
+    ).toBeLessThan(s0Steps.indexOf(sbomFixStep));
   });
 
   test('advisory SBOM tolerates managed-runner @ocr/flags npm-ls noise', () => {
@@ -624,6 +627,76 @@ describe('npm audit resilience — @ocr/flags SBOM mutation guards', () => {
       run,
       'advanced-security-scan SBOM must match S0 managed-runner tolerance for @ocr/flags file: deps'
     ).toContain('--ignore-npm-errors');
+  });
+});
+
+// ─── Hosted runners only: no self-hosted leftovers (2026-11-14) ─────────────
+//
+// Every job runs on a fresh GitHub-hosted ubuntu VM (owner, 2026-10-11). The
+// self-hosted era left steps that can never fire there: install-stamp skips
+// (node_modules never survives a job), the Windows workerd-lock pre-install
+// (OSE-900/904) and the runner _diag/pages cleanup. They were removed; this
+// holds the pipeline to the hosted shape so they do not drift back, and every
+// detector is shown to fire on a planted copy of the removed steps first.
+describe('oursharedevents-ci.yml: hosted runners only, no self-hosted leftovers', () => {
+  const yaml = require('js-yaml');
+  const text = readFile('.github/workflows/oursharedevents-ci.yml');
+  const wf = yaml.load(text);
+  const jobs = Object.entries((wf && wf.jobs) || {});
+  const steps = jobs.flatMap(([jobId, job]) =>
+    ((job && job.steps) || []).map((step) => ({ jobId, step }))
+  );
+  const runCode = (step) =>
+    String((step && step.run) || '')
+      .split(/\r?\n/)
+      .filter((l) => !l.trim().startsWith('#'))
+      .join('\n');
+  const LEFTOVERS = [
+    ['an install stamp', (st) => /install-stamp/.test(runCode(st))],
+    ['a runner _diag cleanup', (st) => /_diag\//.test(runCode(st))],
+    ['a Windows-only step', (st) => /runner\.os\s*==\s*'Windows'/.test(String(st.if || ''))],
+    ['a powershell step', (st) => /^(powershell|pwsh)$/.test(String(st.shell || ''))],
+  ];
+  const leftovers = (list) =>
+    list.flatMap(({ jobId, step }) =>
+      LEFTOVERS.filter(([, hit]) => hit(step)).map(
+        ([what]) => `${jobId} / "${step.name || step.uses || '(unnamed)'}": ${what}`
+      )
+    );
+
+  test('every detector fires on the removed self-hosted steps (born red)', () => {
+    const planted = [
+      { name: 'Install root dependencies', run: 'STAMP=node_modules/.install-stamp\nnpm ci' },
+      {
+        name: 'Clear stale runner diag files',
+        run: 'rm -rf "$RUNNER_WORKSPACE/../../_diag/pages"',
+      },
+      { name: 'Pre-install: clear locked workerd', if: "runner.os == 'Windows'", run: 'exit 0' },
+      { name: 'ps', shell: 'powershell', run: 'exit 0' },
+    ].map((step) => ({ jobId: 'planted', step }));
+    expect(leftovers(planted)).toHaveLength(4);
+  });
+
+  test('the walk found the jobs and their install steps', () => {
+    expect(jobs.length).toBeGreaterThan(10);
+    expect(steps.filter(({ step }) => /\bnpm ci\b/.test(runCode(step))).length).toBeGreaterThan(5);
+  });
+
+  test('no step carries an install stamp, a _diag cleanup or a Windows-only path', () => {
+    expect(leftovers(steps)).toEqual([]);
+  });
+
+  test('no job asks for a self-hosted or Windows runner', () => {
+    const bad = jobs
+      .filter(([, job]) =>
+        /self-hosted|windows/i.test(JSON.stringify((job && job['runs-on']) || ''))
+      )
+      .map(([id]) => id);
+    expect(bad).toEqual([]);
+  });
+
+  test('the force_clean dispatch input is gone with the stamp it bypassed', () => {
+    expect(text).not.toMatch(/force_clean/);
   });
 });
 
