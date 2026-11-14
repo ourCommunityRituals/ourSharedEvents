@@ -1,0 +1,22 @@
+info:
+  name: Campaigns (S14)
+  type: folder
+request: {}
+docs: |-
+  Campaigns an organizer can use (showcase plan S14, owner 2026-11-12). A
+  campaign is a brand's named group of sponsor placements: a title and a status.
+
+  Three rules:
+    1. another brand's campaign can never be attached or seen;
+    2. the public sponsor bundle shows a campaign (id and title only) only for a
+       placement that is on show: the event opted in and both sides accepted;
+    3. a campaign title is never a filter, a search key or a sort key.
+
+  Fixture: bruno/fixtures/campaigns-seed.sql, applied before this run. It puts
+  every row back to its starting state and removes the campaign this folder
+  creates.
+
+  The requests run in `seq` order. The attach and detach requests change
+  spl_camp_toggle and nothing else.
+
+  Mock-layer twin: workers/oursharedevents/tests/campaigns.spec.ts.

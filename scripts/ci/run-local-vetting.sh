@@ -80,9 +80,11 @@ seed bruno/fixtures/sponsor-public-card-seed.sql
 seed bruno/fixtures/opt-in-sponsors-seed.sql
 seed bruno/fixtures/sponsor-thumb-seed.sql
 seed bruno/fixtures/attendance-mode-seed.sql
+seed bruno/fixtures/declared-series-seed.sql
 seed bruno/fixtures/core-values-draft-seed.sql
 seed bruno/fixtures/report-plan-cap-seed.sql
 seed bruno/fixtures/ci-brand-seed.sql
+seed bruno/fixtures/campaigns-seed.sql
 # Read by the Pages collection's landing ?zip=60655 / ?zip=60453 requests. On
 # staging a later step unpublishes it again; this local D1 is thrown away.
 seed bruno/fixtures/landing-zip-own-area-seed.sql

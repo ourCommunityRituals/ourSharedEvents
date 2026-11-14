@@ -1,0 +1,28 @@
+info:
+  name: OSE-2014 | rainy | brand | the two refused declares left no series behind
+  type: http
+  seq: 40
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-other-evt/series"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2014 rainy: brand: the other brand\'s event is on no series', function () { expect(res.getStatus()).to.eql(200); expect(res.getBody().series).to.eql(null); });
+        test('OSE-2014 rainy: brand: the other brand sees none of this brand\'s suggestions', function () { expect(res.getBody().suggestions).to.eql([]); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

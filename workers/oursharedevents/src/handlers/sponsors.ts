@@ -69,6 +69,7 @@ import { maybeTag } from '../lib/h3-tagging';
 import { MAP_FLIP_NOTE, auditMapFlip, flipFired, mapFlipStatement } from '../lib/map-default';
 import { classifyBeacon, type InvalidTrafficEnv } from '../lib/invalid-traffic';
 import { mintBeaconToken, verifyBeaconToken, type BeaconTokenEnv } from '../lib/beacon-token';
+import { readShownPlacementCampaigns, type PublicCampaign } from '../lib/campaigns';
 
 import { errorLabel } from '../lib/error-label';
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -1519,6 +1520,31 @@ export async function handleGetSponsorBundle(
     for (const s of bundle.sponsors) {
       const token = tokenBySponsor.get(s.id);
       if (token) (s as SponsorRow & { beacon_token?: string }).beacon_token = token;
+    }
+
+    // S14: a sponsor's campaign (id and title only) sits beside its other fields.
+    // It is read under the per-placement consent rule (lib/campaigns.ts), and it
+    // is attached only to a sponsor this bundle already shows, so a campaign can
+    // never appear for a placement that is not on show. A failed read shows no
+    // campaign; it never fails the bundle.
+    if (env.DB && bundle.sponsors.length > 0) {
+      let campaigns = new Map<string, PublicCampaign>();
+      try {
+        campaigns = await readShownPlacementCampaigns(env.DB, eventId);
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            type: 'DB_ERROR',
+            handler: 'handleGetSponsorBundle',
+            step: 'campaigns',
+            error: errorLabel(err),
+          })
+        );
+      }
+      for (const s of bundle.sponsors) {
+        const c = campaigns.get(s.id);
+        if (c) (s as SponsorRow & { campaign?: PublicCampaign }).campaign = c;
+      }
     }
 
     return Response.json(

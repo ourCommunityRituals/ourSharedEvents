@@ -1,0 +1,27 @@
+info:
+  name: OSE-2014 | sunny | cadence | take the event off the as-announced series
+  type: http
+  seq: 119
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-try2-evt/series"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2014 sunny: cadence: detach: 200', function () { expect(res.getStatus()).to.eql(200); expect(res.getBody().detached).to.eql(['series-ci-try2-evt']); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

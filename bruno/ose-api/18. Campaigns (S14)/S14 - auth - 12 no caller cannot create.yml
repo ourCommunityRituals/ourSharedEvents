@@ -1,0 +1,33 @@
+info:
+  name: "S14 | rainy | auth | a caller with no identity cannot create a campaign"
+  type: http
+  seq: 12
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/campaigns"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  body:
+    type: json
+    data: '{"title":"Campaign Fixture Refused"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const body = res.getBody();
+        const raw = typeof body === 'string' ? body : JSON.stringify(body);
+        test('S14 auth: a caller with no identity creates nothing', function () {
+          expect(res.getStatus()).to.not.eql(201);
+          expect(raw).to.not.include('"id":"cmp_');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

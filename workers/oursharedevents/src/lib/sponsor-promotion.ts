@@ -281,13 +281,20 @@ export async function promoteSponsorDraft(
       `INSERT INTO sponsor_placement
          (id, sponsor_business_id, event_id, tier, campaign_id, source, polarity,
           locality_band, click_token, display_token, is_active, sponsor_accepted, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'corridor_covenant', 1, ?, NULL, NULL, 1, 1, ?, ?)`
+       VALUES (?, ?, ?, ?,
+               (SELECT c.id FROM campaigns c WHERE c.id = ? AND c.brand_id = ?),
+               'corridor_covenant', 1, ?, NULL, NULL, 1, 1, ?, ?)`
     ).bind(
       placementId,
       sponsorId,
       draft.event_id,
       COVENANT_BASE_TIER, // server-forced, never from draft/client
+      // Showcase S14: the draft's campaign_id can come from the sponsor's own
+      // request body (handlers/sponsors-draft.ts), so it is kept only when that
+      // campaign is in the draft's brand (which is the event's brand, checked
+      // above). Any other id, another brand's or an unknown one, becomes NULL.
       draft.campaign_id,
+      draft.brand_id,
       isLocal, // → locality_band (geo-derived above)
       now,
       now

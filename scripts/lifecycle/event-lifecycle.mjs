@@ -480,13 +480,33 @@ export function createReport({ log = (line) => process.stdout.write(`${line}\n`)
 }
 
 /**
- * Poll a surface until it meets `want`, then record the check. Reads repeat for
- * a short while because a change may take a moment to reach every read.
+ * A change takes a moment to reach every read, so the checks after it may wait:
+ * attempts - 1 waits of delayMs in all, shared by every check that reads that
+ * change, never that much again per check. A step with many red checks then
+ * still ends well inside its timeout and reports every one of them (run
+ * 42575959758 hit step 1's 8-minute timeout when each check waited its own 90 s).
+ */
+function changeMade(ctx) {
+  ctx.waitsLeft = Math.max(0, ctx.attempts - 1);
+}
+
+/** Wait once more for the last change, or false when its wait is used up. */
+async function waitForChange(ctx) {
+  if (ctx.waitsLeft === undefined) changeMade(ctx);
+  if (ctx.waitsLeft <= 0) return false;
+  ctx.waitsLeft -= 1;
+  await ctx.sleep(ctx.delayMs);
+  return true;
+}
+
+/**
+ * Read a surface until it meets `want` or the change's wait is used up, then
+ * record the check. Every check reads at least once.
  */
 async function expectSurface(ctx, name, kind, path, want) {
-  const { site, report, state, attempts, delayMs, sleep } = ctx;
+  const { site, report, state } = ctx;
   let verdict = { pass: false, detail: 'not read' };
-  for (let i = 1; i <= attempts; i++) {
+  for (;;) {
     let r;
     try {
       r = await readSurface(site, kind, path, state.eventId);
@@ -494,8 +514,7 @@ async function expectSurface(ctx, name, kind, path, want) {
       r = { healthy: false, detail: err.message };
     }
     verdict = judge(r, want);
-    if (verdict.pass) break;
-    if (i < attempts) await sleep(delayMs);
+    if (verdict.pass || !(await waitForChange(ctx))) break;
   }
   report.record(name, verdict.pass, `${path} → ${verdict.detail}`);
   return verdict.pass;
@@ -514,6 +533,7 @@ async function expectAdmin(ctx, name, promise, wantStatus, extra, onAnswer) {
   if (onAnswer) onAnswer(res);
   const extraFail = res.status === wantStatus && extra ? extra(res.json) : null;
   const pass = res.status === wantStatus && !extraFail;
+  if (pass) changeMade(ctx);
   const code = res.json && res.json.code ? ` ${res.json.code}` : '';
   ctx.report.record(
     name,
@@ -569,11 +589,11 @@ async function expectEverywhere(ctx, step, place, want, { mapWant, apiWant } = {
 
 /** The event page by its id: 200 with the title, or 404 once it is deleted. */
 async function expectEventPage(ctx, name, wantStatus, title) {
-  const { site, report, state, attempts, delayMs, sleep } = ctx;
+  const { site, report, state } = ctx;
   const path = `/events/${q(state.eventId)}`;
   let detail = '';
   let pass = false;
-  for (let i = 1; i <= attempts && !pass; i++) {
+  for (;;) {
     let got;
     try {
       got = await site.read(path);
@@ -589,7 +609,7 @@ async function expectEventPage(ctx, name, wantStatus, title) {
       pass = true;
       detail = `answered ${got.status}`;
     }
-    if (!pass && i < attempts) await sleep(delayMs);
+    if (pass || !(await waitForChange(ctx))) break;
   }
   report.record(name, pass, `${path} → ${detail}`);
 }

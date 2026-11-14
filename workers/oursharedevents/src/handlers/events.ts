@@ -44,6 +44,11 @@ import {
 } from '../lib/event-settings';
 import { logAdminAction } from '../lib/audit-log';
 import { toPublicEvent } from '../lib/public-event-projection.js';
+import {
+  fetchPublicSeriesByEvent,
+  fetchPublicSeriesOf,
+  type PublicSeries,
+} from '../lib/public-series.js';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { createShortlink } from '../lib/shortlinks';
 import { ensureEventCode } from '../lib/event-code';
@@ -212,8 +217,15 @@ export async function handleListEvents(
     for (const [eventId, title] of await fetchSponsorTitles(env.DB, brand)) {
       if (listed.has(eventId)) sponsor_titles[eventId] = title;
     }
+    // OSE-2018: the confirmed series each listed event sits on. A sibling of
+    // `items`, like `sponsor_titles`, so the event projection is untouched.
+    // Only `confirmed`, only the event's own brand (lib/public-series); fails to empty.
+    const series: Record<string, PublicSeries> = {};
+    for (const [eventId, s] of await fetchPublicSeriesByEvent(env.DB, brand)) {
+      if (listed.has(eventId)) series[eventId] = s;
+    }
     return Response.json(
-      { ok: true, status: 200, items, sponsor_titles },
+      { ok: true, status: 200, items, sponsor_titles, series },
       {
         headers: {
           ...corsHeaders(request),
@@ -276,7 +288,13 @@ export async function handleGetEvent(
       // the same event with different field sets, the narrower one would be
       // security theatre: a caller wanting the extra fields would just use the
       // other route.
-      { ok: true, status: 200, item: toPublicEvent(enrichWithPhase(row)) },
+      // OSE-2018: `series` is a sibling of `item`, never a field on it.
+      {
+        ok: true,
+        status: 200,
+        item: toPublicEvent(enrichWithPhase(row)),
+        series: await fetchPublicSeriesOf(env.DB, String(row.id ?? id)),
+      },
       {
         headers: {
           ...corsHeaders(request),
@@ -716,11 +734,19 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   const slugDerived = typeof body.slug !== 'string';
   const slugBase = slugDerived ? slugify(title) || 'event' : (body.slug as string).slice(0, 100);
   let slug = slugBase;
-  const status =
+  // OSE-1425 (owner, 2026-11-13): creation is the start of the lifecycle. A
+  // signed-in person's event is always a draft, whatever the body says; it goes
+  // live only through ready → verify-qr or PUT status, which check the step.
+  // Automation (a key or the CI service actor) may still create an event in
+  // another state, as the staging lifecycle job, the stock seed and the staging
+  // specs do. A live one is written with qr_verified = 1 in the same INSERT
+  // below, so `active ⟺ qr_verified = 1` holds at this door too.
+  const requestedStatus =
     typeof body.status === 'string' &&
     (VALID_EVENT_STATES as readonly string[]).includes(body.status)
       ? body.status
       : 'draft';
+  const status = isAutomationActor(actor) ? requestedStatus : 'draft';
   const description = typeof body.description === 'string' ? body.description.slice(0, 2000) : null;
   const location = typeof body.location === 'string' ? body.location.slice(0, 500) : null;
 
@@ -938,8 +964,8 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
                              lat, lon, h3_res9, h3_res7, is_published, created_by,
                              event_type_id, settings_json, listed_from, data_class,
                              attendance_mode,
-                             created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                             qr_verified, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           id,
@@ -981,6 +1007,8 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
           status === 'active' ? now : null,
           dataClass,
           attendanceMode,
+          // OSE-1425: live means verified, in the same write.
+          status === 'active' ? 1 : 0,
           now,
           now
         )
@@ -1114,6 +1142,11 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       place,
       attendance_mode: attendanceMode,
       data_class: dataClass,
+      // OSE-1425 — the lifecycle state the row was written in, so a caller sees
+      // that a person's create is a draft whatever it asked for, and automation
+      // sees that a live create is verified.
+      event_status: status,
+      qr_verified: status === 'active',
       warnings,
       // OSE-1560 — what the admin shows as the heads-up (the toast is OSE-1564).
       map: mapState(isPublished === 1, mapChoice === null),

@@ -27,7 +27,7 @@ function notFound(): Response {
 }
 
 // Any line break becomes "\n", a lone CR included: a raw CR would end the line.
-function escapeIcsText(value: string): string {
+export function escapeIcsText(value: string): string {
   return value
     .replace(/\\/g, '\\\\')
     .replace(/\r\n|\r|\n/g, '\\n')
@@ -133,6 +133,102 @@ function calendarFileName(title: string): string {
   return `${slug || 'event'}.ics`;
 }
 
+/** The four columns that decide when an entry starts and ends. */
+export interface IcsTimeSource {
+  start_date: string | null;
+  end_date: string | null;
+  timezone: string | null;
+  starts_at: string | null;
+}
+
+/**
+ * When an event starts and ends, for a calendar entry. One rule for the
+ * per-event file and the brand feed (handlers/brand-calendar.ts).
+ */
+export function icsEventTimes(
+  row: IcsTimeSource
+): { start: Date; end: Date } | 'missing' | 'invalid' {
+  if (!row.start_date) return 'missing';
+
+  // OSE-1313 — a timed event carries its canonical UTC instant in starts_at
+  // (date+time in the event's zone, server-computed). Prefer it: the date-only
+  // start_date parses as UTC midnight, which is not when the event starts.
+  const start = new Date(row.starts_at || row.start_date);
+  if (Number.isNaN(start.getTime())) return 'invalid';
+
+  // OSE-1313 — for a timed event, a date-only end_date is a calendar day in the
+  // EVENT zone (phaseTimesFor), not UTC midnight: read raw it lands the evening
+  // before in the Americas and gives multi-day events a wrong DTEND. A same-day
+  // date-only end says nothing about the end TIME, so it keeps the one-hour
+  // default below rather than blocking out the rest of the day.
+  const sameDayDateOnlyEnd =
+    !!row.starts_at &&
+    !!row.end_date &&
+    /^\d{4}-\d{2}-\d{2}$/.test(row.end_date.trim()) &&
+    row.end_date.trim() === zonedDatePart(row.starts_at, row.timezone);
+  const endIso = sameDayDateOnlyEnd
+    ? null
+    : row.starts_at
+      ? phaseTimesFor(row).end_date
+      : row.end_date;
+  const parsedEnd = endIso ? new Date(endIso) : null;
+  const end =
+    parsedEnd && !Number.isNaN(parsedEnd.getTime()) && parsedEnd.getTime() > start.getTime()
+      ? parsedEnd
+      : new Date(start.getTime() + 60 * 60 * 1000);
+  return { start, end };
+}
+
+/** One VEVENT. Every text value is escaped here, so a caller passes raw text. */
+export interface IcsEntry {
+  uid: string;
+  /** DTSTAMP: when this entry was last written. */
+  stamp: Date;
+  start: Date;
+  end: Date;
+  timezone: string | null;
+  title: string;
+  description: string;
+  location: string;
+  /** The entry's link. An address this Worker built, never a stored one. */
+  url: string;
+}
+
+/**
+ * The calendar file: the fixed header, `calendarLines` (calendar-level
+ * properties, already escaped), then one VEVENT per entry, folded and CRLF-ended.
+ */
+export function buildIcsCalendar(
+  entries: readonly IcsEntry[],
+  calendarLines: string[] = []
+): string {
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//OurSharedEvents//Public Event Calendar//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    ...calendarLines,
+  ];
+  for (const entry of entries) {
+    const timezone = safeTimezone(entry.timezone);
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${entry.uid}`,
+      `DTSTAMP:${formatUtcIcs(entry.stamp)}`,
+      icsDateProperty('DTSTART', entry.start, timezone),
+      icsDateProperty('DTEND', entry.end, timezone),
+      `SUMMARY:${escapeIcsText(entry.title)}`,
+      `DESCRIPTION:${escapeIcsText(entry.description)}`,
+      `LOCATION:${escapeIcsText(entry.location)}`,
+      `URL:${entry.url}`,
+      'END:VEVENT'
+    );
+  }
+  lines.push('END:VCALENDAR');
+  return lines.map(foldIcsLine).join('\r\n') + '\r\n';
+}
+
 export async function handleEventCalendar(
   request: Request,
   env: CalendarEnv,
@@ -161,7 +257,8 @@ export async function handleEventCalendar(
     return notFound();
   }
 
-  if (!row.start_date) {
+  const times = icsEventTimes(row);
+  if (times === 'missing') {
     return Response.json(
       {
         ok: false,
@@ -172,39 +269,13 @@ export async function handleEventCalendar(
       { status: 409 }
     );
   }
-
-  // OSE-1313 — a timed event carries its canonical UTC instant in starts_at
-  // (date+time in the event's zone, server-computed). Prefer it: the date-only
-  // start_date parses as UTC midnight, which is not when the event starts.
-  const start = new Date(row.starts_at || row.start_date);
-  if (Number.isNaN(start.getTime())) {
+  if (times === 'invalid') {
     return Response.json(
       { ok: false, status: 409, code: 'EVENT_TIME_INVALID', error: 'Event start time is invalid' },
       { status: 409 }
     );
   }
-
-  // OSE-1313 — for a timed event, a date-only end_date is a calendar day in the
-  // EVENT zone (phaseTimesFor), not UTC midnight: read raw it lands the evening
-  // before in the Americas and gives multi-day events a wrong DTEND. A same-day
-  // date-only end says nothing about the end TIME, so it keeps the one-hour
-  // default below rather than blocking out the rest of the day.
-  const sameDayDateOnlyEnd =
-    !!row.starts_at &&
-    !!row.end_date &&
-    /^\d{4}-\d{2}-\d{2}$/.test(row.end_date.trim()) &&
-    row.end_date.trim() === zonedDatePart(row.starts_at, row.timezone);
-  const endIso = sameDayDateOnlyEnd
-    ? null
-    : row.starts_at
-      ? phaseTimesFor(row).end_date
-      : row.end_date;
-  const parsedEnd = endIso ? new Date(endIso) : null;
-  const end =
-    parsedEnd && !Number.isNaN(parsedEnd.getTime()) && parsedEnd.getTime() > start.getTime()
-      ? parsedEnd
-      : new Date(start.getTime() + 60 * 60 * 1000);
-  const timezone = safeTimezone(row.timezone);
+  const { start, end } = times;
   const url = new URL(request.url);
   const publicCode = await getPublicShortlinkForEvent(env, row.id);
   if (!publicCode) {
@@ -222,26 +293,21 @@ export async function handleEventCalendar(
   const title = row.title || 'OurSharedEvents event';
   const description = [row.description || '', shareUrl].filter(Boolean).join('\n\n');
 
-  const lines = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//OurSharedEvents//Public Event Calendar//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
-    'BEGIN:VEVENT',
-    `UID:ose-${publicCode ?? 'event'}-${formatUtcIcs(start)}@oursharedevents.com`,
-    `DTSTAMP:${formatUtcIcs(new Date())}`,
-    icsDateProperty('DTSTART', start, timezone),
-    icsDateProperty('DTEND', end, timezone),
-    `SUMMARY:${escapeIcsText(title)}`,
-    `DESCRIPTION:${escapeIcsText(description)}`,
-    `LOCATION:${escapeIcsText(row.location || '')}`,
-    `URL:${shareUrl}`,
-    'END:VEVENT',
-    'END:VCALENDAR',
-  ];
+  const body = buildIcsCalendar([
+    {
+      uid: `ose-${publicCode ?? 'event'}-${formatUtcIcs(start)}@oursharedevents.com`,
+      stamp: new Date(),
+      start,
+      end,
+      timezone: row.timezone,
+      title,
+      description,
+      location: row.location || '',
+      url: shareUrl,
+    },
+  ]);
 
-  return new Response(lines.map(foldIcsLine).join('\r\n') + '\r\n', {
+  return new Response(body, {
     headers: {
       'Content-Type': 'text/calendar; charset=utf-8',
       'Content-Disposition': `attachment; filename="${calendarFileName(title)}"`,

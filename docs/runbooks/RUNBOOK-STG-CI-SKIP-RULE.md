@@ -11,7 +11,9 @@ From GitHub runners, the edge answers stg reads of `/s/<code>` and `/events/<id>
 - the host `stg.oursharedevents.com`;
 - a read (`GET` or `HEAD`);
 - the `X-OCR-CI` header equal to the CI token;
-- a path CI reads: `/`, `/events`, `/events/…`, `/q/…`, `/s/…`, `/api/v2/uploads/…`.
+- a path CI reads: `/`, `/events`, `/events/…`, `/brands/…`, `/q/…`, `/s/…`, `/api/v2/uploads/…`.
+
+`/brands/…` was added on 2026-11-13 for the brand calendar feed (`/brands/<brand>/calendar.ics`, OSE-2022). A rule applied before that date does not cover it: run the script again (dry run, then `--apply`). It updates its own rule in place.
 
 A request without the token is challenged as before. The rule sits first, so it covers the rules after it.
 
@@ -79,6 +81,26 @@ gh workflow run stock-data-full.yml
 
 A green run closes the open `ci-red:stock-data-stg` issue, and its summary shows the Poster showcase table.
 
+## Turn on the calendar strict switch (OSE-2022)
+
+The edge probe reads the two calendar addresses, `/brands/root/calendar.ics` and `/events/test-event-001/calendar.ics`. If the rule on the zone does not cover `/brands/`, the `edge` job is red on the first of them, and the T2 and T4 calendar checks show a warning, "Edge challenge (OSE-2022)", and stay green. In the first run after the feed merged (43532167205, 2026-11-14) CI's read of `/brands/root/calendar.ics` reached the Worker, so the path may already pass; the `edge` job is the check.
+
+Once the `edge` job is green for both addresses, make a challenged calendar read a failure:
+
+```bash
+gh variable set CALENDAR_EDGE_STRICT --body 1
+```
+
+From the next run, a calendar read the edge challenges fails T2 (Bruno Pages) and T4g (Launch Story Smoke) by name. To go back, delete the variable:
+
+```bash
+gh variable delete CALENDAR_EDGE_STRICT
+```
+
+The owner sets this variable. An agent never sets repository variables (AGENTS.md).
+
+This rule lets CI through. It does not let a calendar app through: that is a separate decision, `docs/adr/ADR-028-calendar-addresses-and-the-edge.md`.
+
 ## If a read is still challenged
 
 The run summary names the first challenged read with its Ray ID. Look it up in Cloudflare → Security → Events to see which product challenged it:
@@ -92,4 +114,4 @@ The run summary names the first challenged read with its Ray ID. Look it up in C
 node scripts/ci/cf-waf-stg-ci-skip.mjs --remove --apply
 ```
 
-This needs only `CLOUDFLARE_API_TOKEN`. It removes this rule and keeps every other rule as it was. CI's `/s/` and `/events/` reads are challenged again.
+This needs only `CLOUDFLARE_API_TOKEN`. It removes this rule and keeps every other rule as it was. CI's `/s/`, `/events/` and `/brands/` reads are challenged again. Delete `CALENDAR_EDGE_STRICT` first, or T2 and T4 go red.

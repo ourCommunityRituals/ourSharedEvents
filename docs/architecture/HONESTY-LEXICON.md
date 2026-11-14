@@ -132,7 +132,7 @@ only hides the problem.
   removal once the rename lands. **Do not weaken the banned set to go green** —
   rename, or add a ticketed exemption.
 - **A decided name that holds a banned word without the banned meaning**
-  (ADR-028): `ALLOWED_IDENTIFIERS` in the same file. One entry,
+  (ADR-031): `ALLOWED_IDENTIFIERS` in the same file. One entry,
   `events.attendance_mode`: how an event is held (in person, online or both).
   It is one of three words, held by a CHECK, and can never be a number. The
   match is the exact name; `attendance_count` still fails. This is not an
