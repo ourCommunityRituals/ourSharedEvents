@@ -36,7 +36,7 @@ export const ar: Record<MessageKey, string> = {
   'calendar.ics': 'Apple أو Outlook',
   'calendar.subscribe': 'اشترك في التقويم',
   'calendar.subscribe.apple': 'تقويم Apple',
-  'calendar.subscribe.ics': 'عنوان التقويم (.ics)',
+  'calendar.subscribe.ics': 'عنوان التقويم',
   'directions.pre': 'الاتجاهات',
   'directions.live': 'ابدأ الملاحة الآن',
   'video.watch': '▶ شاهد الفيديو',

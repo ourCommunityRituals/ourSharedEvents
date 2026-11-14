@@ -173,7 +173,7 @@ describe('OSE-2045 subscribe menu: order and content', () => {
     ['en', 'Subscribe to calendar', 'Apple Calendar', 'Calendar address (.ics)'],
     ['es', 'Suscribirse al calendario', 'Calendario de Apple', 'Dirección del calendario (.ics)'],
     ['pl', 'Subskrybuj kalendarz', 'Kalendarz Apple', 'Adres kalendarza (.ics)'],
-    ['ar', 'اشترك في التقويم', 'تقويم Apple', 'عنوان التقويم (.ics)'],
+    ['ar', 'اشترك في التقويم', 'تقويم Apple', 'عنوان التقويم'],
   ] as const) {
     it(`renders in ${lang}, with the same four links`, () => {
       const html = renderSubscribeMenu(row(), ORIGIN, lang as Lang, NOW);

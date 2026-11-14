@@ -907,10 +907,14 @@ function renderEventActions(
   const shareLink = row.share_code
     ? `${new URL(shareUrl).origin}${withLangPrefix(lang, `/e/${encodeURIComponent(row.share_code)}`)}`
     : shareUrl;
+  // An admin draft preview shows what the public will see with its controls
+  // switched off; a draft is in no feed, so the menu is not drawn there at all.
+  // When there is no menu the row is byte for byte what it was before OSE-2045.
+  const subscribe =
+    opts.inert === true ? '' : renderSubscribeMenu(row, new URL(shareUrl).origin, lang);
   return `<div class="ose-event-actions" data-testid="event-actions">
   ${renderShareBlock(shareLink, row.title, nonce, lang, opts.inert === true)}
-  ${menu}
-  ${opts.inert === true ? '' : renderSubscribeMenu(row, new URL(shareUrl).origin, lang)}
+  ${menu}${subscribe ? `\n  ${subscribe}` : ''}
 </div>`;
 }
 

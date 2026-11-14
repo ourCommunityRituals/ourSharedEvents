@@ -233,6 +233,9 @@ function visibleItems(p: Parsed, viewport: number, menu: MenuState): Element[] {
 
 /** The text a reader sees or hears. */
 const NAMES = [
+  // OSE-2045: the online calendar's own name. Listed before 'Outlook' so the
+  // whole name is taken out, not only its first word.
+  'Outlook.com',
   'OurSharedEvents',
   'Cloudflare Access',
   'GeoNames',
