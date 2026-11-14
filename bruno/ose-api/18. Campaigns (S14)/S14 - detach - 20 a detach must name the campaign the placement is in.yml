@@ -1,0 +1,27 @@
+info:
+  name: "S14 | rainy | detach | a detach that names another campaign changes nothing"
+  type: http
+  seq: 20
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_shown/placements/spl_camp_toggle"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('S14 detach: 404 NOT_FOUND', function () { expect(res.getStatus()).to.eql(404); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

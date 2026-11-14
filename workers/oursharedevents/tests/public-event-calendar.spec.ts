@@ -1,5 +1,8 @@
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { PUBLIC_READ_MAX } from '../src/lib/public-read-limit';
+import { EDGE_WINDOW_SECONDS } from '../src/lib/edge-rate-limit';
+import { rateLimitKvKey } from '../src/lib/rate-limit';
 
 interface TestEnv {
   DB: D1Database;
@@ -194,6 +197,29 @@ describe('OSE-1358 public event calendar download', () => {
       .bind('NoMut8')
       .first<{ clicks: number }>();
     expect(row?.clicks).toBe(0);
+  });
+});
+
+describe('OSE-2022 the per-event calendar file is rate-limited like other public reads', () => {
+  test('a caller past the limit gets 429; another caller is unaffected', async () => {
+    const eventId = 'evt_ose2022_calendar_limit';
+    await seedEvent({ id: eventId });
+    await seedShortlink(eventId, 'Lim2A2');
+    const url = `https://t.test/events/${eventId}/calendar.ics`;
+    const ip = '203.0.113.221';
+    expect((await SELF.fetch(url, { headers: { 'CF-Connecting-IP': ip } })).status).toBe(200);
+    // Spend the rest of this caller's minute.
+    const E = env as unknown as { RATE_LIMIT_KV: KVNamespace; RATE_LIMIT_KEY_PEPPER?: string };
+    const key = await rateLimitKvKey(`publicread:event-calendar:${ip}`, E.RATE_LIMIT_KEY_PEPPER);
+    await E.RATE_LIMIT_KV.put(
+      key,
+      JSON.stringify({ count: PUBLIC_READ_MAX, resetAt: Date.now() + 60_000, max: PUBLIC_READ_MAX })
+    );
+    const limited = await SELF.fetch(url, { headers: { 'CF-Connecting-IP': ip } });
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('Retry-After')).toBe(String(EDGE_WINDOW_SECONDS));
+    const other = await SELF.fetch(url, { headers: { 'CF-Connecting-IP': '203.0.113.222' } });
+    expect(other.status).toBe(200);
   });
 });
 

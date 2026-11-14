@@ -1,0 +1,46 @@
+info:
+  name: OSE-1425 | admin events | POST create answers a draft when no status is sent
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: '{"title":"OSE-1425 create status none (staging, synthetic)","is_published":false,"data_class":"synthetic"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // OSE-1425 (owner, 2026-11-13): a signed-in person's create is always a
+        // draft; automation (this run's internal key) chooses the state, and
+        // with no status, create starts the lifecycle at draft.
+        // The person path cannot be reached from CI (no person identity); it is
+        // covered in the workers pool (tests/event-create-status.spec.ts).
+        // The event is synthetic and unlisted; the staging data is rebuilt daily.
+        test('201 created', function () {
+          expect(res.getStatus()).to.eql(201);
+        });
+        test('event_status is draft', function () {
+          expect(res.getBody().event_status).to.eql('draft');
+        });
+        test('qr_verified is false', function () {
+          expect(res.getBody().qr_verified).to.eql(false);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

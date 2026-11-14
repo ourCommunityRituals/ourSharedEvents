@@ -1,0 +1,30 @@
+info:
+  name: "S14 | happy | detach | the placement leaves its campaign"
+  type: http
+  seq: 21
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_toggle/placements/spl_camp_toggle"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('S14 detach: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 detach: the answer says the placement has no campaign', function () {
+          expect(res.getBody().campaign_id).to.eql(null);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

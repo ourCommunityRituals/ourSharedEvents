@@ -38,6 +38,15 @@ Subagents are told in their prompts to stay read-only, but their `tools:` lists 
 - `.claude/hooks/policy-gate.mjs` blocks deploys, production changes, secret writes, force pushes, admin merges and credential reads. The owner installs it (`.claude/hooks/README.md`). Agents cannot change their own settings; auto mode refuses it.
 - Never print a credential or config file to inventory it. Use names, sizes and key names only.
 
+## Environment: staging, not the owner's computer
+
+A standing order from the owner (2026-11-14) for every session.
+
+- **Staging is the environment of record.** Work is run and checked against staging (`stg.oursharedevents.com`, `stg.ourwkrp.com`). A result counts when it is seen on staging, or in the CI that deploys to it.
+- **Never the owner's own computer.** Do not ask the owner to run, build, seed or check anything on their machine, and do not plan work that depends on it. A throwaway worker inside a CI job or a session's own container is a test rig: it can support a result, and it does not stand in for staging.
+- **One exception: a private showcase instance.** Its data file and built pages stay private. They are never committed, loaded into staging or published until the owner says the people named in them have agreed.
+- **This grants nothing else.** Staging changes only through CI after a merge to `main`. Who merges, who deploys and who holds credentials are unchanged, and production is not staging.
+
 ## Compact instructions
 
 When compacting, keep: the story or review id and its acceptance criteria; decisions and who made them; failing test names and exact error lines; files changed; open questions for the owner. Drop: tool output already acted on, file dumps, superseded plans.

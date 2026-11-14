@@ -1,0 +1,31 @@
+info:
+  name: "S14 | rainy | list | no refused request wrote a campaign"
+  type: http
+  seq: 28
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/campaigns"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const titles = (res.getBody().items || []).map(function (c) { return c.title; });
+        test('S14 refusals: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 refusals: no refused campaign is in the list', function () {
+          expect(titles).to.not.include('Campaign Fixture Refused');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
