@@ -1,6 +1,6 @@
 /**
  * INVARIANT: a campaign stays inside its brand, and is public only by consent
- * (showcase S14; OSE ADR-028).
+ * (showcase S14; OSE ADR-029).
  *
  * A campaign is a brand's named group of sponsor placements. Three owner rules
  * bind it, and this file holds their code shape on every PR:

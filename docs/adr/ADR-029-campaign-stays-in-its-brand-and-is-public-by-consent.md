@@ -1,4 +1,4 @@
-# ADR-028: A campaign stays in its brand and is public only through a placement that is on show
+# ADR-029: A campaign stays in its brand and is public only through a placement that is on show
 
 **Status:** Proposed. Decision 1 is the owner's (2026-11-12). Decisions 2, 3 and 6 follow from rules
 the owner already set. Decisions 4 and 5 are choices made while building and need the owner's yes

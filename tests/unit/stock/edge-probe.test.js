@@ -27,7 +27,8 @@ const passed = (status, ray, extra = {}) =>
   Promise.resolve({ status, headers: headersOf({ 'cf-ray': ray, ...extra }) });
 const RAY = 'a5711b1a7f66a3a7-SEA';
 // The Worker's own answers, as read on stg 2026-11-08: /q/<made-up> goes home,
-// /s/<made-up> is a 404, the event page and the zip page are 200.
+// /s/<made-up> is a 404, the event page and the zip page are 200. The two
+// calendar addresses (OSE-2022) answer 200 here too.
 const worker = (pathname) =>
   pathname.startsWith('/q/')
     ? passed(302, RAY, { location: 'https://stg.oursharedevents.com/' })
@@ -35,7 +36,8 @@ const worker = (pathname) =>
       ? passed(404, RAY)
       : passed(200, RAY);
 
-// An edge that challenges the listed shapes on /s/ and /events/ only.
+// An edge that challenges the listed shapes on /s/ and /events/ only: the short
+// link, the event page and the per-event calendar file (3 of the 6 reads).
 function edge({ challenge }) {
   const seen = [];
   const fetch = (url, init) => {
@@ -80,7 +82,7 @@ describe('stg edge probe', () => {
     const r = await run(ENV, fetch);
     expect(r.code).toBe(1);
     expect(r.out).toContain(
-      '2 of 4 reads shaped like the stock check failed from this runner (2 challenged at the edge'
+      '3 of 6 reads shaped like the stock check failed from this runner (3 challenged at the edge'
     );
     expect(r.out).toContain(
       '| check | `/s/edge-probe` | 403 | CHALLENGED | a5711b195919fa42-SEA |'
@@ -105,7 +107,7 @@ describe('stg edge probe', () => {
     };
     const r = await run(ENV, fetch);
     expect(r.code).toBe(1);
-    expect(r.out).toContain('(0 challenged at the edge, 1 an unexpected answer or none)');
+    expect(r.out).toContain('(0 challenged at the edge, 2 an unexpected answer or none)');
   });
 
   test('each path passes only on the Worker’s own answer for it', () => {
@@ -140,7 +142,7 @@ describe('stg edge probe', () => {
       });
     const r = await run(ENV, fetch);
     expect(r.code).toBe(1);
-    expect(r.out).toContain('4 of 4 reads shaped like the stock check failed');
+    expect(r.out).toContain('6 of 6 reads shaped like the stock check failed');
     expect(r.out).toContain('| check | `/q/edge-probe` | 302 → elsewhere | no |');
     expect(r.out).not.toContain('cloudflareaccess');
   });
