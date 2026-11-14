@@ -59,6 +59,9 @@ export const MUTATION_PATHS = Object.freeze([
   'workers/oursharedevents/tests/red-team/auth-jwt-verify-memo.spec.ts',
   'workers/oursharedevents/tests/red-team/ci-service-actor.spec.ts',
   'workers/oursharedevents/tests/admin-actor-memo.spec.ts',
+  // OSE-826: when a registration expires, and the node spec that kills its mutants.
+  'workers/oursharedevents/src/lib/retention-windows.ts',
+  'workers/oursharedevents/tests/registration-expiry.spec.ts',
   // OSE-1824: the landing's Type row by event-type category. Its sources (two
   // handler files are mutated only in a marker range, see rangeOf in
   // stryker.conf.mjs) and the node specs and goldens that kill its mutants.

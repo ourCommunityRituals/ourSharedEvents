@@ -22,7 +22,7 @@ runtime:
         //
         // OSE-2012: one key has a count-shaped NAME and is not a count.
         // attendance_mode says how an event is held. It is declared in
-        // PUBLIC_EVENT_WORD_FIELDS (ADR-031), and here in WORD_FIELDS with the
+        // PUBLIC_EVENT_WORD_FIELDS (ADR-032), and here in WORD_FIELDS with the
         // only words it may hold. It is let through only while its value is one
         // of them, so a number published under that name still fails.
         //

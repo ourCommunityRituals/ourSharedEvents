@@ -1,4 +1,4 @@
-# ADR-031: Keep the field name `attendance_mode`, as one exact allowance in the lexicon lint
+# ADR-032: Keep the field name `attendance_mode`, as one exact allowance in the lexicon lint
 
 **Status:** Proposed. The owner chose the field name on 2026-11-12. The owner has not yet ruled on
 the lexicon allowance this needs (OSE-2033: option A below, or rename). It moves to Accepted on that

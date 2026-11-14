@@ -49,6 +49,7 @@ const OPENERS = {
   render: 'window.renderSeriesCard = function (id, data) {',
   load: 'window.loadEventSeries = async function (id) {',
   write: 'window.seriesWrite = async function (id, method, tail, body, btn) {',
+  confirm: 'window.seriesConfirm = function (el) {',
 };
 const scriptText = () => Object.values(OPENERS).map(sourceOf).join('\n');
 
@@ -251,6 +252,8 @@ describe('the card is in the page, built from what already exists', () => {
     for (const action of ['series-declare', 'series-detach', 'series-confirm', 'series-reject']) {
       expect(ADMIN_HTML, action).toContain(`'${action}': function (el)`);
     }
+    const at = ADMIN_HTML.indexOf("'series-confirm': function (el)");
+    expect(ADMIN_HTML.slice(at, at + 160)).toContain('window.seriesConfirm(el)');
     expect(ADMIN_HTML).toContain("'series-cadence': function (el)");
     expect(ADMIN_HTML).toContain('window.loadEventSeries(d.id);');
   });
@@ -417,5 +420,79 @@ describe('the card talks to the series routes and nothing else', () => {
   test('the card shows no count', () => {
     expect(card()).not.toMatch(/\b(scans?|attend|headcount|visitors?|people)\b/i);
     expect(scriptText()).not.toMatch(/distinct|headcount|scan_|\.count\b/);
+  });
+});
+
+describe('confirming a suggestion asks for a name (OSE-2041)', () => {
+  const SUGGESTED = {
+    ...SERIES,
+    id: 'evtsrs_s1',
+    name: 'Thursday 7 PM (auto-detected)',
+    state: 'pending',
+  };
+
+  function mounted(fetchImpl?: (url: string, init?: any) => Promise<any>) {
+    const m = mount(fetchImpl);
+    m.win.renderSeriesCard('evt-1', { series: null, suggestions: [SUGGESTED] });
+    const li = m.q('series-suggestion-list').querySelector('li')!;
+    const input = li.querySelector('input') as HTMLInputElement;
+    const yes = li.querySelector('button[data-action="series-confirm"]') as HTMLButtonElement;
+    return { ...m, li, input, yes };
+  }
+
+  test('each suggestion has a labelled name field, empty, in a 44 px / 16 px form row', () => {
+    const { li, input, doc } = mounted();
+    expect(input).not.toBeNull();
+    expect(input.type).toBe('text');
+    expect(input.getAttribute('maxlength')).toBe('80');
+    // Empty on purpose: the suggestion's own name is the job's label, and that
+    // label is never offered as the series' public name.
+    expect(input.value).toBe('');
+    expect(input.id).toBe('series-suggest-name-evtsrs_s1');
+    const label = doc.querySelector(`label[for="${input.id}"]`)!;
+    expect(label.textContent).toBe('Name this series');
+    expect(input.closest('.create-form')).not.toBeNull();
+    expect(li.textContent).toContain('Every Thursday at 7 PM');
+  });
+
+  test('Yes with a name sends it, with the event, to the confirm route', async () => {
+    const calls: Array<[string, any]> = [];
+    const { win, input, yes } = mounted(async (url, init) => {
+      calls.push([url, init]);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, series: null, suggestions: [] }),
+      };
+    });
+    input.value = '  Thursday trivia ';
+    await win.seriesConfirm(yes);
+    expect(calls[0][0]).toBe('/api/v2/admin/events/evt-1/series/confirm');
+    expect(JSON.parse(calls[0][1].body)).toEqual({
+      series_id: 'evtsrs_s1',
+      name: 'Thursday trivia',
+      event_ids: ['evt-1'],
+    });
+  });
+
+  test('Yes with no name sends nothing, says what to do, and puts the cursor in the field', async () => {
+    const calls: string[] = [];
+    const { win, doc, input, yes, q } = mounted(async (url) => {
+      calls.push(url);
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    });
+    input.value = '   ';
+    await win.seriesConfirm(yes);
+    expect(calls).toEqual([]);
+    expect(q('series-msg').textContent).toBe('Give the series a name first, then choose Yes.');
+    expect(q('series-msg').className).toBe('create-msg error');
+    expect(doc.activeElement).toBe(input);
+  });
+
+  test('the field is built as an element and filled as text, never as HTML', () => {
+    const src = sourceOf(OPENERS.render) + sourceOf(OPENERS.confirm);
+    expect(src).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML/);
+    const { doc } = mounted();
+    expect(doc.querySelectorAll('#series-suggestion-list input')).toHaveLength(1);
   });
 });

@@ -33,6 +33,7 @@
 import { describe, test, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { routeShapes, isApi } from './helpers/route-shapes';
 
 const ROUTER = readFileSync(join(__dirname, '..', 'src', 'router.ts'), 'utf8');
 
@@ -144,39 +145,6 @@ const OUTSIDE_THE_FOLDER: Readonly<Record<string, { why: Why; reason: string }>>
   '/summary': { why: 'site', reason: 'Alias of /briefing.' },
 };
 
-/** Lines that are comments carry route-looking text that is not a route. */
-function codeOnly(src: string): string {
-  return src
-    .split('\n')
-    .map((line) => (/^\s*(\/\/|\/\*|\*)/.test(line) ? '' : line))
-    .join('\n');
-}
-
-/** `^\/events\/([^/]+)\/(tv|poster)$` → `/events/:param/(tv|poster)` */
-function shapeOfPattern(body: string): string {
-  return body
-    .replace(/^\^/, '')
-    .replace(/\$$/, '')
-    .replace(/\(([^()]*)\)/g, (_m, inner: string) =>
-      /^[a-z0-9-]+(\|[a-z0-9-]+)+$/.test(inner) ? `(${inner})` : ':param'
-    )
-    .replace(/\\(.)/g, '$1');
-}
-
-/** Every address the router answers, as a readable shape. */
-function routeShapes(src: string): Set<string> {
-  const code = codeOnly(src);
-  const out = new Set<string>();
-  for (const m of code.matchAll(/pathname\s*===\s*'([^']*)'/g)) out.add(m[1]);
-  for (const m of code.matchAll(/pathname\s*===\s*([A-Z][A-Z0-9_]*)\b/g)) out.add(`const:${m[1]}`);
-  for (const m of code.matchAll(/pathname\.startsWith\(\s*'([^']*)'\s*\)/g)) {
-    out.add(`${m[1]}*`);
-  }
-  for (const m of code.matchAll(/\/(\^\\\/[^\n]*?\$)\//g)) out.add(shapeOfPattern(m[1]));
-  return out;
-}
-
-const isApi = (s: string) => s.startsWith('/api/');
 const inTheFolder = (s: string) => s === '/events' || s.startsWith('/events/');
 
 /** The addresses that are neither in the folder nor decided. */

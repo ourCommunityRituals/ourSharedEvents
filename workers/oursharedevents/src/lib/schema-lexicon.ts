@@ -57,7 +57,7 @@ export const EXEMPT_IDENTIFIERS: ReadonlyMap<string, string> = new Map([
 
 /**
  * Whole identifiers that hold a banned token and are NOT the banned idea
- * (docs/adr/ADR-031). This is not debt and has no ticket to remove it: each
+ * (docs/adr/ADR-032). This is not debt and has no ticket to remove it: each
  * entry is a decision recorded in that ADR, and says why the name is not an
  * audience count.
  *
@@ -65,7 +65,7 @@ export const EXEMPT_IDENTIFIERS: ReadonlyMap<string, string> = new Map([
  * `attendance_count` and `attendance_mode_total` still fail.
  *
  * A name may be here only if it is a column held to a fixed list of words by a
- * CHECK, and is listed in ADR-031. The structural invariant
+ * CHECK, and is listed in ADR-032. The structural invariant
  * tests/e2e/0-architecture/lexicon-allowance.invariant.spec.ts holds both, so
  * this list cannot grow by a one-line edit.
  */

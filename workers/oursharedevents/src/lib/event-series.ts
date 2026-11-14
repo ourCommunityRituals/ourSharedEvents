@@ -132,6 +132,7 @@ function unknownKey(body: Record<string, unknown>, allowed: readonly string[]): 
 // place for a contact detail: an email-shaped or phone-shaped name is refused.
 const EMAIL_SHAPED = /\S@\S/;
 const PHONE_SHAPED = /(?:\d[\s().-]*){7,}/;
+const JOB_LABEL = /auto-detected/i;
 const CONTROL_CHAR = /[\u0000-\u001f\u007f]/;
 
 function parseName(raw: unknown): Parsed<string> {
@@ -143,6 +144,10 @@ function parseName(raw: unknown): Parsed<string> {
   if (CONTROL_CHAR.test(raw)) return bad('INVALID_NAME', 'name has a character that is not text');
   if (EMAIL_SHAPED.test(name) || PHONE_SHAPED.test(name))
     return bad('INVALID_NAME', 'name must not hold a contact detail');
+  // "(auto-detected)" is the nightly job's own label. A confirmed series' name
+  // is public, so it is always one a person gave (OSE-2041).
+  if (JOB_LABEL.test(name))
+    return bad('INVALID_NAME', 'Give the series a name of your own, without "auto-detected"');
   return { ok: true, value: name };
 }
 
@@ -238,7 +243,7 @@ export function parseAttach(body: unknown): Parsed<{ series_id: string }> {
 
 export interface ConfirmInput {
   series_id: string;
-  name: string | null;
+  name: string;
   event_ids: string[];
 }
 
@@ -249,15 +254,13 @@ export function parseConfirm(body: unknown): Parsed<ConfirmInput> {
   if (extra) return bad('UNKNOWN_FIELD', `A series does not take the field: ${extra}`);
   const id = parseId(b.series_id);
   if (!id) return bad('INVALID_SERIES_ID', 'series_id is required');
-  let name: string | null = null;
-  if (b.name !== undefined) {
-    const parsed = parseName(b.name);
-    if (!parsed.ok) return parsed;
-    name = parsed.value;
-  }
+  // Required: confirming makes the name public, and the suggestion's own name
+  // is the job's label (OSE-2041).
+  const name = parseName(b.name);
+  if (!name.ok) return name;
   const ids = parseEventIds(b.event_ids);
   if (!ids.ok) return ids;
-  return { ok: true, value: { series_id: id, name, event_ids: ids.value } };
+  return { ok: true, value: { series_id: id, name: name.value, event_ids: ids.value } };
 }
 
 export function parseReject(

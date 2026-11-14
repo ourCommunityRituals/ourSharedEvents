@@ -325,6 +325,7 @@ describe('a declared series feeds the SharedReport trend exactly as a detected o
     await seedPending('evtsrs_detected', A1);
     const confirmed = await call('POST', seriesPath(A1, '/confirm'), A, {
       series_id: 'evtsrs_detected',
+      name: 'The daily room',
       event_ids: [A1, A2, A3],
     });
     expect(confirmed.status).toBe(200);
@@ -392,6 +393,7 @@ describe('BORN RED 1: another brand’s event can never join a series', () => {
     await seedPending('evtsrs_p1', A4);
     const res = await call('POST', seriesPath(A4, '/confirm'), A, {
       series_id: 'evtsrs_p1',
+      name: 'Monday room',
       event_ids: [A4, B1],
     });
     expect(res.status).toBe(404);
@@ -403,7 +405,11 @@ describe('BORN RED 1: another brand’s event can never join a series', () => {
   test('brand B can neither confirm nor reject brand A’s suggestion', async () => {
     await seedPending('evtsrs_p1', A4);
     for (const tail of ['/confirm', '/reject']) {
-      const res = await call('POST', seriesPath(B1, tail), B, { series_id: 'evtsrs_p1' });
+      const body = {
+        series_id: 'evtsrs_p1',
+        ...(tail === '/confirm' ? { name: 'Monday room' } : {}),
+      };
+      const res = await call('POST', seriesPath(B1, tail), B, body);
       expect(res.status).toBe(404);
       expect(res.json.code).toBe('SERIES_NOT_FOUND');
     }
@@ -497,7 +503,12 @@ describe('BORN RED 2: a series never carries a per-attendee field', () => {
     const bodies = [
       (await call('POST', seriesPath(A1), A, { ...DECLARE, event_ids: [A2] })).json,
       (await call('GET', seriesPath(A1), A)).json,
-      (await call('POST', seriesPath(A4, '/confirm'), A, { series_id: 'evtsrs_p1' })).json,
+      (
+        await call('POST', seriesPath(A4, '/confirm'), A, {
+          series_id: 'evtsrs_p1',
+          name: 'Monday room',
+        })
+      ).json,
       (await call('DELETE', seriesPath(A2), A)).json,
     ];
     for (const body of bodies) {
@@ -554,6 +565,7 @@ describe('BORN RED 3: promoting a trial changes no past date or count', () => {
     const before = await pastSnapshot();
     const res = await call('POST', seriesPath(A1, '/confirm'), A, {
       series_id: 'evtsrs_p1',
+      name: 'Monday room',
       event_ids: [A1, A2, A3],
     });
     expect(res.status).toBe(200);
@@ -600,7 +612,7 @@ describe('confirm or reject a detector suggestion', () => {
     ]);
   });
 
-  test('confirm: pending becomes confirmed, keeps its origin, and may take a new name', async () => {
+  test('confirm: pending becomes confirmed, keeps its origin, and takes the organizer’s name', async () => {
     await seedPending('evtsrs_p1', A4);
     const res = await call('POST', seriesPath(A4, '/confirm'), A, {
       series_id: 'evtsrs_p1',
@@ -620,7 +632,10 @@ describe('confirm or reject a detector suggestion', () => {
 
   test('confirm alone attaches nothing: a suggestion is a prompt, never a promotion', async () => {
     await seedPending('evtsrs_p1', A4);
-    const res = await call('POST', seriesPath(A4, '/confirm'), A, { series_id: 'evtsrs_p1' });
+    const res = await call('POST', seriesPath(A4, '/confirm'), A, {
+      series_id: 'evtsrs_p1',
+      name: 'Monday room',
+    });
     expect(res.status).toBe(200);
     expect(res.json.attached).toEqual([]);
     expect(await seriesIdOf(A4)).toBeNull();
@@ -643,7 +658,11 @@ describe('confirm or reject a detector suggestion', () => {
   test('only a pending suggestion can be confirmed or rejected', async () => {
     const made = await call('POST', seriesPath(A1), A, DECLARE);
     for (const tail of ['/confirm', '/reject']) {
-      const res = await call('POST', seriesPath(A1, tail), A, { series_id: made.json.series.id });
+      const body = {
+        series_id: made.json.series.id,
+        ...(tail === '/confirm' ? { name: 'Monday room' } : {}),
+      };
+      const res = await call('POST', seriesPath(A1, tail), A, body);
       expect(res.status).toBe(409);
       expect(res.json.code).toBe('SERIES_NOT_PENDING');
     }
@@ -672,7 +691,10 @@ describe('every write is audited, in the event’s brand', () => {
     await call('DELETE', seriesPath(A2), A);
     await seedPending('evtsrs_p1', A4);
     await seedPending('evtsrs_p2', A4);
-    await call('POST', seriesPath(A4, '/confirm'), A, { series_id: 'evtsrs_p1' });
+    await call('POST', seriesPath(A4, '/confirm'), A, {
+      series_id: 'evtsrs_p1',
+      name: 'Monday room',
+    });
     await call('POST', seriesPath(A4, '/reject'), A, { series_id: 'evtsrs_p2' });
 
     for (const [action, id] of [
@@ -834,5 +856,66 @@ describe('cadence: the five a programme slot can state (OSE-2017)', () => {
     const rows = await seriesRows();
     expect(rows.length).toBeGreaterThanOrEqual(1);
     expect(rows.every((r) => r.cadence === 'weekly' && r.state === 'pending')).toBe(true);
+  });
+});
+
+describe('confirming a suggestion asks for a name (OSE-2041)', () => {
+  // A detector suggestion is named by the job ("Monday 5 PM (auto-detected)").
+  // A confirmed series' name is public, so the organizer names it first.
+  const pendingRow = async () => (await seriesRows()).find((r) => r.id === 'evtsrs_p1');
+
+  test('confirm with no name is refused, and the suggestion stays pending', async () => {
+    await seedPending('evtsrs_p1', A4);
+    const res = await call('POST', seriesPath(A4, '/confirm'), A, {
+      series_id: 'evtsrs_p1',
+      event_ids: [A4],
+    });
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe('INVALID_NAME');
+    expect((await pendingRow())?.state).toBe('pending');
+    expect(await seriesIdOf(A4)).toBeNull();
+  });
+
+  test.each([
+    ['the job’s own name', 'Monday 5 PM (auto-detected)'],
+    ['any name that still says auto-detected', 'Bocce (Auto-Detected)'],
+    ['a blank name', '   '],
+    ['a name with a contact detail', 'Ask someone@example.com'],
+  ])('confirm with %s is refused', async (_label, name) => {
+    await seedPending('evtsrs_p1', A4);
+    const res = await call('POST', seriesPath(A4, '/confirm'), A, { series_id: 'evtsrs_p1', name });
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe('INVALID_NAME');
+    expect((await pendingRow())?.state).toBe('pending');
+    expect((await pendingRow())?.series_name).toBe('Monday 5 PM (auto-detected)');
+  });
+
+  test('confirm with a name stores that name, never the job’s', async () => {
+    await seedPending('evtsrs_p1', A4);
+    const res = await call('POST', seriesPath(A4, '/confirm'), A, {
+      series_id: 'evtsrs_p1',
+      name: 'Monday bocce',
+    });
+    expect(res.status).toBe(200);
+    expect((await pendingRow())?.series_name).toBe('Monday bocce');
+    expect(JSON.stringify(res.json)).not.toContain('auto-detected');
+  });
+
+  test('declare refuses a name that says auto-detected too: that label is the job’s', async () => {
+    const res = await call('POST', seriesPath(A1), A, { ...DECLARE, name: 'Room (auto-detected)' });
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe('INVALID_NAME');
+  });
+
+  test('no confirmed series in the table carries the job’s label after these routes', async () => {
+    await seedPending('evtsrs_p1', A4);
+    await call('POST', seriesPath(A4, '/confirm'), A, { series_id: 'evtsrs_p1' });
+    await call('POST', seriesPath(A4, '/confirm'), A, {
+      series_id: 'evtsrs_p1',
+      name: 'Monday bocce',
+    });
+    const confirmed = (await seriesRows()).filter((r) => r.state === 'confirmed');
+    expect(confirmed).toHaveLength(1);
+    expect(confirmed.every((r) => !/auto-detected/i.test(String(r.series_name)))).toBe(true);
   });
 });

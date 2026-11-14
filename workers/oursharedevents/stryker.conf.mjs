@@ -73,6 +73,11 @@ const config = {
     // log lines via console spies). Residual survivors are documented EQUIVALENT
     // mutants (`// Stryker disable` with written reasons in src/auth/admin.ts).
     'src/auth/admin.ts',
+    // OSE-826 (owner 2026-11-13): when a registration expires, the later of 90
+    // days and the day after its event. A privacy rule: a survivor here is a
+    // registration kept too long or deleted before its event. Killed by
+    // registration-expiry.spec.ts.
+    'src/lib/retention-windows.ts',
     // OSE-1824 — the landing's Type row by event-type category (owner 2026-11-09).
     // The catalog grouping and its read are whole files; the renderer is the
     // whole landing area (its CSS-only filter is the behaviour); in the two big

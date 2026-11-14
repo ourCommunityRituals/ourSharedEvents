@@ -1,9 +1,9 @@
 /**
- * The lexicon allowance stays one exact name (OSE-2034, ADR-031).
+ * The lexicon allowance stays one exact name (OSE-2034, ADR-032).
  *
  * The honesty lexicon bans words that claim a count of people ("attendance",
  * "reach", "views"…) from every schema name (OSE-801;
- * workers/oursharedevents/src/lib/schema-lexicon.ts). ADR-031 allows one whole
+ * workers/oursharedevents/src/lib/schema-lexicon.ts). ADR-032 allows one whole
  * identifier that holds a banned token without the banned meaning:
  * `attendance_mode`, which says how an event is held and can only ever hold one
  * of three words.
@@ -12,7 +12,7 @@
  * what the ADR decided. It is structural: it reads the source, the migrations
  * and the ADR, and runs on every PR in the T0 `invariants` step.
  *
- *   (a) The list is exactly the names ADR-031 lists. A name added to the code
+ *   (a) The list is exactly the names ADR-032 lists. A name added to the code
  *       without the ADR, or to the ADR without the code, fails.
  *   (b) Each allowed name's reason cites a ticket.
  *   (c) Each allowed name is a column a migration adds, with a CHECK that limits
@@ -26,7 +26,7 @@
  *       id, a class or visible text: the public event page says "In person",
  *       never the field's name.
  *
- * @born-red OSE-2034 | method: (a) run before ADR-031 existed, then with a
+ * @born-red OSE-2034 | method: (a) run before ADR-032 existed, then with a
  * second name added to the code only; (c) the CHECK removed from migration
  * 0108; (d) the lint changed to a prefix match; (e) the word removed from the
  * banned list; (f) the test id renamed to carry the word | date: 2026-11-13
@@ -40,7 +40,7 @@ const WORKER = join(ROOT, 'workers', 'oursharedevents');
 const read = (...p: string[]) => readFileSync(join(...p), 'utf8');
 
 const LEXICON = read(WORKER, 'src', 'lib', 'schema-lexicon.ts');
-const ADR = read(ROOT, 'docs', 'adr', 'ADR-031-attendance-mode-and-the-lexicon.md');
+const ADR = read(ROOT, 'docs', 'adr', 'ADR-032-attendance-mode-and-the-lexicon.md');
 
 /** The body of `export const NAME ... = new Map([ ... ]);` or `new Set([ ... ]);`. */
 function literalOf(name: string): string {
@@ -69,10 +69,10 @@ function migrations(): string {
 }
 
 test.describe('the lexicon allowance is one exact, decided name', () => {
-  test('(a) the list is exactly what ADR-031 lists', () => {
+  test('(a) the list is exactly what ADR-032 lists', () => {
     const inAdr =
       /<!-- allowed-identifiers:begin -->([\s\S]*?)<!-- allowed-identifiers:end -->/.exec(ADR);
-    expect(inAdr, 'ADR-031 carries the marked list of allowed identifiers').not.toBeNull();
+    expect(inAdr, 'ADR-032 carries the marked list of allowed identifiers').not.toBeNull();
     const adrNames = [...inAdr![1]!.matchAll(/^- `([a-z0-9_]+)`/gm)].map((m) => m[1]!).sort();
     const codeNames = allowed()
       .map(([n]) => n)

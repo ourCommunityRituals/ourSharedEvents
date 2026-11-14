@@ -231,7 +231,11 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
   }),
   eventRoute('/api/v2/admin/events/:id/series', 'DELETE', '/series', { variant: 'detach' }),
   eventRoute('/api/v2/admin/events/:id/series/confirm', 'POST', '/series/confirm', {
-    body: (t) => ({ series_id: 'evtsrs_matrix', event_ids: [t.activeEventId] }),
+    body: (t) => ({
+      series_id: 'evtsrs_matrix',
+      name: 'Matrix series',
+      event_ids: [t.activeEventId],
+    }),
   }),
   eventRoute('/api/v2/admin/events/:id/series/reject', 'POST', '/series/reject', {
     body: () => ({ series_id: 'evtsrs_matrix' }),

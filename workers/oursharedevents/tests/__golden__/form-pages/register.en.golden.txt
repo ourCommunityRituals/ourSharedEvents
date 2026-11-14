@@ -164,7 +164,7 @@
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Privacy details</summary>
       <p>
-        We collect your name and, if you choose, your email, so the organizer can reach you if this event changes. Legal basis: GDPR Art. 6(1)(a) — your <strong>consent</strong>. Your name and email are encrypted, and <strong>cleared the day after the event</strong>. The rest of the registration is deleted after 90 days.
+        We collect your name and, if you choose, your email, so the organizer can reach you if this event changes. Legal basis: GDPR Art. 6(1)(a) — your <strong>consent</strong>. Your name and email are encrypted, and <strong>cleared the day after the event</strong>. The rest of the registration is deleted 90 days after you register, or the day after the event if that is later.
         You have the right to access, correct, or erase your data, and to lodge a complaint with your local data protection
         <strong>supervisory authority</strong>.
         
