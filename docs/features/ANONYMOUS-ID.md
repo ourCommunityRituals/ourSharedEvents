@@ -221,11 +221,11 @@ const SAFE_KEY_PATTERNS = /^(rating|score|count|number|rank|order|id|uuid|type|
 
 A daily cron job runs independent cleanup phases (the main ones are below). A separate nightly step clears a registrant's name and email the day after the event's last date (`runRegistrationContactClear`, `src/index.ts`); the row stays until its own expiry.
 
-| Phase | Target        | TTL                       | SQL                                         |
-| ----- | ------------- | ------------------------- | ------------------------------------------- |
-| 1     | Registrations | 90 days after registering | `DELETE WHERE expires_at < now()`           |
-| 2     | Survey PII    | Immediate (next cron run) | `UPDATE SET pii_scrubbed = 1`               |
-| 3     | Email signups | 30 days after signup      | `DELETE WHERE retention_expires_at < now()` |
+| Phase | Target        | TTL                                                                      | SQL                                         |
+| ----- | ------------- | ------------------------------------------------------------------------ | ------------------------------------------- |
+| 1     | Registrations | 90 days after registering, or the day after the event if later (OSE-826) | `DELETE WHERE expires_at < now()`           |
+| 2     | Survey PII    | Immediate (next cron run)                                                | `UPDATE SET pii_scrubbed = 1`               |
+| 3     | Email signups | 30 days after signup                                                     | `DELETE WHERE retention_expires_at < now()` |
 
 Each phase runs independently. Failure in one does not block others.
 

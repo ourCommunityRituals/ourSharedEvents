@@ -2266,13 +2266,21 @@ export async function route(
     // Only blocks if the event row explicitly exists with a non-active status;
     // unknown event IDs pass through for backward compat with un-seeded test fixtures.
     // Hoisted to outer scope so phase gate below can access legal_clearance_tier.
-    let eventRow: { status: string; legal_clearance_tier: number | null } | null = null;
+    // The dates set when a registration expires (OSE-826): the day after the
+    // event when that is later than 90 days from now.
+    type FormEventRow = {
+      status: string;
+      legal_clearance_tier: number | null;
+      start_date: string | null;
+      end_date: string | null;
+    };
+    let eventRow: FormEventRow | null = null;
     if (env.DB) {
       eventRow = await env.DB.prepare(
-        'SELECT status, legal_clearance_tier FROM events WHERE id = ?'
+        'SELECT status, legal_clearance_tier, start_date, end_date FROM events WHERE id = ?'
       )
         .bind(eventId)
-        .first<{ status: string; legal_clearance_tier: number | null }>();
+        .first<FormEventRow>();
       if (eventRow) {
         const { allowed, reason } = assertRenderable(parseEventState(eventRow.status), 'public');
         if (!allowed) {
@@ -2340,7 +2348,12 @@ export async function route(
 
     switch (formType) {
       case 'register':
-        return handleFormRegistration(request, env, eventId);
+        return handleFormRegistration(
+          request,
+          env,
+          eventId,
+          eventRow?.end_date ?? eventRow?.start_date ?? null
+        );
       case 'checkin':
         return handleFormCheckin(request, env, eventId);
       case 'survey':

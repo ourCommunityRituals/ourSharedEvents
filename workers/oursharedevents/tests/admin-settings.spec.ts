@@ -243,7 +243,7 @@ describe('fixed list: numbers come from the code that enforces them', () => {
     expect(text('retention_registrations')).toContain(`${REGISTRATION_TTL_DAYS} days`);
     // Owner 2026-10-11: counted from registering, and name and email go first.
     expect(text('retention_registrations')).toBe(
-      `A registrant's name and email are cleared the day after the event. The rest is deleted ${REGISTRATION_TTL_DAYS} days after they register.`
+      `A registrant's name and email are cleared the day after the event. The rest is deleted ${REGISTRATION_TTL_DAYS} days after they register, or the day after the event if that is later.`
     );
     expect(text('retention_email')).toContain(`${EMAIL_RETENTION_DAYS} days`);
   });
@@ -254,7 +254,12 @@ describe('fixed list: numbers come from the code that enforces them', () => {
       Object.entries(files).find(([p]) =>
         p.replace(/\\/g, '/').endsWith('src/handlers/forms.ts')
       )?.[1] ?? '';
-    expect(forms).toContain('REGISTRATION_TTL_DAYS');
+    // OSE-826: the registration expiry is registrationExpiresAt, which counts
+    // REGISTRATION_TTL_DAYS in the same file (pinned by registration-expiry.spec.ts).
+    expect(forms).toMatch(
+      /import \{[^}]*\bregistrationExpiresAt\b[^}]*\} from '\.\.\/lib\/retention-windows'/
+    );
+    expect(forms).toContain('registrationExpiresAt(new Date(), eventEnd)');
     expect(forms).toContain('EMAIL_RETENTION_DAYS');
   });
 

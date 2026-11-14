@@ -2676,6 +2676,20 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/registration-expiry-http.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, createExecutionContext, waitOnExecutionContext",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/registration-expiry.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 13
+    },
+    {
       "file": "workers/oursharedevents/tests/registration-self-delete.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
