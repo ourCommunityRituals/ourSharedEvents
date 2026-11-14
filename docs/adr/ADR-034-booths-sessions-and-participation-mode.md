@@ -93,7 +93,12 @@ What this decides:
 - **The order is: scan, then pay.** The fair adopts this as its process and the vendors hold to it.
 - **Required or optional is the fair's choice.** The owner added, the same day: "or optional". So a fair states one of two things: scanning first is required at its stalls, or it is invited and not required. The report says which, because the two numbers do not mean the same thing: under "required" a stall's scans are close to its buyers; under "optional" they are only the visitors who chose to scan.
 
+The owner, the same day, on what makes it happen: "the key is the positioning and script/playbook so they action takes place". So the first means is not software. It is where the code sits on the stall and what the vendor says, written down as a playbook the organizer hands to every vendor. The software below supports that; it does not replace it.
+
 How it is held to, proposed for the owner to accept or change:
+
+- **Positioning.** The code sits where the hand goes before the money does: at the front edge of the table beside the till or card reader, at phone height, one code per stall, with the stall number printed large beside it.
+- **Script.** The vendor says one short line before taking payment, the same line at every stall. The playbook gives the line, what to say when someone declines, and that a sale is never refused over it when scanning is optional.
 
 - **A scan answers with a stamp the vendor can see.** After a stall scan the visitor's phone shows the stall's number and name and the time, for a short while. The vendor glances at it before taking payment. The stamp carries no count, no visitor id and nothing about the sale.
 - **The organizer makes it a condition of the stall.** The process is in the fair's terms for vendors, on the table card, and in what vendors are told on the day. OurSharedEvents can show the stamp; it cannot see whether a vendor looked at it.
