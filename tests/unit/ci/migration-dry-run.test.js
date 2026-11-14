@@ -128,6 +128,22 @@ describe('migration dry run: which files run', () => {
   });
 });
 
+describe('migration dry run: the printed table', () => {
+  // Seen red (2026-11-14): with the backslash escape removed the first case fails.
+  test('a backslash, a pipe or a line break in a value cannot break the table', () => {
+    const md = lib.toMarkdown([{ 'a|b': 'x\\|y', n: 'one\ntwo' }]);
+    const rows = md.split('\n');
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toBe('| a\\|b | n |');
+    expect(rows[2]).toBe('| x\\\\\\|y | one two |');
+  });
+
+  test('no rows and NULL are said in words', () => {
+    expect(lib.toMarkdown([])).toBe('_no rows_');
+    expect(lib.toMarkdown([{ n: null }])).toContain('| NULL |');
+  });
+});
+
 describe('migration dry run: staging only', () => {
   const run = (...args) => spawnSync('node', [SCRIPT, ...args], { encoding: 'utf8' });
 

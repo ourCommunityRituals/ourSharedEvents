@@ -157,9 +157,16 @@ export function bindingOfFile(name) {
 export function toMarkdown(rows) {
   if (!rows || rows.length === 0) return '_no rows_';
   const cols = Object.keys(rows[0]);
-  const cell = (v) => String(v ?? 'NULL').replace(/\|/g, '\\|');
+  // A value is data from the database: a backslash, a pipe or a line break in
+  // it must not end the cell or the row. The backslash goes first, so the
+  // escapes added after it are not escaped again.
+  const cell = (v) =>
+    String(v ?? 'NULL')
+      .replace(/\\/g, '\\\\')
+      .replace(/\|/g, '\\|')
+      .replace(/\r?\n/g, ' ');
   return [
-    `| ${cols.join(' | ')} |`,
+    `| ${cols.map(cell).join(' | ')} |`,
     `| ${cols.map(() => '---').join(' | ')} |`,
     ...rows.map((r) => `| ${cols.map((c) => cell(r[c])).join(' | ')} |`),
   ].join('\n');
