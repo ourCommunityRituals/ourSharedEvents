@@ -1,0 +1,21 @@
+info:
+  name: Booths (OSE-1998)
+  type: folder
+request: {}
+docs: |-
+  A booth is part of a fair (OSE-1998, OSE ADR-034 decision 1). An admin adds a
+  fair's booths one at a time or in bulk, changes one, and takes one out of use.
+  A booth holds a number, a trading name, an optional category and an optional
+  spot on the hall plan, and never a person (ADR-034 decision 5). A poster
+  placement may point at a booth in use of its own event (`booth_id`).
+
+  No fixture. The folder makes its own two synthetic, unlisted draft events
+  (seq 10 and 11), works on them, and deletes them at the end (seq 900 and
+  910). An event with no scans hard-deletes with its booths and placements, so
+  a run leaves nothing behind. If a run stops half way, the next run makes new
+  events; the leftovers are synthetic drafts that the daily staging rebuild
+  clears.
+
+  The requests run in `seq` order.
+
+  Mock-layer twin: workers/oursharedevents/tests/event-booths.spec.ts.

@@ -1,0 +1,36 @@
+info:
+  name: OSE-1998 | rainy | bulk | a number already used in the fair refuses the list
+  type: http
+  seq: 71
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/booths/bulk"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"booths\": [{\"number\": \"E1\", \"name\": \"New\"}, {\"number\": \"d2\", \"name\": \"Clash\"}]}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 bulk clash: 409 BOOTHS_REFUSED naming row 1', function () {
+          expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('BOOTHS_REFUSED');
+          expect((b.failed || []).map(function (f) { return [f.index, f.code]; })).to.eql([[1, 'DUPLICATE_NUMBER']]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

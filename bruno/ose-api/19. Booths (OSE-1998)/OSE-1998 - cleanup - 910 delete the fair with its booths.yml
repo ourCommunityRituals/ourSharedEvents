@@ -1,0 +1,27 @@
+info:
+  name: OSE-1998 | cleanup | the fair is deleted with its booths and placement (no scans)
+  type: http
+  seq: 910
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-1998 cleanup: 200, the cascade cleared the booths', function () { expect(res.getStatus()).to.eql(200); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

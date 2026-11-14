@@ -1,0 +1,34 @@
+info:
+  name: OSE-1998 | sunny | placement | a poster placement on a booth of its own event
+  type: http
+  seq: 100
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/poster-deployments"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"placement_label\":\"Table card A12\",\"booth_id\":\"{{boothId}}\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 placement: 201 with the booth', function () { expect(res.getStatus()).to.eql(201); expect(b.booth_id).to.eql(bru.getVar('boothId')); });
+        bru.setVar('boothPlacementId', b.id || 'missing-placement');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

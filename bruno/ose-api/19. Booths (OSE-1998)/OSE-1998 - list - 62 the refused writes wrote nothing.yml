@@ -1,0 +1,28 @@
+info:
+  name: OSE-1998 | rainy | list | after the refused writes the fair still has one booth
+  type: http
+  seq: 62
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/booths"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 refused writes: one booth, A12', function () { expect(res.getStatus()).to.eql(200); expect((b.booths || []).map(function (x) { return x.number; })).to.eql(['A12']); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

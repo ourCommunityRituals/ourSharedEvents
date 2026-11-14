@@ -1,0 +1,30 @@
+info:
+  name: OSE-1998 | sunny | delete | the booth goes out of use and keeps its placement
+  type: http
+  seq: 130
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/booths/{{boothId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 delete: 200, out of use, one placement kept', function () {
+          expect(res.getStatus()).to.eql(200); expect(b.booth.is_active).to.eql(false); expect(b.placements_kept).to.eql(1);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

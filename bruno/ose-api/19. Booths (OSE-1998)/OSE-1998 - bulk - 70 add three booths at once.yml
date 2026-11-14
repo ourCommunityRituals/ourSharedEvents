@@ -1,0 +1,34 @@
+info:
+  name: OSE-1998 | sunny | bulk | three booths in one list
+  type: http
+  seq: 70
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/booths/bulk"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"booths\": [{\"number\": \"D1\", \"name\": \"Print Stall\", \"category\": \"art\", \"sort\": 2}, {\"number\": \"D2\", \"name\": \"Book Swap\", \"category\": \"books\", \"sort\": 1}, {\"number\": \"D3\", \"name\": \"Soup Kitchen\", \"category\": \"community\", \"sort\": 3}]}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 bulk: 201, three created', function () { expect(res.getStatus()).to.eql(201); expect(b.created).to.eql(3); expect((b.booths || []).length).to.eql(3); });
+        test('OSE-1998: the answer holds nothing person-shaped', function () { expect(JSON.stringify(b)).to.not.match(/"(email|phone|contact|contact_name|owner_name|notes?|anon_id|anonymous_id|ip|user_agent|attendees)":/); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
