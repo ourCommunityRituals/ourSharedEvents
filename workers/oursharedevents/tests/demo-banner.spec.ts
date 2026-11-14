@@ -43,6 +43,23 @@ describe('OSE-1012: banner markup', () => {
   });
 });
 
+// OSE-2031: the demo bar sits on the accent, so its text takes the accent's own
+// on-colour. With plain white it read at 2.86:1 on the dark theme's lighter
+// accent (axe color-contrast, serious). The degraded bar keeps its fixed slate
+// and white, which pass in both themes.
+describe('OSE-2031: the banner text colour pairs with its background', () => {
+  it('the demo bar uses the accent and its on-colour', () => {
+    const html = demoBannerMarkup();
+    expect(html).toContain('background:var(--accent,#b45309);color:var(--on-accent,#fff);');
+  });
+
+  it('the degraded bar keeps slate and white', () => {
+    const html = degradedBannerMarkup();
+    expect(html).toContain('background:#334155;color:#fff;');
+    expect(html).not.toContain('--on-accent');
+  });
+});
+
 describe('OSE-1012: injectDemoBanner', () => {
   it('inserts the banner immediately after the opening <body> tag', () => {
     const out = injectDemoBanner('<html><body><main>x</main></body></html>', true);

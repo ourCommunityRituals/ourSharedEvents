@@ -121,9 +121,9 @@ const SECTION_LABELS: Record<string, string> = {
 // ── Scoped demo styling — role tokens only, no hardcoded palette ─────────────────
 
 const DEMO_STYLE = `<style>
-  .demo-wrap { max-width: 960px; margin: 0 auto; padding: 1rem; }
+  .demo-wrap { max-width: 960px; margin: 0 auto; padding: 1rem; overflow-wrap: anywhere; }
   .demo-hero { padding: 1.5rem 0 0.5rem; }
-  .demo-hero h2 { margin: 0 0 0.25rem; }
+  .demo-hero h1 { margin: 0 0 0.25rem; }
   .demo-lede { color: var(--text-muted); font-size: 1.05rem; margin: 0 0 1rem; }
   .demo-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 1.5rem; }
   .demo-tab {
@@ -134,7 +134,7 @@ const DEMO_STYLE = `<style>
   .demo-tab[aria-current="page"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
   .demo-tab:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .demo-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
-  .demo-card {
+  .demo-card, .stat-card {
     border: 1px solid var(--border); border-radius: 0.75rem; padding: 1rem;
     background: var(--surface);
   }
@@ -146,7 +146,7 @@ const DEMO_STYLE = `<style>
     background: var(--accent); color: var(--bg); font-weight: 700; margin-right: 0.5rem;
   }
   .demo-section { margin: 2rem 0; }
-  .demo-section > h3 { border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+  .demo-section > h2 { border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
   .flag-list { list-style: none; padding: 0; margin: 0; display: grid;
     gap: 0.35rem 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
   .flag-list li { display: flex; align-items: center; justify-content: space-between;
@@ -154,20 +154,19 @@ const DEMO_STYLE = `<style>
   .flag-on { color: var(--live); font-weight: 700; }
   .flag-off { color: var(--text-muted); }
   .stat-row { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  .stat-card { border: 1px solid var(--border); border-radius: 0.75rem; padding: 1rem; background: var(--surface); }
   .stat-num { font-size: 1.8rem; font-weight: 800; }
   .stat-label { color: var(--text-muted); font-size: 0.85rem; }
-  .depth-locked { opacity: 0.55; }
+  .depth-locked { border-style: dashed; }
   .depth-badge { font-size: 0.7rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px;
-    background: var(--border); color: var(--text-muted); margin-left: 0.4rem; }
+    background: var(--border); color: var(--text); margin-left: 0.4rem; }
   .roster-tier { margin: 0.75rem 0; }
   .roster-tier h4 { margin: 0 0 0.35rem; text-transform: capitalize; }
   .roster-tier ul { margin: 0; padding-left: 1.1rem; color: var(--text-muted); }
   .camp-title { font-weight: 700; margin: 0.6rem 0 0.2rem; font-size: 0.9rem; }
   .camp-list { margin: 0 0 0.25rem; padding-left: 1.1rem; color: var(--text-muted); font-size: 0.88rem; }
   .season-list { list-style: none; margin: 0; padding: 0; }
-  .season-list li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
-  .season-list li span:last-child { color: var(--text-muted); white-space: nowrap; }
+  .season-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
+  .season-list li span:last-child { color: var(--text-muted); }
   .fallback-note { margin-top: 0.6rem; padding: 0.6rem 0.85rem; border-left: 3px solid var(--text-muted); background: var(--surface); border-radius: 0 0.4rem 0.4rem 0; color: var(--text-muted); font-size: 0.85rem; }
   .demo-note { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem; }
   .ladder { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
@@ -279,7 +278,7 @@ function fourFlowLoop(activeTier: DemoTier | null): string {
     )
     .join('');
   return `<section class="demo-section" aria-labelledby="loop-h">
-    <h3 id="loop-h">The four-flow loop</h3>
+    <h2 id="loop-h">The four-flow loop</h2>
     <div class="demo-grid">${cards}</div>
     <p class="demo-note">These surfaces render the demo dataset when the worker runs with mock mode on
     (<code>MOCK_MODE=1</code> on <code>wrangler dev</code>). Sponsor → Create → Attend → Report — the whole
@@ -294,7 +293,7 @@ function fourFlowLoop(activeTier: DemoTier | null): string {
  */
 function tierLadder(): string {
   return `<section class="demo-section" aria-labelledby="ladder-h">
-    <h3 id="ladder-h">One platform, three depths</h3>
+    <h2 id="ladder-h">One platform, three depths</h2>
     <table class="ladder">
       <caption>Everyone gets a real SharedReport. Paid unlocks the map; Premium reaches furthest — floored so no one is excluded.</caption>
       <thead>
@@ -342,7 +341,7 @@ function linkRegistry(): string {
       )}: ${esc(l.description)}</li>`
   ).join('');
   return `<section class="demo-section" aria-labelledby="registry-h">
-    <h3 id="registry-h">Canonical link registry <span class="depth-badge">v${esc(DEMO_REGISTRY_VERSION)}</span></h3>
+    <h2 id="registry-h">Canonical link registry <span class="depth-badge">v${esc(DEMO_REGISTRY_VERSION)}</span></h2>
     <p class="demo-note">The one address book. Every outward reference points here, and the CI gate
     (OSE-609) checks these exact paths — one list, never two. Slugs are permanent (Invariant #18 spirit).</p>
     <ul>${rows}</ul>
@@ -358,20 +357,20 @@ export function handleDemoIndex(): Response {
       return `<div class="demo-card">
       <h3>${esc(cfg.label)}</h3>
       <p>${esc(cfg.tagline)}</p>
-      <a class="demo-tab" href="${escUrl(link.path)}" aria-label="Open the ${esc(cfg.label)} demo site">Enter →</a>
+      <a class="demo-tab" href="${escUrl(link.path)}" aria-label="Enter the ${esc(cfg.label)} demo site">Enter →</a>
     </div>`;
     })
     .join('');
 
   const body = `
   <section class="demo-hero">
-    <h2>The demo site</h2>
+    <h1>The demo site</h1>
     <p class="demo-lede">Same night, same numbers — three depths. Tab between them.</p>
   </section>
   ${tierTabs(null)}
   ${tierLadder()}
   <section class="demo-section" aria-labelledby="trio-h">
-    <h3 id="trio-h">Three standing sites, one dataset</h3>
+    <h2 id="trio-h">Three standing sites, one dataset</h2>
     <div class="demo-grid">${cards}</div>
     <p class="demo-note">The differences you see between the three are the platform's real feature flags
     rendering at three tier configurations — one platform being configured, not three versions.
@@ -394,7 +393,7 @@ function flagPanel(flagTier: FlagTier): string {
     })
     .join('');
   return `<section class="demo-section" aria-labelledby="flags-h">
-    <h3 id="flags-h">Configuration driving this render</h3>
+    <h2 id="flags-h">Configuration driving this render</h2>
     <p class="demo-note">Read-only. This is the live flag set for this tier — the same
     <code>/api/v2/admin/flags</code> machinery, not a hardcoded list.</p>
     <ul class="flag-list">${items}</ul>
@@ -418,7 +417,7 @@ function depthExhibit(depth: ReportDepth): string {
   const has = (section: string) => allowed.has(section);
 
   // Stat cards, each tagged with the depth that unlocks it. Locked cards render
-  // dimmed with the tier that would reveal them — the upgrade hint, visible.
+  // outlined with a dashed border and the tier that would reveal them — the upgrade hint, visible.
   const cards: string[] = [];
 
   // local depth (always present)
@@ -489,9 +488,9 @@ function depthExhibit(depth: ReportDepth): string {
     .join('');
 
   return `<section class="demo-section" aria-labelledby="depth-h">
-    <h3 id="depth-h">What this depth shows</h3>
+    <h2 id="depth-h">What this depth shows</h2>
     <p class="demo-note">Same materialized signal underneath (avg survey rating ${avgRating.toFixed(1)}★
-    across ${surveys.length} responses). Dimmed cards are sections a deeper tier unlocks —
+    across ${surveys.length} responses). Dashed cards are sections a deeper tier unlocks —
     the numbers already exist; the tier decides what renders.</p>
     <div class="stat-row">${cards.join('')}</div>
     <p class="demo-note">Sections at this depth: <span>${sectionList ? '' : 'headcount + own logo only'}</span></p>
@@ -550,7 +549,7 @@ function sponsorRoster(): string {
     .join('');
 
   return `<section class="demo-section" aria-labelledby="roster-h">
-    <h3 id="roster-h">Sponsors — by campaign, grouped by tier</h3>
+    <h2 id="roster-h">Sponsors — by campaign, grouped by tier</h2>
     <p class="demo-note">The 15-minute script's opening view: the RIPH property's sponsors grouped by
     campaign within each tier class. Premium renders as a class (two campaigns), not a lone example.</p>
     <div class="demo-grid">${groups}</div>
@@ -586,7 +585,7 @@ function seasonSection(): string {
     : '';
 
   return `<section class="demo-section" aria-labelledby="season-h">
-    <h3 id="season-h">The RIPH season — four recurring containers</h3>
+    <h2 id="season-h">The RIPH season — four recurring containers</h2>
     <p class="demo-note">One venue, four recurring containers (trivia · bocce · pinball · cigar social club)
     across a mock season — consolidated so a sponsor's reach rolls up ACROSS them. Headcounts vary and
     climb, so the ladder shows real states — not a flat demo.</p>
@@ -599,7 +598,7 @@ export function handleDemoSite(tier: string): Response {
   const cfg = DEMO_TIERS[tier as DemoTier];
   if (!cfg) {
     const body = `<section class="demo-hero">
-      <h2>No such demo site</h2>
+      <h1>No such demo site</h1>
       <p class="demo-lede">Try one of the three standing sites.</p>
     </section>${tierTabs(null)}`;
     return demoHtml(body, 404);
@@ -607,7 +606,7 @@ export function handleDemoSite(tier: string): Response {
 
   const body = `
   <section class="demo-hero">
-    <h2>Demo — ${esc(cfg.label)}</h2>
+    <h1>Demo — ${esc(cfg.label)}</h1>
     <p class="demo-lede">${esc(cfg.tagline)}</p>
     <p class="demo-note">Venue: ${esc(RIPH_VENUE_NAME)} · one property, four recurring containers</p>
   </section>
