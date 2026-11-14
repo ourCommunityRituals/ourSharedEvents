@@ -1,0 +1,55 @@
+info:
+  name: OSE-1896 | taps after | unchanged by reading the zoomed pages
+  type: http
+  seq: 11
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/map-zoom-a/pre-event-activity"
+  headers:
+    - name: X-OCR-Internal
+      value: "{{ocrInternalSecret}}"
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The "after" read (see "taps before", the first request of this folder).
+        // Between the two, this folder read /?area= eight times. A map page that
+        // counted a tap, or resolved a /s/ code while rendering, would move this.
+        // Share opens have no HTTP read; CI reads them, and the taps again, from D1
+        // right after this collection (scripts/ci/map-counts-check.mjs).
+        const json = res.getBody();
+        const clicks = json && json.activity ? json.activity.clicks : null;
+        const before = bru.getVar('mapZoomTapsBefore');
+
+        test('The admin read answers 200 with JSON (it reached the Worker)', function () {
+          expect(res.getStatus()).to.equal(200);
+          expect(String(res.getHeader('Content-Type') || '')).to.include('application/json');
+          expect(json.ok).to.equal(true);
+        });
+
+        test('The "before" read ran in this run', function () {
+          expect(before).to.be.a('number');
+        });
+
+        test('Taps on map-zoom-a are unchanged after reading the zoomed pages', function () {
+          expect(clicks.suppressed).to.equal(false);
+          expect(clicks.count).to.equal(before);
+        });
+
+        test('Taps on map-zoom-a are still the seeded 42', function () {
+          expect(clicks.count).to.equal(42);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

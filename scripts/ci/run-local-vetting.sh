@@ -4,6 +4,9 @@
 #
 #   T2  Bruno API contract + pages        (bruno/ose-api, bruno/ose-pages)
 #   T3  Playwright smoke: security, iac, forms
+#   T4k Playwright: the zoomed landing map, its place panels and links (the one T4
+#       slice that needs only a local worker and its fixture), then a D1 read
+#       that using the map moved no count (scripts/ci/map-counts-check.mjs)
 #
 # Runs every section even when an earlier one fails, so one run names every red
 # section. Exits non-zero if any section failed OR proved nothing (zero tests ran:
@@ -88,18 +91,23 @@ seed bruno/fixtures/campaigns-seed.sql
 # Read by the Pages collection's landing ?zip=60655 / ?zip=60453 requests. On
 # staging a later step unpublishes it again; this local D1 is thrown away.
 seed bruno/fixtures/landing-zip-own-area-seed.sql
+# The zoomed landing map (epic OSE-1880): read by the Pages folder "16. Landing Map
+# Zoom" and by the T4k map specs below. Sets known tap and share-open counts.
+seed bruno/fixtures/map-zoom-area-seed.sql
 echo "::endgroup::"
 
 # ── T3: Playwright smoke ─────────────────────────────────────────────────────
 # Counts come from Playwright's JSON report so a section that ran nothing is red.
-pw_section() { # name config specs...
+pw_section() { # name config specs...   (PW_TIER names the tier; default T3)
   local name="$1" config="$2"; shift 2
-  local json="$RESULTS/local-t3-${name}.json"
-  echo "::group::T3 ${name}"
+  local tier="${PW_TIER:-T3}"
+  local slug; slug="$(printf '%s' "$tier" | tr 'A-Z' 'a-z')"
+  local json="$RESULTS/local-${slug}-${name}.json"
+  echo "::group::${tier} ${name}"
   (cd "$ROOT" && BASE_URL="$BASE" ADMIN_KEY="$ADMIN_KEY_LOCAL" TEST_ENV=staging \
-     PLAYWRIGHT_JSON_OUTPUT_NAME="$json" npx playwright test --config="$config" --reporter=line,json "$@") >"$PERSIST_DIR/t3-${name}.log" 2>&1
+     PLAYWRIGHT_JSON_OUTPUT_NAME="$json" npx playwright test --config="$config" --reporter=line,json "$@") >"$PERSIST_DIR/${slug}-${name}.log" 2>&1
   local rc=$?
-  tail -15 "$PERSIST_DIR/t3-${name}.log"
+  tail -15 "$PERSIST_DIR/${slug}-${name}.log"
   echo "::endgroup::"
   local counts
   counts=$(node -e '
@@ -107,9 +115,9 @@ pw_section() { # name config specs...
     console.log([r.expected||0,r.unexpected||0,r.skipped||0,r.flaky||0].join(" "));' "$json" 2>/dev/null || echo "0 0 0 0")
   set -- $counts
   local passed=$1 failed=$2 skipped=$3 flaky=$4
-  if [ "$rc" -ne 0 ]; then record "T3 ${name}" "failed" "${passed} passed, ${failed} failed, ${skipped} skipped"
-  elif [ "$passed" -eq 0 ]; then record "T3 ${name}" "vacuous" "0 tests ran; a gate that cannot fail is not green"
-  else record "T3 ${name}" "passed" "${passed} passed, ${skipped} skipped, ${flaky} flaky"; fi
+  if [ "$rc" -ne 0 ]; then record "${tier} ${name}" "failed" "${passed} passed, ${failed} failed, ${skipped} skipped"
+  elif [ "$passed" -eq 0 ]; then record "${tier} ${name}" "vacuous" "0 tests ran; a gate that cannot fail is not green"
+  else record "${tier} ${name}" "passed" "${passed} passed, ${skipped} skipped, ${flaky} flaky"; fi
 }
 # Sections come from scripts/ci/t3-sections.json, the same list the staging T3 runs.
 while IFS=$'	' read -r t3name t3config t3specs; do
@@ -119,6 +127,15 @@ while IFS=$'	' read -r t3name t3config t3specs; do
   # shellcheck disable=SC2086
   pw_section "$t3name" "$t3config" $t3specs
 done < <(node "$ROOT/scripts/ci/run-t3.mjs" --tsv)
+
+# ── T4k: the zoomed landing map ──────────────────────────────────────────────
+# The same two specs the staging step "T4k: Map Zoom, Place Panel and Map Links"
+# names (tests/unit/ci/map-counts-check.test.js keeps the two lists equal). Here they
+# run on this branch's code before merge. A local worker has no street tiles in its
+# bucket, which is staging's state too: the zoom is the place list and the panels.
+PW_TIER=T4k pw_section map-zoom playwright.e2e-smoke.config.ts \
+  tests/e2e/3-flows/map-place-panel.spec.ts \
+  tests/e2e/2-pages/map-place-panel-layout.spec.ts
 
 # ── T2: Bruno ────────────────────────────────────────────────────────────────
 # `bru run` prints "Tests 0/0" for these scripts, so the JUnit file is the only honest
@@ -148,6 +165,19 @@ bru_section() { # name collection-dir
 }
 bru_section api bruno/ose-api
 bru_section pages bruno/ose-pages
+
+# ── Map counts (OSE-1896) ────────────────────────────────────────────────────
+# After the map specs followed every link and the Pages folder read the zoomed
+# pages: taps, share opens and scans of the seeded events, read from the local D1,
+# must still be what bruno/fixtures/map-zoom-area-seed.sql set.
+echo "::group::Map counts unchanged"
+(cd "$ROOT/workers/oursharedevents" &&
+  node ../../scripts/ci/map-counts-check.mjs --local --persist-to "$PERSIST_DIR") >"$PERSIST_DIR/map-counts.log" 2>&1
+MAP_COUNTS_RC=$?
+tail -6 "$PERSIST_DIR/map-counts.log"
+echo "::endgroup::"
+if [ "$MAP_COUNTS_RC" -eq 0 ]; then record "Map counts (D1)" "passed" "taps, share opens and scans unchanged"
+else record "Map counts (D1)" "failed" "a count moved, or the read failed (see log above)"; fi
 
 # ── Report ───────────────────────────────────────────────────────────────────
 {

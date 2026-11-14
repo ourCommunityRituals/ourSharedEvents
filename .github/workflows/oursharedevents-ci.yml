@@ -1619,6 +1619,21 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/landing-zip-own-area-seed.sql
 
+      # Epic OSE-1880 (hyperlocal map): ten synthetic events in one area the stock
+      # data does not use, at three places, with poster codes, share codes and known
+      # tap and share-open counts. Read by the Pages folder "16. Landing Map Zoom"
+      # (/?area=<cell>). Upserts by id and code; counts are reset to the seeded
+      # numbers on every run. NOT continue-on-error: a missing fixture fails here.
+      - name: 'Seed map zoom area fixture (OSE-1880)'
+        if: matrix.section == 'pages'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/map-zoom-area-seed.sql
+
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
       # from the collection root, so each step sets working-directory. Secrets are
@@ -1666,6 +1681,32 @@ jobs:
             --env-var "ciBrandClientSecret=$CF_ACCESS_CI_BRAND_CLIENT_SECRET" \
             --reporter-junit "$GITHUB_WORKSPACE/.test-results/${{ matrix.junit }}"
         timeout-minutes: 5
+
+      # OSE-1896: a map tap is never counted. The Pages run above read /?area=<cell>
+      # many times; taps, share opens and scans of the seeded events must still be
+      # the seeded numbers. Read straight from D1 (share opens have no HTTP read).
+      # Runs only when the run above passed, so a red here is a count that moved.
+      - name: 'Map counts unchanged after the Pages run (OSE-1896)'
+        if: matrix.section == 'pages'
+        timeout-minutes: 3
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: node ../../scripts/ci/map-counts-check.mjs
+
+      # The map zoom fixture is published only for the run above: staging is one
+      # site with stock data (owner 2026-11-06), so take its ten events off again,
+      # pass or fail. A failed reset fails the job by name.
+      - name: 'Unpublish map zoom area fixture'
+        if: always() && matrix.section == 'pages'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/map-zoom-area-reset.sql
 
       # The landing zip own-area fixture is published only for the run above:
       # Mount Greenwood (60655) is the seed's deliberately empty place on stg (owner
@@ -2475,6 +2516,70 @@ jobs:
             tests/e2e/3-flows/sponsor-thumbnails.spec.ts
         timeout-minutes: 6
 
+      # Epic OSE-1880 (hyperlocal map), the staging layer of OSE-1886, OSE-1891 and
+      # OSE-1896. The fixture is applied HERE, right before the specs that read it,
+      # and unpublished right after them (staging is one site with stock data, owner
+      # 2026-11-06). The same file the T2 Pages leg seeds; T2 has finished by now.
+      - name: 'T4k-seed: map zoom area fixture (OSE-1880)'
+        if: matrix.section == 'surfaces'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/map-zoom-area-seed.sql
+
+      # A real browser on the zoomed landing map: a place row opens only its panel,
+      # Prev / Next / Back, a shared #amap-dot-N link, the keyboard, the When pills,
+      # Share (share sheet and copy), scripts off, axe in both themes, and that
+      # following every map link moves no tap total. map-place-panel.spec.ts runs on
+      # the one `e2e-smoke` project; map-place-panel-layout.spec.ts (the button grid)
+      # runs on one project per device profile: map-phone, map-tablet, map-desktop,
+      # map-tv. About 3 runner-minutes.
+      - name: 'T4k: Map Zoom, Place Panel and Map Links'
+        if: matrix.section == 'surfaces'
+        id: map-place-panel
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # The specs never skip: a missing fixture or credential throws by name.
+          PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
+        run: |
+          PW_LABEL='T4k: Map Zoom, Place Panel and Map Links' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/3-flows/map-place-panel.spec.ts \
+            tests/e2e/2-pages/map-place-panel-layout.spec.ts
+        timeout-minutes: 10
+
+      # OSE-1896: after every map link was followed and every Share pressed, taps,
+      # share opens and scans of the seeded events must still be the seeded numbers,
+      # read straight from D1. Runs only when T4k passed.
+      - name: 'T4k-check: map counts unchanged (OSE-1896)'
+        if: matrix.section == 'surfaces'
+        timeout-minutes: 3
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: node ../../scripts/ci/map-counts-check.mjs
+
+      # Pass or fail, take the ten fixture events off the public lists again. An
+      # UPDATE by fixed id, so it is harmless when the seed never ran; a failed
+      # reset fails the job by name.
+      - name: 'T4k-reset: unpublish the map zoom area fixture'
+        if: always() && matrix.section == 'surfaces'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/map-zoom-area-reset.sql
+
       # OSE-1470: the T4 suites send CF Access / admin credentials and mint a
       # CF_Authorization cookie. Refuse to upload anything that recorded one.
       # Prints only the file + pattern name; the upload runs only if this passes.
@@ -2535,6 +2640,7 @@ jobs:
           echo "| T4h Poster Print Layout | \`${{ steps.poster-print-layout.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4i Language Path Prefix | \`${{ steps.language-path-prefix.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4j Sponsor Thumbnails | \`${{ steps.sponsor-thumbnails.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4k Map Zoom, Place Panel and Map Links | \`${{ steps.map-place-panel.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
       # ── OSE-1171: per-gate NAMED CHECKS ──────────────────────────────────────────
       # Each leg publishes a check-run for the gates IT ran, so a red names its own
@@ -2582,6 +2688,7 @@ jobs:
               post "T4h: Poster Print Layout"                         "${{ steps.poster-print-layout.outcome }}"
               post "T4i: Language Path Prefix"                        "${{ steps.language-path-prefix.outcome }}"
               post "T4j: Sponsor Thumbnails"                          "${{ steps.sponsor-thumbnails.outcome }}"
+              post "T4k: Map Zoom, Place Panel and Map Links"         "${{ steps.map-place-panel.outcome }}"
               ;;
           esac
       # ── S2 Post-execution integrity — the tamper tripwire, IN THE SAME VM that ran

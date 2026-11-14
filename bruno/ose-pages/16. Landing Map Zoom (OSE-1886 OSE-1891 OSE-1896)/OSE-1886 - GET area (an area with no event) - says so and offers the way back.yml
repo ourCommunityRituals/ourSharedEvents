@@ -1,0 +1,47 @@
+info:
+  name: OSE-1886 | GET /?area=87274a18bffffff (an area with no event) | says so and offers the way back
+  type: http
+  seq: 10
+
+http:
+  method: GET
+  url: "{{baseUrl}}/?area=87274a18bffffff"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Rainy (OSE-1886): a real res-7 cell that holds no event (open water in
+        // Lake Michigan, 42.6,-87.0). The page says nothing is coming up there and
+        // offers the way back; it draws no map, no list and no panel.
+        const body = String(res.getBody());
+
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        test('Says the area has nothing coming up (amap-zoom-empty)', function () {
+          expect(body).to.include('data-testid="amap-zoom-empty"');
+        });
+
+        test('Offers the way back to all areas', function () {
+          expect(body).to.match(/<a class="amap-back" href="\/(?:[a-z]{2}\/)?" data-testid="amap-back">/);
+        });
+
+        test('Draws no zoomed map, no place list and no panel', function () {
+          expect(body).to.not.include('data-zoom=');
+          expect(body).to.not.include('data-testid="amap-legend-dot"');
+          expect(body).to.not.include('data-testid="amap-panel"');
+        });
+
+        test('Exactly one h1', function () {
+          expect((body.match(/<h1[\s>]/g) || []).length).to.equal(1);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
