@@ -377,6 +377,40 @@ describe('OSE-2013 brand calendar feed: links and people', () => {
   });
 });
 
+describe('OSE-2045 the event page offers the feed it is in', () => {
+  test('a listed event page links to its brand feed, and that link answers with this event', async () => {
+    const page = await SELF.fetch(`${ORIGIN}/events/evt_2013_a_first`);
+    expect(page.status).toBe(200);
+    expect(page.headers.get('Set-Cookie')).toBeNull();
+    const html = await page.text();
+    const href = /data-testid="subscribe-calendar-ics" href="([^"]+)"/.exec(html)?.[1];
+    expect(href).toBe(feedUrl(BRAND));
+    // The link is live: it is the feed, and this event is in it.
+    const feed = await SELF.fetch(href as string);
+    expect(feed.status).toBe(200);
+    expect(feed.headers.get('Content-Type')).toContain('text/calendar');
+    expect(unfold(await feed.text())).toContain(
+      'UID:ose-event-evt_2013_a_first@oursharedevents.com'
+    );
+    // Online calendars first, then Apple, then the address.
+    const order = [
+      ...html.matchAll(/data-testid="(subscribe-calendar-(?:google|outlook|apple|ics))"/g),
+    ].map((m) => m[1]);
+    expect(order).toEqual([
+      'subscribe-calendar-google',
+      'subscribe-calendar-outlook',
+      'subscribe-calendar-apple',
+      'subscribe-calendar-ics',
+    ]);
+  });
+
+  test('an event that opens by link only offers no feed', async () => {
+    const page = await SELF.fetch(`${ORIGIN}/events/evt_2013_a_offmap`);
+    expect(page.status).toBe(200);
+    expect(await page.text()).not.toContain('subscribe-calendar');
+  });
+});
+
 describe('OSE-2013 brand calendar feed: refusals', () => {
   test('an unknown brand is a 404', async () => {
     const res = await SELF.fetch(feedUrl('ose2013-no-such-brand'));

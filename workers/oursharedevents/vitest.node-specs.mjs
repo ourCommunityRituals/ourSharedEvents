@@ -175,6 +175,8 @@ export const NODE_SPECS = [
   // and the <details> menu render over renderPre/LiveEventHtml. No cloudflare:test.
   'tests/calendar-links.spec.ts',
   'tests/calendar-action.spec.ts',
+  // OSE-2045 — the Subscribe menu beside it: same render seam, no runtime.
+  'tests/subscribe-calendar-menu.spec.ts',
   // OSE-1760 — golden renders of the three phase pages in English and Spanish:
   // the language layer must change no byte. Pure over the exported renderers.
   'tests/language-layer-golden.spec.ts',

@@ -188,6 +188,25 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
           `[data-testid="add-to-calendar-ics"][href="/events/${publicEventId}/calendar.ics"]`
         )
       ).toBeVisible();
+      // OSE-2045: a listed event also offers its brand's feed, online
+      // calendars first, then Apple, then the .ics address.
+      await page.locator('[data-testid="subscribe-calendar-summary"]').click();
+      const subscribeOptions = page.locator(
+        '[data-testid="subscribe-calendar"] a[data-testid^="subscribe-calendar-"]'
+      );
+      await expect(subscribeOptions).toHaveCount(4);
+      expect(
+        await subscribeOptions.evaluateAll((els) => els.map((el) => el.getAttribute('data-testid')))
+      ).toEqual([
+        'subscribe-calendar-google',
+        'subscribe-calendar-outlook',
+        'subscribe-calendar-apple',
+        'subscribe-calendar-ics',
+      ]);
+      await expect(page.locator('[data-testid="subscribe-calendar-ics"]')).toHaveAttribute(
+        'href',
+        `${BASE_URL}/brands/root/calendar.ics`
+      );
     }
   });
 
