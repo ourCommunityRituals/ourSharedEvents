@@ -1,0 +1,41 @@
+info:
+  name: OSE-2014 | sunny | promote | declare on an online event; its two earlier tries join
+  type: http
+  seq: 60
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-anchor-evt/series"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"name":"The daily room","cadence":"weekly","day_of_week":1,"hour_of_day":17,"event_ids":["series-ci-try1-evt","series-ci-try2-evt"]}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2014 sunny: promote: 201', function () { expect(res.getStatus()).to.eql(201); expect(b.ok).to.eql(true); });
+        test('OSE-2014 sunny: promote: the declared series is confirmed at once, anchored on the event', function () {
+          expect(b.series.state).to.eql('confirmed'); expect(b.series.origin).to.eql('declared');
+          expect(b.series.anchor_event_id).to.eql('series-ci-anchor-evt'); expect(b.series.cadence).to.eql('weekly');
+          expect(b.series.day_of_week).to.eql(1); expect(b.series.hour_of_day).to.eql(17);
+        });
+        test('OSE-2014 sunny: promote: the anchor and both tries joined', function () { expect((b.attached || []).slice().sort()).to.eql(['series-ci-anchor-evt', 'series-ci-try1-evt', 'series-ci-try2-evt']); });
+        test('OSE-2014 sunny: promote: the answer holds nothing person-shaped', function () { expect(JSON.stringify(b)).to.not.match(/"(anon_id_hash|anonymous_id|anon_id|ip|ip_hash|user_agent|session_id|device_id|fingerprint|email|phone|attendees|lat|lon)":/); });
+        bru.setVar('declaredSeriesId', (b.series || {}).id || '');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

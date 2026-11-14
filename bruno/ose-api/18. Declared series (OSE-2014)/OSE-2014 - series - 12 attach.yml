@@ -1,0 +1,32 @@
+info:
+  name: OSE-2014 | sunny | attach | attach puts it back
+  type: http
+  seq: 120
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-try2-evt/series"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"series_id":"{{declaredSeriesId}}"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2014 sunny: attach: 200, and it names the event', function () { expect(res.getStatus()).to.eql(200); expect(res.getBody().attached).to.eql(['series-ci-try2-evt']); expect(res.getBody().series.id).to.eql(bru.getVar('declaredSeriesId')); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
