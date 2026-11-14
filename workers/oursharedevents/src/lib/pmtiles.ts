@@ -65,8 +65,9 @@ export const MAX_DIRECTORY_BYTES = 2_097_152;
 /**
  * One tile unpacked. A frame reads at most 12 tiles (lib/street-map.ts,
  * MAX_TILES) and unpacks them together, so a frame holds at most 48 MiB of
- * tiles. The measured frames unpacked from 0.41 MB to 0.77 MB stored, all tiles
- * together.
+ * tiles. Measured on build 20261109 (2026-11-10): a first map read 0.41 MB to
+ * 0.77 MB as stored, header, leaf directory and every tile of the frame
+ * together. What those tiles unpacked to was not recorded.
  */
 export const MAX_TILE_UNPACKED_BYTES = 4_194_304;
 

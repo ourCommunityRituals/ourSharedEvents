@@ -170,6 +170,12 @@ streets of the tiles the file has.
    - every leaf directory can be read, the entries counted match the header, no
      tile points past the tile data, and the largest leaf fits the entries the
      reader keeps (`MAX_LEAF_ENTRIES`);
+   - the file is inside the reader's limits (`lib/pmtiles.ts`): no directory
+     over 2 MiB, stored or unpacked (`MAX_DIRECTORY_BYTES`), and no tile over
+     2 MiB stored (`MAX_TILE_BYTES`). The record carries the largest leaf
+     directory, stored and unpacked, and the largest tile stored. What a tile
+     unpacks to (`MAX_TILE_UNPACKED_BYTES`, 4 MiB) is checked only for the
+     tiles the draws below read;
    - the landing page's own function draws roads for one area in each part of
      the region (Chicago, Seattle, San Diego, Miami, Bangor, Anchorage,
      Honolulu, San Juan) and for the 7-area and 19-area frames, and draws
@@ -273,7 +279,10 @@ region file.
   staging cases go red if step 9 is done, which is the signal that it is off.
 
 Either way no page fails: with no binding, no archive, no tile for the area, a
-damaged file or a read slower than 1.5 s, the map is drawn without streets.
+damaged file, a file past the reader's limits (a directory or a tile longer
+than `MAX_DIRECTORY_BYTES`, `MAX_TILE_BYTES` or `MAX_TILE_UNPACKED_BYTES` in
+`lib/pmtiles.ts` allow) or a read slower than 1.5 s, the map is drawn without
+streets.
 
 ## What is proven, and what is not until the file is on staging
 

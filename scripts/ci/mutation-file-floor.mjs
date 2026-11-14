@@ -99,12 +99,15 @@ export const FLOORS = {
   // before the state tells the two apart, and a test now does.) mvt.ts, 305 of 308:
   // `cur.length > 0` at ClosePath (a ring is never empty once it exists, two
   // mutants) and `k + 1 < tags.length` to `<=` (the extra pass reads past the
-  // end and sets nothing). pmtiles.ts, 338 of 339 since the reader plans its
-  // reads and takes a frame's tiles together (2026-11-10; was 275 of 276 with
-  // the leaf entry budget, 260 of 261 before it): `3 * rx` to `3 / rx` in the
-  // Hilbert step (rx is 0 or 1, and `^` turns Infinity into 0). Five of the 338
-  // never end and are stopped by the run (the varint loop, the directory
-  // search, the Hilbert walk). Never lower.
+  // end and sets nothing). pmtiles.ts, 366 of 367 since the reader holds every
+  // read and unpack to a limit (2026-11-14, a local run; was 338 of 339 when it
+  // began to plan its reads, 275 of 276 with the leaf entry budget, 260 of 261
+  // before it): `3 * rx` to `3 / rx` in the Hilbert step (rx is 0 or 1, and `^`
+  // turns Infinity into 0). Seven of the 366 never end and are stopped by the
+  // run (the varint loop, the directory search, the Hilbert walk, the gzip
+  // read loop). On a loaded machine a slow test can pass its own time limit
+  // and count that survivor as killed: read 100% here as a run to repeat, not
+  // as a new floor. Never lower.
   'src/lib/attendee-map.ts': 98.9,
   'src/lib/mvt.ts': 99.02,
   'src/lib/pmtiles.ts': 99.7,
