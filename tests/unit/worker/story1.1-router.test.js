@@ -219,7 +219,10 @@ describe('Route Coverage (Story 1.1)', () => {
 
     it('should route each form type to its handler', () => {
       expect(routerSource).toContain("case 'register':");
-      expect(routerSource).toContain('handleFormRegistration(request, env, eventId)');
+      // OSE-826: registration also gets the event's date, for its expiry.
+      expect(routerSource).toMatch(
+        /handleFormRegistration\(\s*request,\s*env,\s*eventId,\s*eventRow\?\.end_date \?\? eventRow\?\.start_date \?\? null\s*\)/
+      );
       expect(routerSource).toContain("case 'checkin':");
       expect(routerSource).toContain('handleFormCheckin(request, env, eventId)');
       expect(routerSource).toContain("case 'survey':");
