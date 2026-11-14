@@ -49,7 +49,7 @@ import {
 } from '../lib/form-validation';
 import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
 import { parsePagingParams, encodeRegistrationsCursor } from '../lib/registrations-paging';
-import { REGISTRATION_TTL_DAYS, EMAIL_RETENTION_DAYS } from '../lib/retention-windows';
+import { EMAIL_RETENTION_DAYS, registrationExpiresAt } from '../lib/retention-windows';
 import { errorLabel } from '../lib/error-label';
 
 export interface FormsEnv extends FormsDbEnv, TurnstileEnv {
@@ -66,7 +66,6 @@ export interface FormsEnv extends FormsDbEnv, TurnstileEnv {
 
 // The day counts live in lib/retention-windows.ts so the admin Settings page
 // quotes the same numbers this handler enforces.
-const REGISTRATION_TTL_MS = REGISTRATION_TTL_DAYS * 24 * 60 * 60 * 1000;
 const EMAIL_RETENTION_MS = EMAIL_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 // ─── Rate limiter (per-isolate, sliding window) ─────────────────────────────
@@ -213,10 +212,18 @@ async function decryptAttendeeNames(
 
 // ─── Public: Registration ───────────────────────────────────────────────────────
 
+/**
+ * `eventEnd` is the event's `COALESCE(end_date, start_date)`, read by the
+ * router from the main database (this handler never reads it: two-database
+ * isolation). It moves the expiry to the day after the event when that is
+ * later than 90 days from now (OSE-826). Null when the event row or its dates
+ * are missing: the 90 days alone apply.
+ */
 export async function handleFormRegistration(
   request: Request,
   env: FormsEnv,
-  eventId: string
+  eventId: string,
+  eventEnd: string | null = null
 ): Promise<Response> {
   // Rate limit by CF edge IP only — null means local dev or test; skip limiting.
   const clientIp = request.headers.get('CF-Connecting-IP');
@@ -295,7 +302,7 @@ export async function handleFormRegistration(
 
   const bucket = bucketTimestamp();
   const id = generateId();
-  const expiresAt = new Date(Date.now() + REGISTRATION_TTL_MS).toISOString();
+  const expiresAt = registrationExpiresAt(new Date(), eventEnd);
 
   try {
     await env.FORMS_DB.prepare(

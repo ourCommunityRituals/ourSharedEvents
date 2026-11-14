@@ -46,6 +46,7 @@ See [ADR-RECONCILIATION-PROCESS.md](ADR-RECONCILIATION-PROCESS.md) for the full 
 | [ADR-028](ADR-028-calendar-addresses-and-the-edge.md)                      | Let a calendar app's read of a .ics address pass the edge                                                                 | Proposed   | 2026-11-13 |
 | [ADR-029](ADR-029-declared-event-series.md)                                | A series an organizer declares                                                                                            | Accepted   | 2026-11-13 |
 | [ADR-030](ADR-030-campaign-stays-in-its-brand-and-is-public-by-consent.md) | A campaign stays in its brand and is public only through a placement that is on show                                      | Proposed   | 2026-11-13 |
+| [ADR-031](ADR-031-page-rules-from-the-route-table.md)                      | Check page rules from the route table, not from a remembered list                                                         | Proposed   | 2026-11-13 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 

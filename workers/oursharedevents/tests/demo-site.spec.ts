@@ -42,7 +42,7 @@ describe('demo site — three depths, same data', () => {
     // OSE-818: the count is distinct scanners, in the lexicon ("unique" is banned).
     expect(html).toContain('Distinct scanners');
     expect(html.toLowerCase()).not.toContain('unique gatherings');
-    // premium-only sections rendered but dimmed (upgrade hint visible)
+    // premium-only sections rendered but locked: a dashed card (upgrade hint visible)
     expect(html).toContain('depth-locked');
     expect(html).toContain('Corridor map');
   });
@@ -75,6 +75,26 @@ describe('demo site — three depths, same data', () => {
     const freeOn = (free.match(/flag-on/g) ?? []).length;
     const premiumOn = (premium.match(/flag-on/g) ?? []).length;
     expect(premiumOn).toBeGreaterThan(freeOn);
+  });
+
+  // OSE-2031: at 200% text on a 320px phone the tier pages were 515px wide.
+  // The browser layer measures it (tests/playwright/a11y-profile.spec.ts); this
+  // holds the three style decisions that made the pages fit and read.
+  it('long words wrap, season rows wrap, and a locked card is not faded', async () => {
+    const html = await text(handleDemoSite('free'));
+    expect(html).toMatch(/\.demo-wrap \{[^}]*overflow-wrap: anywhere;/);
+    expect(html).toMatch(/\.season-list li \{[^}]*flex-wrap: wrap;/);
+    expect(html).not.toMatch(/\.season-list li span:last-child \{[^}]*nowrap/);
+    // A faded card put its label and its tier badge under 4.5:1 in both themes.
+    expect(html).not.toMatch(/\.depth-locked \{[^}]*opacity/);
+    expect(html).toMatch(/\.depth-badge \{[^}]*color: var\(--text\);/);
+  });
+
+  it('each "Enter" link on the front door says "Enter" in its name', async () => {
+    const html = await text(handleDemoIndex());
+    const labels = Array.from(html.matchAll(/aria-label="([^"]*)">Enter →<\/a>/g)).map((m) => m[1]);
+    expect(labels.length).toBe(3);
+    for (const label of labels) expect(label.startsWith('Enter the ')).toBe(true);
   });
 
   it('unknown tier returns a branded 404', async () => {

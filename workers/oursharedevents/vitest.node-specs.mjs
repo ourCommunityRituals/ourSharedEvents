@@ -289,6 +289,8 @@ export const NODE_SPECS = [
   'tests/event-form-link-writers.spec.ts',
   // OSE-1684 last rule: the route table keeps every event screen under /events/<id>/.
   'tests/event-address-route-table.spec.ts',
+  // OSE-2030: the page-rules list equals the route table (reads src/router.ts).
+  'tests/page-surfaces-route-table.spec.ts',
 
   // Scan write-buffer (Cloudflare Queues) — producer (enqueueOrWriteScan) +
   // consumer (handleScanBatch) tested in isolation with a fake D1 + fake Queue.
@@ -397,4 +399,7 @@ export const NODE_SPECS = [
   'tests/form-pages-language.spec.ts',
   // The error label a log line may carry: a pure function, no runtime.
   'tests/error-label.spec.ts',
+  // OSE-826: when a registration expires (the later of 90 days and the day
+  // after the event). A pure function, no runtime.
+  'tests/registration-expiry.spec.ts',
 ];

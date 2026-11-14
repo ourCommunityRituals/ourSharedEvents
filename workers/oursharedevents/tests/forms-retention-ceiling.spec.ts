@@ -40,7 +40,7 @@ const RETENTION: Record<string, Rule> = {
   form_registrations: {
     kind: 'deleted-after',
     days: REGISTRATION_TTL_DAYS,
-    how: 'expires_at; a row with none goes by created_at (runFormDataLifecycle phase 1)',
+    how: 'expires_at, or the day after the event when that is later (owner 2026-11-13, OSE-826); a row with none goes by created_at (runFormDataLifecycle phase 1)',
   },
   email_signups: {
     kind: 'deleted-after',

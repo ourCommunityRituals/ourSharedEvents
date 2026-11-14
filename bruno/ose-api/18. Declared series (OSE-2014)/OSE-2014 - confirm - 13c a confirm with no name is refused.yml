@@ -1,0 +1,33 @@
+info:
+  name: OSE-2014 | rainy | confirm | a suggestion cannot be confirmed without a name
+  type: http
+  seq: 137
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-sugg-evt/series/confirm"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"series_id":"evtsrs_ci_suggest","event_ids":["series-ci-sugg-evt"]}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // OSE-2041: a confirmed series' name is public, so the organizer names it first.
+        test('OSE-2014 rainy: confirm: 400 INVALID_NAME with no name', function () { expect(res.getStatus()).to.eql(400); expect(res.getBody().code).to.eql('INVALID_NAME'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

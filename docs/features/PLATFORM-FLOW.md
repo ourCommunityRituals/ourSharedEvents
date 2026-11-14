@@ -132,7 +132,7 @@ GET /api/v2/admin/events/:id/forms/email-signups   → count only
 ```
 Daily cron trigger (Cloudflare Worker scheduled event)
         │
-        ├── Phase 1: DELETE expired registrations (90 days after registering)
+        ├── Phase 1: DELETE expired registrations (90 days after registering, or the day after the event if later)
         │
         ├── Phase 2: SCRUB survey PII (whitelist approach — keep ratings, scrub strings)
         │
@@ -271,15 +271,15 @@ The router checks `isFeatureEnabled()` before accepting any form submission. Dis
 
 ### Privacy Enforcement Points
 
-| Layer                   | Mechanism                                                          |
-| ----------------------- | ------------------------------------------------------------------ |
-| **Schema**              | No PII columns in scans/scan_aggregates tables                     |
-| **Hashing**             | Emails SHA-256 hashed before storage                               |
-| **Encryption**          | Email signups AES-256-GCM encrypted (PBKDF2, 100k iterations)      |
-| **Time bucketing**      | All timestamps truncated to hour (`2026-03-27T14`)                 |
-| **Whitelist scrubbing** | Survey responses: numeric + safe keys kept, strings → `[SCRUBBED]` |
-| **TTL deletion**        | Registrations: 90 days. Email signups: 30 days. Daily cron.        |
-| **Database separation** | FORMS_DB and DB are separate D1 databases with no cross-linking    |
+| Layer                   | Mechanism                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------ |
+| **Schema**              | No PII columns in scans/scan_aggregates tables                                                   |
+| **Hashing**             | Emails SHA-256 hashed before storage                                                             |
+| **Encryption**          | Email signups AES-256-GCM encrypted (PBKDF2, 100k iterations)                                    |
+| **Time bucketing**      | All timestamps truncated to hour (`2026-03-27T14`)                                               |
+| **Whitelist scrubbing** | Survey responses: numeric + safe keys kept, strings → `[SCRUBBED]`                               |
+| **TTL deletion**        | Registrations: 90 days, or the day after the event if later. Email signups: 30 days. Daily cron. |
+| **Database separation** | FORMS_DB and DB are separate D1 databases with no cross-linking                                  |
 
 ---
 

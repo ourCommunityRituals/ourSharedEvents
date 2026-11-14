@@ -94,6 +94,14 @@ for (const route of manifest.routes) {
         'viewport meta'
       ).toBeGreaterThan(0);
 
+      // 4b. One <h1> per page (AGENTS.md invariant 8). The mock layer asks the
+      // router for every page (workers/oursharedevents/tests/
+      // page-surfaces-one-h1.spec.ts); this is the same rule on what the
+      // browser draws on deployed staging, script-built headings included.
+      if (manifest.app === 'ose') {
+        await expect(testPage.locator('h1'), 'exactly one <h1>').toHaveCount(1);
+      }
+
       // 5. Mobile workability: no horizontal scroll
       if (!route.allowHScroll) {
         const overflow = await testPage.evaluate(
@@ -182,6 +190,33 @@ if (manifest.app === 'ose') {
     await expect(band).toContainText('Solo para pruebas.');
     await expect(band).not.toContainText('Testing purposes only.');
   });
+}
+
+// The demo sites are the permanent reference installation (ADR-007), so each
+// one has exactly one <h1> and it is the page title (AGENTS.md invariant 8).
+// Until 2026-11-13 the titles were <h2> and no page had an <h1>. The mock layer
+// is workers/oursharedevents/tests/demo-page-title.spec.ts; this is the same
+// rule on deployed staging (T4d). The unknown-site page answers 404 and keeps
+// its one <h1> too.
+if (manifest.app === 'ose') {
+  const demoPages: Array<{ path: string; status: number; title: string }> = [
+    { path: '/demo', status: 200, title: 'The demo site' },
+    { path: '/demo/free', status: 200, title: 'Demo — Free · Local' },
+    { path: '/demo/mid', status: 200, title: 'Demo — Mid' },
+    { path: '/demo/premium', status: 200, title: 'Demo — Premium · Enterprise' },
+    { path: '/demo/no-such-site', status: 404, title: 'No such demo site' },
+  ];
+
+  for (const demo of demoPages) {
+    test(`[T1:ose] demo page title: ${demo.path} has one <h1>`, async ({ page }) => {
+      const res = await page.goto(demo.path, { waitUntil: 'networkidle' });
+      expect(res?.status(), `${demo.path} status`).toBe(demo.status);
+      const h1 = page.locator('h1');
+      await expect(h1, `${demo.path}: exactly one <h1>`).toHaveCount(1);
+      await expect(h1).toBeVisible();
+      await expect(h1).toHaveText(demo.title);
+    });
+  }
 }
 
 async function assertTapTargets(page: Page, min: number): Promise<void> {

@@ -330,7 +330,7 @@ export async function handleConfirmEventSeries(
         .prepare(
           `UPDATE event_series
               SET state = 'confirmed', confirmed_at = ?, updated_at = ?,
-                  series_name = COALESCE(?, series_name)
+                  series_name = ?
             WHERE id = ? AND state = 'pending'`
         )
         .bind(now, now, input.value.name, series.id),
