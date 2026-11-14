@@ -407,8 +407,9 @@ test.describe('poster with two sponsors', () => {
     // Pin the draws: "play a vignette", then "the first one in the library".
     await page.addInitScript(() => {
       const draws = [0.99, 0];
-      let n = 0;
-      Math.random = () => draws[n++ % draws.length];
+      const w = window as unknown as { __drawN: number };
+      w.__drawN = 0;
+      Math.random = () => draws[w.__drawN++ % draws.length];
     });
     await page.clock.install();
     await page.setViewportSize(PHONE);
@@ -420,8 +421,15 @@ test.describe('poster with two sponsors', () => {
     await expect(items.nth(from)).toBeVisible();
     await expect(vignette).toHaveCount(0);
 
-    // A turn that keeps the same sponsor draws nothing and plays nothing.
-    await page.clock.fastForward(5_000 * steps);
+    // A turn that keeps the same sponsor plays nothing. Anything else on the page
+    // that draws a number while those turns pass would shift the pinned draws,
+    // so they start again right before the turn that changes the sponsor.
+    if (steps > 1) await page.clock.fastForward(5_000 * (steps - 1));
+    await expect(vignette).toHaveCount(0);
+    await page.evaluate(() => {
+      (window as unknown as { __drawN: number }).__drawN = 0;
+    });
+    await page.clock.fastForward(5_000);
     await expect(vignette).toHaveAttribute('data-vignette', 'bocce');
     await expect(items.nth(from), 'the sponsor holds until the ball lands').toBeVisible();
     await expect(items.nth(to)).toBeHidden();
