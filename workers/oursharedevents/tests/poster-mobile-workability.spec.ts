@@ -79,9 +79,11 @@ describe('OSE-300 poster preview mobile workability — API layer', () => {
     // Default container padding is 0 1rem (16px); poster-body is 2rem
     // (32px). At 375px the poster-body's 64px of horizontal padding
     // squeezes content to ~311px — tightening to 1rem (16px) reclaims
-    // 32px without breaking the printed-poster aesthetic.
+    // 32px without breaking the printed-poster aesthetic. OSE-1991 (owner
+    // 2026-11-12): the top is tighter still (0.75rem) so the title and
+    // sponsors lead on a phone; the sides stay 1rem.
     expect(mediaBlock).toMatch(/\.container\s*\{[^}]*padding:\s*0\s+\.75rem/);
-    expect(mediaBlock).toMatch(/\.poster-body\s*\{[^}]*padding:\s*1\.25rem\s+1rem/);
+    expect(mediaBlock).toMatch(/\.poster-body\s*\{[^}]*padding:\s*0\.75rem\s+1rem\s+1\.25rem/);
   });
 
   test('OSE-300 | API | GET /poster (mobile media query) | qr-link-url wraps inside its 100px column', async () => {

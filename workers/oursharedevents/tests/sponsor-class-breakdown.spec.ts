@@ -48,6 +48,25 @@ describe('SR-25 | Sponsor Competitive View gate', () => {
     expect(src).toContain('data-testid="sponsor-class-row-premium"');
   });
 
+  // OSE-1991 (owner 2026-11-12): the middle share tier is called Anchor where
+  // people see it (Local 1x, Anchor 3x, Premium 7x). The code keeps `mid`.
+  // @born-red OSE-1991 | method: run against the parent commit's templates
+  // (the row and the admin group said "Mid"): this test went red | date: 2026-11-12
+  test('the middle tier reads "Anchor" on the report and in the admin tier picker', () => {
+    const src = getSharedReportHtml();
+    expect(src).toContain(
+      '<tr data-testid="sponsor-class-row-mid"><td data-label="Class">Anchor</td>'
+    );
+    const sources: Record<string, string> = JSON.parse(
+      (env as unknown as TestEnv).TEST_SOURCE_FILES_JSON
+    );
+    const admin = Object.entries(sources).find(([p]) =>
+      p.replace(/\\/g, '/').endsWith('templates/admin.html')
+    )![1];
+    expect(admin).toContain('<optgroup label="Anchor">');
+    expect(admin).not.toContain('<optgroup label="Mid">');
+  });
+
   test('sponsor count and displays testids are present for each class', () => {
     const src = getSharedReportHtml();
     expect(src).toContain('data-testid="local-sponsor-count"');
