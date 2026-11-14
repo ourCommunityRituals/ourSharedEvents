@@ -1,0 +1,32 @@
+info:
+  name: "S14 | rainy | brand wall | a campaign cannot take a placement of another brand, whoever asks"
+  type: http
+  seq: 16
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_toggle/placements/spl_camp_ci"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // spl_camp_ci is on a ci-brand event; camp_fx_toggle is a root campaign. The
+        // same-brand rule is in the write itself, so the automation caller is refused too.
+        test('S14 brand wall: 404 NOT_FOUND', function () {
+          expect(res.getStatus()).to.eql(404);
+          expect(res.getBody().code).to.eql('NOT_FOUND');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

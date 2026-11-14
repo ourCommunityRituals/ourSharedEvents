@@ -1,0 +1,27 @@
+info:
+  name: "S14 | rainy | brand wall | the refused attach left the placement in the campaign of its own brand"
+  type: http
+  seq: 17
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/camp-ci-evt/sponsor-bundle?surface=public"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const s = ((res.getBody().bundle || {}).sponsors || []).filter(function (x) { return x.id === 'sb_camp_ci'; })[0];
+        test('S14 brand wall: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 brand wall: the placement is still in the campaign of its own brand', function () {
+          expect(s).to.be.an('object');
+          expect(s.campaign).to.eql({ id: 'camp_fx_other', title: 'Campaign Fixture Other Brand' });
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

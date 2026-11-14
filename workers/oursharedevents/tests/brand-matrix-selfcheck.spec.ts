@@ -85,7 +85,13 @@ describe('OSE-1554 self-check: the matrix route list covers the router', () => {
 
   test('the matrix exercises every object kind and every shape', () => {
     const kinds = new Set(MATRIX_ROUTES.flatMap((r) => (r.shape === 'object' ? [r.objectOf] : [])));
-    expect([...kinds].sort()).toEqual(['event', 'placement', 'poster-deployment', 'sponsor']);
+    expect([...kinds].sort()).toEqual([
+      'campaign',
+      'event',
+      'placement',
+      'poster-deployment',
+      'sponsor',
+    ]);
     const shapes = new Set(MATRIX_ROUTES.map((r) => r.shape));
     expect([...shapes].sort()).toEqual(['create', 'list', 'object']);
   });

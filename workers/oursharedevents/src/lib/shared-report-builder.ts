@@ -611,13 +611,16 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // economics (campaign, tier, locality) come from the sponsor_placement for THIS
   // event. Join both off si.sponsor_id (= sponsor_business.id) — placement scoped
   // to si.event_id so a business at multiple events reads its own per-event tier.
+  // Showcase S14: a campaign is read only when it is in THIS event's brand (the
+  // first bound id), so a placement linked to another brand's campaign reports
+  // as having none, neither its id nor its title.
   const impressions = await db
     .prepare(
       `SELECT
          si.sponsor_id      AS sponsor_id,
          sb.name            AS sponsor_name,
          sb.display_name    AS sponsor_display_name,
-         sp.campaign_id     AS campaign_id,
+         c.id               AS campaign_id,
          c.title            AS campaign_title,
          sp.tier            AS sponsor_tier,
          sp.locality_band   AS is_local,
@@ -627,12 +630,14 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
        LEFT JOIN sponsor_business sb ON sb.id = si.sponsor_id
        LEFT JOIN sponsor_placement sp
               ON sp.sponsor_business_id = si.sponsor_id AND sp.event_id = si.event_id
-       LEFT JOIN campaigns c ON c.id = sp.campaign_id
+       LEFT JOIN campaigns c
+              ON c.id = sp.campaign_id
+             AND c.brand_id = (SELECT e.brand_id FROM events e WHERE e.id = ?)
        WHERE si.event_id = ?
-       GROUP BY si.sponsor_id, sb.name, sb.display_name, sp.campaign_id, c.title, sp.tier, sp.locality_band, si.surface
+       GROUP BY si.sponsor_id, sb.name, sb.display_name, c.id, c.title, sp.tier, sp.locality_band, si.surface
        ORDER BY count DESC`
     )
-    .bind(eventId)
+    .bind(eventId, eventId)
     .all<{
       sponsor_id: string;
       sponsor_name: string | null;

@@ -33,6 +33,9 @@ export const NODE_SPECS = [
   // OSE-1900 — derived gate: every statement in src/ that carries the sponsor
   // consent rule also carries the event's opt-in gate (reads src/; no runtime).
   'tests/sponsor-opt-in-readers.spec.ts',
+  // Showcase S14 — derived gate: no query parameter is named for a campaign and
+  // no statement on `campaigns` selects or orders by a title (reads src/).
+  'tests/campaign-never-a-filter.spec.ts',
   // Toast adoption in admin and sponsor home: the pages' scripts and the
   // @ocr/ui toast script in jsdom, plus one handler called directly. No runtime.
   'tests/toast-adoption.spec.ts',
