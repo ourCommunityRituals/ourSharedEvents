@@ -383,4 +383,7 @@ export const NODE_SPECS = [
   'tests/form-pages-language.spec.ts',
   // The error label a log line may carry: a pure function, no runtime.
   'tests/error-label.spec.ts',
+  // OSE-826: when a registration expires (the later of 90 days and the day
+  // after the event). A pure function, no runtime.
+  'tests/registration-expiry.spec.ts',
 ];
