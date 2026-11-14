@@ -15,7 +15,12 @@ Owner decisions:
 
 **Every step here is the owner's.** An agent never creates a bucket, never cuts,
 loads or downloads the archive, never holds the R2 token, and never touches
-production (`AGENTS.md`, Human approval).
+production (`AGENTS.md`, Human approval). The check in step 3 only reads a file
+on disk: it needs no login and no token, and it uploads nothing.
+
+**One path for both environments.** Staging is loaded first, by the steps below.
+Production is loaded later with the same file, checked by the same command, and
+is the same file only if its SHA-256 is the one in the staging record (step 3).
 
 ## Names
 
@@ -28,7 +33,7 @@ production (`AGENTS.md`, Human approval).
 
 `YYYYMMDD` is the date of the Protomaps build the file was cut from.
 `wrangler.toml` carries `us-20261109.pmtiles`. If you cut another build, change
-that value (both environment blocks) and the commands in steps 2 and 4 in one
+that value (both environment blocks) and the commands in steps 2, 3 and 5 in one
 PR: `tests/unit/ci/env-parity.test.js` fails when they name different files. The
 key must match `^[a-z0-9][a-z0-9._-]{0,80}\.pmtiles$` or the Worker refuses it.
 
@@ -124,9 +129,15 @@ streets of the tiles the file has.
    domain. If either is on, turn it off before anything is loaded. The Worker is
    the bucket's only reader.
 
-2. **Cut the United States file.** Install the `pmtiles` CLI
-   (github.com/protomaps/go-pmtiles), pick a build date at
-   <https://maps.protomaps.com/builds>, and run from the root of this repo:
+2. **Cut the United States file.** Install the `pmtiles` CLI from
+   github.com/protomaps/go-pmtiles, release **v1.31.2** (the version the proof
+   and this runbook were written against). Before you unpack it, compare the
+   download's SHA-256 with the digest GitHub lists beside that release file; for
+   `go-pmtiles_1.31.2_Windows_x86_64.zip` it read
+   `a658baa4d7e55020aef6ca17bd9ff9faa1582671266b36f58c52db0ac8e785a1` on
+   2026-11-11. Pick a build date at <https://maps.protomaps.com/builds>, and run
+   from the root of this repo (git ignores `*.pmtiles`, so the file cannot be
+   committed by accident):
 
    ```bash
    pmtiles extract https://build.protomaps.com/20261109.pmtiles us-20261109.pmtiles --region=docs/runbooks/street-map-us-region.geojson
@@ -137,42 +148,75 @@ streets of the tiles the file has.
    file is not measured yet.** Run the same command with `--dry-run` added first:
    it prints the archive size without fetching the tiles, which is the free disk
    you need. The file is ours, so Protomaps lists no checksum for it: take its
-   SHA-256 yourself, and **keep your own copy**, because the build will not stay
-   on their side. Record on the owner-step ticket the build date, the file's
-   byte size, its SHA-256, and what `pmtiles show us-20261109.pmtiles` prints:
-   the zoom range, the tile and internal compression, and the tile entries
-   count. The reader reads **gzip** only; a file with other compression draws
-   hexagons only. The byte size then goes into
-   [`../positioning/MAPPING-COST-STRUCTURE.md`](../positioning/MAPPING-COST-STRUCTURE.md),
-   which carries it as unmeasured until then.
+   SHA-256 yourself (step 3 does), and **keep your own copy**, because the build
+   will not stay on their side. `pmtiles show us-20261109.pmtiles` prints the
+   header (zoom range, compression, tile entries); step 3 reads the same header
+   and more, so it is a second opinion, not the record.
 
-3. **Create an R2 API token** in the dashboard: "Object Read & Write", scoped to
+3. **Check the file before it goes anywhere.** From the root of this repo:
+
+   ```bash
+   node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261109.pmtiles
+   ```
+
+   It reads the file with the Worker's own reader and drawing code
+   (`lib/pmtiles.ts`, `lib/street-map.ts`), over the disk instead of R2, and
+   uploads nothing. It must end in `PASS`. It checks that:
+   - the file is PMTiles v3, vector tiles, gzip, down to the zoom the zoomed
+     area reads. The reader unpacks **gzip** only; another compression would
+     draw hexagons only;
+   - the file is whole: every section ends inside it and the last ends at its
+     last byte, so a cut that stopped early fails;
+   - every leaf directory can be read, the entries counted match the header, no
+     tile points past the tile data, and the largest leaf fits the entries the
+     reader keeps (`MAX_LEAF_ENTRIES`);
+   - the landing page's own function draws roads for one area in each part of
+     the region (Chicago, Seattle, San Diego, Miami, Bangor, Anchorage,
+     Honolulu, San Juan) and for the 7-area and 19-area frames, and draws
+     nothing for London and Mexico City, which the region leaves out;
+   - the file's name is the key `wrangler.toml` reads, in this checkout.
+
+   Add `--cells=<h3>,<h3>` with the areas staging draws today (the `area=`
+   links on the staging landing page) to require streets for exactly those.
+
+   It writes `us-20261109.pmtiles.check.json` beside the file: the byte size,
+   the SHA-256, the header, the directory layout and each draw. **Keep that
+   record with your copy of the file.** Put the build date, the byte size and
+   the SHA-256 on the owner-step ticket; the byte size also goes into
+   [`../positioning/MAPPING-COST-STRUCTURE.md`](../positioning/MAPPING-COST-STRUCTURE.md),
+   which carries it as unmeasured until then. A file that does not pass is not
+   uploaded: cut it again. The times in the record are from your disk and say
+   nothing about R2.
+
+4. **Create an R2 API token** in the dashboard: "Object Read & Write", scoped to
    `ose-map-tiles-staging` only. Put the key pair in your own rclone config. It
    never goes into chat, a ticket, a file in this repo or an agent's terminal.
 
-4. **Upload** under the dated key:
+5. **Upload** under the dated key:
 
    ```bash
    rclone copyto us-20261109.pmtiles r2:ose-map-tiles-staging/us-20261109.pmtiles --progress --s3-chunk-size=256M
    ```
 
-   Check that the bucket lists the key at the exact byte size of the file.
+   Check that the bucket lists the key at the exact byte size in the record
+   from step 3: a smaller object is an upload that stopped. The proof that the
+   bytes are right is step 8, the Worker drawing from them.
 
-5. **Delete the token.** The Worker reads through its binding, not the token.
+6. **Delete the token.** The Worker reads through its binding, not the token.
 
-6. **Check the name the Worker reads.** `MAP_TILES_ARCHIVE` on `main`, in both
+7. **Check the name the Worker reads.** `MAP_TILES_ARCHIVE` on `main`, in both
    environment blocks of `wrangler.toml`, must be the key you uploaded. The
    merge of that name and the upload can come in either order: until both are
    done the Worker finds no object under the name it reads and draws hexagons
    only, as it does today. After both, the next landing request should draw
    streets: a read that found no object is not remembered.
 
-7. **Look at staging.** For areas in the United States, the landing shows
+8. **Look at staging.** For areas in the United States, the landing shows
    streets under the hexagons and the OpenStreetMap credit, and a tapped hexagon
    shows its dots over streets. In the run's `T2: Bruno Pages contract` log, the
    two street-map requests print their street assertions and no `NOT RUN` line.
 
-8. **Make the staging cases binding.** One-line PR: `streetMapArchiveLoaded` to
+9. **Make the staging cases binding.** One-line PR: `streetMapArchiveLoaded` to
    `"true"` in `bruno/ose-pages/environments/ose-staging.yml`. From then on a
    staging run that draws no streets is red, not a printed `NOT RUN`.
 
@@ -189,15 +233,19 @@ production, create the bucket before the binding PR merges.
 
 With the bucket present and the archive missing, the Worker finds no object and
 the map stays hexagons only. The two staging cases then print `NOT RUN`, or fail
-once step 8 is done.
+once step 9 is done.
 
 ## Production, later
 
 Production has no `MAP_TILES` binding, and `scripts/ci/env-parity.mjs` lists that
 as an open difference (`--strict`, the check before production is announced,
-fails on it). After step 8: create `ose-map-tiles-production`, load the **same
-file under the same key**, then one PR adds `[[env.production.r2_buckets]]` and
-removes the open entry from `env-parity.mjs`. `tests/unit/ci/env-parity.test.js`
+fails on it). After step 9: create `ose-map-tiles-production` and check it is
+private (step 1, with that bucket's name). Take **your kept copy of the file
+staging drew from**, run step 3 on it again, and compare the SHA-256 it prints
+with the one in the staging record: the same hash is the same file, and anything
+else is not loaded. Upload it **under the same key** with a token scoped to the
+production bucket only (steps 4 to 6), then one PR adds
+`[[env.production.r2_buckets]]` and removes the open entry from `env-parity.mjs`. `tests/unit/ci/env-parity.test.js`
 refuses a production binding while `streetMapArchiveLoaded` is not `"true"`.
 Loading a bucket is not a launch: production stays closed and no
 `PRODUCTION_LIVE` is set.
@@ -206,7 +254,9 @@ Loading a bucket is not a launch: production stays closed and no
 
 Cut the new build with the same region file, upload it under its **own dated
 key**, then change `MAP_TILES_ARCHIVE` in both environment blocks, and the
-commands in steps 2 and 4, in one PR. Never overwrite an object in place: a
+commands in steps 2, 3 and 5, in one PR. Run step 3 on the new file from that
+PR's branch, since the check compares the file's name with the key
+`wrangler.toml` reads. Never overwrite an object in place: a
 running Worker keeps an archive's directories in memory, by key, and would read
 the new file with the old directories. Delete the old object only after the new
 one has drawn on staging. Changing the region is the same steps with a new
@@ -220,7 +270,7 @@ region file.
   binding and draws hexagons only.
 - **At once, with no deploy:** rename or delete the object in the bucket. The
   Worker finds no archive and draws hexagons only on the next request. The
-  staging cases go red if step 8 is done, which is the signal that it is off.
+  staging cases go red if step 9 is done, which is the signal that it is off.
 
 Either way no page fails: with no binding, no archive, no tile for the area, a
 damaged file or a read slower than 1.5 s, the map is drawn without streets.
@@ -264,11 +314,21 @@ Every measure above was made on the whole build, at Protomaps. The United States
 file holds the same tiles for its area, but `pmtiles extract` writes it new
 directories, and the reader has not read that file yet.
 
+Checked on 2026-11-11, with no United States file cut yet: the step 3 check was
+run on a generated archive on disk (it passed whole, and failed when one byte
+short, when named for another build, and when not PMTiles), and its twelve draws
+were aimed at build `20261109` at Protomaps over HTTPS as a stand-in. The ten
+inside the region drew roads there (zoom 14, or 13 at Anchorage's latitude, and
+zoom 12 for the 7-area and 19-area frames), so those places are ones a correct
+cut draws. London and Mexico City drew roads from the whole build, as they must;
+in the United States file they must draw nothing. None of this is a measure of
+the United States file or of R2.
+
 Still unmeasured:
 
 - the United States file itself: its size, how its directories are laid out
   (how many leaf directories, how many entries in each), and the reader drawing
-  from it;
+  from it. Step 3 measures all three on the cut file, before the upload;
 - the first map in a new Worker instance, reading from R2. The workstation's
   1.4 s sits just under the 1.5 s limit that turns a slow read into hexagons
   only; it went over the public internet, so it says nothing about R2, and this

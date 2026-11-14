@@ -445,6 +445,18 @@ describe('the street-map names the owner types are the names the Worker binds', 
     if (upload?.[2] !== `${bucket}/${key}`) {
       out.push(`the runbook uploads to "${upload?.[2]}", the Worker reads "${bucket}/${key}"`);
     }
+    // Between the two, the file is read by the Worker's own reader
+    // (workers/oursharedevents/scripts/check-street-map-archive.mjs).
+    const check =
+      /node workers\/oursharedevents\/scripts\/check-street-map-archive\.mjs (\S+)/.exec(
+        runbookText
+      );
+    if (check?.[1] !== key) {
+      out.push(`the runbook checks the file "${check?.[1]}", the extract is "${key}"`);
+    }
+    if (check && cut && upload && !(cut.index < check.index && check.index < upload.index)) {
+      out.push('the runbook does not check the file between cutting it and uploading it');
+    }
     // The sentence wraps in the runbook, so compare with the line breaks folded.
     const oneLine = runbookText.replace(/\s+/g, ' ');
     if (!oneLine.includes(`scoped to \`${bucket}\` only`)) {
@@ -561,10 +573,41 @@ describe('the street-map names the owner types are the names the Worker binds', 
       '`ose-map-tiles-staging` only',
       '`ose-uploads-staging` only',
     ],
+    [
+      'the check run on a file of another date',
+      'check-street-map-archive.mjs us-20261109.pmtiles',
+      'check-street-map-archive.mjs us-20261019.pmtiles',
+    ],
+    [
+      'the check run on the whole build',
+      'check-street-map-archive.mjs us-20261109.pmtiles',
+      'check-street-map-archive.mjs 20261109.pmtiles',
+    ],
+    [
+      'the check command dropped',
+      'node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261109.pmtiles',
+      '',
+    ],
   ])('fat finger in the runbook: %s', (_, from, to) => {
     const text = runbook().replace(from, to);
     expect(text).not.toBe(runbook());
     expect(nameProblems(toml(), text, workerRule())).not.toEqual([]);
+  });
+
+  // The check is worth nothing after the upload: a file that fails it is
+  // already in the bucket.
+  // @born-red street-map check order | method: the order rule switched off in nameProblems, and this test went red; the "check" rule switched off, and the three check cases above went red | date: 2026-11-11
+  test('fat finger in the runbook: the check moved after the upload', () => {
+    const check =
+      'node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261109.pmtiles';
+    const upload =
+      'rclone copyto us-20261109.pmtiles r2:ose-map-tiles-staging/us-20261109.pmtiles --progress --s3-chunk-size=256M';
+    expect(runbook()).toContain(check);
+    expect(runbook()).toContain(upload);
+    const moved = runbook().replace(check, '').replace(upload, `${upload}\n   ${check}`);
+    expect(nameProblems(toml(), moved, workerRule())).toEqual([
+      'the runbook does not check the file between cutting it and uploading it',
+    ]);
   });
 
   // The area the extract keeps (owner 2026-11-10): 50 states, DC, Puerto Rico

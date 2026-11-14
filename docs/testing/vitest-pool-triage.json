@@ -3432,6 +3432,13 @@
       "testCount": 6
     },
     {
+      "file": "workers/oursharedevents/tests/street-map-archive-check.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 24
+    },
+    {
       "file": "workers/oursharedevents/tests/street-map-landing.spec.ts",
       "bucket": "node",
       "needsReview": false,
