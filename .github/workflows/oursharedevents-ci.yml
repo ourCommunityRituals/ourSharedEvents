@@ -211,6 +211,10 @@ jobs:
       contents: read
       actions: read
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -412,6 +416,10 @@ jobs:
         # were gated by nothing while T2→T3→T4 sat behind staging.
         shard: [lint, typecheck, a11y, invariants, component]
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -907,6 +915,10 @@ jobs:
               tests/poster-qr.spec.ts
               tests/tier-equity-sort.spec.ts
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -1004,6 +1016,10 @@ jobs:
       needs.gate.result == 'success' &&
       needs.gate-tests.result == 'success'
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -1080,6 +1096,10 @@ jobs:
       url: ${{ env.STG_BASE_URL }}
 
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -1144,6 +1164,21 @@ jobs:
           if ! echo "$OUT" | grep -q "ANON_ID_HASH_PEPPER"; then
             echo "::warning title=ANON_ID_HASH_PEPPER missing::ANON_ID_HASH_PEPPER is not set on the staging worker: scans are stored with no id and returning visitors are not counted (OSE-1659). Provision it: bash scripts/set-secrets.sh staging"
           fi
+
+      # ────────────────────────────────────────────────────────────────────
+      # OSE-2016: the dry run a migration's author wrote, taken on staging data
+      # BEFORE the migration is applied. Read only: the script refuses any
+      # statement that is not a SELECT. It runs the dry-run file of each pending
+      # migration (workers/oursharedevents/scripts/dry-run-NNNN-*.sql) and puts
+      # the counts in the job summary. A dry-run file that cannot be run stops
+      # the job here, before the apply steps. It uses the credential those
+      # steps already hold: no new secret, no new permission.
+      # ────────────────────────────────────────────────────────────────────
+      - name: 'Dry run: pending migrations, read only, before they are applied (OSE-2016)'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/ci/migration-dry-run.mjs --pending --env staging --remote
 
       - name: Apply D1 migrations (main DB)
         env:
@@ -1321,6 +1356,10 @@ jobs:
             collection: bruno/ose-pages
             junit: bru-pages-junit.xml
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -1745,6 +1784,10 @@ jobs:
             label: 'T3: Forms endpoint smoke'
             installBrowser: false
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -1909,6 +1952,10 @@ jobs:
       checks: write
 
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -2980,6 +3027,10 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -3039,6 +3090,10 @@ jobs:
       ]
     if: always()
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false

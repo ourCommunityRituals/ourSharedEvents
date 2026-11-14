@@ -71,6 +71,10 @@ jobs:
       issues: write
 
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - name: Pick reviewer and check auth
         id: check-key
         env:
@@ -112,8 +116,11 @@ jobs:
           fi
 
       # Sweep 9 #6 (2026-05-14): shallow checkout — the review works from the PR
-      # diff (gh pr diff), not the repo history.
+      # diff (gh pr diff), not the repo history. No stored token: the repo is
+      # public, so the base-branch `git fetch origin` below needs none.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
         if: steps.check-key.outputs.skip != 'true'
 
       # The charter is read from the BASE branch, never the PR head: a PR must
@@ -274,6 +281,10 @@ jobs:
       issues: write
 
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - name: Check auth
         id: check-key
         env:
@@ -288,6 +299,8 @@ jobs:
           fi
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
         if: steps.check-key.outputs.skip != 'true'
 
       # No `prompt`: tag mode answers the @claude comment itself.

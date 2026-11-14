@@ -108,8 +108,14 @@ jobs:
     timeout-minutes: 25
 
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
       - name: Checkout OSE
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       # OSE-1466 0.6, run time: this job runs the PR's code, so prove its token is
       # refused on push, comment and issue creation. Nothing is created.
@@ -253,6 +259,8 @@ jobs:
     steps:
       - name: Checkout OSE
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7

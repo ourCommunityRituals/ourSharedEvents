@@ -110,6 +110,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
+        persist-credentials: false
         clean: false
 
     - name: Display security scan configuration
@@ -257,9 +258,14 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+    - name: Harden runner
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+      with:
+        egress-policy: audit
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
+        persist-credentials: false
         clean: false
 
     - name: Setup Node.js
