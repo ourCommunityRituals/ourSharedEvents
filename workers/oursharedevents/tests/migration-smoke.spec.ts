@@ -52,6 +52,7 @@ const DB_TABLES = [
   'corridor_readiness_latch', // 0082 (VISION §6.2b corridor readiness latch)
   'corridor_regulatory_status', // 0023
   'corridors', // 0010
+  'event_booths', // 0109 (OSE-1998 — a booth is part of a fair; no person field)
   'event_codes', // 0096 (OSE-1684 — one short code per event, every screen)
   'event_series', // 0033 (OSE-272 SharedReport pipeline)
   'event_templates', // 0014

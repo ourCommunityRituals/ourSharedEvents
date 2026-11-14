@@ -92,10 +92,11 @@ describe('QA-1: Migration idempotency', () => {
     // + 1 (shortlink_click_daily — migration 0094, OSE-1613) = 39.
     // + 2 (event_codes, share_opens_daily — migration 0096, OSE-1684) = 41.
     // − 1 (subscribers — migration 0098, moved to FORMS_DB, OSE-1661) = 40.
-    expect(names).toHaveLength(40);
+    // + 1 (event_booths — migration 0109, OSE-1998) = 41.
+    expect(names).toHaveLength(41);
   });
 
-  test('indexes remain at exactly 82 after idempotent re-run', async () => {
+  test('indexes remain at exactly 84 after idempotent re-run', async () => {
     // 33 (pre-OSE-240) + 2 (idx_shortlinks_*, OSE-240) + 4 (OSE-272 Session 2:
     // idx_anon_id_returns_venue_return, idx_event_series_venue_state,
     // idx_event_series_venue_dow_hour, idx_events_series_start) + 1
@@ -134,7 +135,7 @@ describe('QA-1: Migration idempotency', () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(82); // +2 (0104: idx_events_venue_canonical, idx_events_event_correlation) +1 (0101: idx_snr_event_anon_bucket) +1 (0092: idx_anon_id_returns_pepper_epoch) +2 (0075) +1 (0076: idx_event_type_registry_category) +1 (0087: idx_scan_cell_aggregates_event_cell) +1 (0088: idx_admin_audit_log_brand_created) +1 (0089: idx_snr_country_nonnull) +2 (0090: idx_anon_id_returns_last_seen, idx_anon_id_returns_computed_at)
+    expect(indexes.results).toHaveLength(84); // +2 (0109: idx_event_booths_event_id, idx_poster_deployments_booth_id) +2 (0104: idx_events_venue_canonical, idx_events_event_correlation) +1 (0101: idx_snr_event_anon_bucket) +1 (0092: idx_anon_id_returns_pepper_epoch) +2 (0075) +1 (0076: idx_event_type_registry_category) +1 (0087: idx_scan_cell_aggregates_event_cell) +1 (0088: idx_admin_audit_log_brand_created) +1 (0089: idx_snr_country_nonnull) +2 (0090: idx_anon_id_returns_last_seen, idx_anon_id_returns_computed_at)
   });
 });
 
