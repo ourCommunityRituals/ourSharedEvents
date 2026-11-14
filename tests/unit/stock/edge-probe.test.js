@@ -99,6 +99,25 @@ describe('stg edge probe', () => {
     expect(r.out).toContain('error: TypeError ENOTFOUND');
   });
 
+  // ADR-028: the report says what a calendar app, which sends no header, would see.
+  test('reports the calendar addresses as a calendar app reads them, outside the verdict', async () => {
+    // The edge challenges the header-less shape only: CI passes, a calendar app does not.
+    const blocked = await run(
+      { ...ENV, GITHUB_STEP_SUMMARY: 'summary.md' },
+      edge({ challenge: ['plain'] }).fetch
+    );
+    expect(blocked.code).toBe(0);
+    const line =
+      'Calendar addresses read with no header, as a calendar app reads them: 1 of 2 reached the Worker.';
+    expect(blocked.out).toContain(line);
+    expect(blocked.summary).toContain(line);
+    expect(blocked.out).toContain('RUNBOOK-CALENDAR-EDGE-RULE.md');
+
+    const open = await run(ENV, edge({ challenge: [] }).fetch);
+    expect(open.code).toBe(0);
+    expect(open.out).toContain('2 of 2 reached the Worker. A calendar app can load them.');
+  });
+
   // An error status the edge did not mark as a challenge is still a failed read.
   test.each([403, 429, 503])('red on an unchallenged %i to a check read', async (status) => {
     const fetch = (url) => {

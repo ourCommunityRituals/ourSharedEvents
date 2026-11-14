@@ -138,6 +138,24 @@ export function verdict(rows) {
   return { ok: bad.length === 0, bad };
 }
 
+/**
+ * What a calendar app sees (ADR-028). An app sends no CI header and no browser, so
+ * its read is the `plain` shape. This line reports those reads for the calendar
+ * addresses. It is information, not part of the verdict: the verdict is about CI's
+ * own reads, and a calendar app gets through only once the owner has applied the
+ * calendar rule (scripts/ci/cf-waf-calendar-skip.mjs).
+ */
+export function calendarAppLine(rows) {
+  const plain = rows.filter((r) => r.shape === 'plain' && r.path.endsWith('.ics'));
+  if (plain.length === 0) return '';
+  const reached = plain.filter(readOk).length;
+  const verdictText =
+    reached === plain.length
+      ? 'A calendar app can load them.'
+      : 'A calendar app cannot load the rest until the calendar edge rule is applied (docs/runbooks/RUNBOOK-CALENDAR-EDGE-RULE.md).';
+  return `Calendar addresses read with no header, as a calendar app reads them: ${reached} of ${plain.length} reached the Worker. ${verdictText}\n`;
+}
+
 // Each read gets its own deadline, so a stalled read becomes an error row and the
 // table still prints well inside the step's timeout (18 reads × 8 s < 3 min).
 export const READ_TIMEOUT_MS = 8_000;
@@ -176,11 +194,12 @@ export async function main(env = process.env, deps = {}) {
   const summary = ok
     ? 'Every read shaped like the stock check got past the stg edge from this runner. "Stock data (stg)" can run.\n'
     : `${bad.length} of ${PROBE_PATHS.length} reads shaped like the stock check failed from this runner (${challengedCount} challenged at the edge, ${bad.length - challengedCount} an unexpected answer or none). Look up a CHALLENGED Ray ID in Cloudflare Security → Events to see the rule or service that did it.\n`;
-  out(`${table}\n${summary}`);
+  const calendar = calendarAppLine(rows);
+  out(`${table}\n${summary}${calendar}`);
   if (env.GITHUB_STEP_SUMMARY) {
     (deps.appendFile || appendFileSync)(
       env.GITHUB_STEP_SUMMARY,
-      `## stg edge probe\n\n${table}\n${summary}`
+      `## stg edge probe\n\n${table}\n${summary}${calendar}`
     );
   }
   return ok ? 0 : 1;

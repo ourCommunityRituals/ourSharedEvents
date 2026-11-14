@@ -19,9 +19,11 @@ const ROUTER = resolve(__dirname, '../../workers/oursharedevents/src/router.ts')
 
 let PROBES;
 let pathCovered;
+let calendarRuleCovers;
 beforeAll(async () => {
   ({ PROBES } = await import('../../scripts/stock/edge-probe.mjs'));
   ({ pathCovered } = await import('../../scripts/ci/cf-waf-stg-ci-skip.mjs'));
+  ({ pathCovered: calendarRuleCovers } = await import('../../scripts/ci/cf-waf-calendar-skip.mjs'));
 });
 
 /** Every `pathname.match(/^…\.ics$/)` pattern in the router, as a RegExp. */
@@ -60,6 +62,20 @@ describe('every machine-read address has an edge probe and skip-rule cover', () 
       const probe = PROBES.find((p) => route.test(p.path));
       expect(probe, `edge probe has a read for ${route}`).toBeDefined();
       expect(pathCovered(probe.path), `skip rule covers ${probe.path}`).toBe(true);
+    }
+  });
+
+  // ADR-028: the public calendar rule (no header) must cover every .ics route too,
+  // or a calendar app is challenged on the one the rule missed.
+  test('the public calendar rule covers every .ics route, and no probe that is not one', () => {
+    for (const route of icsRoutes()) {
+      const probe = PROBES.find((p) => route.test(p.path));
+      expect(calendarRuleCovers(probe.path), `calendar rule covers ${probe.path}`).toBe(true);
+    }
+    for (const probe of PROBES.filter((p) => !p.path.endsWith('.ics'))) {
+      expect(calendarRuleCovers(probe.path), `calendar rule leaves ${probe.path} alone`).toBe(
+        false
+      );
     }
   });
 
