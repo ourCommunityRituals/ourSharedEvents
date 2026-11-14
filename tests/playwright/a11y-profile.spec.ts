@@ -56,6 +56,15 @@ const SURFACES: Surface[] = [
   { name: 'admin', path: () => '/admin', admin: true },
   { name: 'admin logs', path: () => '/api/v2/admin/screens/logs', admin: true },
   { name: 'admin settings', path: () => '/api/v2/admin/screens/settings', admin: true },
+  // The demo sites are the permanent reference installation (OCR-docs ADR-007),
+  // so they pass the same profile as every other surface. They were missing
+  // from this list, which is how the three tier pages shipped 515px wide at
+  // 200% text on a 320px screen (OSE-2031).
+  { name: 'demo index', path: () => '/demo' },
+  { name: 'demo free', path: () => '/demo/free' },
+  { name: 'demo mid', path: () => '/demo/mid' },
+  { name: 'demo premium', path: () => '/demo/premium' },
+  { name: 'demo unknown site', path: () => '/demo/no-such-site' },
 ];
 
 async function open(page: Page, surface: Surface): Promise<void> {
@@ -139,6 +148,18 @@ for (const surface of SURFACES) {
     }
   });
 }
+
+// The briefing draws its heading with a script, so the served markup has no
+// <h1> for the workers-pool gate to count
+// (workers/oursharedevents/tests/page-surfaces-one-h1.spec.ts). This is where
+// its one <h1> is checked: in a browser, on the first screen it shows.
+test('the briefing, drawn in the browser, shows exactly one <h1>', async ({ page }) => {
+  await page.setExtraHTTPHeaders({ Authorization: `Bearer ${ADMIN_BEARER}` });
+  await page.goto('/briefing');
+  const h1 = page.locator('h1');
+  await expect(h1, 'the briefing: exactly one <h1>').toHaveCount(1);
+  await expect(h1).toBeVisible();
+});
 
 test('the TV holds still when the system asks for reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });

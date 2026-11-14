@@ -218,6 +218,60 @@ test.describe('Invariant 16: API Response Schema Stability — structural code-s
     ).toMatch(/items['":\s]/);
   });
 
+  // OSE-2042. `items` / `item` were the only envelope keys a gate held. Two
+  // siblings sit beside them and consumers read both: `sponsor_titles` (the TV's
+  // "also coming up") and `series` (ourWKRP's showcase build). The snapshot now
+  // lists them, and each listed key must be written by its handler's success
+  // response.
+  //
+  // @born-red OSE-2042 | method: `series` taken out of the list response, then
+  // `sponsor_titles`, then `series` out of the detail response; then a sibling
+  // taken out of the snapshot's list | date: 2026-11-14
+  const ENVELOPES: Array<[string, string, string[]]> = [
+    [
+      'GET /api/v2/events',
+      'handleListEvents',
+      ['ok', 'status', 'items', 'sponsor_titles', 'series'],
+    ],
+    ['GET /api/v2/events/:id', 'handleGetEvent', ['ok', 'status', 'item', 'series']],
+  ];
+
+  /** The object literal of a handler's success response: from `ok: true` to its headers. */
+  function successEnvelope(src: string, handler: string): string {
+    const fnIdx = src.indexOf(`async function ${handler}`);
+    const next = src.indexOf('\nexport async function ', fnIdx + 1);
+    const fn = src.slice(fnIdx, next === -1 ? undefined : next);
+    const at = fn.indexOf('ok: true');
+    const end = fn.indexOf('headers:', at);
+    return at === -1 || end === -1 ? '' : fn.slice(at, end);
+  }
+
+  for (const [endpoint, handler, expected] of ENVELOPES) {
+    test(`OSE-INV16 | api | envelope | ${endpoint} snapshot lists its sibling keys`, () => {
+      const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
+      expect(
+        snapshot.endpoints[endpoint].envelope_keys,
+        'envelope_keys is the locked list of top-level response keys. To remove a key, remove it ' +
+          'here, in the snapshot, and bump snapshot.version in the same change.'
+      ).toEqual(expected);
+    });
+
+    test(`OSE-INV16 | api | envelope | ${handler} writes every envelope key in the snapshot`, () => {
+      const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
+      const envelope = successEnvelope(readFileSync(EVENTS_HANDLER, 'utf8'), handler);
+      expect(envelope, `${handler} success response not found`).not.toBe('');
+      const missing = (snapshot.endpoints[endpoint].envelope_keys as string[]).filter(
+        (key) => !new RegExp(`(^|[\\s{,])${key}\\s*[:,}\\n]`).test(envelope)
+      );
+      expect(
+        missing,
+        `${handler} no longer writes these envelope keys (snapshot v${snapshot.version}). A ` +
+          'consumer reads each one. To remove one on purpose, remove it from the snapshot and ' +
+          'bump the version.'
+      ).toEqual([]);
+    });
+  }
+
   test('OSE-INV16 | api | envelope | handleGetEvent returns item envelope key', () => {
     const src = readFileSync(EVENTS_HANDLER, 'utf8');
     // The public detail response is { ok, status, item }. If `item` is renamed,

@@ -157,7 +157,7 @@ function privacyNotice(formType: NoticeForm, legalTier = 1, lang: Lang = DEFAULT
         'We collect your name and, if you choose, your email, so the organizer can reach you if this event changes.';
       legalBasis = 'GDPR Art. 6(1)(a) — your <strong>consent</strong>.';
       retention =
-        'Your name and email are encrypted, and <strong>cleared the day after the event</strong>. The rest of the registration is deleted after 90 days.';
+        'Your name and email are encrypted, and <strong>cleared the day after the event</strong>. The rest of the registration is deleted 90 days after you register, or the day after the event if that is later.';
   }
 
   let addenda = '';

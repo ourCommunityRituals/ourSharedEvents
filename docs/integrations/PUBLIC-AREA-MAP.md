@@ -1,7 +1,7 @@
 # The public area map: a note for a reader outside OurSharedEvents
 
 For the OurWKRP creator showcase (`showcase/lib/map.mjs`), the first reader. Story OSE-2039,
-decision OSE ADR-031. Source: `workers/oursharedevents/src/handlers/map-areas.ts`.
+decision OSE ADR-032. Source: `workers/oursharedevents/src/handlers/map-areas.ts`.
 
 ## The request
 

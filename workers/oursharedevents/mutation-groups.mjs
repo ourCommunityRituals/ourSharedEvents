@@ -10,7 +10,7 @@
 //   landing  the landing's Type row: landing-area.ts, the event-  30%
 //            type catalog and its read, the events.ts range
 //   guards   the privacy and auth guards: admin.ts, count-floor.ts, 18%
-//            pii.ts, report-depth.ts
+//            pii.ts, report-depth.ts, retention-windows.ts
 //   render   the street map and the page renderers: mvt.ts,        19%
 //            pmtiles.ts, street-map.ts, every pages.ts range, the
 //            Language menu, the sponsor art and logo rules
@@ -59,6 +59,7 @@ export const MUTATION_GROUPS = Object.freeze({
     'src/lib/count-floor.ts',
     'src/lib/pii.ts',
     'src/lib/report-depth.ts',
+    'src/lib/retention-windows.ts',
   ]),
   render: Object.freeze([
     'src/lib/mvt.ts',

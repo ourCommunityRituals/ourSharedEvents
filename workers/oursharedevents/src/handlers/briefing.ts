@@ -82,7 +82,7 @@ const SECTIONS: Section[] = [
       },
       {
         h: 'Advantage 2: Breach-Proof by Design',
-        p: "If our main database is breached, the attacker gets: event schedules and anonymous scan counts. No names, no emails, no phone numbers.\n\nThe small amount of personal data we do handle (event registrations, email signups) lives in a completely separate database with automatic destruction timers. Emails self-delete after 30 days. Registrations after 90. That data is also encrypted and scrambled so even during its short life, it's protected. Two separate databases means a breach of one reveals nothing about the other.",
+        p: "If our main database is breached, the attacker gets: event schedules and anonymous scan counts. No names, no emails, no phone numbers.\n\nThe small amount of personal data we do handle (event registrations, email signups) lives in a completely separate database with automatic destruction timers. Emails self-delete after 30 days. Registrations after 90, or the day after the event if that is later. That data is also encrypted and scrambled so even during its short life, it's protected. Two separate databases means a breach of one reveals nothing about the other.",
       },
       {
         h: 'Advantage 3: The Flywheel',

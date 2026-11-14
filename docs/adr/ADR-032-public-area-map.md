@@ -1,4 +1,4 @@
-# ADR-031: Serve the drawn area map as a public read of cells
+# ADR-032: Serve the drawn area map as a public read of cells
 
 **Status:** Proposed. Built as written here; the owner ratifies it by merging the pull request.
 **Date:** 2026-11-14

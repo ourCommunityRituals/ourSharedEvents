@@ -41,6 +41,9 @@ export const FLOORS = {
   'src/lib/i18n/language-switch.ts': 95,
   'src/lib/i18n/catalog.ts': 95,
   'src/lib/pii.ts': 95,
+  // OSE-826 (2026-11-13): when a registration expires. A local run scored 100
+  // (26 of 26 killed, 0 timed out). Never lower.
+  'src/lib/retention-windows.ts': 100,
   // OSE-1824 (2026-11-09): the landing's Type row by event-type category, at
   // the scores of the run that added them. One equivalent mutant in the catalog
   // read carries a written `// Stryker disable` reason. landing-area.ts is 306 of
