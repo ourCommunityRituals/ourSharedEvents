@@ -165,6 +165,9 @@ export const NODE_SPECS = [
   'tests/street-map.spec.ts',
   'tests/street-map-landing.spec.ts',
   'tests/map-areas.spec.ts',
+  // The check a cut archive passes before it is loaded into R2
+  // (scripts/street-map-archive/check.ts), over in-memory archives.
+  'tests/street-map-archive-check.spec.ts',
   'tests/map-zoom.spec.ts',
   'tests/map-place-links.spec.ts',
   // WHAT external link — event-page render fns emit the optional outbound link

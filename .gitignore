@@ -135,5 +135,10 @@ __pycache__/
 .h3-stub.measure-startup.tmp.mjs
 .wrangler.measure-startup.tmp.toml
 
+# Street-map archives and their check records (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md):
+# cut at the repo root, many gigabytes, kept by the owner, never committed.
+*.pmtiles
+*.pmtiles.check.json
+
 # StrykerJS output (stryker.ci-scripts.conf.mjs)
 /reports/
