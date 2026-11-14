@@ -15,7 +15,7 @@ http:
       value: "application/json"
   body:
     type: json
-    data: '{"series_id":"evtsrs_ci_decline"}'
+    data: '{"series_id":"evtsrs_ci_decline","name":"Thursday late room"}'
   auth: inherit
 
 runtime:

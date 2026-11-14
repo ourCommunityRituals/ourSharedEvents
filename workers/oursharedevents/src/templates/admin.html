@@ -1786,7 +1786,7 @@
             if (window.seriesWrite) window.seriesWrite(argOf(el, 'event-id'), 'PUT', '', { series_id: argOf(el, 'series-id') }, el);
           },
           'series-confirm': function (el) {
-            if (window.seriesWrite) window.seriesWrite(argOf(el, 'event-id'), 'POST', '/confirm', { series_id: argOf(el, 'series-id'), event_ids: [argOf(el, 'event-id')] }, el);
+            if (window.seriesConfirm) window.seriesConfirm(el);
           },
           'series-reject': function (el) {
             if (window.seriesWrite) window.seriesWrite(argOf(el, 'event-id'), 'POST', '/reject', { series_id: argOf(el, 'series-id'), reason: 'not_recurring' }, el);
@@ -8276,11 +8276,48 @@
             b.setAttribute('data-series-id', String(p.id));
             row.appendChild(b);
           });
+          // OSE-2041: a confirmed series' name is public, so the organizer names
+          // it here. The field starts empty: the job's label is never offered.
+          var form = document.createElement('div');
+          form.className = 'create-form';
+          var cell = document.createElement('div');
+          cell.className = 'full-width';
+          var label = document.createElement('label');
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.id = 'series-suggest-name-' + String(p.id);
+          input.maxLength = 80;
+          input.setAttribute('maxlength', '80');
+          input.setAttribute('autocomplete', 'off');
+          label.setAttribute('for', input.id);
+          label.textContent = 'Name this series';
+          cell.appendChild(label);
+          cell.appendChild(input);
+          form.appendChild(cell);
           li.appendChild(line);
+          li.appendChild(form);
           li.appendChild(row);
           list.appendChild(li);
         });
         sugg.hidden = pending.length === 0;
+      };
+      /**
+       * OSE-2041: answer Yes to a suggestion. The name comes from the field on
+       * that suggestion. With no name nothing is sent: the card says what to do
+       * and puts the cursor in the field.
+       */
+      window.seriesConfirm = function (el) {
+        var li = el.closest ? el.closest('li') : null;
+        var input = li ? li.querySelector('input') : null;
+        var name = input ? String(input.value || '').trim() : '';
+        if (!name) {
+          var m = document.getElementById('series-msg');
+          if (m) { m.textContent = 'Give the series a name first, then choose Yes.'; m.className = 'create-msg error'; }
+          if (input) input.focus();
+          return Promise.resolve();
+        }
+        var id = el.getAttribute('data-event-id');
+        return window.seriesWrite(id, 'POST', '/confirm', { series_id: el.getAttribute('data-series-id'), name: name, event_ids: [id] }, el);
       };
       /** OSE-2019: read the selected event's series and fill the card. */
       window.loadEventSeries = async function (id) {
