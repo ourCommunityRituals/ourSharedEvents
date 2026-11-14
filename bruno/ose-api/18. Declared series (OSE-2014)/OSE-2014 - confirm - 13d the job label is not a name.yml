@@ -1,0 +1,32 @@
+info:
+  name: OSE-2014 | rainy | confirm | the detector's own label is refused as a name
+  type: http
+  seq: 138
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-sugg-evt/series/confirm"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"series_id":"evtsrs_ci_suggest","name":"Thursday 7 PM (auto-detected)"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2014 rainy: confirm: 400 INVALID_NAME for a name that says auto-detected', function () { expect(res.getStatus()).to.eql(400); expect(res.getBody().code).to.eql('INVALID_NAME'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

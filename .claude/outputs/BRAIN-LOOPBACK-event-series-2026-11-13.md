@@ -104,3 +104,14 @@ _Proposal (OSE, small):_ the admin card asks for a name when confirming. Not don
 3. Lock the response siblings in the snapshot (F2).
 4. Registry and monitor wording (F4, F5).
 5. Ask for a name at confirm (F7).
+
+## 6. Owner decisions, 2026-11-14
+
+The owner answered "yes" to all four open items.
+
+| Item                                        | Decision                    | Where it landed                                                                        |
+| ------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------- |
+| F3, series names in the BigQuery export     | Yes: the name may leave OSE | ADR-029 D14. No export code changed                                                    |
+| F1, F2, F4, F5, F6, the brain proposals     | Yes: make them              | OCR-docs PR under OCR-212 (the owner reviews and merges it); F2's OSE half is OSE-2042 |
+| F7, ask for a name at confirm               | Yes                         | OSE-2041, ADR-029 D13                                                                  |
+| The drift ticket for the failed brain check | Close it                    | OCR-210, closed with its cause                                                         |

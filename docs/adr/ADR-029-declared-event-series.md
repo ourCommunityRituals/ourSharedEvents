@@ -126,6 +126,23 @@ from the card attaches the selected event, since that is the event the organizer
 `tests/e2e/0-architecture/event-series.invariant.spec.ts` runs in the T0 `invariants` step. It reads
 source, so it catches a writer added later.
 
+## Amendments of 2026-11-14 (owner: "yes to all 4")
+
+**D13. Confirming a suggestion needs a name (OSE-2041).** `POST …/series/confirm` requires `name`.
+A name that says "auto-detected" is refused at confirm and at declare: that label is the nightly
+job's own. So no confirmed series carries it, and none reaches a public read. The admin card shows a
+name field on each suggestion; it starts empty, and Yes with no name sends nothing.
+
+**D14. A series name may leave OSE in the BigQuery export (owner decision, 2026-11-14).** The export
+`event_series_export` keeps `series_name`. No export code changes. The name rule stands in front of
+it: 80 characters, no contact detail, never the job's label. A name can still be a person's first
+name, by the organizer's own choice; on staging the neutral-name rule of the showcase plan still
+governs what the owner types.
+
+**D15. The response siblings are locked (OSE-2042).** `public-events.snapshot.json` v1.4.0 lists
+`sponsor_titles` and `series` in `envelope_keys`, and the invariant 16 gate fails when a handler
+stops writing one.
+
 ## Consequences
 
 - A programme can sit on a series from its first event, online or in person.
@@ -136,14 +153,11 @@ source, so it catches a writer added later.
   so it does not cover a detector cluster; the detector may still suggest a weekly series beside it.
 - `day_of_week` and `hour_of_day` on a declared row are what the organizer stated. On a detected row
   they come from `start_date` as stored. Nothing compares the two today.
-- A series name becomes public once the series is confirmed. It is the organizer's own label, and
-  the name rule (no contact detail, 80 characters) applies at declare and at confirm. A detector's
-  auto-name ("Thursday 7 PM (auto-detected)") becomes public if confirmed without a new name.
+- A series name becomes public once the series is confirmed. It is always a name a person gave
+  (D13): the name rule applies at declare and at confirm.
 - The BigQuery export of confirmed series (`exportEventSeries`, table `event_series_export`) existed
   before this ADR and had nothing to send. It now sends each declared or confirmed series, its name
-  included. No export code changed. The brain loop-back
-  (`.claude/outputs/BRAIN-LOOPBACK-event-series-2026-11-13.md`, finding F3) asks the owner to confirm
-  that a series name may leave OSE.
+  included. The owner confirmed that on 2026-11-14 (D14).
 - ourWKRP can check from the public API that a programme event sits on a series. It still cannot
   tell a declared series from a confirmed suggestion, by design.
 

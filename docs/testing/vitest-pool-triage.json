@@ -321,7 +321,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 26
+      "testCount": 30
     },
     {
       "file": "workers/oursharedevents/tests/admin-servicetoken-fallthrough.spec.ts",
@@ -1203,7 +1203,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 50
+      "testCount": 56
     },
     {
       "file": "workers/oursharedevents/tests/event-start-datetime.spec.ts",
