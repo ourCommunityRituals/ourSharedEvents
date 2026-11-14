@@ -107,19 +107,31 @@ const touchesStaging = (g) =>
 const conc = ci.concurrency;
 const groupFor = (g) => evaluate(conc.group, g);
 const cancelFor = (g) => evaluate(String(conc['cancel-in-progress']), g);
+const queueFor = (g) => {
+  const q = String(conc.queue ?? 'single');
+  return q.includes('${{') ? evaluate(q, g) : q;
+};
 
 describe('one staging chain at a time', () => {
-  test('waiting runs queue in order instead of replacing each other', () => {
-    // queue: single (the default) keeps one waiting run; a third arrival cancels it.
-    expect(conc.queue).toBe('max');
-  });
-
   test.each(Object.keys(TRIGGERS).filter((k) => touchesStaging(TRIGGERS[k])))(
-    '%s takes the staging lock and is never cancelled by the next run',
+    '%s takes the staging lock, queues in order and is never cancelled by the next run',
     (name) => {
       const g = TRIGGERS[name];
       expect(groupFor(g)).toBe(LOCK);
       expect(cancelFor(g)).toBe(false);
+      // queue: single (the default) keeps one waiting run; a third arrival cancels it.
+      expect(queueFor(g)).toBe('max');
+    }
+  );
+
+  test.each(Object.keys(TRIGGERS))(
+    '%s: GitHub accepts the run (never queue max with cancel)',
+    (name) => {
+      // GitHub refuses a run whose concurrency resolves to queue: max with
+      // cancel-in-progress: true ("workflow file issue"; PR #1234's first run, 43571814615).
+      const g = TRIGGERS[name];
+      expect(['single', 'max']).toContain(queueFor(g));
+      expect(queueFor(g) === 'max' && cancelFor(g) === true).toBe(false);
     }
   );
 
