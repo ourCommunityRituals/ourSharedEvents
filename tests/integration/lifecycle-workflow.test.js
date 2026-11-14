@@ -51,6 +51,7 @@ describe('when it runs', () => {
     expect(wf.concurrency).toEqual({
       group: 'stg-writer',
       'cancel-in-progress': false,
+      queue: 'max',
     });
   });
 

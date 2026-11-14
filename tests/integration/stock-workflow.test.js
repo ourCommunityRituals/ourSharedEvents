@@ -69,7 +69,11 @@ describe('triggers and posture', () => {
 
   // One writer on stg at a time (CCR 2026-11-07 R-07; tests/integration/stg-writer-concurrency.test.js).
   test('one run at a time, never cancelled by the next', () => {
-    expect(wf.concurrency).toEqual({ group: 'stg-writer', 'cancel-in-progress': false });
+    expect(wf.concurrency).toEqual({
+      group: 'stg-writer',
+      'cancel-in-progress': false,
+      queue: 'max',
+    });
   });
 
   test('every job is on ubuntu-24.04', () => {

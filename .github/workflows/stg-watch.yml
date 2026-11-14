@@ -15,9 +15,9 @@
 #   announce  a red run opens a GitHub issue (label ci-red:stg-watch), or comments
 #             on the open one; the next green run closes it (scripts/ci/announce-run.mjs).
 #
-# Reads only: no deploy, no D1 or R2, no writes to stg. Not in the stg-writer group
-# (GitHub keeps one waiting run per group, so a waiting read could replace a
-# waiting load). Runs well after the 09:23 UTC load and again in the evening.
+# Reads only: no deploy, no D1 or R2, no writes to stg. Not in the stg-writer group:
+# a read has nothing to keep apart, and in the queue it would only hold up the
+# writers. Runs well after the 09:23 UTC load and again in the evening.
 # Secrets: OCR_CI_EDGE_TOKEN, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET (the
 # stock check's own read headers), masked and never printed.
 
