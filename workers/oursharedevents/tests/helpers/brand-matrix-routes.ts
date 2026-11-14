@@ -99,6 +99,11 @@ function eventRoute(
   };
 }
 
+/** `bm-<brand>-active` with that brand's own booth, `bm-<brand>-booth` (seeded by brand-matrix.ts). */
+function boothPath(eventId: string): string {
+  return `/api/v2/admin/events/${eventId}/booths/${eventId.replace(/-active$/, '-booth')}`;
+}
+
 /** `bm-<brand>-campaign` with that brand's own placement, `spl_bm-<brand>-sponsor`. */
 function campaignPlacementPath(campaignId: string): string {
   const placementId = `spl_${campaignId.replace(/-campaign$/, '-sponsor')}`;
@@ -240,6 +245,20 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
   eventRoute('/api/v2/admin/events/:id/series/reject', 'POST', '/series/reject', {
     body: () => ({ series_id: 'evtsrs_matrix' }),
   }),
+  // OSE-1998: a booth is part of a fair. A cross-brand call must 404 and leave
+  // every booth as it was; the by-id routes address the TARGET brand's own booth.
+  eventRoute('/api/v2/admin/events/:id/booths', 'GET', '/booths'),
+  eventRoute('/api/v2/admin/events/:id/booths', 'POST', '/booths', {
+    body: () => ({ number: 'M1', name: 'Matrix stall' }),
+  }),
+  eventRoute('/api/v2/admin/events/:id/booths/bulk', 'POST', '/booths/bulk', {
+    body: () => ({ booths: [{ number: 'M1', name: 'Matrix stall' }] }),
+  }),
+  eventRoute('/api/v2/admin/events/:id/booths/:id', 'PUT', '', {
+    path: boothPath,
+    body: () => ({ name: 'bm-cross-write' }),
+  }),
+  eventRoute('/api/v2/admin/events/:id/booths/:id', 'DELETE', '', { path: boothPath }),
   eventRoute('/api/v2/admin/events/:id/verify-qr', 'POST', '/verify-qr'),
   eventRoute('/api/v2/admin/events/:id/unverify-qr', 'POST', '/unverify-qr'),
   eventRoute('/api/v2/admin/events/:id/backup', 'POST', '/backup'),

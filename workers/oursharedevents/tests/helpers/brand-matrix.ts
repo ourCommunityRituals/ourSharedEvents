@@ -100,6 +100,12 @@ export async function seedBrandFixture(): Promise<void> {
     )
       .bind(b.posterDeploymentId, b.activeEventId, `qrt_${b.posterDeploymentId}`)
       .run();
+    // OSE-1998: one booth on the live event, for the booth by-id routes.
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO event_booths (id, event_id, number, name) VALUES (?, ?, 'M0', ?)`
+    )
+      .bind(`${b.marker}booth`, b.activeEventId, `${b.marker}booth`)
+      .run();
   }
   (routerEnv as { ADMIN_BRAND_MEMBERSHIP?: string }).ADMIN_BRAND_MEMBERSHIP = membershipJson();
 }
@@ -234,6 +240,12 @@ export async function snapshotFixture(): Promise<string> {
     `SELECT * FROM sponsor_asset WHERE sponsor_business_id LIKE 'bm-%' ORDER BY 1`
   ).all();
   out.sponsor_asset = assets.results;
+  // A refused cross-brand booth write must leave every booth as it was (OSE-1998).
+  out.event_booths = (
+    await env.DB.prepare(
+      `SELECT * FROM event_booths WHERE id LIKE 'bm-%' OR event_id LIKE 'bm-%' ORDER BY id`
+    ).all()
+  ).results;
   // A refused cross-brand series write must leave no series row either (OSE ADR-029).
   out.event_series = (await env.DB.prepare(`SELECT * FROM event_series ORDER BY id`).all()).results;
   // Rows a refused cross-brand create would have left behind.

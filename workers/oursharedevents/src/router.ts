@@ -52,6 +52,11 @@
  *   DELETE /api/v2/admin/events/:id/series → detach this event from its series (auth, audited)
  *   POST   /api/v2/admin/events/:id/series/confirm → accept a detector suggestion (auth, audited)
  *   POST   /api/v2/admin/events/:id/series/reject  → turn a detector suggestion down (auth, audited)
+ *   GET    /api/v2/admin/events/:id/booths → the event's booths, in use first, then by sort and number (auth, OSE-1998, OSE ADR-034)
+ *   POST   /api/v2/admin/events/:id/booths → add one booth: number, trading name, category, hall spot; no person field (auth, audited)
+ *   POST   /api/v2/admin/events/:id/booths/bulk → add up to 200 booths, all or nothing; names every refused row (auth, audited)
+ *   PUT    /api/v2/admin/events/:id/booths/:boothId → change a booth of this event (auth, audited)
+ *   DELETE /api/v2/admin/events/:id/booths/:boothId → take a booth out of use; never removed, its placements stay (auth, audited)
  *   GET    /api/v2/admin/events/:id/preview → draft/ready pre-event page, HTML, no-store + noindex (auth, OSE-1355)
  *   GET    /api/v2/admin/events/:id/poster-preview → draft/ready poster, HTML, no-store + noindex (auth)
  *   GET    /api/v2/admin/events/:id/live → organizer's live view of one event, HTML, no-store + noindex (auth)
@@ -110,10 +115,10 @@
  *   GET    /api/v2/events/:id/display-config   → TV order + dwell + league/donate links + event QR (ETag, 304)
  *
  *   Poster Deployments Admin (auth required):
- *   POST   /api/v2/admin/events/:id/poster-deployments  → create deployment (with H3 tagging)
+ *   POST   /api/v2/admin/events/:id/poster-deployments  → create deployment (with H3 tagging; optional booth_id, an active booth of the same event)
  *   GET    /api/v2/admin/events/:id/poster-deployments  → list deployments for event
  *   GET    /api/v2/admin/poster-deployments/:id         → get single deployment
- *   PUT    /api/v2/admin/poster-deployments/:id         → update (re-tags H3 when coords change)
+ *   PUT    /api/v2/admin/poster-deployments/:id         → update (re-tags H3 when coords change; booth_id an active booth of its event, or null)
  *   DELETE /api/v2/admin/poster-deployments/:id         → soft-delete (is_active=0)
  *   POST   /api/v2/admin/poster-deployments/backfill-h3 → backfill H3 for existing rows
  *   POST   /api/v2/admin/geocode                        → address to coordinates for a placement; the server derives the H3 cell from them (auth, OSE-238)
@@ -216,6 +221,13 @@ import {
   handleGetEventSeries,
   handleRejectEventSeries,
 } from './handlers/event-series';
+import {
+  handleBulkCreateEventBooths,
+  handleCreateEventBooth,
+  handleDeactivateEventBooth,
+  handleListEventBooths,
+  handleUpdateEventBooth,
+} from './handlers/event-booths';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
   handleOperationsDashboard,
@@ -1277,6 +1289,64 @@ export async function route(
       'event',
       adminEventSeriesRejectMatch[1]
     );
+    return response;
+  }
+
+  // /api/v2/admin/events/:id/booths — a booth is part of a fair (OSE-1998, OSE ADR-034).
+  // The event in the path is brand-scoped by guardAdminObjectScope above, and the
+  // admin write guard has checked every write; the handler reads a booth only
+  // with the path event as a bound predicate. Each write is audited against the
+  // event, so the row carries the event's brand.
+  const adminEventBoothsMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/booths$/);
+  if (adminEventBoothsMatch && (method === 'GET' || method === 'POST')) {
+    const boothEventId = adminEventBoothsMatch[1];
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      if (method === 'POST') _audit(reqId, 'CREATE_BOOTH', 'denied', 'event', boothEventId);
+      return authRes;
+    }
+    if (method === 'GET') return handleListEventBooths(request, env, boothEventId); // a read is not audited
+    const response = await handleCreateEventBooth(request, env, boothEventId);
+    _audit(reqId, 'CREATE_BOOTH', _auditOutcome(response), 'event', boothEventId);
+    return response;
+  }
+
+  const adminEventBoothsBulkMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/booths\/bulk$/
+  );
+  if (adminEventBoothsBulkMatch && method === 'POST') {
+    const boothEventId = adminEventBoothsBulkMatch[1];
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      _audit(reqId, 'CREATE_BOOTHS_BULK', 'denied', 'event', boothEventId);
+      return authRes;
+    }
+    const response = await handleBulkCreateEventBooths(request, env, boothEventId);
+    _audit(reqId, 'CREATE_BOOTHS_BULK', _auditOutcome(response), 'event', boothEventId);
+    return response;
+  }
+
+  // `bulk` is matched above for POST only; as a booth id it is simply a booth
+  // that does not exist (404), never the bulk route.
+  const adminEventBoothMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/booths\/([^/]+)$/
+  );
+  if (adminEventBoothMatch && (method === 'PUT' || method === 'DELETE')) {
+    const [, boothEventId, boothId] = adminEventBoothMatch;
+    const action = method === 'PUT' ? 'UPDATE_BOOTH' : 'DEACTIVATE_BOOTH';
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      _audit(reqId, action, 'denied', 'event', boothEventId);
+      return authRes;
+    }
+    const response =
+      method === 'PUT'
+        ? await handleUpdateEventBooth(request, env, boothEventId, boothId)
+        : await handleDeactivateEventBooth(request, env, boothEventId, boothId);
+    _audit(reqId, action, _auditOutcome(response), 'event', boothEventId);
     return response;
   }
 
