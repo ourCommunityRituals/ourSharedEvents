@@ -23,6 +23,11 @@ Owner decisions:
 ("Street-map archive load (stg)" in the Actions tab). It is dispatched by hand,
 from `main` only, and loads staging only.
 
+**Accepting this path is the owner's decision, made by merging the PR that
+carries the workflow and this runbook.** No agent decides it: wherever this text
+is not on `main`, it is a proposal. After the merge still nothing runs until the
+owner dispatches the workflow.
+
 **What stays the owner's**, all of it in a browser: creating the R2 token,
 setting it as a secret, dispatching the workflow, deleting the token afterwards,
 and merging. An agent never creates a bucket, never holds or reads the token,
