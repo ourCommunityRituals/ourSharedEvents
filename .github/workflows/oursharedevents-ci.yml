@@ -1324,6 +1324,21 @@ jobs:
             echo "::warning title=ANON_ID_HASH_PEPPER missing::ANON_ID_HASH_PEPPER is not set on the staging worker: scans are stored with no id and returning visitors are not counted (OSE-1659). Provision it: bash scripts/set-secrets.sh staging"
           fi
 
+      # ────────────────────────────────────────────────────────────────────
+      # OSE-2016: the dry run a migration's author wrote, taken on staging data
+      # BEFORE the migration is applied. Read only: the script refuses any
+      # statement that is not a SELECT. It runs the dry-run file of each pending
+      # migration (workers/oursharedevents/scripts/dry-run-NNNN-*.sql) and puts
+      # the counts in the job summary. A dry-run file that cannot be run stops
+      # the job here, before the apply steps. It uses the credential those
+      # steps already hold: no new secret, no new permission.
+      # ────────────────────────────────────────────────────────────────────
+      - name: 'Dry run: pending migrations, read only, before they are applied (OSE-2016)'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/ci/migration-dry-run.mjs --pending --env staging --remote
+
       - name: Apply D1 migrations (main DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}

@@ -1,0 +1,59 @@
+name: Migration dry run (staging)
+
+# OSE-2016. Runs one migration dry-run file against STAGING and prints its counts
+# in the job summary. Read only: scripts/ci/migration-dry-run.mjs refuses any
+# statement that is not a SELECT, and it has no production mode.
+#
+# The T1 staging deploy already runs the dry-run file of every pending migration
+# before it applies them. This workflow is for the other case: reading a file's
+# counts on demand, for example after its migration is applied.
+#
+# The file is named by its file name in workers/oursharedevents/scripts/, for
+# example dry-run-0108-attendance-mode.sql. The name is checked for shape, so it
+# cannot be a path. It never targets production: `--env production` appears
+# nowhere in this file (held by tests/unit/ci/migration-dry-run.test.js).
+
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: 'The dry-run file name, e.g. dry-run-0108-attendance-mode.sql'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    name: 'Migration dry run on staging (read only)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        # The worker's install needs the hub packages at the pinned commit.
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install dependencies (worker)
+        working-directory: workers/oursharedevents
+        run: npm ci --prefer-offline || npm ci
+
+      - name: 'Run the dry-run file on staging (read only)'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DRY_RUN_FILE: ${{ github.event.inputs.file }}
+        run: node scripts/ci/migration-dry-run.mjs --file "$DRY_RUN_FILE" --env staging --remote
