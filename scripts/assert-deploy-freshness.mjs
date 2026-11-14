@@ -56,6 +56,93 @@ export function isFresh(version, expectedSha) {
   return sha === want || sha.startsWith(want) || want.startsWith(sha);
 }
 
+/**
+ * A gateway status that says "not answering right now", not "wrong build":
+ * 502/503/504. The Worker's /health answers 503 when D1's `SELECT 1` throws
+ * (handlers/health.ts); the edge answers 502/503/504 on its own faults. A 4xx
+ * is a configuration fault (Access headers, route) and a 500 is a Worker bug;
+ * neither is retried.
+ */
+export function isTransientStatus(status) {
+  return status === 502 || status === 503 || status === 504;
+}
+
+/**
+ * Fetch /health, trying again on a transient status or a network error.
+ *
+ * Run 43574886316 (2026-11-14) failed on one 503 at 08:54:10; the same URL
+ * answered 200 with the right version 6 s earlier for two other T4 legs, and
+ * those legs then ran their suites with no 5xx. One blip is not evidence of a
+ * stale build, so it gets `attempts` tries. Anything that is not transient,
+ * including a 200 carrying a stale version, returns at once: the gate still
+ * fails on the first stale read, and it still fails closed when the target
+ * stays down. `fetchImpl` and `sleep` are injectable for the unit tests.
+ */
+export async function readHealth(
+  url,
+  headers,
+  {
+    fetchImpl = fetch,
+    sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+    attempts = 3,
+    waitMs = 5000,
+  } = {}
+) {
+  for (let attempt = 1; ; attempt++) {
+    let res;
+    try {
+      res = await fetchImpl(url, { headers, signal: AbortSignal.timeout(30000) });
+    } catch (e) {
+      if (attempt >= attempts) throw e;
+      console.log(
+        `deploy-freshness: try ${attempt}/${attempts} could not reach ${url} (${e.message}); trying again.`
+      );
+      await sleep(waitMs * attempt);
+      continue;
+    }
+    if (!isTransientStatus(res.status) || attempt >= attempts) return res;
+    console.log(
+      `deploy-freshness: try ${attempt}/${attempts} got HTTP ${res.status} (${await describeFailure(res)}); trying again.`
+    );
+    await sleep(waitMs * attempt);
+  }
+}
+
+/**
+ * One line saying where a non-200 came from, so the next one can be told apart:
+ * the Worker's own 503 carries JSON with `db` ("error" = D1 threw); an edge
+ * error page is HTML with a Cloudflare error code. Only named /health fields
+ * are printed, never the whole body.
+ */
+export async function describeFailure(res) {
+  const parts = [`cf-ray=${res.headers.get('cf-ray') ?? 'none'}`];
+  let text = '';
+  try {
+    text = await res.text();
+  } catch {
+    // body unreadable: the ray id is still worth printing
+  }
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // not JSON: an edge page
+  }
+  if (json && typeof json === 'object') {
+    for (const key of ['ok', 'db', 'env', 'version']) {
+      if (key in json) parts.push(`${key}=${JSON.stringify(json[key]).replace(/^"|"$/g, '')}`);
+    }
+  } else if (text) {
+    const excerpt = text
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200);
+    parts.push(`body="${excerpt}"`);
+  }
+  return parts.join(' ');
+}
+
 function fail(msg) {
   console.error(msg);
   process.exit(1);
@@ -72,7 +159,12 @@ function runSelfTest() {
     // Full-length merge sha (longer than the short deployed sha) → prefix match.
     // Built at runtime so no 40-char hex literal sits in source (detect-secrets
     // reads a committed high-entropy hex string as a secret — OCR-130 lesson).
-    ['full-length merge sha matches short deployed sha (prefix)', 'stg-abc1234-20260908', 'abc1234' + 'a'.repeat(33), true],
+    [
+      'full-length merge sha matches short deployed sha (prefix)',
+      'stg-abc1234-20260908',
+      'abc1234' + 'a'.repeat(33),
+      true,
+    ],
     ['empty merge sha fails closed', 'stg-abc1234-20260908', '', false],
     ['the date segment is NOT mistaken for the sha', 'stg-abc1234-20260908', '20260908', false],
     ['case-insensitive sha match', 'stg-ABC1234-20260908', 'abc1234', true],
@@ -97,17 +189,24 @@ async function main() {
   }
 
   const headers = {};
-  if (process.env.CF_ACCESS_CLIENT_ID) headers['CF-Access-Client-Id'] = process.env.CF_ACCESS_CLIENT_ID;
-  if (process.env.CF_ACCESS_CLIENT_SECRET) headers['CF-Access-Client-Secret'] = process.env.CF_ACCESS_CLIENT_SECRET;
+  if (process.env.CF_ACCESS_CLIENT_ID)
+    headers['CF-Access-Client-Id'] = process.env.CF_ACCESS_CLIENT_ID;
+  if (process.env.CF_ACCESS_CLIENT_SECRET)
+    headers['CF-Access-Client-Secret'] = process.env.CF_ACCESS_CLIENT_SECRET;
 
   let res;
   try {
-    res = await fetch(healthUrl, { headers, signal: AbortSignal.timeout(30000) });
+    res = await readHealth(healthUrl, headers);
   } catch (e) {
-    fail(`deploy-freshness: could not reach ${healthUrl} — ${e.message}. An unreachable target is not a fresh one.`);
+    fail(
+      `deploy-freshness: could not reach ${healthUrl} — ${e.message}. An unreachable target is not a fresh one.`
+    );
   }
   if (res.status !== 200) {
-    fail(`deploy-freshness: ${healthUrl} returned HTTP ${res.status} (expected 200). Cannot confirm the deployed build.`);
+    fail(
+      `deploy-freshness: ${healthUrl} returned HTTP ${res.status} (expected 200; ${await describeFailure(res)}). ` +
+        `Cannot confirm the deployed build.`
+    );
   }
   let body;
   try {

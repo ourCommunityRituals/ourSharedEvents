@@ -13,9 +13,131 @@
 
 let isFresh;
 let parseSha;
+let readHealth;
+let isTransientStatus;
+let describeFailure;
 
 beforeAll(async () => {
-  ({ isFresh, parseSha } = await import('../../../scripts/assert-deploy-freshness.mjs'));
+  ({ isFresh, parseSha, readHealth, isTransientStatus, describeFailure } =
+    await import('../../../scripts/assert-deploy-freshness.mjs'));
+});
+
+/** A fake fetch that answers each call from `script` in turn (a status or an Error). */
+function scriptedFetch(script) {
+  const calls = [];
+  const impl = async (url, init) => {
+    calls.push({ url, init });
+    const next = script[Math.min(calls.length - 1, script.length - 1)];
+    if (next instanceof Error) throw next;
+    const {
+      status,
+      body = { version: 'stg-abc1234-20261114', db: status === 200 ? 'ok' : 'error' },
+    } = typeof next === 'number' ? { status: next } : next;
+    return new Response(typeof body === 'string' ? body : JSON.stringify(body), {
+      status,
+      headers: {
+        'content-type': typeof body === 'string' ? 'text/html' : 'application/json',
+        'cf-ray': 'ray-1',
+      },
+    });
+  };
+  impl.calls = calls;
+  return impl;
+}
+
+const noSleep = async () => {};
+
+describe('deploy-freshness readHealth — one transient 503 is not a stale build', () => {
+  test('a 503 then a 200 reads the 200 on the second try (run 43574886316)', async () => {
+    const fetchImpl = scriptedFetch([503, 200]);
+    const res = await readHealth('https://stg.example/health', {}, { fetchImpl, sleep: noSleep });
+    expect(res.status).toBe(200);
+    expect(fetchImpl.calls).toHaveLength(2);
+  });
+
+  test('a network error then a 200 reads the 200', async () => {
+    const fetchImpl = scriptedFetch([new TypeError('fetch failed'), 200]);
+    const res = await readHealth('https://stg.example/health', {}, { fetchImpl, sleep: noSleep });
+    expect(res.status).toBe(200);
+  });
+
+  test('a 503 on every try still fails closed after the last attempt', async () => {
+    const fetchImpl = scriptedFetch([503]);
+    const res = await readHealth(
+      'https://stg.example/health',
+      {},
+      { fetchImpl, sleep: noSleep, attempts: 3 }
+    );
+    expect(res.status).toBe(503);
+    expect(fetchImpl.calls).toHaveLength(3);
+  });
+
+  test('a network error on every try rethrows after the last attempt', async () => {
+    const fetchImpl = scriptedFetch([new TypeError('fetch failed')]);
+    await expect(
+      readHealth('https://stg.example/health', {}, { fetchImpl, sleep: noSleep, attempts: 2 })
+    ).rejects.toThrow('fetch failed');
+    expect(fetchImpl.calls).toHaveLength(2);
+  });
+
+  test('a 4xx is not retried: it is a configuration fault, not a blip', async () => {
+    const fetchImpl = scriptedFetch([403, 200]);
+    const res = await readHealth('https://stg.example/health', {}, { fetchImpl, sleep: noSleep });
+    expect(res.status).toBe(403);
+    expect(fetchImpl.calls).toHaveLength(1);
+  });
+
+  test('a 200 is never retried, so a stale version still fails on the first read', async () => {
+    const fetchImpl = scriptedFetch([
+      { status: 200, body: { version: 'stg-def5678-20261114' } },
+      200,
+    ]);
+    const res = await readHealth('https://stg.example/health', {}, { fetchImpl, sleep: noSleep });
+    expect(fetchImpl.calls).toHaveLength(1);
+    expect(isFresh((await res.json()).version, 'abc1234')).toBe(false);
+  });
+
+  test('waits between tries', async () => {
+    const waits = [];
+    const fetchImpl = scriptedFetch([503, 503, 200]);
+    await readHealth(
+      'https://stg.example/health',
+      {},
+      { fetchImpl, sleep: async (ms) => waits.push(ms) }
+    );
+    expect(waits.length).toBe(2);
+    expect(waits.every((ms) => ms > 0)).toBe(true);
+  });
+
+  test('only 502, 503 and 504 count as transient', () => {
+    expect([502, 503, 504].every(isTransientStatus)).toBe(true);
+    expect([200, 400, 401, 403, 404, 429, 500].some(isTransientStatus)).toBe(false);
+  });
+});
+
+describe('deploy-freshness describeFailure — the next 503 says where it came from', () => {
+  test('a Worker 503 names its db field and the cf-ray', async () => {
+    const res = new Response(
+      JSON.stringify({ ok: false, db: 'error', version: 'stg-abc1234-20261114', _debug: {} }),
+      {
+        status: 503,
+        headers: { 'content-type': 'application/json', 'cf-ray': 'ray-9' },
+      }
+    );
+    const text = await describeFailure(res);
+    expect(text).toContain('db=error');
+    expect(text).toContain('cf-ray=ray-9');
+    expect(text).not.toContain('_debug');
+  });
+
+  test('an edge 503 (not JSON) shows a short, single-line excerpt', async () => {
+    const html = '<html>\n<body>error code: 1102</body>\n</html>' + 'x'.repeat(500);
+    const res = new Response(html, { status: 503, headers: { 'content-type': 'text/html' } });
+    const text = await describeFailure(res);
+    expect(text).toContain('error code: 1102');
+    expect(text).not.toContain('\n');
+    expect(text.length).toBeLessThan(400);
+  });
 });
 
 describe('OSE-834 2d — deploy-freshness parseSha', () => {
