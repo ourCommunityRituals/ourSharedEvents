@@ -1,8 +1,8 @@
 # ADR-032: Keep the field name `attendance_mode`, as one exact allowance in the lexicon lint
 
-**Status:** Proposed. The owner chose the field name on 2026-11-12. The owner has not yet ruled on
-the lexicon allowance this needs (OSE-2033: option A below, or rename). It moves to Accepted on that
-ruling. The code in this change is built for option A.
+**Status:** Accepted. The owner chose the field name on 2026-11-12 and, on 2026-11-14, accepted
+option A below: keep the name, as the one exact allowance in the lexicon lint (OSE-2033). The field
+has been on `main` and on staging since 2026-11-14 (PR #1211).
 **Date:** 2026-11-13
 **Deciders:** Owner (PO). Dr of Security advises on the lexicon; the Data Scientist confirms the field carries no count.
 **Tickets:** OSE-2033 (this decision), OSE-2034 (its tests), OSE-2035 (the shared brain), OSE-2012 (the story that needed it)
@@ -67,10 +67,10 @@ The allowed identifiers:
 
 No allowance is needed and the lint stays as it was.
 
-**Not chosen, pending the owner:** it departs from the name the owner decided and from schema.org,
+**Not chosen (owner, 2026-11-14):** it departs from the name the owner decided and from schema.org,
 and ourWKRP's showcase reader and its testing doc already use `attendanceMode`. `participation_mode`
-is taken by a different, planned field (OSE-2000). It remains open as option B of OSE-2033. Nothing
-is applied to staging until this change merges, so until then a rename is a find and replace.
+is taken by a different, planned field (OSE-2000). The column is applied on staging now, so a rename
+would be a migration and a change to the public contract.
 
 ### Alternative C: A ticketed exemption in `EXEMPT_IDENTIFIERS`
 

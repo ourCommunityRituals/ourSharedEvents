@@ -811,7 +811,7 @@
   "readUsesOnNewSecret": {
     "direction": "up",
     "reason": "Reads must name OCR_HUB_READ (OSE-1695): may only rise; a deleted read site needs a retired entry.",
-    "total": 30,
+    "total": 31,
     "byFile": {
       ".github/workflows/advanced-security-scan.yml": {
         "count": 2,
@@ -853,6 +853,13 @@
         "count": 1,
         "steps": ["inv22-gate :: Checkout OCR-docs brain guard"],
         "reason": "Checks out the canonical Invariant #22 guard from the OCR-docs brain (OSE-1297); the read stays on OCR_HUB_READ."
+      },
+      ".github/workflows/migration-dry-run.yml": {
+        "count": 1,
+        "steps": [
+          "dry-run :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "The on-demand migration dry run installs the worker to get its locked wrangler, and the worker install needs the hub packages at the pinned commit (OSE-2016)."
       },
       ".github/workflows/mobile-workability-audit.yml": {
         "count": 2,
