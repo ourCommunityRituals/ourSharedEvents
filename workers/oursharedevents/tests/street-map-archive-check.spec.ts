@@ -11,7 +11,9 @@ import {
   READER_MAX_DEPTH,
   type Probe,
 } from '../scripts/street-map-archive/check.js';
+import { MAX_DIRECTORY_BYTES, MAX_TILE_BYTES, zxyToTileId } from '../src/lib/pmtiles.js';
 import {
+  gzip,
   memSource,
   mvtTile,
   pmtilesArchive,
@@ -189,6 +191,110 @@ describe('street-map archive check | a file that is not whole', () => {
         /^directories: a tile ends at byte \d+ of a 1-byte tile section$/.test(p)
       )
     ).toBe(true);
+  });
+});
+
+// The reader refuses what is past its limits (lib/pmtiles.ts). A file that
+// passes the check must be inside every one of them, or staging would draw
+// hexagons only from a file the check called good.
+describe('street-map archive check | the reader limits', () => {
+  /**
+   * An archive that is a header and a root of one entry, nothing compressed.
+   * The entry states `length` bytes: a tile (`run` 1) or a leaf directory
+   * (`run` 0). The bytes it points at are not in the file; `size` says they are.
+   */
+  function oneEntry(run: 0 | 1, length: number): { bytes: Uint8Array; size: number } {
+    const root = [
+      ...varint(1),
+      ...varint(zxyToTileId(3, 2, 5)),
+      ...varint(run),
+      ...varint(length),
+      1,
+    ];
+    const at = 127 + root.length;
+    const bytes = new Uint8Array(at);
+    bytes.set(new TextEncoder().encode('PMTiles'), 0);
+    bytes[7] = 3;
+    const view = new DataView(bytes.buffer);
+    view.setUint32(8, 127, true);
+    view.setUint32(16, root.length, true);
+    view.setUint32(24, at, true);
+    view.setUint32(40, at, true);
+    view.setUint32(48, run === 0 ? length : 0, true);
+    view.setUint32(56, run === 0 ? at + length : at, true);
+    view.setUint32(64, run === 1 ? length : 0, true);
+    bytes.set([1, 1, 1, 0, 15], 97);
+    bytes.set(root, 127);
+    return { bytes, size: at + length };
+  }
+  const tileOver = (n: number) =>
+    `directories: a tile is ${n} bytes stored; the reader refuses a frame with a tile over ${MAX_TILE_BYTES}`;
+  const stated = (what: string, n: number) =>
+    `directories: ${what} is stated as ${n} bytes; the reader asks for ${MAX_DIRECTORY_BYTES} at most`;
+
+  it('records the largest leaf directory, stored and unpacked, and the largest tile', async () => {
+    const d = (await run(await good({ leaf: true }))).directories!;
+    expect(d.largestTileBytes).toBeGreaterThan(0);
+    expect(d.largestTileBytes).toBeLessThanOrEqual(MAX_TILE_BYTES);
+    expect(d.largestLeafBytes).toBeGreaterThan(0);
+    expect(d.largestLeafUnpackedBytes).toBeGreaterThan(0);
+    expect(d.largestLeafUnpackedBytes).toBeLessThanOrEqual(MAX_DIRECTORY_BYTES);
+    const plain = (await run(await good({ leaf: true, gzip: false }))).directories!;
+    expect(plain.largestLeafUnpackedBytes).toBe(plain.largestLeafBytes);
+    expect(d.largestLeafUnpackedBytes).toBe(plain.largestLeafBytes);
+    const flat = (await run(await good())).directories!;
+    expect([flat.largestLeafBytes, flat.largestLeafUnpackedBytes]).toEqual([0, 0]);
+  });
+
+  it('a tile stored longer than the reader asks for is named; one at the limit is not', async () => {
+    const over = oneEntry(1, MAX_TILE_BYTES + 1);
+    const r = await checkArchive(memSource(over.bytes), over.size, { probes: [] });
+    expect(r.problems).toEqual([tileOver(MAX_TILE_BYTES + 1)]);
+    expect(r.directories!.largestTileBytes).toBe(MAX_TILE_BYTES + 1);
+    const at = oneEntry(1, MAX_TILE_BYTES);
+    const ok = await checkArchive(memSource(at.bytes), at.size, { probes: [] });
+    expect(ok.problems).toEqual([]);
+    expect(ok.directories!.largestTileBytes).toBe(MAX_TILE_BYTES);
+  });
+
+  it('a leaf directory stated longer than the reader asks for is named and is not read', async () => {
+    const over = oneEntry(0, MAX_DIRECTORY_BYTES + 1);
+    const src = memSource(over.bytes);
+    const r = await checkArchive(src, over.size, { probes: [] });
+    expect(r.problems).toEqual([stated('a leaf directory', MAX_DIRECTORY_BYTES + 1)]);
+    expect(src.reads.some(([, length]) => length > MAX_DIRECTORY_BYTES)).toBe(false);
+    // At the limit it is asked for. The fixture holds no leaf bytes, so the read
+    // names a different problem: what matters is that the limit is not it.
+    const at = oneEntry(0, MAX_DIRECTORY_BYTES);
+    const atSrc = memSource(at.bytes);
+    const ok = await checkArchive(atSrc, at.size, { probes: [] });
+    expect(ok.problems.some((p) => p.includes('is stated as'))).toBe(false);
+    expect(atSrc.reads.some(([, length]) => length === MAX_DIRECTORY_BYTES)).toBe(true);
+  });
+
+  it('a root directory stated longer than the reader asks for is named and is not read', async () => {
+    const bytes = withU64(await good(), 16, MAX_DIRECTORY_BYTES + 1);
+    const src = memSource(bytes);
+    const r = await checkArchive(src, bytes.length, { probes: [] });
+    expect(r.problems).toContain(stated('the root directory', MAX_DIRECTORY_BYTES + 1));
+    expect(src.reads.some(([, length]) => length > MAX_DIRECTORY_BYTES)).toBe(false);
+  });
+
+  it('a directory that unpacks past the limit is named; one that unpacks to the limit is not', async () => {
+    const base = await good();
+    for (const over of [0, 1]) {
+      // A root with no entries, then zero bytes: the decoder stops after the count.
+      const root = await gzip(new Uint8Array(MAX_DIRECTORY_BYTES + over));
+      const out = new Uint8Array(base.length + root.length);
+      out.set(base);
+      out.set(root, base.length);
+      const view = new DataView(out.buffer);
+      view.setUint32(8, base.length, true);
+      view.setUint32(16, root.length, true);
+      const r = await checkArchive(memSource(out), out.length, { probes: [] });
+      const named = `directories: gzip unpacks past ${MAX_DIRECTORY_BYTES} bytes`;
+      expect(r.problems.includes(named)).toBe(over === 1);
+    }
   });
 });
 

@@ -41,7 +41,11 @@ import {
 } from '../src/lib/street-map';
 import { MAP_STYLE, renderAttendeeMap, type AttendeeMapItem } from '../src/lib/attendee-map';
 import { renderLandingArea } from '../src/lib/landing-area';
-import { resetPmtilesCache } from '../src/lib/pmtiles';
+import {
+  MAX_DIRECTORY_BYTES,
+  MAX_TILE_UNPACKED_BYTES,
+  resetPmtilesCache,
+} from '../src/lib/pmtiles';
 import {
   fakeBucket,
   memSource,
@@ -514,6 +518,32 @@ describe('street map | loading (fail soft)', () => {
     expect(
       await loadStreetLayer({ MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) }, [BLUE7])
     ).toBeNull();
+  });
+
+  // An archive that asks the Worker to hold more than the reader allows
+  // (lib/pmtiles.ts, the limits) is a refused read, and a refused read is
+  // hexagons only. Born red 2026-11-14: before the limits the first archive drew
+  // nothing only because its tiles are not vector tiles, after unpacking all of
+  // them; the second asked the bucket for 2 MiB and one byte.
+  it('an archive past the reader limits: null, and nothing past a limit is asked for', async () => {
+    const { tiles } = tilesForCells([BLUE7]);
+    // Every tile is a few KB of gzip that unpacks to one byte past the tile limit.
+    const swollen = await pmtilesArchive(
+      tiles.map((t) => ({ ...t, data: new Uint8Array(MAX_TILE_UNPACKED_BYTES + 1) })),
+      { gzip: true }
+    );
+    const first = fakeBucket(DEFAULT_ARCHIVE, swollen);
+    expect(await loadStreetLayer({ MAP_TILES: first }, [BLUE7], { timeoutMs: 60_000 })).toBeNull();
+    expect(first.gets.length).toBeGreaterThan(0);
+
+    // The same tiles as they are, behind a root directory stated over its limit.
+    // (The first archive's header is kept under the same name: forget it.)
+    resetPmtilesCache();
+    const stated = await pmtilesArchive(tiles);
+    new DataView(stated.buffer).setUint32(16, MAX_DIRECTORY_BYTES + 1, true);
+    const second = fakeBucket(DEFAULT_ARCHIVE, stated);
+    expect(await loadStreetLayer({ MAP_TILES: second }, [BLUE7])).toBeNull();
+    expect(second.gets.map((g) => g.range?.length)).toEqual([16384]);
   });
 
   // Born red 2026-11-09 (location-precision CCR, F41): before the guard in

@@ -16,10 +16,14 @@
  *   - a whole-planet build's layout, on a sparse file: every tile two leaf
  *     directories down, byte offsets past 4 GiB and 128 GiB, an open-water run
  *   - the leaf cache is bounded by the entries it keeps, not only by its count
+ *   - no length the archive states is trusted: a directory or a tile stated
+ *     longer than its limit is never asked for, and gzip stops unpacking at its
+ *     limit
  */
 // @born-red pmtiles reader mutants | method: StrykerJS mutants of src/lib/pmtiles.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
 // @born-red planet-sized layout and leaf entry budget | method: 6 faults injected one at a time in src/lib/pmtiles.ts (header offsets cut to 32 bits, directory offsets cut to 32 bits, one leaf level only, a run covering only its first tile, leaves never kept, the entry budget never applied), each planet and budget case seen failing on at least one; the budget cases also seen failing before the budget existed. "is laid out as meant" checks the fixture, not the reader | date: 2026-11-09
-import { describe, it, expect, beforeEach } from 'vitest';
+// @born-red limits on what an archive may ask the Worker to hold | method: every case in that block was written before the limits existed and seen failing (the reader asked for the stated length and unpacked to the end; the never-ending gzip case ended the test worker); then 11 faults injected one at a time in src/lib/pmtiles.ts (each of the three stated-length checks removed, > turned to >= in the directory, tile and unpack limits, the cancel removed, each unpack given the other's limit, a frame refused only when every tile is over), each seen failing at least one case | date: 2026-11-14
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   archiveHeader,
   decodeDirectory,
@@ -34,9 +38,12 @@ import {
   zxyToTileId,
   PmtilesError,
   HEADER_BYTES,
+  MAX_DIRECTORY_BYTES,
   MAX_LEAF_ENTRIES,
   MAX_READ_BYTES,
   MAX_READ_GAP,
+  MAX_TILE_BYTES,
+  MAX_TILE_UNPACKED_BYTES,
   type DirEntry,
   type RangeSource,
 } from '../src/lib/pmtiles';
@@ -510,19 +517,19 @@ describe('pmtiles | finding an entry', () => {
 describe('pmtiles | decompress', () => {
   it('passes bytes through for none and unknown', async () => {
     const b = bytes('plain');
-    expect(await decompress(b, 1)).toBe(b);
-    expect(await decompress(b, 0)).toBe(b);
+    expect(await decompress(b, 1, 0)).toBe(b);
+    expect(await decompress(b, 0, 0)).toBe(b);
   });
 
   it('round-trips gzip', async () => {
-    expect(text(await decompress(await gzip(bytes('zipped tile')), 2))).toBe('zipped tile');
+    expect(text(await decompress(await gzip(bytes('zipped tile')), 2, 64))).toBe('zipped tile');
   });
 
   it('refuses brotli, zstd and an unknown code by name', async () => {
     const b = await gzip(bytes('x'));
-    await expect(decompress(b, 3)).rejects.toThrow(/unsupported compression 3/);
-    await expect(decompress(b, 4)).rejects.toThrow(/unsupported compression 4/);
-    await expect(decompress(b, 9)).rejects.toThrow(PmtilesError);
+    await expect(decompress(b, 3, 64)).rejects.toThrow(/unsupported compression 3/);
+    await expect(decompress(b, 4, 64)).rejects.toThrow(/unsupported compression 4/);
+    await expect(decompress(b, 9, 64)).rejects.toThrow(PmtilesError);
   });
 });
 
@@ -1092,5 +1099,196 @@ describe('pmtiles | R2 source', () => {
   it('throws when the object is missing', async () => {
     const src = r2Source(fakeBucket('map.pmtiles', bytes('x')), 'other.pmtiles');
     await expect(src.read(0, 1)).rejects.toThrow(/archive not found/);
+  });
+});
+
+// A length in the archive is a claim, not a fact. Before 2026-11-14 the reader
+// asked R2 for whatever a header or a directory entry stated and unpacked gzip
+// to the end, so a damaged or hostile file could make a Worker hold more than it
+// has: that ends the isolate, and the page with it, instead of falling back to
+// hexagons. The limits are in lib/pmtiles.ts beside the numbers they stand on.
+describe('pmtiles | limits on what an archive may ask the Worker to hold', () => {
+  const t = { z: 3, x: 2, y: 5, data: bytes('tile-325') };
+  const id = zxyToTileId(t.z, t.x, t.y);
+  const otherId = zxyToTileId(3, 7, 7);
+  const entry: DirEntry = { tileId: id, offset: 0, length: t.data.length, runLength: 1 };
+  /** A directory padded with zero bytes to `size`: the decoder stops after its entries. */
+  const padded = (entries: DirEntry[], size: number): Uint8Array => {
+    const out = new Uint8Array(size);
+    out.set(dirOf(entries));
+    return out;
+  };
+  const FIRST_READ: [number, number] = [0, 16384];
+
+  it('the limits are the ones the runbook and the archive check name', () => {
+    expect(MAX_DIRECTORY_BYTES).toBe(2_097_152);
+    expect(MAX_TILE_BYTES).toBe(MAX_READ_BYTES);
+    expect(MAX_TILE_UNPACKED_BYTES).toBe(4_194_304);
+    expect(otherId).toBeGreaterThan(id);
+  });
+
+  it('gzip: unpacks up to the limit to the byte, over several chunks, and refuses one byte more', async () => {
+    const body = Uint8Array.from({ length: 200_000 }, (_, i) => i % 251);
+    const gz = await gzip(body);
+    const out = await decompress(gz, 2, 200_000);
+    expect(out.length).toBe(200_000);
+    expect(out.every((v, i) => v === i % 251)).toBe(true);
+    await expect(decompress(gz, 2, 199_999)).rejects.toThrow(PmtilesError);
+    await expect(decompress(gz, 2, 199_999)).rejects.toThrow(/unpacks past 199999 bytes/);
+  });
+
+  it('gzip: unpacking stops at the limit, and the rest of the stream is not read', async () => {
+    let pulls = 0;
+    let cancelled = false;
+    // Stands in for a gzip body that never ends: 64 KiB more for every pull.
+    class Endless {
+      writable = new WritableStream<Uint8Array>();
+      readable = new ReadableStream<Uint8Array>(
+        {
+          pull(c) {
+            pulls++;
+            c.enqueue(new Uint8Array(65_536));
+          },
+          cancel() {
+            cancelled = true;
+          },
+        },
+        { highWaterMark: 0 }
+      );
+    }
+    vi.stubGlobal('DecompressionStream', Endless);
+    try {
+      await expect(decompress(bytes('x'), 2, 100_000)).rejects.toThrow(/unpacks past 100000 bytes/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(cancelled).toBe(true);
+    // 100,000 bytes are passed in the second 64 KiB chunk.
+    expect(pulls).toBe(2);
+  });
+
+  it('a root directory stated longer than the limit is refused before it is asked for, each time', async () => {
+    const { archive } = rawArchive({ root: dirOf([]) });
+    putU64(archive, 16, MAX_DIRECTORY_BYTES + 1);
+    const src = memSource(archive);
+    await expect(archiveHeader(src)).rejects.toThrow(PmtilesError);
+    await expect(archiveHeader(src)).rejects.toThrow(/directory of 2097153 bytes/);
+    // The header read, twice: the refusal is not kept, and no directory byte is asked for.
+    expect(src.reads).toEqual([FIRST_READ, FIRST_READ]);
+  });
+
+  it('a root directory of exactly the limit is read', async () => {
+    const root = padded([entry], MAX_DIRECTORY_BYTES);
+    const src = memSource(rawArchive({ root, data: t.data }).archive);
+    expect(text(await readTile(src, 3, 2, 5))).toBe('tile-325');
+    expect(src.reads[1]).toEqual([HEADER_BYTES, MAX_DIRECTORY_BYTES]);
+  });
+
+  it('a leaf directory stated longer than the limit is refused before it is asked for', async () => {
+    const root = dirOf([{ tileId: id, offset: 0, length: MAX_DIRECTORY_BYTES + 1, runLength: 0 }]);
+    const src = memSource(rawArchive({ root, leaves: new Uint8Array(8), data: t.data }).archive);
+    await expect(readTile(src, 3, 2, 5)).rejects.toThrow(PmtilesError);
+    await expect(readTile(src, 3, 2, 5)).rejects.toThrow(/directory of 2097153 bytes/);
+    expect(src.reads).toEqual([FIRST_READ]);
+  });
+
+  it('a leaf directory of exactly the limit is read', async () => {
+    const leaf = padded([entry], MAX_DIRECTORY_BYTES);
+    const root = dirOf([{ tileId: id, offset: 0, length: leaf.length, runLength: 0 }]);
+    const raw = rawArchive({ root, leaves: leaf, data: t.data });
+    const src = memSource(raw.archive);
+    expect(text(await readTile(src, 3, 2, 5))).toBe('tile-325');
+    expect(src.reads[1]).toEqual([raw.leafAt, MAX_DIRECTORY_BYTES]);
+  });
+
+  it('a root directory that unpacks to exactly its limit is read; one byte more is refused', async () => {
+    for (const over of [0, 1]) {
+      const root = await gzip(padded([entry], MAX_DIRECTORY_BYTES + over));
+      const { archive } = rawArchive({ root, data: t.data });
+      archive[97] = 2;
+      const src = memSource(archive);
+      if (over === 0) {
+        expect(text(await readTile(src, 3, 2, 5))).toBe('tile-325');
+      } else {
+        await expect(readTile(src, 3, 2, 5)).rejects.toThrow(PmtilesError);
+        await expect(readTile(src, 3, 2, 5)).rejects.toThrow(/unpacks past 2097152 bytes/);
+      }
+    }
+  });
+
+  it('a leaf directory that unpacks to exactly its limit is read', async () => {
+    const leaf = await gzip(padded([entry], MAX_DIRECTORY_BYTES));
+    const root = await gzip(dirOf([{ tileId: id, offset: 0, length: leaf.length, runLength: 0 }]));
+    const { archive } = rawArchive({ root, leaves: leaf, data: t.data });
+    archive[97] = 2;
+    expect(text(await readTile(memSource(archive), 3, 2, 5))).toBe('tile-325');
+  });
+
+  it('a leaf directory that unpacks past its limit is refused and not kept: the next read asks again', async () => {
+    const leaf = await gzip(padded([entry], MAX_DIRECTORY_BYTES + 1));
+    const root = await gzip(dirOf([{ tileId: id, offset: 0, length: leaf.length, runLength: 0 }]));
+    const raw = rawArchive({ root, leaves: leaf, data: t.data });
+    raw.archive[97] = 2;
+    const src = memSource(raw.archive);
+    await expect(readTile(src, 3, 2, 5)).rejects.toThrow(/unpacks past 2097152 bytes/);
+    await expect(readTile(src, 3, 2, 5)).rejects.toThrow(PmtilesError);
+    expect(src.reads.filter(([off]) => off === raw.leafAt)).toHaveLength(2);
+  });
+
+  it('one tile stated longer than the limit refuses the frame before any tile byte is asked for', async () => {
+    const root = dirOf([
+      { tileId: id, offset: 0, length: 8, runLength: 1 },
+      { tileId: otherId, offset: 8, length: MAX_TILE_BYTES + 1, runLength: 1 },
+    ]);
+    const src = memSource(rawArchive({ root, data: new Uint8Array(64) }).archive);
+    const frame = readTiles(src, 3, [
+      [2, 5],
+      [7, 7],
+    ]);
+    await expect(frame).rejects.toThrow(PmtilesError);
+    await expect(frame).rejects.toThrow(/tile of 2097153 bytes/);
+    expect(src.reads).toEqual([FIRST_READ]);
+    // The tile inside the limit is still read on its own.
+    expect((await readTile(src, 3, 2, 5))!.length).toBe(8);
+  });
+
+  it('a tile of exactly the limit is read whole', async () => {
+    const data = Uint8Array.from({ length: MAX_TILE_BYTES }, (_, i) => i % 249);
+    const root = dirOf([{ tileId: id, offset: 0, length: data.length, runLength: 1 }]);
+    const out = (await readTile(memSource(rawArchive({ root, data }).archive), 3, 2, 5))!;
+    expect(out.length).toBe(MAX_TILE_BYTES);
+    expect(out[MAX_TILE_BYTES - 1]).toBe((MAX_TILE_BYTES - 1) % 249);
+  });
+
+  it('a tile that unpacks to exactly its limit is read; one byte more is refused', async () => {
+    for (const over of [0, 1]) {
+      const data = await gzip(new Uint8Array(MAX_TILE_UNPACKED_BYTES + over));
+      const root = dirOf([{ tileId: id, offset: 0, length: data.length, runLength: 1 }]);
+      const { archive } = rawArchive({ root, data });
+      archive[98] = 2;
+      const src = memSource(archive);
+      if (over === 0) {
+        expect((await readTile(src, 3, 2, 5))!.length).toBe(MAX_TILE_UNPACKED_BYTES);
+      } else {
+        await expect(readTile(src, 3, 2, 5)).rejects.toThrow(PmtilesError);
+        await expect(readTile(src, 3, 2, 5)).rejects.toThrow(/unpacks past 4194304 bytes/);
+      }
+    }
+  });
+
+  it('fat finger: a gzip tile stated as 0 bytes is refused, not read as an empty tile', async () => {
+    const root = dirOf([{ tileId: id, offset: 0, length: 0, runLength: 1 }]);
+    const { archive } = rawArchive({ root, data: new Uint8Array(8) });
+    archive[98] = 2;
+    await expect(readTile(memSource(archive), 3, 2, 5)).rejects.toThrow();
+  });
+
+  it('fat finger: a directory stated longer than the file, inside the limit, is asked for and read from what the file has', async () => {
+    const { archive } = rawArchive({ root: dirOf([entry]), data: t.data });
+    putU64(archive, 16, 500_000);
+    const src = memSource(archive);
+    expect(text(await readTile(src, 3, 2, 5))).toBe('tile-325');
+    // Inside the limit, so it was asked for at the length stated; the file gave what it had.
+    expect(src.reads[1]).toEqual([HEADER_BYTES, 500_000]);
   });
 });

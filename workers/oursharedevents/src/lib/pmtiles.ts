@@ -11,6 +11,14 @@
 // being drawn. No request parameter, viewer position or identity reaches it, and
 // it logs nothing (a logged tile range would say which part of the map a page
 // showed).
+//
+// WHAT IT TRUSTS. Nothing the archive says about its own size. Every length in
+// the header or a directory is checked against a limit before a byte is asked
+// for, and gzip stops unpacking at a limit (the limits are below, with the
+// numbers they stand on). Past a limit the read is refused with a PmtilesError,
+// which the street map turns into hexagons only. Without them a damaged or
+// hostile file could make the Worker hold more than it has, and that ends the
+// isolate and the page with it.
 
 /** Where the archive's bytes come from. R2 in the Worker; a buffer in tests. */
 export interface RangeSource {
@@ -43,6 +51,24 @@ export const HEADER_BYTES = 127;
 const FIRST_READ_BYTES = 16384;
 /** Leaf directory lookups at most, so a damaged archive cannot loop. */
 const MAX_DEPTH = 3;
+
+/**
+ * A directory (root or leaf): stated longer than this it is not asked for, and
+ * it may unpack to no more than this. One number for both, so a directory
+ * stored without compression is held to what a gzipped one may unpack to.
+ * Measured on build 20261109 (2026-11-10): a leaf of 61,239 entries was 115 KB
+ * and 129 KB gzipped and about 0.32 MB unpacked (5.2 bytes an entry). So this
+ * is 16 of the largest seen as stored, and unpacked it holds about 400,000
+ * entries, more than MAX_LEAF_ENTRIES keeps.
+ */
+export const MAX_DIRECTORY_BYTES = 2_097_152;
+/**
+ * One tile unpacked. A frame reads at most 12 tiles (lib/street-map.ts,
+ * MAX_TILES) and unpacks them together, so a frame holds at most 48 MiB of
+ * tiles. The measured frames unpacked from 0.41 MB to 0.77 MB stored, all tiles
+ * together.
+ */
+export const MAX_TILE_UNPACKED_BYTES = 4_194_304;
 
 export const COMPRESSION = { unknown: 0, none: 1, gzip: 2, brotli: 3, zstd: 4 } as const;
 export const TILE_TYPE_MVT = 1;
@@ -169,13 +195,47 @@ export function findEntry(entries: readonly DirEntry[], tileId: number): DirEntr
   return null;
 }
 
-export async function decompress(bytes: Uint8Array, compression: number): Promise<Uint8Array> {
+/**
+ * The bytes unpacked. Gzip is read a chunk at a time and stopped once it has
+ * given more than `maxBytes`: the rest of the stream is not read, so a small
+ * body that unpacks to gigabytes costs one chunk past the limit. Bytes stored
+ * without compression are returned as they are; their length was checked
+ * before they were asked for.
+ */
+export async function decompress(
+  bytes: Uint8Array,
+  compression: number,
+  maxBytes: number
+): Promise<Uint8Array> {
   if (compression === COMPRESSION.none || compression === COMPRESSION.unknown) return bytes;
   if (compression !== COMPRESSION.gzip) {
     throw new PmtilesError(`unsupported compression ${compression}`);
   }
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  const reader = new Blob([bytes])
+    .stream()
+    .pipeThrough(new DecompressionStream('gzip'))
+    .getReader();
+  const parts: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new PmtilesError(`gzip unpacks past ${maxBytes} bytes`);
+    }
+    parts.push(value);
+  }
+  return new Uint8Array(await new Blob(parts).arrayBuffer());
+}
+
+/** Refuse a directory the archive states as longer than MAX_DIRECTORY_BYTES. */
+function directoryLength(length: number): number {
+  if (length > MAX_DIRECTORY_BYTES) {
+    throw new PmtilesError(`directory of ${length} bytes is over the limit`);
+  }
+  return length;
 }
 
 interface Leaf {
@@ -214,10 +274,13 @@ async function open(src: RangeSource): Promise<Opened> {
   const p = (async () => {
     const first = await src.read(0, FIRST_READ_BYTES);
     const header = parseHeader(first);
-    const { rootDirectoryOffset: off, rootDirectoryLength: len } = header;
+    const off = header.rootDirectoryOffset;
+    const len = directoryLength(header.rootDirectoryLength);
     const raw =
       off + len <= first.length ? first.subarray(off, off + len) : await src.read(off, len);
-    const root = decodeDirectory(await decompress(raw, header.internalCompression));
+    const root = decodeDirectory(
+      await decompress(raw, header.internalCompression, MAX_DIRECTORY_BYTES)
+    );
     return { header, root, leaves: new Map() };
   })();
   OPENED.set(src.key, p);
@@ -235,10 +298,11 @@ async function leaf(src: RangeSource, o: Opened, e: DirEntry): Promise<DirEntry[
   const at = o.header.leafDirectoryOffset + e.offset;
   const hit = o.leaves.get(at);
   if (hit) return hit.dir;
+  const length = directoryLength(e.length);
   const slot: Leaf = {
     dir: src
-      .read(at, e.length)
-      .then((raw) => decompress(raw, o.header.internalCompression))
+      .read(at, length)
+      .then((raw) => decompress(raw, o.header.internalCompression, MAX_DIRECTORY_BYTES))
       .then(decodeDirectory),
     entries: 0,
   };
@@ -300,6 +364,12 @@ export interface ByteRange {
 export const MAX_READ_GAP = 262_144;
 /** One merged read is at most this long. A single range longer than this is read alone. */
 export const MAX_READ_BYTES = 2_097_152;
+/**
+ * One tile as stored: longer than this and the frame is refused before a tile
+ * byte is asked for. It is the length of the longest joined read, so no read of
+ * tiles is ever longer than MAX_READ_BYTES.
+ */
+export const MAX_TILE_BYTES = MAX_READ_BYTES;
 
 /**
  * The fewest reads that cover every wanted range: sorted, repeats dropped,
@@ -345,6 +415,9 @@ export async function readTiles(
   const at = (e: DirEntry): number => o.header.tileDataOffset + e.offset;
   // Tiles of one run share one entry: it is wanted once.
   const stored = [...new Set(entries)].filter((e): e is DirEntry => e !== null);
+  // Half a frame is no frame: one tile over the limit refuses them all.
+  const long = stored.find((e) => e.length > MAX_TILE_BYTES);
+  if (long) throw new PmtilesError(`tile of ${long.length} bytes is over the limit`);
   const reads = planReads(stored.map((e) => ({ offset: at(e), length: e.length })));
   const chunks = await Promise.all(reads.map((r) => src.read(r.offset, r.length)));
   const done = new Map<DirEntry, Promise<Uint8Array>>();
@@ -358,7 +431,11 @@ export async function readTiles(
     const chunk = chunks[i]!;
     // The source answered with fewer bytes than asked: half a tile is no tile.
     if (from + e.length > chunk.length) throw new PmtilesError('short read');
-    const p = decompress(chunk.subarray(from, from + e.length), o.header.tileCompression);
+    const p = decompress(
+      chunk.subarray(from, from + e.length),
+      o.header.tileCompression,
+      MAX_TILE_UNPACKED_BYTES
+    );
     done.set(e, p);
     return p;
   };

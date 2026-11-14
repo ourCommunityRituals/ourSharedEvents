@@ -21,7 +21,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { latLngToCell } from 'h3-js';
 import { OSM_COPYRIGHT_URL } from '../src/lib/attendee-map';
 import { LANGUAGES, type Lang } from '../src/lib/i18n/languages';
-import { resetPmtilesCache } from '../src/lib/pmtiles';
+import { MAX_TILE_UNPACKED_BYTES, resetPmtilesCache } from '../src/lib/pmtiles';
 import { DEFAULT_ARCHIVE } from '../src/lib/street-map';
 import {
   fakeBucket,
@@ -88,6 +88,24 @@ describe('street map | the landing page handler', () => {
   it('a broken archive leaves the page and its hexagons as they were', async () => {
     const plain = await landing({});
     const bucket = fakeBucket(DEFAULT_ARCHIVE, new Uint8Array(500).fill(1));
+    const html = await landing({ MAP_TILES: bucket });
+    expect(bucket.gets.length).toBeGreaterThan(0);
+    expect(html).not.toContain('data-testid="amap-streets"');
+    expect(html).not.toContain('data-testid="amap-credit"');
+    expect(cellsOf(html)).toEqual(cellsOf(plain));
+  });
+
+  // The archive holds the right tiles for the page, each a few KB of gzip that
+  // unpacks past the reader's tile limit (lib/pmtiles.ts). Born red 2026-11-14
+  // at the reader (tests/pmtiles.spec.ts); here it is the page that is watched.
+  it('an archive past the reader limits leaves the page and its hexagons as they were', async () => {
+    const plain = await landing({});
+    const { tiles } = tilesForCells(cellsOf(plain));
+    const swollen = await pmtilesArchive(
+      tiles.map((t) => ({ ...t, data: new Uint8Array(MAX_TILE_UNPACKED_BYTES + 1) })),
+      { gzip: true }
+    );
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, swollen);
     const html = await landing({ MAP_TILES: bucket });
     expect(bucket.gets.length).toBeGreaterThan(0);
     expect(html).not.toContain('data-testid="amap-streets"');

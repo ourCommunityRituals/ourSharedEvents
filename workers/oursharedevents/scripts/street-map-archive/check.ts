@@ -12,7 +12,9 @@
 //      its last byte (a cut or copy that stopped early fails here).
 //   3. Directories: every leaf directory is read and counted. The counts must
 //      match the header, no tile may point past the tile data, and the largest
-//      leaf must fit the reader's entry budget.
+//      leaf must fit the reader's entry budget. Every directory and every tile
+//      must be inside the reader's limits (MAX_DIRECTORY_BYTES, MAX_TILE_BYTES):
+//      past them the Worker refuses the read and draws hexagons only.
 //   4. Draws: `buildStreetLayer`, the function the landing page calls, must draw
 //      roads for areas inside the region and nothing for areas outside it.
 //
@@ -26,7 +28,9 @@ import { gridDisk, latLngToCell } from 'h3-js';
 import {
   COMPRESSION,
   HEADER_BYTES,
+  MAX_DIRECTORY_BYTES,
   MAX_LEAF_ENTRIES,
+  MAX_TILE_BYTES,
   TILE_TYPE_MVT,
   decodeDirectory,
   decompress,
@@ -87,6 +91,11 @@ export interface ArchiveReport {
     addressedTiles: number;
     /** Leaves of the largest size the reader keeps at once. */
     leavesInBudget: number;
+    /** The longest leaf directory as stored, and the longest once unpacked (0 with no leaf). */
+    largestLeafBytes: number;
+    largestLeafUnpackedBytes: number;
+    /** The longest tile as stored. */
+    largestTileBytes: number;
   } | null;
   probes: ProbeResult[];
   problems: string[];
@@ -217,6 +226,13 @@ export async function checkArchive(
   let tileEntries = 0;
   let addressedTiles = 0;
   let tileEnd = 0;
+  let largestLeafBytes = 0;
+  let largestLeafUnpackedBytes = 0;
+  let largestTileBytes = 0;
+  const overLimit = (what: string, length: number): Error =>
+    new Error(
+      `${what} is stated as ${length} bytes; the reader asks for ${MAX_DIRECTORY_BYTES} at most`
+    );
   const walk = async (dir: DirEntry[], level: number): Promise<void> => {
     depth = Math.max(depth, level);
     for (const e of dir) {
@@ -224,19 +240,28 @@ export async function checkArchive(
         tileEntries++;
         addressedTiles += e.runLength;
         tileEnd = Math.max(tileEnd, e.offset + e.length);
+        largestTileBytes = Math.max(largestTileBytes, e.length);
         continue;
       }
       if (level >= READER_MAX_DEPTH) throw new Error('nested deeper than the reader follows');
       if (e.offset + e.length > h.leafBytes) throw new Error('a leaf lies outside its section');
+      if (e.length > MAX_DIRECTORY_BYTES) throw overLimit('a leaf directory', e.length);
       const raw = await src.read(header.leafDirectoryOffset + e.offset, e.length);
-      const leaf = decodeDirectory(await decompress(raw, h.internalCompression));
+      const unpacked = await decompress(raw, h.internalCompression, MAX_DIRECTORY_BYTES);
+      const leaf = decodeDirectory(unpacked);
+      largestLeafBytes = Math.max(largestLeafBytes, e.length);
+      largestLeafUnpackedBytes = Math.max(largestLeafUnpackedBytes, unpacked.length);
       sizes.push(leaf.length);
       await walk(leaf, level + 1);
     }
   };
   try {
+    if (h.rootBytes > MAX_DIRECTORY_BYTES) throw overLimit('the root directory', h.rootBytes);
     const raw = await src.read(header.rootDirectoryOffset, h.rootBytes);
-    await walk(decodeDirectory(await decompress(raw, h.internalCompression)), 0);
+    await walk(
+      decodeDirectory(await decompress(raw, h.internalCompression, MAX_DIRECTORY_BYTES)),
+      0
+    );
     const largest = Math.max(0, ...sizes);
     const budget = opts.maxLeafEntries ?? MAX_LEAF_ENTRIES;
     report.directories = {
@@ -247,7 +272,15 @@ export async function checkArchive(
       tileEntries,
       addressedTiles,
       leavesInBudget: largest ? Math.floor(budget / largest) : 0,
+      largestLeafBytes,
+      largestLeafUnpackedBytes,
+      largestTileBytes,
     };
+    if (largestTileBytes > MAX_TILE_BYTES) {
+      bad(
+        `directories: a tile is ${largestTileBytes} bytes stored; the reader refuses a frame with a tile over ${MAX_TILE_BYTES}`
+      );
+    }
     if (largest > budget) {
       bad(`directories: a leaf holds ${largest} entries; the reader keeps ${budget} in all`);
     }
