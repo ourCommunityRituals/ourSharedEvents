@@ -713,11 +713,19 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   const slugDerived = typeof body.slug !== 'string';
   const slugBase = slugDerived ? slugify(title) || 'event' : (body.slug as string).slice(0, 100);
   let slug = slugBase;
-  const status =
+  // OSE-1425 (owner, 2026-11-13): creation is the start of the lifecycle. A
+  // signed-in person's event is always a draft, whatever the body says; it goes
+  // live only through ready → verify-qr or PUT status, which check the step.
+  // Automation (a key or the CI service actor) may still create an event in
+  // another state, as the staging lifecycle job, the stock seed and the staging
+  // specs do. A live one is written with qr_verified = 1 in the same INSERT
+  // below, so `active ⟺ qr_verified = 1` holds at this door too.
+  const requestedStatus =
     typeof body.status === 'string' &&
     (VALID_EVENT_STATES as readonly string[]).includes(body.status)
       ? body.status
       : 'draft';
+  const status = isAutomationActor(actor) ? requestedStatus : 'draft';
   const description = typeof body.description === 'string' ? body.description.slice(0, 2000) : null;
   const location = typeof body.location === 'string' ? body.location.slice(0, 500) : null;
 
@@ -921,8 +929,8 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
                              what_url_enabled, what_url_type,
                              lat, lon, h3_res9, h3_res7, is_published, created_by,
                              event_type_id, settings_json, listed_from, data_class,
-                             created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                             qr_verified, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           id,
@@ -961,6 +969,8 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
           // recorded so the corridor latch's settling rule still applies.
           status === 'active' ? now : null,
           dataClass,
+          // OSE-1425: live means verified, in the same write.
+          status === 'active' ? 1 : 0,
           now,
           now
         )
@@ -1091,6 +1101,11 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       timezone,
       place,
       data_class: dataClass,
+      // OSE-1425 — the lifecycle state the row was written in, so a caller sees
+      // that a person's create is a draft whatever it asked for, and automation
+      // sees that a live create is verified.
+      event_status: status,
+      qr_verified: status === 'active',
       warnings,
       // OSE-1560 — what the admin shows as the heads-up (the toast is OSE-1564).
       map: mapState(isPublished === 1, mapChoice === null),

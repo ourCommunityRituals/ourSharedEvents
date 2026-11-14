@@ -977,6 +977,38 @@ describe('E3 | headers, the log, and the parts around the words', () => {
     }
   });
 
+  // Found by the CI mutation run of 2026-11-13 (run 43231267288). The two
+  // cases below were killed locally only by a test that timed out under load,
+  // never by an assertion, so CI saw them survive.
+
+  test('an event with no title (null) is named by the fallback and keeps its next step', async () => {
+    for (const lang of LANGUAGES) {
+      const d = await doc('register', { lang, row: { ...EVENT, title: null } });
+      expect(d.querySelector('[data-testid="form-event-name"]')?.textContent, lang).toBe(
+        msg(lang, 'form.eventFallback')
+      );
+      // A missing title is not a failed read: the event is still known, so the
+      // page still offers its next step.
+      const tpl = d.getElementById('form-next-step') as HTMLTemplateElement | null;
+      expect(tpl, lang).toBeInstanceOf(d.defaultView!.HTMLTemplateElement);
+      expect(tpl!.content.querySelector('[data-testid="register-next-step"]'), lang).toBeInstanceOf(
+        d.defaultView!.HTMLElement
+      );
+    }
+  });
+
+  test('a title over 200 characters is cut to 200 before it is escaped', async () => {
+    // The 200th character is an ampersand. Cut first, it is one character and
+    // reads as "&". Escaped first, the cut could split "&amp;".
+    const title = `${'x'.repeat(199)}&${'y'.repeat(50)}`;
+    for (const lang of LANGUAGES) {
+      const d = await doc('register', { lang, row: { ...EVENT, title } });
+      expect(d.querySelector('[data-testid="form-event-name"]')?.textContent, lang).toBe(
+        `${'x'.repeat(199)}&`
+      );
+    }
+  });
+
   test('in production the calendar entry links to the production event page', async () => {
     const d = await doc('register', { lang: 'es', env: { WORKER_ENV: 'production' } });
     const tpl = d.getElementById('form-next-step') as HTMLTemplateElement;

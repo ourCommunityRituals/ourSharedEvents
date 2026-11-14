@@ -83,7 +83,7 @@ A green run closes the open `ci-red:stock-data-stg` issue, and its summary shows
 
 ## Turn on the calendar strict switch (OSE-2022)
 
-The edge probe reads the two calendar addresses, `/brands/root/calendar.ics` and `/events/test-event-001/calendar.ics`. Until the rule covers `/brands/`, the `edge` job is red on the first of them, and the T2 and T4 calendar checks show a warning, "Edge challenge (OSE-2022)", and stay green.
+The edge probe reads the two calendar addresses, `/brands/root/calendar.ics` and `/events/test-event-001/calendar.ics`. If the rule on the zone does not cover `/brands/`, the `edge` job is red on the first of them, and the T2 and T4 calendar checks show a warning, "Edge challenge (OSE-2022)", and stay green. In the first run after the feed merged (43532167205, 2026-11-14) CI's read of `/brands/root/calendar.ics` reached the Worker, so the path may already pass; the `edge` job is the check.
 
 Once the `edge` job is green for both addresses, make a challenged calendar read a failure:
 
