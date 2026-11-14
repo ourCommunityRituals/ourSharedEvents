@@ -135,16 +135,17 @@ isolation and retention never depend on the plan.
 ### 3. One readable address, with optional parts.
 
 ```
-/events?type=<event_type>&sponsor=<sponsor>          no brand
-/b/<brand>?type=<event_type>&sponsor=<sponsor>       a brand
+/events?type=<event_type>          no brand
+/b/<brand>?type=<event_type>       a brand
 ```
 
-- Every part is a plain word. Event types, categories and sponsors get readable
-  slugs; the brand id is its slug.
-- `type` and `sponsor` are optional filters, in that order in the canonical form.
-- The `sponsor` filter lists only events where that sponsor is on show
-  (`SPONSOR_ON_SHOW_SQL`). A pending or declined placement is indistinguishable
-  from an unknown sponsor.
+- Every part is a plain word. Event types and categories get readable slugs; the
+  brand id is its slug.
+- `type` is an optional filter.
+- **A sponsor is never a filter** (owner, 2026-11-14; ADR-030, decision 6). This
+  section first proposed a `sponsor` part in the address. It is withdrawn: no
+  address, search or sort selects events by a sponsor or by a sponsor's
+  campaign. No code ever read a `sponsor` parameter.
 - No brand means the platform's public list. It never means every brand's events
   merged; a brand's events appear only under its own address.
 
@@ -245,7 +246,7 @@ are forgiving on purpose and expire by themselves (`lib/draft-expiry.ts`).
   rule. Two rules are more to test and to get wrong than one.
 - The plan moves from one global setting to one per brand: a change in
   `@ocr/flags` and a backfill.
-- Slugs for event types, categories and sponsors are new data that must stay
+- Slugs for event types and categories are new data that must stay
   unique and stable; renaming one breaks printed addresses unless the old slug
   keeps redirecting.
 - `root` stays as an internal name that newcomers have to learn.
