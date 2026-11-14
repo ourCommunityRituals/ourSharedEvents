@@ -1,0 +1,33 @@
+info:
+  name: OSE-2014 | sunny | cadence | an as-announced series takes neither day nor hour
+  type: http
+  seq: 117
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-try2-evt/series"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"name":"Pop-in sessions","cadence":"as-announced"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const s = (res.getBody() || {}).series || {};
+        test('OSE-2014 sunny: cadence: 201, as-announced, no day, no hour', function () { expect(res.getStatus()).to.eql(201); expect(s.cadence).to.eql('as-announced'); expect(s.day_of_week).to.eql(null); expect(s.hour_of_day).to.eql(null); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

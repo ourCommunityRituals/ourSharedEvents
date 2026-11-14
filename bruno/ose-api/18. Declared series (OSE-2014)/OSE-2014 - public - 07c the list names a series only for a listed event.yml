@@ -1,0 +1,34 @@
+info:
+  name: OSE-2014 | rainy | public | the brand list names a series only for an event it lists
+  type: http
+  seq: 77
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events?brand=series-ci"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The fixture events are unpublished on purpose, so the list holds none of them.
+        // The map is built only from listed events: it must be empty too, although three
+        // of the brand's events now sit on a confirmed series. The filled map is covered
+        // in workers/oursharedevents/tests/public-event-series.spec.ts.
+        const b = res.getBody() || {};
+        test('OSE-2014 rainy: public: 200, and the list carries a series map beside the items', function () { expect(res.getStatus()).to.eql(200); expect(b).to.have.property('series'); expect(b.items).to.be.an('array'); });
+        test('OSE-2014 rainy: public: an unlisted event\'s series is not in the map', function () {
+          const listed = (b.items || []).map(function (i) { return i.id; });
+          Object.keys(b.series).forEach(function (k) { expect(listed).to.include(k); });
+          expect(listed).to.not.include('series-ci-try1-evt');
+          expect(b.series).to.not.have.property('series-ci-try1-evt');
+        });
+        test('OSE-2014 rainy: public: no item carries series_id', function () { (b.items || []).forEach(function (i) { expect(i).to.not.have.property('series_id'); }); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

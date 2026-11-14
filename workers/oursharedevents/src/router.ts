@@ -17,8 +17,8 @@
  *   GET /robots.txt              → crawl policy (prod indexable; else Disallow: /)
  *   GET /sitemap.xml             → static pages + published/active events
  *   GET /api/status              → alias for /health
- *   GET /api/v2/events           → list active events
- *   GET /api/v2/events/:id       → single event
+ *   GET /api/v2/events           → list active events; `series` beside `items` maps an event id to its confirmed series (OSE ADR-029)
+ *   GET /api/v2/events/:id       → single event; `series` beside `item` is its confirmed series or null
  *   GET /es/events/:id[/:name]   → the event page in Spanish (OSE-1761). A language prefix is
  *                                  the visitor's explicit choice and beats Accept-Language; English
  *                                  stays unprefixed. Only pages on the language layer exist under a
@@ -42,6 +42,12 @@
  *   PUT    /api/v2/admin/events/:id → update event (auth required)
  *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
  *   POST   /api/v2/admin/events/:id/repeat → draft copy of a finished event, new date, nothing about who took part (auth, rate-limited, audited, OSE-1531)
+ *   GET    /api/v2/admin/events/:id/series → the event's series and the brand's pending suggestions (auth, OSE ADR-029)
+ *   POST   /api/v2/admin/events/:id/series → declare a series anchored on this event: name, cadence, day, hour; `event_ids` join it (auth, audited)
+ *   PUT    /api/v2/admin/events/:id/series → attach this event to a confirmed series of its brand (auth, audited)
+ *   DELETE /api/v2/admin/events/:id/series → detach this event from its series (auth, audited)
+ *   POST   /api/v2/admin/events/:id/series/confirm → accept a detector suggestion (auth, audited)
+ *   POST   /api/v2/admin/events/:id/series/reject  → turn a detector suggestion down (auth, audited)
  *   GET    /api/v2/admin/events/:id/preview → draft/ready pre-event page, HTML, no-store + noindex (auth, OSE-1355)
  *   GET    /api/v2/admin/events/:id/poster-preview → draft/ready poster, HTML, no-store + noindex (auth)
  *   GET    /api/v2/admin/events/:id/live → organizer's live view of one event, HTML, no-store + noindex (auth)
@@ -197,6 +203,14 @@ import {
   type EventsEnv,
 } from './handlers/events';
 import { handleAdminRepeatEvent } from './handlers/event-repeat';
+import {
+  handleAttachEventSeries,
+  handleConfirmEventSeries,
+  handleDeclareEventSeries,
+  handleDetachEventSeries,
+  handleGetEventSeries,
+  handleRejectEventSeries,
+} from './handlers/event-series';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
   handleOperationsDashboard,
@@ -1181,6 +1195,83 @@ export async function route(
     } else {
       _audit(reqId, 'UPDATE_EVENT', 'denied', 'event', adminEventMatch[1]);
     }
+    return response;
+  }
+
+  // /api/v2/admin/events/:id/series — a series an organizer declares (OSE ADR-029).
+  // The event in the path is brand-scoped by guardAdminObjectScope above; the
+  // handler holds every id in the body to that event's brand. Each write is
+  // audited against the event, so the row carries the event's brand.
+  const adminEventSeriesMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/series$/);
+  if (
+    adminEventSeriesMatch &&
+    (method === 'GET' || method === 'POST' || method === 'PUT' || method === 'DELETE')
+  ) {
+    const seriesEventId = adminEventSeriesMatch[1];
+    const action =
+      method === 'POST'
+        ? 'DECLARE_SERIES'
+        : method === 'PUT'
+          ? 'ATTACH_SERIES_EVENT'
+          : method === 'DELETE'
+            ? 'DETACH_SERIES_EVENT'
+            : null; // a read is not audited
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      if (action) _audit(reqId, action, 'denied', 'event', seriesEventId);
+      return authRes;
+    }
+    if (method === 'GET') return handleGetEventSeries(request, env, seriesEventId);
+    const response =
+      method === 'POST'
+        ? await handleDeclareEventSeries(request, env, seriesEventId)
+        : method === 'PUT'
+          ? await handleAttachEventSeries(request, env, seriesEventId)
+          : await handleDetachEventSeries(request, env, seriesEventId);
+    if (action) _audit(reqId, action, _auditOutcome(response), 'event', seriesEventId);
+    return response;
+  }
+
+  const adminEventSeriesConfirmMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/series\/confirm$/
+  );
+  if (adminEventSeriesConfirmMatch && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      _audit(reqId, 'CONFIRM_SERIES', 'denied', 'event', adminEventSeriesConfirmMatch[1]);
+      return authRes;
+    }
+    const response = await handleConfirmEventSeries(request, env, adminEventSeriesConfirmMatch[1]);
+    _audit(
+      reqId,
+      'CONFIRM_SERIES',
+      _auditOutcome(response),
+      'event',
+      adminEventSeriesConfirmMatch[1]
+    );
+    return response;
+  }
+
+  const adminEventSeriesRejectMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/series\/reject$/
+  );
+  if (adminEventSeriesRejectMatch && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      _audit(reqId, 'REJECT_SERIES', 'denied', 'event', adminEventSeriesRejectMatch[1]);
+      return authRes;
+    }
+    const response = await handleRejectEventSeries(request, env, adminEventSeriesRejectMatch[1]);
+    _audit(
+      reqId,
+      'REJECT_SERIES',
+      _auditOutcome(response),
+      'event',
+      adminEventSeriesRejectMatch[1]
+    );
     return response;
   }
 

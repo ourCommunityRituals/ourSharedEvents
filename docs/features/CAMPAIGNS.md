@@ -1,7 +1,7 @@
 # Campaigns
 
 > A campaign is a brand's named group of sponsor placements across its events.
-> Decision record: [ADR-029](../adr/ADR-029-campaign-stays-in-its-brand-and-is-public-by-consent.md).
+> Decision record: [ADR-030](../adr/ADR-030-campaign-stays-in-its-brand-and-is-public-by-consent.md).
 > Owner, 2026-11-12: a partner for a whole showcase station is a campaign across that station's events.
 
 **Built 2026-11-13 (showcase S14, part of OSE-1552). API only; there is no admin screen yet.**

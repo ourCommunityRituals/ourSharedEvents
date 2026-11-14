@@ -44,7 +44,8 @@ See [ADR-RECONCILIATION-PROCESS.md](ADR-RECONCILIATION-PROCESS.md) for the full 
 | [ADR-026](ADR-026-analytic-layer-privacy-jurisdiction.md)                  | The analytic layer has its own privacy control; ADR-014 and COST-101 do not reach it                                      | Proposed   | 2026-11-10 |
 | [ADR-027](ADR-027-landing-list-cap-and-more.md)                            | Cap the landing list at 10 and add a More action                                                                          | Proposed   | 2026-11-10 |
 | [ADR-028](ADR-028-calendar-addresses-and-the-edge.md)                      | Let a calendar app's read of a .ics address pass the edge                                                                 | Proposed   | 2026-11-13 |
-| [ADR-029](ADR-029-campaign-stays-in-its-brand-and-is-public-by-consent.md) | A campaign stays in its brand and is public only through a placement that is on show                                      | Proposed   | 2026-11-13 |
+| [ADR-029](ADR-029-declared-event-series.md)                                | A series an organizer declares                                                                                            | Accepted   | 2026-11-13 |
+| [ADR-030](ADR-030-campaign-stays-in-its-brand-and-is-public-by-consent.md) | A campaign stays in its brand and is public only through a placement that is on show                                      | Proposed   | 2026-11-13 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 

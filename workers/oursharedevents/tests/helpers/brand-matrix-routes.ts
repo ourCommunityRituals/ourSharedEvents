@@ -212,6 +212,30 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
   ),
   // OSE-1531: the copy lands in the SOURCE's brand, so a cross-brand call must 404 and make nothing.
   eventRoute('/api/v2/admin/events/:id/repeat', 'POST', '/repeat'),
+  // OSE ADR-029: a series an organizer declares. A cross-brand call must 404 and
+  // leave every row as it was; the body names the target's own event on purpose.
+  eventRoute('/api/v2/admin/events/:id/series', 'GET', '/series'),
+  eventRoute('/api/v2/admin/events/:id/series', 'POST', '/series', {
+    variant: 'declare',
+    body: (t) => ({
+      name: 'Matrix series',
+      cadence: 'weekly',
+      day_of_week: 1,
+      hour_of_day: 17,
+      event_ids: [t.activeEventId],
+    }),
+  }),
+  eventRoute('/api/v2/admin/events/:id/series', 'PUT', '/series', {
+    variant: 'attach',
+    body: () => ({ series_id: 'evtsrs_matrix' }),
+  }),
+  eventRoute('/api/v2/admin/events/:id/series', 'DELETE', '/series', { variant: 'detach' }),
+  eventRoute('/api/v2/admin/events/:id/series/confirm', 'POST', '/series/confirm', {
+    body: (t) => ({ series_id: 'evtsrs_matrix', event_ids: [t.activeEventId] }),
+  }),
+  eventRoute('/api/v2/admin/events/:id/series/reject', 'POST', '/series/reject', {
+    body: () => ({ series_id: 'evtsrs_matrix' }),
+  }),
   eventRoute('/api/v2/admin/events/:id/verify-qr', 'POST', '/verify-qr'),
   eventRoute('/api/v2/admin/events/:id/unverify-qr', 'POST', '/unverify-qr'),
   eventRoute('/api/v2/admin/events/:id/backup', 'POST', '/backup'),

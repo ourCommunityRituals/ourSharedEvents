@@ -200,6 +200,7 @@ and is wired — and let the mechanism do the scanning.
 | `declined-regimes.invariant.test.ts` | #29 declined_regulatory_regimes |
 | `deprecation-lock.invariant.spec.ts` | #10 deprecation_lock |
 | `edge-token-verification.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `event-series.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `export-grain.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `geo-resolution.invariant.spec.ts` | #2 hyperlocal_geo_resolution |
 | `geo-resolution.structural.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |

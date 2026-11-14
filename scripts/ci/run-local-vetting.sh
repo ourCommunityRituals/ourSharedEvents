@@ -79,6 +79,7 @@ seed bruno/fixtures/covenant-sponsors-seed.sql
 seed bruno/fixtures/sponsor-public-card-seed.sql
 seed bruno/fixtures/opt-in-sponsors-seed.sql
 seed bruno/fixtures/sponsor-thumb-seed.sql
+seed bruno/fixtures/declared-series-seed.sql
 seed bruno/fixtures/core-values-draft-seed.sql
 seed bruno/fixtures/report-plan-cap-seed.sql
 seed bruno/fixtures/ci-brand-seed.sql
@@ -111,7 +112,9 @@ pw_section() { # name config specs...
 }
 # Sections come from scripts/ci/t3-sections.json, the same list the staging T3 runs.
 while IFS=$'	' read -r t3name t3config t3specs; do
-  t3name="${t3name%$''}"; t3specs="${t3specs%$''}"
+  t3name="${t3name%$'
+'}"; t3specs="${t3specs%$'
+'}"
   # shellcheck disable=SC2086
   pw_section "$t3name" "$t3config" $t3specs
 done < <(node "$ROOT/scripts/ci/run-t3.mjs" --tsv)

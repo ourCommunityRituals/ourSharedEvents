@@ -854,6 +854,7 @@ jobs:
             tests/e2e/0-architecture/csp-connect-src.invariant.spec.ts \
             tests/e2e/0-architecture/cost-metric-never-who.invariant.spec.ts \
             tests/e2e/0-architecture/declined-regimes.invariant.test.ts \
+            tests/e2e/0-architecture/event-series.invariant.spec.ts \
             tests/e2e/0-architecture/deprecation-lock.invariant.spec.ts \
             tests/e2e/0-architecture/i18n-catalog-only.invariant.spec.ts \
             tests/e2e/0-architecture/log-redaction.invariant.spec.ts \
@@ -1618,6 +1619,20 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/opt-in-sponsors-seed.sql
+
+      # OSE-2014 (OSE ADR-029): a series an organizer declares, for Bruno folder 18.
+      # Own brands ('series-ci', 'series-ci-other'), unpublished, synthetic. The
+      # folder declares, attaches, detaches, confirms and rejects; this seed puts
+      # every row back first. NOT continue-on-error.
+      - name: 'Seed declared series fixtures (OSE-2014)'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/declared-series-seed.sql
 
       # OSE-1955: the event page's sponsor thumbnails, for Bruno folder 17. One
       # sponsor per case (compact, header, none, empty URL, refused URL, a URL with
