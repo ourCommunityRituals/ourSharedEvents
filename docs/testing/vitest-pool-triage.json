@@ -1038,6 +1038,13 @@
       "testCount": 7
     },
     {
+      "file": "workers/oursharedevents/tests/event-booths.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 56
+    },
+    {
       "file": "workers/oursharedevents/tests/event-card-filter.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

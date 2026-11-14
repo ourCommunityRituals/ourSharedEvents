@@ -1,0 +1,33 @@
+info:
+  name: OSE-1998 | rainy | placement | a booth out of use takes no new placement
+  type: http
+  seq: 150
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/poster-deployments"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"placement_label\":\"Late card\",\"booth_id\":\"{{boothId}}\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 placement: 404 BOOTH_NOT_FOUND', function () { expect(res.getStatus()).to.eql(404); expect(b.code).to.eql('BOOTH_NOT_FOUND'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

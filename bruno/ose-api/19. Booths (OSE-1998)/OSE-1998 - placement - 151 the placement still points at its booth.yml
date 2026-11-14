@@ -1,0 +1,28 @@
+info:
+  name: OSE-1998 | sunny | placement | the existing placement still points at the booth
+  type: http
+  seq: 151
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/poster-deployments/{{boothPlacementId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 placement read: still on its booth', function () { expect(res.getStatus()).to.eql(200); expect(b.item.booth_id).to.eql(bru.getVar('boothId')); expect(b.item.is_active).to.eql(1); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

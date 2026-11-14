@@ -15,6 +15,12 @@
  *   DELETE /api/v2/admin/poster-deployments/:id          – soft-delete (is_active=0)
  *   POST   /api/v2/admin/poster-deployments/backfill-h3  – H3 backfill for rows with lat/lon but no H3
  *
+ * Booths (OSE-1998, OSE ADR-034): create and update take an optional `booth_id`.
+ * It must name a booth IN USE of the deployment's OWN event, else 404
+ * BOOTH_NOT_FOUND (a booth of another event, so of any other brand, reads as
+ * one that does not exist); `null` on update takes the placement off its booth.
+ * Both admin reads return `booth_id`. The /q scan path does not read it.
+ *
  * H3 tagging policy (migration 0047):
  *   Physical poster scans carry res9 (Node, ~174m²) precision because the person is
  *   physically present at the poster — the poster's location is what is recorded.
@@ -36,6 +42,8 @@ import { parsePlacementType } from '../lib/poster-reach';
 import { posterSlotLabel } from './poster-bundle';
 import { qrScanTarget } from './qr-scan';
 import { errorLabel } from '../lib/error-label';
+import { parseBoothId } from '../lib/event-booths';
+import { activeBoothOfEvent } from './event-booths';
 
 /** Longest address kept (OSE-1357). A geocoder's formatted_address is well under. */
 const ADDRESS_MAX = 300;
@@ -137,6 +145,37 @@ function validateCoords(
   return { ok: true, lat, lon };
 }
 
+/**
+ * The booth a placement may point at: an ACTIVE booth of `eventId` (OSE-1998).
+ * `keep` is the booth the placement already has; re-sending it is accepted
+ * even when that booth has since gone out of use, so an unchanged form saves.
+ */
+async function boothFor(
+  db: D1Database,
+  raw: unknown,
+  eventId: string,
+  rid: string,
+  keep: string | null = null
+): Promise<{ ok: true; boothId: string | null } | { ok: false; response: Response }> {
+  if (raw === null) return { ok: true, boothId: null };
+  const id = parseBoothId(raw);
+  if (!id) {
+    return {
+      ok: false,
+      response: errorResponse('INVALID_BOOTH_ID', 'booth_id must be a booth id or null', 400, rid),
+    };
+  }
+  if (keep !== null && id === keep) return { ok: true, boothId: id };
+  const found = await activeBoothOfEvent(db, id, eventId);
+  if (!found) {
+    return {
+      ok: false,
+      response: errorResponse('BOOTH_NOT_FOUND', 'Booth not found', 404, rid),
+    };
+  }
+  return { ok: true, boothId: found };
+}
+
 // ─── Create ──────────────────────────────────────────────────────────────────
 
 export async function handleAdminCreatePosterDeployment(
@@ -201,6 +240,24 @@ export async function handleAdminCreatePosterDeployment(
     }
   }
 
+  let boothId: string | null = null;
+  if (body.booth_id !== undefined) {
+    try {
+      const booth = await boothFor(env.DB, body.booth_id, eventId, rid);
+      if (!booth.ok) return booth.response;
+      boothId = booth.boothId;
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          type: 'DB_ERROR',
+          handler: 'handleAdminCreatePosterDeployment',
+          error: errorLabel(err),
+        })
+      );
+      return errorResponse('DB_ERROR', 'Failed to create poster deployment', 503, rid);
+    }
+  }
+
   const h3Tags = maybeTag(lat, lon);
   const h3Res9 = h3Tags?.h3_res9 ?? null;
   const h3Res7 = h3Tags?.h3_res7 ?? null;
@@ -212,8 +269,8 @@ export async function handleAdminCreatePosterDeployment(
   try {
     await env.DB.prepare(
       `INSERT INTO poster_deployments
-         (id, event_id, qr_token, placement_label, location_desc, address, placement_type, latitude, longitude, h3_res9, h3_res7, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+         (id, event_id, qr_token, placement_label, location_desc, address, placement_type, latitude, longitude, h3_res9, h3_res7, booth_id, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
     )
       .bind(
         id,
@@ -227,6 +284,7 @@ export async function handleAdminCreatePosterDeployment(
         lon,
         h3Res9,
         h3Res7,
+        boothId,
         now,
         now
       )
@@ -252,6 +310,7 @@ export async function handleAdminCreatePosterDeployment(
       address,
       h3_res9: h3Res9,
       h3_res7: h3Res7,
+      booth_id: boothId,
     },
     { status: 201, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );
@@ -274,8 +333,8 @@ export async function handleAdminListPosterDeployments(
   // figure the reach card and the SharedReport's poster attribution read.
   const rows = await env.DB.prepare(
     `SELECT pd.id, pd.event_id, pd.qr_token, pd.placement_label, pd.location_desc, pd.address,
-            pd.placement_type, pd.latitude, pd.longitude, pd.h3_res9, pd.h3_res7, pd.is_active,
-            pd.created_at, pd.updated_at
+            pd.placement_type, pd.latitude, pd.longitude, pd.h3_res9, pd.h3_res7, pd.booth_id,
+            pd.is_active, pd.created_at, pd.updated_at
        FROM poster_deployments pd
       WHERE pd.event_id = ?
       ORDER BY pd.created_at DESC`
@@ -293,6 +352,7 @@ export async function handleAdminListPosterDeployments(
       longitude: number | null;
       h3_res9: string | null;
       h3_res7: string | null;
+      booth_id: string | null;
       is_active: number;
       created_at: string;
       updated_at: string;
@@ -376,7 +436,7 @@ export async function handleAdminGetPosterDeployment(
 
   const row = await env.DB.prepare(
     `SELECT id, event_id, qr_token, placement_label, location_desc, address, placement_type,
-            latitude, longitude, h3_res9, h3_res7, is_active, created_at, updated_at
+            latitude, longitude, h3_res9, h3_res7, booth_id, is_active, created_at, updated_at
        FROM poster_deployments WHERE id = ?`
   )
     .bind(deploymentId)
@@ -440,6 +500,32 @@ export async function handleAdminUpdatePosterDeployment(
   if ('is_active' in body) {
     sets.push('is_active = ?');
     values.push(body.is_active ? 1 : 0);
+  }
+  if ('booth_id' in body) {
+    // The booth must be of the deployment's own event, so read that first.
+    try {
+      const current = await env.DB.prepare(
+        'SELECT event_id, booth_id FROM poster_deployments WHERE id = ?'
+      )
+        .bind(deploymentId)
+        .first<{ event_id: string; booth_id: string | null }>();
+      if (!current) {
+        return errorResponse('NOT_FOUND', `Poster deployment not found: ${deploymentId}`, 404, rid);
+      }
+      const booth = await boothFor(env.DB, body.booth_id, current.event_id, rid, current.booth_id);
+      if (!booth.ok) return booth.response;
+      sets.push('booth_id = ?');
+      values.push(booth.boothId);
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          type: 'DB_ERROR',
+          handler: 'handleAdminUpdatePosterDeployment',
+          error: errorLabel(err),
+        })
+      );
+      return errorResponse('DB_ERROR', 'Failed to update poster deployment', 503, rid);
+    }
   }
 
   // H3 re-tagging when coordinates are updated

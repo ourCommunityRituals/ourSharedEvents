@@ -1,0 +1,33 @@
+info:
+  name: OSE-1998 | rainy | create | the same number in another case is 409
+  type: http
+  seq: 40
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/booths"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"number\": \"a12\", \"name\": \"Other Stall\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 duplicate: 409 DUPLICATE_NUMBER', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('DUPLICATE_NUMBER'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0108; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0109; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,24 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0109: event_booths + poster_deployments.booth_id (OSE-1998, OSE ADR-034).
+-- Additive: one new table, two indexes, one nullable column. No row is written
+-- or rewritten. THE ROLLBACK IS: revert the Worker and LEAVE THE TABLE AND THE
+-- COLUMN. The older Worker reads neither: /q, the scan path and every report
+-- ignore booth_id.
+--
+-- What the older Worker does NOT know: its event hard-delete
+-- (DELETE /api/v2/admin/events/:id) does not clear event_booths, so deleting an
+-- event that has a booth answers 503 (the foreign key holds) until the newer
+-- Worker returns. Archive such an event instead, as for any event with activity.
+--
+-- Surgical reverse, only if the objects themselves must go. Drop the index
+-- before the column, the column before the table (it points at the table):
+DROP INDEX IF EXISTS idx_poster_deployments_booth_id;
+ALTER TABLE poster_deployments DROP COLUMN booth_id;
+DROP INDEX IF EXISTS idx_event_booths_event_id;
+DROP TABLE IF EXISTS event_booths;
+
 -- 0108: events.attendance_mode ('in_person', 'online' or 'both'; OSE-2012).
 -- Additive: NOT NULL with the default 'in_person', and a CHECK on the three
 -- values. No row is rewritten. THE ROLLBACK IS: revert the Worker and LEAVE THE

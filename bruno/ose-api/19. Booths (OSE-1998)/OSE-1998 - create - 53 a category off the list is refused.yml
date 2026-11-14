@@ -1,0 +1,33 @@
+info:
+  name: OSE-1998 | rainy | create | a category not on the fixed list is refused
+  type: http
+  seq: 53
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/booths"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"number\": \"B1\", \"name\": \"Rye and Co\", \"category\": \"jewellery\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 category: 400 INVALID_CATEGORY', function () { expect(res.getStatus()).to.eql(400); expect(b.code).to.eql('INVALID_CATEGORY'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

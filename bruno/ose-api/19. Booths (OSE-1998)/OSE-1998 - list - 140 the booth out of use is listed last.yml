@@ -1,0 +1,31 @@
+info:
+  name: OSE-1998 | sunny | list | in use first by sort, the booth out of use last
+  type: http
+  seq: 140
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/booths"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 list: D2, D1, D3, then A12 out of use', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect((b.booths || []).map(function (x) { return [x.number, x.is_active]; })).to.eql([['D2', true], ['D1', true], ['D3', true], ['A12', false]]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

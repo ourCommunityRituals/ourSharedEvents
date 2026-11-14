@@ -31,6 +31,7 @@ const EXPECTED_TABLES = [
   'corridor_readiness_latch', // 0082 (VISION §6.2b — a corridor's map, once open, stays open)
   'corridor_regulatory_status',
   'corridors',
+  'event_booths', // 0109 (OSE-1998 — a booth is part of a fair, OSE ADR-034)
   'event_templates',
   'event_type_registry',
   'event_type_category_registry', // 0076 (OSE-1344 — Category → Type picker)
@@ -56,6 +57,8 @@ const EXPECTED_INDEXES = [
   'idx_events_slug',
   'idx_poster_deployments_event_id',
   'idx_poster_deployments_qr_token',
+  'idx_poster_deployments_booth_id', // 0109 (OSE-1998)
+  'idx_event_booths_event_id', // 0109 (OSE-1998)
   // Split sponsor identity (migration 0065-0067 — OSE-799 A2): idx_sponsors_* retired
   'idx_sponsor_business_brand',
   'idx_sponsor_business_h3_res7',
@@ -158,7 +161,11 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // OSE poster geo-tagging — res9 Node precision for physical placement attribution) = 12.
   // + 1 (migration 0079, OSE-1357: address — the place the poster hangs) = 13.
   // + 1 (migration 0082, OSE-1357 tiers: placement_type venue|community) = 14.
-  poster_deployments: 14,
+  // + 1 (migration 0109, OSE-1998: booth_id — the booth a placement belongs to) = 15.
+  poster_deployments: 15,
+  // event_booths (0109, OSE-1998): id, event_id, number, name, category, hall_x,
+  //   hall_y, is_active, sort, created_at, updated_at = 11. No person field.
+  event_booths: 11,
   // Split scan path (migration 0062 — OSE-798 A1): scans (10) retired →
   // scan_placement_events (id, event_id, poster_deployment_id, scan_bucket,
   // created_at = 5) + scan_node_returns (id, event_id, anonymous_id,
@@ -320,7 +327,7 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 82 custom indexes exist', async () => {
+  test('all 84 custom indexes exist', async () => {
     // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_return,
     // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
     // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
@@ -353,7 +360,7 @@ describe('Gate 5: Index verification', () => {
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
     // + 2 (idx_events_status_updated, idx_events_created_by — migration 0075) = 72.
-    expect(names.length).toBe(82); // +2 0104 idx_events_venue_canonical + idx_events_event_correlation; +1 0101 idx_snr_event_anon_bucket; +1 0092 idx_anon_id_returns_pepper_epoch; +2 0090 idx_anon_id_returns_last_seen + idx_anon_id_returns_computed_at; +1 0089 idx_snr_country_nonnull; +1 0088 idx_admin_audit_log_brand_created; +1 0087 idx_scan_cell_aggregates_event_cell; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
+    expect(names.length).toBe(84); // +2 0109 idx_event_booths_event_id + idx_poster_deployments_booth_id; +2 0104 idx_events_venue_canonical + idx_events_event_correlation; +1 0101 idx_snr_event_anon_bucket; +1 0092 idx_anon_id_returns_pepper_epoch; +2 0090 idx_anon_id_returns_last_seen + idx_anon_id_returns_computed_at; +1 0089 idx_snr_country_nonnull; +1 0088 idx_admin_audit_log_brand_created; +1 0087 idx_scan_cell_aggregates_event_cell; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

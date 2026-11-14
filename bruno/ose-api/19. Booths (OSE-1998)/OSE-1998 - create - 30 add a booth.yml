@@ -1,0 +1,41 @@
+info:
+  name: OSE-1998 | sunny | create | a number, a trading name, a category and a hall spot
+  type: http
+  seq: 30
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/booths"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"number\": \" A12 \", \"name\": \"Hilltop  Honey\", \"category\": \"food\", \"hall_x\": 0.25, \"hall_y\": 0.5}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 create: 201', function () { expect(res.getStatus()).to.eql(201); expect(b.ok).to.eql(true); });
+        test('OSE-1998 create: trimmed, and answered field by field', function () {
+          expect(b.booth.number).to.eql('A12'); expect(b.booth.name).to.eql('Hilltop Honey');
+          expect(b.booth.category).to.eql('food'); expect(b.booth.hall_x).to.eql(0.25); expect(b.booth.hall_y).to.eql(0.5);
+          expect(b.booth.is_active).to.eql(true); expect(b.booth.event_id).to.eql(bru.getVar('boothFairId'));
+          expect(Object.keys(b.booth).sort()).to.eql(['category', 'created_at', 'event_id', 'hall_x', 'hall_y', 'id', 'is_active', 'name', 'number', 'sort', 'updated_at']);
+        });
+        test('OSE-1998: the answer holds nothing person-shaped', function () { expect(JSON.stringify(b)).to.not.match(/"(email|phone|contact|contact_name|owner_name|notes?|anon_id|anonymous_id|ip|user_agent|attendees)":/); });
+        bru.setVar('boothId', b.id || 'missing-booth');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

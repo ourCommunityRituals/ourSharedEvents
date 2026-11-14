@@ -1,0 +1,33 @@
+info:
+  name: OSE-1998 | rainy | wall | a booth id that does not exist
+  type: http
+  seq: 91
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/booths/booth_does_not_exist"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"name\": \"Nobody\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 wall: 404 BOOTH_NOT_FOUND', function () { expect(res.getStatus()).to.eql(404); expect(b.code).to.eql('BOOTH_NOT_FOUND'); expect(b.error).to.eql('Booth not found'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -1986,7 +1986,8 @@ export async function handleDeleteEvent(
     // sponsor_displays rows are already empty per the guard above; they stay
     // in the list so the cascade is FK-complete on its own terms and survives a
     // future guard change. scan_placement_events precedes poster_deployments
-    // because it also FKs poster_deployments.)
+    // because it also FKs poster_deployments, and poster_deployments precedes
+    // event_booths because its booth_id FKs event_booths, OSE-1998.)
     const delChild = (sql: string) => env.DB!.prepare(sql).bind(eventId);
     await env.DB.batch([
       delChild('DELETE FROM scan_placement_events WHERE event_id = ?'),
@@ -1996,6 +1997,8 @@ export async function handleDeleteEvent(
       delChild('DELETE FROM sponsor_displays   WHERE event_id = ?'),
       delChild('DELETE FROM sponsor_placement     WHERE event_id = ?'),
       delChild('DELETE FROM poster_deployments    WHERE event_id = ?'),
+      // After poster_deployments: a placement's booth_id points at a booth (0109).
+      delChild('DELETE FROM event_booths          WHERE event_id = ?'),
       delChild('DELETE FROM shortlinks            WHERE event_id = ?'),
       delChild('DELETE FROM event_codes           WHERE event_id = ?'),
       delChild('DELETE FROM share_opens_daily     WHERE event_id = ?'),

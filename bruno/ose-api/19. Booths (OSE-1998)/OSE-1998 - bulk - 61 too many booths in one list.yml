@@ -1,0 +1,39 @@
+info:
+  name: OSE-1998 | rainy | bulk | more than 200 booths in one list is refused
+  type: http
+  seq: 61
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/booths/bulk"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"booths\": []}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // 201 booths, built here rather than written out.
+        var booths = [];
+        for (var i = 1; i <= 201; i++) booths.push({ number: 'T' + i, name: 'Stall ' + i });
+        req.setBody({ booths: booths });
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 bulk cap: 400 TOO_MANY_BOOTHS', function () { expect(res.getStatus()).to.eql(400); expect(b.code).to.eql('TOO_MANY_BOOTHS'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
