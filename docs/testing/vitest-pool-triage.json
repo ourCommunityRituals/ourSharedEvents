@@ -2347,6 +2347,13 @@
       "testCount": 5
     },
     {
+      "file": "workers/oursharedevents/tests/public-event-booths.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 13
+    },
+    {
       "file": "workers/oursharedevents/tests/public-event-calendar.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

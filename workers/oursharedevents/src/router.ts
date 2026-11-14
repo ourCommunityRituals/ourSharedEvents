@@ -18,7 +18,9 @@
  *   GET /sitemap.xml             → static pages + published/active events
  *   GET /api/status              → alias for /health
  *   GET /api/v2/events           → list active events; `series` beside `items` maps an event id to its confirmed series (OSE ADR-029)
- *   GET /api/v2/events/:id       → single event; `series` beside `item` is its confirmed series or null
+ *   GET /api/v2/events/:id       → single event; `series` beside `item` is its confirmed series or null;
+ *                                  `booths` beside it lists the fair's stalls in use, six fields each
+ *                                  (OSE-1998, lib/public-booths.ts). Not on the list read.
  *   GET /es/events/:id[/:name]   → the event page in Spanish (OSE-1761). A language prefix is
  *                                  the visitor's explicit choice and beats Accept-Language; English
  *                                  stays unprefixed. Only pages on the language layer exist under a
