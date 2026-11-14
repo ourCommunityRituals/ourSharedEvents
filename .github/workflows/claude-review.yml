@@ -54,6 +54,7 @@ concurrency:
 
 jobs:
   review:
+    timeout-minutes: 30 # [Claude] ceiling: no recent completed run to measure; generous on purpose
     name: "Claude PR Review"
     # pull_request only. Without this the job also starts on every PR comment,
     # and with a prompt set the action runs a full review there too (spend on
@@ -112,7 +113,7 @@ jobs:
 
       # Sweep 9 #6 (2026-05-14): shallow checkout — the review works from the PR
       # diff (gh pr diff), not the repo history.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: steps.check-key.outputs.skip != 'true'
 
       # The charter is read from the BASE branch, never the PR head: a PR must
@@ -286,7 +287,7 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: steps.check-key.outputs.skip != 'true'
 
       # No `prompt`: tag mode answers the @claude comment itself.

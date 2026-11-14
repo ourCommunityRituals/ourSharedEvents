@@ -32,12 +32,12 @@ jobs:
 
     steps:
       - name: Checkout OSE
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: ose
 
       - name: Checkout OCR-docs brain (read-only)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: ourCommunityRituals/OCR-docs
           path: ocr-docs
@@ -53,7 +53,7 @@ jobs:
         run: bash ose/scripts/ci/assert-no-persisted-token.sh ocr-docs
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: '3.11'
 
@@ -97,7 +97,7 @@ jobs:
       # a live or partial brain invariant, every owner decision carries a tag, and
       # every OCR-docs path AGENTS.md cites exists in the fresh checkout above.
       - name: Set up Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '22'
 
@@ -140,7 +140,7 @@ jobs:
 
       - name: Upload conformance report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: conformance-report
           path: conformance-report.json
@@ -161,14 +161,14 @@ jobs:
 
     steps:
       - name: Checkout OSE at the base commit (for the token check script only)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: ose-base
           persist-credentials: false
 
       - name: Checkout OCR-docs brain (read-only)
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: ourCommunityRituals/OCR-docs
           path: ocr-docs
@@ -182,14 +182,14 @@ jobs:
         run: bash ose-base/scripts/ci/assert-no-persisted-token.sh ocr-docs
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: '3.11'
 
       - name: Download conformance report
         # Always present: the check job writes a placeholder when it stopped
         # before the conformance step.
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: conformance-report
 
@@ -213,7 +213,7 @@ jobs:
             --commit "$COMMIT_SHA"
 
       - name: Comment on PR with drift summary
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const fs = require('fs');

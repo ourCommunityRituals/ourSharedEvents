@@ -40,13 +40,14 @@ defaults:
 
 jobs:
   triage:
+    timeout-minutes: 15 # [Claude] ceiling: no recent completed run to measure; generous on purpose
     name: "🚨 Triage Security Findings"
     runs-on: ubuntu-24.04
     # Only triage when the scan failed (findings detected)
     if: github.event.workflow_run.conclusion == 'failure'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Determine severity and SLA
         id: severity

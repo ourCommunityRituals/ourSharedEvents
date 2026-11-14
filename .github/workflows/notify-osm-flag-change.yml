@@ -23,6 +23,7 @@ permissions:
 
 jobs:
   notify:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.5 min)
     name: Open issue in OSM
     runs-on: ubuntu-24.04
     # Its write token is a main-automation environment secret (OSE-1695); main only.
@@ -31,7 +32,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 2
           persist-credentials: false

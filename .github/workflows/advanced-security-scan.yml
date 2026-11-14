@@ -43,16 +43,17 @@ jobs:
   # Advisory only — does not block merges.
   # ============================================================================
   sbom:
+    timeout-minutes: 30 # [Claude] ceiling: ~3x the slowest of the last 25 runs (10.0 min)
     name: "📦 SBOM Generation"
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           clean: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '22'
 
@@ -104,7 +105,7 @@ jobs:
           echo "- **Artifact:** \`sbom-cyclonedx\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sbom-cyclonedx
           path: sbom.json
@@ -117,16 +118,17 @@ jobs:
   # create legal risk. Blocks on GPL/AGPL family licenses.
   # ============================================================================
   license-check:
+    timeout-minutes: 25 # [Claude] ceiling: ~3x the slowest of the last 25 runs (6.7 min)
     name: "⚖️ License Compliance"
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           clean: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '22'
 
@@ -218,7 +220,7 @@ jobs:
 
       - name: Upload license report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: license-report
           path: |
@@ -251,12 +253,13 @@ jobs:
   # license issues, or risky dependency additions before merge.
   # ============================================================================
   dependency-review:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.2 min)
     name: "📋 Dependency Review"
     runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # The pull request review runs in dependency-review.yml, which holds the
       # only copy of its settings (severity threshold and licence allowlist).
@@ -269,6 +272,7 @@ jobs:
   # SUMMARY AGGREGATOR
   # ============================================================================
   security-summary:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.1 min)
     name: "📊 Security Summary"
     runs-on: ubuntu-24.04
     if: always()

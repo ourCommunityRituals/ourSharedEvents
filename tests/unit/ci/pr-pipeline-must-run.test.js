@@ -99,8 +99,10 @@ function jobProblems(ci, inv22) {
   if (!gate) out.push('ci: no `gate` job');
   else {
     if (gate.if !== undefined) out.push('ci: the gate job has an `if:` and can skip');
-    if (JSON.stringify([].concat(gate.needs || [])) !== JSON.stringify(['security'])) {
-      out.push('ci: the gate job must need only `security`');
+    // [Claude] T0 runs alongside S0, so it waits on nothing and nothing upstream can
+    // skip it. (It used to need only `security`; that wait added S0's time to every PR.)
+    if (gate.needs !== undefined) {
+      out.push('ci: the gate job waits on another job and can skip with it');
     }
     if (gate.name !== 'T0 Gate (${{ matrix.shard }})') {
       out.push('ci: the gate job name is not "T0 Gate (<shard>)"');
@@ -124,8 +126,16 @@ function jobProblems(ci, inv22) {
   if (!sub) out.push('ci: no `gate-tests-sub` job');
   else {
     if (sub.if !== undefined) out.push('ci: gate-tests-sub has an `if:` and can skip');
-    if (JSON.stringify([].concat(sub.needs || [])) !== JSON.stringify(['security'])) {
-      out.push('ci: gate-tests-sub must need only `security`');
+    if (sub.needs !== undefined) {
+      out.push('ci: gate-tests-sub waits on another job and can skip with it');
+    }
+  }
+  // [Claude] With S0 and T0 side by side, a red S0 must still stop everything after
+  // them: these jobs run PR code on a local worker or touch staging/production.
+  for (const id of ['local-vetting', 'deploy-staging', 'deploy-production']) {
+    const needs = [].concat((jobs[id] && jobs[id].needs) || []);
+    for (const n of ['security', 'gate']) {
+      if (jobs[id] && !needs.includes(n)) out.push(`ci: ${id} does not wait for \`${n}\``);
     }
   }
   const rec = jobs['gate-execution-reconciler'];
@@ -219,8 +229,27 @@ describe('OSE-1212 - each break in the chain is caught', () => {
   test('the gate job waits on something that can skip', () => {
     const ci = clone(ci0);
     ci.jobs.gate.needs = ['security', 'local-vetting'];
-    expect(allProblems(ci, inv0, cfg0)).toEqual(['ci: the gate job must need only `security`']);
+    expect(allProblems(ci, inv0, cfg0)).toEqual([
+      'ci: the gate job waits on another job and can skip with it',
+    ]);
   });
+
+  test('a T0 test section waits on another job', () => {
+    const ci = clone(ci0);
+    ci.jobs['gate-tests-sub'].needs = ['security'];
+    expect(allProblems(ci, inv0, cfg0)).toEqual([
+      'ci: gate-tests-sub waits on another job and can skip with it',
+    ]);
+  });
+
+  test.each(['local-vetting', 'deploy-staging', 'deploy-production'])(
+    '%s stops waiting for S0',
+    (id) => {
+      const ci = clone(ci0);
+      ci.jobs[id].needs = [].concat(ci.jobs[id].needs).filter((n) => n !== 'security');
+      expect(allProblems(ci, inv0, cfg0)).toEqual([`ci: ${id} does not wait for \`security\``]);
+    }
+  );
 
   test('a gate shard dropped from the matrix', () => {
     const ci = clone(ci0);

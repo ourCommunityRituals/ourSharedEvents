@@ -93,8 +93,9 @@ jobs:
     # No job-level `if:` and no `needs:`, so every group starts on every pull
     # request; the required check is `mutation` below, which waits for all six.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           # 2, not the default 1: the scope step reads a pull request's changes as
           # the merge commit against its first parent (HEAD^1).
           fetch-depth: 2
@@ -114,7 +115,7 @@ jobs:
           MUTATION_BEFORE_SHA: ${{ github.event.before }}
         run: node scripts/ci/mutation-paths.mjs
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         if: steps.scope.outputs.run != 'false'
         with:
           # StrykerJS 10 requires Node >= 22 (the rest of CI runs on 20; this job
@@ -151,7 +152,7 @@ jobs:
 
       - name: Upload this group's report
         if: always() && steps.scope.outputs.run != 'false'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mutation-group-${{ matrix.group }}
           path: workers/oursharedevents/reports/mutation-${{ matrix.group }}/**
@@ -183,8 +184,9 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           fetch-depth: 2
 
       # The same decision the groups made, so this job knows whether reports exist.
@@ -197,7 +199,7 @@ jobs:
 
       - name: Download every group's report
         if: steps.scope.outputs.run != 'false'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: mutation-group-*
           path: reports
@@ -224,7 +226,7 @@ jobs:
     timeout-minutes: 15
     # No job-level `if:` and no `needs:`, for the same reason as the job above.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
           # 2: the scope step reads HEAD^1, as in the job above.
@@ -244,7 +246,7 @@ jobs:
           MUTATION_BEFORE_SHA: ${{ github.event.before }}
         run: node scripts/ci/mutation-paths.mjs
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         if: steps.scope.outputs.run != 'false'
         with:
           node-version: 22
@@ -263,7 +265,7 @@ jobs:
 
       - name: Upload mutation report
         if: always() && steps.scope.outputs.run != 'false'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mutation-report-ci-scripts
           path: reports/mutation-ci-scripts/**

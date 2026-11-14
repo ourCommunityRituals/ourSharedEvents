@@ -23,6 +23,7 @@ concurrency:
 
 jobs:
   red-team-staging:
+    timeout-minutes: 30 # [Claude] ceiling: ~3x the slowest of the last 25 runs (9.5 min)
     name: 'T5 Adversarial (red-team) → deployed env'
     # ADR-012 0.2: a workflow_run job runs with main as its ref, so environment
     # branch rules do not stop it, and a head_repository check only stops forks.
@@ -37,11 +38,11 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           clean: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '22'
       - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
@@ -73,6 +74,7 @@ jobs:
         run: npx playwright test --config=playwright.red-team.config.ts --grep-invert "RL-"
 
   security-closing:
+    timeout-minutes: 15 # [Claude] ceiling: ~3x the slowest of the last 25 runs (4.2 min)
     name: 'T6 Closing Security (post-test integrity)'
     needs: [red-team-staging]
     # Same ADR-012 0.2 gate as red-team-staging (only push runs on main hold
@@ -84,11 +86,11 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           clean: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '22'
       - name: 'Closing: committed-secret gate (nothing injected during testing)'
@@ -109,6 +111,7 @@ jobs:
           npx playwright test --config=playwright.red-team.config.ts             tests/red-team/public-list-stored-xss.spec.ts             tests/red-team/security-headers.spec.ts
 
   post-t6-security:
+    timeout-minutes: 15 # [Claude] ceiling: ~3x the slowest of the last 25 runs (3.4 min)
     name: 'Post-T6 Security (final bookend)'
     needs: [security-closing]
     if: >
@@ -118,11 +121,11 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '22'
 

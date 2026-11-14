@@ -27,6 +27,7 @@ permissions:
 
 jobs:
   dependency-review:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.2 min)
     name: "Dependency Review"
     runs-on: ubuntu-24.04
     defaults:
@@ -34,7 +35,7 @@ jobs:
         shell: bash
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Check dependency graph availability
         id: check
@@ -51,7 +52,7 @@ jobs:
           echo "  Settings > Security > Code security and analysis > Dependency graph"
           echo "=============================================="
 
-      - uses: actions/dependency-review-action@v5
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
         # Graceful degradation: if Dependency Graph is not enabled, this errors
         # but should not block PRs. Stage-1 npm audit provides the backstop.
         # Once Dependency Graph is enabled, remove continue-on-error to make this a hard gate.
