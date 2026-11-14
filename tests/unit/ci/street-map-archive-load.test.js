@@ -291,8 +291,13 @@ describe('absent and loaded: what the bucket lists', () => {
 
 const LOAD_ONLY = "inputs.mode == 'load'";
 const BUCKET_SECRETS = ['R2_MAP_TILES_ACCESS_KEY_ID', 'R2_MAP_TILES_SECRET_KEY'];
-const DEPLOY_SECRET = 'CLOUDFLARE_API_TOKEN_OSE';
-const SECRETS_ALLOWED = [...BUCKET_SECRETS, DEPLOY_SECRET, 'CLOUDFLARE_ACCOUNT_ID', 'OCR_HUB_READ'];
+const DEPLOY_TOKEN_NAME = 'CLOUDFLARE_API_TOKEN_OSE';
+const SECRETS_ALLOWED = [
+  ...BUCKET_SECRETS,
+  DEPLOY_TOKEN_NAME,
+  'CLOUDFLARE_ACCOUNT_ID',
+  'OCR_HUB_READ',
+];
 const secretsIn = (node) => [
   ...new Set([...JSON.stringify(node ?? null).matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1])),
 ];
@@ -370,7 +375,7 @@ function shapeProblems(text) {
   if (BUCKET_SECRETS.some((s) => secretsIn(privateJob).includes(s))) {
     out.push('bucket-private reads the bucket credential');
   }
-  if (secretsIn(loadJob).includes(DEPLOY_SECRET)) {
+  if (secretsIn(loadJob).includes(DEPLOY_TOKEN_NAME)) {
     out.push('load reads the deploy token, on the runner that downloads tools');
   }
   for (const step of privateJob.steps ?? []) {
@@ -1068,8 +1073,9 @@ describe('the names typed three times are one set of names', () => {
     ],
     [
       'an older go-pmtiles digest',
-      '3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f',
-      '0'.repeat(64),
+      // By its place in the table, so the digest is typed in the workflow and the runbook only.
+      /(Linux_x86_64\.tar\.gz` +\| `)[0-9a-f]{64}/,
+      `$1${'0'.repeat(64)}`,
     ],
     ['an older rclone named', 'rclone **v1.76.0**', 'rclone **v1.59.0**'],
     ['a secret under another name', '`R2_MAP_TILES_SECRET_KEY`', '`R2_SECRET_ACCESS_KEY`'],
