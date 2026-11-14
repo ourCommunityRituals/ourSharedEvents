@@ -116,7 +116,7 @@ import {
   zoneDisplayName,
 } from '../lib/event-datetime.js';
 import { renderEventCountdown } from '../lib/event-countdown.js';
-import { buildGoogleCalendarUrl } from '../lib/calendar-links.js';
+import { buildBrandSubscribeLinks, buildGoogleCalendarUrl } from '../lib/calendar-links.js';
 import {
   CANONICAL_PATH,
   canonicalLinkTagFor,
@@ -837,6 +837,42 @@ function renderShareBlock(
 <script nonce="${nonce}">(function(){var btn=document.querySelector('.ose-share-btn');if(!btn)return;var orig=btn.textContent;btn.addEventListener('click',function(){var u=btn.dataset.shareUrl,t=btn.dataset.shareTitle;if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){btn.textContent='${jsStr(copiedLabel)}';setTimeout(function(){btn.textContent=orig;},2000);}).catch(function(){});}});})();</script>`;
 }
 
+/**
+ * OSE-2045 — subscribe to every public event of this event's brand (the feed at
+ * /brands/<brand>/calendar.ics, OSE-2013). Owner, 2026-11-14: the online
+ * calendars come first, then the .ics address. Same CSP-safe <details> menu and
+ * classes as "Add to calendar"; no script, no new style.
+ *
+ * Shown only when this event is itself in the feed (published, active and past
+ * the publish grace). An event that opens by link only is not in its brand's
+ * feed, and its brand may have no feed at all, so it does not offer one.
+ */
+export function renderSubscribeMenu(
+  row: PublicEventRow,
+  origin: string,
+  lang: Lang,
+  now: Date = new Date()
+): string {
+  if (row.is_published !== 1 || (row.status || '').toLowerCase() !== 'active') return '';
+  if (row.listed_from) {
+    const listedFrom = new Date(row.listed_from).getTime();
+    if (Number.isNaN(listedFrom) || listedFrom > now.getTime()) return '';
+  }
+  const links = buildBrandSubscribeLinks(origin, row.brand_id);
+  if (!links) return '';
+  const label = msg(lang, 'calendar.subscribe');
+  const external = 'target="_blank" rel="noopener noreferrer"';
+  return `<details class="ose-calendar-menu" data-testid="subscribe-calendar">
+    <summary class="ose-calendar-link ose-calendar-summary" data-testid="subscribe-calendar-summary">${label}</summary>
+    <div class="ose-calendar-options" role="group" aria-label="${label}">
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-google" href="${esc(links.google)}" ${external}>Google Calendar</a>
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-outlook" href="${esc(links.outlook)}" ${external}>Outlook.com</a>
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-apple" href="${esc(links.webcal)}">${msg(lang, 'calendar.subscribe.apple')}</a>
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-ics" href="${esc(links.ics)}">${msg(lang, 'calendar.subscribe.ics')}</a>
+    </div>
+  </details>`;
+}
+
 function renderEventActions(
   row: PublicEventRow,
   shareUrl: string,
@@ -877,9 +913,14 @@ function renderEventActions(
   const shareLink = row.share_code
     ? `${new URL(shareUrl).origin}${withLangPrefix(lang, `/e/${encodeURIComponent(row.share_code)}`)}`
     : shareUrl;
+  // An admin draft preview shows what the public will see with its controls
+  // switched off; a draft is in no feed, so the menu is not drawn there at all.
+  // When there is no menu the row is byte for byte what it was before OSE-2045.
+  const subscribe =
+    opts.inert === true ? '' : renderSubscribeMenu(row, new URL(shareUrl).origin, lang);
   return `<div class="ose-event-actions" data-testid="event-actions">
   ${renderShareBlock(shareLink, row.title, nonce, lang, opts.inert === true)}
-  ${menu}
+  ${menu}${subscribe ? `\n  ${subscribe}` : ''}
 </div>`;
 }
 

@@ -393,8 +393,12 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   test('Step 6: Poster surface renders sponsor', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
 
-    await page.goto('/poster', { waitUntil: 'networkidle', timeout: TIMEOUT });
-    await page.waitForTimeout(3000);
+    // The bare /poster draws the first listed event, as the bare /display does;
+    // the journey must look at the event it attached its sponsor to.
+    await page.goto(`/poster?event=${encodeURIComponent(eventId)}`, {
+      waitUntil: 'networkidle',
+      timeout: TIMEOUT,
+    });
 
     // Check poster-bundle API directly
     const res = await publicFetch(
@@ -407,21 +411,14 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     const found = posterSponsors.find((s: any) => s.id === sponsorId);
     expect(found).toBeTruthy();
 
-    // Check DOM rendering
+    // Check DOM rendering: this run's sponsor, by its exact name, among the
+    // poster's sponsor items. No items at all is a failure, not a skip.
     const sponsorItems = page.locator('[data-testid="poster-sponsor-item"]');
-    const count = await sponsorItems.count();
-
-    if (count > 0) {
-      let foundInPoster = false;
-      for (let i = 0; i < count; i++) {
-        const text = await sponsorItems.nth(i).textContent();
-        if (text?.includes('Journey Sponsor')) {
-          foundInPoster = true;
-          break;
-        }
-      }
-      expect(foundInPoster).toBe(true);
-    }
+    await expect(async () => {
+      const texts = await sponsorItems.allTextContents();
+      expect(texts.length).toBeGreaterThan(0);
+      expect(texts.some((t) => t.includes(SPONSOR_NAME))).toBe(true);
+    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000] });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────

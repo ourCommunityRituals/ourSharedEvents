@@ -164,6 +164,7 @@ export const NODE_SPECS = [
   'tests/mvt.spec.ts',
   'tests/street-map.spec.ts',
   'tests/street-map-landing.spec.ts',
+  'tests/map-areas.spec.ts',
   'tests/map-zoom.spec.ts',
   'tests/map-place-links.spec.ts',
   // WHAT external link — event-page render fns emit the optional outbound link
@@ -174,6 +175,8 @@ export const NODE_SPECS = [
   // and the <details> menu render over renderPre/LiveEventHtml. No cloudflare:test.
   'tests/calendar-links.spec.ts',
   'tests/calendar-action.spec.ts',
+  // OSE-2045 — the Subscribe menu beside it: same render seam, no runtime.
+  'tests/subscribe-calendar-menu.spec.ts',
   // OSE-1760 — golden renders of the three phase pages in English and Spanish:
   // the language layer must change no byte. Pure over the exported renderers.
   'tests/language-layer-golden.spec.ts',

@@ -114,3 +114,60 @@ export function buildGoogleCalendarUrl(event: CalendarLinkEvent, shareUrl: strin
   if (location) parts.push(`location=${encodeURIComponent(location)}`);
   return `https://calendar.google.com/calendar/render?${parts.join('&')}`;
 }
+
+// ─── Subscribing to a brand's calendar feed (OSE-2045) ────────────────────────
+//
+// Owner, 2026-11-14: a subscription offers the online calendars first, then the
+// .ics address. These are the four links, in that order. Each is built here from
+// this site's origin and the brand id alone, so nothing an organizer typed can
+// reach a link, and none carries a tracking parameter.
+//
+// The two online calendars fetch the feed from their own servers. The feed is
+// public and sets no cookie, so nothing about the visitor travels with it.
+
+/** A brand id as the feed route accepts it (handlers/brand-calendar.ts). */
+const FEED_BRAND_SHAPE = /^[a-z0-9_-]{1,64}$/;
+
+export interface BrandSubscribeLinks {
+  /** Google Calendar, "add by URL". Online. */
+  google: string;
+  /** Outlook.com, "add from web". Online. */
+  outlook: string;
+  /** webcal://, which Apple Calendar and desktop apps open as a subscription. */
+  webcal: string;
+  /** The feed's own https address, to copy into any other app. */
+  ics: string;
+}
+
+/**
+ * The subscribe links for a brand's feed, or null when the origin is not a web
+ * origin or the brand id is not one the feed route would accept.
+ */
+export function buildBrandSubscribeLinks(
+  origin: string,
+  brand: string
+): BrandSubscribeLinks | null {
+  if (!FEED_BRAND_SHAPE.test(brand)) return null;
+  let host: string;
+  let scheme: string;
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    host = parsed.host;
+    scheme = parsed.protocol;
+  } catch {
+    return null;
+  }
+  const path = `/brands/${brand}/calendar.ics`;
+  const ics = `${scheme}//${host}${path}`;
+  const webcal = `webcal://${host}${path}`;
+  const name = `OurSharedEvents: ${brand}`;
+  return {
+    google: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`,
+    outlook:
+      'https://outlook.live.com/calendar/0/addfromweb' +
+      `?url=${encodeURIComponent(ics)}&name=${encodeURIComponent(name)}`,
+    webcal,
+    ics,
+  };
+}

@@ -284,7 +284,12 @@ describe('street map | the credit, in the page language, wherever streets are dr
   // and no others, and lib/attendee-map.ts is the only one that draws it. A new
   // surface that draws streets turns this red: give it the credit (streetCredit)
   // and a case above, then add it here.
-  it('only the landing map draws the street layer, and each drawing is paired with the credit', () => {
+  //
+  // OSE-2039 added the second surface: handlers/map-areas.ts hands the layer to a
+  // reader outside OSE (GET /api/v2/map/areas). It sends the credit in the same
+  // object as the layer, so one is never sent without the other; its case is in
+  // map-areas.spec.ts ("draws the street layer ... and the credit").
+  it('only the landing map and the public area map draw the street layer, and each drawing is paired with the credit', () => {
     const SRC = join(__dirname, '..', 'src');
     const files: string[] = [];
     const walk = (dir: string) => {
@@ -300,6 +305,7 @@ describe('street map | the credit, in the page language, wherever streets are dr
       .map((f) => relative(SRC, f).split(sep).join('/'))
       .sort();
     expect(touches).toEqual([
+      'handlers/map-areas.ts',
       'handlers/pages.ts',
       'lib/attendee-map.ts',
       'lib/landing-area.ts',
@@ -312,5 +318,12 @@ describe('street map | the credit, in the page language, wherever streets are dr
     expect(credited).toHaveLength(drawn.length);
     // The credit is built in one place.
     expect(map.split('data-testid="amap-credit"')).toHaveLength(2);
+    // The public area map: the layer is sent once, inside the object that holds
+    // its credit, and that object is null when there is no layer.
+    const api = readFileSync(join(SRC, 'handlers', 'map-areas.ts'), 'utf8');
+    expect(api.match(/\blayer\.svg\b/g) ?? []).toHaveLength(1);
+    expect(api).toMatch(
+      /streets: layer\s*\? \{[^}]*svg: layer\.svg,[^}]*credit: \{ html: streetCredit\('en'\)[^}]*\}[^}]*\}\s*: null/
+    );
   });
 });
