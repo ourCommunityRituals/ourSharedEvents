@@ -1109,9 +1109,17 @@ describe('pmtiles | R2 source', () => {
 // hexagons. The limits are in lib/pmtiles.ts beside the numbers they stand on.
 describe('pmtiles | limits on what an archive may ask the Worker to hold', () => {
   const t = { z: 3, x: 2, y: 5, data: bytes('tile-325') };
-  const id = zxyToTileId(t.z, t.x, t.y);
-  const otherId = zxyToTileId(3, 7, 7);
-  const entry: DirEntry = { tileId: id, offset: 0, length: t.data.length, runLength: 1 };
+  // Functions, not values: a call into the reader at describe level runs outside
+  // every test, and Stryker then reruns the whole suite for each mutant on that
+  // path (72 more such mutants, and a mutation job past its time limit, 2026-11-14).
+  const id = (): number => zxyToTileId(t.z, t.x, t.y);
+  const otherId = (): number => zxyToTileId(3, 7, 7);
+  const entry = (): DirEntry => ({
+    tileId: id(),
+    offset: 0,
+    length: t.data.length,
+    runLength: 1,
+  });
   /** A directory padded with zero bytes to `size`: the decoder stops after its entries. */
   const padded = (entries: DirEntry[], size: number): Uint8Array => {
     const out = new Uint8Array(size);
@@ -1124,7 +1132,7 @@ describe('pmtiles | limits on what an archive may ask the Worker to hold', () =>
     expect(MAX_DIRECTORY_BYTES).toBe(2_097_152);
     expect(MAX_TILE_BYTES).toBe(MAX_READ_BYTES);
     expect(MAX_TILE_UNPACKED_BYTES).toBe(4_194_304);
-    expect(otherId).toBeGreaterThan(id);
+    expect(otherId()).toBeGreaterThan(id());
   });
 
   it('gzip: unpacks up to the limit to the byte, over several chunks, and refuses one byte more', async () => {
@@ -1178,14 +1186,16 @@ describe('pmtiles | limits on what an archive may ask the Worker to hold', () =>
   });
 
   it('a root directory of exactly the limit is read', async () => {
-    const root = padded([entry], MAX_DIRECTORY_BYTES);
+    const root = padded([entry()], MAX_DIRECTORY_BYTES);
     const src = memSource(rawArchive({ root, data: t.data }).archive);
     expect(text(await readTile(src, 3, 2, 5))).toBe('tile-325');
     expect(src.reads[1]).toEqual([HEADER_BYTES, MAX_DIRECTORY_BYTES]);
   });
 
   it('a leaf directory stated longer than the limit is refused before it is asked for', async () => {
-    const root = dirOf([{ tileId: id, offset: 0, length: MAX_DIRECTORY_BYTES + 1, runLength: 0 }]);
+    const root = dirOf([
+      { tileId: id(), offset: 0, length: MAX_DIRECTORY_BYTES + 1, runLength: 0 },
+    ]);
     const src = memSource(rawArchive({ root, leaves: new Uint8Array(8), data: t.data }).archive);
     await expect(readTile(src, 3, 2, 5)).rejects.toThrow(PmtilesError);
     await expect(readTile(src, 3, 2, 5)).rejects.toThrow(/directory of 2097153 bytes/);
@@ -1193,8 +1203,8 @@ describe('pmtiles | limits on what an archive may ask the Worker to hold', () =>
   });
 
   it('a leaf directory of exactly the limit is read', async () => {
-    const leaf = padded([entry], MAX_DIRECTORY_BYTES);
-    const root = dirOf([{ tileId: id, offset: 0, length: leaf.length, runLength: 0 }]);
+    const leaf = padded([entry()], MAX_DIRECTORY_BYTES);
+    const root = dirOf([{ tileId: id(), offset: 0, length: leaf.length, runLength: 0 }]);
     const raw = rawArchive({ root, leaves: leaf, data: t.data });
     const src = memSource(raw.archive);
     expect(text(await readTile(src, 3, 2, 5))).toBe('tile-325');
@@ -1203,7 +1213,7 @@ describe('pmtiles | limits on what an archive may ask the Worker to hold', () =>
 
   it('a root directory that unpacks to exactly its limit is read; one byte more is refused', async () => {
     for (const over of [0, 1]) {
-      const root = await gzip(padded([entry], MAX_DIRECTORY_BYTES + over));
+      const root = await gzip(padded([entry()], MAX_DIRECTORY_BYTES + over));
       const { archive } = rawArchive({ root, data: t.data });
       archive[97] = 2;
       const src = memSource(archive);
@@ -1217,16 +1227,20 @@ describe('pmtiles | limits on what an archive may ask the Worker to hold', () =>
   });
 
   it('a leaf directory that unpacks to exactly its limit is read', async () => {
-    const leaf = await gzip(padded([entry], MAX_DIRECTORY_BYTES));
-    const root = await gzip(dirOf([{ tileId: id, offset: 0, length: leaf.length, runLength: 0 }]));
+    const leaf = await gzip(padded([entry()], MAX_DIRECTORY_BYTES));
+    const root = await gzip(
+      dirOf([{ tileId: id(), offset: 0, length: leaf.length, runLength: 0 }])
+    );
     const { archive } = rawArchive({ root, leaves: leaf, data: t.data });
     archive[97] = 2;
     expect(text(await readTile(memSource(archive), 3, 2, 5))).toBe('tile-325');
   });
 
   it('a leaf directory that unpacks past its limit is refused and not kept: the next read asks again', async () => {
-    const leaf = await gzip(padded([entry], MAX_DIRECTORY_BYTES + 1));
-    const root = await gzip(dirOf([{ tileId: id, offset: 0, length: leaf.length, runLength: 0 }]));
+    const leaf = await gzip(padded([entry()], MAX_DIRECTORY_BYTES + 1));
+    const root = await gzip(
+      dirOf([{ tileId: id(), offset: 0, length: leaf.length, runLength: 0 }])
+    );
     const raw = rawArchive({ root, leaves: leaf, data: t.data });
     raw.archive[97] = 2;
     const src = memSource(raw.archive);
@@ -1237,8 +1251,8 @@ describe('pmtiles | limits on what an archive may ask the Worker to hold', () =>
 
   it('one tile stated longer than the limit refuses the frame before any tile byte is asked for', async () => {
     const root = dirOf([
-      { tileId: id, offset: 0, length: 8, runLength: 1 },
-      { tileId: otherId, offset: 8, length: MAX_TILE_BYTES + 1, runLength: 1 },
+      { tileId: id(), offset: 0, length: 8, runLength: 1 },
+      { tileId: otherId(), offset: 8, length: MAX_TILE_BYTES + 1, runLength: 1 },
     ]);
     const src = memSource(rawArchive({ root, data: new Uint8Array(64) }).archive);
     const frame = readTiles(src, 3, [
@@ -1253,17 +1267,19 @@ describe('pmtiles | limits on what an archive may ask the Worker to hold', () =>
   });
 
   it('a tile of exactly the limit is read whole', async () => {
-    const data = Uint8Array.from({ length: MAX_TILE_BYTES }, (_, i) => i % 249);
-    const root = dirOf([{ tileId: id, offset: 0, length: data.length, runLength: 1 }]);
+    const data = new Uint8Array(MAX_TILE_BYTES);
+    data[0] = 7;
+    data[MAX_TILE_BYTES - 1] = 249;
+    const root = dirOf([{ tileId: id(), offset: 0, length: data.length, runLength: 1 }]);
     const out = (await readTile(memSource(rawArchive({ root, data }).archive), 3, 2, 5))!;
     expect(out.length).toBe(MAX_TILE_BYTES);
-    expect(out[MAX_TILE_BYTES - 1]).toBe((MAX_TILE_BYTES - 1) % 249);
+    expect([out[0], out[1], out[MAX_TILE_BYTES - 1]]).toEqual([7, 0, 249]);
   });
 
   it('a tile that unpacks to exactly its limit is read; one byte more is refused', async () => {
     for (const over of [0, 1]) {
       const data = await gzip(new Uint8Array(MAX_TILE_UNPACKED_BYTES + over));
-      const root = dirOf([{ tileId: id, offset: 0, length: data.length, runLength: 1 }]);
+      const root = dirOf([{ tileId: id(), offset: 0, length: data.length, runLength: 1 }]);
       const { archive } = rawArchive({ root, data });
       archive[98] = 2;
       const src = memSource(archive);
@@ -1277,14 +1293,14 @@ describe('pmtiles | limits on what an archive may ask the Worker to hold', () =>
   });
 
   it('fat finger: a gzip tile stated as 0 bytes is refused, not read as an empty tile', async () => {
-    const root = dirOf([{ tileId: id, offset: 0, length: 0, runLength: 1 }]);
+    const root = dirOf([{ tileId: id(), offset: 0, length: 0, runLength: 1 }]);
     const { archive } = rawArchive({ root, data: new Uint8Array(8) });
     archive[98] = 2;
     await expect(readTile(memSource(archive), 3, 2, 5)).rejects.toThrow();
   });
 
   it('fat finger: a directory stated longer than the file, inside the limit, is asked for and read from what the file has', async () => {
-    const { archive } = rawArchive({ root: dirOf([entry]), data: t.data });
+    const { archive } = rawArchive({ root: dirOf([entry()]), data: t.data });
     putU64(archive, 16, 500_000);
     const src = memSource(archive);
     expect(text(await readTile(src, 3, 2, 5))).toBe('tile-325');

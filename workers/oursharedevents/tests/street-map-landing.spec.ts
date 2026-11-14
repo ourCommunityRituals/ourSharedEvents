@@ -25,6 +25,7 @@ import { MAX_TILE_UNPACKED_BYTES, resetPmtilesCache } from '../src/lib/pmtiles';
 import { DEFAULT_ARCHIVE } from '../src/lib/street-map';
 import {
   fakeBucket,
+  paddedTile,
   pmtilesArchive,
   scriptedBucket,
   tilesForCells,
@@ -95,14 +96,17 @@ describe('street map | the landing page handler', () => {
     expect(cellsOf(html)).toEqual(cellsOf(plain));
   });
 
-  // The archive holds the right tiles for the page, each a few KB of gzip that
-  // unpacks past the reader's tile limit (lib/pmtiles.ts). Born red 2026-11-14
-  // at the reader (tests/pmtiles.spec.ts); here it is the page that is watched.
+  // The archive holds the right tiles for the page, and one of them is a good
+  // tile (a few KB of gzip) that unpacks to one byte past the reader's tile
+  // limit (lib/pmtiles.ts). Born red 2026-11-14: with a tile unpacked to any
+  // length, this page drew its streets from that archive.
   it('an archive past the reader limits leaves the page and its hexagons as they were', async () => {
     const plain = await landing({});
     const { tiles } = tilesForCells(cellsOf(plain));
     const swollen = await pmtilesArchive(
-      tiles.map((t) => ({ ...t, data: new Uint8Array(MAX_TILE_UNPACKED_BYTES + 1) })),
+      tiles.map((t, i) =>
+        i === 0 ? { ...t, data: paddedTile(t.data, MAX_TILE_UNPACKED_BYTES + 1) } : t
+      ),
       { gzip: true }
     );
     const bucket = fakeBucket(DEFAULT_ARCHIVE, swollen);
