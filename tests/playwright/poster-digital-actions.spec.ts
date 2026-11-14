@@ -26,6 +26,8 @@
  *
  * @born-red OSE-1991 | method: run against main's template (2218bbbd: no
  * sponsor link, 40px logo, art below the cards, print one plain line) | date: 2026-11-12
+ * @born-red OSE-1991 phone spacing | method: run against accb936f's template
+ * (the wider title and body padding): the spacing case went red | date: 2026-11-12
  */
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -233,6 +235,30 @@ test.describe('OSE-1825 digital poster: When / Where / Share at 375px', () => {
       expect(art!.y + art!.height, 'art ends above the When card').toBeLessThanOrEqual(when!.y + 1);
     });
   }
+
+  // OSE-1991 (owner 2026-11-12): on a phone the title and the sponsor set the
+  // page; the art follows close behind, with no wide band of empty space.
+  test('OSE-1991 digital 375px: the sponsor block sits tight under the title and the art tight under it', async ({
+    page,
+  }) => {
+    await load(page, 'digital', undefined, true);
+    await page.waitForFunction(() => {
+      const i = document.querySelector('[data-testid="poster-art-img"]') as HTMLImageElement;
+      return i && i.complete && i.naturalWidth > 0;
+    });
+    const header = await page.getByTestId('poster-card-header').boundingBox();
+    const title = await page.getByTestId('poster-title').boundingBox();
+    const strip = await page.getByTestId('poster-sponsor-strip').boundingBox();
+    const art = await page.getByTestId('poster-art-img').boundingBox();
+    expect(
+      header!.y + header!.height - (title!.y + title!.height),
+      'space under the title'
+    ).toBeLessThanOrEqual(16);
+    expect(strip!.y - (header!.y + header!.height), 'title to sponsor block').toBeLessThanOrEqual(
+      2
+    );
+    expect(art!.y - (strip!.y + strip!.height), 'sponsor block to art').toBeLessThanOrEqual(16);
+  });
 
   test('OSE-1991: the sponsor block links to the sponsor’s own https site, in a new tab', async ({
     page,

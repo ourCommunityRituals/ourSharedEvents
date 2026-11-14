@@ -309,10 +309,21 @@ export async function handleGetPosterBundle(
   // codes) down with it — before OSE-867 the strip was its own call and failed
   // alone (CCR PR701 F1).
   let sponsors: SponsorRow[] = [];
+  // OSE-1991 (owner 2026-11-12): the digital poster shows one sponsor at a time,
+  // and how often each comes up follows its covenant share (Premium 7 / Anchor 3
+  // / Local 1, the local floor and the caps held: allocateShares via
+  // buildWeightedRotation, the same sequence the TV side rail plays). Only ids,
+  // each one of `sponsors`; the order is seeded-shuffled, so it carries no
+  // meaning. Size stays the same for every sponsor (#25: money buys frequency).
+  let sponsorRotation: string[] = [];
   try {
     const sponsorResult = await getDataProvider(env).getSponsors(row.id, { bypassCache: true });
-    sponsors = buildSponsorBundle(filterSponsorsForSurface(sponsorResult.data, 'poster'), row.id)
-      .surface_sponsors.posterTop;
+    const bundle = buildSponsorBundle(
+      filterSponsorsForSurface(sponsorResult.data, 'poster'),
+      row.id
+    );
+    sponsors = bundle.surface_sponsors.posterTop;
+    sponsorRotation = bundle.surface_sponsors.tvSide.map((s) => s.id);
   } catch (err) {
     console.error(
       JSON.stringify({
@@ -345,6 +356,7 @@ export async function handleGetPosterBundle(
     uecEnterHex: UEC_ENTER_HEX,
     slots,
     sponsors,
+    sponsor_rotation: sponsorRotation,
     // OSE-869: the organiser's section switches, resolved (absent → on). The
     // poster drops its QR grid when showQRSection is false. The codes above are
     // still minted and coloured as always — hiding them is a visibility choice.
