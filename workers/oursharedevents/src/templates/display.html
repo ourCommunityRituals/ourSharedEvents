@@ -335,7 +335,37 @@
       // board.topSponsors: the same shape, for the strip under the featured title.
       // board.config: the last display-config body, board.configEtag its ETag.
       // board.sponsorsFor: the event whose sponsors are on screen (loadDisplaySponsors).
-      var board = { items: null, sponsors: [], topSponsors: [], rotation: null, config: null, configEtag: null, configFor: null, sponsorsFor: null, sponsorTitles: {}, listedIds: [], stopSideRail: null, sideRailVisibility: null };
+      var board = { items: null, sponsors: [], topSponsors: [], rotation: null, config: null, configEtag: null, configFor: null, sponsorsFor: null, sponsorTitles: {}, listedIds: [], stopSideRail: null, sideRailVisibility: null, leadTurns: [], leadStep: 0 };
+      // OSE-1991 (owner 2026-11-12): on a phone the title and the sponsor lead
+      // the screen. The side rail is not drawn (it squeezed the title into a
+      // column); the strip under the title becomes one sponsor block at a time,
+      // its banner full width, in the turns of its covenant share (tvSide:
+      // Premium 7 / Anchor 3 / Local 1, the local floor and caps held). The
+      // block is the same size for every sponsor (#25). A TV is unchanged.
+      var NARROW = window.matchMedia ? window.matchMedia('(max-width: 767px)') : null;
+      function narrow() { return !!(NARROW && NARROW.matches); }
+      var LEAD_TURN_MS = 6000;
+      // Show the sponsor whose turn it is; the others are taken out of the flow.
+      function applyLead() {
+        const blocks = document.querySelectorAll('[data-testid="display-sponsor-lead-item"]');
+        const at = board.leadTurns.length ? board.leadTurns[board.leadStep % board.leadTurns.length] : 0;
+        blocks.forEach(function (el, i) { el.style.display = i === at ? '' : 'none'; });
+      }
+      setInterval(function () {
+        if (document.hidden || !narrow() || board.leadTurns.length < 2) return;
+        board.leadStep = (board.leadStep + 1) % board.leadTurns.length;
+        applyLead();
+      }, LEAD_TURN_MS);
+      if (NARROW && NARROW.addEventListener) {
+        NARROW.addEventListener('change', function () {
+          if (narrow()) {
+            if (board.stopSideRail) board.stopSideRail();
+            const rail = document.getElementById('display-sponsor-sidebar');
+            if (rail) rail.innerHTML = '';
+          }
+          if (board.items && board.items.length) renderBoard();
+        });
+      }
       // A QR is a PNG data URI from our own endpoint; anything else is not put
       // in an <img src>.
       function isQrDataUri(v) {
@@ -438,7 +468,15 @@
         const featuredName = featured.name || '';
         // The sponsor sits by the title (PO rule): below the title and date,
         // above the QR. Tier-blind: one box per sponsor, by its title.
-        const strip = board.topSponsors.length
+        const lead = '<div class="sponsor-panel" data-testid="display-sponsor-lead" role="list" aria-label="Event sponsors">' +
+          '<div class="sponsor-panel-label" data-testid="display-sponsor-lead-label">Sponsored by</div>' +
+          board.topSponsors.map(s => '<div class="sponsor-panel-block" role="listitem" aria-label="' + escAttr(s.title) + '" data-testid="display-sponsor-lead-item">' +
+            (s.header ? '<img class="sponsor-panel-header" src="' + escAttr(s.header) + '" alt="" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="display-sponsor-lead-header">' : '') +
+            '<div class="sponsor-panel-id"><img src="' + escAttr(s.src) + '" alt="' + escAttr(s.title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" data-testid="display-sponsor-lead-logo">' +
+            '<span class="sponsor-panel-name" data-testid="display-sponsor-lead-name">' + escAttr(s.title) + '</span></div>' +
+            (s.text ? '<p class="sponsor-panel-text" data-testid="display-sponsor-lead-text">' + escAttr(s.text) + '</p>' : '') +
+            '</div>').join('') + '</div>';
+        const strip = !board.topSponsors.length ? '' : narrow() ? lead : board.topSponsors.length
           ? '<div class="display-sponsor-banner" data-testid="display-sponsor-banner">' +
             board.topSponsors.map(s => '<div class="display-sponsor-item" data-tier="' + escAttr(s.tier || 'primary') + '" data-testid="display-sponsor-item">' +
               '<img src="' + escAttr(s.src) + '" alt="' + escAttr(s.title) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" data-testid="display-sponsor-logo">' +
@@ -532,6 +570,7 @@
         board.rotation = createPaneRotation(panes, rot.dwellMs, showPane);
         board.rotation.setHidden(document.hidden);
         board.rotation.start(Math.max(panes.indexOf(keepType), 0), keepPaused);
+        applyLead();
       }
       // Nothing is featured any more (the list came back empty): drop every
       // piece of state that belonged to the previous event, so its sponsors
@@ -720,9 +759,21 @@
             .map(s => ({ title: s.title || s.name, src: s.logo_url ? logoSrc(s) : logoSrc(s, 'sidebar') }));
           // The strip under the featured title (OSE-1521): the top-slot sponsors,
           // by title, drawn inside the featured screen by renderBoard.
-          board.topSponsors = tvTop.map(s => ({ title: s.title || s.name, src: s.logo_url ? logoSrc(s) : SPONSOR_DEFAULT_LOGO, tier: s.tier }));
+          board.topSponsors = tvTop.map(s => ({
+            title: s.title || s.name, src: s.logo_url ? logoSrc(s) : SPONSOR_DEFAULT_LOGO, tier: s.tier,
+            // The phone lead block (OSE-1991): the sponsor's banner through the
+            // consent-gated proxy, and its short text.
+            header: s.has_header_image === true ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo?slot=header' : '',
+            text: String(s.header_text == null ? '' : s.header_text).trim()
+          }));
+          // Turns for the phone lead block: tvSide is the share-weighted sequence;
+          // each entry points at the strip's sponsor with that id.
+          const topIds = tvTop.map(s => s && s.id);
+          board.leadTurns = tvSide.map(s => topIds.indexOf(s && s.id)).filter(i => i >= 0);
+          if (!board.leadTurns.length) board.leadTurns = tvTop.map((_, i) => i);
+          board.leadStep = 0;
           renderBoard();
-          if (sidebar && tvSide.length) {
+          if (sidebar && tvSide.length && !narrow()) {
             let idx = 0;
             const total = tvSide.length;
             function renderSideItem(s) {

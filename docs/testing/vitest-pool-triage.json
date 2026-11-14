@@ -947,6 +947,13 @@
       "testCount": 4
     },
     {
+      "file": "workers/oursharedevents/tests/display-phone-sponsor-lead.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 7
+    },
+    {
       "file": "workers/oursharedevents/tests/display-settings.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -2221,6 +2228,20 @@
       "testCount": 24
     },
     {
+      "file": "workers/oursharedevents/tests/poster-sponsor-rotation-share.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-sponsor-share-turns.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 6
+    },
+    {
       "file": "workers/oursharedevents/tests/poster-sponsor.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -3121,7 +3142,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 10
+      "testCount": 11
     },
     {
       "file": "workers/oursharedevents/tests/sponsor-covenant-authoring.spec.ts",
