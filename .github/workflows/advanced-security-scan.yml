@@ -50,6 +50,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           clean: false
 
       - name: Setup Node.js
@@ -125,6 +126,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           clean: false
 
       - name: Setup Node.js
@@ -260,6 +262,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       # The pull request review runs in dependency-review.yml, which holds the
       # only copy of its settings (severity threshold and licence allowlist).
