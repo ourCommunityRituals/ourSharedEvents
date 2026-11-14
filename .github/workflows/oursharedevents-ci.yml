@@ -147,10 +147,6 @@ on:
         description: 'Run full functional suite (Tier 4 — expensive)'
         type: boolean
         default: false
-      force_clean:
-        description: 'Force npm ci regardless of stamp (bust corrupt node_modules)'
-        type: boolean
-        default: false
 
 concurrency:
   # OSE-937: key the group by EVENT so a nightly `schedule` run and a `push`-to-main
@@ -240,40 +236,7 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          FLAGS_NM=node_modules/@ocr/flags/package.json
-          # The install-stamp lets us skip `npm ci` when package-lock.json is
-          # unchanged. But the "Fix @ocr/flags for SBOM resolution" step later
-          # in THIS job destructively strips devDependencies from @ocr/flags
-          # IN PLACE, and self-hosted runners persist node_modules between
-          # runs. The lockfile hash doesn't change when only @ocr/flags is
-          # mutated, so a naive stamp-skip would let `npm audit` run against
-          # the mutated tree — the npm registry then rejects the submitted
-          # tree with `400 Bad Request — Invalid package tree`.
-          #
-          # SELF-HEALING GUARD: the stamp is only trustworthy if @ocr/flags
-          # in node_modules still carries its devDependencies. If they're gone
-          # (SBOM step already ran on this runner) or the file is unparseable,
-          # node_modules is mutated → force a fresh `npm ci`. This recovers on
-          # the very next run with no force_clean dispatch needed, and catches
-          # corruption from ANY source, not just the known SBOM step.
-          flags_mutated=false
-          if [ -f "$FLAGS_NM" ]; then
-            node -e "const p=JSON.parse(require('fs').readFileSync('$FLAGS_NM','utf8'));process.exit(p.devDependencies?0:1)" 2>/dev/null || flags_mutated=true
-          fi
-          if [ "$FORCE_CLEAN" != 'true' ] && [ "$flags_mutated" = 'false' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "node_modules up-to-date, skipping npm ci"
-          else
-            if [ "$flags_mutated" = 'true' ]; then
-              echo "node_modules/@ocr/flags is mutated (devDependencies stripped by a prior SBOM run) — forcing fresh npm ci"
-            fi
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
 
       # ── CodeQL moved out (Sweep 9 #2, 2026-05-14) ───────────────────────
       # CodeQL javascript-typescript analysis lived here AND in codeql.yml
@@ -342,17 +305,12 @@ jobs:
       # causing CycloneDX to fail. Strip them from the installed copy so SBOM
       # only inventories production dependencies.
       #
-      # IMPORTANT — this step destructively mutates node_modules. Two guards
-      # keep `npm audit` from later submitting the mutated tree to the npm
-      # registry (which rejects it with `400 — Invalid package tree`):
-      #   1. PRIMARY (self-healing): the Install Dependencies step above
-      #      detects a stripped @ocr/flags and forces a fresh `npm ci`
-      #      regardless of the install-stamp. See its comment block.
-      #   2. BELT-AND-SUSPENDERS (this step): invalidate the install-stamp
-      #      here so the stamp-hash path ALSO reinstalls next run, even if
-      #      the primary detection is ever broken.
-      # Diagnosed via workflow_dispatch force_clean=true (run 26111985672 =
-      # success vs run 26110784159 same SHA = failure).
+      # This step mutates node_modules in place. That is safe because the job
+      # runs on a fresh hosted VM (the mutated tree is gone when it ends) and
+      # `npm audit` above reads the lockfile only (--package-lock-only), so the
+      # npm registry never sees the mutated tree (it rejects one with
+      # `400 — Invalid package tree`). tests/integration/infra-consistency.test.js
+      # holds both.
       - name: Fix @ocr/flags for SBOM resolution
         run: |
           FLAGS_PKG="node_modules/@ocr/flags/package.json"
@@ -364,9 +322,6 @@ jobs:
               fs.writeFileSync('$FLAGS_PKG', JSON.stringify(pkg, null, 2));
             "
           fi
-          # Belt-and-suspenders — invalidate install stamp; node_modules is no
-          # longer pristine after the @ocr/flags mutation above.
-          rm -f node_modules/.install-stamp
 
       - name: Generate SBOM
         run: |
@@ -407,9 +362,8 @@ jobs:
   # change required there.
   #
   # Each shard runs identical setup (checkout, setup-node, stage @ocr/flags,
-  # install root deps). The per-runner stamp cache (node_modules/.install-stamp)
-  # makes the install a near no-op on warm runners, so the duplicated setup
-  # cost is bounded to ~30-45s per shard. Worker deps are skipped on the
+  # install root deps). setup-node's npm cache keeps `npm ci` to seconds on a
+  # fresh hosted VM, so the duplicated setup is cheap. Worker deps are skipped on the
   # lint shard since eslint only touches root files — absorbs the original
   # Sweep 9 #3 (combine npm ci) win directly into the matrix design.
   # ============================================================================
@@ -432,10 +386,9 @@ jobs:
     #     isolate corruption (ECONNRESET / "Failed to start cloudflare-pool
     #     worker" / "Reflect.get on non-object") on the RAM-bound box.
     # The required branch-protection check names derive from `matrix.shard`, so
-    # they stay exactly "T0 Gate (<shard>)" — no protection change needed. The
-    # Windows-only workerd-lock pre-install step self-skips (`runner.os ==
-    # 'Windows'`). Moving the fs-reading structural gates to Linux also removes
-    # the Windows path-sep vacuous-green class (OSE-980/981).
+    # they stay exactly "T0 Gate (<shard>)" — no protection change needed.
+    # Moving the fs-reading structural gates to Linux also removes the Windows
+    # path-sep vacuous-green class (OSE-980/981).
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -459,14 +412,6 @@ jobs:
         # were gated by nothing while T2→T3→T4 sat behind staging.
         shard: [lint, typecheck, a11y, invariants, component]
     steps:
-      # Self-hosted runner cleanup: stale _diag/pages/ log files left by
-      # cancelled runs cause checkout to fail with "file already exists".
-      # Run on every shard — concurrent rm -rf is safe (idempotent).
-      # RUNNER_WORKSPACE = <runner_root>/_work/<repo> — go up two levels.
-      - name: 'Clear stale runner diag files'
-        shell: bash
-        run: rm -rf "$RUNNER_WORKSPACE/../../_diag/pages" 2>/dev/null || true
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -502,75 +447,7 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install root dependencies
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "node_modules up-to-date, skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
-
-      # OSE-900: on self-hosted Windows a leftover workerd.exe from a prior job
-      # can be pinned by a kernel System (PID 4) image-section handle that only
-      # releases on reboot. `npm ci` on a lockfile-changing PR (stamp miss) must
-      # delete node_modules and then dies on that locked file with
-      # ENOTEMPTY/EPERM — which is why only Dependabot-style PRs fail install.
-      # Pre-clear THIS workspace's workerd package so npm never has to delete a
-      # locked file: try Remove-Item, else MOVE the dir aside (a directory
-      # rename succeeds even when the file inside is section-locked; Remove-Item
-      # alone cannot beat it). Path-scoped to $GITHUB_WORKSPACE — never a global
-      # `taskkill /IM workerd.exe` — so concurrent jobs on the other runners that
-      # share this box are untouched. Idempotent no-op; never fails the job.
-      - name: 'Pre-install: clear locked workerd (Windows self-hosted)'
-        if: runner.os == 'Windows' && matrix.shard != 'lint' && matrix.shard != 'invariants'
-        # Windows PowerShell 5.1 — the self-hosted runners do NOT have pwsh
-        # (PowerShell Core) installed. The script below is 5.1-compatible.
-        shell: powershell
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          $ErrorActionPreference = 'Continue'
-          $ws = $env:GITHUB_WORKSPACE
-          # 1) Kill ONLY workerd processes whose exe lives under this workspace.
-          try {
-            Get-CimInstance Win32_Process -Filter "Name='workerd.exe'" -ErrorAction Stop |
-              Where-Object { $_.ExecutablePath -and $ws -and $_.ExecutablePath.StartsWith($ws, [System.StringComparison]::OrdinalIgnoreCase) } |
-              ForEach-Object {
-                Write-Host "stopping in-workspace workerd PID $($_.ProcessId): $($_.ExecutablePath)"
-                try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch {}
-              }
-          } catch { Write-Host "workerd scan skipped: $($_.Exception.Message)" }
-          # 2) Clear every workerd-windows-64 copy: delete, else move aside.
-          $targets = @(
-            'node_modules\wrangler\node_modules\@cloudflare\workerd-windows-64',
-            'node_modules\@cloudflare\workerd-windows-64',
-            'node_modules\@cloudflare\vitest-pool-workers\node_modules\wrangler\node_modules\@cloudflare\workerd-windows-64'
-          )
-          # Quarantine OUTSIDE the checkout (RUNNER_WORKSPACE = parent of the repo
-          # dir, same volume) so it never lands in the git tree; it clears on reboot.
-          $quarBase = if ($env:RUNNER_WORKSPACE) { $env:RUNNER_WORKSPACE } else { (Get-Location).Path }
-          foreach ($t in $targets) {
-            $full = Join-Path (Get-Location) $t
-            $present = $true
-            try { $present = Test-Path $full } catch { $present = $true }  # access-denied => treat as locked/present
-            if (-not $present) { continue }
-            try {
-              Remove-Item -Recurse -Force -ErrorAction Stop $full
-              Write-Host "removed $t"
-            } catch {
-              try {
-                $dest = Join-Path $quarBase "_locked_workerd_quarantine_$([System.IO.Path]::GetRandomFileName())"
-                [System.IO.Directory]::Move($full, $dest)
-                Write-Host "quarantined (move-aside) $t -> $dest"
-              } catch {
-                Write-Host "WARN: could not clear $t ($($_.Exception.Message)); npm ci will attempt it"
-              }
-            }
-          }
-          exit 0
+        run: npm ci --prefer-offline || npm ci
 
       # Worker deps not needed for the lint shard (eslint targets root paths)
       # nor the invariants shard (structural specs read source via node:fs —
@@ -579,26 +456,7 @@ jobs:
       # workers/oursharedevents/node_modules populated.
       - name: Install worker dependencies
         if: matrix.shard != 'lint' && matrix.shard != 'invariants'
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          # OSE-904: the "Pre-install: clear locked workerd" guard (OSE-900)
-          # deletes/quarantines @cloudflare/workerd-windows-64 on EVERY run to
-          # beat the image-section lock. The install-stamp alone does not know
-          # workerd was cleared, so a lockfile-unchanged PR would skip npm ci and
-          # leave workerd absent -> vitest dies at startup ("workerd-windows-64
-          # could not be found"). Gate the skip on the workerd binary actually
-          # being present so the clear/restore cycle self-heals every run.
-          WORKERD=node_modules/@cloudflare/workerd-windows-64/bin/workerd.exe
-          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ] && [ -f "$WORKERD" ]; then
-            echo "worker node_modules up-to-date, skipping npm ci"
-          else
-            [ -f "$WORKERD" ] || echo "workerd binary absent (cleared by the pre-install lock guard or a partial install) — forcing npm ci"
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
         working-directory: ${{ env.WORKER_DIR }}
 
       # ── Shard: lint ────────────────────────────────────────────────────────
@@ -972,15 +830,6 @@ jobs:
             tests/e2e/2-pages/a11y-axe-surfaces.spec.ts \
             tests/e2e/2-pages/sponsor-thumbnails.component.spec.ts
 
-      # Post-job cleanup: delete _diag/pages/ so the next run's runner agent
-      # can create fresh log files without "file already exists" collisions.
-      # Runs on every shard, always (even on failure/cancel). Concurrent
-      # rm -rf is safe — idempotent on already-missing directories.
-      - name: 'Cleanup: clear diag pages for next run'
-        if: always()
-        shell: bash
-        run: rm -rf "$RUNNER_WORKSPACE/../../_diag/pages" 2>/dev/null || true
-
   # T0 test sub-gates: keep the existing required context `T0 Gate (tests)` as
   # an aggregate below, but split the former 9+ minute long-pole job into
   # independently visible and parallel sections.
@@ -1018,22 +867,34 @@ jobs:
           # [Claude] 3 → 4 slices: at 3, each slice spent a p50 of 5.7 min in tests
           # and the slowest slice set T0's end (7.0 min p50, 216 PR runs
           # 2026-10-31..11-14); setup is ~0.7 min a slice, so a 4th slice cuts ~1.4 min.
+          # [Claude] 4 → 5 slices, cut by time (2026-11-14): vitest's own --shard
+          # splits by file COUNT, and spec times run from 0.4 s to 63 s, so one run
+          # had slices of 3.4 to 5.9 min. vitest.sequencer.mjs now cuts them by the
+          # measured times in vitest-shard-durations.json (refresh:
+          # node scripts/vitest-shard-durations.mjs); on held-out runs the slowest
+          # slice sits 0.2-0.3 min above the mean (was 0.3-0.8). The serial pool
+          # holds ~20 min of tests: 5 slices ≈ 4.0 min each, still above S0 (≈3 min),
+          # while a 6th would save ~0.7 min more for one more concurrent runner.
           - section: worker-d1-schema
-            shard: 1/4
+            shard: 1/5
             workdir: workers/oursharedevents
-            command: node ../../scripts/vitest-retry.mjs npm test -- --shard=1/4
+            command: node ../../scripts/vitest-retry.mjs npm test -- --shard=1/5
           - section: worker-d1-schema
-            shard: 2/4
+            shard: 2/5
             workdir: workers/oursharedevents
-            command: node ../../scripts/vitest-retry.mjs npm test -- --shard=2/4
+            command: node ../../scripts/vitest-retry.mjs npm test -- --shard=2/5
           - section: worker-d1-schema
-            shard: 3/4
+            shard: 3/5
             workdir: workers/oursharedevents
-            command: node ../../scripts/vitest-retry.mjs npm test -- --shard=3/4
+            command: node ../../scripts/vitest-retry.mjs npm test -- --shard=3/5
           - section: worker-d1-schema
-            shard: 4/4
+            shard: 4/5
             workdir: workers/oursharedevents
-            command: node ../../scripts/vitest-retry.mjs npm test -- --shard=4/4
+            command: node ../../scripts/vitest-retry.mjs npm test -- --shard=4/5
+          - section: worker-d1-schema
+            shard: 5/5
+            workdir: workers/oursharedevents
+            command: node ../../scripts/vitest-retry.mjs npm test -- --shard=5/5
           - section: launch-contracts
             workdir: workers/oursharedevents
             command: >-
@@ -1046,10 +907,6 @@ jobs:
               tests/poster-qr.spec.ts
               tests/tier-equity-sort.spec.ts
     steps:
-      - name: 'Clear stale runner diag files'
-        shell: bash
-        run: rm -rf "$RUNNER_WORKSPACE/../../_diag/pages" 2>/dev/null || true
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -1075,33 +932,12 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install root dependencies
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "node_modules up-to-date, skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
 
       - name: Install worker dependencies
         if: matrix.workdir == 'workers/oursharedevents'
         working-directory: ${{ env.WORKER_DIR }}
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          WORKERD=node_modules/@cloudflare/workerd-windows-64/bin/workerd.exe
-          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ] && { [ "$RUNNER_OS" != "Windows" ] || [ -f "$WORKERD" ]; }; then
-            echo "worker node_modules up-to-date, skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
 
       # The worker D1 schema run imports OCR-docs brain artifacts at vitest config
       # time. Root/local runs skip when absent; CI must provide them.
@@ -1129,11 +965,6 @@ jobs:
         run: ${{ matrix.command }}
         env:
           BRAIN_DIR: ${{ github.workspace }}/ocr-docs-brain-checkout/ocr-docs-brain
-
-      - name: 'Cleanup: clear diag pages for next run'
-        if: always()
-        shell: bash
-        run: rm -rf "$RUNNER_WORKSPACE/../../_diag/pages" 2>/dev/null || true
 
   gate-tests:
     name: 'T0 Gate (tests)'
@@ -1274,17 +1105,7 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install worker dependencies
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "worker node_modules up-to-date, skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
         working-directory: ${{ env.WORKER_DIR }}
 
       # ────────────────────────────────────────────────────────────────────
@@ -1524,33 +1345,13 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "node_modules up-to-date, skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
 
       # Locked wrangler for the seed steps below (they run with the Cloudflare token).
       # Root has no wrangler, so without this `npx wrangler` fetches the newest release
       # instead of the version workers/oursharedevents/package-lock.json pins.
       - name: Install worker dependencies
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "worker node_modules up-to-date, skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
         working-directory: ${{ env.WORKER_DIR }}
 
       # CF Access preflight probe (OSE-349) — diagnostic only, does not gate.
@@ -1969,17 +1770,7 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "node_modules up-to-date, skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
 
       - name: Restore Playwright browser cache
         if: matrix.installBrowser == true
@@ -2142,33 +1933,13 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "node_modules up-to-date, skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
 
       # Locked wrangler for the seed steps below (they run with the Cloudflare token).
       # Root has no wrangler, so without this `npx wrangler` fetches the newest release
       # instead of the version workers/oursharedevents/package-lock.json pins.
       - name: Install worker dependencies
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "worker node_modules up-to-date, skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
         working-directory: ${{ env.WORKER_DIR }}
 
       - name: Restore Playwright browser cache
@@ -2881,17 +2652,7 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install worker dependencies
-        env:
-          FORCE_CLEAN: ${{ inputs.force_clean }}
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          if [ "$FORCE_CLEAN" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "worker node_modules up-to-date, skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
         working-directory: ${{ env.WORKER_DIR }}
 
       - name: Verify production DB isolation

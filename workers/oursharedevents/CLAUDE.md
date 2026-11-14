@@ -83,6 +83,11 @@ turns CI red — a ~0-token operation cannot silently become token-metered.
   (OSE-946); `scripts/vitest-projects-partition.mjs` (in this folder) asserts every
   spec runs in exactly one project, and `node scripts/triage-vitest-pool.mjs --check`
   (repo root, `../../scripts/`) guards the manifest in the T0 Gate `lint` shard.
+- CI runs the suite as `--shard=i/N` slices cut by measured time, not file count
+  (`vitest.sequencer.mjs` → `vitest-shard-plan.mjs`, times in
+  `vitest-shard-durations.json`). A new spec gets its project's median until the
+  times are refreshed with `node ../../scripts/vitest-shard-durations.mjs`;
+  `tests/integration/vitest-shard-plan.test.js` fails once over 15% are unmeasured.
 - Structural architecture invariants live at repo-root
   `tests/e2e/0-architecture/*.invariant.spec.ts` and gate **every** PR/push via
   the T0 Gate `invariants` shard (OSE-350). A new structural invariant spec
