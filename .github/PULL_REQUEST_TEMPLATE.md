@@ -13,9 +13,9 @@
 
 ## Testing Checklist
 
-- [ ] Jest unit tests pass (`npm run test:jest`)
+- [ ] Unit, contract and integration tests pass (Vitest: `npm test` at the root and in `workers/oursharedevents`)
 - [ ] Deployed to @HEAD and tested (`npm run push && sleep 30`)
-- [ ] Newman smoke tests pass (`npm run test:newman:smoke`)
+- [ ] API cases are in Bruno (`bruno/ose-api`, `bruno/ose-pages`) and pass in CI's Bruno runs
 - [ ] Tested in browser (Admin, Public, Display pages)
 - [ ] Tested on mobile viewport (if UI changes)
 
