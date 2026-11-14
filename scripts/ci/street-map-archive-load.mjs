@@ -4,7 +4,7 @@
  * (.github/workflows/street-map-archive-load.yml, docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md).
  *
  * The workflow cuts the United States archive on a runner, checks it and loads
- * it into the staging bucket. Each point where it may stop is a pure function
+ * it into the street-map bucket. Each point where it may stop is a pure function
  * here, so each is tested on the fault that must stop a run
  * (tests/unit/ci/street-map-archive-load.test.js). Every one fails closed: what
  * it cannot read counts as a problem, never as a pass.
@@ -30,8 +30,17 @@ export const WRANGLER_PATH = 'workers/oursharedevents/wrangler.toml';
 const KEY = /^us-(\d{8})\.pmtiles$/;
 
 /**
- * The names wrangler.toml binds: the staging bucket and the archive key both
- * environment blocks read. A name it cannot find is undefined.
+ * The one street-map bucket (owner 2026-11-14): staging binds it, and
+ * production will bind the same one, so the file is loaded once. The workflow
+ * loads this bucket and no other, whatever wrangler.toml and the workflow's env
+ * agree on between themselves. Until 2026-11-14 the rule was a name ending in
+ * "-staging".
+ */
+export const STREET_MAP_BUCKET = 'ose-map-tiles';
+
+/**
+ * The names wrangler.toml binds: the bucket staging's MAP_TILES names and the
+ * archive key both environment blocks read. A name it cannot find is undefined.
  */
 export function boundNames(tomlText) {
   const stgAt = tomlText.search(/^\[env\.staging\]/m);
@@ -75,8 +84,10 @@ export function nameProblems(named, tomlText) {
   if (named.bucket !== bound.bucket) {
     out.push(`the workflow loads into "${named.bucket}", staging binds "${bound.bucket}"`);
   }
-  if (!/-staging$/.test(named.bucket ?? '')) {
-    out.push(`"${named.bucket}" is not a staging bucket: this workflow loads staging only`);
+  if (named.bucket !== STREET_MAP_BUCKET) {
+    out.push(
+      `"${named.bucket}" is not the street-map bucket "${STREET_MAP_BUCKET}": this workflow loads that bucket only`
+    );
   }
   return out;
 }

@@ -39,12 +39,12 @@ beforeAll(async () => {
 // ─── 1. The decisions ────────────────────────────────────────────────────────
 
 describe('names: the workflow loads the file the Worker reads, into the bucket staging binds', () => {
-  const NAMED = { build: '20261109', key: 'us-20261109.pmtiles', bucket: 'ose-map-tiles-staging' };
+  const NAMED = { build: '20261109', key: 'us-20261109.pmtiles', bucket: 'ose-map-tiles' };
   const TOML_OK = [
     '[env.staging]',
     '[[env.staging.r2_buckets]]',
     'binding = "MAP_TILES"',
-    'bucket_name = "ose-map-tiles-staging"',
+    'bucket_name = "ose-map-tiles"',
     '[env.staging.vars]',
     'MAP_TILES_ARCHIVE = "us-20261109.pmtiles"',
     '[env.production]',
@@ -63,13 +63,32 @@ describe('names: the workflow loads the file the Worker reads, into the bucket s
     ['the build moved and the key left behind', { build: '20261110' }],
     ['the whole build named as the key', { key: '20261109.pmtiles' }],
     ['the planet name of 2026-11-09', { key: 'planet-20261109.pmtiles' }],
-    ['the production bucket', { bucket: 'ose-map-tiles-production' }],
+    ['a production bucket (there is none: one bucket)', { bucket: 'ose-map-tiles-production' }],
+    ['the bucket of before 2026-11-14', { bucket: 'ose-map-tiles-staging' }],
     ['the uploads bucket', { bucket: 'ose-uploads-staging' }],
     ['the dev bucket', { bucket: 'ose-map-tiles-dev' }],
     ['no key at all', { key: undefined }],
     ['no bucket at all', { bucket: undefined }],
   ])('fat finger in the workflow: %s', (_, slip) => {
     expect(load.nameProblems({ ...NAMED, ...slip }, TOML_OK)).not.toEqual([]);
+  });
+
+  // One bucket (owner 2026-11-14). The workflow and wrangler.toml agreeing with
+  // each other is not enough: the bucket is the one street-map bucket by name.
+  // Until that day the rule was a name ending in "-staging", and no case fed it
+  // two files that agreed on a wrong bucket.
+  // @born-red street-map load bucket by name | method: two faults in nameProblems (scripts/ci/street-map-archive-load.mjs), one at a time: the STREET_MAP_BUCKET rule switched off (the three cases below went red), and the "-staging" rule of before put back in its place ("agreeing names have no problem", "the real files agree" and two of the three cases below went red) | date: 2026-11-14
+  test.each([
+    ['a production bucket', 'ose-map-tiles-production'],
+    ['the uploads bucket', 'ose-uploads-staging'],
+    ['the bucket of before 2026-11-14', 'ose-map-tiles-staging'],
+  ])('the workflow and wrangler.toml agreeing on %s: still refused', (_, bucket) => {
+    expect(load.STREET_MAP_BUCKET).toBe('ose-map-tiles');
+    const toml = TOML_OK.replace('bucket_name = "ose-map-tiles"', `bucket_name = "${bucket}"`);
+    expect(toml).not.toBe(TOML_OK);
+    expect(load.nameProblems({ ...NAMED, bucket }, toml)).toEqual([
+      `"${bucket}" is not the street-map bucket "ose-map-tiles": this workflow loads that bucket only`,
+    ]);
   });
 
   test('a production block that reads another archive is a problem, not a pass', () => {
@@ -99,7 +118,7 @@ describe('private: only the two exact answers that mean private pass', () => {
   const OFF =
     ' ⛅️ wrangler 4.158.0\n───────────────────\nPublic access via the r2.dev URL is disabled.\n';
   const NONE =
-    " ⛅️ wrangler 4.158.0\n───────────────────\nListing custom domains connected to bucket 'ose-map-tiles-staging'...\nThere are no custom domains connected to this bucket.\n";
+    " ⛅️ wrangler 4.158.0\n───────────────────\nListing custom domains connected to bucket 'ose-map-tiles'...\nThere are no custom domains connected to this bucket.\n";
 
   test('no r2.dev URL and no custom domain: private', () => {
     expect(load.privacyProblems(OFF, NONE)).toEqual([]);
@@ -276,14 +295,14 @@ describe('absent and loaded: what the bucket lists', () => {
 
   test('the summary carries the size and the SHA-256', () => {
     const md = load.summaryMarkdown(RECORD, {
-      bucket: 'ose-map-tiles-staging',
+      bucket: 'ose-map-tiles',
       build: '20261109',
       state: 'loaded',
     });
     expect(md).toContain('`21000000123` (21.0 GB)');
     expect(md).toContain(`\`${'a'.repeat(64)}\``);
     expect(md).toContain('`us-20261109.pmtiles`');
-    expect(md).toContain('`ose-map-tiles-staging`');
+    expect(md).toContain('`ose-map-tiles`');
   });
 });
 
@@ -806,9 +825,7 @@ describe('the workflow: dispatched by hand, staging only, the credential where i
     expect(workflow()).toMatch(/^# .*production/m);
     expect(shapeProblems(`${workflow()}\n# production is loaded by a later PR\n`)).toEqual([]);
     expect(
-      shapeProblems(
-        workflow().replace('BUCKET: ose-map-tiles-staging', 'BUCKET: ose-map-tiles-prod')
-      )
+      shapeProblems(workflow().replace('BUCKET: ose-map-tiles', 'BUCKET: ose-map-tiles-prod'))
     ).toContain('a line that is not a comment names production');
   });
 });
@@ -930,7 +947,7 @@ describe('the names typed three times are one set of names', () => {
   // Seen red on the real files, 2026-11-14, one fault at a time: ARCHIVE_KEY in
   // the workflow changed to us-20261019.pmtiles; MAP_TILES_ARCHIVE in the staging
   // block of wrangler.toml changed to us-20261110.pmtiles; a ```bash block with
-  // `rclone delete r2:ose-map-tiles-staging/us-20261109.pmtiles` added to the
+  // `rclone delete r2:ose-map-tiles/us-20261109.pmtiles` added to the
   // runbook; PMTILES_SHA256 in the workflow changed by one character;
   // `--download-threads=16` added to the cut and not to the dry run (the cut is
   // the dry run without its last flag, so commands are compared as whole lines).
@@ -956,8 +973,8 @@ describe('the names typed three times are one set of names', () => {
       'ARCHIVE_KEY: us-20261110.pmtiles',
     ],
     ['the build moved, the key left', "PROTOMAPS_BUILD: '20261109'", "PROTOMAPS_BUILD: '20261110'"],
-    ['the uploads bucket', 'BUCKET: ose-map-tiles-staging', 'BUCKET: ose-uploads-staging'],
-    ['the dev bucket', 'BUCKET: ose-map-tiles-staging', 'BUCKET: ose-map-tiles-dev'],
+    ['the uploads bucket', 'BUCKET: ose-map-tiles', 'BUCKET: ose-uploads-staging'],
+    ['the dev bucket', 'BUCKET: ose-map-tiles', 'BUCKET: ose-map-tiles-dev'],
     [
       'another region file',
       'REGION_FILE: docs/runbooks/street-map-us-region.geojson',
@@ -1014,7 +1031,7 @@ describe('the names typed three times are one set of names', () => {
     ],
     [
       'the staging bucket',
-      'binding = "MAP_TILES"\nbucket_name = "ose-map-tiles-staging"',
+      'binding = "MAP_TILES"\nbucket_name = "ose-map-tiles"',
       'binding = "MAP_TILES"\nbucket_name = "ose-map-tiles-stg"',
     ],
     [
@@ -1032,7 +1049,7 @@ describe('the names typed three times are one set of names', () => {
     [
       'a command for a person: delete the object',
       '## Staging, in order',
-      '```bash\nrclone delete r2:ose-map-tiles-staging/us-20261109.pmtiles\n```\n\n## Staging, in order',
+      '```bash\nrclone delete r2:ose-map-tiles/us-20261109.pmtiles\n```\n\n## Staging, in order',
     ],
     [
       'a command for a person: cut it on your machine',
@@ -1042,7 +1059,7 @@ describe('the names typed three times are one set of names', () => {
     [
       'a command for a person: make the bucket public',
       '## Staging, in order',
-      '```bash\nnpx wrangler r2 bucket dev-url enable ose-map-tiles-staging\n```\n\n## Staging, in order',
+      '```bash\nnpx wrangler r2 bucket dev-url enable ose-map-tiles\n```\n\n## Staging, in order',
     ],
     [
       'a command for a person: dispatch from a terminal',
@@ -1056,8 +1073,8 @@ describe('the names typed three times are one set of names', () => {
     ],
     [
       'the upload shown to another key',
-      'r2:ose-map-tiles-staging/us-20261109.pmtiles --immutable',
-      'r2:ose-map-tiles-staging/us-20261019.pmtiles --immutable',
+      'r2:ose-map-tiles/us-20261109.pmtiles --immutable',
+      'r2:ose-map-tiles/us-20261019.pmtiles --immutable',
     ],
     [
       'the check shown on another file',
@@ -1068,7 +1085,7 @@ describe('the names typed three times are one set of names', () => {
     ['the bucket listing not shown', /^ *```bash\n *rclone lsjson .*\n *```\n/m, ''],
     [
       'the privacy read shown on another bucket',
-      'dev-url get ose-map-tiles-staging',
+      'dev-url get ose-map-tiles',
       'dev-url get ose-uploads-staging',
     ],
     [
@@ -1100,7 +1117,7 @@ describe('the names typed three times are one set of names', () => {
     const parity = await import('../../../scripts/ci/env-parity.mjs');
     expect(load.WRANGLER_PATH).toBe(parity.WRANGLER_PATH);
     expect(load.boundNames(toml())).toEqual({
-      bucket: 'ose-map-tiles-staging',
+      bucket: 'ose-map-tiles',
       key: 'us-20261109.pmtiles',
       productionKey: 'us-20261109.pmtiles',
     });
