@@ -587,7 +587,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 18
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/brand-matrix-selfcheck.spec.ts",
@@ -3423,6 +3423,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 42
+    },
+    {
+      "file": "workers/oursharedevents/tests/subscribe-calendar-menu.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/subscribers.spec.ts",
