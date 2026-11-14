@@ -164,6 +164,7 @@ export const NODE_SPECS = [
   'tests/mvt.spec.ts',
   'tests/street-map.spec.ts',
   'tests/street-map-landing.spec.ts',
+  'tests/map-areas.spec.ts',
   'tests/map-zoom.spec.ts',
   'tests/map-place-links.spec.ts',
   // WHAT external link — event-page render fns emit the optional outbound link

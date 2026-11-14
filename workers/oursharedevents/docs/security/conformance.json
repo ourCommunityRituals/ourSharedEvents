@@ -36,9 +36,7 @@
       "last_green": "2026-08-22",
       "threat_count": 3,
       "open_threat_count": 0,
-      "brain_conformance": [
-        "riph-brain-conformance.spec.ts:19"
-      ]
+      "brain_conformance": ["riph-brain-conformance.spec.ts:19"]
     },
     {
       "id": 3,

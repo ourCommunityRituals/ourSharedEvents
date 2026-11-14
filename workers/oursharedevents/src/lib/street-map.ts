@@ -322,12 +322,18 @@ function pathOf(pts: readonly [number, number][], closed: boolean): string {
  * Read, decode and draw the street layer for these cells. Throws on bad data.
  * Null when the archive holds no tile for the frame: a layer with nothing read
  * is a blank rectangle, and the zoomed area would draw its dots on it.
+ *
+ * `numbered` are the cells that carry a number on the finished map, when that is
+ * fewer than the cells the frame is fitted to (the public area map frames the
+ * neighbouring cells too, and numbers only the areas). Town names keep clear of
+ * those; the frame, the tiles and `cellsKey` come from `cells`.
  */
 export async function buildStreetLayer(
   src: RangeSource,
   cells: readonly string[],
   w = MAP_W,
-  h = MAP_H
+  h = MAP_H,
+  numbered: readonly string[] = cells
 ): Promise<StreetLayer | null> {
   const header = await archiveHeader(src);
   const f = frameForCells(cells, w, h);
@@ -344,7 +350,7 @@ export async function buildStreetLayer(
     if (bytes) tiles.push({ x: want[i]![0], y: want[i]![1], layers: decodeTile(bytes, WANTED) });
   });
   if (tiles.length === 0) return null;
-  return { cellsKey: cellsKey(cells), svg: drawStreets(f, r.z, tiles, cells) };
+  return { cellsKey: cellsKey(cells), svg: drawStreets(f, r.z, tiles, numbered) };
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
@@ -365,7 +371,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 export async function loadStreetLayer(
   env: StreetMapEnv | null | undefined,
   cells: readonly string[],
-  opts?: { timeoutMs?: number }
+  opts?: { timeoutMs?: number; numbered?: readonly string[] }
 ): Promise<StreetLayer | null> {
   if (!env?.MAP_TILES || cells.length === 0) return null;
   const bucket = env.MAP_TILES;
@@ -373,7 +379,7 @@ export async function loadStreetLayer(
   if (!ARCHIVE_NAME.test(name)) return null;
   try {
     return await withTimeout(
-      buildStreetLayer(r2Source(bucket, name), cells),
+      buildStreetLayer(r2Source(bucket, name), cells, MAP_W, MAP_H, opts?.numbered),
       opts?.timeoutMs ?? STREET_TIMEOUT_MS
     );
   } catch {

@@ -1822,6 +1822,20 @@
       "testCount": 7
     },
     {
+      "file": "workers/oursharedevents/tests/map-areas-route.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/map-areas.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 22
+    },
+    {
       "file": "workers/oursharedevents/tests/map-default.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -3429,7 +3443,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 42
+      "testCount": 43
     },
     {
       "file": "workers/oursharedevents/tests/subscribers.spec.ts",

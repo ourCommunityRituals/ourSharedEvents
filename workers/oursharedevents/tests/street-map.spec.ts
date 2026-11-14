@@ -19,7 +19,7 @@
  */
 // @born-red no tile in the frame, planet-sized archive | method: "an archive with no tile in the frame is no layer" seen failing before the guard in buildStreetLayer (it returned a layer of one blank rectangle); "one tile of the frame is enough" is its control; the planet case seen failing on 4 of the 6 reader faults listed in pmtiles.spec.ts | date: 2026-11-09
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { cellToLatLng, latLngToCell } from 'h3-js';
+import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import {
   DEFAULT_ARCHIVE,
   MAX_LABELS,
@@ -421,6 +421,52 @@ describe('street map | loading (fail soft)', () => {
     expect(layer.svg).toContain('class="as-w"');
     // A highway across the middle of each tile row: the middle row passes near the centre.
     expect(layer.svg).toMatch(/class="as-r as-3" d="M-?\d+ \d+L/);
+  });
+
+  // OSE-2039: the public area map frames an area's neighbours and numbers only
+  // the area. Born red 2026-11-14: with `numbered` dropped on the way from
+  // loadStreetLayer to drawStreets, the town over the neighbour was not drawn.
+  it('town names keep clear of the numbered cells only, when fewer are numbered than framed', async () => {
+    const neighbour = gridDisk(BLUE7, 1).find((c) => c !== BLUE7)!;
+    const framed = [BLUE7, neighbour];
+    const f = frameForCells(framed);
+    const z = tilesFor(f, 0, 15).z;
+    const n = 2 ** z;
+    // A town at the middle of the neighbouring cell, where its number would be.
+    const [wx, wy] = toWorld(...cellToLatLng(neighbour));
+    const tx = Math.floor(wx * n);
+    const ty = Math.floor(wy * n);
+    const at: [number, number] = [
+      Math.round((wx * n - tx) * 4096),
+      Math.round((wy * n - ty) * 4096),
+    ];
+    const { tiles } = tilesForCells(framed, (x, y) =>
+      x === tx && y === ty
+        ? [
+            {
+              name: 'places',
+              features: [{ type: 1, props: { kind: 'locality', name: 'Nexto' }, parts: [[at]] }],
+            },
+          ]
+        : []
+    );
+    const archive = await pmtilesArchive(tiles, { gzip: true });
+
+    // Every framed cell numbered (the landing map): the name gives way.
+    const all = await buildStreetLayer(memSource(archive), framed);
+    expect(all!.svg).not.toContain('Nexto');
+    // Only the area numbered: the name over the neighbour is drawn.
+    const one = await buildStreetLayer(memSource(archive), framed, undefined, undefined, [BLUE7]);
+    expect(one!.svg).toContain('>Nexto</text>');
+    // Same frame, same tiles, same key either way.
+    expect(one!.cellsKey).toBe(all!.cellsKey);
+    expect(one!.svg.replace(/<text[^>]*>Nexto<\/text>/, '')).toBe(all!.svg);
+
+    // And through the loader, which is what the handler calls.
+    const env = { MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) };
+    expect((await loadStreetLayer(env, framed))!.svg).toBe(all!.svg);
+    resetPmtilesCache();
+    expect((await loadStreetLayer(env, framed, { numbered: [BLUE7] }))!.svg).toBe(one!.svg);
   });
 
   it('no binding, or no cells: null', async () => {

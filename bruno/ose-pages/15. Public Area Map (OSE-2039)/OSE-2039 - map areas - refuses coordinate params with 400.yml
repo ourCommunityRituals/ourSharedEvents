@@ -1,0 +1,29 @@
+info:
+  name: OSE-2039 | map areas | refuses coordinate-shaped params (400)
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/map/areas?cells=872664570ffffff&LAT=41.69&lon=-87.67"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // AGENTS.md invariant 3 (place, not person): the route takes cells only. A
+        // coordinate-shaped parameter is refused in any letter case, even beside
+        // a valid cell, exactly as GET /api/v2/events/map refuses it.
+        test('400 on coordinate-shaped params', function () { expect(res.getStatus()).to.eql(400); });
+        const json = res.getBody() || {};
+        test('ok is false', function () { expect(json.ok).to.eql(false); });
+        test('code is COORDINATES_NOT_ACCEPTED', function () { expect(json.code).to.eql('COORDINATES_NOT_ACCEPTED'); });
+        test('No cookie is set', function () { expect(!res.getHeader('set-cookie')).to.equal(true); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
