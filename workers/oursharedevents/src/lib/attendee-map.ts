@@ -199,7 +199,7 @@ const PROTOMAPS_LINK = '<a href="https://protomaps.com">Protomaps</a>';
  * never without it. In the page's language; the link opens OpenStreetMap's own
  * page, which says the data is under the Open Database License.
  */
-function streetCredit(lang: Lang): string {
+export function streetCredit(lang: Lang): string {
   const osm = `<a href="${OSM_COPYRIGHT_URL[lang]}">OpenStreetMap</a>`;
   const credit = fmt(lang, 'map.credit', { osm, protomaps: PROTOMAPS_LINK });
   return `<p class="amap-credit" data-testid="amap-credit">${credit}</p>`;

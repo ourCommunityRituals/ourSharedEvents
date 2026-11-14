@@ -1,0 +1,116 @@
+info:
+  name: OSE-2039 | map areas | frame, hexagons, and streets when the archive is loaded
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/map/areas?cells=872664570ffffff&around=1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The drawn map for a list of areas (handlers/map-areas.ts, OSE ADR-030),
+        // read the way a static-site build reads it: no credential, no cookie and
+        // no X-OCR-CI header. The first reader is the OurWKRP showcase build.
+        //
+        // An edge challenge here is a FAILURE, not a pass: a build has no browser
+        // to answer one, so a challenged read means the reader cannot use the
+        // route (OSE ADR-028 found this on the calendar addresses).
+        //
+        // Streets, three states, as on the landing (1. Landing - Public):
+        //   streets drawn          every street assertion runs.
+        //   streets null, archive not loaded (streetMapArchiveLoaded is not "true")
+        //                          the fail-soft answer is asserted and the street
+        //                          assertions print NOT RUN.
+        //   streets null, archive loaded
+        //                          a named test fails.
+        const edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        const loaded = String(bru.getEnvVar('streetMapArchiveLoaded')) === 'true';
+
+        test('The read reaches the Worker with no credential (not an edge challenge)', function () {
+          expect(edge).to.equal(false);
+        });
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        const json = res.getBody() || {};
+
+        test('The frame is the fixed Web Mercator frame', function () {
+          expect(json.ok).to.equal(true);
+          expect(json.frame.projection).to.equal('web-mercator');
+          expect(json.frame.w).to.equal(600);
+          expect(json.frame.h).to.equal(360);
+          expect(json.frame.scale).to.be.a('number');
+          expect(json.frame.x0).to.be.a('number');
+          expect(json.frame.y0).to.be.a('number');
+        });
+
+        test('The area is numbered 1, with a six-corner outline inside the frame', function () {
+          expect(json.areas).to.have.length(1);
+          const a = json.areas[0];
+          expect(a.cell).to.equal('872664570ffffff');
+          expect(a.n).to.equal(1);
+          const pts = a.points.split(' ').map(function (p) { return p.split(',').map(Number); });
+          expect(pts).to.have.length(6);
+          pts.forEach(function (p) {
+            expect(p[0]).to.be.within(0, 600);
+            expect(p[1]).to.be.within(0, 360);
+          });
+          expect(a.centre).to.have.length(2);
+        });
+
+        test('around=1 returns the six neighbouring outlines, and never the area itself', function () {
+          expect(json.around).to.have.length(6);
+          json.around.forEach(function (c) {
+            expect(c.cell).to.not.equal('872664570ffffff');
+            expect(c.points.split(' ')).to.have.length(6);
+          });
+        });
+
+        test('No cookie is set', function () {
+          expect(!res.getHeader('set-cookie')).to.equal(true);
+        });
+
+        test('Nothing but the frame, the cells and the streets is in the answer', function () {
+          expect(Object.keys(json).sort()).to.eql(['areas', 'around', 'frame', 'ok', 'status', 'streets']);
+        });
+
+        if (json.streets) {
+          test('The street layer is one SVG group holding drawn paths', function () {
+            expect(json.streets.svg).to.match(/^<g class="amap-s"/);
+            expect(json.streets.svg).to.match(/<\/g>$/);
+            expect(json.streets.svg).to.match(/<path class="as-(w|v|r as-[123])" d="M/);
+          });
+          test('The street layer comes with its CSS and the OpenStreetMap credit', function () {
+            expect(json.streets.css).to.include('.as-r');
+            expect(json.streets.css).to.not.include('<style');
+            expect(json.streets.credit.html).to.include('href="https://www.openstreetmap.org/copyright/en"');
+            expect(json.streets.credit.html).to.include('<a href="https://protomaps.com">Protomaps</a>');
+          });
+          test('The street layer loads nothing from another host', function () {
+            expect(json.streets.svg).to.not.match(/(src|href)=|https?:/i);
+          });
+        } else {
+          test('Without streets the answer is still the hexagons, and streets is null', function () {
+            expect(json.streets).to.equal(null);
+            expect(json.areas).to.have.length(1);
+          });
+          if (loaded) {
+            test('The street layer is drawn (streetMapArchiveLoaded is true for this environment)', function () {
+              expect(json.streets, 'the environment file says the street-map archive is loaded, and the route drew no street layer').to.not.equal(null);
+            });
+          } else {
+            console.log('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): street layer paths, CSS, OpenStreetMap credit, no third-party host');
+          }
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

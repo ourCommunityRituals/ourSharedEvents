@@ -61,7 +61,7 @@ export interface EventsMapEnv {
  */
 const MAX_MAP_EVENTS = 250;
 
-const COORDINATE_PARAMS = [
+export const COORDINATE_PARAMS = [
   'lat',
   'lon',
   'lng',

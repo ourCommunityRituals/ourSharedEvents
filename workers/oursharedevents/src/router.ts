@@ -33,6 +33,10 @@
  *                                  projection; rate-limited; 404 for an unknown or invalid brand
  *   GET /api/v2/events/map       → attendee map, cell-scoped (OSE-1242).
  *                                  Accepts ?cell=<h3 res7>; REFUSES lat/lon.
+ *   GET /api/v2/map/areas        → the drawn map for a list of areas (OSE-2039, OSE ADR-030):
+ *                                  ?cells=<h3 res7>,… (12 at most) [&around=1]. JSON: the frame,
+ *                                  each cell's outline in it, and the street layer as SVG, or
+ *                                  `streets: null`. REFUSES lat/lon; reads no database; rate-limited.
  *   GET /api/v2/events/:id/shared-report     → SharedReport (signed-link auth, OSE-272 S5)
  *   POST /api/v2/events/shared-reports/batch → SharedReport batch (WKRP service token, OSE-272 S5)
  *   POST /api/v2/admin/events/:id/shared-report/mint-link → mint signed token (admin, S-3.5.1)
@@ -176,6 +180,7 @@ import { HARDENING_HEADERS } from './lib/security-headers.js';
 import { handleHealth } from './handlers/health';
 import { handleRobotsTxt, handleSitemapXml } from './lib/crawl-policy.js';
 import { handleEventsMap } from './handlers/events-map.js';
+import { handleMapAreas } from './handlers/map-areas.js';
 import { handleNear } from './lib/landing-where.js';
 import {
   isPublicReadLimited,
@@ -1969,6 +1974,14 @@ export async function route(
   // enumeration, not an auth boundary; it fails open if KV is unavailable.
   if (pathname === '/api/v2/events/map') {
     return publicReadLimited('events-map', handleEventsMap)(request, env);
+  }
+
+  // OSE-2039 — the drawn map for a list of areas, for a reader outside OSE (the
+  // OurWKRP showcase build). Cells only, resolution 7 only, a short list; no
+  // database is read. Rate-limited like every public read: each request can
+  // cost a street-tile read from R2.
+  if (pathname === '/api/v2/map/areas' && (method === 'GET' || method === 'HEAD')) {
+    return publicReadLimited('map-areas', handleMapAreas)(request, env);
   }
 
   // ── S-3.5.1: Admin mint endpoint ───────────────────────────────────────────
