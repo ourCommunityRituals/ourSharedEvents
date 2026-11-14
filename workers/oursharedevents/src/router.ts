@@ -30,6 +30,11 @@
  *                                  (OSE-1850); /es stands for any listed language. The form posts
  *                                  to the unprefixed API; no language is stored.
  *   GET /events/:id/calendar.ics → public event calendar download
+ *   GET /events/:id/booths/:number → one stall at a fair (OSE-1998, OSE ADR-034): the fair's title
+ *                                  and date, its sponsor strip when sponsors are on show, the
+ *                                  stall's number, trading name and category, a link to the fair.
+ *                                  The number is read in any case. An unknown or closed event,
+ *                                  number or stall is one 404. No count, no cookie; rate-limited.
  *   GET /brands/:brand/calendar.ics → a brand's public events as one calendar feed (OSE-2013):
  *                                  the rows GET /api/v2/events?brand= lists, through the public
  *                                  projection; rate-limited; 404 for an unknown or invalid brand
@@ -250,8 +255,10 @@ import {
   handleAdminPosterPreviewPage,
   handleSharedReportPage,
   handleUiPreview,
+  renderErrorPage,
   type PagesEnv,
 } from './handlers/pages';
+import { handleBoothPage } from './handlers/booth-page';
 import { handleBriefingPage } from './handlers/briefing';
 import { handleDemoIndex, handleDemoSite } from './handlers/demo';
 import {
@@ -2516,6 +2523,20 @@ export async function route(
   );
   if (eventFormMatch && (method === 'GET' || method === 'HEAD')) {
     return handleFormPage(request, env, eventFormMatch[1], 1, eventFormMatch[2] as EventFormScreen);
+  }
+
+  // ── A stall at a fair (OSE-1998, OSE ADR-034) — /events/<id>/booths/<number>
+  // The public key is the number on the table card, read in any case. Every
+  // segment that reaches here is answered by the handler, so a malformed id or
+  // number gets the same 404 as an unknown stall. Rate-limited as a public read
+  // here at the route; past the limit a person gets the house page, not JSON.
+  // Not on the language layer: under /es/ it is the ordinary 404.
+  const boothPageMatch = pathname.match(/^\/events\/([^/]{1,200})\/booths\/([^/]{1,200})$/);
+  if (boothPageMatch && method === 'GET') {
+    if (await isPublicReadLimited(request, env, 'booth-page')) {
+      return renderErrorPage(429, 'Too many requests', 'Give it a minute and try again.');
+    }
+    return handleBoothPage(request, env, boothPageMatch[1], boothPageMatch[2]);
   }
 
   // ── Public event landing page (OSE-243a) ──────────────────────────────────
