@@ -1,0 +1,44 @@
+info:
+  name: "S14 | rainy | brand wall | an admin of another brand cannot create a campaign in root"
+  type: http
+  seq: 27
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/campaigns"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{ciBrandClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{ciBrandClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+  body:
+    type: json
+    data: '{"title":"Campaign Fixture Refused","brand_id":"root"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1800: the CI service actor (a brand admin of ci-brand, never platform).
+        // Inert until the owner creates the Access service token and adds its secrets.
+        // Until then this request is skipped and logs NOT RUN; it records no passing test.
+        if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
+          console.log('NOT RUN (OSE-1800 setup pending): no CI brand service token configured');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('S14 brand wall: 403 BRAND_FORBIDDEN', function () {
+          expect(res.getStatus()).to.eql(403);
+          expect(res.getBody().code).to.eql('BRAND_FORBIDDEN');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

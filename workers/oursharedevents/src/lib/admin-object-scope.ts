@@ -63,7 +63,9 @@ export type AdminObjectScopeEnv = AdminEnv &
 
 /** The object an admin object-level path addresses. */
 export type AdminObjectTarget =
-  { kind: 'event'; id: string } | { kind: 'poster-deployment'; id: string };
+  | { kind: 'event'; id: string }
+  | { kind: 'poster-deployment'; id: string }
+  | { kind: 'campaign'; id: string };
 
 /**
  * Segments that sit where an id would but address a COLLECTION, not an object.
@@ -80,6 +82,9 @@ const POSTER_DEPLOYMENT_COLLECTION_SEGMENTS: ReadonlySet<string> = new Set(['bac
 
 const ADMIN_EVENT_OBJECT_PATH = /^\/api\/v2\/admin\/events\/([^/]+)(?:\/.*)?$/;
 const ADMIN_POSTER_DEPLOYMENT_OBJECT_PATH = /^\/api\/v2\/admin\/poster-deployments\/([^/]+)$/;
+// A campaign and everything beneath it (S14: /placements/:placementId). The
+// collection itself (/api/v2/admin/campaigns) has no id and scopes its own SQL.
+const ADMIN_CAMPAIGN_OBJECT_PATH = /^\/api\/v2\/admin\/campaigns\/([^/]+)(?:\/.*)?$/;
 
 /**
  * Which object (if any) an admin request path addresses. Pure and total — no
@@ -106,6 +111,9 @@ export function matchAdminObjectTarget(pathname: string): AdminObjectTarget | nu
     return POSTER_DEPLOYMENT_COLLECTION_SEGMENTS.has(id) ? null : { kind: 'poster-deployment', id };
   }
 
+  const campaignMatch = pathname.match(ADMIN_CAMPAIGN_OBJECT_PATH);
+  if (campaignMatch) return { kind: 'campaign', id: campaignMatch[1] };
+
   return null;
 }
 
@@ -114,6 +122,7 @@ export function matchAdminObjectTarget(pathname: string): AdminObjectTarget | nu
  *
  * Poster deployments carry no brand_id column (migration 0003), so their tenancy
  * is resolved through the owning event — a bound JOIN, one hop, same predicate.
+ * A campaign carries its own brand_id (migration 0039).
  */
 export async function isAdminObjectInScope(
   request: Request,
@@ -135,7 +144,9 @@ export async function isAdminObjectInScope(
   const sql =
     target.kind === 'event'
       ? `SELECT 1 AS reachable FROM events WHERE id = ? AND brand_id IN (${placeholders}) LIMIT 1`
-      : `SELECT 1 AS reachable FROM poster_deployments pd
+      : target.kind === 'campaign'
+        ? `SELECT 1 AS reachable FROM campaigns WHERE id = ? AND brand_id IN (${placeholders}) LIMIT 1`
+        : `SELECT 1 AS reachable FROM poster_deployments pd
            JOIN events e ON e.id = pd.event_id
           WHERE pd.id = ? AND e.brand_id IN (${placeholders}) LIMIT 1`;
 
@@ -152,7 +163,12 @@ export async function isAdminObjectInScope(
 
 /** The canonical scoped-miss body — identical to a genuine "does not exist". */
 function notFound(request: Request, target: AdminObjectTarget): Response {
-  const label = target.kind === 'event' ? 'Event' : 'Poster deployment';
+  const label =
+    target.kind === 'event'
+      ? 'Event'
+      : target.kind === 'campaign'
+        ? 'Campaign'
+        : 'Poster deployment';
   const rid = crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}`;
   return Response.json(
     {

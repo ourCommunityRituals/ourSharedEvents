@@ -76,11 +76,13 @@ export const FLOORS = {
   // equivalent mutants carry a written `// Stryker disable` reason in
   // form-pages.ts: the four `nonce = ''` defaults (formPage always passes one)
   // and `'register'` to privacyNotice (its default branch is the same notice).
-  // form-pages.ts timed out 12 and then 23 of its 207 on the same workstation,
-  // so its floor is the 95% break, as for the language files above: a slower
-  // runner that turns a timeout into a survivor is not a false red. Raise it to
-  // 100 once CI confirms. Never lower.
-  'src/handlers/form-pages.ts': 95,
+  // The main CI run 43231267288 (2026-11-13) then scored form-pages.ts 98.55%:
+  // three mutants the local runs had marked killed only by tests that timed
+  // out under load, never by an assertion. Two were real gaps (a null title,
+  // the 200-character cap), now pinned in form-pages-language.spec.ts E3. The
+  // third was a `case 'email-signup':` label no caller reached; it is gone and
+  // the NoticeForm type makes tsc refuse it. Floor 100. Never lower.
+  'src/handlers/form-pages.ts': 100,
   'src/lib/event-staleness.ts': 100,
   // Epic OSE-1880 (owner, 2026-11-09): the map's deterministic rules, at the
   // scores of the run that added them (rounded down, so the same run passes).

@@ -11,7 +11,7 @@
 //   LANDING_WHERE_SEARCH     on | off: check the landing town search (PR #1118)
 //   WINDOW_PAST_DAYS         days back the landing and map list (0 today)
 //   WINDOW_FUTURE_DAYS       days ahead they list (90)
-//   LIFECYCLE_POLL_ATTEMPTS, LIFECYCLE_POLL_DELAY_MS   how long a check waits for a change
+//   LIFECYCLE_POLL_ATTEMPTS, LIFECYCLE_POLL_DELAY_MS   how long the checks after a change wait for it, together
 //   LIFECYCLE_BASE_URL       only for a local worker run (with LIFECYCLE_ALLOW_LOCAL=1, never in CI)
 /* eslint-disable security/detect-non-literal-fs-filename -- reads fixed repo files and writes the runner's own summary and state paths */
 import { readFileSync, writeFileSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';

@@ -106,19 +106,27 @@ function buildSecurityHeaders(nonce: string, env?: FormPagesEnv): Record<string,
  * language (`choices.checkinNote`), so the reader who tapped it reads it again
  * here in the same words.
  */
-function privacySummary(formType: string): string {
+function privacySummary(formType: NoticeForm): string {
   switch (formType) {
     case 'survey':
       return 'Comments are cleaned of personal details within 24 hours.';
     case 'email':
-    case 'email-signup':
       return 'Your email is deleted after 30 days.';
     default:
       return 'Your name and email are cleared the day after the event.';
   }
 }
 
-function privacyNotice(formType: string, legalTier = 1, lang: Lang = DEFAULT_LANG): string {
+/**
+ * The four forms that carry a notice, as their renderers name them. The updates
+ * form passes 'email'. 'email-signup' is the name of its submission, never of a
+ * notice: a `case 'email-signup':` here was a label no caller could reach, and
+ * the CI mutation run of 2026-11-13 found it (an equivalent survivor). This type
+ * makes tsc refuse such a label.
+ */
+type NoticeForm = 'register' | 'checkin' | 'survey' | 'email';
+
+function privacyNotice(formType: NoticeForm, legalTier = 1, lang: Lang = DEFAULT_LANG): string {
   let purpose: string;
   let legalBasis: string;
   let retention: string;
@@ -136,7 +144,6 @@ function privacyNotice(formType: string, legalTier = 1, lang: Lang = DEFAULT_LAN
         'Comments are scrubbed of personal information within <strong>24</strong> hours. Aggregate ratings are kept indefinitely.';
       break;
     case 'email':
-    case 'email-signup':
       purpose = 'We collect your email address to notify you about future community events.';
       legalBasis =
         'GDPR Art. 6(1)(a) — your <strong>consent</strong>. You can <strong>withdraw consent</strong> at any time.';

@@ -1,0 +1,32 @@
+info:
+  name: OSE-2014 | rainy | cadence | a weekdays series with a single day is refused
+  type: http
+  seq: 112
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-try2-evt/series"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"name":"Weekday room","cadence":"daily-weekdays","day_of_week":1,"hour_of_day":17}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2014 rainy: cadence: 400 INVALID_DAY', function () { expect(res.getStatus()).to.eql(400); expect(res.getBody().code).to.eql('INVALID_DAY'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

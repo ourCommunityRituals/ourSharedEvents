@@ -17,8 +17,8 @@
  *   GET /robots.txt              → crawl policy (prod indexable; else Disallow: /)
  *   GET /sitemap.xml             → static pages + published/active events
  *   GET /api/status              → alias for /health
- *   GET /api/v2/events           → list active events
- *   GET /api/v2/events/:id       → single event
+ *   GET /api/v2/events           → list active events; `series` beside `items` maps an event id to its confirmed series (OSE ADR-029)
+ *   GET /api/v2/events/:id       → single event; `series` beside `item` is its confirmed series or null
  *   GET /es/events/:id[/:name]   → the event page in Spanish (OSE-1761). A language prefix is
  *                                  the visitor's explicit choice and beats Accept-Language; English
  *                                  stays unprefixed. Only pages on the language layer exist under a
@@ -42,6 +42,12 @@
  *   PUT    /api/v2/admin/events/:id → update event (auth required)
  *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
  *   POST   /api/v2/admin/events/:id/repeat → draft copy of a finished event, new date, nothing about who took part (auth, rate-limited, audited, OSE-1531)
+ *   GET    /api/v2/admin/events/:id/series → the event's series and the brand's pending suggestions (auth, OSE ADR-029)
+ *   POST   /api/v2/admin/events/:id/series → declare a series anchored on this event: name, cadence, day, hour; `event_ids` join it (auth, audited)
+ *   PUT    /api/v2/admin/events/:id/series → attach this event to a confirmed series of its brand (auth, audited)
+ *   DELETE /api/v2/admin/events/:id/series → detach this event from its series (auth, audited)
+ *   POST   /api/v2/admin/events/:id/series/confirm → accept a detector suggestion (auth, audited)
+ *   POST   /api/v2/admin/events/:id/series/reject  → turn a detector suggestion down (auth, audited)
  *   GET    /api/v2/admin/events/:id/preview → draft/ready pre-event page, HTML, no-store + noindex (auth, OSE-1355)
  *   GET    /api/v2/admin/events/:id/poster-preview → draft/ready poster, HTML, no-store + noindex (auth)
  *   GET    /api/v2/admin/events/:id/live → organizer's live view of one event, HTML, no-store + noindex (auth)
@@ -71,6 +77,10 @@
  *                                            for any URL: QR, shortlink, deep link.
  *
  *   Sponsor Admin (auth required):
+ *   GET    /api/v2/admin/campaigns             → list the caller's brands' campaigns (S14)
+ *   POST   /api/v2/admin/campaigns             → create a campaign on a brand (title, status)
+ *   PUT    /api/v2/admin/campaigns/:id/placements/:placementId → put a sponsor placement in the campaign
+ *   DELETE /api/v2/admin/campaigns/:id/placements/:placementId → take it out
  *   GET    /api/v2/admin/sponsors              → list all sponsors
  *   POST   /api/v2/admin/sponsor-requests/:id/respond → organizer approves/declines a sponsor's request
  *   GET    /api/v2/admin/sponsors/:id          → get sponsor
@@ -193,6 +203,14 @@ import {
   type EventsEnv,
 } from './handlers/events';
 import { handleAdminRepeatEvent } from './handlers/event-repeat';
+import {
+  handleAttachEventSeries,
+  handleConfirmEventSeries,
+  handleDeclareEventSeries,
+  handleDetachEventSeries,
+  handleGetEventSeries,
+  handleRejectEventSeries,
+} from './handlers/event-series';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
   handleOperationsDashboard,
@@ -323,6 +341,11 @@ import {
   handleSponsorLogo,
   type SponsorsEnv,
 } from './handlers/sponsors';
+import {
+  handleAdminCreateCampaign,
+  handleAdminListCampaigns,
+  handleAdminSetPlacementCampaign,
+} from './handlers/campaigns';
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
 import { handleCreateSponsorDraft, handlePromoteSponsorDraft } from './handlers/sponsors-draft';
 import { handleSponsorAsset } from './handlers/sponsor-asset-route';
@@ -1175,6 +1198,83 @@ export async function route(
     return response;
   }
 
+  // /api/v2/admin/events/:id/series — a series an organizer declares (OSE ADR-029).
+  // The event in the path is brand-scoped by guardAdminObjectScope above; the
+  // handler holds every id in the body to that event's brand. Each write is
+  // audited against the event, so the row carries the event's brand.
+  const adminEventSeriesMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/series$/);
+  if (
+    adminEventSeriesMatch &&
+    (method === 'GET' || method === 'POST' || method === 'PUT' || method === 'DELETE')
+  ) {
+    const seriesEventId = adminEventSeriesMatch[1];
+    const action =
+      method === 'POST'
+        ? 'DECLARE_SERIES'
+        : method === 'PUT'
+          ? 'ATTACH_SERIES_EVENT'
+          : method === 'DELETE'
+            ? 'DETACH_SERIES_EVENT'
+            : null; // a read is not audited
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      if (action) _audit(reqId, action, 'denied', 'event', seriesEventId);
+      return authRes;
+    }
+    if (method === 'GET') return handleGetEventSeries(request, env, seriesEventId);
+    const response =
+      method === 'POST'
+        ? await handleDeclareEventSeries(request, env, seriesEventId)
+        : method === 'PUT'
+          ? await handleAttachEventSeries(request, env, seriesEventId)
+          : await handleDetachEventSeries(request, env, seriesEventId);
+    if (action) _audit(reqId, action, _auditOutcome(response), 'event', seriesEventId);
+    return response;
+  }
+
+  const adminEventSeriesConfirmMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/series\/confirm$/
+  );
+  if (adminEventSeriesConfirmMatch && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      _audit(reqId, 'CONFIRM_SERIES', 'denied', 'event', adminEventSeriesConfirmMatch[1]);
+      return authRes;
+    }
+    const response = await handleConfirmEventSeries(request, env, adminEventSeriesConfirmMatch[1]);
+    _audit(
+      reqId,
+      'CONFIRM_SERIES',
+      _auditOutcome(response),
+      'event',
+      adminEventSeriesConfirmMatch[1]
+    );
+    return response;
+  }
+
+  const adminEventSeriesRejectMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/series\/reject$/
+  );
+  if (adminEventSeriesRejectMatch && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      _audit(reqId, 'REJECT_SERIES', 'denied', 'event', adminEventSeriesRejectMatch[1]);
+      return authRes;
+    }
+    const response = await handleRejectEventSeries(request, env, adminEventSeriesRejectMatch[1]);
+    _audit(
+      reqId,
+      'REJECT_SERIES',
+      _auditOutcome(response),
+      'event',
+      adminEventSeriesRejectMatch[1]
+    );
+    return response;
+  }
+
   // POST /api/v2/admin/events/:id/repeat — OSE-1531 "Repeat this event": a DRAFT
   // copy of the event (name, place, kind, time, settings; a new date; never who
   // took part). Rate-limited like the report mint, and the limit runs before auth
@@ -1281,6 +1381,61 @@ export async function route(
       })
     );
     return res;
+  }
+
+  // ── Admin campaign routes (showcase S14; auth-gated, brand-scoped, audited) ──
+  //
+  // A campaign is a brand's named group of sponsor placements. The collection
+  // routes scope their own SQL by the caller's brands; the by-id routes are
+  // behind guardAdminObjectScope (above), which 404s a campaign in another brand.
+
+  if (pathname === '/api/v2/admin/campaigns' && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminListCampaigns(request, env);
+  }
+
+  if (pathname === '/api/v2/admin/campaigns' && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'CREATE_CAMPAIGN', 'denied', 'campaign');
+      return deny;
+    }
+    const response = await handleAdminCreateCampaign(request, env);
+    _audit(
+      reqId,
+      'CREATE_CAMPAIGN',
+      _auditOutcome(response),
+      'campaign',
+      await _createdId(response)
+    );
+    return response;
+  }
+
+  // PUT/DELETE /api/v2/admin/campaigns/:id/placements/:placementId — put a
+  // sponsor placement in the campaign, or take it out. The placement's event
+  // must be in the campaign's brand (lib/campaigns.ts).
+  const campaignPlacementMatch = pathname.match(
+    /^\/api\/v2\/admin\/campaigns\/([^/]+)\/placements\/([^/]+)$/
+  );
+  if (campaignPlacementMatch && (method === 'PUT' || method === 'DELETE')) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const action = method === 'PUT' ? 'ATTACH_CAMPAIGN_PLACEMENT' : 'DETACH_CAMPAIGN_PLACEMENT';
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, action, 'denied', 'campaign', campaignPlacementMatch[1]);
+      return deny;
+    }
+    const response = await handleAdminSetPlacementCampaign(
+      request,
+      env,
+      campaignPlacementMatch[1],
+      campaignPlacementMatch[2],
+      method === 'PUT'
+    );
+    _audit(reqId, action, _auditOutcome(response), 'campaign', campaignPlacementMatch[1]);
+    return response;
   }
 
   // ── Admin sponsor routes (auth-gated) ──────────────────────────────────────

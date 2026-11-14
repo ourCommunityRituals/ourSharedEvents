@@ -50,6 +50,8 @@ export const AUDIT_BRAND_RESOLVE_SQL = `CASE
     WHEN ?4 = 'sponsor_placement'
       THEN (SELECT e.brand_id FROM sponsor_placement sp JOIN events e ON e.id = sp.event_id
              WHERE sp.id = ?5)
+    WHEN ?4 = 'campaign'
+      THEN (SELECT c.brand_id FROM campaigns c WHERE c.id = ?5)
     ELSE NULL
   END`;
 

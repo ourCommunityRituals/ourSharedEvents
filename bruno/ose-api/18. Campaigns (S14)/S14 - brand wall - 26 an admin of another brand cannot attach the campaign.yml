@@ -1,0 +1,39 @@
+info:
+  name: "S14 | rainy | brand wall | an admin of another brand gets 404 for a root campaign"
+  type: http
+  seq: 26
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_toggle/placements/spl_camp_ci"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{ciBrandClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{ciBrandClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1800: the CI service actor (a brand admin of ci-brand, never platform).
+        // Inert until the owner creates the Access service token and adds its secrets.
+        // Until then this request is skipped and logs NOT RUN; it records no passing test.
+        if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
+          console.log('NOT RUN (OSE-1800 setup pending): no CI brand service token configured');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        // camp_fx_toggle belongs to brand root: brand scoping answers 404, like an unknown id.
+        test('S14 brand wall: 404 for a campaign outside the brand of the caller', function () { expect(res.getStatus()).to.eql(404); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

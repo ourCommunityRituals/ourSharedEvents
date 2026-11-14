@@ -358,6 +358,8 @@ The 5 open questions surfaced in the initial design draft have been answered. Se
 
 ### Q2 — Event-series creation flow → **Hybrid (auto-suggest + admin confirms)**
 
+> **Amended 2026-11-13 by [ADR-029](../adr/ADR-029-declared-event-series.md).** The admin step below was not built until OSE-2014; until then no series could become `confirmed`. It is now a set of routes under `/api/v2/admin/events/:id/series`, not a screen. An organizer can also **declare** a series up front, anchored on an event with no venue needed, and a declared series is `confirmed` at once. Confirming a suggestion attaches no event by itself: the organizer names the events. A rejection reason is one of a fixed list, not free text.
+
 The platform auto-detects candidate series by clustering events on `venue + day_of_week + hour_of_day`, surfaces them to the admin UI as suggestions, and the admin clicks accept/reject. Confirmed series participate in `headcount_trend`; rejected suggestions are remembered so the platform doesn't re-suggest them.
 
 **Implementation note (this is the deviation from the original draft):**

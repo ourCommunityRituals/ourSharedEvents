@@ -70,6 +70,8 @@ const TENANT_TABLES = [
   'node_hierarchy',
   // 0082 (VISION §6.2b): per-brand corridor latch. Every read must bind brand_id.
   'corridor_readiness_latch',
+  // Showcase S14: a campaign lives in exactly one brand (0039).
+  'campaigns',
 ];
 
 /**
@@ -148,6 +150,15 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
       'one caller is the scheduled handler, so it is not reachable from any ' +
       "request path. (The store's other read, in refreshSpineKeys, is by a held " +
       'id and needs no entry.)',
+  ],
+
+  [
+    'handlers/campaigns.ts > handleAdminListCampaigns: FROM campaigns ${where}',
+    'Admin list of campaigns (showcase S14). `where` is `WHERE brand_id IN (?, ?)` ' +
+      'built from resolveAdminBrandScopeAsync two lines above, so the literal ' +
+      '`brand_id = ?` never appears in the statement. A caller with no brand ' +
+      'returns before the read. The unscoped form runs only for the automation ' +
+      'scope. Held by tests/campaigns.spec.ts and the brand matrix.',
   ],
 
   [

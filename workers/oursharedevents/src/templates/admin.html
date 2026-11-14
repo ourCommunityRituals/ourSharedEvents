@@ -1774,12 +1774,34 @@
           'event-sponsors': function (el) {
             if (window.changeEventSponsors) window.changeEventSponsors(argOf(el, 'event-id'), el.getAttribute('data-want-on') === '1', el);
           },
+          // OSE-2019: the Series card. Each action is one series route.
+          'series-declare': function (el) {
+            var v = function (x) { return document.getElementById(x).value; };
+            if (window.seriesWrite) window.seriesWrite(argOf(el, 'event-id'), 'POST', '', window.seriesDeclareBody({ name: v('series-name'), cadence: v('series-cadence'), day: v('series-day'), hour: v('series-hour') }), el);
+          },
+          'series-detach': function (el) {
+            if (window.seriesWrite) window.seriesWrite(argOf(el, 'event-id'), 'DELETE', '', null, el);
+          },
+          'series-attach': function (el) {
+            if (window.seriesWrite) window.seriesWrite(argOf(el, 'event-id'), 'PUT', '', { series_id: argOf(el, 'series-id') }, el);
+          },
+          'series-confirm': function (el) {
+            if (window.seriesWrite) window.seriesWrite(argOf(el, 'event-id'), 'POST', '/confirm', { series_id: argOf(el, 'series-id'), event_ids: [argOf(el, 'event-id')] }, el);
+          },
+          'series-reject': function (el) {
+            if (window.seriesWrite) window.seriesWrite(argOf(el, 'event-id'), 'POST', '/reject', { series_id: argOf(el, 'series-id'), reason: 'not_recurring' }, el);
+          },
           'reload-page': function () {
             location.reload();
           },
         };
 
         var CHANGES = {
+          'series-cadence': function (el) {
+            var shows = window.seriesCadenceFields ? window.seriesCadenceFields(el.value) : { day: true, hour: true };
+            document.getElementById('series-day-field').hidden = !shows.day;
+            document.getElementById('series-hour-field').hidden = !shows.hour;
+          },
           'form-flag': function (el) {
             if (window.toggleFormFlag) window.toggleFormFlag(el);
           },
@@ -5108,6 +5130,80 @@
       };
     </script>
 
+    <!-- Series (OSE-2019, OSE ADR-029). An organizer starts a series from an
+         event, takes an event off one, or answers a suggestion from the nightly
+         job. Hidden until an event is selected. Built from classes that already
+         exist (@ocr/ui's btn, card-title and sub-line, this page's create-form):
+         it adds no CSS. It holds a name and a schedule, never a count. -->
+    <div class="card" id="series-card" data-testid="series-card" hidden>
+      <div class="mcard-head">
+        <div>
+          <h2 class="mcard-title">Series</h2>
+          <p class="sub-line" id="series-summary" data-testid="series-summary" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <div class="mcard-body form-field" id="series-on" data-testid="series-on" hidden>
+        <div class="flex-row">
+          <button type="button" class="btn btn-secondary" id="series-detach" data-action="series-detach" data-testid="series-detach">Take this event off the series</button>
+        </div>
+        <p class="sub-line">The series and its other dates stay as they are.</p>
+      </div>
+
+      <form class="mcard-body" id="series-declare" data-testid="series-declare" novalidate hidden>
+        <h3 class="card-title" id="series-declare-label">Start a series from this event</h3>
+        <div class="create-form">
+          <div class="full-width">
+            <label for="series-name">Series name</label>
+            <input type="text" id="series-name" data-testid="series-name" maxlength="80" autocomplete="off" />
+          </div>
+          <div class="full-width">
+            <label for="series-cadence">How often</label>
+            <select id="series-cadence" data-testid="series-cadence" data-change="series-cadence">
+              <option value="weekly" selected>Every week</option>
+              <option value="biweekly">Every other week</option>
+              <option value="monthly">Once a month</option>
+              <option value="daily-weekdays">Weekdays</option>
+              <option value="as-announced">As announced</option>
+            </select>
+          </div>
+          <div id="series-day-field" data-testid="series-day-field">
+            <label for="series-day">Day</label>
+            <select id="series-day" data-testid="series-day">
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
+          </div>
+          <div id="series-hour-field" data-testid="series-hour-field">
+            <label for="series-hour">Start hour</label>
+            <select id="series-hour" data-testid="series-hour"></select>
+          </div>
+        </div>
+        <p class="sub-line" id="series-hint" data-testid="series-hint">A series links this event with its other dates, so your report can show how it grows. It keeps a name and a schedule, never who came.</p>
+        <div class="flex-row">
+          <button type="button" class="btn btn-primary" id="series-declare-btn" data-action="series-declare" data-testid="series-declare-btn" aria-describedby="series-hint">Start the series</button>
+        </div>
+      </form>
+
+      <div class="mcard-body" id="series-suggestions" data-testid="series-suggestions" hidden>
+        <h3 class="card-title">Is this a series?</h3>
+        <p class="sub-line">Three or more of your events share a place, a day and a time.</p>
+        <ul id="series-suggestion-list" data-testid="series-suggestion-list"></ul>
+      </div>
+
+      <div class="mcard-body">
+        <div class="flex-row">
+          <button type="button" class="btn btn-secondary" id="series-reattach" data-action="series-attach" data-testid="series-reattach" hidden>Put it back</button>
+        </div>
+        <p class="create-msg" id="series-msg" data-testid="series-msg" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+
     <!-- Sponsors — step 2, optional. (SPON-6) -->
     <div class="card sponsors-card" id="sponsors-card" data-testid="sponsors-card">
       <!-- Folded to one line until opened (owner 2026-10-10): the summary says
@@ -5200,7 +5296,7 @@
                   <option value="title">Title</option>
                   <option value="platinum">Platinum</option>
                 </optgroup>
-                <optgroup label="Mid">
+                <optgroup label="Anchor">
                   <option value="gold">Gold</option>
                   <option value="silver">Silver</option>
                 </optgroup>
@@ -8075,10 +8171,173 @@
           }
         }
       };
+      /**
+       * OSE-2019: a series' schedule in words. Says only what the series states:
+       * a missing day or hour is left out, never made up, and a cadence this
+       * page does not know reads as nothing.
+       */
+      window.seriesScheduleText = function (s) {
+        if (!s || !s.cadence) return '';
+        var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        var day = typeof s.day_of_week === 'number' && s.day_of_week >= 0 && s.day_of_week <= 6 ? DAYS[s.day_of_week] : '';
+        var h = typeof s.hour_of_day === 'number' && s.hour_of_day >= 0 && s.hour_of_day <= 23 ? s.hour_of_day : -1;
+        var at = h < 0 ? '' : ' at ' + (h % 12 === 0 ? 12 : h % 12) + (h < 12 ? ' AM' : ' PM');
+        if (s.cadence === 'as-announced') return 'Dates as announced';
+        if (s.cadence === 'daily-weekdays') return 'Weekdays' + at;
+        if (s.cadence === 'weekly') return day ? 'Every ' + day + at : 'Weekly' + at;
+        if (s.cadence === 'biweekly') return day ? 'Every other ' + day + at : 'Every other week' + at;
+        if (s.cadence === 'monthly') return day ? 'Monthly, on a ' + day + at : 'Monthly' + at;
+        return '';
+      };
+      /** OSE-2019: which of day and hour a cadence states (the server's rule, lib/event-series.ts). */
+      window.seriesCadenceFields = function (cadence) {
+        if (cadence === 'as-announced') return { day: false, hour: false };
+        if (cadence === 'daily-weekdays') return { day: false, hour: true };
+        return { day: true, hour: true };
+      };
+      /**
+       * OSE-2019: the body of a declare, from the form's values. Four fields at
+       * most, and a field its cadence does not state is not sent.
+       */
+      window.seriesDeclareBody = function (f) {
+        var body = { name: String(f.name || '').trim(), cadence: String(f.cadence || '') };
+        var shows = window.seriesCadenceFields(body.cadence);
+        if (shows.day) body.day_of_week = Number(f.day);
+        if (shows.hour) body.hour_of_day = Number(f.hour);
+        return body;
+      };
+      /**
+       * OSE-2019: fill the Series card from what GET …/series answered. Every
+       * string from the server goes in as text. `data` null means the read failed.
+       */
+      window.renderSeriesCard = function (id, data) {
+        var box = document.getElementById('series-card');
+        if (!box) return;
+        var e = window._oseList && window._oseList.byId[String(id)];
+        if (!e) { box.hidden = true; return; }
+        var byId = function (x) { return document.getElementById(x); };
+        var summary = byId('series-summary');
+        var on = byId('series-on');
+        var form = byId('series-declare');
+        var sugg = byId('series-suggestions');
+        var list = byId('series-suggestion-list');
+        box.hidden = false;
+        box.setAttribute('data-event-id', String(e.id));
+        while (list.firstChild) list.removeChild(list.firstChild);
+        if (!data) {
+          summary.textContent = 'Could not read this event\u2019s series. Reload the page to try again.';
+          on.hidden = true; form.hidden = true; sugg.hidden = true;
+          return;
+        }
+        var s = data.series;
+        if (s) {
+          var when = window.seriesScheduleText(s);
+          summary.textContent = String(s.name || 'Series') + '.' + (when ? ' ' + when + '.' : '');
+          byId('series-detach').setAttribute('data-event-id', String(e.id));
+          byId('series-detach').setAttribute('data-series-id', String(s.id));
+        } else {
+          summary.textContent = 'This event is not part of a series.';
+          var hour = byId('series-hour');
+          if (!hour.options.length) {
+            for (var h = 0; h < 24; h++) {
+              var o = document.createElement('option');
+              o.value = String(h);
+              o.textContent = (h % 12 === 0 ? 12 : h % 12) + (h < 12 ? ' AM' : ' PM');
+              hour.appendChild(o);
+            }
+            hour.value = '18';
+          }
+          // Do the thinking: the name and the weekday come from the event.
+          byId('series-name').value = String(e.title || '').slice(0, 80);
+          var d = /^\d{4}-\d{2}-\d{2}/.test(String(e.start_date || '')) ? new Date(String(e.start_date).slice(0, 10) + 'T12:00:00Z') : null;
+          if (d && !isNaN(d.getTime())) byId('series-day').value = String(d.getUTCDay());
+          byId('series-declare-btn').setAttribute('data-event-id', String(e.id));
+          var shows = window.seriesCadenceFields(byId('series-cadence').value);
+          byId('series-day-field').hidden = !shows.day;
+          byId('series-hour-field').hidden = !shows.hour;
+        }
+        on.hidden = !s;
+        form.hidden = !!s;
+        var pending = Array.isArray(data.suggestions) ? data.suggestions : [];
+        pending.forEach(function (p) {
+          var li = document.createElement('li');
+          var line = document.createElement('p');
+          var when = window.seriesScheduleText(p);
+          line.textContent = String(p.name || 'Suggested series') + (when ? '. ' + when + '.' : '');
+          var row = document.createElement('div');
+          row.className = 'flex-row';
+          [['series-confirm', 'Yes, this is a series', 'btn btn-secondary'], ['series-reject', 'Not a series', 'btn btn-secondary']].forEach(function (spec) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = spec[2];
+            b.textContent = spec[1];
+            b.setAttribute('data-action', spec[0]);
+            b.setAttribute('data-event-id', String(e.id));
+            b.setAttribute('data-series-id', String(p.id));
+            row.appendChild(b);
+          });
+          li.appendChild(line);
+          li.appendChild(row);
+          list.appendChild(li);
+        });
+        sugg.hidden = pending.length === 0;
+      };
+      /** OSE-2019: read the selected event's series and fill the card. */
+      window.loadEventSeries = async function (id) {
+        var data = null;
+        try {
+          var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(id) + '/series');
+          var body = await res.json();
+          if (res.ok && body && body.ok) data = body;
+        } catch (x) { data = null; }
+        window.renderSeriesCard(id, data);
+      };
+      /**
+       * OSE-2019: one series write (declare, attach, detach, confirm, reject),
+       * then the card reads the server again and says what happened. It never
+       * shows a change the server did not confirm.
+       */
+      window.seriesWrite = async function (id, method, tail, body, btn) {
+        if (btn) btn.disabled = true;
+        var failure = '';
+        try {
+          var init = { method: method, headers: { 'Content-Type': 'application/json' } };
+          if (body) init.body = JSON.stringify(body);
+          var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(id) + '/series' + (tail || ''), init);
+          var data = null;
+          try { data = await res.json(); } catch (x) { data = null; }
+          if (!res.ok || !data || !data.ok) {
+            throw new Error((data && (data.error || data.code)) || 'Could not save the series (server said ' + res.status + ')');
+          }
+        } catch (err) {
+          failure = err && err.message ? err.message : 'Could not save the series.';
+        }
+        await window.loadEventSeries(id);
+        if (btn) btn.disabled = false;
+        var back = document.getElementById('series-reattach');
+        var off = !failure && method === 'DELETE' && btn ? btn.getAttribute('data-series-id') : '';
+        if (back) {
+          back.hidden = !off;
+          if (off) { back.setAttribute('data-series-id', off); back.setAttribute('data-event-id', String(id)); }
+        }
+        var m = document.getElementById('series-msg');
+        if (m) {
+          var SAID = {
+            'POST': 'The series is started. This event is on it.',
+            'PUT': 'This event is back on the series.',
+            'DELETE': 'This event is off the series. Nothing was deleted.',
+            'POST/confirm': 'It is a series now. This event is on it.',
+            'POST/reject': 'Marked as not a series. It will not be suggested again.',
+          };
+          m.textContent = failure || SAID[method + (tail || '')] || 'Saved.';
+          m.className = failure ? 'create-msg error' : 'create-msg success';
+        }
+      };
       window.addEventListener('ose:event-selected', function (ev) {
         var d = ev.detail || {};
         window.renderEventStatus(d.id);
         window.renderSponsorsSwitch(d.id);
+        window.loadEventSeries(d.id);
         window.renderEventTimeline(d.id);
         window.renderPreEventWindow(d.id);
       });
