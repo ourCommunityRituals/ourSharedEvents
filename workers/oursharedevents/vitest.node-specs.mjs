@@ -244,6 +244,8 @@ export const NODE_SPECS = [
   'tests/admin-map-setting.spec.ts',
   // OSE-1900 - the sponsors switch in the sponsors card (jsdom + extracted helpers).
   'tests/admin-sponsors-switch.spec.ts',
+  // OSE-2019 — the admin's Series card (jsdom over the admin.html Text import)
+  'tests/admin-series-card.spec.ts',
   'tests/admin-create-core-values.spec.ts',
   'tests/admin-wizard-tv.spec.ts',
   'tests/admin-wizard-uniform.spec.ts',

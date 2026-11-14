@@ -1,0 +1,27 @@
+info:
+  name: OSE-2014 | sunny | public | the public read of a try carries its series, five fields
+  type: http
+  seq: 75
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/series-ci-try1-evt"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2014 sunny: public: the series is exactly id, name, cadence, day and hour', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(b.series).to.eql({ id: bru.getVar('declaredSeriesId'), name: 'The daily room', cadence: 'weekly', day_of_week: 1, hour_of_day: 17 });
+        });
+        test('OSE-2014 sunny: public: the event item itself has no series key and no series_id', function () { expect(b.item).to.not.have.property('series'); expect(b.item).to.not.have.property('series_id'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

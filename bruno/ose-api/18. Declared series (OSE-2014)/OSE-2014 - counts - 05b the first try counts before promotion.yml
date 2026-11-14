@@ -1,0 +1,29 @@
+info:
+  name: OSE-2014 | sunny | promote | the first try, its poster and scan counts before it joins
+  type: http
+  seq: 55
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-try1-evt/pre-event-activity"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const a = (res.getBody() || {}).activity || {};
+        test('OSE-2014 sunny: promote: the first try has a count to protect (6 scans, above the floor)', function () { expect(res.getStatus()).to.eql(200); expect(a.posters).to.eql(1); expect(a.scans.count).to.eql(6); });
+        bru.setVar('seriesTry1CountsBefore', JSON.stringify([a.posters, a.places, a.scans, a.clicks]));
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

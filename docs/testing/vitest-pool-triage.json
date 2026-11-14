@@ -317,6 +317,13 @@
       "testCount": 6
     },
     {
+      "file": "workers/oursharedevents/tests/admin-series-card.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 26
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-servicetoken-fallthrough.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -574,6 +581,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 26
+    },
+    {
+      "file": "workers/oursharedevents/tests/brand-calendar-feed.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 18
     },
     {
       "file": "workers/oursharedevents/tests/brand-matrix-selfcheck.spec.ts",
@@ -1169,6 +1183,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-series.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 50
     },
     {
       "file": "workers/oursharedevents/tests/event-start-datetime.spec.ts",
@@ -2253,7 +2274,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 9
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/public-event-error-pages.spec.ts",
@@ -2289,6 +2310,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-event-series.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/public-event-stakeholder-surfaces.spec.ts",
