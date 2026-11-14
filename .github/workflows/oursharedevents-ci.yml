@@ -159,8 +159,34 @@ concurrency:
   # (and `schedule` skips T1/T4, so nothing deployed). cancel-in-progress is scoped to
   # pull_request only — PR pushes still supersede their own stale runs for fast
   # feedback, but a merge's deploy run is never cancelled out from under it.
-  group: ose-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  #
+  # Staging lock (2026-11-14): stg has one worker and one D1, so every run that
+  # touches it joins ONE group, `ose-staging-chain`, whatever its branch or event:
+  # push to main, a release tag, the nightly schedule (T2/T3 read the standing
+  # build), a dispatch with deploy_staging / run_functional / deploy_production,
+  # and a full-pipeline/* PR. The lock spans the whole run, so T1 Deploy → T4
+  # Functional run against this run's own build; a per-job group would let the
+  # next run's T1 deploy as soon as this run's T1 ended. Before the lock, two
+  # dispatches on different branches overlapped, the later T1 replaced the earlier
+  # build mid-chain, and the earlier run's T4 deploy-freshness preflight refused
+  # it (runs 43550717549, 43550998525, 43552994911). `queue: max` keeps waiting
+  # runs in FIFO order (up to 100) instead of the default one waiting run that a
+  # third arrival cancels, so a merge's run and the nightly are never starved or
+  # dropped, and nothing in the lock is ever cancelled. Merging OSE-937's push and
+  # schedule groups is safe for the same reason: they now queue, not cancel.
+  # Every other run keeps its own group, and a plain PR push still supersedes its
+  # own stale run. GitHub refuses a run whose concurrency resolves to queue: max
+  # with cancel-in-progress: true, so the queue is `single` exactly where cancel
+  # is on (plain PRs). Gate: tests/integration/staging-chain-lock.test.js.
+  group: >-
+    ${{ (
+    (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) ||
+    github.event_name == 'schedule' ||
+    (github.event_name == 'workflow_dispatch' && (github.event.inputs.deploy_staging == 'true' || github.event.inputs.run_functional == 'true' || github.event.inputs.deploy_production == 'PRODUCTION')) ||
+    (github.event_name == 'pull_request' && startsWith(github.head_ref, 'full-pipeline/'))
+    ) && 'ose-staging-chain' || format('ose-{0}-{1}', github.event_name, github.event.pull_request.number || github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && !startsWith(github.head_ref, 'full-pipeline/') }}
+  queue: ${{ github.event_name == 'pull_request' && !startsWith(github.head_ref, 'full-pipeline/') && 'single' || 'max' }}
 
 env:
   STG_BASE_URL: 'https://stg.oursharedevents.com'
@@ -1429,8 +1455,8 @@ jobs:
   contract-staging-sub:
     name: 'T2 Contract (${{ matrix.section }})'
     timeout-minutes: 15 # job ceiling; slowest observed run is far below it
-    # One section at a time across runs. The workflow group is keyed by event, so a
-    # push run and a scheduled run can overlap, and both seed the same fixture ids
+    # One section at a time across runs. The workflow-level staging lock already keeps
+    # two CI runs apart; this job group stays as a second guard, since two runs seed the same fixture ids
     # (the pages leg publishes the landing zip fixture, then unpublishes it after
     # Bruno): without this, one run's reset could land mid-way through the other's
     # assertions. A second run waits; it is never cancelled out from under a merge.
