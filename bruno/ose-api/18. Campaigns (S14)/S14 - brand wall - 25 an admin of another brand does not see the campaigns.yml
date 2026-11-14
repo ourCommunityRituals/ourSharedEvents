@@ -1,0 +1,48 @@
+info:
+  name: "S14 | rainy | brand wall | an admin of another brand sees only the campaigns of their own brand"
+  type: http
+  seq: 25
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/campaigns"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{ciBrandClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{ciBrandClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1800: the CI service actor (a brand admin of ci-brand, never platform).
+        // Inert until the owner creates the Access service token and adds its secrets.
+        // Until then this request is skipped and logs NOT RUN; it records no passing test.
+        if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
+          console.log('NOT RUN (OSE-1800 setup pending): no CI brand service token configured');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        const raw = JSON.stringify(res.getBody());
+        test('S14 brand wall: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 brand wall: no root campaign is in the list, by id or by title', function () {
+          expect(raw).to.not.include('camp_fx_shown');
+          expect(raw).to.not.include('camp_fx_toggle');
+          expect(raw).to.not.include('Campaign Fixture Shown');
+          expect(raw).to.not.include('"brand_id":"root"');
+        });
+        test('S14 brand wall: the campaign of their own brand is in it', function () {
+          expect(raw).to.include('camp_fx_other');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

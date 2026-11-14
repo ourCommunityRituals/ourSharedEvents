@@ -1,4 +1,4 @@
-// ─── Public area map — OSE-2039, OSE ADR-030 ───────────────────────────────────
+// ─── Public area map — OSE-2039, OSE ADR-031 ───────────────────────────────────
 //
 //   GET /api/v2/map/areas?cells=<h3_res7>,<h3_res7>…[&around=1]
 //

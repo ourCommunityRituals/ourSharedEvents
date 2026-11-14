@@ -1,0 +1,29 @@
+info:
+  name: "S14 | happy | sponsor bundle | after the detach the sponsor shows with no campaign"
+  type: http
+  seq: 22
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/camp-on-evt/sponsor-bundle?surface=public"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const raw = JSON.stringify(res.getBody());
+        const s = ((res.getBody().bundle || {}).sponsors || []).filter(function (x) { return x.id === 'sb_camp_toggle'; })[0];
+        test('S14 detach: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 detach: the sponsor still shows, with no campaign', function () {
+          expect(s).to.be.an('object');
+          expect(s).to.not.have.property('campaign');
+          expect(raw).to.not.include('Campaign Fixture Toggle');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

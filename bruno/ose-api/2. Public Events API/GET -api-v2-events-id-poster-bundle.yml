@@ -67,6 +67,21 @@ runtime:
           // OSE-1991: the digital poster links a sponsor's thumbnail and name to
           // its own site. Only an https address ever leaves the resolver, and a
           // card address is only ever this site's own /sponsors/<id> page.
+          // OSE-1991: the digital poster's turns follow each sponsor's share.
+          // sponsor_rotation is ids only, each one of the sponsors on the poster,
+          // and every sponsor on the poster has at least one turn.
+          test('sponsor_rotation: ids of the poster sponsors only, each sponsor at least once', function() {
+            expect(json.sponsor_rotation).to.be.an('array');
+            const ids = json.sponsors.map(function(s) { return s.id; });
+            json.sponsor_rotation.forEach(function(id) {
+              expect(id).to.be.a('string');
+              expect(ids).to.include(id);
+            });
+            ids.forEach(function(id) {
+              expect(json.sponsor_rotation).to.include(id);
+            });
+          });
+
           test('a sponsor site is https or absent; a card page is our own /sponsors/ path', function() {
             json.sponsors.forEach(function(s) {
               if (s.website_url != null) {

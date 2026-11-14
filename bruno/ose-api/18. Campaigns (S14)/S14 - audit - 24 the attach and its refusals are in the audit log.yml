@@ -1,0 +1,34 @@
+info:
+  name: "S14 | audit | attach | the attach and the refused attaches each have an audit row"
+  type: http
+  seq: 24
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/audit-log?action=ATTACH_CAMPAIGN_PLACEMENT&resource_type=campaign&limit=50"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // This run: one attach (success), then two refused attaches on the same
+        // campaign (another brand, an unknown placement). Rows of earlier runs are older.
+        const rows = (res.getBody().entries || []).filter(function (r) { return r.resource_id === 'camp_fx_toggle'; });
+        test('S14 audit: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 audit: the three newest rows for the campaign are one success and two refusals', function () {
+          expect(rows.length).to.be.at.least(3);
+          expect(rows.slice(0, 3).map(function (r) { return r.outcome; }).sort()).to.eql(['denied', 'denied', 'success']);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

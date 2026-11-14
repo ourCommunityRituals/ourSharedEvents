@@ -144,7 +144,7 @@ describe('SPON-4: Poster sponsor rendering (OSE-177)', () => {
     // OSE-867: the sponsor strip rides in the poster-bundle — one call.
     expect(body).toContain('/api/v2/events/');
     expect(body).toContain("'/poster-bundle'");
-    expect(body).toContain('renderPosterSponsors(data.sponsors)');
+    expect(body).toContain('renderPosterSponsors(data.sponsors, data.sponsor_rotation)');
   });
 
   test('poster sponsor strip has aria-busy lifecycle', async () => {

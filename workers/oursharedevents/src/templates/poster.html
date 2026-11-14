@@ -105,7 +105,7 @@ body {
 .poster-header {
   background: var(--surface);
   color: var(--text);
-  padding: 2.5rem 2rem 2rem;
+  padding: 1.5rem 2rem 1rem;
   text-align: center;
 }
 .poster {
@@ -134,7 +134,7 @@ body {
   white-space: normal;
 }
 .poster-body {
-  padding: 2rem;
+  padding: 1rem 2rem 2rem;
 }
 .meta-text {
   font-size: 1rem;
@@ -286,7 +286,7 @@ body {
 }
 .poster-stage {
   position: relative;
-  margin: 1rem 0 1.25rem;
+  margin: 0 0 1.25rem;
 }
 .poster-art {
   margin: 0 0 1.25rem;
@@ -429,7 +429,7 @@ body {
 /* The strip's padding. Its blocks are @ocr/ui's sponsor panel: ONE thumbnail
    box for every sponsor at every tier (OSE-864/#25, WALL-3b). */
 .poster-sponsors {
-  padding: 0.75rem 2rem;
+  padding: 0.75rem 2rem 0;
 }
 .poster-sponsors:empty {
   display: none;
@@ -476,10 +476,10 @@ body {
     margin: 1rem auto;
   }
   .poster-header {
-    padding: 1.75rem 1.25rem 1.5rem;
+    padding: 1rem 1rem 0.75rem;
   }
   .poster-body {
-    padding: 1.25rem 1rem;
+    padding: 0.75rem 1rem 1.25rem;
   }
   .event-select select {
     padding: 0.65rem 0.75rem;
@@ -502,7 +502,7 @@ body {
     word-break: break-all;
   }
   .poster-sponsors {
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 1rem 0;
   }
 }
 @media print {
@@ -587,9 +587,8 @@ body {
     padding: 0.18in 0;
     gap: 0.3in;
   }
-  /* OSE-R-006: NO grayscale on sponsor logos in print. OSE-1991 (owner
-     2026-11-11): the thumbnails print at their full panel size, not the old
-     20px clamp; the panel takes the page's ink (@ocr/ui print rules). */
+  /* OSE-R-006: no grayscale on sponsor logos in print. OSE-1991: full-size
+     thumbnails in the page's ink (@ocr/ui print rules). */
   .poster-sponsors {
     page-break-inside: avoid;
     padding: 0.06in 0.35in 0;
@@ -1275,7 +1274,7 @@ body {
       // The sponsor strip, rendered from the bundle's `sponsors` (OSE-867 —
       // the same set sponsor-bundle?surface=poster serves). Logos hide
       // themselves on error (see the capture listener below).
-      function renderPosterSponsors(sponsors) {
+      function renderPosterSponsors(sponsors, rotation) {
         const strip = document.getElementById('poster-sponsor-strip');
         if (!strip) return;
         strip.setAttribute('aria-busy', 'false');
@@ -1322,11 +1321,25 @@ body {
               (headerText ? '<p class="sponsor-panel-text" data-testid="poster-sponsor-text">' + esc(headerText) + '</p>' : '') +
               '</div>';
           }).join('');
-        rotatePosterSponsors(strip);
+        rotatePosterSponsors(strip, posterSponsorTurns(sponsors, rotation));
       }
-      // Digital poster: one sponsor at a time, each in turn. Tier-blind — every
-      // sponsor gets the same share of the cycle. The print poster shows all of
-      // them at once, since paper cannot rotate. A hidden tab holds its place.
+      // OSE-1991 (owner 2026-11-12): the order the digital poster shows its
+      // sponsors in, as indexes into the list it drew. It follows the bundle's
+      // sponsor_rotation (ids, one entry per turn: a sponsor with a bigger share
+      // has more turns). An id that is not on the poster is skipped. No usable
+      // rotation: each sponsor once, in the order drawn.
+      function posterSponsorTurns(sponsors, rotation) {
+        const list = Array.isArray(sponsors) ? sponsors : [];
+        const ids = list.map(function(s) { return s && s.id != null ? String(s.id) : null; });
+        const turns = (Array.isArray(rotation) ? rotation : [])
+          .map(function(id) { return ids.indexOf(id == null ? null : String(id)); })
+          .filter(function(i) { return i >= 0; });
+        return turns.length ? turns : list.map(function(_, i) { return i; });
+      }
+      // Digital poster: one sponsor at a time, in the turns posterSponsorTurns()
+      // gives (its covenant share: a bigger share comes up more often; the size
+      // never changes, #25). The print poster shows all of them at once, since
+      // paper cannot rotate. A hidden tab holds its place.
       //
       // The TV display moves sponsors across the screen; the poster is tall, so
       // here they travel up and down. All motion is declared below as data and
@@ -1449,13 +1462,16 @@ body {
             '</g></svg>'
         }
       };
-      function rotatePosterSponsors(strip) {
+      function rotatePosterSponsors(strip, turns) {
         if (posterSponsorTimer) { clearInterval(posterSponsorTimer); posterSponsorTimer = null; }
         strip.removeAttribute('data-rotating');
         if (KIND !== 'digital') return;
         const items = Array.prototype.slice.call(strip.querySelectorAll('[data-testid="poster-sponsor-item"]'));
         if (items.length < 2) return;
-        let at = 0;
+        const order = (Array.isArray(turns) ? turns : []).filter(function(i) { return i >= 0 && i < items.length; });
+        if (!order.length) items.forEach(function(_, i) { order.push(i); });
+        let step = 0;
+        let at = order[0];
         const entrances = Object.keys(POSTER_ENTRANCES);
         const vignettes = Object.keys(POSTER_VIGNETTES);
         // People who ask for less motion get a plain swap: no entrance, no scene.
@@ -1476,7 +1492,10 @@ body {
         };
         const pick = function(list) { return list[Math.floor(Math.random() * list.length)]; };
         const advance = function() {
-          const next = (at + 1) % items.length;
+          step = (step + 1) % order.length;
+          const next = order[step];
+          // The same sponsor twice running keeps its place: no entrance, no scene.
+          if (next === at) return;
           // Roughly one turn in five is a vignette.
           const name = !calm && vignettes.length && Math.random() >= 0.8 ? pick(vignettes) : null;
           if (!name) { at = next; show(pick(entrances)); return; }
@@ -1634,7 +1653,7 @@ body {
             document.getElementById('poster-area').innerHTML = renderPoster(data.event);
             syncChrome(data.event);
           }
-          renderPosterSponsors(data.sponsors);
+          renderPosterSponsors(data.sponsors, data.sponsor_rotation);
           // OSE-869: the organiser turned the QR grid off (a walk-up event has
           // nothing to scan). Remove the whole section — absent, not empty, so
           // the printed poster keeps no QR-shaped hole. Absent setting = on.

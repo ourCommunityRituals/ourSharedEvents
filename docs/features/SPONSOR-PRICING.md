@@ -70,11 +70,11 @@ pool size.
 | Class       | Multiplier | What it buys                                  |
 | ----------- | :--------: | --------------------------------------------- |
 | **Premium** |     7x     | 7x base rotation frequency + deepest report   |
-| **Mid**     |     3x     | 3x base rotation frequency + mid report depth |
+| **Anchor**  |     3x     | 3x base rotation frequency + mid report depth |
 | **Local**   |     1x     | base rotation frequency + base report depth   |
 
 **Multipliers are global** — same for every event type. One set of numbers for the entire platform.
-Sponsors know exactly what they're buying: "Mid = 3x rotation frequency at every event."
+Sponsors know exactly what they're buying: "Anchor = 3x rotation frequency at every event." (Anchor is the name people see for the `mid` share tier, owner 2026-11-12.)
 
 **Every class appears on every eligible surface.** Placement is not a product. A local sponsor and
 a premium sponsor both appear in the Display header band and both appear in the rail; the premium
@@ -104,7 +104,7 @@ ratio is a starting point; the walls are the guarantee.**
 - Anonymous behavioural data in SharedReports — base depth
 - QR trigger counts
 
-**Mid ($200 illustrative)**
+**Anchor ($200 illustrative)**
 
 - Everything in Local
 - 3x base rotation frequency
@@ -112,7 +112,7 @@ ratio is a starting point; the walls are the guarantee.**
 
 **Premium ($500 illustrative)**
 
-- Everything in Mid
+- Everything in Anchor
 - 7x base rotation frequency, capped at 40% share
 - Deepest report tier
 

@@ -16,7 +16,7 @@
 
 import { BRANDS, UNKNOWN_ID, type BrandFx } from './brand-matrix-ids';
 
-export type ObjectOf = 'event' | 'sponsor' | 'placement' | 'poster-deployment';
+export type ObjectOf = 'event' | 'sponsor' | 'placement' | 'campaign' | 'poster-deployment';
 
 export interface KnownGap {
   /** Linear ticket that owns the fix. */
@@ -69,7 +69,9 @@ export const idOf = (b: BrandFx, kind: ObjectOf): string =>
       ? b.sponsorId
       : kind === 'placement'
         ? b.placementId
-        : b.posterDeploymentId;
+        : kind === 'campaign'
+          ? b.campaignId
+          : b.posterDeploymentId;
 
 const ev =
   (suffix = '') =>
@@ -95,6 +97,12 @@ function eventRoute(
     mutates: method !== 'GET',
     ...extra,
   };
+}
+
+/** `bm-<brand>-campaign` with that brand's own placement, `spl_bm-<brand>-sponsor`. */
+function campaignPlacementPath(campaignId: string): string {
+  const placementId = `spl_${campaignId.replace(/-campaign$/, '-sponsor')}`;
+  return `/api/v2/admin/campaigns/${campaignId}/placements/${placementId}`;
 }
 
 export const MATRIX_ROUTES: readonly MatrixRoute[] = [
@@ -328,6 +336,43 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
     path: (id) => `/api/v2/admin/sponsor-requests/${id}/respond`,
     mutates: true,
     body: () => ({ approve: false }),
+  },
+
+  // ── campaigns (showcase S14) ────────────────────────────────────────────────
+  {
+    shape: 'list',
+    pattern: '/api/v2/admin/campaigns',
+    method: 'GET',
+    path: '/api/v2/admin/campaigns',
+    expectOwnMarker: true,
+  },
+  {
+    shape: 'create',
+    pattern: '/api/v2/admin/campaigns',
+    method: 'POST',
+    path: '/api/v2/admin/campaigns',
+    variant: 'names the target brand',
+    crossBody: (t) => ({ title: 'bm-cross-campaign', brand_id: t.brandId }),
+  },
+  // The campaign is the object. The placement named beside it is the campaign
+  // brand's own (already in that campaign in the fixture), so a wall that let the
+  // caller through would change a row: a detach would clear it. The other half,
+  // an OWN campaign against another brand's placement, is in tests/campaigns.spec.ts.
+  {
+    shape: 'object',
+    objectOf: 'campaign',
+    pattern: '/api/v2/admin/campaigns/:id/placements/:id',
+    method: 'PUT',
+    path: campaignPlacementPath,
+    mutates: true,
+  },
+  {
+    shape: 'object',
+    objectOf: 'campaign',
+    pattern: '/api/v2/admin/campaigns/:id/placements/:id',
+    method: 'DELETE',
+    path: campaignPlacementPath,
+    mutates: true,
   },
 ];
 

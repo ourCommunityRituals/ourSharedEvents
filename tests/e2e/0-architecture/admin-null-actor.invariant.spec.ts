@@ -120,6 +120,12 @@ const SITES: Record<string, { kind: Kind; count: number; why: string }> = {
     count: 1,
     why: 'Eligibility-decision audit.',
   },
+  'handlers/campaigns.ts: const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);':
+    {
+      kind: 'scope-denies-null',
+      count: 3,
+      why: 'Campaign list, create and placement attach or detach (showcase S14).',
+    },
   'handlers/dashboards.ts: const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);':
     { kind: 'scope-denies-null', count: 1, why: 'Dashboard brand scope.' },
   'handlers/portfolio-rollup.ts: extractAdminActor(request, env),': {

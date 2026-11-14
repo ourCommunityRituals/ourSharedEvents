@@ -1,0 +1,32 @@
+info:
+  name: "S14 | rainy | auth | a caller with no identity gets no campaign"
+  type: http
+  seq: 11
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/campaigns"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // On staging Cloudflare Access answers first (a redirect or its sign-in page);
+        // on a local worker the route answers 401. Either way: no campaign data.
+        const body = res.getBody();
+        const raw = typeof body === 'string' ? body : JSON.stringify(body);
+        test('S14 auth: a caller with no identity is not given the list', function () {
+          expect(raw).to.not.include('camp_fx_');
+          expect(raw).to.not.include('Campaign Fixture');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

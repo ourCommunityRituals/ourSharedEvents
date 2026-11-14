@@ -33,7 +33,7 @@
  *                                  projection; rate-limited; 404 for an unknown or invalid brand
  *   GET /api/v2/events/map       → attendee map, cell-scoped (OSE-1242).
  *                                  Accepts ?cell=<h3 res7>; REFUSES lat/lon.
- *   GET /api/v2/map/areas        → the drawn map for a list of areas (OSE-2039, OSE ADR-030):
+ *   GET /api/v2/map/areas        → the drawn map for a list of areas (OSE-2039, OSE ADR-031):
  *                                  ?cells=<h3 res7>,… (12 at most) [&around=1]. JSON: the frame,
  *                                  each cell's outline in it, and the street layer as SVG, or
  *                                  `streets: null`. REFUSES lat/lon; reads no database; rate-limited.
@@ -81,6 +81,10 @@
  *                                            for any URL: QR, shortlink, deep link.
  *
  *   Sponsor Admin (auth required):
+ *   GET    /api/v2/admin/campaigns             → list the caller's brands' campaigns (S14)
+ *   POST   /api/v2/admin/campaigns             → create a campaign on a brand (title, status)
+ *   PUT    /api/v2/admin/campaigns/:id/placements/:placementId → put a sponsor placement in the campaign
+ *   DELETE /api/v2/admin/campaigns/:id/placements/:placementId → take it out
  *   GET    /api/v2/admin/sponsors              → list all sponsors
  *   POST   /api/v2/admin/sponsor-requests/:id/respond → organizer approves/declines a sponsor's request
  *   GET    /api/v2/admin/sponsors/:id          → get sponsor
@@ -342,6 +346,11 @@ import {
   handleSponsorLogo,
   type SponsorsEnv,
 } from './handlers/sponsors';
+import {
+  handleAdminCreateCampaign,
+  handleAdminListCampaigns,
+  handleAdminSetPlacementCampaign,
+} from './handlers/campaigns';
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
 import { handleCreateSponsorDraft, handlePromoteSponsorDraft } from './handlers/sponsors-draft';
 import { handleSponsorAsset } from './handlers/sponsor-asset-route';
@@ -1377,6 +1386,61 @@ export async function route(
       })
     );
     return res;
+  }
+
+  // ── Admin campaign routes (showcase S14; auth-gated, brand-scoped, audited) ──
+  //
+  // A campaign is a brand's named group of sponsor placements. The collection
+  // routes scope their own SQL by the caller's brands; the by-id routes are
+  // behind guardAdminObjectScope (above), which 404s a campaign in another brand.
+
+  if (pathname === '/api/v2/admin/campaigns' && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminListCampaigns(request, env);
+  }
+
+  if (pathname === '/api/v2/admin/campaigns' && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'CREATE_CAMPAIGN', 'denied', 'campaign');
+      return deny;
+    }
+    const response = await handleAdminCreateCampaign(request, env);
+    _audit(
+      reqId,
+      'CREATE_CAMPAIGN',
+      _auditOutcome(response),
+      'campaign',
+      await _createdId(response)
+    );
+    return response;
+  }
+
+  // PUT/DELETE /api/v2/admin/campaigns/:id/placements/:placementId — put a
+  // sponsor placement in the campaign, or take it out. The placement's event
+  // must be in the campaign's brand (lib/campaigns.ts).
+  const campaignPlacementMatch = pathname.match(
+    /^\/api\/v2\/admin\/campaigns\/([^/]+)\/placements\/([^/]+)$/
+  );
+  if (campaignPlacementMatch && (method === 'PUT' || method === 'DELETE')) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const action = method === 'PUT' ? 'ATTACH_CAMPAIGN_PLACEMENT' : 'DETACH_CAMPAIGN_PLACEMENT';
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, action, 'denied', 'campaign', campaignPlacementMatch[1]);
+      return deny;
+    }
+    const response = await handleAdminSetPlacementCampaign(
+      request,
+      env,
+      campaignPlacementMatch[1],
+      campaignPlacementMatch[2],
+      method === 'PUT'
+    );
+    _audit(reqId, action, _auditOutcome(response), 'campaign', campaignPlacementMatch[1]);
+    return response;
   }
 
   // ── Admin sponsor routes (auth-gated) ──────────────────────────────────────
