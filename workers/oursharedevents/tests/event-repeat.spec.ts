@@ -140,12 +140,12 @@ beforeAll(async () => {
     .bind(SRC, BRAND_A, typeId)
     .run();
   await tenv.DB.prepare(
-    `INSERT INTO events (id, brand_id, title, slug, status) VALUES (?, ?, 'Bare Event', 'bare-event', 'archived')`
+    `INSERT INTO events (id, brand_id, title, slug, status, location) VALUES (?, ?, 'Bare Event', 'bare-event', 'archived', 'Eagles Hall')`
   )
     .bind(SRC_BARE, BRAND_A)
     .run();
   await tenv.DB.prepare(
-    `INSERT INTO events (id, brand_id, title, slug, status, start_date) VALUES (?, ?, 'Other Brand Event', 'other-brand-event', 'active', '2026-09-26')`
+    `INSERT INTO events (id, brand_id, title, slug, status, start_date, location) VALUES (?, ?, 'Other Brand Event', 'other-brand-event', 'active', '2026-09-26', 'Eagles Hall')`
   )
     .bind(SRC_B, BRAND_B)
     .run();
@@ -261,8 +261,8 @@ describe('POST /api/v2/admin/events/:id/repeat — the copy', () => {
   test('artwork saved as an outside address is left behind, and the repeat still works', async () => {
     const LEGACY = 'evt-rep-legacy-art';
     await (env as unknown as { DB: D1Database }).DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, cover_image_url)
-       VALUES (?, ?, 'Legacy Art Event', 'legacy-art-event', 'active', 'https://img.example.com/old.png')`
+      `INSERT INTO events (id, brand_id, title, slug, status, cover_image_url, location)
+       VALUES (?, ?, 'Legacy Art Event', 'legacy-art-event', 'active', 'https://img.example.com/old.png', 'Eagles Hall')`
     )
       .bind(LEGACY, BRAND_A)
       .run();
@@ -353,10 +353,44 @@ describe('POST /api/v2/admin/events/:id/repeat — the copy', () => {
     expect(r2.starts_at).toBeNull();
   });
 
+  test('OSE-2012: a source with no place is refused in plain words; an online source repeats as online', async () => {
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status) VALUES ('evt-rep-noplace', ?, 'No Place', 'no-place-rep', 'active')`
+    )
+      .bind(BRAND_A)
+      .run();
+    const refused = await repeat('evt-rep-noplace', asEmail(OWNER_A));
+    expect(refused.status).toBe(409);
+    const why = (await refused.json()) as { code: string; error: string };
+    expect(why.code).toBe('SOURCE_HAS_NO_PLACE');
+    expect(why.error).toContain('online event');
+    expect(why.error).not.toMatch(/attendance_mode|where_address|location/);
+    const copies = await tenv.DB.prepare(
+      "SELECT COUNT(*) AS c FROM events WHERE brand_id = ? AND title = 'No Place'"
+    )
+      .bind(BRAND_A)
+      .first<{ c: number }>();
+    expect(copies!.c, 'the refusal made no copy').toBe(1);
+
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, attendance_mode) VALUES ('evt-rep-online', ?, 'Online Class', 'online-class-rep', 'active', 'online')`
+    )
+      .bind(BRAND_A)
+      .run();
+    const res = await repeat('evt-rep-online', asEmail(OWNER_A));
+    expect(res.status).toBe(201);
+    const copy = await tenv.DB.prepare(
+      'SELECT attendance_mode, location, lat, h3_res7 FROM events WHERE id = ?'
+    )
+      .bind(((await res.json()) as { id: string }).id)
+      .first();
+    expect(copy).toEqual({ attendance_mode: 'online', location: null, lat: null, h3_res7: null });
+  });
+
   test('a multi-day source keeps its length', async () => {
     await tenv.DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, start_date, end_date)
-       VALUES ('evt-rep-multi', ?, 'Tournament', 'tournament-rep', 'active', '2026-09-25', '2026-09-27')`
+      `INSERT INTO events (id, brand_id, title, slug, status, start_date, end_date, location)
+       VALUES ('evt-rep-multi', ?, 'Tournament', 'tournament-rep', 'active', '2026-09-25', '2026-09-27', 'Eagles Hall')`
     )
       .bind(BRAND_A)
       .run();

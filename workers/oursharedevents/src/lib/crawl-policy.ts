@@ -27,6 +27,7 @@
 
 import { HARDENING_HEADERS } from './security-headers.js';
 import { listedSql } from './publish-grace';
+import { notLinkOnlySql } from './attendance-mode';
 import { canonicalOrigin, eventPagePath } from './canonical';
 
 export interface CrawlPolicyEnv {
@@ -187,7 +188,10 @@ export function buildSitemapXml(entries: readonly SitemapEntry[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>\n`;
 }
 
-/** Published, active, root-brand events — the `/events` predicate, ids only. */
+/**
+ * Published, active, root-brand events — the `/events` predicate, ids only.
+ * An online event is link only (OSE-2012), so it is not in the sitemap either.
+ */
 async function listSitemapEvents(
   db: D1Database
 ): Promise<{ id: string; slug: string | null; updated_at: string | null }[]> {
@@ -195,6 +199,7 @@ async function listSitemapEvents(
     .prepare(
       `SELECT id, slug, updated_at FROM events
        WHERE is_published = 1 AND brand_id = ? AND status = 'active' AND ${listedSql()}
+         AND ${notLinkOnlySql()}
        ORDER BY updated_at DESC
        LIMIT ${SITEMAP_MAX_EVENTS}`
     )

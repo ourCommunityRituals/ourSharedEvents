@@ -13,7 +13,7 @@ http:
       value: "{{cfAccessClientSecret}}"
   body:
     type: json
-    data: '{"title":"OSE-1615 refused create","event_correlation_id":"00000000000000000000000000000000"}'
+    data: '{"title":"OSE-1615 refused create","attendance_mode":"in_person","location":"OSE-1615 Hall","event_correlation_id":"00000000000000000000000000000000"}'
   auth: inherit
 
 runtime:

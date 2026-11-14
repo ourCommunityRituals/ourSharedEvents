@@ -33,6 +33,7 @@
 // it here would be guessing at that decision rather than implementing it.
 
 import { applyCountFloor, roundForPublish } from './count-floor';
+import { attendanceModeOf } from './attendance-mode';
 
 /** Columns of `events` that a public response may carry. Additions are decisions. */
 const PUBLIC_EVENT_COLUMNS = [
@@ -62,6 +63,10 @@ const PUBLIC_EVENT_COLUMNS = [
   'lon',
   'corridor_id',
   'h3_res7',
+  // OSE-2012 (owner, 2026-11-12) — 'in_person', 'online' or 'both'. The ONLY
+  // field the online-or-in-person story adds. No meeting link is here, and none
+  // is stored: a visitor reaches one through the event's own /s code.
+  'attendance_mode',
   // NOT template_id. It looked like contract drift — emitted publicly, absent
   // from the snapshot — but it exists only in the MOCK fixture; the real SELECT
   // never projects it. Adding it here would have made mock responses carry a
@@ -117,16 +122,33 @@ type CountPublisher = keyof typeof COUNT_PUBLISHERS;
  */
 const PUBLIC_EVENT_COUNT_SOURCES: Readonly<Record<string, CountPublisher>> = {};
 
+/**
+ * Fields whose NAME reads like a count and whose value is one of a fixed set of
+ * words (OSE-2012). `attendance_mode` says how an event is held; it is not how
+ * many attended. Each goes through its function here, which can only return one
+ * of its words, so no number is ever published under such a name. The derived
+ * spec (tests/count-floor-publication.derived.spec.ts) accepts a count-shaped
+ * field only when it is declared here or in PUBLIC_EVENT_COUNT_SOURCES.
+ */
+const PUBLIC_EVENT_WORD_FIELDS: Readonly<Record<string, (v: unknown) => string>> = {
+  attendance_mode: attendanceModeOf,
+};
+
 /** The projection itself, with its field list and count declarations passed in. */
 export function projectEvent(
   row: Record<string, unknown>,
   fields: ReadonlySet<string>,
   sources: Readonly<Record<string, CountPublisher>>
 ): Record<string, unknown> {
+  const own = (o: object, key: string): boolean => Object.prototype.hasOwnProperty.call(o, key);
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(row)) {
     if (!fields.has(key)) continue;
-    const publisher = Object.prototype.hasOwnProperty.call(sources, key) ? sources[key] : null;
+    if (own(PUBLIC_EVENT_WORD_FIELDS, key)) {
+      out[key] = PUBLIC_EVENT_WORD_FIELDS[key]!(row[key]);
+      continue;
+    }
+    const publisher = own(sources, key) ? sources[key] : null;
     out[key] = publisher ? COUNT_PUBLISHERS[publisher](row[key]) : row[key];
   }
   return out;
@@ -138,4 +160,5 @@ export {
   PUBLIC_EVENT_COMPUTED,
   PUBLIC_EVENT_COUNT_SOURCES,
   PUBLIC_EVENT_FIELDS,
+  PUBLIC_EVENT_WORD_FIELDS,
 };

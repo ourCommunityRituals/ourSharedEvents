@@ -60,6 +60,7 @@ export async function createLiveEvent(
       // OSE-1900: a new event has sponsors off unless asked; these journeys show a
       // sponsor and let one ask to join, so the event opts in as its organizer would.
       data: {
+        attendance_mode: 'in_person',
         title,
         start_date: start,
         location: 'Eagles Hall',

@@ -100,7 +100,12 @@ async function create(env: EventsEnv, body: Record<string, unknown>) {
     new Request('https://t.test/api/v2/admin/events', {
       method: 'POST',
       headers: ADMIN,
-      body: JSON.stringify({ start_date: '2026-12-05', ...body }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        start_date: '2026-12-05',
+        ...body,
+      }),
     }),
     env
   );

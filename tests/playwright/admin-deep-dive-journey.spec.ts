@@ -252,6 +252,7 @@ test.describe('the map setting', () => {
     const res = await request.post('/api/v2/admin/events', {
       headers: headers(),
       data: {
+        attendance_mode: 'in_person',
         title: `${label} ${Date.now().toString(36)}`,
         start_date: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
         location: 'Eagles Hall',

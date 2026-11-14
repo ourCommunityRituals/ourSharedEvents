@@ -1,0 +1,35 @@
+info:
+  name: OSE-2012 | sunny | update | back to in person with a place is saved
+  type: http
+  seq: 37
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/mode-toggle-evt"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"attendance_mode":"in_person","location":"Mode Fixture Hall"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2012 sunny: 200 and in person again', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(res.getBody().attendance_mode).to.eql('in_person');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

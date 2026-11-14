@@ -108,6 +108,8 @@ async function seedEvent(suffix: string): Promise<string> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
     body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
       title: `OSE-982 Delete Target (${suffix})`,
       brand_id: BRAND,
       slug: `ose982-${suffix}-${Date.now().toString(36)}`,

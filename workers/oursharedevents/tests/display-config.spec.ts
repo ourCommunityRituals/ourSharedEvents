@@ -44,7 +44,13 @@ async function createEvent(extra: Record<string, unknown> = {}): Promise<string>
   const res = await SELF.fetch('https://t.test/api/v2/admin/events', {
     method: 'POST',
     headers: ADMIN,
-    body: JSON.stringify({ title: `TV ${crypto.randomUUID()}`, status: 'active', ...extra }),
+    body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      title: `TV ${crypto.randomUUID()}`,
+      status: 'active',
+      ...extra,
+    }),
   });
   const body = (await res.json()) as { item?: { id: string }; id?: string };
   expect(res.status, JSON.stringify(body)).toBe(201);

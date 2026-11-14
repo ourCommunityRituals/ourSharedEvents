@@ -15,7 +15,7 @@ http:
       value: application/json
   body:
     type: json
-    data: '{"title":"OSE-1425 create status ready (staging, synthetic)","status":"ready","is_published":false,"data_class":"synthetic"}'
+    data: '{"attendance_mode":"in_person","location":"OSE-1425 Hall","title":"OSE-1425 create status ready (staging, synthetic)","status":"ready","is_published":false,"data_class":"synthetic"}'
   auth: inherit
 
 runtime:

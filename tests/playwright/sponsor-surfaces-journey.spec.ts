@@ -424,7 +424,9 @@ test.describe('poster with two sponsors', () => {
     // A turn that keeps the same sponsor plays nothing. Anything else on the page
     // that draws a number while those turns pass would shift the pinned draws,
     // so they start again right before the turn that changes the sponsor.
-    if (steps > 1) await page.clock.fastForward(5_000 * (steps - 1));
+    // runFor, not fastForward: fastForward fires a repeating timer at most once
+    // however far it jumps, so several turns in one call would be one turn.
+    if (steps > 1) await page.clock.runFor(5_000 * (steps - 1));
     await expect(vignette).toHaveCount(0);
     await page.evaluate(() => {
       (window as unknown as { __drawN: number }).__drawN = 0;
@@ -454,7 +456,10 @@ test.describe('poster with two sponsors', () => {
     const items = page.getByTestId('poster-sponsor-item');
     await expect(items).toHaveCount(2);
     const { to, steps } = await firstChange(page);
-    await page.clock.fastForward(5_000 * steps);
+    // The turn order is seeded per event, so the second sponsor can first come
+    // up after two or more turns. runFor fires each of them; fastForward would
+    // fire the timer once and the sponsor would not change.
+    await page.clock.runFor(5_000 * steps);
     await expect(page.getByTestId('poster-vignette')).toHaveCount(0);
     await expect(items.nth(to)).toBeVisible();
   });
@@ -471,7 +476,7 @@ test.describe('poster with two sponsors', () => {
     await expect(items).toHaveCount(2);
     const { from, to, steps } = await firstChange(page);
 
-    await page.clock.fastForward(5_000 * steps);
+    await page.clock.runFor(5_000 * steps);
     await expect(page.getByTestId('poster-vignette')).toHaveAttribute('data-vignette', 'dj');
     await expect(items.nth(from), 'the sponsor she bumps is the one on screen').toHaveAttribute(
       'data-leaving',

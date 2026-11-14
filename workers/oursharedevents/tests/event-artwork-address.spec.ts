@@ -57,7 +57,12 @@ const post = (body: Record<string, unknown>) =>
   SELF.fetch('https://t.test/api/v2/admin/events', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
-    body: JSON.stringify({ brand_id: BRAND, ...body }),
+    body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      brand_id: BRAND,
+      ...body,
+    }),
   });
 
 const put = (id: string, body: Record<string, unknown>) =>

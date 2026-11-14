@@ -44,6 +44,7 @@ import {
 } from '../lib/corridor-readiness.js';
 import { corsHeaders } from '../lib/cors';
 import { listedSql } from '../lib/publish-grace';
+import { notLinkOnlySql } from '../lib/attendance-mode';
 
 export interface EventsMapEnv {
   DB?: D1Database;
@@ -168,6 +169,10 @@ export async function handleEventsMap(request: Request, env: EventsMapEnv): Prom
     // while it is happening. The floor exists to bound the scan, not to decide
     // the window — corridor-readiness still owns that, so the gate and the map
     // cannot diverge on what counts.
+    //
+    // OSE-2012: an online event has no place, so it has no cell and could not
+    // match `h3_res7 = ?`. The mode is tested as well, so the map never rests
+    // on a cell having been cleared.
     const floorIso = new Date(Date.now() - 7 * 86_400_000).toISOString();
     const horizonIso = new Date(Date.now() + CORRIDOR_WINDOW_DAYS * 86_400_000).toISOString();
 
@@ -177,6 +182,7 @@ export async function handleEventsMap(request: Request, env: EventsMapEnv): Prom
          FROM events
         WHERE is_published = 1
           AND brand_id = ? AND h3_res7 = ? AND status = 'active' AND ${listedSql()}
+          AND ${notLinkOnlySql()}
           AND start_date >= ? AND start_date <= ?
         ORDER BY start_date ASC
         LIMIT ?`

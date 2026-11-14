@@ -12,7 +12,7 @@ runtime:
   scripts:
     - type: after-response
       code: |-
-        // The drawn map for a list of areas (handlers/map-areas.ts, OSE ADR-032),
+        // The drawn map for a list of areas (handlers/map-areas.ts, OSE ADR-033),
         // read the way a static-site build reads it: no credential, no cookie and
         // no X-OCR-CI header. The first reader is the OurWKRP showcase build.
         //

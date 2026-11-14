@@ -51,6 +51,7 @@ test.beforeAll(async ({ request }) => {
   const created = await request.post('/api/v2/admin/events', {
     headers,
     data: {
+      attendance_mode: 'in_person',
       title: eventTitle,
       location: 'Eagles Hall',
       start_date: '2026-09-26',

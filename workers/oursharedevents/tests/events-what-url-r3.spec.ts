@@ -48,7 +48,11 @@ async function postEvent(body: Record<string, unknown>): Promise<Response> {
   return SELF.fetch('https://t.test/api/v2/admin/events', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      ...(body as object),
+    }),
   });
 }
 

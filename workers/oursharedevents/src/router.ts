@@ -33,7 +33,7 @@
  *                                  projection; rate-limited; 404 for an unknown or invalid brand
  *   GET /api/v2/events/map       → attendee map, cell-scoped (OSE-1242).
  *                                  Accepts ?cell=<h3 res7>; REFUSES lat/lon.
- *   GET /api/v2/map/areas        → the drawn map for a list of areas (OSE-2039, OSE ADR-032):
+ *   GET /api/v2/map/areas        → the drawn map for a list of areas (OSE-2039, OSE ADR-033):
  *                                  ?cells=<h3 res7>,… (12 at most) [&around=1]. JSON: the frame,
  *                                  each cell's outline in it, and the street layer as SVG, or
  *                                  `streets: null`. REFUSES lat/lon; reads no database; rate-limited.

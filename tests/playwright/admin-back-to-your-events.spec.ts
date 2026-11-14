@@ -53,6 +53,7 @@ test.describe('admin: back to Your events', () => {
     const res = await request.post('/api/v2/admin/events', {
       headers: { Authorization: `Bearer ${ADMIN_BEARER}`, 'Content-Type': 'application/json' },
       data: {
+        attendance_mode: 'in_person',
         title: `Way back draft ${Date.now()}`,
         start_date: '2027-01-15',
         location: 'Eagles Hall',

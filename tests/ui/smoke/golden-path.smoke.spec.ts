@@ -50,6 +50,7 @@ test.describe('Golden Path — First-Time Organizer', () => {
     // Use API directly since the form does a location.reload() which resets page state
     const res = await request.post('/api/v2/admin/events', {
       data: {
+        attendance_mode: 'in_person',
         title: EVENT_NAME,
         start_date: '2026-08-15',
         location: 'Beverly Arts Center',

@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0107; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0108; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,20 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0108: events.attendance_mode ('in_person', 'online' or 'both'; OSE-2012).
+-- Additive: NOT NULL with the default 'in_person', and a CHECK on the three
+-- values. No row is rewritten. THE ROLLBACK IS: revert the Worker and LEAVE THE
+-- COLUMN. The older Worker does not read it, and its creates get the default.
+--
+-- What the older Worker does NOT know: an event saved as 'online' while the
+-- newer Worker was live. The older Worker lists it on /events, the landing page
+-- and the sitemap like any other event (it still has no place and no map cell).
+-- If that matters before the newer Worker returns, unlist those events first:
+--   UPDATE events SET is_published = 0 WHERE attendance_mode = 'online';
+--
+-- Surgical reverse, only if the column itself must go (the CHECK goes with it):
+ALTER TABLE events DROP COLUMN attendance_mode;
+
 -- 0107: switches sponsors on (`useSponsors: true` in events.settings_json) for
 -- events whose organizer had already chosen a sponsor (OSE-1900). Data only: no
 -- table, column, index or trigger. THE ROLLBACK IS: revert the Worker and LEAVE

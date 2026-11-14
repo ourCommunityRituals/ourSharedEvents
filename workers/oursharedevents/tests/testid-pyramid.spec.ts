@@ -259,7 +259,11 @@ describe('L2 Contract: Admin events API schema', () => {
     const body = await fetchJson('/api/v2/admin/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Contract Test Event' }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'Contract Test Event',
+      }),
     });
     expect(body).toHaveProperty('ok', true);
     expect(body).toHaveProperty('status', 201);
@@ -275,7 +279,11 @@ describe('L2 Contract: Admin events API schema', () => {
     const created = await fetchJson('/api/v2/admin/events', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'LCT Contract Schema Test' }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'LCT Contract Schema Test',
+      }),
     });
     const eventId = created.id as string;
 
@@ -593,6 +601,7 @@ describe('L4 E2E: Admin create → update → forms → export → flags → sur
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        attendance_mode: 'in_person',
         title: 'E2E Pyramid Test Event',
         status: 'active',
         // OSE-1560: a new event is off the map unless asked.

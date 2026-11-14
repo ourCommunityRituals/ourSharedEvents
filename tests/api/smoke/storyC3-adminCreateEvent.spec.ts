@@ -36,7 +36,8 @@ const authHeaders = (): Record<string, string> => {
 async function createEvent(request: any, data: Record<string, unknown>) {
   return request.post('/api/v2/admin/events', {
     timeout: TIMEOUT,
-    data,
+    // OSE-2012: the create API requires the mode, and a place for an in-person event.
+    data: { attendance_mode: 'in_person', location: 'Test Hall', ...data },
     headers: authHeaders(),
   });
 }
@@ -49,7 +50,7 @@ test.describe('Create Event — Auth Gate', () => {
   test('401 without any auth header', async ({ request }) => {
     const res = await request.post('/api/v2/admin/events', {
       timeout: TIMEOUT,
-      data: { title: 'No Auth' },
+      data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'No Auth' },
     });
     expect(res.status()).toBe(401);
     const json = await res.json();
@@ -61,7 +62,7 @@ test.describe('Create Event — Auth Gate', () => {
   test('401 with invalid Bearer token', async ({ request }) => {
     const res = await request.post('/api/v2/admin/events', {
       timeout: TIMEOUT,
-      data: { title: 'Bad Token' },
+      data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Bad Token' },
       headers: { Authorization: 'Bearer invalid-token-xyz' },
     });
     expect(res.status()).toBe(401);
@@ -70,7 +71,7 @@ test.describe('Create Event — Auth Gate', () => {
   test('401 with empty Bearer token', async ({ request }) => {
     const res = await request.post('/api/v2/admin/events', {
       timeout: TIMEOUT,
-      data: { title: 'Empty Token' },
+      data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Empty Token' },
       headers: { Authorization: 'Bearer ' },
     });
     expect(res.status()).toBe(401);
@@ -79,7 +80,7 @@ test.describe('Create Event — Auth Gate', () => {
   test('401 with malformed Authorization header', async ({ request }) => {
     const res = await request.post('/api/v2/admin/events', {
       timeout: TIMEOUT,
-      data: { title: 'Malformed' },
+      data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Malformed' },
       headers: { Authorization: 'NotBearer abc123' },
     });
     expect(res.status()).toBe(401);
@@ -88,7 +89,7 @@ test.describe('Create Event — Auth Gate', () => {
   test('401 includes WWW-Authenticate header', async ({ request }) => {
     const res = await request.post('/api/v2/admin/events', {
       timeout: TIMEOUT,
-      data: { title: 'WWW-Auth Check' },
+      data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'WWW-Auth Check' },
     });
     expect(res.status()).toBe(401);
     expect(res.headers()['www-authenticate']).toBeDefined();
@@ -107,7 +108,11 @@ test.describe('Create Event — Content-Type Gate', () => {
       method: 'POST',
       timeout: TIMEOUT,
       headers: { ...authHeaders(), 'Content-Type': 'text/plain' },
-      data: JSON.stringify({ title: 'CT Test' }),
+      data: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'CT Test',
+      }),
     });
     expect(res.status()).toBe(400);
     const json = await res.json();
@@ -119,7 +124,11 @@ test.describe('Create Event — Content-Type Gate', () => {
       method: 'POST',
       timeout: TIMEOUT,
       headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' },
-      data: JSON.stringify({ title: 'Multipart Test' }),
+      data: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'Multipart Test',
+      }),
     });
     expect(res.status()).toBe(400);
     const json = await res.json();
@@ -143,7 +152,11 @@ test.describe('Create Event — Content-Type Gate', () => {
       method: 'POST',
       timeout: TIMEOUT,
       headers: { ...authHeaders(), 'Content-Type': 'application/json; charset=utf-8' },
-      data: JSON.stringify({ title: `Charset Test ${Date.now()}` }),
+      data: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: `Charset Test ${Date.now()}`,
+      }),
     });
     expect(res.status()).toBe(201);
   });
@@ -642,7 +655,7 @@ test.describe('Create Event — Error Envelope Contract', () => {
   test('401 errors include ok, code, requestId', async ({ request }) => {
     const res = await request.post('/api/v2/admin/events', {
       timeout: TIMEOUT,
-      data: { title: 'Unauth Envelope' },
+      data: { attendance_mode: 'in_person', location: 'Test Hall', title: 'Unauth Envelope' },
     });
     expect(res.status()).toBe(401);
     const json = await res.json();

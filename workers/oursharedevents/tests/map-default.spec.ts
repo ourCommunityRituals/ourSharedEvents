@@ -77,6 +77,9 @@ async function eventType(): Promise<string> {
 async function core(title: string, extra: J = {}): Promise<J> {
   return {
     title,
+    // OSE-2012: the mode is required, and an in-person event needs a place.
+    attendance_mode: 'in_person',
+    location: 'Test Hall',
     start_date: '2027-06-01',
     start_time: '18:00',
     timezone: 'America/Chicago',
@@ -132,18 +135,29 @@ async function flipAudits(eventId: string) {
 
 describe('a new event is off the map unless the organizer says so', () => {
   test('no map choice: stored off, and the response says so in the heads-up words', async () => {
-    const c = await api('POST', '/api/v2/admin/events', { title: uid('Bare') });
+    const c = await api('POST', '/api/v2/admin/events', {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      title: uid('Bare'),
+    });
     expect(c.status).toBe(201);
     expect((await row(c.body.id)).is_published).toBe(0);
     expect(c.body.map).toEqual({ on: false, by_default: true, note: OFF_NOTE });
   });
 
   test('an explicit choice is honoured, and no default heads-up is attached', async () => {
-    const on = await api('POST', '/api/v2/admin/events', { title: uid('On'), is_published: true });
+    const on = await api('POST', '/api/v2/admin/events', {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      title: uid('On'),
+      is_published: true,
+    });
     expect((await row(on.body.id)).is_published).toBe(1);
     expect(on.body.map).toEqual({ on: true, by_default: false, note: null });
 
     const off = await api('POST', '/api/v2/admin/events', {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
       title: uid('Off'),
       is_published: false,
     });
@@ -153,7 +167,12 @@ describe('a new event is off the map unless the organizer says so', () => {
 
   test('a malformed map value fails toward off, never on', async () => {
     for (const bad of ['yes', 'true', 2, {}, []]) {
-      const c = await api('POST', '/api/v2/admin/events', { title: uid('Bad'), is_published: bad });
+      const c = await api('POST', '/api/v2/admin/events', {
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: uid('Bad'),
+        is_published: bad,
+      });
       expect(c.status).toBe(201);
       expect((await row(c.body.id)).is_published, JSON.stringify(bad)).toBe(0);
     }
@@ -195,6 +214,8 @@ describe('a new event is off the map unless the organizer says so', () => {
 
   test('the marker is server-managed: a client cannot write it', async () => {
     const c = await api('POST', '/api/v2/admin/events', {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
       title: uid('Forge'),
       settings: { mapDefault: false },
     });

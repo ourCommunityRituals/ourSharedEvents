@@ -70,6 +70,10 @@ export const pl: Record<MessageKey, string> = {
   'price.sliding': 'Cena według możliwości',
   'price.donation': 'Zapłać, ile możesz',
   'price.varies': 'Różnie',
+  // OSE-2012: how people take part (lib/attendance-mode.ts).
+  'mode.in_person': 'Stacjonarnie',
+  'mode.online': 'Online',
+  'mode.both': 'Online i stacjonarnie',
   'countdown.now': 'Zaczyna się teraz',
   'countdown.today': 'Zaczyna się dzisiaj',
   'countdown.tomorrow': 'Zaczyna się jutro',

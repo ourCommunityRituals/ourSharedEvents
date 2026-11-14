@@ -1,6 +1,6 @@
 /**
  * OSE-2039 — GET /api/v2/map/areas, the drawn map for a list of areas
- * (handlers/map-areas.ts, OSE ADR-032).
+ * (handlers/map-areas.ts, OSE ADR-033).
  *
  * Node-clean: the handler is called directly and the R2 binding is a fake
  * bucket. Registered in vitest.node-specs.mjs. The route itself (the limit, the

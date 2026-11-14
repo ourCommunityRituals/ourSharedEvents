@@ -1,0 +1,24 @@
+info:
+  name: Online or in person (OSE-2012)
+  type: folder
+request: {}
+docs: |-
+  Every event says how people take part: `attendance_mode` is `in_person`,
+  `online` or `both` (owner, 2026-11-12). The create API requires it. In person
+  and both need a place; online takes none. An online event is link only: off
+  /events, the landing page and the sitemap, while its own page, its /q and /s
+  codes and the brand API still answer. No meeting link is stored or published.
+
+  Fixture: bruno/fixtures/attendance-mode-seed.sql, applied before this run. It
+  puts every row back to its starting state, the toggle event and the click
+  count included.
+
+  The requests run in `seq` order. The toggle requests (seq 30 on) change
+  mode-toggle-evt and nothing else. The refused creates write no row.
+
+  Two rules are held at the mock layer only, because staging cannot show them
+  failing. The sitemap lists no event at all off production (staging is not
+  indexable). A click count is published only from 5 up, so one click on
+  /s/MODEsl cannot be read back here; this folder checks the code answers.
+
+  Mock-layer twin: workers/oursharedevents/tests/attendance-mode.spec.ts.

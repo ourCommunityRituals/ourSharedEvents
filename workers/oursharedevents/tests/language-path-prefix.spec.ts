@@ -65,6 +65,8 @@ async function publicEvent(title: string): Promise<{ id: string; slug: string; c
     method: 'POST',
     headers: JSON_KEY,
     body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
       title,
       status: 'active',
       is_published: true,
@@ -191,7 +193,11 @@ describe('OSE-1761 | the prefix renders the page in that language', () => {
     const res = await SELF.fetch(`${ORIGIN}/api/v2/admin/events`, {
       method: 'POST',
       headers: JSON_KEY,
-      body: JSON.stringify({ title: 'Still a draft' }),
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'Still a draft',
+      }),
     });
     const draft = (await res.json()) as Created;
     const bare = await get(`/events/${draft.id}`);

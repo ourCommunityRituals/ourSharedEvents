@@ -211,7 +211,11 @@ describe('createClient', () => {
 
   test('sends the access headers, the bearer key and JSON content type', async () => {
     const site = fakeSite();
-    await client(site.fetch).post('/api/v2/admin/events', { title: 't' });
+    await client(site.fetch).post('/api/v2/admin/events', {
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      title: 't',
+    });
     expect(site.calls[0].headers).toEqual({
       'CF-Access-Client-Id': 'cid',
       'CF-Access-Client-Secret': SECRET,

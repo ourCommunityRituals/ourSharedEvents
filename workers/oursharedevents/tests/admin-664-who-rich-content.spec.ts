@@ -65,15 +65,17 @@ async function postEvent(body: Record<string, unknown>): Promise<Response> {
   return SELF.fetch('https://t.test/api/v2/admin/events', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      attendance_mode: 'in_person',
+      location: 'Test Hall',
+      ...(body as object),
+    }),
   });
 }
 
 async function readRow(id: string): Promise<Record<string, unknown> | null> {
   const tenv = env as unknown as TestEnv;
-  return tenv.DB.prepare(
-    'SELECT who_story, who_image_url, what_video_url FROM events WHERE id = ?'
-  )
+  return tenv.DB.prepare('SELECT who_story, who_image_url, what_video_url FROM events WHERE id = ?')
     .bind(id)
     .first<Record<string, unknown>>();
 }
@@ -205,11 +207,7 @@ describe('OSE-664: admin form carries the rich-content inputs', () => {
   test('admin page renders data-testid for story + media inputs', async () => {
     const res = await SELF.fetch('https://t.test/admin', { headers: ADMIN_HEADERS });
     const html = await res.text();
-    for (const testid of [
-      'create-who-story',
-      'create-who-image-url',
-      'create-what-video-url',
-    ]) {
+    for (const testid of ['create-who-story', 'create-who-image-url', 'create-what-video-url']) {
       expect(
         html.includes(`data-testid="${testid}"`),
         `admin form HTML missing data-testid="${testid}"`

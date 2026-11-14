@@ -1,0 +1,36 @@
+info:
+  name: OSE-2012 | sunny | update | online with the place cleared in the same request is saved
+  type: http
+  seq: 33
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/mode-toggle-evt"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"attendance_mode":"online","location":null}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2012 sunny: 200', function () { expect(res.getStatus()).to.eql(200); expect(res.getBody().ok).to.eql(true); });
+        test('OSE-2012 sunny: the answer says online, with no place', function () {
+          expect(res.getBody().attendance_mode).to.eql('online');
+          expect(res.getBody().place).to.eql('no_place');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

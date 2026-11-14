@@ -53,6 +53,7 @@ async function plantEvent(request: APIRequestContext, title: string): Promise<st
   const res = await request.post(`${BASE_URL}/api/v2/admin/events`, {
     headers: adminHeaders(),
     data: {
+      attendance_mode: 'in_person',
       title,
       // Far enough out that the event is unambiguously pre_event, so the card
       // renders the Register CTA — the variant that interpolates the title

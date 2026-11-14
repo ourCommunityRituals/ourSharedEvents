@@ -208,6 +208,7 @@ describe('a live event that is off the map opens by link', () => {
     const title = uid('Backyard bocce');
     const created = await admin('POST', '/api/v2/admin/events', {
       title,
+      attendance_mode: 'in_person',
       start_date: inDays(5),
       start_time: '18:00',
       timezone: 'America/Chicago',
