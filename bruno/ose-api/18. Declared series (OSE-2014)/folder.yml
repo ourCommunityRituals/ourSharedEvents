@@ -3,7 +3,7 @@ info:
   type: folder
 request: {}
 docs: |-
-  A series an organizer declares (OSE ADR-028, showcase story S15). An admin
+  A series an organizer declares (OSE ADR-029, showcase story S15). An admin
   declares a series anchored on an event (no venue needed), attaches and
   detaches events, and confirms or rejects a detector suggestion. Promoting a
   trial is declaring with the earlier tries in `event_ids`.

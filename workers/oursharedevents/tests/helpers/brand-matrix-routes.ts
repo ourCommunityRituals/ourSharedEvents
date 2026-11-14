@@ -204,7 +204,7 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
   ),
   // OSE-1531: the copy lands in the SOURCE's brand, so a cross-brand call must 404 and make nothing.
   eventRoute('/api/v2/admin/events/:id/repeat', 'POST', '/repeat'),
-  // OSE ADR-028: a series an organizer declares. A cross-brand call must 404 and
+  // OSE ADR-029: a series an organizer declares. A cross-brand call must 404 and
   // leave every row as it was; the body names the target's own event on purpose.
   eventRoute('/api/v2/admin/events/:id/series', 'GET', '/series'),
   eventRoute('/api/v2/admin/events/:id/series', 'POST', '/series', {

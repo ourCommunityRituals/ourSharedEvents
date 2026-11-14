@@ -29,7 +29,7 @@ this work.
 
 **F1. Invariant 9 says every multi-tenant table has a brand column. `event_series` has none.**
 The brain text: "Dual-key pattern (id + brandId) on every multi-tenant table." `event_series`
-resolves its brand through its anchor event (owner ruling 2026-10-01, OSE-1421; kept by ADR-028
+resolves its brand through its anchor event (owner ruling 2026-10-01, OSE-1421; kept by ADR-029
 D3). `poster_deployments` does the same through its event. So the brain's wording is stricter than
 two tables the code has had for months. The code is deliberate; the brain text is behind.
 _Proposal:_ amend invariant 9 to read "has a brand column, or resolves its brand through exactly

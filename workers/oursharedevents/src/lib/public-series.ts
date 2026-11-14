@@ -1,4 +1,4 @@
-// ─── The series a public event sits on (OSE-2018, OSE ADR-028 amendment) ──────────
+// ─── The series a public event sits on (OSE-2018, OSE ADR-029 amendment) ──────────
 //
 // A reader outside admin (ourWKRP building the creator showcase) needs to see
 // that an event sits on a series an organizer declared or confirmed. This is

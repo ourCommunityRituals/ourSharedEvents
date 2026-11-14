@@ -1,7 +1,7 @@
 /**
  * OSE-2019: the admin's Series card.
  *
- * The series routes (OSE ADR-028) had no screen. This card is where an
+ * The series routes (OSE ADR-029) had no screen. This card is where an
  * organizer starts a series from an event, takes an event off one, and answers
  * a suggestion the nightly detector made.
  *

@@ -1,6 +1,6 @@
 /**
  * INVARIANT: an event series groups one brand's events, and holds nothing about
- * a person (OSE ADR-028; brain invariants 1, 7 and 9).
+ * a person (OSE ADR-029; brain invariants 1, 7 and 9).
  *
  * The behaviour is tested in workers/oursharedevents/tests/event-series.spec.ts
  * and public-event-series.spec.ts. Those specs test the writers that exist
@@ -118,7 +118,7 @@ function statements(text: string, head: RegExp): string[] {
   return out;
 }
 
-test.describe('event series: one brand, no person (OSE ADR-028)', () => {
+test.describe('event series: one brand, no person (OSE ADR-029)', () => {
   test('the scan sees the code it is about (not vacuous)', () => {
     expect(sources.length).toBeGreaterThan(50);
     expect(statements(source(HANDLER), /^\s*UPDATE events SET/i).length).toBeGreaterThanOrEqual(2);

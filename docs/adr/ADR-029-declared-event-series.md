@@ -1,4 +1,4 @@
-# ADR-028: A series an organizer declares
+# ADR-029: A series an organizer declares
 
 **Status:** Accepted. Owner decision 2026-11-12 (showcase plan, story S15); built in the change that
 adds this file.

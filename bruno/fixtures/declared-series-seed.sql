@@ -1,5 +1,5 @@
 -- A series an organizer declares: staging fixture for the T2 Bruno folder
--- "18. Declared series (OSE-2014)". OSE ADR-028.
+-- "18. Declared series (OSE-2014)". OSE ADR-029.
 --
 -- Applied by CI before the Bruno contract run (api section):
 --   node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/declared-series-seed.sql

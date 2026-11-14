@@ -17,7 +17,7 @@
  *   GET /robots.txt              → crawl policy (prod indexable; else Disallow: /)
  *   GET /sitemap.xml             → static pages + published/active events
  *   GET /api/status              → alias for /health
- *   GET /api/v2/events           → list active events; `series` beside `items` maps an event id to its confirmed series (OSE ADR-028)
+ *   GET /api/v2/events           → list active events; `series` beside `items` maps an event id to its confirmed series (OSE ADR-029)
  *   GET /api/v2/events/:id       → single event; `series` beside `item` is its confirmed series or null
  *   GET /es/events/:id[/:name]   → the event page in Spanish (OSE-1761). A language prefix is
  *                                  the visitor's explicit choice and beats Accept-Language; English
@@ -28,6 +28,9 @@
  *                                  (OSE-1850); /es stands for any listed language. The form posts
  *                                  to the unprefixed API; no language is stored.
  *   GET /events/:id/calendar.ics → public event calendar download
+ *   GET /brands/:brand/calendar.ics → a brand's public events as one calendar feed (OSE-2013):
+ *                                  the rows GET /api/v2/events?brand= lists, through the public
+ *                                  projection; rate-limited; 404 for an unknown or invalid brand
  *   GET /api/v2/events/map       → attendee map, cell-scoped (OSE-1242).
  *                                  Accepts ?cell=<h3 res7>; REFUSES lat/lon.
  *   GET /api/v2/events/:id/shared-report     → SharedReport (signed-link auth, OSE-272 S5)
@@ -39,7 +42,7 @@
  *   PUT    /api/v2/admin/events/:id → update event (auth required)
  *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
  *   POST   /api/v2/admin/events/:id/repeat → draft copy of a finished event, new date, nothing about who took part (auth, rate-limited, audited, OSE-1531)
- *   GET    /api/v2/admin/events/:id/series → the event's series and the brand's pending suggestions (auth, OSE ADR-028)
+ *   GET    /api/v2/admin/events/:id/series → the event's series and the brand's pending suggestions (auth, OSE ADR-029)
  *   POST   /api/v2/admin/events/:id/series → declare a series anchored on this event: name, cadence, day, hour; `event_ids` join it (auth, audited)
  *   PUT    /api/v2/admin/events/:id/series → attach this event to a confirmed series of its brand (auth, audited)
  *   DELETE /api/v2/admin/events/:id/series → detach this event from its series (auth, audited)
@@ -269,6 +272,7 @@ import { handleListSubscribers, type SubscribersAdminEnv } from './handlers/subs
 import { handleAdminGeocode, type GeocodeAdminEnv } from './handlers/geocode';
 import { handleShortlinkResolve, type ShortlinkResolveEnv } from './handlers/shortlink-resolve';
 import { handleEventCalendar, type CalendarEnv } from './handlers/calendar';
+import { handleBrandCalendar } from './handlers/brand-calendar';
 import { handleUecResolve } from './handlers/uec-resolve';
 import {
   handleV2AdminVerifyQr,
@@ -1185,7 +1189,7 @@ export async function route(
     return response;
   }
 
-  // /api/v2/admin/events/:id/series — a series an organizer declares (OSE ADR-028).
+  // /api/v2/admin/events/:id/series — a series an organizer declares (OSE ADR-029).
   // The event in the path is brand-scoped by guardAdminObjectScope above; the
   // handler holds every id in the body to that event's brand. Each write is
   // audited against the event, so the row carries the event's brand.
@@ -2320,10 +2324,22 @@ export async function route(
   // ── Public event calendar download (OSE-1358) ─────────────────────────────
   const eventCalendarMatch = pathname.match(/^\/events\/([^/]+)\/calendar\.ics$/);
   if (eventCalendarMatch && method === 'GET') {
-    return handleEventCalendar(request, env, eventCalendarMatch[1]);
+    // Rate-limited like every public read (OSE-2022). It had no limit before.
+    return publicReadLimited('event-calendar', (req, e: typeof env) =>
+      handleEventCalendar(req, e, eventCalendarMatch[1])
+    )(request, env);
   }
 
-  // ── One event's screens under its own address (OSE-1684) ─────────────────
+  // ── A brand's calendar feed (OSE-2013) ────────────────────────────────────
+  // The brand is read as typed: a segment that is not a brand id (an encoded
+  // character included) is a 404 from the handler, the same as an unknown brand.
+  const brandCalendarMatch = pathname.match(/^\/brands\/([^/]+)\/calendar\.ics$/);
+  if (brandCalendarMatch && method === 'GET') {
+    return publicReadLimited('brand-calendar', (req, e: typeof env) =>
+      handleBrandCalendar(req, e, brandCalendarMatch[1], ctx)
+    )(request, env);
+  }
+
   // /events/<id>/tv and /events/<id>/poster are the addresses the platform
   // writes for an event's TV and poster; the pages read the id from the path.
   // /display?event= and /poster?event= keep working (printed and saved links).

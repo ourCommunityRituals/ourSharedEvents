@@ -1,5 +1,5 @@
 /**
- * A series an organizer declares (OSE ADR-028).
+ * A series an organizer declares (OSE ADR-029).
  *
  *   GET    /api/v2/admin/events/:id/series          the event's series + the brand's suggestions
  *   POST   /api/v2/admin/events/:id/series          declare a series anchored on this event

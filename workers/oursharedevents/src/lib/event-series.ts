@@ -1,5 +1,5 @@
 /**
- * A series an organizer declares (OSE ADR-028): the pure half.
+ * A series an organizer declares (OSE ADR-029): the pure half.
  *
  * What a series is, said once: a label over a brand's events across time. It
  * holds a name, a cadence, a weekday, an hour and a lifecycle state. It never

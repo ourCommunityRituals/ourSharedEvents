@@ -95,6 +95,7 @@ describe('the rule', () => {
         '(http.request.uri.path eq "/" or http.request.uri.path eq "/events" or ' +
         'starts_with(http.request.uri.path, "/q/") or starts_with(http.request.uri.path, "/s/") or ' +
         'starts_with(http.request.uri.path, "/events/") or ' +
+        'starts_with(http.request.uri.path, "/brands/") or ' +
         'starts_with(http.request.uri.path, "/api/v2/uploads/"))'
     );
     const r = S.buildRule(TOKEN);
@@ -112,6 +113,8 @@ describe('the rule', () => {
       '/events?q=Oak%20Lawn', // check-full and stg-watch: the search
       '/api/v2/uploads/events/evt_1/1-art.png', // check-full: the art
       '/?zip=60453', // stg-watch: the landing zip search
+      '/brands/root/calendar.ics', // T2 and T4: the brand calendar feed (OSE-2022)
+      '/events/test-event-001/calendar.ics', // T2: the per-event calendar file
     ];
     for (const p of read) expect(S.pathCovered(p), p).toBe(true);
   });
@@ -124,6 +127,8 @@ describe('the rule', () => {
       '/qx',
       '/eventsX',
       '/events.json',
+      '/brands',
+      '/brandsX/root/calendar.ics',
     ]) {
       expect(S.pathCovered(p), p).toBe(false);
     }
