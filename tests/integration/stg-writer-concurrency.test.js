@@ -6,9 +6,12 @@
  * They share one concurrency group, `stg-writer`, so no two of them write at
  * the same time; a second one waits and is never cancelled out from under a run.
  *
- * GitHub keeps one waiting run per group: a third arrival replaces the waiting
- * one. The schedules are set apart (stock 09:23, lifecycle 06:47, nightly CI
- * 03:07 UTC) so that only a hand dispatch can make three meet.
+ * Every member sets `queue: max`: waiting runs line up first in, first out (up
+ * to 100) instead of GitHub's default of one waiting run, where a third arrival
+ * cancels the waiting one. GitHub refuses a run whose concurrency resolves to
+ * `queue: max` with cancel-in-progress true, so the group never cancels. The
+ * schedules stay set apart (stock 09:23, lifecycle 06:47, nightly CI 03:07 UTC)
+ * so the queue is short.
  *
  * The stock load also runs only from main (R-06): a dispatch from any other
  * branch skips every job, so a branch's scripts never touch stg with the
@@ -20,11 +23,11 @@ const yaml = require('js-yaml');
 
 const WF = join(__dirname, '..', '..', '.github', 'workflows');
 const load = (file) => yaml.load(readFileSync(join(WF, file), 'utf8'));
-const STG_WRITER = { group: 'stg-writer', 'cancel-in-progress': false };
+const STG_WRITER = { group: 'stg-writer', 'cancel-in-progress': false, queue: 'max' };
 
 describe('one writer on stg at a time', () => {
   test.each(['stock-data-full.yml', 'staging-event-lifecycle.yml', 'staging-rollback-drill.yml'])(
-    '%s is in the stg-writer group, never cancelled by the next',
+    '%s is in the stg-writer group, queued first in first out, never cancelled by the next',
     (file) => {
       expect(load(file).concurrency).toEqual(STG_WRITER);
     }
@@ -35,6 +38,7 @@ describe('one writer on stg at a time', () => {
     const job = ci.jobs['contract-staging-sub'];
     const group = String(job.concurrency.group);
     expect(job.concurrency['cancel-in-progress']).toBe(false);
+    expect(job.concurrency.queue).toBe('max');
     // The group is an expression over the matrix leg; evaluate it for each leg.
     const sections = job.strategy.matrix.include.map((l) => l.section);
     expect(sections).toEqual(expect.arrayContaining(['api', 'pages']));

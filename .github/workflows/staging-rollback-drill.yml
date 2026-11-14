@@ -40,9 +40,12 @@ permissions:
 # One writer on stg at a time (CCR 2026-11-07 R-07): this job, the stock load, the T2 pages
 # leg and the other stg writer
 # share this group. A second run waits; it is never cancelled out from under a run.
+# queue: max lines waiting runs up first in, first out (up to 100) instead of
+# GitHub's default of one waiting run, which a third arrival cancels.
 concurrency:
   group: stg-writer
   cancel-in-progress: false
+  queue: max
 
 env:
   WORKER_DIR: workers/oursharedevents

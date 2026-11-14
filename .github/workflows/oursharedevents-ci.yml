@@ -1318,10 +1318,12 @@ jobs:
     # assertions. A second run waits; it is never cancelled out from under a merge.
     # The pages leg writes to stg (the landing zip fixture), so it also waits for the
     # stock load, the event lifecycle and the rollback drill: one stg writer at a
-    # time (CCR 2026-11-07 R-07).
+    # time (CCR 2026-11-07 R-07). Waiting runs queue first in, first out (queue: max) rather
+    # than GitHub's one waiting run, which a third arrival cancels.
     concurrency:
       group: ${{ matrix.section == 'pages' && 'stg-writer' || format('ose-t2-staging-{0}', matrix.section) }}
       cancel-in-progress: false
+      queue: max
     # OSE-954: runs on ephemeral ubuntu-latest. Bruno (`bru run`) + wrangler-d1
     # seed only; no deploy. Staging auth is the header-based CF Access service
     # token (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY) and the D1 seed uses

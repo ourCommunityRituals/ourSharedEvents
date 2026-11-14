@@ -47,6 +47,8 @@ describe('staging rollback drill workflow', () => {
 
   test('has read-only permissions and one run at a time', () => {
     expect(code).toMatch(/permissions:\s*\n\s+contents: read/);
-    expect(code).toMatch(/concurrency:\s*\n\s+group: stg-writer/);
+    expect(code).toMatch(
+      /concurrency:\s*\n\s+group: stg-writer\s*\n\s+cancel-in-progress: false\s*\n\s+queue: max\s*\n/
+    );
   });
 });
