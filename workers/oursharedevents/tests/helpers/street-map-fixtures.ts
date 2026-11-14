@@ -151,6 +151,25 @@ export interface FixtureTile {
 }
 
 /**
+ * The same vector tile, `size` bytes long: `data` followed by one field no
+ * reader of a tile knows (number 15, length-delimited) full of zero bytes. A
+ * decoder skips it, so the tile still draws the same roads, and gzip packs the
+ * zeros into a few KB. Use it for a tile that is large and still a good tile.
+ */
+export function paddedTile(data: Uint8Array, size: number): Uint8Array {
+  for (let lengthBytes = 1; lengthBytes <= 5; lengthBytes++) {
+    const payload = size - data.length - 1 - lengthBytes;
+    if (payload >= 0 && varint(payload).length === lengthBytes) {
+      const out = new Uint8Array(size);
+      out.set(data);
+      out.set([(15 << 3) | 2, ...varint(payload)], data.length);
+      return out;
+    }
+  }
+  throw new Error(`paddedTile: ${size} bytes cannot hold a tile of ${data.length}`);
+}
+
+/**
  * A PMTiles v3 archive holding these tiles. `leaf: true` puts every entry in
  * one leaf directory behind the root, as large builds do.
  */

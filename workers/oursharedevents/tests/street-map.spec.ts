@@ -41,10 +41,15 @@ import {
 } from '../src/lib/street-map';
 import { MAP_STYLE, renderAttendeeMap, type AttendeeMapItem } from '../src/lib/attendee-map';
 import { renderLandingArea } from '../src/lib/landing-area';
-import { resetPmtilesCache } from '../src/lib/pmtiles';
+import {
+  MAX_DIRECTORY_BYTES,
+  MAX_TILE_UNPACKED_BYTES,
+  resetPmtilesCache,
+} from '../src/lib/pmtiles';
 import {
   fakeBucket,
   memSource,
+  paddedTile,
   planetArchive,
   pmtilesArchive,
   scriptedBucket,
@@ -514,6 +519,43 @@ describe('street map | loading (fail soft)', () => {
     expect(
       await loadStreetLayer({ MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) }, [BLUE7])
     ).toBeNull();
+  });
+
+  // An archive that asks the Worker to hold more than the reader allows
+  // (lib/pmtiles.ts, the limits) is a refused read, and a refused read is
+  // hexagons only. Born red 2026-11-14: with the tile unpacked to any length the
+  // archive with one tile a byte over its limit drew its streets; with the
+  // root's stated length not checked, the last one asked the bucket for 2 MiB
+  // and one byte.
+  it('an archive past the reader limits: null, and nothing past a limit is asked for', async () => {
+    const { tiles } = tilesForCells([BLUE7]);
+    // One tile of the frame is a good tile that unpacks to `size` bytes (a few
+    // KB of gzip); the others are as they were.
+    const withOneTileOf = (size: number) =>
+      pmtilesArchive(
+        tiles.map((t, i) => (i === 0 ? { ...t, data: paddedTile(t.data, size) } : t)),
+        { gzip: true }
+      );
+    // At the limit it is a tile like any other, so what refuses the next
+    // archive is the limit and not the padding.
+    const atLimit = fakeBucket(DEFAULT_ARCHIVE, await withOneTileOf(MAX_TILE_UNPACKED_BYTES));
+    const drawn = await loadStreetLayer({ MAP_TILES: atLimit }, [BLUE7], { timeoutMs: 60_000 });
+    expect(drawn?.svg).toContain('<path');
+
+    // One byte more in one tile, and the frame has no streets at all.
+    resetPmtilesCache();
+    const over = fakeBucket(DEFAULT_ARCHIVE, await withOneTileOf(MAX_TILE_UNPACKED_BYTES + 1));
+    expect(await loadStreetLayer({ MAP_TILES: over }, [BLUE7], { timeoutMs: 60_000 })).toBeNull();
+    expect(over.gets.length).toBeGreaterThan(0);
+
+    // The same tiles as they are, behind a root directory stated over its limit.
+    // (The archive before it is kept under the same name: forget it.)
+    resetPmtilesCache();
+    const stated = await pmtilesArchive(tiles);
+    new DataView(stated.buffer).setUint32(16, MAX_DIRECTORY_BYTES + 1, true);
+    const second = fakeBucket(DEFAULT_ARCHIVE, stated);
+    expect(await loadStreetLayer({ MAP_TILES: second }, [BLUE7])).toBeNull();
+    expect(second.gets.map((g) => g.range?.length)).toEqual([16384]);
   });
 
   // Born red 2026-11-09 (location-precision CCR, F41): before the guard in

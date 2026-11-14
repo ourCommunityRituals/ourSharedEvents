@@ -21,10 +21,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { latLngToCell } from 'h3-js';
 import { OSM_COPYRIGHT_URL } from '../src/lib/attendee-map';
 import { LANGUAGES, type Lang } from '../src/lib/i18n/languages';
-import { resetPmtilesCache } from '../src/lib/pmtiles';
+import { MAX_TILE_UNPACKED_BYTES, resetPmtilesCache } from '../src/lib/pmtiles';
 import { DEFAULT_ARCHIVE } from '../src/lib/street-map';
 import {
   fakeBucket,
+  paddedTile,
   pmtilesArchive,
   scriptedBucket,
   tilesForCells,
@@ -88,6 +89,27 @@ describe('street map | the landing page handler', () => {
   it('a broken archive leaves the page and its hexagons as they were', async () => {
     const plain = await landing({});
     const bucket = fakeBucket(DEFAULT_ARCHIVE, new Uint8Array(500).fill(1));
+    const html = await landing({ MAP_TILES: bucket });
+    expect(bucket.gets.length).toBeGreaterThan(0);
+    expect(html).not.toContain('data-testid="amap-streets"');
+    expect(html).not.toContain('data-testid="amap-credit"');
+    expect(cellsOf(html)).toEqual(cellsOf(plain));
+  });
+
+  // The archive holds the right tiles for the page, and one of them is a good
+  // tile (a few KB of gzip) that unpacks to one byte past the reader's tile
+  // limit (lib/pmtiles.ts). Born red 2026-11-14: with a tile unpacked to any
+  // length, this page drew its streets from that archive.
+  it('an archive past the reader limits leaves the page and its hexagons as they were', async () => {
+    const plain = await landing({});
+    const { tiles } = tilesForCells(cellsOf(plain));
+    const swollen = await pmtilesArchive(
+      tiles.map((t, i) =>
+        i === 0 ? { ...t, data: paddedTile(t.data, MAX_TILE_UNPACKED_BYTES + 1) } : t
+      ),
+      { gzip: true }
+    );
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, swollen);
     const html = await landing({ MAP_TILES: bucket });
     expect(bucket.gets.length).toBeGreaterThan(0);
     expect(html).not.toContain('data-testid="amap-streets"');
