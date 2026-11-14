@@ -58,7 +58,7 @@ describe('SPON-4: Poster sponsor JS rendering', () => {
 
   test('poster sponsors come from the poster-bundle (OSE-867 — no separate sponsor-bundle call)', async () => {
     const body = await posterHtml();
-    expect(body).toContain('renderPosterSponsors(data.sponsors)');
+    expect(body).toContain('renderPosterSponsors(data.sponsors, data.sponsor_rotation)');
     expect(body).not.toContain("'/sponsor-bundle");
   });
 });
