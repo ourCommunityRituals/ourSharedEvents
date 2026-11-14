@@ -1,6 +1,6 @@
 /**
  * Every address the router answers outside /api/, and whether a browser gets a
- * page there (OSE-2030, OSE ADR-028).
+ * page there (OSE-2030, OSE ADR-031).
  *
  * AGENTS.md invariant 8 says one <h1> per page. Until 2026-11-13 that rule was
  * checked on a remembered list of pages; the demo sites were not on it and all
@@ -97,6 +97,10 @@ export const PAGE_SURFACES: Readonly<Record<string, PageSurface>> = {
   '/events/:param/calendar.ics': notPage(
     'Calendar download.',
     '/events/no-such-event/calendar.ics'
+  ),
+  '/brands/:param/calendar.ics': notPage(
+    "A brand's calendar download.",
+    '/brands/no-such-brand/calendar.ics'
   ),
   '/event': notPage('Forwards 301 to /events.', '/event'),
   '/event/*': notPage('Forwards 301 to /events/<rest>.', '/event/abc'),

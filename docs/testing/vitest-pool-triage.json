@@ -317,6 +317,13 @@
       "testCount": 6
     },
     {
+      "file": "workers/oursharedevents/tests/admin-series-card.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 26
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-servicetoken-fallthrough.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -576,6 +583,13 @@
       "testCount": 26
     },
     {
+      "file": "workers/oursharedevents/tests/brand-calendar-feed.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 18
+    },
+    {
       "file": "workers/oursharedevents/tests/brand-matrix-selfcheck.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -623,6 +637,20 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/campaign-never-a-filter.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/campaigns.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB, createExecutionContext, waitOnExecutionContext",
+      "testCount": 35
     },
     {
       "file": "workers/oursharedevents/tests/canonical-link.spec.ts",
@@ -1045,6 +1073,13 @@
       "testCount": 4
     },
     {
+      "file": "workers/oursharedevents/tests/event-create-status.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 7
+    },
+    {
       "file": "workers/oursharedevents/tests/event-date-line.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1171,6 +1206,13 @@
       "testCount": 10
     },
     {
+      "file": "workers/oursharedevents/tests/event-series.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 50
+    },
+    {
       "file": "workers/oursharedevents/tests/event-start-datetime.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1190,6 +1232,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, env.DB, env.FORMS_DB",
       "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-status-writers.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 11
     },
     {
       "file": "workers/oursharedevents/tests/event-type-catalog.spec.ts",
@@ -1385,7 +1434,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 50
+      "testCount": 52
     },
     {
       "file": "workers/oursharedevents/tests/form-pages-less-text.spec.ts",
@@ -2253,7 +2302,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 9
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/public-event-error-pages.spec.ts",
@@ -2289,6 +2338,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-event-series.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/public-event-stakeholder-surfaces.spec.ts",

@@ -1,4 +1,4 @@
-# ADR-028: Check page rules from the route table, not from a remembered list
+# ADR-031: Check page rules from the route table, not from a remembered list
 
 **Status:** Proposed. The gate described here is built and running (PR 1205); it moves to Accepted
 when the owner agrees that a page rule must be enforced this way from now on.

@@ -33,6 +33,9 @@ export const NODE_SPECS = [
   // OSE-1900 — derived gate: every statement in src/ that carries the sponsor
   // consent rule also carries the event's opt-in gate (reads src/; no runtime).
   'tests/sponsor-opt-in-readers.spec.ts',
+  // Showcase S14 — derived gate: no query parameter is named for a campaign and
+  // no statement on `campaigns` selects or orders by a title (reads src/).
+  'tests/campaign-never-a-filter.spec.ts',
   // Toast adoption in admin and sponsor home: the pages' scripts and the
   // @ocr/ui toast script in jsdom, plus one handler called directly. No runtime.
   'tests/toast-adoption.spec.ts',
@@ -244,6 +247,8 @@ export const NODE_SPECS = [
   'tests/admin-map-setting.spec.ts',
   // OSE-1900 - the sponsors switch in the sponsors card (jsdom + extracted helpers).
   'tests/admin-sponsors-switch.spec.ts',
+  // OSE-2019 — the admin's Series card (jsdom over the admin.html Text import)
+  'tests/admin-series-card.spec.ts',
   'tests/admin-create-core-values.spec.ts',
   'tests/admin-wizard-tv.spec.ts',
   'tests/admin-wizard-uniform.spec.ts',
@@ -301,6 +306,9 @@ export const NODE_SPECS = [
   'tests/event-datetime.spec.ts',
   'tests/spine-keys.spec.ts',
   'tests/spine-keys-writers.spec.ts',
+  // OSE-1425 every writer of events.status keeps active ⟺ qr_verified = 1.
+  // Reads src/ as text with node:fs; no cloudflare:test.
+  'tests/event-status-writers.spec.ts',
   // OSE-474 pre-event countdown: pure text over lib/event-countdown.ts and its
   // browser tick run in jsdom with fake timers. No cloudflare:test.
   'tests/event-countdown.spec.ts',

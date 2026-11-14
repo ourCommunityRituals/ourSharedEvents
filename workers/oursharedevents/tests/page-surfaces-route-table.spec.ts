@@ -1,6 +1,6 @@
 /**
  * Every address the router answers is in the page-rules list (OSE-2030,
- * OSE ADR-028).
+ * OSE ADR-031).
  *
  * `tests/helpers/page-surfaces.ts` says, for each address outside /api/,
  * whether a browser gets a page there. This gate holds that list equal to the

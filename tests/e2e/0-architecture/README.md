@@ -191,6 +191,7 @@ and is wired — and let the mechanism do the scanning.
 | `aggregate-only.invariant.spec.ts` | #7 aggregate_only_reporting |
 | `anonymous-id.invariant.spec.ts` | #1 anonymous_id |
 | `api-response-schema.invariant.spec.ts` | #16 api_response_schema_stability |
+| `campaign-brand-and-consent.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `ci-approval-gate-safety.invariant.spec.ts` | #28 ci_approval_gate_secret_surface |
 | `cookie-setters.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `cors-allowlist.invariant.spec.ts` | #15 cors_allowlist_immutability |
@@ -199,6 +200,7 @@ and is wired — and let the mechanism do the scanning.
 | `declined-regimes.invariant.test.ts` | #29 declined_regulatory_regimes |
 | `deprecation-lock.invariant.spec.ts` | #10 deprecation_lock |
 | `edge-token-verification.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `event-series.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `export-grain.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `geo-resolution.invariant.spec.ts` | #2 hyperlocal_geo_resolution |
 | `geo-resolution.structural.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |

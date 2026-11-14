@@ -1,0 +1,28 @@
+info:
+  name: "S14 | consent | sponsor bundle | an event that has not opted in shows no sponsor and no campaign"
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/camp-off-evt/sponsor-bundle?surface=public"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const raw = JSON.stringify(res.getBody());
+        test('S14 consent: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 consent: the switch is off, so neither the sponsor nor its campaign is named', function () {
+          expect(raw).to.not.include('sb_camp_hidden');
+          expect(raw).to.not.include('camp_fx_hidden');
+          expect(raw).to.not.include('Campaign Fixture Hidden');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

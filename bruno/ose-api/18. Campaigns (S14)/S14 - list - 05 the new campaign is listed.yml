@@ -1,0 +1,38 @@
+info:
+  name: "S14 | happy | list | the list carries the new campaign and the fixture ones"
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/campaigns"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const items = res.getBody().items || [];
+        const ids = items.map(function (c) { return c.id; });
+        test('S14 list: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 list: the campaign just created is in it', function () {
+          expect(ids).to.include(bru.getVar('s14CampaignId'));
+        });
+        test('S14 list: every row is an id, a brand, a title, a status and two timestamps', function () {
+          items.forEach(function (c) {
+            expect(Object.keys(c).sort()).to.eql(['brand_id', 'created_at', 'id', 'status', 'title', 'updated_at']);
+          });
+        });
+        bru.setVar('s14ListIds', JSON.stringify(ids));
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

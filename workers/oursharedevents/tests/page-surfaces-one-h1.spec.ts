@@ -1,6 +1,6 @@
 /**
  * Every page the worker serves has exactly one <h1> (AGENTS.md invariant 8;
- * OSE-2030, OSE ADR-028).
+ * OSE-2030, OSE ADR-031).
  *
  * The pages are not a list kept in this file. They come from
  * `tests/helpers/page-surfaces.ts`, which `page-surfaces-route-table.spec.ts`

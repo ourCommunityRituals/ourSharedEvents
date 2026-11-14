@@ -37,10 +37,11 @@ export const PHASE = 'http_request_firewall_custom';
 /**
  * Every public path CI reads on stg, from scripts/stock (check-full, stg-watch,
  * edge-probe): QR scans, short links, event pages and the /events search, art,
- * and the landing page's zip search. Reads only: GET and HEAD.
+ * and the landing page's zip search. /brands/ is the brand calendar feed
+ * (/brands/<brand>/calendar.ics, OSE-2022); the per-event file sits under /events/. Reads only: GET and HEAD.
  */
 export const EXACT_PATHS = ['/', '/events'];
-export const PATH_PREFIXES = ['/q/', '/s/', '/events/', '/api/v2/uploads/'];
+export const PATH_PREFIXES = ['/q/', '/s/', '/events/', '/brands/', '/api/v2/uploads/'];
 export const METHODS = ['GET', 'HEAD'];
 
 /**

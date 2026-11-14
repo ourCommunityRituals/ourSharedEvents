@@ -35,6 +35,13 @@ export const PROBES = [
   { path: '/s/edge-probe', expect: [404] },
   { path: '/events/test-event-001', expect: [200] },
   { path: '/?zip=60453', expect: [200] },
+  // The calendar addresses (OSE-2022). A calendar app is a machine, so these are
+  // the reads a challenge breaks outright. The feed is 200, or 404 when the root
+  // brand lists nothing; the per-event file is 200, or 409 before its short link
+  // is minted. tests/integration/machine-read-edge-cover.test.js requires a probe
+  // here for every .ics route in the router.
+  { path: '/brands/root/calendar.ics', expect: [200, 404] },
+  { path: '/events/test-event-001/calendar.ics', expect: [200, 409] },
 ];
 export const PROBE_PATHS = PROBES.map((p) => p.path);
 
@@ -132,7 +139,7 @@ export function verdict(rows) {
 }
 
 // Each read gets its own deadline, so a stalled read becomes an error row and the
-// table still prints well inside the step's timeout (12 reads × 8 s < 2 min).
+// table still prints well inside the step's timeout (18 reads × 8 s < 3 min).
 export const READ_TIMEOUT_MS = 8_000;
 
 /** fetchFn with a per-read abort deadline, beneath every shape's own builder. */

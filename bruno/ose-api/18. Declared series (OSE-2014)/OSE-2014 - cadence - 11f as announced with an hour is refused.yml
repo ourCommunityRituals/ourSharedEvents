@@ -1,0 +1,32 @@
+info:
+  name: OSE-2014 | rainy | cadence | an as-announced series that names an hour is refused
+  type: http
+  seq: 118
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/series-ci-sugg-evt/series"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"name":"Pop-in sessions","cadence":"as-announced","hour_of_day":9}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2014 rainy: cadence: 400 INVALID_HOUR', function () { expect(res.getStatus()).to.eql(400); expect(res.getBody().code).to.eql('INVALID_HOUR'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
