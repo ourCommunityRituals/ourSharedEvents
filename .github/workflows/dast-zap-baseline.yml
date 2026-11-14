@@ -137,6 +137,8 @@ jobs:
           IMAGE="ghcr.io/zaproxy/zaproxy:stable"
           docker pull -q "$IMAGE"
           worst=0   # 0 clean, 2 warnings only, 1 fail-level found
+          failed=""   # surfaces with a FAIL-level alert
+          errored=""  # surfaces whose scan did not finish (no result to read)
           summary="$GITHUB_STEP_SUMMARY"
           echo "## ZAP baseline — public surfaces" >> "$summary"
           echo "" >> "$summary"
@@ -160,14 +162,21 @@ jobs:
             case "$code" in
               0) verdict="✅ clean" ;;
               2) verdict="⚠️ warnings (reported, not gating — calibration slice)"; if [ "$worst" -eq 0 ]; then worst=2; fi ;;
-              1) verdict="❌ FAIL-level alert"; worst=1 ;;
-              *) verdict="🛑 scan error (exit $code)"; worst=1 ;;
+              1) verdict="❌ FAIL-level alert"; worst=1; failed="$failed $path" ;;
+              *) verdict="🛑 scan error (exit $code)"; worst=1; errored="$errored $path(exit $code)" ;;
             esac
             echo "| \`$path\` | $verdict |" >> "$summary"
           done
           echo "" >> "$summary"
           if [ "$worst" -eq 1 ]; then
-            echo "::error::ZAP baseline found a FAIL-level alert (or a scan error). See the artifact."
+            # Both gate. They are named apart so a reader knows which happened:
+            # an alert is a finding; a scan error means that surface was not scanned.
+            if [ -n "$failed" ]; then
+              echo "::error::ZAP baseline found a FAIL-level alert on:$failed. See the artifact."
+            fi
+            if [ -n "$errored" ]; then
+              echo "::error::ZAP baseline scan did not finish on:$errored. That surface was not scanned; this is not an alert."
+            fi
             exit 1
           fi
           if [ "$worst" -eq 2 ]; then
