@@ -86,17 +86,18 @@ Every feature serves at least one vertex of the Triangle. The live chat assistan
 
 ### For Sponsors (Brands)
 
-| Document                                 | Description                                                             |
-| ---------------------------------------- | ----------------------------------------------------------------------- |
-| [SPONSORS.md](SPONSORS.md)               | Sponsor experience: attribution, analytics, tiers by scale              |
-| [REPORT-DEPTH.md](REPORT-DEPTH.md)       | What each report depth (local/mid/premium) shows a sponsor, and why     |
-| [SPONSOR-PRICING.md](SPONSOR-PRICING.md) | Pricing governance: weight classes, governor, pool dynamics             |
-| [GOVERNOR-DESIGN.md](GOVERNOR-DESIGN.md) | Deep dive: pool-based allocation — security, edge cases, error handling |
-| [BRANDS.md](BRANDS.md)                   | Multi-brand isolation, white-label, sponsor layering                    |
-| [TIERS.md](TIERS.md)                     | What each tier unlocks for sponsors                                     |
-| [EVENTS.md](EVENTS.md)                   | How events work, the Triangle data model                                |
-| [SURFACES.md](SURFACES.md)               | Where sponsors appear (report, display, poster)                         |
-| [PRIVACY.md](PRIVACY.md)                 | What attendee data sponsors can/cannot access                           |
+| Document                                 | Description                                                               |
+| ---------------------------------------- | ------------------------------------------------------------------------- |
+| [SPONSORS.md](SPONSORS.md)               | Sponsor experience: attribution, analytics, tiers by scale                |
+| [CAMPAIGNS.md](CAMPAIGNS.md)             | A sponsor's campaign across events: the admin API and the public contract |
+| [REPORT-DEPTH.md](REPORT-DEPTH.md)       | What each report depth (local/mid/premium) shows a sponsor, and why       |
+| [SPONSOR-PRICING.md](SPONSOR-PRICING.md) | Pricing governance: weight classes, governor, pool dynamics               |
+| [GOVERNOR-DESIGN.md](GOVERNOR-DESIGN.md) | Deep dive: pool-based allocation — security, edge cases, error handling   |
+| [BRANDS.md](BRANDS.md)                   | Multi-brand isolation, white-label, sponsor layering                      |
+| [TIERS.md](TIERS.md)                     | What each tier unlocks for sponsors                                       |
+| [EVENTS.md](EVENTS.md)                   | How events work, the Triangle data model                                  |
+| [SURFACES.md](SURFACES.md)               | Where sponsors appear (report, display, poster)                           |
+| [PRIVACY.md](PRIVACY.md)                 | What attendee data sponsors can/cannot access                             |
 
 ### For Admins (Event Organizers)
 

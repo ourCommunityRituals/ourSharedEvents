@@ -1,0 +1,35 @@
+info:
+  name: "S14 | rainy | list | a title in the address does not filter or reorder the list"
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/campaigns?title=Campaign%20Fixture%20Shown&q=Campaign%20Fixture%20Shown&search=Shown&campaign=camp_fx_shown&sort=title&order=title"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const ids = (res.getBody().items || []).map(function (c) { return c.id; });
+        test('S14 never a filter: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 never a filter: the same campaigns come back in the same order as with no parameter', function () {
+          expect(ids).to.eql(JSON.parse(bru.getVar('s14ListIds')));
+        });
+        test('S14 never a filter: campaigns the title does not match are still there', function () {
+          expect(ids).to.include('camp_fx_paused');
+          expect(ids).to.include('camp_fx_toggle');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
