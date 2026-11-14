@@ -194,11 +194,11 @@ bucket_name = "ose-uploads-staging"
 # (lib/street-map.ts): the United States subset of a Protomaps build (owner
 # 2026-11-10, in place of the whole planet chosen 2026-11-09), read by byte
 # range. The Worker is its only reader; the bucket must have no public URL
-# (the runbook, step 1, reads its settings).
+# (the load workflow's bucket-private job reads its settings before every run).
 # OWNER STEPS (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md): the bucket exists,
-# made empty by the staging deploy of 2026-11-10; the owner loads the archive
-# named by MAP_TILES_ARCHIVE below. Until it is there the map draws hexagons
-# only. An agent never creates the bucket or loads the file.
+# made empty by the staging deploy of 2026-11-10; the load workflow, dispatched
+# by the owner (.github/workflows/street-map-archive-load.yml), loads the archive
+# MAP_TILES_ARCHIVE names. Until it is there the map draws hexagons only. An agent never creates the bucket or dispatches the load.
 # Staging first: production gets the same binding in its own PR, after the
 # staging street-map cases have passed. Until then scripts/ci/env-parity.mjs
 # lists the difference as open, and production draws hexagons only.

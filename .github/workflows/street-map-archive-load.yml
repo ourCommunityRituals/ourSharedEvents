@@ -1,0 +1,386 @@
+# Street-map archive load: cut the United States archive, check it, load it into
+# the staging bucket. Runbook: docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md.
+#
+# The landing map draws its streets from one PMTiles file in the R2 bucket bound
+# to the Worker as MAP_TILES (lib/street-map.ts). Owner, 2026-11-14: nothing is
+# run, built or checked on the owner's computer, and staging changes only through
+# CI. So the cut, the check and the upload run here, on a GitHub-hosted runner,
+# and the file never touches a workstation.
+#
+# Dispatch by hand, from main only. Two modes, so nothing is written until the
+# size is known:
+#
+#   measure (default)  reads the bucket's two privacy settings, downloads the two
+#                      tools and checks their SHA-256, runs `pmtiles extract
+#                      --dry-run` and reports the archive size against the
+#                      runner's free disk. Uses no bucket credential and writes
+#                      nothing anywhere.
+#
+#   load               the same, then: refuses if the bucket already holds the key,
+#                      cuts the file, runs the Worker's own reader over it
+#                      (scripts/check-street-map-archive.mjs, must end in PASS),
+#                      uploads it under the dated key, and confirms the bucket
+#                      lists the key at the byte size in the check record.
+#
+# An object is never overwritten: a refresh is a new dated key and a PR that
+# changes the three names below together with wrangler.toml and the runbook
+# (tests/unit/ci/street-map-archive-load.test.js fails when they differ, and the
+# first step of each job refuses to run when they differ on the commit it runs).
+#
+# Staging only. There is no production input, no production bucket and no
+# production credential in this file (held by the same test).
+#
+# Secrets:
+#   R2_MAP_TILES_ACCESS_KEY_ID, R2_MAP_TILES_SECRET_KEY
+#       an R2 API token, "Object Read & Write", scoped to ose-map-tiles-staging
+#       only. Read by the load job's three bucket steps and by nothing else. Set
+#       on the `staging` environment (the load job names it) or at repository
+#       level. The owner creates the token and sets the secret; an agent never does.
+#   CLOUDFLARE_ACCOUNT_ID   the R2 endpoint, https://<account>.r2.cloudflarestorage.com
+#   CLOUDFLARE_API_TOKEN_OSE   the bucket-private job only: two reads of the
+#       bucket's settings with the lockfile's wrangler. That job runs on its own
+#       runner and downloads no tool, so this token never shares a machine with
+#       pmtiles or rclone.
+#   OCR_HUB_READ   the pinned @ocr/ui the Worker install needs (ADR-008).
+
+name: Street-map archive load (stg)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type STAGING to confirm this runs against staging'
+        type: string
+        required: true
+      mode:
+        description: 'measure: report the size, write nothing. load: cut, check and upload.'
+        type: choice
+        options:
+          - measure
+          - load
+        default: measure
+
+permissions:
+  contents: read
+
+# One load at a time: two runs must not race for the same key. A second run
+# waits; it is never cancelled out from under an upload. Not the stg-writer
+# group: this writes one object the Worker does not read until wrangler.toml
+# names it, and a cut can take longer than the T2 pages leg should wait.
+concurrency:
+  group: street-map-archive-load
+  cancel-in-progress: false
+
+env:
+  WORKER_DIR: workers/oursharedevents
+  # The three names. The same values are in wrangler.toml (MAP_TILES_ARCHIVE in
+  # both environment blocks, the staging MAP_TILES bucket) and in the runbook.
+  PROTOMAPS_BUILD: '20261109'
+  ARCHIVE_KEY: us-20261109.pmtiles
+  BUCKET: ose-map-tiles-staging
+  REGION_FILE: docs/runbooks/street-map-us-region.geojson
+  # go-pmtiles: the release the runbook and the proof were written against. The
+  # digest is the one GitHub lists beside the Linux x86_64 release file (read
+  # 2026-11-14; the Windows file's digest in the same listing is the one the
+  # owner read on 2026-11-11).
+  PMTILES_VERSION: '1.31.2'
+  PMTILES_SHA256: 3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f
+  # rclone: Cloudflare's documented tool for files over wrangler's 315 MB limit.
+  # The digest is the one GitHub lists beside the linux-amd64 zip (read 2026-11-14).
+  RCLONE_VERSION: '1.76.0'
+  RCLONE_SHA256: b00f00b3266c3764413afe599d3ec316f6f43b3e0ea8a0bc1d186d2133e46df7
+
+jobs:
+  # Reads only. Its own runner: the deploy token is here and no downloaded tool is.
+  bucket-private:
+    name: 'The bucket is private (reads only)'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: 'Refuse unless STAGING was typed'
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "STAGING" ]; then
+            echo "::error::Type STAGING in the confirm input. This workflow runs against staging only."
+            exit 1
+          fi
+
+      - name: 'Refuse unless dispatched from main'
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Dispatch this workflow from main. A branch's copy never reaches the staging bucket."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+
+      - name: 'The names here are the names wrangler.toml binds'
+        run: node scripts/ci/street-map-archive-load.mjs names
+
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      # The lockfile's wrangler, not whatever npx would fetch that day.
+      - name: Install worker dependencies
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npm ci
+
+      - name: 'Read the bucket: no r2.dev URL, no custom domain'
+        working-directory: ${{ env.WORKER_DIR }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler r2 bucket dev-url get "${BUCKET}" | tee "$RUNNER_TEMP/dev-url.txt"
+          npx wrangler r2 bucket domain list "${BUCKET}" | tee "$RUNNER_TEMP/domains.txt"
+
+      - name: 'Stop unless both reads say private'
+        run: node scripts/ci/street-map-archive-load.mjs private "$RUNNER_TEMP/dev-url.txt" "$RUNNER_TEMP/domains.txt"
+
+  load:
+    name: 'Cut, check and load (or measure only)'
+    needs: [bucket-private]
+    runs-on: ubuntu-24.04
+    # The cut reads a 139 GB build at Protomaps by byte range; how long the United
+    # States part takes is not measured yet. Each long step has its own limit.
+    timeout-minutes: 300
+    environment: staging
+    steps:
+      - name: 'Refuse unless STAGING was typed'
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "STAGING" ]; then
+            echo "::error::Type STAGING in the confirm input. This workflow runs against staging only."
+            exit 1
+          fi
+
+      - name: 'Refuse unless dispatched from main'
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Dispatch this workflow from main. A branch's copy never reaches the staging bucket."
+            exit 1
+          fi
+
+      # Before the long cut, not after it.
+      - name: 'LOAD: refuse to start without the bucket credential'
+        if: ${{ inputs.mode == 'load' }}
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_MAP_TILES_ACCESS_KEY_ID }}
+          R2_SECRET_KEY: ${{ secrets.R2_MAP_TILES_SECRET_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_KEY" ] || [ -z "$R2_ACCOUNT_ID" ]; then
+            echo "::error::R2_MAP_TILES_ACCESS_KEY_ID and R2_MAP_TILES_SECRET_KEY are not both set. The owner creates an R2 API token (Object Read & Write, this bucket only) and sets the two secrets: see the runbook."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+
+      - name: 'The names here are the names wrangler.toml binds'
+        run: node scripts/ci/street-map-archive-load.mjs names
+
+      # The check reads the file with the Worker's own reader, so it needs the
+      # Worker's dependencies. Installed before any tool is downloaded.
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install worker dependencies
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npm ci
+
+      - name: 'Download go-pmtiles and refuse it unless its SHA-256 is the pinned one'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/tools/pmtiles"
+          cd "$RUNNER_TEMP/tools/pmtiles"
+          FILE="go-pmtiles_${PMTILES_VERSION}_Linux_x86_64.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 --output "$FILE" \
+            "https://github.com/protomaps/go-pmtiles/releases/download/v${PMTILES_VERSION}/${FILE}"
+          # Stops here on any other file: nothing is unpacked or run before this line passes.
+          echo "${PMTILES_SHA256}  ${FILE}" | sha256sum --check --strict
+          tar -xzf "$FILE"
+          if [ ! -x ./pmtiles ]; then
+            echo "::error::The go-pmtiles release file holds no pmtiles program."
+            exit 1
+          fi
+          echo "$PWD" >> "$GITHUB_PATH"
+          ./pmtiles version
+
+      - name: 'Download rclone and refuse it unless its SHA-256 is the pinned one'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/tools/rclone"
+          cd "$RUNNER_TEMP/tools/rclone"
+          FILE="rclone-v${RCLONE_VERSION}-linux-amd64.zip"
+          curl --fail --silent --show-error --location --retry 3 --output "$FILE" \
+            "https://github.com/rclone/rclone/releases/download/v${RCLONE_VERSION}/${FILE}"
+          echo "${RCLONE_SHA256}  ${FILE}" | sha256sum --check --strict
+          unzip -q -j "$FILE" "rclone-v${RCLONE_VERSION}-linux-amd64/rclone"
+          if [ ! -x ./rclone ]; then
+            echo "::error::The rclone release file holds no rclone program."
+            exit 1
+          fi
+          echo "$PWD" >> "$GITHUB_PATH"
+          ./rclone version
+
+      # A hosted runner has two disks; the larger free one holds the file.
+      - name: 'Pick the disk with the most free space'
+        id: work
+        run: |
+          set -euo pipefail
+          CANDIDATES=("$RUNNER_TEMP")
+          if [ -d /mnt ] && sudo mkdir -p /mnt/street-map && sudo chown "$(id -u):$(id -g)" /mnt/street-map; then
+            CANDIDATES+=("/mnt/street-map")
+          fi
+          BEST=""
+          BEST_FREE=0
+          for DIR in "${CANDIDATES[@]}"; do
+            FREE="$(df --output=avail -B1 "$DIR" | tail -n 1 | tr -d ' ')"
+            echo "$DIR: $FREE bytes free"
+            if [ "$FREE" -gt "$BEST_FREE" ]; then
+              BEST="$DIR"
+              BEST_FREE="$FREE"
+            fi
+          done
+          mkdir -p "$BEST/street-map-archive"
+          echo "dir=$BEST/street-map-archive" >> "$GITHUB_OUTPUT"
+
+      - name: 'The build is still offered at Protomaps'
+        run: |
+          # One byte, by range: the request pmtiles itself makes.
+          if ! curl --fail --silent --show-error --location --range 0-0 --output /dev/null \
+            "https://build.protomaps.com/${PROTOMAPS_BUILD}.pmtiles"; then
+            echo "::error::Build ${PROTOMAPS_BUILD} is not offered at Protomaps any more (daily builds are kept about a week). Pick a build listed at https://build-metadata.protomaps.dev/builds.json and change the build, the key, wrangler.toml and the runbook in one PR."
+            exit 1
+          fi
+
+      - name: 'Measure: pmtiles extract --dry-run, and stop if the file does not fit the free disk'
+        timeout-minutes: 30
+        env:
+          WORK: ${{ steps.work.outputs.dir }}
+        run: |
+          set -euo pipefail
+          cd "$WORK"
+          pmtiles extract "https://build.protomaps.com/${PROTOMAPS_BUILD}.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}" --dry-run 2>&1 | tee "$RUNNER_TEMP/dry-run.log"
+          FREE="$(df --output=avail -B1 "$WORK" | tail -n 1 | tr -d ' ')"
+          node "${GITHUB_WORKSPACE}/scripts/ci/street-map-archive-load.mjs" fits "$RUNNER_TEMP/dry-run.log" "$FREE"
+
+      # Before the cut, so an hour is not spent on a key that is taken.
+      - name: 'LOAD: the bucket does not hold the key yet (never overwrite)'
+        if: ${{ inputs.mode == 'load' }}
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_MAP_TILES_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_MAP_TILES_SECRET_KEY }}
+          RCLONE_CONFIG_R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          RCLONE_CONFIG_R2_ACL: private
+          RCLONE_CONFIG_R2_NO_CHECK_BUCKET: 'true'
+        run: |
+          set -euo pipefail
+          rclone lsjson "r2:${BUCKET}" --files-only --max-depth 1 > "$RUNNER_TEMP/before-cut.json"
+          node scripts/ci/street-map-archive-load.mjs absent "$RUNNER_TEMP/before-cut.json"
+
+      - name: 'LOAD: cut the United States file with the region file in this repo'
+        if: ${{ inputs.mode == 'load' }}
+        timeout-minutes: 180
+        env:
+          WORK: ${{ steps.work.outputs.dir }}
+        run: |
+          set -euo pipefail
+          cd "$WORK"
+          pmtiles extract "https://build.protomaps.com/${PROTOMAPS_BUILD}.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}"
+          ls -l "${ARCHIVE_KEY}"
+
+      - name: "LOAD: check the file with the Worker's own reader, and stop unless it ends in PASS"
+        if: ${{ inputs.mode == 'load' }}
+        timeout-minutes: 60
+        env:
+          WORK: ${{ steps.work.outputs.dir }}
+        run: |
+          set -uo pipefail
+          cd "$WORK" || exit 1
+          # Both must hold: the command's own exit code, and PASS as its last line.
+          node "${GITHUB_WORKSPACE}/workers/oursharedevents/scripts/check-street-map-archive.mjs" "${ARCHIVE_KEY}" | tee "$RUNNER_TEMP/check.log"
+          STATUS=$?
+          if [ "$STATUS" -ne 0 ] || [ "$(tail -n 1 "$RUNNER_TEMP/check.log")" != "PASS" ]; then
+            echo "::error::The check did not end in PASS (exit $STATUS). The file is not uploaded."
+            exit 1
+          fi
+
+      # Kept for a failed check too: the record says what was wrong with the file.
+      - name: 'LOAD: keep the check record as a run artifact'
+        if: ${{ always() && inputs.mode == 'load' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: street-map-archive-check-record
+          path: ${{ steps.work.outputs.dir }}/${{ env.ARCHIVE_KEY }}.check.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: 'LOAD: size and SHA-256 in the job summary'
+        if: ${{ inputs.mode == 'load' }}
+        env:
+          WORK: ${{ steps.work.outputs.dir }}
+        run: node scripts/ci/street-map-archive-load.mjs summary "$WORK/${ARCHIVE_KEY}.check.json"
+
+      - name: 'LOAD: upload under the dated key (never overwrite)'
+        if: ${{ inputs.mode == 'load' }}
+        timeout-minutes: 90
+        env:
+          WORK: ${{ steps.work.outputs.dir }}
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_MAP_TILES_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_MAP_TILES_SECRET_KEY }}
+          RCLONE_CONFIG_R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          RCLONE_CONFIG_R2_ACL: private
+          RCLONE_CONFIG_R2_NO_CHECK_BUCKET: 'true'
+        run: |
+          set -euo pipefail
+          # Asked again: the cut and the check took a while.
+          rclone lsjson "r2:${BUCKET}" --files-only --max-depth 1 > "$RUNNER_TEMP/before-upload.json"
+          node scripts/ci/street-map-archive-load.mjs absent "$RUNNER_TEMP/before-upload.json"
+          cd "$WORK"
+          rclone copyto "${ARCHIVE_KEY}" "r2:${BUCKET}/${ARCHIVE_KEY}" --immutable --s3-chunk-size=256M --stats=1m --stats-one-line -v
+
+      - name: 'LOAD: the bucket lists the key at the byte size in the check record'
+        if: ${{ inputs.mode == 'load' }}
+        env:
+          WORK: ${{ steps.work.outputs.dir }}
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_MAP_TILES_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_MAP_TILES_SECRET_KEY }}
+          RCLONE_CONFIG_R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          RCLONE_CONFIG_R2_ACL: private
+          RCLONE_CONFIG_R2_NO_CHECK_BUCKET: 'true'
+        run: |
+          set -euo pipefail
+          rclone lsjson "r2:${BUCKET}" --files-only --max-depth 1 > "$RUNNER_TEMP/after-upload.json"
+          node scripts/ci/street-map-archive-load.mjs loaded "$RUNNER_TEMP/after-upload.json" "$WORK/${ARCHIVE_KEY}.check.json"

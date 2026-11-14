@@ -811,7 +811,7 @@
   "readUsesOnNewSecret": {
     "direction": "up",
     "reason": "Reads must name OCR_HUB_READ (OSE-1695): may only rise; a deleted read site needs a retired entry.",
-    "total": 31,
+    "total": 33,
     "byFile": {
       ".github/workflows/advanced-security-scan.yml": {
         "count": 2,
@@ -935,6 +935,14 @@
           "check-swap :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
         ],
         "reason": "Build and check-swap install the Worker deps for the lockfile wrangler (build lists its manifest in R2, check-swap purges), which needs the pinned hub @ocr/ui (ADR-008)."
+      },
+      ".github/workflows/street-map-archive-load.yml": {
+        "count": 2,
+        "steps": [
+          "bucket-private :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "load :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "Both jobs install the Worker deps, which need the pinned hub @ocr/ui (ADR-008): bucket-private for the lockfile wrangler that reads the bucket's two privacy settings, load for the Worker's own reader that checks the cut archive before it is uploaded (OSE-2064)."
       }
     },
     "retired": [

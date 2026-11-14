@@ -374,7 +374,9 @@ describe('the street map reaches staging before production', () => {
 });
 
 // Fat fingers (owner 2026-11-10). The bucket and the object key are typed by
-// hand: in wrangler.toml, and in the commands the runbook gives the owner (check
+// hand: in wrangler.toml, and in the commands the runbook shows, which since
+// 2026-11-14 are the ones the load workflow runs, not ones the owner types
+// (tests/unit/ci/street-map-archive-load.test.js holds the workflow to them) (check
 // the bucket is private, cut the United States file out of a build, upload it).
 // A slip in any one of them is silent: the deploy passes, the Worker finds no
 // object, and the map stays hexagons only. These rules compare them.
@@ -601,7 +603,7 @@ describe('the street-map names the owner types are the names the Worker binds', 
     const check =
       'node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261109.pmtiles';
     const upload =
-      'rclone copyto us-20261109.pmtiles r2:ose-map-tiles-staging/us-20261109.pmtiles --progress --s3-chunk-size=256M';
+      'rclone copyto us-20261109.pmtiles r2:ose-map-tiles-staging/us-20261109.pmtiles --immutable --s3-chunk-size=256M --stats=1m --stats-one-line -v';
     expect(runbook()).toContain(check);
     expect(runbook()).toContain(upload);
     const moved = runbook().replace(check, '').replace(upload, `${upload}\n   ${check}`);

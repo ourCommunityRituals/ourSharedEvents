@@ -16,7 +16,7 @@
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | **H3 hexagons**                   | Server-drawn SVG from res-7 cell ids (`lib/attendee-map.ts`, `lib/corridor-map.ts`). No tiles, no JS, no outside request.      | Shipped                                                                                              |
 | **Venue image**                   | One Google Static Maps image per venue, fetched by the Worker (`GET /api/v2/maps/venue-image`, `lib/maps.ts`).                 | Shipped on event pages                                                                               |
-| **Street map under the hexagons** | Water, roads and town names drawn by the Worker as SVG under the hexagons (`lib/street-map.ts`), from a PMTiles archive in R2. | Built on the landing map; bound on staging first, after the owner loads the archive (see decision 4) |
+| **Street map under the hexagons** | Water, roads and town names drawn by the Worker as SVG under the hexagons (`lib/street-map.ts`), from a PMTiles archive in R2. | Built on the landing map; bound on staging first, after the workflow loads the file (see decision 4) |
 | **Zoomed area with event dots**   | A tapped hexagon drawn alone over its streets, one dot per place (`lib/attendee-map.ts`, `/?area=`).                           | Built on the landing map (see decision 5); streets need `MAP_TILES`                                  |
 
 ## Cost lines
@@ -83,13 +83,14 @@ its size is not measured yet (decision 4).
    **United States subset** of a Protomaps build: the 50 states, DC, Puerto Rico
    and the US Virgin Islands, cut out with `pmtiles extract` (owner, 2026-11-10,
    in place of the whole planet chosen on 2026-11-09). Areas outside it draw
-   hexagons only. **The size of that file is not measured yet**; the owner
-   records it when the file is cut, and the storage figures here are then
+   hexagons only. **The size of that file is not measured yet**; the load run
+   reports it when the file is cut, and the storage figures here are then
    replaced. The steps, the names, the region and the way back to hexagons only
    are in
    [`../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md`](../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md).
    The `MAP_TILES` binding for `[env.staging]` is on `main` and its bucket
-   exists, empty; the owner loads the file `MAP_TILES_ARCHIVE` names.
+   exists, empty; the load workflow, dispatched by the owner, loads the file
+   `MAP_TILES_ARCHIVE` names (no step runs on the owner's computer).
    Production gets the same binding in its own PR afterwards; until then
    `scripts/ci/env-parity.mjs` lists the difference as open and production shows
    hexagons only. Local dev has its own binding and reads the regional file.
