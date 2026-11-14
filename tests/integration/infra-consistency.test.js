@@ -109,7 +109,8 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
     const stagingSteps = workflow.jobs['deploy-staging'].steps;
     const productionSteps = workflow.jobs['deploy-production'].steps;
     const findStep = (steps, name) => steps.find((step) => step.name === name);
-    const checkoutStep = (steps) => steps.find((step) => step.uses === 'actions/checkout@v7');
+    const checkoutStep = (steps) =>
+      steps.find((step) => /^actions\/checkout@/.test(String(step.uses)));
     const deployPrereqs = [
       STAGE_STEP,
       'Install worker dependencies',
@@ -154,7 +155,7 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
       const steps = job.steps || [];
       const stagesAdjacentFlags = steps.some((step) => step.name === STAGE_STEP);
       if (!stagesAdjacentFlags) continue;
-      const checkout = steps.find((step) => step.uses === 'actions/checkout@v7');
+      const checkout = steps.find((step) => /^actions\/checkout@/.test(String(step.uses)));
       expect(checkout?.with, `${jobId} must use hosted-runner clean:true checkout`).toMatchObject({
         clean: true,
       });
@@ -888,7 +889,7 @@ describe('Playwright browser installs use cache on staging and PR gates', () => 
   const assertCacheStep = (steps, name, expectedIf) => {
     const cacheStep = steps.find((step) => step && step.name === name);
     expect(cacheStep, `${name} step must exist`).toBeDefined();
-    expect(cacheStep.uses).toBe('actions/cache@v6');
+    expect(cacheStep.uses).toMatch(/^actions\/cache@[0-9a-f]{40}$/); // SHA-pinned (tests/unit/ci/actions-sha-pinned.test.js)
     expect(cacheStep.with && cacheStep.with.path).toBe('~/.cache/ms-playwright');
     expect(cacheStep.with && cacheStep.with.key).toContain('playwright');
     if (expectedIf) expect(cacheStep.if).toBe(expectedIf);
@@ -933,7 +934,7 @@ describe('main CI setup-node steps cache npm downloads', () => {
   const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
   const setupNodeSteps = Object.entries(wf.jobs || {}).flatMap(([jobId, job]) =>
     (job.steps || [])
-      .filter((step) => step && step.uses === 'actions/setup-node@v7')
+      .filter((step) => step && /^actions\/setup-node@/.test(String(step.uses)))
       .map((step) => ({ jobId, step }))
   );
 

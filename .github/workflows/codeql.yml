@@ -36,6 +36,7 @@ defaults:
 
 jobs:
   analyze:
+    timeout-minutes: 15 # [Claude] ceiling: ~3x the slowest of the last 25 runs (4.3 min)
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-24.04
     permissions:
@@ -58,7 +59,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Shield CodeQL parser from workspace ESM scope
         # CodeQL's typescript-parser-wrapper/main.js is a CommonJS module.
@@ -78,7 +79,7 @@ jobs:
           fi
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -98,7 +99,7 @@ jobs:
           threads: 8
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           category: '/language:${{ matrix.language }}'
           # Decouple from repo-level Code Security (GHAS). Private repo on
@@ -126,7 +127,7 @@ jobs:
 
       - name: Upload CodeQL SARIF as workflow artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: codeql-sarif-${{ matrix.language }}-${{ github.sha }}
           path: '${{ runner.temp }}/codeql-sarif-${{ matrix.language }}/'

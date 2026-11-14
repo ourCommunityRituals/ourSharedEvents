@@ -72,6 +72,7 @@ permissions:
 
 jobs:
   npm-audit:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.7 min)
     name: npm audit — all packages
     runs-on: ubuntu-24.04
     outputs:
@@ -84,10 +85,10 @@ jobs:
       summary: ${{ steps.audit.outputs.summary }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
 
@@ -183,7 +184,7 @@ jobs:
 
       - name: Upload audit reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: npm-audit-${{ github.run_number }}
           path: .security-reports/
@@ -191,6 +192,7 @@ jobs:
 
 # ─── Job 2: gitleaks secret scan ─────────────────────────────────────────────
   secret-scan:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.2 min)
     name: gitleaks — commits last 24 h
     runs-on: ubuntu-24.04
     outputs:
@@ -199,7 +201,7 @@ jobs:
       summary: ${{ steps.gitleaks.outputs.summary }}
     steps:
       - name: Checkout (full history for log range)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
@@ -288,7 +290,7 @@ jobs:
 
       - name: Upload gitleaks report
         if: always() && steps.artifact-scan.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gitleaks-${{ github.run_number }}
           path: .security-reports/gitleaks.json
@@ -296,6 +298,7 @@ jobs:
 
 # ─── Job 3: Playwright health + security check ───────────────────────────────
   health-check:
+    timeout-minutes: 30 # [Claude] ceiling: ~3x the slowest of the last 25 runs (9.3 min)
     name: Playwright — staging + production health + security headers
     runs-on: ubuntu-24.04
     outputs:
@@ -307,10 +310,10 @@ jobs:
       prod_findings: ${{ steps.pw.outputs.prod_findings }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
 
@@ -525,7 +528,7 @@ jobs:
 
       - name: Upload health check report
         if: always() && steps.artifact-scan.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: health-check-${{ github.run_number }}
           path: |
@@ -536,6 +539,7 @@ jobs:
 
 # ─── Job 4: Create Linear issues for failures ────────────────────────────────
   linear-issues:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.1 min)
     name: Create Linear issues for findings
     runs-on: ubuntu-24.04
     needs: [npm-audit, secret-scan, health-check]
@@ -766,6 +770,7 @@ jobs:
 
 # ─── Job 5: Daily digest webhook ─────────────────────────────────────────────
   digest:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.1 min)
     name: Post daily security digest
     runs-on: ubuntu-24.04
     needs: [npm-audit, secret-scan, health-check, linear-issues]

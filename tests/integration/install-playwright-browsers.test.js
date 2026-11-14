@@ -198,7 +198,7 @@ describe('jobs that install WebKit go through the script and the package cache',
   function assertCache(steps, beforeStep) {
     const step = steps[index(steps, CACHE_NAME)];
     expect(step, `"${CACHE_NAME}" step must exist`).toBeDefined();
-    expect(step.uses).toBe('actions/cache@v6');
+    expect(step.uses).toMatch(/^actions\/cache@[0-9a-f]{40}$/);
     expect(step.with.path).toBe('~/.cache/pw-apt-archives');
     // One cache per browser set: a chromium-only job must never save its
     // smaller set under the key a WebKit job restores.
@@ -347,7 +347,7 @@ describe('no job asks apt for browser packages outside the script', () => {
     const at = (name) => steps.findIndex((s) => s && s.name === name);
     const cache = steps[at('Restore Playwright system package cache')];
     expect(cache, 'the package cache step must exist').toBeDefined();
-    expect(cache.uses).toBe('actions/cache@v6');
+    expect(cache.uses).toMatch(/^actions\/cache@[0-9a-f]{40}$/);
     expect(cache.with.path).toBe('~/.cache/pw-apt-archives');
     // The key the T0 component shard and the phone audit save under.
     expect(cache.with.key).toBe(

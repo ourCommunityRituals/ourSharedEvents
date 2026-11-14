@@ -30,11 +30,12 @@ jobs:
   # CHECK OVERDUE SECURITY ISSUES
   # ============================================================================
   check-overdue:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.4 min)
     name: "⏰ Check Overdue Security Issues"
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Audit open security issues
         env:
@@ -166,11 +167,12 @@ jobs:
   # CHECK EXPIRED SECURITY EXCEPTIONS
   # ============================================================================
   check-exceptions:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.1 min)
     name: "📋 Check Security Exceptions"
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Check exception expiry
         run: |

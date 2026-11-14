@@ -35,6 +35,7 @@ defaults:
 
 jobs:
   human-gate:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.1 min)
     name: "🛑 Security Human Gate"
     runs-on: ubuntu-24.04
     steps:

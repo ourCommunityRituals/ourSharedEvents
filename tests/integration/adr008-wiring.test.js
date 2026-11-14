@@ -935,8 +935,8 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
           expect.arrayContaining([
             `${CONF} :: generate :: Checkout`,
             `${CONF} :: generate :: Checkout OCR-docs brain (read-only)`,
-            '.github/workflows/notify-osm-flag-change.yml :: notify :: step #1 (unnamed uses actions/checkout@v7; give it a name:)',
-            '.github/workflows/branch-protection-drift.yml :: full-settings :: step #1 (unnamed uses actions/checkout@v7; give it a name:)',
+            '.github/workflows/notify-osm-flag-change.yml :: notify :: Checkout',
+            '.github/workflows/branch-protection-drift.yml :: full-settings :: Checkout',
           ])
         );
         expect(s.checkouts.length).toBeGreaterThanOrEqual(4);

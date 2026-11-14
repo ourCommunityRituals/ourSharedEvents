@@ -84,6 +84,7 @@ jobs:
   # This is a REQUIRED CHECK - configure in branch protection rules.
   # ============================================================================
   security-regression:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.3 min)
     name: Security Regression Gate
     runs-on: ubuntu-24.04
 
@@ -101,7 +102,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Display configuration
       env:
@@ -237,6 +238,7 @@ jobs:
   # Ensures any endpoint returning QR codes includes the verified flag.
   # ============================================================================
   qr-contract-check:
+    timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.3 min)
     name: QR-0 Contract Verification
     runs-on: ubuntu-24.04
     needs: security-regression
@@ -249,10 +251,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Setup Node.js
-      uses: actions/setup-node@v7
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
       with:
         node-version: '22'
 
