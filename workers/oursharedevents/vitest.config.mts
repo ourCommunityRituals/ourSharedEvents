@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import TimeBalancedSequencer from './vitest.sequencer.mjs';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // vitest.config.mts — root of the OSE-946 dual-pool suite.
@@ -20,9 +21,15 @@ import { defineConfig } from 'vitest/config';
 // vitest.workers.mts and made this the projects root. CI still invokes the pool
 // through `node ../../scripts/vitest-retry.mjs npm test`; restoring parallelism
 // and the required-check wiring is OSE-946 child 4/5 (deferred).
+//
+// Slices (2026-11-14): CI runs this suite as `--shard=i/N` slices. The
+// sequencer below cuts them by measured time (vitest-shard-durations.json)
+// instead of vitest's equal file counts; see vitest-shard-plan.mjs. It changes
+// nothing without --shard.
 // ─────────────────────────────────────────────────────────────────────────────
 export default defineConfig({
   test: {
     projects: ['./vitest.workers.config.mts', './vitest.node.config.mts'],
+    sequence: { sequencer: TimeBalancedSequencer },
   },
 });
