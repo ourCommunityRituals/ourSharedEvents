@@ -301,6 +301,9 @@ export const NODE_SPECS = [
   'tests/event-datetime.spec.ts',
   'tests/spine-keys.spec.ts',
   'tests/spine-keys-writers.spec.ts',
+  // OSE-1425 every writer of events.status keeps active ⟺ qr_verified = 1.
+  // Reads src/ as text with node:fs; no cloudflare:test.
+  'tests/event-status-writers.spec.ts',
   // OSE-474 pre-event countdown: pure text over lib/event-countdown.ts and its
   // browser tick run in jsdom with fake timers. No cloudflare:test.
   'tests/event-countdown.spec.ts',

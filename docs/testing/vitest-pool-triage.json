@@ -1052,6 +1052,13 @@
       "testCount": 4
     },
     {
+      "file": "workers/oursharedevents/tests/event-create-status.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 7
+    },
+    {
       "file": "workers/oursharedevents/tests/event-date-line.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1204,6 +1211,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, env.DB, env.FORMS_DB",
       "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-status-writers.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 11
     },
     {
       "file": "workers/oursharedevents/tests/event-type-catalog.spec.ts",
