@@ -1,7 +1,7 @@
 {
   "generated_at": "2026-11-14",
-  "commit": "933ec8c0",
-  "run_url": "https://github.com/ourCommunityRituals/ourSharedEvents/actions/runs/43557317915",
+  "commit": "c06f8880",
+  "run_url": "https://github.com/ourCommunityRituals/ourSharedEvents/actions/runs/43561432657",
   "schema_version": "1.0.0",
   "story": "OSE-560",
   "summary": {
@@ -36,7 +36,9 @@
       "last_green": "2026-08-22",
       "threat_count": 3,
       "open_threat_count": 0,
-      "brain_conformance": ["riph-brain-conformance.spec.ts:19"]
+      "brain_conformance": [
+        "riph-brain-conformance.spec.ts:19"
+      ]
     },
     {
       "id": 3,
