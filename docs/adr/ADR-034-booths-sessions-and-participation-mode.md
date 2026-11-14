@@ -1,6 +1,6 @@
 # ADR-034: A booth and a session are children of one event; participation mode is a column
 
-**Status:** Proposed. A draft for the owner to decide. Nothing is built. The seven owner decisions below are open.
+**Status:** Proposed. A draft for the owner to decide. Nothing is built. Decision 1 (a booth is its own row) was accepted by the owner on 2026-11-14, so booths may be built. Items 8 and 9 record the owner's direction of the same day. The other owner decisions listed below are open.
 **Date:** 2026-11-14
 **Deciders:** Owner (PO). Sr Architect owns the draft. Dr of Security advises on the membrane.
 **Ticket:** OSE-1997 (epic OSE-1996)
@@ -27,6 +27,8 @@ Three features (booths OSE-1998, the programme OSE-2001, participation mode OSE-
 Proposed. Each numbered item is one decision the owner may accept, change or refuse on its own.
 
 ### 1. A booth is its own row under an event
+
+**Accepted by the owner, 2026-11-14** ("Yes.", in answer to "Do I go ahead and build stalls as their own records?").
 
 A new table in `DB`, `event_booths`:
 
@@ -80,15 +82,45 @@ A fair is one venue, one organizer and one consent; the things inside it are not
 
 No container exists to wait for. The two tables are plain, and a later container can adopt them: each row has its own id and one parent event.
 
+### 8. Scan before the transaction (owner direction, 2026-11-14)
+
+The owner's words:
+
+> "The workshop will be more diffcult to keep track of real numbers with more people walking in and out. The stalls where trackable actions and transactions are taking place where the scan is in OSE then the monetary is conducted through the booths own vendor. The key is a process is adopted to where scan before transaction needs to be adopted and enforced"
+
+What this decides:
+
+- **The stall is where the count is real.** A visitor scans the stall's code, and that scan is what OurSharedEvents counts.
+- **Money never passes through OurSharedEvents.** The sale is made through the vendor's own till, card reader or app. No price, basket, receipt or payment detail is stored or read here. This is separate from a fee for the table itself (open decision 5).
+- **The order is: scan, then pay.** The fair adopts this as its process and the vendors hold to it.
+- **Required or optional is the fair's choice.** The owner added, the same day: "or optional". So a fair states one of two things: scanning first is required at its stalls, or it is invited and not required. The report says which, because the two numbers do not mean the same thing: under "required" a stall's scans are close to its buyers; under "optional" they are only the visitors who chose to scan.
+
+The owner, the same day, on what makes it happen: "the key is the positioning and script/playbook so they action takes place". So the first means is not software. It is where the code sits on the stall and what the vendor says, written down as a playbook the organizer hands to every vendor. The software below supports that; it does not replace it.
+
+How it is held to, proposed for the owner to accept or change:
+
+- **Positioning.** The code sits where the hand goes before the money does: at the front edge of the table beside the till or card reader, at phone height, one code per stall, with the stall number printed large beside it.
+- **Script.** The vendor says one short line before taking payment, the same line at every stall. The owner agreed this line on 2026-11-14: "Before I ring that up, would you scan our stall? It only counts a visit, it doesn't take your name." The playbook gives the line, what to say when someone declines, and that a sale is never refused over it when scanning is optional.
+
+- **A scan answers with a stamp the vendor can see.** After a stall scan the visitor's phone shows the stall's number and name and the time, for a short while. The vendor glances at it before taking payment. The stamp carries no count, no visitor id and nothing about the sale.
+- **The organizer makes it a condition of the stall.** The process is in the fair's terms for vendors, on the table card, and in what vendors are told on the day. OurSharedEvents can show the stamp; it cannot see whether a vendor looked at it.
+- **What the number means is stated on the report.** One scan is one visitor at one stall in one hour (the existing dedupe, `src/handlers/qr-scan.ts:20-25`). Two purchases by one visitor in that hour are one scan. A scan is not proof of a sale. The report says "scans before a purchase", never "sales".
+- **A vendor cannot be the source of their own count.** Scans from the vendor's own phone at their own stall would inflate it. How to limit that without identifying anyone is for the security read (OSE-2003).
+
+### 9. A session's number is its sign-ups, not its room (owner direction, 2026-11-14)
+
+People walk in and out of a workshop, so a headcount there is not a real number. A session publishes how many signed up, under the floor like any other count. It does not publish attendance, and no session count is added to the stalls' total.
+
 ## Owner decisions still open
 
-1. **Booth shape:** accept decision 1 (its own table), or keep booths as placements with more fields?
+1. **Booth shape:** decided. The owner accepted decision 1 on 2026-11-14.
 2. **Session shape:** accept decision 2 (a child table), or make a session a full event with a parent?
 3. **A sole trader's own name.** Some vendors trade under their own name. Is that acceptable as a booth's public name when the organizer enters it, or must the vendor confirm it first?
 4. **May a vendor see their own booth's count?** The floor has no exceptions either way; the question is whether a vendor gets a view at all, and how they are let in without becoming an identified user on this side.
 5. **Paid tables.** A fee for a stall is commerce. The catalog puts commerce in regulatory phase 2 (`migrations/0023:10`). Is a paid table recorded here at all in phase 1, or kept outside the product? (OSE-2002)
 6. **Who may set the mode, and the lock.** Accept "brand admin, fixed at start time", or something stricter?
-7. **A general fair type.** Add a code for a fair that is not a craft fair, and one for a farmers market? This also bears on the "50+ event types" goal (OCR-214).
+7. **The stamp, and where the choice is made.** Accept a short-lived on-screen stamp after a stall scan as the way a vendor checks "scanned first"? How long should it show? Is "required or optional" chosen once for the whole fair, or stall by stall?
+8. **A general fair type.** Add a code for a fair that is not a craft fair, and one for a farmers market? This also bears on the "50+ event types" goal (OCR-214).
 
 ## Alternatives Considered
 
