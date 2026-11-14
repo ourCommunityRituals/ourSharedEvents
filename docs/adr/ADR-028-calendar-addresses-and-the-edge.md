@@ -1,6 +1,6 @@
 # ADR-028: Let a calendar app's read of a .ics address pass the edge
 
-**Status:** Proposed. The owner decides (D1 to D3 below). No edge rule is written until then.
+**Status:** Accepted by the owner on 2026-11-14 (D1: skip the challenge for the two calendar address shapes). The rule is not applied yet: the owner runs `scripts/ci/cf-waf-calendar-skip.mjs`, stg first (D3).
 **Date:** 2026-11-13
 **Deciders:** Owner (PO). Dr of Security advises on D1 and D2.
 **Ticket:** OSE-2023 (Feature OSE-2022; found while building OSE-2013)
@@ -40,7 +40,7 @@ the zone's rules, not a documented one.
 
 ## Decision
 
-Proposed, for the owner:
+Decided by the owner, 2026-11-14:
 
 **D1. Skip the challenge for reads of the two calendar addresses, for every caller.** One edge rule,
 matching only `GET` and `HEAD` on a path that starts with `/events/` or `/brands/` and ends with
@@ -130,12 +130,21 @@ Built already, and needing no decision:
 - Rate limit on `GET /events/:id/calendar.ics` (`publicReadLimited('event-calendar', …)` in
   `workers/oursharedevents/src/router.ts`).
 
-Not built, waiting on D1 to D3:
+Built after the owner accepted D1 (2026-11-14):
 
-- The public rule itself, as a script the owner runs (dry run by default, in the manner of
-  `cf-waf-stg-ci-skip.mjs`).
-- A probe shape with no headers at all for the two calendar addresses, which is what a calendar app
-  sends. Today's `plain` shape already reads them; it is not part of the verdict until D1 is applied.
+- The rule, as a script the owner runs: `scripts/ci/cf-waf-calendar-skip.mjs` (dry run by default;
+  `--host stg` or `--host production`, one rule and one ref each; `--remove` rolls it back).
+  Tests: `tests/integration/cf-waf-calendar-skip.test.js`.
+- The gate also requires the public rule to cover every `.ics` route
+  (`tests/integration/machine-read-edge-cover.test.js`).
+- The edge probe reports what a calendar app sees: the `plain` reads of the two calendar addresses,
+  as one line under the table. It is not part of the probe's verdict.
+- Runbook: `docs/runbooks/RUNBOOK-CALENDAR-EDGE-RULE.md`.
+
+Not done, and not an agent's to do:
+
+- Applying the rule on stg, then on production (D3). Nothing is verified until the edge probe shows
+  the `plain` calendar reads reaching the Worker.
 
 ## References
 
