@@ -79,6 +79,35 @@ async function config(id: string, headers: Record<string, string> = {}) {
   return res;
 }
 
+// Invariant 5 (AGENTS.md): the display shows no counts. These are the words a
+// fundraiser's numbers would arrive under.
+const FUNDRAISER_WORDS = /goal|raised|progress|amount/i;
+
+// A QR image as the handler serves it: a PNG data URI (the base64 of the PNG
+// signature, then base64 only). Its text is image bytes, not words.
+const QR_PNG_DATA_URI = /^data:image\/png;base64,iVBORw0KGgo[A-Za-z0-9+/]*={0,2}$/;
+
+// String.search, not RegExp.test: scripts/triage-vitest-pool.mjs counts a
+// "test(" call as a test case, and the manifest's count for this spec is checked.
+const hasFundraiserWord = (text: string): boolean => text.search(FUNDRAISER_WORDS) !== -1;
+const isQrPng = (text: string): boolean => text.search(QR_PNG_DATA_URI) === 0;
+
+/**
+ * Every place a fundraiser word shows in a parsed body: a key at any depth, or
+ * a text value. The one thing not read as text is a PNG image under a `qr` key.
+ */
+function fundraiserWordsIn(value: unknown, path = '$'): string[] {
+  if (typeof value === 'string') return hasFundraiserWord(value) ? [`text ${path}`] : [];
+  if (Array.isArray(value)) return value.flatMap((v, i) => fundraiserWordsIn(v, `${path}[${i}]`));
+  if (value === null || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([key, v]) => {
+    const at = `${path}.${key}`;
+    const found = hasFundraiserWord(key) ? [`key ${at}`] : [];
+    if (key === 'qr' && typeof v === 'string' && isQrPng(v)) return found;
+    return [...found, ...fundraiserWordsIn(v, at)];
+  });
+}
+
 describe('display-config: what the TV reads', () => {
   test('an event with nothing saved gets the default order and 15 s, no league', async () => {
     const id = await createEvent();
@@ -131,8 +160,60 @@ describe('display-config: what the TV reads', () => {
     const id = await createEvent();
     expect((await put(id, { donateGoal: 5000 })).status).toBe(400);
     expect((await put(id, { donateRaised: 1200 })).status).toBe(400);
-    const text = await (await config(id)).text();
-    expect(text).not.toMatch(/goal|raised|progress|amount/i);
+    const res = await config(id);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Config;
+    // The body does carry a QR image, so the one thing the check skips is there.
+    expect(body.event_page.qr).toMatch(QR_PNG_DATA_URI);
+    expect(fundraiserWordsIn(body)).toEqual([]);
+  });
+
+  // The check above used to read the whole body as text. A QR image is about
+  // 197,000 base64 characters whose last few change with the event id, and
+  // "goal" turns up in them by chance: 6 of 2,000,012 random ids, which is the
+  // one red T0 run on 2026-11-14. This case keeps the check honest both ways
+  // with fixed bodies: image bytes never trip it, and a fundraiser number does.
+  // @born-red OSE-1591 | method: injected-fault (the handler served `donate_goal: 5000`, then a "Raised so far" text: the case above went red both times; the check itself, with its key read or its PNG test removed, turned this case red) | date: 2026-11-14
+  test('the fundraiser-word check reads every key and text, and never the QR image bytes', () => {
+    // A PNG data URI whose base64 spells a word, as a real QR image can.
+    const qr = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAgoALAAAAAElFTkSuQmCC';
+    expect(qr).toMatch(QR_PNG_DATA_URI);
+    const clean = {
+      ok: true,
+      event_id: 'evt_00000000-0000-4000-8000-000000000000',
+      panes: ['event', 'donate'],
+      dwell_seconds: 15,
+      league: [{ kind: 'schedule', label: 'Schedule', url: 'https://league.example/s', qr }],
+      event_page: { url: 'https://t.test/events/evt_00000000-0000-4000-8000-000000000000', qr },
+      donate: { label: 'Donate', url: 'https://donate.example/give', qr },
+    };
+    // The old check: the same clean body, read as text, is a false alarm.
+    expect(JSON.stringify(clean)).toMatch(FUNDRAISER_WORDS);
+    expect(fundraiserWordsIn(clean)).toEqual([]);
+
+    // A number under any key, at any depth.
+    expect(fundraiserWordsIn({ ...clean, donate_goal: 5000 })).toEqual(['key $.donate_goal']);
+    expect(fundraiserWordsIn({ ...clean, donate: { ...clean.donate, raised: 1200 } })).toEqual([
+      'key $.donate.raised',
+    ]);
+    expect(
+      fundraiserWordsIn({ ...clean, league: [{ ...clean.league[0], Progress: 0.4 }] })
+    ).toEqual(['key $.league[0].Progress']);
+    // The same thing said in text.
+    expect(
+      fundraiserWordsIn({ ...clean, donate: { ...clean.donate, label: 'Raised so far: 1200' } })
+    ).toEqual(['text $.donate.label']);
+    expect(fundraiserWordsIn({ ...clean, panes: ['event', 'amount'] })).toEqual([
+      'text $.panes[1]',
+    ]);
+    // Only a PNG image under `qr` is skipped: anything else there is read.
+    expect(
+      fundraiserWordsIn({ ...clean, event_page: { ...clean.event_page, qr: 'goal 5000' } })
+    ).toEqual(['text $.event_page.qr']);
+    expect(
+      fundraiserWordsIn({ ...clean, event_page: { ...clean.event_page, qr: { goal: 5000 } } })
+    ).toEqual(['key $.event_page.qr.goal']);
+    expect(fundraiserWordsIn({ ...clean, note: qr })).toEqual(['text $.note']);
   });
 
   test('the admin save round-trips: order, dwell and league links with QR codes', async () => {
