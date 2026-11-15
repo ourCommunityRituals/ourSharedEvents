@@ -104,6 +104,12 @@ function boothPath(eventId: string): string {
   return `/api/v2/admin/events/${eventId}/booths/${eventId.replace(/-active$/, '-booth')}`;
 }
 
+/** `bm-<brand>-campaign` with that brand's own live event, `bm-<brand>-active`. */
+function campaignEventPath(campaignId: string): string {
+  const eventId = campaignId.replace(/-campaign$/, '-active');
+  return `/api/v2/admin/campaigns/${campaignId}/events/${eventId}`;
+}
+
 /** `bm-<brand>-campaign` with that brand's own placement, `spl_bm-<brand>-sponsor`. */
 function campaignPlacementPath(campaignId: string): string {
   const placementId = `spl_${campaignId.replace(/-campaign$/, '-sponsor')}`;
@@ -395,6 +401,35 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
     pattern: '/api/v2/admin/campaigns/:id/placements/:id',
     method: 'DELETE',
     path: campaignPlacementPath,
+    mutates: true,
+  },
+  // OSE-1552 scope 1: an event in a campaign. The event named beside the
+  // campaign is the campaign brand's own live event, already in that campaign in
+  // the fixture, so a wall that let the caller through would change a row: a
+  // remove would clear it. The other half, an OWN campaign against another
+  // brand's event, is in tests/campaign-events.spec.ts.
+  {
+    shape: 'object',
+    objectOf: 'campaign',
+    pattern: '/api/v2/admin/campaigns/:id/events',
+    method: 'GET',
+    path: (id) => `/api/v2/admin/campaigns/${id}/events`,
+    mutates: false,
+  },
+  {
+    shape: 'object',
+    objectOf: 'campaign',
+    pattern: '/api/v2/admin/campaigns/:id/events/:id',
+    method: 'PUT',
+    path: campaignEventPath,
+    mutates: true,
+  },
+  {
+    shape: 'object',
+    objectOf: 'campaign',
+    pattern: '/api/v2/admin/campaigns/:id/events/:id',
+    method: 'DELETE',
+    path: campaignEventPath,
     mutates: true,
   },
 ];

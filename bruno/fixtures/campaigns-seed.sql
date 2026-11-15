@@ -33,11 +33,18 @@
 --   (camp_fx_other)                    sb_camp_ci        both accepted, on camp-ci-evt
 --                                                        the placement no root campaign may take
 --
+-- EVENT LINK (OSE-1552 scope 1, migration 0110). No event starts in a campaign.
+-- Requests 30 to 52 put camp-on-evt in camp_fx_toggle, move it to camp_fx_shown
+-- and take it out again; every pass starts with events.campaign_id NULL on the
+-- three events. camp-ci-evt is the event no root campaign may take.
+--
 -- The folder also creates one campaign, titled 'Campaign Fixture Created'. Rows
 -- with that title are removed here, so each pass starts from the same state.
 -- Idempotent. Never apply to production.
 
 -- ── idempotency: clear prior fixed-id rows (child -> parent) ──
+-- An event points at its campaign (0110), so the link goes before the campaigns.
+UPDATE events SET campaign_id = NULL WHERE id IN ('camp-on-evt','camp-off-evt','camp-ci-evt');
 DELETE FROM sponsor_displays WHERE sponsor_id IN
   ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci');
 DELETE FROM sponsor_asset WHERE sponsor_business_id IN

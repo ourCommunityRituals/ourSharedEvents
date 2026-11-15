@@ -97,6 +97,35 @@ All three were answered by the owner on 2026-11-14.
   same change as this note, and decision 6 above now covers sponsors as well as campaigns. No code
   read a `sponsor` parameter, so nothing was removed from the worker.
 
+## The event link (added 2026-11-15, OSE-1552 scope 1)
+
+Decisions 2, 3 and 6 are applied to a second link, with nothing new decided:
+
+- An event can be in one campaign (`events.campaign_id`, migration 0110). The statement that sets
+  it proves in its own SQL that the campaign is in the event's brand, so the automation key is held
+  to it too. The routes are `PUT` and `DELETE /api/v2/admin/campaigns/:id/events/:eventId` and
+  `GET /api/v2/admin/campaigns/:id/events`, under `guardAdminObjectScope`.
+- An event's campaign is not public. The one public read is still decision 3; the public event
+  projection is unchanged, and only `lib/campaigns.ts` reads the column.
+- The two links are kept apart. No statement copies an event's campaign onto a placement, or the
+  reverse.
+
+**D8, open, the owner's.** OSE-1552 scope 4 proposes that a placement's campaign follows its
+event once the event is in a campaign. What happens to a placement whose own `campaign_id`
+differs from its event's is not decided. The options:
+
+- **A. The placement's own campaign wins** (as built today). The event link only groups events,
+  for the campaign report. A sponsor can back one campaign while its event sits in another.
+- **B. The event's campaign wins.** A placement on an event that is in a campaign is read as in
+  that campaign; its own value counts only while the event is in none. Nothing stored is lost, and
+  taking the event out brings the old value back.
+- **C. They must agree.** Putting an event in a campaign is refused, or asks first, while one of
+  its placements is in a different campaign. Nothing ever differs, at the cost of a refused write.
+- **D. The event's campaign overwrites.** Adding the event rewrites its placements' campaigns. The
+  older choice is lost and cannot be brought back.
+
+Until the owner answers, the code is A and nothing is overwritten, so B, C and D all stay possible.
+
 ## Consequences
 
 ### Positive
@@ -132,8 +161,10 @@ All three were answered by the owner on 2026-11-14.
 - Tests: `tests/campaigns.spec.ts` and the brand matrix (workers pool);
   `tests/campaign-never-a-filter.spec.ts` (static); the T0 invariant named above;
   `bruno/ose-api/18. Campaigns (S14)` with `bruno/fixtures/campaigns-seed.sql` (staging).
-- Not built here, and still owned by OSE-1552: rename, a status change after create, the
-  event-to-campaign link, the campaign SharedReport.
+- Not built here, and still owned by OSE-1552: rename, a status change after create, suggestions,
+  the campaign SharedReport. The event-to-campaign link was added on 2026-11-15 (see "The event
+  link"); its tests are `tests/campaign-events.spec.ts`, the same T0 invariant, and requests 30 to
+  52 of the Bruno folder.
 
 ## The shared brain (OCR-docs), read on 2026-11-13 at `0716b6b`
 
@@ -161,6 +192,5 @@ Nothing in the brain was changed. These are proposals for its owner.
 ## Revisit Criteria
 
 - The owner changes D4, D5 or D7.
-- Events gain their own campaign link (OSE-1552, scope 1 and 4): decide which wins when a
-  placement's campaign and its event's campaign differ.
+- The owner answers D8: which wins when a placement's campaign and its event's campaign differ.
 - A sponsor needs to be in two campaigns at one event.

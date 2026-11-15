@@ -1,0 +1,32 @@
+info:
+  name: "S14 | happy | event link | an event joins a campaign of its own brand"
+  type: http
+  seq: 31
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_toggle/events/camp-on-evt"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody();
+        test('S14 event link: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 event link: the answer names the event and the campaign', function () {
+          expect(b.id).to.eql('camp-on-evt');
+          expect(b.campaign_id).to.eql('camp_fx_toggle');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

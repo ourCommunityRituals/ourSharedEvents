@@ -1,0 +1,35 @@
+info:
+  name: "S14 | rainy | admin write guard | an add the browser marks as cross-site is refused"
+  type: http
+  seq: 41
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_shown/events/camp-on-evt"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Sec-Fetch-Site
+      value: cross-site
+    - name: Origin
+      value: "https://another-site.example"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Without the guard this request would answer 200 and move the event.
+        test('S14 write guard: 403 CROSS_SITE_WRITE', function () {
+          expect(res.getStatus()).to.eql(403);
+          expect(res.getBody().code).to.eql('CROSS_SITE_WRITE');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
