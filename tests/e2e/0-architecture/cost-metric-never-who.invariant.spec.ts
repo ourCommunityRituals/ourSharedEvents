@@ -23,6 +23,30 @@
  *     payload interface or the emitter body → forbidden-token assertion fails.
  *   - The metric emission being unwired from the request seam in index.ts →
  *     wiring assertion fails.
+ *
+ * THE STREET_LAYER LINE (street-map CCR 2026-11-15, R4) is held to the same
+ * shape, in the second block below. The street layer writes one line for each
+ * try that reads its bucket (src/lib/street-map.ts, `emitStreetLayer`): what
+ * came of it, on which surface, and five numbers. The street layer knows which
+ * cells a page drew and which tiles it read, so its line must be never-where as
+ * well as never-who: a cell or a tile address in Workers Logs would say which
+ * part of the map a request showed. This catches a key added to the line, a
+ * place- or identifier-shaped word in the line or its emitter, a second
+ * console call in the street layer, a console call in the archive reader or
+ * the tile decoder, and the loader no longer writing the line.
+ *
+ * @born-red the STREET_LAYER line | method: nine faults in
+ *   workers/oursharedevents/src/lib, one at a time, each seen failing the test
+ *   named and put back: `cells: string[]` added to StreetLayerLine ("carries
+ *   only the sealed keys" and "no place or identifier words"); `cells:` added
+ *   to the payload literal ("exactly the sealed keys" and "no place or
+ *   identifier words"); the trace spread into the payload ("exactly the sealed
+ *   keys"); a comment naming a tile and a cell in the emitter body ("no place
+ *   or identifier words"); `console.log(z, tiles)` added to readTiles in
+ *   pmtiles.ts, a `console.warn` of the cells added to loadStreetLayer, a
+ *   `console.error` added to mvt.ts, and the line written with the input as a
+ *   second argument ("one sink", each); the emitStreetLayer call removed from
+ *   loadStreetLayer ("the loader writes the line") | date: 2026-11-15
  */
 
 import { test, expect } from '@playwright/test';
@@ -39,6 +63,36 @@ const COST_METRIC_PATH = join(
   'cost-metric.ts'
 );
 const INDEX_PATH = join(REPO_ROOT, 'workers', 'oursharedevents', 'src', 'index.ts');
+const LIB_DIR = join(REPO_ROOT, 'workers', 'oursharedevents', 'src', 'lib');
+const STREET_MAP_PATH = join(LIB_DIR, 'street-map.ts');
+
+// The complete, sealed set of keys the STREET_LAYER line may carry.
+const STREET_LINE_KEYS = ['type', 'outcome', 'surface', 'z', 'tiles', 'r2Reads', 'ms'].sort();
+
+// Place-shaped words that must never appear in the line or its emitter: any of
+// them in Workers Logs would say which part of the map a request showed.
+const FORBIDDEN_PLACE_TOKENS = [
+  'cell',
+  'cells',
+  'cellsKey',
+  'h3',
+  'lat',
+  'lng',
+  'lon',
+  'x',
+  'y',
+  'tile',
+  'offset',
+  'key',
+  'name',
+  'archive',
+  'url',
+  'request',
+  'env',
+  'numbered',
+  'svg',
+  'message',
+];
 
 // The complete, sealed set of keys the metric payload may carry. Adding a key
 // here is a deliberate act that must be reviewed against the never-who wall.
@@ -177,5 +231,94 @@ test.describe('Invariant: cost metric never-who — structural code-shape lock',
       src,
       'index.ts must instrument the D1 bindings via instrumentEnvForCost(...) so D1 rows are counted'
     ).toMatch(/instrumentEnvForCost\s*\(/);
+  });
+});
+
+test.describe('Invariant: the STREET_LAYER line never-who, never-where — structural code-shape lock', () => {
+  const streetSrc = (): string => readFileSync(STREET_MAP_PATH, 'utf8');
+  const lineInterface = (src: string) =>
+    src.match(/export\s+interface\s+StreetLayerLine\s*\{([\s\S]*?)\n\}/);
+  const emitter = (src: string) => src.match(/export\s+function\s+emitStreetLayer[\s\S]*?\n\}/);
+  /** Console calls in a source file, comments left out. */
+  const consoleCalls = (file: string): number => {
+    const code = readFileSync(join(LIB_DIR, file), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    return (code.match(/\bconsole\s*\.\s*[a-z]+\s*\(/g) ?? []).length;
+  };
+
+  test('STREET-LAYER | privacy | payload | StreetLayerLine carries only the sealed keys', () => {
+    const iface = lineInterface(streetSrc());
+    expect(iface, 'StreetLayerLine must be defined and exported from street-map.ts').not.toBeNull();
+    expect(
+      extractKeys(iface![1]),
+      `StreetLayerLine has unexpected fields. Only an outcome, a surface and numbers are ` +
+        `permitted (${STREET_LINE_KEYS.join(', ')}). A new key must be reviewed against ` +
+        `never who and place-not-person: no cell, no tile address, nothing of the request.`
+    ).toEqual(STREET_LINE_KEYS);
+  });
+
+  test('STREET-LAYER | privacy | emitter | the emitted payload literal has exactly the sealed keys', () => {
+    const literal = streetSrc().match(
+      /const\s+payload\s*:\s*StreetLayerLine\s*=\s*\{([\s\S]*?)\n\s*\};/
+    );
+    expect(
+      literal,
+      'emitStreetLayer must build the line as an explicit `const payload: StreetLayerLine = {...}` ' +
+        'literal, key by key, so nothing a caller holds can ride along'
+    ).not.toBeNull();
+    expect(
+      literal![1],
+      'the payload literal may not spread another object into the line'
+    ).not.toMatch(/\.\.\./);
+    expect(
+      extractKeys(literal![1]),
+      'the emitted payload literal must contain exactly the sealed keys and nothing else'
+    ).toEqual(STREET_LINE_KEYS);
+  });
+
+  test('STREET-LAYER | privacy | no-identifiers | the line and its emitter carry no place or identifier words', () => {
+    const src = streetSrc();
+    const iface = lineInterface(src);
+    const emit = emitter(src);
+    expect(emit, 'emitStreetLayer must be defined and exported from street-map.ts').not.toBeNull();
+    const guarded = `${iface ? iface[1] : ''}\n${emit ? emit[0] : ''}`;
+    for (const tok of [...FORBIDDEN_IDENTIFIER_TOKENS, ...FORBIDDEN_PLACE_TOKENS]) {
+      const re = new RegExp(`\\b${tok}\\b`, 'i');
+      expect(
+        re.test(guarded),
+        `"${tok}" appears in the STREET_LAYER line or its emitter. The line says what a try at ` +
+          `the street layer came to, never where and never for whom.`
+      ).toBe(false);
+    }
+  });
+
+  test('STREET-LAYER | privacy | one sink | one console call in the street layer, none in the reader or the decoder', () => {
+    expect(
+      emitter(streetSrc())?.[0] ?? '',
+      'the one console call is the line, written whole by emitStreetLayer'
+    ).toMatch(/console\.log\(JSON\.stringify\(payload\)\)/);
+    expect(
+      consoleCalls('street-map.ts'),
+      'street-map.ts may write to the log in one place only, emitStreetLayer: the file holds ' +
+        'the cells and the tiles of the page it draws'
+    ).toBe(1);
+    for (const file of ['pmtiles.ts', 'mvt.ts']) {
+      expect(
+        consoleCalls(file),
+        `${file} must not write to the log: it holds tile addresses and byte ranges, and a ` +
+          `logged tile range says which part of the map a page showed`
+      ).toBe(0);
+    }
+  });
+
+  test('STREET-LAYER | wiring | the loader writes the line', () => {
+    const loader = streetSrc().match(/export\s+async\s+function\s+loadStreetLayer[\s\S]*?\n\}/);
+    expect(loader, 'loadStreetLayer must be defined in street-map.ts').not.toBeNull();
+    expect(
+      loader![0],
+      'loadStreetLayer must call emitStreetLayer(...): without it a street layer that fell ' +
+        'back to hexagons says nothing about why'
+    ).toMatch(/emitStreetLayer\s*\(/);
   });
 });

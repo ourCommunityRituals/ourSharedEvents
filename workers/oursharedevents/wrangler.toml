@@ -303,13 +303,14 @@ MAP_TILES_ARCHIVE = "us-20261109.pmtiles"
 # MAP_TILES bucket is not asked.
 # ON (owner 2026-11-15), set before any archive was loaded. The choice is the
 # owner's. While the bucket holds no object under MAP_TILES_ARCHIVE the Worker
-# asks, finds none, and draws hexagons only. Staging is public, so with "on"
-# the archive load itself puts the first street on a public page, at the minute
-# the object lands, with the defects that go live with the object (CCR R24,
-# R38) and whatever the licence questions in NOTICE.md then say: they are
-# settled before the load, not before a later switch. The way back to hexagons
-# only is this line set to "off": one PR and its deploy, with the bucket and
-# the object left as they are.
+# asks, finds none, and draws hexagons only; each instance then asks again once
+# a minute, not on every view (lib/pmtiles.ts, MISS_MEMORY_MS). Staging is
+# public, so with "on" the archive load itself puts the first street on a
+# public page, within a minute of the object landing and with no deploy, with
+# the defects that go live with the object (CCR R24, R38) and whatever the
+# licence questions in NOTICE.md then say: they are settled before the load,
+# not before a later switch. The way back to hexagons only is this line set to
+# "off": one PR and its deploy, with the bucket and the object left as they are.
 # This is not the test flag. streetMapArchiveLoaded (bruno/ose-pages/
 # environments/ose-staging.yml) says what the staging cases must see, and may
 # not be "true" while this is "off". streetMapSwitch in that file is a copy of
