@@ -43,6 +43,8 @@ export const INTENTIONAL_VALUE_DIFFERENCES = {
     'staging writes _stg; only production writes the dataset OER reads (OSE-1416)',
   CF_ACCESS_AUD:
     'a separate Access app per environment, so a separate audience; production is pinned (OSE-1353), staging is still unpinned (OSE-1377)',
+  STREET_MAP:
+    'the street layer is switched on one environment at a time, staging first (owner 2026-11-09). Production has no MAP_TILES binding yet, so its value does nothing until it is bound; production may be "on" only once staging is (tests/unit/ci/env-parity.test.js)',
 };
 
 /** Settings only one environment may carry, and why. */

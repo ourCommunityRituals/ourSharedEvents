@@ -341,6 +341,9 @@ writes nothing and can run at any time.
    behaviour, for every branch and every push to `main` (review finding R21).
    One pull request makes both read the flag, and makes the street cases ask for
    roads, not for any path (finding R17). **It merges before the load.**
+   (Since the switch, `STREET_MAP`, the Worker draws nothing from a loaded
+   object while staging carries `"off"`; this holds for the day the switch is
+   turned on, step 8 of "Staging, in order".)
 2. **The bucket and the key are settled.** All of it is the owner's, in Cloudflare
    and GitHub (OSE ADR-035, "Open, for the owner"):
    - **The bucket.** `ose-map-tiles` exists because a deploy created it, with
@@ -365,7 +368,9 @@ writes nothing and can run at any time.
 4. **The licence.** [`NOTICE.md`](../../NOTICE.md) lists the duties and what is
    NOT CLEAR. Staging is public, so the first load is the first public street:
    the owner answers its question 2 (before the load, or before production)
-   first.
+   first. With `STREET_MAP` at `"off"` on staging the load puts no street on a
+   page, and the first public street is then step 8 of "Staging, in order".
+   Whether the question waits for the load or for step 8 is the owner's.
 5. **The drawer and its checks are corrected** (findings R7, R17, R18). This
    needs no archive and runs beside the steps above. It must be done before the
    flag is set to `"true"` (step 9 of "Staging, in order"), not before the load.
@@ -404,7 +409,8 @@ writes nothing and can run at any time.
 
 4. **Owner: load.** The same dispatch with `mode` = `load`. Green means the
    bucket lists `us-20261109.pmtiles` at the checked size. Any red is explained
-   in "What stops a run".
+   in "What stops a run". No page changes: the street layer is switched off on
+   staging until step 8.
 
 5. **Record what was loaded.** The run's summary has the build date, the byte
    size and the SHA-256. They go on the owner-step ticket, and the byte size goes
@@ -434,12 +440,42 @@ writes nothing and can run at any time.
    in GitHub. The Worker reads through its binding, not the token. A refresh
    makes a new one.
 
-8. **Look at staging.** `MAP_TILES_ARCHIVE` on `main`, in both environment
-   blocks of `wrangler.toml`, is the key that was loaded (the workflow refused to
-   run otherwise). The Worker does not remember a read that found no object, so
+8. **Turn the switch on, and look at staging.** The load by itself shows
+   nothing. The Worker reads a switch, `STREET_MAP`, a plain value in each vars
+   block of `wrangler.toml` (`lib/street-map.ts`; review finding R20). Exactly
+   `"on"` draws streets, on the landing and for `/api/v2/map/areas` alike.
+   `"off"`, a missing line or any other value is hexagons only, and the bucket
+   is not asked. Staging carries `"off"`, so the load and the first street on a
+   public page are two steps.
+   - **One PR, two lines:** `STREET_MAP = "on"` in `[env.staging.vars]`, and
+     `streetMapSwitch` to `"on"` in
+     `bruno/ose-pages/environments/ose-staging.yml`. The second is the copy the
+     staging cases print; `tests/unit/ci/env-parity.test.js` fails when the two
+     differ. An agent can open this PR. Merging it is the owner's.
+   - **Its own staging run is the first that draws streets.** Every branch is
+     run on staging before it is called ready, so the PR's run shows the streets
+     before it merges.
+   - **What the switch is not.** It is not the test flag: `streetMapArchiveLoaded`
+     (step 9) says what the staging cases must see, and it may not be `"true"`
+     while the switch is off. It is not a lock and not a control on who writes
+     the bucket (steps 3, 6 and 7 are). It reaches a Worker only with a deploy.
+     And it is one environment at a time: production has its own line, `"off"`,
+     which may be `"on"` only once staging is.
+   - **Staging runs the branch deployed last.** A branch cut before this PR
+     merged still says `"off"`, and takes the streets off staging for as long as
+     it is the one deployed. Its cases agree with it and pass.
+
+   `MAP_TILES_ARCHIVE` on `main`, in both environment blocks of `wrangler.toml`,
+   is the key that was loaded (the workflow refused to run otherwise). The
+   Worker does not remember a read that found no object, so with the switch on
    the next landing request draws streets: for areas in the United States, the
    landing shows streets under the hexagons and the OpenStreetMap credit, and a
-   tapped hexagon shows its dots over streets. In the next staging run's
+   tapped hexagon shows its dots over streets.
+
+   In every staging run's `T2: Bruno Pages contract` log, the landing case and
+   the area-map case each print one test whose name starts `Street-map switch:`
+   and says which way the switch is. With it off, that test fails if a street
+   layer is drawn. With it on, in the next staging run's
    `T2: Bruno Pages contract` log, the four cases that read
    `streetMapArchiveLoaded` (the two landing cases, the area-map case in folder
    15 and the zoomed list case in folder 16) print their street assertions and no
@@ -451,7 +487,9 @@ writes nothing and can run at any time.
    streets, as a test annotation.
 
 9. **Make the staging cases binding.** One-line PR: `streetMapArchiveLoaded` to
-   `"true"` in `bruno/ose-pages/environments/ose-staging.yml`. From then on a
+   `"true"` in `bruno/ose-pages/environments/ose-staging.yml`. It comes after
+   step 8: the flag may not be `"true"` while `STREET_MAP` is `"off"` on staging
+   (`tests/unit/ci/env-parity.test.js`). From then on a
    staging run that draws no streets is red, not a printed `NOT RUN`. **As things
    stand that PR is red on the four T4k axe tests.**
    `tests/e2e/3-flows/map-place-panel.spec.ts` (`sortUndecided`, and the lines
@@ -627,12 +665,25 @@ file.
 
 ## Back to hexagons only
 
-- **By PR (the standing way):** remove the `[[env.staging.r2_buckets]]`
+Three ways, from the lightest.
+
+- **By the switch (the standing way):** a PR sets `STREET_MAP = "off"` in that
+  environment's vars block of `wrangler.toml`. For staging the same PR sets
+  `streetMapSwitch` to `"off"` in
+  `bruno/ose-pages/environments/ose-staging.yml`, and `streetMapArchiveLoaded`
+  to `"false"` if step 9 is done (`tests/unit/ci/env-parity.test.js` refuses
+  the flag at `"true"` with the switch off). After the deploy the Worker draws
+  hexagons only and does not ask the bucket. The binding, the bucket, the
+  object and its lock stay as they are, so streets come back with the same line
+  set to `"on"`. One environment at a time. On staging the PR's own branch run
+  deploys it, so the streets are off there before the merge.
+- **By PR, taking the binding out:** remove the `[[env.staging.r2_buckets]]`
   `MAP_TILES` block, remove its open entry from `env-parity.mjs`, and set
   `streetMapArchiveLoaded` to `"false"`. After the deploy the Worker has no
   binding and draws hexagons only. This is one environment at a time: once
   production is bound it has a block of its own, and removing one block leaves
-  the other environment drawing streets.
+  the other environment drawing streets. It is wanted only when the bucket
+  itself is to be unbound; the switch is the shorter way.
 - **At once, with no deploy, for every environment:** the owner removes the
   object's lock rule and then deletes the object, in the dashboard. Each Worker
   that reads that key finds no archive and draws hexagons only on its next
@@ -640,8 +691,23 @@ file.
   there is no at-once way that reaches staging alone. The staging cases go red
   if step 9 is done, which is the signal that it is off.
 
-Either way no page fails: with no binding, no archive, no tile for the area, a
-damaged file, a file past the reader's limits (a directory or a tile longer
+**What the switch does and does not do.** It turns the street layer off for one
+environment, in one line, and leaves everything else in place. It does not:
+
+- act without a deploy. It is a value in `wrangler.toml`, so it reaches a
+  Worker through a PR and the deploy queue. The dashboard way above is still
+  the only at-once way;
+- stand in for the test flag. `streetMapArchiveLoaded` says what the staging
+  cases must see; the switch says what the Worker draws. `streetMapSwitch` is
+  only the copy of the switch that the cases print;
+- empty, lock or protect the bucket, or change who can write it;
+- take back an answer a reader already holds. `/api/v2/map/areas` sends a
+  street layer as cacheable for an hour (`max-age=3600`, with
+  `stale-while-revalidate=86400`), so a build or a browser that kept one may
+  show it until it expires. An answer without streets is kept for 60 seconds.
+
+Whichever way, no page fails: with the switch off, no binding, no archive, no
+tile for the area, a damaged file, a file past the reader's limits (a directory or a tile longer
 than `MAX_DIRECTORY_BYTES`, `MAX_TILE_BYTES` or `MAX_TILE_UNPACKED_BYTES` in
 `lib/pmtiles.ts` allow) or a read slower than 1.5 s, the map is drawn without
 streets.

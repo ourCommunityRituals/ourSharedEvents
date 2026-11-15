@@ -9,6 +9,8 @@
  *   - the frame is Web Mercator from the cell ids, and the hexagons and the
  *     streets share it (a road through a cell's centre passes under its number)
  *   - the tile read is bounded (zoom, tile count, point budget, labels)
+ *   - the switch: STREET_MAP exactly "on" draws; "off", no value or anything
+ *     else is no layer, and the bucket is never asked (street-map CCR, R20)
  *   - fail soft: no binding, a bad archive name, a damaged archive or a slow
  *     read all leave the hexagons-only map, and never throw
  *   - never who: the archive is the only object read; town names are escaped;
@@ -18,6 +20,7 @@
  *     F41), and a planet-sized archive draws (two leaf levels, far offsets)
  */
 // @born-red no tile in the frame, planet-sized archive | method: "an archive with no tile in the frame is no layer" seen failing before the guard in buildStreetLayer (it returned a layer of one blank rectangle); "one tile of the frame is enough" is its control; the planet case seen failing on 4 of the 6 reader faults listed in pmtiles.spec.ts | date: 2026-11-09
+// @born-red the switch (STREET_MAP) | method: six faults in loadStreetLayer (src/lib/street-map.ts), one at a time, each seen failing in "street map | the switch (STREET_MAP)": the switch line removed (19 tests failed, here and in map-areas.spec.ts and street-map-landing.spec.ts); any set value counted as on (17); the value trimmed and lower-cased before the compare (6: "ON", "On", " on", "on ", the non-string case and the landing's "ON"); the switch read after the bucket (19, on the count of reads alone); the compare turned round (72, "on: the layer is drawn" among them); STREET_MAP_ON set to 'true' (59, "the one value that draws" among them). Before any spec passed STREET_MAP, the switch alone failed 52 tests that draw | date: 2026-11-15
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { cellToBoundary, cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import {
@@ -40,6 +43,7 @@ import {
   frameZoom,
   layerShows,
   loadStreetLayer,
+  STREET_MAP_ON,
   project,
   spendPoints,
   thinLine,
@@ -1428,7 +1432,10 @@ describe('street map | a layer too thin to read is no layer', () => {
     const archive = await pmtilesArchive(tiles, { gzip: true });
     return {
       built: await buildStreetLayer(memSource(archive), [BLUE7]),
-      loaded: await loadStreetLayer({ MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) }, [BLUE7]),
+      loaded: await loadStreetLayer(
+        { STREET_MAP: 'on', MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) },
+        [BLUE7]
+      ),
     };
   };
 
@@ -1477,6 +1484,70 @@ describe('street map | a layer too thin to read is no layer', () => {
     });
     expect(built!.drawn.major).toBeGreaterThan(0);
     expect(built!.drawn.major + built!.drawn.minor).toBeGreaterThanOrEqual(MIN_ROAD_POINTS);
+  });
+});
+
+// Street-map CCR 2026-11-15, R20: the Worker had no switch. The archive in the
+// bucket was the switch, so the owner's load put streets on every page at once
+// and the way back was a dashboard action or the binding taken out.
+describe('street map | the switch (STREET_MAP)', () => {
+  /** A bucket holding a sound archive for BLUE7, and the layer it draws. */
+  const loaded = async () => {
+    const { tiles } = tilesForCells([BLUE7]);
+    const archive = await pmtilesArchive(tiles, { gzip: true, leaf: true });
+    const drawn = await buildStreetLayer(memSource(archive), [BLUE7]);
+    resetPmtilesCache();
+    return { bucket: fakeBucket(DEFAULT_ARCHIVE, archive), drawn: drawn! };
+  };
+
+  it('the one value that draws is "on"', () => {
+    expect(STREET_MAP_ON).toBe('on');
+  });
+
+  it('on: the layer is drawn from the archive, as before there was a switch', async () => {
+    const { bucket, drawn } = await loaded();
+    const layer = await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, [BLUE7]);
+    expect(layer).toEqual(drawn);
+    expect(layer!.svg).toContain('class="as-r as-3"');
+    // Header and root, the leaf directory, the tiles.
+    expect(bucket.gets).toHaveLength(3);
+    expect(new Set(bucket.gets.map((g) => g.key))).toEqual(new Set([DEFAULT_ARCHIVE]));
+  });
+
+  it('off: no layer, and the bucket is never asked, with a sound archive under the key', async () => {
+    const { bucket } = await loaded();
+    expect(await loadStreetLayer({ STREET_MAP: 'off', MAP_TILES: bucket }, [BLUE7])).toBeNull();
+    expect(bucket.gets).toHaveLength(0);
+    // The same bucket, switched on, draws: off was the switch, not the archive.
+    expect(await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, [BLUE7])).not.toBeNull();
+  });
+
+  it('no value is off', async () => {
+    const { bucket } = await loaded();
+    expect(await loadStreetLayer({ MAP_TILES: bucket }, [BLUE7])).toBeNull();
+    expect(
+      await loadStreetLayer({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: DEFAULT_ARCHIVE }, [BLUE7])
+    ).toBeNull();
+    expect(bucket.gets).toHaveLength(0);
+  });
+
+  it.each(['', 'ON', 'On', ' on', 'on ', 'onn', 'o', 'true', '1', 'yes', 'enabled', 'of', 'off '])(
+    'a value that is not exactly "on" is off: %j',
+    async (value) => {
+      const { bucket } = await loaded();
+      expect(await loadStreetLayer({ STREET_MAP: value, MAP_TILES: bucket }, [BLUE7])).toBeNull();
+      expect(bucket.gets).toHaveLength(0);
+    }
+  );
+
+  it('a value that is not a string is off', async () => {
+    const { bucket } = await loaded();
+    for (const value of [true, 1, ['on'], { on: true }]) {
+      expect(
+        await loadStreetLayer({ STREET_MAP: value, MAP_TILES: bucket } as never, [BLUE7])
+      ).toBeNull();
+    }
+    expect(bucket.gets).toHaveLength(0);
   });
 });
 
@@ -1534,7 +1605,7 @@ describe('street map | loading (fail soft)', () => {
     expect(one!.svg.replace(/<text[^>]*>Nexto<\/text>/, '')).toBe(all!.svg);
 
     // And through the loader, which is what the handler calls.
-    const env = { MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) };
+    const env = { STREET_MAP: 'on', MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) };
     expect((await loadStreetLayer(env, framed))!.svg).toBe(all!.svg);
     resetPmtilesCache();
     expect((await loadStreetLayer(env, framed, { numbered: [BLUE7] }))!.svg).toBe(one!.svg);
@@ -1542,9 +1613,11 @@ describe('street map | loading (fail soft)', () => {
 
   it('no binding, or no cells: null', async () => {
     expect(await loadStreetLayer(undefined, [BLUE7])).toBeNull();
-    expect(await loadStreetLayer({}, [BLUE7])).toBeNull();
+    expect(await loadStreetLayer(null, [BLUE7])).toBeNull();
+    // Switched on, with nothing bound to read from.
+    expect(await loadStreetLayer({ STREET_MAP: 'on' }, [BLUE7])).toBeNull();
     const bucket = fakeBucket(DEFAULT_ARCHIVE, new Uint8Array(0));
-    expect(await loadStreetLayer({ MAP_TILES: bucket }, [])).toBeNull();
+    expect(await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, [])).toBeNull();
     expect(bucket.gets).toHaveLength(0);
   });
 
@@ -1553,7 +1626,7 @@ describe('street map | loading (fail soft)', () => {
     const archive = await pmtilesArchive(tiles);
     const bucket = fakeBucket('region-2026.pmtiles', archive);
     const layer = await loadStreetLayer(
-      { MAP_TILES: bucket, MAP_TILES_ARCHIVE: 'region-2026.pmtiles' },
+      { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: 'region-2026.pmtiles' },
       [BLUE7]
     );
     expect(layer?.svg).toContain('data-testid="amap-streets"');
@@ -1563,27 +1636,35 @@ describe('street map | loading (fail soft)', () => {
 
     const bad = fakeBucket('../uploads/x', archive);
     expect(
-      await loadStreetLayer({ MAP_TILES: bad, MAP_TILES_ARCHIVE: '../uploads/x' }, [BLUE7])
+      await loadStreetLayer(
+        { STREET_MAP: 'on', MAP_TILES: bad, MAP_TILES_ARCHIVE: '../uploads/x' },
+        [BLUE7]
+      )
     ).toBeNull();
     expect(bad.gets).toHaveLength(0);
   });
 
   it('a missing or damaged archive: null', async () => {
     expect(
-      await loadStreetLayer({ MAP_TILES: fakeBucket('other.pmtiles', new Uint8Array(200)) }, [
-        BLUE7,
-      ])
+      await loadStreetLayer(
+        { STREET_MAP: 'on', MAP_TILES: fakeBucket('other.pmtiles', new Uint8Array(200)) },
+        [BLUE7]
+      )
     ).toBeNull();
     const junk = new Uint8Array(4096).fill(7);
     expect(
-      await loadStreetLayer({ MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, junk) }, [BLUE7])
+      await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, junk) }, [
+        BLUE7,
+      ])
     ).toBeNull();
     const { tiles } = tilesForCells([BLUE7]);
     const archive = await pmtilesArchive(
       tiles.map((t) => ({ ...t, data: new Uint8Array([0x1a, 0xff]) }))
     );
     expect(
-      await loadStreetLayer({ MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) }, [BLUE7])
+      await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) }, [
+        BLUE7,
+      ])
     ).toBeNull();
   });
 
@@ -1605,13 +1686,17 @@ describe('street map | loading (fail soft)', () => {
     // At the limit it is a tile like any other, so what refuses the next
     // archive is the limit and not the padding.
     const atLimit = fakeBucket(DEFAULT_ARCHIVE, await withOneTileOf(MAX_TILE_UNPACKED_BYTES));
-    const drawn = await loadStreetLayer({ MAP_TILES: atLimit }, [BLUE7], { timeoutMs: 60_000 });
+    const drawn = await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: atLimit }, [BLUE7], {
+      timeoutMs: 60_000,
+    });
     expect(drawn?.svg).toContain('<path');
 
     // One byte more in one tile, and the frame has no streets at all.
     resetPmtilesCache();
     const over = fakeBucket(DEFAULT_ARCHIVE, await withOneTileOf(MAX_TILE_UNPACKED_BYTES + 1));
-    expect(await loadStreetLayer({ MAP_TILES: over }, [BLUE7], { timeoutMs: 60_000 })).toBeNull();
+    expect(
+      await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: over }, [BLUE7], { timeoutMs: 60_000 })
+    ).toBeNull();
     expect(over.gets.length).toBeGreaterThan(0);
 
     // The same tiles as they are, behind a root directory stated over its limit.
@@ -1620,7 +1705,7 @@ describe('street map | loading (fail soft)', () => {
     const stated = await pmtilesArchive(tiles);
     new DataView(stated.buffer).setUint32(16, MAX_DIRECTORY_BYTES + 1, true);
     const second = fakeBucket(DEFAULT_ARCHIVE, stated);
-    expect(await loadStreetLayer({ MAP_TILES: second }, [BLUE7])).toBeNull();
+    expect(await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: second }, [BLUE7])).toBeNull();
     expect(second.gets.map((g) => g.range?.length)).toEqual([16384]);
   });
 
@@ -1633,10 +1718,10 @@ describe('street map | loading (fail soft)', () => {
     const archive = await pmtilesArchive(tiles, { gzip: true, leaf: true });
     expect(await buildStreetLayer(memSource(archive), [BLUE7])).toBeNull();
     const bucket = fakeBucket(DEFAULT_ARCHIVE, archive);
-    expect(await loadStreetLayer({ MAP_TILES: bucket }, [BLUE7])).toBeNull();
+    expect(await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, [BLUE7])).toBeNull();
     // It was read, and it is not a damaged file: its own cells draw.
     expect(bucket.gets.length).toBeGreaterThan(0);
-    const own = await loadStreetLayer({ MAP_TILES: bucket }, [FAR7]);
+    const own = await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, [FAR7]);
     expect(own?.svg).toContain('data-testid="amap-streets"');
   });
 
@@ -1651,7 +1736,7 @@ describe('street map | loading (fail soft)', () => {
     );
     const name = 'planet-20261109.pmtiles';
     const bucket = sparseBucket(name, file);
-    const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: name };
+    const env = { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: name };
     const layer = await loadStreetLayer(env, [BLUE7]);
     expect(layer?.svg).toContain('class="as-r as-3"');
     expect(layer?.svg).toContain('class="as-w"');
@@ -1680,7 +1765,7 @@ describe('street map | loading (fail soft)', () => {
     expect(tiles.length).toBeGreaterThan(6);
     const archive = await pmtilesArchive(tiles, { gzip: true, leaf: true });
     const bucket = fakeBucket(DEFAULT_ARCHIVE, archive);
-    const first = await loadStreetLayer({ MAP_TILES: bucket }, [BLUE7]);
+    const first = await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, [BLUE7]);
     expect(first?.svg).toContain('data-testid="amap-streets"');
     expect(bucket.gets).toHaveLength(3);
     // The same drawing as when every tile is a read of its own (the tiles 1 MiB
@@ -1693,7 +1778,7 @@ describe('street map | loading (fail soft)', () => {
     expect(await buildStreetLayer(apartSrc, [BLUE7])).toEqual(first);
     expect(apartSrc.reads.filter(([off]) => off >= 5 * 2 ** 30)).toHaveLength(tiles.length);
     expect(first!.svg.match(/M-?\d+ -?\d+L/g)!.length).toBeGreaterThanOrEqual(tiles.length);
-    expect(await loadStreetLayer({ MAP_TILES: bucket }, [BLUE7])).toEqual(first);
+    expect(await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, [BLUE7])).toEqual(first);
     expect(bucket.gets).toHaveLength(4);
     // The one tile read is every tile's bytes and nothing else.
     const tileRead = bucket.gets[3]!.range!;
@@ -1725,7 +1810,7 @@ describe('street map | loading (fail soft)', () => {
     // The tiles are there and they draw: only the width refuses them.
     expect(await buildStreetLayer(memSource(archive), framed)).not.toBeNull();
     const bucket = fakeBucket(DEFAULT_ARCHIVE, archive);
-    expect(await loadStreetLayer({ MAP_TILES: bucket }, framed)).toBeNull();
+    expect(await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, framed)).toBeNull();
     expect(bucket.gets).toHaveLength(0);
   });
 
@@ -1751,7 +1836,7 @@ describe('street map | loading (fail soft)', () => {
       const { r, tiles } = tilesForCells(framed);
       expect(r.z).toBeLessThanOrEqual(z);
       const bucket = fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles, { gzip: true }));
-      const layer = await loadStreetLayer({ MAP_TILES: bucket }, framed);
+      const layer = await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, framed);
       expect(layer !== null).toBe(draws);
       expect(bucket.gets.length > 0).toBe(draws);
     }
@@ -1777,9 +1862,13 @@ describe('street map | loading (fail soft)', () => {
     const slow = fakeBucket(name, await pmtilesArchive(tiles), { delayMs: 200 });
     const t0 = Date.now();
     expect(
-      await loadStreetLayer({ MAP_TILES: slow, MAP_TILES_ARCHIVE: name }, [BLUE7], {
-        timeoutMs: 50,
-      })
+      await loadStreetLayer(
+        { STREET_MAP: 'on', MAP_TILES: slow, MAP_TILES_ARCHIVE: name },
+        [BLUE7],
+        {
+          timeoutMs: 50,
+        }
+      )
     ).toBeNull();
     expect(Date.now() - t0).toBeLessThan(180);
     // It was the read that was slow, not the name that was refused.
@@ -1792,9 +1881,13 @@ describe('street map | loading (fail soft)', () => {
     const { tiles } = tilesForCells([BLUE7]);
     const slow = fakeBucket('settled.pmtiles', await pmtilesArchive(tiles), { delayMs: 200 });
     expect(
-      await loadStreetLayer({ MAP_TILES: slow, MAP_TILES_ARCHIVE: 'settled.pmtiles' }, [BLUE7], {
-        timeoutMs: 50,
-      })
+      await loadStreetLayer(
+        { STREET_MAP: 'on', MAP_TILES: slow, MAP_TILES_ARCHIVE: 'settled.pmtiles' },
+        [BLUE7],
+        {
+          timeoutMs: 50,
+        }
+      )
     ).toBeNull();
     await slow.settle();
     // What the next case does: fake timers, then time passes. An unsettled read
@@ -1827,7 +1920,11 @@ describe('street map | the archive read: fat fingers, security, network', () => 
   async function dryRun(archive: Uint8Array) {
     const b = scriptedBucket(CONFIGURED, archive, () => 'ok');
     expect(
-      drawn(await loadStreetLayer({ MAP_TILES: b, MAP_TILES_ARCHIVE: CONFIGURED }, [BLUE7]))
+      drawn(
+        await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: b, MAP_TILES_ARCHIVE: CONFIGURED }, [
+          BLUE7,
+        ])
+      )
     ).toBe(true);
     resetPmtilesCache();
     return b.gets.length;
@@ -1860,7 +1957,9 @@ describe('street map | the archive read: fat fingers, security, network', () => 
     async (_, name) => {
       const bucket = fakeBucket(name, await sound());
       expect(
-        await loadStreetLayer({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: name }, [BLUE7])
+        await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: name }, [
+          BLUE7,
+        ])
       ).toBeNull();
       expect(bucket.gets).toHaveLength(0);
     }
@@ -1868,7 +1967,7 @@ describe('street map | the archive read: fat fingers, security, network', () => 
 
   it('fat finger: a well-formed name with the wrong date finds no object: no layer, one read, no throw', async () => {
     const bucket = fakeBucket(CONFIGURED, await sound());
-    const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: 'us-20261190.pmtiles' };
+    const env = { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: 'us-20261190.pmtiles' };
     expect(await loadStreetLayer(env, [BLUE7])).toBeNull();
     expect(bucket.gets.map((g) => g.key)).toEqual(['us-20261190.pmtiles']);
     // Control: the right date draws from the same bucket.
@@ -1881,7 +1980,11 @@ describe('street map | the archive read: fat fingers, security, network', () => 
     const archive = await sound();
     const byDefault = fakeBucket(DEFAULT_ARCHIVE, archive);
     expect(
-      drawn(await loadStreetLayer({ MAP_TILES: byDefault, MAP_TILES_ARCHIVE: '' }, [BLUE7]))
+      drawn(
+        await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: byDefault, MAP_TILES_ARCHIVE: '' }, [
+          BLUE7,
+        ])
+      )
     ).toBe(true);
     expect(new Set(byDefault.gets.map((g) => g.key))).toEqual(new Set([DEFAULT_ARCHIVE]));
 
@@ -1892,11 +1995,17 @@ describe('street map | the archive read: fat fingers, security, network', () => 
     resetPmtilesCache();
     const ok = fakeBucket(longest, archive);
     expect(
-      drawn(await loadStreetLayer({ MAP_TILES: ok, MAP_TILES_ARCHIVE: longest }, [BLUE7]))
+      drawn(
+        await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: ok, MAP_TILES_ARCHIVE: longest }, [
+          BLUE7,
+        ])
+      )
     ).toBe(true);
     const over = fakeBucket(tooLong, archive);
     expect(
-      await loadStreetLayer({ MAP_TILES: over, MAP_TILES_ARCHIVE: tooLong }, [BLUE7])
+      await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: over, MAP_TILES_ARCHIVE: tooLong }, [
+        BLUE7,
+      ])
     ).toBeNull();
     expect(over.gets).toHaveLength(0);
   });
@@ -1907,13 +2016,21 @@ describe('street map | the archive read: fat fingers, security, network', () => 
     try {
       const good = fakeBucket(CONFIGURED, archive);
       expect(
-        drawn(await loadStreetLayer({ MAP_TILES: good, MAP_TILES_ARCHIVE: CONFIGURED }, [BLUE7]))
+        drawn(
+          await loadStreetLayer(
+            { STREET_MAP: 'on', MAP_TILES: good, MAP_TILES_ARCHIVE: CONFIGURED },
+            [BLUE7]
+          )
+        )
       ).toBe(true);
       expect(vi.getTimerCount()).toBe(0);
       resetPmtilesCache();
       const junk = fakeBucket(CONFIGURED, new Uint8Array(4096).fill(7));
       expect(
-        await loadStreetLayer({ MAP_TILES: junk, MAP_TILES_ARCHIVE: CONFIGURED }, [BLUE7])
+        await loadStreetLayer(
+          { STREET_MAP: 'on', MAP_TILES: junk, MAP_TILES_ARCHIVE: CONFIGURED },
+          [BLUE7]
+        )
       ).toBeNull();
       expect(vi.getTimerCount()).toBe(0);
     } finally {
@@ -1925,7 +2042,12 @@ describe('street map | the archive read: fat fingers, security, network', () => 
     expect(STREET_TIMEOUT_MS).toBe(1500);
     const bucket = scriptedBucket(CONFIGURED, await sound(), () => ({ delayMs: 5 }));
     expect(
-      drawn(await loadStreetLayer({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED }, [BLUE7]))
+      drawn(
+        await loadStreetLayer(
+          { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED },
+          [BLUE7]
+        )
+      )
     ).toBe(true);
   });
 
@@ -1950,7 +2072,9 @@ describe('street map | the archive read: fat fingers, security, network', () => 
   ])('security: %s is refused before any read', async (_, name) => {
     const bucket = fakeBucket(name, await sound());
     expect(
-      await loadStreetLayer({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: name }, [BLUE7])
+      await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: name }, [
+        BLUE7,
+      ])
     ).toBeNull();
     expect(bucket.gets).toHaveLength(0);
   });
@@ -1980,7 +2104,11 @@ describe('street map | the archive read: fat fingers, security, network', () => 
         },
       ]);
       const honest = await loadStreetLayer(
-        { MAP_TILES: fakeBucket(CONFIGURED, await sound()), MAP_TILES_ARCHIVE: CONFIGURED },
+        {
+          STREET_MAP: 'on',
+          MAP_TILES: fakeBucket(CONFIGURED, await sound()),
+          MAP_TILES_ARCHIVE: CONFIGURED,
+        },
         [BLUE7]
       );
       resetPmtilesCache();
@@ -1988,9 +2116,10 @@ describe('street map | the archive read: fat fingers, security, network', () => 
         CONFIGURED,
         await pmtilesArchive(tiles, { gzip: true, leaf: true })
       );
-      const layer = await loadStreetLayer({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED }, [
-        BLUE7,
-      ]);
+      const layer = await loadStreetLayer(
+        { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED },
+        [BLUE7]
+      );
       expect(drawn(layer)).toBe(true);
       // The odd road added nothing: the layer is the one honest tiles give.
       expect(layer).toEqual(honest);
@@ -2001,16 +2130,22 @@ describe('street map | the archive read: fat fingers, security, network', () => 
     const archive = await sound();
     const tilesBucket = fakeBucket(CONFIGURED, archive);
     const uploads = fakeBucket(CONFIGURED, archive);
-    const env = { MAP_TILES: tilesBucket, MAP_TILES_ARCHIVE: CONFIGURED, UPLOADS_BUCKET: uploads };
+    const env = {
+      STREET_MAP: 'on',
+      MAP_TILES: tilesBucket,
+      MAP_TILES_ARCHIVE: CONFIGURED,
+      UPLOADS_BUCKET: uploads,
+    };
     expect(drawn(await loadStreetLayer(env, [BLUE7]))).toBe(true);
     expect(uploads.gets).toHaveLength(0);
     expect(new Set(tilesBucket.gets.map((g) => g.key))).toEqual(new Set([CONFIGURED]));
     // With no MAP_TILES, the other bucket is still not a fallback.
     resetPmtilesCache();
     expect(
-      await loadStreetLayer({ MAP_TILES_ARCHIVE: CONFIGURED, UPLOADS_BUCKET: uploads } as never, [
-        BLUE7,
-      ])
+      await loadStreetLayer(
+        { STREET_MAP: 'on', MAP_TILES_ARCHIVE: CONFIGURED, UPLOADS_BUCKET: uploads } as never,
+        [BLUE7]
+      )
     ).toBeNull();
     expect(uploads.gets).toHaveLength(0);
   });
@@ -2018,9 +2153,13 @@ describe('street map | the archive read: fat fingers, security, network', () => 
   it('security: never who: the reads depend on the cells alone, and no read names a place finer than a tile', async () => {
     const a = fakeBucket(CONFIGURED, await sound());
     const b = fakeBucket(CONFIGURED, await sound());
-    await loadStreetLayer({ MAP_TILES: a, MAP_TILES_ARCHIVE: CONFIGURED }, [BLUE7]);
+    await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: a, MAP_TILES_ARCHIVE: CONFIGURED }, [
+      BLUE7,
+    ]);
     resetPmtilesCache();
-    await loadStreetLayer({ MAP_TILES: b, MAP_TILES_ARCHIVE: CONFIGURED }, [BLUE7]);
+    await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: b, MAP_TILES_ARCHIVE: CONFIGURED }, [
+      BLUE7,
+    ]);
     // Two cold isolates asked for the same area ask R2 for the same byte ranges.
     const ranges = (g: typeof a.gets) =>
       g.map((x) => `${x.range!.offset}+${x.range!.length}`).sort();
@@ -2032,7 +2171,7 @@ describe('street map | the archive read: fat fingers, security, network', () => 
   // ── network ────────────────────────────────────────────────────────────────
   it('network: R2 fails on the first read: no layer, no throw; the next request opens the archive again and draws', async () => {
     const bucket = scriptedBucket(CONFIGURED, await sound(), (n) => (n === 0 ? 'throw' : 'ok'));
-    const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED };
+    const env = { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED };
     expect(await loadStreetLayer(env, [BLUE7])).toBeNull();
     expect(bucket.gets).toHaveLength(1);
     expect(drawn(await loadStreetLayer(env, [BLUE7]))).toBe(true);
@@ -2049,7 +2188,7 @@ describe('street map | the archive read: fat fingers, security, network', () => 
       const last = (await dryRun(archive)) - 1;
       expect(last).toBeGreaterThan(1);
       const bucket = scriptedBucket(CONFIGURED, archive, (n) => (n === last ? step : 'ok'));
-      const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED };
+      const env = { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED };
       expect(await loadStreetLayer(env, [BLUE7])).toBeNull();
       expect(bucket.gets).toHaveLength(last + 1);
       expect(drawn(await loadStreetLayer(env, [BLUE7]))).toBe(true);
@@ -2068,7 +2207,10 @@ describe('street map | the archive read: fat fingers, security, network', () => 
       n === at ? { shortTo: to ?? Math.floor(range!.length / 2) } : 'ok'
     );
     expect(
-      await loadStreetLayer({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED }, [BLUE7])
+      await loadStreetLayer(
+        { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED },
+        [BLUE7]
+      )
     ).toBeNull();
     expect(bucket.gets.length).toBeGreaterThan(at);
   });
@@ -2090,7 +2232,7 @@ describe('street map | the archive read: fat fingers, security, network', () => 
       if (n === last) landed();
       return out;
     };
-    const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED };
+    const env = { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED };
     const t0 = Date.now();
     expect(await loadStreetLayer(env, [BLUE7], { timeoutMs: 60 })).toBeNull();
     expect(Date.now() - t0).toBeLessThan(300);
@@ -2106,7 +2248,7 @@ describe('street map | the archive read: fat fingers, security, network', () => 
   // so neither may wait on the other's (tests/street-map-runtime.spec.ts).
   it('network: two requests for one area in a cold isolate each read the header, and both draw', async () => {
     const bucket = scriptedBucket(CONFIGURED, await sound(), () => ({ delayMs: 5 }));
-    const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED };
+    const env = { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED };
     const [one, two] = await Promise.all([
       loadStreetLayer(env, [BLUE7]),
       loadStreetLayer(env, [BLUE7]),
@@ -2132,7 +2274,7 @@ describe('street map | on the attendee map', () => {
       },
     ]);
     return loadStreetLayer(
-      { MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles)) },
+      { STREET_MAP: 'on', MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles)) },
       cells
     );
   }

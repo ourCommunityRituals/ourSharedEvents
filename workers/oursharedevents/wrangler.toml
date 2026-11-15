@@ -120,6 +120,12 @@ crons = ["0 3 * * *"]
 [vars]
 WORKER_ENV = "development"
 WORKER_BUILD_VERSION = "dev-local"
+# The street-layer switch (lib/street-map.ts; street-map CCR 2026-11-15, R20).
+# Exactly "on" draws streets under the hexagons; "off", no value or anything else
+# is hexagons only, and the MAP_TILES bucket is not asked. On here: local dev and
+# the workers test pool read a bucket on this machine's disk, which no visitor
+# sees. Staging and production each carry their own value, below.
+STREET_MAP = "on"
 # Draft auto-expiry (lifecycle cron): archive — never delete — drafts untouched
 # for >= N days; 0 disables. Declared explicitly so the nightly fleet-wide sweep
 # is visible config, not an invisible code default of 30 (CCR-PR567 L2).
@@ -208,7 +214,8 @@ bucket_name = "ose-uploads-staging"
 # Staging first: production gets the same binding in its own PR, after the
 # staging street-map cases have passed. Until then scripts/ci/env-parity.mjs
 # lists the difference as open, and production draws hexagons only.
-# Back to hexagons only: remove this block and redeploy.
+# Back to hexagons only: STREET_MAP = "off" in [env.staging.vars] below (the
+# switch; the bucket stays bound), or remove this block. Either needs a deploy.
 [[env.staging.r2_buckets]]
 binding = "MAP_TILES"
 bucket_name = "ose-map-tiles"
@@ -290,6 +297,23 @@ SPONSOR_GEO_MATCH_ENABLED = "0"
 # a new key and a PR that changes this value, never an overwrite: the Worker keeps
 # an archive's directories for the life of an isolate, keyed by this name.
 MAP_TILES_ARCHIVE = "us-20261109.pmtiles"
+# The street-layer switch (lib/street-map.ts; street-map CCR 2026-11-15, R20).
+# Exactly "on" draws streets under the hexagons, on the landing and for
+# /api/v2/map/areas. "off", no value or anything else is hexagons only, and the
+# MAP_TILES bucket is not asked.
+# OFF is the default, and the choice is the owner's. Why off: staging is public,
+# so with "on" the archive load itself would put the first street on a public
+# page, at the minute the object lands, with the defects that go live with the
+# object (CCR R24, R38) and whatever the licence question in NOTICE.md then
+# says. With "off" the load shows nothing. A one-line PR sets "on", and that
+# PR's own run on staging is the first run that draws streets. The way back to
+# hexagons only is this line set to "off": one PR and its deploy, with the
+# bucket and the object left as they are.
+# This is not the test flag. streetMapArchiveLoaded (bruno/ose-pages/
+# environments/ose-staging.yml) says what the staging cases must see, and may
+# not be "true" while this is "off". streetMapSwitch in that file is a copy of
+# this value. tests/unit/ci/env-parity.test.js holds both.
+STREET_MAP = "off"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
 # Allow Bearer token fallback in staging (for local testing without CF Access)
@@ -455,6 +479,10 @@ SPONSOR_GEO_MATCH_ENABLED = "0"
 # When production is bound it binds the bucket staging binds (owner 2026-11-14:
 # one bucket, read by both), so this key is then the object staging drew from.
 MAP_TILES_ARCHIVE = "us-20261109.pmtiles"
+# The street-layer switch (see the staging block). Off, and it does nothing here
+# yet: production has no MAP_TILES binding. Staging goes first: this may be "on"
+# only once staging is (tests/unit/ci/env-parity.test.js), in a PR of its own.
+STREET_MAP = "off"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
 # ALLOW_OCR_INTERNAL is deliberately absent in production (ADR-012 gate R2,

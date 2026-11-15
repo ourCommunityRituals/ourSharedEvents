@@ -65,6 +65,18 @@
  *       failed; three lines of sortUndecided were then pinned below)
  *         -> each: "the axe scan sets apart only text drawn on the map"
  *
+ * The switch (R20), added 2026-11-15 and faulted the same way:
+ *   S1  API: the off assertion (streets null) removed
+ *         -> api "off, and the Worker drew a street layer all the same"
+ *   S2  landing: the off assertions (no layer, no credit) removed
+ *         -> landing "off, and the Worker drew ..." and "off, and the credit shown"
+ *   S3  both: any word taken for the copy (the oneOf line removed)
+ *         -> both "the copy missing or mistyped"
+ *   S4  API: the test name always says on -> api "the test name says off", and S1's test
+ *   S5  landing: the copy not read (always "on") -> 6 tests, "both cases read the copy" among them
+ *   S6  workflow: `--env-var "streetMapSwitch=on"` on the Pages run
+ *         -> "the workflow passes the copy to no one"
+ *
  * The H tests only read the Playwright source. What it does was seen in Chromium
  * against a local Worker (wrangler dev, local D1 with the two fixtures, a
  * synthetic archive in local R2), in three states: no archive, streets, and a
@@ -129,10 +141,16 @@ const API_SOFT = 'Without streets the answer is still the hexagons, and streets 
  * Run one case's script the way Bruno does: its `test()` calls are collected,
  * a throwing one is a failure, and `console.log` lines are kept.
  */
-function run(which, { body, flag, status = 200 }) {
+function run(which, opts) {
+  const { body, flag, status = 200 } = opts;
+  const sw = 'sw' in opts ? opts.sw : 'on';
   const out = { passed: [], failed: [], logs: [] };
   const res = { getStatus: () => status, getBody: () => body, getHeader: () => undefined };
-  const bru = { getEnvVar: (name) => (name === 'streetMapArchiveLoaded' ? flag : undefined) };
+  // `sw` is streetMapSwitch, the copy of staging's STREET_MAP. "on" unless a
+  // test says otherwise: the pages built below are what a Worker set to draw
+  // answers with.
+  const vars = { streetMapArchiveLoaded: flag, streetMapSwitch: sw };
+  const bru = { getEnvVar: (name) => vars[name] };
   const test = (name, fn) => {
     try {
       fn();
@@ -483,6 +501,80 @@ describe('no streets: a named test prints in both states of the flag', () => {
         expect(printed.length, `${which}, flag ${flag}`).toBeGreaterThan(0);
       }
     }
+  });
+});
+
+// Street-map CCR 2026-11-15, R20: the Worker reads a switch (STREET_MAP), and
+// the landing case and the API case say which way it is, in a test name, on
+// every run. Off, they hold the Worker to it: no street layer, whatever the
+// bucket holds.
+describe('the landing and API cases say which way the switch is (R20)', () => {
+  const SW_OFF =
+    'Street-map switch: STREET_MAP is "off" for this environment, and no street layer is drawn';
+  const SW_ON =
+    'Street-map switch: STREET_MAP is "on" for this environment (streetMapArchiveLoaded says whether streets must be drawn)';
+  const SW_UNSAID = 'Street-map switch: the environment file sets streetMapSwitch to "on" or "off"';
+  const named = (r) => r.passed.concat(r.failed).filter((n) => n.startsWith('Street-map switch'));
+
+  const PAGES_OF = {
+    api: { none: areasAnswer(''), streets: areasAnswer(GOOD) },
+    landing: { none: landingPage({}), streets: landingPage({ streets: GOOD }) },
+  };
+
+  describe.each(['api', 'landing'])('%s case', (which) => {
+    const { none, streets } = PAGES_OF[which];
+
+    test('off, and no street layer: passes, and the test name says off', () => {
+      const r = run(which, { body: none, flag: 'false', sw: 'off' });
+      expect(named(r)).toEqual([SW_OFF]);
+      expect(r.passed).toContain(SW_OFF);
+      expect(r.failed).toEqual([]);
+    });
+
+    test('off, and the Worker drew a street layer all the same: fails by name', () => {
+      const r = run(which, { body: streets, flag: 'false', sw: 'off' });
+      expect(r.failed).toEqual([SW_OFF]);
+    });
+
+    test('on: the test name says on, with streets and without', () => {
+      for (const body of [none, streets]) {
+        const r = run(which, { body, flag: 'false', sw: 'on' });
+        expect(named(r)).toEqual([SW_ON]);
+        expect(r.failed).toEqual([]);
+      }
+    });
+
+    test('the copy missing or mistyped: fails by name, and never reads as on or off', () => {
+      for (const sw of [undefined, '', 'ON', 'true', 'off ']) {
+        const r = run(which, { body: none, flag: 'false', sw });
+        expect(named(r), String(sw)).toEqual([SW_UNSAID]);
+        expect(r.failed, String(sw)).toEqual([SW_UNSAID]);
+      }
+    });
+  });
+
+  test('off, and the landing draws no map at all: passes', () => {
+    const r = run('landing', { body: landingPage({ map: false }), flag: 'false', sw: 'off' });
+    expect(r.passed).toContain(SW_OFF);
+    expect(r.failed).toEqual([]);
+  });
+
+  test('off, and the credit shown with no street layer: fails by name', () => {
+    const body = landingPage({}).replace('</body>', `${CREDIT}</body>`);
+    expect(run('landing', { body, flag: 'false', sw: 'off' }).failed).toContain(SW_OFF);
+  });
+
+  test('both cases read the copy, and the staging environment file carries it', () => {
+    for (const which of ['api', 'landing']) {
+      expect(scriptOf(which)).toContain("bru.getEnvVar('streetMapSwitch')");
+    }
+    const vars = yaml.load(read('bruno', 'ose-pages', 'environments', 'ose-staging.yml')).variables;
+    expect(['on', 'off']).toContain(vars.find((v) => v.name === 'streetMapSwitch')?.value);
+  });
+
+  test('the workflow passes the copy to no one', () => {
+    const wf = read('.github', 'workflows', 'oursharedevents-ci.yml');
+    expect(wf).not.toMatch(/streetMapSwitch|STREET_MAP\b/);
   });
 });
 

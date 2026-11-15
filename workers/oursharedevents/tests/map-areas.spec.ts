@@ -12,6 +12,7 @@
  *   - the frame and the outlines are the ones the landing map draws
  *   - the streets come with their CSS and the OpenStreetMap credit
  *   - a frame too wide for a street map reads no tile
+ *   - the switch off (STREET_MAP): 200, hexagons only, the bucket never asked
  *   - no archive, or a broken one: 200, hexagons only
  *   - no database is touched
  */
@@ -22,6 +23,7 @@
 // @born-red fail soft | method: loadStreetLayer replaced by buildStreetLayer in the handler, so a bad or missing archive throws; "a broken archive is still a 200, with the same hexagons" and "no binding: 200, hexagons only, kept briefly" failed | date: 2026-11-14
 // @born-red the around frame | method: the frame fitted to the areas alone, then the streets loaded for the areas alone; "around=1 fits the frame to the neighbours and returns their outlines" and "with around=1 the streets are drawn for the wider frame" failed | date: 2026-11-14
 // @born-red no database | method: `await (env as any).DB.prepare('SELECT 1')` added to the handler; "no database binding is touched" failed | date: 2026-11-14
+// @born-red the switch off | method: the switch line removed from loadStreetLayer, then the switch read after the bucket; "the switch off: 200, hexagons only, kept briefly, and the bucket is never asked" failed on each (streets drawn; then the bucket asked) | date: 2026-11-15
 import { describe, it, expect, beforeEach } from 'vitest';
 import { cellToBoundary, cellToLatLng, cellToParent, gridDisk, latLngToCell } from 'h3-js';
 import {
@@ -83,7 +85,10 @@ describe('public area map | what is refused', () => {
   it('a coordinate-shaped parameter is refused, and nothing is read', async () => {
     for (const name of ['lat', 'lon', 'lng', 'latitude', 'longitude', 'coords', 'position']) {
       const bucket = fakeBucket(DEFAULT_ARCHIVE, new Uint8Array(200));
-      const { res, body } = await get(`?cells=${BLUE7}&${name}=41.65`, { MAP_TILES: bucket });
+      const { res, body } = await get(`?cells=${BLUE7}&${name}=41.65`, {
+        STREET_MAP: 'on',
+        MAP_TILES: bucket,
+      });
       expect(res.status, name).toBe(400);
       expect(body.code, name).toBe('COORDINATES_NOT_ACCEPTED');
       expect(bucket.gets, name).toHaveLength(0);
@@ -233,7 +238,10 @@ describe('public area map | the frame and the hexagons', () => {
 describe('public area map | the streets', () => {
   it('draws the street layer in the same frame, with its CSS and the credit', async () => {
     const { r, bucket } = await streetBucket([BLUE7, NORTH7]);
-    const { res, body } = await get(`?cells=${BLUE7},${NORTH7}`, { MAP_TILES: bucket });
+    const { res, body } = await get(`?cells=${BLUE7},${NORTH7}`, {
+      STREET_MAP: 'on',
+      MAP_TILES: bucket,
+    });
     expect(res.status).toBe(200);
     const streets = body.streets!;
     expect(streets.svg.startsWith('<g class="amap-s"')).toBe(true);
@@ -256,13 +264,40 @@ describe('public area map | the streets', () => {
   it('with around=1 the streets are drawn for the wider frame', async () => {
     const framed = [BLUE7, ...gridDisk(BLUE7, 1).filter((c) => c !== BLUE7)];
     const { r, bucket } = await streetBucket(framed);
-    const { body } = await get(`?cells=${BLUE7}&around=1`, { MAP_TILES: bucket });
+    const { body } = await get(`?cells=${BLUE7}&around=1`, { STREET_MAP: 'on', MAP_TILES: bucket });
     expect(body.streets!.svg).toContain(`data-z="${r.z}"`);
     expect(frameZoom(frameForCells(framed, MAP_W, MAP_H))).toBe(r.z);
   });
 
+  // Street-map CCR 2026-11-15, R20.
+  it('the switch off: 200, hexagons only, kept briefly, and the bucket is never asked', async () => {
+    const { bucket } = await streetBucket([BLUE7]);
+    const on = await get(`?cells=${BLUE7}`, { STREET_MAP: 'on', MAP_TILES: bucket });
+    expect(on.body.streets).not.toBeNull();
+    const asked = bucket.gets.length;
+    expect(asked).toBeGreaterThan(0);
+
+    for (const env of [
+      { STREET_MAP: 'off', MAP_TILES: bucket },
+      { MAP_TILES: bucket },
+      { STREET_MAP: 'true', MAP_TILES: bucket },
+    ]) {
+      resetPmtilesCache();
+      const { res, body } = await get(`?cells=${BLUE7}`, env);
+      expect(res.status).toBe(200);
+      expect(body.ok).toBe(true);
+      expect(body.streets).toBeNull();
+      // The hexagons are the ones drawn with streets.
+      expect(body.areas).toEqual(on.body.areas);
+      expect(body.frame).toEqual(on.body.frame);
+      // Kept for a minute, not an hour: the switch turned on shows soon.
+      expect(res.headers.get('Cache-Control')).toBe('public, max-age=60');
+    }
+    expect(bucket.gets).toHaveLength(asked);
+  });
+
   it('no binding: 200, hexagons only, kept briefly', async () => {
-    const { res, body } = await get(`?cells=${BLUE7}`);
+    const { res, body } = await get(`?cells=${BLUE7}`, { STREET_MAP: 'on' });
     expect(res.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.streets).toBeNull();
@@ -273,7 +308,10 @@ describe('public area map | the streets', () => {
   it('a broken archive is still a 200, with the same hexagons', async () => {
     const plain = await get(`?cells=${BLUE7},${NORTH7}`);
     const bucket = fakeBucket(DEFAULT_ARCHIVE, new Uint8Array(500).fill(1));
-    const { res, body } = await get(`?cells=${BLUE7},${NORTH7}`, { MAP_TILES: bucket });
+    const { res, body } = await get(`?cells=${BLUE7},${NORTH7}`, {
+      STREET_MAP: 'on',
+      MAP_TILES: bucket,
+    });
     expect(bucket.gets.length).toBeGreaterThan(0);
     expect(res.status).toBe(200);
     expect(body.streets).toBeNull();
@@ -283,7 +321,7 @@ describe('public area map | the streets', () => {
 
   it('an archive with no tile for the frame: hexagons only, no credit', async () => {
     const { bucket } = await streetBucket([LOS_ANGELES7]);
-    const { res, body } = await get(`?cells=${BLUE7}`, { MAP_TILES: bucket });
+    const { res, body } = await get(`?cells=${BLUE7}`, { STREET_MAP: 'on', MAP_TILES: bucket });
     expect(res.status).toBe(200);
     expect(body.streets).toBeNull();
   });
@@ -292,7 +330,10 @@ describe('public area map | the streets', () => {
     const framed = [BLUE7, LOS_ANGELES7];
     expect(frameZoom(frameForCells(framed, MAP_W, MAP_H))).toBeLessThan(MIN_STREET_ZOOM);
     const { bucket } = await streetBucket(framed);
-    const { res, body } = await get(`?cells=${framed.join(',')}`, { MAP_TILES: bucket });
+    const { res, body } = await get(`?cells=${framed.join(',')}`, {
+      STREET_MAP: 'on',
+      MAP_TILES: bucket,
+    });
     expect(res.status).toBe(200);
     expect(body.streets).toBeNull();
     expect(body.areas).toHaveLength(2);
@@ -305,7 +346,10 @@ describe('public area map | the streets', () => {
     const framed = [BLUE7, far];
     expect(frameZoom(frameForCells(framed, MAP_W, MAP_H))).toBeGreaterThanOrEqual(MIN_STREET_ZOOM);
     const { bucket } = await streetBucket(framed);
-    const { body } = await get(`?cells=${framed.join(',')}`, { MAP_TILES: bucket });
+    const { body } = await get(`?cells=${framed.join(',')}`, {
+      STREET_MAP: 'on',
+      MAP_TILES: bucket,
+    });
     expect(body.streets).not.toBeNull();
   });
 });
@@ -325,6 +369,7 @@ describe('public area map | nothing about anyone', () => {
       );
     const { bucket } = await streetBucket([BLUE7]);
     const { res, body } = await get(`?cells=${BLUE7}`, {
+      STREET_MAP: 'on',
       MAP_TILES: bucket,
       DB: trap('DB'),
       FORMS_DB: trap('FORMS_DB'),
@@ -340,7 +385,7 @@ describe('public area map | nothing about anyone', () => {
       (
         await handleMapAreas(
           new Request(`${ORIGIN}/api/v2/map/areas?cells=${BLUE7}`, { headers }),
-          { MAP_TILES: bucket } as never
+          { STREET_MAP: 'on', MAP_TILES: bucket } as never
         )
       ).text();
     const a = await ask({});

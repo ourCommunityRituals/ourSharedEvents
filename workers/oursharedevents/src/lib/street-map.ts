@@ -21,6 +21,13 @@
 // slow read: the map is drawn as before, hexagons only. The street layer is
 // never a reason the page fails.
 //
+// THE SWITCH (street-map CCR 2026-11-15, R20). `STREET_MAP` is a plain value in
+// wrangler.toml, one for each environment. Exactly "on" draws streets. "off", no
+// value, or anything else is hexagons only, for every caller, and the bucket is
+// not asked: the archive can sit in the bucket with no street on any page. So
+// loading the archive and showing the first street are two steps, and the way
+// back from streets is one line in a PR, with the bucket left as it is.
+//
 // A LAYER IS A STREET MAP OR IT IS NOTHING (street-map CCR 2026-11-15). A layer
 // that is shown turns on the OpenStreetMap credit, lightens the hexagons and, in
 // the zoomed area, turns on the dots. So three rules stand between the tiles
@@ -42,6 +49,9 @@ import { escapeHtml } from './html-escape.js';
 
 export const MAP_W = 600;
 export const MAP_H = 360;
+
+/** The one value of `STREET_MAP` that draws streets. Anything else is off. */
+export const STREET_MAP_ON = 'on';
 
 /** The archive read when `MAP_TILES_ARCHIVE` is not set (the proof's region). */
 export const DEFAULT_ARCHIVE = 'chicago-region.pmtiles';
@@ -67,6 +77,8 @@ export const STREET_TIMEOUT_MS = 1500;
 const LABEL_PX = 22;
 
 export interface StreetMapEnv {
+  /** The switch: streets are drawn only when this is exactly `STREET_MAP_ON`. */
+  STREET_MAP?: string;
   MAP_TILES?: RangeBucket;
   MAP_TILES_ARCHIVE?: string;
 }
@@ -572,7 +584,8 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 }
 
 /**
- * The street layer for these cells, or null when it cannot be drawn (no
+ * The street layer for these cells, or null when it is switched off
+ * (`STREET_MAP` is not "on": nothing is read) or cannot be drawn (no
  * binding, no archive, a frame wider than a street map can show, no tile for
  * the frame, nothing in it to steer by, bad data, too slow). Never throws.
  */
@@ -581,7 +594,9 @@ export async function loadStreetLayer(
   cells: readonly string[],
   opts?: { timeoutMs?: number; numbered?: readonly string[] }
 ): Promise<StreetLayer | null> {
-  if (!env?.MAP_TILES || cells.length === 0) return null;
+  // The switch first: off reads nothing (street-map CCR 2026-11-15, R20).
+  if (env?.STREET_MAP !== STREET_MAP_ON) return null;
+  if (!env.MAP_TILES || cells.length === 0) return null;
   const bucket = env.MAP_TILES;
   const name = env.MAP_TILES_ARCHIVE || DEFAULT_ARCHIVE;
   if (!ARCHIVE_NAME.test(name)) return null;

@@ -33,8 +33,25 @@ runtime:
         // path (as-r as-2) are counted, and ROAD_FLOOR is 50. The layer measured as
         // wrong had 8,999 points of water and 1 of road; the sparsest good frame
         // measured had 253 (one area over Sawyer, Michigan).
+        //
+        // The switch (STREET_MAP in wrangler.toml, read by lib/street-map.ts;
+        // street-map CCR 2026-11-15, R20). streetMapSwitch in the environment file
+        // is a copy of staging's value (tests/unit/ci/env-parity.test.js holds the
+        // two equal), so every run's log says which way the switch is, in the name
+        // of one test:
+        //   "off"  the answer must carry no street layer, whatever the bucket holds.
+        //   "on"   the three states above decide.
+        //   else   the test fails: the copy must say "on" or "off".
+        // It is not streetMapArchiveLoaded: that flag says what these cases must
+        // see, and this says what the Worker is set to draw.
         const edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
         const loaded = String(bru.getEnvVar('streetMapArchiveLoaded')) === 'true';
+        const sw = String(bru.getEnvVar('streetMapSwitch'));
+        const SWITCH_TEST = sw === 'off'
+          ? 'Street-map switch: STREET_MAP is "off" for this environment, and no street layer is drawn'
+          : sw === 'on'
+            ? 'Street-map switch: STREET_MAP is "on" for this environment (streetMapArchiveLoaded says whether streets must be drawn)'
+            : 'Street-map switch: the environment file sets streetMapSwitch to "on" or "off"';
         const ROAD_FLOOR = 50;
         const roadCommands = function (layer) {
           let n = 0;
@@ -52,6 +69,13 @@ runtime:
         });
 
         const json = res.getBody() || {};
+
+        test(SWITCH_TEST, function () {
+          expect(sw, 'streetMapSwitch in the environment file').to.be.oneOf(['on', 'off']);
+          if (sw === 'off') {
+            expect(json.streets, 'STREET_MAP is "off" and the route drew a street layer').to.equal(null);
+          }
+        });
 
         test('The frame is the fixed Web Mercator frame', function () {
           expect(json.ok).to.equal(true);

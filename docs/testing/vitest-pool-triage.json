@@ -1847,7 +1847,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 22
+      "testCount": 23
     },
     {
       "file": "workers/oursharedevents/tests/map-default.spec.ts",
@@ -3471,21 +3471,21 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 15
+      "testCount": 17
     },
     {
       "file": "workers/oursharedevents/tests/street-map-runtime.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
-      "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 9
+      "reason": "runtime marker(s): SELF.fetch, createExecutionContext, waitOnExecutionContext",
+      "testCount": 12
     },
     {
       "file": "workers/oursharedevents/tests/street-map.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 90
+      "testCount": 96
     },
     {
       "file": "workers/oursharedevents/tests/subscribe-calendar-menu.spec.ts",
