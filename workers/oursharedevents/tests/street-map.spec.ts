@@ -28,6 +28,7 @@
 // @born-red no tile in the frame, planet-sized archive | method: "an archive with no tile in the frame is no layer" seen failing before the guard in buildStreetLayer (it returned a layer of one blank rectangle); its control is the archive's own cells drawing, in the same case ("one tile of the frame is enough" was its control until 2026-11-15, when R15 made every tile of the frame the rule); the planet case seen failing on 4 of the 6 reader faults listed in pmtiles.spec.ts | date: 2026-11-09
 // @born-red the switch (STREET_MAP) | method: six faults in loadStreetLayer (src/lib/street-map.ts), one at a time, each seen failing in "street map | the switch (STREET_MAP)": the switch line removed (19 tests failed, here and in map-areas.spec.ts and street-map-landing.spec.ts); any set value counted as on (17); the value trimmed and lower-cased before the compare (6: "ON", "On", " on", "on ", the non-string case and the landing's "ON"); the switch read after the bucket (19, on the count of reads alone); the compare turned round (72, "on: the layer is drawn" among them); STREET_MAP_ON set to 'true' (59, "the one value that draws" among them). Before any spec passed STREET_MAP, the switch alone failed 52 tests that draw | date: 2026-11-15
 // @born-red every tile of the frame, the frame's decode limits, the edges of the world (street-map CCR 2026-11-15, R15, R2, R49) | method: 9 faults injected one at a time in src/lib/street-map.ts and one in src/lib/mvt.ts, each seen failing the case named for it in the PR's fault list. The first puts main's lines back (a tile that is there is drawn): the R15 case failed. With the frame limit not passed to the decoder, and with the tile limit taken out, the "one point more" archive of that case drew. The three edge cases pin what the frame already did, so their red is the injected fault alone | date: 2026-11-15
+// @born-red a river is a line (the last survivor of street-map.ts in the mutation run) | method: `feat.type === 2` turned to `true` in drawStreetLayer (src/lib/street-map.ts), the mutant that survived on main (run 43731915136) and on PR 1295; "a river is a line in the water layer" seen failing on it (rivers: 6 points drawn, 2 wanted) while the other 229 cases of the four street specs stayed green, then the line put back | date: 2026-11-15
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   cellToBoundary,
@@ -1242,6 +1243,32 @@ describe('street map | the frame, the names and the kinds, to the unit', () => {
     expect(drawn).toEqual({ highway: 2, major: 0, minor: 0, water: 0, rivers: 0 });
     expect(svg).toContain('<path class="as-r as-3" d="M10 10L100 10"/>');
     expect(svg).not.toContain('as-r as-2');
+  });
+
+  it('a river is a line in the water layer: a run of points typed as a point, or not typed, is not one', () => {
+    // The decoder takes a feature's type and its commands as the tile gives
+    // them, so a run of points can arrive typed as a point (1) or untyped (0).
+    const run = (type: number, y: number) => ({
+      type,
+      props: {},
+      geometry: [
+        [
+          [10, y],
+          [100, y],
+        ] as [number, number][],
+      ],
+    });
+    const { svg, drawn } = drawStreetLayer(one, 0, [
+      {
+        x: 0,
+        y: 0,
+        layers: [{ name: 'water', extent: 4096, features: [run(2, 50), run(1, 90), run(0, 130)] }],
+      },
+    ]);
+    expect(drawn).toEqual({ highway: 0, major: 0, minor: 0, water: 0, rivers: 2 });
+    expect(svg).toContain('<path class="as-v" d="M10 50L100 50"/>');
+    expect(svg).not.toContain('L100 90');
+    expect(svg).not.toContain('L100 130');
   });
 
   it('the markup, to the character: nothing where nothing was drawn, parts end to end', () => {

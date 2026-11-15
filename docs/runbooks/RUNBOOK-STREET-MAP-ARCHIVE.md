@@ -436,9 +436,12 @@ writes nothing and can run at any time.
 4. **Owner: load.** The same dispatch with `mode` = `load`. Green means the
    bucket lists `us-20261109.pmtiles` at the checked size. Any red is explained
    in "What stops a run". **This is the first public street.** The switch is
-   already on for staging (step 8, done 2026-11-15 before any load), and the
-   Worker does not remember a read that found no object, so the next landing
-   request after the object lands draws streets.
+   already on for staging (step 8, done 2026-11-15 before any load). A Worker
+   instance that asked and found no object remembers that for one minute and
+   does not ask again until the minute is up (`MISS_MEMORY_MS` in
+   `lib/pmtiles.ts`). So streets show within a minute of the object landing,
+   one instance at a time, with no deploy: for up to a minute the same page can
+   come back with streets from one instance and without from another.
 
 5. **Record what was loaded.** The run's summary has the build date, the byte
    size and the SHA-256. They go on the owner-step ticket, and the byte size goes
@@ -499,11 +502,36 @@ writes nothing and can run at any time.
      it is the one deployed. Its cases agree with it and pass.
 
    `MAP_TILES_ARCHIVE` on `main`, in both environment blocks of `wrangler.toml`,
-   is the key that was loaded (the workflow refused to run otherwise). The
-   Worker does not remember a read that found no object, so with the switch on
-   the next landing request draws streets: for areas in the United States, the
-   landing shows streets under the hexagons and the OpenStreetMap credit, and a
-   tapped hexagon shows its dots over streets.
+   is the key that was loaded (the workflow refused to run otherwise). A
+   Worker instance remembers a read that found no object for one minute and no
+   longer (step 4), so with the switch on streets draw within a minute of the
+   load: for areas in the United States, the landing shows streets under the
+   hexagons and the OpenStreetMap credit, and a tapped hexagon shows its dots
+   over streets.
+
+   **What the Worker says it did.** Every try that reads the bucket writes one
+   `STREET_LAYER` line to Workers Logs (`lib/street-map.ts`,
+   `emitStreetLayer`): `outcome`, `surface` (`landing` or `map-areas`),
+   the zoom read (`z`), the tile count (`tiles`), the R2 reads (`r2Reads`)
+   and the time in milliseconds (`ms`). It names no area, no tile and no
+   request. The outcomes:
+
+   | `outcome`    | What happened                                                       |
+   | ------------ | ------------------------------------------------------------------- |
+   | `drew`       | a street layer is on the page                                       |
+   | `no-archive` | the bucket has no object under `MAP_TILES_ARCHIVE`                  |
+   | `no-tile`    | the archive has no tile for a part of the frame (outside the cut)   |
+   | `thin`       | the tiles were read and held no street map (no road to steer by)    |
+   | `timeout`    | slower than the 1.5 s limit; the page drew hexagons only            |
+   | `error`      | a read failed, or the bytes were refused (damaged, or over a limit) |
+
+   Before the load the only line is `no-archive`, at most once a minute for
+   each Worker instance. After it, the first lines to read are `timeout`
+   against `drew`, and `ms` on the `drew` lines with `r2Reads` of 3 or
+   more (a first map in a new instance): that is the cold read the last
+   section of this runbook could not time from a workstation. The switch off, a frame too wide
+   for streets, and an archive found missing less than a minute ago read
+   nothing and write no line.
 
    In every staging run's `T2: Bruno Pages contract` log, the landing case and
    the area-map case each print one test whose name starts `Street-map switch:`
@@ -721,7 +749,10 @@ Three ways, from the lightest.
 - **At once, with no deploy, for every environment:** the owner removes the
   object's lock rule and then deletes the object, in the dashboard. Each Worker
   that reads that key finds no archive and draws hexagons only on its next
-  request. **Once production is bound this takes production's streets too**;
+  request. An instance that had the archive open goes on asking on every view,
+  and writes a `no-archive` line each time, until it is replaced; a new
+  instance asks once a minute (step 4). **Once production is bound this takes
+  production's streets too**;
   there is no at-once way that reaches staging alone. The staging cases go red
   if step 9 is done, which is the signal that it is off.
 
@@ -829,7 +860,9 @@ Still unmeasured:
 - the first map in a new Worker instance, reading from R2. The workstation's
   1.4 s sits just under the 1.5 s limit that turns a slow read into hexagons
   only; it went over the public internet, so it says nothing about R2, and this
-  is the number to read on staging first;
+  is the number to read on staging first. The Worker now writes it: `ms` on
+  the `STREET_LAYER` lines, and a `timeout` line each time the limit is
+  passed (step 8);
 - R2 range reads at offsets past 4 GiB through the Worker binding;
 - memory in the Worker with many areas read (the reader keeps at most 300,000
   directory entries, about 25 MB by an estimate made in Node), and whether four

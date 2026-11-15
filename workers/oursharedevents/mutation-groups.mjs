@@ -11,9 +11,10 @@
 //            type catalog and its read, the events.ts range
 //   guards   the privacy and auth guards: admin.ts, count-floor.ts, 18%
 //            pii.ts, report-depth.ts, retention-windows.ts
-//   render   the street map and the page renderers: mvt.ts,        19%
-//            pmtiles.ts, street-map.ts, every pages.ts range, the
-//            Language menu, the sponsor art and logo rules
+//   render   the street layer and the page renderers:             19%
+//            street-map.ts, every pages.ts range, the Language
+//            menu, the sponsor art and logo rules (with tiles,
+//            below, until 2026-11-15)
 //
 //   forms    the form pages on the language layer (PR 1192):     own job
 //            form-pages.ts and event-staleness.ts
@@ -23,7 +24,24 @@
 // 207 mutants in form-pages.ts, 19 of them timeouts, each waiting out its
 // limit), which would have made the whole stage half as slow again.
 //
-// The language layer is the fifth job (stryker.language.conf.mjs), as before.
+//   tiles    what reads the street map's bytes (PR 1295):        own job
+//            mvt.ts (a tile) and pmtiles.ts (the archive)
+//
+// tiles was part of render until 2026-11-15. render had grown from 19% of one
+// pass to a job that ran out of its 15 minutes. On main that day it took
+// 11 min 26 s (run 43723016178), 12 min 51 s (43695883020) and 13 min 6 s
+// (43731915136), then was cancelled at the limit on the merge of PR 1291 (run
+// 43760539310), which changed none of its files, only two specs it runs. PR
+// 1295, which adds 45 mutants
+// to street-map.ts and pmtiles.ts and a spec that reaches both, was cancelled
+// at the limit twice (runs 43756620998 and 43760065975). The two readers are
+// the cut because they were over half of render's work in the last report main
+// finished (run 43731915136: 963 of 1,827 seconds of mutant runs, and 21 of
+// the 24 mutants that never end and wait out their limit, the slowest 48 s
+// each), and because every spec that reaches them reaches street-map.ts too
+// (48 of render's 51 specs), so neither job runs a spec render did not run.
+//
+// The language layer is its own job too (stryker.language.conf.mjs), as before.
 //
 // RULES (each enforced below, so a mistake fails the run, never a quiet gap):
 //   - Every target in stryker.conf.mjs belongs to exactly one group. A target
@@ -62,8 +80,6 @@ export const MUTATION_GROUPS = Object.freeze({
     'src/lib/retention-windows.ts',
   ]),
   render: Object.freeze([
-    'src/lib/mvt.ts',
-    'src/lib/pmtiles.ts',
     'src/lib/street-map.ts',
     'src/handlers/pages.ts',
     'src/lib/i18n/language-menu.ts',
@@ -71,6 +87,7 @@ export const MUTATION_GROUPS = Object.freeze({
     'src/handlers/sponsors.ts',
   ]),
   forms: Object.freeze(['src/handlers/form-pages.ts', 'src/lib/event-staleness.ts']),
+  tiles: Object.freeze(['src/lib/mvt.ts', 'src/lib/pmtiles.ts']),
 });
 
 /** The file a mutate entry names: `src/x.ts` or a range `src/x.ts:10-20`. */
@@ -175,7 +192,7 @@ export function relatedSpecs(specs, files, root) {
   return specs.filter((s) => reaches(normalize(resolve(root, s)), new Set()));
 }
 
-/** The fifth CI job: the language pass, which has its own config. */
+/** The last CI job: the language pass, which has its own config. */
 export const LANGUAGE_GROUP = 'language';
 
 /**

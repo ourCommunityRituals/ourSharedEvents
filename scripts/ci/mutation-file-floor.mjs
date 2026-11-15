@@ -118,9 +118,12 @@ export const FLOORS = {
   // run of the whole file, 2026-11-15: 540 mutants, 535 killed, 3 that never
   // end (`--z` to `++z` where the zoom steps out, `x++` and `y++` to `--` in
   // the tile loop), 2 survived, so 99.63. One survivor has a test since (three
-  // points on a straight run). The other is equivalent: a point of water sent
-  // on as a river is one point to a part, and a part under two points is left
-  // out either way (its `// Stryker disable` line in the source did not take).
+  // points on a straight run). The other was read as equivalent (a point of
+  // water sent on as a river is one point to a part, and a part under two
+  // points is left out either way) and was not: the decoder takes a feature's
+  // type as the tile gives it, so a run of points can arrive typed as a point.
+  // It has a test since PR 1295 ("a river is a line in the water layer"), and
+  // its `// Stryker disable` line, which never took, is gone from the source.
   // Three more are disabled in the source with their reasons. Never lower.
   'src/lib/street-map.ts': 99.6,
 };
