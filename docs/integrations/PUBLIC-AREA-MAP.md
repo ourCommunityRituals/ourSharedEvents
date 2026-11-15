@@ -21,6 +21,18 @@ Production is held closed, so read staging. Staging has no street archive loaded
 (`docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md`); until the owner loads it the answer is
 `streets: null`, which the build must handle anyway.
 
+## What is true today (read 2026-11-15)
+
+- **No reader has ever received a street layer from this route.** No archive is loaded, so
+  staging answers `streets: null` every time. The frame, the outlines and the refusals are
+  proven on staging; the `streets` object is proven only in tests, on test archives.
+- **A street layer, when it comes, may be thin.** The drawer on `main` can return a layer that
+  is mostly water for a wide frame (street-map review 2026-11-15, finding R7). That is not
+  `null`, so this route returns it as `streets`. A reader cannot tell it from a good one. It
+  is being corrected before the load.
+- **The licence duties for the data** are in [`../../NOTICE.md`](../../NOTICE.md). The credit
+  is the reader's page's to show (below).
+
 ## The answer (200)
 
 ```jsonc
@@ -92,13 +104,48 @@ return (
 - When `streets` is not null:
   - put `streets.css` in the page's stylesheet. It reads the `@ocr/ui` colour tokens `--surface`,
     `--info`, `--border`, `--border-strong`, `--text-muted` and `--bg`;
-  - show `streets.credit.html` beside the map. OpenStreetMap's licence asks for it wherever the
-    streets show. Without streets, show no credit;
+  - show `streets.credit.html` beside the map, where a visitor sees it without doing anything.
+    OpenStreetMap's licence asks for it wherever the streets show, and this route cannot show
+    it for you. Without streets, show no credit. See "The credit" below;
   - make `hex-area` see-through enough that the streets read (the landing uses a fill opacity of
     0.15 to 0.5 over streets).
 - When `streets` is null, draw as today: hexagons only. This is a normal answer, not a failure.
 - `streets.svg` is markup the Worker built from tile data it escaped. It holds `<g>`, `<rect>`,
   `<path>` and `<text>` only: no link, no script, no address of another host.
+
+## The credit
+
+- `streets.credit.html` is one paragraph: the words, a link to OpenStreetMap's copyright page
+  (which says the data is under the Open Database License) and a link to Protomaps.
+  `streets.credit.osm` is the OpenStreetMap address alone.
+- **It is in English only**, whatever language your page is in
+  (`streetCredit('en')` in the handler). The route takes no language. If your page is in
+  another language, the credit will still read in English; a `lang` parameter is listed as a
+  later change in `NOTICE.md`.
+- **It is not inside `streets.svg`.** If you copy the `<svg>` somewhere without the paragraph,
+  the map has no credit. Keep the two together.
+- If the page may be printed or saved as a PDF, print the address
+  (`https://www.openstreetmap.org/copyright`) as text, not only as a link.
+- Nothing in OurSharedEvents checks that a reader's page shows the credit. A test on the
+  reader's side should: whenever the page holds `streets.svg`, it holds `streets.credit.html`.
+
+## How long an answer may be kept
+
+The route sets `Cache-Control` itself:
+
+| Answer                   | `Cache-Control`                                      | What it means for a build                                                               |
+| ------------------------ | ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 200 with `streets`       | `public, max-age=3600, stale-while-revalidate=86400` | Fresh for an hour; may be served stale for a further day. Up to 25 hours for one answer |
+| 200 with `streets: null` | `public, max-age=60`                                 | Kept a minute, so a failed street read is not what a build keeps getting                |
+| Any refusal (400, 429)   | `no-store`                                           | Never kept                                                                              |
+
+- Nothing at Cloudflare's edge stores the route today. The header matters to your build's own
+  HTTP cache, to a proxy in front of it, and to a browser.
+- The archive's name is not part of the address. After the archive is refreshed, or a wrong
+  layer is corrected, a build that kept an answer shows the old streets until its copy ends.
+  A build that must have the current map should not answer this read from its own HTTP cache.
+- The pages a static build writes keep the streets they were built with until the next build.
+  That is a longer life than any header here.
 
 ## Refusals
 

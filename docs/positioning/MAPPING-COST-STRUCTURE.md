@@ -12,12 +12,46 @@
 
 ## The three map layers
 
-| Layer                             | What it is                                                                                                                     | Status                                                                                               |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| **H3 hexagons**                   | Server-drawn SVG from res-7 cell ids (`lib/attendee-map.ts`, `lib/corridor-map.ts`). No tiles, no JS, no outside request.      | Shipped                                                                                              |
-| **Venue image**                   | One Google Static Maps image per venue, fetched by the Worker (`GET /api/v2/maps/venue-image`, `lib/maps.ts`).                 | Shipped on event pages                                                                               |
-| **Street map under the hexagons** | Water, roads and town names drawn by the Worker as SVG under the hexagons (`lib/street-map.ts`), from a PMTiles archive in R2. | Built on the landing map; bound on staging first, after the workflow loads the file (see decision 4) |
-| **Zoomed area with event dots**   | A tapped hexagon drawn alone over its streets, one dot per place (`lib/attendee-map.ts`, `/?area=`).                           | Built on the landing map (see decision 5); streets need `MAP_TILES`                                  |
+| Layer                             | What it is                                                                                                                     | Status                                                                                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **H3 hexagons**                   | Server-drawn SVG from res-7 cell ids (`lib/attendee-map.ts`, `lib/corridor-map.ts`). No tiles, no JS, no outside request.      | Shipped                                                                                                                                  |
+| **Venue image**                   | One Google Static Maps image per venue, fetched by the Worker (`GET /api/v2/maps/venue-image`, `lib/maps.ts`).                 | Shipped on event pages                                                                                                                   |
+| **Street map under the hexagons** | Water, roads and town names drawn by the Worker as SVG under the hexagons (`lib/street-map.ts`), from a PMTiles archive in R2. | **Code merged; drawn nowhere yet.** No archive is loaded, so staging and production draw hexagons only (see "What is drawn where today") |
+| **Zoomed area with event dots**   | A tapped hexagon drawn alone over its streets, one dot per place (`lib/attendee-map.ts`, `/?area=`).                           | **Code merged; the dots are not shown yet.** With no street layer the zoomed area lists its places and draws no dots (decision 5)        |
+
+### What is drawn where today (read 2026-11-15)
+
+**No street has been drawn on staging or production.** The load workflow has 0 runs, the bucket
+`ose-map-tiles` is empty, and `streetMapArchiveLoaded` is `"false"`. A green staging chain
+says nothing about streets until that flag is `"true"`: the street cases print NOT RUN.
+
+Once an archive is loaded, the code on `main` draws streets on two surfaces and no other:
+
+| Surface                                              | What it draws                                                                     | Limit                                                                                                     |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| The landing map (`/`)                                | Streets under every hexagon in view, in the frame fitted to those hexagons        | 12 tiles, zoom 14 or coarser; no zoom floor, so a frame a country wide still reads tiles and draws little |
+| The zoomed area (`/?area=<res-7 cell>`)              | One area over its streets, with a numbered dot per place                          | The same read; with no street layer it lists the places and draws no dots                                 |
+| The public area map (`GET /api/v2/map/areas`)        | The same street layer, handed to a reader outside OSE as SVG markup (OSE ADR-033) | The same read; below zoom 7 (a frame about 600 km across) it reads no tile and answers hexagons only      |
+| Event page, `/events`, display, poster, SharedReport | Hexagons only. No street layer is drawn there                                     | —                                                                                                         |
+
+The layer is water, roads in three weights (highways, major roads, minor roads) and up to six
+town names. It is capped at 9,000 path points (`MAX_POINTS`).
+
+**Not proven, and found wanting by the street-map review of 2026-11-15**
+(`.claude/outputs/CCR-STREET-MAP-WILL-IT-WORK-2026-11-15.md`, score 0%, stopped at a human gate):
+
+- No real archive has gone through the Worker's reader and drawer in a Worker. The United
+  States file has never been cut or read (finding R1).
+- The point cap is spent on water first, and a feature that does not fit is skipped whole. In
+  the review's workstation run a 19-area frame over Manhattan drew water and no roads, and a
+  7-area frame drew no minor roads (finding R7). A wide frame is not a street map today.
+- The 1.5 s limit, the Worker's CPU and memory for a dense frame, and reads from R2 are
+  unmeasured (findings R2, R3).
+- Nothing tells a thin or wrong layer from a good one at run time (finding R18).
+- The data's licence duties are in [`../../NOTICE.md`](../../NOTICE.md): the credit is in the
+  code; some duties are NOT CLEAR and wait for the owner.
+
+The owner chose "corrections first" on 2026-11-15: these are corrected before the load.
 
 ## Cost lines
 
@@ -78,6 +112,14 @@ its size is not measured yet (decision 4).
    Any failure, or a read slower than 1.5 s, draws the hexagons alone. The
    OpenStreetMap credit shows whenever streets do.
 
+   **What those figures are, and are not (2026-11-15):** the read counts were measured
+   from a workstation against the whole build at Protomaps, not through a Worker and not
+   from R2, and not on the United States file, which does not exist yet. "Any failure
+   draws the hexagons alone" holds when the read returns nothing. A layer that is read
+   and drawn badly (water and no roads, for one) is not a failure to the code: it is
+   shown, with the credit. The 1.5 s limit has no measurement on the Worker's path behind
+   it. See "What is drawn where today".
+
    **Turning it on (owner steps, 2026-11-09 and 2026-11-10):** the archive is on
    our own Cloudflare account, and staging gets it before production. It is the
    **United States subset** of a Protomaps build: the 50 states, DC, Puerto Rico
@@ -109,11 +151,18 @@ its size is not measured yet (decision 4).
    that one area over the street map, with a numbered dot per place that holds an
    event. Each dot links to its event, or to its row in the list when it holds
    several. The type, date and where pills filter the dots as they filter the cards,
-   still with no JavaScript. **Where a dot sits:** a place the lookup named a
-   business or landmark (`events.place_kind = 'business'`, migration 0106) at its
-   exact point; anything else, which can be a home, at the centre of its res-9 cell
-   (about one block). A missing kind is drawn as a block. Only a res-7 cell is
-   accepted; anything finer is ignored.
+   still with no JavaScript. **Where a dot sits:** every place sits at the centre
+   of its res-9 cell (about one block), a business too. No dot is drawn at an exact
+   point. A place the lookup named a business or landmark
+   (`events.place_kind = 'business'`, migration 0106) is drawn solid and named; anything
+   else, which can be a home, is drawn as a block. A missing kind is drawn as a block.
+   Events on one block share a dot. Only a res-7 cell is accepted; anything finer is
+   ignored. (Corrected 2026-11-15: this paragraph said a business sat at its exact
+   point. The code is stricter, `mapDots` in `lib/attendee-map.ts`.)
+
+   **Not shown yet:** the dots need a street layer, and no archive is loaded. Whether
+   a dot for a home-hosted event over legible streets is wanted is an open owner
+   question (street-map review 2026-11-15, finding R9).
 
    **Cost:** the zoomed view reads the same 12 tiles at most as the hexagon view, so
    decision 4's figure holds per view. Kinds for events placed before 0105 are filled
@@ -125,13 +174,13 @@ its size is not measured yet (decision 4).
 The PO needs a plan and a reaction ready for this inside the next year
 (2026-10-03). For mapping, the reaction is fixed in advance:
 
-| Question                                | Answer                                                                                                                                                           |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Does their traffic change the map bill? | On Google, yes: a million venue-image loads is about $1,980 a month. Self-hosted, about $5–10.                                                                   |
-| What do we do on signing?               | Build the self-hosted street map and move the venue image onto it **before** their events go live. Until that ships, set a daily quota cap on the Google key.    |
-| Who pays?                               | Their Mid or Enterprise fee. Self-hosted, the map costs a few dollars a month even at a million views, so it is covered by a single $49 Mid seat.                |
-| What do they get that others do not?    | Nothing on the public map (tier-blind). In reports: the corridor map across their venues, the portfolio roll-up, and their own styling through OurSharedMagnets. |
-| What must be true first?                | The exposure below is closed, and the count of map loads is being read from `OPERATION_COST` monthly.                                                            |
+| Question                                | Answer                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Does their traffic change the map bill? | On Google, yes: a million venue-image loads is about $1,980 a month. Self-hosted, about $5–10.                                                                                                                                                                                                                                                                                                            |
+| What do we do on signing?               | Finish the self-hosted street map and move the venue image onto it **before** their events go live. Until that ships, set a daily quota cap on the Google key. **State on 2026-11-15: the street map's code is merged and it draws nowhere.** No archive is loaded, the review of that day scored it 0%, and nothing moves the venue image onto it. Do not tell a signing customer the street map exists. |
+| Who pays?                               | Their Mid or Enterprise fee. Self-hosted, the map costs a few dollars a month even at a million views, so it is covered by a single $49 Mid seat.                                                                                                                                                                                                                                                         |
+| What do they get that others do not?    | Nothing on the public map (tier-blind). In reports: the corridor map across their venues, the portfolio roll-up, and their own styling through OurSharedMagnets.                                                                                                                                                                                                                                          |
+| What must be true first?                | The exposure below is closed, and the count of map loads is being read from `OPERATION_COST` monthly.                                                                                                                                                                                                                                                                                                     |
 
 Their actual volumes are unknown; re-run the table above with their numbers at intake.
 

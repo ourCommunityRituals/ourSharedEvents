@@ -2068,6 +2068,75 @@ const ANALYTIC_LAYER: ThreatEntry[] = [
   },
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Layer: the street-map archive and its bucket (OSE ADR-033, ADR-035). TL-098..TL-101.
+// Named by the street-map review of 2026-11-15 (findings R8, R13, R5, R23). All open:
+// no archive is loaded and production is not bound, so none is live today.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const STREET_MAP_ARCHIVE: ThreatEntry[] = [
+  {
+    id: 'TL-098',
+    layer: 'pipeline',
+    threat:
+      'Nothing enforces who may write the bucket production will read (ose-map-tiles, binding MAP_TILES). The GitHub staging environment has no branch policy, so a job on any branch can name it and read R2_MAP_TILES_ACCESS_KEY_ID / R2_MAP_TILES_SECRET_KEY while they are set; every branch is deployed to the staging Worker, whose R2 binding can write; and the bucket lock rule that is meant to protect a loaded object has never been tried. A branch could write the archive key before the owner loads it.',
+    severity: 'HIGH',
+    target_invariant: null,
+    mitigation_story: 'OSE-2064',
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'OSE ADR-035, "What happened". Owner settings: the write key in an environment only main can reach; the lock seen refusing a write through a binding; the CI-made bucket checked or remade. Becomes Security Critical on the day production binds if unchanged (CCR 2026-11-15, R8).',
+  },
+  {
+    id: 'TL-099',
+    layer: 'worker_surface',
+    threat:
+      'A replaced street-map object would not be noticed: the Worker pins no etag or hash of the object MAP_TILES_ARCHIVE names, and the directories it keeps per isolate have no time limit (lib/pmtiles.ts). Whoever can write the key (TL-098) chooses what every map draws.',
+    severity: 'MEDIUM',
+    target_invariant: null,
+    mitigation_story: 'OSE-1884',
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      "The tile data is escaped before it is drawn (the street layer holds g, rect, path and text only), so this is a wrong or defaced map, not script. Close by pinning the loaded object's etag in configuration and comparing it on read (CCR 2026-11-15, R13). High before production binds.",
+  },
+  {
+    id: 'TL-100',
+    layer: 'worker_surface',
+    threat:
+      'The landing page reads, decodes and draws the street layer on every request, with no stored copy, and "/" has no rate limit, so an anonymous caller can spend R2 reads and Worker CPU at will once an archive is loaded. GET /api/v2/map/areas does the same read behind publicReadLimited("map-areas").',
+    severity: 'MEDIUM',
+    target_invariant: null,
+    mitigation_story: 'OSE-1882',
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'docs/security/ROUTE_CLASSIFICATION_POLICY.md lists "/" with rate limiting as a required control; the router has none for it, which is older than the street map. The area-map limit is tested in tests/map-areas-route.spec.ts. Close with a stored copy of the drawn layer and a limit on "/" (CCR 2026-11-15, R5).',
+  },
+  {
+    id: 'TL-101',
+    layer: 'pipeline',
+    threat:
+      'The street-map load job runs npm ci with lifecycle scripts on the runner that later receives the R2 write key, so a compromised dependency install script could read R2_MAP_TILES_ACCESS_KEY_ID / R2_MAP_TILES_SECRET_KEY from a later step of the same job.',
+    severity: 'MEDIUM',
+    target_invariant: null,
+    mitigation_story: 'OSE-2064',
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'The key reaches four steps as environment variables (a guard, two listings, the upload) and no install step; the risk is a process left behind by an install. Close by installing with scripts off in that job, or by moving the upload to its own job (CCR 2026-11-15, R23).',
+  },
+];
+
 export const THREAT_LEDGER: ThreatEntry[] = [
   ...D1_BOUNDARY,
   ...WORKER_SURFACE,
@@ -2091,12 +2160,13 @@ export const THREAT_LEDGER: ThreatEntry[] = [
   ...ADMIN_ACTOR_ONCE,
   ...ADMIN_IDENTITY_HARDENING,
   ...ANALYTIC_LAYER,
+  ...STREET_MAP_ARCHIVE,
 ];
 
 export const THREAT_LEDGER_META = {
   schema_version: '1.0.0',
   story: 'OSE-564',
-  last_updated: '2026-11-10',
+  last_updated: '2026-11-15',
   total_entries: THREAT_LEDGER.length,
   layers: 8,
 } as const;
