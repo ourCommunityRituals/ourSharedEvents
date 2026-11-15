@@ -97,6 +97,9 @@ export const NODE_SPECS = [
   // node. Green-filtered in the node project like batch 2.
   'tests/advanced-metrics.spec.ts',
   'tests/withheld-counts-in-words.spec.ts',
+  // OSE-1656 — a withheld count reads "Fewer than 5" on every page, from one
+  // source (jsdom + the source tree; no runtime)
+  'tests/withheld-count-words.spec.ts',
   'tests/as-display-public-admin.spec.ts',
   'tests/briefing.spec.ts',
   'tests/color-contrast.spec.ts',

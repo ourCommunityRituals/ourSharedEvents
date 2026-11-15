@@ -22,6 +22,7 @@ import { JSDOM } from 'jsdom';
 import { getCode } from '../src/lib/uec';
 import ADMIN_HTML from '../src/templates/admin.html';
 import POSTER_HTML from '../src/templates/poster.html';
+import { installFewerThan } from './helpers/fewer-than';
 
 // A code's UEC as the server sends it, read from the registry.
 const UEC = (id: string) => {
@@ -85,6 +86,7 @@ function mountAdmin(router: Router, needle: string) {
     value: { writeText: vi.fn(async () => {}) },
     configurable: true,
   });
+  installFewerThan(w);
   w.eval(scriptContaining(ADMIN_HTML, needle));
   return { w, doc: w.document, calls };
 }
@@ -470,6 +472,7 @@ function mountReach() {
     runScripts: 'outside-only',
   });
   const w = dom.window as unknown as Win;
+  installFewerThan(w);
   w.eval(reachFn());
   const render = (r: unknown, plan?: unknown) =>
     (w.renderPreEventReach as (r: unknown, plan?: unknown) => void)(r, plan);
@@ -700,6 +703,7 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
         link: { url: 'https://ose.test/s/Pub001', code: 'Pub001', qr: QR },
       },
     }));
+    installFewerThan(w);
     w.eval(reachFn());
     w.eval(windowFn());
     await (w.renderPreEventWindow as (id: string) => Promise<void>)(EVT);
@@ -708,9 +712,9 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
     return { text };
   }
 
-  test('withheld: the tile reads Held and the lede says "fewer than 5 taps on any one link" — never the number', async () => {
+  test('withheld: the tile reads in words and the lede says "fewer than 5 taps on any one link" — never the number', async () => {
     const { text } = await mountCard(fc(3), 7);
-    expect(text('pre-event-clicks')).toBe('Held');
+    expect(text('pre-event-clicks')).toBe('Fewer than 5 on any one link');
     expect(text('pre-event-lede')).toBe(
       'People are finding it: fewer than 5 taps on any one link and 7 poster scans so far.'
     );
@@ -718,7 +722,8 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
 
   test('nothing yet (or withheld with no scans) reads as the normal early state', async () => {
     const { text } = await mountCard(fc(0), 0);
-    expect(text('pre-event-clicks')).toBe('Held');
+    expect(text('pre-event-clicks')).toBe('Fewer than 5 on any one link');
+    expect(text('pre-event-scans')).toBe('Fewer than 5 in any hour');
     expect(text('pre-event-lede')).toMatch(/taps show here once a link has 5 or more/);
   });
 
@@ -736,7 +741,7 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
     const tile = text('pre-event-clicks')!;
     const lede = text('pre-event-lede')!;
     const line = text('pre-event-reach-taps')!;
-    expect(tile).toBe('Held');
+    expect(tile).toBe('Fewer than 5 on any one link');
     expect(lede).toBe(
       'People are finding it: fewer than 5 taps on any one link and 7 poster scans so far.'
     );
@@ -744,7 +749,7 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
       'Link taps: fewer than 5 on any one link so far (a link shows here at 5 or more)'
     );
     for (const shown of [tile, lede, line]) {
-      expect(shown).not.toMatch(/NaN|null|undefined|<5|\b0\b/);
+      expect(shown).not.toMatch(/NaN|null|undefined|<5|Held|\b0\b/);
       expect(shown).not.toMatch(/fewer than 5 (link )?taps(?! on any one link)/);
       expect(shown).not.toMatch(/fewer than 5 so far/);
     }
@@ -760,9 +765,9 @@ describe('Tier 3 | the card’s Link taps tile and lede read the FLOORED tap tot
   });
 
   // OSE-1656: poster scans arrive floored; withheld reads in words, never 0.
-  test('scans withheld, taps shown: the tile reads Held and the lede says so in words', async () => {
+  test('scans withheld, taps shown: the tile and the lede say so in words, never "Held"', async () => {
     const { text } = await mountCard(fc(11), 3);
-    expect(text('pre-event-scans')).toBe('Held');
+    expect(text('pre-event-scans')).toBe('Fewer than 5 in any hour');
     expect(text('pre-event-lede')).toBe(
       'People are finding it: 11 link taps and fewer than 5 poster scans in any one hour so far.'
     );

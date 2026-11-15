@@ -5,7 +5,7 @@
  * A sub-5 cohort is suppressed on EVERY surface using the same K as the
  * SharedReport (CORRIDOR_MAP_MIN_COUNT), enforced server-side, so no surface
  * side-channels an exact small count. The tile renders three server-decided
- * states: an exact count (>=5), a suppressed band (<5 → "<5"), or a failed
+ * states: an exact count (>=5), a suppressed band (<5 → "Fewer than 5"), or a failed
  * fetch (retry — never a masked 0). The old `.catch(() => 0)` mask is gone.
  *
  * Source-shape assertions on the served admin HTML (inline script), matching
@@ -27,7 +27,7 @@ async function fetchAdminHtml(): Promise<string> {
 describe('OSE-665 — count tiles are three-state, never a masked 0', () => {
   test('the old error-masking pattern (.catch(() => 0)) is gone from the counts fetch', async () => {
     const html = await fetchAdminHtml();
-    expect(html).not.toContain(".then(d => d.count || 0).catch(() => 0)");
+    expect(html).not.toContain('.then(d => d.count || 0).catch(() => 0)');
   });
 
   test('a failed count resolves to an explicit error sentinel, not 0', async () => {
@@ -40,8 +40,11 @@ describe('OSE-665 — count tiles are three-state, never a masked 0', () => {
     const html = await fetchAdminHtml();
     expect(html).toContain('if (d.suppressed) return');
     expect(html).toContain('data-testid="count-suppressed"');
-    // The suppressed band renders "<5", never the exact sub-floor number.
-    expect(html).toContain('&lt;5');
+    // The suppressed band reads "Fewer than 5" (OSE-1656: in words, from the one
+    // source the page carries), never "<5" and never the exact sub-floor number.
+    expect(html).toContain("esc(oseFewerThan(5)) + '</span>'");
+    expect(html).toContain('function oseFewerThan(floor, tail, lower)');
+    expect(html).not.toContain('&lt;5');
   });
 
   test('an errored tile renders a retry affordance (never a masked 0)', async () => {

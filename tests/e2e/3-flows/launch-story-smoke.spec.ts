@@ -349,6 +349,52 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     expect(await other.text()).not.toContain(publicEventId);
   });
 
+  // OSE-1656: a withheld count reads "Fewer than 5" on the deployed pages, and an
+  // event's registrations have one count. A new event has no registrations, so
+  // every figure here is withheld for real: nothing is mocked. The grid of cases
+  // is in the Worker specs (withheld-count-words.spec.ts,
+  // registration-count-one-definition.spec.ts); this reads the deployed Worker.
+  test('a new event: withheld counts are one figure, and the Live view says "Fewer than 5", never "Held"', async ({
+    request,
+  }) => {
+    draftEventId = await createEvent(request, 'draft', false, 'withheld');
+
+    const stats = await adminFetch(request, 'GET', `/api/v2/admin/events/${draftEventId}/stats`);
+    expect(stats.status(), 'event stats').toBe(200);
+    const list = await adminFetch(
+      request,
+      'GET',
+      `/api/v2/admin/events/${draftEventId}/forms/registrations`
+    );
+    expect(list.status(), 'registrations list').toBe(200);
+    const withheld = { count: null, suppressed: true, floor: 5 };
+    const statsJson = await stats.json();
+    const listJson = await list.json();
+    expect(statsJson.stats.registrations).toEqual(withheld);
+    expect({
+      count: listJson.count,
+      suppressed: listJson.suppressed,
+      floor: listJson.floor,
+    }).toEqual(statsJson.stats.registrations);
+
+    const live = await adminFetch(
+      request,
+      'GET',
+      `/api/v2/admin/events/${draftEventId}/live`,
+      undefined,
+      { allowHtml: true }
+    );
+    expect(live.status(), 'live view').toBe(200);
+    const html = await live.text();
+    expect(html, 'the Worker served the Live view, not a sign-in page').toContain(
+      'data-testid="live-main"'
+    );
+    // The one source of the words is on the page, and the old word is not.
+    expect(html).toContain('function oseFewerThan(floor, tail, lower)');
+    expect(html).toContain('"Fewer than {floor}"');
+    expect(html).not.toMatch(/['">]Held['"<]/);
+  });
+
   test('poster scan route replays to /events/:id with type and deployment context (OSE-1359)', async ({
     request,
   }) => {

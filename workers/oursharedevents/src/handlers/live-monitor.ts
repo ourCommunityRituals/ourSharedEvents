@@ -11,7 +11,7 @@
 // page fetches and re-fetches every REFRESH_SECONDS. So the privacy classes are
 // the contract's, not this page's: poster scans, link taps and check-ins are
 // all floored at K=5 (OSE-1656: scans too, as sums of poster-hours) and read
-// "held" below it; posters, places and sponsors are counts of things, exact. The note under the tiles names the tiles that came floored,
+// "Fewer than 5" below it (lib/withheld-words.ts); posters, places and sponsors are counts of things, exact. The note under the tiles names the tiles that came floored,
 // read from the data on each refresh, so it never claims a floor a number does
 // not have (OSE-1657). A failed refresh keeps the last numbers and says so — never
 // zeros. No scan, click, shortlink or audit row is written by looking.
@@ -22,6 +22,7 @@
 import { html, renderErrorPage } from './pages';
 import { escapeHtml } from '../lib/html-escape.js';
 import { eventScreenPaths } from '../lib/event-nav';
+import { WITHHELD_WORDS_CLIENT_JS } from '../lib/withheld-words';
 
 export interface LiveMonitorEnv {
   DB?: D1Database;
@@ -51,7 +52,8 @@ const STYLE = `
   .lv-tile b{display:block;font-size:2rem;line-height:1.1}
   .lv-tile span{color:var(--text-muted);font-size:.875rem}
   .lv-tile.held{border-style:dashed}
-  .lv-tile.held b{color:var(--text-muted);font-size:1.5rem}
+  .lv-tile.held b{color:var(--text-muted);font-size:1.125rem;line-height:1.25}
+  .lv-days b.held{color:var(--text-muted);font-size:.875rem}
   .lv-days{list-style:none;margin:1rem 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:.5rem}
   .lv-days li{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.5rem .75rem;font-size:.875rem}
   .lv-days b{display:block;font-size:1.125rem}
@@ -106,6 +108,7 @@ function page(id: string, title: string, status: string): string {
   <p class="lv-note" data-testid="live-note">Counts only.<span data-testid="live-note-held"></span> Nobody who scanned, tapped or checked in is named, and attendees never see this page.</p>
 </main>
 <script>
+${WITHHELD_WORDS_CLIENT_JS}
 (function () {
   var main = document.querySelector('[data-testid="live-main"]');
   var id = main.getAttribute('data-event-id');
@@ -113,21 +116,26 @@ function page(id: string, title: string, status: string): string {
   var statusEl = document.querySelector('[data-testid="live-status"]');
   var lastGood = null;
 
+  // A floored count is an object; a day in the list may be one too.
+  function isHeld(v) {
+    return !!(v && typeof v === 'object' && (v.suppressed === true || v.count === null));
+  }
+
+  // What a withheld total was held to. Scans are the poster-hours with 5 or
+  // more, summed, and taps the links with 5 or more: withheld there means no
+  // hour, or no link, reached 5, not fewer than 5 in all.
+  var TAIL = { scans: 'in any hour', clicks: 'on any one link' };
+
   // A floored count is { count, suppressed, floor }; a plain count is a number.
+  // Withheld reads in words (oseFewerThan), never a code word, a symbol or 0.
   function show(metric, v) {
     var tile = document.querySelector('[data-metric="' + metric + '"]');
     if (!tile) return;
     var b = tile.querySelector('b');
-    var held = v && typeof v === 'object' && v.suppressed === true;
+    var held = isHeld(v);
     var n = v && typeof v === 'object' ? v.count : v;
     tile.classList.toggle('held', held);
-    b.textContent = held ? 'Held' : (typeof n === 'number' && isFinite(n) ? String(n) : '\\u2014');
-    if (held) b.setAttribute('title', 'Fewer than ' + v.floor + ' so far'); else b.removeAttribute('title');
-  }
-
-  // A floored count is an object; a day in the list may be one too.
-  function isHeld(v) {
-    return !!(v && typeof v === 'object' && (v.suppressed === true || v.count === null));
+    b.textContent = held ? oseFewerThan(v.floor, TAIL[metric]) : (typeof n === 'number' && isFinite(n) ? String(n) : '\\u2014');
   }
 
   // The note names exactly the tiles whose number came floored this time.
@@ -141,7 +149,7 @@ function page(id: string, title: string, status: string): string {
     var list = held.length === 1 ? held[0]
       : held.slice(0, -1).join(', ') + ' and ' + held[held.length - 1];
     el.textContent = ' ' + list.charAt(0).toUpperCase() + list.slice(1) +
-      ' under 5 read \u201cHeld\u201d.';
+      ' under 5 read \u201c' + oseFewerThan(5) + '\u201d.';
   }
 
   function render(d) {
@@ -161,11 +169,13 @@ function page(id: string, title: string, status: string): string {
     (Array.isArray(reach.scansByDay) ? reach.scansByDay : []).slice(-14).forEach(function (day) {
       var li = document.createElement('li');
       var b = document.createElement('b');
-      // A floored day reads Held, never 0 (OSE-1657). The day's count is a
+      // A floored day reads in words, never 0 (OSE-1657). The day's count is a
       // floored count itself (OSE-1656), so its own flag is the one to read.
       var c = day ? day.count : null;
-      b.textContent = isHeld(day) || isHeld(c)
-        ? 'Held'
+      var dayHeld = isHeld(day) || isHeld(c);
+      b.classList.toggle('held', dayHeld);
+      b.textContent = dayHeld
+        ? oseFewerThan(c && typeof c === 'object' ? c.floor : 5, TAIL.scans)
         : String(Number(c && typeof c === 'object' ? c.count : c) || 0);
       li.appendChild(b);
       li.appendChild(document.createTextNode(String(day.day || '')));

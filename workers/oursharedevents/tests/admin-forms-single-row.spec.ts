@@ -20,6 +20,7 @@
  *
  * @born-red OSE-1361 | method: ran against origin/main admin.html (restored via tagged git stash) — the extraction marker is absent, and the per-row lock-overlay / tan-hex source assertions fail | date: 2026-09-29
  */
+import { installFewerThan } from './helpers/fewer-than';
 import { describe, expect, test } from 'vitest';
 import ADMIN_HTML from '../src/templates/admin.html';
 
@@ -31,6 +32,7 @@ function extract(html: string): Section {
   expect(begin, 'admin.html must carry the oseFormsSection block').toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(begin);
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  installFewerThan(globalThis);
   return new Function(`${html.slice(begin, end)}; return oseFormsSection;`)() as Section;
 }
 
@@ -101,10 +103,11 @@ describe('OSE-1361: each form exactly once, one row each', () => {
     }
   });
 
-  test('counts stay K-anonymous: a floored count renders "<5", never a raw number', () => {
+  test('counts stay K-anonymous: a floored count reads "Fewer than 5", never "<5" or a raw number', () => {
     const { rowsHtml } = build();
     expect(count(rowsHtml, /data-testid="count-suppressed"/g)).toBe(4);
-    expect(rowsHtml).toContain('&lt;5');
+    expect(count(rowsHtml, />Fewer than 5<\/span>/g)).toBe(4);
+    expect(rowsHtml).not.toContain('&lt;5');
   });
 });
 

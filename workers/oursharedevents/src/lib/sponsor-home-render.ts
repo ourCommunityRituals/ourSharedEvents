@@ -23,6 +23,7 @@ import { computeEventPhase } from '../domain/event-phase';
 import { parseEventState, canRender } from '../domain/event-state';
 import type { FlooredPreEventActivity } from './pre-event-activity';
 import type { FlooredCount } from './count-floor';
+import { fewerThan } from './withheld-words';
 import type { DiscoverableEvent, SponsorRequestRow } from './sponsor-discovery';
 
 export interface PlacementRow {
@@ -112,9 +113,13 @@ function renderDiscovery(discoverable: DiscoverableEvent[], requests: SponsorReq
   return parts.join('');
 }
 
-/** "12" / "fewer than 5" — a floored count as words. */
-function floored(f: FlooredCount): string {
-  return f.suppressed || f.count == null ? `fewer than ${f.floor}` : String(f.count);
+/** "12 poster scans" / "fewer than 5 poster scans in any one hour". */
+function scansLine(f: FlooredCount): string {
+  // Scans are the poster-hours with 5 or more, summed (lib/scan-cells.ts):
+  // withheld means no hour reached 5, not fewer than 5 scans in all.
+  return f.suppressed || f.count == null
+    ? fewerThan(f.floor, 'poster scans in any one hour', true)
+    : `${f.count} poster scans`;
 }
 
 /**
@@ -129,9 +134,9 @@ export function renderPreEventReach(r: FlooredPreEventActivity): string {
   // all (four links with 4, 4, 3 and 4 are 15), so it has its own words.
   const linkTaps =
     r.clicks.suppressed || r.clicks.count == null
-      ? `fewer than ${r.clicks.floor} taps on any one link`
+      ? fewerThan(r.clicks.floor, 'taps on any one link', true)
       : `${r.clicks.count} link taps`;
-  const taps = `So far: ${linkTaps} · ${floored(r.scans)} poster scans.`;
+  const taps = `So far: ${linkTaps} · ${scansLine(r.scans)}.`;
   if (r.posters === 0) {
     return `<p class="sh-why" data-testid="placement-reach">${taps} No posters up yet.</p>`;
   }

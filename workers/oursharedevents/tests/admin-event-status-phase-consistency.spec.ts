@@ -21,6 +21,7 @@
  *
  * @born-red OSE-1360 | method: ran against origin/main admin.html (restored via tagged git stash) — the extraction marker is absent, the "Live" status label and the stale-checklist wiring fail | date: 2026-09-29
  */
+import { installFewerThan } from './helpers/fewer-than';
 import { describe, expect, test } from 'vitest';
 import ADMIN_HTML from '../src/templates/admin.html';
 
@@ -47,6 +48,7 @@ function extractView(html: string): ViewFn {
   expect(end).toBeGreaterThan(begin);
   const src = html.slice(begin, end);
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  installFewerThan(globalThis);
   return new Function(`${src}; return oseEventView;`)() as ViewFn;
 }
 

@@ -36,6 +36,7 @@
 import { hasPaidReport, paidEventsSql, planNote, type ReportPlan } from '../lib/report-plan';
 import { corsHeaders } from '../lib/cors';
 import { applyCountFloor, floorTotalOfParts, type FlooredCount } from '../lib/count-floor';
+import { COUNTED_REGISTRATION_SQL } from '../lib/registration-count';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 import {
@@ -383,8 +384,7 @@ async function explicitChoices(
       formsDb,
       eventIds,
       (ph) => `SELECT event_id, COUNT(*) AS cnt FROM form_registrations
-       WHERE event_id IN (${ph}) AND status = 'confirmed'
-         AND (expires_at IS NULL OR expires_at > datetime('now'))
+       WHERE event_id IN (${ph}) AND ${COUNTED_REGISTRATION_SQL}
        GROUP BY event_id`
     ),
     perEventCounts(
