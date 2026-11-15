@@ -385,8 +385,10 @@ writes nothing and can run at any time.
    object is not changed (finding R6). **Measured 2026-11-15 (run
    43753563640): 20 GB by dry run, with every zoom kept, and it fits the
    runner** ("Staging, in order", step 2). How much of the 20 GB lies above
-   zoom 14 is not measured: the workflow makes one dry run, without a top
-   zoom, so the size alone does not say what a top zoom would save.
+   zoom 14 is not measured yet: that run made one dry run, without a top
+   zoom, so its size alone does not say what a top zoom would save. A
+   `measure` run now makes a second dry run at zoom 14 and prints both sizes
+   ("What the workflow runs", step 3); the next `measure` gives the figure.
 4. **The licence.** [`NOTICE.md`](../../NOTICE.md) lists the duties and what is
    NOT CLEAR. Staging is public, so the first load is the first public street:
    the owner answers its question 2 (before the load, or before production)
