@@ -538,7 +538,7 @@ export function drawStreetLayer(
         let kind: StreetKind | null = null;
         if (layer.name === 'water') {
           if (feat.type === 3) kind = 'water';
-          // Stryker disable next-line ConditionalExpression: a point of water (type 1) is one point to a part, and a part under two points is left out below either way.
+          // A river is a line (type 2). A run of points typed as a point, or not typed, is not drawn.
           else if (feat.type === 2) kind = 'rivers';
         } else if (layer.name === 'roads' && feat.type === 2) {
           kind = ROAD_CLASS.get(String(feat.props.kind)) ?? null;
