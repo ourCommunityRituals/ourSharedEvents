@@ -1,0 +1,130 @@
+# Calendar edge rule (stg): write, check or remove the rule that lets a calendar
+# app read a calendar address (ADR-028, OSE-2023).
+#
+# A calendar app cannot answer a Cloudflare challenge. The owner decided on
+# 2026-11-14 that reads of /brands/<brand>/calendar.ics and
+# /events/<id>/calendar.ics skip the challenge, for every caller. The rule is
+# written by scripts/ci/cf-waf-calendar-skip.mjs. This workflow runs that script
+# from GitHub, so the owner applies the rule without a terminal of their own
+# (CLAUDE.md, "Environment: staging, not the owner's computer").
+#
+# Dispatch by hand only. Three actions:
+#   dry-run  reads the zone and prints the rule it would write. Writes nothing.
+#   apply    writes the rule. Needs the confirm box to read APPLY.
+#   remove   deletes the rule. Needs the confirm box to read APPLY.
+#
+# stg only. The production rule is a separate, owner-decided production change
+# and is not offered here.
+#
+# Before and after, it reads the two calendar addresses with no header, which is
+# what a calendar app sends, and writes what came back to the run summary. After
+# an apply the job fails unless both addresses reached the Worker.
+#
+# Secret: CLOUDFLARE_WAF_EDIT_TOKEN, a Cloudflare API token limited to
+# Zone > Zone WAF > Edit and Zone > Zone > Read on the oursharedevents.com zone.
+# The owner creates it and adds it in the repository's settings. The script
+# redacts it from every line it prints. No deploy, D1, R2 or admin credential.
+
+name: calendar edge rule (stg)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'dry-run prints the rule and writes nothing; apply writes it; remove deletes it'
+        type: choice
+        options:
+          - dry-run
+          - apply
+          - remove
+        default: dry-run
+      confirm:
+        description: 'Type APPLY to apply or remove. Leave empty for a dry run.'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+# One edit of the rule at a time. A second run waits; it is never cancelled out
+# from under a run that is writing.
+concurrency:
+  group: calendar-edge-rule
+  cancel-in-progress: false
+
+jobs:
+  rule:
+    name: 'Calendar edge rule on stg'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      # The inputs reach the shell through env, never by being written into a
+      # script, so nothing typed in the form can run as a command.
+      - name: Check the request
+        env:
+          ACTION: ${{ inputs.action }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          case "$ACTION" in
+            dry-run) ;;
+            apply|remove)
+              if [ "$CONFIRM" != "APPLY" ]; then
+                echo "::error::To $ACTION the rule, type APPLY in the confirm box. Nothing was written."
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::Unknown action. Nothing was written."
+              exit 2
+              ;;
+          esac
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      # Information only: before the rule exists a challenge is the expected answer,
+      # so this read reports and never fails the job.
+      - name: Before - what a calendar app sees
+        timeout-minutes: 2
+        run: node scripts/stock/edge-probe.mjs --calendar-app --report-only
+
+      - name: Rule
+        timeout-minutes: 2
+        env:
+          ACTION: ${{ inputs.action }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WAF_EDIT_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::The repository secret CLOUDFLARE_WAF_EDIT_TOKEN is not set. See docs/runbooks/RUNBOOK-CALENDAR-EDGE-RULE.md. Nothing was written."
+            exit 1
+          fi
+          case "$ACTION" in
+            dry-run) set -- --host stg ;;
+            apply) set -- --host stg --apply ;;
+            remove) set -- --host stg --remove --apply ;;
+            *) exit 2 ;;
+          esac
+          {
+            echo "## Calendar edge rule: $ACTION"
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          set -o pipefail
+          node scripts/ci/cf-waf-calendar-skip.mjs "$@" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      # A new rule takes a moment to reach the edge. After an apply this step is
+      # the result: the job is green only when both addresses reached the Worker.
+      - name: After - what a calendar app sees
+        if: inputs.action == 'apply'
+        timeout-minutes: 3
+        run: |
+          sleep 30
+          node scripts/stock/edge-probe.mjs --calendar-app

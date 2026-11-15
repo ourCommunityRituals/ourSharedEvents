@@ -156,6 +156,33 @@ export function calendarAppLine(rows) {
   return `Calendar addresses read with no header, as a calendar app reads them: ${reached} of ${plain.length} reached the Worker. ${verdictText}\n`;
 }
 
+/**
+ * Only what a calendar app sees: the calendar addresses, read with no header
+ * (`node scripts/stock/edge-probe.mjs --calendar-app`). It needs no secret, so the
+ * calendar-edge-rule workflow can run it before and after it writes the rule.
+ * Exit 0 only when every calendar address reached the Worker, unless
+ * `--report-only` is given: then it reports and exits 0 either way.
+ */
+export async function calendarAppRead(env = process.env, deps = {}) {
+  const out = deps.write || ((s) => process.stdout.write(s));
+  const fetchFn = withDeadline(deps.fetch || globalThis.fetch, deps.readTimeoutMs);
+  const plain = shapeFetch('plain', env, fetchFn);
+  const rows = [];
+  for (const path of PROBE_PATHS.filter((p) => p.endsWith('.ics'))) {
+    rows.push(await probeOne(plain, 'plain', path));
+  }
+  const text = `${report(rows)}\n${calendarAppLine(rows)}`;
+  out(text);
+  if (env.GITHUB_STEP_SUMMARY) {
+    (deps.appendFile || appendFileSync)(
+      env.GITHUB_STEP_SUMMARY,
+      `## What a calendar app sees on stg\n\n${text}`
+    );
+  }
+  // reportOnly: the read before a rule change is information; it must not fail a job.
+  return deps.reportOnly || rows.every(readOk) ? 0 : 1;
+}
+
 // Each read gets its own deadline, so a stalled read becomes an error row and the
 // table still prints well inside the step's timeout (18 reads × 8 s < 3 min).
 export const READ_TIMEOUT_MS = 8_000;
@@ -206,7 +233,10 @@ export async function main(env = process.env, deps = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  main().then(
+  (process.argv.includes('--calendar-app')
+    ? calendarAppRead(process.env, { reportOnly: process.argv.includes('--report-only') })
+    : main()
+  ).then(
     (code) => process.exit(code),
     (err) => {
       console.error(`edge-probe: ${err.message}`);

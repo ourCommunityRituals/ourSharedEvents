@@ -1,6 +1,6 @@
 # Runbook: the calendar edge rule (ADR-028, OSE-2023)
 
-The owner runs this. After it, a calendar app can load a calendar address on staging, and later on production.
+The owner runs this, from GitHub. After it, a calendar app can load a calendar address on staging.
 
 ## Why
 
@@ -28,67 +28,61 @@ The script writes only its own rule, through Cloudflare's per-rule endpoints. It
 
 If the CI skip rule (`ose-1812-stg-ci-skip`) is on the zone, the script copies what that rule skips, because that set is already shown to get a read past this zone's edge. Otherwise it uses the default set: the rest of the custom rules, Super Bot Fight Mode, and the challenge products.
 
-## Before you start
+## Before you start: one secret, added in the browser
 
-In Cloudflare → My Profile → API Tokens, create a custom token:
+Everything below is done in a browser. Nothing runs on your own computer.
 
-- Permissions: **Zone → Zone WAF → Edit** and **Zone → Zone → Read**.
-- Zone resources: **Include → Specific zone → oursharedevents.com**.
-- TTL: end it tomorrow. Delete it when you are done.
+1. In Cloudflare → My Profile → API Tokens, create a custom token:
+   - Permissions: **Zone → Zone WAF → Edit** and **Zone → Zone → Read**.
+   - Zone resources: **Include → Specific zone → oursharedevents.com**.
+   - Give it an end date you are comfortable with. It can be deleted after the rule is applied and made again if the rule ever needs changing.
+2. In GitHub → the ourSharedEvents repository → Settings → Secrets and variables → Actions → **New repository secret**:
+   - Name: `CLOUDFLARE_WAF_EDIT_TOKEN`
+   - Value: the token.
 
-Type it in your own terminal. It stays out of the shell history and is never printed:
+The token can edit this zone's edge rules and nothing else: no deploy, no database, no storage. Only the "calendar edge rule (stg)" workflow reads it, and only in the step that writes the rule. The script redacts it from every line it prints.
+
+## Run it on stg, from GitHub
+
+In GitHub → Actions → **calendar edge rule (stg)** → Run workflow.
+
+1. **Dry run first.** Leave `action` on `dry-run` and the confirm box empty. Run it.
+
+   The run summary shows, in order: what a calendar app sees now (expect the two addresses challenged), then the script's output: the current rules (no expression or description is printed), which skip set it uses, and the rule it would write. Nothing is written.
+
+2. **Apply.** Run it again with `action` set to `apply` and `APPLY` typed in the confirm box.
+
+   The run writes the rule, waits 30 seconds, and reads the two calendar addresses again with no header. The job is green only when both reached the Worker:
+
+   > Calendar addresses read with no header, as a calendar app reads them: 2 of 2 reached the Worker. A calendar app can load them.
+
+   If the job is red on that last step, the rule was written but a read is still challenged. See "If a read is still challenged".
+
+   If the script says `check the dashboard now`, open Cloudflare → Security → WAF → Custom rules and compare against the dry run's list.
+
+Without the word `APPLY` in the confirm box, `apply` and `remove` stop before anything is read or written.
+
+## Then try the real thing once
+
+Open a listed event page on staging, choose Subscribe to calendar, and tap Google Calendar and Outlook.com. Neither link form is documented by its service, so this tap is the only real test of them. If one fails, the fourth option (the calendar address) pasted into the service's own "From URL" or "Subscribe from web" box is the documented way.
+
+## The same thing from a terminal
+
+The workflow only runs `scripts/ci/cf-waf-calendar-skip.mjs`. Anyone holding a token with the permissions above can run it directly:
 
 ```bash
-read -rs CLOUDFLARE_API_TOKEN && export CLOUDFLARE_API_TOKEN
+node scripts/ci/cf-waf-calendar-skip.mjs
 ```
-
-## Run it on stg
-
-1. Dry run. It reads the zone and writes nothing:
-
-   ```bash
-   node scripts/ci/cf-waf-calendar-skip.mjs
-   ```
-
-   Check the output: the current rules (no expression or description is printed), which skip set it uses, and the rule it would write.
-
-2. Apply:
-
-   ```bash
-   node scripts/ci/cf-waf-calendar-skip.mjs --apply
-   ```
-
-   It ends with `Applied.` and exits 0 only when Cloudflare saved the rule and every other rule is still there. If it says `check the dashboard now`, open Security → WAF → Custom rules and compare against the dry run's list.
-
-3. Clear the variable and delete the API token:
-
-   ```bash
-   unset CLOUDFLARE_API_TOKEN
-   ```
-
-## Check it
 
 ```bash
-gh workflow run stg-edge-probe.yml
+node scripts/ci/cf-waf-calendar-skip.mjs --apply
 ```
 
-Under the table, the run summary has one line for calendar apps:
-
-> Calendar addresses read with no header, as a calendar app reads them: 2 of 2 reached the Worker. A calendar app can load them.
-
-`2 of 2` means the rule works. Then try the real thing once on staging: open a listed event page, choose Subscribe to calendar, and tap Google Calendar and Outlook.com. Neither link form is documented by its service, so this tap is the only real test of them. If one fails, the fourth option (the calendar address) pasted into the service's own "From URL" or "Subscribe from web" box is the documented way.
+The token is read from `CLOUDFLARE_API_TOKEN` in the environment. This is a fallback, not the expected path.
 
 ## Production
 
-Only when the owner decides it, as a production change:
-
-```bash
-node scripts/ci/cf-waf-calendar-skip.mjs --host production
-```
-
-```bash
-node scripts/ci/cf-waf-calendar-skip.mjs --host production --apply
-```
+Not offered by the workflow. The production rule is a separate rule (`ose-2023-calendar-skip-production`) and a production change the owner decides. The script supports it with `--host production`; adding it to the workflow is a small change to make when that decision is taken.
 
 Production is held closed (AGENTS.md). Applying the rule there keeps production in line with stg. It does not make production live.
 
@@ -101,8 +95,4 @@ Find the Ray ID of the challenged `plain` row in the probe's table and look it u
 
 ## Roll back
 
-```bash
-node scripts/ci/cf-waf-calendar-skip.mjs --remove --apply
-```
-
-Add `--host production` for the production rule. It removes this rule and keeps every other rule as it was. Calendar apps are challenged again.
+Run the workflow with `action` set to `remove` and `APPLY` in the confirm box. It removes this rule and keeps every other rule as it was. Calendar apps are challenged again.
