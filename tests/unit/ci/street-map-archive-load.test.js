@@ -440,7 +440,7 @@ function shapeProblems(text) {
   // The tools: refused before they are unpacked.
   for (const [tool, unpack] of [
     ['PMTILES', 'tar -xzf'],
-    ['RCLONE', 'unzip'],
+    ['TOOL_RCLONE', 'unzip'],
   ]) {
     const step = steps.find((s) => run(s).includes(`\${${tool}_SHA256}`));
     const script = run(step);
@@ -467,10 +467,37 @@ function shapeProblems(text) {
     if (step?.if) out.push(`${tool}: the download is skipped in one mode`);
   }
 
+  // rclone reads every RCLONE_<FLAG> in its environment as that flag's value
+  // (https://rclone.org/docs/#environment-variables). A name of ours that
+  // begins RCLONE_ is therefore a setting handed to the program: the first
+  // measure run (43744396310, 2026-11-15) stopped at `./rclone version` because
+  // a workflow-level RCLONE_VERSION was read as --version=1.76.0. So no name
+  // every step sees begins RCLONE_, and a step sets only the remote's own
+  // settings, RCLONE_CONFIG_R2_*.
+  for (const [where, env] of [
+    ['the workflow', doc.env],
+    ...Object.entries(jobs).map(([id, job]) => [`the job ${id}`, job.env]),
+  ]) {
+    for (const name of Object.keys(env ?? {}).filter((n) => /^RCLONE_/.test(n))) {
+      out.push(
+        `${where} sets ${name} for every step: rclone reads a name that begins RCLONE_ as its own flag`
+      );
+    }
+  }
+  for (const step of Object.values(jobs).flatMap((job) => job.steps ?? [])) {
+    for (const name of Object.keys(step.env ?? {}).filter((n) => /^RCLONE_/.test(n))) {
+      if (!/^RCLONE_CONFIG_R2_[A-Z0-9_]+$/.test(name)) {
+        out.push(
+          `"${step.name}" sets ${name}: rclone reads it as a flag; only RCLONE_CONFIG_R2_* is meant for it`
+        );
+      }
+    }
+  }
+
   // The order of the load, and nothing after the measure in measure mode.
   const at = (test) => steps.findIndex(test);
   const order = {
-    'tool downloads': at((s) => run(s).includes('${RCLONE_SHA256}')),
+    'tool downloads': at((s) => run(s).includes('${TOOL_RCLONE_SHA256}')),
     'dry run': at((s) => commands(s, 'pmtiles').some((c) => c.includes('--dry-run'))),
     'key is free': at((s) => / absent /.test(run(s))),
     cut: at((s) =>
@@ -701,7 +728,7 @@ describe('the workflow: dispatched by hand, staging only, the credential where i
     [
       'the rclone SHA-256 check made a warning',
       doc((d, steps) => {
-        const s = stepOf(steps, '${RCLONE_SHA256}');
+        const s = stepOf(steps, '${TOOL_RCLONE_SHA256}');
         s.run = s.run.replace('sha256sum --check --strict', 'sha256sum --check --strict || true');
         s.run = s.run.replace('set -euo pipefail\n', '');
       }),
@@ -710,7 +737,19 @@ describe('the workflow: dispatched by hand, staging only, the credential where i
       'the pmtiles digest shortened',
       doc((d) => (d.env.PMTILES_SHA256 = d.env.PMTILES_SHA256.slice(0, 40))),
     ],
-    ['rclone at "latest"', doc((d) => (d.env.RCLONE_VERSION = 'latest'))],
+    ['rclone at "latest"', doc((d) => (d.env.TOOL_RCLONE_VERSION = 'latest'))],
+    [
+      'the rclone version under a name rclone reads as --version (the first measure run)',
+      doc((d) => (d.env.RCLONE_VERSION = '1.76.0')),
+    ],
+    [
+      'a name rclone reads, on the whole load job',
+      doc((d) => (d.jobs.load.env = { RCLONE_TRANSFERS: '8' })),
+    ],
+    [
+      'a flag handed to rclone in a bucket step, beside the remote settings',
+      doc((d, steps) => (stepOf(steps, 'rclone copyto').env.RCLONE_IGNORE_CHECKSUM = 'true')),
+    ],
     [
       'the dry run dropped',
       doc((d, steps) => steps.splice(steps.indexOf(stepOf(steps, '--dry-run')), 1)),
@@ -821,6 +860,28 @@ describe('the workflow: dispatched by hand, staging only, the credential where i
     expect(shapeProblems(text)).not.toEqual([]);
   });
 
+  // The fault of the first measure run, by its sentence, so the rule that
+  // holds it is the one seen red and not another rule that happens to fail.
+  // @born-red rclone env names | method: the real workflow with TOOL_RCLONE_VERSION renamed back to RCLONE_VERSION failed "the real workflow" and this case's first line; the rule's two loops switched off in turn failed this case; in CI the fault itself was red, run 43744396310 | date: 2026-11-15
+  test('a name that begins RCLONE_ is a flag handed to rclone: refused by name', () => {
+    const everyStep = doc((d) => (d.env.RCLONE_VERSION = '1.76.0'))(workflow());
+    expect(shapeProblems(everyStep)).toContain(
+      'the workflow sets RCLONE_VERSION for every step: rclone reads a name that begins RCLONE_ as its own flag'
+    );
+    const oneJob = doc((d) => (d.jobs.load.env = { RCLONE_TRANSFERS: '8' }))(workflow());
+    expect(shapeProblems(oneJob)).toContain(
+      'the job load sets RCLONE_TRANSFERS for every step: rclone reads a name that begins RCLONE_ as its own flag'
+    );
+    const oneStep = doc(
+      (d, steps) => (stepOf(steps, 'rclone copyto').env.RCLONE_IGNORE_CHECKSUM = 'true')
+    )(workflow());
+    expect(shapeProblems(oneStep).join(' | ')).toMatch(
+      /sets RCLONE_IGNORE_CHECKSUM: rclone reads it as a flag; only RCLONE_CONFIG_R2_\* is meant for it/
+    );
+    // The remote's own settings, in the steps that talk to the bucket, pass.
+    expect(shapeProblems(workflow()).filter((p) => /RCLONE_/.test(p))).toEqual([]);
+  });
+
   test('"production" in a comment is not a fault; in a line the runner reads it is', () => {
     expect(workflow()).toMatch(/^# .*production/m);
     expect(shapeProblems(`${workflow()}\n# production is loaded by a later PR\n`)).toEqual([]);
@@ -913,9 +974,9 @@ function driftProblems(workflowText, tomlText, runbookText) {
     ['the go-pmtiles version', `go-pmtiles **v${env.PMTILES_VERSION}**`],
     ['the go-pmtiles file', `go-pmtiles_${env.PMTILES_VERSION}_Linux_x86_64.tar.gz`],
     ['the go-pmtiles SHA-256', env.PMTILES_SHA256],
-    ['the rclone version', `rclone **v${env.RCLONE_VERSION}**`],
-    ['the rclone file', `rclone-v${env.RCLONE_VERSION}-linux-amd64.zip`],
-    ['the rclone SHA-256', env.RCLONE_SHA256],
+    ['the rclone version', `rclone **v${env.TOOL_RCLONE_VERSION}**`],
+    ['the rclone file', `rclone-v${env.TOOL_RCLONE_VERSION}-linux-amd64.zip`],
+    ['the rclone SHA-256', env.TOOL_RCLONE_SHA256],
     ['the workflow file', WORKFLOW],
     ['the first secret', '`R2_MAP_TILES_ACCESS_KEY_ID`'],
     ['the second secret', '`R2_MAP_TILES_SECRET_KEY`'],
@@ -982,8 +1043,8 @@ describe('the names typed three times are one set of names', () => {
     ],
     ['another go-pmtiles release', "PMTILES_VERSION: '1.31.2'", "PMTILES_VERSION: '1.31.3'"],
     ['one character of the go-pmtiles digest', 'PMTILES_SHA256: 3ed7', 'PMTILES_SHA256: 3ed8'],
-    ['another rclone release', "RCLONE_VERSION: '1.76.0'", "RCLONE_VERSION: '1.77.0'"],
-    ['one character of the rclone digest', 'RCLONE_SHA256: b00f', 'RCLONE_SHA256: b00e'],
+    ['another rclone release', "TOOL_RCLONE_VERSION: '1.76.0'", "TOOL_RCLONE_VERSION: '1.77.0'"],
+    ['one character of the rclone digest', 'TOOL_RCLONE_SHA256: b00f', 'TOOL_RCLONE_SHA256: b00e'],
     [
       'the cut from a build typed in the command',
       '"https://build.protomaps.com/${PROTOMAPS_BUILD}.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}"\n',

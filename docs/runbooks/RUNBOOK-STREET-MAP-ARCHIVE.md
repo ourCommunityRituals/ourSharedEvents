@@ -390,6 +390,13 @@ writes nothing and can run at any time.
    no custom domain, and delete `ose-map-tiles-staging`, which is empty and no
    longer bound. Step 2 reads the same two settings from a runner and stops if
    either is on.
+   - **Read 2026-11-15 (run 43744396310, job "The bucket is private (reads
+     only)", green):** "Public access via the r2.dev URL is disabled." and
+     "There are no custom domains connected to this bucket." The account lists
+     the bucket as created 2026-11-15 01:07 UTC, location WNAM, jurisdiction
+     `default`, standard storage, with no object. `ose-map-tiles-staging`
+     (created 2026-11-10) was still listed that day. Whether `default` is the
+     jurisdiction the owner accepts is the owner's to say, before the load.
    - **The rule for any later bucket is unchanged:** the owner creates it
      **before** the PR that names it in `wrangler.toml` merges, and before that
      PR's branch is run on staging. A deploy that finds no bucket under a bound
@@ -402,6 +409,20 @@ writes nothing and can run at any time.
    summary gives the archive size and the runner's free disk. Green means the
    file fits a GitHub-hosted runner. Red on "does not fit this runner" is an
    owner decision, not a fault: see "If the file does not fit".
+   - **The first measure run, 43744396310 on 2026-11-15, was red before it
+     measured anything.** It stopped at "Download rclone and refuse it unless
+     its SHA-256 is the pinned one": the file's digest was `OK`, and then
+     `./rclone version` refused to start. The workflow kept the pinned version
+     in a variable named `RCLONE_VERSION`, and rclone reads every
+     `RCLONE_<FLAG>` in its environment as that flag, so it read
+     `--version=1.76.0`. The same variable reached every rclone step, so a
+     `load` would have stopped at the same place, before any write. The two
+     pins are now `TOOL_RCLONE_VERSION` and `TOOL_RCLONE_SHA256`, and
+     `tests/unit/ci/street-map-archive-load.test.js` refuses a name that begins
+     `RCLONE_` unless it is one of the remote's own settings in a bucket step.
+     **No size has been measured yet.** The steps after the rclone download
+     (the disk, the build, the dry run, the fit) have never run on a runner:
+     the next `measure` from `main` is their first.
 
 3. **Owner: create the token and set the secret.** In the Cloudflare dashboard:
    an R2 API token, "Object Read & Write", scoped to `ose-map-tiles` only.
