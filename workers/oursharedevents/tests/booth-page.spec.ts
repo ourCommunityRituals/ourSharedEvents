@@ -353,6 +353,33 @@ describe('stored text is hostile input', () => {
   });
 });
 
+/**
+ * The text a reader sees: every text node of the page except what sits inside
+ * a script or a style element. Read with the HTML parser the Worker runtime
+ * ships, not with a pattern over the markup.
+ */
+async function visibleText(html: string): Promise<string> {
+  const parts: string[] = [];
+  let hidden = 0;
+  await new HTMLRewriter()
+    .on('script, style', {
+      element(el) {
+        hidden += 1;
+        el.onEndTag(() => {
+          hidden -= 1;
+        });
+      },
+    })
+    .onDocument({
+      text(chunk) {
+        if (hidden === 0) parts.push(chunk.text);
+      },
+    })
+    .transform(new Response(html))
+    .text();
+  return parts.join(' ');
+}
+
 describe('no cookie and no count', () => {
   test('neither the page nor the 404 sets a cookie', async () => {
     expect((await get(page(FAIR, 'A12'))).headers.get('set-cookie')).toBeNull();
@@ -361,10 +388,7 @@ describe('no cookie and no count', () => {
 
   test('the page says nothing about how many scanned, visited or signed up', async () => {
     const { body } = await get(page(FAIR, 'A12'));
-    const text = body
-      .replace(/<script[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ');
+    const text = await visibleText(body);
     expect(text).not.toContain(String(SCANS));
     for (const word of [
       /\bscan/i,
