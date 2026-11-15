@@ -375,6 +375,176 @@ describe('the street map reaches staging before production', () => {
   });
 });
 
+// Street-map CCR 2026-11-15, R20: the street layer has a switch the Worker
+// reads, `STREET_MAP` in each vars block of wrangler.toml. Exactly "on" draws.
+// The Worker treats a missing or mistyped value as off, which is safe and
+// silent, so these rules make the value be written, and written as one of the
+// two words. They also hold the two things that lean on it: the staging cases'
+// flag (streetMapArchiveLoaded may not be "true" while staging is "off") and
+// the copy the Bruno cases print (streetMapSwitch).
+// @born-red street-layer switch | method: each rule is fed the fault that turns it red, in the cases below. Then the real files were faulted, one at a time, and "the real files agree" seen failing on each: staging set to "on" with the copy left at "off"; the copy set to "on"; staging mistyped "ON"; production's line removed (the parity check's own "no unlisted difference" failed too); production "on" with staging "off"; streetMapArchiveLoaded "true" with the switch off. STREET_MAP taken off INTENTIONAL_VALUE_DIFFERENCES failed "the parity check lists a staging-first difference"; STREET_MAP_ON set to 'true' failed "the word the rules call on"; the runbook's two sections with the value taken out each failed "the runbook names the switch" | date: 2026-11-15
+describe('the street-layer switch (STREET_MAP)', () => {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- the repository's own files, by a path written in this file
+  const root = (p) => fs.readFileSync(path.join(__dirname, '../../../', p), 'utf8');
+  const STAGING_ENV = 'bruno/ose-pages/environments/ose-staging.yml';
+  const RUNBOOK = 'docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md';
+  const toml = () => root('workers/oursharedevents/wrangler.toml');
+  const stagingEnv = () => root(STAGING_ENV);
+
+  /** The three vars blocks, by the name the sentences use. */
+  function blocks(tomlText) {
+    const stgAt = tomlText.search(/^\[env\.staging\]/m);
+    const prodAt = tomlText.search(/^\[env\.production\]/m);
+    return {
+      'local dev': tomlText.slice(0, stgAt),
+      staging: tomlText.slice(stgAt, prodAt),
+      production: tomlText.slice(prodAt),
+    };
+  }
+  const valueIn = (block) => /^STREET_MAP = "([^"]*)"\r?$/m.exec(block)?.[1];
+
+  /** What is wrong, as sentences. Pure: takes the two files' text and the Worker's on value. */
+  function switchProblems(tomlText, envYaml, onValue = 'on') {
+    const out = [];
+    const value = {};
+    for (const [name, block] of Object.entries(blocks(tomlText))) {
+      value[name] = valueIn(block);
+      if (value[name] === undefined) {
+        out.push(`${name} has no STREET_MAP: write "on" or "off"`);
+      } else if (value[name] !== onValue && value[name] !== 'off') {
+        out.push(
+          `${name} sets STREET_MAP to "${value[name]}": the Worker draws streets only for "${onValue}", so write "${onValue}" or "off"`
+        );
+      }
+    }
+    if (value.production === onValue && value.staging !== onValue) {
+      out.push('production has STREET_MAP "on" and staging does not: staging goes first');
+    }
+    const loaded = /name: streetMapArchiveLoaded\r?\n\s+value: "([^"]*)"/.exec(envYaml)?.[1];
+    if (loaded === 'true' && value.staging !== onValue) {
+      out.push(
+        'streetMapArchiveLoaded is "true" and staging has STREET_MAP off: the staging cases would demand streets the Worker is set not to draw'
+      );
+    }
+    const copy = /name: streetMapSwitch\r?\n\s+value: "([^"]*)"/.exec(envYaml)?.[1];
+    if (copy !== value.staging) {
+      out.push(
+        `${STAGING_ENV} says streetMapSwitch "${copy}" and wrangler.toml says STREET_MAP "${value.staging}" on staging: the Bruno cases would print the wrong word`
+      );
+    }
+    return out;
+  }
+
+  const withValue = (tomlText, name, v) => {
+    const b = blocks(tomlText);
+    const changed = b[name].replace(/^STREET_MAP = "[^"]*"(\r?)$/m, `STREET_MAP = "${v}"$1`);
+    expect(changed).not.toBe(b[name]);
+    return { ...b, [name]: changed };
+  };
+  const join = (b) => b['local dev'] + b.staging + b.production;
+  const set = (tomlText, name, v) => join(withValue(tomlText, name, v));
+  const withCopy = (yaml, v) =>
+    yaml.replace(/(name: streetMapSwitch\r?\n\s+value: )"[^"]*"/, `$1"${v}"`);
+  const withFlag = (yaml, v) =>
+    yaml.replace(/(name: streetMapArchiveLoaded\r?\n\s+value: )"(true|false)"/, `$1"${v}"`);
+
+  test('the real files agree', () => {
+    expect(switchProblems(toml(), stagingEnv())).toEqual([]);
+  });
+
+  test('the word the rules call on is the word the Worker reads', () => {
+    const src = root('workers/oursharedevents/src/lib/street-map.ts');
+    expect(/^export const STREET_MAP_ON = '([^']*)';\r?$/m.exec(src)?.[1]).toBe('on');
+    expect(src).toMatch(/^ {2}if \(env\?\.STREET_MAP !== STREET_MAP_ON\) return null;\r?$/m);
+  });
+
+  // The owner's choice, written down: off on the two deployed environments, on
+  // where only this machine sees the page. A PR that turns staging on changes
+  // the second line, and the copy in the Bruno environment file with it.
+  test('as it stands: on for local dev, off on staging, off on production', () => {
+    const b = blocks(toml());
+    expect(valueIn(b['local dev'])).toBe('on');
+    expect(valueIn(b.staging)).toBe('off');
+    expect(valueIn(b.production)).toBe('off');
+  });
+
+  test('a block with no value, or a value that is neither word: refused', () => {
+    for (const name of ['local dev', 'staging', 'production']) {
+      const b = blocks(toml());
+      const gone = join({ ...b, [name]: b[name].replace(/^STREET_MAP = /m, 'STREET_MAPS = ') });
+      expect(switchProblems(gone, stagingEnv())).toContain(
+        `${name} has no STREET_MAP: write "on" or "off"`
+      );
+      for (const typo of ['ON', 'true', '1', 'on ', '']) {
+        expect(switchProblems(set(toml(), name, typo), stagingEnv()).join(' | ')).toContain(
+          `${name} sets STREET_MAP to "${typo}": the Worker draws streets only for "on"`
+        );
+      }
+    }
+  });
+
+  test('staging turned on, and the copy with it: in order; the copy left behind: refused', () => {
+    const on = set(toml(), 'staging', 'on');
+    expect(switchProblems(on, withCopy(stagingEnv(), 'on'))).toEqual([]);
+    expect(switchProblems(on, stagingEnv())).toEqual([
+      `${STAGING_ENV} says streetMapSwitch "off" and wrangler.toml says STREET_MAP "on" on staging: the Bruno cases would print the wrong word`,
+    ]);
+    expect(switchProblems(toml(), withCopy(stagingEnv(), 'on')).join(' ')).toMatch(
+      /says streetMapSwitch "on" and wrangler\.toml says STREET_MAP "off"/
+    );
+    expect(
+      switchProblems(toml(), stagingEnv().replace('streetMapSwitch', 'renamed')).join(' ')
+    ).toMatch(/says streetMapSwitch "undefined"/);
+  });
+
+  test('the staging cases made binding while the switch is off: refused', () => {
+    expect(switchProblems(toml(), withFlag(stagingEnv(), 'true'))).toEqual([
+      'streetMapArchiveLoaded is "true" and staging has STREET_MAP off: the staging cases would demand streets the Worker is set not to draw',
+    ]);
+    const on = set(toml(), 'staging', 'on');
+    expect(switchProblems(on, withFlag(withCopy(stagingEnv(), 'on'), 'true'))).toEqual([]);
+  });
+
+  test('production on before staging: refused', () => {
+    expect(switchProblems(set(toml(), 'production', 'on'), stagingEnv())).toEqual([
+      'production has STREET_MAP "on" and staging does not: staging goes first',
+    ]);
+    const both = set(set(toml(), 'staging', 'on'), 'production', 'on');
+    expect(switchProblems(both, withCopy(stagingEnv(), 'on'))).toEqual([]);
+  });
+
+  test('the parity check lists a staging-first difference as intentional, not unlisted', () => {
+    const now = parity.compareEnvironments(toml());
+    expect(now.findings.filter((f) => f.key === 'value:STREET_MAP')).toEqual([]);
+    const stagingFirst = parity.compareEnvironments(set(toml(), 'staging', 'on'));
+    expect(keys(stagingFirst, 'unlisted')).toEqual([]);
+    expect(keys(stagingFirst, 'intentional')).toContain('value:STREET_MAP');
+    // One side only is still unlisted: the value is written in both.
+    const b = blocks(toml());
+    const oneSide = parity.compareEnvironments(
+      join({ ...b, production: b.production.replace(/^STREET_MAP = "[^"]*"\r?\n/m, '') })
+    );
+    expect(keys(oneSide, 'unlisted')).toContain('only-in-staging:STREET_MAP');
+  });
+
+  test('the runbook names the switch where the owner turns streets on and off', () => {
+    const text = root(RUNBOOK);
+    const section = (title) => {
+      const from = text.indexOf(`\n## ${title}`);
+      expect(from, title).toBeGreaterThan(-1);
+      const to = text.indexOf('\n## ', from + 4);
+      return text.slice(from, to < 0 ? undefined : to);
+    };
+    expect(section('Staging, in order')).toContain('`STREET_MAP = "on"`');
+    expect(section('Back to hexagons only')).toContain('`STREET_MAP = "off"`');
+    for (const title of ['Staging, in order', 'Back to hexagons only']) {
+      // It is not the test flag, and the runbook says so in both places.
+      expect(section(title)).toContain('streetMapSwitch');
+      expect(section(title)).toContain('streetMapArchiveLoaded');
+    }
+  });
+});
+
 // Fat fingers (owner 2026-11-10). The bucket and the object key are typed by
 // hand: in wrangler.toml, and in the commands the runbook shows, which since
 // 2026-11-14 are the ones the load workflow runs, not ones the owner types

@@ -26,6 +26,8 @@ variables:
     name: ocrInternalSecret
   - name: streetMapArchiveLoaded
     value: "false"
+  - name: streetMapSwitch
+    value: "off"
   - secret: true
     name: ocrCiEdgeToken
   - name: edgeStrict

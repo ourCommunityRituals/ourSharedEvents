@@ -9,12 +9,15 @@
  *   - the handler reads the street layer for exactly the cells it draws, and the
  *     page then carries the streets and the OpenStreetMap credit
  *   - no binding, or a broken archive: the page is served as before, same cells
+ *   - the switch off (STREET_MAP): the page with no street map, the bucket never
+ *     asked, on the landing and zoomed in (street-map CCR 2026-11-15, R20)
  *   - zoomed in on one area (epic OSE-1880): the dots are drawn only over that
  *     area's street map; with no street map the places are a list (OSE-1894)
  *   - a sound archive with no tile for the area counts as no street map
  *     (location-precision CCR, F41)
  */
 // @born-red archive with no tile for the area | method: both cases seen failing before the guard in buildStreetLayer (the landing carried a blank street layer and its credit; the zoomed area drew its dot with no "amap-no-tiles" list) | date: 2026-11-09
+// @born-red the switch off | method: the switch line removed from loadStreetLayer, then the switch read after the bucket; both "the switch off" cases failed on each. With the value lower-cased before the compare, the first failed alone (its "ON") | date: 2026-11-15
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -48,6 +51,8 @@ import { handleLandingPage } from '../src/handlers/pages';
 // No tile in common with the Chicago rows at any zoom the map reads.
 const LOS_ANGELES = latLngToCell(34.05, -118.25, 7);
 
+const sansNonce = (html: string) => html.replace(/nonce="[^"]+"/g, 'nonce=""');
+
 const cellsOf = (html: string) =>
   [...html.matchAll(/data-testid="amap-area" data-cell="([0-9a-f]+)"/g)].map((m) => m[1]!);
 
@@ -79,17 +84,58 @@ describe('street map | the landing page handler', () => {
 
     const { tiles } = tilesForCells(cells);
     const bucket = fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles, { gzip: true }));
-    const html = await landing({ MAP_TILES: bucket });
+    const html = await landing({ STREET_MAP: 'on', MAP_TILES: bucket });
     expect(html).toContain('data-testid="amap-streets"');
     expect(html).toContain('data-testid="amap-credit"');
     expect(cellsOf(html)).toEqual(cells);
     expect(new Set(bucket.gets.map((g) => g.key))).toEqual(new Set([DEFAULT_ARCHIVE]));
   });
 
+  // Street-map CCR 2026-11-15, R20: with a sound archive under the key, the
+  // switch alone decides.
+  it('the switch off: the page with no street map, and the bucket is never asked', async () => {
+    const unbound = await landing({ STREET_MAP: 'on' });
+    const { tiles } = tilesForCells(cellsOf(unbound));
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles, { gzip: true }));
+    for (const env of [
+      { STREET_MAP: 'off', MAP_TILES: bucket },
+      { MAP_TILES: bucket },
+      { STREET_MAP: 'ON', MAP_TILES: bucket },
+    ]) {
+      const html = await landing(env);
+      expect(html).not.toContain('data-testid="amap-streets"');
+      expect(html).not.toContain('data-testid="amap-credit"');
+      // The page with no bucket bound, but for the nonce each response makes.
+      expect(sansNonce(html)).toBe(sansNonce(unbound));
+    }
+    expect(bucket.gets).toHaveLength(0);
+    // The same bucket, switched on, draws.
+    const on = await landing({ STREET_MAP: 'on', MAP_TILES: bucket });
+    expect(on).toContain('data-testid="amap-streets"');
+    expect(on).toContain('data-testid="amap-credit"');
+    expect(bucket.gets.length).toBeGreaterThan(0);
+  });
+
+  it('the switch off, zoomed in: the places are a list, no dot, and the bucket is never asked', async () => {
+    const { tiles } = tilesForCells([BLUE_ISLAND]);
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles, { gzip: true }));
+    const html = await landing({ STREET_MAP: 'off', MAP_TILES: bucket }, `/?area=${BLUE_ISLAND}`);
+    expect(html).toContain(`data-zoom="${BLUE_ISLAND}"`);
+    expect(html).toContain('data-testid="amap-no-tiles"');
+    expect(html).not.toContain('data-testid="amap-dot"');
+    expect(html).not.toContain('data-testid="amap-streets"');
+    expect(html).not.toContain('data-testid="amap-credit"');
+    expect(bucket.gets).toHaveLength(0);
+    const on = await landing({ STREET_MAP: 'on', MAP_TILES: bucket }, `/?area=${BLUE_ISLAND}`);
+    expect(on).toContain('data-testid="amap-streets"');
+    expect(on).toContain('data-testid="amap-dot"');
+    expect(on).not.toContain('data-testid="amap-no-tiles"');
+  });
+
   it('a broken archive leaves the page and its hexagons as they were', async () => {
     const plain = await landing({});
     const bucket = fakeBucket(DEFAULT_ARCHIVE, new Uint8Array(500).fill(1));
-    const html = await landing({ MAP_TILES: bucket });
+    const html = await landing({ STREET_MAP: 'on', MAP_TILES: bucket });
     expect(bucket.gets.length).toBeGreaterThan(0);
     expect(html).not.toContain('data-testid="amap-streets"');
     expect(html).not.toContain('data-testid="amap-credit"');
@@ -110,7 +156,7 @@ describe('street map | the landing page handler', () => {
       { gzip: true }
     );
     const bucket = fakeBucket(DEFAULT_ARCHIVE, swollen);
-    const html = await landing({ MAP_TILES: bucket });
+    const html = await landing({ STREET_MAP: 'on', MAP_TILES: bucket });
     expect(bucket.gets.length).toBeGreaterThan(0);
     expect(html).not.toContain('data-testid="amap-streets"');
     expect(html).not.toContain('data-testid="amap-credit"');
@@ -122,7 +168,7 @@ describe('street map | the landing page handler', () => {
   it('zoomed in on an area: its street layer is read, and the dots are drawn over it', async () => {
     const { tiles } = tilesForCells([BLUE_ISLAND]);
     const bucket = fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles, { gzip: true }));
-    const html = await landing({ MAP_TILES: bucket }, `/?area=${BLUE_ISLAND}`);
+    const html = await landing({ STREET_MAP: 'on', MAP_TILES: bucket }, `/?area=${BLUE_ISLAND}`);
     expect(html).toContain(`data-zoom="${BLUE_ISLAND}"`);
     expect(html).toContain('data-testid="amap-streets"');
     expect(html).toContain('data-testid="amap-credit"');
@@ -134,7 +180,7 @@ describe('street map | the landing page handler', () => {
 
   it('zoomed in with no street map, or a broken one: the places are listed and no dot floats', async () => {
     const broken = fakeBucket(DEFAULT_ARCHIVE, new Uint8Array(500).fill(1));
-    for (const env of [{}, { MAP_TILES: broken }]) {
+    for (const env of [{ STREET_MAP: 'on' }, { STREET_MAP: 'on', MAP_TILES: broken }]) {
       const html = await landing(env, `/?area=${BLUE_ISLAND}`);
       expect(html).toContain(`data-zoom="${BLUE_ISLAND}"`);
       expect(html).toContain('data-testid="amap-no-tiles"');
@@ -172,7 +218,7 @@ describe('street map | the landing page handler', () => {
     // The tiles for that frame are in the archive, and they hold roads.
     const { tiles } = tilesForCells(cells);
     const bucket = fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles, { gzip: true }));
-    const html = await landing({ MAP_TILES: bucket });
+    const html = await landing({ STREET_MAP: 'on', MAP_TILES: bucket });
     expect(html).not.toContain('data-testid="amap-streets"');
     expect(html).not.toContain('data-testid="amap-credit"');
     expect(cellsOf(html)).toEqual(cells);
@@ -182,7 +228,7 @@ describe('street map | the landing page handler', () => {
   it('an archive with no tile for the areas: the landing keeps its plain hexagons, with no credit', async () => {
     const bucket = await elsewhere();
     const plain = await landing({});
-    const html = await landing({ MAP_TILES: bucket });
+    const html = await landing({ STREET_MAP: 'on', MAP_TILES: bucket });
     expect(bucket.gets.length).toBeGreaterThan(0);
     expect(html).not.toContain('data-testid="amap-streets"');
     expect(html).not.toContain('data-testid="amap-credit"');
@@ -191,7 +237,7 @@ describe('street map | the landing page handler', () => {
 
   it('an archive with no tile for the area: zoomed in, the places are listed and no dot floats', async () => {
     const bucket = await elsewhere();
-    const zoomed = await landing({ MAP_TILES: bucket }, `/?area=${BLUE_ISLAND}`);
+    const zoomed = await landing({ STREET_MAP: 'on', MAP_TILES: bucket }, `/?area=${BLUE_ISLAND}`);
     expect(bucket.gets.length).toBeGreaterThan(0);
     expect(zoomed).toContain(`data-zoom="${BLUE_ISLAND}"`);
     expect(zoomed).toContain('data-testid="amap-no-tiles"');
@@ -225,7 +271,7 @@ describe('street map | the landing page handler', () => {
           plan
         );
       const a = await bucketFor(cells);
-      const html = await landing({ MAP_TILES: a });
+      const html = await landing({ STREET_MAP: 'on', MAP_TILES: a });
       expect(a.gets.length).toBeGreaterThan(0);
       expect(html).not.toContain('data-testid="amap-streets"');
       expect(html).not.toContain('data-testid="amap-credit"');
@@ -233,7 +279,7 @@ describe('street map | the landing page handler', () => {
 
       resetPmtilesCache();
       const b = await bucketFor([BLUE_ISLAND]);
-      const zoomed = await landing({ MAP_TILES: b }, `/?area=${BLUE_ISLAND}`);
+      const zoomed = await landing({ STREET_MAP: 'on', MAP_TILES: b }, `/?area=${BLUE_ISLAND}`);
       expect(b.gets.length).toBeGreaterThan(0);
       expect(zoomed).toContain('data-testid="amap-no-tiles"');
       expect(zoomed).not.toContain('data-testid="amap-dot"');
@@ -248,7 +294,11 @@ describe('street map | the landing page handler', () => {
       mistyped,
       await pmtilesArchive(tilesForCells(cellsOf(plain)).tiles, { gzip: true })
     );
-    const html = await landing({ MAP_TILES: bucket, MAP_TILES_ARCHIVE: mistyped });
+    const html = await landing({
+      STREET_MAP: 'on',
+      MAP_TILES: bucket,
+      MAP_TILES_ARCHIVE: mistyped,
+    });
     expect(bucket.gets).toHaveLength(0);
     expect(html).not.toContain('data-testid="amap-streets"');
     expect(html).not.toContain('data-testid="amap-credit"');
@@ -259,7 +309,7 @@ describe('street map | the landing page handler', () => {
       right,
       await pmtilesArchive(tilesForCells(cellsOf(plain)).tiles, { gzip: true })
     );
-    const drawn = await landing({ MAP_TILES: good, MAP_TILES_ARCHIVE: right });
+    const drawn = await landing({ STREET_MAP: 'on', MAP_TILES: good, MAP_TILES_ARCHIVE: right });
     expect(drawn).toContain('data-testid="amap-streets"');
   });
 });
@@ -306,7 +356,7 @@ describe('street map | the credit, in the page language, wherever streets are dr
           DEFAULT_ARCHIVE,
           await pmtilesArchive(tilesForCells(cells).tiles, { gzip: true })
         );
-        const html = await landing({ MAP_TILES: bucket }, path, lang);
+        const html = await landing({ STREET_MAP: 'on', MAP_TILES: bucket }, path, lang);
         expect(html, path).toContain('data-testid="amap-streets"');
         expect(html.split('data-testid="amap-credit"'), path).toHaveLength(2);
         expect(html, path).toContain(CREDIT[lang]);

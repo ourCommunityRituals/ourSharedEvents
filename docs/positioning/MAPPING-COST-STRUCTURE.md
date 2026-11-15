@@ -25,7 +25,9 @@
 `ose-map-tiles` is empty, and `streetMapArchiveLoaded` is `"false"`. A green staging chain
 says nothing about streets until that flag is `"true"`: the street cases print NOT RUN.
 
-Once an archive is loaded, the code on `main` draws streets on two surfaces and no other:
+Once an archive is loaded and the street layer is switched on (`STREET_MAP = "on"` for that
+environment in `wrangler.toml`; it is `"off"` on staging and production, and off reads nothing
+from the bucket), the code on `main` draws streets on two surfaces and no other:
 
 | Surface                                              | What it draws                                                                     | Limit                                                                                                     |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |

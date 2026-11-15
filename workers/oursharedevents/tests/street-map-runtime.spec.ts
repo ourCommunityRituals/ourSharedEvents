@@ -8,7 +8,7 @@
  * isolate, the reads are ranged R2 reads, and directories and tiles are
  * unpacked by the runtime's `DecompressionStream`.
  *
- * Two things are pinned:
+ * Three things are pinned:
  *
  *  1. The public area route and the landing draw streets from the archive, and
  *     stay whole when the object is missing or cut short.
@@ -16,6 +16,10 @@
  *     dropped by the runtime with that request, and its promise never settles.
  *     Nothing kept between requests may wait on it: the next request reads
  *     again and draws (street-map scenario pass 2026-11-15, S10).
+ *  3. The switch (street-map CCR 2026-11-15, R20). The pool's own `STREET_MAP`
+ *     is "on" (the top-level [vars] of wrangler.toml), which is why everything
+ *     above draws. With it off, through the Worker's own fetch and router, both
+ *     surfaces answer hexagons only and R2 is not asked, with the archive there.
  *
  * The slow read is the bucket's own `get`, held back by a timer that belongs to
  * the request that asked: when that request ends, the runtime drops the timer
@@ -25,9 +29,11 @@
 // @born-red drawing from R2 in the runtime | method: `decompress` in src/lib/pmtiles.ts returning gzip bytes as they are; the route, the landing and the one-read cases failed | date: 2026-11-15
 // @born-red a missing or cut object leaves the page whole | method: the catch in `loadStreetLayer` (src/lib/street-map.ts) rethrowing; "no object under the key" and "an object cut short" failed | date: 2026-11-15
 // @born-red directories kept between requests | method: `OPENED.set` removed from `open` in src/lib/pmtiles.ts; "the next map of that area is one read" and the read counts after a lost leaf and a lost tile read failed | date: 2026-11-15
-import { env, SELF } from 'cloudflare:test';
+// @born-red the switch in the runtime | method: the switch line removed from loadStreetLayer; both "off" cases failed (the route and the landing drew streets). The top-level STREET_MAP in wrangler.toml set to "off"; "the pool runs with the switch on" and the nine cases that draw failed | date: 2026-11-15
+import { createExecutionContext, env, SELF, waitOnExecutionContext } from 'cloudflare:test';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
+import worker from '../src/index';
 import { resetPmtilesCache } from '../src/lib/pmtiles';
 import { DEFAULT_ARCHIVE, STREET_TIMEOUT_MS } from '../src/lib/street-map';
 import { pmtilesArchive, tilesForCells, type FixtureTile } from './helpers/street-map-fixtures';
@@ -36,6 +42,7 @@ interface TestEnv {
   DB: D1Database;
   MAP_TILES: R2Bucket;
   MAP_TILES_ARCHIVE?: string;
+  STREET_MAP?: string;
   TEST_MIGRATION_STATEMENTS: string;
 }
 const E = env as unknown as TestEnv;
@@ -224,6 +231,54 @@ describe('the street layer in the Workers runtime | drawing from R2', () => {
     expect(page.html).not.toContain(STREETS);
     await E.MAP_TILES.put(KEY, archive);
     expect((await areas()).body.streets).not.toBeNull();
+  });
+});
+
+describe('the street layer in the Workers runtime | the switch (STREET_MAP)', () => {
+  /** One request through the Worker's fetch and router, with this value of the switch. */
+  async function through(url: string, value: string | undefined): Promise<Response> {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request(url), { ...E, STREET_MAP: value } as never, ctx);
+    await waitOnExecutionContext(ctx);
+    return res;
+  }
+
+  test('the pool runs with the switch on, from wrangler.toml', () => {
+    expect(E.STREET_MAP).toBe('on');
+  });
+
+  test('off: the area route answers streets: null and R2 is not asked, with the archive there', async () => {
+    const bucket = watchBucket();
+    for (const value of ['off', undefined, 'true']) {
+      const res = await through(AREAS, value);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as AreasBody;
+      expect(body.ok).toBe(true);
+      expect(body.areas).toHaveLength(1);
+      expect(body.around).toHaveLength(6);
+      expect(body.streets).toBeNull();
+      expect(res.headers.get('Cache-Control')).toBe('public, max-age=60');
+    }
+    expect(bucket.mock.calls).toHaveLength(0);
+    // The same request with the switch on draws, from the same object.
+    const on = (await (await through(AREAS, 'on')).json()) as AreasBody;
+    expect(on.streets).not.toBeNull();
+    expect(on.streets!.svg).toContain(STREETS);
+    expect(bucket.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  test('off: the landing is whole, hexagons only, with no credit, and R2 is not asked', async () => {
+    const bucket = watchBucket();
+    const res = await through(LANDING, 'off');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain(HEXAGONS);
+    expect(html).not.toContain(STREETS);
+    expect(html).not.toContain('data-testid="amap-credit"');
+    expect(bucket.mock.calls).toHaveLength(0);
+    const on = await (await through(LANDING, 'on')).text();
+    expect(on).toContain(STREETS);
+    expect(on).toContain('data-testid="amap-credit"');
   });
 });
 
