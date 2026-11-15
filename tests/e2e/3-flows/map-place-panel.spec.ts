@@ -92,7 +92,9 @@ import {
   gotoArea,
   openPanels,
   panel,
+  passStgEdge,
   placeRow,
+  throwIfEdgeAnswered,
 } from '../helpers/map-zoom-area';
 
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
@@ -574,10 +576,14 @@ test.describe('Zoomed map: using it moves no count (OSE-1896)', () => {
         'https://tickets.map-zoom.example/b',
       ]);
     const visitor = await context.newPage();
+    // Event pages sit behind the stg edge's challenge; CI's reads carry the
+    // header its skip rule matches. An answer from the edge stops the test.
+    await passStgEdge(visitor);
     for (const href of [...inside, ...outside]) {
       const res = await visitor.goto(new URL(href, `${BASE_URL}/`).toString(), {
         waitUntil: 'domcontentloaded',
       });
+      throwIfEdgeAnswered(res, href);
       expect.soft(res?.status(), `following ${href}`).toBeLessThan(400);
     }
     await visitor.close();
