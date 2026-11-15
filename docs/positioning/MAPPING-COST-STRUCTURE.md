@@ -88,10 +88,13 @@ its size is not measured yet (decision 4).
    replaced. The steps, the names, the region and the way back to hexagons only
    are in
    [`../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md`](../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md).
-   The `MAP_TILES` binding for `[env.staging]` is on `main` and its bucket
-   exists, empty; the load workflow, dispatched by the owner, loads the file
+   The `MAP_TILES` binding for `[env.staging]` is on `main`. Its bucket,
+   `ose-map-tiles`, is **one bucket that staging and production both read**
+   (owner, 2026-11-14): the file is stored once and loaded once, and a loaded
+   object is locked against change and delete. The owner creates the bucket;
+   the load workflow, dispatched by the owner, loads the file
    `MAP_TILES_ARCHIVE` names (no step runs on the owner's computer).
-   Production gets the same binding in its own PR afterwards; until then
+   Production gets a binding to the same bucket in its own PR afterwards; until then
    `scripts/ci/env-parity.mjs` lists the difference as open and production shows
    hexagons only. Local dev has its own binding and reads the regional file.
 

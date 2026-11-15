@@ -78,7 +78,7 @@ export const UNDECIDED = [
   {
     key: 'binding:r2_buckets:MAP_TILES',
     reason:
-      'staging has the street-map archive bucket (MAP_TILES, ose-map-tiles-staging); production has none, so production draws hexagons only. The order is decided (owner 2026-11-09: staging first); what is open is the production side. Production gets the same binding in its own PR once the staging street-map cases have passed and the owner has created and loaded the production bucket (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md). Remove this entry in that PR.',
+      'staging has the street-map archive bucket (MAP_TILES, ose-map-tiles); production has no binding yet, so production draws hexagons only. Decided: staging first (owner 2026-11-09), and one bucket that both environments read (owner 2026-11-14), so production gets no bucket and no load of its own. What is open is the day. Production gets the binding, naming the same bucket, in its own PR once the staging street-map cases have passed (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md, "Production, later"). Remove this entry in that PR.',
   },
 ];
 

@@ -215,7 +215,9 @@ describe('the real wrangler.toml', () => {
 
   // Staging first (owner 2026-11-09): the street-map bucket is bound on staging
   // only, and the archive is named the same on both sides so that the later
-  // production PR adds a binding and nothing else. The archive is the United
+  // production PR adds a binding and nothing else. That binding names the
+  // bucket staging names: one bucket, read by both (owner 2026-11-14; the rule
+  // is in "one bucket for both environments", below). The archive is the United
   // States subset (owner 2026-11-10), so the name starts "us-", not "planet-".
   test('the street-map archive: bound on staging only, named the same on both sides', () => {
     const toml = real();
@@ -291,7 +293,7 @@ describe('the street map reaches staging before production', () => {
   const withProduction = (toml) =>
     toml.replace(
       /^\[env\.production\.triggers\]/m,
-      '[[env.production.r2_buckets]]\nbinding = "MAP_TILES"\nbucket_name = "ose-map-tiles-production"\n\n[env.production.triggers]'
+      '[[env.production.r2_buckets]]\nbinding = "MAP_TILES"\nbucket_name = "ose-map-tiles"\n\n[env.production.triggers]'
     );
   const withFlag = (yaml, v) =>
     yaml.replace(/(name: streetMapArchiveLoaded\r?\n\s+value: )"(true|false)"/, `$1"${v}"`);
@@ -411,12 +413,31 @@ describe('the street-map names the owner types are the names the Worker binds', 
       out.push(`"${bucket}" is not a bucket name R2 accepts`);
     }
     if (!rule.test(key)) out.push(`the Worker refuses the archive name "${key}"`);
-    const others = [...tomlText.matchAll(/^bucket_name = "([^"]*)"\r?$/gm)].map((m) => m[1]);
-    if (others.filter((b) => b === bucket).length > 1) {
-      out.push(`"${bucket}" is bound more than once: staging must have a bucket of its own`);
+    // One bucket, read by both environments (owner 2026-11-14). Production,
+    // once it is bound, names the bucket staging names, and no other binding
+    // in the file names it: not local dev's, not the uploads buckets'.
+    const prodBinds = /^\[\[env\.production\.r2_buckets\]\]\r?\nbinding = "MAP_TILES"\r?$/m.test(
+      tomlText
+    );
+    const prodBucket =
+      /^\[\[env\.production\.r2_buckets\]\]\r?\nbinding = "MAP_TILES"\r?\nbucket_name = "([^"]*)"/m.exec(
+        tomlText
+      )?.[1];
+    if (prodBinds && prodBucket !== bucket) {
+      out.push(
+        `production binds MAP_TILES to "${prodBucket}" and staging to "${bucket}": the two read one bucket`
+      );
     }
-    // The bucket exists (the staging deploy of 2026-11-10 made it), so the
-    // runbook checks it instead of creating it: no r2.dev URL, no custom domain.
+    const named = [...tomlText.matchAll(/^bucket_name = "([^"]*)"\r?$/gm)].filter(
+      (m) => m[1] === bucket
+    ).length;
+    if (named > (prodBinds && prodBucket === bucket ? 2 : 1)) {
+      out.push(
+        `"${bucket}" is named by a binding other than MAP_TILES on staging and on production`
+      );
+    }
+    // The owner creates the bucket, so the runbook reads its settings and
+    // does not take them on trust: no r2.dev URL, no custom domain.
     const privacyChecks = [
       ['dev-url get', /wrangler r2 bucket dev-url get (\S+)/],
       ['domain list', /wrangler r2 bucket domain list (\S+)/],
@@ -478,10 +499,12 @@ describe('the street-map names the owner types are the names the Worker binds', 
   });
 
   test.each([
-    ['a letter dropped from the bucket', 'ose-map-tiles-staging', 'ose-map-tiles-stagin'],
-    ['the dev bucket copied down', 'ose-map-tiles-staging', 'ose-map-tiles-dev'],
-    ['a capital in the bucket', 'ose-map-tiles-staging', 'Ose-map-tiles-staging'],
-    ['an underscore in the bucket', 'ose-map-tiles-staging', 'ose_map_tiles_staging'],
+    ['a letter dropped from the bucket', 'ose-map-tiles', 'ose-map-tile'],
+    ['the dev bucket copied down', 'ose-map-tiles', 'ose-map-tiles-dev'],
+    ['a capital in the bucket', 'ose-map-tiles', 'Ose-map-tiles'],
+    ['an underscore in the bucket', 'ose-map-tiles', 'ose_map_tiles'],
+    ['the name of before 2026-11-14 left in', 'ose-map-tiles', 'ose-map-tiles-staging'],
+    ['the uploads bucket copied down', 'ose-map-tiles', 'ose-uploads-staging'],
   ])('fat finger in wrangler.toml: %s', (_, from, to) => {
     const slipped = toml().replace(
       `binding = "MAP_TILES"\nbucket_name = "${from}"`,
@@ -501,7 +524,7 @@ describe('the street-map names the owner types are the names the Worker binds', 
     ['the extension in capitals', 'us-20261109.PMTILES'],
     ['a capital in the name', 'US-20261109.pmtiles'],
     ['a space after', 'us-20261109.pmtiles '],
-    ['the bucket pasted in front', 'ose-map-tiles-staging/us-20261109.pmtiles'],
+    ['the bucket pasted in front', 'ose-map-tiles/us-20261109.pmtiles'],
     ['the planet name of 2026-11-09 left in', 'planet-20261109.pmtiles'],
   ])('fat finger in wrangler.toml: the archive name with %s', (_, to) => {
     const stgAt = toml().search(/^\[env\.staging\]/m);
@@ -517,23 +540,23 @@ describe('the street-map names the owner types are the names the Worker binds', 
   test.each([
     [
       'the upload key with two digits swapped',
-      'r2:ose-map-tiles-staging/us-20261109.pmtiles',
-      'r2:ose-map-tiles-staging/us-20261019.pmtiles',
+      'r2:ose-map-tiles/us-20261109.pmtiles',
+      'r2:ose-map-tiles/us-20261019.pmtiles',
     ],
     [
-      'the upload to the production bucket',
+      'the upload to the bucket of before 2026-11-14',
+      'r2:ose-map-tiles/us-20261109.pmtiles',
       'r2:ose-map-tiles-staging/us-20261109.pmtiles',
-      'r2:ose-map-tiles-production/us-20261109.pmtiles',
     ],
     [
       'the upload under the bare build name',
-      'r2:ose-map-tiles-staging/us-20261109.pmtiles',
-      'r2:ose-map-tiles-staging/20261109.pmtiles',
+      'r2:ose-map-tiles/us-20261109.pmtiles',
+      'r2:ose-map-tiles/20261109.pmtiles',
     ],
     [
       'the upload under the planet key of 2026-11-09',
-      'r2:ose-map-tiles-staging/us-20261109.pmtiles',
-      'r2:ose-map-tiles-staging/planet-20261109.pmtiles',
+      'r2:ose-map-tiles/us-20261109.pmtiles',
+      'r2:ose-map-tiles/planet-20261109.pmtiles',
     ],
     [
       'a whole build uploaded in place of the extract',
@@ -552,29 +575,25 @@ describe('the street-map names the owner types are the names the Worker binds', 
     ],
     [
       'another bucket checked for a public URL',
-      'dev-url get ose-map-tiles-staging',
+      'dev-url get ose-map-tiles',
       'dev-url get ose-map-tiles-stg',
     ],
     [
       'another bucket checked for a custom domain',
-      'domain list ose-map-tiles-staging',
+      'domain list ose-map-tiles',
       'domain list ose-uploads-staging',
     ],
     [
       'a command that turns the public URL on, added under the checks',
-      'domain list ose-map-tiles-staging',
-      'domain list ose-map-tiles-staging\n   npx wrangler r2 bucket dev-url enable ose-map-tiles-staging',
+      'domain list ose-map-tiles',
+      'domain list ose-map-tiles\n   npx wrangler r2 bucket dev-url enable ose-map-tiles',
     ],
     [
       'a command that gives the bucket a custom domain, added under the checks',
-      'domain list ose-map-tiles-staging',
-      'domain list ose-map-tiles-staging\n   npx wrangler r2 bucket domain add ose-map-tiles-staging',
+      'domain list ose-map-tiles',
+      'domain list ose-map-tiles\n   npx wrangler r2 bucket domain add ose-map-tiles',
     ],
-    [
-      'the token scoped to another bucket',
-      '`ose-map-tiles-staging` only',
-      '`ose-uploads-staging` only',
-    ],
+    ['the token scoped to another bucket', '`ose-map-tiles` only', '`ose-uploads-staging` only'],
     [
       'the check run on a file of another date',
       'check-street-map-archive.mjs us-20261109.pmtiles',
@@ -603,7 +622,7 @@ describe('the street-map names the owner types are the names the Worker binds', 
     const check =
       'node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261109.pmtiles';
     const upload =
-      'rclone copyto us-20261109.pmtiles r2:ose-map-tiles-staging/us-20261109.pmtiles --immutable --s3-chunk-size=256M --stats=1m --stats-one-line -v';
+      'rclone copyto us-20261109.pmtiles r2:ose-map-tiles/us-20261109.pmtiles --immutable --s3-chunk-size=256M --stats=1m --stats-one-line -v';
     expect(runbook()).toContain(check);
     expect(runbook()).toContain(upload);
     const moved = runbook().replace(check, '').replace(upload, `${upload}\n   ${check}`);
@@ -672,6 +691,58 @@ describe('the street-map names the owner types are the names the Worker binds', 
     };
     expect(Object.keys(inside).filter((name) => !held(inside[name]))).toEqual([]);
     expect(Object.keys(outside).filter((name) => held(outside[name]))).toEqual([]);
+  });
+
+  // One bucket, read by both environments (owner 2026-11-14). Until that day
+  // the rule here was the opposite one ("staging must have a bucket of its
+  // own"), so a production binding to the same bucket was red.
+  // @born-red street-map one bucket | method: three faults in nameProblems, one at a time: the one-bucket rule switched off (the four "production bound to ...: refused" cases went red), the no-other-binding rule switched off (the three "names the street-map bucket too" cases went red), the rule of before 2026-11-14 put back as `named > 1` ("production bound to the bucket staging binds: no problem" went red) | date: 2026-11-14
+  describe('one bucket for both environments', () => {
+    const bound = (bucket) =>
+      toml().replace(
+        /^\[env\.production\.triggers\]/m,
+        `[[env.production.r2_buckets]]\nbinding = "MAP_TILES"\nbucket_name = "${bucket}"\n\n[env.production.triggers]`
+      );
+
+    test('production bound to the bucket staging binds: no problem', () => {
+      expect(bound('ose-map-tiles')).not.toBe(toml());
+      expect(nameProblems(bound('ose-map-tiles'), runbook(), workerRule())).toEqual([]);
+    });
+
+    test.each([
+      ['a bucket of its own', 'ose-map-tiles-production'],
+      ['the bucket of before 2026-11-14', 'ose-map-tiles-staging'],
+      ['the local dev bucket', 'ose-map-tiles-dev'],
+    ])('production bound to %s: refused', (_, bucket) => {
+      expect(nameProblems(bound(bucket), runbook(), workerRule())).toContain(
+        `production binds MAP_TILES to "${bucket}" and staging to "ose-map-tiles": the two read one bucket`
+      );
+    });
+
+    test('production bound with no bucket name: refused', () => {
+      const text = bound('x').replace(
+        'binding = "MAP_TILES"\nbucket_name = "x"\n',
+        'binding = "MAP_TILES"\n'
+      );
+      expect(text).not.toBe(bound('x'));
+      expect(nameProblems(text, runbook(), workerRule())).toContain(
+        'production binds MAP_TILES to "undefined" and staging to "ose-map-tiles": the two read one bucket'
+      );
+    });
+
+    test.each([
+      ['the staging uploads binding', 'bucket_name = "ose-uploads-staging"'],
+      ['the production uploads binding', 'bucket_name = "ose-uploads-production"'],
+      ['the local dev street-map binding', 'bucket_name = "ose-map-tiles-dev"'],
+    ])('%s names the street-map bucket too: refused, bound on production or not', (_, line) => {
+      const want =
+        '"ose-map-tiles" is named by a binding other than MAP_TILES on staging and on production';
+      for (const text of [toml(), bound('ose-map-tiles')]) {
+        expect(text).toContain(line);
+        const slipped = text.replace(line, 'bucket_name = "ose-map-tiles"');
+        expect(nameProblems(slipped, runbook(), workerRule())).toContain(want);
+      }
+    });
   });
 
   test('rainy: a wrangler.toml with no staging bucket, or no archive name, is named, not passed', () => {

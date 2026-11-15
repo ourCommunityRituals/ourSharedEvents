@@ -1,5 +1,5 @@
 # Street-map archive load: cut the United States archive, check it, load it into
-# the staging bucket. Runbook: docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md.
+# the street-map bucket. Runbook: docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md.
 #
 # The landing map draws its streets from one PMTiles file in the R2 bucket bound
 # to the Worker as MAP_TILES (lib/street-map.ts). Owner, 2026-11-14: nothing is
@@ -27,12 +27,16 @@
 # (tests/unit/ci/street-map-archive-load.test.js fails when they differ, and the
 # first step of each job refuses to run when they differ on the commit it runs).
 #
-# Staging only. There is no production input, no production bucket and no
-# production credential in this file (held by the same test).
+# One bucket (owner 2026-11-14): staging reads it today, and production will
+# bind the same bucket, so there is no production bucket and no second load.
+# This file runs with staging's credentials only: it has no production input
+# and no production credential (held by the same test). It adds a new dated key
+# and never changes or removes an object; once the owner has locked a loaded
+# object, Cloudflare refuses both, for this file's token too.
 #
 # Secrets:
 #   R2_MAP_TILES_ACCESS_KEY_ID, R2_MAP_TILES_SECRET_KEY
-#       an R2 API token, "Object Read & Write", scoped to ose-map-tiles-staging
+#       an R2 API token, "Object Read & Write", scoped to ose-map-tiles
 #       only. Read by the load job's three bucket steps and by nothing else. Set
 #       on the `staging` environment (the load job names it) or at repository
 #       level. The owner creates the token and sets the secret; an agent never does.
@@ -77,7 +81,7 @@ env:
   # both environment blocks, the staging MAP_TILES bucket) and in the runbook.
   PROTOMAPS_BUILD: '20261109'
   ARCHIVE_KEY: us-20261109.pmtiles
-  BUCKET: ose-map-tiles-staging
+  BUCKET: ose-map-tiles
   REGION_FILE: docs/runbooks/street-map-us-region.geojson
   # go-pmtiles: the release the runbook and the proof were written against. The
   # digest is the one GitHub lists beside the Linux x86_64 release file (read
