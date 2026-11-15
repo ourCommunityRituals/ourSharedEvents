@@ -131,9 +131,10 @@ it; the report depends on who is asking and on floored counts, and must never be
 
 - Staging has no archive, so every surface draws hexagons only until the owner loads it. Nothing
   here changes the order in the street-map review: corrections, the load, the look, the flag.
-  Since 2026-11-15 the Worker also reads a switch, `STREET_MAP`, which is `"off"` on staging: the
-  load by itself draws nothing, and the look begins with the switch turned on (runbook, "Staging,
-  in order", step 8).
+  Since 2026-11-15 the Worker also reads a switch, `STREET_MAP`. It was `"off"` on staging when it
+  landed, and the owner set it to `"on"` the same day, before any load: with no object in the
+  bucket staging still draws hexagons only, and the load is now the step that draws the first
+  street (runbook, "Staging, in order", steps 4 and 8).
 - OSE ADR-033's route and contract are unchanged.
 
 ## Not proven

@@ -27,7 +27,7 @@ variables:
   - name: streetMapArchiveLoaded
     value: "false"
   - name: streetMapSwitch
-    value: "off"
+    value: "on"
   - secret: true
     name: ocrCiEdgeToken
   - name: edgeStrict
