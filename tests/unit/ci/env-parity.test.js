@@ -382,7 +382,7 @@ describe('the street map reaches staging before production', () => {
 // two words. They also hold the two things that lean on it: the staging cases'
 // flag (streetMapArchiveLoaded may not be "true" while staging is "off") and
 // the copy the Bruno cases print (streetMapSwitch).
-// @born-red street-layer switch | method: each rule is fed the fault that turns it red, in the cases below. Then the real files were faulted, one at a time, and "the real files agree" seen failing on each: staging set to "on" with the copy left at "off"; the copy set to "on"; staging mistyped "ON"; production's line removed (the parity check's own "no unlisted difference" failed too); production "on" with staging "off"; streetMapArchiveLoaded "true" with the switch off. STREET_MAP taken off INTENTIONAL_VALUE_DIFFERENCES failed "the parity check lists a staging-first difference"; STREET_MAP_ON set to 'true' failed "the word the rules call on"; the runbook's two sections with the value taken out each failed "the runbook names the switch" | date: 2026-11-15
+// @born-red street-layer switch | method: each rule is fed the fault that turns it red, in the cases below. Then the real files were faulted, one at a time, and "the real files agree" seen failing on each: staging set to "on" with the copy left at "off"; the copy set to "on"; staging mistyped "ON"; production's line removed (the parity check's own "no unlisted difference" failed too); production "on" with staging "off"; streetMapArchiveLoaded "true" with the switch off. STREET_MAP taken off INTENTIONAL_VALUE_DIFFERENCES failed "the parity check lists a staging-first difference"; STREET_MAP_ON set to 'true' failed "the word the rules call on"; the runbook's two sections with the value taken out each failed "the runbook names the switch". Watched again the day staging was set to "on" and the cases were made to start from a stated value: the real files faulted three ways (the copy left at "off"; staging back to "off" with the copy left; both back to "off") each failed "as it stands", and the first two "the real files agree"; the copy check, the flag check and the staging-first check switched off in turn each failed its own case; STREET_MAP taken off the list failed the parity case; the helper `at` made to set nothing failed four cases | date: 2026-11-15
 describe('the street-layer switch (STREET_MAP)', () => {
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- the repository's own files, by a path written in this file
   const root = (p) => fs.readFileSync(path.join(__dirname, '../../../', p), 'utf8');
@@ -447,6 +447,22 @@ describe('the street-layer switch (STREET_MAP)', () => {
     yaml.replace(/(name: streetMapSwitch\r?\n\s+value: )"[^"]*"/, `$1"${v}"`);
   const withFlag = (yaml, v) =>
     yaml.replace(/(name: streetMapArchiveLoaded\r?\n\s+value: )"(true|false)"/, `$1"${v}"`);
+  // The cases below start from a stated value, not from whichever the real
+  // files carry today, so they hold on both sides of the day staging is turned
+  // on or back off. `set` insists the text changed; `at` insists only that the
+  // line is there to set.
+  const at = (tomlText, name, v) => {
+    const b = blocks(tomlText);
+    expect(valueIn(b[name]), `${name} has a STREET_MAP line`).toBeDefined();
+    return join({
+      ...b,
+      [name]: b[name].replace(/^STREET_MAP = "[^"]*"(\r?)$/m, `STREET_MAP = "${v}"$1`),
+    });
+  };
+  const stagingOff = () => at(at(toml(), 'staging', 'off'), 'production', 'off');
+  const stagingOn = () => at(at(toml(), 'staging', 'on'), 'production', 'off');
+  const copyOff = () => withFlag(withCopy(stagingEnv(), 'off'), 'false');
+  const copyOn = () => withFlag(withCopy(stagingEnv(), 'on'), 'false');
 
   test('the real files agree', () => {
     expect(switchProblems(toml(), stagingEnv())).toEqual([]);
@@ -458,14 +474,17 @@ describe('the street-layer switch (STREET_MAP)', () => {
     expect(src).toMatch(/^ {2}if \(env\?\.STREET_MAP !== STREET_MAP_ON\) return null;\r?$/m);
   });
 
-  // The owner's choice, written down: off on the two deployed environments, on
-  // where only this machine sees the page. A PR that turns staging on changes
-  // the second line, and the copy in the Bruno environment file with it.
-  test('as it stands: on for local dev, off on staging, off on production', () => {
+  // The owner's choice, written down: on where only this machine sees the
+  // page, on for staging (owner 2026-11-15, set before any archive was loaded),
+  // off for production. A PR that turns staging back off, or production on,
+  // changes a line here, and for staging the copy in the Bruno environment
+  // file with it.
+  test('as it stands: on for local dev, on for staging, off on production', () => {
     const b = blocks(toml());
     expect(valueIn(b['local dev'])).toBe('on');
-    expect(valueIn(b.staging)).toBe('off');
+    expect(valueIn(b.staging)).toBe('on');
     expect(valueIn(b.production)).toBe('off');
+    expect(/name: streetMapSwitch\r?\n\s+value: "([^"]*)"/.exec(stagingEnv())?.[1]).toBe('on');
   });
 
   test('a block with no value, or a value that is neither word: refused', () => {
@@ -484,39 +503,37 @@ describe('the street-layer switch (STREET_MAP)', () => {
   });
 
   test('staging turned on, and the copy with it: in order; the copy left behind: refused', () => {
-    const on = set(toml(), 'staging', 'on');
-    expect(switchProblems(on, withCopy(stagingEnv(), 'on'))).toEqual([]);
-    expect(switchProblems(on, stagingEnv())).toEqual([
+    expect(switchProblems(stagingOff(), copyOff())).toEqual([]);
+    expect(switchProblems(stagingOn(), copyOn())).toEqual([]);
+    expect(switchProblems(stagingOn(), copyOff())).toEqual([
       `${STAGING_ENV} says streetMapSwitch "off" and wrangler.toml says STREET_MAP "on" on staging: the Bruno cases would print the wrong word`,
     ]);
-    expect(switchProblems(toml(), withCopy(stagingEnv(), 'on')).join(' ')).toMatch(
-      /says streetMapSwitch "on" and wrangler\.toml says STREET_MAP "off"/
-    );
+    expect(switchProblems(stagingOff(), copyOn())).toEqual([
+      `${STAGING_ENV} says streetMapSwitch "on" and wrangler.toml says STREET_MAP "off" on staging: the Bruno cases would print the wrong word`,
+    ]);
     expect(
       switchProblems(toml(), stagingEnv().replace('streetMapSwitch', 'renamed')).join(' ')
     ).toMatch(/says streetMapSwitch "undefined"/);
   });
 
   test('the staging cases made binding while the switch is off: refused', () => {
-    expect(switchProblems(toml(), withFlag(stagingEnv(), 'true'))).toEqual([
+    expect(switchProblems(stagingOff(), withFlag(copyOff(), 'true'))).toEqual([
       'streetMapArchiveLoaded is "true" and staging has STREET_MAP off: the staging cases would demand streets the Worker is set not to draw',
     ]);
-    const on = set(toml(), 'staging', 'on');
-    expect(switchProblems(on, withFlag(withCopy(stagingEnv(), 'on'), 'true'))).toEqual([]);
+    expect(switchProblems(stagingOn(), withFlag(copyOn(), 'true'))).toEqual([]);
   });
 
   test('production on before staging: refused', () => {
-    expect(switchProblems(set(toml(), 'production', 'on'), stagingEnv())).toEqual([
+    expect(switchProblems(at(stagingOff(), 'production', 'on'), copyOff())).toEqual([
       'production has STREET_MAP "on" and staging does not: staging goes first',
     ]);
-    const both = set(set(toml(), 'staging', 'on'), 'production', 'on');
-    expect(switchProblems(both, withCopy(stagingEnv(), 'on'))).toEqual([]);
+    expect(switchProblems(at(stagingOn(), 'production', 'on'), copyOn())).toEqual([]);
   });
 
   test('the parity check lists a staging-first difference as intentional, not unlisted', () => {
-    const now = parity.compareEnvironments(toml());
-    expect(now.findings.filter((f) => f.key === 'value:STREET_MAP')).toEqual([]);
-    const stagingFirst = parity.compareEnvironments(set(toml(), 'staging', 'on'));
+    const same = parity.compareEnvironments(stagingOff());
+    expect(same.findings.filter((f) => f.key === 'value:STREET_MAP')).toEqual([]);
+    const stagingFirst = parity.compareEnvironments(stagingOn());
     expect(keys(stagingFirst, 'unlisted')).toEqual([]);
     expect(keys(stagingFirst, 'intentional')).toContain('value:STREET_MAP');
     // One side only is still unlisted: the value is written in both.

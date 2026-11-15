@@ -345,9 +345,9 @@ writes nothing and can run at any time.
    behaviour, for every branch and every push to `main` (review finding R21).
    One pull request makes both read the flag, and makes the street cases ask for
    roads, not for any path (finding R17). **It merges before the load.**
-   (Since the switch, `STREET_MAP`, the Worker draws nothing from a loaded
-   object while staging carries `"off"`; this holds for the day the switch is
-   turned on, step 8 of "Staging, in order".)
+   (The Worker also reads a switch, `STREET_MAP`, and draws nothing from a
+   loaded object while an environment carries `"off"`. Staging carries `"on"`
+   since 2026-11-15, set before any load, so this holds for the load itself.)
 2. **The bucket and the key are settled.** All of it is the owner's, in Cloudflare
    and GitHub (OSE ADR-035, "Open, for the owner"):
    - **The bucket.** `ose-map-tiles` exists because a deploy created it, with
@@ -372,9 +372,10 @@ writes nothing and can run at any time.
 4. **The licence.** [`NOTICE.md`](../../NOTICE.md) lists the duties and what is
    NOT CLEAR. Staging is public, so the first load is the first public street:
    the owner answers its question 2 (before the load, or before production)
-   first. With `STREET_MAP` at `"off"` on staging the load puts no street on a
-   page, and the first public street is then step 8 of "Staging, in order".
-   Whether the question waits for the load or for step 8 is the owner's.
+   first. Staging carries `STREET_MAP = "on"` (owner 2026-11-15, set before any
+   load), so the load is the first public street and the question is answered
+   before the load. Setting the switch back to `"off"` first (see "Back to
+   hexagons only") is the way to load without showing a street.
 5. **The drawer and its checks are corrected** (findings R7, R17, R18). This
    needs no archive and runs beside the steps above. It must be done before the
    flag is set to `"true"` (step 9 of "Staging, in order"), not before the load.
@@ -413,8 +414,10 @@ writes nothing and can run at any time.
 
 4. **Owner: load.** The same dispatch with `mode` = `load`. Green means the
    bucket lists `us-20261109.pmtiles` at the checked size. Any red is explained
-   in "What stops a run". No page changes: the street layer is switched off on
-   staging until step 8.
+   in "What stops a run". **This is the first public street.** The switch is
+   already on for staging (step 8, done 2026-11-15 before any load), and the
+   Worker does not remember a read that found no object, so the next landing
+   request after the object lands draws streets.
 
 5. **Record what was loaded.** The run's summary has the build date, the byte
    size and the SHA-256. They go on the owner-step ticket, and the byte size goes
@@ -444,21 +447,26 @@ writes nothing and can run at any time.
    in GitHub. The Worker reads through its binding, not the token. A refresh
    makes a new one.
 
-8. **Turn the switch on, and look at staging.** The load by itself shows
-   nothing. The Worker reads a switch, `STREET_MAP`, a plain value in each vars
-   block of `wrangler.toml` (`lib/street-map.ts`; review finding R20). Exactly
-   `"on"` draws streets, on the landing and for `/api/v2/map/areas` alike.
-   `"off"`, a missing line or any other value is hexagons only, and the bucket
-   is not asked. Staging carries `"off"`, so the load and the first street on a
-   public page are two steps.
+8. **Turn the switch on, and look at staging.** The Worker reads a switch,
+   `STREET_MAP`, a plain value in each vars block of `wrangler.toml`
+   (`lib/street-map.ts`; review finding R20). Exactly `"on"` draws streets, on
+   the landing and for `/api/v2/map/areas` alike. `"off"`, a missing line or
+   any other value is hexagons only, and the bucket is not asked.
+   **Done out of order (owner 2026-11-15): staging carries `"on"`, set before
+   any load.** The bucket held no object that day, so the Worker asks, finds
+   none and draws hexagons only, and the load (step 4) is the step that puts
+   the first street on a public page. With the switch at `"off"` the load and
+   the first street would be two steps; that is still the order for production.
    - **One PR, two lines:** `STREET_MAP = "on"` in `[env.staging.vars]`, and
      `streetMapSwitch` to `"on"` in
      `bruno/ose-pages/environments/ose-staging.yml`. The second is the copy the
      staging cases print; `tests/unit/ci/env-parity.test.js` fails when the two
-     differ. An agent can open this PR. Merging it is the owner's.
-   - **Its own staging run is the first that draws streets.** Every branch is
-     run on staging before it is called ready, so the PR's run shows the streets
-     before it merges.
+     differ. That test also writes the owner's choice down, in its case "as it
+     stands", so the same PR changes the word there. An agent can open this PR.
+     Merging it is the owner's.
+   - **Its staging run draws streets only when the object is already there.**
+     Every branch is run on staging before it is called ready. The PR that set
+     staging to `"on"` ran with an empty bucket, so its run drew hexagons only.
    - **What the switch is not.** It is not the test flag: `streetMapArchiveLoaded`
      (step 9) says what the staging cases must see, and it may not be `"true"`
      while the switch is off. It is not a lock and not a control on who writes
@@ -676,7 +684,8 @@ Three ways, from the lightest.
   `streetMapSwitch` to `"off"` in
   `bruno/ose-pages/environments/ose-staging.yml`, and `streetMapArchiveLoaded`
   to `"false"` if step 9 is done (`tests/unit/ci/env-parity.test.js` refuses
-  the flag at `"true"` with the switch off). After the deploy the Worker draws
+  the flag at `"true"` with the switch off), and changes the word in that
+  test's case "as it stands". After the deploy the Worker draws
   hexagons only and does not ask the bucket. The binding, the bucket, the
   object and its lock stay as they are, so streets come back with the same line
   set to `"on"`. One environment at a time. On staging the PR's own branch run

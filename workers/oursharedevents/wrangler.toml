@@ -301,19 +301,20 @@ MAP_TILES_ARCHIVE = "us-20261109.pmtiles"
 # Exactly "on" draws streets under the hexagons, on the landing and for
 # /api/v2/map/areas. "off", no value or anything else is hexagons only, and the
 # MAP_TILES bucket is not asked.
-# OFF is the default, and the choice is the owner's. Why off: staging is public,
-# so with "on" the archive load itself would put the first street on a public
-# page, at the minute the object lands, with the defects that go live with the
-# object (CCR R24, R38) and whatever the licence question in NOTICE.md then
-# says. With "off" the load shows nothing. A one-line PR sets "on", and that
-# PR's own run on staging is the first run that draws streets. The way back to
-# hexagons only is this line set to "off": one PR and its deploy, with the
-# bucket and the object left as they are.
+# ON (owner 2026-11-15), set before any archive was loaded. The choice is the
+# owner's. While the bucket holds no object under MAP_TILES_ARCHIVE the Worker
+# asks, finds none, and draws hexagons only. Staging is public, so with "on"
+# the archive load itself puts the first street on a public page, at the minute
+# the object lands, with the defects that go live with the object (CCR R24,
+# R38) and whatever the licence questions in NOTICE.md then say: they are
+# settled before the load, not before a later switch. The way back to hexagons
+# only is this line set to "off": one PR and its deploy, with the bucket and
+# the object left as they are.
 # This is not the test flag. streetMapArchiveLoaded (bruno/ose-pages/
 # environments/ose-staging.yml) says what the staging cases must see, and may
 # not be "true" while this is "off". streetMapSwitch in that file is a copy of
 # this value. tests/unit/ci/env-parity.test.js holds both.
-STREET_MAP = "off"
+STREET_MAP = "on"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
 # Allow Bearer token fallback in staging (for local testing without CF Access)
