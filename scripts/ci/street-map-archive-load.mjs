@@ -12,6 +12,8 @@
  *   names    the build, key and bucket the workflow names are the ones wrangler.toml binds
  *   private  the bucket has no r2.dev URL and no custom domain (wrangler's two reads)
  *   fits     the size `pmtiles extract --dry-run` reports fits the runner's free disk
+ *   topzoom  the same dry run at the Worker's top zoom, beside the first (a figure
+ *            for the owner's zoom decision; it judges nothing and changes no cut)
  *   absent   the bucket does not hold the key yet (an object is never overwritten)
  *   loaded   the bucket lists the key at the byte size in the check record
  *   summary  size and SHA-256 from the check record, for the job summary
@@ -25,6 +27,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const WRANGLER_PATH = 'workers/oursharedevents/wrangler.toml';
+/** Where the Worker's street reader keeps the deepest zoom it reads (MAX_ZOOM). */
+export const STREET_MAP_SOURCE = 'workers/oursharedevents/src/lib/street-map.ts';
 
 /** The archive is the United States subset of one dated Protomaps build. */
 const KEY = /^us-(\d{8})\.pmtiles$/;
@@ -175,6 +179,77 @@ export function diskVerdict(size, freeBytes) {
 const gb = (bytes) => `${(bytes / 1e9).toFixed(1)} GB`;
 
 /**
+ * The deepest zoom the Worker reads: `export const MAX_ZOOM = <whole number>;`
+ * in lib/street-map.ts, or undefined. Anything else on that line (a sum, a
+ * call) is not read as a number: a zoom this cannot read is a stop, not a guess.
+ */
+export function workerTopZoom(sourceText) {
+  const m = /^export const MAX_ZOOM = (\d+);\r?$/m.exec(String(sourceText ?? ''));
+  return m ? Number(m[1]) : undefined;
+}
+
+/**
+ * Why the second dry run may not be made at `zoom` (the workflow's
+ * WORKER_TOP_ZOOM), as sentences: it is only a figure worth reading when it is
+ * the zoom the Worker really stops at.
+ */
+export function topZoomProblems(zoom, sourceText) {
+  const worker = workerTopZoom(sourceText);
+  if (worker === undefined) {
+    return [`${STREET_MAP_SOURCE} has no "export const MAX_ZOOM = <number>;" to read`];
+  }
+  if (!/^\d+$/.test(String(zoom ?? ''))) {
+    return [`WORKER_TOP_ZOOM is "${zoom}", not a whole number`];
+  }
+  return Number(zoom) === worker
+    ? []
+    : [`WORKER_TOP_ZOOM is ${zoom}; the Worker reads zoom ${worker} at most (MAX_ZOOM)`];
+}
+
+/**
+ * The two dry-run sizes side by side, for the job summary. `whole` is the dry
+ * run the fit is judged on (every zoom of the build), `capped` the same region
+ * with a top zoom. Both are rounded figures of the tile data alone, so the
+ * difference is "about". A capped size above the whole one means the two logs
+ * are not what they are named, and nothing is reported.
+ */
+export function topZoomReport(whole, capped, zoom) {
+  if (!whole) {
+    return { problems: ['the dry run with every zoom printed no archive size'], lines: [] };
+  }
+  if (!capped) {
+    return {
+      problems: [`the dry run with a top zoom of ${zoom} printed no archive size`],
+      lines: [],
+    };
+  }
+  if (capped.bytes > whole.upperBytes) {
+    return {
+      problems: [
+        `the dry run with a top zoom of ${zoom} reports ${capped.text}, larger than the dry run with every zoom (${whole.text}): the two logs are not what they are named`,
+      ],
+      lines: [],
+    };
+  }
+  const less = whole.bytes - capped.bytes;
+  return {
+    problems: [],
+    lines: [
+      '### Street-map archive: what a top zoom would change',
+      '',
+      `- with a top zoom of ${zoom}, the most the Worker reads, the dry run reports **${capped.text}**.`,
+      `- with every zoom of the build, as a load cuts today, it reports **${whole.text}**.`,
+      less > 0
+        ? `- that is about ${gb(less)} less (both figures are the tile data alone, rounded).`
+        : '- no saving that the rounded figures show.',
+      '',
+      "This is a figure for the owner's decision. It does not change what a load cuts, and the fit above is judged on the larger size.",
+      '',
+    ],
+  };
+}
+
+/**
  * The object `rclone lsjson` lists under `key`, or null. Throws when the
  * listing is not a JSON array: a listing that cannot be read is not an empty one.
  */
@@ -294,6 +369,18 @@ const COMMANDS = {
       ].join('\n')
     );
     return stop(verdict.fits ? [] : [verdict.reason], 'The cut fits.');
+  },
+  topzoom([wholeLog, cappedLog]) {
+    const zoom = process.env.WORKER_TOP_ZOOM;
+    const wrong = topZoomProblems(zoom, readFileSync(join(ROOT, STREET_MAP_SOURCE), 'utf8'));
+    if (wrong.length) return stop(wrong, '');
+    const report = topZoomReport(
+      parseDryRunSize(readFileSync(wholeLog, 'utf8')),
+      parseDryRunSize(readFileSync(cappedLog, 'utf8')),
+      Number(zoom)
+    );
+    if (report.problems.length === 0) say(report.lines.join('\n'));
+    return stop(report.problems, `Top zoom ${zoom}: both sizes are in the summary.`);
   },
   absent([listing]) {
     const key = named().key;

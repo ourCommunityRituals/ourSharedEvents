@@ -251,8 +251,22 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
 
    It works out the tiles and prints the archive size without fetching them. The
    run stops here, with the size and the free disk in its summary, if the file
-   does not fit the runner's larger disk. **In `measure` mode the run ends
-   here**, having used no bucket credential and written nothing.
+   does not fit the runner's larger disk.
+
+   In `measure` mode only, the step then makes the same dry run once more, at
+   the deepest zoom the Worker reads (`MAX_ZOOM` in `lib/street-map.ts`; the
+   workflow carries it as `WORKER_TOP_ZOOM`, and a test holds the two together):
+
+   ```bash
+   pmtiles extract https://build.protomaps.com/20261109.pmtiles us-20261109.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14 --dry-run
+   ```
+
+   The summary then gives both sizes side by side. It is a figure for the
+   owner's zoom decision ("Before the load", item 3) and nothing else: the fit
+   is judged on the first dry run, a `load` neither makes the second nor waits
+   on it, and the cut in step 5 keeps every zoom until a PR changes it. **In
+   `measure` mode the run ends here**, having used no bucket credential and
+   written nothing.
 
 4. **The key is free.** The bucket is listed, and the run stops if it already
    holds the key (asked before the cut, and again just before the upload):
