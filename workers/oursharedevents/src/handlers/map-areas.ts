@@ -154,7 +154,7 @@ export async function handleMapAreas(request: Request, env: StreetMapEnv): Promi
 
   // 4. The streets, when the frame is one a street map can show (the loader
   //    reads no tile for a wider one). Never throws.
-  const layer = await loadStreetLayer(env, framed, { numbered: cells });
+  const layer = await loadStreetLayer(env, framed, { numbered: cells, surface: 'map-areas' });
 
   return Response.json(
     {

@@ -35,7 +35,7 @@ below):
 
 <!-- STRUCTURED_LOG_TAGS:start — every tag below is asserted to exist as `type: '…'` in src/ by tests/observability-runbook-tags.spec.ts; edit the two in lockstep -->
 
-- **request-path:** `FORM_EVENT`, `FLAG_EVENT`, `TURNSTILE_EVENT`, `OPERATION_COST` (never-who, gated)
+- **request-path:** `FORM_EVENT`, `FLAG_EVENT`, `TURNSTILE_EVENT`, `OPERATION_COST` (never-who, gated), `STREET_LAYER` (what a try at the street layer came to: `drew`, `no-archive`, `no-tile`, `thin`, `timeout`, `error`; never-who and never-where, gated)
 - **scheduled-job completion:** `LIFECYCLE_COMPLETE`, `SECURITY_CRON_COMPLETE`
 - **error / alert (watch these):** `LIFECYCLE_PHASE_ERROR`, `UNHANDLED_ERROR`, `DB_ERROR`, `SCHEMA_DRIFT`, `SECURITY_ALERT_RAISED`
 

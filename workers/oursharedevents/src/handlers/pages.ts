@@ -3012,7 +3012,9 @@ export async function handleLandingPage(
     // the cells the first pass drew, then the area is drawn again with it. No
     // binding, or any failure, leaves the hexagons-only map from the first pass.
     if (area.mapCells?.length) {
-      const streets = await loadStreetLayer(env as LandingEnv, area.mapCells);
+      const streets = await loadStreetLayer(env as LandingEnv, area.mapCells, {
+        surface: 'landing',
+      });
       if (streets) {
         // In its own try (street-map CCR 2026-11-15, R22). The outer catch
         // serves the empty area; a second pass that threw there would take the

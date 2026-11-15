@@ -8,7 +8,7 @@
  * isolate, the reads are ranged R2 reads, and directories and tiles are
  * unpacked by the runtime's `DecompressionStream`.
  *
- * Three things are pinned:
+ * Four things are pinned:
  *
  *  1. The public area route and the landing draw streets from the archive, and
  *     stay whole when the object is missing or cut short.
@@ -20,6 +20,13 @@
  *     is "on" (the top-level [vars] of wrangler.toml), which is why everything
  *     above draws. With it off, through the Worker's own fetch and router, both
  *     surfaces answer hexagons only and R2 is not asked, with the archive there.
+ *  4. What the log says, and an empty bucket (street-map CCR 2026-11-15, R4 and
+ *     R5). Each try that reads the bucket writes one STREET_LAYER line to the
+ *     isolate's console, the one Workers Logs keeps: drew, no-archive, timeout
+ *     or error, with the surface that asked. An object that is not there is
+ *     read once for the requests of a minute, both surfaces together; an object
+ *     loaded meanwhile draws when that minute is up, in the same isolate, with
+ *     no deploy. The clock is the runtime's `Date.now`, moved on by the test.
  *
  * The slow read is the bucket's own `get`, held back by a timer that belongs to
  * the request that asked: when that request ends, the runtime drops the timer
@@ -30,12 +37,13 @@
 // @born-red a missing or cut object leaves the page whole | method: the catch in `loadStreetLayer` (src/lib/street-map.ts) rethrowing; "no object under the key" and "an object cut short" failed | date: 2026-11-15
 // @born-red directories kept between requests | method: `OPENED.set` removed from `open` in src/lib/pmtiles.ts; "the next map of that area is one read" and the read counts after a lost leaf and a lost tile read failed | date: 2026-11-15
 // @born-red the switch in the runtime | method: the switch line removed from loadStreetLayer; both "off" cases failed (the route and the landing drew streets). The top-level STREET_MAP in wrangler.toml set to "off"; "the pool runs with the switch on" and the nine cases that draw failed | date: 2026-11-15
+// @born-red what the log says, and an empty bucket, in the runtime | method: 14 faults in src/lib/street-map.ts, src/lib/pmtiles.ts and the two handlers, one at a time, each seen failing here in workerd and put back. The emit call removed (the four cases of that block and "an object cut short"); a timeout said as error ("a lost race is a timeout in the log"); no-archive said as error ("R2 is read once" and "the object is loaded"); every error said as no-archive ("an object cut short"); reads not counted (3); the remembered miss not read by the loader, and the miss not remembered at all ("R2 is read once", "the object is loaded"); `surface` taken out of the area route's call (5) and of the landing's, and the landing saying the other surface (3 each); every throw of the read remembered as a miss ("an object cut short"); the miss marked before the read comes back ("a lost race is a timeout in the log", and the open-read and landing lost-race cases already here); the window twice as long, and never ending ("the object is loaded") | date: 2026-11-15
 import { createExecutionContext, env, SELF, waitOnExecutionContext } from 'cloudflare:test';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import worker from '../src/index';
-import { resetPmtilesCache } from '../src/lib/pmtiles';
-import { DEFAULT_ARCHIVE, STREET_TIMEOUT_MS } from '../src/lib/street-map';
+import { MISS_MEMORY_MS, resetPmtilesCache } from '../src/lib/pmtiles';
+import { DEFAULT_ARCHIVE, STREET_TIMEOUT_MS, type StreetLayerLine } from '../src/lib/street-map';
 import { pmtilesArchive, tilesForCells, type FixtureTile } from './helpers/street-map-fixtures';
 
 interface TestEnv {
@@ -118,6 +126,26 @@ async function areas(): Promise<{ status: number; body: AreasBody }> {
 async function landing(): Promise<{ status: number; html: string }> {
   const res = await SELF.fetch(LANDING);
   return { status: res.status, html: await res.text() };
+}
+
+/** Watch the isolate's console: the STREET_LAYER lines the Worker has written since. */
+function watchLog(): () => StreetLayerLine[] {
+  const log = vi.spyOn(console, 'log');
+  return () =>
+    log.mock.calls.flatMap(([text]) => {
+      try {
+        const line = JSON.parse(String(text)) as StreetLayerLine;
+        return line.type === 'STREET_LAYER' ? [line] : [];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/** Move the runtime's clock on by `ms` for the rest of the test. */
+function clockOn(ms: number): void {
+  const real = Date.now.bind(Date);
+  vi.spyOn(Date, 'now').mockImplementation(() => real() + ms);
 }
 
 const STREETS = 'data-testid="amap-streets"';
@@ -221,6 +249,7 @@ describe('the street layer in the Workers runtime | drawing from R2', () => {
     // The header says where the tiles start (bytes 56 to 63, little-endian).
     const tilesAt = new DataView(archive.buffer, archive.byteOffset).getUint32(56, true);
     await E.MAP_TILES.put(KEY, archive.subarray(0, tilesAt + 100));
+    const lines = watchLog();
     const cut = await areas();
     expect(cut.status).toBe(200);
     expect(cut.body.areas).toHaveLength(1);
@@ -229,8 +258,112 @@ describe('the street layer in the Workers runtime | drawing from R2', () => {
     expect(page.status).toBe(200);
     expect(page.html).toContain(HEXAGONS);
     expect(page.html).not.toContain(STREETS);
+    // A damaged object is an error in the log, on each surface, and is not
+    // taken for a missing one: the whole object draws at once.
+    expect(lines().map((l) => [l.outcome, l.surface])).toEqual([
+      ['error', 'map-areas'],
+      ['error', 'landing'],
+    ]);
     await E.MAP_TILES.put(KEY, archive);
     expect((await areas()).body.streets).not.toBeNull();
+  });
+});
+
+describe('the street layer in the Workers runtime | what the log says, and an empty bucket', () => {
+  test('a layer that is drawn is one line, with the surface that asked', async () => {
+    const lines = watchLog();
+    expect((await areas()).body.streets).not.toBeNull();
+    expect((await landing()).html).toContain(STREETS);
+    expect(lines()).toHaveLength(2);
+    const [route, page] = lines();
+    // Cold: the header, the leaf directory, the tiles.
+    expect(route).toMatchObject({ outcome: 'drew', surface: 'map-areas', r2Reads: 3 });
+    // Another frame of the same archive: the directories are kept.
+    expect(page).toMatchObject({ outcome: 'drew', surface: 'landing', r2Reads: 1 });
+    for (const line of [route!, page!]) {
+      expect(Object.keys(line)).toEqual([
+        'type',
+        'outcome',
+        'surface',
+        'z',
+        'tiles',
+        'r2Reads',
+        'ms',
+      ]);
+      expect(line.z).toBeGreaterThanOrEqual(7);
+      expect(line.tiles).toBeGreaterThan(0);
+      expect(line.ms).toBeGreaterThanOrEqual(0);
+    }
+    // No cell is in it.
+    expect(JSON.stringify(lines())).not.toContain(CELL);
+  });
+
+  test('no object under the key: R2 is read once for the requests of the window, and the log says no-archive once', async () => {
+    await E.MAP_TILES.delete(KEY);
+    const bucket = watchBucket();
+    const lines = watchLog();
+    for (let n = 0; n < 2; n++) {
+      const route = await areas();
+      expect(route.status).toBe(200);
+      expect(route.body.areas).toHaveLength(1);
+      expect(route.body.streets).toBeNull();
+    }
+    // The other surface, in the same isolate, does not ask either.
+    const page = await landing();
+    expect(page.status).toBe(200);
+    expect(page.html).toContain(HEXAGONS);
+    expect(page.html).not.toContain(STREETS);
+    expect(bucket.mock.calls).toHaveLength(1);
+    expect(lines()).toHaveLength(1);
+    expect(lines()[0]).toMatchObject({
+      type: 'STREET_LAYER',
+      outcome: 'no-archive',
+      surface: 'map-areas',
+      z: null,
+      tiles: 0,
+      r2Reads: 1,
+    });
+  });
+
+  test('the object is loaded: hexagons only for the rest of the window, then streets, with no deploy', async () => {
+    expect(MISS_MEMORY_MS).toBe(60_000);
+    await E.MAP_TILES.delete(KEY);
+    const bucket = watchBucket();
+    const lines = watchLog();
+    expect((await areas()).body.streets).toBeNull();
+    expect(bucket.mock.calls).toHaveLength(1);
+    // The owner's load lands.
+    await E.MAP_TILES.put(KEY, archive);
+    // Inside the window the isolate does not look, on either surface.
+    expect((await areas()).body.streets).toBeNull();
+    expect((await landing()).html).not.toContain(STREETS);
+    expect(bucket.mock.calls).toHaveLength(1);
+    // The window is up. Nothing else changed: the same isolate, the same Worker.
+    clockOn(MISS_MEMORY_MS);
+    const route = await areas();
+    expect(route.body.streets).not.toBeNull();
+    expect(route.body.streets!.svg).toContain(STREETS);
+    expect(bucket.mock.calls).toHaveLength(4);
+    expect((await landing()).html).toContain(STREETS);
+    expect(lines().map((l) => [l.outcome, l.surface])).toEqual([
+      ['no-archive', 'map-areas'],
+      ['drew', 'map-areas'],
+      ['drew', 'landing'],
+    ]);
+  });
+
+  test('a lost race is a timeout in the log, and is not taken for a missing object', async () => {
+    const bucket = watchBucket({ call: READ.open.call, ms: LATE_MS });
+    const lines = watchLog();
+    expect((await areas()).body.streets).toBeNull();
+    expect(lines()).toHaveLength(1);
+    expect(lines()[0]).toMatchObject({ outcome: 'timeout', surface: 'map-areas', r2Reads: 1 });
+    expect(lines()[0]!.ms).toBeGreaterThanOrEqual(STREET_TIMEOUT_MS);
+    // Asked again at once, and drawn.
+    const before = bucket.mock.calls.length;
+    expect((await areas()).body.streets).not.toBeNull();
+    expect(bucket.mock.calls.length - before).toBe(READ.open.readsAfter);
+    expect(lines().map((l) => l.outcome)).toEqual(['timeout', 'drew']);
   });
 });
 

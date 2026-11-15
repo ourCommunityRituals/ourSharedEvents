@@ -167,6 +167,9 @@ export const NODE_SPECS = [
   'tests/mvt.spec.ts',
   'tests/street-map.spec.ts',
   'tests/street-map-landing.spec.ts',
+  // The street layer's outcome line and the one-minute memory of a missing
+  // archive, over fake buckets with the clock held by the test.
+  'tests/street-layer-outcome.spec.ts',
   'tests/map-areas.spec.ts',
   // The check a cut archive passes before it is loaded into R2
   // (scripts/street-map-archive/check.ts), over in-memory archives.
