@@ -319,6 +319,16 @@ describe('every closed address answers the same 404', () => {
     for (const [i, b] of bodies.entries()) expect(same(b.body), CASES[i][0]).toBe(first);
   });
 
+  // On staging the edge adds a script for its JavaScript check to an HTML page,
+  // new on every read, and the staging check (Bruno folder 19, requests 185 to
+  // 187) leaves that one script out, finding it by this name. That is safe
+  // while nothing the Worker sends carries the name.
+  test('none of them names the edge’s script, which the staging check leaves out', async () => {
+    for (const [label, path] of CASES) {
+      expect((await get(path)).body, label).not.toContain('__CF$cv$params');
+    }
+  });
+
   test('a closed fair’s stall name never reaches the page', async () => {
     for (const id of Object.values(CLOSED)) {
       expect((await get(page(id, '1'))).body).not.toContain('Closed Fair');

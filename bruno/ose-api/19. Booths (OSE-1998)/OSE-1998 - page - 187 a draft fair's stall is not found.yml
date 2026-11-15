@@ -20,10 +20,27 @@ runtime:
         var edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
         if (edge) { test('EDGE: the page read was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
         var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        // The page as the Worker sent it. Two things are new on every read, so they are taken out:
+        // the script the edge adds for its JavaScript check (it names window.__CF$cv$params and holds
+        // this request's Ray ID, the time and the nonce), and the value of each nonce attribute.
+        // Everything else is compared. tests/integration/bruno-stall-not-found-same-page.test.js runs
+        // this script against both kinds of page; requests 185 to 187 carry the same function.
+        var workerPage = function (h) {
+          return h
+            .replace(/<script\b[^>]*>(?:(?!<\/script>)[\s\S])*?window\.__CF\$cv\$params(?:(?!<\/script>)[\s\S])*?<\/script>/g, '')
+            .replace(/nonce="[^"]*"/g, '');
+        };
         if (!edge) {
           test('OSE-1998 page: 404', function () { expect(res.getStatus()).to.eql(404); expect(body).to.not.include('Print Stall'); });
           if (bru.getVar('boothNotFoundBody')) {
-            test('OSE-1998 page: the same page as an unknown stall', function () { expect(body.replace(/nonce="[^"]*"/g, '')).to.eql(bru.getVar('boothNotFoundBody')); });
+            test('OSE-1998 page: the same page as an unknown stall', function () {
+              var mine = workerPage(body);
+              var unknown = bru.getVar('boothNotFoundBody');
+              if (mine === unknown) return;
+              var i = 0;
+              while (i < mine.length && i < unknown.length && mine.charAt(i) === unknown.charAt(i)) i++;
+              throw new Error('the pages part at character ' + i + ' (of ' + mine.length + ' and ' + unknown.length + '). This page: ' + JSON.stringify(mine.slice(Math.max(0, i - 40), i + 80)) + '. The unknown stall: ' + JSON.stringify(unknown.slice(Math.max(0, i - 40), i + 80)));
+            });
           }
         }
 
