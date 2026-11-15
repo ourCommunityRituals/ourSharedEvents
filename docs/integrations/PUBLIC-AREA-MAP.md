@@ -108,7 +108,16 @@ return (
     OpenStreetMap's licence asks for it wherever the streets show, and this route cannot show
     it for you. Without streets, show no credit. See "The credit" below;
   - make `hex-area` see-through enough that the streets read (the landing uses a fill opacity of
-    0.15 to 0.5 over streets).
+    0.15 to 0.5 over streets);
+  - mind the size of the town names on a narrow map. `streets.css` sets them (`.as-t`) at 22 map
+    units, which is under 13 px on screen once the map is drawn narrower than 355 px. The names
+    are placed with room for 28 units (since 2026-11-15), so a page may set
+    `.as-t{font-size:28px}` for narrow screens in its own stylesheet: 28 units is 13 px on a
+    280 px map, and the placement keeps names clear of each other and of the areas' numbers at
+    that size (by its own estimate of a name's width). The landing does this under 480 px
+    (`lib/map-narrow-style.ts`). That rule is the landing's own and is not in `streets.css`.
+    With more room kept round each name, an answer can hold fewer names than the same request
+    held before; still six at most.
 - When `streets` is null, draw as today: hexagons only. This is a normal answer, not a failure.
 - `streets.svg` is markup the Worker built from tile data it escaped. It holds `<g>`, `<rect>`,
   `<path>` and `<text>` only: no link, no script, no address of another host.

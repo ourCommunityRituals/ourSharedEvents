@@ -159,6 +159,8 @@ export const MAP_STYLE =
 // gives each source file one 400-char inline budget, and MAP_STYLE uses this one.
 export { ZOOM_STYLE } from './map-zoom-style.js';
 import { ZOOM_STYLE } from './map-zoom-style.js';
+// What a narrow screen changes: its own module, for the same budget.
+import { NARROW_MAP_STYLE } from './map-narrow-style.js';
 import {
   renderPlacePanels,
   type PanelEvent,
@@ -166,9 +168,15 @@ import {
   type PanelPlace,
 } from './map-place-panel.js';
 
-/** Touch target round a dot, in map units: 44 px on a 343 px wide phone map. */
+/**
+ * Touch target round a dot, in map units. 78 units across is 44 px once a unit
+ * is 0.565 px. The whole 600-unit frame gives that only on a map 339 px wide or
+ * more, so under 480 px the zoomed area is drawn 4 by 3 (map-narrow-style.ts),
+ * where a unit is 0.583 px on the narrowest phone (320 px, a 280 px map).
+ */
 const DOT_HIT_R = 39;
-const DOT_R = 13;
+/** The dot itself: wide enough for a two-digit number at either size it is set in. */
+const DOT_R = 17;
 /** Dots nearer than two hit radii overlap as touch targets, so they are one place. */
 export const DOT_MERGE = 2 * DOT_HIT_R;
 
@@ -558,8 +566,10 @@ function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets: string): str
       );
     })
     .join('');
+  // "slice": in a box taller than the frame the drawing fills the box and its
+  // sides are cut (map-narrow-style.ts). In a 5 by 3 box it changes nothing.
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="group" aria-labelledby="amap-caption" data-testid="amap-svg">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" role="group" aria-labelledby="amap-caption" data-testid="amap-svg">` +
     `${streets}<polygon class="amap-zone" points="${ring}" data-testid="amap-zone" data-cell="${cell}"/>${marks}</svg>`
   );
 }
@@ -637,7 +647,7 @@ function renderZoom(
   }));
   const panels = renderPlacePanels(places, { lang, sponsorTitles, ...panel });
   const html = `<div class="amap-wrap" data-testid="amap-wrap"><figure class="amap" data-testid="amap" data-zoom="${cell}">
-              ${MAP_STYLE}${ZOOM_STYLE}${streets ? STREET_STYLE : ''}
+              ${MAP_STYLE}${ZOOM_STYLE}${streets ? STREET_STYLE : ''}${NARROW_MAP_STYLE}
               ${back}
               ${drawing}
               ${zoomLegend(dots, unplaced, lang, sponsorTitles)}
@@ -730,7 +740,7 @@ export function renderAttendeeMap(
       : undefined;
   const credit = streets ? streetCredit(lang) : '';
   const html = `<figure class="amap" data-testid="amap">
-              ${MAP_STYLE}${streets ? STREET_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}
+              ${MAP_STYLE}${streets ? STREET_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}${NARROW_MAP_STYLE}
               ${svgFor(drawn, lang, streets, opts?.zoomHref)}
               ${legendFor(drawn, lang, opts?.sponsorTitles, opts?.zoomHref)}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>${credit}

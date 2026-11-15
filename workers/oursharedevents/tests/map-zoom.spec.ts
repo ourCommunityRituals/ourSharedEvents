@@ -32,7 +32,14 @@
  */
 // @born-red attendee-map mutants | method: StrykerJS mutants of src/lib/attendee-map.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
 import { describe, expect, test } from 'vitest';
-import { cellToBoundary, cellToChildren, cellToLatLng, cellToParent, latLngToCell } from 'h3-js';
+import {
+  cellToBoundary,
+  cellToChildren,
+  cellToLatLng,
+  cellToParent,
+  gridDisk,
+  latLngToCell,
+} from 'h3-js';
 import {
   DOT_MERGE,
   MAP_STYLE,
@@ -42,6 +49,7 @@ import {
   type ZoomEvent,
 } from '../src/lib/attendee-map';
 import { landingZoom, renderLandingArea } from '../src/lib/landing-area';
+import { NARROW_MAP_STYLE } from '../src/lib/map-narrow-style';
 import { PLACE_PANEL_CSS } from '../src/lib/event-list';
 import { CORRIDOR_WINDOW_DAYS } from '../src/lib/corridor-readiness';
 import {
@@ -610,10 +618,100 @@ describe('design budget', () => {
     expect(ZOOM_STYLE.match(/<style>/g)).toHaveLength(1);
   });
 
-  test("a dot's touch target is at least 44 px on a 343 px wide phone map", () => {
+  // What a narrow screen changes, read out of the style that ships
+  // (lib/map-narrow-style.ts). The page's side gutters are 40 px in all, so a
+  // 320 px phone has a 280 px map, and from 480 px, where the rule ends, the map
+  // is 440 px or more. That gutter, and that a browser obeys the rule, are seen
+  // in tests/e2e/2-pages/street-map-sizes.component.spec.ts.
+  const narrow = {
+    under: Number(/@media\(max-width:(\d+)px\)/.exec(NARROW_MAP_STYLE)![1]) + 1,
+    ratio: /\.amap\[data-zoom\] svg\{aspect-ratio:(\d+)\/(\d+)\}/.exec(NARROW_MAP_STYLE)!,
+    dotNumber: Number(/\.amap-dn\{font-size:(\d+)px\}/.exec(NARROW_MAP_STYLE)![1]),
+    names: Number(/\.as-t,\.amap-num\{font-size:(\d+)px\}/.exec(NARROW_MAP_STYLE)![1]),
+  };
+  const GUTTER = 40;
+  /** The map units the taller box shows across: 4 by 3 of a 360-unit-high drawing. */
+  const SHOWN = (MAP_H * Number(narrow.ratio[1])) / Number(narrow.ratio[2]);
+  /** Screen px to a map unit: the narrowest phone, and the first width past the rule. */
+  const PHONE = (320 - GUTTER) / MAP_W;
+  const WIDE = (narrow.under - GUTTER) / MAP_W;
+  /** The same on the narrowest phone, for the zoomed area in its taller box. */
+  const PHONE_ZOOMED = (320 - GUTTER) / SHOWN;
+  const two = () => [ev('a'), ev('b', { h3_res7: OTHER, lat: 41.88, lon: -87.63 })];
+
+  test('the narrow style is one block under 400 characters, one rule, no colour', () => {
+    expect(NARROW_MAP_STYLE).toBe(
+      '<style>@media(max-width:479px){.amap[data-zoom] svg{aspect-ratio:4/3}.amap-dn{font-size:23px}.as-t,.amap-num{font-size:28px}}</style>'
+    );
+    expect(NARROW_MAP_STYLE.length).toBeLessThanOrEqual(400);
+    expect(NARROW_MAP_STYLE.match(/<style>/g)).toHaveLength(1);
+    expect(NARROW_MAP_STYLE).not.toMatch(/var\(|#[0-9a-f]{3,8}\b|fill|stroke|color/i);
+    expect(narrow.under).toBe(480);
+    expect(SHOWN).toBe(480);
+  });
+
+  test('the zoomed map is cut at its sides, not shrunk, in a taller box; the landing map never is', () => {
+    expect(zoomed([ev('a')]).html).toContain(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${MAP_W} ${MAP_H}" preserveAspectRatio="xMidYMid slice" role="group" `
+    );
+    // The landing's own map holds areas out to its edges: it keeps its whole frame.
+    const landing = renderAttendeeMap(two(), {
+      now: NOW,
+      area: { count: 10, min: 10 },
+      zoomHref: (c) => `/?area=${c}`,
+    }).html;
+    expect(landing).toContain(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${MAP_W} ${MAP_H}" role="img" `
+    );
+    expect(landing).not.toContain('preserveAspectRatio');
+    // The narrow style comes after the other blocks, so its sizes are the ones used.
+    expect(landing).toContain(`${MAP_STYLE}${ZOOM_STYLE}${NARROW_MAP_STYLE}\n`);
+    const plain = renderAttendeeMap(two(), { now: NOW, area: { count: 10, min: 10 } }).html;
+    expect(plain).toContain(`${MAP_STYLE}${NARROW_MAP_STYLE}\n`);
+  });
+
+  test('what the taller box shows holds the whole area and every dot target', () => {
+    const left = (MAP_W - SHOWN) / 2;
+    const r = Number(/class="amap-hit" [^>]*r="(\d+)"/.exec(zoomed([ev('a')]).html)![1]);
+    // Chicago, the equator, a high latitude and the south: the hexagon turns with the place.
+    for (const [lat, lng] of [
+      [RIPH.lat, RIPH.lon],
+      [0.1, 0.1],
+      [64.84, -147.72],
+      [-33.87, 151.21],
+    ] as const) {
+      const cell = latLngToCell(lat, lng, 7);
+      const f = frameForCells([cell], MAP_W, MAP_H);
+      const xs = cellToBoundary(cell).map(([a, b]) => project(f, a, b)[0]);
+      expect(Math.min(...xs)).toBeGreaterThanOrEqual(left);
+      expect(Math.max(...xs)).toBeLessThanOrEqual(MAP_W - left);
+      // A dot sits at the centre of the block its place is in. A place is in
+      // the area by where it is, and a block on the area's edge can belong to
+      // the area next door, so every block with a corner or its centre in this
+      // area counts, whichever area it belongs to. Its whole target shows.
+      const blocks = gridDisk(cell, 1)
+        .flatMap((c) => cellToChildren(c, 9))
+        .filter((block) =>
+          [cellToLatLng(block), ...cellToBoundary(block)].some(
+            ([a, b]) => latLngToCell(a, b, 7) === cell
+          )
+        )
+        .map((block) => project(f, ...cellToLatLng(block))[0]);
+      expect(blocks.length).toBeGreaterThan(49);
+      expect(Math.min(...blocks) - r).toBeGreaterThanOrEqual(left);
+      expect(Math.max(...blocks) + r).toBeLessThanOrEqual(MAP_W - left);
+    }
+  });
+
+  test("a dot's touch target is at least 44 px on the narrowest phone and at every width above it", () => {
     const html = zoomed([ev('a')]).html;
     const r = Number(/class="amap-hit" [^>]*r="(\d+)"/.exec(html)![1]);
-    expect(2 * r * (343 / MAP_W)).toBeGreaterThanOrEqual(44);
+    // 320 px: the zoomed area is in its taller box. On the whole frame the same
+    // target is under 44 px there, which is what a browser showed (36.4 px).
+    expect(2 * r * PHONE_ZOOMED).toBeGreaterThanOrEqual(44);
+    expect(2 * r * PHONE).toBeLessThan(44);
+    // 480 px, where the rule ends and the whole frame is back.
+    expect(2 * r * WIDE).toBeGreaterThanOrEqual(44);
     // Two targets that do not overlap are two radii apart: the merge distance.
     expect(DOT_MERGE).toBe(2 * r);
     // The target is invisible but still takes the tap (a fill of none would not).
@@ -628,6 +726,38 @@ describe('design budget', () => {
       '.event-card .amap-acts .cta-secondary:hover { background: var(--surface-hover); }'
     );
     expect(PLACE_PANEL_CSS).not.toMatch(/#[0-9a-f]{3,8}/i);
+  });
+
+  test('no text on the map is under 13 px, on the narrowest phone or where the narrow rule ends', () => {
+    const px = (style: string, rule: RegExp) => Number(rule.exec(style)![1]);
+    const dotNumber = px(ZOOM_STYLE, /\.amap-dn\{[^}]*font:700 (\d+)px system-ui/);
+    const townName = px(STREET_STYLE, /\.as-t\{[^}]*font:600 (\d+)px system-ui/);
+    const areaNumber = px(MAP_STYLE, /\.amap-num\{[^}]*font:700 (\d+)px system-ui/);
+    // From 480 px: the sizes the three blocks set, on the whole frame.
+    for (const units of [dotNumber, townName, areaNumber]) {
+      expect(units * WIDE).toBeGreaterThanOrEqual(13);
+    }
+    // Under 480 px: the sizes the narrow rule sets. A dot's number is only ever
+    // on the zoomed map; names and area numbers are on the landing's own map too.
+    expect(narrow.dotNumber * PHONE_ZOOMED).toBeGreaterThanOrEqual(13);
+    expect(narrow.names * PHONE).toBeGreaterThanOrEqual(13);
+    // The sizes they replace were under the floor there: that is why the rule exists.
+    expect(dotNumber * PHONE_ZOOMED).toBeLessThan(13);
+    expect(townName * PHONE).toBeLessThan(13);
+    expect(areaNumber * PHONE).toBeLessThan(13);
+  });
+
+  test('a dot is wide enough for a two-digit number at either size it is set in', () => {
+    const html = zoomed([ev('a')]).html;
+    const r = Number(/class="amap-dot" [^>]*r="(\d+)"/.exec(html)![1]);
+    const stroke = Number(/\.amap-dot\{[^}]*stroke-width:(\d+)/.exec(ZOOM_STYLE)![1]);
+    // Two bold digits are about 1.2 of the font size wide.
+    for (const units of [
+      Number(/\.amap-dn\{[^}]*font:700 (\d+)px/.exec(ZOOM_STYLE)![1]),
+      narrow.dotNumber,
+    ]) {
+      expect(1.2 * units).toBeLessThanOrEqual(2 * r - stroke);
+    }
   });
 
   test('the area outline is neutral; the accent colour is for the dots alone', () => {
@@ -798,7 +928,7 @@ describe('the zoomed area, edge by edge', () => {
       '<a href="#amap-dot-1" class="amap-f amap-d1 type-trivia when-week" data-testid="amap-dot" data-exact="1" data-count="1">' +
         '<title>Event solo</title>' +
         `<circle class="amap-hit" cx="${x}" cy="${y}" r="39" fill-opacity="0"/>` +
-        `<circle class="amap-dot" cx="${x}" cy="${y}" r="13"/>` +
+        `<circle class="amap-dot" cx="${x}" cy="${y}" r="17"/>` +
         `<text class="amap-dn" x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central">1</text>` +
         '</a></svg>'
     );
@@ -863,7 +993,7 @@ describe('the zoomed area, edge by edge', () => {
     expect(zoomed([ev('a')], { lang: 'es' }).html).toContain(
       '<p class="amap-credit" data-testid="amap-credit">Datos del mapa de calles © colaboradores de <a href="https://www.openstreetmap.org/copyright/es">OpenStreetMap</a>, preparados por <a href="https://protomaps.com">Protomaps</a>.</p>'
     );
-    expect(html).toContain(`${MAP_STYLE}${ZOOM_STYLE}${STREET_STYLE}\n`);
+    expect(html).toContain(`${MAP_STYLE}${ZOOM_STYLE}${STREET_STYLE}${NARROW_MAP_STYLE}\n`);
     expect(caption(html)).toBe(
       `1 event in this area over the next ${CORRIDOR_WINDOW_DAYS} days. A solid dot is a named place, shown on its block; a pale dot marks only its block.`
     );
@@ -873,7 +1003,7 @@ describe('the zoomed area, edge by edge', () => {
     const html = zoomed([ev('a')], { streets: null }).html;
     expect(html).not.toContain('data-testid="amap-credit"');
     expect(html).not.toContain(STREET_STYLE);
-    expect(html).toContain(`${MAP_STYLE}${ZOOM_STYLE}\n`);
+    expect(html).toContain(`${MAP_STYLE}${ZOOM_STYLE}${NARROW_MAP_STYLE}\n`);
     expect(html).toMatch(/<\/figcaption>\s*<\/figure>/);
     expect(caption(html)).toBe(
       `1 event in this area over the next ${CORRIDOR_WINDOW_DAYS} days, listed by place. A place is a block, never a street address.`

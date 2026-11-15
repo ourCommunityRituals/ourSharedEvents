@@ -371,7 +371,8 @@ describe('street map | drawing', () => {
       {
         name: 'places',
         extent: 4096,
-        features: [town('Tom & "Jerry" <b onmouseover=alert(1)>\'s', 9, 300, 180)],
+        // Short enough to be given room in the frame at 28 units a letter.
+        features: [town('Tom & "Jerry" <b onclick=alert(1)>\'s', 9, 300, 180)],
       },
     ]);
     // The same elements, attributes and classes as a layer from honest data.
@@ -381,7 +382,7 @@ describe('street map | drawing', () => {
     // Only the one known road kind was drawn; the four made-up kinds were dropped.
     expect(hostile.svg.match(/<path /g)).toHaveLength(clean.svg.match(/<path /g)!.length);
     // The name is there, as text.
-    expect(hostile.svg).toContain('Tom &amp; &quot;Jerry&quot; &lt;b onmouseover=alert(1)&gt;');
+    expect(hostile.svg).toContain('Tom &amp; &quot;Jerry&quot; &lt;b onclick=alert(1)&gt;');
     for (const bad of [
       '<script',
       '<b ',
@@ -1006,8 +1007,11 @@ describe('street map | the frame, the names and the kinds, to the unit', () => {
     geometry: [[[x, y] as [number, number]]],
   });
   const names = (svg: string) => [...svg.matchAll(/<text [^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
-  /** Half the width a name of `length` characters is given (22 px letters, 0.55 wide). */
-  const half = (length: number) => (length * 22 * 0.55) / 2;
+  /**
+   * Half the width a name of `length` characters is given: 28 units a letter
+   * (the size a narrow screen sets it in, lib/map-narrow-style.ts), 0.55 wide.
+   */
+  const half = (length: number) => (length * 28 * 0.55) / 2;
 
   it('the key of a set of cells is the cells in order, with commas', () => {
     expect(cellsKey(['87b', '87a', '87c'])).toBe('87a,87b,87c');
@@ -1120,12 +1124,12 @@ describe('street map | the frame, the names and the kinds, to the unit', () => {
         // Past each edge by half a unit: listed first and biggest, so each would be drawn if kept.
         town(name('out-left'), 9, h - 0.5, 280),
         town(name('out-right'), 9, 600 - h + 0.5, 310),
-        town(name('out-top'), 9, 300, 21.5),
+        town(name('out-top'), 9, 300, 27.5),
         town(name('out-bottom'), 9, 300, 356.5),
-        // Touching each edge: the box is 22 above the point and 4 below it.
+        // Touching each edge: the box is 28 above the point and 4 below it.
         town(name('in-left'), 5, h, 100),
         town(name('in-right'), 5, 600 - h, 200),
-        town(name('in-top'), 5, 300, 22),
+        town(name('in-top'), 5, 300, 28),
         town(name('in-bottom'), 5, 300, 356)
       )
     );
@@ -1154,9 +1158,9 @@ describe('street map | the frame, the names and the kinds, to the unit', () => {
         town(name('mid'), 9, x, 180),
         town(name('left'), 5, x - 2 * h, 180),
         town(name('right'), 5, x + 2 * h, 180),
-        // 22 above the point and 4 below: 26 apart is edge to edge.
-        town(name('up'), 5, x, 154),
-        town(name('down'), 5, x, 206)
+        // 28 above the point and 4 below: 32 apart is edge to edge.
+        town(name('up'), 5, x, 148),
+        town(name('down'), 5, x, 212)
       )
     );
     expect(names(svg).sort()).toEqual(['down', 'left', 'mid', 'right', 'up'].map(name).sort());
@@ -1164,8 +1168,8 @@ describe('street map | the frame, the names and the kinds, to the unit', () => {
     for (const [tag, tx, ty] of [
       ['left', x - 2 * h + 1, 180],
       ['right', x + 2 * h - 1, 180],
-      ['up', x, 155],
-      ['down', x, 205],
+      ['up', x, 149],
+      ['down', x, 211],
     ] as const) {
       const near = drawStreets(
         one,

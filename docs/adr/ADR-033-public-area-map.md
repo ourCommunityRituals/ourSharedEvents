@@ -170,6 +170,12 @@ code, for a job one public read does.
   `src/router.ts`.
 - `lib/street-map.ts`: `buildStreetLayer` and `loadStreetLayer` take the cells that carry a number,
   so town names keep clear of the areas and not of every framed neighbour.
+- Town names are placed with room for 28 map units a letter (2026-11-15, street-map review
+  findings R24 and R38), the size the landing sets them in under 480 px
+  (`lib/map-narrow-style.ts`). `streets.css` still sets 22, and the landing's narrow rule is not
+  part of this route's answer: a reader that draws the map narrower than 355 px sets its own size
+  (`docs/integrations/PUBLIC-AREA-MAP.md`). The markup's shape did not change; an answer can hold
+  fewer names than before.
 - Tests: `tests/map-areas.spec.ts` (node), `tests/map-areas-route.spec.ts` (workers pool),
   `tests/street-map.spec.ts` (the numbered cells), and the Bruno folder
   `bruno/ose-pages/15. Public Area Map (OSE-2039)` on staging.
