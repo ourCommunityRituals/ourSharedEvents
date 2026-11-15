@@ -5,6 +5,9 @@
  *   POST   /api/v2/admin/campaigns                               create one on a brand (title, status)
  *   PUT    /api/v2/admin/campaigns/:id/placements/:placementId   put a placement in the campaign
  *   DELETE /api/v2/admin/campaigns/:id/placements/:placementId   take it out
+ *   GET    /api/v2/admin/campaigns/:id/events                    the events in the campaign
+ *   PUT    /api/v2/admin/campaigns/:id/events/:eventId           put an event in the campaign
+ *   DELETE /api/v2/admin/campaigns/:id/events/:eventId           take it out
  *
  * Brand wall: the by-id routes sit behind guardAdminObjectScope (router), which
  * 404s a campaign outside the caller's brands before this code runs. Each
@@ -22,11 +25,14 @@ import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/adm
 import {
   CAMPAIGN_CREATE_FIELDS,
   CAMPAIGN_LIST_MAX,
+  addEventToCampaign,
   attachPlacementToCampaign,
   checkCampaignStatus,
   checkCampaignTitle,
   detachPlacementFromCampaign,
+  listCampaignEvents,
   newCampaignId,
+  removeEventFromCampaign,
   type CampaignRow,
 } from '../lib/campaigns';
 import { isJsonContentType } from '../lib/content-type';
@@ -261,5 +267,69 @@ export async function handleAdminSetPlacementCampaign(
   } catch (err) {
     logDbError('handleAdminSetPlacementCampaign', errorLabel(err));
     return errorResponse(request, 'DB_ERROR', 'Failed to update the placement', 503, rid);
+  }
+}
+
+// ─── An event in a campaign (OSE-1552 scope 1) ──────────────────────────────────
+
+/**
+ * Put an event in a campaign, or take it out. No body. The event must be in the
+ * campaign's brand; the rule is in the write itself (lib/campaigns.ts). The
+ * event's sponsor placements, and their own campaigns, are not touched.
+ */
+export async function handleAdminSetEventCampaign(
+  request: Request,
+  env: CampaignsEnv,
+  campaignId: string,
+  eventId: string,
+  add: boolean
+): Promise<Response> {
+  const rid = requestId();
+  if (!env.DB) return campaignNotFound(request, campaignId, rid);
+  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
+  if (scope.mode === 'deny') return campaignNotFound(request, campaignId, rid);
+  const brandIds = scope.mode === 'scoped' ? scope.brandIds : null;
+
+  try {
+    const result = add
+      ? await addEventToCampaign(env.DB, campaignId, eventId, brandIds)
+      : await removeEventFromCampaign(env.DB, campaignId, eventId, brandIds);
+    if (!result.ok) {
+      return result.code === 'CAMPAIGN_NOT_FOUND'
+        ? campaignNotFound(request, campaignId, rid)
+        : errorResponse(request, 'NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
+    }
+    return Response.json(
+      { ok: true, status: 200, id: result.event_id, campaign_id: add ? campaignId : null },
+      { headers: headers(request, rid) }
+    );
+  } catch (err) {
+    logDbError('handleAdminSetEventCampaign', errorLabel(err));
+    return errorResponse(request, 'DB_ERROR', 'Failed to update the event', 503, rid);
+  }
+}
+
+/** The events in a campaign, earliest start first. It takes no query parameter. */
+export async function handleAdminListCampaignEvents(
+  request: Request,
+  env: CampaignsEnv,
+  campaignId: string
+): Promise<Response> {
+  const rid = requestId();
+  if (!env.DB) return campaignNotFound(request, campaignId, rid);
+  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
+  if (scope.mode === 'deny') return campaignNotFound(request, campaignId, rid);
+  const brandIds = scope.mode === 'scoped' ? scope.brandIds : null;
+
+  try {
+    const items = await listCampaignEvents(env.DB, campaignId, brandIds);
+    if (!items) return campaignNotFound(request, campaignId, rid);
+    return Response.json(
+      { ok: true, status: 200, campaign_id: campaignId, items },
+      { headers: headers(request, rid) }
+    );
+  } catch (err) {
+    logDbError('handleAdminListCampaignEvents', errorLabel(err));
+    return errorResponse(request, 'DB_ERROR', 'Failed to list the campaign events', 503, rid);
   }
 }

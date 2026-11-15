@@ -1,8 +1,8 @@
-# Production migration plan: main 77 to 109, forms 14 to 18
+# Production migration plan: main 77 to 110, forms 14 to 18
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0109, forms 0015–0018.
+Covers: main 0078–0110, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 109              | 32       |
+| Main (`ocr-db-production`)        | 77               | 110              | 33       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -128,7 +128,7 @@ its counts were not taken first. They were read on staging the next day (run 436
 events, 60 of them with no place at all, 3 of those on the public list. Its per-status breakdown was
 replaced by one count on 2026-11-15 so the file fits the strict rule.
 
-## Main database, 0078 to 0109
+## Main database, 0078 to 0110
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -166,6 +166,7 @@ replaced by one count on 2026-11-15 so the file fits the strict rule.
 | `0107_events_use_sponsors_backfill.sql`                   | Switches sponsors on (`useSponsors` in `events.settings_json`) for events whose organizer already chose a sponsor. No new column. | Yes  |
 | `0108_event_attendance_mode.sql`                          | Adds `events.attendance_mode` (in person, online or both). Every existing event reads `in_person`, from the column default.       | No   |
 | `0109_event_booths.sql`                                   | Adds `event_booths` (a fair's stalls: number, trading name, category, hall plan spot) and `poster_deployments.booth_id`.          | No   |
+| `0110_event_campaign.sql`                                 | Adds `events.campaign_id` (the one campaign an event is in, or none). Writes no row. Nothing public reads it.                     | No   |
 
 ## Forms database, 0015 to 0018
 
@@ -362,7 +363,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0109_event_booths.sql` and `109`;
+2. **The level.** Expected: `0110_event_campaign.sql` and `110`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash

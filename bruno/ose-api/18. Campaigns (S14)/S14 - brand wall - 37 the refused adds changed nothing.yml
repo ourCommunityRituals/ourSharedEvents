@@ -1,0 +1,33 @@
+info:
+  name: "S14 | rainy | brand wall | the refused adds left the campaign and the event as they were"
+  type: http
+  seq: 37
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_toggle/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Had request 35 written, camp-ci-evt would be listed here. Had request 36
+        // written, camp-on-evt would have moved out of this campaign.
+        const ids = (res.getBody().items || []).map(function (i) { return i.id; });
+        test('S14 brand wall: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 brand wall: the campaign still holds its own event and no other', function () {
+          expect(ids).to.eql(['camp-on-evt']);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
