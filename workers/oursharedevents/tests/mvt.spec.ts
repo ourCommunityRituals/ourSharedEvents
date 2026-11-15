@@ -4,8 +4,18 @@
  * Node-clean: pure byte handling. Registered in vitest.node-specs.mjs.
  */
 // @born-red mvt decoder mutants | method: StrykerJS mutants of src/lib/mvt.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
+// @born-red limits on what a tile may ask the Worker to hold (street-map CCR 2026-11-15, R2) | method: every case of that block seen failing on main's decoder, which counted nothing (each "one more is refused" decoded); then 16 faults injected one at a time in src/lib/mvt.ts, each seen failing the case named for it in the PR's fault list | date: 2026-11-15
 import { describe, it, expect } from 'vitest';
-import { decodeGeometry, decodeTile, MvtError, type Props } from '../src/lib/mvt';
+import {
+  decodeGeometry,
+  decodeTile,
+  MvtError,
+  MAX_PACKED_VALUES,
+  MAX_TILE_LAYERS,
+  TILE_LIMITS,
+  type DecodeCounts,
+  type Props,
+} from '../src/lib/mvt';
 import { geom, mvtTile } from './helpers/street-map-fixtures';
 
 // ─── Raw protobuf builders, so each test spells out the exact bytes ───────────
@@ -395,5 +405,232 @@ describe('mvt | property values', () => {
 
   it('refuses an unsupported wire type inside a value', () => {
     expect(() => valueProps(tag(9, 3))).toThrow(new MvtError('unsupported wire type 3'));
+  });
+});
+
+// street-map CCR 2026-11-15, R2. A tile's bytes are limited by the reader
+// (lib/pmtiles.ts); until these limits nothing limited what the bytes became. A
+// point is two bytes of tile and 76 decoded, and a ring's closing point is one
+// byte, so a tile of the 4 MiB the reader allows could ask for some 300 MB.
+describe('mvt | limits on what a tile may ask the Worker to hold', () => {
+  const packedField = (field: number, nums: number[]): number[] => ld(field, nums.flatMap(vint));
+  /** A line of n points: a MoveTo, then n - 1 steps of one unit. */
+  const lineOf = (n: number): number[] => [
+    9,
+    0,
+    0,
+    ((n - 1) << 3) | 2,
+    ...new Array<number>(2 * (n - 1)).fill(2),
+  ];
+  /** A feature that is a line of n points. */
+  const lineFeature = (n: number): number[] => ld(2, [...u(3, 2), ...packedField(4, lineOf(n))]);
+  const many = (n: number, item: number[]): number[][] => new Array<number[]>(n).fill(item);
+  const EMPTY_FEATURE = ld(2, []);
+  const tooMany = (kind: string, where = 'tile') =>
+    new MvtError(`too many ${kind} in one ${where}`);
+  const L = new Set(['L']);
+  const LM = new Set(['L', 'M']);
+
+  it('the limits are the ones the source gives its reasons for', () => {
+    expect(TILE_LIMITS).toEqual({ features: 30_000, points: 150_000, props: 150_000 });
+    expect(Object.isFrozen(TILE_LIMITS)).toBe(true);
+    expect(MAX_TILE_LAYERS).toBe(16);
+    expect(MAX_PACKED_VALUES).toBe(450_000);
+  });
+
+  // ── points ────────────────────────────────────────────────────────────────
+  it('points: a line of exactly the limit is decoded, and one point more is refused', () => {
+    const parts = decodeGeometry(lineOf(TILE_LIMITS.points));
+    expect(parts).toHaveLength(1);
+    expect(parts[0]).toHaveLength(TILE_LIMITS.points);
+    expect(parts[0]![TILE_LIMITS.points - 1]).toEqual([
+      TILE_LIMITS.points - 1,
+      TILE_LIMITS.points - 1,
+    ]);
+    expect(() => decodeGeometry(lineOf(TILE_LIMITS.points + 1))).toThrow(tooMany('points'));
+  });
+
+  it('points: the point a ClosePath adds is counted, though it costs the tile one byte', () => {
+    const closed = decodeGeometry([...lineOf(TILE_LIMITS.points - 1), 7]);
+    expect(closed[0]).toHaveLength(TILE_LIMITS.points);
+    expect(closed[0]![TILE_LIMITS.points - 1]).toEqual([0, 0]);
+    expect(() => decodeGeometry([...lineOf(TILE_LIMITS.points), 7])).toThrow(tooMany('points'));
+    // A ring of three points closed again and again: every close is a point held.
+    const again = [...lineOf(3), ...new Array<number>(TILE_LIMITS.points - 3).fill(7)];
+    expect(decodeGeometry(again)[0]).toHaveLength(TILE_LIMITS.points);
+    expect(() => decodeGeometry([...again, 7])).toThrow(tooMany('points'));
+  });
+
+  it('points: counted across the features and layers of one tile, and from nothing for the next tile', () => {
+    const half = TILE_LIMITS.points / 2;
+    const full = tileOf(layerMsg('L', lineFeature(half)), layerMsg('M', lineFeature(half)));
+    const layers = decodeTile(full, LM);
+    expect(layers.map((l) => l.features[0]!.geometry[0]!.length)).toEqual([half, half]);
+    // The same tile again: the count is one tile's, not the decoder's.
+    expect(decodeTile(full, LM)).toHaveLength(2);
+    // One more point, in a second feature of the second layer.
+    const over = tileOf(
+      layerMsg('L', lineFeature(half)),
+      layerMsg('M', lineFeature(half), ld(2, [...u(3, 1), ...ld(4, POINT_GEOM)]))
+    );
+    expect(() => decodeTile(over, LM)).toThrow(tooMany('points'));
+    // In two features of one layer as well.
+    const twoInOne = tileOf(layerMsg('L', lineFeature(half), lineFeature(half + 1)));
+    expect(() => decodeTile(twoInOne, L)).toThrow(tooMany('points'));
+  });
+
+  // ── features ──────────────────────────────────────────────────────────────
+  it('features: exactly the limit is decoded, and one more is refused, across layers too', () => {
+    const atLimit = tileOf(layerMsg('L', ...many(TILE_LIMITS.features, EMPTY_FEATURE)));
+    const [layer] = decodeTile(atLimit, L);
+    expect(layer!.features).toHaveLength(TILE_LIMITS.features);
+    const over = tileOf(layerMsg('L', ...many(TILE_LIMITS.features + 1, EMPTY_FEATURE)));
+    expect(() => decodeTile(over, L)).toThrow(tooMany('features'));
+    const half = TILE_LIMITS.features / 2;
+    const split = (extra: number) =>
+      tileOf(
+        layerMsg('L', ...many(half, EMPTY_FEATURE)),
+        layerMsg('M', ...many(half + extra, EMPTY_FEATURE))
+      );
+    expect(decodeTile(split(0), LM).map((l) => l.features.length)).toEqual([half, half]);
+    expect(() => decodeTile(split(1), LM)).toThrow(tooMany('features'));
+  });
+
+  it('an unwanted layer named first costs nothing; one named last is counted as it is held', () => {
+    const big = [...many(TILE_LIMITS.features + 1, EMPTY_FEATURE), lineFeature(TILE_LIMITS.points)];
+    // Named first: skipped at its name, and the wanted layer after it has the whole tile limit.
+    const skipped = tileOf(
+      layerMsg('X', ...big),
+      layerMsg('L', ...many(TILE_LIMITS.features, EMPTY_FEATURE))
+    );
+    expect(decodeTile(skipped, L)[0]!.features).toHaveLength(TILE_LIMITS.features);
+    // Named last: its features were kept before the name said to drop them.
+    const late = tileOf(
+      ld(3, [...many(TILE_LIMITS.features + 1, EMPTY_FEATURE).flat(), ...ld(1, txt('X'))])
+    );
+    expect(() => decodeTile(late, L)).toThrow(tooMany('features'));
+    const lateAtLimit = tileOf(
+      ld(3, [...many(TILE_LIMITS.features, EMPTY_FEATURE).flat(), ...ld(1, txt('X'))])
+    );
+    expect(decodeTile(lateAtLimit, L)).toEqual([]);
+  });
+
+  // ── properties ────────────────────────────────────────────────────────────
+  it('properties: keys read, values read and properties set share one count', () => {
+    const key = ld(3, txt('k'));
+    const value = ld(4, ld(1, txt('v')));
+    /** One feature that sets k -> v `pairs` times over. */
+    const setter = (pairs: number): number[] =>
+      ld(2, [...packedField(2, new Array<number>(2 * pairs).fill(0)), ...POINT]);
+    // One key, one value, and the rest of the limit in properties set.
+    const rest = TILE_LIMITS.props - 2;
+    const atLimit = decodeTile(tileOf(layerMsg('L', key, value, setter(rest))), L);
+    expect(atLimit[0]!.features[0]!.props).toEqual({ k: 'v' });
+    for (const [what, extra] of [
+      ['a property set', [key, value, setter(rest + 1)]],
+      ['a key', [key, key, value, setter(rest)]],
+      ['a value', [key, value, value, setter(rest)]],
+    ] as const) {
+      expect(() => decodeTile(tileOf(layerMsg('L', ...extra)), L), what).toThrow(tooMany('props'));
+    }
+  });
+
+  it('properties: a tag pair that sets nothing is not counted', () => {
+    // Indexes past the one key and the one value: dropped, as before, and free.
+    const dropped = new Array<number>(2 * TILE_LIMITS.props).fill(7);
+    const tile = tileOf(
+      layerMsg(
+        'L',
+        ld(3, txt('k')),
+        ld(4, ld(1, txt('v'))),
+        ld(2, [...packedField(2, dropped), ...POINT])
+      )
+    );
+    expect(decodeTile(tile, L)[0]!.features[0]!.props).toEqual({});
+  });
+
+  // ── one packed field ──────────────────────────────────────────────────────
+  it('a packed field of exactly the limit is read, as tags or as geometry; one integer more is refused', () => {
+    const refused = new MvtError('too many values in one field');
+    // Tags that name no key, and a geometry of MoveTo commands with a count of 0:
+    // integers that are read and held, and become nothing.
+    for (const [field, value] of [
+      [2, 7],
+      [4, 1],
+    ] as const) {
+      const feature = (n: number) => ld(2, packedField(field, new Array<number>(n).fill(value)));
+      const [layer] = decodeTile(tileOf(layerMsg('L', feature(MAX_PACKED_VALUES))), L);
+      expect(layer!.features).toEqual([{ type: 0, props: {}, geometry: [] }]);
+      expect(() => decodeTile(tileOf(layerMsg('L', feature(MAX_PACKED_VALUES + 1))), L)).toThrow(
+        refused
+      );
+    }
+  });
+
+  // ── layers ────────────────────────────────────────────────────────────────
+  it('layers: exactly the limit of wanted layers is decoded, one more is refused, and unwanted ones are free', () => {
+    const wanted = many(MAX_TILE_LAYERS, layerMsg('L'));
+    const unwanted = many(3 * MAX_TILE_LAYERS, layerMsg('X'));
+    expect(decodeTile(tileOf(...unwanted, ...wanted), L)).toHaveLength(MAX_TILE_LAYERS);
+    expect(() => decodeTile(tileOf(...wanted, layerMsg('L')), L)).toThrow(
+      new MvtError('too many layers in one tile')
+    );
+  });
+
+  // ── what the caller has left for the frame ────────────────────────────────
+  describe('what the caller has left, for the tiles it decodes together', () => {
+    // 3 features; 2 keys and 2 values; 3 properties set; 2 + 1 + 4 points.
+    const tile = tileOf(
+      layerMsg(
+        'L',
+        ld(3, txt('a')),
+        ld(3, txt('b')),
+        ld(4, ld(1, txt('v'))),
+        ld(4, ld(1, txt('w'))),
+        ld(2, [...packedField(2, [0, 0, 1, 1]), ...u(3, 2), ...packedField(4, lineOf(2))]),
+        ld(2, [...packedField(2, [0, 1]), ...POINT]),
+        ld(2, [...u(3, 3), ...packedField(4, [...lineOf(3), 7])])
+      )
+    );
+    const NEEDS: DecodeCounts = { features: 3, points: 7, props: 7 };
+
+    it('is counted down by what the tile read', () => {
+      const left: DecodeCounts = { features: 10, points: 100, props: 50 };
+      const [layer] = decodeTile(tile, L, left);
+      expect(layer!.features.map((f) => f.props)).toEqual([{ a: 'v', b: 'w' }, { a: 'w' }, {}]);
+      expect(left).toEqual({ features: 7, points: 93, props: 43 });
+      // A second tile is counted from where the first left off.
+      decodeTile(tile, L, left);
+      expect(left).toEqual({ features: 4, points: 86, props: 36 });
+    });
+
+    it('exactly enough left is enough, and ends at nothing left', () => {
+      const left = { ...NEEDS };
+      expect(decodeTile(tile, L, left)).toHaveLength(1);
+      expect(left).toEqual({ features: 0, points: 0, props: 0 });
+    });
+
+    it.each(['features', 'points', 'props'] as const)(
+      'one short of %s is refused, by the frame and not the tile',
+      (kind) => {
+        const left = { ...NEEDS, [kind]: NEEDS[kind] - 1 };
+        expect(() => decodeTile(tile, L, left)).toThrow(tooMany(kind, 'frame'));
+      }
+    );
+
+    it("the tile's own limit holds whatever is left for the frame", () => {
+      const left: DecodeCounts = { features: 10, points: 10 * TILE_LIMITS.points, props: 10 };
+      const over = tileOf(layerMsg('L', lineFeature(TILE_LIMITS.points + 1)));
+      expect(() => decodeTile(over, L, left)).toThrow(tooMany('points'));
+    });
+
+    it('with nothing passed there is no frame to run out: only the tile limits apply', () => {
+      for (let i = 0; i < 3; i++) {
+        const atLimit = tileOf(layerMsg('L', lineFeature(TILE_LIMITS.points)));
+        expect(decodeTile(atLimit, L)[0]!.features[0]!.geometry[0]).toHaveLength(
+          TILE_LIMITS.points
+        );
+      }
+    });
   });
 });

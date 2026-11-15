@@ -19,10 +19,14 @@
  *   - no length the archive states is trusted: a directory or a tile stated
  *     longer than its limit is never asked for, and gzip stops unpacking at its
  *     limit
+ *   - no count the archive states is trusted: a directory's entry count is held
+ *     to what the bytes after it can hold, four bytes an entry (street-map CCR
+ *     2026-11-15, R2)
  */
 // @born-red pmtiles reader mutants | method: StrykerJS mutants of src/lib/pmtiles.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
 // @born-red planet-sized layout and leaf entry budget | method: 6 faults injected one at a time in src/lib/pmtiles.ts (header offsets cut to 32 bits, directory offsets cut to 32 bits, one leaf level only, a run covering only its first tile, leaves never kept, the entry budget never applied), each planet and budget case seen failing on at least one; the budget cases also seen failing before the budget existed. "is laid out as meant" checks the fixture, not the reader | date: 2026-11-09
 // @born-red limits on what an archive may ask the Worker to hold | method: every case in that block was written before the limits existed and seen failing (the reader asked for the stated length and unpacked to the end; the never-ending gzip case ended the test worker); then 11 faults injected one at a time in src/lib/pmtiles.ts (each of the three stated-length checks removed, > turned to >= in the directory, tile and unpack limits, the cancel removed, each unpack given the other's limit, a frame refused only when every tile is over), each seen failing at least one case | date: 2026-11-14
+// @born-red directory count bound (street-map CCR 2026-11-15, R2) | method: the five cases of "a directory's count is held to what its bytes can hold" seen failing on main's rule (count against the byte length: each read on to "truncated varint", the 2 MiB one after making 2,097,149 entries), then 3 faults injected one at a time in decodeDirectory (the count held to the byte length; the count's own bytes counted as room; three bytes an entry), each seen failing its case | date: 2026-11-15
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   archiveHeader,
@@ -479,18 +483,28 @@ describe('pmtiles | directory decoding', () => {
     expect(both[1]).toEqual({ tileId: 5, offset: 59, length: 3, runLength: 1 });
   });
 
-  it('refuses a count larger than the buffer, but a count equal to it reads on', () => {
+  it('refuses a count the bytes after it cannot hold', () => {
     expect(() => decodeDirectory(new Uint8Array([3, 1]))).toThrow(/directory count out of range/);
     expect(() => decodeDirectory(new Uint8Array([...varint(1e9), 0]))).toThrow(
       /directory count out of range/
     );
-    expect(() => decodeDirectory(new Uint8Array([1]))).toThrow(/truncated varint/);
+    // One entry and no byte for it. (Held to the byte length alone, as it was
+    // until 2026-11-15, this read on to "truncated varint".)
+    expect(() => decodeDirectory(new Uint8Array([1]))).toThrow(/directory count out of range/);
   });
 
   it('refuses a directory cut short by its last byte or inside a varint', () => {
     expect(decodeDirectory(new Uint8Array([1, 5, 1, 4, 1]))).toHaveLength(1);
-    expect(() => decodeDirectory(new Uint8Array([1, 5, 1, 4]))).toThrow(/truncated varint/);
-    expect(() => decodeDirectory(new Uint8Array([1, 0x85]))).toThrow(/truncated varint/);
+    // A byte short of four an entry: the count is refused before an entry is read.
+    expect(() => decodeDirectory(new Uint8Array([1, 5, 1, 4]))).toThrow(
+      /directory count out of range/
+    );
+    // Four bytes for one entry, and the last of them says another byte follows.
+    expect(() => decodeDirectory(new Uint8Array([1, 5, 1, 4, 0x85]))).toThrow(/truncated varint/);
+    // Two bytes to a column: the fourth column runs out.
+    expect(() => decodeDirectory(new Uint8Array([1, 0x85, 1, 0x81, 1, 4]))).toThrow(
+      /truncated varint/
+    );
     expect(() => decodeDirectory(new Uint8Array(0))).toThrow(/truncated varint/);
   });
 
@@ -1246,6 +1260,82 @@ describe('pmtiles | limits on what an archive may ask the Worker to hold', () =>
     expect(cancelled).toBe(true);
     // 100,000 bytes are passed in the second 64 KiB chunk.
     expect(pulls).toBe(2);
+  });
+
+  // street-map CCR 2026-11-15, R2. A directory says how many entries it holds
+  // before it holds them. Until this rule the count was held to the directory's
+  // byte length, so a directory of zeros could say "2,097,151" and have that
+  // many entries made, about 170 MB at 82 bytes an entry, before the second
+  // column ran out. An entry is four varints, so n entries need 4n bytes.
+  describe("a directory's count is held to what its bytes can hold", () => {
+    const refused = new PmtilesError('directory count out of range');
+
+    it('four bytes an entry: a count that fits to the byte is read, and one byte short is refused', () => {
+      // 3 entries: ids 1, 2, 3; runs of 1; lengths of 9; the first at offset 0, the rest after it.
+      const fits = new Uint8Array([3, 1, 1, 1, 1, 1, 1, 9, 9, 9, 1, 0, 0]);
+      expect(decodeDirectory(fits)).toEqual([
+        { tileId: 1, offset: 0, length: 9, runLength: 1 },
+        { tileId: 2, offset: 9, length: 9, runLength: 1 },
+        { tileId: 3, offset: 18, length: 9, runLength: 1 },
+      ]);
+      expect(() => decodeDirectory(fits.subarray(0, 12))).toThrow(refused);
+    });
+
+    it('the bytes of the count itself are not room for entries', () => {
+      const n = 128;
+      expect(varint(n)).toHaveLength(2);
+      const dir = new Uint8Array(2 + 4 * n).fill(1);
+      dir.set(varint(n));
+      expect(decodeDirectory(dir)).toHaveLength(n);
+      // 511 bytes after a two-byte count: with the count's own bytes taken for
+      // room this would pass the check and fail later, on its last varint.
+      expect(() => decodeDirectory(dir.subarray(0, dir.length - 1))).toThrow(refused);
+    });
+
+    it('2 KB of directory cannot say it holds 2,000 entries', () => {
+      const dir = new Uint8Array(2048);
+      dir.set(varint(2000));
+      expect(() => decodeDirectory(dir)).toThrow(refused);
+      // 511 fit, at four bytes each after a two-byte count; 512 do not.
+      dir.fill(1);
+      dir.set(varint(511));
+      expect(decodeDirectory(dir)).toHaveLength(511);
+      dir.set(varint(512));
+      expect(() => decodeDirectory(dir)).toThrow(refused);
+    });
+
+    it('a directory of the limit holds 524,287 entries at the most, whatever it says', () => {
+      const dir = new Uint8Array(MAX_DIRECTORY_BYTES).fill(1);
+      dir.set(varint(524_287));
+      expect(decodeDirectory(dir)).toHaveLength(524_287);
+      dir.set(varint(524_288));
+      expect(() => decodeDirectory(dir)).toThrow(refused);
+      // What the old rule let through: the byte length, less one.
+      const zeros = new Uint8Array(MAX_DIRECTORY_BYTES);
+      zeros.set(varint(MAX_DIRECTORY_BYTES - 1));
+      expect(() => decodeDirectory(zeros)).toThrow(refused);
+    });
+
+    it('through the reader: a 2 KB gzipped root or leaf that claims two million entries is a refused read', async () => {
+      const claim = new Uint8Array(MAX_DIRECTORY_BYTES);
+      claim.set(varint(MAX_DIRECTORY_BYTES - 1));
+      const packed = await gzip(claim);
+      expect(packed.length).toBeLessThan(4096);
+
+      const gzRoot = rawArchive({ root: packed, data: t.data }).archive;
+      gzRoot[97] = 2;
+      const rootSrc = memSource(gzRoot);
+      await expect(readTile(rootSrc, 3, 2, 5)).rejects.toThrow(refused);
+      // Nothing of a refused directory is kept: the next read asks again and is refused again.
+      await expect(readTile(rootSrc, 3, 2, 5)).rejects.toThrow(refused);
+
+      const root = await gzip(
+        dirOf([{ tileId: id(), offset: 0, length: packed.length, runLength: 0 }])
+      );
+      const gzLeaf = rawArchive({ root, leaves: packed, data: t.data }).archive;
+      gzLeaf[97] = 2;
+      await expect(readTile(memSource(gzLeaf), 3, 2, 5)).rejects.toThrow(refused);
+    });
   });
 
   it('a root directory stated longer than the limit is refused before it is asked for, each time', async () => {

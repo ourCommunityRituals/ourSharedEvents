@@ -1903,7 +1903,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 34
+      "testCount": 49
     },
     {
       "file": "workers/oursharedevents/tests/ncr-pipeline.spec.ts",
@@ -2078,7 +2078,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 89
+      "testCount": 94
     },
     {
       "file": "workers/oursharedevents/tests/portfolio-rollup.invariant.spec.ts",
@@ -3471,7 +3471,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 17
+      "testCount": 19
     },
     {
       "file": "workers/oursharedevents/tests/street-map-runtime.spec.ts",
@@ -3485,7 +3485,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 96
+      "testCount": 102
     },
     {
       "file": "workers/oursharedevents/tests/subscribe-calendar-menu.spec.ts",

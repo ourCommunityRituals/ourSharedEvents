@@ -146,7 +146,9 @@ its size is not measured yet (decision 4).
 
    **A layer needs tiles** (2026-11-09): when the archive holds no tile for the
    frame, the Worker draws no street layer at all, so the zoomed area lists its
-   places and never puts dots on a blank rectangle.
+   places and never puts dots on a blank rectangle. From 2026-11-15 (street-map
+   CCR, R15) the same holds when any one tile of the frame is missing: every
+   tile of the frame, or hexagons only.
 
 5. **Tap a hexagon to zoom in; events show as dots** (owner, 2026-11-09). On the
    landing each hexagon links to `/?area=<res-7 cell>`, which the Worker draws as
