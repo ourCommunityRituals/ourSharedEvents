@@ -26,8 +26,10 @@
 says nothing about streets until that flag is `"true"`: the street cases print NOT RUN.
 
 Once an archive is loaded and the street layer is switched on (`STREET_MAP = "on"` for that
-environment in `wrangler.toml`; it is `"off"` on staging and production, and off reads nothing
-from the bucket), the code on `main` draws streets on two surfaces and no other:
+environment in `wrangler.toml`; it is `"on"` on staging since 2026-11-15, set before any load,
+and `"off"` on production; off reads nothing from the bucket, and on with no object in the
+bucket asks the bucket and finds nothing each time a map would draw streets, because a miss is
+not remembered), the code on `main` draws streets on two surfaces and no other:
 
 | Surface                                              | What it draws                                                                     | Limit                                                                                                     |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
