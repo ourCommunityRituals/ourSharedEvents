@@ -50,6 +50,7 @@ See [ADR-RECONCILIATION-PROCESS.md](ADR-RECONCILIATION-PROCESS.md) for the full 
 | [ADR-032](ADR-032-attendance-mode-and-the-lexicon.md)                      | Keep the field name `attendance_mode`, as one exact allowance in the lexicon lint                                         | Accepted   | 2026-11-13 |
 | [ADR-033](ADR-033-public-area-map.md)                                      | Serve the drawn area map as a public read of cells                                                                        | Proposed   | 2026-11-14 |
 | [ADR-034](ADR-034-booths-sessions-and-participation-mode.md)               | A booth and a session are children of one event; participation mode is a column                                           | Proposed   | 2026-11-14 |
+| [ADR-035](ADR-035-street-map-one-bucket.md)                                | Keep the street-map archive in one bucket that staging and production both read                                           | Proposed   | 2026-11-15 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 

@@ -1,6 +1,8 @@
 # ADR-033: Serve the drawn area map as a public read of cells
 
 **Status:** Proposed. Built as written here; the owner ratifies it by merging the pull request.
+Reconciled with the code on 2026-11-15 (see "Reconciliation" at the end): the cache headers, the
+full list of refusals and the limit of "fail soft" were in the code and not in this record.
 **Date:** 2026-11-14
 **Deciders:** Owner (PO). Dr of Security advises on the limits.
 **Ticket:** OSE-2039 (epic OSE-1880)
@@ -9,7 +11,8 @@
 
 The owner wants one map renderer, OurSharedEvents'. The street tiles (OpenStreetMap, a Protomaps
 build in one PMTiles archive) sit in the Worker's private `MAP_TILES` bucket, so only the Worker can
-draw streets (`lib/street-map.ts`).
+draw streets (`lib/street-map.ts`). The bucket, its key and who may read and write it are OSE
+ADR-035; the data's licence and credit are in `NOTICE.md`.
 
 The OurWKRP creator showcase builds static pages. For each station it draws a "where" map of the
 areas its events are in (`showcase/lib/map.mjs` in ourWKRP). It cannot reach the street layer, so it
@@ -50,19 +53,24 @@ It answers JSON:
 - `areas`: one entry per cell, in the order given: `cell`, `n` (from 1), `points` (the outline in
   frame units, ready for `<polygon points>`), `centre` (where the number goes).
 - `around`: with `around=1`, the neighbouring cells' outlines, and the frame is fitted to them too.
+  `around` is `0`, `1` or absent. Any other value is a 400 (`AROUND_INVALID`).
 - `streets`: `{ svg, css, credit }`, or `null` when no street layer can be drawn. `svg` is the one
   `<g>` the landing map puts under its hexagons. `css` is that layer's rules. `credit` is the
-  OpenStreetMap credit, which the licence asks for wherever the streets show.
+  OpenStreetMap credit, which the licence asks for wherever the streets show: `credit.html` is the
+  paragraph the landing shows and `credit.osm` is the address it links to. **The credit is in
+  English only** (`streetCredit('en')`), whatever language the reader's page is in.
 
 **D2. Parts, not a finished picture.** The route returns the layers and the frame. The caller puts
 them in its own `<svg>` with its own classes, labels and accessible name.
 
 **D3. The limits.**
 
-- Cells only. A coordinate-shaped parameter is a 400 in any letter case, using the list
-  `events-map.ts` uses.
-- Resolution 7 only. Any other resolution is a 400.
-- At most 12 cells. A 13th is a 400.
+- Cells only. A coordinate-shaped parameter is a 400 in any letter case
+  (`COORDINATES_NOT_ACCEPTED`), using the list `events-map.ts` uses.
+- `cells` is required (`CELLS_REQUIRED`), and each entry must be a valid H3 cell (`CELL_INVALID`).
+- Resolution 7 only. Any other resolution is a 400 (`CELL_RESOLUTION`).
+- At most 12 cells. A 13th is a 400 (`TOO_MANY_CELLS`).
+- `around` is `0` or `1`. Anything else is a 400 (`AROUND_INVALID`).
 - The frame size is fixed. The caller cannot ask for a bigger one.
 - The street read is bounded as on the landing: 12 tiles and 1.5 seconds at most. A frame too wide
   for a street map (below zoom 7, about 600 km across) reads no tile and answers hexagons only.
@@ -71,6 +79,28 @@ them in its own `<svg>` with its own classes, labels and accessible name.
 
 **D4. Fail soft.** No binding, no archive, no tile, bad data or a slow read is a 200 with the
 hexagons and `streets: null`. Only a bad request is an error.
+
+This holds when the street read returns nothing. It does not cover a layer that is drawn and
+wrong. A layer that decodes but shows water and no roads, or nothing a reader can use, is not
+`null`: it is returned as `streets`, with the credit and the long cache header of D5 (street-map
+review 2026-11-15, findings R7 and R18). Nothing in the route tells a thin layer from a good one
+today.
+
+**D5. Cache headers.** The route sets `Cache-Control` itself
+(`handlers/map-areas.ts`, the last lines of `handleMapAreas`):
+
+| Answer                   | `Cache-Control`                                      |
+| ------------------------ | ---------------------------------------------------- |
+| 200 with `streets`       | `public, max-age=3600, stale-while-revalidate=86400` |
+| 200 with `streets: null` | `public, max-age=60`                                 |
+| Any refusal (400, 429)   | `no-store`                                           |
+
+An answer with streets may be kept for an hour and served stale for a further day while it is
+re-read, so a browser or a build that honours the header can show one answer for up to 25 hours.
+An answer without streets is kept for a minute, so a failed read is not what a build keeps
+getting. No cache at Cloudflare's edge stores the route today (`caches.default` is not used for
+it), so the header reaches only browsers and readers. The archive's key is not part of the
+address: after a refresh, a reader that kept an answer shows the old streets until its copy ends.
 
 ## Alternatives Considered
 
@@ -116,7 +146,10 @@ code, for a job one public read does.
 ### Negative
 
 - Each uncached request can cost one R2 read of up to 12 tiles. The route limit is the control. The
-  answer is cacheable (one hour with streets), but nothing at the edge caches it today.
+  answer is cacheable (D5), but nothing at the edge caches it today.
+- A wrong layer that is not `null` is kept by a reader for up to 25 hours (D4, D5).
+- The credit reaches the reader's page only if that page shows `credit.html`. The route hands it
+  over in the same object as the streets and cannot make the reader show it (`NOTICE.md`, duty L5).
 - The street markup and its class names (`amap-s`, `as-*`) become a contract with a reader outside
   this repo. A change to them is now a change for the showcase.
 - The street CSS reads `@ocr/ui` colour tokens. A page that does not load them gets uncoloured
@@ -154,3 +187,16 @@ code, for a job one public read does.
 - The route's reads show in the rate-limit stats or the R2 bill.
 - The zone starts challenging `/api/v2/`.
 - The street markup changes shape.
+
+## Reconciliation
+
+Per `ADR-RECONCILIATION-PROCESS.md`. The code was read on `main` at `7daf52ed`; no code changed.
+
+### ADR drift register
+
+| ADR     | Status   | Last verified | Code evidence                                                           | Drift note                                                                                                                                                                                                                                                                                                     | Owner |
+| ------- | -------- | ------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| ADR-033 | Proposed | 2026-11-15    | `src/handlers/map-areas.ts`, `src/router.ts`, `tests/map-areas.spec.ts` | The record had no cache headers (now D5), listed three of the six refusals (now all six, with `AROUND_INVALID`), did not say the credit is English only (D1), and read "fail soft" as covering a wrong layer, which it does not (D4). Found by the street-map review of 2026-11-15, findings R18, R19 and R26. | Owner |
+
+Still true, and still not proven: no archive is loaded, so no reader has received a street layer
+from this route on staging, and the staging street assertions print NOT RUN.
