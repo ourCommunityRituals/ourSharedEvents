@@ -446,7 +446,9 @@ function svgFor(
     };
   });
   const side = (W - H) / 2;
-  // Stryker disable next-line MethodExpression: the areas of one map are res-7 cells a few kilometres apart, drawn the same size to within a fraction of a unit, so the largest decides as the smallest does.
+  // The smallest decides: every hexagon that is a link must be a touch target.
+  // The areas of one map are drawn nearly the same size, and near a limit
+  // "nearly" is the difference (tests/map-limits.spec.ts).
   const least = Math.min(...boxes.map((b) => b.least));
   // On the whole frame the phone decides; in the taller box the phone has room
   // to spare and 480 px, back on the whole frame, decides.

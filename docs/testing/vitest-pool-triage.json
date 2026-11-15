@@ -1857,6 +1857,13 @@
       "testCount": 27
     },
     {
+      "file": "workers/oursharedevents/tests/map-limits.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
       "file": "workers/oursharedevents/tests/map-place-links.spec.ts",
       "bucket": "node",
       "needsReview": false,
