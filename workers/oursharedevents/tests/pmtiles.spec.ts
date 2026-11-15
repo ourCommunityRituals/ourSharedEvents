@@ -192,6 +192,32 @@ function failOnce(
   return s;
 }
 
+/**
+ * The first read `when` picks never comes back: what the Workers runtime does
+ * to a read whose request ended before it answered. Later reads go through.
+ */
+function hangOnce(
+  src: RangeSource,
+  when: (offset: number) => boolean
+): RangeSource & { hung: number } {
+  const s = {
+    key: src.key,
+    hung: 0,
+    read(offset: number, length: number): Promise<Uint8Array> {
+      if (s.hung === 0 && when(offset)) {
+        s.hung++;
+        return new Promise<Uint8Array>(() => {});
+      }
+      return src.read(offset, length);
+    },
+  };
+  return s;
+}
+
+/** What `p` settles to, or 'gave up' when it has not settled after `ms`. */
+const orGiveUp = <T>(p: Promise<T>, ms = 30): Promise<T | 'gave up'> =>
+  Promise.race([p, new Promise<'gave up'>((r) => setTimeout(() => r('gave up'), ms))]);
+
 /** Hilbert d for (x, y) on an n×n grid, written from the textbook xy2d, without bit ops. */
 function referenceTileId(z: number, x: number, y: number): number {
   const n = 2 ** z;
@@ -714,15 +740,37 @@ describe('pmtiles | a planet-sized layout', () => {
     expect(src.reads).toHaveLength(1 + dirs.length + 3 * all.length);
   });
 
-  it('two neighbouring tiles cost one walk down the directories between them', async () => {
+  it('two neighbouring tiles asked for in one call cost one walk down the directories between them', async () => {
     const { file } = await planet();
     const src = sparseSource(file);
-    await Promise.all([
+    const [a, b] = await readTiles(src, city.z, [
+      [city.x, city.y],
+      [next.x, next.y],
+    ]);
+    expect(text(a!)).toBe('city');
+    expect(text(b!)).toBe('next');
+    // Header, one level-1 directory, one level-2 directory, the two tiles in one read.
+    expect(src.reads).toHaveLength(4);
+  });
+
+  // 2026-11-15: a read in flight is shared inside one call and never between
+  // calls. In a Worker two calls are two requests, and a read is dropped with
+  // the request that asked for it (tests/street-map-runtime.spec.ts).
+  it('two calls at once share no read in flight: each opens the archive and walks the directories itself', async () => {
+    const { file } = await planet();
+    const src = sparseSource(file);
+    const [a, b] = await Promise.all([
       readTile(src, city.z, city.x, city.y),
       readTile(src, next.z, next.x, next.y),
     ]);
-    // Header, one level-1 directory, one level-2 directory, two tiles.
-    expect(src.reads).toHaveLength(5);
+    expect(text(a!)).toBe('city');
+    expect(text(b!)).toBe('next');
+    // Twice: header, one level-1 directory, one level-2 directory, a tile.
+    expect(src.reads).toHaveLength(8);
+    expect(src.reads.filter(([off]) => off === 0)).toHaveLength(2);
+    // What both read is kept once it is whole: a third call reads its tile only.
+    expect(text((await readTile(src, city.z, city.x, city.y))!)).toBe('city');
+    expect(src.reads).toHaveLength(9);
   });
 });
 
@@ -1074,6 +1122,31 @@ describe('pmtiles | per-archive cache', () => {
     await expect(readTile(src, 3, 2, 5)).rejects.toThrow('connection dropped');
     expect(text(await readTile(src, 3, 2, 5))).toBe('tile-325');
     expect(src.failures).toBe(1);
+  });
+
+  // @born-red a read that never comes back | method: the reader of 79647f2d (a pending promise kept in OPENED and in each leaf slot) run against these two cases: both failed, the second read 'gave up' | date: 2026-11-15
+  it('does not wait on an open that never comes back: the next read opens the archive itself', async () => {
+    const inner = memSource(await pmtilesArchive([t325]));
+    const src = hangOnce(inner, (off) => off === 0);
+    expect(await orGiveUp(readTile(src, 3, 2, 5))).toBe('gave up');
+    const again = await orGiveUp(readTile(src, 3, 2, 5));
+    expect(again).not.toBe('gave up');
+    expect(text(again as Uint8Array)).toBe('tile-325');
+    expect(src.hung).toBe(1);
+    expect(headerReads(inner)).toBe(1);
+  });
+
+  it('does not wait on a leaf read that never comes back: the next read asks for the leaf again, and not for the header', async () => {
+    const raw = leafPerTile([t325]);
+    const inner = memSource(raw.archive);
+    const src = hangOnce(inner, (off) => off === raw.leafOf.get(t325));
+    expect(await orGiveUp(readTile(src, 3, 2, 5))).toBe('gave up');
+    const again = await orGiveUp(readTile(src, 3, 2, 5));
+    expect(again).not.toBe('gave up');
+    expect(text(again as Uint8Array)).toBe('tile-325');
+    expect(src.hung).toBe(1);
+    expect(headerReads(inner)).toBe(1);
+    expect(inner.reads.filter(([off]) => off === raw.leafOf.get(t325))).toHaveLength(1);
   });
 
   it('does not keep a failed leaf read: the next read tries again', async () => {
