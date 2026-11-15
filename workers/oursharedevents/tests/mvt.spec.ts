@@ -4,7 +4,7 @@
  * Node-clean: pure byte handling. Registered in vitest.node-specs.mjs.
  */
 // @born-red mvt decoder mutants | method: StrykerJS mutants of src/lib/mvt.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
-// @born-red limits on what a tile may ask the Worker to hold (street-map CCR 2026-11-15, R2) | method: every case of that block seen failing on main's decoder, which counted nothing (each "one more is refused" decoded); then 16 faults injected one at a time in src/lib/mvt.ts, each seen failing the case named for it in the PR's fault list | date: 2026-11-15
+// @born-red limits on what a tile may ask the Worker to hold (street-map CCR 2026-11-15, R2) | method: 16 faults injected one at a time in src/lib/mvt.ts (each count left out or moved, each limit moved by one, what is left for the frame ignored), each seen failing the cases named for it in the PR's fault list. Main's decoder counted nothing and has no limits to import, so the block was not run against it as it stood | date: 2026-11-15
 import { describe, it, expect } from 'vitest';
 import {
   decodeGeometry,

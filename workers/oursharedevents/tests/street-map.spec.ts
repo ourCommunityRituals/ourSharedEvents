@@ -27,7 +27,7 @@
  */
 // @born-red no tile in the frame, planet-sized archive | method: "an archive with no tile in the frame is no layer" seen failing before the guard in buildStreetLayer (it returned a layer of one blank rectangle); its control is the archive's own cells drawing, in the same case ("one tile of the frame is enough" was its control until 2026-11-15, when R15 made every tile of the frame the rule); the planet case seen failing on 4 of the 6 reader faults listed in pmtiles.spec.ts | date: 2026-11-09
 // @born-red the switch (STREET_MAP) | method: six faults in loadStreetLayer (src/lib/street-map.ts), one at a time, each seen failing in "street map | the switch (STREET_MAP)": the switch line removed (19 tests failed, here and in map-areas.spec.ts and street-map-landing.spec.ts); any set value counted as on (17); the value trimmed and lower-cased before the compare (6: "ON", "On", " on", "on ", the non-string case and the landing's "ON"); the switch read after the bucket (19, on the count of reads alone); the compare turned round (72, "on: the layer is drawn" among them); STREET_MAP_ON set to 'true' (59, "the one value that draws" among them). Before any spec passed STREET_MAP, the switch alone failed 52 tests that draw | date: 2026-11-15
-// @born-red every tile of the frame, the frame's decode limits, the edges of the world (street-map CCR 2026-11-15, R15, R2, R49) | method: the R15 case and the two decode-limit cases seen failing on main (one tile was enough for a layer; nothing was counted, so both "one point more" archives drew); then 9 faults injected one at a time in src/lib/street-map.ts and one in src/lib/mvt.ts, each seen failing the case named for it in the PR's fault list (the three edge cases pin what the frame already did, so their red is the injected fault alone) | date: 2026-11-15
+// @born-red every tile of the frame, the frame's decode limits, the edges of the world (street-map CCR 2026-11-15, R15, R2, R49) | method: 9 faults injected one at a time in src/lib/street-map.ts and one in src/lib/mvt.ts, each seen failing the case named for it in the PR's fault list. The first puts main's lines back (a tile that is there is drawn): the R15 case failed. With the frame limit not passed to the decoder, and with the tile limit taken out, the "one point more" archive of that case drew. The three edge cases pin what the frame already did, so their red is the injected fault alone | date: 2026-11-15
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   cellToBoundary,
@@ -1810,8 +1810,9 @@ describe('street map | loading (fail soft)', () => {
   // street-map CCR 2026-11-15, R15. Until then one tile of the frame was
   // enough for a layer, so a frame that reached past the archive's region drew
   // streets on one side and blank land on the other, under the credit. A build
-  // stores open water as a tile, so a gap is the edge of what was cut. Born red
-  // 2026-11-15: on main every archive below drew a layer.
+  // that leaves no gap inside its region has gaps only at the edge of what was
+  // cut. Born red 2026-11-15: with main's lines put back, the archives below
+  // drew a layer.
   it('every tile of the frame, or no layer: with any one tile missing the map is hexagons only', async () => {
     const { r, tiles } = tilesForCells([BLUE7]);
     expect(tiles.length).toBeGreaterThan(1);
@@ -1958,8 +1959,9 @@ describe('street map | loading (fail soft)', () => {
 // street-map CCR 2026-11-15, R2. The reader limits a tile's bytes; the decoder
 // (lib/mvt.ts) limits what one tile's bytes may become, and FRAME_LIMITS what
 // the tiles of one frame may become together. Past either the read is refused,
-// and a refused read is hexagons only. Born red 2026-11-15: on main nothing was
-// counted, and both "one point more" archives below drew their streets.
+// and a refused read is hexagons only. Born red 2026-11-15: with the frame
+// limit not passed to the decoder, and with the tile limit taken out, the "one
+// point more" archive of that case drew its streets.
 describe('street map | more in the tiles than the Worker will decode', () => {
   // Two areas: a frame of at least three tiles, so the frame limit (two tiles'
   // worth) can be passed with every tile inside its own.

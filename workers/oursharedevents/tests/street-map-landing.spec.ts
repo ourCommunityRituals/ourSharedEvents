@@ -22,7 +22,7 @@
  */
 // @born-red archive with no tile for the area | method: both cases seen failing before the guard in buildStreetLayer (the landing carried a blank street layer and its credit; the zoomed area drew its dot with no "amap-no-tiles" list) | date: 2026-11-09
 // @born-red the switch off | method: the switch line removed from loadStreetLayer, then the switch read after the bucket; both "the switch off" cases failed on each. With the value lower-cased before the compare, the first failed alone (its "ON") | date: 2026-11-15
-// @born-red the landing's second pass in its own try; a tile missing or over the decode limit (street-map CCR 2026-11-15, R22, R15, R2) | method: "a second pass that throws" seen failing with the inner try taken out of handlers/pages.ts (the page lost its cards and hexagons to the empty area); the missing-tile and decode-limit cases seen failing on main (both pages carried streets and the credit) | date: 2026-11-15
+// @born-red the landing's second pass in its own try; a tile missing or over the decode limit (street-map CCR 2026-11-15, R22, R15, R2) | method: "a second pass that throws" seen failing with the inner try taken out of handlers/pages.ts (the page lost its cards and hexagons to the empty area); the missing-tile and decode-limit case seen failing twice: with R15 taken out of lib/street-map.ts (the first page carried streets and the credit) and with the decoder's limits taken out of lib/mvt.ts (the second did) | date: 2026-11-15
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -183,8 +183,9 @@ describe('street map | the landing page handler', () => {
   });
 
   // street-map CCR 2026-11-15, R15 and R2: two more archives that are sound and
-  // are still no street map. Born red 2026-11-15: on main both pages carried
-  // the streets and the credit.
+  // are still no street map. Born red 2026-11-15: with R15 taken out the first
+  // page carried the streets and the credit; with the decoder's limits taken
+  // out the second did.
   it('an archive missing one tile of the frame, or with more in a tile than the decoder allows, leaves the page as it was', async () => {
     const plain = await landing({});
     const cells = cellsOf(plain);
@@ -222,7 +223,7 @@ describe('street map | the landing page handler', () => {
   // serves the empty area, so a throw there would have cost the page its cards
   // and hexagons for the sake of the streets. No throw path is known; the
   // renderer is made to throw here. Born red 2026-11-15: with the inner try
-  // taken out, this page had no area on it.
+  // taken out, this case failed (the page no longer carried its hexagons).
   it('a second pass that throws leaves the first pass on the page: the hexagons, no streets, no credit', async () => {
     const plain = await landing({});
     const cells = cellsOf(plain);
