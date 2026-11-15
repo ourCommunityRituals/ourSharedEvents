@@ -122,9 +122,35 @@
  *            This is meant. Setting the flag needs that contrast judged first.
  * Not seen failing here: a water-only street layer. This spec does not count
  * roads; the Bruno street cases do, and failed on that layer on the same rig.
+ *
+ * BORN RED (2026-11-15, the Share test and the stg edge). On staging "Share hands
+ * the share sheet that card's own link and title" was red in four of eight main
+ * runs (43668128696, 43669630533, 43674376427, 43676301628). What it recorded was
+ * not the page's: the edge adds its own scripts to the page, and they called
+ * /cdn-cgi/challenge-platform/… and /cdn-cgi/rum between the page loading and the
+ * check. On a retry the two reads of /events/<id>, sent without X-OCR-CI, met the
+ * edge's challenge (403). A local Worker has no edge, so the rig stood in for it:
+ * a script on the page that makes those two calls every 50 ms, and a 403 with
+ * cf-mitigated on /events/ unless X-OCR-CI matches. One fault at a time:
+ *   the edge's scripts on the page, Share sends nothing
+ *         -> the test as it was on main fails, as on staging; as it is now, passes
+ *   the edge's scripts on the page, and pressing Share also asks for
+ *   E1  the event's counted share link (GET /e/MZPANB)
+ *   E2  an API route (POST /api/v2/track)
+ *   E3  a path under /cdn-cgi/ that is not one of the edge's two (/cdn-cgi/trace)
+ *   E4  a route whose query only names the edge's path (/api/v2/track?to=/cdn-cgi/rum)
+ *         -> each: the test fails, on that request alone
+ *   the edge challenges /events/<id>
+ *   E5  no token set          -> fails by name: "Cloudflare answered /events/map-zoom-b"
+ *   E6  another token         -> fails by name, "sent with X-OCR-CI"
+ *       the token the rule matches -> passes; the test as it was on main still got 403
+ * Which calls are the edge's is decided in scripts/ci/edge-read.mjs (edgeOwnRequest,
+ * tests/unit/ci/edge-read.test.js); tests/unit/ci/map-links-stg-edge.test.js keeps
+ * this spec from growing a second list. Staging is the verdict.
  */
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { edgeOwnRequest } from '../../../scripts/ci/edge-read.mjs';
 import {
   AREA,
   AREA_PATH,
@@ -414,10 +440,13 @@ test.describe('Zoomed map: Share is the event page share (OSE-1891)', () => {
   ): Promise<{ url: string; title: string }> {
     const own = await page.context().newPage();
     try {
-      const res = await own.goto(`${BASE_URL}/events/${eventId}`, {
-        waitUntil: 'domcontentloaded',
-      });
-      expect(res?.status(), `/events/${eventId}`).toBe(200);
+      // Event pages sit behind the stg edge's challenge; CI's reads carry the
+      // header its skip rule matches. An answer from the edge fails by name.
+      await passStgEdge(own);
+      const path = `/events/${eventId}`;
+      const res = await own.goto(`${BASE_URL}${path}`, { waitUntil: 'domcontentloaded' });
+      throwIfEdgeAnswered(res, path);
+      expect(res?.status(), path).toBe(200);
       const btn = own.getByTestId('share-btn').first();
       return {
         url: (await btn.getAttribute('data-share-url')) ?? '',
@@ -448,8 +477,21 @@ test.describe('Zoomed map: Share is the event page share (OSE-1891)', () => {
     expect(new URL(ownC.url).pathname).toBe('/events/map-zoom-c/map-zoom-c');
 
     await gotoArea(page, '#amap-dot-2');
+    const origin = new URL(BASE_URL).origin;
     const requests: string[] = [];
-    page.on('request', (r) => requests.push(`${r.method()} ${r.url()}`));
+    // The stg edge adds its own scripts to the page it serves (the bot check, the
+    // timing beacon). They call /cdn-cgi/… on their own clock after the page
+    // loads, pressed or not, and Cloudflare answers them, never the Worker. Those
+    // calls are set apart by exact path (edgeOwnRequest) and named on the report.
+    // Every other request, to any host, is the page's own and fails the test.
+    const edgeOwn: string[] = [];
+    page.on('request', (r) => {
+      if (edgeOwnRequest(r.url(), origin)) {
+        edgeOwn.push(`${r.method()} ${new URL(r.url()).pathname.split('/').slice(0, 3).join('/')}`);
+      } else {
+        requests.push(`${r.method()} ${r.url()}`);
+      }
+    });
 
     // The second card first: a listener that reads the first button would share b.
     await card(page, 'map-zoom-c').getByTestId('share-btn').click();
@@ -462,8 +504,12 @@ test.describe('Zoomed map: Share is the event page share (OSE-1891)', () => {
       { title: TITLE['map-zoom-c'], url: ownC.url },
       { title: TITLE['map-zoom-b'], url: ownB.url },
     ]);
+    test.info().annotations.push({
+      type: 'edge-own-requests',
+      description: `set apart, not the page's: ${edgeOwn.join('; ') || 'none'}`,
+    });
     // Pressing Share writes nothing: no request leaves the page.
-    expect(requests).toEqual([]);
+    expect(requests, 'requests the page made once Share could be pressed').toEqual([]);
     await expect(page).toHaveURL(/#amap-dot-2$/);
   });
 
