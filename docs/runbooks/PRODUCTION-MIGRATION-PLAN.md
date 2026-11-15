@@ -105,12 +105,28 @@ file that cannot be run stops the job before anything is applied
 
 **On demand:** the workflow "Migration dry run (staging)" runs one named file against staging.
 
-**On production, nothing runs it yet.** The script refuses any remote environment but staging. Adding
-the same step to the production deploy is a decision for the owner.
+**On production, the deploy runs it, under a stricter rule** (ADR-037, Proposed; OSE-2085). The
+production deploy job has the same step above its two apply steps
+(`--pending --env production --remote`). This repository is public, so its logs are public, and a
+dry run on production therefore prints counts and nothing else:
 
-0108 has a dry-run file. It was applied on staging on 2026-11-14 before the step existed, so its
-counts were not taken first. What was read after: 100 public events, 99 `in_person` and 1 `online`
-(the test fixture).
+- every statement is `SELECT COUNT(...)`, with no `GROUP BY`, and returns one row;
+- a count under 5 prints as "Fewer than 5", never as a digit and never as 0;
+- a statement that reads only the schema (`pragma_table_info`, `sqlite_master`, `d1_migrations`)
+  prints exactly, so "is the column there" stays readable;
+- a file that may print more is refused before anything is sent, and the job stops before the
+  migrations are applied.
+
+The same strict rule holds for the forms database on staging. Production has no on-demand run: the
+script takes production only with `--pending`.
+
+What to expect at the first production deploy: production has no events, so every data count of a
+pending dry-run file reads "Fewer than 5". That is the floor, not a fault.
+
+0108 has a dry-run file. It was applied on staging on 2026-11-14 before the staging step existed, so
+its counts were not taken first. They were read on staging the next day (run 43657972124): 495
+events, 60 of them with no place at all, 3 of those on the public list. Its per-status breakdown was
+replaced by one count on 2026-11-15 so the file fits the strict rule.
 
 ## Main database, 0078 to 0109
 
