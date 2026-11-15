@@ -97,6 +97,9 @@
  *   POST   /api/v2/admin/campaigns             → create a campaign on a brand (title, status)
  *   PUT    /api/v2/admin/campaigns/:id/placements/:placementId → put a sponsor placement in the campaign
  *   DELETE /api/v2/admin/campaigns/:id/placements/:placementId → take it out
+ *   GET    /api/v2/admin/campaigns/:id/events  → the events in the campaign (OSE-1552)
+ *   PUT    /api/v2/admin/campaigns/:id/events/:eventId → put an event in the campaign (same brand only)
+ *   DELETE /api/v2/admin/campaigns/:id/events/:eventId → take it out
  *   GET    /api/v2/admin/sponsors              → list all sponsors
  *   POST   /api/v2/admin/sponsor-requests/:id/respond → organizer approves/declines a sponsor's request
  *   GET    /api/v2/admin/sponsors/:id          → get sponsor
@@ -369,7 +372,9 @@ import {
 } from './handlers/sponsors';
 import {
   handleAdminCreateCampaign,
+  handleAdminListCampaignEvents,
   handleAdminListCampaigns,
+  handleAdminSetEventCampaign,
   handleAdminSetPlacementCampaign,
 } from './handlers/campaigns';
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
@@ -1519,6 +1524,39 @@ export async function route(
       method === 'PUT'
     );
     _audit(reqId, action, _auditOutcome(response), 'campaign', campaignPlacementMatch[1]);
+    return response;
+  }
+
+  // GET /api/v2/admin/campaigns/:id/events — the events in the campaign.
+  const campaignEventsMatch = pathname.match(/^\/api\/v2\/admin\/campaigns\/([^/]+)\/events$/);
+  if (campaignEventsMatch && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminListCampaignEvents(request, env, campaignEventsMatch[1]);
+  }
+
+  // PUT/DELETE /api/v2/admin/campaigns/:id/events/:eventId — put an event in
+  // the campaign, or take it out (OSE-1552 scope 1). The event must be in the
+  // campaign's brand; the rule is in the write itself (lib/campaigns.ts).
+  const campaignEventMatch = pathname.match(
+    /^\/api\/v2\/admin\/campaigns\/([^/]+)\/events\/([^/]+)$/
+  );
+  if (campaignEventMatch && (method === 'PUT' || method === 'DELETE')) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const action = method === 'PUT' ? 'ADD_CAMPAIGN_EVENT' : 'REMOVE_CAMPAIGN_EVENT';
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, action, 'denied', 'campaign', campaignEventMatch[1]);
+      return deny;
+    }
+    const response = await handleAdminSetEventCampaign(
+      request,
+      env,
+      campaignEventMatch[1],
+      campaignEventMatch[2],
+      method === 'PUT'
+    );
+    _audit(reqId, action, _auditOutcome(response), 'campaign', campaignEventMatch[1]);
     return response;
   }
 

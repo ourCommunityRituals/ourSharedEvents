@@ -19,4 +19,10 @@ docs: |-
   The requests run in `seq` order. The attach and detach requests change
   spl_camp_toggle and nothing else.
 
-  Mock-layer twin: workers/oursharedevents/tests/campaigns.spec.ts.
+  Requests 30 to 52 (OSE-1552 scope 1): an event can be in one campaign of its
+  own brand. They put camp-on-evt in camp_fx_toggle, move it to camp_fx_shown and
+  take it out, and change no placement. An event's campaign is not public, and a
+  placement's own campaign is never overwritten by its event's.
+
+  Mock-layer twins: workers/oursharedevents/tests/campaigns.spec.ts and
+  tests/campaign-events.spec.ts.

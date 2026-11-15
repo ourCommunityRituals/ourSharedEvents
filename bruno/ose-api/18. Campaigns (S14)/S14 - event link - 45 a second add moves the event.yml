@@ -1,0 +1,30 @@
+info:
+  name: "S14 | happy | event link | an event is in one campaign: a second add moves it"
+  type: http
+  seq: 45
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_shown/events/camp-on-evt"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('S14 event link: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 event link: the event is now in the second campaign', function () {
+          expect(res.getBody().campaign_id).to.eql('camp_fx_shown');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

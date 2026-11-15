@@ -140,6 +140,10 @@ Built after the owner accepted D1 (2026-11-14):
 - The edge probe reports what a calendar app sees: the `plain` reads of the two calendar addresses,
   as one line under the table. It is not part of the probe's verdict.
 - Runbook: `docs/runbooks/RUNBOOK-CALENDAR-EDGE-RULE.md`.
+- A manual workflow, `.github/workflows/calendar-edge-rule.yml` (2026-11-15), runs the script from
+  GitHub for stg: dry run by default, a typed confirm to apply or remove, and a read of the two
+  addresses with no header before and after. It needs one repository secret the owner adds,
+  `CLOUDFLARE_WAF_EDIT_TOKEN`.
 
 Not done, and not an agent's to do:
 

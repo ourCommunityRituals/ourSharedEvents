@@ -79,6 +79,10 @@ export const MUTATION_PATHS = Object.freeze([
   // landing-area.ts and the panel-link lines in the pages.ts range.
   'workers/oursharedevents/tests/map-zoom.spec.ts',
   'workers/oursharedevents/tests/map-place-links.spec.ts',
+  // The map's rules at the exact sizes where they change (attendee-map.ts: the
+  // landing's hexagon links, the taller box, the dot merge). Only this spec
+  // kills the mutants on those limits.
+  'workers/oursharedevents/tests/map-limits.spec.ts',
   // Epic OSE-1880: the map's own rules (dot placement, the tile archive reader,
   // the vector tile decoder) and the specs that kill their mutants. The
   // property spec holds the ?area= fat-finger rules for landing-area.ts.

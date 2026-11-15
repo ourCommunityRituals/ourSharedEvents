@@ -10,12 +10,18 @@
  *        statement itself, that the campaign is in the right brand;
  *      - every statement that joins `campaigns` to read a title does so on a
  *        brand match;
- *      - the by-id admin routes sit under guardAdminObjectScope.
+ *      - the by-id admin routes sit under guardAdminObjectScope;
+ *      - every statement that puts an event in a campaign (events.campaign_id,
+ *        migration 0110, OSE-1552) proves the same brand match in itself.
  *   2. CONSENT. The one public read of a campaign carries the per-placement
  *      on-show rule (the event opted in, both sides accepted), shows only an
  *      active campaign, and hands out an id and a title and nothing else. The
  *      public event projection never names a campaign.
  *   3. NEVER A FILTER. No code reads a query parameter named for a campaign.
+ *   4. TWO LINKS, KEPT APART (OSE-1552 scope 4, an open owner decision). A
+ *      placement's campaign and its event's campaign are separate columns. No
+ *      statement writes one from the other, and only lib/campaigns.ts reads an
+ *      event's campaign, so nothing public can name it.
  *
  * Pyramid coverage:
  *   L0 STATIC (this file)  code shape, node:fs only, no deployed worker.
@@ -37,6 +43,15 @@
  * PublicCampaign; (5) `campaign_id` added to the public event projection;
  * (6) `url.searchParams.get('campaign')` added to handlers/events.ts
  * | date: 2026-11-13
+ *
+ * @born-red event link (OSE-1552) | method: the same. (7) the same-brand EXISTS
+ * dropped from the add UPDATE in lib/campaigns.ts; `c.brand_id = e.brand_id`
+ * dropped from the member list; (8) `SET campaign_id = e.campaign_id` written
+ * into a sponsor_placement UPDATE in lib/sponsor-promotion.ts; (9) `e.campaign_id`
+ * selected in handlers/events.ts (this passed at first, because that file builds
+ * its SQL from quoted strings; the check now reads the whole file); (10) the
+ * classified count in admin-null-actor.invariant.spec.ts left at 3, which failed
+ * that spec on the two new actor reads | date: 2026-11-15
  */
 
 import { test, expect } from '@playwright/test';
@@ -85,6 +100,26 @@ export function writesPlacementCampaign(sql: string): boolean {
   return false;
 }
 
+/** A statement that puts an event in a campaign (an INSERT, an upsert or an UPDATE … SET). */
+export function writesEventCampaign(sql: string): boolean {
+  const s = flat(sql);
+  if (/INSERT (OR \w+ )?INTO events\b/i.test(s)) {
+    const cols = s.match(/INTO events\s*\(([^)]*)\)/i)?.[1] ?? '';
+    if (/\bcampaign_id\b/.test(cols)) return true;
+    const upsert = s.match(/\bDO UPDATE SET\b(.*)$/i)?.[1] ?? '';
+    return /\bcampaign_id\s*=/.test(upsert) && !/\bcampaign_id\s*=\s*NULL\b/i.test(upsert);
+  }
+  if (/UPDATE events\b/i.test(s)) {
+    const set = s.match(/\bSET\b(.*?)(\bWHERE\b|$)/i)?.[1] ?? '';
+    // Clearing a campaign crosses no wall.
+    return /\bcampaign_id\s*=/.test(set) && !/\bcampaign_id\s*=\s*NULL\b/i.test(set);
+  }
+  return false;
+}
+
+/** A statement that reads an event's own campaign (`e.campaign_id`, `events.campaign_id`). */
+const readsEventCampaign = (sql: string) => /\b(e|ev|evt|events)\.campaign_id\b/i.test(flat(sql));
+
 /** The statement proves the campaign's brand: it reads `campaigns` and matches its brand_id. */
 export function provesCampaignBrand(sql: string): boolean {
   const s = flat(sql);
@@ -102,6 +137,106 @@ test.describe('Invariant: a campaign stays in its brand and is public only by co
     expect(writers.sort()).toEqual(['lib/campaigns.ts', 'lib/sponsor-promotion.ts']);
     const joiners = FILES.filter((f) => statements(code(f)).some(joinsCampaigns)).map(rel);
     expect(joiners.sort()).toEqual(['lib/campaigns.ts', 'lib/shared-report-builder.ts']);
+    const eventWriters = FILES.filter((f) => statements(code(f)).some(writesEventCampaign)).map(
+      rel
+    );
+    expect(eventWriters).toEqual(['lib/campaigns.ts']);
+  });
+
+  test('OSE-1552-INV | negative control | the event-link detectors flag the forbidden shapes', () => {
+    const bare = `UPDATE events SET campaign_id = ?1 WHERE id = ?2`;
+    expect(writesEventCampaign(bare)).toBe(true);
+    expect(provesCampaignBrand(bare)).toBe(false);
+    // Reading the table without matching its brand proves nothing.
+    expect(
+      provesCampaignBrand(
+        `UPDATE events SET campaign_id = ?1 WHERE id = ?2 AND EXISTS (SELECT 1 FROM campaigns c WHERE c.id = ?1)`
+      )
+    ).toBe(false);
+    expect(
+      provesCampaignBrand(
+        `UPDATE events SET campaign_id = ?1 WHERE id = ?2 AND EXISTS (SELECT 1 FROM campaigns c WHERE c.id = ?1 AND c.brand_id = events.brand_id)`
+      )
+    ).toBe(true);
+    expect(writesEventCampaign(`UPDATE events SET campaign_id = NULL WHERE id = ?`)).toBe(false);
+    expect(writesEventCampaign(`UPDATE events SET series_id = ? WHERE id = ?`)).toBe(false);
+    expect(writesEventCampaign(`UPDATE sponsor_placement SET campaign_id = ? WHERE id = ?`)).toBe(
+      false
+    );
+    expect(
+      writesEventCampaign(`INSERT INTO events (id, brand_id, campaign_id) VALUES (?, ?, ?)`)
+    ).toBe(true);
+    expect(
+      writesEventCampaign(
+        `INSERT INTO events (id, title) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET campaign_id = excluded.title`
+      )
+    ).toBe(true);
+    expect(writesEventCampaign(`INSERT INTO events (id, brand_id) VALUES (?, ?)`)).toBe(false);
+    expect(readsEventCampaign(`SELECT e.campaign_id FROM events e`)).toBe(true);
+    expect(readsEventCampaign(`SELECT sp.campaign_id FROM sponsor_placement sp`)).toBe(false);
+  });
+
+  test('OSE-1552-INV | brand wall | every write of a campaign onto an event proves the campaign brand', () => {
+    const offenders: string[] = [];
+    for (const f of FILES) {
+      for (const sql of statements(code(f))) {
+        if (writesEventCampaign(sql) && !provesCampaignBrand(sql)) {
+          offenders.push(`${rel(f)}: ${flat(sql).slice(0, 140)}`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      'A statement that sets events.campaign_id must read `campaigns c` and match `c.brand_id` ' +
+        'in the same statement, so no caller can put an event in another brand’s campaign:\n' +
+        offenders.join('\n')
+    ).toEqual([]);
+  });
+
+  test('OSE-1552-INV | two links | no statement writes a placement campaign from its event, or the reverse', () => {
+    const offenders: string[] = [];
+    for (const f of FILES) {
+      for (const sql of statements(code(f))) {
+        const s = flat(sql);
+        const placementFromEvent = /UPDATE sponsor_placement\b/i.test(s) && readsEventCampaign(s);
+        const placementWrite =
+          /(UPDATE|INTO) sponsor_placement\b/i.test(s) && /\bcampaign_id\b/.test(s);
+        const eventWrite =
+          /(UPDATE|INTO) events\b/i.test(s) &&
+          /\bcampaign_id\s*=/.test(s.replace(/\bWHERE\b.*$/i, ''));
+        const eventFromPlacement = eventWrite && /\bsponsor_placement\b/i.test(s);
+        if (placementFromEvent || eventFromPlacement || (placementWrite && readsEventCampaign(s))) {
+          offenders.push(`${rel(f)}: ${s.slice(0, 140)}`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      'Which campaign wins when a placement and its event differ is an open owner decision ' +
+        '(OSE-1552 scope 4). Until it is made, no statement may copy one link onto the other:\n' +
+        offenders.join('\n')
+    ).toEqual([]);
+  });
+
+  test('OSE-1552-INV | not public | only lib/campaigns.ts reads an event’s campaign', () => {
+    // The whole file is read, not only its template literals: handlers/events.ts
+    // builds its SQL from quoted strings.
+    const readers = FILES.filter((f) => readsEventCampaign(code(f))).map(rel);
+    expect(readers).toEqual(['lib/campaigns.ts']);
+    // The admin member list is the one read, and it is on the brand match.
+    const lib = read('lib/campaigns.ts');
+    const fn = lib.slice(lib.indexOf('export async function listCampaignEvents'));
+    const sql = statements(fn).find(readsEventCampaign) ?? '';
+    expect(flat(sql)).toMatch(/JOIN campaigns c ON c\.id = e\.campaign_id/);
+    expect(flat(sql)).toMatch(/c\.brand_id = e\.brand_id/);
+    // Nothing public uses it: the projection and the public handlers never name it.
+    expect(read('lib/public-event-projection.ts')).not.toMatch(/campaign/i);
+    const users = FILES.filter(
+      (f) =>
+        rel(f) !== 'lib/campaigns.ts' &&
+        /\b(listCampaignEvents|addEventToCampaign|removeEventFromCampaign)\b/.test(code(f))
+    ).map(rel);
+    expect(users).toEqual(['handlers/campaigns.ts']);
   });
 
   test('S14-INV | negative control | the detectors flag the forbidden shapes', () => {

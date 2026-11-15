@@ -161,6 +161,8 @@ export { ZOOM_STYLE } from './map-zoom-style.js';
 import { ZOOM_STYLE } from './map-zoom-style.js';
 // What a narrow screen changes: its own module, for the same budget.
 import { NARROW_MAP_STYLE } from './map-narrow-style.js';
+// From which screen width a hexagon is a link: its own module, for the same budget.
+import { LINK_FROM_PX, LINK_STYLE, MAP_GUTTER_PX, MAP_MAX_PX } from './map-link-style.js';
 import {
   renderPlacePanels,
   type PanelEvent,
@@ -179,6 +181,29 @@ const DOT_HIT_R = 39;
 const DOT_R = 17;
 /** Dots nearer than two hit radii overlap as touch targets, so they are one place. */
 export const DOT_MERGE = 2 * DOT_HIT_R;
+
+/**
+ * A hexagon on the landing's own map is a link only where it is a touch target
+ * (AGENTS.md invariant 8). The narrowest phone is 320 px, whose gutters leave
+ * the map 280 px (map-narrow-style.ts).
+ */
+const TOUCH_MIN_PX = 44;
+const PHONE_MAP_PX = 320 - MAP_GUTTER_PX;
+/** Map units a hexagon must span to be 44 px when `shown` units fill a map `mapPx` wide. */
+const touchUnits = (shown: number, mapPx: number) => (TOUCH_MIN_PX * shown) / mapPx;
+/**
+ * `v` is `floor` or more. Every size and edge the map compares goes through
+ * here. Written with `min`, not `>=`: a size worked out from a cell's corners
+ * never equals its floor, so `>=` has a twin, `>`, that no page can tell from
+ * it and no test can fail on (the mutation floor, scripts/ci/mutation-file-floor.mjs).
+ */
+const atLeast = (v: number, floor: number) => Math.min(v, floor) === floor;
+/** The same on the whole frame, for each step of map-link-style.ts. */
+const STEP_UNITS = LINK_FROM_PX.map((px) =>
+  touchUnits(MAP_W, Math.min(px - MAP_GUTTER_PX, MAP_MAX_PX))
+);
+/** Half the width of a name drawn in a hexagon, in map units a letter (bold, 28 units high). */
+const NAME_HALF_UNITS = 9;
 
 /**
  * OpenStreetMap's copyright page, one per language of this site. Its address
@@ -359,12 +384,35 @@ function eventCount(n: number, lang: Lang): string {
   return fmtCount(lang, n, { one: 'when.all.countOne', other: 'when.all.count' });
 }
 
+/**
+ * The landing's own map. With `zoomHref` a hexagon opens its area (owner,
+ * 2026-11-09), on every screen where it is large enough to be a touch target.
+ *
+ * The drawing is 600 by 360 units, scaled to the page, so on a 320 px phone a
+ * hexagon must span 95 units to be 44 px, and areas side by side are rarely
+ * that large (staging, 2026-11-15: ten areas, 62 by 60 units, 29 by 28 px). A
+ * larger invisible target, as a dot has, cannot be used: areas share their
+ * edges, so it would lie over the neighbour and take its taps (tried, and seen
+ * in a browser). The hexagons themselves have to be large enough. The size
+ * counted is the hexagon's box, as the phone audit counts it
+ * (tests/playwright/mobile-workability.spec.ts), and the smallest hexagon
+ * decides for the whole map. `links` says where they are links:
+ *   0     at every width. Either they are 95 units or more, or every area lies
+ *         in the middle 360 units and a phone shows that square (`tall`: `slice`
+ *         here, the box in map-narrow-style.ts), which cuts only street at the
+ *         sides. A hexagon is then 44 px from 57 units on the phone and from 60
+ *         units at 480 px, where the whole frame is back.
+ *   1 2 3 from a wider screen only (map-link-style.ts): each hexagon is drawn
+ *         as a link and plain, and the width decides which shows.
+ *   null  never: no `zoomHref`, or hexagons under 36.7 units.
+ * The list under the map keeps a 44 px link to every area in every case.
+ */
 function svgFor(
   areas: AttendeeMapArea[],
   lang: Lang,
   streets?: string,
   zoomHref?: (cell: string) => string
-): string {
+): { svg: string; tall: boolean; links: 0 | 1 | 2 | 3 | null } {
   // Web Mercator, the street map's projection, so the hexagons sit on its
   // streets. The frame comes from the cell ids alone.
   const frame = frameForCells(
@@ -378,6 +426,42 @@ function svgFor(
     mid: project(frame, ...cellToLatLng(a.cell)),
   }));
   const fx = (v: number) => v.toFixed(1);
+  /** The name under an area's number, cut to fit, while the hexagons are few and large. */
+  const shortName = (a: AttendeeMapArea) =>
+    !a.name || areas.length > SVG_NAME_MAX_AREAS
+      ? ''
+      : a.name.length > SVG_NAME_MAX_CHARS
+        ? `${a.name.slice(0, SVG_NAME_MAX_CHARS - 1)}…`
+        : a.name;
+
+  // Each hexagon's box, and how far its name reaches either side of its middle.
+  const span = (vs: number[]) => Math.max(...vs) - Math.min(...vs);
+  const boxes = rings.map(({ a, ring, mid }) => {
+    const xs = ring.map((p) => p[0]);
+    const half = shortName(a).length * NAME_HALF_UNITS;
+    return {
+      left: Math.min(...xs, mid[0] - half),
+      right: Math.max(...xs, mid[0] + half),
+      least: Math.min(span(xs), span(ring.map((p) => p[1]))),
+    };
+  });
+  const side = (W - H) / 2;
+  // The smallest decides: every hexagon that is a link must be a touch target.
+  // The areas of one map are drawn nearly the same size, and near a limit
+  // "nearly" is the difference (tests/map-limits.spec.ts).
+  const least = Math.min(...boxes.map((b) => b.least));
+  // On the whole frame the phone decides; in the taller box the phone has room
+  // to spare and 480 px, back on the whole frame, decides.
+  const wholeFloor = touchUnits(W, PHONE_MAP_PX);
+  const tallFloor = Math.max(touchUnits(H, PHONE_MAP_PX), STEP_UNITS[0] ?? wholeFloor);
+  const large = atLeast(least, wholeFloor);
+  const tall =
+    !!zoomHref &&
+    !large &&
+    atLeast(least, tallFloor) &&
+    boxes.every((b) => atLeast(b.left, side) && atLeast(W - side, b.right));
+  const step = STEP_UNITS.findIndex((units) => atLeast(least, units));
+  const links = !zoomHref ? null : large || tall ? 0 : step >= 0 ? ((step + 1) as 1 | 2 | 3) : null;
 
   const max = Math.max(...areas.map((a) => a.events.length), 1);
   const shapes = rings
@@ -391,24 +475,31 @@ function svgFor(
         ? fmt(lang, 'map.areaTitleNamed', { n: a.n, name: a.name, count })
         : fmt(lang, 'map.areaTitle', { n: a.n, count });
       // The name sits under the number while the hexagons are few and large.
-      const short =
-        a.name.length > SVG_NAME_MAX_CHARS ? `${a.name.slice(0, SVG_NAME_MAX_CHARS - 1)}…` : a.name;
-      const nameLine =
-        a.name && areas.length <= SVG_NAME_MAX_AREAS
-          ? `<tspan x="${fx(mid[0])}" dy="1.15em" data-testid="amap-area-name">${escapeHtml(short)}</tspan>`
-          : '';
+      const short = shortName(a);
+      const nameLine = short
+        ? `<tspan x="${fx(mid[0])}" dy="1.15em" data-testid="amap-area-name">${escapeHtml(short)}</tspan>`
+        : '';
       const body =
         `<title>${escapeHtml(label)}</title>` +
         `<polygon class="amap-cell" points="${points}" fill-opacity="${opacity}" stroke-width="1.5"/>` +
         `<text class="amap-num" x="${fx(mid[0])}" y="${fx(mid[1])}" text-anchor="middle" dominant-baseline="central">${a.n}${nameLine}</text>`;
-      // On the landing a hexagon opens its area, zoomed in (owner, 2026-11-09).
-      const inner = zoomHref
-        ? `<a href="${escapeHtml(zoomHref(a.cell))}" data-testid="amap-area-link">${body}</a>`
-        : body;
+      // On the landing a hexagon opens its area, zoomed in (owner, 2026-11-09):
+      // at every width, or as a link and plain, one of them shown.
+      const href = zoomHref && links !== null ? escapeHtml(zoomHref(a.cell)) : '';
+      const inner = !href
+        ? body
+        : links === 0
+          ? `<a href="${href}" data-testid="amap-area-link">${body}</a>`
+          : `<a class="amap-w${links}" href="${href}" data-testid="amap-area-link">${body}</a><g class="amap-n${links}">${body}</g>`;
       return `<g data-testid="amap-area" data-cell="${a.cell}" data-count="${k}">${inner}</g>`;
     })
     .join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="amap-caption" data-testid="amap-svg">${streets ?? ''}${shapes}</svg>`;
+  const cut = tall ? ' preserveAspectRatio="xMidYMid slice"' : '';
+  return {
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"${cut} role="img" aria-labelledby="amap-caption" data-testid="amap-svg">${streets ?? ''}${shapes}</svg>`,
+    tall,
+    links,
+  };
 }
 
 /** One event's link in a legend, with its consented sponsor (OSE-1522). */
@@ -728,22 +819,29 @@ export function renderAttendeeMap(
     return { html: thinHtml(note, lang), state: 'thin', count: 0, areas: [] };
   }
 
-  const caption =
-    fmt(lang, 'map.caption', {
-      events: eventCount(count, lang),
-      areas: fmtCount(lang, drawn.length, { one: 'map.areasOne', other: 'map.areas' }),
-      days: CORRIDOR_WINDOW_DAYS,
-    }) + (opts?.zoomHref ? ` ${msg(lang, 'map.tapToZoom')}` : '');
+  const caption = fmt(lang, 'map.caption', {
+    events: eventCount(count, lang),
+    areas: fmtCount(lang, drawn.length, { one: 'map.areasOne', other: 'map.areas' }),
+    days: CORRIDOR_WINDOW_DAYS,
+  });
   const streets =
     opts?.streets && opts.streets.cellsKey === cellsKey(drawn.map((a) => a.cell))
       ? opts.streets.svg
       : undefined;
   const credit = streets ? streetCredit(lang) : '';
-  const html = `<figure class="amap" data-testid="amap">
-              ${MAP_STYLE}${streets ? STREET_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}${NARROW_MAP_STYLE}
-              ${svgFor(drawn, lang, streets, opts?.zoomHref)}
+  const map = svgFor(drawn, lang, streets, opts?.zoomHref);
+  // "Tap a hexagon" only where a hexagon is a link.
+  const tap =
+    map.links === null
+      ? ''
+      : map.links === 0
+        ? ` ${msg(lang, 'map.tapToZoom')}`
+        : ` <span class="amap-w${map.links}" data-testid="amap-tap">${msg(lang, 'map.tapToZoom')}</span>`;
+  const html = `<figure class="amap" data-testid="amap"${map.tall ? ' data-tall' : ''}>
+              ${MAP_STYLE}${streets ? STREET_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}${NARROW_MAP_STYLE}${map.links ? LINK_STYLE : ''}
+              ${map.svg}
               ${legendFor(drawn, lang, opts?.sponsorTitles, opts?.zoomHref)}
-              <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>${credit}
+              <figcaption id="amap-caption" data-testid="amap-caption">${caption}${tap}</figcaption>${credit}
             </figure>`;
   return { html, state: 'map', count, areas: drawn };
 }

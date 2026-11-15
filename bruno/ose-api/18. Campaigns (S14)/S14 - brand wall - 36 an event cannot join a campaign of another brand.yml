@@ -1,0 +1,31 @@
+info:
+  name: "S14 | rainy | brand wall | an event cannot join a campaign of another brand, whoever asks"
+  type: http
+  seq: 36
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_other/events/camp-on-evt"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // camp_fx_other is a ci-brand campaign; camp-on-evt is a root event.
+        test('S14 brand wall: 404 NOT_FOUND', function () {
+          expect(res.getStatus()).to.eql(404);
+          expect(res.getBody().code).to.eql('NOT_FOUND');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

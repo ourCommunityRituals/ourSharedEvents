@@ -3,6 +3,7 @@
  *
  * A campaign is a brand's named group of sponsor placements across its events
  * (table `campaigns`, migration 0039; `sponsor_placement.campaign_id`, 0067).
+ * An event can be in one campaign too (`events.campaign_id`, 0110, OSE-1552).
  * A partner that backs a whole showcase station is a campaign across that
  * station's events (owner, 2026-11-12). It has a title and a status, and it
  * lives in exactly one brand.
@@ -20,6 +21,16 @@
  *      by a campaign's title, the same as a sponsor's name. Lists are ordered by
  *      creation time only.
  *
+ * The event link follows rule 1 and is not public: an event joins a campaign
+ * only in its own brand (the predicate is in the UPDATE), and no public read
+ * names an event's campaign.
+ *
+ * TWO LINKS, KEPT APART. A placement's campaign (`sponsor_placement.campaign_id`)
+ * and its event's campaign (`events.campaign_id`) are separate columns. No
+ * statement here copies one to the other, so neither overwrites the other. Which
+ * wins when they differ is an open owner decision (OSE-1552 scope 4); until it
+ * is made, the public bundle keeps reading the placement's own campaign.
+ *
  * No tier is read: scoping and consent are the same at every tier (invariant 7).
  */
 
@@ -34,6 +45,9 @@ export const CAMPAIGN_CREATE_FIELDS: readonly string[] = ['title', 'status', 'br
 
 /** Most campaigns one list call returns (newest first). */
 export const CAMPAIGN_LIST_MAX = 500;
+
+/** Most events one campaign's member list returns (earliest start first). */
+export const CAMPAIGN_EVENT_LIST_MAX = 500;
 
 export interface CampaignRow {
   id: string;
@@ -197,4 +211,127 @@ export async function detachPlacementFromCampaign(
     .bind(new Date().toISOString(), placementId, campaignId)
     .first<{ event_id: string }>();
   return row ? { ok: true, event_id: row.event_id } : { ok: false, code: 'PLACEMENT_NOT_FOUND' };
+}
+
+// ─── An event in a campaign (events.campaign_id, migration 0110) ────────────────
+
+export type EventCampaignResult =
+  { ok: true; event_id: string } | { ok: false; code: 'CAMPAIGN_NOT_FOUND' | 'EVENT_NOT_FOUND' };
+
+/** What an admin sees of an event in a campaign. Nothing here is public. */
+export interface CampaignEventRow {
+  id: string;
+  title: string;
+  status: string;
+  start_date: string | null;
+}
+
+/**
+ * Put an event in a campaign. `brandIds` is the caller's server-derived brand
+ * list, or null for the automation scope that sees every brand.
+ *
+ * The same-brand rule is in the UPDATE's WHERE (the campaign's brand is the
+ * event's own brand), so it holds for every caller. An event that is unknown, in
+ * another brand than the campaign, or outside the caller's brands is the same
+ * EVENT_NOT_FOUND, and nothing is written.
+ *
+ * An event is in at most one campaign (one column). Putting it in a second
+ * campaign of its brand moves it. Only `campaign_id` is written: the event's
+ * `updated_at`, its sponsor placements and their own campaigns are untouched.
+ */
+export async function addEventToCampaign(
+  db: D1Database,
+  campaignId: string,
+  eventId: string,
+  brandIds: readonly string[] | null
+): Promise<EventCampaignResult> {
+  const scope = brandClause(brandIds, 'brand_id');
+  const campaign = await db
+    .prepare(`SELECT id FROM campaigns WHERE id = ?${scope.sql}`)
+    .bind(campaignId, ...scope.params)
+    .first<{ id: string }>();
+  if (!campaign) return { ok: false, code: 'CAMPAIGN_NOT_FOUND' };
+
+  const eventScope = brandClause(brandIds, 'events.brand_id');
+  const row = await db
+    .prepare(
+      `UPDATE events
+          SET campaign_id = ?1
+        WHERE id = ?2
+          AND EXISTS (
+            SELECT 1 FROM campaigns c
+             WHERE c.id = ?1 AND c.brand_id = events.brand_id)${eventScope.sql}
+        RETURNING id`
+    )
+    .bind(campaignId, eventId, ...eventScope.params)
+    .first<{ id: string }>();
+  return row ? { ok: true, event_id: row.id } : { ok: false, code: 'EVENT_NOT_FOUND' };
+}
+
+/**
+ * Take an event out of a campaign. Only an event that is in THIS campaign, and
+ * in the caller's brands, is changed; anything else is EVENT_NOT_FOUND and
+ * nothing is written. Clearing a link crosses no brand wall, so this statement
+ * does not ask for the brand match: a row mislinked past the API can still be
+ * cleared, by the automation scope or by an admin who is in both brands.
+ */
+export async function removeEventFromCampaign(
+  db: D1Database,
+  campaignId: string,
+  eventId: string,
+  brandIds: readonly string[] | null
+): Promise<EventCampaignResult> {
+  const scope = brandClause(brandIds, 'brand_id');
+  const campaign = await db
+    .prepare(`SELECT id FROM campaigns WHERE id = ?${scope.sql}`)
+    .bind(campaignId, ...scope.params)
+    .first<{ id: string }>();
+  if (!campaign) return { ok: false, code: 'CAMPAIGN_NOT_FOUND' };
+
+  const eventScope = brandClause(brandIds, 'brand_id');
+  const row = await db
+    .prepare(
+      `UPDATE events
+          SET campaign_id = NULL
+        WHERE id = ?1 AND campaign_id = ?2${eventScope.sql}
+        RETURNING id`
+    )
+    .bind(eventId, campaignId, ...eventScope.params)
+    .first<{ id: string }>();
+  return row ? { ok: true, event_id: row.id } : { ok: false, code: 'EVENT_NOT_FOUND' };
+}
+
+/**
+ * The events in a campaign, earliest start first. Admin only.
+ *
+ * The join is on the brand match, so an event mislinked to another brand's
+ * campaign is not listed under it. Returns null when the campaign is unknown or
+ * outside the caller's brands.
+ */
+export async function listCampaignEvents(
+  db: D1Database,
+  campaignId: string,
+  brandIds: readonly string[] | null
+): Promise<CampaignEventRow[] | null> {
+  const scope = brandClause(brandIds, 'brand_id');
+  const campaign = await db
+    .prepare(`SELECT id FROM campaigns WHERE id = ?${scope.sql}`)
+    .bind(campaignId, ...scope.params)
+    .first<{ id: string }>();
+  if (!campaign) return null;
+
+  const eventScope = brandClause(brandIds, 'e.brand_id');
+  const res = await db
+    .prepare(
+      `SELECT e.id AS id, e.title AS title, e.status AS status, e.start_date AS start_date
+         FROM events e
+         JOIN campaigns c ON c.id = e.campaign_id
+        WHERE c.id = ?
+          AND c.brand_id = e.brand_id${eventScope.sql}
+        ORDER BY e.start_date, e.id
+        LIMIT ${CAMPAIGN_EVENT_LIST_MAX}`
+    )
+    .bind(campaignId, ...eventScope.params)
+    .all<CampaignEventRow>();
+  return res.results ?? [];
 }
