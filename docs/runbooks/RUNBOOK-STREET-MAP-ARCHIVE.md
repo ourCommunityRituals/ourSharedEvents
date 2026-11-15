@@ -24,7 +24,16 @@ Owner decisions:
   from. A loaded object is **locked in Cloudflare against change and delete**,
   and is removed only when no environment reads it. This replaces a bucket per
   environment (`ose-map-tiles-staging`, `ose-map-tiles-production`) and the open
-  question of how production would get a second copy.
+  question of how production would get a second copy. The decision record is
+  [OSE ADR-035](../adr/ADR-035-street-map-one-bucket.md).
+- 2026-11-15: **corrections first, then the load.** A five-loop review of the
+  street map (`.claude/outputs/CCR-STREET-MAP-WILL-IT-WORK-2026-11-15.md`) scored
+  it 0% and stopped for the owner, who chose to correct before loading. Nothing
+  in "Staging, in order" is dispatched until "Before the load" below is done.
+
+**Where the data comes from and what its licence asks** is in
+[`NOTICE.md`](../../NOTICE.md), with the cut written out as a statement of
+method. A refresh changes the build there too.
 
 **The workflow does the work:**
 [`.github/workflows/street-map-archive-load.yml`](../../.github/workflows/street-map-archive-load.yml)
@@ -38,7 +47,10 @@ workflow.
 
 **What stays the owner's**, all of it in a browser: creating the bucket,
 creating the R2 token, setting it as a secret, dispatching the workflow, locking
-the loaded object, deleting the token afterwards, and merging. An agent never
+the loaded object, deleting the token afterwards, and merging. (The bucket in
+use, `ose-map-tiles`, was not created by the owner: it exists because a staging
+deploy made it on 2026-11-15. See "When the binding lands before the bucket".
+Checking it, and keeping or remaking it, is the owner's.) An agent never
 creates a bucket, never holds or reads the token, never sets a secret, a
 variable or a lock rule, never dispatches the load, and never touches production
 (`AGENTS.md`, Human approval).
@@ -314,6 +326,49 @@ check before the write, not a lock inside R2: an upload made by hand in the same
 minute is not covered, and there should be none. The lock inside R2 is the
 owner's bucket lock rule, set once a load is green ("Staging, in order", step
 6); from then on Cloudflare refuses a change to that object from any credential.
+
+## Before the load (owner, 2026-11-15: corrections first)
+
+The owner chose this order after the review of 2026-11-15. The `load` dispatch
+(step 4 of "Staging, in order") waits for the first two. `measure` (step 2)
+writes nothing and can run at any time.
+
+1. **The staging cases are made aware of the flag.** Two staging cases demand
+   the "no street map" note today, whatever `streetMapArchiveLoaded` says:
+   `tests/e2e/3-flows/map-place-panel.spec.ts` and the Bruno folder
+   "16. Landing Map Zoom" under `bruno/ose-pages/`. The Worker draws streets on its next request once the
+   object is in the bucket, so the load itself would turn both red on correct
+   behaviour, for every branch and every push to `main` (review finding R21).
+   One pull request makes both read the flag, and makes the street cases ask for
+   roads, not for any path (finding R17). **It merges before the load.**
+2. **The bucket and the key are settled.** All of it is the owner's, in Cloudflare
+   and GitHub (OSE ADR-035, "Open, for the owner"):
+   - **The bucket.** `ose-map-tiles` exists because a deploy created it, with
+     default settings nobody chose. Check that it has no public r2.dev address
+     and no custom domain, and that its jurisdiction is one the owner accepts. A
+     jurisdiction cannot be changed later: if it is wrong, delete the bucket
+     while it is empty and make it by hand.
+   - **The write key.** Decide where `R2_MAP_TILES_ACCESS_KEY_ID` and
+     `R2_MAP_TILES_SECRET_KEY` live so that only `main` can reach them. The
+     `staging` environment has no branch policy (read 2026-11-15) and cannot get
+     one while every branch must deploy to staging, so a job on any branch can
+     read a secret set there. An environment of its own, limited to `main`, needs
+     a small change to the workflow's `environment:` line in a pull request.
+   - **Empty, just before the load.** A branch deployed to staging holds the
+     `MAP_TILES` binding and could have written the key. The workflow refuses to
+     load when the key is already there; the owner looks at the bucket's object
+     list as well.
+3. **Measure, and decide the zoom.** `measure` gives the file's size. The cut
+   keeps every zoom of the build, and the Worker reads zoom 14 at most; whether
+   to cut with a top zoom is decided before the first load, because a locked
+   object is not changed (finding R6).
+4. **The licence.** [`NOTICE.md`](../../NOTICE.md) lists the duties and what is
+   NOT CLEAR. Staging is public, so the first load is the first public street:
+   the owner answers its question 2 (before the load, or before production)
+   first.
+5. **The drawer and its checks are corrected** (findings R7, R17, R18). This
+   needs no archive and runs beside the steps above. It must be done before the
+   flag is set to `"true"` (step 9 of "Staging, in order"), not before the load.
 
 ## Staging, in order
 

@@ -110,9 +110,25 @@ Routes accessible to all users without authentication. Subject to `guardPublicRe
 | `/api/v2/sponsor/:id/monetization` | —                                   | GET       | sponsor monetization | CORS, rate limiting             |
 | `/api/v2/event/:id/monetization`   | —                                   | GET       | event monetization   | CORS, rate limiting             |
 | `/api/v2/sharedreport`             | —                                   | GET       | shared analytics     | CORS, rate limiting             |
+| `/api/v2/map/areas`                | —                                   | GET, HEAD | public area map      | Rate limiting, cache headers    |
 | `/web/shared/*.js`                 | —                                   | GET       | JS modules           | Cache headers                   |
 
 **Enforcement:** `guardPublicReadOnly()` blocks POST/PUT/DELETE/PATCH on these routes unless signed mutation token present (SEC-IAC-05).
+
+**The street map on these routes (added 2026-11-15; OSE ADR-033, ADR-035).** Two public routes
+read the private R2 bucket `ose-map-tiles` through the Worker's `MAP_TILES` binding and draw
+streets from it: `/` (the landing map and its zoomed area, `/?area=<res-7 cell>`) and
+`/api/v2/map/areas` (`handlers/map-areas.ts`). Neither takes a position: the tiles read are
+chosen by the server from H3 cell ids. No route serves a tile or the archive itself.
+
+- `/api/v2/map/areas` is rate-limited at the router (`publicReadLimited('map-areas')`) and sets
+  its own `Cache-Control`. It takes cells only: a coordinate-shaped parameter is a 400, as is any
+  resolution but 7 and a 13th cell.
+- `/` is listed above with rate limiting as a required control, and the router has no limit
+  for it. That gap is older than the street map; the street map adds an R2 read and a draw
+  to each request once an archive is loaded (street-map review 2026-11-15, finding R5; threat
+  ledger TL-100).
+- No archive is loaded today, so both routes answer with hexagons only.
 
 ### 4.2 Privileged Routes
 
@@ -388,6 +404,7 @@ head -100 worker/src/router.ts | grep guardPublicReadOnly
 
 ## Document History
 
-| Date       | Author      | Changes                                                |
-| ---------- | ----------- | ------------------------------------------------------ |
-| 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-5.1 route classification policy |
+| Date       | Author      | Changes                                                  |
+| ---------- | ----------- | -------------------------------------------------------- |
+| 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-5.1 route classification policy   |
+| 2026-11-15 | Claude Code | Section 4.1: `/api/v2/map/areas` and the street-map note |

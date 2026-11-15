@@ -107,6 +107,30 @@ This document defines consistent naming conventions and storage rules for CI/CD 
 | `SHEETS_SPREADSHEET_ID`         | Identifier | Production database | Cloudflare Worker | Yes      |
 | `STAGING_SHEETS_SPREADSHEET_ID` | Identifier | Staging database    | GitHub Secrets    | Yes      |
 
+### 3.5 Street-Map Archive Load (R2)
+
+Added 2026-11-15, names only (OSE ADR-035). The pair is one R2 API token.
+
+| Secret Name                  | Type         | Purpose                 | Storage Location | Required           |
+| ---------------------------- | ------------ | ----------------------- | ---------------- | ------------------ |
+| `R2_MAP_TILES_ACCESS_KEY_ID` | R2 API Token | Street-map archive load | GitHub Secrets   | Only around a load |
+| `R2_MAP_TILES_SECRET_KEY`    | R2 API Token | Street-map archive load | GitHub Secrets   | Only around a load |
+
+- **Scope:** "Object Read & Write" on the bucket `ose-map-tiles` and no other. The owner creates
+  the token for a load, sets the pair, and deletes the token and both secrets once the load is
+  green (`docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md`, "Staging, in order", steps 3 and 7). An
+  agent never creates, reads or sets them.
+- **Read by** four steps of the `load` job in `.github/workflows/street-map-archive-load.yml` (a
+  guard before the cut, two listings, the upload) and by nothing else;
+  `tests/unit/ci/street-map-archive-load.test.js` holds that.
+- **Not in `.github-secrets-required.json`:** that file lists standing secrets, and these exist
+  only around a load. Whether they exist today was not read.
+- **The Worker does not use them.** It reads the bucket through its `MAP_TILES` binding.
+- **Open (street-map review 2026-11-15, finding R8; threat ledger TL-098):** the workflow lets
+  the pair sit on the `staging` environment or at repository level. The `staging` environment
+  has no branch policy, so neither place limits the pair to `main`. Where the pair should live
+  is an owner decision.
+
 ---
 
 ## 4. Storage Rules
@@ -381,6 +405,7 @@ wrangler secret delete OLD_SECRET --env staging
 
 ## Document History
 
-| Date       | Author      | Changes                                       |
-| ---------- | ----------- | --------------------------------------------- |
-| 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-1.2 naming conventions |
+| Date       | Author      | Changes                                           |
+| ---------- | ----------- | ------------------------------------------------- |
+| 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-1.2 naming conventions     |
+| 2026-11-15 | Claude Code | Section 3.5: the street-map load pair, names only |
