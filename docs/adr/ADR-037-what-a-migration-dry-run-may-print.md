@@ -41,9 +41,12 @@ one row of counts and the floor applies.**
 In detail:
 
 1. **Strict statements are checked from the SQL alone, before anything is sent.** The statement starts
-   with `SELECT`; every item of its select list is `COUNT(...)` with an optional alias and nothing
+   with `SELECT` (every statement must, under any rule); every item of its select list is `COUNT(...)` with an optional alias and nothing
    else; there is no `GROUP BY`, `UNION`, `INTERSECT` or `EXCEPT`. `MIN` and `MAX` are refused because
    they return a row's own value. Arithmetic on a count is refused because it can carry a value out.
+   **No statement, under any rule, may hold a double quote, a backtick or a square bracket, or the
+   word `WITH`.** Those quote an identifier or name a temporary table, and each was a way past the
+   checks as first written (see "Security review" below).
 2. **Every pending file is checked before any statement of any file runs.** A file that may print more
    than counts stops the job before the migrations are applied.
 3. **The answer is checked again before it is printed.** A strict statement must return exactly one
@@ -75,6 +78,23 @@ In detail:
 - **It does not make production live, and it runs nothing from a session.** The step runs only inside a
   production deploy the owner starts (AGENTS.md, "Production posture").
 - **It does not change ADR-021.** Production stays read-only for every test suite. A dry run is a read.
+
+## Security review (2026-11-15)
+
+Dr of Security read the first version of this rule and broke it. All of it was confirmed by running
+the script's own checks, and for the first finding by running the statement on a local SQLite.
+
+| Finding                                             | The input                                                                                                                                             | Fixed by                                                                                            |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| A write passed every check                          | `WITH sqlite_master AS (SELECT 1 AS "'") DELETE FROM events …`: a single quote inside a double-quoted name made the string blanking hide the `DELETE` | refusing `"`, backtick, `[` and `]` in every statement; refusing `WITH`                             |
+| Data was read as a schema fact, and printed exactly | `FROM sqlite_master JOIN "registrations"`, `JOIN(registrations)`, a CTE named `sqlite_master`                                                         | the same refusals; every `FROM` and `JOIN` must be followed by a plain listed name                  |
+| A non-count value passed the select-list check      | brackets inside double-quoted aliases threw off the bracket count                                                                                     | the same refusals                                                                                   |
+| A parser message could quote the database's answer  | a failed `JSON.parse` put its input in the error                                                                                                      | the script's own words for an answer it cannot read; no wrangler text for production's pending list |
+
+Each input is now a test case. The write finding also applied to the script as it has been on `main`
+since #1239 (staging only). No dry-run file that used it was ever committed.
+
+Not checked by that review: the behaviour of real D1 (it would need a credential and a write).
 
 ## Alternatives
 

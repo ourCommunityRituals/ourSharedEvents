@@ -20,8 +20,10 @@
  *                   run the dry-run file of each one that has a file.
  *   --file <name>   run one dry-run file by name, whatever is applied.
  *
- * READ ONLY, and it checks that itself: every statement must be a SELECT (or a
- * WITH ... SELECT), and none may hold a word that writes or changes the schema.
+ * READ ONLY, and it checks that itself: every statement must start with SELECT,
+ * hold no word that writes or changes the schema, and hold no double quote,
+ * backtick or square bracket (they quote identifiers, and hid a DELETE from an
+ * earlier version of this check).
  * A file that fails the check stops the run before any statement is sent.
  *
  * Each statement is sent with `wrangler d1 execute --command`, one at a time.
@@ -83,6 +85,7 @@ export const WRITE_WORDS = [
   'COMMIT',
   'ROLLBACK',
   'SAVEPOINT',
+  'WITH',
 ];
 
 /** The SQL with `--` line comments and block comments taken out. */
@@ -114,10 +117,26 @@ export function parseStatements(sql) {
 /** The reasons a statement is not read-only. Empty means it may be sent. */
 export function readOnlyFaults(statement) {
   const faults = [];
+  // Only a single quote may delimit anything. A double quote, a backtick or a
+  // square bracket quotes an identifier in SQLite, and inside one a single
+  // quote is an ordinary character: `"'"` would make the string blanking below
+  // swallow real SQL (a DELETE was hidden that way, security review
+  // 2026-11-15). A quoted identifier also hides a table name from every check
+  // that reads names. A dry-run file needs none of them, so they are refused.
+  for (const [char, name] of [
+    ['"', 'a double quote'],
+    ['`', 'a backtick'],
+    ['[', 'a square bracket'],
+    [']', 'a square bracket'],
+  ]) {
+    if (statement.includes(char)) faults.push(`holds ${name}`);
+  }
   // Quoted strings are data, not SQL: a count of rows WHERE status = 'delete'
   // is still a read.
   const bare = statement.replace(/'(?:[^']|'')*'/g, "''");
-  if (!/^(SELECT|WITH)\b/i.test(bare)) faults.push('does not start with SELECT or WITH');
+  // SELECT only. WITH is refused: SQLite accepts WITH ... DELETE, and a CTE can
+  // take the name of a schema table.
+  if (!/^SELECT\b/i.test(bare)) faults.push('does not start with SELECT');
   for (const word of WRITE_WORDS) {
     if (new RegExp(`\\b${word}\\b`, 'i').test(bare)) faults.push(`holds the word ${word}`);
   }
@@ -205,10 +224,16 @@ const withoutStrings = (statement) => statement.replace(/'(?:[^']|'')*'/g, "''")
 /** True when every table the statement reads is a schema source. */
 export function isSchemaOnly(statement) {
   const bare = withoutStrings(statement);
-  const sources = [...bare.matchAll(/\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_]*)/gi)].map((m) =>
-    m[1].toLowerCase()
-  );
-  if (sources.length === 0 || !sources.every((name) => SCHEMA_SOURCES.includes(name))) return false;
+  // Every FROM and every JOIN must be followed by a plain name from the list.
+  // A bracket after one (a subquery, or `JOIN(table)`) is not a plain name, so
+  // the statement is not schema-only. Quoted names never get here: they are
+  // refused for every statement.
+  const sources = [...bare.matchAll(/\b(?:FROM|JOIN)\b\s*(\S*)/gi)].map((m) => m[1]);
+  if (sources.length === 0) return false;
+  for (const next of sources) {
+    const name = next.match(/^([A-Za-z_][A-Za-z0-9_]*)(?=$|[\s(),;])/);
+    if (!name || !SCHEMA_SOURCES.includes(name[1].toLowerCase())) return false;
+  }
   // `FROM sqlite_master, registrations` joins with a comma, which the list
   // above does not see. With the bracketed parts taken out, a comma after the
   // first FROM is such a join, so the statement is not schema-only.
@@ -382,8 +407,17 @@ function runStatement(binding, statement, opts) {
     '--command',
     statement,
   ]);
-  const parsed = JSON.parse(out.slice(out.indexOf('[')));
-  return parsed[0]?.results ?? [];
+  let parsed;
+  try {
+    parsed = JSON.parse(out.slice(out.indexOf('[')));
+  } catch {
+    // The parser's own message quotes what it was given, which is the answer.
+    throw Object.assign(new Error('the answer could not be read'), { status: 0 });
+  }
+  if (!Array.isArray(parsed) || !Array.isArray(parsed[0]?.results)) {
+    throw Object.assign(new Error('the answer could not be read'), { status: 0 });
+  }
+  return parsed[0].results;
 }
 
 function say(text) {
@@ -405,7 +439,8 @@ function runFile(name, opts) {
       rows = printableRows(runStatement(binding, statement, opts), rule, statement);
     } catch (e) {
       // Only the rule's own words: a wrangler failure can quote the database.
-      const why = e.status === undefined ? e.message : 'the statement could not be run';
+      const ours = e.status === undefined || e.message === 'the answer could not be read';
+      const why = ours ? e.message : 'the statement could not be run';
       throw new Error(`${name}, statement ${i + 1}: ${why}`);
     }
     say(`**${i + 1}.** \`${statement}\`\n\n${toMarkdown(rows)}\n`);
@@ -463,9 +498,9 @@ function main() {
     }
     const pending = pendingNumbers(listOutput);
     if (pending === null) {
-      throw new Error(
-        `could not read the pending migrations of ${binding}:\n${listOutput.slice(-1500)}`
-      );
+      // Wrangler's text helps on staging. On production it stays out of a public log.
+      const detail = opts.env === 'production' ? '' : `:\n${listOutput.slice(-1500)}`;
+      throw new Error(`could not read the pending migrations of ${binding}${detail}`);
     }
     if (pending.length === 0) {
       say(`\n${binding}: no migration is pending, so there is nothing to dry-run.`);

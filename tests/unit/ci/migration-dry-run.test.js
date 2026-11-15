@@ -26,6 +26,11 @@
  * plain; a non-count number allowed; the production step moved below the
  * apply; the production step removed; production taking --file; the 0108 file
  * given its GROUP BY back.
+ *
+ * After the security review of 2026-11-15, three more, each red: the quoting
+ * characters allowed; WITH allowed (the start check and the word list both
+ * off; either one alone still refuses it); a bracket after FROM or JOIN
+ * ignored by the schema-only check.
  */
 const { spawnSync } = require('node:child_process');
 const { readFileSync, readdirSync } = require('node:fs');
@@ -48,14 +53,34 @@ beforeAll(async () => {
 });
 
 describe('migration dry run: the read-only check', () => {
-  test('passes plain SELECTs and WITH ... SELECT, and drops comments', () => {
+  test('passes plain SELECTs, and drops comments', () => {
     const sql = `-- a note; with a semicolon
       SELECT COUNT(*) AS n FROM events; /* block; comment */
-      WITH x AS (SELECT 1 AS a) SELECT a FROM x;`;
+      SELECT COUNT(*) AS m FROM events WHERE status = 'delete';`;
     expect(lib.readOnlyStatements(sql)).toEqual([
       'SELECT COUNT(*) AS n FROM events',
-      'WITH x AS (SELECT 1 AS a) SELECT a FROM x',
+      "SELECT COUNT(*) AS m FROM events WHERE status = 'delete'",
     ]);
+  });
+
+  // Security review, 2026-11-15. Each of these got past the checks as first
+  // written. The first one deleted a row in a local SQLite.
+  test('refuses WITH, and every way of quoting an identifier', () => {
+    const refused = [
+      `WITH sqlite_master AS (SELECT 1 AS "'") DELETE FROM events WHERE id IN (SELECT "'" FROM sqlite_master)`,
+      'WITH a AS (SELECT 1 AS x) SELECT COUNT(*) FROM a',
+      'WITH sqlite_master AS (SELECT age FROM registrations) SELECT age FROM sqlite_master',
+      'SELECT COUNT(*) AS n FROM sqlite_master JOIN "registrations"',
+      "SELECT (SELECT COUNT(*) FROM [registrations] WHERE status = 'flagged') AS n FROM sqlite_master LIMIT 1",
+      'SELECT r.status FROM sqlite_master JOIN `registrations` r',
+      'SELECT COUNT((SELECT 1 AS "(")), age, COUNT((SELECT 1 AS ")")) FROM registrations',
+      'SELECT COUNT(*) AS "n" FROM events',
+    ];
+    for (const sql of refused) {
+      expect(() => lib.readOnlyStatements(sql, 'f.sql'), sql).toThrow(
+        /not read-only, nothing was sent/
+      );
+    }
   });
 
   test('refuses a file that writes, and names the statement', () => {
@@ -295,6 +320,7 @@ describe('migration dry run: what it may print (ADR-037)', () => {
       'SELECT COUNT(*), email FROM registrations',
       'SELECT COUNT(*) FROM a UNION SELECT COUNT(*) FROM b',
       'WITH a AS (SELECT email FROM registrations) SELECT COUNT(*) FROM a',
+      'SELECT 1000 + (SELECT COUNT(*) FROM registrations) AS n FROM registrations',
       'SELECT * FROM registrations',
     ]) {
       expect(lib.strictFaults(bad).length, bad).toBeGreaterThan(0);
@@ -321,6 +347,19 @@ describe('migration dry run: what it may print (ADR-037)', () => {
       lib.isSchemaOnly('SELECT (SELECT email FROM registrations LIMIT 1) FROM sqlite_master')
     ).toBe(false);
     expect(lib.isSchemaOnly('SELECT COUNT(*) FROM events')).toBe(false);
+    // A bracket after FROM or JOIN is not a plain name (security review 2026-11-15).
+    for (const sql of [
+      'SELECT age FROM sqlite_master JOIN(registrations)',
+      'SELECT COUNT(*) FROM sqlite_master JOIN (SELECT age FROM registrations)',
+      'SELECT age FROM (SELECT age FROM registrations)',
+      'SELECT (SELECT COUNT(*) FROM registrations) AS n FROM sqlite_master LIMIT 1',
+      'SELECT name FROM sqlite_masterx',
+    ]) {
+      expect(lib.isSchemaOnly(sql), sql).toBe(false);
+    }
+    expect(
+      lib.strictFaults('SELECT age FROM sqlite_master JOIN(registrations)').length
+    ).toBeGreaterThan(0);
   });
 
   test('under the strict rule a count under the floor reads in words, zero too', () => {
