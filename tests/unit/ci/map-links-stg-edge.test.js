@@ -61,6 +61,27 @@ describe('the map link walk passes the stg edge', () => {
     expect(body).not.toMatch(/test\.skip|noteEdgeChallenge/);
   });
 
+  // The Share test reads two event pages for the link each card must match. They
+  // went without the header, so a retry of that test met the challenge (403 for
+  // /events/map-zoom-c, main run 43668128696). Born red (2026-11-15): with
+  // `await passStgEdge(own)` removed, and with `throwIfEdgeAnswered(res, path)`
+  // removed, this test fails.
+  test("the Share test's reads of the event pages send the header, and name the edge", () => {
+    const start = SPEC.indexOf('async function ownPageShare(');
+    const body = SPEC.slice(start, SPEC.indexOf('test(', start));
+    const page = body.indexOf('const own = await page.context().newPage();');
+    const pass = body.indexOf('await passStgEdge(own);');
+    const read = body.indexOf('await own.goto(');
+    const stop = body.indexOf('throwIfEdgeAnswered(res, path);');
+    const status = body.indexOf('expect(res?.status(), path).toBe(200);');
+    expect(start).toBeGreaterThan(-1);
+    expect(page).toBeGreaterThan(-1);
+    expect(pass).toBeGreaterThan(page);
+    expect(read).toBeGreaterThan(pass);
+    expect(stop).toBeGreaterThan(read);
+    expect(status).toBeGreaterThan(stop);
+  });
+
   test('the header goes to the site only', () => {
     const body = HELPER.slice(
       HELPER.indexOf('export async function passStgEdge'),
@@ -68,5 +89,54 @@ describe('the map link walk passes the stg edge', () => {
     );
     expect(body).toContain('(url) => url.origin === origin');
     expect(body).not.toMatch(/setExtraHTTPHeaders|extraHTTPHeaders/);
+  });
+});
+
+/**
+ * "Share hands the share sheet that card's own link and title" also proves that
+ * pressing Share sends nothing. On stg the edge adds its own page scripts, which
+ * call /cdn-cgi/challenge-platform/… and /cdn-cgi/rum after the page loads; the
+ * test recorded those and was red in four of eight main runs (43668128696,
+ * 43669630533, 43674376427, 43676301628). The test now sets those calls apart,
+ * and only those: what counts as the edge's is decided in one place
+ * (scripts/ci/edge-read.mjs, edgeOwnRequest; tests/unit/ci/edge-read.test.js).
+ *
+ * Born red (2026-11-15), one fault at a time, each taken out again:
+ *   - the recorder keeps nothing (`requests.push` removed)      -> "every other request…" fails
+ *   - the recorder drops any /cdn-cgi/ path by its own pattern   -> "the spec holds no pattern…" fails
+ *   - the list is filtered before it is checked                  -> "the whole list…" fails
+ *   - the check is made soft                                     -> "the whole list…" fails
+ */
+describe('the Share test sets apart the edge calls and nothing else', () => {
+  const start = SPEC.indexOf('test("Share hands the share sheet that card\'s own link and title"');
+  const body = SPEC.slice(start, SPEC.indexOf('test(', start + 10));
+
+  test('the test is there, and records what the page asks for', () => {
+    expect(start).toBeGreaterThan(-1);
+    expect(body).toContain("page.on('request', (r) => {");
+  });
+
+  test('every other request is kept: one branch for the edge, the rest recorded whole', () => {
+    expect(body).toContain('if (edgeOwnRequest(r.url(), origin)) {');
+    expect(body).toMatch(
+      /\} else \{\s*requests\.push\(`\$\{r\.method\(\)\} \$\{r\.url\(\)\}`\);\s*\}/
+    );
+    expect(body).toContain('const origin = new URL(BASE_URL).origin;');
+  });
+
+  test('the spec holds no pattern of its own for what the edge sends', () => {
+    // One list, in edge-read.mjs. A path written here would be a second one.
+    const code = body.replace(/^\s*\/\/.*$/gm, '');
+    expect(code).not.toMatch(/cdn-cgi|challenge-platform|\/rum/);
+    expect(code.match(/edgeOwnRequest\(/g)).toHaveLength(1);
+  });
+
+  test('the whole list is checked, hard, against nothing', () => {
+    const checks = body.match(/expect[.\w]*\(\s*requests\b[^;]*;/g) || [];
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatch(/^expect\(requests, '[^']+'\)\.toEqual\(\[\]\);$/);
+    expect(body).not.toMatch(
+      /requests\s*\.\s*(filter|splice|slice|pop|shift)\(|requests\.length\s*=/
+    );
   });
 });

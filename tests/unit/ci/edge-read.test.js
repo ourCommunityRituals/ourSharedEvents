@@ -37,6 +37,78 @@ describe('edgeChallenged', () => {
   });
 });
 
+describe('edgeOwnRequest', () => {
+  const STG = 'https://stg.oursharedevents.com';
+  // The three calls T4k recorded on stg (main runs 43668128696 and 43669630533).
+  const SEEN = [
+    `${STG}/cdn-cgi/challenge-platform/h/b/scripts/jsd/f8df4d4a0cd6/main.js?ray=a5ab5a23eafc510d`,
+    `${STG}/cdn-cgi/challenge-platform/h/b/jsd/oneshot/f8df4d4a0cd6/0.42:1794712223:abc/a5ab5a23eafc510d`,
+    `${STG}/cdn-cgi/rum?`,
+  ];
+
+  test('the calls the stg edge was seen to add are its own', () => {
+    for (const url of SEEN) expect(E.edgeOwnRequest(url, STG), url).toBe(true);
+    expect(E.edgeOwnRequest(`${STG}/cdn-cgi/rum/`, STG)).toBe(true);
+  });
+
+  test('no route the Worker serves is ever the edge', () => {
+    for (const path of [
+      '/',
+      '/?area=872664405ffffff',
+      '/events/map-zoom-c',
+      '/e/MZPANB',
+      '/s/mzPub1',
+      '/q/abc',
+      '/api/v2/events/map',
+      '/api/v2/track',
+      // The words in a query or deeper in a path do not make it the edge's.
+      '/api/v2/track?to=/cdn-cgi/rum',
+      '/events/cdn-cgi/rum',
+      '/x/cdn-cgi/challenge-platform/h/b/jsd/oneshot/1',
+    ]) {
+      expect(E.edgeOwnRequest(`${STG}${path}`, STG), path).toBe(false);
+    }
+  });
+
+  test('only the listed paths under /cdn-cgi/, not the whole of it', () => {
+    for (const path of [
+      '/cdn-cgi/',
+      '/cdn-cgi/trace',
+      '/cdn-cgi/image/width=80/a.png',
+      '/cdn-cgi/l/email-protection',
+      '/cdn-cgi/rumour',
+      '/cdn-cgi/rum/extra',
+      '/cdn-cgi/challenge-platform',
+    ]) {
+      expect(E.edgeOwnRequest(`${STG}${path}`, STG), path).toBe(false);
+    }
+  });
+
+  test('a path that climbs out of the edge folder is judged where it lands', () => {
+    expect(E.edgeOwnRequest(`${STG}/cdn-cgi/challenge-platform/../../api/v2/track`, STG)).toBe(
+      false
+    );
+    expect(E.edgeOwnRequest(`${STG}/cdn-cgi/challenge-platform/%2e%2e/%2e%2e/q/abc`, STG)).toBe(
+      false
+    );
+  });
+
+  test('the same path on another host is a request that left the site', () => {
+    for (const url of SEEN) {
+      const elsewhere = url.replace(STG, 'https://collect.example');
+      expect(E.edgeOwnRequest(elsewhere, STG), elsewhere).toBe(false);
+    }
+    expect(E.edgeOwnRequest('https://other.stg.oursharedevents.com/cdn-cgi/rum', STG)).toBe(false);
+    expect(E.edgeOwnRequest('http://stg.oursharedevents.com/cdn-cgi/rum', STG)).toBe(false);
+  });
+
+  test('not a URL: not the edge', () => {
+    for (const bad of ['', 'cdn-cgi/rum', '/cdn-cgi/rum', undefined, null]) {
+      expect(E.edgeOwnRequest(bad, STG)).toBe(false);
+    }
+  });
+});
+
 describe('noteEdgeChallenge', () => {
   test('not strict: writes a GitHub warning and a summary line, and does not throw', () => {
     const c = capture();
