@@ -373,9 +373,9 @@ describe('migration dry run: what it may print (ADR-037)', () => {
 
   test('a strict answer that is not one row of counts stops, and the value is not in the message', () => {
     const q = 'SELECT COUNT(*) n FROM registrations';
-    const secret = 'someone@example.org';
+    const rowValue = 'someone@example.org';
     const cases = [
-      [[{ n: secret }], /column n holds text/],
+      [[{ n: rowValue }], /column n holds text/],
       [[{ n: 'active' }], /column n holds text/],
       [[{ n: 1.5 }], /not a count/],
       [[{ n: -1 }], /not a count/],
@@ -391,7 +391,7 @@ describe('migration dry run: what it may print (ADR-037)', () => {
         message = e.message;
       }
       expect(message, JSON.stringify(rows)).toMatch(why);
-      expect(message).not.toContain(secret);
+      expect(message).not.toContain(rowValue);
     }
   });
 
