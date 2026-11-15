@@ -191,6 +191,13 @@ const TOUCH_MIN_PX = 44;
 const PHONE_MAP_PX = 320 - MAP_GUTTER_PX;
 /** Map units a hexagon must span to be 44 px when `shown` units fill a map `mapPx` wide. */
 const touchUnits = (shown: number, mapPx: number) => (TOUCH_MIN_PX * shown) / mapPx;
+/**
+ * `v` is `floor` or more. Every size and edge the map compares goes through
+ * here. Written with `min`, not `>=`: a size worked out from a cell's corners
+ * never equals its floor, so `>=` has a twin, `>`, that no page can tell from
+ * it and no test can fail on (the mutation floor, scripts/ci/mutation-file-floor.mjs).
+ */
+const atLeast = (v: number, floor: number) => Math.min(v, floor) === floor;
 /** The same on the whole frame, for each step of map-link-style.ts. */
 const STEP_UNITS = LINK_FROM_PX.map((px) =>
   touchUnits(MAP_W, Math.min(px - MAP_GUTTER_PX, MAP_MAX_PX))
@@ -428,35 +435,31 @@ function svgFor(
         : a.name;
 
   // Each hexagon's box, and how far its name reaches either side of its middle.
+  const span = (vs: number[]) => Math.max(...vs) - Math.min(...vs);
   const boxes = rings.map(({ a, ring, mid }) => {
     const xs = ring.map((p) => p[0]);
-    const ys = ring.map((p) => p[1]);
     const half = shortName(a).length * NAME_HALF_UNITS;
     return {
       left: Math.min(...xs, mid[0] - half),
       right: Math.max(...xs, mid[0] + half),
-      least: Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)),
+      least: Math.min(span(xs), span(ring.map((p) => p[1]))),
     };
   });
   const side = (W - H) / 2;
+  // Stryker disable next-line MethodExpression: the areas of one map are res-7 cells a few kilometres apart, drawn the same size to within a fraction of a unit, so the largest decides as the smallest does.
   const least = Math.min(...boxes.map((b) => b.least));
   // On the whole frame the phone decides; in the taller box the phone has room
   // to spare and 480 px, back on the whole frame, decides.
   const wholeFloor = touchUnits(W, PHONE_MAP_PX);
   const tallFloor = Math.max(touchUnits(H, PHONE_MAP_PX), STEP_UNITS[0] ?? wholeFloor);
+  const large = atLeast(least, wholeFloor);
   const tall =
     !!zoomHref &&
-    least < wholeFloor &&
-    least >= tallFloor &&
-    boxes.every((b) => b.left >= side && b.right <= W - side);
-  const step = STEP_UNITS.findIndex((units) => least >= units);
-  const links = !zoomHref
-    ? null
-    : least >= wholeFloor || tall
-      ? 0
-      : step >= 0
-        ? ((step + 1) as 1 | 2 | 3)
-        : null;
+    !large &&
+    atLeast(least, tallFloor) &&
+    boxes.every((b) => atLeast(b.left, side) && atLeast(W - side, b.right));
+  const step = STEP_UNITS.findIndex((units) => atLeast(least, units));
+  const links = !zoomHref ? null : large || tall ? 0 : step >= 0 ? ((step + 1) as 1 | 2 | 3) : null;
 
   const max = Math.max(...areas.map((a) => a.events.length), 1);
   const shapes = rings

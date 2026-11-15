@@ -30,7 +30,7 @@
  *   accent colour, the fill too, the touch target without its fill-opacity);
  *   each turned this file red | date: 2026-11-09
  */
-// @born-red landing hexagon links are touch targets (OSE-2084) | method: the six tests seen failing on the source as it was (a staging hexagon link: 28.1 px at 320 px), then 16 faults injected one at a time, each put back (the floor at 30 px; the taller box never used, used though it cuts an area, without its 480 px floor, without slice, without data-tall, its rule removed, its rule 4/3; one step too early; small hexagons linked at every width; hexagons under the last step linked; the plain copy dropped; the link style not sent; its third step at 700 px; the linked copies not hidden first; "Tap a hexagon" always said); each turned this file red | date: 2026-11-15
+// @born-red landing hexagon links are touch targets (OSE-2084) | method: the six tests seen failing on the source as it was (a staging hexagon link: 28.1 px at 320 px), then 16 faults injected one at a time, each put back (the floor at 30 px; the taller box never used, used though it cuts an area, without its 480 px floor, without slice, without data-tall, its rule removed, its rule 4/3; one step too early; small hexagons linked at every width; hexagons under the last step linked; the plain copy dropped; the link style not sent; its third step at 700 px; the linked copies not hidden first; "Tap a hexagon" always said); each turned this file red. Then StrykerJS on src/lib/attendee-map.ts: 18 mutants of the new code survived the first run (the name's reach on each side, the box holding an area on each side, a row of five linked from 480 px, large hexagons keeping the whole frame); each is killed now, by the test that names it | date: 2026-11-15
 // @born-red attendee-map mutants | method: StrykerJS mutants of src/lib/attendee-map.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
 import { describe, expect, test } from 'vitest';
 import {
@@ -924,8 +924,51 @@ describe('design budget', () => {
     const wide = landingOver(line);
     expect(wide).not.toContain('preserveAspectRatio');
     expect(wide).toContain('<figure class="amap" data-testid="amap">');
+    // Five in a line are 65 units: links from 480 px, where the whole frame makes them 44 px.
+    expect(WIDTHS.find((w) => onScreen(wide, w).links.length > 0)).toBe(480);
+    expect(onScreen(wide, 480).links).toHaveLength(5);
+    expect(wide).toContain('<a class="amap-w1" href=');
+    // Hexagons already 44 px on the whole frame keep it: one area, or seven.
+    for (const cells of [[CELL], gridDisk(CELL, 1)]) {
+      const large = landingOver(cells);
+      expect(large).toContain('<figure class="amap" data-testid="amap">');
+      expect(large).not.toContain('preserveAspectRatio');
+    }
     // Nor is the box used where it would not make a hexagon a link on a phone.
     expect(landingOver([...STAGING_AREAS, FIXTURE_AREA])).not.toContain('preserveAspectRatio');
+  });
+
+  test("the taller box cuts no area's name either, on the left or on the right", () => {
+    // Three areas, 83 units across, all in the middle of the frame: the one on
+    // the left has its middle at 171 units, the one on the right at 429. A name
+    // is drawn under an area's number, centred, as wide as its letters.
+    const LEFT = '872664570ffffff';
+    const MIDDLE = '87266456affffff';
+    const RIGHT = '872664561ffffff';
+    const over = (named: Record<string, string>) =>
+      renderAttendeeMap(
+        [LEFT, MIDDLE, RIGHT].map((c, i) =>
+          ev(`n${i}`, {
+            h3_res7: c,
+            ...(named[c] ? { where_address: `1 Main St, ${named[c]}, IL 60008` } : {}),
+          })
+        ),
+        { now: NOW, area: { count: 10, min: 10 }, zoomHref: (c) => `/?area=${c}` }
+      ).html;
+    const TALL = '<figure class="amap" data-testid="amap" data-tall>';
+    const WHOLE = '<figure class="amap" data-testid="amap">';
+    const LONG = 'Rolling Meadowsville';
+    // No name, or a short one: the square box holds everything.
+    expect(over({})).toContain(TALL);
+    expect(over({ [LEFT]: 'Posen', [RIGHT]: 'Posen' })).toContain(TALL);
+    // A long name (cut to 16 letters, 144 units either side of the middle)
+    // reaches past the box on that side only: the map keeps its whole frame.
+    for (const cell of [LEFT, RIGHT]) {
+      const html = over({ [cell]: LONG });
+      expect(html).toContain('data-testid="amap-area-name">Rolling Meadows…</tspan>');
+      expect(html).toContain(WHOLE);
+      expect(html).not.toContain('preserveAspectRatio');
+    }
   });
 
   test('"Tap a hexagon" is said only where a hexagon is a link; the list always links every area', () => {
