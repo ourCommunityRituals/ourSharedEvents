@@ -30,6 +30,7 @@
  *   accent colour, the fill too, the touch target without its fill-opacity);
  *   each turned this file red | date: 2026-11-09
  */
+// @born-red landing hexagon links are touch targets (OSE-2084) | method: the six tests seen failing on the source as it was (a staging hexagon link: 28.1 px at 320 px), then 16 faults injected one at a time, each put back (the floor at 30 px; the taller box never used, used though it cuts an area, without its 480 px floor, without slice, without data-tall, its rule removed, its rule 4/3; one step too early; small hexagons linked at every width; hexagons under the last step linked; the plain copy dropped; the link style not sent; its third step at 700 px; the linked copies not hidden first; "Tap a hexagon" always said); each turned this file red | date: 2026-11-15
 // @born-red attendee-map mutants | method: StrykerJS mutants of src/lib/attendee-map.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
 import { describe, expect, test } from 'vitest';
 import {
@@ -50,6 +51,7 @@ import {
 } from '../src/lib/attendee-map';
 import { landingZoom, renderLandingArea } from '../src/lib/landing-area';
 import { NARROW_MAP_STYLE } from '../src/lib/map-narrow-style';
+import { LINK_FROM_PX, LINK_STYLE, MAP_GUTTER_PX } from '../src/lib/map-link-style';
 import { PLACE_PANEL_CSS } from '../src/lib/event-list';
 import { CORRIDOR_WINDOW_DAYS } from '../src/lib/corridor-readiness';
 import {
@@ -67,6 +69,8 @@ const SOON = '2026-11-20';
 const RIPH = { lat: 41.6565, lon: -87.681 };
 const CELL = latLngToCell(RIPH.lat, RIPH.lon, 7);
 const OTHER = latLngToCell(41.88, -87.63, 7);
+// The area next to CELL: near enough that both hexagons are drawn large.
+const NEAR = gridDisk(CELL, 1).find((c) => c !== CELL)!;
 
 function ev(id: string, over: Partial<ZoomEvent> = {}): ZoomEvent {
   return {
@@ -463,7 +467,9 @@ describe('no street map: the places are a list, with their panels', () => {
 });
 
 describe('the hexagons link to their areas', () => {
-  const items = [ev('a'), ev('b', { h3_res7: OTHER, lat: 41.88, lon: -87.63 })];
+  // Two areas side by side. Far apart they are drawn too small to be links
+  // (OSE-2084, "design budget" below).
+  const items = [ev('a'), ev('b', { h3_res7: NEAR })];
   const href = (cell: string) => `/?zip=60406&area=${cell}`;
 
   test('with a zoom link, each hexagon and each list row opens its area', () => {
@@ -472,7 +478,7 @@ describe('the hexagons link to their areas', () => {
       area: { count: 10, min: 10 },
       zoomHref: href,
     }).html;
-    for (const cell of [CELL, OTHER]) {
+    for (const cell of [CELL, NEAR]) {
       expect(html).toContain(
         `<g data-testid="amap-area" data-cell="${cell}" data-count="1"><a href="/?zip=60406&amp;area=${cell}" data-testid="amap-area-link">`
       );
@@ -641,7 +647,7 @@ describe('design budget', () => {
 
   test('the narrow style is one block under 400 characters, one rule, no colour', () => {
     expect(NARROW_MAP_STYLE).toBe(
-      '<style>@media(max-width:479px){.amap[data-zoom] svg{aspect-ratio:4/3}.amap-dn{font-size:23px}.as-t,.amap-num{font-size:28px}}</style>'
+      '<style>@media(max-width:479px){.amap[data-zoom] svg{aspect-ratio:4/3}.amap[data-tall] svg{aspect-ratio:1/1}.amap-dn{font-size:23px}.as-t,.amap-num{font-size:28px}}</style>'
     );
     expect(NARROW_MAP_STYLE.length).toBeLessThanOrEqual(400);
     expect(NARROW_MAP_STYLE.match(/<style>/g)).toHaveLength(1);
@@ -650,11 +656,12 @@ describe('design budget', () => {
     expect(SHOWN).toBe(480);
   });
 
-  test('the zoomed map is cut at its sides, not shrunk, in a taller box; the landing map never is', () => {
+  test('the zoomed map is cut at its sides, not shrunk, in a taller box; a landing map with areas far apart is not', () => {
     expect(zoomed([ev('a')]).html).toContain(
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${MAP_W} ${MAP_H}" preserveAspectRatio="xMidYMid slice" role="group" `
     );
-    // The landing's own map holds areas out to its edges: it keeps its whole frame.
+    // Two areas far apart are too small to be links in either box, so the
+    // landing's own map keeps its whole frame (the taller box: OSE-2084, below).
     const landing = renderAttendeeMap(two(), {
       now: NOW,
       area: { count: 10, min: 10 },
@@ -716,6 +723,234 @@ describe('design budget', () => {
     expect(DOT_MERGE).toBe(2 * r);
     // The target is invisible but still takes the tap (a fill of none would not).
     expect(html).toMatch(/<circle class="amap-hit" [^>]*fill-opacity="0"\/>/);
+  });
+
+  // The landing's hexagon links (OSE-2084). Seen on staging on 2026-11-15: ten
+  // areas, each hexagon 62 by 60 units, so 29 by 28 px on a 320 px phone and 35
+  // by 34 px at 375 px, and the nightly phone audit red since 2026-11-10.
+  const STAGING_AREAS = [
+    '87266452bffffff',
+    '872664544ffffff',
+    '872664cdcffffff',
+    '872664574ffffff',
+    '872664cdaffffff',
+    '872664529ffffff',
+    '872664572ffffff',
+    '87266450cffffff',
+    '87266450dffffff',
+    '872664cd8ffffff',
+  ];
+  // The area the staging fixture adds (bruno/fixtures/map-zoom-area-seed.sql).
+  const FIXTURE_AREA = '872664405ffffff';
+  // Eight areas, all in the middle of the frame, drawn 58 units across: a 44 px
+  // target in the taller box on a phone, and under it at 480 px on the whole frame.
+  const BETWEEN_FLOORS = [
+    '87266455cffffff',
+    '872664572ffffff',
+    '872664563ffffff',
+    '872664555ffffff',
+    '87266454cffffff',
+    '87266455dffffff',
+    '872664566ffffff',
+    '872664540ffffff',
+  ];
+  const landingOver = (cells: readonly string[]) =>
+    renderAttendeeMap(
+      cells.map((c, i) => ev(`s${i}`, { h3_res7: c })),
+      { now: NOW, area: { count: 10, min: 10 }, zoomHref: (c) => `/?area=${c}` }
+    ).html;
+  /** Each step of the link style: its number and the screen width it starts at. */
+  const steps = [
+    ...LINK_STYLE.matchAll(
+      /@media\(min-width:(\d+)px\)\{\.amap-w(\d)\{display:inline\}\.amap-n\2\{display:none\}\}/g
+    ),
+  ].map((m) => ({ step: Number(m[2]), from: Number(m[1]) }));
+  const boxOf = (points: string) => {
+    const pts = points.split(' ').map((p) => p.split(',').map(Number));
+    const xs = pts.map((p) => p[0]!);
+    const ys = pts.map((p) => p[1]!);
+    return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+  };
+  /**
+   * The landing map as a screen `width` px wide draws it, read out of the page
+   * and the styles that ship: the hexagon links on show, each one's smaller
+   * side in px, and whether the plain hexagons are on show.
+   */
+  function onScreen(html: string, width: number) {
+    const tallBox = /\.amap\[data-tall\] svg\{aspect-ratio:(\d+)\/(\d+)\}/.exec(NARROW_MAP_STYLE);
+    const tall =
+      /<figure class="amap" data-testid="amap" data-tall>/.test(html) &&
+      width < narrow.under &&
+      !!tallBox;
+    // Map units across the map: the whole frame, or the middle of it in the taller box.
+    const shown = tall ? (MAP_H * Number(tallBox![1])) / Number(tallBox![2]) : MAP_W;
+    const scale = Math.min(width - GUTTER, 720) / shown;
+    const links = [
+      ...html.matchAll(
+        /<a (?:class="amap-w(\d)" )?href="[^"]*" data-testid="amap-area-link">.*?<polygon class="amap-cell" points="([^"]+)"/g
+      ),
+    ]
+      // A link with a step is on show from that step's width; without one, always.
+      .filter((m) => !m[1] || width >= steps.find((s) => s.step === Number(m[1]))!.from)
+      .map((m) => {
+        const b = boxOf(m[2]!);
+        return Math.min(b.x1 - b.x0, b.y1 - b.y0) * scale;
+      });
+    const plainStep = /<g class="amap-n(\d)">/.exec(html)?.[1];
+    const plain = plainStep
+      ? width < steps.find((s) => s.step === Number(plainStep))!.from
+      : !html.includes('amap-area-link');
+    return { tall, shown, links, plain };
+  }
+  // Every width a rule starts or ends at, one px either side, a phone and a desktop.
+  const WIDTHS = [320, 375, 479, 480, 639, 640, 759, 760, 1280];
+  const layouts = () => ({
+    staging: landingOver(STAGING_AREAS),
+    stagingWithFixture: landingOver([...STAGING_AREAS, FIXTURE_AREA]),
+    two: landingOver([CELL, NEAR]),
+    one: landingOver([CELL]),
+    seven: landingOver(gridDisk(CELL, 1)),
+    nineteen: landingOver(gridDisk(CELL, 2)),
+    thirtySeven: landingOver(gridDisk(CELL, 3)),
+    betweenFloors: landingOver(BETWEEN_FLOORS),
+    farApart: landingOver([CELL, OTHER]),
+  });
+
+  test('the link style is one block under 400 characters, three steps, no colour', () => {
+    expect(LINK_STYLE).toBe(
+      '<style>.amap-w1,.amap-w2,.amap-w3{display:none}@media(min-width:480px){.amap-w1{display:inline}.amap-n1{display:none}}@media(min-width:640px){.amap-w2{display:inline}.amap-n2{display:none}}@media(min-width:760px){.amap-w3{display:inline}.amap-n3{display:none}}</style>'
+    );
+    expect(LINK_STYLE.length).toBeLessThanOrEqual(400);
+    expect(LINK_STYLE.match(/<style>/g)).toHaveLength(1);
+    expect(LINK_STYLE).not.toMatch(/var\(|#[0-9a-f]{3,8}\b|fill|stroke|color/i);
+    // The widths the renderer counts with are the widths the style switches at.
+    expect(steps).toEqual(LINK_FROM_PX.map((from, i) => ({ step: i + 1, from })));
+    // The first step starts where the narrow rule ends: no width is under both.
+    expect(steps[0]!.from).toBe(narrow.under);
+    expect(MAP_GUTTER_PX).toBe(GUTTER);
+  });
+
+  test('a hexagon link on show is a 44 px touch target, at every width', () => {
+    for (const [name, html] of Object.entries(layouts())) {
+      for (const width of WIDTHS) {
+        const m = onScreen(html, width);
+        for (const px of m.links) {
+          expect(px, `${name}, ${width} px: a hexagon link`).toBeGreaterThanOrEqual(44);
+        }
+        // Links or plain hexagons, never both and never neither.
+        expect(m.links.length > 0, `${name}, ${width} px: links or plain`).toBe(!m.plain);
+      }
+    }
+    // A hexagon carries no larger invisible target: next to another area it
+    // would lie over the neighbour and take its taps.
+    expect(layouts().staging).not.toContain('amap-hit');
+  });
+
+  test('hexagons are links from the narrowest screen that makes them 44 px, and not below it', () => {
+    const maps = layouts();
+    /** The narrowest of WIDTHS at which the hexagons are links, and how many are. */
+    const from = (html: string) => {
+      const width = WIDTHS.find((w) => onScreen(html, w).links.length > 0);
+      return width ? [width, onScreen(html, width).links.length] : null;
+    };
+    // Large enough on the whole frame, or in the taller box a phone draws.
+    expect(from(maps.one)).toEqual([320, 1]);
+    expect(from(maps.two)).toEqual([320, 2]);
+    expect(from(maps.seven)).toEqual([320, 7]);
+    expect(from(maps.staging)).toEqual([320, 10]);
+    expect(from(maps.nineteen)).toEqual([320, 19]);
+    for (const html of [maps.one, maps.two, maps.seven, maps.staging, maps.nineteen]) {
+      // Drawn once: no second copy, no step, no link style.
+      expect(html).not.toMatch(/amap-w\d|amap-n\d/);
+      expect(html).not.toContain(LINK_STYLE);
+    }
+    // Staging while its fixture is loaded (eleven areas, 45 by 44 units), and
+    // thirty-seven areas: links on a wide screen only, plain hexagons under it.
+    expect(from(maps.stagingWithFixture)).toEqual([760, 11]);
+    expect(from(maps.thirtySeven)).toEqual([640, 37]);
+    // 58 units: the taller box would do for a phone, and leave 43 px at 480 px.
+    // So no taller box, and links from the width that makes them 44 px.
+    expect(from(maps.betweenFloors)).toEqual([640, 8]);
+    expect(onScreen(maps.betweenFloors, 320).tall).toBe(false);
+    expect((58.07 * (320 - GUTTER)) / MAP_H).toBeGreaterThanOrEqual(44);
+    expect(58.07 * WIDE).toBeLessThan(44);
+    expect(maps.stagingWithFixture).toContain(LINK_STYLE);
+    expect(onScreen(maps.stagingWithFixture, 759)).toMatchObject({ links: [], plain: true });
+    // Two areas far apart (31 units): 37 px on the widest map, so never links.
+    expect(from(maps.farApart)).toBeNull();
+    expect(maps.farApart).not.toContain('amap-area-link');
+    expect(maps.farApart).not.toContain(LINK_STYLE);
+    // Staging's hexagons on the whole frame, which is why the taller box exists.
+    expect(60.24 * PHONE).toBeLessThan(44);
+  });
+
+  test('a hexagon drawn as a link and plain is the same drawing twice, one address', () => {
+    const html = landingOver([...STAGING_AREAS, FIXTURE_AREA]);
+    const twice = [
+      ...html.matchAll(
+        /<g data-testid="amap-area" data-cell="([0-9a-f]{15})" data-count="1"><a class="amap-w3" href="\/\?area=([0-9a-f]{15})" data-testid="amap-area-link">(.*?)<\/a><g class="amap-n3">(.*?)<\/g><\/g>/g
+      ),
+    ];
+    expect(twice).toHaveLength(11);
+    for (const m of twice) {
+      expect(m[2]).toBe(m[1]);
+      expect(m[4]).toBe(m[3]);
+      expect(m[3]).toContain('<polygon class="amap-cell" ');
+    }
+  });
+
+  test('the taller box on a phone cuts no area, and the svg is cut at its sides, not shrunk', () => {
+    const html = landingOver(STAGING_AREAS);
+    expect(onScreen(html, 320)).toMatchObject({ tall: true, shown: MAP_H });
+    expect(onScreen(html, 479).tall).toBe(true);
+    expect(onScreen(html, 480)).toMatchObject({ tall: false, shown: MAP_W });
+    expect(html).toContain(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${MAP_W} ${MAP_H}" preserveAspectRatio="xMidYMid slice" role="img" `
+    );
+    const left = (MAP_W - MAP_H) / 2;
+    const cells = [...html.matchAll(/<polygon class="amap-cell" points="([^"]+)"/g)].map((m) =>
+      boxOf(m[1]!)
+    );
+    expect(cells).toHaveLength(10);
+    for (const b of cells) {
+      expect(b.x0).toBeGreaterThanOrEqual(left);
+      expect(b.x1).toBeLessThanOrEqual(MAP_W - left);
+    }
+    // Areas in a line east to west reach past the middle of the frame: the box
+    // would cut them, so the map keeps its whole frame and its usual shape.
+    const [lat, lng] = cellToLatLng(CELL);
+    const line = [-0.12, -0.06, 0, 0.06, 0.12].map((d) => latLngToCell(lat, lng + d, 7));
+    expect(new Set(line).size).toBe(5);
+    const wide = landingOver(line);
+    expect(wide).not.toContain('preserveAspectRatio');
+    expect(wide).toContain('<figure class="amap" data-testid="amap">');
+    // Nor is the box used where it would not make a hexagon a link on a phone.
+    expect(landingOver([...STAGING_AREAS, FIXTURE_AREA])).not.toContain('preserveAspectRatio');
+  });
+
+  test('"Tap a hexagon" is said only where a hexagon is a link; the list always links every area', () => {
+    const maps = layouts();
+    const TAP = 'Tap a hexagon to see its events on the map.';
+    expect(maps.staging).toContain(`never a street address. ${TAP}</figcaption>`);
+    // On show with the links, from the same width.
+    expect(maps.stagingWithFixture).toContain(
+      `never a street address. <span class="amap-w3" data-testid="amap-tap">${TAP}</span></figcaption>`
+    );
+    expect(maps.farApart).not.toContain('Tap a hexagon');
+    // Every area keeps its way in on every screen: the 44 px "Zoom in" link in the list.
+    for (const [html, cells] of [
+      [maps.stagingWithFixture, [...STAGING_AREAS, FIXTURE_AREA]],
+      [maps.farApart, [CELL, OTHER]],
+    ] as const) {
+      for (const c of cells) {
+        expect(html).toContain(
+          `<a class="amap-zoom" href="/?area=${c}" data-testid="amap-zoom">Zoom in</a>`
+        );
+      }
+    }
+    expect(ZOOM_STYLE).toContain(
+      '.amap-zoom{display:inline-flex;align-items:center;min-height:44px'
+    );
   });
 
   test("an outlined panel button's hover keeps its accent text readable", () => {
