@@ -1,0 +1,31 @@
+info:
+  name: "S14 | happy | update | back to active"
+  type: http
+  seq: 73
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_edit"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"status":"active"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('S14 update: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 update: active again', function () { expect(res.getBody().item.status).to.eql('active'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

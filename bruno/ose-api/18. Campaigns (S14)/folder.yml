@@ -24,5 +24,10 @@ docs: |-
   take it out, and change no placement. An event's campaign is not public, and a
   placement's own campaign is never overwritten by its event's.
 
-  Mock-layer twins: workers/oursharedevents/tests/campaigns.spec.ts and
-  tests/campaign-events.spec.ts.
+  Requests 60 to 75 (OSE-1552 scope 2): rename a campaign, or change its status.
+  They change camp_fx_edit and nothing else. An update takes a title and a
+  status only; a paused campaign is not named in public and its sponsor still
+  shows.
+
+  Mock-layer twins: workers/oursharedevents/tests/campaigns.spec.ts,
+  tests/campaign-events.spec.ts and tests/campaign-update.spec.ts.

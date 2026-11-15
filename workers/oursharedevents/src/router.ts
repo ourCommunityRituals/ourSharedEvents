@@ -95,6 +95,7 @@
  *   Sponsor Admin (auth required):
  *   GET    /api/v2/admin/campaigns             → list the caller's brands' campaigns (S14)
  *   POST   /api/v2/admin/campaigns             → create a campaign on a brand (title, status)
+ *   PUT    /api/v2/admin/campaigns/:id         → rename a campaign, or change its status (title, status only)
  *   PUT    /api/v2/admin/campaigns/:id/placements/:placementId → put a sponsor placement in the campaign
  *   DELETE /api/v2/admin/campaigns/:id/placements/:placementId → take it out
  *   GET    /api/v2/admin/campaigns/:id/events  → the events in the campaign (OSE-1552)
@@ -376,6 +377,7 @@ import {
   handleAdminListCampaigns,
   handleAdminSetEventCampaign,
   handleAdminSetPlacementCampaign,
+  handleAdminUpdateCampaign,
 } from './handlers/campaigns';
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
 import { handleCreateSponsorDraft, handlePromoteSponsorDraft } from './handlers/sponsors-draft';
@@ -1499,6 +1501,21 @@ export async function route(
       'campaign',
       await _createdId(response)
     );
+    return response;
+  }
+
+  // PUT /api/v2/admin/campaigns/:id — rename a campaign, or change its status.
+  // The brand is never changed (lib/campaigns.ts).
+  const campaignMatch = pathname.match(/^\/api\/v2\/admin\/campaigns\/([^/]+)$/);
+  if (campaignMatch && method === 'PUT') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'UPDATE_CAMPAIGN', 'denied', 'campaign', campaignMatch[1]);
+      return deny;
+    }
+    const response = await handleAdminUpdateCampaign(request, env, campaignMatch[1]);
+    _audit(reqId, 'UPDATE_CAMPAIGN', _auditOutcome(response), 'campaign', campaignMatch[1]);
     return response;
   }
 

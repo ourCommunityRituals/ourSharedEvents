@@ -33,6 +33,12 @@
 --   (camp_fx_other)                    sb_camp_ci        both accepted, on camp-ci-evt
 --                                                        the placement no root campaign may take
 --
+--   camp_fx_edit     root, active     sb_camp_edit      both accepted
+--                                                        requests 60 to 75 rename it, pause
+--                                                        it and make it active again; every
+--                                                        pass starts from the title
+--                                                        'Campaign Fixture Edit', active
+--
 -- EVENT LINK (OSE-1552 scope 1, migration 0110). No event starts in a campaign.
 -- Requests 30 to 52 put camp-on-evt in camp_fx_toggle, move it to camp_fx_shown
 -- and take it out again; every pass starts with events.campaign_id NULL on the
@@ -46,15 +52,15 @@
 -- An event points at its campaign (0110), so the link goes before the campaigns.
 UPDATE events SET campaign_id = NULL WHERE id IN ('camp-on-evt','camp-off-evt','camp-ci-evt');
 DELETE FROM sponsor_displays WHERE sponsor_id IN
-  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci');
+  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci','sb_camp_edit');
 DELETE FROM sponsor_asset WHERE sponsor_business_id IN
-  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci');
+  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci','sb_camp_edit');
 DELETE FROM sponsor_placement WHERE sponsor_business_id IN
-  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci');
+  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci','sb_camp_edit');
 DELETE FROM sponsor_business WHERE id IN
-  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci');
+  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci','sb_camp_edit');
 DELETE FROM campaigns WHERE id IN
-  ('camp_fx_shown','camp_fx_pending','camp_fx_declined','camp_fx_paused','camp_fx_hidden','camp_fx_other','camp_fx_toggle');
+  ('camp_fx_shown','camp_fx_pending','camp_fx_declined','camp_fx_paused','camp_fx_hidden','camp_fx_other','camp_fx_toggle','camp_fx_edit');
 DELETE FROM campaigns WHERE title = 'Campaign Fixture Created'
   AND id NOT IN (SELECT campaign_id FROM sponsor_placement WHERE campaign_id IS NOT NULL);
 
@@ -92,7 +98,8 @@ INSERT INTO campaigns (id, brand_id, title, status) VALUES
   ('camp_fx_paused',   'root',     'Campaign Fixture Paused',      'paused'),
   ('camp_fx_hidden',   'root',     'Campaign Fixture Hidden',      'active'),
   ('camp_fx_other',    'ci-brand', 'Campaign Fixture Other Brand', 'active'),
-  ('camp_fx_toggle',   'root',     'Campaign Fixture Toggle',      'active');
+  ('camp_fx_toggle',   'root',     'Campaign Fixture Toggle',      'active'),
+  ('camp_fx_edit',     'root',     'Campaign Fixture Edit',        'active');
 
 -- ── identity (sponsor_business), each in its event's brand.
 INSERT INTO sponsor_business (id, brand_id, name, tier, is_active) VALUES
@@ -103,7 +110,8 @@ INSERT INTO sponsor_business (id, brand_id, name, tier, is_active) VALUES
   ('sb_camp_hidden',    'root',     'Campaign Hidden Sponsor',    'gold', 1),
   ('sb_camp_mislinked', 'root',     'Campaign Mislinked Sponsor', 'gold', 1),
   ('sb_camp_toggle',    'root',     'Campaign Toggle Sponsor',    'gold', 1),
-  ('sb_camp_ci',        'ci-brand', 'Campaign Other Brand Sponsor', 'gold', 1);
+  ('sb_camp_ci',        'ci-brand', 'Campaign Other Brand Sponsor', 'gold', 1),
+  ('sb_camp_edit',      'root',     'Campaign Edit Sponsor',      'gold', 1);
 
 -- ── placements (ADR-019). Every one is on. What differs is who said yes, the
 -- event's switch, and the campaign.
@@ -115,4 +123,5 @@ INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, tier, campaign
   ('spl_camp_hidden',    'sb_camp_hidden',    'camp-off-evt', 'gold', 'camp_fx_hidden',   'organizer', 1, 1,    1),
   ('spl_camp_mislinked', 'sb_camp_mislinked', 'camp-on-evt',  'gold', 'camp_fx_other',    'organizer', 1, 1,    1),
   ('spl_camp_toggle',    'sb_camp_toggle',    'camp-on-evt',  'gold', NULL,               'organizer', 1, 1,    1),
-  ('spl_camp_ci',        'sb_camp_ci',        'camp-ci-evt',  'gold', 'camp_fx_other',    'organizer', 1, 1,    1);
+  ('spl_camp_ci',        'sb_camp_ci',        'camp-ci-evt',  'gold', 'camp_fx_other',    'organizer', 1, 1,    1),
+  ('spl_camp_edit',      'sb_camp_edit',      'camp-on-evt',  'gold', 'camp_fx_edit',     'organizer', 1, 1,    1);

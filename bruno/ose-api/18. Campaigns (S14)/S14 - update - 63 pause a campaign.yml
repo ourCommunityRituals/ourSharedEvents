@@ -1,0 +1,35 @@
+info:
+  name: "S14 | happy | update | pause a campaign; its title stays"
+  type: http
+  seq: 63
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_edit"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"status":"paused"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody();
+        test('S14 update: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 update: paused, and the title is as it was', function () {
+          expect(b.item.status).to.eql('paused');
+          expect(b.item.title).to.eql('Campaign Fixture Renamed');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

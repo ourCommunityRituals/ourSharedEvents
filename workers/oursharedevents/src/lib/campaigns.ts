@@ -43,6 +43,9 @@ export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
 /** The only fields a create accepts. `brand_id` names where it is created. */
 export const CAMPAIGN_CREATE_FIELDS: readonly string[] = ['title', 'status', 'brand_id'];
 
+/** The only fields an update accepts. The brand is set at create and never changed. */
+export const CAMPAIGN_UPDATE_FIELDS: readonly string[] = ['title', 'status'];
+
 /** Most campaigns one list call returns (newest first). */
 export const CAMPAIGN_LIST_MAX = 500;
 
@@ -334,4 +337,43 @@ export async function listCampaignEvents(
     .bind(campaignId, ...eventScope.params)
     .all<CampaignEventRow>();
   return res.results ?? [];
+}
+
+// ─── Rename a campaign, or change its status ────────────────────────────────────
+
+/**
+ * Change a campaign's title, its status, or both. `brandIds` is the caller's
+ * server-derived brand list, or null for the automation scope.
+ *
+ * Only `title`, `status` and `updated_at` are written. The brand is never
+ * changed: a campaign lives in exactly one brand (OSE ADR-030), and moving one
+ * would carry its placements and events across the wall. A campaign that is
+ * unknown or outside the caller's brands returns null, and nothing is written.
+ *
+ * A status other than 'active' takes the campaign out of the public sponsor
+ * bundle at once (readShownPlacementCampaigns); its sponsors still show.
+ */
+export async function updateCampaign(
+  db: D1Database,
+  campaignId: string,
+  change: { title?: string; status?: CampaignStatus },
+  brandIds: readonly string[] | null
+): Promise<CampaignRow | null> {
+  const scope = brandClause(brandIds, 'brand_id');
+  const row = await db
+    .prepare(
+      `UPDATE campaigns
+          SET title = COALESCE(?1, title), status = COALESCE(?2, status), updated_at = ?3
+        WHERE id = ?4${scope.sql}
+        RETURNING id, brand_id, title, status, created_at, updated_at`
+    )
+    .bind(
+      change.title ?? null,
+      change.status ?? null,
+      new Date().toISOString(),
+      campaignId,
+      ...scope.params
+    )
+    .first<CampaignRow>();
+  return row ?? null;
 }

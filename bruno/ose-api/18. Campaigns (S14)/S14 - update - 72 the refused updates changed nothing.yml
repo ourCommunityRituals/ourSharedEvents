@@ -1,0 +1,38 @@
+info:
+  name: "S14 | rainy | list | the refused updates of 65 to 71 changed nothing"
+  type: http
+  seq: 72
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/campaigns"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const items = res.getBody().items || [];
+        const c = items.filter(function (x) { return x.id === 'camp_fx_edit'; })[0];
+        test('S14 update: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 update: the campaign is as requests 61 and 63 left it, in its own brand', function () {
+          expect(c).to.be.an('object');
+          expect(c.title).to.eql('Campaign Fixture Renamed');
+          expect(c.status).to.eql('paused');
+          expect(c.brand_id).to.eql('root');
+        });
+        test('S14 update: no refused title was written anywhere', function () {
+          expect(items.map(function (x) { return x.title; })).to.not.include('Campaign Fixture Refused');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
