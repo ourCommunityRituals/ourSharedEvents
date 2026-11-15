@@ -200,10 +200,10 @@ describe('street layer outcome | one line for each try that reads the bucket', (
 
   it('timeout: slower than the limit. The line is written when the limit runs out', async () => {
     const { archive } = await sound();
-    const bucket = fakeBucket(DEFAULT_ARCHIVE, archive, { delayMs: 150 });
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, archive, { delayMs: 40 });
     expect(
       await loadStreetLayer({ ...ON, MAP_TILES: bucket }, [BLUE7], {
-        timeoutMs: 20,
+        timeoutMs: 10,
         surface: 'landing',
       })
     ).toBeNull();
@@ -484,17 +484,17 @@ describe('street layer miss window | an empty bucket is asked once a minute', ()
     ['threw', 'throw', 'error'],
     ['broke in its body', 'body-fails', 'error'],
     ['came back short', { shortTo: 10 }, 'error'],
-    ['came back after the limit', { delayMs: 150 }, 'timeout'],
+    ['came back after the limit', { delayMs: 40 }, 'timeout'],
   ])(
     'a read that failed is not a miss: one that %s is asked for again at once',
     async (_, bad, said) => {
       const { archive } = await sound();
       const bucket = scriptedBucket(DEFAULT_ARCHIVE, archive, (n) => (n === 0 ? bad : 'ok'));
       const env = { ...ON, MAP_TILES: bucket };
-      expect(await loadStreetLayer(env, [BLUE7], { timeoutMs: 20 })).toBeNull();
+      expect(await loadStreetLayer(env, [BLUE7], { timeoutMs: 10 })).toBeNull();
       expect(archiveKnownMissing(`r2:${DEFAULT_ARCHIVE}`)).toBe(false);
       // Let a late read land and run out before the next try.
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 60));
       const before = bucket.gets.length;
       const layer = await loadStreetLayer(env, [BLUE7], { timeoutMs: 5_000 });
       expect(layer?.svg).toContain('data-testid="amap-streets"');
