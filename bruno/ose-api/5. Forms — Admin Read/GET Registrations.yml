@@ -11,37 +11,44 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
-
-        
+      code: |
+        const ct = (res.getHeader('Content-Type') || '');
+        if (!ct.includes('application/json')) {
+          test('CF Access blocked — admin route protected', function() {
+            expect([200, 302, 403]).to.include(res.getStatus());
+          });
+          return;
+        }
+        const json = res.getBody();
 
         if (res.getStatus() === 200) {
+          test('ok is true', function() {
+            expect(json.ok).to.eql(true);
+          });
 
-        \    test('ok is true', function() {
+          test('Has items or registrations array', function() {
+            const data = json.items;
+            expect(data).to.be.an('array');
+          });
 
-        \        expect(json.ok).to.eql(true);
-
-        \    });
-
-        
-
-        \    test('Has items or registrations array', function() {
-
-        \        const data = json.items;
-
-        \        expect(data).to.be.an('array');
-
-        \    });
-
+          // OSE-1656: the total is floored (a number from 5 up, else null and
+          // suppressed, never 0). Kept for the next request, which holds the
+          // stats figure to the same value.
+          test('count is floored: a number from 5 up, or withheld', function() {
+            if (json.suppressed) {
+              expect(json.count).to.eql(null);
+              expect(json.floor).to.eql(5);
+            } else {
+              expect(json.count).to.be.a('number');
+              expect(json.count).to.be.at.least(5);
+            }
+          });
+          bru.setVar('registrationsListCount', JSON.stringify({ count: json.count, suppressed: json.suppressed === true }));
         } else if (res.getStatus() === 401) {
-
-        \    test('Auth required', function() {
-
-        \        expect(json.code).to.eql('UNAUTH');
-
-        \    });
-
-        }"
+          test('Auth required', function() {
+            expect(json.code).to.eql('UNAUTH');
+          });
+        }
 
 settings:
   encodeUrl: true

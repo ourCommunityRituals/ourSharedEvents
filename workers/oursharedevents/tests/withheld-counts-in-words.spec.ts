@@ -13,7 +13,9 @@
  *      under 5 reads "held", but poster scans, posters and places are exact by
  *      the dashboard contract. The note now names the tiles that came floored,
  *      from the data itself, so it stays true when more of them are floored
- *      (OSE-1656). A floored day in the scans list reads "Held", not 0.
+ *      (OSE-1656). A floored day in the scans list reads in words, not 0
+ *      ("Held" until OSE-1656 put every withheld count in the same words:
+ *      `withheld-count-words.spec.ts`).
  *   4. The public post-event "By the numbers" card: a line was drawn only when
  *      its raw count was above 0, so a missing line said 0 and "Fewer than 5"
  *      said 1 to 4; the card itself showed for any count above 0. Walk-ins and
@@ -103,14 +105,14 @@ describe('OSE-1657 item 1 | the report funnel draws a withheld count in words', 
     expect(cell(doc, 'funnel-checkin-count')).toBe('Fewer than 5');
     // A rate over a withheld count is withheld too, and says so.
     expect(cell(doc, 'funnel-rate')).not.toMatch(/\d/);
-    expect(cell(doc, 'funnel-rate')).toBe('Held');
+    expect(cell(doc, 'funnel-rate')).toBe('Not shown');
   });
 
-  test('one side withheld: that side reads "Fewer than 5" and the rate is held', async () => {
+  test('one side withheld: that side reads "Fewer than 5" and the rate is not drawn', async () => {
     const doc = await openFunnel({ status: 200, body: shown(12) }, { status: 200, body: WITHHELD });
     expect(cell(doc, 'funnel-reg-count')).toBe('12');
     expect(cell(doc, 'funnel-checkin-count')).toBe('Fewer than 5');
-    expect(cell(doc, 'funnel-rate')).toBe('Held');
+    expect(cell(doc, 'funnel-rate')).toBe('Not shown');
   });
 
   test.each([
@@ -186,18 +188,18 @@ describe('OSE-1657 item 3 | the Live view says only what is true of its numbers'
   test('the note names the tiles that came floored, and no other', async () => {
     const doc = await openLive(dashboard());
     expect(text(doc, 'live-scans')).toBe('7');
-    expect(text(doc, 'live-taps')).toBe('Held');
-    expect(text(doc, 'live-checkins')).toBe('Held');
+    expect(text(doc, 'live-taps')).toBe('Fewer than 5 on any one link');
+    expect(text(doc, 'live-checkins')).toBe('Fewer than 5');
     const note = text(doc, 'live-note');
     // Before: "A total under 5 reads "held"." — untrue while scans read 7.
     expect(note).not.toMatch(/A total under 5 reads/i);
-    expect(note).toMatch(/Link taps and check-ins under 5 read .Held./);
+    expect(note).toMatch(/Link taps and check-ins under 5 read .Fewer than 5./);
     expect(note).not.toMatch(/scans[^.]*under 5/i);
   });
 
   // The route's own day shape (OSE-1656): `count` is a floored count. Before
   // the day list read the flag on the day itself, so a withheld day read "0".
-  test('when scans come floored, the note says so, and a floored day reads Held, never 0', async () => {
+  test('when scans come floored, the note says so, and a floored day reads in words, never 0', async () => {
     const doc = await openLive(
       dashboard({
         scans: WITHHELD,
@@ -207,23 +209,23 @@ describe('OSE-1657 item 3 | the Live view says only what is true of its numbers'
         ],
       })
     );
-    expect(text(doc, 'live-scans')).toBe('Held');
+    expect(text(doc, 'live-scans')).toBe('Fewer than 5 in any hour');
     expect(text(doc, 'live-note')).toMatch(
-      /Poster scans, link taps and check-ins under 5 read .Held./
+      /Poster scans, link taps and check-ins under 5 read .Fewer than 5./
     );
     const days = [...doc.querySelectorAll('[data-testid="live-days"] li b')].map(
       (b) => b.textContent
     );
-    expect(days).toEqual(['Held', '6']);
+    expect(days).toEqual(['Fewer than 5 in any hour', '6']);
   });
 
-  test('guard: nothing floored, the note makes no claim about "Held"', async () => {
+  test('guard: nothing floored, the note makes no claim about withheld counts', async () => {
     const doc = await openLive({
       ...dashboard(),
       reach: { scans: shown(9), scansByDay: [], clicks: shown(12), posters: 2, places: 1 },
       participation: { explicit: { checkins: shown(7) } },
     });
-    expect(text(doc, 'live-note')).not.toMatch(/Held/i);
+    expect(text(doc, 'live-note')).not.toMatch(/Held|Fewer than/i);
     expect(text(doc, 'live-note')).toMatch(/Counts only/);
   });
 });

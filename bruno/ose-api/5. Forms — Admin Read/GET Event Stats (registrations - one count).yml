@@ -1,0 +1,59 @@
+info:
+  name: GET Event Stats | registrations is the same count as the list
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{testEventId}}/stats"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // OSE-1656: an event's registrations have one count. The forms list
+        // total (GET Registrations, seq 1) and this figure are each floored; if
+        // they counted different rows they could be subtracted to a group
+        // under 5. Both now read lib/registration-count.ts.
+        const ct = (res.getHeader('Content-Type') || '');
+        if (!ct.includes('application/json')) {
+          test('CF Access blocked — admin route protected', function() {
+            expect([200, 302, 403]).to.include(res.getStatus());
+          });
+          return;
+        }
+        const json = res.getBody();
+
+        if (res.getStatus() === 200) {
+          const reg = json.stats && json.stats.registrations;
+          test('stats.registrations is floored: a number from 5 up, or withheld', function() {
+            expect(reg).to.be.an('object');
+            if (reg.suppressed) {
+              expect(reg.count).to.eql(null);
+              expect(reg.floor).to.eql(5);
+            } else {
+              expect(reg.count).to.be.a('number');
+              expect(reg.count).to.be.at.least(5);
+            }
+          });
+
+          const saved = bru.getVar('registrationsListCount');
+          if (saved) {
+            test('stats.registrations equals the forms list count (nothing to subtract)', function() {
+              const list = JSON.parse(saved);
+              expect({ count: reg.count, suppressed: reg.suppressed === true }).to.eql(list);
+            });
+          }
+        } else if (res.getStatus() === 401) {
+          test('Auth required', function() {
+            expect(json.code).to.eql('UNAUTH');
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

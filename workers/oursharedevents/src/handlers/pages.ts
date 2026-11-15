@@ -107,6 +107,7 @@ import { enrichWithPhase, eventPhaseOf } from '../lib/event-enrich.js';
 import { attendanceModeLabel, attendanceModeOf, withoutLinkOnly } from '../lib/attendance-mode';
 import { archivedBeforeStart } from '../lib/archived-before-start.js';
 import { flooredRatePct } from '../lib/count-floor.js';
+import { COUNTED_REGISTRATION_SQL } from '../lib/registration-count.js';
 import { clearsFloor, statLine, walkInStatLine } from '../lib/recap-stat-lines';
 import {
   formatEventTime,
@@ -2141,7 +2142,7 @@ export async function fetchEventPageSocialData(
 
       env.FORMS_DB
         ? env.FORMS_DB.prepare(
-            `SELECT COUNT(*) as cnt FROM form_registrations WHERE event_id = ? AND status = 'confirmed' AND (expires_at IS NULL OR expires_at > datetime('now'))`
+            `SELECT COUNT(*) as cnt FROM form_registrations WHERE event_id = ? AND ${COUNTED_REGISTRATION_SQL}`
           )
             .bind(eventId)
             .first<{ cnt: number }>()

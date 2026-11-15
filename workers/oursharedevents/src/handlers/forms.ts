@@ -37,6 +37,7 @@ import {
 } from '../lib/forms-db';
 import { corsHeaders } from '../lib/cors';
 import { applyCountFloor } from '../lib/count-floor';
+import { COUNTED_REGISTRATION_SQL } from '../lib/registration-count';
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
 import { eventAnonKey } from '../lib/event-anon-key';
 import {
@@ -634,8 +635,11 @@ export async function handleAdminRegistrations(
     const result = await env.FORMS_DB.prepare(pageQuery)
       .bind(...(after ? [eventId, after.c, after.c, after.i] : [eventId]), paging.limit + 1)
       .all();
+    // The same definition as every other registration count (OSE-1656):
+    // counted on all rows, this total and the /stats figure could be
+    // subtracted to a group under the floor.
     const totalRow = await env.FORMS_DB.prepare(
-      'SELECT COUNT(*) AS cnt FROM form_registrations WHERE event_id = ?'
+      `SELECT COUNT(*) AS cnt FROM form_registrations WHERE event_id = ? AND ${COUNTED_REGISTRATION_SQL}`
     )
       .bind(eventId)
       .first<{ cnt: number }>();
@@ -655,7 +659,8 @@ export async function handleAdminRegistrations(
     logFormEvent('register', eventId, 'admin_read', { count: items.length, paged: true });
     // OSE-665: the aggregate `count` is floored uniformly (same K as the
     // SharedReport surface) so every viewer sees the same representation of a
-    // sub-5 cohort. It is the event's TOTAL, not this page's size. `items`
+    // sub-5 cohort. It is the event's count of confirmed, unexpired
+    // registrations (lib/registration-count.ts), not this page's size. `items`
     // remains the organizer's first-party operational list (#1/#8), exact.
     const floored = applyCountFloor(total);
     return jsonResponse(

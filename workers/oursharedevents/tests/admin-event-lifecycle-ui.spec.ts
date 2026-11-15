@@ -208,7 +208,8 @@ describe('event timeline — the chain at a glance', () => {
   test('counts come from the k-floored stats endpoint and never render a sub-floor number', async () => {
     const html = await adminHtml();
     expect(html).toContain("fetch('/api/v2/admin/events/' + eid + '/stats')");
-    expect(html).toContain("if (f.suppressed) return 'fewer than ' + (f.floor || 5)");
+    // OSE-1656: the words come from the one source the page carries.
+    expect(html).toContain('if (f.suppressed) return oseFewerThan(f.floor, tail, true)');
   });
 
   test('the "Get the word out" step folds sponsors in and counts ACCEPTED sponsors only', async () => {
