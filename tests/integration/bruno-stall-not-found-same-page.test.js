@@ -19,8 +19,8 @@
  *
  * What the check leaves out, and why that tells a visitor nothing:
  *   - the edge's script, found by `window.__CF$cv$params`. The edge writes it
- *     after the Worker has answered, from the request alone. The Worker's own
- *     404 has no script (workers/oursharedevents/tests/booth-page.spec.ts).
+ *     after the Worker has answered, from the request alone. No stall 404 from
+ *     the Worker carries that name (workers/oursharedevents/tests/booth-page.spec.ts).
  *   - the value of each `nonce` attribute: 16 random bytes per response.
  * Everything else must be equal.
  *
@@ -126,20 +126,23 @@ const edgeBeacon = ({ nonce }) =>
 const served = (page, read) =>
   page.replace('</body>', `${edgeCheck(read)}${edgeBeacon(read)}\n</body>`);
 
+// Made-up values in the shapes the edge uses (16 hex, base64 of ten digits, 24
+// base64). Repeated characters on purpose: the committed-secret scan in S0 reads
+// a random-looking string in a test file as a secret.
 const READ_1 = {
-  ray: 'a5aab93fe81de7fe',
-  time: 'MTc5NDcwNzQ2OQ==',
-  nonce: 'Eg5D5PMikAfB17gNKTN56g==',
+  ray: '1111111111111111',
+  time: 'MTExMTExMTExMQ==',
+  nonce: 'AAAAAAAAAAAAAAAAAAAAAA==',
 };
 const READ_2 = {
-  ray: 'a5aaba2bbaf4e7fe',
-  time: 'MTc5NDcwNzQ3MA==',
-  nonce: 'q0J2m1o7r3T5u8W9x1Y2zA==',
+  ray: '2222222222222222',
+  time: 'MjIyMjIyMjIyMg==',
+  nonce: 'BBBBBBBBBBBBBBBBBBBBBB==',
 };
 const READ_3 = {
-  ray: 'a5aabb0c1d2e3f40',
-  time: 'MTc5NDcwNzQ3MQ==',
-  nonce: 'Zz9y8X7w6V5u4T3s2R1q0A==',
+  ray: '3333333333333333',
+  time: 'MzMzMzMzMzMzMw==',
+  nonce: 'CCCCCCCCCCCCCCCCCCCCCC==',
 };
 
 /** Staging with a closed stall whose page is `outOfUse`, a draft fair's `draftFair`. */
