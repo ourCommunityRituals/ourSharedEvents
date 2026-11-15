@@ -59,7 +59,9 @@ const MAX_DEPTH = 3;
  * Measured on build 20261109 (2026-11-10): a leaf of 61,239 entries was 115 KB
  * and 129 KB gzipped and about 0.32 MB unpacked (5.2 bytes an entry). So this
  * is 16 of the largest seen as stored, and unpacked it holds about 400,000
- * entries, more than MAX_LEAF_ENTRIES keeps.
+ * entries of that build, more than MAX_LEAF_ENTRIES keeps. The most any
+ * directory this long can hold is 524,287 entries, at four bytes an entry
+ * (`decodeDirectory`): about 43 MB at the 82 bytes an entry measured in Node.
  */
 export const MAX_DIRECTORY_BYTES = 2_097_152;
 /**
@@ -153,8 +155,14 @@ class Cursor {
 export function decodeDirectory(bytes: Uint8Array): DirEntry[] {
   const c = new Cursor(bytes);
   const n = c.varint();
-  // Each entry takes at least four bytes; a count past that is a damaged file.
-  if (n > bytes.length) throw new PmtilesError('directory count out of range');
+  // An entry is four varints (id, run, length, offset), a byte each at the
+  // least, so n entries need 4n bytes after the count. A count the bytes cannot
+  // hold is refused here, before an entry is made for it: the count is the
+  // file's word, and the entries are the Worker's memory (street-map CCR
+  // 2026-11-15, R2: held to the byte length alone, a directory of zeros that
+  // unpacks to MAX_DIRECTORY_BYTES could claim 2,097,151 entries, about 170 MB
+  // at 82 bytes an entry, before the second column ran out and it threw).
+  if (n * 4 > bytes.length - c.pos) throw new PmtilesError('directory count out of range');
   const entries: DirEntry[] = [];
   let last = 0;
   for (let i = 0; i < n; i++) {
@@ -420,9 +428,10 @@ export function planReads(
 
 /**
  * These tiles' bytes, decompressed, in the order asked; null where the archive
- * has no tile (open water and empty land are often left out). Tiles that sit
- * near each other in the file come from one read (planReads), and tiles that
- * share one stored tile (a run) are read and decompressed once.
+ * has no tile (outside the region it was cut for; some builds leave out open
+ * water and empty land as well). Tiles that sit near each other in the file
+ * come from one read (planReads), and tiles that share one stored tile (a run)
+ * are read and decompressed once.
  */
 export async function readTiles(
   src: RangeSource,

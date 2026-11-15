@@ -18,13 +18,28 @@
  *   - the OpenStreetMap credit shows whenever the streets do
  *   - an archive with no tile in the frame is no layer (location-precision CCR,
  *     F41), and a planet-sized archive draws (two leaf levels, far offsets)
+ *   - every tile of the frame, or no layer: one tile missing is hexagons only
+ *     (street-map CCR 2026-11-15, R15)
+ *   - a tile, or the tiles of a frame together, holding more than the Worker
+ *     will decode is hexagons only (R2; the counting itself is in mvt.spec.ts)
+ *   - the edges of the world: an area on the antimeridian, a pentagon, the far
+ *     north (R49)
  */
-// @born-red no tile in the frame, planet-sized archive | method: "an archive with no tile in the frame is no layer" seen failing before the guard in buildStreetLayer (it returned a layer of one blank rectangle); "one tile of the frame is enough" is its control; the planet case seen failing on 4 of the 6 reader faults listed in pmtiles.spec.ts | date: 2026-11-09
+// @born-red no tile in the frame, planet-sized archive | method: "an archive with no tile in the frame is no layer" seen failing before the guard in buildStreetLayer (it returned a layer of one blank rectangle); its control is the archive's own cells drawing, in the same case ("one tile of the frame is enough" was its control until 2026-11-15, when R15 made every tile of the frame the rule); the planet case seen failing on 4 of the 6 reader faults listed in pmtiles.spec.ts | date: 2026-11-09
 // @born-red the switch (STREET_MAP) | method: six faults in loadStreetLayer (src/lib/street-map.ts), one at a time, each seen failing in "street map | the switch (STREET_MAP)": the switch line removed (19 tests failed, here and in map-areas.spec.ts and street-map-landing.spec.ts); any set value counted as on (17); the value trimmed and lower-cased before the compare (6: "ON", "On", " on", "on ", the non-string case and the landing's "ON"); the switch read after the bucket (19, on the count of reads alone); the compare turned round (72, "on: the layer is drawn" among them); STREET_MAP_ON set to 'true' (59, "the one value that draws" among them). Before any spec passed STREET_MAP, the switch alone failed 52 tests that draw | date: 2026-11-15
+// @born-red every tile of the frame, the frame's decode limits, the edges of the world (street-map CCR 2026-11-15, R15, R2, R49) | method: 9 faults injected one at a time in src/lib/street-map.ts and one in src/lib/mvt.ts, each seen failing the case named for it in the PR's fault list. The first puts main's lines back (a tile that is there is drawn): the R15 case failed. With the frame limit not passed to the decoder, and with the tile limit taken out, the "one point more" archive of that case drew. The three edge cases pin what the frame already did, so their red is the injected fault alone | date: 2026-11-15
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { cellToBoundary, cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
+import {
+  cellToBoundary,
+  cellToLatLng,
+  getPentagons,
+  gridDisk,
+  isPentagon,
+  latLngToCell,
+} from 'h3-js';
 import {
   DEFAULT_ARCHIVE,
+  FRAME_LIMITS,
   MAX_LABELS,
   MAX_POINTS,
   MAX_TILES,
@@ -45,6 +60,7 @@ import {
   loadStreetLayer,
   STREET_MAP_ON,
   project,
+  readStreetDrawing,
   spendPoints,
   thinLine,
   tilesFor,
@@ -54,6 +70,7 @@ import {
   type DecodedTile,
   type MapFrame,
 } from '../src/lib/street-map';
+import { decodeTile, MvtError, TILE_LIMITS } from '../src/lib/mvt';
 import { MAP_STYLE, renderAttendeeMap, type AttendeeMapItem } from '../src/lib/attendee-map';
 import { renderLandingArea } from '../src/lib/landing-area';
 import {
@@ -1790,17 +1807,44 @@ describe('street map | loading (fail soft)', () => {
     expect(tileRead.offset + tileRead.length).toBeLessThanOrEqual(archive.length);
   });
 
-  it('one tile of the frame is enough for a layer, when its roads cross the map', async () => {
+  // street-map CCR 2026-11-15, R15. Until then one tile of the frame was
+  // enough for a layer, so a frame that reached past the archive's region drew
+  // streets on one side and blank land on the other, under the credit. A build
+  // that leaves no gap inside its region has gaps only at the edge of what was
+  // cut. Born red 2026-11-15: with main's lines put back, the archives below
+  // drew a layer.
+  it('every tile of the frame, or no layer: with any one tile missing the map is hexagons only', async () => {
     const { r, tiles } = tilesForCells([BLUE7]);
     expect(tiles.length).toBeGreaterThan(1);
-    // The tile under the middle of the frame: its highway and its street cross the map.
+    // The control: with every tile, the same frame draws.
+    const whole = await pmtilesArchive(tiles, { gzip: true });
+    expect((await buildStreetLayer(memSource(whole), [BLUE7]))?.svg).toContain(
+      'data-testid="amap-streets"'
+    );
+    for (let gone = 0; gone < tiles.length; gone++) {
+      const archive = await pmtilesArchive(
+        tiles.filter((_, i) => i !== gone),
+        { gzip: true }
+      );
+      // Null, not an error: the archive is sound, it only ends here.
+      expect(await readStreetDrawing(memSource(archive), [BLUE7]), `tile ${gone}`).toBeNull();
+      expect(await buildStreetLayer(memSource(archive), [BLUE7]), `tile ${gone}`).toBeNull();
+      resetPmtilesCache();
+      const bucket = fakeBucket(DEFAULT_ARCHIVE, archive);
+      expect(
+        await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, [BLUE7]),
+        `tile ${gone}`
+      ).toBeNull();
+      expect(bucket.gets.length).toBeGreaterThan(0);
+    }
+    // The tile under the middle of the frame alone, whose highway and street
+    // cross the map: what used to be enough.
     const [wx, wy] = toWorld(...cellToLatLng(BLUE7));
     const mid = tiles.filter(
       (t) => t.x === Math.floor(wx * 2 ** r.z) && t.y === Math.floor(wy * 2 ** r.z)
     );
     expect(mid).toHaveLength(1);
-    const layer = await buildStreetLayer(memSource(await pmtilesArchive(mid)), [BLUE7]);
-    expect(layer?.svg).toContain('data-testid="amap-streets"');
+    expect(await buildStreetLayer(memSource(await pmtilesArchive(mid)), [BLUE7])).toBeNull();
   });
 
   // street-map CCR 2026-11-15, R5. The public area map refused a frame wider
@@ -1912,6 +1956,215 @@ describe('street map | loading (fail soft)', () => {
 // in MAP_TILES_ARCHIVE, what a hostile name may not reach, and how a read over
 // the network goes wrong. Every one ends the same way: no layer, no throw, so
 // the page draws its hexagons. Sunny and rainy cases are in the block above.
+// street-map CCR 2026-11-15, R2. The reader limits a tile's bytes; the decoder
+// (lib/mvt.ts) limits what one tile's bytes may become, and FRAME_LIMITS what
+// the tiles of one frame may become together. Past either the read is refused,
+// and a refused read is hexagons only. Born red 2026-11-15: with the frame
+// limit not passed to the decoder, and with the tile limit taken out, the "one
+// point more" archive of that case drew its streets.
+describe('street map | more in the tiles than the Worker will decode', () => {
+  // Two areas: a frame of at least three tiles, so the frame limit (two tiles'
+  // worth) can be passed with every tile inside its own.
+  const CELLS = [BLUE7, NORTH7];
+  const WANTED = new Set(['water', 'roads', 'places']);
+  const pointsIn = (data: Uint8Array): number =>
+    decodeTile(data, WANTED)
+      .flatMap((l) => l.features)
+      .flatMap((f) => f.geometry)
+      .reduce((n, part) => n + part.length, 0);
+  /** A road of `n` points of a kind the map does not draw: decoded and counted, never drawn. */
+  const filler = (n: number): FixtureLayer[] =>
+    n === 0
+      ? []
+      : [
+          {
+            name: 'roads',
+            features: [
+              {
+                type: 2,
+                props: { kind: 'path' },
+                parts: [
+                  Array.from({ length: n }, (_, i): [number, number] => [i % 4096, (i * 7) % 4096]),
+                ],
+              },
+            ],
+          },
+        ];
+  /** The frame's tiles, each with `extra(i)` more points than the plain fixture tile. */
+  const framed = (extra: (i: number) => number) => {
+    const plain = tilesForCells(CELLS).tiles;
+    const index = new Map(plain.map((t, i) => [`${t.x},${t.y}`, i]));
+    return tilesForCells(CELLS, (x, y) => filler(extra(index.get(`${x},${y}`)!))).tiles;
+  };
+  const load = async (tiles: ReturnType<typeof framed>) => {
+    resetPmtilesCache();
+    const archive = await pmtilesArchive(tiles, { gzip: true });
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, archive);
+    const layer = await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, CELLS, {
+      timeoutMs: 60_000,
+    });
+    return { archive, bucket, layer };
+  };
+
+  it("a frame may hold twice what one tile may, and the limits are the source's", () => {
+    expect(FRAME_LIMITS).toEqual({ features: 60_000, points: 300_000, props: 300_000 });
+    expect(Object.isFrozen(FRAME_LIMITS)).toBe(true);
+    for (const kind of ['features', 'points', 'props'] as const) {
+      expect(FRAME_LIMITS[kind]).toBe(2 * TILE_LIMITS[kind]);
+    }
+  });
+
+  it('the tiles of a frame together: exactly the frame limit is drawn, and one point more is hexagons only', async () => {
+    const plain = tilesForCells(CELLS).tiles;
+    const count = plain.length;
+    expect(count).toBeGreaterThanOrEqual(3);
+    const base = pointsIn(plain[0]!.data);
+    expect(plain.every((t) => pointsIn(t.data) === base)).toBe(true);
+    // The frame limit shared out evenly, the remainder on the last tile.
+    const share = Math.floor(FRAME_LIMITS.points / count);
+    const last = FRAME_LIMITS.points - share * (count - 1);
+    const sharedOut = (over: number) =>
+      framed((i) => (i === count - 1 ? last + over : share) - base);
+
+    const atLimit = sharedOut(0);
+    const each = atLimit.map((t) => pointsIn(t.data));
+    expect(each.reduce((a, b) => a + b, 0)).toBe(FRAME_LIMITS.points);
+    // No tile is near its own limit: what refuses the next archive is the frame's.
+    expect(Math.max(...each)).toBeLessThan(TILE_LIMITS.points);
+    const drawn = await load(atLimit);
+    expect(drawn.layer?.svg).toContain('data-testid="amap-streets"');
+
+    const over = await load(sharedOut(1));
+    expect(over.layer).toBeNull();
+    expect(over.bucket.gets.length).toBeGreaterThan(0);
+    await expect(readStreetDrawing(memSource(over.archive), CELLS)).rejects.toThrow(
+      new MvtError('too many points in one frame')
+    );
+  });
+
+  it('one tile: exactly the tile limit is drawn, and one point more in it is hexagons only', async () => {
+    const base = pointsIn(tilesForCells(CELLS).tiles[0]!.data);
+    const oneTile = (over: number) =>
+      framed((i) => (i === 0 ? TILE_LIMITS.points - base + over : 0));
+
+    const atLimit = oneTile(0);
+    expect(pointsIn(atLimit[0]!.data)).toBe(TILE_LIMITS.points);
+    const drawn = await load(atLimit);
+    expect(drawn.layer?.svg).toContain('data-testid="amap-streets"');
+
+    const over = await load(oneTile(1));
+    expect(over.layer).toBeNull();
+    expect(over.bucket.gets.length).toBeGreaterThan(0);
+    await expect(readStreetDrawing(memSource(over.archive), CELLS)).rejects.toThrow(
+      new MvtError('too many points in one tile')
+    );
+  });
+});
+
+// street-map CCR 2026-11-15, R49. Three places where the frame's arithmetic
+// could go wrong and no test stood: the antimeridian, the twelve pentagons, and
+// the far north, where Web Mercator stretches and then ends. Each case pins
+// what the frame does there today.
+describe('street map | the edges of the world', () => {
+  const finite = (f: MapFrame) => [f.scale, f.x0, f.y0].every(Number.isFinite);
+  const tileCount = (r: ReturnType<typeof tilesFor>) =>
+    (r.xMax - r.xMin + 1) * (r.yMax - r.yMin + 1);
+  const corners = (f: MapFrame, cell: string) =>
+    cellToBoundary(cell).map(([lat, lng]) => project(f, lat, lng));
+  const draws = async (cells: string[]) => {
+    resetPmtilesCache();
+    const { tiles } = tilesForCells(cells);
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles, { gzip: true }));
+    return { bucket, layer: await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, cells) };
+  };
+
+  // The frame takes the least and the greatest longitude of the corners, so an
+  // area with corners on both sides of 180° is framed as if it ran the long way
+  // round. That is a frame far wider than a street map can show: nothing is
+  // read and the map is hexagons only. (An unwrapped frame would draw this
+  // area; this case is then the one to change.)
+  it('an area on the antimeridian frames the whole world: nothing is read, hexagons only', async () => {
+    // West of Semisopochnoi Island, Alaska.
+    const cell = latLngToCell(52, 180, 7);
+    const lngs = cellToBoundary(cell).map(([, lng]) => lng);
+    expect(Math.min(...lngs)).toBeLessThan(-179.9);
+    expect(Math.max(...lngs)).toBeGreaterThan(179.9);
+    const f = frameForCells([cell]);
+    expect(finite(f)).toBe(true);
+    expect(frameZoom(f)).toBe(1);
+    const r = tilesFor(f);
+    expect(r).toEqual({ z: 1, xMin: 0, xMax: 1, yMin: 0, yMax: 1 });
+    const { bucket, layer } = await draws([cell]);
+    expect(layer).toBeNull();
+    expect(bucket.gets).toHaveLength(0);
+    // Its neighbour a little to the east, wholly on one side, is framed alone and drawn.
+    const east = latLngToCell(51.95, 179.6, 7);
+    expect(frameZoom(frameForCells([east]))).toBe(13);
+    expect((await draws([east])).layer?.svg).toContain('data-testid="amap-streets"');
+  });
+
+  it('a pentagon is framed by all of its corners, and drawn like any other area', async () => {
+    // In the Norwegian Sea, 64.7° N 10.5° E. At resolution 7 its outline has ten points.
+    const pent = getPentagons(7)[0]!;
+    expect(isPentagon(pent)).toBe(true);
+    const f = frameForCells([pent]);
+    expect(finite(f)).toBe(true);
+    const drawn = corners(f, pent);
+    expect(drawn).toHaveLength(10);
+    // Fitted with 8% of padding: the corners touch the padding on the tight
+    // side and none is outside it.
+    const xs = drawn.map((c) => c[0]);
+    const ys = drawn.map((c) => c[1]);
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(f.w * 0.08 - 1e-6);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(f.w * 0.92 + 1e-6);
+    expect(Math.min(...ys)).toBeCloseTo(f.h * 0.08, 6);
+    expect(Math.max(...ys)).toBeCloseTo(f.h * 0.92, 6);
+    expect(frameZoom(f)).toBe(13);
+    expect(tileCount(tilesFor(f))).toBeLessThanOrEqual(MAX_TILES);
+    const { layer } = await draws([pent]);
+    expect(layer?.cellsKey).toBe(pent);
+    expect(layer?.svg).toContain('data-testid="amap-streets"');
+  });
+
+  it('the far north: stretched but framed and drawn up to the Mercator limit, and held on the top row past it', async () => {
+    // Utqiagvik, Alaska (71.3° N) and Alert, Nunavut (82.5° N): inside Web Mercator.
+    for (const [lat, lng, zoom] of [
+      [71.29, -156.79, 12],
+      [82.5, -62.3, 11],
+    ] as const) {
+      const cell = latLngToCell(lat, lng, 7);
+      const f = frameForCells([cell]);
+      expect(finite(f), `${lat}`).toBe(true);
+      // The same area is read two or three zooms further out than at Chicago's
+      // latitude (14): the projection has stretched it.
+      expect(frameZoom(f), `${lat}`).toBe(zoom);
+      const ys = corners(f, cell).map((c) => c[1]);
+      expect(Math.min(...ys), `${lat}`).toBeCloseTo(f.h * 0.08, 6);
+      expect(Math.max(...ys), `${lat}`).toBeCloseTo(f.h * 0.92, 6);
+      const r = tilesFor(f);
+      expect(tileCount(r), `${lat}`).toBeLessThanOrEqual(MAX_TILES);
+      expect(r.yMin, `${lat}`).toBeGreaterThan(0);
+      expect((await draws([cell])).layer?.svg, `${lat}`).toContain('data-testid="amap-streets"');
+    }
+    // 89° N is past the limit (85.05°): every corner is held at the top edge of
+    // the world, so the area has no height. The frame is still a frame, its
+    // tiles are the top row, and the read is an ordinary read.
+    const polar = latLngToCell(89, -62.3, 7);
+    const f = frameForCells([polar]);
+    expect(finite(f)).toBe(true);
+    const ys = corners(f, polar).map((c) => c[1]);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(1e-6);
+    expect(ys[0]).toBeCloseTo(f.h / 2, 6);
+    const r = tilesFor(f);
+    expect([r.yMin, r.yMax]).toEqual([0, 0]);
+    expect(r.xMin).toBeGreaterThanOrEqual(0);
+    expect(tileCount(r)).toBeLessThanOrEqual(MAX_TILES);
+    const { bucket, layer } = await draws([polar]);
+    expect(bucket.gets.length).toBeGreaterThan(0);
+    expect(layer?.svg).toContain('data-testid="amap-streets"');
+  });
+});
+
 describe('street map | the archive read: fat fingers, security, network', () => {
   // The name wrangler.toml sets: the United States subset (owner 2026-11-10).
   const CONFIGURED = 'us-20261109.pmtiles';

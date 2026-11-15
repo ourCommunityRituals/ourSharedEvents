@@ -3013,7 +3013,16 @@ export async function handleLandingPage(
     // binding, or any failure, leaves the hexagons-only map from the first pass.
     if (area.mapCells?.length) {
       const streets = await loadStreetLayer(env as LandingEnv, area.mapCells);
-      if (streets) area = renderLandingArea(items as LandingAreaItem[], { ...areaOpts, streets });
+      if (streets) {
+        // In its own try (street-map CCR 2026-11-15, R22). The outer catch
+        // serves the empty area; a second pass that threw there would take the
+        // cards and the hexagons with it. Here the first pass stays.
+        try {
+          area = renderLandingArea(items as LandingAreaItem[], { ...areaOpts, streets });
+        } catch {
+          // The hexagons-only map from the first pass is the page.
+        }
+      }
     }
   } catch {
     area = renderEmptyLandingArea(lang);

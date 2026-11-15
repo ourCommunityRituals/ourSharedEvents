@@ -106,7 +106,8 @@ export function mvtTile(layers: FixtureLayer[]): Uint8Array {
       ...key(5, 0),
       ...varint(l.extent ?? 4096),
     ];
-    out.push(...lenField(3, body));
+    // One at a time: a layer of 100,000 points is too long to spread into a call.
+    for (const b of lenField(3, body)) out.push(b);
   }
   return new Uint8Array(out);
 }

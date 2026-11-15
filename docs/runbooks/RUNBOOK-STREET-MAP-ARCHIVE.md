@@ -110,8 +110,12 @@ outliers such as Mona Island and the Hawaiian islands north-west of Niihau.
 **Outside the region the map draws hexagons only.** The file holds no detailed
 tile there, and the Worker draws no street layer for a frame it has no tile for
 (decision 4 in the cost structure, "A layer needs tiles"). No page fails and
-nothing is logged as an error. An area that straddles a box's edge draws the
-streets of the tiles the file has.
+nothing is logged as an error. A frame that reaches past a box's edge draws
+hexagons only as well: the Worker draws a street layer when the file has every
+tile of the frame, and none when one is missing (street-map CCR 2026-11-15,
+R15; until then it drew the streets of the tiles the file had, one side of the
+map only). The frame is wider than the areas in it, so this can take the
+streets from an area that is itself inside a box, near its edge.
 
 ## What the docs say (re-read before you rely on a number)
 
@@ -706,11 +710,16 @@ environment, in one line, and leaves everything else in place. It does not:
   `stale-while-revalidate=86400`), so a build or a browser that kept one may
   show it until it expires. An answer without streets is kept for 60 seconds.
 
-Whichever way, no page fails: with the switch off, no binding, no archive, no
-tile for the area, a damaged file, a file past the reader's limits (a directory or a tile longer
-than `MAX_DIRECTORY_BYTES`, `MAX_TILE_BYTES` or `MAX_TILE_UNPACKED_BYTES` in
-`lib/pmtiles.ts` allow) or a read slower than 1.5 s, the map is drawn without
-streets.
+Whichever way, no page fails: with the switch off, no binding, no archive, a
+tile of the frame missing, a damaged file, a file past the reader's limits (a
+directory or a tile longer than `MAX_DIRECTORY_BYTES`, `MAX_TILE_BYTES` or
+`MAX_TILE_UNPACKED_BYTES` in `lib/pmtiles.ts` allow, or a directory that says
+it holds more entries than its bytes can), a tile or a frame that holds more
+than the decoder will read (`TILE_LIMITS` in `lib/mvt.ts`, `FRAME_LIMITS` in
+`lib/street-map.ts`) or a read slower than 1.5 s, the map is drawn without
+streets. The decoder's limits stand on source arithmetic and one weighed tile,
+not on a count of real tiles: a place whose tiles pass one shows as an `error`
+probe in the archive check, before the load.
 
 ## What is proven, and what is not until the file is on staging
 

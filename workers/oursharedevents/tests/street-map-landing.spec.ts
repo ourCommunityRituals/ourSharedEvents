@@ -14,16 +14,22 @@
  *   - zoomed in on one area (epic OSE-1880): the dots are drawn only over that
  *     area's street map; with no street map the places are a list (OSE-1894)
  *   - a sound archive with no tile for the area counts as no street map
- *     (location-precision CCR, F41)
+ *     (location-precision CCR, F41), and so does one missing a tile of the
+ *     frame, or holding more in a tile than the decoder allows (street-map CCR
+ *     2026-11-15, R15 and R2)
+ *   - a second pass (the one with the streets) that throws leaves the first
+ *     pass on the page (R22)
  */
 // @born-red archive with no tile for the area | method: both cases seen failing before the guard in buildStreetLayer (the landing carried a blank street layer and its credit; the zoomed area drew its dot with no "amap-no-tiles" list) | date: 2026-11-09
 // @born-red the switch off | method: the switch line removed from loadStreetLayer, then the switch read after the bucket; both "the switch off" cases failed on each. With the value lower-cased before the compare, the first failed alone (its "ON") | date: 2026-11-15
+// @born-red the landing's second pass in its own try; a tile missing or over the decode limit (street-map CCR 2026-11-15, R22, R15, R2) | method: "a second pass that throws" seen failing with the inner try taken out of handlers/pages.ts (the page lost its cards and hexagons to the empty area); the missing-tile and decode-limit case seen failing twice: with R15 taken out of lib/street-map.ts (the first page carried streets and the credit) and with the decoder's limits taken out of lib/mvt.ts (the second did) | date: 2026-11-15
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { latLngToCell } from 'h3-js';
 import { OSM_COPYRIGHT_URL } from '../src/lib/attendee-map';
 import { LANGUAGES, type Lang } from '../src/lib/i18n/languages';
+import { TILE_LIMITS } from '../src/lib/mvt';
 import { MAX_TILE_UNPACKED_BYTES, resetPmtilesCache } from '../src/lib/pmtiles';
 import { DEFAULT_ARCHIVE } from '../src/lib/street-map';
 import {
@@ -36,7 +42,11 @@ import {
 } from './helpers/street-map-fixtures';
 import { BLUE_ISLAND, MANY, NOW, sentinel } from './helpers/list-landing-rows';
 
-const state = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[] }));
+const state = vi.hoisted(() => ({
+  rows: [] as Record<string, unknown>[],
+  /** Make the landing's second pass, the one that is given the streets, throw. */
+  secondPassThrows: false,
+}));
 
 vi.mock('../src/lib/data-provider', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -45,6 +55,14 @@ vi.mock('../src/lib/data-provider', async (importOriginal) => ({
   }),
 }));
 vi.mock('../src/lib/sponsor-titles', async () => ({ fetchSponsorTitles: async () => new Map() }));
+vi.mock('../src/lib/landing-area', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../src/lib/landing-area')>();
+  const renderLandingArea: typeof real.renderLandingArea = (items, opts) => {
+    if (state.secondPassThrows && opts?.streets) throw new Error('the pass with streets threw');
+    return real.renderLandingArea(items, opts);
+  };
+  return { ...real, renderLandingArea };
+});
 
 import { handleLandingPage } from '../src/handlers/pages';
 
@@ -72,6 +90,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   resetPmtilesCache();
   state.rows = sentinel(MANY);
+  state.secondPassThrows = false;
 });
 afterEach(() => vi.useRealTimers());
 
@@ -161,6 +180,69 @@ describe('street map | the landing page handler', () => {
     expect(html).not.toContain('data-testid="amap-streets"');
     expect(html).not.toContain('data-testid="amap-credit"');
     expect(cellsOf(html)).toEqual(cellsOf(plain));
+  });
+
+  // street-map CCR 2026-11-15, R15 and R2: two more archives that are sound and
+  // are still no street map. Born red 2026-11-15: with R15 taken out the first
+  // page carried the streets and the credit; with the decoder's limits taken
+  // out the second did.
+  it('an archive missing one tile of the frame, or with more in a tile than the decoder allows, leaves the page as it was', async () => {
+    const plain = await landing({});
+    const cells = cellsOf(plain);
+    const { tiles } = tilesForCells(cells);
+    expect(tiles.length).toBeGreaterThan(1);
+    const tooMuch = tilesForCells(cells, () => [
+      {
+        name: 'roads',
+        features: [
+          {
+            type: 2,
+            props: { kind: 'path' },
+            parts: [
+              Array.from({ length: TILE_LIMITS.points }, (_, i): [number, number] => [i % 4096, 7]),
+            ],
+          },
+        ],
+      },
+    ]).tiles;
+    for (const archive of [
+      await pmtilesArchive(tiles.slice(1), { gzip: true }),
+      await pmtilesArchive(tooMuch, { gzip: true }),
+    ]) {
+      resetPmtilesCache();
+      const bucket = fakeBucket(DEFAULT_ARCHIVE, archive);
+      const html = await landing({ STREET_MAP: 'on', MAP_TILES: bucket });
+      expect(bucket.gets.length).toBeGreaterThan(0);
+      expect(html).not.toContain('data-testid="amap-streets"');
+      expect(html).not.toContain('data-testid="amap-credit"');
+      expect(cellsOf(html)).toEqual(cells);
+    }
+  });
+
+  // street-map CCR 2026-11-15, R22. The second pass sat in the try whose catch
+  // serves the empty area, so a throw there would have cost the page its cards
+  // and hexagons for the sake of the streets. No throw path is known; the
+  // renderer is made to throw here. Born red 2026-11-15: with the inner try
+  // taken out, this case failed (the page no longer carried its hexagons).
+  it('a second pass that throws leaves the first pass on the page: the hexagons, no streets, no credit', async () => {
+    const plain = await landing({});
+    const cells = cellsOf(plain);
+    expect(cells.length).toBeGreaterThan(0);
+    const { tiles } = tilesForCells(cells);
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles, { gzip: true }));
+    // The control: this archive draws on this page.
+    expect(await landing({ STREET_MAP: 'on', MAP_TILES: bucket })).toContain(
+      'data-testid="amap-streets"'
+    );
+
+    state.secondPassThrows = true;
+    const before = bucket.gets.length;
+    const html = await landing({ STREET_MAP: 'on', MAP_TILES: bucket });
+    // The layer was read and was good: it is the drawing with it that threw.
+    expect(bucket.gets.length).toBeGreaterThan(before);
+    expect(html).not.toContain('data-testid="amap-streets"');
+    expect(html).not.toContain('data-testid="amap-credit"');
+    expect(cellsOf(html)).toEqual(cells);
   });
 
   // Born red 2026-11-09: with the no-street-map branch drawing the dots anyway,

@@ -17,9 +17,10 @@
 // The server, not the visitor, chooses which tiles to read, so no tile request
 // says what a person looked at, and nothing here logs.
 //
-// FAIL SOFT. No binding, no archive, no tile for the frame, a damaged tile, or a
-// slow read: the map is drawn as before, hexagons only. The street layer is
-// never a reason the page fails.
+// FAIL SOFT. No binding, no archive, a part of the frame with no tile, a damaged
+// tile, a tile or a frame that holds more than the Worker will decode
+// (FRAME_LIMITS), or a slow read: the map is drawn as before, hexagons only.
+// The street layer is never a reason the page fails.
 //
 // THE SWITCH (street-map CCR 2026-11-15, R20). `STREET_MAP` is a plain value in
 // wrangler.toml, one for each environment. Exactly "on" draws streets. "off", no
@@ -44,7 +45,7 @@ import {
   type RangeBucket,
   type RangeSource,
 } from './pmtiles.js';
-import { decodeTile, type MvtLayer } from './mvt.js';
+import { decodeTile, type DecodeCounts, type MvtLayer } from './mvt.js';
 import { escapeHtml } from './html-escape.js';
 
 export const MAP_W = 600;
@@ -67,6 +68,25 @@ export const MAX_ZOOM = 14;
  * only, for every caller (`loadStreetLayer`).
  */
 export const MIN_STREET_ZOOM = 7;
+/**
+ * The most the tiles of one frame may hold between them, decoded (street-map
+ * CCR 2026-11-15, R2): twice what one tile may (lib/mvt.ts, TILE_LIMITS, with
+ * what each kind costs). A frame is up to MAX_TILES tiles and every one is
+ * decoded before anything is drawn, so without this a frame could hold twelve
+ * tiles at the tile limit. At every limit a frame is about 23 MB of points,
+ * 9 MB of features and up to 15 MB of properties (Node, a workstation), and
+ * the drawer copies the points it may draw once more. MAX_POINTS below is what
+ * is drawn; this is what is read to choose them from, 33 times as many.
+ *
+ * What a real frame needs is not measured: no archive is loaded. A frame past
+ * this is hexagons only, and the archive check reports such a place as an
+ * error (scripts/street-map-archive/check.ts).
+ */
+export const FRAME_LIMITS: Readonly<DecodeCounts> = Object.freeze({
+  features: 60_000,
+  points: 300_000,
+  props: 300_000,
+});
 /** Path points drawn at most, so a dense city stays a small page (see POINT_SHARES). */
 export const MAX_POINTS = 9000;
 /** Town names drawn at most. */
@@ -527,8 +547,9 @@ function pathOf(pts: readonly Pt[], closed: boolean): string {
 
 /**
  * Read, decode and draw the frame of these cells, with no judgement of what
- * came out. Throws on bad data. Null when the archive holds no tile for the
- * frame. The archive check reads this, to say what a draw held.
+ * came out. Throws on bad data, and on tiles that hold more than FRAME_LIMITS
+ * allows. Null when the archive has no tile for a part of the frame. The
+ * archive check reads this, to say what a draw held.
  */
 export async function readStreetDrawing(
   src: RangeSource,
@@ -547,17 +568,27 @@ export async function readStreetDrawing(
   // One call for the whole frame, so tiles that sit together in the file come
   // from one read (lib/pmtiles.ts, readTiles).
   const read = await readTiles(src, r.z, want);
-  const tiles: DecodedTile[] = [];
-  read.forEach((bytes, i) => {
-    if (bytes) tiles.push({ x: want[i]![0], y: want[i]![1], layers: decodeTile(bytes, WANTED) });
-  });
-  if (tiles.length === 0) return null;
+  // Every tile of the frame, or no layer (street-map CCR 2026-11-15, R15). A
+  // gap is taken for the edge of what the archive was cut for: streets on one
+  // side of the map and blank land on the other would read as "nothing is
+  // there", under a credit that says the map is OpenStreetMap's. A build that
+  // left out open water inside its region would lose the streets of a frame
+  // on the shore to this rule. Whether the loaded build does is not known
+  // here; the archive check draws places on the water and fails if one of
+  // them has no layer (scripts/street-map-archive/check.ts).
+  if (read.includes(null)) return null;
+  const left: DecodeCounts = { ...FRAME_LIMITS };
+  const tiles: DecodedTile[] = read.map((bytes, i) => ({
+    x: want[i]![0],
+    y: want[i]![1],
+    layers: decodeTile(bytes!, WANTED, left),
+  }));
   return drawStreetLayer(f, r.z, tiles, numbered);
 }
 
 /**
  * The street layer for these cells. Throws on bad data. Null when the archive
- * holds no tile for the frame, or when what was drawn is not a street map
+ * has no tile for a part of the frame, or when what was drawn is not a street map
  * (`layerShows`): a layer of nothing, or of water alone, is a blank or blue
  * rectangle, and the zoomed area would draw its dots on it.
  *
@@ -592,8 +623,9 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 /**
  * The street layer for these cells, or null when it is switched off
  * (`STREET_MAP` is not "on": nothing is read) or cannot be drawn (no
- * binding, no archive, a frame wider than a street map can show, no tile for
- * the frame, nothing in it to steer by, bad data, too slow). Never throws.
+ * binding, no archive, a frame wider than a street map can show, a part of the
+ * frame with no tile, nothing in it to steer by, bad data, more in the tiles
+ * than the Worker will decode, too slow). Never throws.
  */
 export async function loadStreetLayer(
   env: StreetMapEnv | null | undefined,
