@@ -52,12 +52,28 @@ export const STAGING_ONLY_VARS = [
 /**
  * Bindings staging may have while production has none yet, as `kind/name`.
  * Each is a resource the owner brings to staging first; production stays dark
- * for it until it has its own. Remove a line in the PR that binds production.
+ * for it until it is bound. Remove a line in the PR that binds production.
  *   r2_buckets/MAP_TILES  the street-map archive (owner 2026-11-09: staging
  *     first). With no binding production draws hexagons only
  *     (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md).
  */
 export const DARK_ON_PRODUCTION = ['r2_buckets/MAP_TILES'];
+
+/**
+ * Bindings production shares with staging on purpose, as `kind/name`. Every
+ * other production binding fails this preflight when it names anything of
+ * staging's; for these the rule is turned round, and production's id must BE
+ * staging's.
+ *   r2_buckets/MAP_TILES  the street-map archive (owner 2026-11-14: one bucket,
+ *     read by both environments). It is public OpenStreetMap data with nothing
+ *     about a person in it, the Worker only reads it, each environment reads
+ *     the dated key in its own MAP_TILES_ARCHIVE, and a loaded object is locked
+ *     in Cloudflare against change and delete. So the file is cut, checked and
+ *     loaded once, and production draws from the object staging drew from
+ *     (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md, "Production, later").
+ * A line here is an owner decision, never a convenience.
+ */
+export const SHARED_WITH_STAGING = ['r2_buckets/MAP_TILES'];
 
 /** Job names of the staging chain, as the CI workflow prints them. */
 export const STAGING_JOBS = [
@@ -230,7 +246,11 @@ export function checkSchemaConstants({ db, forms, guardSource }) {
     : pass(id, title, levels.join(', '));
 }
 
-/** Production has every binding staging has, each with its own real id. */
+/**
+ * Production has every binding staging has, each with its own real id. The one
+ * exception is a binding listed in SHARED_WITH_STAGING, which must carry
+ * staging's id.
+ */
 export function checkProductionBindings(toml) {
   const id = 'bindings';
   const title = 'Production bindings are real and are not shared';
@@ -246,7 +266,24 @@ export function checkProductionBindings(toml) {
   const stagingValues = valuesOf(staging);
   const localValues = valuesOf(local);
   const problems = [];
+  const shared = [];
   for (const b of prod) {
+    if (SHARED_WITH_STAGING.includes(`${b.kind}/${b.name}`)) {
+      // The one resource both environments read: the same id, not another one.
+      shared.push(b.name);
+      const theirs = staging.find((s) => s.kind === b.kind && s.name === b.name);
+      if (!b.ids.length) problems.push(`${b.name}: it names no resource`);
+      for (const [key, value] of b.ids) {
+        const want = theirs?.ids.find(([k]) => k === key)?.[1];
+        if (PLACEHOLDER.test(value))
+          problems.push(`${b.name}: ${key} is still a placeholder ("${value}")`);
+        else if (value !== want)
+          problems.push(
+            `${b.name}: ${key} "${value}" is not staging's (${want === undefined ? 'staging has none' : `"${want}"`}); the two environments read one resource`
+          );
+      }
+      continue;
+    }
     for (const [key, value] of b.ids) {
       if (PLACEHOLDER.test(value))
         problems.push(`${b.name}: ${key} is still a placeholder ("${value}")`);
@@ -265,7 +302,11 @@ export function checkProductionBindings(toml) {
   }
   return problems.length
     ? fail(id, title, problems.join('; '), fix)
-    : pass(id, title, `${prod.length} bindings, none shared with staging or local dev`);
+    : pass(
+        id,
+        title,
+        `${prod.length} bindings, none shared with staging or local dev${shared.length ? ` except ${shared.join(', ')} (listed in SHARED_WITH_STAGING)` : ''}`
+      );
 }
 
 /** What [env.production.vars] must have, and what it must never have. */

@@ -2548,6 +2548,10 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # The walk follows every map link to its event page. From a runner the
+          # stg edge challenges /events/<id> unless the read carries X-OCR-CI
+          # (the stg skip rule). Sent to the stg origin only.
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
           # The specs never skip: a missing fixture or credential throws by name.
           PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
         run: |

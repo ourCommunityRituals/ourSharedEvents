@@ -1,10 +1,9 @@
 # ADR-030: A campaign stays in its brand and is public only through a placement that is on show
 
-**Status:** Proposed. Decision 1 is the owner's (2026-11-12). Decisions 2, 3 and 6 follow from rules
-the owner already set. Decisions 4 and 5 are choices made while building and need the owner's yes
-(see "Owner decisions needed"). It moves to Accepted when those are answered and the code is on
-`main`.
-**Date:** 2026-11-13
+**Status:** Accepted (2026-11-14). Decision 1 is the owner's (2026-11-12). The owner answered D4, D5
+and D7 on 2026-11-14 (see "Owner decisions"), each as built. The code is on `main` as `ff5515c9`
+(PR #1208), with the staging chain T1 to T4 green on that SHA (run 43547878332).
+**Date:** 2026-11-13 (accepted 2026-11-14)
 **Deciders:** Owner (PO). Dr of Security advises on the brand wall.
 **Ticket:** OSE-1552 (testing ticket OSE-2021)
 
@@ -50,11 +49,12 @@ change.
    nothing else. It is carried on the sponsor inside `GET /api/v2/events/:id/sponsor-bundle`; the
    public event projection does not change.
 4. **Only an active campaign is announced.** A paused or completed campaign is not named in public.
-   Its sponsor still shows. _Needs the owner's yes._
+   Its sponsor still shows. _Owner, 2026-11-14: yes._
 5. **A campaign takes a title and a status, and nothing else, at create.** Any other field is
-   refused, so no caller is left believing it was saved. _Needs the owner's yes._
+   refused, so no caller is left believing it was saved. _Owner, 2026-11-14: yes._
 6. **A campaign title is never a filter, a search key or a sort key**, in admin or in public. Lists
-   are ordered by creation time.
+   are ordered by creation time. The same holds for a sponsor: a sponsor is never a filter (owner,
+   2026-11-14).
 
 No tier or plan is read by any of this (invariant 7).
 
@@ -81,18 +81,21 @@ caller.
 
 ### Show a paused campaign
 
-**Not chosen, pending the owner:** "paused" most plainly means "stop announcing this". Showing it
+**Rejected (owner, 2026-11-14):** "paused" most plainly means "stop announcing this". Showing it
 would make the status do nothing in public.
 
-## Owner decisions needed
+## Owner decisions
 
-- **D4.** Is a paused or completed campaign hidden in public (as built), or shown?
-- **D5.** Is a campaign only a title and a status for now (as built)? The table has a `description`
-  column that no route writes.
-- **D7. A conflict with ADR-022.** ADR-022 (Proposed) describes `/events?sponsor=<sponsor>` as an
-  optional filter. The showcase plan, and this story's brief, say a sponsor is never a filter. No
-  code reads a `sponsor` parameter today. One of the two documents has to change; this ADR does not
-  choose.
+All three were answered by the owner on 2026-11-14.
+
+- **D4. A paused or completed campaign is hidden in public.** Decided: yes, as built. Its sponsor
+  still shows.
+- **D5. A campaign is only a title and a status for now.** Decided: yes, as built. The table's
+  `description` column stays unwritten.
+- **D7. The conflict with ADR-022.** ADR-022 described `/events?sponsor=<sponsor>` as an optional
+  filter. Decided: a sponsor is never a filter. The `sponsor` part is withdrawn from ADR-022 in the
+  same change as this note, and decision 6 above now covers sponsors as well as campaigns. No code
+  read a `sponsor` parameter, so nothing was removed from the worker.
 
 ## Consequences
 
@@ -139,8 +142,8 @@ would make the status do nothing in public.
   hide — COALESCE(...accepted, 1) = 1". Since ADR-019 the sponsor side is strict
   (`sponsor_accepted = 1`), and the gate itself asserts the strict rule. The brain's wording is
   behind the code.
-- **"Sponsors are never a filter" is in neither the brain nor AGENTS.md.** It lives in the showcase
-  plan. See D7.
+- **"Sponsors are never a filter" is in neither the brain nor AGENTS.md.** It lived only in the
+  showcase plan. Since 2026-11-14 it is an owner decision recorded here (D7) and in ADR-022.
 - **Invariant 9** does not list its tenant tables; OSE's scan does, and `campaigns` was missing
   from it until this change.
 - **Invariant 19** already names `campaigns` as a table no migration may drop. **Invariant 21**
@@ -157,7 +160,7 @@ Nothing in the brain was changed. These are proposals for its owner.
 
 ## Revisit Criteria
 
-- The owner answers D4, D5 or D7 differently from what is built.
+- The owner changes D4, D5 or D7.
 - Events gain their own campaign link (OSE-1552, scope 1 and 4): decide which wins when a
   placement's campaign and its event's campaign differ.
 - A sponsor needs to be in two campaigns at one event.

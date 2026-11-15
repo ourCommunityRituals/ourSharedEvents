@@ -728,8 +728,8 @@ describe('street map | the archive read: fat fingers, security, network', () => 
     ['only the extension', '.pmtiles'],
     ['a hyphen first', '-us-20261109.pmtiles'],
     ['the quotes kept', '"us-20261109.pmtiles"'],
-    ['the bucket pasted in front', 'ose-map-tiles-staging/us-20261109.pmtiles'],
-    ['the rclone target pasted whole', 'r2:ose-map-tiles-staging/us-20261109.pmtiles'],
+    ['the bucket pasted in front', 'ose-map-tiles/us-20261109.pmtiles'],
+    ['the rclone target pasted whole', 'r2:ose-map-tiles/us-20261109.pmtiles'],
     ['the download address pasted', 'https://build.protomaps.com/20261109.pmtiles'],
     ['spaces only', '   '],
   ])(

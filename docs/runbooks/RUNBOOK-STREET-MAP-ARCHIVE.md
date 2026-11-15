@@ -17,35 +17,43 @@ Owner decisions:
   owner's computer"). So the cut, the check and the upload run in a workflow, on
   a GitHub-hosted runner. Until that day this runbook was a list of commands for
   the owner's terminal; it has none now.
+- 2026-11-14: **one bucket, read by both environments.** Staging and production
+  bind the same bucket, `ose-map-tiles`, and each reads the key in its own
+  `MAP_TILES_ARCHIVE`. The file is cut, checked and loaded once; production gets
+  no bucket and no load of its own, and draws from the object staging drew
+  from. A loaded object is **locked in Cloudflare against change and delete**,
+  and is removed only when no environment reads it. This replaces a bucket per
+  environment (`ose-map-tiles-staging`, `ose-map-tiles-production`) and the open
+  question of how production would get a second copy.
 
 **The workflow does the work:**
 [`.github/workflows/street-map-archive-load.yml`](../../.github/workflows/street-map-archive-load.yml)
 ("Street-map archive load (stg)" in the Actions tab). It is dispatched by hand,
-from `main` only, and loads staging only.
+from `main` only, with staging's credentials only.
 
-**Accepting this path is the owner's decision, made by merging the PR that
-carries the workflow and this runbook.** No agent decides it: wherever this text
-is not on `main`, it is a proposal. After the merge still nothing runs until the
-owner dispatches the workflow.
+**Accepting this path was the owner's decision, made by merging the PR that
+carried the workflow** (#1244, 2026-11-14). Wherever a change to this text is
+not on `main`, it is a proposal. Nothing runs until the owner dispatches the
+workflow.
 
-**What stays the owner's**, all of it in a browser: creating the R2 token,
-setting it as a secret, dispatching the workflow, deleting the token afterwards,
-and merging. An agent never creates a bucket, never holds or reads the token,
-never sets a secret or a variable, never dispatches the load, and never touches
-production (`AGENTS.md`, Human approval).
+**What stays the owner's**, all of it in a browser: creating the bucket,
+creating the R2 token, setting it as a secret, dispatching the workflow, locking
+the loaded object, deleting the token afterwards, and merging. An agent never
+creates a bucket, never holds or reads the token, never sets a secret, a
+variable or a lock rule, never dispatches the load, and never touches production
+(`AGENTS.md`, Human approval).
 
-**One path for both environments.** Staging is loaded first, by the steps below.
-Production is loaded later by the same path; how is an open owner decision
-("Production, later").
+**One bucket, one load.** The steps below load the bucket, and staging reads it
+first. Production reads the same object once it is bound ("Production, later").
 
 ## Names
 
-| What                | Staging                 | Production (later, its own PR) |
-| ------------------- | ----------------------- | ------------------------------ |
-| Bucket              | `ose-map-tiles-staging` | `ose-map-tiles-production`     |
-| Object key          | `us-YYYYMMDD.pmtiles`   | the same key, the same file    |
-| Binding             | `MAP_TILES`             | `MAP_TILES`                    |
-| Setting for the key | `MAP_TILES_ARCHIVE`     | `MAP_TILES_ARCHIVE`            |
+| What                | Staging               | Production (later, its own PR) |
+| ------------------- | --------------------- | ------------------------------ |
+| Bucket              | `ose-map-tiles`       | the same bucket                |
+| Object key          | `us-YYYYMMDD.pmtiles` | the same key, the same object  |
+| Binding             | `MAP_TILES`           | `MAP_TILES`                    |
+| Setting for the key | `MAP_TILES_ARCHIVE`   | `MAP_TILES_ARCHIVE`            |
 
 `YYYYMMDD` is the date of the Protomaps build the file was cut from.
 `wrangler.toml` carries `us-20261109.pmtiles`. The same three names are written
@@ -56,6 +64,10 @@ in three places, and they change together, in one PR:
 | Build  | the date inside `MAP_TILES_ARCHIVE`            | `PROTOMAPS_BUILD`    | the extract's address   |
 | Key    | `MAP_TILES_ARCHIVE`, both environment blocks   | `ARCHIVE_KEY`        | every command           |
 | Bucket | `bucket_name` of the staging `MAP_TILES` block | `BUCKET`             | every bucket command    |
+
+The bucket is written in a fourth place: `STREET_MAP_BUCKET` in
+`scripts/ci/street-map-archive-load.mjs`. The workflow's first step refuses any
+other bucket, whatever `wrangler.toml` and the workflow agree on between them.
 
 `tests/unit/ci/env-parity.test.js` fails when `wrangler.toml` and this runbook
 name different files; `tests/unit/ci/street-map-archive-load.test.js` fails when
@@ -150,6 +162,22 @@ streets of the tiles the file has.
   the copy we load is the copy we keep: there is no going back to Protomaps for
   an old build, and the same file cannot be cut a second time once its build is
   gone. **The object in the bucket is that copy**; nobody holds another.
+- **Bucket locks.** Read 2026-11-14 (the page is dated 2026-10-28); not tried
+  on our account. A lock rule stops objects being overwritten or deleted, for
+  a number of days, until a date, or indefinitely until the rule is removed. A
+  rule covers objects by prefix, and a rule with no prefix covers the whole
+  bucket. Locks "do not prevent new object creation". Once a rule is saved,
+  changes to the objects it covers are blocked from then on, and that includes
+  completing an upload that started earlier. A blocked request through the S3
+  API fails with HTTP 409 `ObjectLockedByBucketPolicy`. In the dashboard: R2
+  object storage, the bucket, the **Settings** tab, the **Bucket lock rules**
+  card, **Add rule** (name, prefix, retention period), **Save changes**; to
+  remove one, the `...` beside the rule, then **Delete**. The page does not say
+  in words that a prefix equal to a whole key covers that key alone: it covers
+  every key that starts with those characters, and no other key of ours does.
+  It does not name the permission a token needs to change a rule, and the
+  linked permissions page was not read.
+  <https://developers.cloudflare.com/r2/buckets/bucket-locks/>
 - **Cost.** Storage $0.015 per GB-month, first 10 GB free per account. Each
   uploaded part is one Class A operation ($4.50 per million, first million free):
   at 256 MB parts a file is four parts per GB, so the upload itself costs
@@ -160,25 +188,23 @@ streets of the tiles the file has.
 Two jobs. Every command below is in the workflow file, with the names taken from
 its `env`; this section shows no command for a person to type.
 
-**Job 1, the bucket is private (reads only).** The bucket is already there, and
-nobody chose its settings: the PR that added the binding merged before the bucket
-existed, and its staging deploy created `ose-map-tiles-staging`, empty (run
-42865404464, `T1 Deploy → Staging`, 2026-11-10 17:41 UTC: the log reads "Creating
-new R2 Bucket"). So the job reads them, with the lockfile's wrangler and the
-staging deploy credential CI already uses:
+**Job 1, the bucket is private (reads only).** The owner creates the bucket
+("Staging, in order", step 1), and the job does not take its settings on trust.
+It reads them, with the lockfile's wrangler and the staging deploy credential CI
+already uses:
 
 ```bash
-npx wrangler r2 bucket dev-url get ose-map-tiles-staging
+npx wrangler r2 bucket dev-url get ose-map-tiles
 ```
 
 ```bash
-npx wrangler r2 bucket domain list ose-map-tiles-staging
+npx wrangler r2 bucket domain list ose-map-tiles
 ```
 
 The first must answer "Public access via the r2.dev URL is disabled.", the
 second "There are no custom domains connected to this bucket." Any other answer,
-an error included, stops the run before anything is cut: the Worker is the
-bucket's only reader. This job runs on its own runner and downloads no tool, so
+an error included, stops the run before anything is cut: the Workers are the
+bucket's only readers. This job runs on its own runner and downloads no tool, so
 the deploy credential is never on a machine with `pmtiles` or `rclone`.
 
 **Job 2, cut, check and load.** In order:
@@ -216,7 +242,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
    holds the key (asked before the cut, and again just before the upload):
 
    ```bash
-   rclone lsjson r2:ose-map-tiles-staging --files-only --max-depth 1
+   rclone lsjson r2:ose-map-tiles --files-only --max-depth 1
    ```
 
 5. **Cut the United States file:**
@@ -269,7 +295,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
 7. **Upload** under the dated key:
 
    ```bash
-   rclone copyto us-20261109.pmtiles r2:ose-map-tiles-staging/us-20261109.pmtiles --immutable --s3-chunk-size=256M --stats=1m --stats-one-line -v
+   rclone copyto us-20261109.pmtiles r2:ose-map-tiles/us-20261109.pmtiles --immutable --s3-chunk-size=256M --stats=1m --stats-one-line -v
    ```
 
    The key pair reaches rclone as environment variables of this step and the two
@@ -280,17 +306,25 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
 8. **Confirm.** The bucket is listed again, and the run is green only if it
    lists the key at the exact byte size in the check record: a smaller object is
    an upload that stopped. The proof that the bytes are right is the Worker
-   drawing from them ("Staging, in order", step 7).
+   drawing from them ("Staging, in order", step 8).
 
 **An object is never overwritten.** The run asks the bucket twice and uploads
 with `--immutable`, and one run at a time holds the workflow's lock. That is a
 check before the write, not a lock inside R2: an upload made by hand in the same
-minute is not covered, and there should be none.
+minute is not covered, and there should be none. The lock inside R2 is the
+owner's bucket lock rule, set once a load is green ("Staging, in order", step
+6); from then on Cloudflare refuses a change to that object from any credential.
 
 ## Staging, in order
 
-1. **Merge the PR that carries the workflow.** GitHub offers a hand-dispatched
-   workflow only once its file is on `main`.
+1. **Owner: create the bucket, then merge.** In the Cloudflare dashboard, R2
+   object storage: create `ose-map-tiles`, with no public r2.dev URL and no
+   custom domain. Do it **before** the PR that names the bucket in
+   `wrangler.toml` merges, and before that PR's branch is run on staging: a
+   deploy that finds no bucket under a bound name makes one by itself, with
+   settings nobody chose ("When the binding lands before the bucket"). The
+   workflow itself is on `main` since #1244; GitHub offers a hand-dispatched
+   workflow only once its file is there.
 
 2. **Owner: measure.** Actions tab, "Street-map archive load (stg)", Run
    workflow, branch `main`, `confirm` = `STAGING`, `mode` = `measure`. The run's
@@ -299,7 +333,7 @@ minute is not covered, and there should be none.
    owner decision, not a fault: see "If the file does not fit".
 
 3. **Owner: create the token and set the secret.** In the Cloudflare dashboard:
-   an R2 API token, "Object Read & Write", scoped to `ose-map-tiles-staging` only.
+   an R2 API token, "Object Read & Write", scoped to `ose-map-tiles` only.
    In GitHub, repository settings: the Access Key ID as
    `R2_MAP_TILES_ACCESS_KEY_ID` and the Secret Access Key as
    `R2_MAP_TILES_SECRET_KEY`, on the `staging` environment (the load job names
@@ -317,11 +351,29 @@ minute is not covered, and there should be none.
    [`../positioning/MAPPING-COST-STRUCTURE.md`](../positioning/MAPPING-COST-STRUCTURE.md),
    which carries it as unmeasured until then. An agent can do both from the run.
 
-6. **Owner: delete the token** in the Cloudflare dashboard, and the two secrets
+6. **Owner: lock the object.** Only after the load is green. In the Cloudflare
+   dashboard: R2 object storage, the bucket `ose-map-tiles`, the **Settings**
+   tab, the **Bucket lock rules** card, **Add rule**. Name it after the build
+   (`us-20261109`), give it the whole key as its prefix (`us-20261109.pmtiles`),
+   choose to keep objects locked indefinitely, and **Save changes**. From then
+   on Cloudflare refuses to overwrite or delete that object, for the load token
+   and for every other credential, until the rule is removed. New keys can
+   still be loaded, so a refresh needs no change to this rule.
+   - One rule for each loaded key. **Never a rule with no prefix**: it would
+     cover every later upload too, and an upload that stopped short could then
+     not be removed.
+   - Not before the load is green, for the same reason: "What stops a run" has
+     the owner remove an object that landed short, and a rule that is already
+     there would refuse that.
+   - This is what lets one bucket serve both environments: a mistake or a
+     stolen token on the staging side can add a key, and cannot change or
+     remove the object production reads.
+
+7. **Owner: delete the token** in the Cloudflare dashboard, and the two secrets
    in GitHub. The Worker reads through its binding, not the token. A refresh
    makes a new one.
 
-7. **Look at staging.** `MAP_TILES_ARCHIVE` on `main`, in both environment
+8. **Look at staging.** `MAP_TILES_ARCHIVE` on `main`, in both environment
    blocks of `wrangler.toml`, is the key that was loaded (the workflow refused to
    run otherwise). The Worker does not remember a read that found no object, so
    the next landing request draws streets: for areas in the United States, the
@@ -330,7 +382,7 @@ minute is not covered, and there should be none.
    `T2: Bruno Pages contract` log, the two street-map requests print their street
    assertions and no `NOT RUN` line.
 
-8. **Make the staging cases binding.** One-line PR: `streetMapArchiveLoaded` to
+9. **Make the staging cases binding.** One-line PR: `streetMapArchiveLoaded` to
    `"true"` in `bruno/ose-pages/environments/ose-staging.yml`. From then on a
    staging run that draws no streets is red, not a printed `NOT RUN`.
 
@@ -376,47 +428,75 @@ documents creating the bucket first. The wrangler this repo pins (4.158.0) has
 resource provisioning on by default: the staging deploy listed `MAP_TILES` as a
 binding to provision and created the bucket with the deploy token (run
 42865404464). So a bucket named in a merged binding is made by CI, with default
-settings, which is a provisioning step that belongs to the owner. For
-production, create the bucket before the binding PR merges.
+settings, which is a provisioning step that belongs to the owner.
+
+That bucket was `ose-map-tiles-staging`. It was never loaded. Since 2026-11-14
+the binding names `ose-map-tiles`, which the owner creates first ("Staging, in
+order", step 1), and the owner deletes `ose-map-tiles-staging`, empty, once
+staging has deployed the new name. Production needs no bucket made for it: its
+binding will name one that is already there.
 
 With the bucket present and the archive missing, the Worker finds no object and
 the map stays hexagons only. The two staging cases then print `NOT RUN`, or fail
-once step 8 is done.
+once step 9 is done.
 
 ## Production, later
 
-Production has no `MAP_TILES` binding, and `scripts/ci/env-parity.mjs` lists that
-as an open difference (`--strict`, the check before production is announced,
-fails on it). The workflow in this repo has no production input, no production
-bucket and no production credential, and
-`tests/unit/ci/street-map-archive-load.test.js` holds it to that. Production is
-loaded by a later PR that extends the same workflow, after step 8, and after the
-owner has created `ose-map-tiles-production` and the run has read it as private.
+**Production reads the bucket staging reads** (owner, 2026-11-14). There is no
+production bucket, no production load and no second copy: the object production
+draws from is the object staging drew from. The two ways of making a second
+copy that were open until that day (copy the staging object and compare its
+SHA-256, or cut the build again) are not needed.
 
-**Open owner decision: how production gets the file.**
+Production has no `MAP_TILES` binding yet, and `scripts/ci/env-parity.mjs` lists
+that as an open difference (`--strict`, the check before production is
+announced, fails on it). One PR ends it, after step 9:
 
-- **Copy the staging object.** The production run reads the object staging drew
-  from, runs the check on it again, and loads it only if its SHA-256 is the one
-  in the staging run's record. Production then holds the file that was proven on
-  staging, byte for byte. It needs a credential that can read the staging bucket
-  and write the production one, or two credentials in one run.
-- **Cut again.** The production run repeats the cut from the same build. It
-  needs the build to be still offered at Protomaps (about a week), and it is the
-  same file only if its SHA-256 equals the staging record's; whether
-  `pmtiles extract` writes the same bytes twice has not been tried.
+- it adds `[[env.production.r2_buckets]]` with `binding = "MAP_TILES"` and
+  `bucket_name = "ose-map-tiles"`;
+- it removes the open entry from `env-parity.mjs`, and `r2_buckets/MAP_TILES`
+  from `DARK_ON_PRODUCTION` in `scripts/prod-preflight.mjs`.
 
-Either way the file goes **under the same key**, with a token scoped to the
-production bucket only, and then one PR adds `[[env.production.r2_buckets]]` and
-removes the open entry from `env-parity.mjs`. `tests/unit/ci/env-parity.test.js`
-refuses a production binding while `streetMapArchiveLoaded` is not `"true"`.
-Loading a bucket is not a launch: production stays closed and no
+What holds it:
+
+- `tests/unit/ci/env-parity.test.js` refuses a production binding while
+  `streetMapArchiveLoaded` is not `"true"`, refuses one that names any other
+  bucket, and refuses any other binding in `wrangler.toml` that names this
+  bucket;
+- `scripts/prod-preflight.mjs` lists `MAP_TILES` as the one binding production
+  shares with staging (`SHARED_WITH_STAGING`) and fails if production's bucket
+  is not staging's. Every other production binding still fails when it names
+  anything of staging's. A line in that list is an owner decision.
+
+What sharing means, said plainly:
+
+- **The load writes the bucket production reads.** The workflow has no
+  production input and no production credential
+  (`tests/unit/ci/street-map-archive-load.test.js` holds it to that), and it
+  runs with staging's credentials. It only adds a new dated key. It never
+  changes or removes an object, and the lock (step 6) makes Cloudflare refuse
+  both. A new key does nothing in either environment until `MAP_TILES_ARCHIVE`
+  names it and that environment is deployed.
+- **An object removed is removed for both** ("Refreshing the archive", "Back to
+  hexagons only").
+- **Production moves to a new key at its own deploy, not at the load.** Both
+  blocks of `wrangler.toml` carry the same key (the parity check fails
+  otherwise), so after a refresh production still reads the old object until it
+  is deployed from a commit that names the new one.
+- **Once production is bound, do not deploy it from a commit where
+  `streetMapArchiveLoaded` is `"false"`.** Such a commit names a key that is not
+  loaded yet; production would find no object and draw hexagons only, with no
+  error. Nothing checks this today.
+
+Binding the bucket is not a launch: production stays closed and no
 `PRODUCTION_LIVE` is set.
 
 ## Refreshing the archive
 
 A refresh is a new build under its **own dated key**. Never overwrite an object
 in place: a running Worker keeps an archive's directories in memory, by key, and
-would read the new file with the old directories.
+would read the new file with the old directories. The lock on a loaded object
+refuses an overwrite in any case.
 
 The workflow runs from `main` and loads the key `wrangler.toml` names there, so
 the order is:
@@ -426,10 +506,14 @@ the order is:
    runbook, and sets `streetMapArchiveLoaded` to `"false"`. Once it is deployed
    the Worker finds no object under the new name and staging draws hexagons only,
    with the street-map cases printing `NOT RUN`.
-2. Owner: `measure`, then the token and `load`, as in "Staging, in order".
+2. Owner: `measure`, then the token and `load`, then the lock rule for the new
+   key, as in "Staging, in order".
 3. Look at staging, then set `streetMapArchiveLoaded` back to `"true"`.
-4. The old object is removed by the owner only after the new one has drawn on
-   staging.
+4. **The old object stays while any environment reads it.** Production reads
+   the old key until it is deployed from a commit that names the new one. So
+   the owner removes the old object (its lock rule first, then the object) only
+   after staging has drawn the new one and, once production is bound, after
+   production has been deployed with the new key and has drawn it.
 
 Staging is without streets between steps 1 and 2. Loading the new key before the
 name changes would avoid that, and would mean running the workflow from a branch
@@ -442,11 +526,15 @@ file.
 - **By PR (the standing way):** remove the `[[env.staging.r2_buckets]]`
   `MAP_TILES` block, remove its open entry from `env-parity.mjs`, and set
   `streetMapArchiveLoaded` to `"false"`. After the deploy the Worker has no
-  binding and draws hexagons only.
-- **At once, with no deploy:** the owner renames or deletes the object in the
-  bucket, in the dashboard. The Worker finds no archive and draws hexagons only
-  on the next request. The staging cases go red if step 8 is done, which is the
-  signal that it is off.
+  binding and draws hexagons only. This is one environment at a time: once
+  production is bound it has a block of its own, and removing one block leaves
+  the other environment drawing streets.
+- **At once, with no deploy, for every environment:** the owner removes the
+  object's lock rule and then deletes the object, in the dashboard. Each Worker
+  that reads that key finds no archive and draws hexagons only on its next
+  request. **Once production is bound this takes production's streets too**;
+  there is no at-once way that reaches staging alone. The staging cases go red
+  if step 9 is done, which is the signal that it is off.
 
 Either way no page fails: with no binding, no archive, no tile for the area, a
 damaged file, a file past the reader's limits (a directory or a tile longer
@@ -526,3 +614,12 @@ Still unmeasured:
 - memory in the Worker with many areas read (the reader keeps at most 300,000
   directory entries, about 25 MB by an estimate made in Node), and whether four
   leaf directories are enough for the areas one isolate serves.
+
+Not tried, and nothing in this repo can try it:
+
+- two Workers bound to one R2 bucket on this account. A binding is a bucket
+  name and both Workers are in the one account; Cloudflare's pages show nothing
+  that limits a bucket to one Worker, and none says in words that two may share
+  one. The first proof is production drawing streets after its binding PR;
+- the bucket lock rule: that a rule whose prefix is the whole key refuses an
+  overwrite and a delete of that object, and lets the next dated key load.

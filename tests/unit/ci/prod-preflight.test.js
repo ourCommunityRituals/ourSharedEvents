@@ -294,7 +294,7 @@ describe('production bindings', () => {
   });
 
   // Staging first (owner 2026-11-09): the street-map bucket is bound on staging
-  // before production has a bucket of its own. Named, so no other bucket rides in.
+  // before production is bound. Named, so no other bucket rides in.
   // @born-red street-map bucket staging only | method: the first case seen failing before DARK_ON_PRODUCTION existed ("MAP_TILES (r2_buckets) is on staging but not on production", also red in tests/integration/prod-preflight-cli.test.js on the real file); the other two are the faults | date: 2026-11-09
   const STAGING_QUEUE = '[[env.staging.queues.producers]]';
   const stagingBucket = (binding) =>
@@ -317,16 +317,69 @@ describe('production bindings', () => {
     expect(r.detail).toContain('OTHER_TILES (r2_buckets) is on staging but not on production');
   });
 
-  test("fault: production's own street-map bucket is still checked, and staging's name is refused", () => {
+  // One bucket, read by both (owner 2026-11-14). For the street-map bucket the
+  // rule is turned round: production must name staging's bucket. It is the one
+  // listed exception, by name, and every other binding keeps the old rule.
+  // @born-red street-map bucket shared by name | method: three faults in scripts/prod-preflight.mjs, one at a time: SHARED_WITH_STAGING emptied (the first, second and fourth cases below went red), the same-id rule switched off (the second and fourth went red), the placeholder rule removed for a shared binding (the third went red) | date: 2026-11-14
+  const productionBucket = (toml, binding, bucket) =>
+    swap(
+      toml,
+      '[env.production.triggers]',
+      `[[env.production.r2_buckets]]\nbinding = "${binding}"\nbucket_name = "${bucket}"\n\n[env.production.triggers]`
+    );
+
+  test("the street-map bucket is one bucket: production naming staging's passes, and says so", () => {
+    expect(pf.SHARED_WITH_STAGING).toEqual(['r2_buckets/MAP_TILES']);
     const r = pf.checkProductionBindings(
-      swap(
-        stagingBucket('MAP_TILES'),
-        '[env.production.triggers]',
-        '[[env.production.r2_buckets]]\nbinding = "MAP_TILES"\nbucket_name = "tiles-stg"\n\n[env.production.triggers]'
+      productionBucket(stagingBucket('MAP_TILES'), 'MAP_TILES', 'tiles-stg')
+    );
+    expect(r.status).toBe('pass');
+    expect(r.detail).toContain('except MAP_TILES (listed in SHARED_WITH_STAGING)');
+  });
+
+  test('fault: production gives the street map a bucket of its own', () => {
+    const r = pf.checkProductionBindings(
+      productionBucket(stagingBucket('MAP_TILES'), 'MAP_TILES', 'tiles-prod')
+    );
+    expect(r.status).toBe('fail');
+    expect(r.detail).toContain(
+      'MAP_TILES: bucket_name "tiles-prod" is not staging\'s ("tiles-stg"); the two environments read one resource'
+    );
+  });
+
+  test('fault: the shared bucket is still a placeholder on production', () => {
+    const r = pf.checkProductionBindings(
+      productionBucket(stagingBucket('MAP_TILES'), 'MAP_TILES', 'PROVISION_ME')
+    );
+    expect(r.status).toBe('fail');
+    expect(r.detail).toContain('MAP_TILES: bucket_name is still a placeholder ("PROVISION_ME")');
+  });
+
+  test('fault: production binds the street map and staging does not', () => {
+    const r = pf.checkProductionBindings(productionBucket(TOML, 'MAP_TILES', 'tiles-stg'));
+    expect(r.status).toBe('fail');
+    expect(r.detail).toContain(
+      'MAP_TILES: bucket_name "tiles-stg" is not staging\'s (staging has none)'
+    );
+  });
+
+  test("fault: the exception is by name: another bucket of staging's is still refused", () => {
+    const both = productionBucket(stagingBucket('OTHER_TILES'), 'OTHER_TILES', 'tiles-stg');
+    const r = pf.checkProductionBindings(both);
+    expect(r.status).toBe('fail');
+    expect(r.detail).toContain('OTHER_TILES: bucket_name "tiles-stg" is staging\'s');
+  });
+
+  test("fault: another production binding names the shared street-map bucket: still staging's", () => {
+    const r = pf.checkProductionBindings(
+      productionBucket(
+        productionBucket(stagingBucket('MAP_TILES'), 'MAP_TILES', 'tiles-stg'),
+        'UPLOADS_BUCKET',
+        'tiles-stg'
       )
     );
     expect(r.status).toBe('fail');
-    expect(r.detail).toContain('MAP_TILES: bucket_name "tiles-stg" is staging\'s');
+    expect(r.detail).toContain('UPLOADS_BUCKET: bucket_name "tiles-stg" is staging\'s');
   });
 
   test('fault: there is no production section at all', () => {
