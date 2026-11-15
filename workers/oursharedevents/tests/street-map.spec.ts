@@ -19,23 +19,34 @@
  */
 // @born-red no tile in the frame, planet-sized archive | method: "an archive with no tile in the frame is no layer" seen failing before the guard in buildStreetLayer (it returned a layer of one blank rectangle); "one tile of the frame is enough" is its control; the planet case seen failing on 4 of the 6 reader faults listed in pmtiles.spec.ts | date: 2026-11-09
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
+import { cellToBoundary, cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import {
   DEFAULT_ARCHIVE,
   MAX_LABELS,
   MAX_POINTS,
   MAX_TILES,
   MAX_ZOOM,
+  MIN_ROAD_POINTS,
+  MIN_STREET_ZOOM,
+  POINT_SHARES,
   STREET_STYLE,
   STREET_TIMEOUT_MS,
   buildStreetLayer,
   cellsKey,
+  drawStreetLayer,
   drawStreets,
+  fitParts,
   frameForCells,
+  frameZoom,
+  layerShows,
   loadStreetLayer,
   project,
+  spendPoints,
+  thinLine,
   tilesFor,
   toWorld,
+  type DrawnPoints,
+  type StreetPart,
   type DecodedTile,
   type MapFrame,
 } from '../src/lib/street-map';
@@ -56,6 +67,8 @@ import {
   sparseBucket,
   sparseSource,
   tilesForCells,
+  tilesOfFrame,
+  type FixtureLayer,
 } from './helpers/street-map-fixtures';
 
 const NOW = Date.parse('2026-09-13T00:00:00.000Z');
@@ -271,10 +284,12 @@ describe('street map | drawing', () => {
 
   it('town names: biggest first, at most MAX_LABELS, only towns', () => {
     // 12 towns on a grid with room for every one: only the 6 biggest are drawn.
+    // The biggest are the last listed and the last by name, so it is size that
+    // picks them, not the order they were read in or their names.
     const towns = Array.from({ length: 12 }, (_, i) =>
       town(
         `Town ${String(i).padStart(2, '0')}`,
-        20 - i,
+        i + 1,
         70 + (i % 4) * 150,
         70 + Math.floor(i / 4) * 110
       )
@@ -286,9 +301,11 @@ describe('street map | drawing', () => {
     const svg = drawStreets(big, 0, tile([{ name: 'places', extent: 4096, features: towns }]));
     expect(svg.match(/<text /g)).toHaveLength(MAX_LABELS);
     for (let i = 0; i < 12; i++) {
-      expect(svg.includes(`Town ${String(i).padStart(2, '0')}`)).toBe(i < MAX_LABELS);
+      expect(svg.includes(`Town ${String(i).padStart(2, '0')}`)).toBe(i >= 12 - MAX_LABELS);
     }
     expect(svg).not.toContain('Hood');
+    // One name follows the next with nothing between them.
+    expect(svg.match(/<\/text><text /g)).toHaveLength(MAX_LABELS - 1);
   });
 
   it('town names are escaped, kept inside the frame, and do not overlap', () => {
@@ -411,6 +428,1055 @@ describe('street map | drawing', () => {
       [BLUE7]
     );
     expect(svg).not.toContain('Middle');
+  });
+});
+
+// The point budget (street-map CCR 2026-11-15, R7). On real tiles the old
+// drawer paid water first, in tile order, and skipped any feature that cost
+// more than what was left: 19 areas of Manhattan drew 8,999 points of water and
+// one point of road. Each test below builds that shape of demand by hand.
+describe('street map | the point budget', () => {
+  // One z0 tile is 1024 units wide here: 4 tile units to an SVG unit.
+  const big: MapFrame = { w: 600, h: 360, scale: 1024, x0: 0, y0: 0 };
+  const U = 4;
+  type Pt = [number, number];
+  const road = (kind: string, ...geometry: Pt[][]) => ({ type: 2, props: { kind }, geometry });
+  const lake = (...geometry: Pt[][]) => ({ type: 3, props: { kind: 'lake' }, geometry });
+  const roads = (...features: ReturnType<typeof road>[]) => ({
+    name: 'roads',
+    extent: 4096,
+    features,
+  });
+  const water = (...features: ReturnType<typeof lake>[]) => ({
+    name: 'water',
+    extent: 4096,
+    features,
+  });
+  /** A line left to right at height y, a point every `step` units, swinging `swing` up and down. */
+  const wavy = (y: number, points: number, swing: number, from = 0, to = 600): Pt[] =>
+    Array.from({ length: points }, (_, i) => [
+      Math.round(from + ((to - from) * i) / (points - 1)) * U,
+      (y + (i % 2 ? swing : -swing)) * U,
+    ]);
+  /** A band of water under a wavy shore: `points` points and the closing one. */
+  const band = (y: number, points: number): Pt[] => {
+    const shore = wavy(y, points - 2, 1);
+    return [...shore, [600 * U, (y + 3) * U], [0, (y + 3) * U], shore[0]!];
+  };
+  const at = (svg: string, cls: string): Pt[] => {
+    const d = new RegExp(`<path class="${cls}" d="([^"]*)"`).exec(svg)?.[1] ?? '';
+    return [...d.matchAll(/[ML](-?\d+) (-?\d+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+  };
+  const count = (svg: string): number => svg.match(/[ML]-?\d/g)?.length ?? 0;
+
+  it('a flood of water does not cost a highway one point', () => {
+    // 60 bands of 400 points (24,000 asked for), listed before the one highway.
+    const lakes = Array.from({ length: 60 }, (_, j) => lake(band(4 + j * 5, 400)));
+    const highway = wavy(180, 500, 6);
+    const svg = drawStreets(big, 0, [
+      { x: 0, y: 0, layers: [water(...lakes), roads(road('highway', highway))] },
+    ]);
+    expect(at(svg, 'as-r as-3')).toEqual(highway.map(([x, y]) => [x / U, y / U]));
+    expect(at(svg, 'as-w').length).toBeGreaterThan(0);
+    expect(count(svg)).toBeLessThanOrEqual(MAX_POINTS);
+  });
+
+  it('one road feature larger than the whole budget is cut down, not left out', () => {
+    // Protomaps stores the minor roads of a metro at zoom 12 as a few very large
+    // features. 40 streets in one feature, 600 points each: 24,000 points.
+    const streets = Array.from({ length: 40 }, (_, j) => wavy(8 + j * 8, 600, 1));
+    const svg = drawStreets(big, 0, [
+      { x: 0, y: 0, layers: [roads(road('minor_road', ...streets))] },
+    ]);
+    const drawn = at(svg, 'as-r as-1');
+    expect(drawn.length).toBeGreaterThan(0);
+    expect(drawn.length).toBeLessThanOrEqual(MAX_POINTS);
+    // Every street is still there, end to end.
+    const d = /<path class="as-r as-1" d="([^"]*)"/.exec(svg)![1]!;
+    expect(d.match(/M/g)).toHaveLength(40);
+    for (const line of d.split('M').slice(1)) {
+      const xs = [...line.matchAll(/(?:^|L)(-?\d+) /g)].map((m) => Number(m[1]));
+      expect(xs[0]).toBe(0);
+      expect(xs.at(-1)).toBe(600);
+    }
+  });
+
+  it('the last tile read is drawn as well as the first', () => {
+    // Two tiles side by side, each asking for more highway than the budget.
+    const half: MapFrame = { w: 600, h: 360, scale: 600, x0: 0, y0: 0 };
+    const k = (2 * 4096) / 600; // tile units to an SVG unit at zoom 1
+    const tileOf = (x: number): DecodedTile => ({
+      x,
+      y: 0,
+      layers: [
+        roads(
+          ...Array.from({ length: 40 }, (_, j) =>
+            road(
+              'highway',
+              Array.from({ length: 300 }, (_, i): Pt => [
+                Math.round(i * k),
+                Math.round((6 + j * 7 + (i % 2 ? 4 : -4)) * k),
+              ])
+            )
+          )
+        ),
+      ],
+    });
+    const svg = drawStreets(half, 1, [tileOf(0), tileOf(1)]);
+    const drawn = at(svg, 'as-r as-3');
+    const right = drawn.filter(([x]) => x >= 300).length;
+    expect(drawn.length).toBeGreaterThan(0);
+    expect(drawn.length).toBeLessThanOrEqual(MAX_POINTS);
+    expect(right).toBeGreaterThanOrEqual(drawn.length * 0.4);
+    expect(drawn.length - right).toBeGreaterThanOrEqual(drawn.length * 0.4);
+  });
+
+  it('with every kind over its share, every kind is drawn, and the roads hold most of the points', () => {
+    const many = (kind: string, y: number) =>
+      Array.from({ length: 30 }, (_, j) => road(kind, wavy(y + j * 3, 600, 20)));
+    const svg = drawStreets(big, 0, [
+      {
+        x: 0,
+        y: 0,
+        layers: [
+          water(...Array.from({ length: 60 }, (_, j) => lake(band(4 + j * 5, 400)))),
+          {
+            name: 'water',
+            extent: 4096,
+            features: Array.from({ length: 30 }, (_, j) => ({
+              type: 2,
+              props: { kind: 'river' },
+              geometry: [wavy(30 + j * 3, 600, 20)],
+            })),
+          },
+          roads(...many('minor_road', 40), ...many('major_road', 140), ...many('highway', 240)),
+        ],
+      },
+    ]);
+    const n = (cls: string) => at(svg, cls).length;
+    const road3 = n('as-r as-3');
+    const road2 = n('as-r as-2');
+    const road1 = n('as-r as-1');
+    for (const got of [road3, road2, road1, n('as-w'), n('as-v')]) expect(got).toBeGreaterThan(0);
+    expect(count(svg)).toBeLessThanOrEqual(MAX_POINTS);
+    expect(road3 + road2 + road1).toBeGreaterThanOrEqual(MAX_POINTS * 0.5);
+    expect(road3).toBeGreaterThanOrEqual(road1);
+  });
+
+  it('what fits is drawn as it was read: nothing is thinned to save points nobody needs', () => {
+    const highway = wavy(100, 300, 1);
+    const street = wavy(200, 300, 1);
+    const svg = drawStreets(big, 0, [
+      {
+        x: 0,
+        y: 0,
+        layers: [
+          water(lake(band(300, 200))),
+          roads(road('highway', highway), road('minor_road', street)),
+        ],
+      },
+    ]);
+    expect(at(svg, 'as-r as-3')).toEqual(highway.map(([x, y]) => [x / U, y / U]));
+    expect(at(svg, 'as-r as-1')).toEqual(street.map(([x, y]) => [x / U, y / U]));
+    expect(at(svg, 'as-w')).toHaveLength(201);
+  });
+
+  /** Steps down and to the right, 20 units a step: no point of it lies near a straight run. */
+  const stairs = (x: number, y: number, steps: number): Pt[] =>
+    Array.from({ length: steps * 2 + 1 }, (_, i): Pt => [
+      (x + Math.ceil(i / 2) * 20) * U,
+      (y + Math.floor(i / 2) * 20) * U,
+    ]);
+
+  it('points the water was allowed and did not draw go to the roads', () => {
+    // 320 streets that cannot be thinned, 31 points each: more than the budget.
+    // Water that asks for 24,000 points and thins to far less than its share.
+    const streets = Array.from({ length: 320 }, (_, j) =>
+      road('minor_road', stairs((j % 40) * 7, Math.floor(j / 40) * 6, 15))
+    );
+    const lakes = Array.from({ length: 60 }, (_, j) => lake(band(4 + j * 5, 400)));
+    const { svg, drawn } = drawStreetLayer(big, 0, [
+      { x: 0, y: 0, layers: [water(...lakes), roads(...streets)] },
+    ]);
+    // Asked: 320 x 31 = 9,920 points of street. Sure of 20%, plus what nobody
+    // else needs (the two other road kinds and the rivers ask for nothing).
+    const sure = spendPoints({ highway: 0, major: 0, minor: 9920, water: 24060, rivers: 0 });
+    expect(sure).toEqual({ highway: 0, major: 0, minor: 7650, water: 1350, rivers: 0 });
+    expect(drawn.water).toBeLessThan(1350);
+    expect(drawn.minor).toBe(MAX_POINTS - drawn.water);
+    expect(count(svg)).toBe(MAX_POINTS);
+  });
+
+  it('points the highways were allowed and did not draw go to the major roads', () => {
+    // Highways that ask for 24,000 points and thin to far less than they may
+    // have; 320 major roads that cannot be thinned, 9,920 points.
+    const highways = Array.from({ length: 40 }, (_, j) => road('highway', wavy(8 + j * 8, 600, 1)));
+    const majors = Array.from({ length: 320 }, (_, j) =>
+      road('major_road', stairs((j % 40) * 7, Math.floor(j / 40) * 6, 15))
+    );
+    const { svg, drawn } = drawStreetLayer(big, 0, [
+      { x: 0, y: 0, layers: [roads(...majors, ...highways)] },
+    ]);
+    const sure = spendPoints({ highway: 24000, major: 9920, minor: 0, water: 0, rivers: 0 });
+    expect(sure).toEqual({ highway: 6300, major: 2700, minor: 0, water: 0, rivers: 0 });
+    expect(drawn.highway).toBeGreaterThan(0);
+    expect(drawn.highway).toBeLessThan(6300);
+    expect(drawn.major).toBe(MAX_POINTS - drawn.highway);
+    expect(count(svg)).toBe(MAX_POINTS);
+  });
+
+  it('reports the points it drew, by kind', () => {
+    const { svg, drawn } = drawStreetLayer(big, 0, [
+      {
+        x: 0,
+        y: 0,
+        layers: [
+          water(lake(band(300, 200))),
+          {
+            name: 'water',
+            extent: 4096,
+            features: [{ type: 2, props: { kind: 'river' }, geometry: [wavy(250, 40, 2)] }],
+          },
+          roads(
+            road('highway', wavy(100, 30, 1)),
+            road('major_road', wavy(150, 20, 1)),
+            road('medium_road', wavy(160, 10, 1)),
+            road('minor_road', wavy(200, 50, 1)),
+            road('path', wavy(220, 60, 1))
+          ),
+        ],
+      },
+    ]);
+    expect(drawn).toEqual({ highway: 30, major: 30, minor: 50, water: 201, rivers: 40 });
+    expect(at(svg, 'as-r as-3')).toHaveLength(30);
+    expect(at(svg, 'as-r as-2')).toHaveLength(30);
+    expect(at(svg, 'as-r as-1')).toHaveLength(50);
+    expect(at(svg, 'as-w')).toHaveLength(201);
+    expect(at(svg, 'as-v')).toHaveLength(40);
+    expect(svg).toBe(
+      drawStreets(big, 0, [
+        {
+          x: 0,
+          y: 0,
+          layers: [
+            water(lake(band(300, 200))),
+            {
+              name: 'water',
+              extent: 4096,
+              features: [{ type: 2, props: { kind: 'river' }, geometry: [wavy(250, 40, 2)] }],
+            },
+            roads(
+              road('highway', wavy(100, 30, 1)),
+              road('major_road', wavy(150, 20, 1)),
+              road('medium_road', wavy(160, 10, 1)),
+              road('minor_road', wavy(200, 50, 1)),
+              road('path', wavy(220, 60, 1))
+            ),
+          ],
+        },
+      ])
+    );
+  });
+
+  it('a point said twice in a row is drawn once, and a part with nothing to draw is left out', () => {
+    const { svg, drawn } = drawStreetLayer(big, 0, [
+      {
+        x: 0,
+        y: 0,
+        layers: [
+          roads(
+            // 40 and 41 tile units both round to SVG unit 10; so do 400 and 401 to 100.
+            road('highway', [
+              [40, 400],
+              [41, 400],
+              [41, 401],
+              [400, 400],
+              [400, 400],
+            ]),
+            // A road that is one SVG point.
+            road('highway', [
+              [800, 800],
+              [801, 801],
+            ])
+          ),
+          // A ring of two corners and its closing point holds no water.
+          water(
+            lake([
+              [0, 0],
+              [400, 0],
+              [0, 0],
+            ]),
+            lake([
+              [0, 0],
+              [400, 0],
+              [400, 400],
+              [0, 0],
+            ])
+          ),
+        ],
+      },
+    ]);
+    expect(svg).toContain('<path class="as-r as-3" d="M10 100L100 100"/>');
+    expect(svg).toContain('<path class="as-w" d="M0 0L100 0L100 100L0 0Z"/>');
+    expect(drawn).toEqual({ highway: 2, major: 0, minor: 0, water: 4, rivers: 0 });
+  });
+
+  it('a part is kept when it touches the frame or its 12-unit margin, and dropped past it', () => {
+    const line = (x0: number, y0: number, x1: number, y1: number) =>
+      road('highway', [
+        [x0 * U, y0 * U],
+        [x1 * U, y1 * U],
+      ]);
+    const kept = (f: ReturnType<typeof line>) =>
+      drawStreetLayer(big, 0, [{ x: 0, y: 0, layers: [roads(f)] }]).drawn.highway === 2;
+    // Left and right of the frame (600 wide).
+    expect(kept(line(-40, 50, -12, 60))).toBe(true);
+    expect(kept(line(-40, 50, -13, 60))).toBe(false);
+    expect(kept(line(612, 50, 640, 60))).toBe(true);
+    expect(kept(line(613, 50, 640, 60))).toBe(false);
+    // Above and below it (360 tall).
+    expect(kept(line(50, -40, 60, -12))).toBe(true);
+    expect(kept(line(50, -40, 60, -13))).toBe(false);
+    expect(kept(line(50, 372, 60, 400))).toBe(true);
+    expect(kept(line(50, 373, 60, 400))).toBe(false);
+  });
+});
+
+describe('street map | the budget rules, one at a time', () => {
+  const need = (highway: number, major: number, minor: number, water: number, rivers: number) => ({
+    highway,
+    major,
+    minor,
+    water,
+    rivers,
+  });
+
+  it('the shares are paid roads first, add up to the whole, and give roads four fifths', () => {
+    expect(POINT_SHARES.map(([kind]) => kind)).toEqual([
+      'highway',
+      'major',
+      'minor',
+      'water',
+      'rivers',
+    ]);
+    expect(POINT_SHARES.reduce((s, [, share]) => s + share * 100, 0)).toBe(100);
+    expect(POINT_SHARES.slice(0, 3).reduce((s, [, share]) => s + share * 100, 0)).toBe(80);
+  });
+
+  it('what fits is paid in full', () => {
+    expect(spendPoints(need(100, 200, 300, 400, 50))).toEqual(need(100, 200, 300, 400, 50));
+    expect(spendPoints(need(0, 0, 0, 0, 0))).toEqual(need(0, 0, 0, 0, 0));
+    expect(spendPoints(need(9000, 0, 0, 0, 0))).toEqual(need(9000, 0, 0, 0, 0));
+    expect(spendPoints(need(0, 0, 0, 9000, 0))).toEqual(need(0, 0, 0, 9000, 0));
+  });
+
+  it('with every kind over its share, each gets its share and no more', () => {
+    expect(spendPoints(need(20000, 20000, 20000, 20000, 20000))).toEqual(
+      need(2700, 2700, 1800, 1350, 450)
+    );
+    expect(MAX_POINTS).toBe(2700 + 2700 + 1800 + 1350 + 450);
+    // The same rule at another size, shares rounded down.
+    expect(spendPoints(need(999, 999, 999, 999, 999), 101)).toEqual(need(31, 30, 20, 15, 5));
+  });
+
+  it('what one kind leaves goes to the first kind in the order that still needs it', () => {
+    // The Manhattan shape: water asks for everything, roads for more than is left.
+    expect(spendPoints(need(100, 5000, 48000, 16000, 1400))).toEqual(
+      need(100, 5000, 2100, 1350, 450)
+    );
+    // Highways take the spare before major roads, major roads before streets.
+    expect(spendPoints(need(8000, 8000, 0, 0, 0))).toEqual(need(6300, 2700, 0, 0, 0));
+    expect(spendPoints(need(0, 8000, 8000, 0, 0))).toEqual(need(0, 7200, 1800, 0, 0));
+    // Streets before water, water before rivers.
+    expect(spendPoints(need(0, 0, 8000, 8000, 0))).toEqual(need(0, 0, 7650, 1350, 0));
+    expect(spendPoints(need(0, 0, 0, 9000, 9000))).toEqual(need(0, 0, 0, 8550, 450));
+    // A kind is never paid more than it asked for.
+    expect(spendPoints(need(0, 0, 0, 8000, 8000))).toEqual(need(0, 0, 0, 8000, 1000));
+    // Never more than the whole.
+    const all = spendPoints(need(3000, 100, 9000, 9000, 9000));
+    expect(Object.values(all).reduce((s, v) => s + v, 0)).toBe(MAX_POINTS);
+    expect(all).toEqual(need(3000, 100, 4100, 1350, 450));
+  });
+
+  it('thinning: a straight run becomes its two ends', () => {
+    const run: [number, number][] = Array.from({ length: 50 }, (_, i) => [i * 3, 10]);
+    expect(thinLine(run, 1)).toEqual([
+      [0, 10],
+      [147, 10],
+    ]);
+    // Three points on one run are two.
+    expect(thinLine(run.slice(0, 3), 1)).toEqual([
+      [0, 10],
+      [6, 10],
+    ]);
+    // Two points, one point and none are returned as they came, as a copy.
+    for (const short of [run.slice(0, 2), run.slice(0, 1), []]) {
+      const out = thinLine(short, 5);
+      expect(out).toEqual(short);
+      expect(out).not.toBe(short);
+    }
+  });
+
+  it('thinning: a corner is kept, at the point where the line leaves the run', () => {
+    // Right along y=0 to (30,0), then straight down.
+    const bend: [number, number][] = [
+      [0, 0],
+      [10, 0],
+      [20, 0],
+      [30, 0],
+      [30, 10],
+      [30, 20],
+      [30, 30],
+    ];
+    expect(thinLine(bend, 1)).toEqual([
+      [0, 0],
+      [30, 0],
+      [30, 30],
+    ]);
+  });
+
+  it('thinning: a point exactly the limit away is left out; one past it is kept', () => {
+    const bump = (h: number): [number, number][] => [
+      [0, 0],
+      [10, 0],
+      [20, h],
+      [30, 0],
+      [40, 0],
+    ];
+    // The run is y=0. A point 3 away, limit 3: inside. Then the last point stays.
+    expect(thinLine(bump(3), 3)).toEqual([
+      [0, 0],
+      [40, 0],
+    ]);
+    expect(thinLine(bump(-3), 3)).toEqual([
+      [0, 0],
+      [40, 0],
+    ]);
+    // 4 away: outside, on either side. The point before it is kept, and the run
+    // from there on is the line through that point and the one that left, which
+    // the points after it leave in their turn.
+    expect(thinLine(bump(4), 3)).toEqual(bump(4));
+    expect(thinLine(bump(-4), 3)).toEqual(bump(-4));
+    // A wider limit takes the bump as part of one run.
+    expect(thinLine(bump(4), 4)).toEqual([
+      [0, 0],
+      [40, 0],
+    ]);
+  });
+
+  it('thinning: distance is measured across the run, whichever way it points', () => {
+    // A run along the diagonal; (20,26) is 6/sqrt(2) = 4.24 from it.
+    const diag: [number, number][] = [
+      [0, 0],
+      [10, 10],
+      [20, 26],
+      [30, 30],
+    ];
+    expect(thinLine(diag, 5)).toEqual([
+      [0, 0],
+      [30, 30],
+    ]);
+    expect(thinLine(diag, 4)).toHaveLength(4);
+    // A steep run: (2,100) is under 2 from the line through (0,0) and (0,50).
+    expect(
+      thinLine(
+        [
+          [0, 0],
+          [0, 50],
+          [2, 100],
+          [0, 150],
+        ],
+        2
+      )
+    ).toHaveLength(2);
+  });
+
+  const part = (points: number, span: number, rank: number, x = 0): StreetPart => ({
+    // Up and down by 100: nothing of it can be thinned at any step.
+    pts: Array.from({ length: points }, (_, i) => [x + i * 30, i % 2 ? 100 : 0]),
+    span,
+    rank,
+  });
+  const sizes = (parts: StreetPart[]) => parts.map((p) => p.pts.length);
+
+  it('fitting: parts that fit come back as they were, in their order', () => {
+    const parts = [part(10, 5, 0), part(20, 9, 1), part(30, 1, 2)];
+    const out = fitParts(parts, 60, false);
+    expect(out).toEqual(parts);
+    expect(out).not.toBe(parts);
+    expect(fitParts([], 0, false)).toEqual([]);
+  });
+
+  it('fitting: one point over, and the parts are thinned by the first step that fits', () => {
+    // 61 points along a line that wanders 2 units either side. Step 1 drops the
+    // points that sit on a straight run; steps 2 and 3 drop no more; step 5 does.
+    const wander: StreetPart = {
+      pts: Array.from({ length: 61 }, (_, i) => [i * 10, [0, 2, 0, -2][i % 4]!]),
+      span: 604,
+      rank: 0,
+    };
+    expect(fitParts([wander], 61, false)[0]!.pts).toHaveLength(61);
+    const thinned = fitParts([wander], 60, false);
+    expect(thinned).toHaveLength(1);
+    const at = (tol: number) => thinLine(wander.pts, tol).length;
+    expect(at(1)).toBeLessThan(61);
+    expect(thinned[0]!.pts.length).toBe(at(1));
+    expect(thinned[0]!.pts[0]).toEqual([0, 0]);
+    expect(thinned[0]!.pts.at(-1)).toEqual([600, 0]);
+    expect(thinned[0]).toMatchObject({ span: 604, rank: 0 });
+    // The gentlest step that fits is the one used. One point under what step 1
+    // leaves: steps 2 and 3 leave as many, so it is step 5, not step 8.
+    expect([at(2), at(3)]).toEqual([at(1), at(1)]);
+    expect(at(5)).toBeLessThan(at(1));
+    expect(at(8)).toBeLessThan(at(5));
+    expect(fitParts([wander], at(1) - 1, false)[0]!.pts).toEqual(thinLine(wander.pts, 5));
+    expect(fitParts([wander], at(5), false)[0]!.pts).toEqual(thinLine(wander.pts, 5));
+    expect(fitParts([wander], at(5) - 1, false)[0]!.pts).toEqual(thinLine(wander.pts, 8));
+  });
+
+  it('fitting: past the coarsest step the widest parts are kept and the last line is cut at a point', () => {
+    const parts = [part(10, 5, 0), part(20, 9, 1), part(30, 7, 2)];
+    // 60 points asked, 45 allowed: span 9 whole (20), span 7 whole would be 50, so 25 of it.
+    const out = fitParts(parts, 45, false);
+    expect(sizes(out)).toEqual([20, 25]);
+    expect(out[0]).toEqual(parts[1]);
+    expect(out[1]!.pts).toEqual(parts[2]!.pts.slice(0, 25));
+    // Exactly what whole parts cost: nothing is cut, and the next part is not started.
+    expect(sizes(fitParts(parts, 50, false))).toEqual([20, 30]);
+    // One point left is not a line.
+    expect(sizes(fitParts(parts, 21, false))).toEqual([20]);
+    // Two are.
+    expect(sizes(fitParts(parts, 22, false))).toEqual([20, 2]);
+    expect(sizes(fitParts(parts, 1, false))).toEqual([]);
+  });
+
+  it('fitting: equal parts are taken one from each tile before a second from any', () => {
+    // Two tiles, three parts each, all as wide as each other; rank is the place in its tile.
+    const a = [part(10, 5, 0, 0), part(10, 5, 1, 0), part(10, 5, 2, 0)];
+    const b = [part(10, 5, 0, 1000), part(10, 5, 1, 1000), part(10, 5, 2, 1000)];
+    const out = fitParts([...a, ...b], 40, false);
+    expect(out).toEqual([a[0], b[0], a[1], b[1]]);
+  });
+
+  it('fitting: a ring is never cut short, and none is kept after a wider one was left out', () => {
+    const ring = (points: number, span: number, rank: number): StreetPart => {
+      const p = part(points - 1, span, rank);
+      return { ...p, pts: [...p.pts, p.pts[0]!] };
+    };
+    const rings = [ring(30, 9, 0), ring(10, 5, 1), ring(40, 7, 2)];
+    // 80 asked. 45 allowed: the widest (30) is in; the next widest (40) does not
+    // fit and is not cut; the small one (10) would fit and is still left out.
+    expect(sizes(fitParts(rings, 45, true))).toEqual([30]);
+    expect(sizes(fitParts(rings, 70, true))).toEqual([30, 40]);
+    expect(sizes(fitParts(rings, 29, true))).toEqual([]);
+  });
+
+  it('fitting: a ring thinned to less than three corners is dropped; a line of two points is not', () => {
+    // A sliver: 40 points out along y=0 and back along y=1.
+    const sliver: [number, number][] = [
+      ...Array.from({ length: 20 }, (_, i): [number, number] => [i * 10, 0]),
+      ...Array.from({ length: 20 }, (_, i): [number, number] => [190 - i * 10, 1]),
+      [0, 0],
+    ];
+    const wide = part(20, 500, 1);
+    const closedWide = { ...wide, pts: [...wide.pts, wide.pts[0]!] };
+    expect(fitParts([{ pts: sliver, span: 191, rank: 0 }, closedWide], 30, true)).toEqual([
+      closedWide,
+    ]);
+    // The same points as a line are a line still.
+    const asLine = fitParts([{ pts: sliver, span: 191, rank: 0 }, wide], 30, false);
+    expect(asLine).toHaveLength(2);
+    expect(asLine[0]!.pts.length).toBeLessThan(10);
+  });
+});
+
+// The whole file is mutated since 2026-11-15 (stryker.conf.mjs). These pin what
+// the older cases left loose: the frame's edges, which tile zooms are read,
+// what counts as a town name and where one may sit, which features are roads,
+// and the markup to the character.
+describe('street map | the frame, the names and the kinds, to the unit', () => {
+  // One z0 tile is 4096 units wide here: a tile unit is an SVG unit.
+  const one: MapFrame = { w: 600, h: 360, scale: 4096, x0: 0, y0: 0 };
+  const tile = (layers: DecodedTile['layers']): DecodedTile[] => [{ x: 0, y: 0, layers }];
+  const places = (...features: DecodedTile['layers'][number]['features']) =>
+    tile([{ name: 'places', extent: 4096, features }]);
+  const town = (name: unknown, rank: number, x: number, y: number) => ({
+    type: 1,
+    props: { kind: 'locality', name, population_rank: rank } as Record<string, never>,
+    geometry: [[[x, y] as [number, number]]],
+  });
+  const names = (svg: string) => [...svg.matchAll(/<text [^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+  /** Half the width a name of `length` characters is given (22 px letters, 0.55 wide). */
+  const half = (length: number) => (length * 22 * 0.55) / 2;
+
+  it('the key of a set of cells is the cells in order, with commas', () => {
+    expect(cellsKey(['87b', '87a', '87c'])).toBe('87a,87b,87c');
+    expect(cellsKey(['87a', '87c', '87b'])).toBe(cellsKey(['87c', '87b', '87a']));
+    expect(cellsKey([])).toBe('');
+  });
+
+  it('a wide frame is fitted by its width: the cells reach 8% in from each side', () => {
+    const cells = [BLUE7, latLngToCell(BLUE.lat, BLUE.lon + 3, 7)];
+    const f = frameForCells(cells);
+    const xs = cells.flatMap((c) => cellToBoundary(c).map(([lat, lng]) => project(f, lat, lng)[0]));
+    expect(Math.min(...xs)).toBeCloseTo(600 * 0.08, 6);
+    expect(Math.max(...xs)).toBeCloseTo(600 * 0.92, 6);
+  });
+
+  it('the zoom read is never finer than the archive holds, nor than MAX_ZOOM', () => {
+    const cell = frameForCells([BLUE7]);
+    expect(frameZoom(cell)).toBeGreaterThanOrEqual(13);
+    // An archive that stops at zoom 12: that is what is read.
+    expect(tilesFor(cell, 0, 12).z).toBe(12);
+    // A frame finer than zoom 14, an archive that holds 15: 14 is read.
+    const fine: MapFrame = { w: 600, h: 360, scale: 256 * 2 ** 15, x0: 0.25, y0: 0.37 };
+    expect(frameZoom(fine)).toBe(15);
+    expect(tilesFor(fine, 0, 15).z).toBe(MAX_ZOOM);
+  });
+
+  it('the zoom read is never coarser than the archive holds, even past MAX_TILES', () => {
+    // 19 areas are read at zoom 12; an archive that starts at 14 is read at 14.
+    const wide = frameForCells(gridDisk(BLUE7, 2));
+    expect(frameZoom(wide)).toBe(12);
+    const r = tilesFor(wide, 14, 15);
+    expect(r.z).toBe(14);
+    expect((r.xMax - r.xMin + 1) * (r.yMax - r.yMin + 1)).toBeGreaterThan(MAX_TILES);
+  });
+
+  it('a frame over the edge of the world reads the last tile, not one past it', () => {
+    // Zoom 2 has tiles 0 to 3. This frame starts in tile 3 and runs past the edge.
+    expect(tilesFor({ w: 600, h: 360, scale: 1024, x0: 0.9, y0: 0.9 }, 0, 15)).toEqual({
+      z: 2,
+      xMin: 3,
+      xMax: 3,
+      yMin: 3,
+      yMax: 3,
+    });
+  });
+
+  it('towns of one size are named in the order of their names', () => {
+    // Seven of one size, listed from G to A, room for all: A to F are named.
+    const towns = ['G', 'F', 'E', 'D', 'C', 'B', 'A'].map((letter, i) =>
+      town(`Town ${letter}`, 5, 80 + (i % 4) * 150, 70 + Math.floor(i / 4) * 110)
+    );
+    expect(names(drawStreets(one, 0, places(...towns))).sort()).toEqual(
+      ['A', 'B', 'C', 'D', 'E', 'F'].map((l) => `Town ${l}`)
+    );
+  });
+
+  it('a name is a named point of kind locality, in English when the tile has it', () => {
+    const svg = drawStreets(
+      one,
+      0,
+      places(
+        // English first.
+        {
+          type: 1,
+          props: { kind: 'locality', name: 'Chicagou', 'name:en': 'Chicago', population_rank: 9 },
+          geometry: [[[300, 60]]],
+        },
+        // A shape, not a point.
+        {
+          type: 3,
+          props: { kind: 'locality', name: 'Shape', population_rank: 8 },
+          geometry: [
+            [
+              [100, 150],
+              [200, 150],
+              [200, 180],
+              [100, 150],
+            ],
+          ],
+        },
+        // A name that is not text, an empty name, and a point with no place.
+        town(12345, 7, 300, 150),
+        town('', 7, 300, 220),
+        { type: 1, props: { kind: 'locality', name: 'Nowhere', population_rank: 7 }, geometry: [] },
+        {
+          type: 1,
+          props: { kind: 'locality', name: 'Nopoint', population_rank: 7 },
+          geometry: [[]],
+        },
+        // No size given: still named, after the ones that have one.
+        { type: 1, props: { kind: 'locality', name: 'Unranked' }, geometry: [[[300, 300]]] }
+      )
+    );
+    expect(names(svg)).toEqual(['Chicago', 'Unranked']);
+  });
+
+  it('a name is kept when its box just fits inside the frame, on each side, and dropped a hair past it', () => {
+    // A length (no shorter than the longest tag below) whose half width adds
+    // back exactly, so "just fits" is exact.
+    const length = Array.from({ length: 19 }, (_, i) => i + 12).find(
+      (n) => 600 - half(n) + half(n) === 600
+    )!;
+    expect(length).toBeGreaterThan(0);
+    const h = half(length);
+    const name = (tag: string) => tag.padEnd(length, 'x');
+    const svg = drawStreets(
+      one,
+      0,
+      places(
+        // Past each edge by half a unit: listed first and biggest, so each would be drawn if kept.
+        town(name('out-left'), 9, h - 0.5, 280),
+        town(name('out-right'), 9, 600 - h + 0.5, 310),
+        town(name('out-top'), 9, 300, 21.5),
+        town(name('out-bottom'), 9, 300, 356.5),
+        // Touching each edge: the box is 22 above the point and 4 below it.
+        town(name('in-left'), 5, h, 100),
+        town(name('in-right'), 5, 600 - h, 200),
+        town(name('in-top'), 5, 300, 22),
+        town(name('in-bottom'), 5, 300, 356)
+      )
+    );
+    expect(names(svg).sort()).toEqual(
+      ['in-bottom', 'in-left', 'in-right', 'in-top'].map(name).sort()
+    );
+  });
+
+  it('names that touch do not overlap: one is drawn against each side of another', () => {
+    // A length and a middle where "touching" is exact on the left and the right.
+    let pick: { length: number; x: number } | null = null;
+    for (let length = 5; length <= 16 && !pick; length++) {
+      const h = half(length);
+      for (let x = 290; x <= 310 && !pick; x++) {
+        if (x - 2 * h + h === x - h && x + 2 * h - h === x + h) pick = { length, x };
+      }
+    }
+    expect(pick).not.toBeNull();
+    const { length, x } = pick!;
+    const h = half(length);
+    const name = (tag: string) => tag.padEnd(length, 'x');
+    const svg = drawStreets(
+      one,
+      0,
+      places(
+        town(name('mid'), 9, x, 180),
+        town(name('left'), 5, x - 2 * h, 180),
+        town(name('right'), 5, x + 2 * h, 180),
+        // 22 above the point and 4 below: 26 apart is edge to edge.
+        town(name('up'), 5, x, 154),
+        town(name('down'), 5, x, 206)
+      )
+    );
+    expect(names(svg).sort()).toEqual(['down', 'left', 'mid', 'right', 'up'].map(name).sort());
+    // One unit nearer on any side, and the smaller name gives way.
+    for (const [tag, tx, ty] of [
+      ['left', x - 2 * h + 1, 180],
+      ['right', x + 2 * h - 1, 180],
+      ['up', x, 155],
+      ['down', x, 205],
+    ] as const) {
+      const near = drawStreets(
+        one,
+        0,
+        places(town(name('mid'), 9, x, 180), town(name(tag), 5, tx, ty))
+      );
+      expect(names(near)).toEqual([name('mid')]);
+    }
+  });
+
+  const line = (kind: string, ...pts: [number, number][]) => ({
+    type: 2,
+    props: { kind },
+    geometry: [pts],
+  });
+
+  it('a road is a line in the roads layer: not a shape there, not a line elsewhere', () => {
+    const { svg, drawn } = drawStreetLayer(one, 0, [
+      {
+        x: 0,
+        y: 0,
+        layers: [
+          {
+            name: 'roads',
+            extent: 4096,
+            features: [
+              line('highway', [10, 10], [100, 10]),
+              // A square by the road, of kind highway: a shape.
+              {
+                type: 3,
+                props: { kind: 'highway' },
+                geometry: [
+                  [
+                    [200, 200],
+                    [300, 200],
+                    [300, 300],
+                    [200, 200],
+                  ],
+                ],
+              },
+            ],
+          },
+          // Layers the Worker does not ask for, should one reach the drawing.
+          { name: 'transit', extent: 4096, features: [line('highway', [10, 50], [100, 50])] },
+          { name: 'boundaries', extent: 4096, features: [line('major_road', [10, 90], [100, 90])] },
+        ],
+      },
+    ]);
+    expect(drawn).toEqual({ highway: 2, major: 0, minor: 0, water: 0, rivers: 0 });
+    expect(svg).toContain('<path class="as-r as-3" d="M10 10L100 10"/>');
+    expect(svg).not.toContain('as-r as-2');
+  });
+
+  it('the markup, to the character: nothing where nothing was drawn, parts end to end', () => {
+    const blank = '<g class="amap-s" aria-hidden="true" data-testid="amap-streets" data-z="3">';
+    const land = '<rect class="as-l" width="600" height="360"/>';
+    expect(drawStreetLayer(one, 3, [])).toEqual({
+      svg: `${blank}${land}</g>`,
+      drawn: { highway: 0, major: 0, minor: 0, water: 0, rivers: 0 },
+    });
+    // Zoom 0 again: two lines of one kind are one path, one after the other.
+    const svg = drawStreets(one, 0, [
+      {
+        x: 0,
+        y: 0,
+        layers: [
+          {
+            name: 'roads',
+            extent: 4096,
+            features: [
+              line('minor_road', [10, 10], [100, 10]),
+              line('minor_road', [20, 30], [90, 40]),
+            ],
+          },
+          {
+            name: 'water',
+            extent: 4096,
+            features: [
+              {
+                type: 3,
+                props: {},
+                geometry: [
+                  [
+                    [0, 100],
+                    [50, 100],
+                    [50, 150],
+                    [0, 100],
+                  ],
+                  [
+                    [200, 100],
+                    [250, 100],
+                    [250, 150],
+                    [200, 100],
+                  ],
+                ],
+              },
+              {
+                type: 2,
+                props: {},
+                geometry: [
+                  [
+                    [0, 300],
+                    [600, 310],
+                  ],
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    expect(svg).toBe(
+      '<g class="amap-s" aria-hidden="true" data-testid="amap-streets" data-z="0">' +
+        land +
+        '<path class="as-w" d="M0 100L50 100L50 150L0 100ZM200 100L250 100L250 150L200 100Z"/>' +
+        '<path class="as-v" d="M0 300L600 310"/>' +
+        '<path class="as-r as-1" d="M10 10L100 10M20 30L90 40"/>' +
+        '</g>'
+    );
+  });
+
+  /** Steps down and to the right, 20 units a step: none of its points can be thinned. */
+  const stairs = (x: number, y: number, steps: number, k = 1): [number, number][] =>
+    Array.from({ length: steps * 2 + 1 }, (_, i): [number, number] => [
+      Math.round((x + Math.ceil(i / 2) * 20) * k),
+      Math.round((y + Math.floor(i / 2) * 20) * k),
+    ]);
+  const starts = (svg: string, cls: string) =>
+    [
+      ...(new RegExp(`<path class="${cls}" d="([^"]*)"`).exec(svg)?.[1] ?? '').matchAll(
+        /M(-?\d+) (-?\d+)/g
+      ),
+    ].map((m) => [Number(m[1]), Number(m[2])] as const);
+
+  it('past the coarsest thinning, the roads that reach furthest are the ones drawn', () => {
+    // 100 short roads, listed first, low and to the right; 300 long ones. The
+    // long ones alone are over the budget, so no short one is drawn.
+    const short = Array.from({ length: 100 }, (_, j) =>
+      line('highway', ...stairs(480 + (j % 10), 250 + Math.floor(j / 10), 5))
+    );
+    const long = Array.from({ length: 300 }, (_, j) =>
+      line('highway', ...stairs((j % 40) * 7, Math.floor(j / 40) * 6, 15))
+    );
+    const { svg, drawn } = drawStreetLayer(one, 0, [
+      { x: 0, y: 0, layers: [{ name: 'roads', extent: 4096, features: [...short, ...long] }] },
+    ]);
+    expect(drawn.highway).toBe(MAX_POINTS);
+    const from = starts(svg, 'as-r as-3');
+    // 290 long roads whole (31 points each) and the first 10 points of one more.
+    expect(from).toHaveLength(291);
+    expect(from.filter(([x]) => x >= 480)).toEqual([]);
+  });
+
+  it('equal roads in two tiles: the first of each tile, then the second of each, to the budget', () => {
+    // Zoom 1, two tiles side by side, 300 units each. 640 equal roads in each
+    // (15 points a road): the budget holds 600 roads, so 300 from each tile,
+    // and from each tile the first 300 listed.
+    const two: MapFrame = { w: 600, h: 360, scale: 600, x0: 0, y0: 0 };
+    const k = (2 * 4096) / 600;
+    const tileOf = (x: number): DecodedTile => ({
+      x,
+      y: 0,
+      layers: [
+        {
+          name: 'roads',
+          extent: 4096,
+          features: Array.from({ length: 640 }, (_, j) =>
+            line('major_road', ...stairs((j % 20) * 7, Math.floor(j / 20) * 6, 7, k))
+          ),
+        },
+      ],
+    });
+    const { svg, drawn } = drawStreetLayer(two, 1, [tileOf(0), tileOf(1)]);
+    expect(drawn.major).toBe(MAX_POINTS);
+    const from = starts(svg, 'as-r as-2');
+    expect(from).toHaveLength(600);
+    expect(from.filter(([x]) => x < 300)).toHaveLength(300);
+    const has = (x: number, y: number) => from.some(([fx, fy]) => fx === x && fy === y);
+    // Road 0 and road 299 of each tile are in; road 300 and road 639 are not.
+    expect([has(0, 0), has(300, 0), has(133, 84), has(433, 84)]).toEqual([true, true, true, true]);
+    expect([has(0, 90), has(300, 90), has(133, 186), has(433, 186)]).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+});
+
+// The floor under a layer (street-map CCR 2026-11-15, R7 and R18). A layer that
+// is shown turns on the OpenStreetMap credit, lightens the hexagons and, in the
+// zoomed area, turns on the dots. So a layer with no road to steer by is not
+// shown at all: the page keeps its hexagons.
+describe('street map | a layer too thin to read is no layer', () => {
+  const drawn = (over: Partial<DrawnPoints>): DrawnPoints => ({
+    highway: 0,
+    major: 0,
+    minor: 0,
+    water: 0,
+    rivers: 0,
+    ...over,
+  });
+
+  it('the rule: a highway or a major road, and MIN_ROAD_POINTS of road in all', () => {
+    expect(MIN_ROAD_POINTS).toBe(100);
+    expect(layerShows(drawn({}))).toBe(false);
+    // Water is not a street map, however much of it.
+    expect(layerShows(drawn({ water: 8999, rivers: 500 }))).toBe(false);
+    // What the old drawer drew for 19 areas of Manhattan, and for Chicago with New York.
+    expect(layerShows(drawn({ water: 8999, major: 1 }))).toBe(false);
+    expect(layerShows(drawn({ water: 8990, highway: 10 }))).toBe(false);
+    // Streets with no road to steer by.
+    expect(layerShows(drawn({ minor: 5000 }))).toBe(false);
+    // Either main kind will do, and the count is of all three kinds together.
+    expect(layerShows(drawn({ highway: 1, minor: 99 }))).toBe(true);
+    expect(layerShows(drawn({ major: 1, minor: 99 }))).toBe(true);
+    expect(layerShows(drawn({ highway: 1, minor: 98 }))).toBe(false);
+    expect(layerShows(drawn({ major: 1, minor: 98 }))).toBe(false);
+    expect(layerShows(drawn({ highway: 50, major: 50 }))).toBe(true);
+    expect(layerShows(drawn({ highway: 100 }))).toBe(true);
+    expect(layerShows(drawn({ major: 100 }))).toBe(true);
+    expect(layerShows(drawn({ highway: 99 }))).toBe(false);
+    // Water does not count toward the roads.
+    expect(layerShows(drawn({ highway: 99, water: 5000, rivers: 5000 }))).toBe(false);
+    // The thinnest real place measured: farmland in Nebraska, one area.
+    expect(layerShows(drawn({ major: 32, minor: 304, water: 9, rivers: 137 }))).toBe(true);
+  });
+
+  /** A line of `points` points across a tile, swinging so that none is thinned or merged. */
+  const across = (kind: string, points: number, y: number): FixtureLayer['features'][number] => ({
+    type: 2,
+    props: { kind },
+    parts: [
+      Array.from({ length: points }, (_, i): [number, number] => [
+        Math.round((4096 * i) / (points - 1)),
+        y + (i % 2 ? 300 : 0),
+      ]),
+    ],
+  });
+  const pond: FixtureLayer = {
+    name: 'water',
+    features: [
+      {
+        type: 3,
+        props: { kind: 'lake' },
+        parts: [
+          [
+            [0, 0],
+            [4096, 0],
+            [4096, 4096],
+            [0, 4096],
+            [0, 0],
+          ],
+        ],
+      },
+    ],
+  };
+  const layerOf = async (layers: FixtureLayer[]) => {
+    const { tiles } = tilesOfFrame([BLUE7], () => layers);
+    const archive = await pmtilesArchive(tiles, { gzip: true });
+    return {
+      built: await buildStreetLayer(memSource(archive), [BLUE7]),
+      loaded: await loadStreetLayer({ MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) }, [BLUE7]),
+    };
+  };
+
+  it('tiles with nothing in them: no layer', async () => {
+    const { built, loaded } = await layerOf([]);
+    expect(built).toBeNull();
+    expect(loaded).toBeNull();
+  });
+
+  it('water and no road: no layer', async () => {
+    const { built, loaded } = await layerOf([pond]);
+    expect(built).toBeNull();
+    expect(loaded).toBeNull();
+  });
+
+  it('streets and no highway or major road: no layer', async () => {
+    const { built, loaded } = await layerOf([
+      pond,
+      { name: 'roads', features: [across('minor_road', 60, 1000), across('minor_road', 60, 2000)] },
+    ]);
+    expect(built).toBeNull();
+    expect(loaded).toBeNull();
+  });
+
+  it('a stub of highway and nothing else: no layer', async () => {
+    const { built } = await layerOf([{ name: 'roads', features: [across('highway', 4, 1000)] }]);
+    expect(built).toBeNull();
+  });
+
+  it('roads to steer by: a layer, which says what it drew', async () => {
+    const { built, loaded } = await layerOf([
+      pond,
+      { name: 'roads', features: [across('major_road', 20, 1000), across('minor_road', 20, 2000)] },
+    ]);
+    expect(built).not.toBeNull();
+    expect(loaded).toEqual(built);
+    const n = (cls: string) =>
+      (new RegExp(`<path class="${cls}" d="([^"]*)"`).exec(built!.svg)?.[1]?.match(/[ML]/g) ?? [])
+        .length;
+    expect(built!.drawn).toEqual({
+      highway: 0,
+      major: n('as-r as-2'),
+      minor: n('as-r as-1'),
+      water: n('as-w'),
+      rivers: 0,
+    });
+    expect(built!.drawn.major).toBeGreaterThan(0);
+    expect(built!.drawn.major + built!.drawn.minor).toBeGreaterThanOrEqual(MIN_ROAD_POINTS);
   });
 });
 
@@ -635,13 +1701,70 @@ describe('street map | loading (fail soft)', () => {
     expect(tileRead.offset + tileRead.length).toBeLessThanOrEqual(archive.length);
   });
 
-  it('one tile of the frame is enough for a layer', async () => {
-    const { tiles } = tilesForCells([BLUE7]);
+  it('one tile of the frame is enough for a layer, when its roads cross the map', async () => {
+    const { r, tiles } = tilesForCells([BLUE7]);
     expect(tiles.length).toBeGreaterThan(1);
-    const layer = await buildStreetLayer(memSource(await pmtilesArchive(tiles.slice(0, 1))), [
-      BLUE7,
-    ]);
+    // The tile under the middle of the frame: its highway and its street cross the map.
+    const [wx, wy] = toWorld(...cellToLatLng(BLUE7));
+    const mid = tiles.filter(
+      (t) => t.x === Math.floor(wx * 2 ** r.z) && t.y === Math.floor(wy * 2 ** r.z)
+    );
+    expect(mid).toHaveLength(1);
+    const layer = await buildStreetLayer(memSource(await pmtilesArchive(mid)), [BLUE7]);
     expect(layer?.svg).toContain('data-testid="amap-streets"');
+  });
+
+  // street-map CCR 2026-11-15, R5. The public area map refused a frame wider
+  // than a street map can show; the landing did not. The floor is the loader's,
+  // so every caller has it.
+  it('a frame wider than a street map can show reads nothing and is no layer', async () => {
+    const framed = [BLUE7, FAR7];
+    expect(frameZoom(frameForCells(framed))).toBeLessThan(MIN_STREET_ZOOM);
+    const { tiles } = tilesForCells(framed);
+    const archive = await pmtilesArchive(tiles, { gzip: true });
+    // The tiles are there and they draw: only the width refuses them.
+    expect(await buildStreetLayer(memSource(archive), framed)).not.toBeNull();
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, archive);
+    expect(await loadStreetLayer({ MAP_TILES: bucket }, framed)).toBeNull();
+    expect(bucket.gets).toHaveLength(0);
+  });
+
+  it('the floor is zoom 7: a frame read at zoom 7 draws, one read at zoom 6 does not', async () => {
+    expect(MIN_STREET_ZOOM).toBe(7);
+    /** Blue Island and an area due east of it, far enough for the frame to be read at `z`. */
+    const pairAt = (z: number): string[] => {
+      for (let d = 0.2; d < 30; d += 0.2) {
+        const pair = [BLUE7, latLngToCell(BLUE.lat, BLUE.lon + d, 7)];
+        if (frameZoom(frameForCells(pair)) === z) return pair;
+      }
+      throw new Error(`no pair of areas is read at zoom ${z}`);
+    };
+    for (const [z, draws] of [
+      [8, true],
+      [7, true],
+      [6, false],
+      [5, false],
+    ] as const) {
+      // Each archive is another file under the same name: forget the last one's directory.
+      resetPmtilesCache();
+      const framed = pairAt(z);
+      const { r, tiles } = tilesForCells(framed);
+      expect(r.z).toBeLessThanOrEqual(z);
+      const bucket = fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles, { gzip: true }));
+      const layer = await loadStreetLayer({ MAP_TILES: bucket }, framed);
+      expect(layer !== null).toBe(draws);
+      expect(bucket.gets.length > 0).toBe(draws);
+    }
+  });
+
+  it('the zoom of a frame is the one whose tiles are about 256 units across in it', () => {
+    const at = (scale: number) => frameZoom({ w: 600, h: 360, scale, x0: 0, y0: 0 });
+    expect(at(256)).toBe(0);
+    expect(at(256 * 2 ** 7)).toBe(7);
+    // Rounded to the nearer zoom, in powers of two.
+    expect(at(256 * 2 ** 6.49)).toBe(6);
+    expect(at(256 * 2 ** 6.51)).toBe(7);
+    expect(at(256 * 2 ** 12.3)).toBe(12);
   });
 
   it('a slow archive: null, on time', async () => {
@@ -951,16 +2074,31 @@ describe('street map | the archive read: fat fingers, security, network', () => 
   });
 
   it('network: one late tile read makes the whole layer late: no layer, on time; the next request draws', async () => {
-    const archive = await sound();
+    // Not gzipped, so the read that is abandoned below has nothing to wait for
+    // once its late answer lands, and ends inside this test (see the last lines).
+    const archive = await sound({ gzip: false, leaf: true });
     const last = (await dryRun(archive)) - 1;
     const bucket = scriptedBucket(CONFIGURED, archive, (n) =>
       n === last ? { delayMs: 400 } : 'ok'
     );
+    let landed!: () => void;
+    const late = new Promise<void>((r) => (landed = r));
+    const get = bucket.get.bind(bucket);
+    bucket.get = async (k, o) => {
+      const n = bucket.gets.length;
+      const out = await get(k, o);
+      if (n === last) landed();
+      return out;
+    };
     const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED };
     const t0 = Date.now();
     expect(await loadStreetLayer(env, [BLUE7], { timeoutMs: 60 })).toBeNull();
     expect(Date.now() - t0).toBeLessThan(300);
     expect(drawn(await loadStreetLayer(env, [BLUE7], { timeoutMs: 2000 }))).toBe(true);
+    // The first read was abandoned, not stopped. Wait for its late answer and
+    // one turn of the event loop, so it draws here and not under a later test.
+    await late;
+    await new Promise<void>((r) => setTimeout(r, 0));
   });
 
   it('network: two requests for one area in a cold isolate read the header once', async () => {

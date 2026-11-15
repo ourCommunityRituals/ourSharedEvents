@@ -15,8 +15,12 @@
 //      leaf must fit the reader's entry budget. Every directory and every tile
 //      must be inside the reader's limits (MAX_DIRECTORY_BYTES, MAX_TILE_BYTES):
 //      past them the Worker refuses the read and draws hexagons only.
-//   4. Draws: `buildStreetLayer`, the function the landing page calls, must draw
-//      roads for areas inside the region and nothing for areas outside it.
+//   4. Draws: the reader and the drawing behind `buildStreetLayer`, the function
+//      the landing page calls, must read no tile for areas outside the region,
+//      and for areas inside it must draw a street map: highways and major
+//      roads, not water with a road or two (MIN_MAIN_ROAD_POINTS,
+//      MIN_MAIN_ROAD_SHARE). The rule asks for more than the Worker's own floor
+//      (`layerShows`), so a draw that passes is one the Worker shows.
 //
 // It is pure: the caller gives it a RangeSource and the file's size. The command
 // that opens a file is `scripts/check-street-map-archive.mjs`.
@@ -40,15 +44,28 @@ import {
   type PmtilesHeader,
   type RangeSource,
 } from '../../src/lib/pmtiles.js';
-import { MAX_ZOOM, buildStreetLayer } from '../../src/lib/street-map.js';
+import { MAX_ZOOM, readStreetDrawing, type DrawnPoints } from '../../src/lib/street-map.js';
 
 /** Leaf directories the reader follows below the root (lib/pmtiles.ts, MAX_DEPTH). */
 export const READER_MAX_DEPTH = 3;
 
+/**
+ * What a draw must hold of highway and major road to count as "streets": this
+ * many points, and this share of every point drawn. Every draw aimed inside
+ * the region is at a city centre. Measured through this drawing on real tiles
+ * of Protomaps build 20261109 (a workstation run, 2026-11-15), the thinnest of
+ * the 16 drew 304 such points (San Juan) and the smallest share was 7.9%
+ * (Anchorage); the layer the old drawing made of 19 areas of Manhattan held 1
+ * point of 9,000. A third of the thinnest, so a real cut is not refused for a
+ * quiet city, and a layer of water with a road or two is.
+ */
+export const MIN_MAIN_ROAD_POINTS = 100;
+export const MIN_MAIN_ROAD_SHARE = 0.03;
+
 export interface Probe {
   name: string;
   cells: string[];
-  /** streets: roads must be drawn. none: no layer at all. report: recorded, never a failure. */
+  /** streets: a street map must be drawn. none: no tile is read. report: recorded, never a failure. */
   expect: 'streets' | 'none' | 'report';
 }
 
@@ -56,8 +73,15 @@ export interface ProbeResult {
   name: string;
   cells: number;
   expect: Probe['expect'];
-  got: 'streets' | 'no-roads' | 'none' | 'error';
+  /**
+   * streets: enough highway and major road (a layer the Worker shows).
+   * thin-roads: roads were drawn, too few to be a street map. no-roads: tiles
+   * were read and held no road. none: no tile for the frame.
+   */
+  got: 'streets' | 'thin-roads' | 'no-roads' | 'none' | 'error';
   error?: string;
+  /** Path points drawn, by kind; null when no tile was read. */
+  drawn: DrawnPoints | null;
   zoom: number | null;
   reads: number;
   bytes: number;
@@ -118,6 +142,15 @@ const INSIDE: [string, number, number][] = [
   ['Honolulu', 21.3069, -157.8583],
   ['San Juan, Puerto Rico', 18.4655, -66.1057],
 ];
+/**
+ * Cities on the water, drawn wide. These are the frames where water took the
+ * whole point budget before roads were paid first (street-map CCR 2026-11-15).
+ */
+const ON_WATER: [string, number, number][] = [
+  ['Manhattan', 40.7831, -73.9712],
+  ['Seattle', 47.6062, -122.3321],
+  ['San Francisco', 37.7749, -122.4194],
+];
 const OUTSIDE: [string, number, number][] = [
   ['London', 51.5074, -0.1278],
   ['Mexico City', 19.4326, -99.1332],
@@ -126,7 +159,8 @@ const OUTSIDE: [string, number, number][] = [
 /**
  * The draws every United States archive must pass: one area in each part of the
  * region (docs/runbooks/street-map-us-region.geojson), the landing map's wider
- * frames, and two areas outside the region, which must draw nothing.
+ * frames, the same frames over cities on the water, and two areas outside the
+ * region, which must draw nothing.
  */
 export function defaultProbes(): Probe[] {
   const chicago = latLngToCell(41.8781, -87.6298, RES);
@@ -138,6 +172,12 @@ export function defaultProbes(): Probe[] {
     })),
     { name: 'Chicago, 7 areas', cells: gridDisk(chicago, 1), expect: 'streets' },
     { name: 'Chicago, 19 areas', cells: gridDisk(chicago, 2), expect: 'streets' },
+    ...ON_WATER.flatMap(([name, lat, lng]): Probe[] =>
+      [1, 2].map((rings) => {
+        const cells = gridDisk(latLngToCell(lat, lng, RES), rings);
+        return { name: `${name}, ${cells.length} areas (on the water)`, cells, expect: 'streets' };
+      })
+    ),
     ...OUTSIDE.map(([name, lat, lng]): Probe => ({
       name: `${name}, one area (outside the region)`,
       cells: [latLngToCell(lat, lng, RES)],
@@ -316,11 +356,25 @@ export async function checkArchive(
     let got: ProbeResult['got'];
     let zoom: number | null = null;
     let error: string | undefined;
+    let drawn: DrawnPoints | null = null;
+    let why = '';
     try {
-      const layer = await buildStreetLayer(counted, p.cells);
-      got = !layer ? 'none' : layer.svg.includes('class="as-r') ? 'streets' : 'no-roads';
-      const z = layer && /data-z="(\d+)"/.exec(layer.svg);
-      if (z) zoom = Number(z[1]);
+      const drawing = await readStreetDrawing(counted, p.cells);
+      if (!drawing) got = 'none';
+      else {
+        drawn = drawing.drawn;
+        const main = drawn.highway + drawn.major;
+        const all = main + drawn.minor + drawn.water + drawn.rivers;
+        if (main + drawn.minor === 0) got = 'no-roads';
+        else if (main >= MIN_MAIN_ROAD_POINTS && main >= all * MIN_MAIN_ROAD_SHARE) {
+          got = 'streets';
+        } else {
+          got = 'thin-roads';
+          why = `highway and major road: ${main} of ${all} points drawn; a draw needs ${MIN_MAIN_ROAD_POINTS} and ${MIN_MAIN_ROAD_SHARE * 100}%`;
+        }
+        const z = /data-z="(\d+)"/.exec(drawing.svg);
+        if (z) zoom = Number(z[1]);
+      }
     } catch (e) {
       got = 'error';
       error = (e as Error).message;
@@ -332,13 +386,16 @@ export async function checkArchive(
       expect: p.expect,
       got,
       ...(error ? { error } : {}),
+      drawn,
       zoom,
       reads,
       bytes,
       ms: Math.round(performance.now() - started),
       ok,
     });
-    if (!ok) bad(`draw: ${p.name}: expected ${p.expect}, got ${got}${error ? ` (${error})` : ''}`);
+    const detail = error || (p.expect === 'streets' ? why : '');
+    if (!ok)
+      bad(`draw: ${p.name}: expected ${p.expect}, got ${got}${detail ? ` (${detail})` : ''}`);
   }
   return report;
 }

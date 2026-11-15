@@ -105,14 +105,16 @@ const config = {
     'src/lib/attendee-map.ts',
     'src/lib/mvt.ts',
     'src/lib/pmtiles.ts',
-    // The street layer's loader, same epic (owner 2026-11-10). Which object is
-    // read (the archive name rule), no layer without a tile, and one failed,
-    // short or late read is no layer and never a throw. Only these two ranges:
-    // the frame, the tile choice and the SVG drawing in the same file are not
-    // mutated. The second range stops at the catch line, so the catch body (its
-    // one statement returns null) is outside it. Killed by street-map.spec.ts.
-    rangeOf('src/lib/street-map.ts', 'export const DEFAULT_ARCHIVE', 'const ARCHIVE_NAME'),
-    rangeOf('src/lib/street-map.ts', 'export async function buildStreetLayer(', '} catch {'),
+    // The street layer, same epic (owner 2026-11-10), the whole file since the
+    // street-map CCR of 2026-11-15 (R17): the frame and the tile choice, the
+    // drawing and its point budget (which kind is paid first, what each is sure
+    // of, how a kind is thinned and cut to fit), the floor under a layer that
+    // is shown, the floor under a frame's width, and the loader (which object
+    // is read, no layer without a tile, one failed, short or late read is no
+    // layer and never a throw). Until then only the archive name and the loader
+    // were mutated, and the file's floor read 100 for that part alone. Killed
+    // by street-map.spec.ts, street-map-landing.spec.ts and map-areas.spec.ts.
+    'src/lib/street-map.ts',
     // OSE-1936 (epic OSE-1927, owner 2026-11-10) — the header Language menu: the
     // whole renderer, and in pages.ts only the two places that put it on a page
     // (the event top bar, and the marker on /events and the landing). Killed by
@@ -167,16 +169,40 @@ const config = {
     // goldens), language-layer-golden.spec.ts and list-landing-language-golden.
     rangeOf('src/handlers/form-pages.ts', 'function privacyNotice(', '// ── Shared CSS'),
     rangeOf('src/handlers/form-pages.ts', 'function js(lang', '// ── Sponsor strip + cache loader'),
-    rangeOf('src/handlers/form-pages.ts', 'const formJsSponsor =', '})(${jsonForScript(eventId)});'),
-    rangeOf('src/handlers/form-pages.ts', 'function registrationForm(', '// ── Next step after a confirmation'),
+    rangeOf(
+      'src/handlers/form-pages.ts',
+      'const formJsSponsor =',
+      '})(${jsonForScript(eventId)});'
+    ),
+    rangeOf(
+      'src/handlers/form-pages.ts',
+      'function registrationForm(',
+      '// ── Next step after a confirmation'
+    ),
     rangeOf('src/handlers/form-pages.ts', 'function registerNextStep(', '// ── Page shell'),
     rangeOf('src/handlers/form-pages.ts', 'const menuPath = eventFormPath(', '</html>`;'),
     rangeOf('src/handlers/form-pages.ts', 'pathLang?: Lang', 'if (!isValidEventId(eventId))'),
-    rangeOf('src/handlers/form-pages.ts', 'Location: withLangPrefix(', "'Cache-Control': 'no-store',"),
-    rangeOf('src/handlers/form-pages.ts', 'if (isStaleForPublicLanding(row.status))', 'if (typeof row.title'),
-    rangeOf('src/handlers/form-pages.ts', 'const eventName = escapeHtml(', 'const nonce = generateNonce();'),
+    rangeOf(
+      'src/handlers/form-pages.ts',
+      'Location: withLangPrefix(',
+      "'Cache-Control': 'no-store',"
+    ),
+    rangeOf(
+      'src/handlers/form-pages.ts',
+      'if (isStaleForPublicLanding(row.status))',
+      'if (typeof row.title'
+    ),
+    rangeOf(
+      'src/handlers/form-pages.ts',
+      'const eventName = escapeHtml(',
+      'const nonce = generateNonce();'
+    ),
     rangeOf('src/handlers/form-pages.ts', 'nextStep,', "Vary: 'Accept-Language' }),"),
-    rangeOf('src/lib/event-staleness.ts', 'path: string = STALE_FORWARD_PATH', 'Location: `${origin}${path}`'),
+    rangeOf(
+      'src/lib/event-staleness.ts',
+      'path: string = STALE_FORWARD_PATH',
+      'Location: `${origin}${path}`'
+    ),
     rangeOf('src/handlers/pages.ts', 'const href = (type: EventFormType) =>', 'const off = inert'),
   ],
   coverageAnalysis: 'perTest',

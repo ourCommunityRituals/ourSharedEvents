@@ -88,7 +88,10 @@ const lines = [
   ...record.draws.map(
     (d) =>
       `draw     ${d.ok ? 'ok  ' : 'FAIL'} ${d.name}: ${d.got}` +
-      `${d.zoom === null ? '' : ` z${d.zoom}`}, ${d.reads} reads, ${d.bytes} bytes, ${d.ms} ms`
+      `${d.zoom === null ? '' : ` z${d.zoom}`}, ${d.reads} reads, ${d.bytes} bytes, ${d.ms} ms` +
+      (d.drawn
+        ? `, points: highway ${d.drawn.highway}, major ${d.drawn.major}, minor ${d.drawn.minor}, water ${d.drawn.water}, rivers ${d.drawn.rivers}`
+        : '')
   ),
   `record   ${recordPath}`,
   passed
