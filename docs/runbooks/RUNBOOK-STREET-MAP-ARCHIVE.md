@@ -368,7 +368,11 @@ writes nothing and can run at any time.
 3. **Measure, and decide the zoom.** `measure` gives the file's size. The cut
    keeps every zoom of the build, and the Worker reads zoom 14 at most; whether
    to cut with a top zoom is decided before the first load, because a locked
-   object is not changed (finding R6).
+   object is not changed (finding R6). **Measured 2026-11-15 (run
+   43753563640): 20 GB by dry run, with every zoom kept, and it fits the
+   runner** ("Staging, in order", step 2). How much of the 20 GB lies above
+   zoom 14 is not measured: the workflow makes one dry run, without a top
+   zoom, so the size alone does not say what a top zoom would save.
 4. **The licence.** [`NOTICE.md`](../../NOTICE.md) lists the duties and what is
    NOT CLEAR. Staging is public, so the first load is the first public street:
    the owner answers its question 2 (before the load, or before production)
@@ -397,6 +401,8 @@ writes nothing and can run at any time.
      `default`, standard storage, with no object. `ose-map-tiles-staging`
      (created 2026-11-10) was still listed that day. Whether `default` is the
      jurisdiction the owner accepts is the owner's to say, before the load.
+     Run 43753563640 read the two privacy settings again the same day, with
+     the same two answers.
    - **The rule for any later bucket is unchanged:** the owner creates it
      **before** the PR that names it in `wrangler.toml` merges, and before that
      PR's branch is run on staging. A deploy that finds no bucket under a bound
@@ -420,9 +426,30 @@ writes nothing and can run at any time.
      pins are now `TOOL_RCLONE_VERSION` and `TOOL_RCLONE_SHA256`, and
      `tests/unit/ci/street-map-archive-load.test.js` refuses a name that begins
      `RCLONE_` unless it is one of the remote's own settings in a bucket step.
-     **No size has been measured yet.** The steps after the rclone download
-     (the disk, the build, the dry run, the fit) have never run on a runner:
-     the next `measure` from `main` is their first.
+   - **The second, 43753563640 on 2026-11-15 (from `main` at `de0fc8f2`), was
+     green, and is the measurement.** It was the first real run of the
+     corrected step (`rclone v1.76.0` started) and of every step after it. The
+     dry run took 222 requests and 25 seconds and printed:
+
+     ```text
+     Region tiles 46129703, result tile entries 18362310
+     Extract transferred 21 GB (overfetch 0.05) for an archive size of 20 GB
+     ```
+
+     The run's summary: an archive of **20 GB** for build `20261109`; "the cut
+     needs 21.6 GB and the runner has 90.5 GB free", "The cut fits." Both
+     places the workflow looks at (`$RUNNER_TEMP` and `/mnt`) had the same
+     90,462,855,168 bytes free: one disk on this runner image, not two. Job 1
+     read the bucket's two privacy settings again, with the answers in step 1.
+     All eight `LOAD:` steps were skipped: no bucket credential was used and
+     nothing was written.
+
+   - **What "20 GB" is.** A dry-run figure: the tile data alone, rounded to a
+     whole number, so at most 20.55 GB, without the new directories, and with
+     every zoom of the build kept. The byte size of the loaded file comes from
+     the load run (step 5). A `measure` run does not show the cut itself or
+     how long it takes, the check with the Worker's reader, or any rclone call
+     that reaches the bucket: those are `LOAD:` steps and have never run.
 
 3. **Owner: create the token and set the secret.** In the Cloudflare dashboard:
    an R2 API token, "Object Read & Write", scoped to `ose-map-tiles` only.
@@ -554,10 +581,12 @@ dashboard.
 
 ## If the file does not fit
 
-The size of the United States file was never measured; the `measure` run is the
-measurement. GitHub documents 14 GB of storage for a standard runner, and the
-run prints what the runner really has. If the run says the file does not fit,
-the choices are the owner's:
+It fits today: on 2026-11-15 the `measure` run 43753563640 reported 20 GB by
+dry run against 90.5 GB free ("Staging, in order", step 2). GitHub documents
+14 GB of storage for a standard runner and promises no more, so every run
+reads what the runner really has, and the answer can change with the runner
+image or the build. If a run says the file does not fit, the choices are the
+owner's:
 
 - a **GitHub-hosted larger runner** (more disk; billed by the minute, and set up
   in the organisation's settings), with the job's `runs-on` changed in a PR.
@@ -603,8 +632,8 @@ that name in the default jurisdiction. The owner had said, before the deploy
 ran, that the bucket was created; whether one was made under another account,
 name or jurisdiction is not known here, and no agent read Cloudflare. What is
 known is that the bucket staging binds was made by the deploy, with default
-settings, and that its two privacy settings have not been read by anyone yet:
-the first `measure` run reads them ("Staging, in order", steps 1 and 2).
+settings. Its two privacy settings were first read by the `measure` runs of
+2026-11-15, which found both off ("Staging, in order", steps 1 and 2).
 
 **Nothing in CI refuses a deploy whose binding names a bucket that is not
 there.** The rule "the owner creates it first" holds only when a person does it
@@ -753,13 +782,15 @@ probe in the archive check, before the load.
 
 ## What is proven, and what is not until the file is on staging
 
-**The workflow has not run.** It can only be dispatched once it is on `main`, so
-on the day it merged nothing in it had been seen working on a runner: not the
-downloads, not the dry run's last line, not the upload. Its decisions (the
-names, the bucket's privacy, the size against the disk, the key being free, the
-listed size) are tested on the faults that must stop it, in
-`tests/unit/ci/street-map-archive-load.test.js`. The `measure` run is its first
-real run, and it writes nothing.
+**The workflow has run in `measure` mode only.** It can only be dispatched once
+it is on `main`. Its first run (43744396310, 2026-11-15) stopped at the rclone
+download; its second (43753563640, the same day) was green through the dry run
+and the fit ("Staging, in order", step 2). So the downloads, the disk read, the
+dry run's last line and the fit have been seen working on a runner, once. No
+`LOAD:` step has run anywhere: not the bucket listing, the cut, the check or
+the upload. The workflow's decisions (the names, the bucket's privacy, the size
+against the disk, the key being free, the listed size) are tested on the faults
+that must stop it, in `tests/unit/ci/street-map-archive-load.test.js`.
 
 Proven in tests: the reader against a 0.464 GB regional file, and against a
 synthetic file laid out as a planet build (two levels of leaf directories, tile
@@ -816,16 +847,19 @@ plus major road and 3% of every point drawn; roads that fall short are
 `thin-roads`, which fails the draw. The two numbers come from a workstation run
 over build `20261109` at Protomaps (the comment in
 `workers/oursharedevents/scripts/street-map-archive/check.ts`). No run of the
-eighteen against a United States file exists: the load workflow has 0 runs
-(read 2026-11-15).
+eighteen against a United States file exists: the load workflow has two
+`measure` runs and no `load` run (read 2026-11-15), and the check is a `LOAD:`
+step.
 
 Still unmeasured:
 
-- the United States file itself: its size, how long the cut takes on a runner
-  and how much memory it needs there, how its directories are laid out (how many
-  leaf directories, how many entries in each), and the reader drawing from it.
-  The `measure` run gives the size; the check measures the layout and the draws
-  on the cut file, before the upload;
+- the United States file itself: its byte size (the dry run of 2026-11-15
+  gives 20 GB of tile data, rounded; "Staging, in order", step 2), how much of
+  that lies above zoom 14, how long the cut takes on a runner and how much
+  memory it needs there, how its directories are laid out (how many leaf
+  directories, how many entries in each), and the reader drawing from it. The
+  load run gives the byte size; the check measures the layout and the draws on
+  the cut file, before the upload;
 - the first map in a new Worker instance, reading from R2. The workstation's
   1.4 s sits just under the 1.5 s limit that turns a slow read into hexagons
   only; it went over the public internet, so it says nothing about R2, and this
