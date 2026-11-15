@@ -91,8 +91,10 @@ its size is not measured yet (decision 4).
    The `MAP_TILES` binding for `[env.staging]` is on `main`. Its bucket,
    `ose-map-tiles`, is **one bucket that staging and production both read**
    (owner, 2026-11-14): the file is stored once and loaded once, and a loaded
-   object is locked against change and delete. The owner creates the bucket;
-   the load workflow, dispatched by the owner, loads the file
+   object is locked against change and delete. The bucket exists: the staging
+   deploy of 2026-11-15 made it (the plan was that the owner would, see the
+   runbook, "When the binding lands before the bucket"). The load workflow,
+   dispatched by the owner, loads the file
    `MAP_TILES_ARCHIVE` names (no step runs on the owner's computer).
    Production gets a binding to the same bucket in its own PR afterwards; until then
    `scripts/ci/env-parity.mjs` lists the difference as open and production shows

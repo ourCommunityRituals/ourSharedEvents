@@ -188,10 +188,10 @@ streets of the tiles the file has.
 Two jobs. Every command below is in the workflow file, with the names taken from
 its `env`; this section shows no command for a person to type.
 
-**Job 1, the bucket is private (reads only).** The owner creates the bucket
-("Staging, in order", step 1), and the job does not take its settings on trust.
-It reads them, with the lockfile's wrangler and the staging deploy credential CI
-already uses:
+**Job 1, the bucket is private (reads only).** Nobody chose the bucket's
+settings: a staging deploy made it ("When the binding lands before the bucket"),
+so the job does not take them on trust. It reads them, with the lockfile's
+wrangler and the staging deploy credential CI already uses:
 
 ```bash
 npx wrangler r2 bucket dev-url get ose-map-tiles
@@ -317,14 +317,20 @@ owner's bucket lock rule, set once a load is green ("Staging, in order", step
 
 ## Staging, in order
 
-1. **Owner: create the bucket, then merge.** In the Cloudflare dashboard, R2
-   object storage: create `ose-map-tiles`, with no public r2.dev URL and no
-   custom domain. Do it **before** the PR that names the bucket in
-   `wrangler.toml` merges, and before that PR's branch is run on staging: a
-   deploy that finds no bucket under a bound name makes one by itself, with
-   settings nobody chose ("When the binding lands before the bucket"). The
-   workflow itself is on `main` since #1244; GitHub offers a hand-dispatched
-   workflow only once its file is there.
+1. **Owner: look at the bucket.** `ose-map-tiles` is there, and a deploy made
+   it, not a person: the staging deploy of `bf1c696d` created it on 2026-11-15
+   at 01:07 UTC (run 43659704554), because it found no bucket of that name
+   ("When the binding lands before the bucket"). In the Cloudflare dashboard,
+   R2 object storage: check that `ose-map-tiles` has no public r2.dev URL and
+   no custom domain, and delete `ose-map-tiles-staging`, which is empty and no
+   longer bound. Step 2 reads the same two settings from a runner and stops if
+   either is on.
+   - **The rule for any later bucket is unchanged:** the owner creates it
+     **before** the PR that names it in `wrangler.toml` merges, and before that
+     PR's branch is run on staging. A deploy that finds no bucket under a bound
+     name makes one by itself, with settings nobody chose.
+   - The workflow itself is on `main` since #1244; GitHub offers a
+     hand-dispatched workflow only once its file is there.
 
 2. **Owner: measure.** Actions tab, "Street-map archive load (stg)", Run
    workflow, branch `main`, `confirm` = `STAGING`, `mode` = `measure`. The run's
@@ -422,19 +428,47 @@ the choices are the owner's:
 
 ## When the binding lands before the bucket
 
-It did, on staging, on 2026-11-10. Cloudflare's documentation does not say what
-`wrangler deploy` does when a binding names a bucket that does not exist; it
-documents creating the bucket first. The wrangler this repo pins (4.158.0) has
-resource provisioning on by default: the staging deploy listed `MAP_TILES` as a
-binding to provision and created the bucket with the deploy token (run
-42865404464). So a bucket named in a merged binding is made by CI, with default
-settings, which is a provisioning step that belongs to the owner.
+It did, on staging, twice: on 2026-11-10 and on 2026-11-15. Cloudflare's
+documentation does not say what `wrangler deploy` does when a binding names a
+bucket that does not exist; it documents creating the bucket first. The wrangler
+this repo pins (4.158.0) has resource provisioning on by default: the staging
+deploy listed `MAP_TILES` as a binding to provision and created the bucket with
+the deploy token (run 42865404464). So a bucket named in a merged binding is
+made by CI, with default settings, which is a provisioning step that belongs to
+the owner.
 
-That bucket was `ose-map-tiles-staging`. It was never loaded. Since 2026-11-14
-the binding names `ose-map-tiles`, which the owner creates first ("Staging, in
-order", step 1), and the owner deletes `ose-map-tiles-staging`, empty, once
-staging has deployed the new name. Production needs no bucket made for it: its
-binding will name one that is already there.
+That first bucket was `ose-map-tiles-staging`. It was never loaded, and the
+owner deletes it, empty, now that staging has deployed the new name.
+
+The second is `ose-map-tiles`, the bucket in use. The plan of 2026-11-14 was
+that the owner creates it before the PR that names it merges. The PR (#1257)
+merged on 2026-11-15 at 00:44 UTC, and the staging deploy of that commit
+(`bf1c696d`, run 43659704554, `T1 Deploy → Staging`) printed at 01:07 UTC:
+
+```text
+The following bindings need to be provisioned:
+env.MAP_TILES         R2 Bucket
+Provisioning MAP_TILES (R2 Bucket)...
+Resource name found in config: ose-map-tiles
+Creating new R2 Bucket "ose-map-tiles"...
+MAP_TILES provisioned
+```
+
+Wrangler 4.158.0 asks Cloudflare for the bucket a binding names and lists it
+for provisioning only when the answer is "not found"
+(`R2Handler.isConnectedToExistingResource` in its `wrangler-dist/cli.js`, read
+2026-11-15). So at that minute the account staging deploys to had no bucket of
+that name in the default jurisdiction. The owner had said, before the deploy
+ran, that the bucket was created; whether one was made under another account,
+name or jurisdiction is not known here, and no agent read Cloudflare. What is
+known is that the bucket staging binds was made by the deploy, with default
+settings, and that its two privacy settings have not been read by anyone yet:
+the first `measure` run reads them ("Staging, in order", steps 1 and 2).
+
+**Nothing in CI refuses a deploy whose binding names a bucket that is not
+there.** The rule "the owner creates it first" holds only when a person does it
+before the merge, and it has now failed twice. Production needs no bucket made
+for it: its binding will name one that is already there.
 
 With the bucket present and the archive missing, the Worker finds no object and
 the map stays hexagons only. The two staging cases then print `NOT RUN`, or fail
