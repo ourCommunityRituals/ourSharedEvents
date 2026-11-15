@@ -1656,6 +1656,16 @@
          Handlers are looked up LAZILY (at event time, not at definition time)
          so this block can sit above every script that defines them. -->
     <script>
+      // @ose-fewer-than:begin (generated from src/lib/withheld-words.ts; do not edit here)
+      function oseFewerThan(floor, tail, lower) {
+        var n = Number(floor);
+        var k = isFinite(n) && n >= 1 ? Math.floor(n) : 5;
+        var s = "Fewer than {floor}".replace('{floor}', String(k));
+        if (lower) s = s.charAt(0).toLowerCase() + s.slice(1);
+        return tail ? s + ' ' + tail : s;
+      }
+      window.oseFewerThan = oseFewerThan;
+      // @ose-fewer-than:end
       (function () {
         function argOf(el, name) {
           return el.getAttribute('data-' + name);
@@ -4663,18 +4673,22 @@
           }
           // Render one stat value. Accepts a plain number (exact counts: scans,
           // sponsors) OR the uniform floored shape { count, suppressed, floor }
-          // from the stats endpoint (registrations, check-ins). A suppressed
-          // value renders "<N" so the K-anon floor is communicated — never a raw
-          // sub-floor count. null/undefined → keep the "—" placeholder.
-          function formatStat(v) {
+          // from the stats endpoint (scans, registrations, check-ins). A
+          // suppressed value reads in words, "Fewer than 5" (never "<5", never
+          // 0, never a raw sub-floor count). `tail` says what a figure summed
+          // from floored parts was held to. null/undefined → keep the "—".
+          function formatStat(v, tail) {
             if (v == null) return null;
             if (typeof v === 'number') return String(v);
             if (typeof v === 'object') {
-              if (v.suppressed) return '<' + (v.floor || 5);
+              if (v.suppressed || v.count === null) return oseFewerThan(v.floor, tail);
               if (v.count != null) return String(v.count);
             }
             return null;
           }
+          // Scans are the poster-hours with 5 or more, summed: withheld means
+          // no hour reached 5, not fewer than 5 scans in all.
+          var STAT_TAIL = { 'admin-stat-scans-num': 'in any hour' };
           var Dashboard = {
             render: function (detail) {
               detail = detail || {};
@@ -4713,8 +4727,14 @@
               Object.keys(map).forEach(function (id) {
                 var el = document.querySelector('[data-testid="' + id + '"]');
                 if (!el) return;
-                var text = formatStat(map[id]);
+                var v = map[id];
+                var text = formatStat(v, STAT_TAIL[id]);
                 if (text != null) el.textContent = text; // omitted → keep "—"
+                // Withheld words take the page's small muted text (.muted-sm)
+                // in place of the big number style, so they fit the tile.
+                var held = !!(v && typeof v === 'object' && (v.suppressed || v.count === null));
+                el.classList.toggle('muted-sm', held);
+                el.classList.toggle('dash-stat__num', !held);
               });
             },
           };
@@ -5051,7 +5071,7 @@
             + ' title="Could not load — tap to retry" aria-label="Count failed to load. Retry."'
             + ' style="background:none;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;min-width:44px;min-height:44px">&#8635;</button>';
           if (c === 'suppressed') return '<span class="count-suppressed" data-testid="count-suppressed"'
-            + ' title="Below the reporting floor of 5 — shown the same on every surface" aria-label="Fewer than 5">&lt;5</span>';
+            + ' title="Below the reporting floor of 5 — shown the same on every surface">' + esc(oseFewerThan(5)) + '</span>';
           // Counts come from the stats response: a finite number only, and
           // escaped anyway so no response value reaches innerHTML raw (CodeQL
           // js/xss-more-sources traced counts → rowsHtml → panel.innerHTML).
@@ -6727,7 +6747,7 @@
           // `plan`; that is the plan, not the privacy floor, so it says so.
           at('pd-scans').textContent = scansLocked
             ? 'Scan counts come with the Mid plan'
-            : scans === null ? 'Fewer than 5 scans in any hour' : scans + ' scans';
+            : scans === null ? oseFewerThan(pd.scans && pd.scans.floor, 'scans in any hour') : scans + ' scans';
 
           // 1. The short link + Copy lead the card.
           at('pd-short-link').textContent = scanUrl;
@@ -7695,7 +7715,7 @@
           if (!r) return;
           const fmt = (f) =>
             f && f.suppressed
-              ? 'Fewer than ' + (f.floor || 5)
+              ? oseFewerThan(f.floor)
               : String(f && f.count != null ? f.count : 0);
           const set = (id, val) => {
             const el = document.querySelector('[data-testid="' + id + '"]');
@@ -8020,17 +8040,19 @@
         var requested = answers && answers.requested ? answers.requested : [];
         var plural = function (n, one, many) { return n + ' ' + (n === 1 ? one : many); };
         // Counts: a missing or null count renders nothing and ticks nothing.
-        var fmt = function (f) {
+        // A withheld count reads in words; `tail` says what a sum of floored
+        // parts was held to (scans: no poster-hour reached 5).
+        var fmt = function (f, tail) {
           if (f == null) return null;
           if (typeof f === 'number') return String(f);
-          if (f.suppressed) return 'fewer than ' + (f.floor || 5);
+          if (f.suppressed) return oseFewerThan(f.floor, tail, true);
           return f.count != null ? String(f.count) : null;
         };
         // Only a published scan count (5 or more, OSE-1656) proves people are
         // scanning; "fewer than 5" may be zero, so it never ticks this step.
         var scanN = stats && stats.scans != null ? (typeof stats.scans === 'number' ? stats.scans : stats.scans.count) : null;
         var anyScans = typeof scanN === 'number' && scanN > 0;
-        var counts = stats ? [['Scans', fmt(stats.scans)], ['registered', fmt(stats.registrations)], ['checked in', fmt(stats.checkins)]]
+        var counts = stats ? [['Scans', fmt(stats.scans, 'in any hour')], ['registered', fmt(stats.registrations)], ['checked in', fmt(stats.checkins)]]
           .filter(function (c) { return c[1] != null; }).map(function (c) { return c[0] + ' ' + c[1]; }).join(' · ') : '';
         var steps = [
           { key: 'setup', label: 'Set up', state: 'done',
@@ -8511,7 +8533,7 @@
         if (!live) lede = 'Your event link, poster and QR code switch on when you publish.';
         else if (!hasLink) lede = 'Open the poster once to create your event link, then share it with friends and family.';
         else if (tapsN === null && scansN === null) lede = 'Share your link with friends and family. Every tap opens the event page; taps show here once a link has 5 or more. Posters widen the reach.';
-        else lede = 'People are finding it: ' + (tapsN === null ? 'fewer than 5 taps on any one link' : tapsN + ' link taps') + ' and ' + (scansN === null ? 'fewer than 5 poster scans in any one hour' : scansN + ' poster scans') + ' so far.';
+        else lede = 'People are finding it: ' + (tapsN === null ? oseFewerThan(a.clicks && a.clicks.floor, 'taps on any one link', true) : tapsN + ' link taps') + ' and ' + (scansN === null ? oseFewerThan(a.scans && a.scans.floor, 'poster scans in any one hour', true) : scansN + ' poster scans') + ' so far.';
         set('pre-event-lede', lede);
 
         // The one thing to do now.
@@ -8566,8 +8588,16 @@
           linkCard.hidden = false;
         } else linkCard.hidden = true;
 
-        set('pre-event-scans', scansN === null ? 'Held' : String(scansN));
-        set('pre-event-clicks', tapsN === null ? 'Held' : String(tapsN));
+        // A withheld tile reads in words, never "Held", "<5" or 0. Both
+        // figures are sums of floored parts, so the words say which part.
+        set('pre-event-scans', scansN === null ? oseFewerThan(a.scans && a.scans.floor, 'in any hour') : String(scansN));
+        set('pre-event-clicks', tapsN === null ? oseFewerThan(a.clicks && a.clicks.floor, 'on any one link') : String(tapsN));
+        [['pre-event-scans', scansN], ['pre-event-clicks', tapsN]].forEach(function (t) {
+          var el = document.querySelector('[data-testid="' + t[0] + '"]');
+          if (!el) return;
+          el.classList.toggle('muted-sm', t[1] === null);
+          el.classList.toggle('dash-stat__num', t[1] !== null);
+        });
         set('pre-event-posters', String(a.posters || 0));
         set('pre-event-places', String(a.places || 0));
 
@@ -8591,7 +8621,7 @@
           svg.setAttribute('role', 'img');
           var total = days.reduce(function (t, x) { return t + (x.count || 0); }, 0);
           var last = days[days.length - 1];
-          svg.setAttribute('aria-label', 'Poster scans per day, last ' + days.length + ' days: ' + total + ' on the days shown, ' + (last.held ? 'held' : last.count) + ' today. A day with fewer than 5 scans in every hour at every poster is held.');
+          svg.setAttribute('aria-label', 'Poster scans per day, last ' + days.length + ' days: ' + total + ' on the days shown, ' + (last.held ? oseFewerThan(5, 'in any hour', true) : last.count) + ' today. A day with ' + oseFewerThan(5, 'scans in every hour at every poster', true) + ' draws no bar.');
           days.forEach(function (x, i) {
             var h = x.count > 0 ? Math.max(3, Math.round((x.count / max) * 38)) : 1;
             var r = document.createElementNS(NS, 'rect');
@@ -8603,7 +8633,7 @@
             r.setAttribute('fill', 'currentColor');
             r.setAttribute('opacity', x.count > 0 ? '1' : '0.3');
             var t = document.createElementNS(NS, 'title');
-            t.textContent = x.day + ': ' + (x.held ? 'held' : x.count + ' scans');
+            t.textContent = x.day + ': ' + (x.held ? oseFewerThan(5, 'scans in any hour', true) : x.count + ' scans');
             r.appendChild(t);
             svg.appendChild(r);
           });
@@ -8645,7 +8675,7 @@
           // Each placement's scans arrive floored (OSE-1656): words, never 0.
           return list.map(function (x) {
             var n = x && x.scans && typeof x.scans.count === 'number' ? num(x.scans.count) : null;
-            return { name: String((x && x.label) || 'Poster'), n: n === null ? 'fewer than 5' : n };
+            return { name: String((x && x.label) || 'Poster'), n: n === null ? oseFewerThan(x && x.scans && x.scans.floor, '', true) : n };
           });
         };
         // A floored count: its number when it cleared the floor, else null.
@@ -8656,10 +8686,10 @@
           .map(function (c) { return { name: String(c.word || 'LINK'), n: fl(c.taps) }; });
         var on = t.other && typeof t.other === 'object' ? fl(t.other.taps) : undefined;
         if (on !== undefined && (taps.length || on !== null)) {
-          taps.push({ name: taps.length ? 'other links' : 'all links', n: on === null ? 'fewer than 5 each' : on });
+          taps.push({ name: taps.length ? 'other links' : 'all links', n: on === null ? oseFewerThan(t.other.taps && t.other.taps.floor, 'each', true) : on });
         }
         line('pre-event-reach-taps', 'Link taps', taps,
-          locked.indexOf('reach.taps') > -1 ? LOCKED_TEXT : 'fewer than 5 on any one link so far (a link shows here at 5 or more)');
+          locked.indexOf('reach.taps') > -1 ? LOCKED_TEXT : oseFewerThan(5, 'on any one link so far (a link shows here at 5 or more)', true));
         line('pre-event-reach-venue', 'At the venue', places(ok && r.venue),
           locked.indexOf('reach.venue') > -1 ? LOCKED_TEXT : 'no posters placed yet');
         line('pre-event-reach-community', 'In the community', places(ok && r.community),

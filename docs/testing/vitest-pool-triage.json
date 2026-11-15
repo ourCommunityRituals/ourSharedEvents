@@ -583,6 +583,13 @@
       "testCount": 13
     },
     {
+      "file": "workers/oursharedevents/tests/booth-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 19
+    },
+    {
       "file": "workers/oursharedevents/tests/born-red-harness.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -2347,6 +2354,13 @@
       "testCount": 5
     },
     {
+      "file": "workers/oursharedevents/tests/public-event-booths.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 13
+    },
+    {
       "file": "workers/oursharedevents/tests/public-event-calendar.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -2702,6 +2716,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, createExecutionContext, waitOnExecutionContext",
       "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/registration-count-one-definition.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, env.DB, env.FORMS_DB",
+      "testCount": 4
     },
     {
       "file": "workers/oursharedevents/tests/registration-expiry-http.spec.ts",
@@ -3696,6 +3717,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/withheld-count-words.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 19
     },
     {
       "file": "workers/oursharedevents/tests/withheld-counts-in-words.spec.ts",

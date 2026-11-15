@@ -1,0 +1,33 @@
+info:
+  name: "OSE-1998 | sunny | public | GET /api/v2/events/:id carries the stalls in use, six fields each"
+  type: http
+  seq: 180
+
+# Mock-layer twin: workers/oursharedevents/tests/public-event-booths.spec.ts.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{boothLiveFairId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 public: 200', function () { expect(res.getStatus()).to.eql(200); expect(b.ok).to.eql(true); });
+        test('OSE-1998 public: the stalls in use, in the organizer order (sort)', function () { expect((b.booths || []).map(function (x) { return x.number; })).to.eql(['L2', 'L1']); });
+        test('OSE-1998 public: each stall is exactly the six public fields', function () {
+          (b.booths || []).forEach(function (x) { expect(Object.keys(x).sort()).to.eql(['category', 'hall_x', 'hall_y', 'id', 'name', 'number']); });
+          const l1 = (b.booths || []).find(function (x) { return x.number === 'L1'; }) || {};
+          expect(l1.name).to.eql('Live Honey'); expect(l1.category).to.eql('food'); expect(l1.hall_x).to.eql(0.1); expect(l1.hall_y).to.eql(0.2);
+        });
+        test('OSE-1998 public: the stall out of use is not there', function () { expect(JSON.stringify(b.booths || [])).to.not.include('Closing Stall'); });
+        test('OSE-1998 public: booths is a sibling, never a field of the event', function () { expect(b.item).to.not.have.property('booths'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

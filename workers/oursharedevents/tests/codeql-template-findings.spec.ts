@@ -26,6 +26,7 @@
  *   — red; green after | date: 2026-09-30
  */
 
+import { installFewerThan } from './helpers/fewer-than';
 import { describe, test, expect, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import ADMIN_HTML from '../src/templates/admin.html';
@@ -63,6 +64,7 @@ function mount(markup: string, script: string, reply: (url: string) => unknown):
     json: async () => reply(url),
   })) as unknown as typeof fetch;
   w._adminAnnounce = () => {};
+  installFewerThan(w);
   w.eval(script);
   return w;
 }

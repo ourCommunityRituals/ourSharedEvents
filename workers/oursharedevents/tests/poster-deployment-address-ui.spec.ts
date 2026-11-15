@@ -13,6 +13,7 @@
  *   link / target in the row) — red; green after | date: 2026-09-29
  */
 
+import { installFewerThan } from './helpers/fewer-than';
 import { describe, test, expect, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import ADMIN_HTML from '../src/templates/admin.html';
@@ -65,6 +66,7 @@ function mount(router: Router) {
   w._adminAnnounce = () => {};
   const writeText = vi.fn(async () => {});
   Object.defineProperty(w.navigator, 'clipboard', { value: { writeText }, configurable: true });
+  installFewerThan(w);
   w.eval(cardScript(ADMIN_HTML));
   return { w, doc: w.document, calls, writeText };
 }

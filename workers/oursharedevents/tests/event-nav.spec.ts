@@ -217,8 +217,11 @@ describe('GET /api/v2/admin/events/:id/live | the organizer live view', () => {
     expect(LIVE_SRC).not.toMatch(/env\.FORMS_DB|FROM scan|checkin_counts|form_registrations/);
   });
 
-  test('a floored count reads "Held"; a failed refresh keeps the last totals and never shows zeros', () => {
-    expect(LIVE_SRC).toContain("b.textContent = held ? 'Held'");
+  test('a floored count reads in words; a failed refresh keeps the last totals and never shows zeros', () => {
+    // OSE-1656: "Fewer than 5" from the one source (lib/withheld-words.ts), not
+    // "Held". The page is RUN with withheld values in withheld-count-words.spec.ts.
+    expect(LIVE_SRC).toContain('b.textContent = held ? oseFewerThan(v.floor, TAIL[metric])');
+    expect(LIVE_SRC).not.toContain("'Held'");
     expect(LIVE_SRC).toContain('v.suppressed === true');
     const failure = LIVE_SRC.slice(
       LIVE_SRC.indexOf('} catch (e) {'),

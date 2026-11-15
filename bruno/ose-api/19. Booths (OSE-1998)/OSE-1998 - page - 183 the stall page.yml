@@ -1,0 +1,44 @@
+info:
+  name: "OSE-1998 | sunny | page | GET /events/:id/booths/:number renders the stall (number read in any case)"
+  type: http
+  seq: 183
+
+# Mock-layer twin: workers/oursharedevents/tests/booth-page.spec.ts. 403 with
+# cf-mitigated is the edge challenging a script client on an HTML page.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/{{boothLiveFairId}}/booths/l1"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the page read was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        if (!edge) {
+          test('OSE-1998 page: 200 HTML', function () { expect(res.getStatus()).to.eql(200); expect(res.getHeader('content-type') || '').to.include('text/html'); });
+          test('OSE-1998 page: the fair, then the stall, then a link to the fair', function () {
+            expect(body).to.include('OSE-1998 public stall fair (staging, synthetic)');
+            expect(body).to.include('Stall L1'); expect(body).to.include('Live Honey'); expect(body).to.include('Food and drink');
+            expect(body).to.include('href="/events/' + bru.getVar('boothLiveFairId'));
+          });
+          test('OSE-1998 page: exactly one <h1>', function () { expect((body.match(/<h1[\s>]/gi) || []).length).to.eql(1); });
+          test('OSE-1998 page: no cookie', function () { expect(!res.getHeader('set-cookie')).to.equal(true); });
+          test('OSE-1998 page: no count of any kind', function () { expect(body).to.not.match(/\b(scans?|scanned|visits?|visitors?|signed up|checked in|fewer than)\b/i); });
+          test('OSE-1998 page: off the map, so not indexed', function () { expect(res.getHeader('x-robots-tag')).to.eql('noindex'); });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

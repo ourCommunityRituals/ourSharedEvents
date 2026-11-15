@@ -20,7 +20,8 @@
 //                    CORRIDOR_MAP_MIN_COUNT) — the SAME rule the SharedReport and
 //                    the existing admin count tiles apply, so no surface
 //                    side-channels a small count (OSE-665). Sub-K raw values
-//                    never leave the worker; the tile renders "<5".
+//                    never leave the worker; the tile reads "Fewer than 5"
+//                    (lib/withheld-words.ts).
 //
 // NB: a looser audience-tiered admin floor (K=3, since the organizer already has
 // row-level access to their own registrations) is proposed but DEFERRED to a
@@ -31,6 +32,7 @@
 // FORMS_DB. No cross-DB join. No runtime LLM. No banned lexicon on the wire.
 
 import { applyCountFloor, type FlooredCount } from '../lib/count-floor';
+import { COUNT_EVENT_REGISTRATIONS_SQL } from '../lib/registration-count';
 import { readEventScanCells, scansOf } from '../lib/scan-cells';
 
 export interface EventStatsEnv {
@@ -85,13 +87,7 @@ export async function handleAdminEventStats(
   let checkins: FlooredCount = applyCountFloor(0);
   if (env.FORMS_DB) {
     registrations = applyCountFloor(
-      await countExact(
-        env.FORMS_DB,
-        `SELECT COUNT(*) AS cnt FROM form_registrations
-         WHERE event_id = ? AND status = 'confirmed'
-           AND (expires_at IS NULL OR expires_at > datetime('now'))`,
-        eventId
-      )
+      await countExact(env.FORMS_DB, COUNT_EVENT_REGISTRATIONS_SQL, eventId)
     );
     checkins = applyCountFloor(
       await countExact(

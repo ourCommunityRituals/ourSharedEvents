@@ -1,0 +1,28 @@
+info:
+  name: "OSE-1998 | setup | stall L3 of the live fair goes out of use"
+  type: http
+  seq: 14
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothLiveFairId}}/booths/{{boothLiveL3Id}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 setup: L3 is out of use', function () { expect(res.getStatus()).to.eql(200); expect(b.booth.is_active).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

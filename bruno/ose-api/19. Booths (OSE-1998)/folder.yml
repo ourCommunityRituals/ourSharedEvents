@@ -9,13 +9,20 @@ docs: |-
   spot on the hall plan, and never a person (ADR-034 decision 5). A poster
   placement may point at a booth in use of its own event (`booth_id`).
 
+  The public side (seq 180 to 187): GET /api/v2/events/:id carries the stalls
+  in use beside the event (`booths`, six fields each; the list read carries
+  none), and GET /events/:id/booths/:number is the public stall page. A draft
+  fair shows no stalls, and an unknown, closed or out-of-use stall is one 404.
+
   No fixture. The folder makes its own two synthetic, unlisted draft events
-  (seq 10 and 11), works on them, and deletes them at the end (seq 900 and
-  910). An event with no scans hard-deletes with its booths and placements, so
-  a run leaves nothing behind. If a run stops half way, the next run makes new
-  events; the leftovers are synthetic drafts that the daily staging rebuild
-  clears.
+  (seq 10 and 11) and one synthetic live fair that is off the map (seq 12, so
+  the public reads have something to show), works on them, and deletes them at
+  the end (seq 900, 905 and 910). An event with no scans hard-deletes with its
+  booths and placements, so a run leaves nothing behind. If a run stops half
+  way, the next run makes new events; the leftovers are synthetic events that
+  the daily staging rebuild clears.
 
   The requests run in `seq` order.
 
-  Mock-layer twin: workers/oursharedevents/tests/event-booths.spec.ts.
+  Mock-layer twins: workers/oursharedevents/tests/event-booths.spec.ts,
+  public-event-booths.spec.ts and booth-page.spec.ts.

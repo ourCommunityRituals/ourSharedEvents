@@ -1,0 +1,35 @@
+info:
+  name: "OSE-1998 | rainy | page | a stall out of use answers the same 404 page"
+  type: http
+  seq: 186
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/{{boothLiveFairId}}/booths/L3"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the page read was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        if (!edge) {
+          test('OSE-1998 page: 404', function () { expect(res.getStatus()).to.eql(404); expect(body).to.not.include('Closing Stall'); });
+          if (bru.getVar('boothNotFoundBody')) {
+            test('OSE-1998 page: the same page as an unknown stall', function () { expect(body.replace(/nonce="[^"]*"/g, '')).to.eql(bru.getVar('boothNotFoundBody')); });
+          }
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -886,6 +886,16 @@
       </section>
     </main>
     <script>
+      // @ose-fewer-than:begin (generated from src/lib/withheld-words.ts; do not edit here)
+      function oseFewerThan(floor, tail, lower) {
+        var n = Number(floor);
+        var k = isFinite(n) && n >= 1 ? Math.floor(n) : 5;
+        var s = "Fewer than {floor}".replace('{floor}', String(k));
+        if (lower) s = s.charAt(0).toLowerCase() + s.slice(1);
+        return tail ? s + ' ' + tail : s;
+      }
+      window.oseFewerThan = oseFewerThan;
+      // @ose-fewer-than:end
       window.__reportBundle = { events: [], sponsors: [], generatedAt: null };
       window.__signedLinkMode = false;
       // The page's admin probes give up after 5 s, so no probe can hold the page
@@ -1634,7 +1644,7 @@
         const esc = window.escapeReportHtml;
         const rows = await Promise.all(
           events.slice(0, 10).map(async (ev) => {
-            // OSE-1657: each count is a number, 'held' (the route floors it under
+            // OSE-1657: each count is a number, 'withheld' (the route floors it under
             // 5) or 'failed'. Never 0 for either: 0 would read as "none".
             let reg = 'failed',
               checkin = 'failed';
@@ -1642,7 +1652,7 @@
               !res || !res.ok
                 ? 'failed'
                 : res.suppressed === true
-                  ? 'held'
+                  ? 'withheld'
                   : typeof res.count === 'number' && isFinite(res.count)
                     ? res.count
                     : 'failed';
@@ -1669,7 +1679,7 @@
         );
         const num = (v) => (typeof v === 'number' ? v : null);
         const word = (v) =>
-          typeof v === 'number' ? String(v) : v === 'held' ? 'Fewer than 5' : 'Not available';
+          typeof v === 'number' ? String(v) : v === 'withheld' ? oseFewerThan(5) : 'Not available';
         const maxReg = Math.max(...rows.map((r) => num(r.reg) || 0), 1);
         content.innerHTML =
           '<h3>Registration → Check-in Funnel</h3>' +
@@ -1683,13 +1693,13 @@
           '</tr></thead><tbody>' +
           rows
             .map((r) => {
-              // A rate is drawn only over two published counts; otherwise it is held.
+              // A rate is drawn only over two published counts; otherwise it reads "Not shown".
               const both = num(r.reg) !== null && num(r.checkin) !== null && r.reg > 0;
               const rate = both
                 ? Math.round((r.checkin / r.reg) * 100) + '%'
                 : r.reg === 'failed' || r.checkin === 'failed'
                   ? 'Not available'
-                  : 'Held';
+                  : 'Not shown';
               const barW = Math.round(((num(r.reg) || 0) / maxReg) * 100);
               return (
                 '<tr data-testid="funnel-row">' +
