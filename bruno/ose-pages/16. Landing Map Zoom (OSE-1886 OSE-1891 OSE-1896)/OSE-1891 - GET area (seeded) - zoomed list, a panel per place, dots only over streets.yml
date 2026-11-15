@@ -1,5 +1,5 @@
 info:
-  name: OSE-1891 | GET /?area=872664405ffffff | zoomed list, a panel per place, no street map
+  name: OSE-1891 | GET /?area=872664405ffffff | zoomed list, a panel per place, dots only over streets
   type: http
   seq: 2
 
@@ -14,10 +14,23 @@ runtime:
       code: |-
         // The zoomed area as HTML (OSE-1886, OSE-1891, OSE-1894).
         // Fixture: bruno/fixtures/map-zoom-area-seed.sql, three places in one area.
-        // Staging has no street layer (no MAP_TILES binding), so the zoom is a note,
-        // the place list and the panels, and no dot map.
+        //
+        // What is drawn above the list is one of two whole pages, and nothing
+        // between them passes (the rule: a dot is drawn only over a street layer):
+        //   no street layer   the "street map is not here" note, and no drawing
+        //   a street layer    the area's outline and a dot per place over it, no note
+        // This area is inside the region the street-map archive covers, so the
+        // page changes from the first to the second the day the archive is loaded.
+        // The environment says which is expected (streetMapArchiveLoaded):
+        //   not "true"   either page passes; with no street layer the dot-map
+        //                assertions print NOT RUN.
+        //   "true"       a page with no street layer fails by name.
+        // The same three states as "1. Landing - Public", the two street cases.
         const body = String(res.getBody());
         const count = function (re) { return (body.match(re) || []).length; };
+        const has = function (id) { return body.includes('data-testid="' + id + '"'); };
+        const at = function (id) { return body.indexOf('data-testid="' + id + '"'); };
+        const loaded = String(bru.getEnvVar('streetMapArchiveLoaded')) === 'true';
         // The zoomed part: from the map's wrapper to the Share script after the panels.
         const zoomed = body.slice(body.indexOf('data-testid="amap-wrap"'), body.indexOf('data-testid="share-script"'));
 
@@ -29,11 +42,37 @@ runtime:
           expect(body).to.include('data-zoom="872664405ffffff"');
         });
 
-        test('Says the street map is not here (amap-no-tiles) and draws no dot map', function () {
-          expect(body).to.include('data-testid="amap-no-tiles"');
-          expect(body).to.not.include('data-testid="amap-dot"');
-          expect(body).to.not.include('data-testid="amap-svg"');
-        });
+        if (has('amap-streets')) {
+          test('With a street layer: the area and a dot per place are drawn over it, and no "not here" note', function () {
+            expect(has('amap-svg')).to.equal(true);
+            expect(body).to.include('data-testid="amap-zone" data-cell="872664405ffffff"');
+            // One dot per place of the fixture, each opening its panel.
+            expect(count(/data-testid="amap-dot"/g)).to.equal(3);
+            for (const n of [1, 2, 3]) {
+              expect(body).to.match(new RegExp('<a href="#amap-dot-' + n + '"[^>]*data-testid="amap-dot"'));
+            }
+            // The streets are under the outline and the dots, inside the drawing.
+            expect(at('amap-streets')).to.be.above(at('amap-svg'));
+            expect(at('amap-zone')).to.be.above(at('amap-streets'));
+            expect(at('amap-dot')).to.be.above(at('amap-zone'));
+            expect(has('amap-no-tiles')).to.equal(false);
+          });
+        } else {
+          test('With no street layer: says the street map is not here (amap-no-tiles) and draws no dot map', function () {
+            expect(has('amap-no-tiles')).to.equal(true);
+            expect(has('amap-dot')).to.equal(false);
+            expect(has('amap-zone')).to.equal(false);
+            expect(has('amap-svg')).to.equal(false);
+          });
+
+          if (loaded) {
+            test('The street layer is drawn (streetMapArchiveLoaded is true for this environment)', function () {
+              expect(has('amap-streets'), 'the environment file says the street-map archive is loaded, and the zoomed area drew no street layer').to.equal(true);
+            });
+          } else {
+            console.log('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): the area and a dot per place over the street layer');
+          }
+        }
 
         test('Lists the three places, each row opening its panel', function () {
           expect(count(/data-testid="amap-legend-dot"/g)).to.equal(3);

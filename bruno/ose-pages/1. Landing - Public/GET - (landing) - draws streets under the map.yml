@@ -25,10 +25,29 @@ runtime:
         //                        credit) and the street assertions print NOT RUN.
         //   no streets, and the environment says the archive is loaded
         //                        a named test fails.
+        //
+        // Roads, not any path (street-map CCR 2026-11-15, R17). The check before
+        // this one took any path, water included, and the layer measured as wrong
+        // was 8,999 points of water and one point of road. What is counted here is
+        // the M and L commands of the highway path (as-r as-3) and of the
+        // major-road path (as-r as-2): the roads a reader finds their way by, and
+        // the ones the drawer keeps first. Minor roads (as-r as-1) are left out, as
+        // a dense frame may rightly draw none.
+        // ROAD_FLOOR is 50. The wrong layer had 1. The sparsest good frame measured
+        // had 253 (one area over Sawyer, Michigan), so 50 leaves a small town room
+        // and still fails a layer whose points all went to water.
         const body = String(res.getBody());
         const has = function (id) { return body.includes('data-testid="' + id + '"'); };
         const at = function (id) { return body.indexOf('data-testid="' + id + '"'); };
         const loaded = String(bru.getEnvVar('streetMapArchiveLoaded')) === 'true';
+        const ROAD_FLOOR = 50;
+        const roadCommands = function (layer) {
+          let n = 0;
+          (layer.match(/<path class="as-r as-[23]" d="[^"]*"/g) || []).forEach(function (p) {
+            n += (p.slice(p.indexOf(' d="')).match(/[ML]/g) || []).length;
+          });
+          return n;
+        };
 
         test('Returns 200', function () {
           expect(res.getStatus()).to.equal(200);
@@ -38,17 +57,28 @@ runtime:
           // Under 10 events in the area the landing leads with the list, and no map
           // is drawn to put streets under. The area case (next request) does not
           // depend on that count.
-          console.log('NOT RUN (the landing draws no map: fewer than 10 events on this environment): street layer under the hexagons');
+          if (loaded) {
+            test('The landing draws its map, so its streets can be checked (streetMapArchiveLoaded is true for this environment)', function () {
+              expect(has('amap-svg'), 'the environment file says the street-map archive is loaded, and the landing drew no map to put streets under (fewer than 10 events on this environment?)').to.equal(true);
+            });
+          } else {
+            test('The landing draws no map, and so no street layer and no OpenStreetMap credit', function () {
+              expect(has('amap-streets')).to.equal(false);
+              expect(has('amap-credit')).to.equal(false);
+            });
+            console.log('NOT RUN (the landing draws no map: fewer than 10 events on this environment): street layer under the hexagons');
+          }
         } else if (has('amap-streets')) {
           test('The street layer is inside the map, under the hexagons', function () {
             expect(at('amap-streets')).to.be.above(at('amap-svg'));
             expect(at('amap-area')).to.be.above(at('amap-streets'));
           });
 
-          test('The street layer holds drawn paths, not a blank rectangle', function () {
+          test('The street layer holds roads: 50 path commands or more of highway or major road (water alone fails)', function () {
             const from = at('amap-streets');
             const layer = body.slice(from, body.indexOf('</g>', from));
-            expect(layer).to.match(/<path class="as-(w|v|r as-[123])" d="M/);
+            expect(layer, 'no highway (as-r as-3) or major-road (as-r as-2) path in the street layer').to.match(/<path class="as-r as-[23]" d="M/);
+            expect(roadCommands(layer), 'M and L commands in the highway and major-road paths').to.be.at.least(ROAD_FLOOR);
           });
 
           test('The OpenStreetMap credit shows with the streets', function () {

@@ -27,8 +27,22 @@ runtime:
         //                          assertions print NOT RUN.
         //   streets null, archive loaded
         //                          a named test fails.
+        //
+        // Roads, not any path (street-map CCR 2026-11-15, R17), as on the landing:
+        // the M and L commands of the highway path (as-r as-3) and the major-road
+        // path (as-r as-2) are counted, and ROAD_FLOOR is 50. The layer measured as
+        // wrong had 8,999 points of water and 1 of road; the sparsest good frame
+        // measured had 253 (one area over Sawyer, Michigan).
         const edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
         const loaded = String(bru.getEnvVar('streetMapArchiveLoaded')) === 'true';
+        const ROAD_FLOOR = 50;
+        const roadCommands = function (layer) {
+          let n = 0;
+          (layer.match(/<path class="as-r as-[23]" d="[^"]*"/g) || []).forEach(function (p) {
+            n += (p.slice(p.indexOf(' d="')).match(/[ML]/g) || []).length;
+          });
+          return n;
+        };
 
         test('The read reaches the Worker with no credential (not an edge challenge)', function () {
           expect(edge).to.equal(false);
@@ -80,10 +94,14 @@ runtime:
         });
 
         if (json.streets) {
-          test('The street layer is one SVG group holding drawn paths', function () {
+          test('The street layer is one SVG group', function () {
             expect(json.streets.svg).to.match(/^<g class="amap-s"/);
             expect(json.streets.svg).to.match(/<\/g>$/);
-            expect(json.streets.svg).to.match(/<path class="as-(w|v|r as-[123])" d="M/);
+          });
+          test('The street layer holds roads: 50 path commands or more of highway or major road (water alone fails)', function () {
+            const layer = String(json.streets.svg);
+            expect(layer, 'no highway (as-r as-3) or major-road (as-r as-2) path in the street layer').to.match(/<path class="as-r as-[23]" d="M/);
+            expect(roadCommands(layer), 'M and L commands in the highway and major-road paths').to.be.at.least(ROAD_FLOOR);
           });
           test('The street layer comes with its CSS and the OpenStreetMap credit', function () {
             expect(json.streets.css).to.include('.as-r');
