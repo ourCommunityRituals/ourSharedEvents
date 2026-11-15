@@ -54,9 +54,18 @@ runtime:
           }
         });
 
-        test('Every link is a place on this page, an event page, a register form or an https site', function () {
+        // With a street layer on the page the map credits its sources, inside the
+        // zoomed part: OpenStreetMap's copyright page in the page's language, and
+        // Protomaps (lib/attendee-map.ts). Those two links are known then, and only
+        // then: this area is inside the region the street-map archive covers, so
+        // they appear the day the archive is loaded.
+        const streets = body.includes('data-testid="amap-streets"');
+        const lang = (/<html lang="([a-z]{2})"/.exec(body) || [])[1];
+        const credit = ['https://www.openstreetmap.org/copyright/' + lang, 'https://protomaps.com'];
+
+        test('Every link is a place on this page, an event page, a register form or an https site (with streets: or the map credit)', function () {
           const known = /^(?:#amap-(?:dot-[1-3]|places)|\/(?:[a-z]{2}\/)?(?:\?[^"]*)?|\/events\/map-zoom-[a-j](?:\/map-zoom-[a-j]|\/register)?|https:\/\/[a-z.-]+\.map-zoom\.example\/[ab])$/;
-          expect(hrefs.filter(function (h) { return !known.test(h); })).to.eql([]);
+          expect(hrefs.filter(function (h) { return !known.test(h) && !(streets && credit.includes(h)); })).to.eql([]);
         });
 
 settings:

@@ -20,9 +20,23 @@ runtime:
         // The rule under test in both states (location-precision CCR, F41): a dot is
         // drawn only over a street layer. With no street layer the places are a list.
         // The three states are the same as in the landing case before this one.
+        //
+        // Roads, not any path (street-map CCR 2026-11-15, R17), as in that case:
+        // the M and L commands of the highway path (as-r as-3) and the major-road
+        // path (as-r as-2) are counted, and ROAD_FLOOR is 50. The layer measured as
+        // wrong had 8,999 points of water and 1 of road; the sparsest good frame
+        // measured had 253 (one area over Sawyer, Michigan).
         const body = String(res.getBody());
         const has = function (id) { return body.includes('data-testid="' + id + '"'); };
         const loaded = String(bru.getEnvVar('streetMapArchiveLoaded')) === 'true';
+        const ROAD_FLOOR = 50;
+        const roadCommands = function (layer) {
+          let n = 0;
+          (layer.match(/<path class="as-r as-[23]" d="[^"]*"/g) || []).forEach(function (p) {
+            n += (p.slice(p.indexOf(' d="')).match(/[ML]/g) || []).length;
+          });
+          return n;
+        };
 
         test('Returns 200', function () {
           expect(res.getStatus()).to.equal(200);
@@ -50,10 +64,11 @@ runtime:
             expect(has('amap-no-tiles')).to.equal(false);
           });
 
-          test('The street layer holds drawn paths, not a blank rectangle', function () {
+          test('The street layer holds roads: 50 path commands or more of highway or major road (water alone fails)', function () {
             const from = body.indexOf('data-testid="amap-streets"');
             const layer = body.slice(from, body.indexOf('</g>', from));
-            expect(layer).to.match(/<path class="as-(w|v|r as-[123])" d="M/);
+            expect(layer, 'no highway (as-r as-3) or major-road (as-r as-2) path in the street layer').to.match(/<path class="as-r as-[23]" d="M/);
+            expect(roadCommands(layer), 'M and L commands in the highway and major-road paths').to.be.at.least(ROAD_FLOOR);
           });
 
           test('The OpenStreetMap credit shows with the streets', function () {

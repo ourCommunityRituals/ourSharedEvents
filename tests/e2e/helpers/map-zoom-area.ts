@@ -12,8 +12,14 @@
  *   place 3  map-zoom-d .. -j  d is 3 days out, the rest 20 days or more
  * CI applies it right before these specs and unpublishes it right after.
  */
+import { resolve } from 'node:path';
 import { expect, type Locator, type Page, type Response } from '@playwright/test';
 import { edgeChallenged, edgeHeaders } from '../../../scripts/ci/edge-read.mjs';
+import {
+  FLAG,
+  STAGING_ENV_FILE,
+  streetMapArchiveLoaded,
+} from '../../../scripts/ci/street-map-flag.mjs';
 
 export const BASE_URL = (process.env.BASE_URL || 'https://stg.oursharedevents.com').replace(
   /\/+$/,
@@ -91,6 +97,50 @@ export async function gotoArea(page: Page, hash = ''): Promise<void> {
         `expected 1 and ${PLACES.length}. Is bruno/fixtures/map-zoom-area-seed.sql applied?`
     );
   }
+}
+
+/**
+ * Does the environment say the street-map archive is loaded? Read from the Bruno
+ * staging environment file, the one place that says so (scripts/ci/street-map-flag.mjs).
+ */
+export const STREETS_LOADED: boolean = streetMapArchiveLoaded(resolve(__dirname, '../../..'));
+
+/**
+ * What the zoomed area draws above its place list. There are two whole pages,
+ * and nothing between them passes:
+ *
+ *   'streets'  the street layer, the area's outline over it and a dot per place,
+ *              with no "street map is not here" note
+ *   'list'     the note, and no drawing at all: a dot is drawn only over streets
+ *
+ * The flag decides whether 'list' is allowed. While it is "false" either page
+ * passes, so the day the archive is loaded turns nothing red. Once it is "true"
+ * a page with no street layer fails here by name.
+ */
+export async function expectZoomDrawing(page: Page): Promise<'streets' | 'list'> {
+  const drawn = (await page.getByTestId('amap-streets').count()) > 0;
+  if (!drawn) {
+    expect(
+      STREETS_LOADED,
+      `${STAGING_ENV_FILE} says the street-map archive is loaded (${FLAG} is "true"), ` +
+        `and ${AREA_PATH} drew no street layer`
+    ).toBe(false);
+    await expect(page.getByTestId('amap-no-tiles')).toBeVisible();
+    await expect(page.getByTestId('amap-svg')).toHaveCount(0);
+    await expect(page.getByTestId('amap-zone')).toHaveCount(0);
+    await expect(page.getByTestId('amap-dot')).toHaveCount(0);
+    return 'list';
+  }
+  await expect(page.getByTestId('amap-svg')).toBeVisible();
+  await expect(page.locator(`[data-testid="amap-zone"][data-cell="${AREA}"]`)).toHaveCount(1);
+  // The streets lie under the outline and the dots, inside the one drawing.
+  await expect(
+    page.locator('[data-testid="amap-svg"] > [data-testid="amap-streets"]:first-child')
+  ).toHaveCount(1);
+  // A dot per place of the fixture, so at least one.
+  await expect(page.getByTestId('amap-dot')).toHaveCount(PLACES.length);
+  await expect(page.getByTestId('amap-no-tiles')).toHaveCount(0);
+  return 'streets';
 }
 
 /**

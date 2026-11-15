@@ -10,9 +10,15 @@
  * scripts off, axe in both themes, and that using the map moves no count.
  *
  * Fixture: bruno/fixtures/map-zoom-area-seed.sql (see helpers/map-zoom-area.ts).
- * Staging has no street layer (no MAP_TILES binding), so the zoomed area is the
- * note, the place list and the panels; a "dot" here is a row of that list. The
- * dot map itself is proven at the mock layer until staging has tiles.
+ * The zoomed area is one of two whole pages (helpers/map-zoom-area.ts,
+ * expectZoomDrawing): with no street layer it is the note, the place list and
+ * the panels; with one it is the dot map over the streets, the same list and the
+ * same panels. Every test below works a row of the list, which both pages have.
+ * Staging has no street-map archive yet, so it shows the first page, and
+ * `streetMapArchiveLoaded` in bruno/ose-pages/environments/ose-staging.yml is
+ * "false". The first test passes on either page while that is so, so loading the
+ * archive turns nothing red; once the flag is "true" it fails on a page with no
+ * streets. The dot map's own behaviour is proven at the mock layer until then.
  *
  * Runs on one profile (project `e2e-smoke`). The button grid runs on one project
  * per device profile: tests/e2e/2-pages/map-place-panel-layout.spec.ts.
@@ -65,6 +71,7 @@
  *         -> the four axe tests fail: the excused rule is excused on "Open event" only
  *   B1  renderZoom: the no-street-map note loses its test id
  *         -> "a tap on a place row opens only its panel…" fails
+ *       (seen again 2026-11-15 as S6 below, through expectZoomDrawing)
  *   B2  renderPlacePanel: target ids start at 2 (a row opens the wrong place)
  *         -> "a shared link to #amap-dot-2…" and "scripts off…" fail
  *   B4  map-place-links: a code taken off the poster is offered
@@ -79,6 +86,42 @@
  * Every test in this file failed under at least one fault. The same faults run
  * against the Bruno folder and the layout spec; the full table is in the PR that
  * added this file.
+ *
+ * BORN RED (2026-11-15, street-map CCR R21: this spec must stay green the day the
+ * street-map archive is loaded, and must not pass on a half-drawn page). A local
+ * Worker on this branch (wrangler dev, local D1 with the fixture, local R2), in
+ * two states: no archive, and a synthetic archive that draws streets, town names
+ * and dots for this area. A test rig: it supports the result, staging is the
+ * verdict. First, what the load would have done to this spec as it was: with
+ * streets drawn 6 of the 17 tests failed (the note at the head of the first
+ * test, the four axe tests, and the link walk). As it is now, 17 pass in both
+ * states with the flag "false". Then one fault at a time, each taken out again:
+ *   no archive:
+ *   T1  the flag file says "true"            -> the first test fails by name
+ *   S6  renderZoom: the note loses its test id
+ *   S8  renderZoom: dots are drawn with no street layer under them
+ *         -> each: the first test fails
+ *   streets drawn:
+ *   S4  renderZoom: the note is drawn with the streets too
+ *   S5  zoomSvg: no dot is drawn
+ *   S7  zoomSvg: the area's outline is not drawn
+ *   S9  zoomSvg: the streets are drawn over the outline, not under it
+ *         -> each: the first test fails
+ *   S1  ZOOM_STYLE: the Back link drawn in the background colour
+ *         -> the axe test fails: still undecided with the street layer hidden
+ *   S2  ZOOM_STYLE: the Back link drawn faint (opacity .3)
+ *         -> the axe test fails (a color-contrast violation)
+ *   S2b ZOOM_STYLE: the Back link drawn in the border colour
+ *         -> the axe test fails: axe leaves it undecided beside the streets, and
+ *            the second scan, street layer hidden, calls it a violation
+ *   S3  streetCredit: the credit loses its Protomaps link
+ *         -> "using the map moves no count…" fails
+ *   T2  the flag file says "true"
+ *         -> the four axe tests fail by name: axe cannot judge the text drawn on
+ *            the map (town names, dot numbers), and the street map is binding.
+ *            This is meant. Setting the flag needs that contrast judged first.
+ * Not seen failing here: a water-only street layer. This spec does not count
+ * roads; the Bruno street cases do, and failed on that layer on the same rig.
  */
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -87,8 +130,10 @@ import {
   AREA_PATH,
   BASE_URL,
   EVENTS_AT,
+  STREETS_LOADED,
   TITLE,
   card,
+  expectZoomDrawing,
   gotoArea,
   openPanels,
   panel,
@@ -104,6 +149,13 @@ const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 
 // English, whatever the runner's locale: the labels below are asserted as text.
 test.use({ locale: 'en-US' });
+
+/**
+ * The street map's credit: OpenStreetMap's copyright page in the page's language
+ * (the tests run in English) and Protomaps (lib/attendee-map.ts, streetCredit).
+ * They are on the page when streets are drawn, and only then.
+ */
+const CREDIT_LINKS = ['https://www.openstreetmap.org/copyright/en', 'https://protomaps.com'];
 
 /** Never a link the map may offer: tracking, counted short links, check-in. */
 const TRACKED_PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/(?:q|s|e|r|c)\/|check-?in/i;
@@ -159,7 +211,12 @@ test.describe('Zoomed map: the place panel opens under the list (OSE-1891)', () 
     await gotoArea(page);
     expect(await openPanels(page), 'no panel is open before a tap').toEqual([]);
     await expect(page.getByTestId('amap-legend')).toBeVisible();
-    await expect(page.getByTestId('amap-no-tiles')).toBeVisible();
+    // The note and no drawing, or the dot map over streets: never a half of each.
+    const drawing = await expectZoomDrawing(page);
+    test.info().annotations.push({
+      type: 'street-map',
+      description: `${AREA_PATH} drew the ${drawing} page; streetMapArchiveLoaded is "${STREETS_LOADED}"`,
+    });
 
     await placeRow(page, 2).click();
 
@@ -450,6 +507,93 @@ test.describe('Zoomed map: Share is the event page share (OSE-1891)', () => {
  */
 const KNOWN_DEFECTS = new Set(['label-content-name-mismatch']);
 
+type AxeIncomplete = Awaited<ReturnType<AxeBuilder['analyze']>>['incomplete'];
+
+/** Which of these selectors name an element inside the map's drawing (its `<svg>`)? */
+async function onTheDrawing(page: Page, selectors: string[]): Promise<boolean[]> {
+  return page.evaluate(
+    (sels) =>
+      sels.map((s) => {
+        try {
+          return document.querySelector(s)?.closest('[data-testid="amap-svg"]') != null;
+        } catch {
+          return false;
+        }
+      }),
+    selectors
+  );
+}
+
+/**
+ * What axe could not decide, sorted. With no street layer on the page nothing is
+ * sorted: every undecided rule is a failure, as before.
+ *
+ * With streets drawn, axe leaves two more kinds of contrast undecided (seen on a
+ * local Worker over a street layer, 2026-11-15, both themes, phone and desktop):
+ *
+ *   beside the map  The Back link, the caption and the credit. Streets run past
+ *                   the frame and the `<svg>` clips them, but axe counts their
+ *                   unclipped boxes as lying over the text next to the map
+ *                   (bgOverlap). Nothing is painted there. So the scan is run
+ *                   again with the street layer hidden, where axe does decide:
+ *                   a violation there, or a node still undecided, fails.
+ *   on the map      Town names over roads and water, and the one-digit numbers
+ *                   on the dots (axe does not judge text that short). axe cannot
+ *                   decide these at all. They come back as `onTheMap`, and the
+ *                   caller fails on them once the street map is binding.
+ *
+ * Any other rule, or a node this cannot place, stays undecided, so it fails.
+ */
+async function sortUndecided(
+  page: Page,
+  incomplete: AxeIncomplete
+): Promise<{ undecided: string[]; onTheMap: string[] }> {
+  const nodes = incomplete.flatMap((v) =>
+    v.nodes.map((n) => ({
+      rule: v.id,
+      name: `${v.id}: ${n.target.join(' ')}`,
+      // A plain selector in this document; a frame or shadow target is not placed.
+      selector: n.target.length === 1 && typeof n.target[0] === 'string' ? n.target[0] : null,
+    }))
+  );
+  const streets = (await page.getByTestId('amap-streets').count()) > 0;
+  if (!streets || nodes.length === 0) return { undecided: nodes.map((n) => n.name), onTheMap: [] };
+
+  const drawn = await onTheDrawing(
+    page,
+    nodes.map((n) => n.selector ?? ':not(*)')
+  );
+  const contrast = (n: (typeof nodes)[number]) =>
+    n.rule === 'color-contrast' && n.selector !== null;
+  const onTheMap = nodes.filter((n, i) => contrast(n) && drawn[i]).map((n) => n.name);
+  const undecided = nodes.filter((n) => !contrast(n)).map((n) => n.name);
+  if (nodes.some((n, i) => contrast(n) && !drawn[i])) {
+    const hide = await page.addStyleTag({
+      content: '[data-testid="amap-streets"]{display:none!important}',
+    });
+    const again = await new AxeBuilder({ page })
+      .include('[data-testid="amap-wrap"]')
+      .withRules(['color-contrast'])
+      .analyze();
+    await hide.evaluate((el) => el.remove());
+    const left = [
+      ...again.violations.map((v) => ({ v, said: 'fails' })),
+      ...again.incomplete.map((v) => ({ v, said: 'is still undecided' })),
+    ].flatMap(({ v, said }) =>
+      v.nodes.map((n) => ({
+        name: `${v.id} ${said} with the street layer hidden: ${n.target.join(' ')}`,
+        selector: n.target.length === 1 && typeof n.target[0] === 'string' ? n.target[0] : null,
+      }))
+    );
+    const leftDrawn = await onTheDrawing(
+      page,
+      left.map((n) => n.selector ?? ':not(*)')
+    );
+    undecided.push(...left.filter((_, i) => !leftDrawn[i]).map((n) => n.name));
+  }
+  return { undecided, onTheMap };
+}
+
 test.describe('Zoomed map: accessibility in both themes (OSE-1886, OSE-1891)', () => {
   for (const scheme of ['light', 'dark'] as const) {
     for (const screen of [
@@ -461,6 +605,7 @@ test.describe('Zoomed map: accessibility in both themes (OSE-1886, OSE-1891)', (
       }) => {
         await page.setViewportSize({ width: screen.width, height: screen.height });
         await page.emulateMedia({ colorScheme: scheme });
+        const mapTextUndecided = new Set<string>();
         for (const hash of ['', '#amap-dot-1', '#amap-dot-2']) {
           await gotoArea(page, hash);
           await expect.poll(() => openPanels(page)).toEqual(hash ? [Number(hash.slice(-1))] : []);
@@ -496,9 +641,9 @@ test.describe('Zoomed map: accessibility in both themes (OSE-1886, OSE-1891)', (
           // A rule axe could not decide proves nothing, so it is a failure, not a
           // pass. Text drawn in its own background colour is the case: axe calls
           // that contrast "incomplete", not a violation (born-red fault F13).
-          const undecided = results.incomplete.map(
-            (v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`
-          );
+          // With streets drawn, what axe leaves undecided is sorted first
+          // (sortUndecided): only text drawn on the map itself is set apart.
+          const { undecided, onTheMap } = await sortUndecided(page, results.incomplete);
           test.info().annotations.push({
             type: 'axe-incomplete',
             description: `${hash || 'list'} ${scheme} ${screen.name}: ${undecided.join('; ') || 'none'}`,
@@ -507,6 +652,28 @@ test.describe('Zoomed map: accessibility in both themes (OSE-1886, OSE-1891)', (
             undecided,
             `axe could not decide these rules on ${AREA_PATH}${hash}, ${scheme}, ${screen.name}`
           ).toEqual([]);
+          if (onTheMap.length > 0) {
+            for (const name of onTheMap) mapTextUndecided.add(name);
+            test.info().annotations.push({
+              type: 'axe-map-text-not-decided',
+              description: `${hash || 'list'} ${scheme} ${screen.name}: ${onTheMap.join(' | ')}`,
+            });
+            expect(
+              STREETS_LOADED,
+              `streetMapArchiveLoaded is "true", so the street map is binding, and axe cannot ` +
+                `judge the contrast of the text drawn on it (${onTheMap.join(' | ')}). ` +
+                `Judge it another way before the flag is set (street-map CCR, R24).`
+            ).toBe(false);
+          }
+        }
+        // Shown where a person looks, once a test: not hidden, and not red while
+        // the street map is not binding. The annotations above name each text.
+        if (mapTextUndecided.size > 0) {
+          console.log(
+            `::warning title=T4k street map text contrast NOT DECIDED::${scheme} theme on a ${screen.name}: ` +
+              `axe cannot judge ${mapTextUndecided.size} text(s) drawn on the street map (town names, dot numbers). ` +
+              `Not a failure while streetMapArchiveLoaded is "false"; a failure once it is "true".`
+          );
         }
       });
     }
@@ -536,6 +703,12 @@ test.describe('Zoomed map: using it moves no count (OSE-1896)', () => {
     // walk follows them without leaving for a site that does not exist.
     await context.route(/^https:\/\/[a-z.-]+\.map-zoom\.example\//, (route) =>
       route.fulfill({ status: 200, contentType: 'text/html', body: '<title>outside</title>' })
+    );
+    // With streets drawn the map credits its sources (CREDIT_LINKS). Those two
+    // are answered here as well: the walk follows them, and no run of this test
+    // reads a site that is not ours.
+    await context.route(/^https:\/\/(www\.openstreetmap\.org|protomaps\.com)(\/|$)/, (route) =>
+      route.fulfill({ status: 200, contentType: 'text/html', body: '<title>credit</title>' })
     );
     await context.addInitScript(() => {
       Object.defineProperty(Navigator.prototype, 'share', {
@@ -568,13 +741,23 @@ test.describe('Zoomed map: using it moves no count (OSE-1896)', () => {
     const destinations = [...new Set(hrefs.filter((h) => !h.startsWith('#')))];
     const outside = destinations.filter((h) => /^https?:\/\//.test(h) && !h.startsWith(origin));
     const inside = destinations.filter((h) => !outside.includes(h));
+    // The street map's credit is there exactly when streets are drawn.
+    const streets = (await page.getByTestId('amap-streets').count()) > 0;
     expect
-      .soft(outside.sort(), 'the only outside links are the organizer https links on the poster')
-      .toEqual([
-        'https://give.map-zoom.example/a',
-        'https://tickets.map-zoom.example/a',
-        'https://tickets.map-zoom.example/b',
-      ]);
+      .soft(
+        outside.sort(),
+        streets
+          ? 'the only outside links are the organizer https links on the poster and the street map credit'
+          : 'the only outside links are the organizer https links on the poster'
+      )
+      .toEqual(
+        [
+          'https://give.map-zoom.example/a',
+          'https://tickets.map-zoom.example/a',
+          'https://tickets.map-zoom.example/b',
+          ...(streets ? CREDIT_LINKS : []),
+        ].sort()
+      );
     const visitor = await context.newPage();
     // Event pages sit behind the stg edge's challenge; CI's reads carry the
     // header its skip rule matches. An answer from the edge stops the test.
