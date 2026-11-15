@@ -826,6 +826,14 @@ jobs:
       # esbuild) and answers every request from page routes. It is the component
       # layer under T4j: logo box, 44 px targets, no sideways scroll at 320/375,
       # focus ring and axe, light and dark.
+      #
+      # street-map-sizes.component.spec.ts (street-map CCR 2026-11-15, R24 and
+      # R38) needs no worker either: it renders the landing with the real handler
+      # over a synthetic street-map archive (tests/e2e/helpers/render-landing-map.ts).
+      # Staging has no archive, so no deployed page draws dots or town names; this
+      # is the layer that measures them on screen: a 44 px dot target and no map
+      # text under 13 px at 320 and 375 px, light and dark, and the whole frame on
+      # a desktop.
       - name: 'Component: viewport specs vs local worker'
         if: matrix.shard == 'component'
         run: |
@@ -836,7 +844,8 @@ jobs:
             tests/e2e/2-pages/poster-print.spec.ts \
             tests/e2e/2-pages/form-pages-responsive.spec.ts \
             tests/e2e/2-pages/a11y-axe-surfaces.spec.ts \
-            tests/e2e/2-pages/sponsor-thumbnails.component.spec.ts
+            tests/e2e/2-pages/sponsor-thumbnails.component.spec.ts \
+            tests/e2e/2-pages/street-map-sizes.component.spec.ts
 
   # T0 test sub-gates: keep the existing required context `T0 Gate (tests)` as
   # an aggregate below, but split the former 9+ minute long-pole job into

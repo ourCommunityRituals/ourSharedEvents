@@ -64,7 +64,13 @@ export const MAX_LABELS = 6;
 /** A street layer slower than this is dropped; the hexagons draw alone. */
 export const STREET_TIMEOUT_MS = 1500;
 
-const LABEL_PX = 22;
+/**
+ * The room a town name is given, in map units a letter: the largest size it is
+ * ever set in. STREET_STYLE sets 22; a narrow screen sets 28, so a name is
+ * 13 px on a 280 px map (lib/map-narrow-style.ts). Names are kept clear of each
+ * other and of the hexagon numbers at 28, which leaves them clear at 22 too.
+ */
+const LABEL_PX = 28;
 
 export interface StreetMapEnv {
   MAP_TILES?: RangeBucket;

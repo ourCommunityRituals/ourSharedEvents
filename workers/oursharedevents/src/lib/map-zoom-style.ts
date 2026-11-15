@@ -11,4 +11,4 @@
  * `--accent` is left for the dots, which are the things to tap.
  */
 export const ZOOM_STYLE =
-  '<style>.amap-zone{fill:var(--border-strong);fill-opacity:.06;stroke:var(--border-strong);stroke-width:3}.amap-dot{fill:var(--accent);stroke:var(--bg);stroke-width:3}.amap-blk .amap-dot{fill-opacity:.45;stroke-dasharray:4 3}.amap-dn{fill:var(--on-accent);font:700 15px system-ui}.amap-back,.amap-zoom{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>';
+  '<style>.amap-zone{fill:var(--border-strong);fill-opacity:.06;stroke:var(--border-strong);stroke-width:3}.amap-dot{fill:var(--accent);stroke:var(--bg);stroke-width:3}.amap-blk .amap-dot{fill-opacity:.45;stroke-dasharray:4 3}.amap-dn{fill:var(--on-accent);font:700 18px system-ui}.amap-back,.amap-zoom{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style>';
