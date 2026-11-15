@@ -98,7 +98,7 @@ describe('edgeOwnRequest', () => {
       const elsewhere = url.replace(STG, 'https://collect.example');
       expect(E.edgeOwnRequest(elsewhere, STG), elsewhere).toBe(false);
     }
-    expect(E.edgeOwnRequest('https://oursharedevents.com/cdn-cgi/rum', STG)).toBe(false);
+    expect(E.edgeOwnRequest('https://other.stg.oursharedevents.com/cdn-cgi/rum', STG)).toBe(false);
     expect(E.edgeOwnRequest('http://stg.oursharedevents.com/cdn-cgi/rum', STG)).toBe(false);
   });
 
