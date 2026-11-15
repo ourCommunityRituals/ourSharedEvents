@@ -118,6 +118,44 @@ describe('stg edge probe', () => {
     expect(open.out).toContain('2 of 2 reached the Worker. A calendar app can load them.');
   });
 
+  // OSE-2023: the calendar-edge-rule workflow runs this before and after it writes the rule.
+  test('--calendar-app reads only the calendar addresses, with no header and no secret', async () => {
+    const blocked = edge({ challenge: ['plain'] });
+    const r1 = await (async () => {
+      const out = [];
+      const summary = [];
+      const code = await ep.calendarAppRead(
+        { GITHUB_STEP_SUMMARY: 'summary.md' },
+        { fetch: blocked.fetch, write: (s) => out.push(s), appendFile: (_f, s) => summary.push(s) }
+      );
+      return { code, out: out.join(''), summary: summary.join('') };
+    })();
+    expect(r1.code).toBe(1);
+    expect(r1.out).toContain('1 of 2 reached the Worker.');
+    expect(r1.summary).toContain('## What a calendar app sees on stg');
+    expect(blocked.seen).toHaveLength(2);
+    for (const { url, init } of blocked.seen) {
+      expect(new URL(url).pathname.endsWith('/calendar.ics')).toBe(true);
+      expect(init.headers).toEqual({});
+      expect(init.redirect).toBe('manual');
+    }
+
+    // Report only: the same blocked read is reported and does not fail.
+    const told = [];
+    const reported = await ep.calendarAppRead(
+      {},
+      { fetch: edge({ challenge: ['plain'] }).fetch, write: (s) => told.push(s), reportOnly: true }
+    );
+    expect(reported).toBe(0);
+    expect(told.join('')).toContain('1 of 2 reached the Worker.');
+
+    const open = edge({ challenge: [] });
+    const out = [];
+    const code = await ep.calendarAppRead({}, { fetch: open.fetch, write: (s) => out.push(s) });
+    expect(code).toBe(0);
+    expect(out.join('')).toContain('2 of 2 reached the Worker. A calendar app can load them.');
+  });
+
   // An error status the edge did not mark as a challenge is still a failed read.
   test.each([403, 429, 503])('red on an unchallenged %i to a check read', async (status) => {
     const fetch = (url) => {

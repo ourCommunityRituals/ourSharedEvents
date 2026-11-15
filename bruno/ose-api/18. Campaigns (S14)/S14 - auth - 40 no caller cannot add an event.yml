@@ -1,0 +1,33 @@
+info:
+  name: "S14 | rainy | auth | a caller with no identity cannot add an event"
+  type: http
+  seq: 40
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_shown/events/camp-on-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // On staging Cloudflare Access may answer before the worker does; on a local
+        // worker the route answers 401. Either way the event is not moved: request
+        // 44 reads the campaign it would have left.
+        const body = res.getBody();
+        const raw = typeof body === 'string' ? body : JSON.stringify(body);
+        test('S14 auth: a caller with no identity adds nothing', function () {
+          expect(res.getStatus()).to.not.eql(200);
+          expect(raw).to.not.include('"campaign_id":"camp_fx_shown"');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

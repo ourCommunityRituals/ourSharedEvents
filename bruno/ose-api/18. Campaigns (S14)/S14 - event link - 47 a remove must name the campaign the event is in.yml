@@ -1,0 +1,31 @@
+info:
+  name: "S14 | rainy | event link | a remove must name the campaign the event is in"
+  type: http
+  seq: 47
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_toggle/events/camp-on-evt"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The event is in camp_fx_shown now, not camp_fx_toggle.
+        test('S14 event link: 404 NOT_FOUND', function () {
+          expect(res.getStatus()).to.eql(404);
+          expect(res.getBody().code).to.eql('NOT_FOUND');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -85,6 +85,11 @@ export async function seedBrandFixture(): Promise<void> {
     await env.DB.prepare(`INSERT OR REPLACE INTO campaigns (id, brand_id, title) VALUES (?, ?, ?)`)
       .bind(b.campaignId, b.brandId, `${b.marker}campaign`)
       .run();
+    // OSE-1552: the live event is in the brand's campaign, so a cross-brand
+    // remove that got through would change a row the snapshot holds.
+    await env.DB.prepare(`UPDATE events SET campaign_id = ? WHERE id = ?`)
+      .bind(b.campaignId, b.activeEventId)
+      .run();
     await seedSplitSponsor(env.DB, {
       id: b.sponsorId,
       eventId: b.activeEventId,

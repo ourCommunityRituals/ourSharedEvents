@@ -15,7 +15,8 @@
  * (tests/e2e/helpers/render-landing-map.ts), served to a real browser from page
  * routes: no Worker, no D1, no R2. The archive proves sizes and layout only.
  *
- * Two pages, each at 320 and 375 px, light and dark, on Chromium and WebKit:
+ * Two pages over streets, each at 320 and 375 px, light and dark, on Chromium
+ * and WebKit:
  *   - the zoomed area (`/?area=`): every dot's target, every dot number, every
  *     town name, the whole hexagon on screen, no sideways scroll;
  *   - the landing's own map (`/`): every area number and every town name, no
@@ -45,6 +46,27 @@
  *   - the wide `.amap-dn` size back from 18 to 15 (map-zoom-style.ts): the
  *     480 px test alone, on the dot number (11 px). The 480 px test was added for
  *     this: no other test in this file saw that size.
+ *
+ * The landing's hexagon links (OSE-2084, 2026-11-15). Each hexagon on the
+ * landing map is a link, and staging's ten were 29 by 28 px on a 320 px phone:
+ * the nightly phone audit on staging was red on them from 2026-11-10, and no
+ * check on a pull request drew more than two areas. So two more pages, each
+ * from a phone to a desktop and at both sides of every width a rule starts at:
+ *   - staging's ten areas: every hexagon is a link and a 44 px target (a phone
+ *     draws the middle of the map in a square box);
+ *   - the same with the staging fixture's area, eleven: too small on a phone in
+ *     any box, so links from 760 px only, plain hexagons under it, and a 44 px
+ *     "Zoom in" link for every area in the list at every width.
+ * Born red (2026-11-15, Chromium, one fault at a time, each put back; 20 of 20
+ * pass with none):
+ *   - the source as it was on `main`: ten areas at 320, 375 and 479 px, on the
+ *     link's width (29 px, 34.7 px);
+ *   - the `data-tall` rule removed from the narrow style: the same three;
+ *   - the linked copies not hidden first (map-link-style.ts): eleven areas at
+ *     320, 375 and 759 px, on 22 hexagons on show;
+ *   - every hexagon a link at every width: all five eleven-area tests.
+ * A larger invisible target round a hexagon, as a dot has, was tried first and
+ * failed here: a tap 21 px from one hexagon's centre opened the area next to it.
  *
  * It runs in the T0 `component` shard (playwright.component.config.ts). That
  * config starts a local Worker for the other specs of the shard; this one never
@@ -120,9 +142,35 @@ function rows(): Row[] {
 
 const ZOOMED = `/?area=${BLUE_ISLAND}`;
 
+/**
+ * Staging's ten areas on 2026-11-15, one event in each (OSE-2084). Side by side
+ * they are drawn 62 by 60 units, and each hexagon is a link: 29 by 28 px on a
+ * 320 px phone and 35 by 34 px at 375 px, on the whole frame. The nightly phone
+ * audit on staging was red on them from 2026-11-10; no check on a pull request
+ * drew more than two areas, so none saw it.
+ */
+const STAGING_AREAS = [
+  '87266452bffffff',
+  '872664544ffffff',
+  '872664cdcffffff',
+  '872664574ffffff',
+  '872664cdaffffff',
+  '872664529ffffff',
+  '872664572ffffff',
+  '87266450cffffff',
+  '87266450dffffff',
+  '872664cd8ffffff',
+];
+function tenAreas(): Row[] {
+  return STAGING_AREAS.map((cell, i) => {
+    const [lat, lon] = cellToLatLng(cell);
+    return ev(i + 1, { lat, lon, h3_res7: cell, place_kind: 'business' });
+  });
+}
+
 /** Serve the rendered page and /ui.css from ORIGIN; abort everything else. */
-async function open(page: Page, path: string): Promise<void> {
-  const html = await renderLanding(path, rows());
+async function open(page: Page, path: string, data: Row[] = rows()): Promise<void> {
+  const html = await renderLanding(path, data);
   const css = await uiCss();
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
@@ -154,6 +202,13 @@ interface Measured {
   texts: { kind: string; text: string; px: number; shown: boolean }[];
   /** Every dot: its target's size on screen, and whether a tap near its edge lands on it. */
   dots: { n: string; width: number; height: number; inside: boolean; tappable: boolean }[];
+  /**
+   * Every hexagon that is a link: the link's box on screen, as the phone audit
+   * reads it, and whether a tap on it opens this area and not its neighbour.
+   */
+  areas: { n: string; width: number; height: number; inside: boolean; tappable: boolean }[];
+  /** Hexagons on show, links or not. */
+  cells: number;
   /** The area's outline, wholly on screen or not. */
   zoneInside: boolean | null;
   /** The page is wider than the screen. */
@@ -210,12 +265,42 @@ async function measure(page: Page): Promise<Measured> {
         tappable,
       };
     });
+    // On show: a link the width has switched off (map-link-style.ts) has no box.
+    const drawn = (el: Element) => el.getBoundingClientRect().width > 0;
+    const areas = [...svg.querySelectorAll<SVGAElement>('[data-testid="amap-area-link"]')]
+      .filter(drawn)
+      .map((a) => {
+        const r = a.getBoundingClientRect();
+        const cell = a.querySelector('.amap-cell')!.getBoundingClientRect();
+        const cx = cell.left + cell.width / 2;
+        const cy = cell.top + cell.height / 2;
+        // Its centre and 15 px to four sides: each tap must open this area, not
+        // the one next to it. (A hexagon is narrower between two edges than its
+        // box, so the dots' 21 px reach is not asked of it.)
+        const reach = 15;
+        const tappable = [
+          [cx, cy],
+          [cx - reach, cy],
+          [cx + reach, cy],
+          [cx, cy - reach],
+          [cx, cy + reach],
+        ].every(([x, y]) => document.elementFromPoint(x!, y!)?.closest('a') === a);
+        return {
+          n: a.querySelector('.amap-num')?.firstChild?.textContent ?? '',
+          width: r.width,
+          height: r.height,
+          inside: within(cell),
+          tappable,
+        };
+      });
     const zone = svg.querySelector('[data-testid="amap-zone"]');
     return {
       map: { width: box.width, height: box.height },
       scale,
       texts,
       dots,
+      areas,
+      cells: [...svg.querySelectorAll('.amap-cell')].filter(drawn).length,
       zoneInside: zone ? within(zone.getBoundingClientRect()) : null,
       sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth,
     };
@@ -233,6 +318,7 @@ function record(where: string, m: Measured): void {
     description:
       `${where}: map ${round(m.map.width)} x ${round(m.map.height)} px; ` +
       `dot target ${span(m.dots.map((d) => Math.min(d.width, d.height)))}; ` +
+      `area link ${span(m.areas.map((a) => Math.min(a.width, a.height)))}; ` +
       `dot number ${span(by('dot number'))}; town name ${span(by('town name'))}; ` +
       `area number ${span(by('area number'))}`,
   });
@@ -293,6 +379,18 @@ for (const screen of PHONES) {
       expect(m.sideways, 'the page does not scroll sideways').toBe(false);
       const numbers = m.texts.filter((t) => t.kind === 'area number');
       expect(numbers.length, 'two numbered areas').toBe(2);
+      // Both hexagons are links here, so both are held to the touch floor.
+      expect(m.areas.length, 'both hexagons are links').toBe(2);
+      for (const a of m.areas) {
+        expect(round(Math.min(a.width, a.height)), `area ${a.n}: link`).toBeGreaterThanOrEqual(
+          TARGET_PX
+        );
+        expect(a.inside, `area ${a.n}: its whole hexagon is on the map`).toBe(true);
+        expect(
+          a.tappable,
+          `area ${a.n}: a tap at its centre or 15 px from it opens this area`
+        ).toBe(true);
+      }
       const names = m.texts.filter((t) => t.kind === 'town name' && t.shown);
       expect(names.length, 'at least one town name is drawn').toBeGreaterThan(0);
       for (const t of [...numbers, ...names]) {
@@ -304,6 +402,131 @@ for (const screen of PHONES) {
       ).toEqual([]);
     });
   }
+}
+
+/**
+ * The landing with staging's ten areas (OSE-2084): every hexagon is a link, so
+ * every one is a 44 px target, from the narrowest phone to a desktop. 479 and
+ * 480 px are either side of the narrow rule: the taller box ends there, and the
+ * whole frame, where a hexagon is smallest for its screen, begins.
+ */
+const TEN_AREA_SCREENS = [
+  { name: '320 px', width: 320, height: 568, tall: true },
+  { name: "375 px, the phone audit's screen", width: 375, height: 812, tall: true },
+  { name: '479 px, the last width of the narrow rule', width: 479, height: 800, tall: true },
+  { name: '480 px, where the whole frame is back', width: 480, height: 800, tall: false },
+  { name: 'desktop, 1280 px', width: 1280, height: 800, tall: false },
+];
+
+for (const screen of TEN_AREA_SCREENS) {
+  test(`landing map, ten areas, ${screen.name}: every hexagon link is a 44 px target`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: screen.width, height: screen.height });
+    await open(page, '/', tenAreas());
+    await page.getByTestId('amap-svg').scrollIntoViewIfNeeded();
+    const m = await measure(page);
+    record(`landing map, ten areas, ${screen.width} px`, m);
+
+    expect(m.sideways, 'the page does not scroll sideways').toBe(false);
+    expect(m.cells, 'ten hexagons').toBe(10);
+    expect(m.areas.length, 'every hexagon is a link').toBe(10);
+    for (const a of m.areas) {
+      expect(round(a.width), `area ${a.n}: link width`).toBeGreaterThanOrEqual(TARGET_PX);
+      expect(round(a.height), `area ${a.n}: link height`).toBeGreaterThanOrEqual(TARGET_PX);
+      expect(a.inside, `area ${a.n}: its whole hexagon is on the map`).toBe(true);
+      expect(a.tappable, `area ${a.n}: a tap at its centre or 15 px from it opens this area`).toBe(
+        true
+      );
+    }
+    // A phone draws the middle of the map in a square box; from 480 px it is 600 by 360.
+    expect(round(m.map.width / m.map.height), 'the shape of the map').toBe(
+      screen.tall ? 1 : round(600 / 360)
+    );
+    // The list under the map keeps a 44 px link to every area.
+    const zooms = await page
+      .getByTestId('amap-zoom')
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
+    expect(zooms.length, 'a "Zoom in" link for every area').toBe(10);
+    for (const h of zooms) expect(round(h), '"Zoom in" height').toBeGreaterThanOrEqual(TARGET_PX);
+    const numbers = m.texts.filter((t) => t.kind === 'area number');
+    expect(numbers.length, 'ten numbered areas').toBe(10);
+    for (const t of numbers) {
+      expect(round(t.px), `area number "${t.text}"`).toBeGreaterThanOrEqual(TEXT_PX);
+    }
+  });
+}
+
+/**
+ * Staging while its map fixture is loaded: the ten areas and the fixture's own
+ * (bruno/fixtures/map-zoom-area-seed.sql). Eleven areas are drawn 45 by 44
+ * units: 21 px on a 320 px phone and 52 px on the widest map. A hexagon is a
+ * link only where it is 44 px, so here from 760 px (map-link-style.ts, step 3).
+ * Under that the hexagons are plain and the list's "Zoom in" links are the way
+ * in. tests/e2e/3-flows/map-place-panel.spec.ts taps one of these hexagons on
+ * staging, on a desktop.
+ */
+function elevenAreas(): Row[] {
+  return [...STAGING_AREAS, '872664405ffffff'].map((cell, i) => {
+    const [lat, lon] = cellToLatLng(cell);
+    return ev(i + 1, { lat, lon, h3_res7: cell, place_kind: 'business' });
+  });
+}
+const ELEVEN_AREA_SCREENS = [
+  { name: '320 px', width: 320, height: 568, links: false },
+  { name: "375 px, the phone audit's screen", width: 375, height: 812, links: false },
+  { name: '759 px, the last width without links', width: 759, height: 900, links: false },
+  { name: '760 px, the first width with links', width: 760, height: 900, links: true },
+  { name: 'desktop, 1280 px', width: 1280, height: 800, links: true },
+];
+
+for (const screen of ELEVEN_AREA_SCREENS) {
+  const what = screen.links ? 'every hexagon is a 44 px link' : 'no hexagon is a link';
+  test(`landing map, eleven areas, ${screen.name}: ${what}`, async ({ page }) => {
+    await page.setViewportSize({ width: screen.width, height: screen.height });
+    await open(page, '/', elevenAreas());
+    await page.getByTestId('amap-svg').scrollIntoViewIfNeeded();
+    const m = await measure(page);
+    record(`landing map, eleven areas, ${screen.width} px`, m);
+
+    expect(m.sideways, 'the page does not scroll sideways').toBe(false);
+    // Each hexagon is in the page twice, as a link and plain: one of the two shows.
+    expect(m.cells, 'eleven hexagons on show').toBe(11);
+    expect(round(m.map.width / m.map.height), 'the map keeps its whole frame').toBe(
+      round(600 / 360)
+    );
+    expect(m.areas.length, 'hexagon links on show').toBe(screen.links ? 11 : 0);
+    for (const a of m.areas) {
+      expect(round(a.width), `area ${a.n}: link width`).toBeGreaterThanOrEqual(TARGET_PX);
+      expect(round(a.height), `area ${a.n}: link height`).toBeGreaterThanOrEqual(TARGET_PX);
+      expect(a.inside, `area ${a.n}: its whole hexagon is on the map`).toBe(true);
+      expect(a.tappable, `area ${a.n}: a tap at its centre or 15 px from it opens this area`).toBe(
+        true
+      );
+    }
+    // A link that is not on show takes no tap: the hexagon's middle is not a link.
+    const linkAtMiddle = await page.evaluate(() => {
+      const cell = [...document.querySelectorAll('.amap-cell')].find(
+        (el) => el.getBoundingClientRect().width > 0
+      )!;
+      const r = cell.getBoundingClientRect();
+      return !!document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('a');
+    });
+    expect(linkAtMiddle, 'a tap on a hexagon opens an area').toBe(screen.links);
+    // "Tap a hexagon" is said only where a hexagon is a link.
+    await expect(page.getByTestId('amap-tap')).toBeVisible({ visible: screen.links });
+    // The list under the map keeps a 44 px link to every area, on every screen.
+    const zooms = await page
+      .getByTestId('amap-zoom')
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
+    expect(zooms.length, 'a "Zoom in" link for every area').toBe(11);
+    for (const h of zooms) expect(round(h), '"Zoom in" height').toBeGreaterThanOrEqual(TARGET_PX);
+    const numbers = m.texts.filter((t) => t.kind === 'area number' && t.shown);
+    expect(numbers.length, 'eleven numbered areas on show').toBe(11);
+    for (const t of numbers) {
+      expect(round(t.px), `area number "${t.text}"`).toBeGreaterThanOrEqual(TEXT_PX);
+    }
+  });
 }
 
 /**

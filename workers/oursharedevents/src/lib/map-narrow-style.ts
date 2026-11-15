@@ -18,9 +18,16 @@
  *     its height (`frameForCells`), which leaves it under 350 units wide, and a
  *     dot sits within one res-9 cell of it. What is cut is street on either
  *     side. At 320 px the 78-unit target is 45.5 px.
+ *   - the landing's own map is drawn square where every area lies in the middle
+ *     360 units of the drawing and a hexagon link would otherwise be under
+ *     44 px (`data-tall`, set by `svgFor` in attendee-map.ts, OSE-2084). The
+ *     same `slice`, so the hexagons are larger and only street is cut: 0.78 px
+ *     a unit at 320 px, where the whole frame gives 0.47. Staging's ten areas
+ *     (62 by 60 units, 2026-11-15) go from 29 by 28 px to 48 by 47 px. Where an
+ *     area lies outside the middle the map keeps its whole frame.
  *   - text is set in more units: a dot's number 23 (13.4 px at 320 px), town
- *     names and area numbers 28 (13.1 px on the landing's own map, which keeps
- *     its whole frame, since cutting it would cut areas).
+ *     names and area numbers 28 (13.1 px on the landing's own map in its whole
+ *     frame).
  * From 480 px the whole frame is wide enough for the sizes the other blocks set
  * (`.amap-dn` 18, `.as-t` 22, `.amap-num` 26): 13.2 px, 16.1 px and 19.1 px on
  * a 440 px map.
@@ -30,4 +37,4 @@
  * colour is set here.
  */
 export const NARROW_MAP_STYLE =
-  '<style>@media(max-width:479px){.amap[data-zoom] svg{aspect-ratio:4/3}.amap-dn{font-size:23px}.as-t,.amap-num{font-size:28px}}</style>';
+  '<style>@media(max-width:479px){.amap[data-zoom] svg{aspect-ratio:4/3}.amap[data-tall] svg{aspect-ratio:1/1}.amap-dn{font-size:23px}.as-t,.amap-num{font-size:28px}}</style>';

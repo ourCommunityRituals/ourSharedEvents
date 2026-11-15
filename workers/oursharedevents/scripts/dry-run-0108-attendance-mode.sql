@@ -24,14 +24,13 @@ SELECT COUNT(*) AS events_that_become_in_person FROM events;
 --    coordinates). They stay as they are: the migration writes no row, and the
 --    place rule runs only on a create, or on an update that names the mode or
 --    the place. The next such update of one of these must add a place, or say
---    'online'.
-SELECT status, COUNT(*) AS in_person_with_no_place
+--    'online'. One count, not one per status: on production a dry run prints
+--    one row of counts and nothing else (ADR-037).
+SELECT COUNT(*) AS in_person_with_no_place
   FROM events
  WHERE TRIM(COALESCE(where_address, '')) = ''
    AND TRIM(COALESCE(location, '')) = ''
-   AND lat IS NULL AND lon IS NULL
- GROUP BY status
- ORDER BY status;
+   AND lat IS NULL AND lon IS NULL;
 
 -- 3. The same, for events on the public list today (root brand, published,
 --    active). These keep showing on /events and the landing page, as before.

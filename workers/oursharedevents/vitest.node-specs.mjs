@@ -172,6 +172,10 @@ export const NODE_SPECS = [
   // (scripts/street-map-archive/check.ts), over in-memory archives.
   'tests/street-map-archive-check.spec.ts',
   'tests/map-zoom.spec.ts',
+  // The map's rules at the exact sizes where they change (hexagon links, the
+  // taller box, the dot merge): stands in for the projection only (vi.mock of
+  // lib/street-map's `project`).
+  'tests/map-limits.spec.ts',
   'tests/map-place-links.spec.ts',
   // WHAT external link — event-page render fns emit the optional outbound link
   // on all three phases. Pure unit over renderPre/Live/PostEventHtml (no

@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0109; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0110; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,20 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0110: events.campaign_id (OSE-1552 scope 1, OSE ADR-030).
+-- Additive: one nullable column and one index. No row is written or rewritten.
+-- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMN. The older Worker does
+-- not read it, and nothing public reads it in the newer one.
+--
+-- What the older Worker does NOT know: nothing that breaks. It has no route
+-- that deletes a campaign, so an event that points at one blocks nothing.
+-- An event put in a campaign keeps the link while the older Worker runs.
+--
+-- Surgical reverse, only if the column itself must go. This forgets which
+-- events were in which campaign. Drop the index before the column:
+DROP INDEX IF EXISTS idx_events_campaign_id;
+ALTER TABLE events DROP COLUMN campaign_id;
+
 -- 0109: event_booths + poster_deployments.booth_id (OSE-1998, OSE ADR-034).
 -- Additive: one new table, two indexes, one nullable column. No row is written
 -- or rewritten. THE ROLLBACK IS: revert the Worker and LEAVE THE TABLE AND THE
