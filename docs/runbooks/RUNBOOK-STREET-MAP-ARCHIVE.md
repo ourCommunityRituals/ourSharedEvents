@@ -440,12 +440,27 @@ writes nothing and can run at any time.
    the next landing request draws streets: for areas in the United States, the
    landing shows streets under the hexagons and the OpenStreetMap credit, and a
    tapped hexagon shows its dots over streets. In the next staging run's
-   `T2: Bruno Pages contract` log, the two street-map requests print their street
-   assertions and no `NOT RUN` line.
+   `T2: Bruno Pages contract` log, the four cases that read
+   `streetMapArchiveLoaded` (the two landing cases, the area-map case in folder
+   15 and the zoomed list case in folder 16) print their street assertions and no
+   `NOT RUN` line. The three road tests among them (the two landing cases and
+   the area-map case) pass only with 50 or more path commands of highway plus
+   major road (`ROAD_FLOOR`), so a layer of water with a stub of road is red by
+   name. In T4k, the first test of `tests/e2e/3-flows/map-place-panel.spec.ts`
+   records which page was drawn, the "no street map" note or the dot map over
+   streets, as a test annotation.
 
 9. **Make the staging cases binding.** One-line PR: `streetMapArchiveLoaded` to
    `"true"` in `bruno/ose-pages/environments/ose-staging.yml`. From then on a
-   staging run that draws no streets is red, not a printed `NOT RUN`.
+   staging run that draws no streets is red, not a printed `NOT RUN`. **As things
+   stand that PR is red on the four T4k axe tests.**
+   `tests/e2e/3-flows/map-place-panel.spec.ts` (`sortUndecided`, and the lines
+   after its call) sets apart the text drawn on the map itself, town names and
+   dot numbers, whose contrast axe cannot decide over streets. While the flag is
+   `"false"` that is a warning in the run ("T4k street map text contrast NOT
+   DECIDED"); once it is `"true"` it is a failure. So that contrast is judged
+   another way first, and the spec changed to match, before this PR. Seen on a
+   local Worker over a synthetic archive (PR #1272), not on staging.
 
 ## What stops a run
 
@@ -687,6 +702,17 @@ zoom 12 for the 7-area and 19-area frames), so those places are ones a correct
 cut draws. London and Mexico City drew roads from the whole build, as they must;
 in the United States file they must draw nothing. None of this is a measure of
 the United States file or of R2.
+
+Since 2026-11-15 (PR #1270) the check makes eighteen draws, not twelve: the ten
+inside the region and the two outside it, as above, and six more over cities on
+the water (Manhattan, Seattle and San Francisco, each at 7 and at 19 areas). A
+draw inside the region now counts as `streets` only with 100 points of highway
+plus major road and 3% of every point drawn; roads that fall short are
+`thin-roads`, which fails the draw. The two numbers come from a workstation run
+over build `20261109` at Protomaps (the comment in
+`workers/oursharedevents/scripts/street-map-archive/check.ts`). No run of the
+eighteen against a United States file exists: the load workflow has 0 runs
+(read 2026-11-15).
 
 Still unmeasured:
 
