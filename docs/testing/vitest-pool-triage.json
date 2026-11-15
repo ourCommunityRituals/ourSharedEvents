@@ -583,6 +583,13 @@
       "testCount": 13
     },
     {
+      "file": "workers/oursharedevents/tests/booth-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 19
+    },
+    {
       "file": "workers/oursharedevents/tests/born-red-harness.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -2345,6 +2352,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-event-booths.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/public-event-calendar.spec.ts",

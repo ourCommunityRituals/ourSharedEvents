@@ -1,0 +1,33 @@
+info:
+  name: "OSE-1998 | rainy | page | a stall name shaped like markup is shown as text"
+  type: http
+  seq: 184
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/{{boothLiveFairId}}/booths/L2"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the page read was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        if (!edge) {
+          test('OSE-1998 page: 200', function () { expect(res.getStatus()).to.eql(200); });
+          test('OSE-1998 page: escaped, never markup', function () { expect(body).to.include('&lt;b&gt;Bold&lt;/b&gt; &amp; Co'); expect(body).to.not.include('<b>Bold</b>'); });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

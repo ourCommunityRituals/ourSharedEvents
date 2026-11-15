@@ -111,6 +111,8 @@ const SAME_ORIGIN_SPONSOR_LINKS: Record<string, string> = {
   'sponsor-card-link': 'href is sponsorCardPath(id), a /sponsors/:id path',
   'sponsor-card-email': 'href is a mailto: built by mailtoHref',
   'sponsor-card-phone': 'href is a tel: built by telHref',
+  'booth-sponsor-card-link':
+    'href is sponsorCardPath(id), a /sponsors/:id path (the stall page, OSE-1998)',
   'poster-sponsor-card-link':
     'href is posterSponsorSite(s), which returns a card path only when it matches /sponsors/<id>',
 };

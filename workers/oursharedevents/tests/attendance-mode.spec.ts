@@ -721,8 +721,10 @@ describe('8. the public projection gained attendance_mode and nothing else', () 
     expect([...PUBLIC_EVENT_COLUMNS].sort()).toEqual([...BEFORE, 'attendance_mode'].sort());
   });
 
-  test('the contract snapshot is v1.5.0 and lists the same columns on both endpoints', () => {
-    expect(snapshot.version).toBe('1.5.0');
+  // v1.5.0 added the mode; v1.6.0 (OSE-1998) added the `booths` envelope key and
+  // changed no column, so the column lists below are still the mode's.
+  test('the contract snapshot is v1.6.0 and lists the same columns on both endpoints', () => {
+    expect(snapshot.version).toBe('1.6.0');
     for (const endpoint of ['GET /api/v2/events', 'GET /api/v2/events/:id'] as const) {
       expect(snapshot.endpoints[endpoint].projected_columns, endpoint).toEqual(
         [...PUBLIC_EVENT_COLUMNS].sort()

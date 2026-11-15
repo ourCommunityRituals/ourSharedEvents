@@ -1,0 +1,35 @@
+info:
+  name: "OSE-1998 | setup | three stalls on the live fair, one with a markup-shaped name"
+  type: http
+  seq: 13
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothLiveFairId}}/booths/bulk"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"booths\": [{\"number\": \"L1\", \"name\": \"Live Honey\", \"category\": \"food\", \"hall_x\": 0.1, \"hall_y\": 0.2, \"sort\": 2}, {\"number\": \"L2\", \"name\": \"<b>Bold</b> & Co\", \"sort\": 1}, {\"number\": \"L3\", \"name\": \"Closing Stall\", \"sort\": 3}]}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1998 setup: three stalls created', function () { expect(res.getStatus()).to.eql(201); expect(b.created).to.eql(3); });
+        const l3 = (b.booths || []).find(function (x) { return x.number === 'L3'; }) || {};
+        bru.setVar('boothLiveL3Id', l3.id || 'missing-l3');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

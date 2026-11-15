@@ -2,7 +2,7 @@
  * Events API handler.
  *
  * GET  /api/v2/events              – list active events for a brand
- * GET  /api/v2/events/:id          – single event by ID
+ * GET  /api/v2/events/:id          – single event by ID; `series` and `booths` beside `item`
  * GET  /api/v2/admin/events        – admin list (includes archived)
  * POST /api/v2/admin/events        – create event (admin)
  * PUT  /api/v2/admin/events/:id    – update event (admin)
@@ -44,6 +44,7 @@ import {
 } from '../lib/event-settings';
 import { logAdminAction } from '../lib/audit-log';
 import { toPublicEvent } from '../lib/public-event-projection.js';
+import { fetchPublicBoothsOf } from '../lib/public-booths.js';
 import {
   fetchPublicSeriesByEvent,
   fetchPublicSeriesOf,
@@ -283,17 +284,29 @@ export async function handleGetEvent(
       );
     }
 
+    // OSE-2018 / OSE-1998: the event's confirmed series and its stalls in use,
+    // read only for an event the gate above let through. Both bind the event
+    // (the stalls its own brand too) and both fail to empty.
+    const eventId = String(row.id ?? id);
+    const [series, booths] = await Promise.all([
+      fetchPublicSeriesOf(env.DB, eventId),
+      fetchPublicBoothsOf(env.DB, eventId, String(row.brand_id ?? '')),
+    ]);
+
     return Response.json(
       // OSE-1247 — same projection as the list. If the two endpoints described
       // the same event with different field sets, the narrower one would be
       // security theatre: a caller wanting the extra fields would just use the
       // other route.
       // OSE-2018: `series` is a sibling of `item`, never a field on it.
+      // OSE-1998: so is `booths`, on this read only (lib/public-booths.ts): a
+      // fair can hold hundreds of stalls, and the list read carries every event.
       {
         ok: true,
         status: 200,
         item: toPublicEvent(enrichWithPhase(row)),
-        series: await fetchPublicSeriesOf(env.DB, String(row.id ?? id)),
+        series,
+        booths,
       },
       {
         headers: {

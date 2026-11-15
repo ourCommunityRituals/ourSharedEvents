@@ -1273,7 +1273,9 @@ function renderSponsorStrip(
  * a date-only event keeps its prior shape (date · zone name). Pure Intl — no zone
  * string is interpolated into markup except through esc() at the call site.
  */
-function formatEventWhen(
+// Exported for the stall page (handlers/booth-page.ts, OSE-1998): a stall
+// shows its fair's date the way the fair's own page does.
+export function formatEventWhen(
   row: {
     start_date: string | null;
     starts_at?: string | null;

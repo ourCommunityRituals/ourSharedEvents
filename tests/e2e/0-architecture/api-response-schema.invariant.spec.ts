@@ -227,13 +227,16 @@ test.describe('Invariant 16: API Response Schema Stability — structural code-s
   // @born-red OSE-2042 | method: `series` taken out of the list response, then
   // `sponsor_titles`, then `series` out of the detail response; then a sibling
   // taken out of the snapshot's list | date: 2026-11-14
+  // @born-red OSE-1998 | method: `booths` taken out of the detail response with
+  // the snapshot and this list naming it (1 red) | date: 2026-11-14
   const ENVELOPES: Array<[string, string, string[]]> = [
     [
       'GET /api/v2/events',
       'handleListEvents',
       ['ok', 'status', 'items', 'sponsor_titles', 'series'],
     ],
-    ['GET /api/v2/events/:id', 'handleGetEvent', ['ok', 'status', 'item', 'series']],
+    // OSE-1998: `booths` (the fair's stalls in use) on the single read only.
+    ['GET /api/v2/events/:id', 'handleGetEvent', ['ok', 'status', 'item', 'series', 'booths']],
   ];
 
   /** The object literal of a handler's success response: from `ok: true` to its headers. */
