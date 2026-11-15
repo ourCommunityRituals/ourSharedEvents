@@ -85,10 +85,14 @@ export const MUTATION_PATHS = Object.freeze([
   'workers/oursharedevents/src/lib/attendee-map.ts',
   'workers/oursharedevents/src/lib/mvt.ts',
   'workers/oursharedevents/src/lib/pmtiles.ts',
-  // The street layer's loader in street-map.ts (two marker ranges, see rangeOf
-  // in stryker.conf.mjs); the fixtures are the fake buckets its specs read.
+  // The street layer, street-map.ts, mutated whole since 2026-11-15 (the frame,
+  // the drawing and its point budget, the two floors, the loader); the fixtures
+  // are the tiles and fake buckets its specs read. The public area map's
+  // handler reaches the loader's width floor, and its spec kills mutants there.
   'workers/oursharedevents/src/lib/street-map.ts',
+  'workers/oursharedevents/src/handlers/map-areas.ts',
   'workers/oursharedevents/tests/helpers/street-map-fixtures.ts',
+  'workers/oursharedevents/tests/map-areas.spec.ts',
   'workers/oursharedevents/tests/attendee-map.spec.ts',
   'workers/oursharedevents/tests/mvt.spec.ts',
   'workers/oursharedevents/tests/pmtiles.spec.ts',

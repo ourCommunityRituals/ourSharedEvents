@@ -3,22 +3,28 @@
 // watched here on an archive with that one fault put in, next to the same
 // archive without it.
 
-import { getResolution, latLngToCell } from 'h3-js';
+// @born-red a water-heavy file with a token road | method: with the check's old rule put back (any road path in the layer is "streets"), "water with a stub of road", "under 100 points of highway and major road", "under 3% of the points drawn" and "streets and no road to steer by" all went red; with only the count rule switched off, "under 100 points" went red; with only the share rule switched off, "under 3%" went red | date: 2026-11-15
+import { cellToLatLng, getResolution, latLngToCell } from 'h3-js';
 import { describe, expect, it } from 'vitest';
 import {
   checkArchive,
   defaultProbes,
+  MIN_MAIN_ROAD_POINTS,
+  MIN_MAIN_ROAD_SHARE,
   READER_MAX_DEPTH,
   type Probe,
 } from '../scripts/street-map-archive/check.js';
 import { MAX_DIRECTORY_BYTES, MAX_TILE_BYTES, zxyToTileId } from '../src/lib/pmtiles.js';
+import { MIN_ROAD_POINTS, layerShows, toWorld } from '../src/lib/street-map.js';
 import {
   gzip,
   memSource,
   mvtTile,
   pmtilesArchive,
   tilesForCells,
+  tilesOfFrame,
   varint,
+  type FixtureLayer,
   type FixtureTile,
 } from './helpers/street-map-fixtures.js';
 
@@ -67,6 +73,13 @@ describe('street-map archive check | an archive the Worker can read passes', () 
       ['outside', 'none', true],
     ]);
     expect(r.probes[0]).toMatchObject({ cells: 1, zoom: 14 });
+    // What each draw held is in the report, so the record of a load says it.
+    const drawn = r.probes[0]!.drawn!;
+    expect(drawn.highway).toBeGreaterThanOrEqual(MIN_MAIN_ROAD_POINTS);
+    expect(drawn.minor).toBeGreaterThan(0);
+    expect(drawn.water).toBeGreaterThan(0);
+    expect(drawn).toMatchObject({ major: 0, rivers: 0 });
+    expect(r.probes[1]!.drawn).toBeNull();
     expect(r.probes[0]!.reads).toBeGreaterThan(0);
     expect(r.probes[0]!.bytes).toBeGreaterThan(0);
   });
@@ -116,10 +129,18 @@ describe('street-map archive check | the default draws', () => {
       'streets: San Juan, Puerto Rico, one area',
       'streets: Chicago, 7 areas',
       'streets: Chicago, 19 areas',
+      'streets: Manhattan, 7 areas (on the water)',
+      'streets: Manhattan, 19 areas (on the water)',
+      'streets: Seattle, 7 areas (on the water)',
+      'streets: Seattle, 19 areas (on the water)',
+      'streets: San Francisco, 7 areas (on the water)',
+      'streets: San Francisco, 19 areas (on the water)',
       'none: London, one area (outside the region)',
       'none: Mexico City, one area (outside the region)',
     ]);
-    expect(probes.map((p) => p.cells.length)).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 7, 19, 1, 1]);
+    expect(probes.map((p) => p.cells.length)).toEqual([
+      1, 1, 1, 1, 1, 1, 1, 1, 7, 19, 7, 19, 7, 19, 7, 19, 1, 1,
+    ]);
     for (const p of probes) for (const c of p.cells) expect(getResolution(c)).toBe(7);
   });
 });
@@ -425,6 +446,120 @@ describe('street-map archive check | draws', () => {
     const r = await run(bytes, { probes: [PROBES[0]!] });
     expect(r.probes[0]!.got).toBe('no-roads');
     expect(r.problems).toEqual(['draw: inside: expected streets, got no-roads']);
+  });
+
+  // street-map CCR 2026-11-15, R17. The check called a draw "streets" when its
+  // layer held any road path at all, so the layer the old drawer made of 19
+  // areas of Manhattan (8,999 points of water, one of road) passed it.
+  /** An archive for CELL's frame whose middle tile holds `layers`; the tiles around it hold water. */
+  const around = async (layers: FixtureLayer[]) => {
+    const [wx, wy] = toWorld(...cellToLatLng(CELL));
+    const lake: FixtureLayer = {
+      name: 'water',
+      features: [
+        {
+          type: 3,
+          props: { kind: 'lake' },
+          parts: [
+            [
+              [0, 0],
+              [4096, 0],
+              [4096, 4096],
+              [0, 4096],
+              [0, 0],
+            ],
+          ],
+        },
+      ],
+    };
+    const { r, tiles: all } = tilesOfFrame([CELL], (x, y) =>
+      x === Math.floor(wx * 2 ** 14) && y === Math.floor(wy * 2 ** 14) ? [lake, ...layers] : [lake]
+    );
+    expect(r.z).toBe(14);
+    return run(await pmtilesArchive(all, { gzip: true }), { probes: [PROBES[0]!] });
+  };
+  /** `points` points of road in lines of 50, each swinging so no two points merge. */
+  const road = (kind: string, points: number, row = 0): FixtureLayer['features'] =>
+    Array.from({ length: Math.ceil(points / 50) }, (_, j) => ({
+      type: 2 as const,
+      props: { kind },
+      parts: [
+        Array.from({ length: Math.min(50, points - j * 50) }, (_, i): [number, number] => [
+          i * 80,
+          row + j * 60 + (i % 2 ? 30 : 0),
+        ]),
+      ],
+    }));
+  const roads = (...features: FixtureLayer['features'][]): FixtureLayer[] => [
+    { name: 'roads', features: features.flat() },
+  ];
+
+  it('water with a stub of road is not streets', async () => {
+    const r = await around(roads(road('major_road', 2)));
+    expect(r.probes[0]).toMatchObject({ got: 'thin-roads', ok: false });
+    expect(r.probes[0]!.drawn).toMatchObject({ highway: 0, major: 2, minor: 0 });
+    expect(r.problems).toHaveLength(1);
+    expect(r.problems[0]).toMatch(
+      /^draw: inside: expected streets, got thin-roads \(highway and major road: 2 of \d+ points drawn; a draw needs 100 and 3%\)$/
+    );
+  });
+
+  it('under 100 points of highway and major road is not streets, though the Worker would show it', async () => {
+    expect(MIN_MAIN_ROAD_POINTS).toBe(100);
+    // 99 points of main road among 400 of streets: over the Worker's own floor.
+    const thin = await around(
+      roads(road('highway', 49), road('major_road', 50, 1500), road('minor_road', 400, 2500))
+    );
+    expect(thin.probes[0]!.drawn).toMatchObject({ highway: 49, major: 50, minor: 400 });
+    expect(thin.probes[0]!.got).toBe('thin-roads');
+    expect(thin.problems).toHaveLength(1);
+    // One more point and it is streets; highway and major road count together.
+    const enough = await around(
+      roads(road('highway', 50), road('major_road', 50, 1500), road('minor_road', 400, 2500))
+    );
+    expect(enough.probes[0]!.drawn).toMatchObject({ highway: 50, major: 50, minor: 400 });
+    expect(enough.probes[0]!.got).toBe('streets');
+    expect(enough.problems).toEqual([]);
+    for (const kind of ['highway', 'major_road']) {
+      expect((await around(roads(road(kind, 100)))).probes[0]!.got).toBe('streets');
+      expect((await around(roads(road(kind, 99)))).probes[0]!.got).toBe('thin-roads');
+    }
+  });
+
+  it('highway and major road under 3% of the points drawn is not streets', async () => {
+    expect(MIN_MAIN_ROAD_SHARE).toBe(0.03);
+    const share = async (minor: number) => {
+      const r = await around(roads(road('highway', 100), road('minor_road', minor, 100)));
+      const d = r.probes[0]!.drawn!;
+      expect(d).toMatchObject({ highway: 100, major: 0, minor, rivers: 0 });
+      return { got: r.probes[0]!.got, all: d.highway + d.minor + d.water, problems: r.problems };
+    };
+    // 100 of 3,400 and some: under 3%.
+    const under = await share(3300);
+    expect(100 / under.all).toBeLessThan(0.03);
+    expect(under.got).toBe('thin-roads');
+    expect(under.problems).toHaveLength(1);
+    // 100 of 3,300 and some: over it.
+    const over = await share(3150);
+    expect(100 / over.all).toBeGreaterThan(0.03);
+    expect(over.got).toBe('streets');
+    expect(over.problems).toEqual([]);
+  });
+
+  it('a draw the check calls streets is one the Worker shows', async () => {
+    // The check asks for 100 points of highway and major road; the Worker's
+    // floor is a point of either and 100 of road in all. Were the Worker's
+    // floor raised past the check's, a file could pass here and draw nothing.
+    expect(MIN_MAIN_ROAD_POINTS).toBeGreaterThanOrEqual(MIN_ROAD_POINTS);
+    const r = await around(roads(road('major_road', MIN_MAIN_ROAD_POINTS)));
+    expect(r.probes[0]!.got).toBe('streets');
+    expect(layerShows(r.probes[0]!.drawn!)).toBe(true);
+  });
+
+  it('streets and no road to steer by is not streets', async () => {
+    const r = await around(roads(road('minor_road', 600)));
+    expect(r.probes[0]!.drawn).toMatchObject({ highway: 0, major: 0, minor: 600 });
+    expect(r.probes[0]!.got).toBe('thin-roads');
   });
 
   it('a draw that is only reported never fails for what it drew', async () => {

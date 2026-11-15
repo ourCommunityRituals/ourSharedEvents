@@ -250,7 +250,10 @@ export function memSource(bytes: Uint8Array): RangeSource & { reads: [number, nu
  * fake timers, the next delay is a fake timer the later test counts (CI,
  * 2026-11-12: "a read that has finished leaves no timer running" saw 1).
  * `settle()` waits for the delays already running, and from then on every get
- * answers at once, with no timer, so the abandoned read ends inside its test.
+ * answers at once, with no timer, so the abandoned read ends inside its test:
+ * with nothing left to wait for (an archive that is not gzipped unpacks at
+ * once), it runs to its end, drawing included, in the turn of the event loop
+ * that `settle()` waits out last. Call it with real timers.
  */
 export function fakeBucket(
   name: string,
@@ -268,6 +271,7 @@ export function fakeBucket(
     async settle() {
       settled = true;
       while (delays.size) await Promise.all([...delays]);
+      await new Promise<void>((r) => setTimeout(r, 0));
     },
     async get(k, o) {
       gets.push({ key: k, range: o?.range });
@@ -463,96 +467,93 @@ export async function planetArchive(
 
 // ── a street map for real cells ─────────────────────────────────────────────
 
-/** A tile for every z/x/y the frame reads: a highway across the middle, a
- * minor road, a lake polygon, and one town. */
+/** A tile for every z/x/y the frame of these cells reads, holding `layers(x, y)`. */
+export function tilesOfFrame(cells: string[], layers: (x: number, y: number) => FixtureLayer[]) {
+  const f = frameForCells(cells);
+  const r = tilesFor(f, 0, 15);
+  const out: FixtureTile[] = [];
+  for (let x = r.xMin; x <= r.xMax; x++) {
+    for (let y = r.yMin; y <= r.yMax; y++) out.push({ z: r.z, x, y, data: mvtTile(layers(x, y)) });
+  }
+  return { f, r, tiles: out };
+}
+
+/**
+ * A straight road across a tile with a point every 64 tile units, as a real
+ * road has a point at every bend and crossing: 65 points. `at` places it.
+ */
+const straight = (at: (t: number) => Pt): Pt[] => Array.from({ length: 65 }, (_, i) => at(i * 64));
+
+/**
+ * A tile for every z/x/y the frame reads: a highway across the middle, a minor
+ * road down it, a lake polygon, and what `extra` adds. Each tile alone holds
+ * more road than a layer needs to be shown (lib/street-map.ts, layerShows).
+ */
 export function tilesForCells(
   cells: string[],
   extra: (x: number, y: number) => FixtureLayer[] = () => []
 ) {
-  const f = frameForCells(cells);
-  const r = tilesFor(f, 0, 15);
-  const out = [];
-  for (let x = r.xMin; x <= r.xMax; x++) {
-    for (let y = r.yMin; y <= r.yMax; y++) {
-      out.push({
-        z: r.z,
-        x,
-        y,
-        data: mvtTile([
-          {
-            name: 'roads',
-            features: [
-              {
-                type: 2,
-                props: { kind: 'highway' },
-                parts: [
-                  [
-                    [0, 2048],
-                    [4096, 2048],
-                  ],
-                ],
-              },
-              {
-                type: 2,
-                props: { kind: 'minor_road' },
-                parts: [
-                  [
-                    [2048, 0],
-                    [2048, 4096],
-                  ],
-                ],
-              },
-              {
-                type: 2,
-                props: { kind: 'path' },
-                parts: [
-                  [
-                    [0, 0],
-                    [4096, 4096],
-                  ],
-                ],
-              },
+  return tilesOfFrame(cells, (x, y) => [
+    {
+      name: 'roads',
+      features: [
+        {
+          type: 2,
+          props: { kind: 'highway' },
+          parts: [straight((t) => [t, 2048])],
+        },
+        {
+          type: 2,
+          props: { kind: 'minor_road' },
+          parts: [straight((t) => [2048, t])],
+        },
+        {
+          type: 2,
+          props: { kind: 'path' },
+          parts: [
+            [
+              [0, 0],
+              [4096, 4096],
             ],
-          },
-          {
-            name: 'water',
-            features: [
-              {
-                type: 3,
-                props: { kind: 'lake' },
-                parts: [
-                  [
-                    [0, 0],
-                    [600, 0],
-                    [600, 600],
-                    [0, 600],
-                    [0, 0],
-                  ],
-                ],
-              },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'water',
+      features: [
+        {
+          type: 3,
+          props: { kind: 'lake' },
+          parts: [
+            [
+              [0, 0],
+              [600, 0],
+              [600, 600],
+              [0, 600],
+              [0, 0],
             ],
-          },
-          {
-            name: 'buildings',
-            features: [
-              {
-                type: 3,
-                props: { kind: 'building' },
-                parts: [
-                  [
-                    [9, 9],
-                    [19, 9],
-                    [19, 19],
-                    [9, 9],
-                  ],
-                ],
-              },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'buildings',
+      features: [
+        {
+          type: 3,
+          props: { kind: 'building' },
+          parts: [
+            [
+              [9, 9],
+              [19, 9],
+              [19, 19],
+              [9, 9],
             ],
-          },
-          ...extra(x, y),
-        ]),
-      });
-    }
-  }
-  return { f, r, tiles: out };
+          ],
+        },
+      ],
+    },
+    ...extra(x, y),
+  ]);
 }

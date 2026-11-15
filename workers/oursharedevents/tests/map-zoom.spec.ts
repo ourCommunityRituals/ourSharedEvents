@@ -76,20 +76,26 @@ function ev(id: string, over: Partial<ZoomEvent> = {}): ZoomEvent {
 }
 
 // The street map drawn for this one area. Without it no dot map is drawn.
-const STREETS = { cellsKey: cellsKey([CELL]), svg: '<g data-testid="amap-streets"></g>' };
+// Made when a test asks, not as the file loads: street-map code run under no
+// test makes its mutants "static", and the mutation pass then reruns every spec
+// for each of them (street-map.ts is mutated whole since 2026-11-15).
+const streets = () => ({
+  cellsKey: cellsKey([CELL]),
+  svg: '<g data-testid="amap-streets"></g>',
+});
 
 const zoomed = (events: ZoomEvent[], extra: Record<string, unknown> = {}) =>
   renderAttendeeMap([], {
     now: NOW,
     zoom: { cell: CELL, events, backHref: '/?zip=60406' },
-    streets: STREETS,
+    streets: streets(),
     ...extra,
   });
 
 /** Where a block's dot is drawn, in map units. */
-const FRAME = frameForCells([CELL], MAP_W, MAP_H);
+const frame = () => frameForCells([CELL], MAP_W, MAP_H);
 const xyOf = (lat: number, lon: number) =>
-  project(FRAME, ...cellToLatLng(latLngToCell(lat, lon, 9)));
+  project(frame(), ...cellToLatLng(latLngToCell(lat, lon, 9)));
 const apart = (a: number[], b: number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!);
 
 describe('where a dot sits', () => {
@@ -253,7 +259,7 @@ describe('the zoomed map', () => {
     const yes = zoomed([ev('a')]).html;
     expect(yes).toContain('data-testid="amap-streets"');
     expect(yes).toContain('data-testid="amap-credit"');
-    const no = zoomed([ev('a')], { streets: { ...STREETS, cellsKey: cellsKey([OTHER]) } }).html;
+    const no = zoomed([ev('a')], { streets: { ...streets(), cellsKey: cellsKey([OTHER]) } }).html;
     expect(no).not.toContain('data-testid="amap-streets"');
     expect(no).not.toContain('data-testid="amap-credit"');
     // Streets for another area are no street map for this one: no dots either.
@@ -322,7 +328,7 @@ describe('dots too near to tap apart are one place', () => {
     expect(dots.length).toBeGreaterThan(1);
     expect(dots.length).toBeLessThan(events.length);
     expect(dots.map((d) => d.n)).toEqual(dots.map((_, i) => i + 1));
-    const at = dots.map((d) => project(FRAME, d.lat, d.lng));
+    const at = dots.map((d) => project(frame(), d.lat, d.lng));
     for (let i = 0; i < at.length; i += 1) {
       for (let j = i + 1; j < at.length; j += 1) {
         expect(apart(at[i]!, at[j]!), `${i + 1} and ${j + 1}`).toBeGreaterThanOrEqual(DOT_MERGE);
@@ -507,7 +513,7 @@ describe('the landing, zoomed', () => {
         { ...ev('here'), event_type_id: 'etr-art-music' },
         { ...ev('two'), event_type_id: 'etr-biz-mixer' },
       ],
-      { now: NOW, zoom: { cell: CELL, backHref: '/' }, typeCategories, streets: STREETS }
+      { now: NOW, zoom: { cell: CELL, backHref: '/' }, typeCategories, streets: streets() }
     );
     expect(area.html).toContain(
       '#cat-art:checked ~ .area .event-card:not(.cat-art),#cat-art:checked ~ .area .amap-f:not(.cat-art){display:none}'
@@ -800,7 +806,7 @@ describe('the zoomed area, edge by edge', () => {
 
   test('the area outline is the cell boundary, point by point', () => {
     const ring = cellToBoundary(CELL)
-      .map(([lat, lng]) => project(FRAME, lat, lng))
+      .map(([lat, lng]) => project(frame(), lat, lng))
       .map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`)
       .join(' ');
     expect(zoomed([ev('a')]).html).toContain(
@@ -841,7 +847,7 @@ describe('the zoomed area, edge by edge', () => {
       const r = renderAttendeeMap([], {
         now: NOW,
         zoom: { cell, events: cell === CELL ? [] : [ev('a')], backHref: '/?zip=60406' },
-        streets: STREETS,
+        streets: streets(),
       });
       expect(r.html, cell).toBe(empty);
       expect(r.count).toBe(0);

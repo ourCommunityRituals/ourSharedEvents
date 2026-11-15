@@ -156,6 +156,29 @@ describe('street map | the landing page handler', () => {
       await pmtilesArchive(tilesForCells([LOS_ANGELES]).tiles, { gzip: true })
     );
 
+  // street-map CCR 2026-11-15, R5: the landing had no width floor, so a list
+  // that reached across the country read tiles at zoom 4 and drew them.
+  it('areas spread wider than a street map can show: plain hexagons, no credit, and the bucket is never asked', async () => {
+    state.rows = sentinel(
+      MANY.map((row, i) =>
+        i % 2 ? { ...row, lat: 34.05, lon: -118.25, h3_res7: LOS_ANGELES } : row
+      )
+    );
+    const plain = await landing({});
+    const cells = cellsOf(plain);
+    expect(cells).toContain(LOS_ANGELES);
+    expect(cells).toContain(BLUE_ISLAND);
+
+    // The tiles for that frame are in the archive, and they hold roads.
+    const { tiles } = tilesForCells(cells);
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, await pmtilesArchive(tiles, { gzip: true }));
+    const html = await landing({ MAP_TILES: bucket });
+    expect(html).not.toContain('data-testid="amap-streets"');
+    expect(html).not.toContain('data-testid="amap-credit"');
+    expect(cellsOf(html)).toEqual(cells);
+    expect(bucket.gets).toHaveLength(0);
+  });
+
   it('an archive with no tile for the areas: the landing keeps its plain hexagons, with no credit', async () => {
     const bucket = await elsewhere();
     const plain = await landing({});

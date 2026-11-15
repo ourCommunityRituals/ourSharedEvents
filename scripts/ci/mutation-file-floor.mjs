@@ -111,13 +111,18 @@ export const FLOORS = {
   'src/lib/attendee-map.ts': 98.9,
   'src/lib/mvt.ts': 99.02,
   'src/lib/pmtiles.ts': 99.7,
-  // The street layer's loader (owner, 2026-11-10): two marker ranges of
-  // street-map.ts, the archive name rule and buildStreetLayer to the catch in
-  // loadStreetLayer. 48 of 48 since the frame's tiles go to one readTiles call
-  // (was 50 of 50): 46 killed, and 2 that never end (`x++` and `y++` to `--` in
-  // the tile loop, so the run stops them). One mutant is disabled
-  // in the source with its reason: the text of an error nobody reads.
-  'src/lib/street-map.ts': 100,
+  // The street layer, street-map.ts, the whole file since 2026-11-15 (street-map
+  // CCR, R17). Until then two marker ranges were mutated (the archive name rule
+  // and the loader, 48 mutants) and this line read 100 for that part alone; the
+  // frame, the drawing and its point budget were not mutated at all. A local
+  // run of the whole file, 2026-11-15: 540 mutants, 535 killed, 3 that never
+  // end (`--z` to `++z` where the zoom steps out, `x++` and `y++` to `--` in
+  // the tile loop), 2 survived, so 99.63. One survivor has a test since (three
+  // points on a straight run). The other is equivalent: a point of water sent
+  // on as a river is one point to a part, and a part under two points is left
+  // out either way (its `// Stryker disable` line in the source did not take).
+  // Three more are disabled in the source with their reasons. Never lower.
+  'src/lib/street-map.ts': 99.6,
 };
 
 /** One file's score from its mutants, or null when it has no valid mutant. */

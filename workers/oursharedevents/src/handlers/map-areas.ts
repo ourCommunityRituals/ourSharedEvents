@@ -52,11 +52,9 @@ import { COORDINATE_PARAMS } from './events-map.js';
 /** Cells per request at most. A station's upcoming events sit in a few areas. */
 export const MAX_AREA_CELLS = 12;
 
-/**
- * The coarsest zoom streets are read at. At zoom 7 the 600-wide frame is about
- * 600 km across; wider than that the answer is hexagons only.
- */
-export const MIN_STREET_ZOOM = 7;
+// The floor under a street map's width, and the zoom of a frame, are the
+// loader's (lib/street-map.ts); the landing has the same floor through it.
+export { MIN_STREET_ZOOM, frameZoom } from '../lib/street-map.js';
 
 /** A res-7 cell id is 15 characters; anything much longer is not a cell list. */
 const MAX_PARAM_CHARS = MAX_AREA_CELLS * 16 + 64;
@@ -88,11 +86,6 @@ function outline(frame: MapFrame, cell: string): string {
     .map(([lat, lng]) => project(frame, lat, lng))
     .map(([x, y]) => `${fx(x)},${fx(y)}`)
     .join(' ');
-}
-
-/** The zoom a frame's tiles are read at before any stepping out (lib/street-map.ts, tilesFor). */
-export function frameZoom(frame: MapFrame): number {
-  return Math.round(Math.log2(frame.scale / 256));
 }
 
 export async function handleMapAreas(request: Request, env: StreetMapEnv): Promise<Response> {
@@ -159,11 +152,9 @@ export async function handleMapAreas(request: Request, env: StreetMapEnv): Promi
   });
   const neighbours: DrawnCell[] = around.map((cell) => ({ cell, points: outline(frame, cell) }));
 
-  // 4. The streets, when the frame is one a street map can show. Never throws.
-  const layer =
-    frameZoom(frame) >= MIN_STREET_ZOOM
-      ? await loadStreetLayer(env, framed, { numbered: cells })
-      : null;
+  // 4. The streets, when the frame is one a street map can show (the loader
+  //    reads no tile for a wider one). Never throws.
+  const layer = await loadStreetLayer(env, framed, { numbered: cells });
 
   return Response.json(
     {
