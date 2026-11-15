@@ -30,3 +30,10 @@ packages/flags/src/generated/
 # output. Prettier leaves the file as it is today (checked 2026-10-07); this keeps
 # a later prettier from turning the check red on a file nobody edited.
 docs/testing/vitest-pool-triage.json
+
+# Generated conformance report. The conformance-report workflow writes both files and
+# opens a refresh PR whenever they differ from its own output, so a prettier reformat
+# (the pre-commit hook on a merge of main, seen 2026-11-15) makes the next run open one
+# for nothing.
+workers/oursharedevents/docs/security/CONFORMANCE.md
+workers/oursharedevents/docs/security/conformance.json

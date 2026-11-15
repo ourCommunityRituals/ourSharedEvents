@@ -26,3 +26,9 @@ docs: |-
 
   Mock-layer twins: workers/oursharedevents/tests/event-booths.spec.ts,
   public-event-booths.spec.ts and booth-page.spec.ts.
+
+  The "same page" check (seq 185 to 187) compares the whole 404 page but for two
+  things that are new on every read: the script the edge adds for its JavaScript
+  check, and the value of each nonce attribute. T0 runs the three scripts
+  against pages shaped like staging's:
+  tests/integration/bruno-stall-not-found-same-page.test.js.
