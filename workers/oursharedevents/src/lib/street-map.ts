@@ -15,12 +15,18 @@
 // NEVER WHO. The frame comes from the drawn cell ids alone (`cellToBoundary`),
 // exactly as the hexagons do; no event lat/lon and no viewer location is read.
 // The server, not the visitor, chooses which tiles to read, so no tile request
-// says what a person looked at, and nothing here logs.
+// says what a person looked at. One line is logged for each try that reads the
+// bucket (STREET_LAYER, below): what came of it, on which surface, and five
+// numbers. No cell, no tile address, nothing of the request.
 //
 // FAIL SOFT. No binding, no archive, a part of the frame with no tile, a damaged
 // tile, a tile or a frame that holds more than the Worker will decode
 // (FRAME_LIMITS), or a slow read: the map is drawn as before, hexagons only.
 // The street layer is never a reason the page fails.
+//
+// IT SAYS WHAT IT DID (street-map CCR 2026-11-15, R4). Every one of those ends
+// the same way on the page, so the page cannot say which happened. The
+// STREET_LAYER line can: drew, no-archive, no-tile, thin, timeout or error.
 //
 // THE SWITCH (street-map CCR 2026-11-15, R20). `STREET_MAP` is a plain value in
 // wrangler.toml, one for each environment. Exactly "on" draws streets. "off", no
@@ -39,7 +45,9 @@
 
 import { cellToBoundary, cellToLatLng } from 'h3-js';
 import {
+  ArchiveNotFoundError,
   archiveHeader,
+  archiveKnownMissing,
   r2Source,
   readTiles,
   type RangeBucket,
@@ -127,6 +135,90 @@ export interface StreetLayer {
   svg: string;
   /** Path points in it, by kind. */
   drawn: DrawnPoints;
+}
+
+/**
+ * What one read of a frame did, filled in as it goes. Numbers and one yes or
+ * no: which zoom, how many tiles, how many reads, never which tiles.
+ */
+export interface StreetTrace {
+  /** The zoom the frame's tiles were asked for at; null until the archive is open. */
+  z: number | null;
+  /** Tiles the frame asked for. */
+  tiles: number;
+  /** Reads of the source so far. */
+  reads: number;
+  /** The archive had no tile for a part of the frame. */
+  gap: boolean;
+}
+
+export function newStreetTrace(): StreetTrace {
+  return { z: null, tiles: 0, reads: 0, gap: false };
+}
+
+/**
+ * What came of one try at the street layer:
+ *   drew        a layer is on the page
+ *   no-archive  the bucket has no object under the archive's key
+ *   no-tile     the archive has no tile for a part of the frame
+ *   thin        the tiles were read and drawn, and held no street map (layerShows)
+ *   timeout     slower than the limit (STREET_TIMEOUT_MS)
+ *   error       a read failed, or the bytes were refused (damaged, or past a limit)
+ */
+export type StreetOutcome = 'drew' | 'no-archive' | 'no-tile' | 'thin' | 'timeout' | 'error';
+
+/** The two callers. A caller that does not say is logged as "other". */
+export type StreetSurface = 'landing' | 'map-areas';
+const STREET_SURFACES: ReadonlySet<unknown> = new Set<StreetSurface>(['landing', 'map-areas']);
+/** One of the two words, or "other": whatever a caller hands over, only these are written. */
+const surfaceWord = (said: unknown): StreetSurface | 'other' =>
+  STREET_SURFACES.has(said) ? (said as StreetSurface) : 'other';
+
+/**
+ * The STREET_LAYER log line, sealed the way the cost line is
+ * (lib/cost-metric.ts): a fixed set of keys, two words from fixed lists and
+ * five numbers. Never who and never where: no cell, no tile address, no archive
+ * name, no error text, nothing read from the request. Gate:
+ * tests/e2e/0-architecture/cost-metric-never-who.invariant.spec.ts.
+ */
+export interface StreetLayerLine {
+  type: 'STREET_LAYER';
+  outcome: StreetOutcome;
+  surface: StreetSurface | 'other';
+  z: number | null;
+  tiles: number;
+  r2Reads: number;
+  ms: number;
+}
+
+/** What the loader hands the line. No request and no cell is among it. */
+export interface StreetLayerLineInput {
+  outcome: StreetOutcome;
+  surface: unknown;
+  trace: StreetTrace;
+  ms: number;
+}
+
+/**
+ * Write one STREET_LAYER line to Workers Logs. The line is built key by key
+ * below, so nothing a caller holds can ride along. `ms` is wall-clock time, and
+ * in a Worker the clock moves only when a read comes back. Never throws.
+ */
+export function emitStreetLayer(input: StreetLayerLineInput): void {
+  try {
+    const payload: StreetLayerLine = {
+      type: 'STREET_LAYER',
+      outcome: input.outcome,
+      surface: surfaceWord(input.surface),
+      z: input.trace.z,
+      tiles: input.trace.tiles,
+      r2Reads: input.trace.reads,
+      ms: Math.max(0, input.ms),
+    };
+    console.log(JSON.stringify(payload));
+  } catch {
+    /* a line that cannot be written is never a reason the page fails */
+  }
 }
 
 /** Under the 400-char inline budget (ADR-008 design check); tokens only. */
@@ -549,14 +641,16 @@ function pathOf(pts: readonly Pt[], closed: boolean): string {
  * Read, decode and draw the frame of these cells, with no judgement of what
  * came out. Throws on bad data, and on tiles that hold more than FRAME_LIMITS
  * allows. Null when the archive has no tile for a part of the frame. The
- * archive check reads this, to say what a draw held.
+ * archive check reads this, to say what a draw held. `trace` is told the zoom
+ * and the tile count once they are known, and a gap when that is why it is null.
  */
 export async function readStreetDrawing(
   src: RangeSource,
   cells: readonly string[],
   w = MAP_W,
   h = MAP_H,
-  numbered: readonly string[] = cells
+  numbered: readonly string[] = cells,
+  trace: StreetTrace = newStreetTrace()
 ): Promise<StreetDrawing | null> {
   const header = await archiveHeader(src);
   const f = frameForCells(cells, w, h);
@@ -565,6 +659,8 @@ export async function readStreetDrawing(
   for (let x = r.xMin; x <= r.xMax; x++) {
     for (let y = r.yMin; y <= r.yMax; y++) want.push([x, y]);
   }
+  trace.z = r.z;
+  trace.tiles = want.length;
   // One call for the whole frame, so tiles that sit together in the file come
   // from one read (lib/pmtiles.ts, readTiles).
   const read = await readTiles(src, r.z, want);
@@ -576,7 +672,10 @@ export async function readStreetDrawing(
   // on the shore to this rule. Whether the loaded build does is not known
   // here; the archive check draws places on the water and fails if one of
   // them has no layer (scripts/street-map-archive/check.ts).
-  if (read.includes(null)) return null;
+  if (read.includes(null)) {
+    trace.gap = true;
+    return null;
+  }
   const left: DecodeCounts = { ...FRAME_LIMITS };
   const tiles: DecodedTile[] = read.map((bytes, i) => ({
     x: want[i]![0],
@@ -602,18 +701,21 @@ export async function buildStreetLayer(
   cells: readonly string[],
   w = MAP_W,
   h = MAP_H,
-  numbered: readonly string[] = cells
+  numbered: readonly string[] = cells,
+  trace: StreetTrace = newStreetTrace()
 ): Promise<StreetLayer | null> {
-  const drawing = await readStreetDrawing(src, cells, w, h, numbered);
+  const drawing = await readStreetDrawing(src, cells, w, h, numbered, trace);
   if (!drawing || !layerShows(drawing.drawn)) return null;
   return { cellsKey: cellsKey(cells), svg: drawing.svg, drawn: drawing.drawn };
 }
 
+/** The street layer's time limit ran out. */
+class StreetTimeout extends Error {}
+
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null;
   const timeout = new Promise<never>((_, reject) => {
-    // Stryker disable next-line StringLiteral: the message is never read; the catch in loadStreetLayer turns every failure into null.
-    timer = setTimeout(() => reject(new Error('street map timed out')), ms);
+    timer = setTimeout(() => reject(new StreetTimeout()), ms);
   });
   // The executor above has run by now, so the timer is set. Clearing it means a
   // read that finished leaves nothing running in the isolate.
@@ -626,11 +728,18 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
  * binding, no archive, a frame wider than a street map can show, a part of the
  * frame with no tile, nothing in it to steer by, bad data, more in the tiles
  * than the Worker will decode, too slow). Never throws.
+ *
+ * A try that reads the bucket writes one STREET_LAYER line saying which of
+ * those it was (`emitStreetLayer`); `surface` is the caller's name in it. The
+ * exits that read nothing write nothing: the switch off, no binding, a bad
+ * name, a frame too wide, and an archive this isolate found missing less than
+ * a minute ago (lib/pmtiles.ts, MISS_MEMORY_MS), which is not asked for again
+ * until the minute is up.
  */
 export async function loadStreetLayer(
   env: StreetMapEnv | null | undefined,
   cells: readonly string[],
-  opts?: { timeoutMs?: number; numbered?: readonly string[] }
+  opts?: { timeoutMs?: number; numbered?: readonly string[]; surface?: StreetSurface }
 ): Promise<StreetLayer | null> {
   // The switch first: off reads nothing (street-map CCR 2026-11-15, R20).
   if (env?.STREET_MAP !== STREET_MAP_ON) return null;
@@ -640,12 +749,31 @@ export async function loadStreetLayer(
   if (!ARCHIVE_NAME.test(name)) return null;
   // Too wide for streets: nothing is read (street-map CCR 2026-11-15, R5).
   if (frameZoom(frameForCells(cells)) < MIN_STREET_ZOOM) return null;
+  const src = r2Source(bucket, name);
+  // Found missing a moment ago: not asked again yet, and nothing to say.
+  if (archiveKnownMissing(src.key)) return null;
+  const trace = newStreetTrace();
+  const counted: RangeSource = {
+    key: src.key,
+    read(offset, length) {
+      trace.reads += 1;
+      return src.read(offset, length);
+    },
+  };
+  const started = Date.now();
+  let layer: StreetLayer | null = null;
+  let outcome: StreetOutcome;
   try {
-    return await withTimeout(
-      buildStreetLayer(r2Source(bucket, name), cells, MAP_W, MAP_H, opts?.numbered),
+    layer = await withTimeout(
+      buildStreetLayer(counted, cells, MAP_W, MAP_H, opts?.numbered, trace),
       opts?.timeoutMs ?? STREET_TIMEOUT_MS
     );
-  } catch {
-    return null;
+    if (layer) outcome = 'drew';
+    else outcome = trace.gap ? 'no-tile' : 'thin';
+  } catch (e) {
+    if (e instanceof StreetTimeout) outcome = 'timeout';
+    else outcome = e instanceof ArchiveNotFoundError ? 'no-archive' : 'error';
   }
+  emitStreetLayer({ outcome, surface: opts?.surface, trace, ms: Date.now() - started });
+  return layer;
 }

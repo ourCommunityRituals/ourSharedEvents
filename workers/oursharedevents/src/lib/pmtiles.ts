@@ -77,6 +77,8 @@ export const COMPRESSION = { unknown: 0, none: 1, gzip: 2, brotli: 3, zstd: 4 } 
 export const TILE_TYPE_MVT = 1;
 
 export class PmtilesError extends Error {}
+/** The bucket holds no object under the archive's key. Not a failed read. */
+export class ArchiveNotFoundError extends PmtilesError {}
 
 function u64(view: DataView, at: number): number {
   const lo = view.getUint32(at, true);
@@ -300,15 +302,40 @@ async function open(src: RangeSource): Promise<Opened> {
     await decompress(raw, header.internalCompression, MAX_DIRECTORY_BYTES)
   );
   // Kept only now that it is whole. A failed or abandoned open leaves nothing:
-  // the next page tries again.
+  // the next page tries again. (An object that is not there is the one thing
+  // remembered, by the R2 source and for a minute: MISS_MEMORY_MS.)
   const opened: Opened = { header, root, leaves: new Map() };
   OPENED.set(src.key, opened);
   return opened;
 }
 
-/** Forget cached headers and directories (tests; an archive swapped in place). */
+/**
+ * How long an isolate takes "no object under this key" as still true, in
+ * milliseconds (street-map CCR 2026-11-15, R5). With the street switch on and
+ * the bucket empty, every map that would draw streets asked R2 and found
+ * nothing; with this, an isolate asks once a minute. It is also the longest an
+ * isolate goes on drawing hexagons only after the object is loaded: no deploy
+ * and no setting brings the streets, the minute running out does.
+ */
+export const MISS_MEMORY_MS = 60_000;
+
+/**
+ * Source key to the time its miss is forgotten. Only "the bucket answered, and
+ * has no such object" is kept (`r2Source`): a read that failed, came back short,
+ * was late or was dropped with its request says nothing about whether the
+ * object is there, and leaves nothing here.
+ */
+const MISSING = new Map<string, number>();
+
+/** Whether this source was found to hold no object less than MISS_MEMORY_MS ago. */
+export function archiveKnownMissing(key: string): boolean {
+  return Date.now() < (MISSING.get(key) ?? 0);
+}
+
+/** Forget cached headers, directories and misses (tests; an archive swapped in place). */
 export function resetPmtilesCache(): void {
   OPENED.clear();
+  MISSING.clear();
 }
 
 async function leaf(
@@ -492,13 +519,30 @@ export interface RangeBucket {
   ): Promise<{ arrayBuffer(): Promise<ArrayBuffer>; etag?: string } | null>;
 }
 
-/** A RangeSource over one R2 object. */
+/**
+ * A RangeSource over one R2 object. R2 answers a `get` for a key it does not
+ * hold with null. That answer to the archive's first read (offset 0, which
+ * every object has) is remembered for MISS_MEMORY_MS, for `archiveKnownMissing`
+ * to tell the next caller before it reads: this is the empty bucket.
+ *
+ * A null to a later read is thrown as the same error and not remembered. The
+ * object was there when this isolate opened the archive, so the answer is
+ * taken as one read gone wrong, and the next request reads again
+ * (tests/street-map.spec.ts, "R2 says the object is gone on the last tile
+ * read"). So an object deleted under an isolate that has it open is asked for
+ * on every view by that isolate, and found missing each time, until the
+ * isolate ends: a new one reads from offset 0 and remembers.
+ */
 export function r2Source(bucket: RangeBucket, name: string): RangeSource {
+  const key = `r2:${name}`;
   return {
-    key: `r2:${name}`,
+    key,
     async read(offset, length) {
       const obj = await bucket.get(name, { range: { offset, length } });
-      if (!obj) throw new PmtilesError('archive not found');
+      if (!obj) {
+        if (offset === 0) MISSING.set(key, Date.now() + MISS_MEMORY_MS);
+        throw new ArchiveNotFoundError('archive not found');
+      }
       return new Uint8Array(await obj.arrayBuffer());
     },
   };
