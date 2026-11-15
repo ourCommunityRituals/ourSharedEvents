@@ -45,7 +45,10 @@ import { handleAdminEventLivePage, type LiveMonitorEnv } from '../src/handlers/l
 import { fewerThan, WITHHELD_PHRASE, WITHHELD_WORDS_CLIENT_JS } from '../src/lib/withheld-words';
 import { fmt } from '../src/lib/i18n/catalog';
 import { renderPreEventReach } from '../src/lib/sponsor-home-render';
-import { COUNTED_REGISTRATION_SQL } from '../src/lib/registration-count';
+import {
+  COUNTED_REGISTRATION_SQL,
+  COUNT_EVENT_REGISTRATIONS_SQL,
+} from '../src/lib/registration-count';
 import { installFewerThan } from './helpers/fewer-than';
 
 type ClientFn = (floor?: unknown, tail?: string, lower?: boolean) => string;
@@ -155,10 +158,19 @@ const rel = (p: string) => relative(SRC, p).split(sep).join('/');
 
 /** Source text without comments: a comment may quote the old forms. */
 function code(text: string): string {
-  return text
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1');
+  // Each pattern is applied until nothing changes, so removing one comment
+  // cannot leave the start of another behind.
+  const strip = (s: string, re: RegExp, to: string): string => {
+    let prev: string;
+    do {
+      prev = s;
+      s = s.replace(re, to);
+    } while (s !== prev);
+    return s;
+  };
+  let out = strip(text, /<!--[\s\S]*?-->/g, '');
+  out = strip(out, /\/\*[\s\S]*?\*\//g, '');
+  return strip(out, /(^|[^:'"`\\])\/\/[^\n]*/g, '$1');
 }
 
 describe('no page writes its own words for a withheld count', () => {
@@ -201,6 +213,8 @@ describe('no page writes its own words for a withheld count', () => {
   test('every count of registrations uses the one definition', () => {
     const found: string[] = [];
     for (const file of files(SRC)) {
+      // The definition itself: the clause, and the whole one-event statement.
+      if (rel(file) === 'lib/registration-count.ts') continue;
       const text = readFileSync(file, 'utf8');
       const re = /COUNT\([^)]*\)[^;`'"]*FROM form_registrations[^;`'"]*/g;
       for (const m of text.matchAll(re))
@@ -209,6 +223,9 @@ describe('no page writes its own words for a withheld count', () => {
     expect(found).toEqual([]);
     expect(COUNTED_REGISTRATION_SQL).toBe(
       "status = 'confirmed' AND (expires_at IS NULL OR expires_at > datetime('now'))"
+    );
+    expect(COUNT_EVENT_REGISTRATIONS_SQL).toBe(
+      `SELECT COUNT(*) AS cnt FROM form_registrations WHERE event_id = ? AND ${COUNTED_REGISTRATION_SQL}`
     );
   });
 });
@@ -254,9 +271,11 @@ describe('the admin dashboard tiles', () => {
     });
     expectWords(at('registrations').textContent, 'Fewer than 5');
     expectWords(at('checkins').textContent, 'Fewer than 5');
-    expect(at('registrations').classList.contains('is-withheld')).toBe(true);
+    expect(at('registrations').classList.contains('muted-sm')).toBe(true);
+    expect(at('registrations').classList.contains('dash-stat__num')).toBe(false);
     expect(at('scans').textContent).toBe('12');
-    expect(at('scans').classList.contains('is-withheld')).toBe(false);
+    expect(at('scans').classList.contains('muted-sm')).toBe(false);
+    expect(at('scans').classList.contains('dash-stat__num')).toBe(true);
     expect(at('appearances').textContent).toBe('2');
   });
 
@@ -274,7 +293,7 @@ describe('the admin dashboard tiles', () => {
   test('a count that is missing keeps its dash and is not drawn as withheld', () => {
     const at = tiles({ scans: shown(12) });
     expect(at('registrations').textContent).toBe('—');
-    expect(at('registrations').classList.contains('is-withheld')).toBe(false);
+    expect(at('registrations').classList.contains('muted-sm')).toBe(false);
   });
 });
 

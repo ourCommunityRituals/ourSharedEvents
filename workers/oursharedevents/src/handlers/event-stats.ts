@@ -32,7 +32,7 @@
 // FORMS_DB. No cross-DB join. No runtime LLM. No banned lexicon on the wire.
 
 import { applyCountFloor, type FlooredCount } from '../lib/count-floor';
-import { COUNTED_REGISTRATION_SQL } from '../lib/registration-count';
+import { COUNT_EVENT_REGISTRATIONS_SQL } from '../lib/registration-count';
 import { readEventScanCells, scansOf } from '../lib/scan-cells';
 
 export interface EventStatsEnv {
@@ -87,12 +87,7 @@ export async function handleAdminEventStats(
   let checkins: FlooredCount = applyCountFloor(0);
   if (env.FORMS_DB) {
     registrations = applyCountFloor(
-      await countExact(
-        env.FORMS_DB,
-        `SELECT COUNT(*) AS cnt FROM form_registrations
-         WHERE event_id = ? AND ${COUNTED_REGISTRATION_SQL}`,
-        eventId
-      )
+      await countExact(env.FORMS_DB, COUNT_EVENT_REGISTRATIONS_SQL, eventId)
     );
     checkins = applyCountFloor(
       await countExact(

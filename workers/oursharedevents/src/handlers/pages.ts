@@ -107,7 +107,7 @@ import { enrichWithPhase, eventPhaseOf } from '../lib/event-enrich.js';
 import { attendanceModeLabel, attendanceModeOf, withoutLinkOnly } from '../lib/attendance-mode';
 import { archivedBeforeStart } from '../lib/archived-before-start.js';
 import { flooredRatePct } from '../lib/count-floor.js';
-import { COUNTED_REGISTRATION_SQL } from '../lib/registration-count.js';
+import { COUNT_EVENT_REGISTRATIONS_SQL } from '../lib/registration-count.js';
 import { clearsFloor, statLine, walkInStatLine } from '../lib/recap-stat-lines';
 import {
   formatEventTime,
@@ -2141,11 +2141,7 @@ export async function fetchEventPageSocialData(
         : Promise.resolve({ results: [] as SponsorBasicRow[] }),
 
       env.FORMS_DB
-        ? env.FORMS_DB.prepare(
-            `SELECT COUNT(*) as cnt FROM form_registrations WHERE event_id = ? AND ${COUNTED_REGISTRATION_SQL}`
-          )
-            .bind(eventId)
-            .first<{ cnt: number }>()
+        ? env.FORMS_DB.prepare(COUNT_EVENT_REGISTRATIONS_SQL).bind(eventId).first<{ cnt: number }>()
         : Promise.resolve(null),
 
       env.FORMS_DB

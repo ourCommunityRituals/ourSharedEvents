@@ -37,7 +37,7 @@ import {
 } from '../lib/forms-db';
 import { corsHeaders } from '../lib/cors';
 import { applyCountFloor } from '../lib/count-floor';
-import { COUNTED_REGISTRATION_SQL } from '../lib/registration-count';
+import { COUNT_EVENT_REGISTRATIONS_SQL } from '../lib/registration-count';
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
 import { eventAnonKey } from '../lib/event-anon-key';
 import {
@@ -638,9 +638,7 @@ export async function handleAdminRegistrations(
     // The same definition as every other registration count (OSE-1656):
     // counted on all rows, this total and the /stats figure could be
     // subtracted to a group under the floor.
-    const totalRow = await env.FORMS_DB.prepare(
-      `SELECT COUNT(*) AS cnt FROM form_registrations WHERE event_id = ? AND ${COUNTED_REGISTRATION_SQL}`
-    )
+    const totalRow = await env.FORMS_DB.prepare(COUNT_EVENT_REGISTRATIONS_SQL)
       .bind(eventId)
       .first<{ cnt: number }>();
     const total = totalRow?.cnt ?? 0;

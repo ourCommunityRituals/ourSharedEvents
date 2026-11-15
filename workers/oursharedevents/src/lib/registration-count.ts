@@ -15,3 +15,11 @@
  */
 export const COUNTED_REGISTRATION_SQL =
   "status = 'confirmed' AND (expires_at IS NULL OR expires_at > datetime('now'))";
+
+/**
+ * The count for one event: one `?`, the event id; one column, `cnt`. Whole, so
+ * a handler passes it to `.prepare()` as it is and builds no SQL of its own
+ * (the forms handler may not interpolate into a statement:
+ * `tests/red-team/api-authz.spec.ts`, `form-security-deep.spec.ts`).
+ */
+export const COUNT_EVENT_REGISTRATIONS_SQL = `SELECT COUNT(*) AS cnt FROM form_registrations WHERE event_id = ? AND ${COUNTED_REGISTRATION_SQL}`;

@@ -1264,13 +1264,6 @@
         line-height: 1.1;
         color: var(--text);
       }
-      /* A withheld count reads in words ("Fewer than 5"), set smaller and
-         muted so the words fit the tile and do not read as a number. */
-      .dash-stat__num.is-withheld {
-        font-size: 1rem;
-        line-height: 1.25;
-        color: var(--text-muted);
-      }
       .dash-stat__label {
         font-size: 0.72rem;
         font-weight: 600;
@@ -4737,7 +4730,11 @@
                 var v = map[id];
                 var text = formatStat(v, STAT_TAIL[id]);
                 if (text != null) el.textContent = text; // omitted → keep "—"
-                el.classList.toggle('is-withheld', !!(v && typeof v === 'object' && (v.suppressed || v.count === null)));
+                // Withheld words take the page's small muted text (.muted-sm)
+                // in place of the big number style, so they fit the tile.
+                var held = !!(v && typeof v === 'object' && (v.suppressed || v.count === null));
+                el.classList.toggle('muted-sm', held);
+                el.classList.toggle('dash-stat__num', !held);
               });
             },
           };
@@ -8597,7 +8594,9 @@
         set('pre-event-clicks', tapsN === null ? oseFewerThan(a.clicks && a.clicks.floor, 'on any one link') : String(tapsN));
         [['pre-event-scans', scansN], ['pre-event-clicks', tapsN]].forEach(function (t) {
           var el = document.querySelector('[data-testid="' + t[0] + '"]');
-          if (el) el.classList.toggle('is-withheld', t[1] === null);
+          if (!el) return;
+          el.classList.toggle('muted-sm', t[1] === null);
+          el.classList.toggle('dash-stat__num', t[1] !== null);
         });
         set('pre-event-posters', String(a.posters || 0));
         set('pre-event-places', String(a.places || 0));
