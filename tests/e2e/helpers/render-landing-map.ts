@@ -178,7 +178,9 @@ export async function renderLanding(
       throw new Error(`landing ${path} drew no map area to put streets under`);
     const { tiles } = b.tilesForCells(cells, towns);
     const bucket = b.fakeBucket(b.DEFAULT_ARCHIVE, await b.pmtilesArchive(tiles, { gzip: true }));
-    const html = await page(b, path, { MAP_TILES: bucket });
+    // The street layer is behind a switch the Worker reads (STREET_MAP, off
+    // unless it is exactly 'on'): the page draws no street without it.
+    const html = await page(b, path, { MAP_TILES: bucket, STREET_MAP: 'on' });
     if (!html.includes('data-testid="amap-streets"')) {
       throw new Error(`landing ${path} drew no street layer over its synthetic archive`);
     }
