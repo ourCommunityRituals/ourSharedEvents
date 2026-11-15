@@ -2101,7 +2101,10 @@ describe('street map | the archive read: fat fingers, security, network', () => 
     await new Promise<void>((r) => setTimeout(r, 0));
   });
 
-  it('network: two requests for one area in a cold isolate read the header once', async () => {
+  // 2026-11-15: each request reads for itself. A read in flight belongs to the
+  // request that asked, and the Workers runtime drops it when that request ends,
+  // so neither may wait on the other's (tests/street-map-runtime.spec.ts).
+  it('network: two requests for one area in a cold isolate each read the header, and both draw', async () => {
     const bucket = scriptedBucket(CONFIGURED, await sound(), () => ({ delayMs: 5 }));
     const env = { MAP_TILES: bucket, MAP_TILES_ARCHIVE: CONFIGURED };
     const [one, two] = await Promise.all([
@@ -2110,7 +2113,11 @@ describe('street map | the archive read: fat fingers, security, network', () => 
     ]);
     expect(drawn(one)).toBe(true);
     expect(two).toEqual(one);
-    expect(bucket.gets.filter((g) => g.range!.offset === 0)).toHaveLength(1);
+    expect(bucket.gets.filter((g) => g.range!.offset === 0)).toHaveLength(2);
+    // The directories are kept once whole: a third request reads the tiles only.
+    const before = bucket.gets.length;
+    expect(drawn(await loadStreetLayer(env, [BLUE7]))).toBe(true);
+    expect(bucket.gets.length - before).toBe(1);
   });
 });
 

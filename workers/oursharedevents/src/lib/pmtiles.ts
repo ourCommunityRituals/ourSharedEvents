@@ -239,21 +239,26 @@ function directoryLength(length: number): number {
   return length;
 }
 
-interface Leaf {
-  dir: Promise<DirEntry[]>;
-  /** Entries it holds; 0 until it is decoded. */
-  entries: number;
-}
-
 interface Opened {
   header: PmtilesHeader;
   root: DirEntry[];
-  /** By offset in the file, oldest first. */
-  leaves: Map<number, Leaf>;
+  /** Decoded leaf directories by offset in the file, oldest first. */
+  leaves: Map<number, DirEntry[]>;
 }
 
-/** Header and directories per archive, kept for the life of the isolate. */
-const OPENED = new Map<string, Promise<Opened>>();
+/**
+ * Header and directories per archive, kept for the life of the isolate.
+ *
+ * Only what has been read and decoded is kept, never a read in flight. Every
+ * request in an isolate shares this map, and the Workers runtime drops a read
+ * with the request that asked for it: a request that ends first (the street
+ * layer's time limit, lib/street-map.ts) leaves a promise that never settles.
+ * Kept here, that promise would be waited on by every later request until its
+ * own limit ran out, for as long as the isolate lived
+ * (tests/street-map-runtime.spec.ts, in workerd). So two requests that open a
+ * cold archive together each read the header: 16 KB more, once.
+ */
+const OPENED = new Map<string, Opened>();
 /** Leaf directories kept per archive; past this the oldest goes. */
 const MAX_LEAVES = 64;
 /**
@@ -269,25 +274,28 @@ const MAX_LEAVES = 64;
  */
 export const MAX_LEAF_ENTRIES = 300_000;
 
+/**
+ * Leaf directories being read by one call, by offset in the file. The tiles of
+ * one frame share them; nothing outlives the call.
+ */
+type LeafReads = Map<number, Promise<DirEntry[]>>;
+
 async function open(src: RangeSource): Promise<Opened> {
   const hit = OPENED.get(src.key);
   if (hit) return hit;
-  const p = (async () => {
-    const first = await src.read(0, FIRST_READ_BYTES);
-    const header = parseHeader(first);
-    const off = header.rootDirectoryOffset;
-    const len = directoryLength(header.rootDirectoryLength);
-    const raw =
-      off + len <= first.length ? first.subarray(off, off + len) : await src.read(off, len);
-    const root = decodeDirectory(
-      await decompress(raw, header.internalCompression, MAX_DIRECTORY_BYTES)
-    );
-    return { header, root, leaves: new Map() };
-  })();
-  OPENED.set(src.key, p);
-  // A failed open is not kept: the next page tries again.
-  p.catch(() => OPENED.delete(src.key));
-  return p;
+  const first = await src.read(0, FIRST_READ_BYTES);
+  const header = parseHeader(first);
+  const off = header.rootDirectoryOffset;
+  const len = directoryLength(header.rootDirectoryLength);
+  const raw = off + len <= first.length ? first.subarray(off, off + len) : await src.read(off, len);
+  const root = decodeDirectory(
+    await decompress(raw, header.internalCompression, MAX_DIRECTORY_BYTES)
+  );
+  // Kept only now that it is whole. A failed or abandoned open leaves nothing:
+  // the next page tries again.
+  const opened: Opened = { header, root, leaves: new Map() };
+  OPENED.set(src.key, opened);
+  return opened;
 }
 
 /** Forget cached headers and directories (tests; an archive swapped in place). */
@@ -295,40 +303,46 @@ export function resetPmtilesCache(): void {
   OPENED.clear();
 }
 
-async function leaf(src: RangeSource, o: Opened, e: DirEntry): Promise<DirEntry[]> {
+async function leaf(
+  src: RangeSource,
+  o: Opened,
+  e: DirEntry,
+  reads: LeafReads
+): Promise<DirEntry[]> {
   const at = o.header.leafDirectoryOffset + e.offset;
-  const hit = o.leaves.get(at);
-  if (hit) return hit.dir;
+  const kept = o.leaves.get(at);
+  if (kept) return kept;
+  const reading = reads.get(at);
+  if (reading) return reading;
   const length = directoryLength(e.length);
-  const slot: Leaf = {
-    dir: src
-      .read(at, length)
-      .then((raw) => decompress(raw, o.header.internalCompression, MAX_DIRECTORY_BYTES))
-      .then(decodeDirectory),
-    entries: 0,
-  };
-  if (o.leaves.size >= MAX_LEAVES) o.leaves.delete(o.leaves.keys().next().value!);
-  o.leaves.set(at, slot);
-  slot.dir.then(
-    (entries) => {
-      slot.entries = entries.length;
-      trimLeaves(o.leaves, slot);
-    },
-    // A failed leaf read is not kept: the next tile tries again.
-    () => o.leaves.delete(at)
-  );
-  return slot.dir;
+  const read = src
+    .read(at, length)
+    .then((raw) => decompress(raw, o.header.internalCompression, MAX_DIRECTORY_BYTES))
+    .then(decodeDirectory)
+    .then((entries) => {
+      // Kept only once it is decoded. A failed or abandoned read leaves
+      // nothing: the next tile tries again.
+      keepLeaf(o.leaves, at, entries);
+      return entries;
+    });
+  reads.set(at, read);
+  return read;
 }
 
-/** Drop the oldest leaves until those kept fit MAX_LEAF_ENTRIES; `keep` stays. */
-function trimLeaves(leaves: Map<number, Leaf>, keep: Leaf): void {
+/**
+ * Keep this decoded leaf as the newest. A 65th pushes the oldest out; then the
+ * oldest go until those kept fit MAX_LEAF_ENTRIES. The newest always stays.
+ */
+function keepLeaf(leaves: Map<number, DirEntry[]>, at: number, entries: DirEntry[]): void {
+  if (leaves.size >= MAX_LEAVES) leaves.delete(leaves.keys().next().value!);
+  leaves.set(at, entries);
   let total = 0;
-  for (const l of leaves.values()) total += l.entries;
-  for (const [at, l] of leaves) {
+  for (const l of leaves.values()) total += l.length;
+  for (const [k, l] of leaves) {
     if (total <= MAX_LEAF_ENTRIES) return;
-    if (l === keep) continue;
-    total -= l.entries;
-    leaves.delete(at);
+    if (k === at) continue;
+    total -= l.length;
+    leaves.delete(k);
   }
 }
 
@@ -338,13 +352,18 @@ export async function archiveHeader(src: RangeSource): Promise<PmtilesHeader> {
 }
 
 /** The directory entry that holds this tile's bytes, or null when the archive has none. */
-async function tileEntry(src: RangeSource, o: Opened, id: number): Promise<DirEntry | null> {
+async function tileEntry(
+  src: RangeSource,
+  o: Opened,
+  id: number,
+  reads: LeafReads
+): Promise<DirEntry | null> {
   let dir = o.root;
   for (let depth = 0; depth <= MAX_DEPTH; depth++) {
     const e = findEntry(dir, id);
     if (!e) return null;
     if (e.runLength > 0) return e;
-    dir = await leaf(src, o, e);
+    dir = await leaf(src, o, e, reads);
   }
   throw new PmtilesError('directory nesting too deep');
 }
@@ -412,7 +431,10 @@ export async function readTiles(
 ): Promise<(Uint8Array | null)[]> {
   const o = await open(src);
   if (z < o.header.minZoom || z > o.header.maxZoom) return tiles.map(() => null);
-  const entries = await Promise.all(tiles.map(([x, y]) => tileEntry(src, o, zxyToTileId(z, x, y))));
+  const leafReads: LeafReads = new Map();
+  const entries = await Promise.all(
+    tiles.map(([x, y]) => tileEntry(src, o, zxyToTileId(z, x, y), leafReads))
+  );
   const at = (e: DirEntry): number => o.header.tileDataOffset + e.offset;
   // Tiles of one run share one entry: it is wanted once.
   const stored = [...new Set(entries)].filter((e): e is DirEntry => e !== null);

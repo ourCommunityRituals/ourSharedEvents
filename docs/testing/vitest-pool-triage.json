@@ -2078,7 +2078,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 86
+      "testCount": 89
     },
     {
       "file": "workers/oursharedevents/tests/portfolio-rollup.invariant.spec.ts",
@@ -3472,6 +3472,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/street-map-runtime.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/street-map.spec.ts",

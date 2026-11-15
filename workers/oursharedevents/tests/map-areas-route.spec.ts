@@ -3,8 +3,10 @@
  *
  * The handler's own rules are in map-areas.spec.ts (node). These pin what only
  * the route can show: it is public, it is limited like every public read, it
- * answers reads only, and it sets no cookie. The pool binds no MAP_TILES bucket,
- * so every answer here is the fail-soft one: hexagons, `streets: null`.
+ * answers reads only, and it sets no cookie. The pool's MAP_TILES bucket holds
+ * no archive here, so every answer is the fail-soft one: hexagons,
+ * `streets: null`. The route drawing streets from an archive, in the runtime,
+ * is street-map-runtime.spec.ts.
  */
 // @born-red rate-limited at the route | method: `publicReadLimited('map-areas', handleMapAreas)(request, env)` replaced by `handleMapAreas(request, env)` in router.ts; "it is rate-limited like other public reads" failed (200, not 429) | date: 2026-11-14
 // @born-red reads only | method: the method check removed from the route; "a write is not answered" failed (POST got 200) | date: 2026-11-14
