@@ -12,7 +12,8 @@ made, and which licence duties are met today.
 - **How clauses are cited.** Each duty names the section and the address to read it at, and
   says in our own words what the section asks. The licence texts are not copied here.
 - **Nothing is public yet.** No archive has been loaded, so no page has drawn a street
-  (`streetMapArchiveLoaded` is `"false"`; the load workflow has 0 runs, read 2026-11-15).
+  (`streetMapArchiveLoaded` is `"false"`; the load workflow has no `load` run, only `measure`
+  runs, which write nothing; read 2026-11-15).
   Every verdict below is about the code on `main` and the workflow as written.
 
 ## When the duties start

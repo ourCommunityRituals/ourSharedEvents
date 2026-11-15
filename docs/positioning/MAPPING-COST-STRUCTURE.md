@@ -21,7 +21,8 @@
 
 ### What is drawn where today (read 2026-11-15)
 
-**No street has been drawn on staging or production.** The load workflow has 0 runs, the bucket
+**No street has been drawn on staging or production.** The load workflow has no `load` run (its
+two `measure` runs of 2026-11-15 write nothing), the bucket
 `ose-map-tiles` is empty, and `streetMapArchiveLoaded` is `"false"`. A green staging chain
 says nothing about streets until that flag is `"true"`: the street cases print NOT RUN.
 
@@ -65,7 +66,7 @@ The owner chose "corrections first" on 2026-11-15: these are corrected before th
 | Place names on hexagons (first release)  | $0                                                                                                                                                                                                                                                                                                    | $0                                                                                                                                     | page views                                                                                                                              | everyone                                  | platform                             |
 | Google venue image (today)               | $0                                                                                                                                                                                                                                                                                                    | first 10,000 loads/month free, then **$2.00 per 1,000**                                                                                | one load per venue, per Cloudflare location, per day (edge-cached)                                                                      | **attendees on public event pages**       | platform — not tied to any paid tier |
 | Google place lookup (Geocoding)          | $0                                                                                                                                                                                                                                                                                                    | Google's Geocoding list price after its free monthly allowance is **$5.00 per 1,000** (not re-read for this change; check the console) | one lookup per event save that changes the place, plus at most **25 a night** for events saved before 2026-10-11 (`lib/event-place.ts`) | **organizers** saving events (admin only) | platform                             |
-| Self-hosted street map (Protomaps on R2) | storage: **$0.015/GB-month** after the free 10 GB per account. What is loaded is the United States subset; **its size is not measured yet**, so its storage line is open. The ceiling is the whole planet (138.5 GB measured): about **$1.93** for the first environment and **$2.08** for the second | reads: **$0.36 per million** after 10 million free; no egress fee                                                                      | tile reads per map view (estimate 10–30)                                                                                                | whoever sees the street map               | funded by Mid revenue (see below)    |
+| Self-hosted street map (Protomaps on R2) | storage: **$0.015/GB-month** after the free 10 GB per account. What is loaded is the United States subset; **20 GB by a dry run** (2026-11-15): $0.15 to $0.30 per month. The ceiling is the whole planet (138.5 GB measured): about **$1.93** for the first environment and **$2.08** for the second | reads: **$0.36 per million** after 10 million free; no egress fee                                                                      | tile reads per map view (estimate 10–30)                                                                                                | whoever sees the street map               | funded by Mid revenue (see below)    |
 
 ## What each option costs at volume (estimates)
 
@@ -82,7 +83,8 @@ share one load, so the real figure is lower.
 
 The storage in the right-hand column is the whole planet's, the ceiling. The
 file loaded is the United States subset (owner, 2026-11-10), which is smaller;
-its size is not measured yet (decision 4).
+a dry run on 2026-11-15 gives it as 20 GB, about $0.15 to $0.30 a month in
+storage (decision 4).
 
 ## Where each line sits in the tiers
 
@@ -129,10 +131,14 @@ its size is not measured yet (decision 4).
    **United States subset** of a Protomaps build: the 50 states, DC, Puerto Rico
    and the US Virgin Islands, cut out with `pmtiles extract` (owner, 2026-11-10,
    in place of the whole planet chosen on 2026-11-09). Areas outside it draw
-   hexagons only. **The size of that file is not measured yet**; the load run
-   reports it when the file is cut, and the storage figures here are then
-   replaced. The steps, the names, the region and the way back to hexagons only
-   are in
+   hexagons only. **By dry run that file is 20 GB** (`measure` run 43753563640,
+   2026-11-15): the tile data alone, rounded, so at most 20.55 GB, with every
+   zoom of the build kept. It is a dry-run figure, not the size of a loaded
+   file. At $0.015 per GB-month that is about **$0.15 a month** if nothing else
+   uses the account's free 10 GB, and about **$0.30** if something does (what
+   else the account stores was not read). The load run reports the byte size
+   when the file is cut, and the storage figures here are then replaced. The
+   steps, the names, the region and the way back to hexagons only are in
    [`../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md`](../runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md).
    The `MAP_TILES` binding for `[env.staging]` is on `main`. Its bucket,
    `ose-map-tiles`, is **one bucket that staging and production both read**
@@ -238,7 +244,9 @@ The self-hosted line above was written from published figures. A local proof
 (`proofs/street-map/`, not shipped, nothing on staging or production) measured it
 for one region. These replace the estimates for that region only. The planet
 rows are kept as the ceiling: the file loaded is the United States subset, and
-**its size and storage cost are not measured until the owner records them**.
+**its loaded size and storage cost are not measured until a load is recorded**
+(the runbook's step 5). The dry-run figure, 20 GB on 2026-11-15, is under
+decision 4.
 
 | Item                                 | Measured                                                                       |
 | ------------------------------------ | ------------------------------------------------------------------------------ |
