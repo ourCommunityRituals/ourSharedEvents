@@ -251,8 +251,22 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
 
    It works out the tiles and prints the archive size without fetching them. The
    run stops here, with the size and the free disk in its summary, if the file
-   does not fit the runner's larger disk. **In `measure` mode the run ends
-   here**, having used no bucket credential and written nothing.
+   does not fit the runner's larger disk.
+
+   In `measure` mode only, the step then makes the same dry run once more, at
+   the deepest zoom the Worker reads (`MAX_ZOOM` in `lib/street-map.ts`; the
+   workflow carries it as `WORKER_TOP_ZOOM`, and a test holds the two together):
+
+   ```bash
+   pmtiles extract https://build.protomaps.com/20261109.pmtiles us-20261109.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14 --dry-run
+   ```
+
+   The summary then gives both sizes side by side. It is a figure for the
+   owner's zoom decision ("Before the load", item 3) and nothing else: the fit
+   is judged on the first dry run, a `load` neither makes the second nor waits
+   on it, and the cut in step 5 keeps every zoom until a PR changes it. **In
+   `measure` mode the run ends here**, having used no bucket credential and
+   written nothing.
 
 4. **The key is free.** The bucket is listed, and the run stops if it already
    holds the key (asked before the cut, and again just before the upload):
@@ -371,8 +385,10 @@ writes nothing and can run at any time.
    object is not changed (finding R6). **Measured 2026-11-15 (run
    43753563640): 20 GB by dry run, with every zoom kept, and it fits the
    runner** ("Staging, in order", step 2). How much of the 20 GB lies above
-   zoom 14 is not measured: the workflow makes one dry run, without a top
-   zoom, so the size alone does not say what a top zoom would save.
+   zoom 14 is not measured yet: that run made one dry run, without a top
+   zoom, so its size alone does not say what a top zoom would save. A
+   `measure` run now makes a second dry run at zoom 14 and prints both sizes
+   ("What the workflow runs", step 3); the next `measure` gives the figure.
 4. **The licence.** [`NOTICE.md`](../../NOTICE.md) lists the duties and what is
    NOT CLEAR. Staging is public, so the first load is the first public street:
    the owner answers its question 2 (before the load, or before production)
