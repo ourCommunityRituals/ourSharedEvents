@@ -2888,6 +2888,20 @@ jobs:
               | node ../../scripts/ci/release-rollbackability.mjs --dir "$DIR" --label "$BINDING (production)" || true
           done
 
+      # ────────────────────────────────────────────────────────────────────
+      # OSE-2085, ADR-037: the dry run of each pending migration, taken on
+      # production BEFORE it is applied. Read only. This repository is public,
+      # so the log is public: on production the script prints one row of counts
+      # per statement and nothing else, and a count under 5 is printed in words.
+      # A dry-run file that may print more, or that cannot be run, stops the job
+      # here, before the apply steps. Same credential as those steps.
+      # ────────────────────────────────────────────────────────────────────
+      - name: 'Dry run: pending migrations on production, counts only, before they are applied (OSE-2085)'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/ci/migration-dry-run.mjs --pending --env production --remote
+
       - name: Apply D1 migrations (main DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
