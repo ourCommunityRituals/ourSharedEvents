@@ -107,27 +107,11 @@ jobs:
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies (root)
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "node_modules up-to-date — skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
 
       - name: Install dependencies (worker)
         working-directory: workers/oursharedevents
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json 2>/dev/null || echo '')"
-          STAMP=node_modules/.install-stamp
-          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "worker node_modules up-to-date — skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
 
       - name: Run npm audit — root
         id: audit

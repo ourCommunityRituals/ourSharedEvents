@@ -29,7 +29,11 @@
 
 import { campaignWithheldReasons, summarizeCampaigns, type CampaignLink } from './campaign-summary';
 import { EFFECTIVE_CAMPAIGN_ID_SQL } from './campaigns';
-import { classWithheldReasons, summarizeSponsorClasses } from './sponsor-class-breakdown';
+import {
+  classWithheldReasons,
+  summarizeSponsorClasses,
+  type ClassPlacement,
+} from './sponsor-class-breakdown';
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 import { renderCorridorMap } from './corridor-map';
 import { gridRingUnsafe } from 'h3-js';
@@ -224,6 +228,40 @@ async function readCampaignLinks(db: D1Database, eventId: string): Promise<Campa
   return links.results ?? [];
 }
 
+/**
+ * The sponsors taking part in the event, each with the class it is placed in,
+ * for `sponsor_class_breakdown[].sponsor_count` (owner ruling 2026-11-16,
+ * OSE-2089: the count is of each sponsor participating in the event).
+ *
+ * The same rule as `readCampaignLinks` above: a placement counts when both
+ * sides accepted it and the event chose sponsors (invariant 6). It starts from
+ * the placements, never the displays, so the count does not depend on how often
+ * anything was shown.
+ */
+async function readClassPlacements(db: D1Database, eventId: string): Promise<ClassPlacement[]> {
+  const rows = await db
+    .prepare(
+      `SELECT sp.sponsor_business_id AS sponsor_id,
+              sp.tier                AS sponsor_tier,
+              sp.locality_band       AS is_local
+       FROM sponsor_placement sp
+       JOIN events e ON e.id = sp.event_id
+       WHERE sp.event_id = ?
+         AND sp.is_active = 1
+         AND sp.sponsor_accepted = 1
+         AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
+         AND ${eventUsesSponsorsSql('e')}
+       ORDER BY sp.sponsor_business_id`
+    )
+    .bind(eventId)
+    .all<{ sponsor_id: string; sponsor_tier: string | null; is_local: number | null }>();
+  return (rows.results ?? []).map((r) => ({
+    sponsor_id: r.sponsor_id,
+    sponsor_tier: r.sponsor_tier ?? null,
+    is_local: r.is_local === 1,
+  }));
+}
+
 export interface SharedReport {
   event_id: string;
   event_title: string;
@@ -332,10 +370,11 @@ export interface SharedReport {
     'local' | 'mid' | 'premium',
     {
       /**
-       * Distinct sponsors of the class with a published `sponsor_displays` row.
-       * A count of businesses (the `entity` class of lib/dashboard-contract.ts),
-       * so it is exact and has no floor. It does not move with displays under
-       * the floor: it steps at 5, with the row that is published at 5.
+       * Distinct sponsors taking part in the event in this class: those placed
+       * and accepted by both sides, and any other with a published row (owner
+       * ruling 2026-11-16). A count of businesses that agreed to be shown (the
+       * `entity` class of lib/dashboard-contract.ts), so it is exact and has no
+       * floor, and it does not move with displays at all.
        */
       sponsor_count: number;
       /**
@@ -762,7 +801,8 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // SR-25: sponsor_class_breakdown, class-level totals of the sponsorDisplays
   // rows published above. A class with no row at the floor has its total
   // withheld (null) and says so in words, never 0 (OSE-2089, invariant 2).
-  const sponsorClassBreakdown = summarizeSponsorClasses(sponsorDisplays);
+  const classPlacements = await readClassPlacements(db, eventId);
+  const sponsorClassBreakdown = summarizeSponsorClasses(classPlacements, sponsorDisplays);
   suppression.push(...classWithheldReasons(sponsorClassBreakdown));
 
   // 6. poster_attribution — per poster_deployment_id

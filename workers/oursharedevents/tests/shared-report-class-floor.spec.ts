@@ -13,9 +13,9 @@
  *      `_meta.suppression_reasons` entry that carries the words. Never 0. A class
  *      with no sponsor at all reads the same as one whose sponsors have 1 to 4.
  *   3. `sponsor_count` counts businesses (the `entity` class of
- *      lib/dashboard-contract.ts) and has no floor. It is the number of sponsors
- *      with a published row, so it does not move with displays under the floor:
- *      it steps at 5, with the row that is published at 5.
+ *      lib/dashboard-contract.ts) and has no floor. Owner ruling 2026-11-16: it
+ *      is each sponsor taking part in the event, placed and accepted by both
+ *      sides, so it does not move with displays at all.
  *
  * The neighbour block reads the whole report twice, one display apart, inside a
  * group under the floor: nothing may differ. Its control makes the same change
@@ -55,6 +55,7 @@ const K = CORRIDOR_MAP_MIN_COUNT;
 const SIGNING_SECRET = 'test-shared-report-signing-secret-do-not-use';
 const EVT = 'test-evt-cf-1';
 const WITHHELD_FIELD = 'sponsor_class_breakdown.total_displays';
+const BATCH_TOKEN = 'test-internal-batch-token-do-not-use';
 
 type ClassName = 'local' | 'mid' | 'premium';
 const CLASSES: ClassName[] = ['local', 'mid', 'premium'];
@@ -210,8 +211,8 @@ describe('a class total at 0, 1, 4, 5 and 6 displays', () => {
 
         const row = (await built()).sponsor_class_breakdown[cls];
         expect(row.total_displays).toBeNull();
-        // The exact count is nowhere in the class row.
-        expect(row).toEqual({ sponsor_count: 0, total_displays: null });
+        // The exact count is nowhere in the class row: the 1 is the sponsor.
+        expect(row).toEqual({ sponsor_count: 1, total_displays: null });
       });
     }
 
@@ -232,8 +233,12 @@ describe('a class total at 0, 1, 4, 5 and 6 displays', () => {
 
     const scb = (await built()).sponsor_class_breakdown;
     expect(scb.mid.total_displays).toBeNull();
-    expect(scb.local).toEqual(scb.mid);
-    expect(scb.premium).toEqual(scb.mid);
+    expect(scb.local.total_displays).toBe(scb.mid.total_displays);
+    expect(scb.premium.total_displays).toBe(scb.mid.total_displays);
+    // The sponsors taking part are counted: one local, none in the others.
+    expect(scb.local.sponsor_count).toBe(1);
+    expect(scb.mid.sponsor_count).toBe(0);
+    expect(scb.premium.sponsor_count).toBe(0);
   });
 
   test('the total is the sum of the rows published for the class (7 + 3 is 7, 6 + 5 is 11)', async () => {
@@ -242,7 +247,7 @@ describe('a class total at 0, 1, 4, 5 and 6 displays', () => {
     await setDisplays('sp-cf-a', 'poster', 7);
     await setDisplays('sp-cf-b', 'poster', 3);
     let r = await built();
-    expect(r.sponsor_class_breakdown.premium).toEqual({ sponsor_count: 1, total_displays: 7 });
+    expect(r.sponsor_class_breakdown.premium).toEqual({ sponsor_count: 2, total_displays: 7 });
 
     await setDisplays('sp-cf-a', 'poster', 6);
     await setDisplays('sp-cf-b', 'poster', 5);
@@ -259,7 +264,7 @@ describe('a class total at 0, 1, 4, 5 and 6 displays', () => {
     await setDisplays('sp-cf-b', 'poster', K - 1);
 
     const r = await built();
-    expect(r.sponsor_class_breakdown.mid).toEqual({ sponsor_count: 0, total_displays: null });
+    expect(r.sponsor_class_breakdown.mid).toEqual({ sponsor_count: 2, total_displays: null });
     expect(r.sponsor_displays).toEqual([]);
   });
 });
@@ -311,10 +316,79 @@ describe('a withheld class total is said in words, once', () => {
   });
 });
 
+// Owner ruling 2026-11-16 (OSE-2089): a count at or over the floor is open
+// knowledge between the sponsors of an event, and the class view is never taken
+// from a sponsor at any depth. In a class of two, a sponsor can work out the
+// other's total; that is accepted. This pins the ruling, so scoping the class
+// breakdown on a sponsor link is a decision, not an accident.
+describe("a sponsor's own link reads the whole-event class breakdown (owner ruling)", () => {
+  test('the class totals are the same on a sponsor link as on the organizer link', async () => {
+    await seedSponsor('sp-cf-a', 'premium');
+    await seedSponsor('sp-cf-b', 'premium');
+    await setDisplays('sp-cf-a', 'poster', K + 2);
+    await setDisplays('sp-cf-b', 'poster', K + 1);
+    const organizer = await read('bar_owner');
+    const sponsor = await read('sponsor', 'sp-cf-a');
+    expect(sponsor.report.sponsor_class_breakdown).toEqual(
+      organizer.report.sponsor_class_breakdown
+    );
+    expect(sponsor.report.sponsor_class_breakdown.premium).toEqual({
+      sponsor_count: 2,
+      total_displays: 2 * K + 3,
+    });
+    // Its own rows only: the peer's row is not on the link.
+    expect(sponsor.report.sponsor_displays.map((r) => r.sponsor_id)).toEqual(['sp-cf-a']);
+  });
+
+  test("a peer under the floor stays withheld on a sponsor's link", async () => {
+    await seedSponsor('sp-cf-a', 'premium');
+    await seedSponsor('sp-cf-b', 'premium');
+    await setDisplays('sp-cf-a', 'poster', K + 2);
+    await setDisplays('sp-cf-b', 'poster', K - 1);
+    const { report } = await read('sponsor', 'sp-cf-a');
+    expect(report.sponsor_class_breakdown.premium).toEqual({
+      sponsor_count: 2,
+      total_displays: K + 2,
+    });
+  });
+});
+
+// The batch route (service token) returns the builder's report whole. This is
+// the published branch of the shape: a number at or over the floor beside a
+// null, through that route (CCR 2026-11-16, F9).
+describe('the batch route carries the same class breakdown', () => {
+  test('a published class is its number and a withheld class is null', async () => {
+    await seedSponsor('sp-cf-a', 'premium');
+    await seedSponsor('sp-cf-b', 'local');
+    await setDisplays('sp-cf-a', 'poster', K + 3);
+    await setDisplays('sp-cf-b', 'poster', K - 1);
+    const res = await SELF.fetch('https://test.local/api/v2/events/shared-reports/batch', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${BATCH_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [EVT] }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { reports: Record<string, Report> };
+    expect(body.reports[EVT]!.sponsor_class_breakdown).toEqual({
+      local: { sponsor_count: 1, total_displays: null },
+      mid: { sponsor_count: 0, total_displays: null },
+      premium: { sponsor_count: 1, total_displays: K + 3 },
+    });
+    expect(body.reports[EVT]!.sponsor_class_breakdown).toEqual(
+      (await built()).sponsor_class_breakdown
+    );
+  });
+});
+
 // ─── 3. sponsor_count ───────────────────────────────────────────────────────
 
-describe('sponsor_count counts businesses with a published row', () => {
-  test('it does not move with displays under the floor; it steps at 5, with the row', async () => {
+// Owner ruling 2026-11-16: the count is of each sponsor taking part in the
+// event. It is read from the placements, so it does not move with displays.
+// @born-red | method: run against the builder that counted sponsors with a
+// published row: 14 tests of this file failed (a placed sponsor under the floor
+// read sponsor_count 0) | date: 2026-11-16
+describe('sponsor_count counts the sponsors taking part in the event', () => {
+  test('it does not move with displays: 0, 1, 4, 5 and 6 all read 1', async () => {
     await seedSponsor('sp-cf-a', 'premium');
     const seen: Array<[number, number | null, number]> = [];
     for (const n of [0, 1, K - 1, K, K + 1]) {
@@ -325,9 +399,9 @@ describe('sponsor_count counts businesses with a published row', () => {
     }
     // [sponsor_count, total_displays, rows published]
     expect(seen).toEqual([
-      [0, null, 0],
-      [0, null, 0],
-      [0, null, 0],
+      [1, null, 0],
+      [1, null, 0],
+      [1, null, 0],
       [1, K, 1],
       [1, K + 1, 1],
     ]);
@@ -343,6 +417,64 @@ describe('sponsor_count counts businesses with a published row', () => {
     // An entity count is a number in every class, beside a withheld total too.
     expect(scb.mid).toEqual({ sponsor_count: 0, total_displays: null });
     expect(scb.premium).toEqual({ sponsor_count: 0, total_displays: null });
+  });
+
+  test('each class counts its own sponsors, shown or not', async () => {
+    await seedSponsor('sp-cf-a', 'local');
+    await seedSponsor('sp-cf-b', 'local');
+    await seedSponsor('sp-cf-c', 'mid');
+    await seedSponsor('sp-cf-d', 'premium');
+    await setDisplays('sp-cf-a', 'poster', K);
+    const scb = (await built()).sponsor_class_breakdown;
+    expect(scb.local).toEqual({ sponsor_count: 2, total_displays: K });
+    expect(scb.mid).toEqual({ sponsor_count: 1, total_displays: null });
+    expect(scb.premium).toEqual({ sponsor_count: 1, total_displays: null });
+  });
+
+  test('a sponsor that has not accepted, or was declined, is not counted (invariant 6)', async () => {
+    await seedSponsor('sp-cf-a', 'premium');
+    // Has not answered. Written here: the seed helper turns a null into a yes.
+    await tenv()
+      .DB.prepare(
+        `UPDATE sponsor_placement SET sponsor_accepted = NULL WHERE sponsor_business_id = 'sp-cf-a'`
+      )
+      .run();
+    await seedSplitSponsor(tenv().DB, {
+      id: 'sp-cf-d',
+      eventId: EVT,
+      tier: 'gold',
+      sponsorAccepted: 0,
+    });
+    await seedSplitSponsor(tenv().DB, {
+      id: 'sp-cf-b',
+      eventId: EVT,
+      tier: 'gold',
+      organizerAccepted: 0,
+    });
+    await seedSponsor('sp-cf-c', 'premium');
+    expect((await built()).sponsor_class_breakdown.premium.sponsor_count).toBe(1);
+  });
+
+  test('an event that did not choose sponsors counts none', async () => {
+    await seedSponsor('sp-cf-a', 'premium');
+    await tenv()
+      .DB.prepare(`UPDATE events SET settings_json = '{"useSponsors":false}' WHERE id = ?`)
+      .bind(EVT)
+      .run();
+    expect((await built()).sponsor_class_breakdown.premium.sponsor_count).toBe(0);
+  });
+
+  test('a sponsor no longer placed still counts while its row is published', async () => {
+    await seedSponsor('sp-cf-a', 'premium');
+    await setDisplays('sp-cf-a', 'poster', K + 1);
+    await tenv()
+      .DB.prepare(`UPDATE sponsor_placement SET is_active = 0 WHERE sponsor_business_id = ?`)
+      .bind('sp-cf-a')
+      .run();
+    expect((await built()).sponsor_class_breakdown.premium).toEqual({
+      sponsor_count: 1,
+      total_displays: K + 1,
+    });
   });
 });
 

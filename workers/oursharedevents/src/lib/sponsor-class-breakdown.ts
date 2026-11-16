@@ -23,41 +23,53 @@ export function classifySponsor(tier: string | null, isLocal: boolean): SponsorC
   return tier !== null && PREMIUM_TIERS.has(tier) ? 'premium' : 'mid';
 }
 
+/** One sponsor taking part in the event, with what decides its class. */
+export interface ClassPlacement {
+  sponsor_id: string;
+  sponsor_tier: string | null;
+  is_local: boolean;
+}
+
 /**
- * The class breakdown of a report, from its (sponsor x surface) display rows.
+ * The class breakdown of a report, from the event's placements and its
+ * (sponsor x surface) display rows.
  *
+ *   - `sponsor_count` is the distinct sponsors taking part in the event in the
+ *     class (owner ruling 2026-11-16): those placed, once each however many
+ *     surfaces they are on, and any other with a published row (a sponsor shown
+ *     at least 5 times on a surface and no longer placed). It counts businesses,
+ *     so it has no floor, and it does not move with displays.
  *   - `total_displays` goes through `floorTotalOfParts`: a row under the floor
  *     never joins a sum, so a class total is the sum of the rows published for
  *     that class. With no row at the floor it is withheld (null), and a class
  *     with no sponsor reads the same as one whose sponsors have 1 to 4.
- *   - `sponsor_count` is the distinct sponsors with a row at the floor, once
- *     each however many surfaces they are on. It counts businesses, so it has no
- *     floor; it steps only at 5, with the row that is published at 5.
  */
 export function summarizeSponsorClasses(
-  rows: readonly {
-    sponsor_id: string;
-    sponsor_tier: string | null;
-    is_local: boolean;
-    count: number;
-  }[]
+  placements: readonly ClassPlacement[],
+  rows: readonly (ClassPlacement & { count: number })[]
 ): SponsorClassBreakdown {
   const classes: Record<SponsorClass, { sponsors: Set<string>; parts: number[] }> = {
     local: { sponsors: new Set(), parts: [] },
     mid: { sponsors: new Set(), parts: [] },
     premium: { sponsors: new Set(), parts: [] },
   };
-  // A sponsor is one business in one class: the class of its first row.
+  // A sponsor is one business in one class: its placement's, else its first row's.
   const classOf = new Map<string, SponsorClass>();
+  const place = (p: ClassPlacement): SponsorClass => {
+    let cls = classOf.get(p.sponsor_id);
+    if (!cls) {
+      cls = classifySponsor(p.sponsor_tier, p.is_local);
+      classOf.set(p.sponsor_id, cls);
+      classes[cls].sponsors.add(p.sponsor_id);
+    }
+    return cls;
+  };
+  for (const p of placements) place(p);
   for (const row of rows) {
     // A part under the floor adds nothing, to the total or to the sponsors.
     if (floorTotalOfParts([row.count]).count === null) continue;
-    const cls = classifySponsor(row.sponsor_tier, row.is_local);
-    if (!classOf.has(row.sponsor_id)) {
-      classOf.set(row.sponsor_id, cls);
-      classes[cls].sponsors.add(row.sponsor_id);
-    }
-    classes[cls].parts.push(row.count);
+    place(row);
+    classes[classifySponsor(row.sponsor_tier, row.is_local)].parts.push(row.count);
   }
   const one = (c: { sponsors: Set<string>; parts: number[] }) => ({
     sponsor_count: c.sponsors.size,

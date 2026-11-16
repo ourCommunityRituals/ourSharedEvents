@@ -214,7 +214,9 @@ test('on a laptop the summary cards share one row, equal width', async ({ page }
 
 test('before any screen has shown the sponsor, the report counts nothing', async ({ page }) => {
   await openReport(page);
-  await expect(page.getByTestId('premium-sponsor-count')).toHaveText('0');
+  // The sponsor is placed and has accepted, so it is counted whatever was shown
+  // (owner ruling 2026-11-16: the count is of each sponsor taking part).
+  await expect(page.getByTestId('premium-sponsor-count')).toHaveText('1');
   // OSE-2089: a class total under the floor is withheld, and reads in words
   // (AGENTS.md invariant 2). It read "0" before, the same as no displays at all.
   await expect(page.getByTestId('premium-displays')).toHaveText(
@@ -238,7 +240,9 @@ test('displays under the floor of 5: the report still shows no number', async ({
   expect(counted, 'still under the floor').toBeLessThan(FLOOR);
 
   await openReport(page);
-  await expect(page.getByTestId('premium-sponsor-count')).toHaveText('0');
+  // The sponsor is placed and has accepted, so it is counted whatever was shown
+  // (owner ruling 2026-11-16: the count is of each sponsor taking part).
+  await expect(page.getByTestId('premium-sponsor-count')).toHaveText('1');
   // OSE-2089: a class total under the floor is withheld, and reads in words
   // (AGENTS.md invariant 2). It read "0" before, the same as no displays at all.
   await expect(page.getByTestId('premium-displays')).toHaveText(
@@ -272,7 +276,11 @@ test("the organizer's report names the sponsor beside the same count", async ({ 
   await openReport(page);
   const main = page.getByTestId('report-main');
   await expect(main).toContainText(seeded.sponsorName);
-  await expect(page.getByTestId('local-vs-paid-delta')).toContainText(`Paid: ${counted} displays`);
+  // Only the premium class is published here, so Paid is a part and says so
+  // (owner ruling 2026-11-16).
+  await expect(page.getByTestId('local-vs-paid-delta')).toContainText(
+    `Paid (classes shown): ${counted} displays`
+  );
 });
 
 test('a link that was tampered with shows a plain message and no event', async ({ page }) => {

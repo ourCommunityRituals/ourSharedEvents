@@ -59,9 +59,9 @@
 --
 -- The class breakdown of the same report (OSE-2089, request 83). The six
 -- sponsors above are gold and not local, so they are the premium class:
---   premium  the published rows: 6 + 7 + 8 + 5 = 26, from 2 sponsors
---   local    sb_camp_rpt_l4 (local, in no campaign)  poster 4   total withheld
---   mid      no sponsor                                         total withheld
+--   premium  the published rows: 6 + 7 + 8 + 5 = 26; 6 sponsors taking part
+--   local    sb_camp_rpt_l4 (local, in no campaign)  poster 4   total withheld; 1 sponsor
+--   mid      no sponsor                                         total withheld; 0 sponsors
 -- Local (4 displays) and mid (none) must read alike: null, never 0.
 --
 -- The folder also creates one campaign, titled 'Campaign Fixture Created'. Rows
