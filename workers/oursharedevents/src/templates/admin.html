@@ -6240,7 +6240,7 @@
          and folded to its title and a one-line summary until opened, as the
          Sponsors card is. Built from classes that already exist (@ocr/ui's btn,
          card-title, sub-line and detail-card; this page's mcard-*, create-form,
-         create-msg, pc-list and pd-link): it adds no CSS. Rows are <template>
+         create-msg, create-field-error, pc-list and pd-link): it adds no CSS. Rows are <template>
          skeletons, cloned and filled with textContent, so their test ids stay
          literal for the registry and nothing from the server reaches innerHTML.
          A stall never holds a person (ADR-034 item 5). Its scans read through
@@ -6270,17 +6270,17 @@
             <div>
               <label for="stall-number">Stall number</label>
               <input type="text" id="stall-number" data-testid="stall-number-input" maxlength="20" autocomplete="off" aria-describedby="stall-number-error" />
-              <p class="create-msg error" id="stall-number-error" data-testid="stall-number-error" hidden></p>
+              <p class="create-field-error" id="stall-number-error" data-testid="stall-number-error" hidden></p>
             </div>
             <div>
               <label for="stall-name">Trading name</label>
               <input type="text" id="stall-name" data-testid="stall-name-input" maxlength="120" autocomplete="off" aria-describedby="stall-name-hint stall-name-error" />
-              <p class="create-msg error" id="stall-name-error" data-testid="stall-name-error" hidden></p>
+              <p class="create-field-error" id="stall-name-error" data-testid="stall-name-error" hidden></p>
             </div>
             <div class="full-width">
               <label for="stall-category">Category</label>
               <select id="stall-category" data-testid="stall-category-input" aria-describedby="stall-category-error"></select>
-              <p class="create-msg error" id="stall-category-error" data-testid="stall-category-error" hidden></p>
+              <p class="create-field-error" id="stall-category-error" data-testid="stall-category-error" hidden></p>
             </div>
           </div>
           <p class="sub-line" id="stall-name-hint" data-testid="stall-name-hint">The trading name is the one the public sees. Never a person’s email address or phone number.</p>
@@ -6305,7 +6305,7 @@
           <div id="stalls-bulk-result" data-testid="stalls-bulk-result" aria-live="polite" hidden>
             <p class="create-msg success" id="stalls-bulk-ok-title" data-testid="stalls-bulk-ok-title"></p>
             <ul class="pc-list" id="stalls-bulk-ok-list" data-testid="stalls-bulk-ok-list"></ul>
-            <p class="create-msg error" id="stalls-bulk-refused-title" data-testid="stalls-bulk-refused-title"></p>
+            <p class="create-field-error" id="stalls-bulk-refused-title" data-testid="stalls-bulk-refused-title"></p>
             <ul class="pc-list" id="stalls-bulk-refused-list" data-testid="stalls-bulk-refused-list"></ul>
           </div>
         </form>
@@ -6350,17 +6350,17 @@
           <div>
             <label data-label="number">Stall number</label>
             <input type="text" data-field="number" data-testid="stall-edit-number" maxlength="20" autocomplete="off" />
-            <p class="create-msg error" data-error="number" hidden></p>
+            <p class="create-field-error" data-error="number" hidden></p>
           </div>
           <div>
             <label data-label="name">Trading name</label>
             <input type="text" data-field="name" data-testid="stall-edit-name" maxlength="120" autocomplete="off" />
-            <p class="create-msg error" data-error="name" hidden></p>
+            <p class="create-field-error" data-error="name" hidden></p>
           </div>
           <div class="full-width">
             <label data-label="category">Category</label>
             <select data-field="category" data-testid="stall-edit-category"></select>
-            <p class="create-msg error" data-error="category" hidden></p>
+            <p class="create-field-error" data-error="category" hidden></p>
           </div>
           <div class="full-width detail-card-actions">
             <button type="button" class="btn btn-primary" data-action="stall-save" data-testid="stall-edit-save">Save the changes</button>

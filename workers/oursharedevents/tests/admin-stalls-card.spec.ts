@@ -7,8 +7,8 @@
  *
  *   1. The card is in the page, hidden until an event is selected, built from
  *      classes that already exist (@ocr/ui's btn, card-title, sub-line,
- *      detail-card; the page's mcard-*, create-form, create-msg, pc-list,
- *      pd-link). It adds no CSS, no `style=`, no raw colour and no h1.
+ *      detail-card; the page's mcard-*, create-form, create-msg,
+ *      create-field-error, pc-list, pd-link). It adds no CSS, no `style=`, no raw colour and no h1.
  *   2. The rules it checks a stall by are the server's: the categories and
  *      their words, the length caps and the bulk cap are a copy between
  *      markers held to lib/event-booths.ts and lib/booth-page-render.ts, and
@@ -412,6 +412,19 @@ describe('the card is in the page, built from what already exists', () => {
       expect(b.classList.contains('btn'), b.outerHTML).toBe(true);
       expect(b.getAttribute('data-action'), b.outerHTML).toBeTruthy();
     }
+  });
+
+  test('refusals use the page’s field-error class, not the padded, centered .error', () => {
+    const { doc } = mount();
+    const errs = [
+      ...doc.querySelectorAll('#stalls-card [id$="-error"]'),
+      ...(doc.getElementById('stall-edit-tpl') as HTMLTemplateElement).content.querySelectorAll(
+        '[data-error]'
+      ),
+    ];
+    expect(errs).toHaveLength(6);
+    for (const e of errs) expect(e.className, e.outerHTML).toBe('create-field-error');
+    expect(pageCss()).toMatch(/\.create-field-error \{[^}]*color: var\(--error\)/);
   });
 
   test('the card adds no CSS, no style attribute, no raw colour and no h1', () => {
