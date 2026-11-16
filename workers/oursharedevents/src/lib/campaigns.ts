@@ -360,12 +360,15 @@ export async function updateCampaign(
   brandIds: readonly string[] | null
 ): Promise<CampaignRow | null> {
   const scope = brandClause(brandIds, 'brand_id');
-  const row = await db
+  // The write answers only the id; the row is read back by that id. (A title
+  // in a RETURNING list would sit after the WHERE, where the never-a-filter scan
+  // in tests/campaign-never-a-filter.spec.ts reads a title as a selection.)
+  const changed = await db
     .prepare(
       `UPDATE campaigns
           SET title = COALESCE(?1, title), status = COALESCE(?2, status), updated_at = ?3
         WHERE id = ?4${scope.sql}
-        RETURNING id, brand_id, title, status, created_at, updated_at`
+        RETURNING id`
     )
     .bind(
       change.title ?? null,
@@ -374,6 +377,14 @@ export async function updateCampaign(
       campaignId,
       ...scope.params
     )
+    .first<{ id: string }>();
+  if (!changed) return null;
+  const row = await db
+    .prepare(
+      `SELECT id, brand_id, title, status, created_at, updated_at
+         FROM campaigns WHERE id = ?${scope.sql}`
+    )
+    .bind(changed.id, ...scope.params)
     .first<CampaignRow>();
   return row ?? null;
 }
