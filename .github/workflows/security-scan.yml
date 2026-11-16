@@ -51,12 +51,6 @@ on:
     - cron: '0 0 * * 0'
   workflow_dispatch:
     # Allow manual trigger for security audits
-    inputs:
-      skip_cache:
-        description: 'Skip cache for fresh analysis'
-        required: false
-        default: 'false'
-        type: boolean
 
 # Sweep 9 #4 (2026-05-14): cancel superseded runs.
 # This workflow triggers on EVERY PR (and pushes to main) with no paths
@@ -285,19 +279,7 @@ jobs:
       run: bash scripts/ci-stage-ocr-workspace.sh
 
     - name: Install dependencies
-      env:
-        # inputs.skip_cache is only populated on workflow_dispatch; default to 'false' for push/PR.
-        # Passed via env, never interpolated into the shell (OSE-1470).
-        SKIP_CACHE: ${{ inputs.skip_cache || 'false' }}
-      run: |
-        HASH="$(node --version)-$(git hash-object package-lock.json)"
-        STAMP=node_modules/.install-stamp
-        if [ "$SKIP_CACHE" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-          echo "node_modules up-to-date, skipping npm ci"
-        else
-          npm ci --prefer-offline || npm ci
-          echo "$HASH" > "$STAMP"
-        fi
+      run: npm ci --prefer-offline || npm ci
 
     - name: Run npm audit
       id: npm-audit

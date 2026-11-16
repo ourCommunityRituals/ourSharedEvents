@@ -707,6 +707,35 @@ describe('oursharedevents-ci.yml: hosted runners only, no self-hosted leftovers'
   test('the force_clean dispatch input is gone with the stamp it bypassed', () => {
     expect(text).not.toMatch(/force_clean/);
   });
+
+  // The lock above read oursharedevents-ci.yml only, so five install stamps
+  // lived on in three security workflows after 2026-11-14. This holds every
+  // workflow to the same hosted shape with the same detectors.
+  describe('every workflow file', () => {
+    const { readdirSync } = require('fs');
+    const files = readdirSync(join(ROOT, '.github', 'workflows')).filter((f) => /\.ya?ml$/.test(f));
+    const all = files.flatMap((file) => {
+      const doc = yaml.load(readFile(`.github/workflows/${file}`));
+      return Object.entries((doc && doc.jobs) || {}).flatMap(([jobId, job]) =>
+        ((job && job.steps) || []).map((step) => ({ jobId: `${file} ${jobId}`, step }))
+      );
+    });
+
+    test('the walk read every workflow and their install steps', () => {
+      expect(files.length).toBeGreaterThan(30);
+      expect(all.filter(({ step }) => /\bnpm ci\b/.test(runCode(step))).length).toBeGreaterThan(
+        steps.filter(({ step }) => /\bnpm ci\b/.test(runCode(step))).length
+      );
+    });
+
+    test('no step in any workflow carries an install stamp, a _diag cleanup or a Windows-only path', () => {
+      expect(leftovers(all)).toEqual([]);
+    });
+
+    test('the skip_cache dispatch input is gone with the stamp it bypassed', () => {
+      expect(readFile('.github/workflows/security-scan.yml')).not.toMatch(/skip_cache|SKIP_CACHE/);
+    });
+  });
 });
 
 // ─── T4d admin gate continuity — scoped worker-401 smoke (OSE-311) ───────────
