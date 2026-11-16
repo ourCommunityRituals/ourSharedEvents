@@ -59,6 +59,9 @@ permissions:
 # share this group. A second run waits; it is never cancelled out from under a run.
 # queue: max lines waiting runs up first in, first out (up to 100) instead of
 # GitHub's default of one waiting run, which a third arrival cancels.
+# The group does not hold back the T2 api, T3 or T4 legs, or people on stg, so the
+# load writes D1 only with `d1 execute --command` (D1's query endpoint), never with
+# `--file`, a remote import that takes staging offline for reads (OSE-2090).
 concurrency:
   group: stg-writer
   cancel-in-progress: false

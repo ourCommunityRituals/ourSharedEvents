@@ -32,9 +32,13 @@ import {
   checkSearches as realCheckSearches,
   isUnverified,
 } from './check-full.mjs';
+import { sqlForFile, stripSqlComments } from '../ci/d1-seed-staging.mjs';
 import {
   SAFE_ID,
-  buildPurgeSql,
+  MAX_SQL_BYTES,
+  buildPurgeStatements,
+  inListStatements,
+  packStatements,
   purgeR2Keys,
   manifestName,
   parseManifestName,
@@ -69,9 +73,11 @@ export const D1_BUSY_TRIES = 3;
 const D1_BUSY_WAIT_MS = 15_000;
 // The line each command prints when it finished (wrangler 4.145.0). wrangler's bin
 // wrapper exits 0 when its child is killed by a signal, so exit 0 without this
-// line is a failure (CCR 2026-11-07 R-11).
+// line is a failure (CCR 2026-11-07 R-11). For d1 it is the line of the ordinary
+// query endpoint, "Executed 1 command in" or "Executed <n> commands in" (wrangler
+// 4.161.0 logResult); an import's "Executed <n> queries" never counts.
 const COMPLETION = {
-  d1: /Executed \d+ (?:queries|commands)/,
+  d1: /Executed (?:1 command|\d+ commands) in /,
   get: /Download complete/,
   put: /Upload complete/,
   delete: /Delete complete/,
@@ -95,6 +101,29 @@ export function seedExpected(nodes) {
 
 // ── Target guard ───────────────────────────────────────────────────────────
 
+// The only statements the stock run sends to D1: the purge's DELETEs and the
+// acceptance UPDATE. Neither returns rows, so `--command` prints none to the log.
+const STOCK_SQL_HEADS = ['DELETE', 'UPDATE'];
+
+/**
+ * Why `sql` may not be sent with `--command`, or '' when it may: at most
+ * MAX_SQL_BYTES, no RETURNING, and only DELETE or UPDATE statements (the
+ * checks of scripts/ci/d1-seed-staging.mjs, narrowed to the stock run's two).
+ */
+export function stockSqlProblem(sql) {
+  if (typeof sql !== 'string') return 'is not text';
+  const read = sqlForFile(sql);
+  if (!read.ok) return `the SQL ${read.reason}`;
+  const shape = stripSqlComments(sql, { blankQuotes: true });
+  for (const statement of shape.split(';')) {
+    const head = statement.trim().split(/\s+/)[0]?.toUpperCase();
+    if (head && !STOCK_SQL_HEADS.includes(head)) {
+      return `the SQL has a ${head} statement; the stock run sends only DELETE and UPDATE`;
+    }
+  }
+  return '';
+}
+
 // Any argument that names production, apart from a temp file's path.
 const PRODUCTION_NAME = /production/i;
 
@@ -103,8 +132,14 @@ const PRODUCTION_NAME = /production/i;
  * targets the staging database or bucket by name. The flag alone is not enough:
  * wrangler resolves a database name account-wide, so `--env staging` with
  * `ocr-db-production` would reach production (CCR 2026-11-07 R-06). Only the
- * two command shapes the swap sends are allowed: `d1 execute <db>` and
- * `r2 object get|put|delete <bucket>/<key>`.
+ * two command shapes the swap sends are allowed: `d1 execute <db> --command <sql>`
+ * and `r2 object get|put|delete <bucket>/<key>`.
+ *
+ * `d1 execute` never takes `--file`: against a remote database that is a D1
+ * import, and staging answers no reads while it runs ("your D1 database will be
+ * unavailable to serve queries", wrangler 4.161.0 executeRemotely). The stock
+ * load's imports reached the T4 legs, which the stg-writer group does not hold
+ * back (2026-11-14: run 43533830657's purge inside run 43532167205's T4).
  */
 export function assertStaging(args) {
   if (!Array.isArray(args) || !args.every((a) => typeof a === 'string')) {
@@ -123,6 +158,15 @@ export function assertStaging(args) {
   const [tool, sub, verb, target] = args;
   if (tool === 'd1' && sub === 'execute') {
     if (verb !== D1_DATABASE) throw new Error(`wrangler: d1 may target ${D1_DATABASE} only`);
+    if (fileAt >= 0) {
+      throw new Error('wrangler: d1 execute never takes --file (a remote import blocks reads)');
+    }
+    const commandAt = args.indexOf('--command');
+    if (commandAt < 0 || args.indexOf('--command', commandAt + 1) >= 0) {
+      throw new Error('wrangler: d1 execute takes exactly one --command');
+    }
+    const problem = stockSqlProblem(args[commandAt + 1]);
+    if (problem) throw new Error(`wrangler: d1 execute refused: ${problem}`);
     return;
   }
   if (tool === 'r2' && sub === 'object' && ['get', 'put', 'delete'].includes(verb)) {
@@ -190,17 +234,25 @@ export function makeCloud({ wrangler, fs, tmpDir, log = () => {}, sleep = realSl
   const remote = ['--env', WRANGLER_ENV, '--remote'];
 
   return {
-    async d1File(sql) {
-      const path = tmp('d1.sql');
-      fs.writeFileSync(path, sql);
-      const args = ['d1', 'execute', D1_DATABASE, ...remote, '--yes', '--file', path];
-      let r = await run('d1 execute', args, 'd1');
-      for (let tries = 1; !r.ok && D1_BUSY.test(r.out) && tries < D1_BUSY_TRIES; tries++) {
-        log(`D1 busy; retry ${tries} of ${D1_BUSY_TRIES - 1}`);
-        await sleep(D1_BUSY_WAIT_MS * tries);
-        r = await run('d1 execute', args, 'd1');
+    /**
+     * Run statements (no `;`) in order, in SQL texts of at most MAX_SQL_BYTES,
+     * each one `d1 execute --command`: D1's ordinary query endpoint, never an
+     * import (OSE-2090). The first text that fails throws, and nothing after it
+     * is sent. Each text is retried while D1 answers busy.
+     */
+    async d1Execute(statements) {
+      const texts = packStatements(statements, MAX_SQL_BYTES);
+      for (const [i, sql] of texts.entries()) {
+        const op = texts.length > 1 ? `d1 execute (${i + 1} of ${texts.length})` : 'd1 execute';
+        const args = ['d1', 'execute', D1_DATABASE, ...remote, '--command', sql];
+        let r = await run(op, args, 'd1');
+        for (let tries = 1; !r.ok && D1_BUSY.test(r.out) && tries < D1_BUSY_TRIES; tries++) {
+          log(`D1 busy; retry ${tries} of ${D1_BUSY_TRIES - 1}`);
+          await sleep(D1_BUSY_WAIT_MS * tries);
+          r = await run(op, args, 'd1');
+        }
+        if (!r.ok) throw fail(r);
       }
-      if (!r.ok) throw fail(r);
     },
     /** The object's text, or null when the key does not exist. */
     async r2Get(key) {
@@ -358,17 +410,23 @@ export function makeManifestPersister({
 
 // ── Acceptance (the only UPDATE the stock run sends) ───────────────────────
 
-/** The SQL that sets both acceptance flags on the day's placements, or ''. */
-export function acceptSqlFor(manifest) {
+/** The statements (no `;`) that set both acceptance flags on the day's placements; [] for none. */
+export function acceptStatementsFor(manifest) {
   const ids = Array.isArray(manifest.acceptSql) ? manifest.acceptSql : [];
   for (const id of ids) {
     if (typeof id !== 'string' || !SAFE_ID.test(id)) throw new Error('unsafe placement id');
   }
-  if (ids.length === 0) return '';
-  const list = unique(ids)
-    .map((id) => `'${id}'`)
-    .join(', ');
-  return `UPDATE sponsor_placement SET sponsor_accepted = 1, organizer_accepted = 1 WHERE id IN (${list});\n`;
+  return inListStatements(
+    'UPDATE sponsor_placement SET sponsor_accepted = 1, organizer_accepted = 1 WHERE id IN',
+    unique(ids).map((id) => `'${id}'`)
+  );
+}
+
+/** The SQL that sets both acceptance flags on the day's placements, or ''. */
+export function acceptSqlFor(manifest) {
+  return acceptStatementsFor(manifest)
+    .map((s) => `${s};\n`)
+    .join('');
 }
 
 // ── Check, then swap ───────────────────────────────────────────────────────
@@ -437,14 +495,14 @@ export async function checkSwap({
     const entry = { name, node, ok: false };
     purges.push(entry);
     try {
-      const sql = buildPurgeSql(m, [node]);
+      const statements = buildPurgeStatements(m, [node]);
       const keys = purgeR2Keys(m, [node]);
       for (const key of keys) {
         if (key.startsWith(MANIFEST_PREFIX) || key.includes('..')) {
           throw new Error('upload key points at the manifest folder');
         }
       }
-      if (sql !== '') await cloud.d1File(sql);
+      if (statements.length) await cloud.d1Execute(statements);
       for (const key of keys) await cloud.r2Delete(key);
       entry.ok = true;
       if (!okNodes.has(name)) okNodes.set(name, new Set());
@@ -580,10 +638,9 @@ export async function checkSwap({
   // 3. Accept the day's placements, then check every node. A database still busy
   //    after its retries is a harness fault: every node is unverified (decision 2A).
   let results;
-  let acceptSql;
   try {
-    acceptSql = acceptSqlFor(manifest);
-    if (acceptSql !== '') await cloud.d1File(acceptSql);
+    const accept = acceptStatementsFor(manifest);
+    if (accept.length) await cloud.d1Execute(accept);
   } catch (err) {
     problems.push(`placements not accepted: ${err.message}`);
     results = allFailing(err.busy ? 'd1-busy' : 'accept-failed');
