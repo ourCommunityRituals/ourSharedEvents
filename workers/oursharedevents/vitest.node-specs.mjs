@@ -21,6 +21,8 @@ export const NODE_SPECS = [
   'tests/booth-counts.spec.ts',
   // OSE-2004 — no stall leaves for BigQuery (row guard + exporter sources)
   'tests/booth-export-boundary.spec.ts',
+  // OSE-2004 — the worked example in docs/features/FAIR-REPORTING.md, computed
+  'tests/fair-reporting-example.spec.ts',
   // OSE-1782 — derived gate: no count published except through count-floor.ts
   // (reads the projection's field list and the src/ tree; no runtime).
   'tests/count-floor-publication.derived.spec.ts',

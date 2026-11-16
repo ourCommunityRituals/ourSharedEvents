@@ -1402,6 +1402,13 @@
       "testCount": 5
     },
     {
+      "file": "workers/oursharedevents/tests/fair-reporting-example.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 2
+    },
+    {
       "file": "workers/oursharedevents/tests/fat-finger.property.spec.ts",
       "bucket": "node",
       "needsReview": false,
