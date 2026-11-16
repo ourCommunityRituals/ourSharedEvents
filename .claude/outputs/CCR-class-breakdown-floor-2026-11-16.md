@@ -9,7 +9,6 @@ cumulative_score: 33
 system_score: 82
 unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 1, medium: 0, low: 4 }
 pr: 1344
-subject_sha: 'f4ccddba8a2d40b8229a496e01da5cdd402046eb'
 ---
 
 # CCR: SharedReport class breakdown floor (PR #1344, OSE-2089)
