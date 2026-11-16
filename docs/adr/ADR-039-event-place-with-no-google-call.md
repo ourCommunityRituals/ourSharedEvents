@@ -1,0 +1,364 @@
+# ADR-039: Give an event its place on the map with no call to Google
+
+**Status:** Proposed. Nothing in it is built and nothing in it is chosen. It sets out three ways an
+event can get its map cell without Google, so the owner can accept or refuse each. Merging the pull
+request that carries it records the options; it accepts none of them (see "Open, for the owner").
+No runtime code changes with it, and neither does `AGENTS.md`, `CLAUDE.md` or `OCR_VISION.md`.
+**Date:** 2026-11-16
+**Deciders:** Owner (PO). Dr of Security advises on what leaves the Worker and what is kept.
+Counsel, for the terms questions marked below.
+**Ticket:** OSE-1908 (epic OSE-1880); OSE-1985 (the venue image)
+
+## Context
+
+The landing map shows events as H3 hexagons over our own OpenStreetMap street layer (OSE ADR-035,
+OSE ADR-036). No Google tile or image is drawn under either map. Google is under the map in one
+way only: as data. When an event is saved, its address text goes to Google's geocoder, and both
+map cells are worked out from the point that comes back.
+
+The owner, 2026-11-09, ruled against Google Maps under the map ("this defeats the privacy on the
+maps pov"), said links a visitor chooses to open are fine, and expected the lookup "would not pass
+legal". The owner, 2026-11-16, asked whether Google's terms cover dots its geocoder placed over
+OpenStreetMap streets: "I was trying to avoid interacting with google maps if I could. Are you
+telling me there is no way to get around this interaction?" There is a way round. The lookup is
+one optional call, and this record sets out three replacements for it.
+
+**What this record is not.** The location-precision review of 2026-11-09 ended at 0% and ruled that
+no place or map text lands before a new ADR. Its owner decisions are still open: the finest
+precision a public map may draw (res 7 or res 9), home addresses, whether "off the map" is a
+privacy control, the paths that publish a place without the organizer choosing, and finding F37.
+This record settles none of them, proposes no wording for invariant 3 or the vision, and does not
+bring back that review's frozen drafts. The rule for what a public output may carry of a place is
+a different record, which that review places in OCR-docs. This one takes a single question: where
+the cell comes from. Where an option depends on an open decision, it says so.
+
+### What the code does today
+
+Read on `main` at `457f4ffe`, 2026-11-16. Paths are under `workers/oursharedevents/src/`.
+
+**Calls the Worker makes to Google** (`maps.googleapis.com`, with the secret
+`GOOGLE_MAPS_API_KEY`):
+
+| #   | Call                                                    | When                                                                                                                                                                                            | What is sent                               | What is kept                                                                                                                               |
+| --- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| G1  | Event place lookup (`lib/event-place.ts`, `lib/geo.ts`) | On create when no coordinates were sent, on update when the place text changed (`handlers/events.ts`), and nightly for at most 25 events (`runEventPlaceBackfill`, then `runPlaceKindBackfill`) | The street address, else the place name    | `events.lat`, `lon`, `h3_res9`, `h3_res7`, `place_kind`, `place_checked_at`. Kept only when Google names a spot and it is not a part match |
+| G2  | Admin lookup route (`POST /api/v2/admin/geocode`)       | The admin poster card, when an address is typed for where a poster hangs (`templates/admin.html`)                                                                                               | The address                                | The point goes back to the browser, which sends it with the poster: `poster_deployments.latitude`, `longitude` and both cells              |
+| G3  | Sponsor sign-up draft (`handlers/sponsors-draft.ts`)    | A sponsor saves a draft with an address                                                                                                                                                         | The address                                | `sponsor_business_draft.lat`, `lon` and both cells                                                                                         |
+| G4  | Venue image (`lib/maps.ts`, `handlers/venue-image.ts`)  | A visitor's view of an event page or a SharedReport, when the image is not in the edge cache                                                                                                    | The place name, else the address, as a pin | The image, in the edge cache for a day                                                                                                     |
+
+With no key set, G1 is skipped and the save still succeeds: the event then has no cell, and the
+nightly job does nothing. Whether the key is set on staging or production was not read (an agent
+does not read secrets).
+
+**Links a visitor may open** (the Worker sends nothing; `rel="noopener noreferrer"`):
+
+- Directions (`lib/geo-link.ts`): Google Maps and Apple Maps. Each carries the stored point when
+  the event has one, else the address or place name. The poster page has a Google Maps link by
+  place text (`templates/poster.html`).
+- Calendar (`lib/calendar-links.ts`): a Google Calendar link carrying the title, the dates, the
+  description and the place text, beside an `.ics` file; and a subscribe link for a brand's feed.
+
+**The point is kept, not only used.** AGENTS.md invariant 3 says admin placement writes take
+coordinates only to derive the cell. The handlers do derive the cell (`maybeTag` in
+`lib/h3-tagging.ts`), and they also store the coordinates: the event insert and update
+(`handlers/events.ts`) and the poster insert and update (`handlers/poster-deployments.ts`). No
+handler today takes a coordinate, works out the cell and drops the coordinate. So "not stored as a
+point" in option 1 is new behaviour, not a description of what exists.
+
+**What reads an event's stored point today:** the Directions links (`handlers/pages.ts`); the
+zoomed area's dots, which use it only to find the event's res-9 block and list an event without
+one as "somewhere in this area" (`lib/attendee-map.ts`); a venue poster, which takes the event's
+point as its own (`handlers/poster-deployments.ts`); the repeat-event copy (`lib/event-repeat.ts`);
+and the public event columns, which list `lat` and `lon` (`lib/public-event-projection.ts`,
+`handlers/events-map.ts`). Any option that stops storing a point changes each of these.
+
+**What we already host.** `lib/zip-areas-data.ts` holds the centres of 33,791 US Census ZIP Code
+Tabulation Areas (public domain data, packaged by `us-zips` 2022.9.1, MIT). The landing search
+already turns a typed zip into a res-7 cell with it (`lib/zip-areas.ts`), and `addressZip` already
+reads the zip an address ends with. `lib/place-names-data.ts` holds US town names with their zips
+(GeoNames, CC BY 4.0). No admin page draws a map: the poster card has two number boxes for
+latitude and longitude.
+
+**Sizes.** A res-7 cell is about 5.2 km² and 2.4 km across. A res-9 cell is about 0.1 km² and 350 m
+across (arithmetic from H3's average cell areas).
+
+## Decision (proposed)
+
+No option is chosen here. The proposal is the shape of the choice: three options, each of which
+the owner can accept or refuse by itself, and a recommendation that is the author's and not a
+ruling. Options 1 and 2 can be accepted together.
+
+### Option 1. The organizer taps the spot on our own map
+
+The admin shows our own map of the area the organizer named (a zip or a town, from the tables we
+host). The organizer taps where the event is. Only the cell is kept.
+
+Two forms, and the difference matters:
+
+- **1a. Cells only.** The Worker draws the area as hexagons over the street layer, as the landing
+  does, and each hexagon is a control that carries its own cell id. A tap posts a cell. No
+  coordinate exists in the browser, in the request or in a log. This is how the public map read
+  already works (`handlers/events-map.ts` refuses coordinate-shaped input), applied to a write.
+- **1b. A coordinate, then dropped.** The browser sends the tapped latitude and longitude, the
+  Worker works out the cell and does not store the point. Invariant 3's words allow this. It holds
+  by policy and not by construction: the coordinate is in the request.
+
+A res-7 cell can be picked from a frame of its neighbours. A res-9 cell can be picked only inside
+one res-7 area: that area holds 49 of them. Whether each is large enough to tap in the landing's
+frame was not worked out. Whether an event gets a res-9 cell at all is the open precision
+decision, not this record's.
+
+| Question                         | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| What leaves the Worker           | Nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Cost                             | A map in the admin, which has none. One more step in each create flow. A way to place an event without a pointer or sight (a list of the same areas by name), because a tap-only control fails the accessibility gate. A path for automation, which has nobody to tap: it sends a cell or a zip. Nothing can be tapped sensibly until the street archive is loaded: a hexagon grid with no streets under it tells an organizer nothing. |
+| What a test would have to prove  | A write that carries a coordinate-shaped field is refused (1a). The stored row has cells and no point, and its res-9 cell's parent is its res-7 cell. A cell far from the zip or town the organizer named is refused or asked about again. The placement can be done by keyboard alone, on staging. Each case in the workers pool and on staging, and each seen red on an injected fault.                                               |
+| Events that already have a point | Their cells stay as they are until the organizer places the event again. The stored point can then be cleared, once the readers listed above use the cells or the words instead. Whether a cell worked out from a Google point may be kept after the point is gone is a question for counsel (see "What the pages say").                                                                                                                |
+| Depends on                       | The street archive on staging (an owner step, not done). The precision decision, for res 9.                                                                                                                                                                                                                                                                                                                                             |
+
+### Option 2. Zip code to cell, from the table we host
+
+On save, the Worker reads the zip the address ends with (or a zip box in the form), finds that
+zip's centre in the table we already ship, and stores the res-7 cell the centre is in. No lookup,
+no network call, no new table.
+
+**Say it plainly: this is good for the res-7 hexagon map and too coarse for a res-9 dot.** And the
+res-7 answer has a limit of its own: the cell is the cell of the zip's centre, not the cell of the
+venue. Measured on our table on 2026-11-16: the median zip centre has its nearest neighbour 7.5 km
+away, a quarter have one within 4.4 km, and 9% have one within the width of a single res-7 cell. So
+a typical zip covers several res-7 cells, the hexagon that lights up can be a cell or more away
+from the venue, and every event in one zip shares one hexagon. That is honest for "what is going on
+in this zip area", which is the question the landing asks. It is not a place on a street. A res-9
+cell taken from a zip centre would name a block the event is not on, so none is stored.
+
+| Question                         | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| What leaves the Worker           | Nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Cost                             | Small: the table and the two functions exist. An address with no zip at its end needs a zip box, or the town table. A zip the table lacks gets no cell: the Census page says "Not all valid ZIP Codes are represented by a 2020 ZCTA". United States only. The kind of place (business or address) came from Google's answer and has no source here. No res-9 cell, so no dot on the zoomed area and no point for a venue poster to copy. |
+| What a test would have to prove  | Known addresses give the expected res-7 cell. No res-9 cell and no point is stored when the source is a zip. A zip that is not in the table gives the organizer the "not found" notice and never fails the save. The landing's zip search finds the event under its own zip. The save makes no outbound request at all, proven by a case that goes red when one is injected. Each case in the workers pool and on staging.                |
+| Events that already have a point | They can stay, or be worked out again from their zip. Working them out again moves each event to its zip centre's hexagon and clears its res-9 cell and its point, so it is a visible change on the map and should be counted on staging first.                                                                                                                                                                                           |
+| Depends on                       | Nothing that is open. Res 7 is allowed under either answer to the precision decision.                                                                                                                                                                                                                                                                                                                                                     |
+
+### Option 3. A lookup service that is not Google
+
+The address text still leaves the Worker and goes to a third party, on every save. That is the
+same shape as today with a different receiver. Four candidates were looked at.
+
+| Candidate                                                              | What it would do for us                                                                                        | What stands in the way                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **3a. The US Census Geocoder**                                         | Street address to a point, free, no key seen in its examples. United States, Puerto Rico and the Island Areas. | It wants a structured street address, so a venue name alone ("Rock Island Public House", the case the lookup was added for) does not match. The point is worked out along an address range, not at the door. No page read says anything on keeping results or on what is logged. |
+| **3b. The public Nominatim service** (OpenStreetMap Foundation)        | Address or place name to a point, from OpenStreetMap data.                                                     | Its policy asks callers not to send personal data, and a home's address can be that. It runs on donated servers, has no service promise, and access can be withdrawn. One request a second at most.                                                                              |
+| **3c. Our own geocoder on OpenStreetMap data** (Nominatim, or another) | Address to a point with no third party at all.                                                                 | It is a server, and OSE is one Worker and D1. Nominatim's manual asks for 128 GB of memory and 1 TB of disk for the planet; no figure for a smaller extract was found. Somebody would run, patch and pay for it.                                                                 |
+| **3d. A commercial service built on OpenStreetMap data**               | The same as 3b with a contract.                                                                                | No such service's terms were read. Not proposed until they are.                                                                                                                                                                                                                  |
+
+| Question                         | Answer                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| What leaves the Worker           | The organizer's place text, to the service, on create, on a changed place and nightly. For a home event that is a home address.                                                                                                                                                                                                                                                                  |
+| Cost                             | The code change is small (one function behind `geocodeVenue`). The standing cost is a second party: its terms, its uptime, its limits, a credit line where its data shows, and a privacy answer for what it logs.                                                                                                                                                                                |
+| What a test would have to prove  | Only the place text is sent: no event id, brand, organizer or visitor value. A slow or failed lookup never fails a save (true today). The same text is not sent twice. The service's rate limit is kept by the nightly job. The credit shows wherever the result shows. A source gate allows exactly one named lookup host and fails on any other. Each case in the workers pool and on staging. |
+| Events that already have a point | The shape of the data does not change. Replacing the Google points means sending every stored place text to the new service once. The Census service takes files of up to 10,000 addresses; Nominatim's policy discourages bulk use.                                                                                                                                                             |
+| Depends on                       | Counsel, on the service's terms. The home-address decision.                                                                                                                                                                                                                                                                                                                                      |
+
+### The venue image, the Directions links and the Calendar link under each option
+
+Not decided here. What each option does to them:
+
+| Piece                                                | Option 1 (tap)                                                                                                                                         | Option 2 (zip)                                                                                                      | Option 3 (another lookup)                                              |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **Venue image** (G4, OSE-1985)                       | Untouched by the option: it is its own call to Google, on a visitor's view. If it is to go, our own area map can stand in, from the cell the tap gave. | The same. A stand-in drawn from a zip-centre cell would show the zip's area, not the venue's.                       | The same. A stored point would let a stand-in be drawn near the venue. |
+| **Directions links**                                 | With no stored point they carry the address or place name, which the code already does when a point is missing.                                        | The same as option 1.                                                                                               | Unchanged: they carry the point when there is one.                     |
+| **Calendar link**                                    | Unchanged. It carries words and dates, never a point.                                                                                                  | Unchanged.                                                                                                          | Unchanged.                                                             |
+| **Poster placement and sponsor address** (G2 and G3) | A tap suits a poster: it is a physical spot and res 9 is already its rule. A sponsor's address needs only its area.                                    | Enough for a sponsor's area. Too coarse for a poster, so the report's res-9 map would have no cell for that poster. | Unchanged in shape.                                                    |
+
+If G1 goes and G2, G3 and G4 stay, the Worker still calls Google. "No call to Google" is true only
+when all four are answered.
+
+## What the pages say
+
+Read on 2026-11-16 by fetching each page. Where a page did not load or does not say, that is
+stated. Nothing here is a legal reading.
+
+**Google.** `developers.google.com/maps/documentation/geocoding/policies` loaded. It says a
+latitude and longitude from the Geocoding API may be cached for up to 30 consecutive calendar days
+and must then be deleted; that content is not to be created from Google Maps content, with a
+place's point used in a spatial analysis as one of its examples; and that place IDs may be stored
+without limit. It names no exception for a value worked out from a point, such as a cell. It does
+not say whether results may be shown on a map that is not Google's. The two pages of terms it
+defers to (`cloud.google.com/maps-platform/terms` and `…/terms/maps-service-terms`) returned only
+their titles and were **not read**. `NOTICE.md` question 6 is this same gap.
+
+**US Census Geocoder.** Six pages loaded:
+`geocoding.geo.census.gov/geocoder/`, its API page (`Geocoding_Services_API.html`, "Last updated
+02/2026"), the technical documentation page on census.gov (revised 2026-05-19), the Census API
+terms of service (revised 2026-04-14), the open data policy page and the privacy policy (revised
+2026-10-09).
+
+- On keeping results: **no page says anything.** No term on storing, caching, sharing or deriving
+  from a result was found, and no licence line for the results. Silence is not a permission.
+- On what it matches: "The current Geocoding Services engine requires a structure address be
+  provided." Results are "interpolated, or approximated" from address ranges in the Bureau's
+  MAF/TIGER data. Coverage is "the United States, Puerto Rico, and the U.S. Island Areas".
+- On limits: "an upper limit of 10,000 records per batch file". No per-second limit is stated.
+- On what it logs: nothing about addresses sent to the geocoder. The privacy policy covers visits
+  to the Bureau's sites and says of its logs: "The logs may be kept indefinitely".
+- The Census API terms say the API is provided "as is" and on an "as-available" basis and ask for
+  a not-endorsed line. They do not name the Geocoder, so whether they bind it is not known.
+- Not read: the Geocoder User Guide and FAQ (two PDFs the pages link to).
+
+**Nominatim and OpenStreetMap.**
+
+- The Nominatim usage policy (`operations.osmfoundation.org/policies/nominatim/`, no date shown)
+  sets a maximum of one request a second, asks for an identifying User-Agent or Referer, forbids
+  systematic queries and reselling results, says access may be withdrawn and that a caller must be
+  able to switch away on request, and asks callers not to submit personal data. On keeping:
+  "Results must be cached on your side."
+- The Foundation's geocoding guideline
+  (`osmfoundation.org/wiki/Licence/Community_Guidelines/Geocoding_-_Guideline`, endorsed by its
+  board 2017-08-24, last edited 2017-08-29) says results "may be stored (either permanently or
+  temporarily)", that single results do not trigger the licence's share-alike duty, and that a
+  collection built to stand in for the map database would. Credit to OpenStreetMap is asked for.
+- The Foundation's privacy policy (last edited 2026-01-25) lists the IP address among what its
+  services receive and says Nominatim queries are analysed to improve the data. It does not say
+  how long a query's text is kept.
+- Nominatim's installation manual (version 5.3.3) gives the server sizes quoted in option 3c.
+- `photon.komoot.io`, another public geocoder on the same data, says heavy use is throttled and
+  availability is not promised. It states no data licence on that page.
+
+**Census zip areas.** The Bureau's ZCTA page (revised 2023-08-10) says a zip area is the Bureau's
+own drawn version of a postal ZIP code and that not every valid ZIP has one. The gazetteer page
+(revised 2026-09-04) offers a 2026 file. Neither page states a licence. The table's header in this
+repo says public domain; the `us-zips` package page that would show which Census year our copy is
+did not load (HTTP 403) and was **not read**.
+
+## Recommendation (the author's, not a ruling)
+
+1. **Option 2 for every in-person event,** because it sends nothing anywhere, needs no new table
+   and no open decision, and answers the question the landing asks. It is the smallest change that
+   takes Google out from under the map.
+2. **Option 1, in its cells-only form (1a), as the way an organizer puts the event in the right
+   hexagon,** and as the only source of a res-9 cell if the owner's precision decision allows one.
+   It follows the street archive's load on staging. It also fits a poster's placement.
+3. **Not option 3.** The two public services cannot be recommended from the pages read: the Census
+   pages are silent on keeping results and cannot match a venue name, and the public Nominatim
+   service asks not to be sent personal data and can be withdrawn. Running our own is a server
+   this product does not have. If the owner wants an address placed with no effort from the
+   organizer, 3c is the only form with no third party, and it is a new piece of infrastructure
+   with its own ADR.
+4. **Answer G2, G3 and G4 in the same pass,** and hold the result with a source gate like the
+   LLM-free one: it fails when a Google Maps host or a `GOOGLE_MAPS_` name appears under `src/` or
+   in `wrangler.toml`. The owner removes the secret.
+
+## Alternatives Considered
+
+### Alternative A: Keep the Google lookup
+
+What the code does today.
+
+**Not proposed because:** the owner has said twice that the aim is to avoid it and expects it not
+to pass legal, and the one Google page that loaded gives a 30-day limit on a kept point with no
+exception for a cell worked out from it. It remains what runs until the owner chooses.
+
+### Alternative B: The organizer's device says where it is
+
+A "use my location" button in the admin.
+
+**Rejected because:** a device's position is a person's position, which invariant 3 never takes,
+and an organizer creating an event is rarely standing at the venue.
+
+### Alternative C: The organizer types a latitude and longitude
+
+The event API already accepts `lat` and `lon`, and the poster card has two boxes for them.
+
+**Rejected as the main path because:** it asks an organizer for numbers they do not have, a
+mistyped digit moves the event to another state, and the handlers store the point. It stays as
+what automation can send until option 1 gives automation a cell to send.
+
+### Alternative D: Store Google's place ID in place of the point
+
+Google's page says a place ID may be kept without limit.
+
+**Rejected because:** the address still goes to Google, and a cell could be had from the ID only by
+asking Google again. It is the interaction the owner asked to avoid.
+
+## Consequences
+
+Of merging this record: none on behaviour. The lookup runs as it does today.
+
+### Positive
+
+- The owner's question of 2026-11-16 has a written answer with its costs, in the repository.
+- The four server calls to Google are listed in one place, with what each sends and keeps.
+
+### Negative
+
+- Every option that drops the lookup loses something an organizer has today: a place found from a
+  venue name with no further step. Option 2 gives a coarser answer; option 1 asks for a tap.
+- The kind of place (business or address) has no source once Google's answer is gone.
+
+### Neutral
+
+- Option 1 and the street archive are tied together. Staging draws no streets until the owner
+  loads the archive (OSE ADR-035).
+- Stored points are a separate clean-up from the choice of option, and wait on the same owner.
+
+## Not proven
+
+- Anything on staging. No option was built or run.
+- How many events, posters and sponsor drafts hold a point from Google, on staging or production.
+- Whether `GOOGLE_MAPS_API_KEY` is set on either environment, and so whether any lookup runs
+  there today.
+- That a res-9 cell can be picked by tap in the zoomed frame, and that the street layer is
+  legible enough at that size to pick by.
+- Which Census year our zip table is, and how many valid ZIP codes it lacks.
+- Google's terms beyond the one policy page; whether the Census API terms cover the Geocoder; how
+  long either Census or the OpenStreetMap Foundation keeps the text of a query.
+- The zip-spacing figures are one run of a script on our own table (nearest-neighbour distance
+  between centres). They say how far apart zip centres are, not how large each zip is.
+
+## Open, for the owner
+
+1. **Which options.** 1, 2, both, 3, or keep the Google lookup until counsel answers. Does
+   removing it wait for counsel or not?
+2. **If option 1:** cells only (1a), or a coordinate that is dropped (1b)? Res 7 only, or res 9
+   too? The second half is the open precision decision.
+3. **If option 2:** is the zip centre's hexagon an acceptable place for an event on the map? What
+   should an organizer see when a zip is not in the table?
+4. **If option 3:** which service, who reads its terms, and may a home address be sent to it?
+5. **Stored points.** Keep them, clear them once nothing reads them, or place events again. For
+   counsel: may a cell worked out from a Google point be kept after 30 days?
+6. **The kind of place** (business or address): asked of the organizer, or dropped?
+7. **The venue image:** removed, or redrawn from our own map (OSE-1985)?
+8. **The Directions links:** words only, or the point where one exists? Does the Google Maps link
+   stay beside the Apple Maps one?
+9. **The Calendar link:** stays as it is?
+10. **Poster placement and sponsor addresses** (G2, G3): the same answer as events, or their own?
+11. **The source gate and the secret:** add the gate with the removal, and remove
+    `GOOGLE_MAPS_API_KEY`?
+
+The location-precision review's own decisions stay open and are not restated as questions here.
+
+## Implementation Notes
+
+- Nothing is implemented. No ticket is created by this record.
+- If option 2 is accepted, the change sits in `lib/event-place.ts` (a second source beside
+  `lookUpEventPlace`), with `lib/zip-areas.ts` as it is.
+- If option 1 is accepted, the frame and the hexagon outlines already come from
+  `frameForCells` and the public area map's route (OSE ADR-033); the admin surface is new.
+- Tests that pin today's behaviour and would change: `tests/event-place.spec.ts`,
+  `tests/geo.spec.ts`, `tests/geocode-handler.spec.ts`, `tests/venue-image.spec.ts`,
+  `tests/geo-link-maps-not-h3.spec.ts`.
+
+## References
+
+- OSE ADR-033 (the public area map), OSE ADR-035 (one bucket), OSE ADR-036 (the base map).
+- `NOTICE.md`, "Questions for the owner", question 6.
+- `docs/positioning/MAPPING-COST-STRUCTURE.md` (what the Google calls cost).
+- The location-precision review of 2026-11-09 (its worksheet is not in this repository).
+- Pages read 2026-11-16: listed under "What the pages say".
+
+## Revisit Criteria
+
+- The owner rules on the precision decision: option 1's res-9 half is then settled or removed.
+- Counsel answers on Google's terms or on a candidate service's.
+- The street archive is loaded on staging: option 1 can then be tried.
+- OSE places events outside the United States: option 2's table does not reach them.
