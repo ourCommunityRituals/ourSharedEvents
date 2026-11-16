@@ -25,26 +25,8 @@
         color: var(--text);
         font: max(22px, 1.15vw) / 1.35 system-ui, -apple-system, sans-serif;
       }
-      .vh,
-      .skip-link {
-        position: absolute;
-        inset-inline-start: -9999px;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-      }
-      .skip-link:focus {
-        position: fixed;
-        inset-inline-start: 0;
-        top: 0;
-        width: auto;
-        height: auto;
-        padding: 0.5em 1em;
-        z-index: 9999;
-        background: var(--surface);
-        color: var(--text);
-        border-bottom: 2px solid var(--accent);
-      }
+      .vh, .skip-link { position: absolute; inset-inline-start: -9999px; width: 1px; height: 1px; overflow: hidden; }
+      .skip-link:focus { position: fixed; inset-inline-start: 0; top: 0; width: auto; height: auto; padding: 0.5em 1em; z-index: 9999; background: var(--surface); color: var(--text); border-bottom: 2px solid var(--accent); }
       .board {
         flex: 1;
         display: flex;

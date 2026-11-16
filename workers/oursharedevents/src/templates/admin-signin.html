@@ -152,22 +152,8 @@
       footer a:hover {
         color: var(--text);
       }
-      .skip-link {
-        position: absolute;
-        inset-inline-start: -9999px;
-      }
-      .skip-link:focus {
-        position: fixed;
-        top: 0;
-        inset-inline-start: 0;
-        padding: 0.5rem 1rem;
-        background: var(--surface);
-        color: var(--text);
-        font-size: 1rem;
-        z-index: 9999;
-        text-decoration: none;
-        border-bottom: 2px solid var(--accent);
-      }
+      .skip-link { position: absolute; inset-inline-start: -9999px; }
+      .skip-link:focus { position: fixed; top: 0; inset-inline-start: 0; padding: 0.5rem 1rem; background: var(--surface); color: var(--text); font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid var(--accent); }
       @media (max-width: 480px) {
         header {
           padding: 0.75rem 1rem;
