@@ -33,7 +33,8 @@
  *       weaker than it (a test below parses it and requires every alternative to be
  *       flagged here), plus: h3_index/h3_cell/cell_id, geohash, geom/geometry,
  *       coordinate(s), street(_address), address_line*, zip(_code), postal_code,
- *       poster_id, placement(_*). Any resolution of h3 as a COLUMN name is
+ *       poster_id, placement(_*), and a stall: booth(_*), stall(_*), hall_x,
+ *       hall_y (OSE-2004). Any resolution of h3 as a COLUMN name is
  *       forbidden (h3_res7 included: an export row carries `corridor_id`, never the
  *       cell under its own name). One exception, SELECT lists only: `h3_res7` may
  *       be READ, because handlers/bigquery.ts derives corridor_id from it
@@ -88,9 +89,13 @@ const GEOGRAPHY_REL = 'lib/export-geography.ts';
 
 // ── The forbidden set ───────────────────────────────────────────────────────
 
-/** Geography finer than the res-7 corridor. A superset of the runtime guard (tested). */
+/**
+ * Geography finer than the res-7 corridor, and a stall at a fair (a spot on a
+ * hall floor; OSE-2004: no stall-level row leaves unless OCR-154 names it). A
+ * superset of the runtime guard (tested).
+ */
 const SUB_CORRIDOR_RE =
-  /^(h3(_res\d+)?|h3_index|h3_cell|cell|cell_id|lat|lon|lng|latitude|longitude|geohash|geom|geometry|coordinates?|where_address|address|address_line\d*|street(_address)?|zip(_code)?|postal_code|poster_deployment_id|poster_id|placement(_.+)?|qr_token)$/;
+  /^(h3(_res\d+)?|h3_index|h3_cell|cell|cell_id|lat|lon|lng|latitude|longitude|geohash|geom|geometry|coordinates?|where_address|address|address_line\d*|street(_address)?|zip(_code)?|postal_code|poster_deployment_id|poster_id|placement(_.+)?|qr_token|booth(_.+)?|stall(_.+)?|hall_x|hall_y)$/;
 
 /** A place or a night, by name. `venue_id` alone is the event id / sentinel and is not here. */
 const VENUE_GRAIN_RE =

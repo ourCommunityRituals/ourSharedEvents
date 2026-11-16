@@ -1,0 +1,56 @@
+info:
+  name: OSE-2004 | sunny | counts | scans per stall on a fair with no scans read withheld, in the shape of the other count routes
+  type: http
+  seq: 125
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/booths/counts"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Named fields only, never a whole body (the staging edge adds per-request markup).
+        const b = res.getBody() || {};
+        const WITHHELD = { count: null, suppressed: true, floor: 5 };
+        const capped = !!b.plan;
+        test('OSE-2004 counts: 200', function () { expect(res.getStatus()).to.eql(200); expect(b.ok).to.eql(true); expect(b.event_id).to.eql(bru.getVar('boothFairId')); });
+        test('OSE-2004 counts: the declared keys only', function () {
+          const keys = ['booths', 'categories', 'event_id', 'no_stall', 'ok', 'status', 'total'].concat(capped ? ['plan'] : ['any_withheld']);
+          expect(Object.keys(b).sort()).to.eql(keys.sort());
+          (b.booths || []).forEach(function (s) {
+            expect(Object.keys(s).sort()).to.eql(['category', 'id', 'is_active', 'name', 'number'].concat(capped ? [] : ['scans']).sort());
+          });
+        });
+        test('OSE-2004 counts: a fair with no scans reads withheld everywhere, never 0', function () {
+          expect(b.total).to.eql(WITHHELD);
+          if (!capped) {
+            (b.booths || []).forEach(function (s) { expect(s.scans).to.eql(WITHHELD); });
+            (b.categories || []).forEach(function (c) { expect(c.scans).to.eql(WITHHELD); });
+            expect(b.no_stall.scans).to.eql(WITHHELD);
+            expect(b.any_withheld).to.eql(true);
+          }
+        });
+        test('OSE-2004 counts: the stall with the table card is on the list', function () {
+          expect((b.booths || []).map(function (s) { return s.id; })).to.include(bru.getVar('boothId'));
+        });
+        test('OSE-2004 counts: any_withheld is a boolean, never how many', function () {
+          if (!capped) expect(typeof b.any_withheld).to.eql('boolean');
+        });
+        const mine = (b.booths || []).filter(function (s) { return s.id === bru.getVar('boothId'); })[0];
+        bru.setVar('boothCountsTotal', JSON.stringify(b.total || null));
+        bru.setVar('boothCountsStall', JSON.stringify(mine && mine.scans !== undefined ? mine.scans : null));
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

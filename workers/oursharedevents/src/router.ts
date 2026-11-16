@@ -68,6 +68,7 @@
  *   POST   /api/v2/admin/events/:id/booths/bulk → add up to 200 booths, all or nothing; names every refused row (auth, audited)
  *   PUT    /api/v2/admin/events/:id/booths/:boothId → change a booth of this event (auth, audited)
  *   DELETE /api/v2/admin/events/:id/booths/:boothId → take a booth out of use; never removed, its placements stay (auth, audited)
+ *   GET    /api/v2/admin/events/:id/booths/counts → scans per stall, per category, for placements with no stall, and the fair's total, each a FlooredCount from the floored poster-hour cells; any_withheld is a boolean (auth, plan-capped like the poster list, OSE-2004)
  *   GET    /api/v2/admin/events/:id/preview → draft/ready pre-event page, HTML, no-store + noindex (auth, OSE-1355)
  *   GET    /api/v2/admin/events/:id/poster-preview → draft/ready poster, HTML, no-store + noindex (auth)
  *   GET    /api/v2/admin/events/:id/live → organizer's live view of one event, HTML, no-store + noindex (auth)
@@ -269,6 +270,7 @@ import {
   type PagesEnv,
 } from './handlers/pages';
 import { handleBoothPage } from './handlers/booth-page';
+import { handleAdminBoothCounts } from './handlers/booth-counts';
 import { handleBriefingPage } from './handlers/briefing';
 import { handleDemoIndex, handleDemoSite } from './handlers/demo';
 import {
@@ -1322,6 +1324,26 @@ export async function route(
       adminEventSeriesRejectMatch[1]
     );
     return response;
+  }
+
+  // GET /api/v2/admin/events/:id/booths/counts — scans per stall (OSE-2004, OSE
+  // ADR-034 decision 6). The event is brand-scoped by guardAdminObjectScope above.
+  // A stall's count is poster attribution, so it takes the poster list's plan cap
+  // (OSE-682), and a platform admin's read past the plan is audited the same way.
+  const adminBoothCountsMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/booths\/counts$/
+  );
+  if (adminBoothCountsMatch && method === 'GET') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    const who = await reportPlanFor(request, env);
+    const id = adminBoothCountsMatch[1];
+    const res = await handleAdminBoothCounts(request, env, id, who.plan);
+    if (!who.platform) return res;
+    const ref = _withReference(res, reqId);
+    _audit(ref.ref, 'READ_PAST_PLAN', _auditOutcome(res), 'event', id);
+    return ref.res;
   }
 
   // /api/v2/admin/events/:id/booths — a booth is part of a fair (OSE-1998, OSE ADR-034).

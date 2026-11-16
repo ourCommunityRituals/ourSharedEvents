@@ -18,12 +18,22 @@
  * it must move every route, or the harness proves nothing.
  *
  * Routes: the poster list, the pre-event card (activity + reach), /stats, the
- * event dashboard, the operations and corridor dashboards, and the sponsor's
- * page. Every key of every JSON answer is compared (bar `generated_at`).
+ * event dashboard, the operations and corridor dashboards, the scans per stall
+ * (OSE-2004), and the sponsor's page. Every key of every JSON answer is
+ * compared (bar `generated_at`).
+ *
+ * Stalls (OSE-2004): p1 is stall S1's code; p2 and p3 are stall S2's two codes,
+ * so S2 is a stall under the floor (3 in BASE). One scan added to it, or a
+ * second hour of 3 beside a 4 (7 in all, never 5 in one hour), moves nothing.
  *
  * @born-red OSE-1656 | method: run against the handlers on main at 43d593f
  *   (exact scans for the organizer): each lever moved 6 or 7 of the 7 routes
  *   (5 of 5 tests red, with the corridor case above) | date: 2026-10-08
+ * @born-red OSE-2004 | method: the stall route listed before it existed (it
+ *   answered 404: 7 of 7 red); then one fault at a time in lib/booth-counts.ts:
+ *   a stall's raw cells summed unfloored, 6 of 7 red (every under-floor lever
+ *   moved the stall route and nothing else, and the base check); the fair
+ *   total from the raw cells, 6 of 7 red | date: 2026-11-16
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -101,6 +111,7 @@ beforeAll(async () => {
   await db.batch([
     db.prepare('DELETE FROM scan_placement_events WHERE event_id = ?').bind(EVENT),
     db.prepare('DELETE FROM poster_deployments WHERE event_id = ?').bind(EVENT),
+    db.prepare('DELETE FROM event_booths WHERE event_id = ?').bind(EVENT),
     db.prepare('DELETE FROM sponsor_placement WHERE event_id = ?').bind(EVENT),
     db.prepare("DELETE FROM sponsor_business WHERE id = 'nbs-sponsor'"),
     db.prepare('DELETE FROM events WHERE id = ?').bind(EVENT),
@@ -114,13 +125,32 @@ beforeAll(async () => {
     )
     .bind(EVENT, BRAND, CELL_EVENT)
     .run();
+  // OSE-2004: two stalls. S1 has p1; S2 has p2 and p3, and sits under the floor.
+  for (const [id, number] of [
+    ['nbs-s1', 'S1'],
+    ['nbs-s2', 'S2'],
+  ])
+    await db
+      .prepare(
+        `INSERT INTO event_booths (id, event_id, number, name, category) VALUES (?, ?, ?, ?, 'craft')`
+      )
+      .bind(id, EVENT, number, `Stall ${number}`)
+      .run();
   for (const [p, cell] of Object.entries(POSTERS)) {
     await db
       .prepare(
-        `INSERT INTO poster_deployments (id, event_id, qr_token, is_active, h3_res7, placement_type, placement_label)
-         VALUES (?, ?, ?, 1, ?, ?, ?)`
+        `INSERT INTO poster_deployments (id, event_id, qr_token, is_active, h3_res7, placement_type, placement_label, booth_id)
+         VALUES (?, ?, ?, 1, ?, ?, ?, ?)`
       )
-      .bind(`nbs-${p}`, EVENT, `qrt-nbs-${p}`, cell, p === 'p1' ? 'venue' : 'community', p)
+      .bind(
+        `nbs-${p}`,
+        EVENT,
+        `qrt-nbs-${p}`,
+        cell,
+        p === 'p1' ? 'venue' : 'community',
+        p,
+        p === 'p1' ? 'nbs-s1' : 'nbs-s2'
+      )
       .run();
   }
   // A sponsor who has accepted: their page shows the event's pre-event reach.
@@ -163,6 +193,7 @@ const ROUTES: Array<{ name: string; read: () => Promise<string> }> = [
     `/api/v2/admin/events/${EVENT}/dashboard`,
     `/api/v2/admin/dashboards/operations?brand_id=${BRAND}`,
     `/api/v2/admin/dashboards/corridor?brand_id=${BRAND}`,
+    `/api/v2/admin/events/${EVENT}/booths/counts`,
   ].map((path) => ({
     name: path.replace(`/api/v2/admin/`, '').replace(EVENT, ':id'),
     read: async () => {
@@ -200,6 +231,12 @@ describe('OSE-1656 | one scan in a poster-hour under the floor moves nothing any
     ['a poster with 3 in one hour gains a fourth', { ...BASE, 'p2@H1': 4 }],
     ['a busy poster with 2 in another hour gains a third', { ...BASE, 'p1@H2': 3 }],
     ['a poster with none gains its first', { ...BASE, 'p3@H1': 1 }],
+    // OSE-2004: S2 (p2 + p3) is a stall under the floor.
+    ['a stall under the floor (S2) gains one scan on its second code', { ...BASE, 'p3@H2': 1 }],
+    [
+      'a stall of 4 + 3 in two hours (7 in all) reads as the stall of 3',
+      { ...BASE, 'p2@H1': 4, 'p3@H2': 3 },
+    ],
   ];
   for (const [name, world] of levers) {
     test(name, async () => {
@@ -224,5 +261,14 @@ describe('OSE-1656 | one scan in a poster-hour under the floor moves nothing any
     };
     expect(ops.reach.poster_scans).toEqual({ count: 7, suppressed: false, floor: 5 });
     expect(all['sponsor page reach line']).toContain('7 poster scans');
+    const stalls = JSON.parse(all['events/:id/booths/counts']) as {
+      booths: { number: string; scans: unknown }[];
+      total: unknown;
+    };
+    expect(stalls.booths.map((b) => [b.number, b.scans])).toEqual([
+      ['S1', { count: 7, suppressed: false, floor: 5 }],
+      ['S2', { count: null, suppressed: true, floor: 5 }],
+    ]);
+    expect(stalls.total).toEqual({ count: 7, suppressed: false, floor: 5 });
   });
 });

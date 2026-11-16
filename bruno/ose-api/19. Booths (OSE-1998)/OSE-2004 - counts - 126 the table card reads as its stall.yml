@@ -1,0 +1,36 @@
+info:
+  name: OSE-2004 | sunny | counts | the stall's code on the poster list reads the same as the stall
+  type: http
+  seq: 126
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothFairId}}/poster-deployments"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Named fields only: the one code's `scans`, against the stall's from seq 125.
+        const b = res.getBody() || {};
+        const card = (b.items || []).filter(function (p) { return p.id === bru.getVar('boothPlacementId'); })[0];
+        const stall = JSON.parse(bru.getVar('boothCountsStall') || 'null');
+        test('OSE-2004 counts: 200 and the table card is listed', function () { expect(res.getStatus()).to.eql(200); expect(!!card).to.eql(true); });
+        test('OSE-2004 counts: a fresh code and its stall read withheld alike', function () {
+          if (stall === null || !card || card.scans === undefined) return; // a plan without the paid report shows neither
+          expect(card.scans).to.eql(stall);
+          expect(card.scans).to.eql({ count: null, suppressed: true, floor: 5 });
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

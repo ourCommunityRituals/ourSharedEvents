@@ -22,6 +22,15 @@ docs: |-
   way, the next run makes new events; the leftovers are synthetic events that
   the daily staging rebuild clears.
 
+  Scans per stall (OSE-2004, seq 125 to 127 and 162): GET
+  /api/v2/admin/events/:id/booths/counts. On this fair, which has no scans,
+  every stall, category, "no stall" and the total read withheld
+  (`{count: null, suppressed: true, floor: 5}`), the table card on the poster
+  list reads as its stall, and the total is the event's scans on /stats. Each
+  check compares named fields, never a whole body. Mock-layer twins:
+  booth-counts-route.spec.ts, booth-counts.property.spec.ts and the stall
+  route in scan-counts-neighbour-floor.spec.ts.
+
   The requests run in `seq` order.
 
   Mock-layer twins: workers/oursharedevents/tests/event-booths.spec.ts,
