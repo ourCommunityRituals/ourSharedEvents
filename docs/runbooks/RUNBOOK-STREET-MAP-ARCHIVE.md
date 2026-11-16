@@ -99,8 +99,9 @@ between six and seven days after its date. By that one observation build
 `20261115` is offered through **2026-11-21 (UTC)** and is gone on 2026-11-22.
 The `measure` run, the owner's zoom decision ("Before the load", item 3) and
 the `load` all have to land inside that window. The `measure` run did, on
-2026-11-16 (run 43792020396); the zoom decision and the `load` are still to
-come. If they do not land in time, the run stops
+2026-11-16 (run 43792020396), and so did the zoom decision, the same day (a
+top zoom of 14); the `load` is still to come. If it does not land in time, the
+run stops
 at "The build is still offered at Protomaps" and the build is moved again, in
 one PR, as it was on 2026-11-16, and measured again.
 
@@ -278,30 +279,28 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
    `go-pmtiles_1.31.2_Windows_x86_64.zip`, which is what the owner read there on
    2026-11-11.
 
-3. **Measure first.** The build must still be offered, and then:
-
-   ```bash
-   pmtiles extract https://build.protomaps.com/20261115.pmtiles us-20261115.pmtiles --region=docs/runbooks/street-map-us-region.geojson --dry-run
-   ```
-
-   It works out the tiles and prints the archive size without fetching them. The
-   run stops here, with the size and the free disk in its summary, if the file
-   does not fit the runner's larger disk.
-
-   In `measure` mode only, the step then makes the same dry run once more, at
-   the deepest zoom the Worker reads (`MAX_ZOOM` in `lib/street-map.ts`; the
-   workflow carries it as `WORKER_TOP_ZOOM`, and a test holds the two together):
+3. **Measure first.** The build must still be offered. The cut keeps no tile
+   above the deepest zoom the Worker reads (owner, 2026-11-16; "Before the
+   load", item 3). That zoom is `MAX_ZOOM` in `lib/street-map.ts`; the workflow
+   carries it as `WORKER_TOP_ZOOM`, a test holds the two together, and this
+   step stops before any `pmtiles` command unless they agree on the commit the
+   run is on. Then the cut's own command, with `--dry-run`:
 
    ```bash
    pmtiles extract https://build.protomaps.com/20261115.pmtiles us-20261115.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14 --dry-run
    ```
 
-   The summary then gives both sizes side by side. It is a figure for the
-   owner's zoom decision ("Before the load", item 3) and nothing else: the fit
-   is judged on the first dry run, a `load` neither makes the second nor waits
-   on it, and the cut in step 5 keeps every zoom until a PR changes it. **In
+   It works out the tiles and prints the archive size without fetching them. The
+   run stops here, with the size and the free disk in its summary, if the file
+   does not fit the runner's larger disk. The fit is judged on the file a load
+   cuts: the dry run and the cut in step 5 take the same top zoom. **In
    `measure` mode the run ends here**, having used no bucket credential and
    written nothing.
+
+   Until 2026-11-16 the cut kept every zoom of the build, the fit was judged on
+   a dry run without a top zoom, and `measure` made the dry run above as a
+   second one, for the owner's decision. Run 43792020396 is the one run of that
+   shape that measured ("Staging, in order", step 2).
 
 4. **The key is free.** The bucket is listed, and the run stops if it already
    holds the key (asked before the cut, and again just before the upload):
@@ -313,11 +312,16 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
 5. **Cut the United States file:**
 
    ```bash
-   pmtiles extract https://build.protomaps.com/20261115.pmtiles us-20261115.pmtiles --region=docs/runbooks/street-map-us-region.geojson
+   pmtiles extract https://build.protomaps.com/20261115.pmtiles us-20261115.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14
    ```
 
    The command reads the build at Protomaps by byte range and writes only the
-   region's tiles, so the whole planet is never downloaded. The file is ours, so
+   region's tiles, so the whole planet is never downloaded. `--maxzoom=14`
+   keeps zoom 14 and every coarser zoom (the flag is inclusive), and leaves out
+   the build's deeper tiles, which the Worker never reads. The new file's
+   header then names 14 as its finest zoom (read from the tool's source at
+   `v1.31.2`, `pmtiles/extract.go`, on 2026-11-16), and the check in the next
+   step stops a file whose finest zoom is anything else. The file is ours, so
    Protomaps lists no checksum for it: the next step takes its SHA-256.
 
 6. **Check the file before it goes anywhere:**
@@ -330,9 +334,11 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
    (`lib/pmtiles.ts`, `lib/street-map.ts`), over the runner's disk instead of R2,
    and uploads nothing. The run goes on only if the command exits 0 **and** its
    last line is `PASS`. It checks that:
-   - the file is PMTiles v3, vector tiles, gzip, down to the zoom the zoomed
-     area reads. The reader unpacks **gzip** only; another compression would
-     draw hexagons only;
+   - the file is PMTiles v3, vector tiles, gzip, and its finest zoom is the
+     zoom the zoomed area reads, 14: no less, or the zoomed area has no tiles,
+     and no more, or the cut was made without its top zoom and holds tiles the
+     Worker never reads (owner, 2026-11-16). The reader unpacks **gzip** only;
+     another compression would draw hexagons only;
    - the file is whole: every section ends inside it and the last ends at its
      last byte, so a cut that stopped early fails;
    - every leaf directory can be read, the entries counted match the header, no
@@ -414,30 +420,42 @@ writes nothing and can run at any time.
      `MAP_TILES` binding and could have written the key. The workflow refuses to
      load when the key is already there; the owner looks at the bucket's object
      list as well.
-3. **Measure, and decide the zoom.** `measure` gives the file's size. The cut
-   keeps every zoom of the build, and the Worker reads zoom 14 at most; whether
-   to cut with a top zoom is decided before the first load, because a locked
+3. **Measure, and decide the zoom. Decided: the cut gets a top zoom of 14
+   (owner, 2026-11-16).** `measure` gives the file's size. The build holds
+   tiles deeper than the Worker reads (zoom 14 at most); whether
+   to cut with a top zoom was decided before the first load, because a locked
    object is not changed (finding R6). **Measured 2026-11-15 (run
    43753563640), on build `20261109`: 20 GB by dry run, with every zoom kept,
    and it fitted the runner** ("Staging, in order", step 2). That build is
    gone. How much of its 20 GB lay above zoom 14 was never measured: that run
    made one dry run, without a top zoom, so its size alone did not say what a
-   top zoom would save. A `measure` run now makes a second dry run at zoom 14
-   and prints both sizes ("What the workflow runs", step 3). Its first
+   top zoom would save. For one day a `measure` run made a second dry run at
+   zoom 14 and printed both sizes. Its first
    dispatch, run 43779110535 on 2026-11-16, stopped before the dry runs
    because build `20261109` was gone. **Measured 2026-11-16 (run 43792020396),
    on build `20261115`, the build named now: 20 GB by dry run with every zoom
    kept, and 9.7 GB with a top zoom of 14, about 10.3 GB less. The larger
    size fitted the runner.** Both are dry-run figures: the tile data alone,
    rounded, without the new directories, and not the size of a loaded file.
-   By those figures about half of the file is tiles above zoom 14, which the
-   Worker never reads. **The zoom decision is the owner's, and it is open.**
-   A top zoom is not a setting: the cut keeps every zoom until a PR changes
-   it in the workflow and in this runbook together ("What the workflow
-   runs", step 5), and that PR merges before the load. The decision, that PR
-   if the owner wants a top zoom, and the load have to land inside the
-   build's window, which ends **2026-11-21 (UTC)** ("Names", "The build's
-   window").
+   By those figures about half of the file was tiles above zoom 14, which the
+   Worker never reads. **On those figures the owner decided, the same day:
+   the cut keeps zoom 14 at most.** The dry run and the cut now both carry
+   `--maxzoom` ("What the workflow runs", steps 3 and 5), and the check stops
+   a file whose finest zoom is not 14 (step 6). What follows from it:
+   - the file a load cuts is the 9.7 GB one by dry run, not the 20 GB one,
+     and the fit is judged on it;
+   - a loaded object is locked, so if the Worker is ever to read deeper than
+     zoom 14, that is a new cut under a new dated key, not a change to this
+     one. `MAX_ZOOM` cannot be raised alone: the test that holds
+     `WORKER_TOP_ZOOM` to it fails, and the check refuses a file that stops
+     short of it;
+   - the next `measure` from `main`, after the PR that made this change
+     merges, is the first run of the new shape. It gives the size and the fit
+     of the file as it will be cut.
+
+   The load has to land inside the build's window, which ends **2026-11-21
+   (UTC)** ("Names", "The build's window").
+
 4. **The licence.** [`NOTICE.md`](../../NOTICE.md) lists the duties and what is
    NOT CLEAR. Staging is public, so the first load is the first public street:
    the owner answers its question 2 (before the load, or before production)
@@ -550,9 +568,17 @@ writes nothing and can run at any time.
      two privacy settings again, with the answers in step 1. All eight `LOAD:`
      steps were skipped: no bucket credential was used and nothing was
      written. The fit was judged on the larger size, and the run changed
-     nothing about what a load cuts. **Whether the cut gets a top zoom is the
-     owner's decision, before the first load** ("Before the load", item 3),
-     and build `20261115` is offered through 2026-11-21 (UTC).
+     nothing about what a load cuts. **On these figures the owner decided,
+     the same day, that the cut gets a top zoom of 14** ("Before the load",
+     item 3). Build `20261115` is offered through 2026-11-21 (UTC).
+
+   - **No run has measured in the shape the workflow has since that
+     decision:** one dry run, at the top zoom, with the fit judged on it, after
+     the step has held `WORKER_TOP_ZOOM` to the Worker's `MAX_ZOOM`. The next
+     `measure` from `main` is the first. The 9.7 GB above came from the same
+     command (`--maxzoom=14 --dry-run`, same build, same region), so that is
+     the size to expect, and the fit to expect is 10.8 GB needed against the
+     runner's free disk.
 
    - **What "20 GB" is.** A dry-run figure, for build `20261109` and again for
      build `20261115`: the tile data
@@ -562,7 +588,8 @@ writes nothing and can run at any time.
      build `20261115` with no tile above zoom 14: rounded to one decimal, so
      at most 9.75 GB. "About 10.3 GB less" is one rounded figure taken from
      the other, so it is not exact either. No file has been cut at either
-     size. The byte size of the loaded file comes from
+     size. Since the owner's decision of 2026-11-16 a load cuts the 9.7 GB
+     one. The byte size of the loaded file comes from
      the load run (step 5). A `measure` run does not show the cut itself or
      how long it takes, the check with the Worker's reader, or any rclone call
      that reaches the bucket: those are `LOAD:` steps and have never run.
@@ -728,8 +755,9 @@ dashboard.
 Build `20261109` fitted: on 2026-11-15 the `measure` run 43753563640 reported
 20 GB by dry run against 90.5 GB free ("Staging, in order", step 2). The build
 named now, `20261115`, fitted too: on 2026-11-16 the `measure` run 43792020396
-reported 20 GB by dry run with every zoom kept, against 90.5 GB free (and
-9.7 GB with a top zoom of 14; the fit is judged on the larger size). GitHub documents
+reported 20 GB by dry run with every zoom kept, against 90.5 GB free, and
+9.7 GB with a top zoom of 14. Since 2026-11-16 the cut has that top zoom, so
+the file to fit is the smaller one, and the fit is judged on it. GitHub documents
 14 GB of storage for a standard runner and promises no more, so every run
 reads what the runner really has, and the answer can change with the runner
 image or the build. If a run says the file does not fit, the choices are the
@@ -941,7 +969,10 @@ stopped at the build check, because build `20261109` was gone; its fourth
 green through both dry runs and the fit. So the
 downloads, the disk read, the dry run's last line and the fit have been seen
 working on a runner twice, once on each build, and the
-second dry run, at the Worker's top zoom, once, on the build named now. No
+dry run at the Worker's top zoom once, on the build named now, as a second
+dry run that judged nothing. Since 2026-11-16 that dry run is the only one and
+the fit is judged on it, after a step that holds the workflow's top zoom to
+the Worker's; no run has been made in that shape yet. No
 `LOAD:` step has run anywhere: not the bucket listing, the cut, the check or
 the upload. The workflow's decisions (the names, the bucket's privacy, the size
 against the disk, the key being free, the listed size) are tested on the faults
@@ -1011,7 +1042,8 @@ Still unmeasured:
 - the United States file itself: its byte size (the dry runs gave 20 GB of
   tile data, rounded, with every zoom kept, for build `20261109` on
   2026-11-15 and for build `20261115`, the one named now, on 2026-11-16, and
-  9.7 GB for build `20261115` with a top zoom of 14; "Staging, in order",
+  9.7 GB for build `20261115` with a top zoom of 14, which is the file a load
+  cuts since 2026-11-16; "Staging, in order",
   step 2; no file has been cut at either size), how long the cut takes on a
   runner and how much
   memory it needs there, how its directories are laid out (how many leaf

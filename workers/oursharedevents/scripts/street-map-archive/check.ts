@@ -7,7 +7,8 @@
 //
 // WHAT IT CHECKS
 //   1. Header: PMTiles v3, vector tiles, a compression the reader unpacks, and
-//      the zoom the zoomed area reads.
+//      a finest zoom that is the zoom the zoomed area reads: no less, and no
+//      more (the cut's top zoom, owner 2026-11-16).
 //   2. Whole file: every section ends inside the file and the last one ends at
 //      its last byte (a cut or copy that stopped early fails here).
 //   3. Directories: every leaf directory is read and counted. The counts must
@@ -242,6 +243,14 @@ export async function checkArchive(
   }
   if (h.maxZoom < MAX_ZOOM) {
     bad(`header: finest zoom is ${h.maxZoom}; the zoomed area reads zoom ${MAX_ZOOM}`);
+  }
+  // Owner, 2026-11-16: the cut keeps no tile above the deepest zoom the Worker
+  // reads (`pmtiles extract --maxzoom`, which writes that zoom into the header).
+  // A loaded object is locked, so a file cut without its top zoom stops here.
+  if (h.maxZoom > MAX_ZOOM) {
+    bad(
+      `header: finest zoom is ${h.maxZoom}; the cut keeps zoom ${MAX_ZOOM} at most, and the Worker reads no deeper`
+    );
   }
 
   // 2. Whole file.
