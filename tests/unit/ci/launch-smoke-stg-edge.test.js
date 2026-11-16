@@ -17,6 +17,14 @@
  *   - `return;` after the note removed                         -> "the edge's answer is noted…" fails
  *   - noteIfEdgeAnswered made to return null after its note    -> "a noted challenge…" fails
  *   - edgeHeaderSent made to read the environment's token      -> "what was sent is read from the request" fails
+ *
+ * Two more reads of the same spec, born red 2026-11-16, one fault at a time:
+ *   - `throwIfEdgeAnswered(draftPublic, …)` removed, or moved below the 404 check -> "the draft's first read…" fails
+ *   - `headers: edgeHeaders()` removed from the scan read                         -> "the scan read sends…" fails
+ *   - `[302, 403]` put back                                                       -> "the scan read…: no 403…" fails
+ *   - the `return;` after the scan note removed                                   -> "the scan read…: noted…" fails
+ *   - the redirect checks put back inside `if (res.status() === 302)`             -> "the scan read…: no 403…" fails
+ *   - the poster token written into the note                                      -> "the scan read…: noted…" fails
  * The helper was also run in Chromium against a stand-in edge (403 with
  * cf-mitigated on /events/ unless the header matches): the right token reached
  * the page and the request showed the header; no route, and another token, were
@@ -130,5 +138,51 @@ describe('the helper notes a challenge and never passes it', () => {
     );
     expect(sent).toContain('await res.request().allHeaders()');
     expect(sent).not.toMatch(/edgeHeaders|process\.env/);
+  });
+});
+
+describe('the other two reads of the spec name the edge too', () => {
+  test("the draft's first read fails by name when the edge answers, before the 404 check", () => {
+    const body = testBody(PAGE_TESTS[1].title);
+    const read = body.indexOf('const draftPublic = await page.goto(');
+    const stop = body.indexOf('throwIfEdgeAnswered(draftPublic, `/events/${draftEventId}`);');
+    const status = body.indexOf(
+      "expect(draftPublic?.status(), 'draft is not public before go-live').toBe(404);"
+    );
+    expect(read).toBeGreaterThan(-1);
+    expect(stop).toBeGreaterThan(read);
+    expect(status).toBeGreaterThan(stop);
+  });
+
+  const SCAN =
+    'poster scan route replays to /events/:id with type and deployment context (OSE-1359)';
+
+  test('the scan read sends the header itself', () => {
+    const body = testBody(SCAN).replace(/\s+/g, ' ');
+    expect(body).toContain('{ maxRedirects: 0, headers: edgeHeaders() }');
+  });
+
+  test('the scan read: an edge answer is noted with what was sent, and the test stops', () => {
+    const body = testBody(SCAN)
+      .replace(/^\s*\/\/.*$/gm, '')
+      .replace(/\s+/g, ' ');
+    const note = body.indexOf('if (edgeChallenged(res.status(), res.headers())) {');
+    const status = body.indexOf(
+      "expect(res.status(), 'the Worker answers the scan route with a redirect').toBe(302);"
+    );
+    expect(note).toBeGreaterThan(body.indexOf('await request.get('));
+    expect(status).toBeGreaterThan(note);
+    expect(body.slice(note, status).trim()).toBe(
+      "if (edgeChallenged(res.status(), res.headers())) { const challenged = noteEdgeChallenge('/q/token?type=checkin', process.env, { headerSent: Boolean(edgeHeaders()['X-OCR-CI']), }); test.info().annotations.push({ type: 'edge-challenge', description: challenged }); return; }"
+    );
+    // The poster token is not written anywhere.
+    expect(body).not.toMatch(/noteEdgeChallenge\([^)]*qrToken/);
+  });
+
+  test('the scan read: no 403 is taken for an answer, and nothing hangs on the status', () => {
+    const code = testBody(SCAN).replace(/^\s*\/\/.*$/gm, '');
+    expect(code).not.toMatch(/403/);
+    expect(code).not.toMatch(/test\.skip|test\.fixme|expect\.soft/);
+    expect(code).not.toMatch(/if \([^)]*res\.status\(\) ===/);
   });
 });

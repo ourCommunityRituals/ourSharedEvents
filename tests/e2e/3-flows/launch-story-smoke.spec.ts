@@ -9,7 +9,7 @@
 
 import { test, expect } from '@playwright/test';
 import { edgeChallenged, edgeHeaders, noteEdgeChallenge } from '../../../scripts/ci/edge-read.mjs';
-import { noteIfEdgeAnswered, passStgEdge } from '../helpers/stg-edge';
+import { noteIfEdgeAnswered, passStgEdge, throwIfEdgeAnswered } from '../helpers/stg-edge';
 
 const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.X_OCR_INTERNAL || '';
@@ -244,6 +244,9 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     const draftPublic = await page.goto(`${BASE_URL}/events/${draftEventId}`, {
       waitUntil: 'domcontentloaded',
     });
+    // A challenge here was never a pass (403 is not 404), and still is not: it
+    // fails, now by name, so the red says "the edge" and not "expected 404".
+    throwIfEdgeAnswered(draftPublic, `/events/${draftEventId}`);
     expect(draftPublic?.status(), 'draft is not public before go-live').toBe(404);
     expect(page.url()).toContain(`/events/${draftEventId}`);
     expect(await page.locator('body').textContent()).toContain("couldn't find");
@@ -423,21 +426,28 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     const deployment = await createPosterDeployment(request, publicEventId, 'scan-route');
     posterDeploymentId = deployment.id;
 
+    // A request read, so it passes the CI header itself (the stg skip rule covers
+    // /q/). An answer from the edge is not the Worker's: it is noted, shown on the
+    // test and the test stops, and it fails when CALENDAR_EDGE_STRICT is 1. Any
+    // other answer is the Worker's own, and only 302 will do.
     const res = await request.get(
       `${BASE_URL}/q/${encodeURIComponent(deployment.qrToken)}?type=checkin`,
-      { maxRedirects: 0 }
+      { maxRedirects: 0, headers: edgeHeaders() }
     );
-    expect(
-      [302, 403],
-      'scan route is handled by Worker OR blocked by the staging WAF edge'
-    ).toContain(res.status());
-    if (res.status() === 302) {
-      const location = res.headers()['location'] ?? '';
-      expect(location, 'good token must deep-link to the event page, not fallback /').toContain(
-        `/events/${publicEventId}`
-      );
-      expect(location).toContain('type=checkin');
-      expect(location).toContain(`deployment=${deployment.id}`);
+    if (edgeChallenged(res.status(), res.headers())) {
+      // The poster token stays out of the log: the note names the route.
+      const challenged = noteEdgeChallenge('/q/token?type=checkin', process.env, {
+        headerSent: Boolean(edgeHeaders()['X-OCR-CI']),
+      });
+      test.info().annotations.push({ type: 'edge-challenge', description: challenged });
+      return;
     }
+    expect(res.status(), 'the Worker answers the scan route with a redirect').toBe(302);
+    const location = res.headers()['location'] ?? '';
+    expect(location, 'good token must deep-link to the event page, not fallback /').toContain(
+      `/events/${publicEventId}`
+    );
+    expect(location).toContain('type=checkin');
+    expect(location).toContain(`deployment=${deployment.id}`);
   });
 });
