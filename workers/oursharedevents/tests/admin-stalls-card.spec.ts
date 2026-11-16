@@ -59,19 +59,31 @@ function card(): string {
   return ADMIN_HTML.slice(start, end);
 }
 
-/** The card's own script, without its <script> tags. */
-function scriptText(): string {
+/**
+ * The card is markup followed by one inline script. The tag markers are
+ * found once, here, so nothing below builds a string around a script tag.
+ */
+const SCRIPT_OPEN = '<script>';
+const SCRIPT_CLOSE = '</script>';
+
+function cardParts(): { markup: string; script: string } {
   const c = card();
-  const open = c.indexOf('<script>');
-  const close = c.indexOf('</script>', open);
-  expect(open, "the card's script").toBeGreaterThan(-1);
-  return c.slice(open + '<script>'.length, close);
+  const openAt = c.indexOf(SCRIPT_OPEN);
+  expect(openAt, "the card's script").toBeGreaterThan(-1);
+  const bodyAt = openAt + SCRIPT_OPEN.length;
+  const closeAt = c.indexOf(SCRIPT_CLOSE, bodyAt);
+  expect(closeAt, "the card's script closes").toBeGreaterThan(openAt);
+  return { markup: c.substring(0, openAt), script: c.substring(bodyAt, closeAt) };
+}
+
+/** The card's own script, without its script tags. */
+function scriptText(): string {
+  return cardParts().script;
 }
 
 /** The card's markup only. */
 function markup(): string {
-  const c = card();
-  return c.slice(0, c.indexOf('<script>'));
+  return cardParts().markup;
 }
 
 function pageCss(): string {
