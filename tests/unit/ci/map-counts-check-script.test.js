@@ -15,7 +15,8 @@
  * and a moved count is often under 5).
  *
  * BORN RED (2026-11-16): one fault at a time in the script, both map-counts test
- * files run, the fault taken out. Every test here failed under at least one:
+ * files run, the fault taken out. Every test here failed under at least one.
+ * F1 to F8 were run on the first version of this change (a8fa7c8):
  *   F1 `return 1` after the differences -> `return 0`
  *      -> a moved tap, a moved share open, a scan row, an answer that cannot be
  *         read, a number given as text (5 red)
@@ -33,6 +34,17 @@
  *   F8 no row reads as no difference
  *      -> "an answer that cannot be read…" and the pure "unknown is never
  *         green" test (2 red)
+ *   F5 above was the first version's whole echo. An independent review then found
+ *   that a failed read could still print the row in other shapes. Those tests
+ *   were added with the line filter, and seen failing on (one at a time):
+ *   G0 the script as it was before the filter
+ *      -> "a failed read prints no count, whatever shape…" (1 red)
+ *   G1 a failure returns wrangler's own status, not 1
+ *      -> "a failure is 1 whatever wrangler said…" (1 red; with that fault npx
+ *         not found or killed by a signal exits 0)
+ *   G2 heldBack keeps every line -> both held-back tests (2 red)
+ *   G3 stderr written unfiltered -> "a failed read prints no count…" (1 red)
+ *   G4 the number-value pattern dropped -> "a failed read prints no count…" (1 red)
  */
 const fs = require('fs');
 const os = require('os');
@@ -44,6 +56,7 @@ const SCRIPT = path.join(ROOT, 'scripts/ci/map-counts-check.mjs');
 
 let m;
 let bin;
+let empty;
 beforeAll(async () => {
   m = await import('../../../scripts/ci/map-counts-check.mjs');
   // A stand-in for `npx`: it records its arguments and answers with what the
@@ -57,6 +70,7 @@ beforeAll(async () => {
       'fs.writeFileSync(process.env.FAKE_ARGS_FILE, JSON.stringify(process.argv.slice(2)));',
       "process.stdout.write(process.env.FAKE_STDOUT || '');",
       "process.stderr.write(process.env.FAKE_STDERR || '');",
+      'if (process.env.FAKE_SIGNAL) process.kill(process.pid, process.env.FAKE_SIGNAL);',
       "process.exit(Number(process.env.FAKE_STATUS || '0'));",
       '',
     ].join('\n')
@@ -65,10 +79,12 @@ beforeAll(async () => {
   fs.writeFileSync(sh, '#!/bin/sh\nexec node "$(dirname "$0")/fake-wrangler.cjs" "$@"\n');
   fs.chmodSync(sh, 0o755);
   fs.writeFileSync(path.join(bin, 'npx.cmd'), '@node "%~dp0fake-wrangler.cjs" %*\r\n');
+  empty = fs.mkdtempSync(path.join(os.tmpdir(), 'map-counts-no-npx-'));
 });
 
 afterAll(() => {
   if (bin) fs.rmSync(bin, { recursive: true, force: true });
+  if (empty) fs.rmSync(empty, { recursive: true, force: true });
 });
 
 /** wrangler d1 execute --json output holding one result row. */
@@ -76,18 +92,20 @@ const answer = (row) =>
   JSON.stringify([{ results: [row], success: true, meta: { rows_read: 1 } }], null, 2);
 
 /** Run the script as CI does, with the stand-in answering. */
-function run({ stdout = '', stderr = '', status = 0, argv = [] } = {}) {
+function run({ stdout = '', stderr = '', status = 0, signal = '', argv = [], noNpx = false } = {}) {
   const argsFile = path.join(bin, `args-${Math.random().toString(36).slice(2)}.json`);
   const r = spawnSync(process.execPath, [SCRIPT, ...argv], {
     cwd: ROOT,
     encoding: 'utf8',
     env: {
       ...process.env,
-      PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+      // noNpx: a PATH with no npx on it at all, so the spawn itself fails.
+      PATH: noNpx ? empty : `${bin}${path.delimiter}${process.env.PATH}`,
       FAKE_ARGS_FILE: argsFile,
       FAKE_STDOUT: stdout,
       FAKE_STDERR: stderr,
       FAKE_STATUS: String(status),
+      FAKE_SIGNAL: signal,
     },
   });
   const args = fs.existsSync(argsFile) ? JSON.parse(fs.readFileSync(argsFile, 'utf8')) : null;
@@ -164,6 +182,40 @@ describe('map-counts-check.mjs as a process', () => {
     const r = run({ stdout: '{"error":{"text":"no such table: shortlinks"}}', status: 1 });
     expect(r.code, r.out).toBe(1);
     expect(r.out).toContain('no such table: shortlinks');
+  });
+
+  test('a failure is 1 whatever wrangler said: status 2, killed by a signal, npx not found', () => {
+    const cases = [
+      { status: 2, stderr: 'wrangler: bad flag\n' },
+      { signal: 'SIGKILL', stdout: answer({ ...m.EXPECTED }) },
+      { noNpx: true },
+    ];
+    for (const c of cases) {
+      const r = run(c);
+      expect(r.code, `${JSON.stringify(c)}\n${r.out}`).toBe(1);
+      expect(r.out).toContain('the D1 read failed, so nothing was checked');
+    }
+  });
+
+  test('a failed read prints no count, whatever shape its output has', () => {
+    const row = { ...m.EXPECTED, taps_a: 1043, tap_days: 3, share_opens: 4, scans: 2 };
+    const full = answer(row);
+    const shapes = {
+      'cut off mid-row': { stdout: JSON.stringify([{ results: [row] }]).slice(0, 60) },
+      'a row, then a line of text': { stdout: `${full}\nwrangler: the read was cut short` },
+      'a row on stderr': { stderr: full },
+      'a row on one line, on stderr': { stderr: JSON.stringify([{ results: [row] }]) },
+      'two JSON documents': { stdout: `${full}\n${JSON.stringify({ error: { text: 'later' } })}` },
+      'pretty values with no key on the line': { stdout: '[\n  1043,\n  3\n]' },
+    };
+    for (const [name, shape] of Object.entries(shapes)) {
+      const r = run({ ...shape, status: 1 });
+      expect(r.code, name).toBe(1);
+      for (const key of Object.keys(row)) expect(r.out, name).not.toContain(key);
+      // No number at all: names that hold a digit (a ticket id, "D1") aside.
+      expect(r.out.replace(/OSE-\d+|\bD1\b/g, ''), `${name}\n${r.out}`).not.toMatch(/\d/);
+      expect(r.out, name).toContain('the D1 read failed');
+    }
   });
 
   test('nothing printed carries a number it read (pass and fail)', () => {

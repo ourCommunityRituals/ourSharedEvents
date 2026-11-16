@@ -6,7 +6,7 @@ loops_run: 4
 team: Dr of Security, Sr Data Scientist, Lead Backend Architect, Sr Automation QA, Product Owner
 gate: human (owner decision)
 system_score: 94.75
-assessment_confidence: 85
+assessment_confidence: 80
 subject: scripts/ci/map-counts-check.mjs and its wiring on main at 6911a06; the fix in draft PR 1341
 ---
 
@@ -16,13 +16,13 @@ Linear OSE-2071, the last item between OSE-1896 and Done.
 
 ## Verdict
 
-|                           |                                                                                                                                                                                                    |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Recommendation**        | **Option A: keep the D1 read in CI as the proof for share opens and scans, and reword OSE-1896's line to say so.** Do not build an admin read of share opens for this test.                        |
-| **System score**          | **94.75%** (the count check as it stands with PR 1341). Two open rows: the scan number cannot move with this fixture (R4), and the CI token's reach cannot be seen from the repository (R5).       |
-| **Security Critical**     | None.                                                                                                                                                                                              |
-| **Assessment confidence** | **85%.** Acceptance line (a) is seen in CI logs, and the born-red list is seen in local runs. The share-open and scan reasoning is read from source. The environment-level secrets cannot be seen. |
-| **Gate**                  | **Human gate.** The decision is the owner's. A CCR score is a signal, never permission.                                                                                                            |
+|                           |                                                                                                                                                                                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Recommendation**        | **Option A: keep the D1 read in CI as the proof for share opens and scans, and reword OSE-1896's line to say so.** Do not build an admin read of share opens for this test.                                                                                       |
+| **System score**          | **94.75%** (the count check as it stands with PR 1341). Two open rows: the scan number cannot move with this fixture (R4), and the CI token's reach cannot be seen from the repository (R5).                                                                      |
+| **Security Critical**     | None.                                                                                                                                                                                                                                                             |
+| **Assessment confidence** | **80%.** Down from 85 after loop 3 showed the first fix was incomplete. Acceptance line (a) is seen in CI logs, and the born-red list is seen in local runs. The share-open and scan reasoning is read from source. The environment-level secrets cannot be seen. |
+| **Gate**                  | **Human gate.** The decision is the owner's. A CCR score is a signal, never permission.                                                                                                                                                                           |
 
 ## What was reviewed
 
@@ -78,6 +78,8 @@ Linear OSE-2071, the last item between OSE-1896 and Done.
 | F6 the success path returns 1              | 1                                                                       |
 | F7 a difference line names the value read  | 4                                                                       |
 | F8 no row reads as no difference           | 2                                                                       |
+
+Loop 3 then added two tests: a failure exits 1 whatever wrangler did, and a failed read prints no count in any output shape. Five more faults (G0 to G4) turned them red; they are listed in loop 3 below.
 
 These are local runs. PR 1341's CI is the standing proof.
 
@@ -206,7 +208,40 @@ These are local runs. PR 1341's CI is the standing proof.
 
 ### Loop 3: confirmation pass (an independent Dr of Security read of the diff, plus PR CI)
 
-See "Loop 3 result" below.
+A fresh Dr of Security read of the diff, given the code and not this worksheet. It ran its own faults in a scratch copy.
+
+**Critical:** does the fix really keep every count out of the log, and does every failure really exit 1?
+
+**Conservative:** no, on both counts.
+
+- **R7 (High, verified at run time).** A failed read could still print the row. The first fix held output back only when `firstRow` parsed a whole row. Four shapes printed counts:
+  - truncated JSON
+  - a row followed by a line of text
+  - a row on stderr, which was written unfiltered
+  - a row followed by a second JSON document
+- **R8 (Medium, verified).** Nothing pinned the failure exit to 1. Mutant M2, `return r.status`, kept every test green. With M2, the script exits 0 when `npx` is missing or is killed by a signal: a green step with no read.
+- Also checked, and holding:
+  - No path exits 0 without all six numbers equal to the seed.
+  - The pass path and the clean-failure path print no count.
+  - Its faults M1, M3 and M4 were caught.
+  - A noexec temp dir would fail red, not green (Low, inferred; `ubuntu-24.04` does not mount `/tmp` noexec).
+
+**Reactive correction (second commit of PR 1341):**
+
+- Wrangler's output after a failure is now filtered line by line (`heldBack`). Any line that names a count, holds `"results"` or carries a number value is left out, on stdout and stderr both.
+- The failure exit is always 1, and a spawn error is named.
+- Two new tests:
+  - "a failure is 1 whatever wrangler said": status 2, killed by a signal, npx not found
+  - "a failed read prints no count, whatever shape its output has": six shapes, including the four above
+- Born red, one fault at a time:
+  - G0, the script before the filter: 1 red
+  - G1, which is M2: 1 red
+  - G2, the filter keeps every line: 2 red
+  - G3, stderr unfiltered: 1 red
+  - G4, the number-value pattern dropped: 1 red
+- Root unit tests: 2749 passed, 0 failed. CI's lint command exits 0.
+
+**Recursive:** the score fell, which is the protocol working. The first fix was incomplete, and loop 2 had counted it at half credit. Loop 3 is **73.6** after the correction, with the fixes at half until CI runs them.
 
 ### Loop 4: the recommendation under attack (lead)
 
@@ -219,13 +254,20 @@ The case for B, at its strongest, and the answer to each point:
 | Holding a D1 credential in CI is a risk.                                    | It is already held, by every seed step. A adds nothing.                                                                                                               |
 | Organizers may want share opens one day.                                    | Then build B for them, as its own story. It still would not replace the D1 check.                                                                                     |
 
-The recommendation stands. Score unchanged.
+The recommendation stands.
+
+**Recursive:** with PR 1341's CI green on its head, R1, R2, R3, R7 and R8 are closed. The score is **94.75**.
 
 ## Findings register
 
-Weights: Medium 5, Low 2. All findings sit in CI against staging (×0.75). All were found in loop 1 (×1.0). R1 and R2 are causally linked, so their sum is multiplied by 1.5.
+Weights: High 10, Medium 5, Low 2. All findings sit in CI against staging (×0.75).
 
-| #   | Finding                                                                                                                                                | Base | Evidence                                                         | Loop 1       | Loop 2                    | Loop 3 (after PR CI) |
+- R1 to R6 were found in loop 1 (×1.0).
+- R7 and R8 were found in loop 3 (×1.5).
+- R1 and R2 are causally linked (×1.5 on their sum). From loop 3, R1, R2 and R7 are one family (×2.0 on their sum).
+- A fix seen in local runs but not yet in CI counts at half.
+
+| #   | Finding                                                                                                                                                | Base | Evidence                                                         | Loop 1       | Loop 2                    | Loop 4 (after PR CI) |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- | ---------------------------------------------------------------- | ------------ | ------------------------- | -------------------- |
 | R1  | The script printed every number it read to a public log, and a moved value exactly                                                                     | M 5  | verified: job logs above; `map-counts-check.mjs:117,119` on main | R1+R2: 7.875 | 3.94 (fixed, CI pending)  | 0 if CI green        |
 | R2  | On a wrangler failure, its output was echoed whole, even with a result row in it                                                                       | L 2  | verified from code, `:110`                                       | (in R1+R2)   | (in R1+R2)                | 0 if CI green        |
@@ -233,12 +275,16 @@ Weights: Medium 5, Low 2. All findings sit in CI against staging (×0.75). All w
 | R4  | The scan number cannot move with this fixture (no placement; queue delay). The request watch is what keeps `/q` out                                    | M 5  | verified from code: `scan-buffer.ts:108`, the seed               | 3.75         | 3.75                      | 3.75 (open, owner)   |
 | R5  | `CLOUDFLARE_API_TOKEN_OSE` can write to D1, and production deploy uses the same name. Whether production has its own environment secret cannot be seen | L 2  | inferred: workflow `:2770`, `:2844`                              | 1.5          | 1.5                       | 1.5 (open, owner)    |
 | R6  | The T2 and T4 legs overlap, so a re-seed hides a moved count                                                                                           | M 5  | refuted in loop 2                                                | 3.75         | 0                         | 0                    |
+| R7  | The first fix: a failed read still printed the row when wrangler's output was truncated, followed by text, on stderr, or two documents                 | H 10 | verified at run time (loop 3 probes A, B, C, E)                  | n/a          | n/a                       | 0 if CI green        |
+| R8  | The failure exit was not pinned to 1; `return r.status` survived and exits 0 when npx is missing or killed                                             | M 5  | verified (mutant M2)                                             | n/a          | n/a                       | 0 if CI green        |
 
 **Score arithmetic:**
 
 - Loop 1: 100 − (7.875 + 3.75 + 3.75 + 1.5 + 3.75) = **79.4**
 - Loop 2: 100 − (3.94 + 1.875 + 3.75 + 1.5) = **88.9**
-- Loop 3, with PR 1341 green: 100 − (3.75 + 1.5) = **94.75**. Below 95, so the human gate.
+- Loop 3, as found: R7 = 10 × 1.5 × 0.75 = 11.25 and R8 = 5 × 1.5 × 0.75 = 5.625. The family R1 + R2 + R7 = (1.875 + 0.75 + 11.25) × 2.0 = 27.75. So 100 − (27.75 + 1.875 + 5.625 + 3.75 + 1.5) = **59.5**.
+- Loop 3, after the correction (fixes at half until CI): the family = (1.875 + 0.75 + 5.625) × 2.0 = 16.5. So 100 − (16.5 + 1.875 + 2.81 + 3.75 + 1.5) = **73.6**.
+- Loop 4, with PR 1341's CI green: 100 − (3.75 + 1.5) = **94.75**. Below 95, so the human gate.
 
 ## What must be true before OSE-1896 goes to Done
 
@@ -258,6 +304,6 @@ Weights: Medium 5, Low 2. All findings sit in CI against staging (×0.75). All w
 3. **The scan number (R4):** accept it, since the walk's request watch and both sweeps keep `/q` out, or open a ticket to seed a poster placement so the number can move? The queue delay makes that ticket larger than it looks.
 4. **Not needed for the decision (R5):** is `CLOUDFLARE_API_TOKEN_OSE` scoped to staging D1, or shared with production? It is a Cloudflare and GitHub settings question.
 
-## Loop 3 result
+## PR 1341 CI
 
-(Filled after the independent read and PR 1341's CI.)
+See the Linear comment on OSE-2071 for the run id on the PR's final head. Loop 4's 94.75 holds only when that run is green.

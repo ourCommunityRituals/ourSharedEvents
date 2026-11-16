@@ -23,8 +23,10 @@
  * What it prints (OSE-2071): the repository is public, so its CI logs are too.
  * The numbers are compared here and never printed: a line says which number
  * moved, or that it could not be read, and never what it read. The seeded
- * values are in the seed file. When wrangler fails, its output is echoed only
- * if it holds no result row. Never who, only how many; and under 5 not even that.
+ * values are in the seed file. When wrangler fails, its output is echoed line by
+ * line, and a line that names a count or carries a number value is held back
+ * (heldBack below): a failed read can still have printed part of the row.
+ * Never who, only how many; and under 5 not even that.
  */
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -95,6 +97,25 @@ export function differences(row, expected = EXPECTED) {
     );
 }
 
+const COUNT_LINE = new RegExp(
+  [...Object.keys(EXPECTED), '"results"', String.raw`:\s*-?\d`, String.raw`^\s*-?\d+,?\s*$`].join(
+    '|'
+  )
+);
+
+/**
+ * Wrangler's output after a failed read, safe for a public log: every line that
+ * names one of the counts, holds "results", or carries a number value is left
+ * out. What is left is the error text (for example "no such table: shortlinks").
+ * @param {string | null | undefined} text
+ * @returns {{ kept: string, held: boolean }}
+ */
+export function heldBack(text) {
+  const lines = String(text ?? '').split('\n');
+  const kept = lines.filter((line) => !COUNT_LINE.test(line));
+  return { kept: kept.join('\n'), held: kept.length < lines.length };
+}
+
 /** Where the read goes, in words for the log. */
 export function whereRead(argv) {
   return argv.includes('--local') ? 'the local D1' : 'staging D1 (--env staging --remote)';
@@ -124,12 +145,18 @@ function main(argv) {
     encoding: 'utf8',
     shell: win,
   });
+  // Any status but 0 is red, including none at all: npx not found, or killed by
+  // a signal (status null). Always 1, never wrangler's own status.
   if (r.status !== 0) {
-    // Wrangler's own error, to say why. Output that holds a result row is held
-    // back: it would print the counts.
-    if (firstRow(r.stdout) === null) process.stdout.write(r.stdout ?? '');
-    else console.log('map counts: wrangler output held back (it holds a result row)');
-    process.stderr.write(r.stderr ?? '');
+    // Wrangler's own error, to say why, without any line that could print a count.
+    const out = heldBack(r.stdout);
+    const err = heldBack(r.stderr);
+    if (out.kept.trim()) console.log(out.kept);
+    if (err.kept.trim()) console.error(err.kept);
+    if (out.held || err.held) {
+      console.log('map counts: wrangler output held back where it names a count or a number');
+    }
+    if (r.error) console.log(`map counts: npx could not run (${r.error.code ?? 'error'})`);
     console.log('::error::map counts: the D1 read failed, so nothing was checked');
     return 1;
   }
