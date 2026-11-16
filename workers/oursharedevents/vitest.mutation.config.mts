@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
-import { MUTATION_GROUPS, groupFromEnv, relatedSpecs } from './mutation-groups.mjs';
+import { BaseSequencer, type TestSpecification } from 'vitest/node';
+import { MUTATION_GROUPS, groupFromEnv, orderSpecs, relatedSpecs } from './mutation-groups.mjs';
 import { NODE_SPECS } from './vitest.node-specs.mjs';
 import { LANGUAGE_MUTATION_SPECS } from './vitest.language-mutation.config.mts';
 
@@ -68,6 +69,55 @@ if (!SPECS.length) {
   throw new Error(`vitest.mutation.config: no spec reaches mutation group ${GROUP}`);
 }
 
+/**
+ * The order the spec files run in, for every run of this project: the same for
+ * the same mutated file, on every runner and in every run.
+ *
+ * Why not Vitest's own (2026-11-15). BaseSequencer runs the files that failed
+ * last time first and then the longest first, from a results cache that each
+ * Stryker test runner keeps, rewrites after every mutant and writes into the
+ * sandbox all the runners share; a runner started later, as one is after every
+ * mutant that never ends, starts from whatever was written last. A mutant's
+ * run stops at its first failing test, so the order is what it costs, and it
+ * was a different order for the same mutant from run to run. Watched locally
+ * with the order logged: the first module-level mutant of street-map.ts in
+ * each runner ran form-pages-language.spec.ts and toast-adoption.spec.ts, the
+ * two longest, before street-map.spec.ts killed it, 78 seconds and about 340
+ * tests; every one after it ran street-map.spec.ts first, because it had just
+ * failed, and died in 10 to 600 ms.
+ *
+ * The order is orderSpecs (mutation-groups.mjs) for the file being mutated,
+ * which Stryker's Vitest runner names in `related` for a mutant's run (all the
+ * files of the run for its dry run). With no `related` (the runner's
+ * `vitest.related` turned off) it is the order for the group's files. It
+ * only moves files: every file Vitest hands over is handed back.
+ */
+export class MutantFirstSequencer extends BaseSequencer {
+  private static readonly ranks = new Map<string, Map<string, number>>();
+
+  async sort(files: TestSpecification[]): Promise<TestSpecification[]> {
+    const root = this.ctx.config.root;
+    const fromRoot = (path: string) => relative(root, path).split('\\').join('/');
+    const related = this.ctx.config.related;
+    const mutated = related?.length
+      ? related.map(fromRoot)
+      : GROUP
+        ? [...MUTATION_GROUPS[GROUP]]
+        : [];
+    const key = `${root}|${mutated.join('|')}`;
+    let rank = MutantFirstSequencer.ranks.get(key);
+    if (!rank) {
+      rank = new Map(orderSpecs(SPECS, mutated, root).map((spec, i) => [spec, i] as const));
+      MutantFirstSequencer.ranks.set(key, rank);
+    }
+    const place = (file: TestSpecification) => rank.get(fromRoot(file.moduleId)) ?? SPECS.length;
+    return [...files].sort(
+      (a, b) =>
+        place(a) - place(b) || (a.moduleId < b.moduleId ? -1 : a.moduleId > b.moduleId ? 1 : 0)
+    );
+  }
+}
+
 export default defineConfig({
   plugins: [htmlAsText],
   test: {
@@ -75,5 +125,6 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: SPECS,
+    sequence: { sequencer: MutantFirstSequencer },
   },
 });
