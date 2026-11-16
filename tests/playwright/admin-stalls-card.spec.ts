@@ -96,9 +96,13 @@ test.describe('admin: the Stalls card', () => {
     page,
   }) => {
     await openCard(page);
+    // Only the stall routes are watched. Opening an event makes the page's own
+    // background writes (its short link, for one), which land at any moment and
+    // are not this card's.
     const sent: string[] = [];
     page.on('request', (r) => {
-      if (r.method() !== 'GET') sent.push(`${r.method()} ${new URL(r.url()).pathname}`);
+      const path = new URL(r.url()).pathname;
+      if (r.method() !== 'GET' && path.includes('/booths')) sent.push(`${r.method()} ${path}`);
     });
     const text = page.getByTestId('stalls-bulk-text');
     await text.fill('2, Pine Crafts, craft\n3, call 312 555 0199\n4, "Smith, Jones & Co", art');
@@ -106,7 +110,7 @@ test.describe('admin: the Stalls card', () => {
     await expect(page.getByTestId('stalls-bulk-ok-title')).toHaveText('Ready to add: 2 stalls.');
     await expect(page.getByTestId('stalls-bulk-refused-list')).toContainText('Line 2:');
     await expect(page.getByTestId('stalls-bulk-save')).toBeHidden();
-    expect(sent, 'Check sends nothing').toEqual([]);
+    expect(sent, 'Check sends nothing to the stall routes').toEqual([]);
 
     await text.fill('2, Pine Crafts, craft\n3, Old Books, books\n4, "Smith, Jones & Co", art');
     await page.getByTestId('stalls-bulk-check').click();
