@@ -1,5 +1,7 @@
 /**
- * INVARIANT #25 (surface leg): the honesty lexicon holds on RENDERED surfaces.
+ * INVARIANT #30 (surface leg): the honesty lexicon holds on RENDERED surfaces.
+ * (Cited as #25 until 2026-11-16. #25 is the sponsor share covenant; the lexicon
+ * is honesty_lexicon, #30, in the OCR-docs brain.)
  *
  * The brain bans a catalogue of audience-inflation words (attendance,
  * impressions, reach, unique, turnout, eyeballs, people, views, visits) because
@@ -82,7 +84,7 @@ function violations(rel: string, terms: string[]): Array<{ line: number; text: s
   return out;
 }
 
-test.describe('INVARIANT #25 | rendered-surface lexicon (OSE-1201)', () => {
+test.describe('INVARIANT #30 | rendered-surface lexicon (OSE-1201)', () => {
   const terms = bannedTerms();
 
   test('the banned vocabulary still has one home (schema-lexicon.ts)', () => {
