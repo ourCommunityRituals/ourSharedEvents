@@ -9,6 +9,7 @@
 
 import { test, expect } from '@playwright/test';
 import { edgeChallenged, edgeHeaders, noteEdgeChallenge } from '../../../scripts/ci/edge-read.mjs';
+import { noteIfEdgeAnswered, passStgEdge } from '../helpers/stg-edge';
 
 const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.X_OCR_INTERNAL || '';
@@ -161,6 +162,10 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
   }) => {
     publicEventId = await createEvent(request, 'active', true, 'public');
 
+    // From a GitHub runner the stg edge can challenge a read of /events/<id>…
+    // unless it carries X-OCR-CI, and a page navigation sends none by itself. So
+    // the page sends it, to the site's own origin only (OSE-2022).
+    await passStgEdge(page);
     await page.goto(`${BASE_URL}/events`, { waitUntil: 'domcontentloaded' });
     // OSE-1684: the card links to the readable address /events/<id>/<slug>.
     // createEvent's slug is lowercase words and dashes, so it is used as is.
@@ -171,50 +176,49 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     const eventPage = await page.goto(`${BASE_URL}${readablePath}`, {
       waitUntil: 'domcontentloaded',
     });
-    const eventPageStatus = eventPage?.status();
-    expect(
-      [200, 403],
-      'public event page is reachable by the Worker OR blocked by the staging WAF edge'
-    ).toContain(eventPageStatus);
-    // A 403 here is the edge, not the Worker. It is not a silent pass: it is
-    // written as a GitHub warning and a summary line, and fails when
-    // CALENDAR_EDGE_STRICT is 1 (scripts/ci/edge-read.mjs, OSE-2022).
-    if (eventPageStatus !== 200) noteEdgeChallenge(readablePath);
-    if (eventPageStatus === 200) {
-      await expect(page.locator('[data-testid="event-actions"]')).toBeVisible();
-      await expect(page.locator('[data-testid="share-btn"]')).toBeVisible();
-      // OSE-1358 made "Add to calendar" a <details> menu: open it, then the
-      // .ics download is the option that carries the calendar href.
-      await expect(page.locator('[data-testid="add-to-calendar"]')).toBeVisible();
-      await page.locator('[data-testid="add-to-calendar-summary"]').click();
-      await expect(
-        page.locator(
-          `[data-testid="add-to-calendar-ics"][href="/events/${publicEventId}/calendar.ics"]`
-        )
-      ).toBeVisible();
-      // OSE-2045: a listed event also offers its brand's feed, online
-      // calendars first, then Apple, then the .ics address.
-      await page.locator('[data-testid="subscribe-calendar-summary"]').click();
-      const subscribeOptions = page.locator(
-        '[data-testid="subscribe-calendar"] a[data-testid^="subscribe-calendar-"]'
-      );
-      await expect(subscribeOptions).toHaveCount(4);
-      expect(
-        await subscribeOptions.evaluateAll((els) => els.map((el) => el.getAttribute('data-testid')))
-      ).toEqual([
-        'subscribe-calendar-google',
-        'subscribe-calendar-outlook',
-        'subscribe-calendar-apple',
-        'subscribe-calendar-ics',
-      ]);
-      await expect(page.locator('[data-testid="subscribe-calendar-ics"]')).toHaveAttribute(
-        'href',
-        `${BASE_URL}/brands/root/calendar.ics`
-      );
-      // Say so in the log: without this line a run that reached the page and a
-      // run the edge blocked print the same thing (found reading run 43563260636).
-      console.log(`OSE-2045: Subscribe menu checked on the event page ${readablePath}`);
+    // An answer from the edge is not the Worker's, and not a silent pass: it is a
+    // GitHub warning and a summary line, and it fails the test when
+    // CALENDAR_EDGE_STRICT is 1 (tests/e2e/helpers/stg-edge.ts). Any other answer
+    // is the Worker's own, and only 200 will do: a 403 the Worker wrote fails.
+    const challenged = await noteIfEdgeAnswered(eventPage, readablePath);
+    if (challenged) {
+      test.info().annotations.push({ type: 'edge-challenge', description: challenged });
+      return;
     }
+    expect(eventPage?.status(), `the Worker answers ${readablePath}`).toBe(200);
+    await expect(page.locator('[data-testid="event-actions"]')).toBeVisible();
+    await expect(page.locator('[data-testid="share-btn"]')).toBeVisible();
+    // OSE-1358 made "Add to calendar" a <details> menu: open it, then the
+    // .ics download is the option that carries the calendar href.
+    await expect(page.locator('[data-testid="add-to-calendar"]')).toBeVisible();
+    await page.locator('[data-testid="add-to-calendar-summary"]').click();
+    await expect(
+      page.locator(
+        `[data-testid="add-to-calendar-ics"][href="/events/${publicEventId}/calendar.ics"]`
+      )
+    ).toBeVisible();
+    // OSE-2045: a listed event also offers its brand's feed, online
+    // calendars first, then Apple, then the .ics address.
+    await page.locator('[data-testid="subscribe-calendar-summary"]').click();
+    const subscribeOptions = page.locator(
+      '[data-testid="subscribe-calendar"] a[data-testid^="subscribe-calendar-"]'
+    );
+    await expect(subscribeOptions).toHaveCount(4);
+    expect(
+      await subscribeOptions.evaluateAll((els) => els.map((el) => el.getAttribute('data-testid')))
+    ).toEqual([
+      'subscribe-calendar-google',
+      'subscribe-calendar-outlook',
+      'subscribe-calendar-apple',
+      'subscribe-calendar-ics',
+    ]);
+    await expect(page.locator('[data-testid="subscribe-calendar-ics"]')).toHaveAttribute(
+      'href',
+      `${BASE_URL}/brands/root/calendar.ics`
+    );
+    // Say so in the log: without this line a run that reached the page and a
+    // run the edge blocked print the same thing (found reading run 43563260636).
+    console.log(`OSE-2045: Subscribe menu checked on the event page ${readablePath}`);
   });
 
   test('admin draft preview uses the public renderer and can go live to the public page', async ({
@@ -222,6 +226,7 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     request,
   }) => {
     draftEventId = await createEvent(request, 'draft', false, 'draft');
+    await passStgEdge(page);
 
     const preview = await adminFetch(
       request,
@@ -265,14 +270,16 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     const live = await page.goto(`${BASE_URL}/events/${draftEventId}`, {
       waitUntil: 'domcontentloaded',
     });
-    const liveStatus = live?.status();
-    expect(
-      [200, 403],
-      'go-live public page is reachable by the Worker OR blocked by the staging WAF edge'
-    ).toContain(liveStatus);
-    if (liveStatus === 200) {
-      await expect(page.locator('[data-testid="event-title"]')).toContainText('Launch Smoke draft');
+    // The same rule as the public list card test: the edge's answer is noted,
+    // never passed over, and the Worker's own answer must be 200.
+    const livePath = `/events/${draftEventId}`;
+    const challenged = await noteIfEdgeAnswered(live, livePath);
+    if (challenged) {
+      test.info().annotations.push({ type: 'edge-challenge', description: challenged });
+      return;
     }
+    expect(live?.status(), `the Worker answers ${livePath} after go-live`).toBe(200);
+    await expect(page.locator('[data-testid="event-title"]')).toContainText('Launch Smoke draft');
   });
 
   // OSE-2013: the brand calendar feed on the deployed Worker. The same four
@@ -290,6 +297,9 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     // stg skip rule lets through. A challenge is still not a pass: it is written
     // as a GitHub warning and a summary line, and with CALENDAR_EDGE_STRICT=1 it
     // fails the test (scripts/ci/edge-read.mjs, OSE-2022).
+    // These two reads pass edgeHeaders() themselves, so the header went out
+    // exactly when the token is set; the note is told so.
+    const sentByRead = { headerSent: Boolean(edgeHeaders()['X-OCR-CI']) };
     const feedPath = '/brands/root/calendar.ics';
     const feed = await request.get(`${BASE_URL}${feedPath}`, {
       maxRedirects: 0,
@@ -298,7 +308,7 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     if (edgeChallenged(feed.status(), feed.headers())) {
       test.info().annotations.push({
         type: 'edge-challenge',
-        description: noteEdgeChallenge(feedPath),
+        description: noteEdgeChallenge(feedPath, process.env, sentByRead),
       });
       return;
     }
@@ -341,7 +351,7 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
       headers: edgeHeaders(),
     });
     if (edgeChallenged(other.status(), other.headers())) {
-      noteEdgeChallenge(otherPath);
+      noteEdgeChallenge(otherPath, process.env, sentByRead);
       return;
     }
     expect(other.status(), 'a brand with nothing public').toBe(404);

@@ -13,8 +13,7 @@
  * CI applies it right before these specs and unpublishes it right after.
  */
 import { resolve } from 'node:path';
-import { expect, type Locator, type Page, type Response } from '@playwright/test';
-import { edgeChallenged, edgeHeaders } from '../../../scripts/ci/edge-read.mjs';
+import { expect, type Locator, type Page } from '@playwright/test';
 import {
   FLAG,
   STAGING_ENV_FILE,
@@ -143,43 +142,6 @@ export async function expectZoomDrawing(page: Page): Promise<'streets' | 'list'>
   return 'streets';
 }
 
-/**
- * Let this page's reads of the site pass the stg edge, as CI's other reads do.
- *
- * From a GitHub runner the Cloudflare edge answers a read of `/events/<id>…` on stg
- * with a managed challenge (403, cf-mitigated) unless it carries the X-OCR-CI
- * header the stg skip rule matches (docs/runbooks/RUNBOOK-STG-CI-SKIP-RULE.md;
- * the stg watch `edge` job shows both answers). `/` is not challenged, which is
- * why the area page needs nothing.
- *
- * The header goes on requests to BASE_URL's own origin and on nothing else, so
- * the token never reaches another host. The Worker does not read X-OCR-CI
- * (nothing under workers/oursharedevents/src names it), so a read with it is
- * counted, or not counted, exactly as a visitor's is. With no token set (a local
- * Worker has no edge) nothing is added.
- */
-export async function passStgEdge(page: Page): Promise<void> {
-  const headers = edgeHeaders();
-  if (Object.keys(headers).length === 0) return;
-  const origin = new URL(BASE_URL).origin;
-  await page.route(
-    (url) => url.origin === origin,
-    (route) => route.continue({ headers: { ...route.request().headers(), ...headers } })
-  );
-}
-
-/**
- * Fail by name when the edge answered a navigation, not the Worker. A challenge
- * is never a pass and never a skip here: a link the walk could not follow proves
- * nothing about what following it counts.
- */
-export function throwIfEdgeAnswered(res: Response | null, path: string): void {
-  if (!res || !edgeChallenged(res.status(), res.headers())) return;
-  const sent = edgeHeaders()['X-OCR-CI']
-    ? 'with X-OCR-CI: the stg skip rule did not let it through (path not covered, or another token)'
-    : 'without X-OCR-CI: OCR_CI_EDGE_TOKEN is not set for this step';
-  throw new Error(
-    `Cloudflare answered ${path}, not the Worker (cf-mitigated: ${res.headers()['cf-mitigated']}; ` +
-      `sent ${sent}). See docs/runbooks/RUNBOOK-STG-CI-SKIP-RULE.md.`
-  );
-}
+// The stg edge helpers moved to ./stg-edge.ts, where the launch story smoke uses
+// them too. They are still offered from here, so the map specs read as before.
+export { passStgEdge, throwIfEdgeAnswered } from './stg-edge';

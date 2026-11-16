@@ -11,7 +11,8 @@
 //   edgeOwnRequest(u, o)    true for a call the edge's own page scripts make
 //   noteEdgeChallenge(...)  counts it where a person looks: a GitHub warning and a
 //                           step-summary line. With CALENDAR_EDGE_STRICT=1 it throws,
-//                           so the test fails.
+//                           so the test fails. The caller says whether the read
+//                           carried the header (headerSent).
 //
 // The strict switch is a repository variable the owner sets once the skip rule
 // covers the path. Until then a challenge is shown, not hidden and not red.
@@ -69,18 +70,35 @@ const safePath = (path) =>
     .replace(/[^A-Za-z0-9/_.?=&%-]/g, '_')
     .slice(0, 200);
 
+// Whether the challenged read carried the header, in words. A set token is not a
+// sent header: a browser navigation sends none unless the page was told to
+// (passStgEdge, tests/e2e/helpers/stg-edge.ts). So the caller says what was sent,
+// and when it does not say, nothing is claimed either way.
+function sentWords(env, headerSent) {
+  if (headerSent === true) return 'with X-OCR-CI';
+  if (!edgeHeaders(env)['X-OCR-CI']) return 'without X-OCR-CI (no token set)';
+  if (headerSent === false) return 'without X-OCR-CI (the token is set; this read did not send it)';
+  return 'token set; the caller did not say whether this read sent X-OCR-CI';
+}
+
 /**
  * Record that the edge challenged `path`. Returns the message. Throws in strict mode.
- * `deps` is for tests: write (stdout) and appendFile (the step summary).
+ * `opts.headerSent`: true when the challenged read carried X-OCR-CI, false when it
+ * did not. `opts.write` (stdout) and `opts.appendFile` (the step summary) are for tests.
  */
-export function noteEdgeChallenge(path, env = process.env, deps = {}) {
-  const write = deps.write || ((s) => process.stdout.write(s));
-  const append = deps.appendFile || appendFileSync;
+export function noteEdgeChallenge(path, env = process.env, opts = {}) {
+  const write = opts.write || ((s) => process.stdout.write(s));
+  const append = opts.appendFile || appendFileSync;
   const p = safePath(path);
-  const sent = edgeHeaders(env)['X-OCR-CI'] ? 'with X-OCR-CI' : 'without X-OCR-CI (no token set)';
+  const sent = sentWords(env, opts.headerSent);
+  // With the header sent, the rule is what to look at. Without it, the read is.
+  const remedy =
+    opts.headerSent === false
+      ? 'The read must send the header before the skip rule can let it through'
+      : 'The skip rule must cover the path';
   const message =
     `The stg edge challenged ${p} (${sent}); the Worker did not answer, so this check ` +
-    `proved nothing about it. The skip rule must cover the path: ` +
+    `proved nothing about it. ${remedy}: ` +
     `docs/runbooks/RUNBOOK-STG-CI-SKIP-RULE.md.`;
   write(`::warning title=Edge challenge (OSE-2022)::${message}\n`);
   if (env.GITHUB_STEP_SUMMARY) {
