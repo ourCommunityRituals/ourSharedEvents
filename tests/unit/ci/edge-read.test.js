@@ -14,6 +14,11 @@ function capture() {
     out,
     summary,
     deps: { write: (s) => out.push(s), appendFile: (_f, s) => summary.push(s) },
+    sent: (headerSent) => ({
+      write: (s) => out.push(s),
+      appendFile: (_f, s) => summary.push(s),
+      headerSent,
+    }),
   };
 }
 
@@ -113,10 +118,11 @@ describe('noteEdgeChallenge', () => {
   test('not strict: writes a GitHub warning and a summary line, and does not throw', () => {
     const c = capture();
     const env = { OCR_CI_EDGE_TOKEN: TOKEN, GITHUB_STEP_SUMMARY: '/tmp/summary' };
-    const message = E.noteEdgeChallenge('/brands/root/calendar.ics', env, c.deps);
+    const message = E.noteEdgeChallenge('/brands/root/calendar.ics', env, c.sent(true));
     expect(message).toContain('/brands/root/calendar.ics');
     expect(c.out.join('')).toMatch(/^::warning title=Edge challenge \(OSE-2022\)::/);
-    expect(c.out.join('')).toContain('with X-OCR-CI');
+    expect(c.out.join('')).toContain('(with X-OCR-CI)');
+    expect(message).toContain('The skip rule must cover the path');
     expect(c.summary.join('')).toContain('`/brands/root/calendar.ics` did not reach the Worker');
   });
 
@@ -129,6 +135,47 @@ describe('noteEdgeChallenge', () => {
     expect(c.out).toHaveLength(1);
     expect(c.summary).toHaveLength(1);
     expect(c.out.join('')).toContain('without X-OCR-CI');
+  });
+
+  // A set token is not a sent header. T4g's page navigation sent none, and its
+  // warning still read "(with X-OCR-CI)" (main run 43643594754, job 132605565745).
+  // Born red (2026-11-16): with sentWords() answering from the token alone, as
+  // before, the first two tests here fail.
+  test('token set, header not sent: says so, and never "with X-OCR-CI"', () => {
+    const c = capture();
+    const env = { OCR_CI_EDGE_TOKEN: TOKEN, GITHUB_STEP_SUMMARY: '/tmp/summary' };
+    const message = E.noteEdgeChallenge('/events/evt_1/a-slug', env, c.sent(false));
+    const written = message + c.out.join('') + c.summary.join('');
+    expect(written).not.toContain('with X-OCR-CI');
+    expect(message).toContain('(without X-OCR-CI (the token is set; this read did not send it))');
+    expect(c.summary.join('')).toContain('without X-OCR-CI (the token is set');
+    expect(message).toContain('The read must send the header');
+    expect(message).not.toContain('The skip rule must cover the path');
+  });
+
+  test('token set, caller silent: claims neither', () => {
+    const c = capture();
+    const message = E.noteEdgeChallenge('/x', { OCR_CI_EDGE_TOKEN: TOKEN }, c.deps);
+    expect(message).not.toMatch(/with X-OCR-CI|without X-OCR-CI/);
+    expect(message).toContain('the caller did not say whether this read sent X-OCR-CI');
+  });
+
+  test('no token: without, whatever the caller left unsaid', () => {
+    for (const headerSent of [undefined, false]) {
+      const c = capture();
+      const message = E.noteEdgeChallenge('/x', {}, c.sent(headerSent));
+      expect(message).toContain('(without X-OCR-CI (no token set))');
+    }
+  });
+
+  test('strict throws whatever was sent', () => {
+    for (const headerSent of [true, false, undefined]) {
+      const c = capture();
+      const env = { CALENDAR_EDGE_STRICT: '1', OCR_CI_EDGE_TOKEN: TOKEN };
+      expect(() => E.noteEdgeChallenge('/x', env, c.sent(headerSent))).toThrow(
+        /CALENDAR_EDGE_STRICT=1/
+      );
+    }
   });
 
   test('only the exact value 1 is strict', () => {

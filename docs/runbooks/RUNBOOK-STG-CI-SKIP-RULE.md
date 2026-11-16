@@ -91,7 +91,7 @@ Once the `edge` job is green for both addresses, make a challenged calendar read
 gh variable set CALENDAR_EDGE_STRICT --body 1
 ```
 
-From the next run, a calendar read the edge challenges fails T2 (Bruno Pages) and T4g (Launch Story Smoke) by name. To go back, delete the variable:
+From the next run, a calendar read the edge challenges fails T2 (Bruno Pages) and T4g (Launch Story Smoke) by name. In T4g the same switch covers the two event pages its browser opens (`/events/<id>/<slug>` and `/events/<id>` after go-live): the page sends `X-OCR-CI` to the site's own origin (`tests/e2e/helpers/stg-edge.ts`), a challenge is a warning that says whether the header was sent, and with the switch on it fails the test. To go back, delete the variable:
 
 ```bash
 gh variable delete CALENDAR_EDGE_STRICT

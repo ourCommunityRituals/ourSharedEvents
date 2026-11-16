@@ -26,7 +26,9 @@ const ROOT = join(__dirname, '..', '..', '..');
 const read = (...p) => readFileSync(join(ROOT, ...p), 'utf8');
 const wf = yaml.load(read('.github', 'workflows', 'oursharedevents-ci.yml'));
 const SPEC = read('tests', 'e2e', '3-flows', 'map-place-panel.spec.ts');
-const HELPER = read('tests', 'e2e', 'helpers', 'map-zoom-area.ts');
+// The two helpers live in stg-edge.ts (shared with T4g); the map helper hands them on.
+const HELPER = read('tests', 'e2e', 'helpers', 'stg-edge.ts');
+const MAP_HELPER = read('tests', 'e2e', 'helpers', 'map-zoom-area.ts');
 const STEP = 'T4k: Map Zoom, Place Panel and Map Links';
 
 const t4kSteps = Object.values(wf.jobs)
@@ -56,7 +58,10 @@ describe('the map link walk passes the stg edge', () => {
     expect(stop).toBeGreaterThan(follow);
     expect(status).toBeGreaterThan(stop);
     // A challenge is a failure here: never a skip, a return or a noted pass.
-    const body = HELPER.slice(HELPER.indexOf('export function throwIfEdgeAnswered'));
+    const body = HELPER.slice(
+      HELPER.indexOf('export function throwIfEdgeAnswered'),
+      HELPER.indexOf('export async function noteIfEdgeAnswered')
+    );
     expect(body).toContain('throw new Error(');
     expect(body).not.toMatch(/test\.skip|noteEdgeChallenge/);
   });
@@ -83,10 +88,12 @@ describe('the map link walk passes the stg edge', () => {
   });
 
   test('the header goes to the site only', () => {
+    expect(MAP_HELPER).toContain("export { passStgEdge, throwIfEdgeAnswered } from './stg-edge';");
     const body = HELPER.slice(
       HELPER.indexOf('export async function passStgEdge'),
-      HELPER.indexOf('export function throwIfEdgeAnswered')
+      HELPER.indexOf('export async function edgeHeaderSent')
     );
+    expect(body).toContain('export async function passStgEdge');
     expect(body).toContain('(url) => url.origin === origin');
     expect(body).not.toMatch(/setExtraHTTPHeaders|extraHTTPHeaders/);
   });
