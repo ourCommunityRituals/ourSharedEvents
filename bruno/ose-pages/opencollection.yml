@@ -33,71 +33,58 @@ request:
 
         bru.setVar('requestStartTime', Date.now());
     - type: after-response
-      code: "const elapsed = Date.now() - bru.getVar('requestStartTime');
+      code: |-
+        // OSE-2090: a 5xx keeps what finds it again in the Worker's logs: the status,
+        // the error code and the request id. Never the URL (a signed link is a
+        // credential) and never the body. A value prints only when it has the shape of
+        // a code or an id; anything else prints as '-'.
+        (function () {
+          var status = res.getStatus();
+          if (!(status >= 500)) return;
+          var body = res.getBody();
+          var json = body && typeof body === 'object' ? body : {};
+          var code = typeof json.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(json.code) ? json.code : '-';
+          var rid = res.getHeader('X-Request-Id');
+          if (typeof rid !== 'string' || rid === '') rid = json.requestId;
+          rid = typeof rid === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(rid) ? rid : '-';
+          var method = String(req.getMethod() || '').toUpperCase();
+          console.log('[5xx] ' + (/^[A-Z]{1,10}$/.test(method) ? method : '-') + ' status=' + status + ' code=' + code + ' requestId=' + rid);
+        })();
 
+        const elapsed = Date.now() - bru.getVar('requestStartTime');
         test(`Response time < 3000ms (actual: ${elapsed}ms)`, function() {
-
-        \    expect(elapsed).to.be.below(3000);
-
+            expect(elapsed).to.be.below(3000);
         });
 
-        
 
         // Invariant #6 — Inert Monetization Hooks: every Worker response (including HTML
-
         // pages) must carry X-Monetization-Inert: true. Skip responses the worker never
-
         // produced: CF Access redirects (302) AND the CF-Access-gated admin aliases
-
         // /admin and /manage (Newman follows the 302 to the CF Access login page — a
-
         // 200 with no worker header), AND CF WAF/managed-challenge EDGE BLOCKS (403 HTML
-
         // served by Cloudflare BEFORE the worker runs — e.g. adversarial paths like
-
         // evt_does_not_exist_r004; see OSE-348/OSE-939). Detected by the CF block-page
-
         // signature so it never misfires on a worker response: worker JSON 401/403 are
-
         // application/json (not text/html), and worker-branded HTML error pages carry
-
         // none of the CF block markers — both are still asserted.
-
         const __ct = res.getHeader('Content-Type') || '';
-
         // Primary signal: CF sets cf-mitigated on WAF block/challenge actions. Fallback:
-
         // the CF block-page body signature (403 HTML). Either way this fires ONLY on a
-
         // non-worker edge response — a worker JSON/HTML 403 has neither.
-
         const __cfMitigated = (res.getHeader('cf-mitigated') || '').length > 0;
-
-        const __isCfEdgeBlock = res.getStatus() === 403 && (__cfMitigated || (/text\\/html/i.test(__ct) && /Attention Required|have been blocked|cf-error-details|__cf_chl|Cloudflare Ray ID/i.test((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody())))));
-
+        const __isCfEdgeBlock = res.getStatus() === 403 && (__cfMitigated || (/text\/html/i.test(__ct) && /Attention Required|have been blocked|cf-error-details|__cf_chl|Cloudflare Ray ID/i.test((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody())))));
         // The other pages behind the staging Access app (scripts/ci/access-protected-paths.txt)
-
         // answer an unauthenticated request with the Access login page, which carries no worker
-
         // header. Matched on the path (prefix, the way an Access destination matches), not on a
-
         // substring, so a public URL that merely contains one of these words is still asserted.
-
         const __u = req.getUrl().toString();
-
         const __p = __u.slice(__u.indexOf('/', __u.indexOf('://') + 3)).split('?')[0];
-
         const __accessGated = ['/dashboard', '/create', '/briefing', '/overview', '/summary'].some(function (x) { return __p.indexOf(x) === 0; });
-
         if (res.getStatus() !== 302 && !__isCfEdgeBlock && !__accessGated && req.getUrl().toString().indexOf('/admin') === -1 && req.getUrl().toString().indexOf('/manage') === -1) {
-
-        \    test('Invariant #6: X-Monetization-Inert: true on every Worker response', function() {
-
-        \        expect(res.getHeader('X-Monetization-Inert')).to.eql('true');
-
-        \    });
-
-        }"
+            test('Invariant #6: X-Monetization-Inert: true on every Worker response', function() {
+                expect(res.getHeader('X-Monetization-Inert')).to.eql('true');
+            });
+        }
 
 docs:
   content: |-
