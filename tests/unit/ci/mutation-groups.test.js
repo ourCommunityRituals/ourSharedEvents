@@ -24,6 +24,28 @@
  *     cycle" fails (the first cycle case alone stayed green on this fault, so
  *     the second was written for it);
  *   - the unknown-name check in groupFromEnv removed -> "a typo" fails.
+ *
+ *   3. the order the specs run in (orderSpecs, and the sequencer that
+ *      vitest.mutation.config.mts runs the main pass with). Left to Vitest it
+ *      was the files that failed last first, then the longest, so the same
+ *      mutant cost 1 test in one run and hundreds in another. An order can go
+ *      wrong three ways: it is not the one meant, it differs from run to run,
+ *      or it loses a spec, which would lose that spec's kills.
+ *
+ * @born-red method: injected fault, one at a time, each watched failing here
+ *   and then reverted | date: 2026-11-15 | verified, in mutation-groups.mjs:
+ *   - distance counted from 1 -> the three "distance is" cases fail;
+ *   - only a file's first import followed -> "by the shortest way" fails;
+ *   - only the first mutated file a target -> "the nearest of several" fails;
+ *   - the named-spec rule dropped -> "the spec named for the file" fails;
+ *   - the distance rule dropped -> "then the nearest specs" fails;
+ *   - the path tiebreak dropped -> "does not depend on the order ... given" fails;
+ *   and in vitest.mutation.config.mts:
+ *   - `sequence` taken off the config -> "the main pass is wired to it" fails;
+ *   - sort() answering with Vitest's own order -> "what failed or ran longest
+ *     last time does not move it" fails, with three more;
+ *   - the mutated file (`related`) ignored -> "a mutant of street-map.ts" fails;
+ *   - a file the order does not know dropped -> "every file handed over" fails.
  */
 
 const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = require('fs');
@@ -185,4 +207,176 @@ describe('the specs a group runs: every spec whose imports reach its files', () 
     }
     // Reads the whole Worker's import graph once per group: seconds on a loaded runner.
   }, 60_000);
+});
+
+describe('the order the specs run in: decided by the mutated file, the same every run', () => {
+  let root;
+  const put = (rel, text) => {
+    const p = join(root, rel);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, text);
+  };
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'mutation-order-'));
+    put('src/lib/target.ts', 'export const t = 1;\n');
+    put('src/lib/other.ts', 'export const o = 1;\n');
+    put('src/mid.ts', "import { t } from './lib/target';\nexport const m = t;\n");
+    put('src/top.ts', "export { m } from './mid';\n");
+    put('tests/target.spec.ts', "import { m } from '../src/top';\n");
+    put('tests/a-far.spec.ts', "import { m } from '../src/top';\n");
+    put('tests/b-near.spec.ts', "import { t } from '../src/lib/target';\n");
+    put('tests/c-mid.spec.ts', "import { m } from '../src/mid';\n");
+    put('tests/d-near.spec.ts', "import { t } from '../src/lib/target';\n");
+    put('tests/e-none.spec.ts', "import { o } from '../src/lib/other';\n");
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  const SPECS = [
+    'tests/a-far.spec.ts',
+    'tests/b-near.spec.ts',
+    'tests/c-mid.spec.ts',
+    'tests/d-near.spec.ts',
+    'tests/e-none.spec.ts',
+    'tests/target.spec.ts',
+  ];
+
+  test('distance is the number of imports between a spec and the file', () => {
+    const d = G.importDistances(SPECS, ['src/lib/target.ts'], root);
+    expect(Object.fromEntries(d)).toEqual({
+      'tests/a-far.spec.ts': 3,
+      'tests/b-near.spec.ts': 1,
+      'tests/c-mid.spec.ts': 2,
+      'tests/d-near.spec.ts': 1,
+      'tests/e-none.spec.ts': Infinity,
+      'tests/target.spec.ts': 3,
+    });
+  });
+
+  test('distance is by the shortest way, whichever import is written first', () => {
+    put('tests/two-ways.spec.ts', "import '../src/top';\nimport '../src/lib/target';\n");
+    put('tests/two-ways-back.spec.ts', "import '../src/lib/target';\nimport '../src/top';\n");
+    const d = G.importDistances(
+      ['tests/two-ways.spec.ts', 'tests/two-ways-back.spec.ts'],
+      ['src/lib/target.ts'],
+      root
+    );
+    expect([...d.values()]).toEqual([1, 1]);
+  });
+
+  test('distance is to the nearest of several files', () => {
+    const d = G.importDistances(
+      ['tests/a-far.spec.ts', 'tests/e-none.spec.ts'],
+      ['src/lib/target.ts', 'src/lib/other.ts'],
+      root
+    );
+    expect([...d.values()]).toEqual([3, 1]);
+  });
+
+  test('the spec named for the file runs first, though others are nearer', () => {
+    expect(G.orderSpecs(SPECS, ['src/lib/target.ts'], root)[0]).toBe('tests/target.spec.ts');
+  });
+
+  test('then the nearest specs, then by path; a spec that never reaches the file is last', () => {
+    expect(G.orderSpecs(SPECS, ['src/lib/target.ts'], root)).toEqual([
+      'tests/target.spec.ts',
+      'tests/b-near.spec.ts',
+      'tests/d-near.spec.ts',
+      'tests/c-mid.spec.ts',
+      'tests/a-far.spec.ts',
+      'tests/e-none.spec.ts',
+    ]);
+  });
+
+  test('the order does not depend on the order the specs were given in', () => {
+    const forward = G.orderSpecs(SPECS, ['src/lib/target.ts'], root);
+    const given = [...SPECS].reverse();
+    expect(G.orderSpecs(given, ['src/lib/target.ts'], root)).toEqual(forward);
+    expect(given).toEqual([...SPECS].reverse()); // the list given is not reordered
+  });
+
+  test('another mutated file is another order', () => {
+    expect(G.orderSpecs(SPECS, ['src/lib/other.ts'], root)).toEqual([
+      'tests/e-none.spec.ts',
+      'tests/a-far.spec.ts',
+      'tests/b-near.spec.ts',
+      'tests/c-mid.spec.ts',
+      'tests/d-near.spec.ts',
+      'tests/target.spec.ts',
+    ]);
+  });
+
+  test('every spec comes back once: order never leaves a spec out', () => {
+    for (const files of [['src/lib/target.ts'], ['src/lib/other.ts'], ['src/nowhere.ts'], []]) {
+      expect([...G.orderSpecs(SPECS, files, root)].sort()).toEqual([...SPECS].sort());
+    }
+  });
+
+  describe('the sequencer the main pass runs with (vitest.mutation.config.mts)', () => {
+    const worker = join(__dirname, '..', '..', '..', 'workers', 'oursharedevents')
+      .split('\\')
+      .join('/');
+    let config;
+    let Sequencer;
+    let specs;
+    beforeAll(async () => {
+      const m = await import('../../../workers/oursharedevents/vitest.mutation.config.mts');
+      config = m.default;
+      Sequencer = m.MutantFirstSequencer;
+      specs = m.MAIN_MUTATION_SPECS;
+    }, 60_000);
+
+    const file = (rel) => ({ moduleId: `${worker}/${rel}`, project: { name: 'main-mutation' } });
+    const names = (files) => files.map((f) => f.moduleId.slice(worker.length + 1));
+    // What Vitest's own order reads: a cache saying which file failed last and
+    // how long each took. Here it says the longest spec failed, and is the longest.
+    const cache = {
+      getFileTestResults: (key) =>
+        key.endsWith('form-pages-language.spec.ts')
+          ? { failed: true, duration: 60_000 }
+          : { failed: false, duration: 1 },
+      getFileStats: () => ({ size: 1 }),
+    };
+    const sorted = (related, files) =>
+      new Sequencer({ config: { root: worker, related }, cache }).sort(files).then(names);
+
+    test('the main pass is wired to it', () => {
+      expect(typeof Sequencer).toBe('function');
+      expect(config.test.sequence.sequencer).toBe(Sequencer);
+    });
+
+    test('a mutant of street-map.ts runs street-map.spec.ts first, of mvt.ts mvt.spec.ts', async () => {
+      const files = specs.map(file);
+      expect((await sorted([`${worker}/src/lib/street-map.ts`], files))[0]).toBe(
+        'tests/street-map.spec.ts'
+      );
+      expect((await sorted([`${worker}/src/lib/mvt.ts`], files))[0]).toBe('tests/mvt.spec.ts');
+    }, 60_000);
+
+    test('what failed or ran longest last time does not move it', async () => {
+      const files = specs.map(file);
+      const order = await sorted([`${worker}/src/lib/street-map.ts`], files);
+      expect(order.indexOf('tests/form-pages-language.spec.ts')).toBeGreaterThan(
+        order.indexOf('tests/street-map.spec.ts')
+      );
+      expect(await sorted([`${worker}/src/lib/street-map.ts`], [...files].reverse())).toEqual(
+        order
+      );
+    }, 60_000);
+
+    test('it is the order of orderSpecs for the mutated file, for just the files of the run', async () => {
+      const some = ['tests/pmtiles.spec.ts', 'tests/street-map.spec.ts', 'tests/mvt.spec.ts'];
+      expect(await sorted([`${worker}/src/lib/pmtiles.ts`], some.map(file))).toEqual(
+        G.orderSpecs(specs, ['src/lib/pmtiles.ts'], worker).filter((s) => some.includes(s))
+      );
+    }, 60_000);
+
+    test('every file handed over is handed back, one it does not know last', async () => {
+      const files = [file('tests/not-in-the-pass.spec.ts'), ...specs.map(file)];
+      for (const related of [[`${worker}/src/lib/mvt.ts`], [], undefined]) {
+        const order = await sorted(related, files);
+        expect([...order].sort()).toEqual(names(files).sort());
+        expect(order[order.length - 1]).toBe('tests/not-in-the-pass.spec.ts');
+      }
+    }, 60_000);
+  });
 });

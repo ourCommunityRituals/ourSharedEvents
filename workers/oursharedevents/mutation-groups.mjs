@@ -58,6 +58,20 @@
 // it can only keep extra specs, never drop a related one. If it ever missed
 // one, the mutants that spec killed would show as survived and fail the
 // per-file floor: a red run, not a hollow one.
+//
+// THE ORDER THE SPECS RUN IN (the same kills, sooner). A mutant's run stops at
+// the first test that fails, so what it costs is every test run before that
+// one. Left alone, Vitest runs the files that failed last time first and then
+// the longest first, from a cache each test runner keeps and rewrites after
+// every mutant. So the order a mutant got depended on which runner took it and
+// what that runner had just killed: on 2026-11-15 one module-level constant of
+// street-map.ts died after 1 test in one CI run and after 744 tests and 68
+// seconds in another, behind the longest spec in the project, and 121 mutants
+// of the tile readers each waited about 9 seconds for a 300,000-point limit
+// case when a unit case would have killed them. orderSpecs below fixes the
+// order from the mutated file alone: the spec named for it, then the specs
+// nearest to it by imports, then by path. Order changes when a mutant dies,
+// never whether: a mutant no test fails on runs every test in any order.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, normalize, resolve } from 'node:path';
@@ -190,6 +204,87 @@ export function relatedSpecs(specs, files, root) {
     return hit;
   };
   return specs.filter((s) => reaches(normalize(resolve(root, s)), new Set()));
+}
+
+/**
+ * For each spec, how many imports lie between it and the nearest of `files`:
+ * 1 when the spec imports one of them itself, 2 through one module, and so on;
+ * Infinity when its imports never reach one. The same scan as relatedSpecs,
+ * walked breadth first so the count is the shortest way there.
+ */
+export function importDistances(specs, files, root) {
+  const targets = new Set(files.map((f) => normalize(resolve(root, f))));
+  /** @type {Map<string, string[]>} */
+  const edges = new Map();
+  const importsOf = (file) => {
+    let out = edges.get(file);
+    if (out) return out;
+    let text = '';
+    try {
+      text = readFileSync(file, 'utf8');
+    } catch {
+      text = '';
+    }
+    out = [];
+    for (const m of text.matchAll(SPECIFIER)) {
+      const next = resolveSpecifier(file, m[1]);
+      if (next) out.push(normalize(next));
+    }
+    edges.set(file, out);
+    return out;
+  };
+  /** @type {Map<string, number>} */
+  const distances = new Map();
+  for (const spec of specs) {
+    const start = normalize(resolve(root, spec));
+    const seen = new Set([start]);
+    let frontier = [start];
+    let found = Infinity;
+    for (let d = 0; frontier.length && found === Infinity; d++) {
+      const next = [];
+      for (const file of frontier) {
+        if (targets.has(file)) {
+          found = d;
+          break;
+        }
+        for (const dep of importsOf(file)) {
+          if (!seen.has(dep)) {
+            seen.add(dep);
+            next.push(dep);
+          }
+        }
+      }
+      frontier = next;
+    }
+    distances.set(spec, found);
+  }
+  return distances;
+}
+
+/** `tests/street-map.spec.ts` and `src/lib/street-map.ts` -> `street-map`. */
+function stem(path) {
+  const name = String(path).split(/[\\/]/).pop() ?? '';
+  return name.replace(/(\.(spec|test))?\.[^.]+$/, '');
+}
+
+/**
+ * `specs` in the order a run that mutates `files` should take them: the spec
+ * named for a mutated file first (`tests/mvt.spec.ts` for `src/lib/mvt.ts`),
+ * then by how few imports lie between the spec and a mutated file, then by
+ * path. Every spec given comes back, once: this decides when a spec runs,
+ * never whether. The same input gives the same order on every machine.
+ */
+export function orderSpecs(specs, files, root) {
+  const named = new Set(files.map(stem));
+  const distance = importDistances(specs, files, root);
+  const rank = (spec) => (named.has(stem(spec)) ? 0 : 1);
+  return [...specs].sort((a, b) => {
+    if (rank(a) !== rank(b)) return rank(a) - rank(b);
+    const da = /** @type {number} */ (distance.get(a));
+    const db = /** @type {number} */ (distance.get(b));
+    if (da !== db) return da < db ? -1 : 1;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
 }
 
 /** The last CI job: the language pass, which has its own config. */
