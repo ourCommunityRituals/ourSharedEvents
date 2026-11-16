@@ -33,7 +33,11 @@ docs: |-
     - a refusal that clears the saved link: 2 red (seq 61)
     - the refusal answered with another code: 4 red (seq 30, 31, 32, 60)
     - the refusal answered with no row index: 4 red (seq 30, 31, 32, 60)
-  With no fault: 57 checks, none red. The first run showed three of the four
+  The same day the folder was also run against a local Worker (wrangler dev,
+  local D1; a test rig, not staging). With no fault: 11 requests, none red.
+  The guard made to accept http: as well: 4 checks red in 2 requests. The
+  guard made to accept any address: 15 checks red in 6 requests.
+  With no fault on the stand-in: 57 checks, none red. The first run showed three of the four
   refusal requests had never run: their names held an unquoted "javascript: "
   or "http: ", which is not valid YAML, and `bru run` skips such a file
   without failing. tests/integration/bruno-request-files-parse.test.js now
