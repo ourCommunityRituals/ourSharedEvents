@@ -215,7 +215,15 @@ test('on a laptop the summary cards share one row, equal width', async ({ page }
 test('before any screen has shown the sponsor, the report counts nothing', async ({ page }) => {
   await openReport(page);
   await expect(page.getByTestId('premium-sponsor-count')).toHaveText('0');
-  await expect(page.getByTestId('premium-displays')).toHaveText('0');
+  // OSE-2089: a class total under the floor is withheld, and reads in words
+  // (AGENTS.md invariant 2). It read "0" before, the same as no displays at all.
+  await expect(page.getByTestId('premium-displays')).toHaveText(
+    'Fewer than 5 for any one sponsor on any one surface'
+  );
+  await expect(page.getByTestId('paid-displays-total')).toHaveText(
+    'fewer than 5 displays for any one sponsor on any one surface'
+  );
+  await expect(page.getByTestId('local-vs-paid-bar')).toHaveCount(0);
 });
 
 test('displays under the floor of 5: the report still shows no number', async ({
@@ -231,7 +239,15 @@ test('displays under the floor of 5: the report still shows no number', async ({
 
   await openReport(page);
   await expect(page.getByTestId('premium-sponsor-count')).toHaveText('0');
-  await expect(page.getByTestId('premium-displays')).toHaveText('0');
+  // OSE-2089: a class total under the floor is withheld, and reads in words
+  // (AGENTS.md invariant 2). It read "0" before, the same as no displays at all.
+  await expect(page.getByTestId('premium-displays')).toHaveText(
+    'Fewer than 5 for any one sponsor on any one surface'
+  );
+  await expect(page.getByTestId('paid-displays-total')).toHaveText(
+    'fewer than 5 displays for any one sponsor on any one surface'
+  );
+  await expect(page.getByTestId('local-vs-paid-bar')).toHaveCount(0);
 });
 
 test('the same screen reloading is not counted again', async ({ browser }) => {

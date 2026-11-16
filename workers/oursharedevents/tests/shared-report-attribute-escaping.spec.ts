@@ -423,11 +423,14 @@ describe('the signed-link view: the report a sponsor or bar owner opens', () => 
     });
     const doc = await openReport(wild);
     expect(doc.querySelectorAll(INJECTED)).toHaveLength(0);
-    const bar = doc.querySelector('[data-testid="local-vs-paid-bar"]')!;
-    expect(bar.getAttributeNames().sort()).toEqual(['aria-label', 'class', 'data-testid']);
-    for (const part of bar.children) {
-      expect(part.getAttributeNames().sort()).toEqual(['class', 'data-testid', 'style', 'title']);
-      expect(part.getAttribute('style')).toMatch(/^width:(NaN|\d+)%$/);
+    // OSE-2089: a class total that is not a number reads as withheld, in words,
+    // and no share bar is drawn for it, so the text never reaches a style or a
+    // title attribute.
+    expect(doc.querySelector('[data-testid="local-vs-paid-bar"]')).toBeNull();
+    for (const cls of ['local', 'mid', 'premium']) {
+      const cell = doc.querySelector(`[data-testid="${cls}-displays"]`)!;
+      expect(cell.children).toHaveLength(0);
+      expect(cell.textContent).toMatch(/^Fewer than 5 /);
     }
     const chip = doc.querySelector('[data-testid="corridor-map-cell-count"]')!;
     expect(chip.getAttributeNames().sort()).toEqual(['aria-label', 'class', 'data-testid']);

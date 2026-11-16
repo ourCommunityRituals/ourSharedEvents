@@ -31,13 +31,18 @@ docs: |-
   status only; a paused campaign is not named in public and its sponsor still
   shows.
 
-  Requests 80 to 83 (OSE-2046): the SharedReport campaign summary of one more
+  Requests 80 to 84 (OSE-2046): the SharedReport campaign summary of one more
   fixture event, camp-rpt-evt. Each sponsor counts once however many surfaces
   it is on; a campaign whose displays are all under 5 is listed with its total
   withheld, and 0, 1 and 4 displays read the same. Request 80 puts the paid
-  report on for that one event (the summary is a Mid section) and 83 takes it
+  report on for that one event (the summary is a Mid section) and 84 takes it
   off. They compare named fields of one response, never a whole body.
 
+  Request 83 (OSE-2089) reads the same report's class breakdown: a class with
+  no sponsor, and a class whose one sponsor has 4 displays, both have their
+  total withheld (null, with the words in the notes), never 0.
+
   Mock-layer twins: workers/oursharedevents/tests/campaigns.spec.ts,
-  tests/campaign-events.spec.ts, tests/campaign-update.spec.ts and
-  tests/shared-report-campaign-summary.spec.ts.
+  tests/campaign-events.spec.ts, tests/campaign-update.spec.ts,
+  tests/shared-report-campaign-summary.spec.ts and
+  tests/shared-report-class-floor.spec.ts.

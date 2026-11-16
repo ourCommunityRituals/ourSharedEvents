@@ -29,6 +29,7 @@
 
 import { campaignWithheldReasons, summarizeCampaigns, type CampaignLink } from './campaign-summary';
 import { EFFECTIVE_CAMPAIGN_ID_SQL } from './campaigns';
+import { classWithheldReasons, summarizeSponsorClasses } from './sponsor-class-breakdown';
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 import { renderCorridorMap } from './corridor-map';
 import { gridRingUnsafe } from 'h3-js';
@@ -327,11 +328,24 @@ export interface SharedReport {
    * investment, or is the spend doing real work?" Classification labels are
    * data IN the report, not access gates ON the reader.
    */
-  sponsor_class_breakdown: {
-    local: { sponsor_count: number; total_displays: number };
-    mid: { sponsor_count: number; total_displays: number };
-    premium: { sponsor_count: number; total_displays: number };
-  };
+  sponsor_class_breakdown: Record<
+    'local' | 'mid' | 'premium',
+    {
+      /**
+       * Distinct sponsors of the class with a published `sponsor_displays` row.
+       * A count of businesses (the `entity` class of lib/dashboard-contract.ts),
+       * so it is exact and has no floor. It does not move with displays under
+       * the floor: it steps at 5, with the row that is published at 5.
+       */
+      sponsor_count: number;
+      /**
+       * The sum of the (sponsor x surface) rows published for the class. Null
+       * when no row of the class reached the floor (withheld; 0 reads the same
+       * as 1 to 4, and a class with no sponsor reads the same too).
+       */
+      total_displays: number | null;
+    }
+  >;
 
   poster_attribution: Array<{
     poster_deployment_id: string;
@@ -745,39 +759,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const campaignSummary = summarizeCampaigns(campaignLinks, sponsorDisplays);
   suppression.push(...campaignWithheldReasons(campaignSummary));
 
-  // SR-25: sponsor_class_breakdown — class-level aggregates from sponsorDisplays.
-  // Mapping: is_local=true → 'local'; non-local + tier in top set → 'premium'; else → 'mid'.
-  // Inline classification — this file must stay tier-blind (invariant #5 tier_equity).
-  const PREMIUM_TIERS = new Set(['title', 'platinum', 'gold']);
-  function classifySponsor(tier: string | null, isLocal: boolean): 'local' | 'mid' | 'premium' {
-    if (isLocal) return 'local';
-    return tier !== null && PREMIUM_TIERS.has(tier) ? 'premium' : 'mid';
-  }
-  const sponsorClassBreakdown: {
-    local: { sponsor_count: number; total_displays: number };
-    mid: { sponsor_count: number; total_displays: number };
-    premium: { sponsor_count: number; total_displays: number };
-  } = {
-    local: { sponsor_count: 0, total_displays: 0 },
-    mid: { sponsor_count: 0, total_displays: 0 },
-    premium: { sponsor_count: 0, total_displays: 0 },
-  };
-  // OSE-683: each (sponsor × surface) impression row is a contributing bucket —
-  // floor it per bucket BEFORE summation. A sub-K row is dropped from the class
-  // total (and does not, on its own, count the sponsor into the class): only
-  // rows that individually clear K contribute, matching the campaign_summary and
-  // distinct_scanners treatment so no surface leaks a sub-K aggregate.
-  const seenSponsorClass = new Map<string, 'local' | 'mid' | 'premium'>();
-  for (const row of sponsorDisplays) {
-    const floored = applyCountFloor(row.count);
-    if (floored.count === null) continue; // sub-K bucket — drop before summation
-    const cls = classifySponsor(row.sponsor_tier, row.is_local);
-    if (!seenSponsorClass.has(row.sponsor_id)) {
-      seenSponsorClass.set(row.sponsor_id, cls);
-      sponsorClassBreakdown[cls].sponsor_count += 1;
-    }
-    sponsorClassBreakdown[cls].total_displays += floored.count;
-  }
+  // SR-25: sponsor_class_breakdown, class-level totals of the sponsorDisplays
+  // rows published above. A class with no row at the floor has its total
+  // withheld (null) and says so in words, never 0 (OSE-2089, invariant 2).
+  const sponsorClassBreakdown = summarizeSponsorClasses(sponsorDisplays);
+  suppression.push(...classWithheldReasons(sponsorClassBreakdown));
 
   // 6. poster_attribution — per poster_deployment_id
   //    OSE-1459: the K-floor is applied per poster-HOUR before the hours are

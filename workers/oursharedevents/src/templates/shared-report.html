@@ -1314,13 +1314,26 @@
           (report.sponsor_class_breakdown
             ? (function() {
                 const scb = report.sponsor_class_breakdown;
-                const localImpr = scb.local ? scb.local.total_displays : 0;
-                const paidImpr = (scb.mid ? scb.mid.total_displays : 0) + (scb.premium ? scb.premium.total_displays : 0);
+                // OSE-2089: a class total is withheld (null) when no sponsor of
+                // the class reached 5 displays on any one surface. It reads in
+                // words, never as 0 (invariant 2). A total is a sum of floored
+                // parts, so the words say which part did not reach 5.
+                const WITHHELD_TAIL = 'for any one sponsor on any one surface';
+                const shown = (c) => (c && typeof c.total_displays === 'number' ? c.total_displays : null);
+                const cell = (n) => (n == null ? esc(oseFewerThan(5, WITHHELD_TAIL)) : fmtInt(n));
+                const line = (n) => (n == null ? esc(oseFewerThan(5, 'displays ' + WITHHELD_TAIL, true)) : fmtInt(n));
+                const localImpr = shown(scb.local);
+                const midImpr = shown(scb.mid);
+                const premiumImpr = shown(scb.premium);
+                // Paid is the published classes only; withheld when neither is.
+                const paidImpr = midImpr == null && premiumImpr == null ? null : (midImpr || 0) + (premiumImpr || 0);
                 const localSponsors = scb.local ? scb.local.sponsor_count : 0;
                 const midSponsors = scb.mid ? scb.mid.sponsor_count : 0;
                 const premiumSponsors = scb.premium ? scb.premium.sponsor_count : 0;
-                const totalImpr = localImpr + paidImpr || 1;
-                const localPct = Math.round((localImpr / totalImpr) * 100);
+                // A share is drawn only between two published totals: a bar
+                // beside a withheld side would read it as 0%.
+                const bothShown = localImpr != null && paidImpr != null;
+                const localPct = bothShown ? Math.round((localImpr / (localImpr + paidImpr)) * 100) : 0;
                 const paidPct = 100 - localPct;
                 return (
                   '<section class="funnel-card" data-testid="signed-link-sponsor-class-breakdown">' +
@@ -1332,15 +1345,17 @@
                   // OSE-1993: data-label on every cell, as on every other table here; on a
                   // phone the cell prints its label (td::before), and without one it
                   // printed a bare ": ".
-                  '<tr data-testid="sponsor-class-row-local"><td data-label="Class">Local</td><td data-label="Sponsors" data-testid="local-sponsor-count">' + fmtInt(localSponsors) + '</td><td data-label="Displays" data-testid="local-displays">' + fmtInt(localImpr) + '</td></tr>' +
-                  '<tr data-testid="sponsor-class-row-mid"><td data-label="Class">Anchor</td><td data-label="Sponsors" data-testid="mid-sponsor-count">' + fmtInt(midSponsors) + '</td><td data-label="Displays" data-testid="mid-displays">' + fmtInt(scb.mid ? scb.mid.total_displays : 0) + '</td></tr>' +
-                  '<tr data-testid="sponsor-class-row-premium"><td data-label="Class">Premium</td><td data-label="Sponsors" data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-label="Displays" data-testid="premium-displays">' + fmtInt(scb.premium ? scb.premium.total_displays : 0) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-local"><td data-label="Class">Local</td><td data-label="Sponsors" data-testid="local-sponsor-count">' + fmtInt(localSponsors) + '</td><td data-label="Displays" data-testid="local-displays">' + cell(localImpr) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-mid"><td data-label="Class">Anchor</td><td data-label="Sponsors" data-testid="mid-sponsor-count">' + fmtInt(midSponsors) + '</td><td data-label="Displays" data-testid="mid-displays">' + cell(midImpr) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-premium"><td data-label="Class">Premium</td><td data-label="Sponsors" data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-label="Displays" data-testid="premium-displays">' + cell(premiumImpr) + '</td></tr>' +
                   '</tbody></table>' +
-                  '<div class="local-vs-paid-bar" data-testid="local-vs-paid-bar" aria-label="Local ' + esc(localPct) + '% vs Paid ' + esc(paidPct) + '%">' +
-                  '<div class="bar-local" data-testid="bar-local" style="width:' + localPct + '%" title="Local ' + esc(localPct) + '%"></div>' +
-                  '<div class="bar-paid" data-testid="bar-paid" style="width:' + paidPct + '%" title="Paid ' + esc(paidPct) + '%"></div>' +
-                  '</div>' +
-                  '<p class="report-note" data-testid="local-vs-paid-delta">Local: <strong data-testid="local-displays-total">' + fmtInt(localImpr) + '</strong> displays · Paid: <strong data-testid="paid-displays-total">' + fmtInt(paidImpr) + '</strong> displays</p>' +
+                  (bothShown
+                    ? '<div class="local-vs-paid-bar" data-testid="local-vs-paid-bar" aria-label="Local ' + esc(localPct) + '% vs Paid ' + esc(paidPct) + '%">' +
+                      '<div class="bar-local" data-testid="bar-local" style="width:' + localPct + '%" title="Local ' + esc(localPct) + '%"></div>' +
+                      '<div class="bar-paid" data-testid="bar-paid" style="width:' + paidPct + '%" title="Paid ' + esc(paidPct) + '%"></div>' +
+                      '</div>'
+                    : '') +
+                  '<p class="report-note" data-testid="local-vs-paid-delta">Local: <strong data-testid="local-displays-total">' + line(localImpr) + '</strong>' + (localImpr == null ? '' : ' displays') + ' · Paid: <strong data-testid="paid-displays-total">' + line(paidImpr) + '</strong>' + (paidImpr == null ? '' : ' displays') + '</p>' +
                   '</section>'
                 );
               })()
