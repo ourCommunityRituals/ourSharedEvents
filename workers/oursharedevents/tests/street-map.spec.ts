@@ -2194,7 +2194,7 @@ describe('street map | the edges of the world', () => {
 
 describe('street map | the archive read: fat fingers, security, network', () => {
   // The name wrangler.toml sets: the United States subset (owner 2026-11-10).
-  const CONFIGURED = 'us-20261109.pmtiles';
+  const CONFIGURED = 'us-20261115.pmtiles';
   const sound = async (opts: { gzip?: boolean; leaf?: boolean } = { gzip: true, leaf: true }) =>
     pmtilesArchive(tilesForCells([BLUE7]).tiles, opts);
   const drawn = (layer: Awaited<ReturnType<typeof loadStreetLayer>>) =>
@@ -2218,23 +2218,23 @@ describe('street map | the archive read: fat fingers, security, network', () => 
   // The bucket holds a sound archive under the mistyped name itself, so a
   // reader that skipped the name rule would draw it.
   it.each([
-    ['a capital letter', 'Us-20261109.pmtiles'],
-    ['the extension in capitals', 'us-20261109.PMTILES'],
-    ['a space in front', ' us-20261109.pmtiles'],
-    ['a space after', 'us-20261109.pmtiles '],
-    ['a line break after', 'us-20261109.pmtiles\n'],
-    ['a tab after', 'us-20261109.pmtiles\t'],
-    ['a space inside', 'us 20261109.pmtiles'],
-    ['a comma for the full stop', 'us-20261109,pmtiles'],
-    ['no extension', 'us-20261109'],
-    ['the extension cut short', 'us-20261109.pmtile'],
-    ['a second extension', 'us-20261109.pmtiles.bak'],
+    ['a capital letter', 'Us-20261115.pmtiles'],
+    ['the extension in capitals', 'us-20261115.PMTILES'],
+    ['a space in front', ' us-20261115.pmtiles'],
+    ['a space after', 'us-20261115.pmtiles '],
+    ['a line break after', 'us-20261115.pmtiles\n'],
+    ['a tab after', 'us-20261115.pmtiles\t'],
+    ['a space inside', 'us 20261115.pmtiles'],
+    ['a comma for the full stop', 'us-20261115,pmtiles'],
+    ['no extension', 'us-20261115'],
+    ['the extension cut short', 'us-20261115.pmtile'],
+    ['a second extension', 'us-20261115.pmtiles.bak'],
     ['only the extension', '.pmtiles'],
-    ['a hyphen first', '-us-20261109.pmtiles'],
-    ['the quotes kept', '"us-20261109.pmtiles"'],
-    ['the bucket pasted in front', 'ose-map-tiles/us-20261109.pmtiles'],
-    ['the rclone target pasted whole', 'r2:ose-map-tiles/us-20261109.pmtiles'],
-    ['the download address pasted', 'https://build.protomaps.com/20261109.pmtiles'],
+    ['a hyphen first', '-us-20261115.pmtiles'],
+    ['the quotes kept', '"us-20261115.pmtiles"'],
+    ['the bucket pasted in front', 'ose-map-tiles/us-20261115.pmtiles'],
+    ['the rclone target pasted whole', 'r2:ose-map-tiles/us-20261115.pmtiles'],
+    ['the download address pasted', 'https://build.protomaps.com/20261115.pmtiles'],
     ['spaces only', '   '],
   ])(
     'fat finger: %s is not an archive name: no layer, and the bucket is never asked',
@@ -2251,9 +2251,9 @@ describe('street map | the archive read: fat fingers, security, network', () => 
 
   it('fat finger: a well-formed name with the wrong date finds no object: no layer, one read, no throw', async () => {
     const bucket = fakeBucket(CONFIGURED, await sound());
-    const env = { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: 'us-20261190.pmtiles' };
+    const env = { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: 'us-20261151.pmtiles' };
     expect(await loadStreetLayer(env, [BLUE7])).toBeNull();
-    expect(bucket.gets.map((g) => g.key)).toEqual(['us-20261190.pmtiles']);
+    expect(bucket.gets.map((g) => g.key)).toEqual(['us-20261151.pmtiles']);
     // Control: the right date draws from the same bucket.
     expect(drawn(await loadStreetLayer({ ...env, MAP_TILES_ARCHIVE: CONFIGURED }, [BLUE7]))).toBe(
       true

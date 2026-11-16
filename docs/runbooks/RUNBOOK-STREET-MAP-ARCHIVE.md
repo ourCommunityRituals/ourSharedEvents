@@ -68,7 +68,9 @@ first. Production reads the same object once it is bound ("Production, later").
 | Setting for the key | `MAP_TILES_ARCHIVE`   | `MAP_TILES_ARCHIVE`            |
 
 `YYYYMMDD` is the date of the Protomaps build the file was cut from.
-`wrangler.toml` carries `us-20261109.pmtiles`. The same three names are written
+`wrangler.toml` carries `us-20261115.pmtiles`: build `20261115`, named on
+2026-11-16 after build `20261109` aged out at Protomaps with nothing loaded
+("The build's window", below). The same three names are written
 in three places, and they change together, in one PR:
 
 | Name   | `wrangler.toml`                                | The workflow's `env` | This runbook's commands |
@@ -89,6 +91,24 @@ writes with a command this runbook does not show. The workflow's first step
 compares its three names with `wrangler.toml` on the commit it runs, and stops
 if they differ. The key must match
 `^[a-z0-9][a-z0-9._-]{0,80}\.pmtiles$` or the Worker refuses it.
+
+**The build's window.** Protomaps offers a daily build for about a week. Build
+`20261109` was still offered on 2026-11-15 at 19:38 UTC (`measure` run
+43753563640), and answered 404 on 2026-11-16 at 00:13 UTC (run 43779110535),
+between six and seven days after its date. By that one observation build
+`20261115` is offered through **2026-11-21 (UTC)** and is gone on 2026-11-22.
+The `measure` run, the owner's zoom decision ("Before the load", item 3) and
+the `load` all have to land inside that window. If they do not, the run stops
+at "The build is still offered at Protomaps" and the build is moved again, in
+one PR, as it was on 2026-11-16.
+
+**Open, for the owner: which kind of build.** Protomaps keeps one kind of build
+longer: the last build of each tileset version ("What the docs say", "Builds go
+away"). The newest of those is `20260811` (version 4.15.1, 137.3 GB). By
+Protomaps' rule it has no window. Its data is three months older than the
+daily builds', and the reader, the drawer and the check have only been tried
+on version 4.15.2. This runbook names the newest daily build until the owner
+says otherwise.
 
 ## The region
 
@@ -178,6 +198,19 @@ streets from an area that is itself inside a box, near its edge.
   the copy we load is the copy we keep: there is no going back to Protomaps for
   an old build, and the same file cannot be cut a second time once its build is
   gone. **The object in the bucket is that copy**; nobody holds another.
+  Read again on 2026-11-16 at 00:17 UTC, after build `20261109` had gone: the
+  list held 61 builds. Six were the daily builds `20261110` to `20261115`, all
+  tileset version 4.15.2 (`20261115` is 139,532,869,447 bytes). The other 55
+  went back to `20230918`, each the only build listed for its version; the
+  newest of them is `20260811`, version 4.15.1. Each of the 61 answered a
+  one-byte range request with 206, and `20261108` and `20261109` answered 404.
+  That fits what the Protomaps downloads page says its bucket keeps (read the
+  same day): all builds for the past week, and the latest build for each patch
+  version. The page gives no number of days beyond "the past week", says the
+  addresses may change, and asks users to copy a tileset to their own storage
+  and not to link to it. So a daily build is gone in about a week unless it is
+  the last of its version, and nobody outside Protomaps knows which daily
+  build that will be. <https://docs.protomaps.com/basemaps/downloads>
 - **Bucket locks.** Read 2026-11-14 (the page is dated 2026-10-28); not tried
   on our account. A lock rule stops objects being overwritten or deleted, for
   a number of days, until a date, or indefinitely until the rule is removed. A
@@ -246,7 +279,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
 3. **Measure first.** The build must still be offered, and then:
 
    ```bash
-   pmtiles extract https://build.protomaps.com/20261109.pmtiles us-20261109.pmtiles --region=docs/runbooks/street-map-us-region.geojson --dry-run
+   pmtiles extract https://build.protomaps.com/20261115.pmtiles us-20261115.pmtiles --region=docs/runbooks/street-map-us-region.geojson --dry-run
    ```
 
    It works out the tiles and prints the archive size without fetching them. The
@@ -258,7 +291,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
    workflow carries it as `WORKER_TOP_ZOOM`, and a test holds the two together):
 
    ```bash
-   pmtiles extract https://build.protomaps.com/20261109.pmtiles us-20261109.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14 --dry-run
+   pmtiles extract https://build.protomaps.com/20261115.pmtiles us-20261115.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14 --dry-run
    ```
 
    The summary then gives both sizes side by side. It is a figure for the
@@ -278,7 +311,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
 5. **Cut the United States file:**
 
    ```bash
-   pmtiles extract https://build.protomaps.com/20261109.pmtiles us-20261109.pmtiles --region=docs/runbooks/street-map-us-region.geojson
+   pmtiles extract https://build.protomaps.com/20261115.pmtiles us-20261115.pmtiles --region=docs/runbooks/street-map-us-region.geojson
    ```
 
    The command reads the build at Protomaps by byte range and writes only the
@@ -288,7 +321,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
 6. **Check the file before it goes anywhere:**
 
    ```bash
-   node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261109.pmtiles
+   node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261115.pmtiles
    ```
 
    It reads the file with the Worker's own reader and drawing code
@@ -315,7 +348,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
      nothing for London and Mexico City, which the region leaves out;
    - the file's name is the key `wrangler.toml` reads, on the commit of the run.
 
-   It writes `us-20261109.pmtiles.check.json` beside the file: the byte size,
+   It writes `us-20261115.pmtiles.check.json` beside the file: the byte size,
    the SHA-256, the header, the directory layout and each draw. The workflow
    keeps that record as the run artifact `street-map-archive-check-record` (90
    days, and for a file that failed too) and prints the byte size and the
@@ -325,7 +358,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
 7. **Upload** under the dated key:
 
    ```bash
-   rclone copyto us-20261109.pmtiles r2:ose-map-tiles/us-20261109.pmtiles --immutable --s3-chunk-size=256M --stats=1m --stats-one-line -v
+   rclone copyto us-20261115.pmtiles r2:ose-map-tiles/us-20261115.pmtiles --immutable --s3-chunk-size=256M --stats=1m --stats-one-line -v
    ```
 
    The key pair reaches rclone as environment variables of this step and the two
@@ -383,12 +416,18 @@ writes nothing and can run at any time.
    keeps every zoom of the build, and the Worker reads zoom 14 at most; whether
    to cut with a top zoom is decided before the first load, because a locked
    object is not changed (finding R6). **Measured 2026-11-15 (run
-   43753563640): 20 GB by dry run, with every zoom kept, and it fits the
-   runner** ("Staging, in order", step 2). How much of the 20 GB lies above
-   zoom 14 is not measured yet: that run made one dry run, without a top
-   zoom, so its size alone does not say what a top zoom would save. A
-   `measure` run now makes a second dry run at zoom 14 and prints both sizes
-   ("What the workflow runs", step 3); the next `measure` gives the figure.
+   43753563640), on build `20261109`: 20 GB by dry run, with every zoom kept,
+   and it fitted the runner** ("Staging, in order", step 2). That build is
+   gone, and the build named now, `20261115`, is not measured yet. How much
+   of the 20 GB lies above zoom 14 was never measured: that run made one dry
+   run, without a top zoom, so its size alone does not say what a top zoom
+   would save. A `measure` run now makes a second dry run at zoom 14 and
+   prints both sizes ("What the workflow runs", step 3). Its first dispatch,
+   run 43779110535 on 2026-11-16, stopped before the dry runs because build
+   `20261109` was gone, so the second dry run has still never run and there
+   is no top-zoom figure. The next `measure` from `main` gives both sizes for
+   build `20261115`, and the decision and the load have to follow inside that
+   build's window ("Names", "The build's window").
 4. **The licence.** [`NOTICE.md`](../../NOTICE.md) lists the duties and what is
    NOT CLEAR. Staging is public, so the first load is the first public street:
    the owner answers its question 2 (before the load, or before production)
@@ -460,7 +499,20 @@ writes nothing and can run at any time.
      All eight `LOAD:` steps were skipped: no bucket credential was used and
      nothing was written.
 
-   - **What "20 GB" is.** A dry-run figure: the tile data alone, rounded to a
+   - **The third, 43779110535 on 2026-11-16 at 00:13 UTC (from `main` at
+     `071165c4`), was red before it measured anything.** It was the first
+     dispatch after the second dry run was added (PR #1302). It stopped at
+     "The build is still offered at Protomaps":
+     `https://build.protomaps.com/20261109.pmtiles` answered 404, between six
+     and seven days after the build's date. The measure step was skipped, so
+     the dry run at the Worker's top zoom has still never run. One PR then
+     moved the build, the key, `wrangler.toml` and this runbook to build
+     `20261115` ("What stops a run"). **Build `20261115` is not measured
+     yet**: the 20 GB above is build `20261109`'s, and the next `measure`
+     from `main` is the first for the build named now.
+
+   - **What "20 GB" is.** A dry-run figure for build `20261109`: the tile data
+     alone, rounded to a
      whole number, so at most 20.55 GB, without the new directories, and with
      every zoom of the build kept. The byte size of the loaded file comes from
      the load run (step 5). A `measure` run does not show the cut itself or
@@ -477,7 +529,7 @@ writes nothing and can run at any time.
    never goes into chat, a ticket, a file in this repo or an agent's terminal.
 
 4. **Owner: load.** The same dispatch with `mode` = `load`. Green means the
-   bucket lists `us-20261109.pmtiles` at the checked size. Any red is explained
+   bucket lists `us-20261115.pmtiles` at the checked size. Any red is explained
    in "What stops a run". **This is the first public street.** The switch is
    already on for staging (step 8, done 2026-11-15 before any load). A Worker
    instance that asked and found no object remembers that for one minute and
@@ -495,7 +547,7 @@ writes nothing and can run at any time.
 6. **Owner: lock the object.** Only after the load is green. In the Cloudflare
    dashboard: R2 object storage, the bucket `ose-map-tiles`, the **Settings**
    tab, the **Bucket lock rules** card, **Add rule**. Name it after the build
-   (`us-20261109`), give it the whole key as its prefix (`us-20261109.pmtiles`),
+   (`us-20261115`), give it the whole key as its prefix (`us-20261115.pmtiles`),
    choose to keep objects locked indefinitely, and **Save changes**. From then
    on Cloudflare refuses to overwrite or delete that object, for the load token
    and for every other credential, until the rule is removed. New keys can
@@ -625,8 +677,9 @@ dashboard.
 
 ## If the file does not fit
 
-It fits today: on 2026-11-15 the `measure` run 43753563640 reported 20 GB by
-dry run against 90.5 GB free ("Staging, in order", step 2). GitHub documents
+Build `20261109` fitted: on 2026-11-15 the `measure` run 43753563640 reported
+20 GB by dry run against 90.5 GB free ("Staging, in order", step 2). The build
+named now, `20261115`, is not measured yet. GitHub documents
 14 GB of storage for a standard runner and promises no more, so every run
 reads what the runner really has, and the answer can change with the runner
 image or the build. If a run says the file does not fit, the choices are the
@@ -832,8 +885,11 @@ probe in the archive check, before the load.
 **The workflow has run in `measure` mode only.** It can only be dispatched once
 it is on `main`. Its first run (43744396310, 2026-11-15) stopped at the rclone
 download; its second (43753563640, the same day) was green through the dry run
-and the fit ("Staging, in order", step 2). So the downloads, the disk read, the
-dry run's last line and the fit have been seen working on a runner, once. No
+and the fit ("Staging, in order", step 2); its third (43779110535, 2026-11-16)
+stopped at the build check, because build `20261109` was gone. So the
+downloads, the disk read, the dry run's last line and the fit have been seen
+working on a runner, once, on a build that is no longer offered, and the
+second dry run, at the Worker's top zoom, has never run. No
 `LOAD:` step has run anywhere: not the bucket listing, the cut, the check or
 the upload. The workflow's decisions (the names, the bucket's privacy, the size
 against the disk, the key being free, the listed size) are tested on the faults
@@ -894,14 +950,15 @@ plus major road and 3% of every point drawn; roads that fall short are
 `thin-roads`, which fails the draw. The two numbers come from a workstation run
 over build `20261109` at Protomaps (the comment in
 `workers/oursharedevents/scripts/street-map-archive/check.ts`). No run of the
-eighteen against a United States file exists: the load workflow has two
-`measure` runs and no `load` run (read 2026-11-15), and the check is a `LOAD:`
+eighteen against a United States file exists: the load workflow has three
+`measure` runs and no `load` run (read 2026-11-16), and the check is a `LOAD:`
 step.
 
 Still unmeasured:
 
 - the United States file itself: its byte size (the dry run of 2026-11-15
-  gives 20 GB of tile data, rounded; "Staging, in order", step 2), how much of
+  gave 20 GB of tile data, rounded, for build `20261109`; build `20261115`,
+  the one named now, has no dry run yet; "Staging, in order", step 2), how much of
   that lies above zoom 14, how long the cut takes on a runner and how much
   memory it needs there, how its directories are laid out (how many leaf
   directories, how many entries in each), and the reader drawing from it. The
