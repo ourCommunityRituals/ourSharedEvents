@@ -169,6 +169,9 @@ export const NODE_SPECS = [
   // handler's use of it, the admin picker endpoint, edge + fat-finger renders.
   // Mocks the data provider and the catalog read; no cloudflare:test.
   'tests/landing-category-scenarios.spec.ts',
+  // OSE-2094 — the landing's latch, sponsor and catalog reads start with the
+  // event list. Fake D1 + mocked data provider; no cloudflare:test.
+  'tests/landing-reads-together.spec.ts',
   'tests/attendee-map.spec.ts',
   // Street map under the hexagons — PMTiles reader, vector tile decoder and the
   // server-drawn layer over in-memory archives and a fake R2 bucket (no runtime).
