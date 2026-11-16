@@ -1,7 +1,8 @@
 # The Where step, our own map, and the map choice: one design (2026-11-16)
 
-**Status:** proposed, for the owner to confirm. Read-only pass: no code, test, migration or ticket was
-changed or created. Nothing here was run; every "today" line is a source read on `main` at
+**Status:** confirmed by the owner on 2026-11-16, with all four decisions in section 8 as
+recommended. Nothing is built. The slices are ticketed (section 9). It was written as a read-only
+pass: no code, test or migration was changed. Nothing here was run; every "today" line is a source read on `main` at
 `e7d21601`, with the lines given. Paths are under `workers/oursharedevents/src/` unless they say
 otherwise.
 
@@ -340,6 +341,21 @@ admin writes becomes true in a stricter form than it is written; rewording it is
 
 Only what the code could not settle. Each has a recommendation.
 
+**The owner's answer (2026-11-16).** Asked "Confirm the Where-step design with all four
+recommended decisions?", the owner answered, word for word: "Confirm all four". So each of the
+four below is decided as recommended:
+
+- **D1.** A zip finds an event; only the organizer's tap puts it on the map. No cell is made from a zip.
+- **D2.** A listed event that nobody placed stays listed and found by zip, with no hexagon.
+- **D3.** A block and a dot only by the organizer's own tap, only for a business or public
+  place, never for a home. This answers the precision review's decision 2 for this design. It
+  puts no text into `OCR_VISION.md` or invariant 3; that still needs the new ADR.
+- **D4.** Cells that came from a Google point are cleared with the points.
+
+The three lines after the list (sponsor "local", the venue picture, when the lookup route goes)
+were recommendations on ADR-039's own questions. The owner's answer was to the four; those three
+stand as recommendations and are written that way on their tickets.
+
 1. **A zip finds an event; only the organizer's tap puts it on the map.** Recommended. The other
    way (the zip also lights the hexagon at the zip's centre) is ADR-039's option 2 and distorts
    the reports as section 4 shows.
@@ -359,7 +375,18 @@ picker ships, not before.
 
 ---
 
-## 9. Build slices (epic OSE-1880). Nothing is built or ticketed until the owner confirms.
+## 9. Build slices (epic OSE-1880). Ticketed on 2026-11-16 after the owner confirmed; nothing is built.
+
+| Slice | Story                 | CI/CD testing ticket |
+| ----- | --------------------- | -------------------- |
+| W1    | OSE-2095              | OSE-2102             |
+| W2    | OSE-2096              | OSE-2103             |
+| W3    | OSE-2097              | OSE-2104             |
+| W4    | OSE-2098              | OSE-2105             |
+| W5    | OSE-1985 (it existed) | OSE-2106             |
+| W6    | OSE-2099              | OSE-2107             |
+| W7    | OSE-2100              | OSE-2108             |
+| W8    | OSE-2101              | OSE-2109             |
 
 Every slice has a CI/CD testing ticket and cases at both layers: the workers-pool mock layer and
 staging (Bruno or Playwright, named in a workflow). Every new test is watched red on an injected
