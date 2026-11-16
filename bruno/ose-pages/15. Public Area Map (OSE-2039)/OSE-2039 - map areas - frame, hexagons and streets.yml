@@ -23,8 +23,9 @@ runtime:
         // Streets, three states, as on the landing (1. Landing - Public):
         //   streets drawn          every street assertion runs.
         //   streets null, archive not loaded (streetMapArchiveLoaded is not "true")
-        //                          the fail-soft answer is asserted and the street
-        //                          assertions print NOT RUN.
+        //                          the fail-soft answer is asserted and a test named
+        //                          NOT RUN says what was not checked (it passes only
+        //                          while the flag is exactly "false").
         //   streets null, archive loaded
         //                          a named test fails.
         //
@@ -45,7 +46,8 @@ runtime:
         // It is not streetMapArchiveLoaded: that flag says what these cases must
         // see, and this says what the Worker is set to draw.
         const edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
-        const loaded = String(bru.getEnvVar('streetMapArchiveLoaded')) === 'true';
+        const flag = String(bru.getEnvVar('streetMapArchiveLoaded'));
+        const loaded = flag === 'true';
         const sw = String(bru.getEnvVar('streetMapSwitch'));
         const SWITCH_TEST = sw === 'off'
           ? 'Street-map switch: STREET_MAP is "off" for this environment, and no street layer is drawn'
@@ -146,7 +148,9 @@ runtime:
               expect(json.streets, 'the environment file says the street-map archive is loaded, and the route drew no street layer').to.not.equal(null);
             });
           } else {
-            console.log('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): street layer paths, CSS, OpenStreetMap credit, no third-party host');
+            test('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): street layer paths, CSS, OpenStreetMap credit, no third-party host', function () {
+              expect(flag, 'a NOT RUN test passes only while the environment file sets streetMapArchiveLoaded to "false"').to.equal('false');
+            });
           }
         }
 

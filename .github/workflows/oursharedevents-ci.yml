@@ -1776,6 +1776,10 @@ jobs:
           echo "Stage 1 of the fail-fast chain — a red here skips T3 E2E smoke + T4 functional." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Collection:** \`${{ matrix.collection }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          # What this run says, by test name, it did not check (a Bruno case that
+          # leaves assertions out names a test "NOT RUN (...)"). Never fails the step.
+          node scripts/ci/bruno-not-run.mjs ".test-results/${{ matrix.junit }}" >> $GITHUB_STEP_SUMMARY
 
   contract-staging:
     name: 'T2 Contract → Staging (Bruno)'

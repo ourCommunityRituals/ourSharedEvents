@@ -77,6 +77,25 @@
  *   S6  workflow: `--env-var "streetMapSwitch=on"` on the Pages run
  *         -> "the workflow passes the copy to no one"
  *
+ * NOT RUN as a test name (2026-11-15). The cases printed NOT RUN with console.log,
+ * which no report keeps: the JUnit file and the check built from it hold test
+ * names only. It is now a test of the same words, and it passes only while the
+ * flag is exactly "false". Faulted the same way:
+ *   N0  all four cases as they were on main (console.log)
+ *         -> 17 tests: each case's "flag false" test, the five "passes under the
+ *            name" tests, the five "flag missing or mistyped" tests, "no Pages
+ *            case prints NOT RUN with console.log" and "names NOT RUN in a test"
+ *   N1  api: the NOT RUN test back to a console.log
+ *         -> 5 tests, all the API case's, the last two of N0 among them
+ *   N2  area: the NOT RUN test asserts nothing (an empty body)
+ *         -> "area, flag missing or mistyped: the NOT RUN test fails by name" alone:
+ *            a NOT RUN test that cannot fail is caught by that test only
+ *   N3  zoom16: the NOT RUN test also runs when the flag is "true"
+ *         -> "flag true, no street layer: fails by name", and zoom16's "flag
+ *            missing or mistyped" and "flag true: no NOT RUN test"
+ *   N4  landing: the no-map NOT RUN test dropped
+ *         -> the three tests of the landing that draws no map
+ *
  * The H tests only read the Playwright source. What it does was seen in Chromium
  * against a local Worker (wrangler dev, local D1 with the two fixtures, a
  * synthetic archive in local R2), in three states: no archive, streets, and a
@@ -136,6 +155,19 @@ const LANDING_NO_MAP =
 const LANDING_MAP_BINDING =
   'The landing draws its map, so its streets can be checked (streetMapArchiveLoaded is true for this environment)';
 const API_SOFT = 'Without streets the answer is still the hexagons, and streets is null';
+// What was not checked, by case. The words are the ones the cases printed with
+// console.log before; each is now the name of a test.
+const NOT_LOADED =
+  'NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): ';
+const NOT_RUN = {
+  landing:
+    NOT_LOADED + 'street layer under the hexagons, OpenStreetMap credit, no third-party host',
+  landingNoMap:
+    'NOT RUN (the landing draws no map: fewer than 10 events on this environment): street layer under the hexagons',
+  area: NOT_LOADED + 'dots over the street layer, OpenStreetMap credit',
+  api: NOT_LOADED + 'street layer paths, CSS, OpenStreetMap credit, no third-party host',
+  zoom16: NOT_LOADED + 'the area and a dot per place over the street layer',
+};
 
 /**
  * Run one case's script the way Bruno does: its `test()` calls are collected,
@@ -172,7 +204,13 @@ function run(which, opts) {
   );
   return out;
 }
-const notRun = (r) => r.logs.filter((l) => l.startsWith('NOT RUN'));
+/** The NOT RUN tests that passed: what the run says, by name, it did not check. */
+const notRun = (r) => r.passed.filter((n) => n.startsWith('NOT RUN'));
+/** Every test name that says NOT RUN, passed or failed. */
+const notRunNamed = (r) => r.passed.concat(r.failed).filter((n) => n.includes('NOT RUN'));
+/** A NOT RUN line that was only printed: no report keeps it. */
+const notRunPrinted = (r) =>
+  r.logs.filter((l) => l.includes('NOT RUN') && !l.startsWith('FAILED '));
 
 // ── pages in each state, in the markup lib/attendee-map.ts and lib/street-map.ts write ──
 
@@ -279,7 +317,7 @@ describe('the zoomed seeded area reads the flag (folder 16, R21)', () => {
     expect(r.passed).toContain(Z16_LIST);
     expect(r.failed).not.toContain(Z16_LIST);
     expect(r.passed.concat(r.failed)).not.toContain(BINDING);
-    expect(notRun(r)).toHaveLength(1);
+    expect(notRun(r)).toEqual([NOT_RUN.zoom16]);
   });
 
   test('the load day: flag still false, the dot map over streets passes', () => {
@@ -422,7 +460,7 @@ describe('no streets: a named test prints in both states of the flag', () => {
     const off = run('area', { body, flag: 'false' });
     expect(off.passed).toContain(AREA_LIST);
     expect(off.failed).toEqual([]);
-    expect(notRun(off)).toHaveLength(1);
+    expect(notRun(off)).toEqual([NOT_RUN.area]);
     const on = run('area', { body, flag: 'true' });
     expect(on.failed).toEqual([BINDING]);
     expect(notRun(on)).toEqual([]);
@@ -443,16 +481,16 @@ describe('no streets: a named test prints in both states of the flag', () => {
     const off = run('landing', { body, flag: 'false' });
     expect(off.passed).toContain(LANDING_SOFT);
     expect(off.failed).toEqual([]);
-    expect(notRun(off)).toHaveLength(1);
+    expect(notRun(off)).toEqual([NOT_RUN.landing]);
     const on = run('landing', { body, flag: 'true' });
     expect(on.failed).toEqual([BINDING]);
   });
 
-  test('the landing draws no map, flag false: a named test passes and NOT RUN is printed', () => {
+  test('the landing draws no map, flag false: a named test passes and a NOT RUN test says so', () => {
     const r = run('landing', { body: landingPage({ map: false }), flag: 'false' });
     expect(r.passed).toContain(LANDING_NO_MAP);
     expect(r.failed).toEqual([]);
-    expect(notRun(r)).toHaveLength(1);
+    expect(notRun(r)).toEqual([NOT_RUN.landingNoMap]);
   });
 
   test('the landing draws no map, flag true: fails by name, not a printed line', () => {
@@ -465,7 +503,7 @@ describe('no streets: a named test prints in both states of the flag', () => {
     const off = run('api', { body: areasAnswer(''), flag: 'false' });
     expect(off.passed).toContain(API_SOFT);
     expect(off.failed).toEqual([]);
-    expect(notRun(off)).toHaveLength(1);
+    expect(notRun(off)).toEqual([NOT_RUN.api]);
     const on = run('api', { body: areasAnswer(''), flag: 'true' });
     expect(on.failed).toEqual([BINDING]);
   });
@@ -501,6 +539,111 @@ describe('no streets: a named test prints in both states of the flag', () => {
         expect(printed.length, `${which}, flag ${flag}`).toBeGreaterThan(0);
       }
     }
+  });
+});
+
+// AGENTS.md: a Bruno run counts only if its test() names print. A console.log
+// line is in the step's log and nowhere else: not in the JUnit file, not in the
+// check built from it, not in the job summary. So what a case did not check is
+// the name of a test.
+describe('NOT RUN is the name of a test, not a printed line', () => {
+  // Every state in which a case leaves its street assertions out.
+  const STATES = [
+    ['landing', NOT_RUN.landing, landingPage({})],
+    ['landing', NOT_RUN.landingNoMap, landingPage({ map: false })],
+    ['area', NOT_RUN.area, zoomPage(MG, { note: true })],
+    ['api', NOT_RUN.api, areasAnswer('')],
+    ['zoom16', NOT_RUN.zoom16, zoomPage(Z16, { note: true })],
+  ];
+  // The street-map tests of a case that failed. The folder 16 case asserts on
+  // the whole zoomed page (panels, cards, Share), which the pages built here do
+  // not carry, so its other tests are left out of the count.
+  const STREET_TESTS = [
+    ROADS,
+    BINDING,
+    Z16_STREETS,
+    Z16_LIST,
+    AREA_DOT,
+    AREA_LIST,
+    LANDING_SOFT,
+    LANDING_NO_MAP,
+    LANDING_MAP_BINDING,
+    API_SOFT,
+  ];
+  const streetFails = (r) =>
+    r.failed.filter((n) => STREET_TESTS.includes(n) || n.includes('NOT RUN'));
+  // The same cases with streets drawn: nothing is left out.
+  const DRAWN = [
+    ['landing', landingPage({ streets: GOOD })],
+    ['area', zoomPage(MG, { streets: GOOD, dots: 1 })],
+    ['api', areasAnswer(GOOD)],
+    ['zoom16', zoomPage(Z16, { streets: GOOD, dots: 3 })],
+  ];
+
+  test.each(STATES)('%s, flag "false": passes under the name "%s"', (which, name, body) => {
+    const r = run(which, { body, flag: 'false' });
+    expect(notRunNamed(r)).toEqual([name]);
+    expect(r.passed).toContain(name);
+    expect(streetFails(r)).toEqual([]);
+    expect(notRunPrinted(r)).toEqual([]);
+  });
+
+  test.each(STATES)(
+    '%s, flag missing or mistyped: the NOT RUN test fails by name ("%s")',
+    (which, name, body) => {
+      // Not "true", so the case takes it for "not loaded". It may not pass for that.
+      for (const flag of [undefined, '', 'False', 'FALSE', 'no', 'true ', '0']) {
+        const r = run(which, { body, flag });
+        expect(streetFails(r), String(flag)).toEqual([name]);
+        expect(notRun(r), String(flag)).toEqual([]);
+      }
+    }
+  );
+
+  test.each(STATES)(
+    '%s, flag "true": no NOT RUN test, the case fails by name (%s is not said)',
+    (which, _name, body) => {
+      const r = run(which, { body, flag: 'true' });
+      expect(notRunNamed(r)).toEqual([]);
+      expect(notRunPrinted(r)).toEqual([]);
+      expect(streetFails(r)).toHaveLength(1);
+      expect([BINDING, LANDING_MAP_BINDING]).toContain(streetFails(r)[0]);
+    }
+  );
+
+  test.each(DRAWN)(
+    '%s, streets drawn: no NOT RUN test in either state of the flag',
+    (which, body) => {
+      for (const flag of ['false', 'true']) {
+        const r = run(which, { body, flag });
+        expect(notRunNamed(r), flag).toEqual([]);
+        expect(notRunPrinted(r), flag).toEqual([]);
+        expect(streetFails(r), flag).toEqual([]);
+      }
+    }
+  );
+
+  test('the five names are five different lines, each naming what was left out', () => {
+    const names = Object.values(NOT_RUN);
+    expect(new Set(names).size).toBe(5);
+    for (const n of names) expect(n).toMatch(/^NOT RUN \([^)]+\): \S/);
+  });
+
+  test('no Pages case prints NOT RUN with console.log', () => {
+    const offenders = [];
+    const walk = (dir) => {
+      for (const e of readdirSync(join(ROOT, ...dir), { withFileTypes: true })) {
+        if (e.isDirectory()) walk([...dir, e.name]);
+        else if (
+          e.name.endsWith('.yml') &&
+          /console\.\w+\([^\n]*NOT RUN/.test(read(...dir, e.name))
+        ) {
+          offenders.push([...dir, e.name].join('/'));
+        }
+      }
+    };
+    walk(PAGES);
+    expect(offenders).toEqual([]);
   });
 });
 
@@ -606,11 +749,12 @@ describe('one place says whether the archive is loaded', () => {
     expect(wf).toContain('npx bru run . -r --env ose-staging');
   });
 
-  test('every case that asserts on the street layer reads the flag and prints NOT RUN by name', () => {
+  test('every case that asserts on the street layer reads the flag and names NOT RUN in a test', () => {
     for (const which of STREET_CASES) {
       const text = scriptOf(which);
       expect(text).toContain("bru.getEnvVar('streetMapArchiveLoaded')");
-      expect(text).toMatch(/console\.log\('NOT RUN \(street-map archive not loaded/);
+      expect(text).toContain(`test('${NOT_RUN[which]}', function () {`);
+      expect(text).not.toMatch(/console\.\w+\([^\n]*NOT RUN/);
       expect(text).toContain(BINDING);
     }
   });
