@@ -3072,7 +3072,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 14
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-date-utc.spec.ts",
@@ -3856,7 +3856,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 22
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/withheld-counts-in-words.spec.ts",

@@ -23,7 +23,8 @@
  *     or degraded per tier. Same pipeline, same numbers, fewer sections.
  *   – Sponsor slice isolation: role=sponsor sees only their own
  *     sponsor_displays rows (cross-contamination = critical bug per the
- *     April 7 CCR).
+ *     April 7 CCR). The class breakdown is not part of that slice: its totals
+ *     are whole-event at every depth (owner ruling 2026-11-16, below).
  */
 
 import type { SignedLinkRole } from './shared-report-auth';
@@ -40,10 +41,13 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'event_end_date',
     'distinct_scanners',
     'sponsor_displays',
-    // sponsor_class_breakdown is CLASS-level aggregate (never per-competitor) —
-    // the tier-neutral competitive-intel delivery SR-25 chose over field-stripping.
-    // Present at every depth (OSE-719 decision, 2026-08-28): the depth gate strips
-    // only the genuinely paid sections, never this aggregate.
+    // sponsor_class_breakdown is the class-level competitive view, present at
+    // every depth and on a sponsor's own link (OSE-719, 2026-08-28). Owner
+    // ruling 2026-11-16 (OSE-2089): a count at or over the floor is open
+    // knowledge between the sponsors of an event. In a class of two, a sponsor
+    // can work out the other's total from it; that is accepted. What a sponsor
+    // pays for is depth of data and features, and the report never takes this
+    // view away from a local or smaller sponsor. Counts under 5 stay withheld.
     'sponsor_class_breakdown',
     '_meta',
   ],
