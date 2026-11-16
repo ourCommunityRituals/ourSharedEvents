@@ -4,6 +4,10 @@ Date: 2026-11-16 · Story: OSE-2087 · Class: governance file (5+ loops, human g
 
 **Status: loop 1 of 5 done. Stopped at the human gate. Nothing in AGENTS.md has been changed.**
 
+**These are working notes, not the worksheet.** The repository's worksheet gate (`scripts/ci/ccr-worksheet-check.mjs`) reads `.claude/outputs` and fails a worksheet that has run fewer loops than its class needs, so a five-loop review has no valid worksheet until all five loops exist. The worksheet, with its frontmatter, is written to `.claude/outputs` when loop 5 is done. A first copy of these notes was put there and failed that gate (PR 1372, `T0 Tests (root-vitest)`).
+
+**Loop order, corrected.** The gate records the owner's rulings of 2026-11-01/02: five loops are five lenses on the same subject, in this order: 1 Critical, 2 Conservative, 3 Adversarial, 4 Compliance, 5 Recursive. All five run, nothing is changed between them, and the scores are taken together. So loop 1 below is the Critical lens only; its "Conservative" and "Recursive" paragraphs are early notes for loops 2 and 5, not those loops. AGENTS.md adds a human gate after every loop for a governance file; both rules are followed.
+
 ## Verdict
 
 |                                                           |                                                                                                              |
@@ -24,7 +28,7 @@ The proposal that started this review: both tickets are Done, so the sentence sh
 
 ## Loop 1 (surface pass)
 
-Team: the main session, and the Dr of Security as a read-only sweep (it listed its commands; all were `grep`, `sed -n`, `git log`).
+Team: dr-of-security (a read-only sweep) with the main session (it listed its commands; all were `grep`, `sed -n`, `git log`).
 
 ### Critical: what is true, and what is assumed
 
