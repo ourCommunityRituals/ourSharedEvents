@@ -16,7 +16,7 @@
  * hexagon of the landing map: the hexagon is painted over the street layer, so
  * it tints the name and its halo alike. The component fixture happens to put no
  * name under a hexagon, so this is computed, not rendered ("a town name under a
- * hexagon" below): 2.76:1 light and 2.48:1 dark under the busiest area (50%),
+ * hexagon" below): 2.76:1 light and 2.47:1 dark under the busiest area (50%),
  * and under 4.5:1 from a strength of about 22%.
  *
  * BORN RED (2026-11-15, and run again 2026-11-16). The module was faulted, one
