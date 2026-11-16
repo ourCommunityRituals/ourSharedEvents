@@ -1,9 +1,10 @@
-# ADR-039: Give an event its place on the map with no call to Google
+# ADR-039: Stop our own systems calling Google Maps, starting with an event's place on the map
 
-**Status:** Proposed. Nothing in it is built and nothing in it is chosen. It sets out three ways an
-event can get its map cell without Google, so the owner can accept or refuse each. Merging the pull
-request that carries it records the options; it accepts none of them (see "Open, for the owner").
-No runtime code changes with it, and neither does `AGENTS.md`, `CLAUDE.md` or `OCR_VISION.md`.
+**Status:** Proposed. Nothing in it is built and nothing in it is chosen. It lists every call our
+own systems make to Google Maps (four, all in OSE) and sets out, for each, what could replace it
+with nothing sent to Google, so the owner can accept or refuse each. Merging the pull request that
+carries it records the options; it accepts none of them (see "Open, for the owner"). No runtime
+code changes with it, and neither does `AGENTS.md`, `CLAUDE.md` or `OCR_VISION.md`.
 **Date:** 2026-11-16
 **Deciders:** Owner (PO). Dr of Security advises on what leaves the Worker and what is kept.
 Counsel, for the terms questions marked below.
@@ -23,14 +24,21 @@ OpenStreetMap streets: "I was trying to avoid interacting with google maps if I 
 telling me there is no way to get around this interaction?" There is a way round. The lookup is
 one optional call, and this record sets out three replacements for it.
 
+**Scope, in the owner's words (2026-11-16):** "it being the analysis to not use google maps if
+possible", and "I understand there will linking out, but I am speaking to the OCR/OSE/OW
+internals". Read here as: in scope is every call our own systems make to Google Maps, in OSE,
+ourWKRP and the spine. A link a visitor chooses to follow to Google is out of scope and may stay
+(see "Link-out only"). The search of the three repositories is under "Across the repositories".
+
 **What this record is not.** The location-precision review of 2026-11-09 ended at 0% and ruled that
 no place or map text lands before a new ADR. Its owner decisions are still open: the finest
 precision a public map may draw (res 7 or res 9), home addresses, whether "off the map" is a
 privacy control, the paths that publish a place without the organizer choosing, and finding F37.
 This record settles none of them, proposes no wording for invariant 3 or the vision, and does not
 bring back that review's frozen drafts. The rule for what a public output may carry of a place is
-a different record, which that review places in OCR-docs. This one takes a single question: where
-the cell comes from. Where an option depends on an open decision, it says so.
+a different record, which that review places in OCR-docs. This one takes a single question: what
+our systems send to Google Maps, and what could stand in its place. Where an option depends on an
+open decision, it says so.
 
 ### What the code does today
 
@@ -50,13 +58,56 @@ With no key set, G1 is skipped and the save still succeeds: the event then has n
 nightly job does nothing. Whether the key is set on staging or production was not read (an agent
 does not read secrets).
 
-**Links a visitor may open** (the Worker sends nothing; `rel="noopener noreferrer"`):
+All four are a plain `fetch` to one host, `maps.googleapis.com`, at two addresses (the geocoder
+and the static map). There is no Google SDK or package, and one secret name. The name appears in
+`wrangler.toml` (two comments), `docs/deployment/INFRA-CHECKLIST.md` and a production-preflight
+test fixture. No repository-level GitHub secret or variable name matches Google or Maps (names
+listed 2026-11-16; environment-level names and the Worker's own secrets were not read).
 
-- Directions (`lib/geo-link.ts`): Google Maps and Apple Maps. Each carries the stored point when
-  the event has one, else the address or place name. The poster page has a Google Maps link by
-  place text (`templates/poster.html`).
-- Calendar (`lib/calendar-links.ts`): a Google Calendar link carrying the title, the dates, the
-  description and the place text, beside an `.ics` file; and a subscribe link for a brand's feed.
+**A visitor's browser cannot reach Google from an OSE page.** The page policy is
+`img-src 'self' data:; connect-src 'self'` (`handlers/pages.ts`), so no Google image, script or
+request loads in the page. The venue image is served from our own address. Old tests under
+`tests/e2e/` and `archive/` still look for a Google Maps frame from the Apps Script product; no
+page under `src/` has one.
+
+### Link-out only
+
+These send nothing unless the visitor follows them, and then the visitor's own browser goes to
+Google (`rel="noopener noreferrer"`, so no referrer). They are outside the owner's scope and none
+of the options below removes them.
+
+- **Directions** (`lib/geo-link.ts`, on the event page): Google Maps and Apple Maps. Each carries
+  the stored point when the event has one, else the address or place name. The poster page has a
+  Google Maps link by place text (`templates/poster.html`).
+- **Calendar** (`lib/calendar-links.ts`, on the event page and after a registration): a Google
+  Calendar link carrying the title, the dates, the description and the place text, beside an
+  `.ics` file; and a subscribe link for a brand's feed (Google and Outlook).
+
+One thing ties them to this record: a Directions link carries a stored point. If an option stops
+storing a point, the link carries words, which the code already does when a point is missing.
+What a public link may carry is the precision review's question, not this record's.
+
+### Across the repositories
+
+Searched 2026-11-16 for Google Maps hosts, SDK names, key names and environment names. Names only;
+no value was read.
+
+| Where                                                        | Read at                                              | Calls to Google Maps from our systems                                                                                                  |
+| ------------------------------------------------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **OSE** (this repository)                                    | `main` at `e7d21601`, whole repository               | The four above. Nothing else.                                                                                                          |
+| **ourWKRP**                                                  | its `main` at `b1ae6d9` (matched against the remote) | **None.** No host, SDK, key or environment name. Its showcase draws its maps from OSE's public area route at build time (OSE ADR-033). |
+| **The spine** (OurCommunityRituals: `packages/*`, workflows) | its `main` at `862171e` (matched against the remote) | **None.** The only matches are archived design notes that use the word "geocode" about OSE's sponsor draft.                            |
+| The six other product repositories beside them               | local checkouts as they stood, not their `main`      | No match. A weak read: 5 to 40 files each, and not compared with the remote.                                                           |
+| OCR-docs                                                     | not searched                                         | It holds documents, not a running system. The local copy of its `main` was behind the remote.                                          |
+
+Two things the search found that are Google but not Google Maps, so outside this record:
+
+- OSE's Worker calls Google Cloud for the BigQuery export (`cloud/config.ts`, `google/auth.ts`).
+- ourWKRP's showcase pages load their fonts from Google's font hosts (`showcase/lib/render.mjs`).
+  That is a request a visitor's browser makes to Google without choosing to. It is not a map, and
+  it is the owner's to weigh.
+
+### What is kept, and what we already host
 
 **The point is kept, not only used.** AGENTS.md invariant 3 says admin placement writes take
 coordinates only to derive the cell. The handlers do derive the cell (`maybeTag` in
@@ -84,9 +135,15 @@ across (arithmetic from H3's average cell areas).
 
 ## Decision (proposed)
 
-No option is chosen here. The proposal is the shape of the choice: three options, each of which
-the owner can accept or refuse by itself, and a recommendation that is the author's and not a
-ruling. Options 1 and 2 can be accepted together.
+No option is chosen here. The proposal is the shape of the choice, call by call: for G1 three
+options, each of which the owner can accept or refuse by itself (options 1 and 2 can be accepted
+together); for G2, G3 and G4 what could replace each with nothing sent to Google; and a
+recommendation that is the author's and not a ruling.
+
+### G1. The event's place: three options
+
+G1 is the large one. Without it an event has no source for a cell, so it needs a replacement and
+not only a removal. Options 1 to 3 below are that replacement.
 
 ### Option 1. The organizer taps the spot on our own map
 
@@ -159,9 +216,110 @@ same shape as today with a different receiver. Four candidates were looked at.
 | Events that already have a point | The shape of the data does not change. Replacing the Google points means sending every stored place text to the new service once. The Census service takes files of up to 10,000 addresses; Nominatim's policy discourages bulk use.                                                                                                                                                             |
 | Depends on                       | Counsel, on the service's terms. The home-address decision.                                                                                                                                                                                                                                                                                                                                      |
 
-### The venue image, the Directions links and the Calendar link under each option
+### G2. The poster's spot (the admin lookup route)
 
-Not decided here. What each option does to them:
+**What it does.** On the admin poster card an organizer types the address where a poster hangs.
+The page calls `POST /api/v2/admin/geocode`, the Worker asks Google, and the point comes back to
+the browser, which sends it with the poster. The poster row keeps the address, the point and both
+cells. A poster marked as the venue's own takes the event's point with no lookup. A poster's res-9
+cell is what the SharedReport's map of placements is drawn from.
+
+**What leaves the Worker.** The address where the poster hangs: usually a shop or a hall, and it
+can be a home.
+
+**What could replace it, with nothing sent to Google.**
+
+- **A tap on our own map,** on the surface option 1 would build. This is the natural fit: a poster
+  is a physical spot, and res 9 for a physical placement is already the written rule (invariant
+  3), so the tap is not waiting on the precision decision the way an event's res-9 cell is.
+- **The venue's poster takes the event's cell** where it takes the event's point today.
+- **Zip to cell** gives res 7 only. A poster placed that way has no res-9 cell and would be
+  missing from the report's map of placements.
+- The two number boxes for latitude and longitude exist today and would be the fallback until a
+  tap exists. They store the point.
+
+**Cost to change.** Small to remove: the route, its handler (`handlers/geocode.ts`), the card's
+call in `templates/admin.html`, and `tests/geocode-handler.spec.ts`. The replacement rides on
+option 1's admin map, so its cost is that surface's cost, paid once for events and posters.
+
+**A test would have to prove:** a poster can be placed with no outbound request; the row has a
+res-9 cell whose parent is its res-7 cell and no point; the route answers 404 after removal; the
+report's placement map still draws a poster placed by tap. Workers pool and staging, each seen red.
+
+**Rows that already have a point.** Posters keep their cells. Clearing the stored point is safe
+once nothing reads it; today the H3 backfill and the venue default do.
+
+### G3. The sponsor's area (the sign-up draft)
+
+**What it does.** A sponsor invited by a signed link saves a draft with its address. The Worker
+asks Google and keeps the point and both cells on the draft. When the draft is promoted, the
+sponsor is "local" only if its res-7 cell is the same cell as the event's
+(`lib/sponsor-promotion.ts`). The draft is flagged for review either way. Nothing here needs
+res 9.
+
+**What leaves the Worker.** The sponsor's business address.
+
+**What could replace it, with nothing sent to Google.** Zip to cell, with the function option 2
+uses. It is enough for an area, and it changes what "local" means: a zip centre's cell is often
+not the cell the business is in, so "the same cell as the event" would turn on how each side was
+placed. Two sponsors on one street could come out differently. The honest rule under a zip source
+is "the same zip area as the event", or "within so many cells", and that is a rule about the local
+sponsor promise, which is the owner's (see "Open, for the owner").
+
+**Cost to change.** Small in code: one call in `handlers/sponsors-draft.ts` and its tests. The
+cost is the rule above. An admin who adds a sponsor directly sends coordinates today
+(`handlers/sponsors.ts`) and is not a Google call.
+
+**A test would have to prove:** a draft with an address ending in a zip gets a res-7 cell and no
+point, with no outbound request; a draft with no usable zip stays flagged and is never local by
+default; the locality rule the owner picks, with a sponsor on each side of its line.
+
+**Rows that already have a point.** Drafts and sponsors keep their cells. Whether locality is
+worked out again for sponsors already promoted is part of the rule question.
+
+### G4. The venue image
+
+**What it does.** The event page and the SharedReport's event list show a small map picture of
+the venue. The `<img>` points at our own route, `GET /api/v2/maps/venue-image?event=<id>`. On a
+miss the Worker asks Google's Static Maps for a road map at zoom 15 with a red marker on the venue
+text, and keeps the picture in Cloudflare's edge cache for a day, keyed by the venue text. It is
+the only one of the four that runs on a visitor's page view, and the only one billed per view
+(free to 10,000 loads a month, then $2.00 per 1,000, `docs/positioning/MAPPING-COST-STRUCTURE.md`).
+
+**What leaves the Worker.** The place name, else the address, of a public event. Google sees
+Cloudflare's address, not the visitor's. The picture that comes back is Google's, shown inside our
+page with a pin on the address.
+
+**What could replace it, with nothing sent to Google.**
+
+- **Remove it.** The page keeps the venue's words and the Directions links. Nothing is drawn.
+- **Draw it ourselves from the street archive.** The event's area over our own OpenStreetMap
+  streets, through `loadStreetLayer`, which takes cells and nothing else (OSE ADR-036, D1), with
+  the OpenStreetMap credit. `MAPPING-COST-STRUCTURE.md` decision 3 already names this move. It
+  shows an area, not a pin: a res-7 hexagon about 2.4 km across. A mark at the venue's block would
+  need a res-9 cell and is the open precision decision. It draws nothing until the archive is
+  loaded, and the page must be whole without it (the street layer is never the reason a page
+  fails). On the SharedReport, OSE ADR-036 D2 already proposes the report's own map on the base
+  map; the small picture in its event list could then simply go.
+- **Both in order:** remove now, draw our own after the archive is on staging.
+
+**Cost to change.** Removing is small: `lib/maps.ts`, `handlers/venue-image.ts`, the route, the
+`<img>` in `handlers/pages.ts` and `templates/shared-report.html`, the `venue-image` name in
+`lib/cost-metric.ts`, and `tests/venue-image.spec.ts` and `tests/maps.spec.ts`. Drawing our own is
+a medium piece of work on two surfaces and waits on the archive. In money, the Google bill for it
+goes to nothing; the self-hosted map is a few dollars a month at a million views by the same
+document's estimate.
+
+**A test would have to prove:** the event page and the report make no request to the removed
+route and show no broken image; the route answers 404; with a street layer the picture is drawn
+from cells only and carries the credit; with no layer the page is whole. Workers pool and staging.
+
+**Rows that already have a point.** None are involved: the image is made from the venue text.
+Pictures already in the edge cache age out within a day.
+
+### What each G1 option does to the other pieces
+
+Not decided here. What each option for G1 does to them:
 
 | Piece                                                | Option 1 (tap)                                                                                                                                         | Option 2 (zip)                                                                                                      | Option 3 (another lookup)                                              |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -244,9 +402,23 @@ did not load (HTTP 403) and was **not read**.
    this product does not have. If the owner wants an address placed with no effort from the
    organizer, 3c is the only form with no third party, and it is a new piece of infrastructure
    with its own ADR.
-4. **Answer G2, G3 and G4 in the same pass,** and hold the result with a source gate like the
-   LLM-free one: it fails when a Google Maps host or a `GOOGLE_MAPS_` name appears under `src/` or
-   in `wrangler.toml`. The owner removes the secret.
+4. **G4, the venue image: remove it now, and draw our own after the street archive is on
+   staging.** It is the only call made on a visitor's view and the only one billed per view, and
+   removing it depends on nothing.
+5. **G3, the sponsor's area: zip to cell,** once the owner has said what "local" means when a
+   place comes from a zip.
+6. **G2, the poster's spot: a tap on our own map,** built once with option 1's surface. Until
+   then the two number boxes stay and the lookup route goes.
+7. **Hold the result with a source gate** like the LLM-free one: it fails when a Google Maps host
+   or a `GOOGLE_MAPS_` name appears under `src/` or in `wrangler.toml`. The owner removes the
+   secret. "No call to Google Maps" is true only when all four are answered.
+8. **An order that needs the fewest rulings first:** G4 removed; G1 by option 2; G3; then the
+   admin map (option 1 and G2) after the archive load; the gate last.
+
+**Where a rule for every product would live.** The search found no Google Maps call outside OSE,
+so this record changes nothing in ourWKRP or the spine. If the owner wants "no product calls
+Google Maps from its own systems" as a rule that binds all of them, that is an org invariant with
+its own ADR in OCR-docs, not an OSE record. Nothing was written there.
 
 ## Alternatives Considered
 
@@ -314,6 +486,12 @@ Of merging this record: none on behaviour. The lookup runs as it does today.
   long either Census or the OpenStreetMap Foundation keeps the text of a query.
 - The zip-spacing figures are one run of a script on our own table (nearest-neighbour distance
   between centres). They say how far apart zip centres are, not how large each zip is.
+- The cross-repository search is a text search of each repository's files. It cannot see a
+  secret set on a deployed Worker, an environment-level GitHub secret, a Cloudflare dashboard
+  setting, or which Google APIs are switched on for the key in Google's console.
+- The six other product repositories were read as local checkouts, not at their `main`, and
+  OCR-docs was not searched.
+- That an event page and a report read well with no venue picture at all. Nobody has looked.
 
 ## Open, for the owner
 
@@ -327,13 +505,20 @@ Of merging this record: none on behaviour. The lookup runs as it does today.
 5. **Stored points.** Keep them, clear them once nothing reads them, or place events again. For
    counsel: may a cell worked out from a Google point be kept after 30 days?
 6. **The kind of place** (business or address): asked of the organizer, or dropped?
-7. **The venue image:** removed, or redrawn from our own map (OSE-1985)?
-8. **The Directions links:** words only, or the point where one exists? Does the Google Maps link
-   stay beside the Apple Maps one?
-9. **The Calendar link:** stays as it is?
-10. **Poster placement and sponsor addresses** (G2, G3): the same answer as events, or their own?
-11. **The source gate and the secret:** add the gate with the removal, and remove
+7. **The venue image (G4):** removed, redrawn from our own map, or removed now and redrawn later
+   (OSE-1985)? On the SharedReport's event list too?
+8. **The poster's spot (G2):** a tap on our own map, at res 9 as the rule already allows? May the
+   lookup route go before the tap exists, leaving the two number boxes?
+9. **The sponsor's area (G3):** when a sponsor's place comes from a zip, is "local" the same zip
+   area as the event, within so many cells, or still the same cell?
+10. **The link-outs** (Directions, Calendar): confirmed as out of scope and staying? What a
+    Directions link may carry is the precision review's question.
+11. **The source gate and the secret:** add the gate with the last removal, and remove
     `GOOGLE_MAPS_API_KEY`?
+12. **A rule for every product:** is "no product calls Google Maps from its own systems" wanted as
+    an org invariant in OCR-docs? It would be its own ADR there.
+13. **Not a map, found in passing:** ourWKRP's showcase pages load fonts from Google's font hosts.
+    Leave it, or host the fonts ourselves?
 
 The location-precision review's own decisions stay open and are not restated as questions here.
 
@@ -346,7 +531,11 @@ The location-precision review's own decisions stay open and are not restated as 
   `frameForCells` and the public area map's route (OSE ADR-033); the admin surface is new.
 - Tests that pin today's behaviour and would change: `tests/event-place.spec.ts`,
   `tests/geo.spec.ts`, `tests/geocode-handler.spec.ts`, `tests/venue-image.spec.ts`,
-  `tests/geo-link-maps-not-h3.spec.ts`.
+  `tests/maps.spec.ts`, `tests/geo-link-maps-not-h3.spec.ts`.
+- Other files that name the secret and would follow its removal: the two comments in
+  `workers/oursharedevents/wrangler.toml`, `docs/deployment/INFRA-CHECKLIST.md`, and the fixture
+  in `tests/unit/ci/prod-preflight.test.js`.
+- Other repositories were read only. Nothing was changed in ourWKRP, the spine or OCR-docs.
 
 ## References
 
