@@ -2025,6 +2025,13 @@
       "testCount": 33
     },
     {
+      "file": "workers/oursharedevents/tests/offscreen-reading-start.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
       "file": "workers/oursharedevents/tests/og-meta.spec.ts",
       "bucket": "node",
       "needsReview": true,
