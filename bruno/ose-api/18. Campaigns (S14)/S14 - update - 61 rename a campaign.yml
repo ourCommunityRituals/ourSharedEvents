@@ -1,0 +1,37 @@
+info:
+  name: "S14 | happy | update | rename a campaign; its status and brand stay"
+  type: http
+  seq: 61
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/campaigns/camp_fx_edit"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"title":"Campaign Fixture Renamed"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody();
+        test('S14 update: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 update: the answer is the campaign as it now is', function () {
+          expect(b.id).to.eql('camp_fx_edit');
+          expect(b.item.title).to.eql('Campaign Fixture Renamed');
+          expect(b.item.status).to.eql('active');
+          expect(b.item.brand_id).to.eql('root');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

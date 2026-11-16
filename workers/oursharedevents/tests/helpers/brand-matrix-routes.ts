@@ -383,6 +383,17 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
     variant: 'names the target brand',
     crossBody: (t) => ({ title: 'bm-cross-campaign', brand_id: t.brandId }),
   },
+  // Rename or status change. A cross-brand call must 404 and leave the campaign's
+  // title as it was (the snapshot holds the row).
+  {
+    shape: 'object',
+    objectOf: 'campaign',
+    pattern: '/api/v2/admin/campaigns/:id',
+    method: 'PUT',
+    path: (id) => `/api/v2/admin/campaigns/${id}`,
+    mutates: true,
+    body: () => ({ title: 'bm-cross-write' }),
+  },
   // The campaign is the object. The placement named beside it is the campaign
   // brand's own (already in that campaign in the fixture), so a wall that let the
   // caller through would change a row: a detach would clear it. The other half,

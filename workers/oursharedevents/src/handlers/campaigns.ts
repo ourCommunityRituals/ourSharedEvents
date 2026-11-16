@@ -3,6 +3,7 @@
  *
  *   GET    /api/v2/admin/campaigns                               list the caller's brands' campaigns
  *   POST   /api/v2/admin/campaigns                               create one on a brand (title, status)
+ *   PUT    /api/v2/admin/campaigns/:id                           rename it, or change its status
  *   PUT    /api/v2/admin/campaigns/:id/placements/:placementId   put a placement in the campaign
  *   DELETE /api/v2/admin/campaigns/:id/placements/:placementId   take it out
  *   GET    /api/v2/admin/campaigns/:id/events                    the events in the campaign
@@ -25,6 +26,7 @@ import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/adm
 import {
   CAMPAIGN_CREATE_FIELDS,
   CAMPAIGN_LIST_MAX,
+  CAMPAIGN_UPDATE_FIELDS,
   addEventToCampaign,
   attachPlacementToCampaign,
   checkCampaignStatus,
@@ -33,6 +35,8 @@ import {
   listCampaignEvents,
   newCampaignId,
   removeEventFromCampaign,
+  updateCampaign,
+  type CampaignStatus,
   type CampaignRow,
 } from '../lib/campaigns';
 import { isJsonContentType } from '../lib/content-type';
@@ -84,6 +88,48 @@ function logDbError(handler: string, label: string): void {
   console.error(JSON.stringify({ type: 'DB_ERROR', handler, error: label }));
 }
 
+/** The request body as a JSON object, or the 400 that says why it is not one. */
+async function readJsonObject(
+  request: Request,
+  rid: string
+): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; response: Response }> {
+  if (!isJsonContentType(request.headers.get('content-type'))) {
+    return {
+      ok: false,
+      response: errorResponse(
+        request,
+        'BAD_CONTENT_TYPE',
+        'Content-Type must be application/json',
+        400,
+        rid
+      ),
+    };
+  }
+  try {
+    const text = await request.text();
+    if (text.length > MAX_BODY) {
+      return {
+        ok: false,
+        response: errorResponse(request, 'PAYLOAD_TOO_LARGE', 'Body too large', 400, rid),
+      };
+    }
+    const parsed: unknown = JSON.parse(text);
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
+    return { ok: true, body: parsed as Record<string, unknown> };
+  } catch {
+    return {
+      ok: false,
+      response: errorResponse(
+        request,
+        'INVALID_BODY',
+        'Request body must be a JSON object',
+        400,
+        rid
+      ),
+    };
+  }
+}
+
 // ─── List ───────────────────────────────────────────────────────────────────────
 
 export async function handleAdminListCampaigns(
@@ -129,27 +175,9 @@ export async function handleAdminCreateCampaign(
   if (!env.DB) {
     return errorResponse(request, 'DB_NOT_CONFIGURED', 'Database not available', 503, rid);
   }
-  if (!isJsonContentType(request.headers.get('content-type'))) {
-    return errorResponse(
-      request,
-      'BAD_CONTENT_TYPE',
-      'Content-Type must be application/json',
-      400,
-      rid
-    );
-  }
-  let body: Record<string, unknown>;
-  try {
-    const text = await request.text();
-    if (text.length > MAX_BODY) {
-      return errorResponse(request, 'PAYLOAD_TOO_LARGE', 'Body too large', 400, rid);
-    }
-    const parsed: unknown = JSON.parse(text);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
-    body = parsed as Record<string, unknown>;
-  } catch {
-    return errorResponse(request, 'INVALID_BODY', 'Request body must be a JSON object', 400, rid);
-  }
+  const read = await readJsonObject(request, rid);
+  if (!read.ok) return read.response;
+  const body = read.body;
 
   // A campaign is a title and a status. Anything else is refused, so a caller
   // is never left believing a field was saved.
@@ -331,5 +359,65 @@ export async function handleAdminListCampaignEvents(
   } catch (err) {
     logDbError('handleAdminListCampaignEvents', errorLabel(err));
     return errorResponse(request, 'DB_ERROR', 'Failed to list the campaign events', 503, rid);
+  }
+}
+
+// ─── Rename, or change the status ───────────────────────────────────────────────
+
+/**
+ * Body `{ "title"?, "status"? }`, at least one of them. Any other field is
+ * refused, `brand_id` included: a campaign never changes brand. Answers the
+ * campaign as it now is.
+ */
+export async function handleAdminUpdateCampaign(
+  request: Request,
+  env: CampaignsEnv,
+  campaignId: string
+): Promise<Response> {
+  const rid = requestId();
+  if (!env.DB) return campaignNotFound(request, campaignId, rid);
+  const read = await readJsonObject(request, rid);
+  if (!read.ok) return read.response;
+  const body = read.body;
+
+  const unknown = Object.keys(body).filter((k) => !CAMPAIGN_UPDATE_FIELDS.includes(k));
+  if (unknown.length > 0) {
+    return errorResponse(
+      request,
+      'UNKNOWN_FIELD',
+      `A campaign update takes only: ${CAMPAIGN_UPDATE_FIELDS.join(', ')}`,
+      400,
+      rid
+    );
+  }
+  if (body.title === undefined && body.status === undefined) {
+    return errorResponse(request, 'NOTHING_TO_UPDATE', 'Send a title, a status, or both', 400, rid);
+  }
+  const change: { title?: string; status?: CampaignStatus } = {};
+  if (body.title !== undefined) {
+    const title = checkCampaignTitle(body.title);
+    if (!title.ok) return errorResponse(request, title.code, title.message, 400, rid);
+    change.title = title.value;
+  }
+  if (body.status !== undefined) {
+    const status = checkCampaignStatus(body.status);
+    if (!status.ok) return errorResponse(request, status.code, status.message, 400, rid);
+    change.status = status.value;
+  }
+
+  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
+  if (scope.mode === 'deny') return campaignNotFound(request, campaignId, rid);
+  const brandIds = scope.mode === 'scoped' ? scope.brandIds : null;
+
+  try {
+    const item = await updateCampaign(env.DB, campaignId, change, brandIds);
+    if (!item) return campaignNotFound(request, campaignId, rid);
+    return Response.json(
+      { ok: true, status: 200, id: item.id, item },
+      { headers: headers(request, rid) }
+    );
+  } catch (err) {
+    logDbError('handleAdminUpdateCampaign', errorLabel(err));
+    return errorResponse(request, 'DB_ERROR', 'Failed to update the campaign', 503, rid);
   }
 }

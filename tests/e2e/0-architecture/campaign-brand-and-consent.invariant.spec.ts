@@ -52,6 +52,9 @@
  * its SQL from quoted strings; the check now reads the whole file); (10) the
  * classified count in admin-null-actor.invariant.spec.ts left at 3, which failed
  * that spec on the two new actor reads | date: 2026-11-15
+ *
+ * @born-red locals on a campaign (owner, 2026-11-15) | method: the same. (11) a
+ * constant named for a campaign added to lib/sponsor-resolver.ts | date: 2026-11-15
  */
 
 import { test, expect } from '@playwright/test';
@@ -353,6 +356,24 @@ test.describe('Invariant: a campaign stays in its brand and is public only by co
     ).map(rel);
     expect(users).toEqual(['handlers/sponsors.ts']);
     expect(read('lib/public-event-projection.ts')).not.toMatch(/campaign/i);
+  });
+
+  test('OSE-1552-INV | locals | nothing that orders or picks sponsors reads a campaign', () => {
+    // Owner, 2026-11-15: "The locals still apply even on a campaign." The Local
+    // Sponsor Covenant is a floor on the local sponsors' share of rotation (brain
+    // invariant 25; lib/sponsor-allocation.ts, lib/sponsor-resolver.ts). A
+    // campaign is a label on a sponsor the bundle already shows; it must never
+    // become an input to which sponsor shows, in what order, or with what share.
+    for (const file of [
+      'lib/sponsor-resolver.ts',
+      'lib/sponsor-allocation.ts',
+      'lib/sponsor-card.ts',
+    ]) {
+      expect(read(file), `${file} must not name a campaign`).not.toMatch(/campaign/i);
+    }
+    // The covenant's own inputs are still there to be held.
+    expect(read('lib/sponsor-resolver.ts')).toMatch(/is_local/);
+    expect(read('lib/sponsor-resolver.ts')).toMatch(/buildShareRotation/);
   });
 
   test('S14-INV | never a filter | no query parameter is named for a campaign', () => {

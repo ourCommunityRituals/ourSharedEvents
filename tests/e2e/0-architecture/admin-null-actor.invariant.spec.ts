@@ -123,8 +123,8 @@ const SITES: Record<string, { kind: Kind; count: number; why: string }> = {
   'handlers/campaigns.ts: const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);':
     {
       kind: 'scope-denies-null',
-      count: 5,
-      why: 'Campaign list, create and placement attach or detach (showcase S14); event add or remove and the member list (OSE-1552).',
+      count: 6,
+      why: 'Campaign list, create and placement attach or detach (showcase S14); event add or remove, the member list, and rename or status change (OSE-1552).',
     },
   'handlers/dashboards.ts: const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);':
     { kind: 'scope-denies-null', count: 1, why: 'Dashboard brand scope.' },

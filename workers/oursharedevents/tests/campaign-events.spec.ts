@@ -40,6 +40,10 @@
  * 0110 moved out of migrations/: schema.spec, constraints.spec and
  * check-schema-guard.mjs failed | date: 2026-11-15
  *
+ * @born-red locals on a campaign | method: the same. (k) the bundle marking a
+ * sponsor local once it carries a campaign: "the bigger sponsor joining the
+ * campaign labels it and changes nothing else" failed | date: 2026-11-15
+ *
  * Not killed alone, and why: dropping only the caller's brand scope from the add
  * UPDATE, or only the campaign lookup scope, changes nothing a caller can see,
  * because the same-brand EXISTS and the route guard return the same 404. They
@@ -484,5 +488,118 @@ describe("a placement's campaign and its event's campaign never overwrite each o
     expect((await callAs(owner(A), 'PUT', eventPath(cmp(A), evt(A)))).status).toBe(200);
     expect(await campaignOfPlacement(plc(A))).toBeNull();
     expect(await bundleCampaign(evt(A), spo(A))).toBeUndefined();
+  });
+});
+
+// ── the Local Sponsor Covenant holds on an event in a campaign ────────────────
+// Owner, 2026-11-15: "The locals still apply even on a campaign." The covenant
+// is a floor on the local sponsors' share of rotation (brain invariant 25,
+// lib/sponsor-allocation.ts), not a rank. A campaign is a label on a sponsor: it
+// is never an input to which sponsors show, their order, or their shares.
+
+describe('the local sponsors keep their share on an event that is in a campaign', () => {
+  const LOCAL = 'ce-abc-local';
+  const BIG = 'ce-abc-big';
+
+  /** The whole public bundle with each sponsor's `campaign` label taken off. */
+  async function bundleWithoutLabels(): Promise<{
+    text: string;
+    ids: string[];
+    labelled: string[];
+  }> {
+    const res = await callAs(
+      { kind: 'anonymous' },
+      'GET',
+      `/api/v2/events/${evt(A, 2)}/sponsor-bundle?surface=public`
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      bundle: { sponsors: Array<{ id: string; is_local?: number; campaign?: unknown }> };
+    } & Record<string, unknown>;
+    const labelled = body.bundle.sponsors.filter((s) => s.campaign).map((s) => s.id);
+    const strip = (v: unknown): unknown =>
+      Array.isArray(v)
+        ? v.map(strip)
+        : v && typeof v === 'object'
+          ? Object.fromEntries(
+              Object.entries(v as Record<string, unknown>)
+                // `updated_at`: attaching a placement stamps the placement (slice 1).
+                .filter(([k]) => !['campaign', 'updated_at', 'requestId', 'timestamp'].includes(k))
+                .map(([k, x]) => [k, strip(x)])
+            )
+          : v;
+    return {
+      text: JSON.stringify(strip(body)),
+      ids: body.bundle.sponsors.map((s) => s.id),
+      labelled,
+    };
+  }
+
+  beforeEach(async () => {
+    await seedSplitSponsor(env.DB, {
+      id: LOCAL,
+      eventId: evt(A, 2),
+      brandId: A.brandId,
+      name: 'Corner Bakery ce',
+      tier: 'bronze',
+      isLocal: 1,
+      placementId: `spl_${LOCAL}`,
+      sponsorAccepted: 1,
+      organizerAccepted: 1,
+    });
+    await seedSplitSponsor(env.DB, {
+      id: BIG,
+      eventId: evt(A, 2),
+      brandId: A.brandId,
+      name: 'Title Partner ce',
+      tier: 'title',
+      isLocal: 0,
+      placementId: `spl_${BIG}`,
+      sponsorAccepted: 1,
+      organizerAccepted: 1,
+    });
+    await env.DB.prepare(`UPDATE sponsor_placement SET campaign_id = NULL WHERE id IN (?, ?)`)
+      .bind(`spl_${LOCAL}`, `spl_${BIG}`)
+      .run();
+  });
+
+  test('both sponsors show, and the bundle marks the local one (the test sees locality)', async () => {
+    const res = await callAs(
+      { kind: 'anonymous' },
+      'GET',
+      `/api/v2/events/${evt(A, 2)}/sponsor-bundle?surface=public`
+    );
+    const raw = await res.text();
+    const body = JSON.parse(raw) as {
+      bundle: { sponsors: Array<{ id: string; is_local?: number }> };
+    };
+    const by = (id: string) => body.bundle.sponsors.find((s) => s.id === id);
+    expect(by(LOCAL)).toBeDefined();
+    expect(by(BIG)).toBeDefined();
+    expect(by(LOCAL)?.is_local).toBe(1);
+    expect(by(BIG)?.is_local).toBe(0);
+  });
+
+  test('the event joining a campaign changes no sponsor, order or share', async () => {
+    const before = await bundleWithoutLabels();
+    expect((await callAs(owner(A), 'PUT', eventPath(cmp(A), evt(A, 2)))).status).toBe(200);
+    const after = await bundleWithoutLabels();
+    expect(after.text).toBe(before.text);
+    expect(after.ids).toEqual(before.ids);
+  });
+
+  test('the bigger sponsor joining the campaign labels it and changes nothing else', async () => {
+    const before = await bundleWithoutLabels();
+    expect((await callAs(owner(A), 'PUT', eventPath(cmp(A), evt(A, 2)))).status).toBe(200);
+    const put = await callAs(
+      owner(A),
+      'PUT',
+      `/api/v2/admin/campaigns/${cmp(A)}/placements/spl_${BIG}`
+    );
+    expect(put.status).toBe(200);
+    const after = await bundleWithoutLabels();
+    expect(after.labelled).toEqual([BIG]);
+    expect(after.text).toBe(before.text);
+    expect(after.ids).toEqual(before.ids);
   });
 });
