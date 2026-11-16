@@ -168,13 +168,18 @@ async function listed(caller: Parameters<typeof callAs>[0], campaignId: string):
   return body.items.map((i) => i.id);
 }
 
-/** Error bodies differ only by the id echoed, the request id and the time. */
+/**
+ * Bodies differ only by the id echoed, the request id, the time, and a sponsor's
+ * beacon token, which carries an expiry in whole seconds: two reads either side
+ * of a second read differently with nothing changed (seen on main, run 43784818898).
+ */
 function shape(text: string, ...ids: string[]): string {
   let out = text;
   for (const id of ids) out = out.split(id).join('<id>');
   return out
     .replace(/"requestId":"[^"]*"/g, '"requestId":"<r>"')
-    .replace(/"timestamp":"[^"]*"/g, '"timestamp":"<t>"');
+    .replace(/"timestamp":"[^"]*"/g, '"timestamp":"<t>"')
+    .replace(/"beacon_token":"[^"]*"/g, '"beacon_token":"<b>"');
 }
 
 const owner = (b: BrandFx) => ({ kind: 'owner' as const, brand: b });
@@ -724,7 +729,13 @@ describe('the local sponsors keep their share on an event that is in a campaign'
           ? Object.fromEntries(
               Object.entries(v as Record<string, unknown>)
                 // `updated_at`: attaching a placement stamps the placement (slice 1).
-                .filter(([k]) => !['campaign', 'updated_at', 'requestId', 'timestamp'].includes(k))
+                // `beacon_token`: its expiry is in whole seconds, so it moves with the clock.
+                .filter(
+                  ([k]) =>
+                    !['campaign', 'updated_at', 'beacon_token', 'requestId', 'timestamp'].includes(
+                      k
+                    )
+                )
                 .map(([k, x]) => [k, strip(x)])
             )
           : v;
