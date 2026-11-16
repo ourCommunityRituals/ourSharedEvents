@@ -254,6 +254,8 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
   // OSE-1998: a booth is part of a fair. A cross-brand call must 404 and leave
   // every booth as it was; the by-id routes address the TARGET brand's own booth.
   eventRoute('/api/v2/admin/events/:id/booths', 'GET', '/booths'),
+  // OSE-2004: scans per stall. Matched above the PUT/DELETE booth pattern.
+  eventRoute('/api/v2/admin/events/:id/booths/counts', 'GET', '/booths/counts'),
   eventRoute('/api/v2/admin/events/:id/booths', 'POST', '/booths', {
     body: () => ({ number: 'M1', name: 'Matrix stall' }),
   }),

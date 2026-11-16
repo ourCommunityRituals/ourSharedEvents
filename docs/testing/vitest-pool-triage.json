@@ -583,6 +583,20 @@
       "testCount": 13
     },
     {
+      "file": "workers/oursharedevents/tests/booth-counts-route.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/booth-counts.property.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 5
+    },
+    {
       "file": "workers/oursharedevents/tests/booth-counts.spec.ts",
       "bucket": "node",
       "needsReview": false,
