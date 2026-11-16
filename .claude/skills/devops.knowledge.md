@@ -2,6 +2,8 @@
 
 > **Role:** Owns environments, releases, pipelines, infrastructure provisioning, and org-wide product infrastructure
 > **Last Reconciled:** 2026-03-27
+>
+> **Out of date (noted 2026-11-16, not rewritten).** Do not act on this file without checking. Known wrong: staging and production are provisioned (real ids in `workers/oursharedevents/wrangler.toml`; `docs/brain/CONSTRAINTS.md`); `stage1.yml` and `stage2.yml` do not exist (the pipeline is `.github/workflows/oursharedevents-ci.yml`); production deploys only by a `v*.*.*` tag or a `deploy_production=PRODUCTION` dispatch, from a commit on `main`, with a ticket; the Google Sheets secrets are from the retired backend. **Never follow the secret-rotation recipe below: an agent does not write or echo secrets (AGENTS.md, Human approval).**
 
 ---
 
