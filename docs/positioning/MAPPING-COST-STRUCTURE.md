@@ -83,8 +83,9 @@ share one load, so the real figure is lower.
 
 The storage in the right-hand column is the whole planet's, the ceiling. The
 file loaded is the United States subset (owner, 2026-11-10), which is smaller;
-a dry run on 2026-11-15 gave it as 20 GB for build `20261109`, about $0.15 to
-$0.30 a month in storage (decision 4).
+a dry run on 2026-11-15 gave it as 20 GB for build `20261109`, and one on
+2026-11-16 gave the same 20 GB for build `20261115`, the build named now:
+about $0.15 to $0.30 a month in storage (decision 4).
 
 ## Where each line sits in the tiers
 
@@ -135,8 +136,16 @@ $0.30 a month in storage (decision 4).
    (`measure` run 43753563640, 2026-11-15): the tile data alone, rounded, so at
    most 20.55 GB, with every zoom of the build kept. It is a dry-run figure, not
    the size of a loaded file. That build aged out at Protomaps before any load;
-   the build named since 2026-11-16, `20261115`, is not measured yet (the whole
-   build is 0.09% larger than `20261109` was). At $0.015 per GB-month that is
+   the build named since 2026-11-16, `20261115`, was measured the same way that
+   day (`measure` run 43792020396): **20 GB by dry run with every zoom kept**,
+   and **9.7 GB by dry run with a top zoom of 14**, the deepest zoom the Worker
+   reads, about 10.3 GB less. These too are dry-run figures (the tile data
+   alone, rounded, without the new directories), not the size of a loaded
+   file. Whether the cut gets a top zoom is the owner's decision, before the
+   first load; the build is offered through 2026-11-21 (UTC). With a top zoom
+   of 14 the storage would be about $0.15 a month, or nothing while the file
+   and whatever else the account stores stay inside the free 10 GB. With
+   every zoom kept, at 20 GB and $0.015 per GB-month, that is
    about **$0.15 a month** if nothing else uses the account's free 10 GB, and about **$0.30** if something does (what
    else the account stores was not read). The load run reports the byte size
    when the file is cut, and the storage figures here are then replaced. The
@@ -247,8 +256,9 @@ The self-hosted line above was written from published figures. A local proof
 for one region. These replace the estimates for that region only. The planet
 rows are kept as the ceiling: the file loaded is the United States subset, and
 **its loaded size and storage cost are not measured until a load is recorded**
-(the runbook's step 5). The dry-run figure, 20 GB on 2026-11-15 for build
-`20261109`, is under decision 4.
+(the runbook's step 5). The dry-run figures, 20 GB on 2026-11-15 for build
+`20261109`, and on 2026-11-16 for build `20261115` 20 GB with every zoom kept
+and 9.7 GB with a top zoom of 14, are under decision 4.
 
 | Item                                 | Measured                                                                       |
 | ------------------------------------ | ------------------------------------------------------------------------------ |
