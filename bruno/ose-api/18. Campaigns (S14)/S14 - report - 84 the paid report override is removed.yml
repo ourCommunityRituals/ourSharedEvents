@@ -1,7 +1,7 @@
 info:
   name: 'S14 | report | teardown | the paid report override on the report fixture event is removed'
   type: http
-  seq: 83
+  seq: 84
 
 http:
   method: DELETE

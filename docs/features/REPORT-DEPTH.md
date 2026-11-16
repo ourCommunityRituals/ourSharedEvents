@@ -125,6 +125,13 @@ Each tier is a superset of the one below. `sponsor_class_breakdown` is present a
 **every** depth (OSE-719): it is class-level aggregate — the tier-neutral
 competitive view — never per-competitor, so it is never a paid section.
 
+The floor applies to it at every depth (OSE-2089): a class with no sponsor at 5
+displays on any one surface has `total_displays: null` and one
+`_meta.suppression_reasons` entry (`sponsor_class_breakdown.total_displays`),
+and the page reads "Fewer than 5", never 0. A class with no sponsor reads the
+same as one whose sponsors have 1 to 4. `sponsor_count` counts businesses with
+a published row and has no floor.
+
 | Section                                                         | Local | Mid | Premium |
 | --------------------------------------------------------------- | :---: | :-: | :-----: |
 | `event_id` / `event_title` / dates                              |   ●   |  ●  |    ●    |

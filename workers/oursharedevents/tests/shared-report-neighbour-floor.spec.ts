@@ -739,8 +739,8 @@ describe('the open list', () => {
 type How =
   /** One count. Withheld (null, or its row dropped) under `floor`. */
   | { how: 'floored'; floor: number }
-  /** A sum of counts that each passed `floor` first. `orZero`: nothing passed. */
-  | { how: 'sum of floored parts'; floor: number; orZero?: true }
+  /** A sum of counts that each passed `floor` first. Null when nothing passed, never 0. */
+  | { how: 'sum of floored parts'; floor: number }
   /** A percentage of the count at `of`, through `flooredRatePct`. */
   | { how: 'rate'; of: string }
   /** One published count divided by another. Null unless both are published. */
@@ -780,7 +780,7 @@ const REGISTRY: Record<string, How> = {
   'campaign_summary[].total_displays': SUM,
   'campaign_summary[].displays_by_surface.*': SUM,
   'campaign_summary[].sponsor_count': NOT_PEOPLE,
-  'sponsor_class_breakdown.*.total_displays': { ...SUM, orZero: true },
+  'sponsor_class_breakdown.*.total_displays': SUM, // OSE-2089: withheld is null, never 0
   'sponsor_class_breakdown.*.sponsor_count': NOT_PEOPLE,
   'poster_attribution[].scan_count': SUM, // poster-hours, each hour floored
   'headcount_trend.instances[].distinct_scanners': SUM,
@@ -833,7 +833,6 @@ function broken(rule: How, value: number, at: (rel: string) => Leaf | undefined)
     case 'floored':
       return whole && value >= rule.floor ? null : `under the floor of ${rule.floor}`;
     case 'sum of floored parts':
-      if (rule.orZero && value === 0) return null;
       return whole && value >= rule.floor ? null : `under the floor of ${rule.floor}`;
     case 'rate': {
       const sample = at(rule.of);

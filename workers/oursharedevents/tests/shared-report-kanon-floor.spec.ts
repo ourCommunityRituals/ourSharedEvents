@@ -441,7 +441,7 @@ describe('OSE-683 — sponsor_class_breakdown floors each sponsor bucket before 
     expect(b.premium.sponsor_count).toBe(1);
   });
 
-  test('a sponsor whose only bucket is sub-K does not count into ANY class (count and total both 0)', async () => {
+  test('a sponsor whose only bucket is sub-K does not count into ANY class (count 0, total withheld)', async () => {
     const evt = 'test-evt-kanon-class-allsub';
     await seedEvent(evt);
     // local sponsor, single sub-K bucket (3) → must not enter the 'local' class.
@@ -453,11 +453,11 @@ describe('OSE-683 — sponsor_class_breakdown floors each sponsor bucket before 
     if (!r.ok) return;
     const b = r.report.sponsor_class_breakdown;
     expect(b.local.sponsor_count).toBe(0);
-    expect(b.local.total_displays).toBe(0);
-    // And it certainly must not have leaked the raw 3 into any class total.
-    expect(b.local.total_displays).not.toBe(3);
-    expect(b.mid.total_displays).toBe(0);
-    expect(b.premium.total_displays).toBe(0);
+    // OSE-2089: a class with no bucket at the floor is withheld (null), never 0,
+    // and never the raw 3. A class with no sponsor reads the same.
+    expect(b.local.total_displays).toBeNull();
+    expect(b.mid.total_displays).toBeNull();
+    expect(b.premium.total_displays).toBeNull();
   });
 
   test('classes with surviving buckets sum exactly (mid=5, premium=6)', async () => {
