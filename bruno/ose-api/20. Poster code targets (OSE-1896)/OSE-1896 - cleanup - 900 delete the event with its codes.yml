@@ -1,11 +1,11 @@
 info:
-  name: OSE-1896 | cleanup | the event is deleted (no scans)
+  name: OSE-1896 | cleanup | the event is deleted with its codes (no scans)
   type: http
   seq: 900
 
 http:
   method: DELETE
-  url: "{{baseUrl}}/api/v2/admin/events/{{linkTargetEventId}}"
+  url: "{{baseUrl}}/api/v2/admin/events/{{posterTargetEventId}}"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"
@@ -17,7 +17,7 @@ runtime:
   scripts:
     - type: after-response
       code: |-
-        test('OSE-1896 cleanup: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-1896 cleanup: 200, the event is deleted', function () { expect(res.getStatus()).to.eql(200); });
 
 settings:
   encodeUrl: true

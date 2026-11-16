@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/api/v2/admin/events/{{linkTargetEventId}}/poster-codes"
+  url: "{{baseUrl}}/api/v2/admin/events/{{posterTargetEventId}}/poster-codes"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"

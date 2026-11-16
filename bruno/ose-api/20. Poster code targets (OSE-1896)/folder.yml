@@ -1,0 +1,34 @@
+info:
+  name: Poster code targets (OSE-1896)
+  type: folder
+request: {}
+docs: |-
+  An organizer's link on a poster code is a full https:// address or it is not
+  saved (OSE-1896, the "Fat-finger" line). PUT
+  /api/v2/admin/events/:id/poster-codes refuses a `javascript:` link and an
+  `http:` link with 400 `INVALID_TARGET`, the row's `index` and the sentence
+  "The <WORD> link must be a full https:// address.". The rule is
+  `isValidHttpsTarget` (workers/oursharedevents/src/lib/shortlinks.ts), applied
+  at save in `parsePosterCodes` (src/lib/poster-codes.ts).
+
+  This folder is the staging layer of that rule. It checks three things:
+
+  - the refusal (seq 30 and 40), and that one bad row refuses the whole list,
+    the good row beside it included;
+  - that nothing was saved (seq 50 reads the codes back and compares them with
+    the read before any save, seq 20);
+  - that a refused save leaves an earlier saved link as it was (seq 70 and 80).
+
+  Seq 60 saves an https link on the same event, so "nothing was saved" is not
+  true only because the save never works here.
+
+  No fixture. The folder makes its own synthetic, unlisted draft event
+  (seq 10), works on it, and deletes it at the end (seq 900 and 910). An event
+  with no scans hard-deletes with its short links, so a run leaves nothing
+  behind. If a run stops half way, the next run makes a new event; the leftover
+  is a synthetic draft that the daily staging rebuild clears.
+
+  The requests run in `seq` order.
+
+  Mock-layer twins: workers/oursharedevents/tests/poster-codes-parse.spec.ts,
+  shortlinks.spec.ts and poster-multi-code-ui.spec.ts.

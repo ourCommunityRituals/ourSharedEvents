@@ -1,0 +1,33 @@
+info:
+  name: OSE-1896 | rainy | save | a javascript link does not replace a saved one
+  type: http
+  seq: 70
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{posterTargetEventId}}/poster-codes"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"codes\": [{\"kind\": \"donation\", \"target_url\": \"javascript:alert(1)\"}]}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1896 replace: 400 INVALID_TARGET', function () { expect(res.getStatus()).to.eql(400); expect(b.code).to.eql('INVALID_TARGET'); expect(b.index).to.eql(0); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
