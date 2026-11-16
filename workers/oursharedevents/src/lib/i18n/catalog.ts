@@ -183,6 +183,13 @@ const en = {
   // The footer's links (lib/legal-footer.ts).
   'footer.browse': 'Browse Events',
   'footer.privacy': 'Privacy',
+  // OSE-1986: the page a reader gets when the landing or the event list is
+  // refused by the per-caller limit (handlers/pages.ts, pageLimitResponse).
+  'limit.status': 'Please wait',
+  'limit.title': 'Too many visits at once',
+  'limit.body':
+    'This connection has opened this page many times in the last minute. Please wait a minute, then try again.',
+  'limit.again': 'Try again',
   // The /events filter bar, heading, count and empty states (lib/event-discovery.ts).
   // One set per `when` window. `{n}` is a number; `One` is the form for exactly one.
   'when.all.chip': 'Everything',
@@ -569,6 +576,11 @@ const es: Record<MessageKey, string> = {
             contraseña. Quienes asisten nunca inician sesión, y nada aquí los nombra.`,
   'footer.browse': 'Ver eventos',
   'footer.privacy': 'Privacidad',
+  'limit.status': 'Espera un momento',
+  'limit.title': 'Demasiadas visitas a la vez',
+  'limit.body':
+    'Esta conexión ha abierto esta página muchas veces en el último minuto. Espera un minuto y vuelve a intentarlo.',
+  'limit.again': 'Volver a intentarlo',
   'when.all.chip': 'Todo',
   'when.all.heading': 'Próximos eventos',
   'when.all.empty': 'No hay nada programado por ahora. Vuelve pronto.',
