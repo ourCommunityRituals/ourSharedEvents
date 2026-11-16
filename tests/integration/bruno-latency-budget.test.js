@@ -247,9 +247,13 @@ describe('collection wiring', () => {
   });
 });
 
-// The fixture's budget is 400 ms (hard ceiling 800 ms). The server answers /fast
-// at once, /slow/* after 600 ms every time, /slow-once/* after 600 ms the first
-// time only, /very-slow/* after 1000 ms, and /q/slow after 600 ms.
+// The fixture's budget is 1000 ms (hard ceiling 2000 ms). The server answers /fast
+// at once, /slow/* after 1200 ms every time, /slow-once/* after 1200 ms the first
+// time only, /very-slow/* after 2500 ms, and /q/slow after 1200 ms.
+// Load on a busy runner only ever adds time, so what needs headroom is the
+// distance up to the next line: a slow sample sits 800 ms under the hard ceiling
+// and a fast one 1000 ms under budget. With 200 ms (budget 400, slow 600) a
+// loaded T0 runner pushed a slow write past the ceiling (PR #1355, job 133488262908).
 describe('born red: a real bru run against injected slow responses', () => {
   let server;
   let port;
@@ -262,9 +266,9 @@ describe('born red: a real bru run against injected slow responses', () => {
       const path = req.url.split('?')[0];
       hits[`${req.method} ${path}`] = (hits[`${req.method} ${path}`] || 0) + 1;
       let delay = 0;
-      if (path.startsWith('/slow/') || path === '/q/slow') delay = 600;
-      if (path.startsWith('/very-slow/')) delay = 1000;
-      if (path.startsWith('/slow-once/') && hits[`${req.method} ${path}`] === 1) delay = 600;
+      if (path.startsWith('/slow/') || path === '/q/slow') delay = 1200;
+      if (path.startsWith('/very-slow/')) delay = 2500;
+      if (path.startsWith('/slow-once/') && hits[`${req.method} ${path}`] === 1) delay = 1200;
       req.resume();
       setTimeout(() => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
