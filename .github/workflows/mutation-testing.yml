@@ -171,14 +171,17 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-  # The required check. It waits for every group, fails if any group did not
-  # succeed, then scores every file against its own floor over all seven reports
-  # (mutation-file-floor.mjs refuses a file missing from them, or in two).
+  # The required check. It waits for every group and for the CI-scripts pass,
+  # fails if any of them did not succeed, then scores every file against its own
+  # floor over all seven group reports (mutation-file-floor.mjs refuses a file
+  # missing from them, or in two). mutation-ci-scripts is not a required check
+  # of its own: owner ruling 2026-11-06 makes mutation testing required, and this
+  # job is that check, so a red CI-scripts pass blocks a merge here.
   mutation:
-    needs: mutation-group
-    # always(): it reports even when a group failed, was cancelled or timed out,
-    # and then it is red. The branch-protection contract counts `if: always()`
-    # behind a job that always starts as a check that always reports.
+    needs: [mutation-group, mutation-ci-scripts]
+    # always(): it reports even when a job it waits for failed, was cancelled or
+    # timed out, and then it is red. The branch-protection contract counts
+    # `if: always()` behind jobs that always start as a check that always reports.
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -188,13 +191,23 @@ jobs:
         with:
           egress-policy: audit
       # First and unconditional: a change that needs no run still fails here if
-      # a group job broke, because a group that decides "no run" succeeds.
-      - name: Every group succeeded
+      # a job broke, because a job that decides "no run" succeeds. Both results
+      # are read before failing, so one red job does not hide the other.
+      - name: Every group and the CI-scripts pass succeeded
         env:
           GROUPS_RESULT: ${{ needs.mutation-group.result }}
+          CI_SCRIPTS_RESULT: ${{ needs.mutation-ci-scripts.result }}
         run: |
+          failed=0
           if [ "$GROUPS_RESULT" != "success" ]; then
             echo "::error title=Mutation groups::the group jobs ended $GROUPS_RESULT, not success. Read the red group above."
+            failed=1
+          fi
+          if [ "$CI_SCRIPTS_RESULT" != "success" ]; then
+            echo "::error title=Mutation of the CI scripts::mutation-ci-scripts ended $CI_SCRIPTS_RESULT, not success. Read that job above."
+            failed=1
+          fi
+          if [ "$failed" != 0 ]; then
             exit 1
           fi
 
@@ -239,6 +252,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # No job-level `if:` and no `needs:`, for the same reason as the job above.
+    # Not required on its own: `mutation` waits for it and is red unless it succeeded.
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
