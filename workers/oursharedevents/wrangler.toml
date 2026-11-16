@@ -295,8 +295,17 @@ SPONSOR_GEO_MATCH_ENABLED = "0"
 # the United States subset of a Protomaps build (owner 2026-11-10), named by the
 # build date. Areas outside it have no tiles and draw hexagons only. A refresh is
 # a new key and a PR that changes this value, never an overwrite: the Worker keeps
-# an archive's directories for the life of an isolate, keyed by this name.
+# an archive's directories for the life of an isolate, keyed by this name. (An
+# isolate does notice an object changed under the key, at its next read: that
+# request draws hexagons only and the next opens the new object.)
 MAP_TILES_ARCHIVE = "us-20261115.pmtiles"
+# MAP_TILES_ETAG exists and is NOT SET, here or in any other block. The Worker
+# reads it (lib/street-map.ts, StreetMapEnv): the etag of the one object streets
+# may be drawn from, as R2 gives it, without quotes. Set, an object under
+# MAP_TILES_ARCHIVE with any other etag is refused and the map is hexagons only.
+# The value exists only once an object is loaded, and setting it is the owner's
+# decision (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md, "Refreshing the
+# archive"). Both environments read one object, so both blocks would carry it.
 # The street-layer switch (lib/street-map.ts; street-map CCR 2026-11-15, R20).
 # Exactly "on" draws streets under the hexagons, on the landing and for
 # /api/v2/map/areas. "off", no value or anything else is hexagons only, and the

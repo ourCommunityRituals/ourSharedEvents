@@ -163,8 +163,13 @@ With no lock, a mistake or a stolen token on the staging side could change what 
 - Two Workers reading one bucket on this account.
 - The settings of the bucket the deploy made: its jurisdiction, and that it has no public
   address. The workflow's first job reads the two public-address settings; no run has happened.
-- That a replaced object would be noticed. The Worker pins no etag or hash of the object it reads
-  (review finding R13).
+- That a replaced object would be noticed, on staging. Since 2026-11-16 the Worker carries the etag
+  of an archive's first read on every later read of it and drops what it kept when R2 answers that
+  the object has changed, and it reads an optional pinned etag, `MAP_TILES_ETAG`
+  (`lib/pmtiles.ts`, `r2Source`). That is held by tests against a fake bucket and against the R2
+  of the Workers test pool; with no object loaded, nothing of it has run against the real bucket.
+  The pin is set in no environment, and no hash of the loaded object is compared with the check's
+  record (review finding R13, still open for those two parts).
 
 ## Open, for the owner
 

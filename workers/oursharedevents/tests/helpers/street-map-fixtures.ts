@@ -229,6 +229,41 @@ export async function pmtilesArchive(
 
 let sourceSeq = 0;
 
+/** What a fake bucket's `get` was asked: a key, a byte range, and a condition when one was sent. */
+export interface BucketGet {
+  key: string;
+  range?: { offset: number; length: number };
+  onlyIf?: { etagMatches?: string };
+}
+
+type GetOptions = Parameters<RangeBucket['get']>[1];
+
+/** The get as asked. `onlyIf` is a key of the record only when the caller sent one. */
+function getOf(key: string, o: GetOptions): BucketGet {
+  return o?.onlyIf ? { key, range: o.range, onlyIf: o.onlyIf } : { key, range: o?.range };
+}
+
+/**
+ * An etag for these bytes, the way R2 gives one to a whole upload: the same
+ * bytes have the same etag, other bytes another (FNV-1a here, not MD5).
+ */
+export function etagOf(bytes: Uint8Array): string {
+  let h = 0x811c9dc5;
+  for (const b of bytes) h = Math.imul(h ^ b, 0x01000193) >>> 0;
+  return `${h.toString(16).padStart(8, '0')}${bytes.length.toString(16).padStart(8, '0')}`;
+}
+
+/**
+ * R2's rule for `onlyIf.etagMatches`, as read in workerd on 2026-11-15: a get
+ * whose condition names another etag is answered with the object's record and
+ * no body (no `body`, no `arrayBuffer`). A key that is not there is null either
+ * way.
+ */
+function conditionFails(o: GetOptions, etag: string): boolean {
+  const wanted = o?.onlyIf?.etagMatches;
+  return wanted !== undefined && wanted !== etag;
+}
+
 /** An in-memory RangeSource with a fresh cache key each time. */
 export function memSource(bytes: Uint8Array): RangeSource & { reads: [number, number][] } {
   const reads: [number, number][] = [];
@@ -261,21 +296,33 @@ export function fakeBucket(
   bytes: Uint8Array,
   opts: { delayMs?: number } = {}
 ): RangeBucket & {
-  gets: { key: string; range?: { offset: number; length: number } }[];
+  gets: BucketGet[];
+  /** The etag of the object held now. */
+  readonly etag: string;
+  /** Put other bytes under the same key, as an upload over the object does. */
+  replace(next: Uint8Array): void;
   settle(): Promise<void>;
 } {
-  const gets: { key: string; range?: { offset: number; length: number } }[] = [];
+  const gets: BucketGet[] = [];
   const delays = new Set<Promise<void>>();
   let settled = false;
+  let etag = etagOf(bytes);
   return {
     gets,
+    get etag() {
+      return etag;
+    },
+    replace(next) {
+      bytes = next;
+      etag = etagOf(next);
+    },
     async settle() {
       settled = true;
       while (delays.size) await Promise.all([...delays]);
       await new Promise<void>((r) => setTimeout(r, 0));
     },
     async get(k, o) {
-      gets.push({ key: k, range: o?.range });
+      gets.push(getOf(k, o));
       if (opts.delayMs && !settled) {
         const delay = new Promise<void>((r) => setTimeout(r, opts.delayMs));
         delays.add(delay);
@@ -283,10 +330,11 @@ export function fakeBucket(
         delays.delete(delay);
       }
       if (k !== name) return null;
+      if (conditionFails(o, etag)) return { etag };
       const off = o?.range?.offset ?? 0;
       const len = o?.range?.length ?? bytes.length;
       const slice = bytes.slice(off, off + len);
-      return { arrayBuffer: async () => slice.buffer };
+      return { etag, arrayBuffer: async () => slice.buffer };
     },
   };
 }
@@ -298,30 +346,49 @@ export function fakeBucket(
  * answer started, or the answer is late.
  */
 export type GetStep =
-  'ok' | 'throw' | 'missing' | 'body-fails' | { shortTo: number } | { delayMs: number };
+  | 'ok'
+  | 'throw'
+  | 'missing'
+  | 'body-fails'
+  | { shortTo: number }
+  | { delayMs: number }
+  | { replaceWith: Uint8Array };
 
 /**
  * A fake R2 bucket holding one object, whose every get is decided by
  * `plan(n, range)`, n counting gets from 0. Records every get.
+ *
+ * `{ replaceWith }` puts other bytes under the key just before that get is
+ * answered: the object changed between two reads of one request.
  */
 export function scriptedBucket(
   name: string,
   bytes: Uint8Array,
   plan: (n: number, range?: { offset: number; length: number }) => GetStep
-): RangeBucket & { gets: { key: string; range?: { offset: number; length: number } }[] } {
-  const gets: { key: string; range?: { offset: number; length: number } }[] = [];
+): RangeBucket & { gets: BucketGet[]; readonly etag: string } {
+  const gets: BucketGet[] = [];
+  let etag = etagOf(bytes);
   return {
     gets,
+    get etag() {
+      return etag;
+    },
     async get(k, o) {
       const step = plan(gets.length, o?.range);
-      gets.push({ key: k, range: o?.range });
+      gets.push(getOf(k, o));
       if (step === 'throw') throw new TypeError('Network connection lost.');
       if (step === 'missing' || k !== name) return null;
       if (typeof step === 'object' && 'delayMs' in step) {
         await new Promise((r) => setTimeout(r, step.delayMs));
       }
+      if (typeof step === 'object' && 'replaceWith' in step) {
+        bytes = step.replaceWith;
+        etag = etagOf(bytes);
+      }
+      if (conditionFails(o, etag)) return { etag };
       if (step === 'body-fails') {
         return {
+          etag,
           arrayBuffer: async () => {
             throw new TypeError('The body stream was cut short.');
           },
@@ -332,7 +399,7 @@ export function scriptedBucket(
       const asked =
         typeof step === 'object' && 'shortTo' in step ? Math.min(len, step.shortTo) : len;
       const slice = bytes.slice(off, off + asked);
-      return { arrayBuffer: async () => slice.buffer };
+      return { etag, arrayBuffer: async () => slice.buffer };
     },
   };
 }
@@ -373,18 +440,18 @@ export function sparseSource(file: SparseFile): RangeSource & { reads: [number, 
 }
 
 /** A fake R2 bucket holding one sparse object; records every get. */
-export function sparseBucket(
-  name: string,
-  file: SparseFile
-): RangeBucket & { gets: { key: string; range?: { offset: number; length: number } }[] } {
-  const gets: { key: string; range?: { offset: number; length: number } }[] = [];
+export function sparseBucket(name: string, file: SparseFile): RangeBucket & { gets: BucketGet[] } {
+  const gets: BucketGet[] = [];
+  // One object that never changes: any etag will do, so long as it stays.
+  const etag = 'sparse-object';
   return {
     gets,
     async get(k, o) {
-      gets.push({ key: k, range: o?.range });
+      gets.push(getOf(k, o));
       if (k !== name || !o?.range) return null;
+      if (conditionFails(o, etag)) return { etag };
       const slice = sparseRead(file, o.range.offset, o.range.length);
-      return { arrayBuffer: async () => slice.buffer as ArrayBuffer };
+      return { etag, arrayBuffer: async () => slice.buffer as ArrayBuffer };
     },
   };
 }

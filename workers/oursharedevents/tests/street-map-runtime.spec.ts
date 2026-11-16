@@ -8,7 +8,7 @@
  * isolate, the reads are ranged R2 reads, and directories and tiles are
  * unpacked by the runtime's `DecompressionStream`.
  *
- * Four things are pinned:
+ * Five things are pinned:
  *
  *  1. The public area route and the landing draw streets from the archive, and
  *     stay whole when the object is missing or cut short.
@@ -27,6 +27,13 @@
  *     read once for the requests of a minute, both surfaces together; an object
  *     loaded meanwhile draws when that minute is up, in the same isolate, with
  *     no deploy. The clock is the runtime's `Date.now`, moved on by the test.
+ *  5. One object for one opened archive (street-map scenario pass 2026-11-15,
+ *     S12). What R2 answers to a ranged get with `onlyIf: { etagMatches }` is
+ *     read here, from the runtime itself, because lib/pmtiles.ts stands on it.
+ *     Then another object is put under the key between two requests, with
+ *     nothing reset: the request after the swap is whole with hexagons only,
+ *     for one read, and the one after it draws the new object's streets. And
+ *     `MAP_TILES_ETAG`, the optional pin, through the Worker's own fetch.
  *
  * The slow read is the bucket's own `get`, held back by a timer that belongs to
  * the request that asked: when that request ends, the runtime drops the timer
@@ -38,18 +45,25 @@
 // @born-red directories kept between requests | method: `OPENED.set` removed from `open` in src/lib/pmtiles.ts; "the next map of that area is one read" and the read counts after a lost leaf and a lost tile read failed | date: 2026-11-15
 // @born-red the switch in the runtime | method: the switch line removed from loadStreetLayer; both "off" cases failed (the route and the landing drew streets). The top-level STREET_MAP in wrangler.toml set to "off"; "the pool runs with the switch on" and the nine cases that draw failed | date: 2026-11-15
 // @born-red what the log says, and an empty bucket, in the runtime | method: 14 faults in src/lib/street-map.ts, src/lib/pmtiles.ts and the two handlers, one at a time, each seen failing here in workerd and put back. The emit call removed (the four cases of that block and "an object cut short"); a timeout said as error ("a lost race is a timeout in the log"); no-archive said as error ("R2 is read once" and "the object is loaded"); every error said as no-archive ("an object cut short"); reads not counted (3); the remembered miss not read by the loader, and the miss not remembered at all ("R2 is read once", "the object is loaded"); `surface` taken out of the area route's call (5) and of the landing's, and the landing saying the other surface (3 each); every throw of the read remembered as a miss ("an object cut short"); the miss marked before the read comes back ("a lost race is a timeout in the log", and the open-read and landing lost-race cases already here); the window twice as long, and never ending ("the object is loaded") | date: 2026-11-15
+// @born-red one object for one opened archive, in the runtime | method: the reader of 44948a04 run under this spec: the two replaced-object cases, "every later read carries the etag", the MAP_TILES_ETAG case and the reworded cut-object case failed (5). Then 10 faults in src/lib/pmtiles.ts and src/lib/street-map.ts, one at a time, each failing at least one case here and put back: the loader's source, the leaf read or the tile read not handing the version on; a changed archive not forgotten; the etag never written; the pin not compared, not handed over, or compared the wrong way round; the no-body check removed; a changed object marked as missing. Three faults fail only in the Node specs (the root read past the first read, `OPENED.clear()`, and a condition on the first read): this pool's archive has its root in the first read, one key, and an R2 that takes an undefined etag as no condition. "what R2 answers to a ranged get with a condition" reads the runtime, not our code: it was seen failing with a quoted etag sent as the condition (workerd threw) | date: 2026-11-16
 import { createExecutionContext, env, SELF, waitOnExecutionContext } from 'cloudflare:test';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import worker from '../src/index';
 import { MISS_MEMORY_MS, resetPmtilesCache } from '../src/lib/pmtiles';
 import { DEFAULT_ARCHIVE, STREET_TIMEOUT_MS, type StreetLayerLine } from '../src/lib/street-map';
-import { pmtilesArchive, tilesForCells, type FixtureTile } from './helpers/street-map-fixtures';
+import {
+  pmtilesArchive,
+  tilesForCells,
+  tilesOfFrame,
+  type FixtureTile,
+} from './helpers/street-map-fixtures';
 
 interface TestEnv {
   DB: D1Database;
   MAP_TILES: R2Bucket;
   MAP_TILES_ARCHIVE?: string;
+  MAP_TILES_ETAG?: string;
   STREET_MAP?: string;
   TEST_MIGRATION_STATEMENTS: string;
 }
@@ -90,6 +104,48 @@ async function archiveFor(frames: string[][]): Promise<Uint8Array> {
 }
 
 let archive: Uint8Array;
+
+/**
+ * Another build of the same two frames: a highway and a major road in every
+ * tile and no minor road, where `archiveFor` has a highway and a minor road.
+ * So a drawn layer says which object it came from.
+ */
+async function otherArchiveFor(frames: string[][]): Promise<Uint8Array> {
+  const line = (at: (t: number) => [number, number]) =>
+    Array.from({ length: 65 }, (_, i) => at(i * 64));
+  const tiles = new Map<string, FixtureTile>();
+  for (const cells of frames) {
+    const made = tilesOfFrame(cells, () => [
+      {
+        name: 'roads',
+        features: [
+          { type: 2, props: { kind: 'highway' }, parts: [line((t) => [t, 1000])] },
+          { type: 2, props: { kind: 'major_road' }, parts: [line((t) => [3000, t])] },
+        ],
+      },
+    ]);
+    for (const t of made.tiles) tiles.set(`${t.z}/${t.x}/${t.y}`, t);
+  }
+  return pmtilesArchive([...tiles.values()], { gzip: true, leaf: true });
+}
+
+let otherArchive: Uint8Array;
+const MINOR = 'class="as-r as-1"';
+const MAJOR = 'class="as-r as-2"';
+
+/** The condition each of the Worker's reads carried, in order (undefined: none). */
+const conditionsOf = (bucket: ReturnType<typeof watchBucket>): (string | undefined)[] =>
+  bucket.mock.calls.map(
+    ([, o]) => (o as { onlyIf?: { etagMatches?: string } } | undefined)?.onlyIf?.etagMatches
+  );
+
+/** One request through the Worker's fetch and router, with these values over the pool's own. */
+async function withEnv(url: string, over: Partial<TestEnv>): Promise<Response> {
+  const ctx = createExecutionContext();
+  const res = await worker.fetch(new Request(url), { ...E, ...over } as never, ctx);
+  await waitOnExecutionContext(ctx);
+  return res;
+}
 
 /**
  * Watch the Worker's reads of the bucket. `slow` holds read number `call` back
@@ -177,6 +233,7 @@ beforeAll(async () => {
       .run();
   }
   archive = await archiveFor([AROUND, [CELL]]);
+  otherArchive = await otherArchiveFor([AROUND, [CELL]]);
 });
 
 beforeEach(async () => {
@@ -245,7 +302,7 @@ describe('the street layer in the Workers runtime | drawing from R2', () => {
     expect(page.html).not.toContain('data-testid="amap-credit"');
   });
 
-  test('an object cut short in its tiles: hexagons only, and the whole object draws again', async () => {
+  test('an object cut short in its tiles: hexagons only, and the whole object draws at the second request after it is put back', async () => {
     // The header says where the tiles start (bytes 56 to 63, little-endian).
     const tilesAt = new DataView(archive.buffer, archive.byteOffset).getUint32(56, true);
     await E.MAP_TILES.put(KEY, archive.subarray(0, tilesAt + 100));
@@ -259,13 +316,23 @@ describe('the street layer in the Workers runtime | drawing from R2', () => {
     expect(page.html).toContain(HEXAGONS);
     expect(page.html).not.toContain(STREETS);
     // A damaged object is an error in the log, on each surface, and is not
-    // taken for a missing one: the whole object draws at once.
+    // taken for a missing one: no minute is waited out before the bucket is
+    // asked again.
     expect(lines().map((l) => [l.outcome, l.surface])).toEqual([
       ['error', 'map-areas'],
       ['error', 'landing'],
     ]);
+    // The whole object is another object under the key. The isolate holds the
+    // cut one's directories, so the first request after the put finds it
+    // changed, drops them and has no streets; the next opens the whole object
+    // and draws (one object for one opened archive, below). Before 2026-11-16
+    // the first request drew at once, from the cut object's directories.
     await E.MAP_TILES.put(KEY, archive);
+    const changed = await areas();
+    expect(changed.status).toBe(200);
+    expect(changed.body.streets).toBeNull();
     expect((await areas()).body.streets).not.toBeNull();
+    expect(lines().map((l) => l.outcome)).toEqual(['error', 'error', 'error', 'drew']);
   });
 });
 
@@ -446,5 +513,130 @@ describe('the street layer in the Workers runtime | a lost race', () => {
     const next = await landing();
     expect(next.status).toBe(200);
     expect(next.html).toContain(STREETS);
+  });
+});
+
+describe('the street layer in the Workers runtime | one object for one opened archive', () => {
+  test('what R2 answers to a ranged get with a condition, in this runtime', async () => {
+    const put = await E.MAP_TILES.put('condition-probe.bin', new Uint8Array([1, 2, 3, 4, 5, 6]));
+    try {
+      const range = { offset: 2, length: 3 };
+      // The etag is the unquoted one; httpEtag is the same in quotes.
+      expect(put.httpEtag).toBe(`"${put.etag}"`);
+      const same = await E.MAP_TILES.get('condition-probe.bin', {
+        range,
+        onlyIf: { etagMatches: put.etag },
+      });
+      expect(same!.etag).toBe(put.etag);
+      expect([...new Uint8Array(await (same as R2ObjectBody).arrayBuffer())]).toEqual([3, 4, 5]);
+      // Another etag: the object's record, its own etag on it, and no body.
+      const other = await E.MAP_TILES.get('condition-probe.bin', {
+        range,
+        onlyIf: { etagMatches: 'another-etag' },
+      });
+      expect(other).not.toBeNull();
+      expect(other!.etag).toBe(put.etag);
+      expect('body' in other!).toBe(false);
+      expect((other as { arrayBuffer?: unknown }).arrayBuffer).toBeUndefined();
+      // A quoted etag is refused outright, so the reader must send `etag`.
+      await expect(
+        E.MAP_TILES.get('condition-probe.bin', { range, onlyIf: { etagMatches: put.httpEtag } })
+      ).rejects.toThrow(/should not be wrapped in quotes/);
+      // A key that is not there is null, condition or no condition.
+      expect(
+        await E.MAP_TILES.get('condition-probe-none.bin', {
+          range,
+          onlyIf: { etagMatches: put.etag },
+        })
+      ).toBeNull();
+    } finally {
+      await E.MAP_TILES.delete('condition-probe.bin');
+    }
+  });
+
+  test('the first read carries no condition, and every later read carries the etag of the object it came from', async () => {
+    const etag = (await E.MAP_TILES.head(KEY))!.etag;
+    const bucket = watchBucket();
+    expect((await areas()).body.streets).not.toBeNull();
+    expect(conditionsOf(bucket)).toEqual([undefined, etag, etag]);
+    // The next request finds the archive open: its one read is held to it too.
+    expect((await areas()).body.streets).not.toBeNull();
+    expect(conditionsOf(bucket)).toEqual([undefined, etag, etag, etag]);
+  });
+
+  test('the area route: the object replaced between two requests is hexagons only for one request, then the new streets', async () => {
+    const lines = watchLog();
+    const first = await areas();
+    expect(first.body.streets!.svg).toContain(MINOR);
+    expect(first.body.streets!.svg).not.toContain(MAJOR);
+    const was = (await E.MAP_TILES.head(KEY))!.etag;
+
+    // Another object under the same key. Nothing the isolate keeps is reset.
+    const now = (await E.MAP_TILES.put(KEY, otherArchive)).etag;
+    expect(now).not.toBe(was);
+    const bucket = watchBucket();
+    const swapped = await areas();
+    expect(swapped.status).toBe(200);
+    expect(swapped.body.ok).toBe(true);
+    expect(swapped.body.areas).toHaveLength(1);
+    expect(swapped.body.around).toHaveLength(6);
+    expect(swapped.body.streets).toBeNull();
+    // One read, the tiles, asked for under the old etag. No request was added.
+    expect(conditionsOf(bucket)).toEqual([was]);
+
+    const next = await areas();
+    expect(next.status).toBe(200);
+    expect(next.body.streets).not.toBeNull();
+    expect(next.body.streets!.svg).toContain(MAJOR);
+    expect(next.body.streets!.svg).not.toContain(MINOR);
+    // The new object from its first byte: header, leaf directory, tiles.
+    expect(conditionsOf(bucket)).toEqual([was, undefined, now, now]);
+    expect(lines().map((l) => l.outcome)).toEqual(['drew', 'error', 'drew']);
+  });
+
+  test('the landing: the object replaced between two pages is one page without streets, then the new streets', async () => {
+    const first = await landing();
+    expect(first.html).toContain(STREETS);
+    expect(first.html).toContain(MINOR);
+    await E.MAP_TILES.put(KEY, otherArchive);
+    const swapped = await landing();
+    expect(swapped.status).toBe(200);
+    expect(swapped.html).toContain(HEXAGONS);
+    expect(swapped.html).not.toContain(STREETS);
+    expect(swapped.html).not.toContain('data-testid="amap-credit"');
+    const next = await landing();
+    expect(next.status).toBe(200);
+    expect(next.html).toContain(STREETS);
+    expect(next.html).toContain(MAJOR);
+    expect(next.html).not.toContain(MINOR);
+  });
+
+  test('MAP_TILES_ETAG is not set in the pool, as in every environment today', () => {
+    expect(E.MAP_TILES_ETAG).toBeUndefined();
+  });
+
+  test('MAP_TILES_ETAG names another object: hexagons only, one read a request; naming this one, or empty, draws', async () => {
+    const etag = (await E.MAP_TILES.head(KEY))!.etag;
+    const bucket = watchBucket();
+    for (const round of [1, 2]) {
+      const res = await withEnv(AREAS, { MAP_TILES_ETAG: 'another-object' });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as AreasBody;
+      expect(body.areas).toHaveLength(1);
+      expect(body.streets).toBeNull();
+      expect(bucket.mock.calls).toHaveLength(round);
+    }
+    const page = await withEnv(LANDING, { MAP_TILES_ETAG: 'another-object' });
+    expect(page.status).toBe(200);
+    const html = await page.text();
+    expect(html).toContain(HEXAGONS);
+    expect(html).not.toContain(STREETS);
+
+    for (const value of [etag, '']) {
+      const res = await withEnv(AREAS, { MAP_TILES_ETAG: value });
+      const body = (await res.json()) as AreasBody;
+      expect(body.streets, `MAP_TILES_ETAG="${value}"`).not.toBeNull();
+      expect(body.streets!.svg).toContain(MINOR);
+    }
   });
 });

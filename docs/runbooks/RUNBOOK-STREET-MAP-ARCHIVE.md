@@ -704,14 +704,14 @@ writes nothing and can run at any time.
    and the time in milliseconds (`ms`). It names no area, no tile and no
    request. The outcomes:
 
-   | `outcome`    | What happened                                                       |
-   | ------------ | ------------------------------------------------------------------- |
-   | `drew`       | a street layer is on the page                                       |
-   | `no-archive` | the bucket has no object under `MAP_TILES_ARCHIVE`                  |
-   | `no-tile`    | the archive has no tile for a part of the frame (outside the cut)   |
-   | `thin`       | the tiles were read and held no street map (no road to steer by)    |
-   | `timeout`    | slower than the 1.5 s limit; the page drew hexagons only            |
-   | `error`      | a read failed, or the bytes were refused (damaged, or over a limit) |
+   | `outcome`    | What happened                                                                                                                                                             |
+   | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `drew`       | a street layer is on the page                                                                                                                                             |
+   | `no-archive` | the bucket has no object under `MAP_TILES_ARCHIVE`                                                                                                                        |
+   | `no-tile`    | the archive has no tile for a part of the frame (outside the cut)                                                                                                         |
+   | `thin`       | the tiles were read and held no street map (no road to steer by)                                                                                                          |
+   | `timeout`    | slower than the 1.5 s limit; the page drew hexagons only                                                                                                                  |
+   | `error`      | a read failed, or the bytes were refused (damaged, or over a limit), or the object under the key is not the one this instance opened or not the one `MAP_TILES_ETAG` pins |
 
    Before the load the only line is `no-archive`, at most once a minute for
    each Worker instance. After it, the first lines to read are `timeout`
@@ -891,9 +891,27 @@ Binding the bucket is not a launch: production stays closed and no
 ## Refreshing the archive
 
 A refresh is a new build under its **own dated key**. Never overwrite an object
-in place: a running Worker keeps an archive's directories in memory, by key, and
-would read the new file with the old directories. The lock on a loaded object
+in place. A running Worker keeps an archive's directories in memory, by key.
+Since 2026-11-16 every read after an instance's first carries the etag of the
+object that first read came from (`lib/pmtiles.ts`, `r2Source`): if the object
+under the key has changed, R2 sends no bytes, the instance drops what it kept,
+that one request draws hexagons only with an `error` line, and the next request
+opens the new object. So an overwrite no longer leaves an instance reading the
+new file with the old directories. It is still not a way to refresh: every
+instance shows one map without streets, a reader's kept answer is not taken
+back, and nothing has checked the new object. The lock on a loaded object
 refuses an overwrite in any case.
+
+**The pin (`MAP_TILES_ETAG`), unset today.** The Worker reads an optional
+setting, the etag of the one object streets may be drawn from. Set, an object
+under `MAP_TILES_ARCHIVE` with any other etag is refused at its first read and
+the map is hexagons only, with an `error` line on every try (it is not
+remembered the way a missing object is). It is in no vars block of
+`wrangler.toml`: the value exists only once an object is loaded, and whether to
+set it is the owner's (scenario pass 2026-11-15, question 3). The value is the
+etag as R2 gives it, without quotes. Both environments read one object, so both
+blocks would carry the same value, and a refresh PR would change it with the
+key; `scripts/ci/env-parity.mjs` reports a setting that is in one block only.
 
 The workflow runs from `main` and loads the key `wrangler.toml` names there, so
 the order is:
