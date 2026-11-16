@@ -655,7 +655,7 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
           '.github/actions/x/action.yml'
         );
         expect(w.environmentNameProblems(r.environments)).toEqual([
-          '.github/actions/x/action.yml :: (composite action) :: (action level): a composite action cannot declare an environment (unrecognized; it must resolve to one of staging, production, copilot, main-automation)',
+          '.github/actions/x/action.yml :: (composite action) :: (action level): a composite action cannot declare an environment (unrecognized; it must resolve to one of staging, production, copilot, main-automation, street-map-load)',
         ]);
       });
 
@@ -715,13 +715,14 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
           `${header} (${list.length}):\n  - ${list.join('\n  - ')}\n${fix}\n`
         ).toBe(0);
 
-      test('the allowed names are the four environments, tied to scripts/hardening/apply-github.mjs (OSE-1693)', async () => {
+      test('the allowed names are the five environments, tied to scripts/hardening/apply-github.mjs (OSE-1693)', async () => {
         // Changing the allowed set means changing this line too, in the same reviewed change.
         expect([...w.ALLOWED_ENVIRONMENTS]).toEqual([
           'staging',
           'production',
           'copilot',
           'main-automation',
+          'street-map-load',
         ]);
         const g = await import(
           pathToFileURL(join(ROOT, 'scripts', 'hardening', 'apply-github.mjs')).href
@@ -749,6 +750,17 @@ describe('token split (OSE-1695): every workflow and composite action', () => {
           'Job-level environments outside ALLOWED_ENVIRONMENTS (or unprovable)',
           'Fix: use one of the allowed names. A new environment is created and protected by scripts/hardening/apply-github.mjs first, then added to ALLOWED_ENVIRONMENTS in scripts/ci/hub-token-wiring.mjs (OSE-1693).'
         );
+      });
+
+      // street-map-load holds the street-map bucket's write key (owner, 2026-11-16). It is the
+      // one allowed name apply-github.mjs does not make, so the name is held to the one job
+      // whose workflow reads the environment's branch list before that job starts.
+      // @born-red street-map-load users | method: seen red on the real tree, 2026-11-16, with `environment: street-map-load` added to the bucket-private job of the load workflow (two users listed) and with the load job put back on `environment: staging` (none listed).
+      test('street-map-load is named by the archive load job and by no other', () => {
+        const users = s.environments
+          .filter((e) => !e.names || e.names.includes(w.STREET_MAP_LOAD_ENV))
+          .map((e) => `${e.file} :: ${e.job}`);
+        expect(users).toEqual(['.github/workflows/street-map-archive-load.yml :: load']);
       });
 
       test('both write sites declare exactly main-automation; no other job may declare it', () => {

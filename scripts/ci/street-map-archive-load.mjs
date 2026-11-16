@@ -11,7 +11,9 @@
  *
  *   names    the build, key and bucket the workflow names are the ones wrangler.toml binds
  *   private  the bucket has no r2.dev URL and no custom domain (wrangler's two reads)
- *   topzoom  the top zoom the dry run and the cut take is the deepest zoom the
+ *   environment  the GitHub environment that holds the bucket's write key can be
+ *            used from branch main and from nothing else (GitHub's two answers)
+ *   topzoom the top zoom the dry run and the cut take is the deepest zoom the
  *            Worker reads (owner, 2026-11-16: the cut keeps no deeper tile)
  *   fits     the size `pmtiles extract --dry-run` reports fits the runner's free disk
  *   absent   the bucket does not hold the key yet (an object is never overwritten)
@@ -114,6 +116,71 @@ export function privacyProblems(devUrlOutput, domainListOutput) {
     out.push(`a custom domain is connected, or the list was not read (expected "${NO_DOMAINS}")`);
   }
   return out;
+}
+
+/**
+ * The GitHub environment the load job names (owner, 2026-11-16). The bucket's
+ * write key is set there and nowhere else. GitHub starts a job that names an
+ * environment only from a ref the environment's branch list allows, so with a
+ * list of branch `main` alone no branch's copy of any workflow can read the key.
+ */
+export const LOAD_ENVIRONMENT = 'street-map-load';
+
+const parseJson = (text) => {
+  try {
+    return JSON.parse(String(text ?? ''));
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * What is wrong with the load job's environment, as sentences. `environmentText`
+ * is GitHub's answer to GET /repos/{repo}/environments/{name}; `policiesText` is
+ * its answer to GET .../environments/{name}/deployment-branch-policies. One
+ * shape passes: the environment exists under that name, it keeps a branch list
+ * of its own, and the list is branch `main` alone. A missing environment, an
+ * error answer, an answer that is not JSON, a list cut short and a list that
+ * also allows a tag or a pattern are all problems. GitHub makes a missing
+ * environment on first use with no list at all, so "missing" must stop the run
+ * before the job that names it starts.
+ */
+export function environmentProblems(environmentText, policiesText, name = LOAD_ENVIRONMENT) {
+  const env = parseJson(environmentText);
+  if (!env || env.name !== name) {
+    return [
+      `the environment "${name}" was not read: it does not exist yet, or GitHub did not answer. The owner creates it (Settings, Environments) with "Selected branches and tags" set to branch main, before any run`,
+    ];
+  }
+  const policy = env.deployment_branch_policy;
+  if (policy == null) {
+    return [`"${name}" can be used from every branch and tag: it has no branch list`];
+  }
+  if (policy.custom_branch_policies !== true || policy.protected_branches !== false) {
+    return [`"${name}" allows every protected branch, not a list of its own with main alone`];
+  }
+  const answer = parseJson(policiesText);
+  const list = answer?.branch_policies;
+  if (!Array.isArray(list)) return [`the branch list of "${name}" was not read`];
+  if (Number.isInteger(answer.total_count) && answer.total_count !== list.length) {
+    return [`the branch list of "${name}" was cut short: ${list.length} of ${answer.total_count}`];
+  }
+  const refs = list.map((p) => `${p?.type ?? 'branch'} ${p?.name}`);
+  if (refs.length !== 1 || refs[0] !== 'branch main') {
+    return [
+      `"${name}" can be used from ${refs.length ? refs.join(', ') : 'no ref at all'}, not from branch main alone`,
+    ];
+  }
+  return [];
+}
+
+/** How many required reviewers the environment has. Reported, never a stop: the owner's choice. */
+export function environmentReviewers(environmentText) {
+  const rules = parseJson(environmentText)?.protection_rules;
+  if (!Array.isArray(rules)) return 0;
+  return rules
+    .filter((r) => r?.type === 'required_reviewers')
+    .reduce((n, r) => n + (Array.isArray(r.reviewers) ? r.reviewers.length : 0), 0);
 }
 
 const UNIT = { B: 1, kB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12, PB: 1e15, EB: 1e18 };
@@ -326,6 +393,21 @@ const COMMANDS = {
     return stop(
       privacyProblems(readFileSync(devUrl, 'utf8'), readFileSync(domains, 'utf8')),
       `${named().bucket} has no r2.dev URL and no custom domain.`
+    );
+  },
+  environment([environmentFile, policiesFile]) {
+    const asked = process.env.LOAD_ENVIRONMENT;
+    if (asked !== LOAD_ENVIRONMENT) {
+      return stop(
+        [`the workflow reads the environment "${asked}", the load job's is "${LOAD_ENVIRONMENT}"`],
+        ''
+      );
+    }
+    const environmentText = readFileSync(environmentFile, 'utf8');
+    const reviewers = environmentReviewers(environmentText);
+    return stop(
+      environmentProblems(environmentText, readFileSync(policiesFile, 'utf8')),
+      `${LOAD_ENVIRONMENT} can be used from branch main alone. Required reviewers: ${reviewers}.`
     );
   },
   fits([log, free]) {
