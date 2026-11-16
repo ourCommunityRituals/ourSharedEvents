@@ -104,6 +104,14 @@ import {
   placeRuleFault,
   type AttendanceMode,
 } from '../lib/attendance-mode';
+import {
+  INVALID_ZIP_CODE,
+  INVALID_ZIP_CODE_MESSAGE,
+  ZIP_NOT_STORED_ONLINE,
+  readZipField,
+  zipNotInTableWarning,
+  type ZipWarning,
+} from '../lib/event-zip';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -436,6 +444,9 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       ' e.start_date, e.end_date, e.timezone, e.starts_at, e.cover_image_url, e.created_at, e.updated_at,' +
       ' e.legal_clearance_tier, e.event_type_id, etr.name AS event_type_name,' +
       ' e.what_short, e.who_host, e.why_purpose, e.how_details, e.where_address,' +
+      // W1 (OSE-2095): the event's ZIP, for the edit forms. Admin only (this
+      // list is brand-scoped); never in a public projection.
+      ' e.zip_code,' +
       ' e.who_story, e.who_image_url, e.what_video_url,' +
       ' e.lat, e.lon, e.corridor_id, e.h3_res9, e.h3_res7,' +
       ' e.is_published, e.created_by, e.listed_from, e.data_class,' +
@@ -940,6 +951,15 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   if (placeFault) return errorResponse(placeFault, PLACE_RULE_MESSAGES[placeFault], 400, rid);
   const isOnline = attendanceMode === 'online';
 
+  // W1 (OSE-2095, owner 2026-11-16): the ZIP the organizer gives. Words only:
+  // it finds the event in zip and town search and is never made into a cell.
+  // Malformed is refused; an online event stores none (and the answer says so).
+  const zipField = readZipField(body);
+  if (zipField.kind === 'invalid') {
+    return errorResponse(INVALID_ZIP_CODE, INVALID_ZIP_CODE_MESSAGE, 400, rid);
+  }
+  const zipCode = !isOnline && zipField.kind === 'set' ? zipField.zip : null;
+
   const h3Tags = maybeTag(lat, lon);
 
   // OSE-1245 — publication is an act (OCR_VISION.md §6.2c). The host decides
@@ -971,14 +991,14 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     try {
       await env.DB.prepare(
         `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, starts_at, cover_image_url, template_id,
-                             what_short, who_host, why_purpose, how_details, where_address,
+                             what_short, who_host, why_purpose, how_details, where_address, zip_code,
                              who_story, who_image_url, what_video_url, what_url,
                              what_url_enabled, what_url_type,
                              lat, lon, h3_res9, h3_res7, is_published, created_by,
                              event_type_id, settings_json, listed_from, data_class,
                              attendance_mode,
                              qr_verified, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
         .bind(
           id,
@@ -1001,6 +1021,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
           whyPurpose,
           howDetails,
           isOnline ? null : whereAddress,
+          zipCode,
           whoStory,
           whoImageUrl,
           whatVideoUrl,
@@ -1074,6 +1095,12 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // without null checks.
   let shortcode: string | null = null;
   const warnings: Array<{ code: string; message: string }> = [];
+  // W1: a ZIP the zip-area table lacks still saved; one sent with an online
+  // event did not. Either way the caller is told.
+  if (zipCode !== null && zipField.kind === 'set' && !zipField.known) {
+    warnings.push(zipNotInTableWarning(zipCode));
+  }
+  if (isOnline && zipField.kind === 'set') warnings.push(ZIP_NOT_STORED_ONLINE);
   try {
     const sl = await createShortlink(env, id);
     shortcode = sl.code;
@@ -1214,6 +1241,14 @@ export async function handleUpdateEvent(
     }
     modeWrite = body.attendance_mode;
   }
+
+  // W1 (OSE-2095): the ZIP can be set, changed or cleared; malformed is refused
+  // before anything is written.
+  const zipField = readZipField(body);
+  if (zipField.kind === 'invalid') {
+    return errorResponse(INVALID_ZIP_CODE, INVALID_ZIP_CODE_MESSAGE, 400, rid);
+  }
+  const updateWarnings: ZipWarning[] = [];
 
   // Status validation (if provided)
   if ('status' in body && body.status !== null) {
@@ -1441,6 +1476,8 @@ export async function handleUpdateEvent(
   // switch never trips over an older event. In person and both must end up with
   // a place; online must end up with none.
   let becomesOnline = false;
+  // W1: whether the mode was read here (then becomesOnline is the answer).
+  let modeKnown = false;
   if (
     modeWrite !== null ||
     'location' in body ||
@@ -1484,6 +1521,7 @@ export async function handleUpdateEvent(
       const fault = placeRuleFault(mode, hasPlace);
       if (fault) return errorResponse(fault, PLACE_RULE_MESSAGES[fault], 400, rid);
       becomesOnline = mode === 'online';
+      modeKnown = true;
     }
   }
   if (modeWrite !== null) {
@@ -1507,6 +1545,8 @@ export async function handleUpdateEvent(
     for (const col of [
       'location',
       'where_address',
+      // W1: an online event has no place, so no ZIP either.
+      'zip_code',
       'lat',
       'lon',
       'h3_res9',
@@ -1519,6 +1559,30 @@ export async function handleUpdateEvent(
     // Nothing to look up, and no coordinates to tag.
     placeChanged = false;
     geoUpdated = false;
+  }
+
+  // W1 (OSE-2095): the ZIP. An event turning online had it cleared just above.
+  // Otherwise a ZIP sent for an event that is online (read now if the place
+  // rule above did not read the mode) is not stored, and the answer says so.
+  if (zipField.kind !== 'absent' && !becomesOnline) {
+    let online = false;
+    if (zipField.kind === 'set' && !modeKnown) {
+      const row = await env.DB.prepare('SELECT attendance_mode FROM events WHERE id = ?')
+        .bind(eventId)
+        .first<{ attendance_mode: string | null }>();
+      online = row !== null && attendanceModeOf(row.attendance_mode) === 'online';
+    }
+    if (online) {
+      updateWarnings.push(ZIP_NOT_STORED_ONLINE);
+    } else {
+      sets.push('zip_code = ?');
+      values.push(zipField.kind === 'set' ? zipField.zip : null);
+      if (zipField.kind === 'set' && !zipField.known) {
+        updateWarnings.push(zipNotInTableWarning(zipField.zip));
+      }
+    }
+  } else if (zipField.kind === 'set' && becomesOnline) {
+    updateWarnings.push(ZIP_NOT_STORED_ONLINE);
   }
 
   // OSE-664: media reference URLs — validated http(s)-only (born-red XSS wall)
@@ -1663,6 +1727,14 @@ export async function handleUpdateEvent(
   }
 
   if (sets.length === 0) {
+    // W1: the only field was a ZIP for an online event (the row exists: its
+    // mode was read). Nothing to write, and the answer says why.
+    if (updateWarnings.length > 0) {
+      return Response.json(
+        { ok: true, status: 200, id: eventId, warnings: updateWarnings },
+        { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
+      );
+    }
     return errorResponse('NO_FIELDS', 'No valid fields to update', 400, rid);
   }
 
@@ -1899,6 +1971,8 @@ export async function handleUpdateEvent(
       ...(observedStatus !== undefined ? { from: observedStatus } : {}),
       ...(listedFrom !== undefined ? { listedFrom } : {}),
       ...(mapChosenNow !== null ? { map: mapState(mapChosenNow, false) } : {}),
+      // W1: a ZIP the table lacks (saved) or sent with an online event (not).
+      ...(updateWarnings.length > 0 ? { warnings: updateWarnings } : {}),
     },
     { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );

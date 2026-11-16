@@ -27,6 +27,8 @@ export const REPEAT_SOURCE_COLUMNS = [
   'description',
   'location',
   'where_address',
+  // W1: the ZIP the organizer gave travels with the place words.
+  'zip_code',
   'start_date',
   'end_date',
   'timezone',
@@ -114,6 +116,7 @@ export function buildRepeatBody(
     'description',
     'location',
     'where_address',
+    'zip_code',
     'cover_image_url',
     'template_id',
     'what_short',

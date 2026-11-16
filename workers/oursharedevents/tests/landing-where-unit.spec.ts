@@ -204,11 +204,44 @@ describe("a zip's own area (owner 2026-11-05)", () => {
     expect(withinBound(mg, latLngToCell(34.05, -118.25, CORRIDOR_RES))).toBe(false);
   });
 
-  test('an event with no cell, or a cell that is not one, is in no zip', () => {
+  test('an event with no cell, or a cell that is not one, is in the zip it gives and no other (W1)', () => {
     const mine = inZipOwnArea(findZipArea('60655')!);
-    expect(mine({ where_address: '3700 W 111th St, Chicago, IL 60655' })).toBe(false);
-    expect(mine({ h3_res7: 'not-a-cell', where_address: 'IL 60655' })).toBe(false);
+    const next = inZipOwnArea(findZipArea('60643')!);
+    // By its address's zip, by its ZIP box, and the box wins over the address.
+    expect(mine({ where_address: '3700 W 111th St, Chicago, IL 60655' })).toBe(true);
+    expect(mine({ h3_res7: 'not-a-cell', where_address: 'IL 60655' })).toBe(true);
+    expect(mine({ zip_code: '60655' })).toBe(true);
+    expect(mine({ zip_code: '60655', where_address: '1 Main St, Chicago, IL 60643' })).toBe(true);
+    expect(next({ zip_code: '60655', where_address: '1 Main St, Chicago, IL 60643' })).toBe(false);
+    // ZIP+4 in the row still reads as its five digits.
+    expect(mine({ zip_code: '60655-1234' })).toBe(true);
+    // No zip given: in no zip. A zip it does not give: not in that zip.
     expect(mine({ h3_res7: 42 })).toBe(false);
+    expect(mine({ where_address: 'A hall' })).toBe(false);
+    expect(next({ zip_code: '60655' })).toBe(false);
+    // Fat finger in the row: not a zip, so not read as one.
+    expect(mine({ zip_code: '6065' })).toBe(false);
+    expect(mine({ zip_code: '60655 A' })).toBe(false);
+    // A street number shaped like a zip is not the address's zip.
+    expect(mine({ where_address: '60655 S Pulaski Rd' })).toBe(false);
+  });
+
+  test('an event WITH a cell: the ZIP box is read ahead of the address, within the bound (W1)', () => {
+    const cell = latLngToCell(41.6939, -87.7025, CORRIDOR_RES); // 60655 (Mount Greenwood)
+    const mine = inZipOwnArea(findZipArea('60655')!);
+    const next = inZipOwnArea(findZipArea('60643')!);
+    const withCell = (extra: Record<string, unknown>) => ({ h3_res7: cell, ...extra });
+    // As before with no box at all: the nearest center (or the address) decides.
+    const before = mine(withCell({}));
+    expect(mine(withCell({ zip_code: null }))).toBe(before);
+    // The box names the neighbour within its bound: the neighbour's, and the
+    // address's own zip is not read ahead of it.
+    expect(next(withCell({ zip_code: '60643', where_address: 'Chicago, IL 60655' }))).toBe(true);
+    expect(mine(withCell({ zip_code: '60643', where_address: 'Chicago, IL 60655' }))).toBe(false);
+    // A zip from another state with a cell here is ignored, not trusted: the
+    // event falls to the nearest-center rule, exactly as with no zip.
+    expect(mine(withCell({ zip_code: '90210' }))).toBe(before);
+    expect(inZipOwnArea(findZipArea('90210')!)(withCell({ zip_code: '90210' }))).toBe(false);
   });
 
   test('reads a zip only at the end of an address', () => {

@@ -10,13 +10,13 @@
  *
  * An event belongs to a zip by the landing page's rule (zip-areas.ts
  * inZipOwnArea): the zip its address ends with, else the nearest zip center,
- * within 8 rings. A place lists the events of any of its zips. A zip the Census
- * table does not have (60454, PO boxes) matches only an event whose address
- * ends with it. Place, not person: nothing here reads where the searcher is.
+ * within 8 rings; an event with no cell, by the zip it gives (W1). A place lists
+ * the events of any of its zips. A zip the Census table does not have (60454,
+ * PO boxes) matches only an event that gives it (its ZIP box or its address). Place, not person: nothing here reads where the searcher is.
  *
  * Only the names below are places; any other text stays a name/venue search.
  */
-import { addressZip, findZipArea, inZipOwnArea, normalizeZip } from './zip-areas';
+import { eventZip, findZipArea, inZipOwnArea, normalizeZip } from './zip-areas';
 import type { PlacedEvent } from './zip-areas';
 import { placeKey, STATE_BY_KEY } from './place-key';
 
@@ -108,8 +108,9 @@ export function inSearchPlace(place: SearchPlace): (event: PlacedEvent) => boole
   const tests = place.zips.map((zip) => {
     const area = findZipArea(zip);
     if (area) return inZipOwnArea(area);
-    // Not a Census zip area: only an address that ends with it.
-    return (event: PlacedEvent) => addressZip(event.where_address) === zip;
+    // Not a Census zip area: only an event that gives it (its ZIP box, else
+    // the zip its address ends with).
+    return (event: PlacedEvent) => eventZip(event) === zip;
   });
   return (event) => tests.some((t) => t(event));
 }

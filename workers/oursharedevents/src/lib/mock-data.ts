@@ -41,6 +41,8 @@ export interface MockEvent {
   why_purpose: string | null;
   how_details: string | null;
   where_address: string | null;
+  /** W1: read for zip search only; never in the public projection. */
+  zip_code?: string | null;
   start_date: string | null;
   end_date: string | null;
   created_at: string;

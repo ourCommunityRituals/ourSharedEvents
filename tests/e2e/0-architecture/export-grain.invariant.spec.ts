@@ -758,6 +758,14 @@ test.describe('Invariant 17 (export grain): the rule can see what it is meant to
         `runtime guard rejects "${n}" but this gate does not: the gate must never be weaker than the guard`
       ).not.toBeNull();
     }
+    // W1 (OSE-2095): events now store a ZIP, so the runtime guard must refuse
+    // the zip names too, not only this gate.
+    for (const zipName of ['zip', 'zip_code', 'postal_code']) {
+      expect(
+        names,
+        `runtime guard (SUB_CORRIDOR_KEY) must refuse "${zipName}": events.zip_code is written since W1`
+      ).toContain(zipName);
+    }
     const geo = stripComments(readFileSync(join(SRC_DIR, GEOGRAPHY_REL), 'utf8'));
     expect(geo, 'the finest resolution allowed out of the boundary is the res-7 corridor').toMatch(
       /CORRIDOR_H3_RESOLUTION\s*=\s*7\b/

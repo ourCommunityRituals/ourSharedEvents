@@ -26,13 +26,7 @@
  */
 import { PLACE_NAMES } from './place-names-data';
 import { PLACES } from './place-names';
-import {
-  addressZip,
-  findZipArea,
-  inZipsOwnArea,
-  type PlacedEvent,
-  type ZipArea,
-} from './zip-areas';
+import { eventZip, findZipArea, inZipsOwnArea, type PlacedEvent, type ZipArea } from './zip-areas';
 import { placeKey, STATE_BY_KEY } from './place-key';
 
 export { placeKey };
@@ -143,7 +137,8 @@ export function inPlaceMatches(matches: readonly PlaceMatch[]): (event: PlacedEv
     const inAreas = inZipsOwnArea(areas);
     return (event: PlacedEvent) => {
       if (byAddress.size > 0) {
-        const said = addressZip(event.where_address);
+        // The zip the event gives: its ZIP box, else its address's (W1).
+        const said = eventZip(event);
         if (said && byAddress.has(said)) return true;
       }
       return inAreas(event);
