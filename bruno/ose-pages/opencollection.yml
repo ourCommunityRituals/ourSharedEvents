@@ -56,10 +56,12 @@ request:
           }
         })();
 
+        // Collection-level test: a latency budget on every request (OSE-2091).
+        // One slow sample is retried or allowed, never the gate on its own; a slow
+        // retry, a sample at 2x budget or a third slow sample in the run fails.
+        // Rules: lib/latency-budget.js.
         const elapsed = Date.now() - bru.getVar('requestStartTime');
-        test(`Response time < 3000ms (actual: ${elapsed}ms)`, function() {
-            expect(elapsed).to.be.below(3000);
-        });
+        await require('./lib/latency-budget.js').enforce({ bru: bru, req: req, res: res, test: test, expect: expect, elapsed: elapsed, budget: 3000 });
 
 
         // Invariant #6 — Inert Monetization Hooks: every Worker response (including HTML

@@ -64,20 +64,19 @@ request:
         }
       })();
       
-      // Collection-level test: measure latency on every request
+      // Collection-level test: a latency budget on every request (OSE-2091).
+      // One slow sample is retried or allowed, never the gate on its own; a slow
+      // retry, a sample at 2x budget or a third slow sample in the run fails.
+      // Rules: lib/latency-budget.js.
       const elapsed = Date.now() - bru.getVar('requestStartTime');
+      // Admin registrations decrypts organizer-visible attendee names before responding;
+      // live staging can exceed the generic API budget while still staying usable.
       const isAdminRegistrationsRead = req.getPath().includes('/forms/registrations');
-       // Admin registrations decrypts organizer-visible attendee names before responding;
-       // live staging can exceed the generic API budget while still staying usable.
-       if (isAdminRegistrationsRead) {
-           test(`Response time < 9000ms (actual: ${elapsed}ms)`, function() {
-               expect(elapsed).to.be.below(9000);
-           });
-       } else {
-           test(`Response time < 6000ms (actual: ${elapsed}ms)`, function() {
-               expect(elapsed).to.be.below(6000);
-           });
-       }
+      await require('./lib/latency-budget.js').enforce({
+          bru: bru, req: req, res: res, test: test, expect: expect,
+          elapsed: elapsed,
+          budget: isAdminRegistrationsRead ? 9000 : 6000
+      });
 
       // Verify JSON content-type on API responses
       // Skip: CORS preflight (204 no body), CF Access blocks (HTML instead of JSON),

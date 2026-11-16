@@ -1,0 +1,6 @@
+name: local delaying server
+variables:
+  - name: baseUrl
+    value: http://127.0.0.1:1
+  - name: budget
+    value: "400"

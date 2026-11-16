@@ -33,7 +33,7 @@ const LINK_URL = 'https://stg.oursharedevents.com/r/signed-link-path?k=v';
 const BODY_TEXT = 'Mount Greenwood row 4c4381db';
 
 /** Run a collection's after-response script; return the lines it logged. */
-function runAfterResponse(rel, { status, body, headers = {}, method = 'GET', tests = [] }) {
+async function runAfterResponse(rel, { status, body, headers = {}, method = 'GET', tests = [] }) {
   const script = (yaml.load(read(rel)).request?.scripts ?? []).find(
     (s) => s.type === 'after-response'
   );
@@ -59,14 +59,20 @@ function runAfterResponse(rel, { status, body, headers = {}, method = 'GET', tes
   };
   const bru = { getVar: () => Date.now(), setVar() {}, getEnvVar: () => '' };
   const fakeConsole = { log: (...a) => lines.push(a.join(' ')), warn() {}, error() {} };
+  // Bruno runs a script as an async function with a require() that resolves
+  // ./ inside the collection (OSE-2091: the latency budget is lib/latency-budget.js).
+  const dir = join(ROOT, rel, '..');
+  const collectionRequire = (m) => require(m.startsWith('.') ? join(dir, m) : m);
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   // test() bodies are not run: only what the script itself prints matters here.
-  new Function('bru', 'req', 'res', 'test', 'expect', 'console', script.code)(
+  await new AsyncFunction('bru', 'req', 'res', 'test', 'expect', 'console', 'require', script.code)(
     bru,
     req,
     res,
     (name) => tests.push(name),
     () => ({}),
-    fakeConsole
+    fakeConsole,
+    collectionRequire
   );
   return lines;
 }
@@ -81,8 +87,8 @@ describe('OSE-2090: a 5xx in a staging Bruno run keeps its code and request id',
   for (const dir of collections) {
     const rel = `${dir}/opencollection.yml`;
 
-    test(`${dir}: a JSON 503 prints its status, code and request id, once`, () => {
-      const lines = runAfterResponse(rel, {
+    test(`${dir}: a JSON 503 prints its status, code and request id, once`, async () => {
+      const lines = await runAfterResponse(rel, {
         status: 503,
         body: { ok: false, code: 'DB_ERROR', error: BODY_TEXT, requestId: RID },
         headers: { 'Content-Type': 'application/json', 'X-Request-Id': RID },
@@ -90,8 +96,8 @@ describe('OSE-2090: a 5xx in a staging Bruno run keeps its code and request id',
       expect(lines).toEqual([`[5xx] GET status=503 code=DB_ERROR requestId=${RID}`]);
     });
 
-    test(`${dir}: the request id comes from the body when the header is missing`, () => {
-      const lines = runAfterResponse(rel, {
+    test(`${dir}: the request id comes from the body when the header is missing`, async () => {
+      const lines = await runAfterResponse(rel, {
         status: 500,
         method: 'POST',
         body: { code: 'INTERNAL', requestId: RID },
@@ -99,26 +105,26 @@ describe('OSE-2090: a 5xx in a staging Bruno run keeps its code and request id',
       expect(lines).toEqual([`[5xx] POST status=500 code=INTERNAL requestId=${RID}`]);
     });
 
-    test(`${dir}: never the URL or the body, and odd values print as '-'`, () => {
-      const lines = runAfterResponse(rel, {
+    test(`${dir}: never the URL or the body, and odd values print as '-'`, async () => {
+      const lines = await runAfterResponse(rel, {
         status: 502,
         body: `<html>${BODY_TEXT}</html>`,
         headers: { 'Content-Type': 'text/html', 'X-Request-Id': 'not an id; ' + BODY_TEXT },
       });
       expect(lines).toEqual(['[5xx] GET status=502 code=- requestId=-']);
-      const odd = runAfterResponse(rel, {
+      const odd = await runAfterResponse(rel, {
         status: 503,
         body: { code: `DB_ERROR ${BODY_TEXT}`, requestId: 'undefined value' },
       });
       expect(odd).toEqual(['[5xx] GET status=503 code=- requestId=-']);
       // Only the shapes the Worker makes: a UUID, or req-<digits>. A token is not one.
-      const notAnId = runAfterResponse(rel, {
+      const notAnId = await runAfterResponse(rel, {
         status: 503,
         body: {},
         headers: { 'X-Request-Id': 'ab12'.repeat(8) },
       });
       expect(notAnId).toEqual(['[5xx] GET status=503 code=- requestId=-']);
-      const fallback = runAfterResponse(rel, {
+      const fallback = await runAfterResponse(rel, {
         status: 503,
         body: {},
         headers: { 'X-Request-Id': 'req-1794843930645' },
@@ -129,9 +135,9 @@ describe('OSE-2090: a 5xx in a staging Bruno run keeps its code and request id',
       }
     });
 
-    test(`${dir}: if the block itself fails, the request keeps its other checks`, () => {
+    test(`${dir}: if the block itself fails, the request keeps its other checks`, async () => {
       const tests = [];
-      const lines = runAfterResponse(rel, {
+      const lines = await runAfterResponse(rel, {
         status: 503,
         body: { code: 'DB_ERROR' },
         headers: { 'Content-Type': 'application/json', throws: 'yes' },
@@ -144,9 +150,9 @@ describe('OSE-2090: a 5xx in a staging Bruno run keeps its code and request id',
       ).toBe(true);
     });
 
-    test(`${dir}: a 2xx, 3xx or 4xx prints nothing`, () => {
+    test(`${dir}: a 2xx, 3xx or 4xx prints nothing`, async () => {
       for (const status of [200, 302, 401, 404]) {
-        const lines = runAfterResponse(rel, {
+        const lines = await runAfterResponse(rel, {
           status,
           body: { code: 'NOT_FOUND', requestId: RID },
           headers: { 'X-Request-Id': RID },
