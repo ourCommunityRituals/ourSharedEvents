@@ -26,8 +26,8 @@
 // list.
 //
 // Fails to empty: a card without its sponsor line is correct, a list that errors
-// because of it is not. One event whose rows cannot be worked out loses its own
-// line and leaves the others theirs.
+// because of it is not. One event whose rows the share math refuses loses its
+// own line and leaves the others theirs.
 
 import { PLACEMENT_ON_SHOW_SQL } from './sponsor-card.js';
 import { hourOf, pickSponsorLine, type LineCandidate } from './sponsor-line-pick.js';
