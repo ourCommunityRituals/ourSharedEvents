@@ -381,6 +381,17 @@ test.describe('Launch story smoke — PR #645 public/admin surfaces', () => {
     const statsJson = await stats.json();
     const listJson = await list.json();
     expect(statsJson.stats.registrations).toEqual(withheld);
+    // OSE-2087 (owner, 2026-11-16): the rows follow the count. A new event's
+    // roster and its export are withheld lists: no row, and no next page.
+    expect(listJson.items).toEqual([]);
+    expect(listJson.next_cursor).toBeNull();
+    const exported = await adminFetch(
+      request,
+      'GET',
+      `/api/v2/admin/events/${draftEventId}/forms/export?type=registrations`
+    );
+    expect(exported.status(), 'registrations export').toBe(200);
+    expect(await exported.json()).toMatchObject({ ok: true, items: [], ...withheld });
     expect({
       count: listJson.count,
       suppressed: listJson.suppressed,

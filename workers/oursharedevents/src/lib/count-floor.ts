@@ -11,10 +11,12 @@
  * exact number. Enforced SERVER-SIDE so the exact sub-K value never reaches any
  * client.
  *
- * NOTE ON SCOPE: this floors the aggregate COUNT representation. It does not
- * govern the organizer's first-party operational LIST views (their own
- * attendee/registration rows), which are guarded by #1 (two-DB) + #8 (TTL) and
- * are legitimately exact — an organizer must be able to run their own event.
+ * NOTE ON SCOPE: until 2026-11-16 this floored the aggregate COUNT only, and
+ * the organizer's own LIST views (registration rows, survey rows, the export,
+ * registrant contacts) were exact: the rows are the count. The owner ruled
+ * that day that "no exceptions" reaches those lists too (OSE-2087). A list of
+ * fewer than 5 people is withheld, for the organizer's own event as well, and
+ * `floorRows` below is how a list route does it.
  */
 
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
@@ -38,6 +40,30 @@ export function applyCountFloor(raw: number, floor: number = CORRIDOR_MAP_MIN_CO
   const n = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
   if (n < floor) return { count: null, suppressed: true, floor };
   return { count: n, suppressed: false, floor };
+}
+
+/** A list of rows about people, floored: the rows, or none of them. */
+export interface FlooredRows<T> extends FlooredCount {
+  items: T[];
+}
+
+/**
+ * Floor a list of rows that are each one person (a roster, a set of survey
+ * answers, an export). Rows ARE a count: handing back three rows says "three",
+ * and names them. So under the floor no row is returned at all, and the answer
+ * carries the same `{ count: null, suppressed: true }` a withheld count does.
+ * From the floor up the rows are returned as they are (OSE-2087, owner ruling
+ * 2026-11-16).
+ *
+ * `total` is the size of the whole list when `rows` is one page of it.
+ */
+export function floorRows<T>(
+  rows: readonly T[],
+  total: number = rows.length,
+  floor: number = CORRIDOR_MAP_MIN_COUNT
+): FlooredRows<T> {
+  const floored = applyCountFloor(total, floor);
+  return { ...floored, items: floored.suppressed ? [] : [...rows] };
 }
 
 /**

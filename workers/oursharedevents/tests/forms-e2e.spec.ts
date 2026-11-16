@@ -134,13 +134,27 @@ describe('Scenario 1: Registration lifecycle', () => {
     const regId = submitBody.id as string;
 
     // ── Step 2: Admin reads — sees entry with hashed email ────────────────
+    const lone = await json(await handleAdminRegistrations(getReq(), formsEnv(), EVENT));
+    // OSE-665: the aggregate count is floored uniformly (K=5) — a single
+    // registration is suppressed.
+    expect(lone.suppressed).toBe(true);
+    expect(lone.count).toBeNull();
+    // OSE-2087 (owner, 2026-11-16): the rows follow the count. One
+    // registration is a withheld list: no row comes back. With four more the
+    // list is shown, and the row proves the write.
+    expect(lone.items).toEqual([]);
+    for (let i = 0; i < 4; i++) {
+      await formsDb()
+        .prepare(
+          `INSERT INTO form_registrations (id, event_id, registration_bucket, status, attendee_email_hash, created_at)
+         VALUES (?, ?, 'bucket-fill', 'confirmed', ?, '2020-01-01 00:00:00')`
+        )
+        .bind(crypto.randomUUID(), EVENT, crypto.randomUUID())
+        .run();
+    }
     const adminRes = await handleAdminRegistrations(getReq(), formsEnv(), EVENT);
     const adminBody = await json(adminRes);
-    // OSE-665: the aggregate count is floored uniformly (K=5) — a single
-    // registration is suppressed. The organizer's first-party `items` list is
-    // still exact, so the write is verified by the row below.
-    expect(adminBody.suppressed).toBe(true);
-    expect(adminBody.count).toBeNull();
+    expect(adminBody.count).toBe(5);
     const items = adminBody.items as Record<string, unknown>[];
     expect(items[0].id).toBe(regId);
     expect(items[0].attendee_name).toBe('Alice Johnson');
@@ -179,10 +193,12 @@ describe('Scenario 1: Registration lifecycle', () => {
 
     const remaining = await handleAdminRegistrations(getReq(), formsEnv(), EVENT);
     const remainingBody = await json(remaining);
-    // OSE-665: one row remains — the exact first-party items list proves it;
-    // the aggregate count is floored (suppressed) below K=5.
-    expect((remainingBody.items as unknown[]).length).toBe(1);
-    expect(remainingBody.suppressed).toBe(true);
+    // The active registration remains beside the four added above (OSE-2087:
+    // a list is shown from 5 rows up), and the expired one is not among them.
+    const left = remainingBody.items as Record<string, unknown>[];
+    expect(left.length).toBe(5);
+    expect(remainingBody.suppressed).toBe(false);
+    expect(left.some((r) => r.id === regId)).toBe(false);
   });
 });
 
@@ -319,12 +335,25 @@ describe('Scenario 3: Survey lifecycle with PII scrub', () => {
     expect(data.speaker_quality).toBe(3); // Numeric — always safe
 
     // ── Step 6: Admin NOW reads — ratings intact, PII gone ────────────────
+    // OSE-2087 (owner, 2026-11-16): one scrubbed answer is a withheld list.
+    const loneSurvey = await json(await handleAdminSurveys(getReq(), formsEnv(), EVENT));
+    expect(loneSurvey.items).toEqual([]);
+    expect(loneSurvey.suppressed).toBe(true);
+    // With four more scrubbed answers the list is shown, and the scrubbed row
+    // is read back as before.
+    for (let i = 0; i < 4; i++) {
+      await formsDb()
+        .prepare(
+          `INSERT INTO form_surveys (id, event_id, responses_json, submitted_bucket, pii_scrubbed)
+           VALUES (?, ?, '{"overall_rating":4}', 'bucket-fill', 1)`
+        )
+        .bind(crypto.randomUUID(), EVENT)
+        .run();
+    }
     const visibleRes = await handleAdminSurveys(getReq(), formsEnv(), EVENT);
     const visibleBody = await json(visibleRes);
-    // OSE-665: the scrubbed survey is now visible in the first-party items list;
-    // the aggregate count is floored (suppressed) below K=5.
-    expect((visibleBody.items as unknown[]).length).toBe(1);
-    expect(visibleBody.suppressed).toBe(true);
+    expect((visibleBody.items as unknown[]).length).toBe(5);
+    expect(visibleBody.suppressed).toBe(false);
     const fullStr = JSON.stringify(visibleBody);
     expect(fullStr).not.toContain('Bob Smith');
     expect(fullStr).not.toContain('bob@example.com');
@@ -753,10 +782,29 @@ describe('Scenario 10: Full organizer flow (QA-4 — admin→configure→QR→su
       { headers: { Authorization: `Bearer ${MOCK_ADMIN_KEY}` } }
     );
     expect(adminRes.status).toBe(200);
-    const adminBody = await json(adminRes);
-    // OSE-665: single registration → floored count; first-party items exact.
-    expect(adminBody.suppressed).toBe(true);
-    expect(adminBody.count).toBeNull();
+    const lone = await json(adminRes);
+    // OSE-665: single registration → floored count.
+    expect(lone.suppressed).toBe(true);
+    expect(lone.count).toBeNull();
+    // OSE-2087 (owner, 2026-11-16): the rows follow the count. One
+    // registration is a withheld list: no row comes back. With four more the
+    // list is shown, and the row proves the write.
+    expect(lone.items).toEqual([]);
+    for (let i = 0; i < 4; i++) {
+      await formsDb()
+        .prepare(
+          `INSERT INTO form_registrations (id, event_id, registration_bucket, status, attendee_email_hash, created_at)
+         VALUES (?, ?, 'bucket-fill', 'confirmed', ?, '2020-01-01 00:00:00')`
+        )
+        .bind(crypto.randomUUID(), eventId, crypto.randomUUID())
+        .run();
+    }
+    const adminBody = await json(
+      await SELF.fetch(`https://t.test/api/v2/admin/events/${eventId}/forms/registrations`, {
+        headers: { Authorization: `Bearer ${MOCK_ADMIN_KEY}` },
+      })
+    );
+    expect(adminBody.count).toBe(5);
     const items = adminBody.items as Record<string, unknown>[];
     expect(items[0].attendee_name).toBe('Flow Test Attendee');
     // Raw email must not be stored (hashed only)

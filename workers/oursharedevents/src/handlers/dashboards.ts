@@ -426,7 +426,9 @@ export async function handleOperationsDashboard(
       LIFECYCLE_STATES.map((s) => [s, 0])
     );
     const places = new Set<string>();
-    const admin = new Map<string, number>();
+    // One brand's count of one action is a part: floored before the brands are
+    // added (OSE-2087; drop before sum, as every other total here).
+    const admin = new Map<string, number[]>();
     const eventIds: string[] = [];
     const taps: (number | null)[] = [];
     const scanCells: number[] = [];
@@ -439,7 +441,7 @@ export async function handleOperationsDashboard(
     for (const b of perBrand) {
       for (const [s, n] of b.byStatus) byStatus[s] = (byStatus[s] ?? 0) + n;
       for (const p of b.places) places.add(p);
-      for (const [k, n] of b.admin) admin.set(k, (admin.get(k) ?? 0) + n);
+      for (const [k, n] of b.admin) pushTo(admin, k, n);
       eventIds.push(...b.eventIds);
       taps.push(...b.tapsPerEvent);
       published += b.published;
@@ -466,12 +468,15 @@ export async function handleOperationsDashboard(
         // Named for the audit action each one counts. A status change made
         // through PUT is audited as UPDATE_EVENT, so it lands in `updated`,
         // not in the QR verify counters (see NOT_MEASURED).
-        created: admin.get('CREATE_EVENT') ?? 0,
-        updated: admin.get('UPDATE_EVENT') ?? 0,
-        qr_verified: admin.get('VERIFY_QR') ?? 0,
-        qr_unverified: admin.get('UNVERIFY_QR') ?? 0,
-        deleted: admin.get('DELETE_EVENT') ?? 0,
-        denied: admin.get('denied') ?? 0,
+        // Floored (OSE-2087, owner 2026-11-16): what operators did is a count
+        // of actions by people, and with one operator it is a count of one
+        // person's actions. Under 5 it is withheld, 0 included.
+        created: floorTotalOfParts(admin.get('CREATE_EVENT') ?? []),
+        updated: floorTotalOfParts(admin.get('UPDATE_EVENT') ?? []),
+        qr_verified: floorTotalOfParts(admin.get('VERIFY_QR') ?? []),
+        qr_unverified: floorTotalOfParts(admin.get('UNVERIFY_QR') ?? []),
+        deleted: floorTotalOfParts(admin.get('DELETE_EVENT') ?? []),
+        denied: floorTotalOfParts(admin.get('denied') ?? []),
       },
       reach: {
         poster_scans: scans,

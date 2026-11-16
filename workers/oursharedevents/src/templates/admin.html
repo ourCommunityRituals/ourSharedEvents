@@ -5142,6 +5142,9 @@
           var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/forms/contacts');
           var data = await res.json();
           if (!res.ok || !data || !data.ok) throw new Error('read');
+          // Fewer than 5 people left an email: the list is withheld, and 0 reads
+          // the same as 1 to 4 (OSE-2087, owner 2026-11-16).
+          if (data.suppressed) { say(oseFewerThan(data.floor, 'people have left an email.') + ' The list shows at 5 or more.'); return; }
           var emails = (data.items || []).map(function (i) { return i.email; }).filter(Boolean);
           if (!emails.length) { say('No one has left an email.'); return; }
           if (!navigator.clipboard) throw new Error('clipboard');

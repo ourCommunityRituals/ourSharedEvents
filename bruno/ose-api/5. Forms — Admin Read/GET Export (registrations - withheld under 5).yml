@@ -1,0 +1,57 @@
+info:
+  name: "GET Export | registrations: no row under 5"
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{testEventId}}/forms/export?type=registrations"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // OSE-2087 (owner, 2026-11-16): a list of fewer than 5 people is
+        // withheld, for the organizer's own event too. Whichever state the
+        // staging event is in, rows and the withheld flag must agree.
+        const ct = (res.getHeader('Content-Type') || '');
+        if (!ct.includes('application/json')) {
+          test('CF Access blocked — admin route protected', function() {
+            expect([200, 302, 403]).to.include(res.getStatus());
+          });
+          return;
+        }
+        const json = res.getBody();
+
+        if (res.getStatus() === 200) {
+          test('ok is true, and the answer says whether the list is withheld', function() {
+            expect(json.ok).to.eql(true);
+            expect(json.suppressed).to.be.a('boolean');
+            expect(json.floor).to.eql(5);
+          });
+
+          test('no row while withheld; at least 5 when shown', function() {
+            expect(json.items).to.be.an('array');
+            if (json.suppressed) {
+              expect(json.items).to.eql([]);
+            } else {
+              expect(json.items.length + (json.decrypt_failed || 0)).to.be.at.least(5);
+            }
+          });
+        } else if (res.getStatus() === 401) {
+          test('Auth required', function() {
+            expect(json.code).to.eql('UNAUTH');
+          });
+        } else if (res.getStatus() === 503) {
+          test('503 names a missing configuration, not a failure of the floor', function() {
+            expect(json.code).to.eql('CONFIG_ERROR');
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

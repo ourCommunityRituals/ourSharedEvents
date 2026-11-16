@@ -11,29 +11,39 @@ http:
 runtime:
   scripts:
     - type: after-response
-      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();
-
-        
+      code: |
+        const ct = (res.getHeader('Content-Type') || '');
+        if (!ct.includes('application/json')) {
+          test('CF Access blocked — admin route protected', function() {
+            expect([200, 302, 403]).to.include(res.getStatus());
+          });
+          return;
+        }
+        const json = res.getBody();
 
         if (res.getStatus() === 200) {
+          test('ok is true', function() {
+            expect(json.ok).to.eql(true);
+          });
 
-        \    test('ok is true', function() {
+          test('Has items or surveys array', function() {
+            const data = json.items;
+            expect(data).to.be.an('array');
+          });
 
-        \        expect(json.ok).to.eql(true);
-
-        \    });
-
-        
-
-        \    test('Has items or surveys array', function() {
-
-        \        const data = json.items;
-
-        \        expect(data).to.be.an('array');
-
-        \    });
-
-        }"
+          // OSE-2087 (owner, 2026-11-16): fewer than 5 answers is a withheld
+          // list: no row, and the count is null, never 0.
+          test('rows follow the count: none under 5, all of them from 5 up', function() {
+            expect(json.floor).to.eql(5);
+            if (json.suppressed) {
+              expect(json.items).to.eql([]);
+              expect(json.count).to.eql(null);
+            } else {
+              expect(json.items.length).to.be.at.least(5);
+              expect(json.count).to.eql(json.items.length);
+            }
+          });
+        }
 
 settings:
   encodeUrl: true
