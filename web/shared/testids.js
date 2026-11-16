@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-11-14 — 677 ids.
+ * Generated 2026-11-16 — 735 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 452 ids
+    // admin.html — 510 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -401,6 +401,64 @@
       'sponsors-switch-toggle',
       'sponsors-table',
       'sponsors-tbody',
+      'stall-add-btn',
+      'stall-category-error',
+      'stall-category-input',
+      'stall-code',
+      'stall-code-label',
+      'stall-code-link',
+      'stall-code-posters',
+      'stall-code-print',
+      'stall-codes',
+      'stall-edit-cancel',
+      'stall-edit-category',
+      'stall-edit-form',
+      'stall-edit-name',
+      'stall-edit-number',
+      'stall-edit-save',
+      'stall-name-error',
+      'stall-name-hint',
+      'stall-name-input',
+      'stall-number-error',
+      'stall-number-input',
+      'stall-out-confirm',
+      'stall-out-no',
+      'stall-out-text',
+      'stall-out-yes',
+      'stall-row',
+      'stall-row-actions',
+      'stall-row-back',
+      'stall-row-category',
+      'stall-row-code',
+      'stall-row-edit',
+      'stall-row-name',
+      'stall-row-number',
+      'stall-row-out',
+      'stall-row-panel',
+      'stall-row-public-link',
+      'stall-row-scans',
+      'stall-row-state',
+      'stalls-add',
+      'stalls-body',
+      'stalls-bulk',
+      'stalls-bulk-check',
+      'stalls-bulk-hint',
+      'stalls-bulk-ok-list',
+      'stalls-bulk-ok-title',
+      'stalls-bulk-refused-list',
+      'stalls-bulk-refused-title',
+      'stalls-bulk-result',
+      'stalls-bulk-save',
+      'stalls-bulk-text',
+      'stalls-card',
+      'stalls-empty',
+      'stalls-list',
+      'stalls-msg',
+      'stalls-no-stall',
+      'stalls-public-note',
+      'stalls-summary',
+      'stalls-toggle',
+      'stalls-total',
       'surface-cards',
       'surface-cards-not-live',
       'tier-badge',
