@@ -1,0 +1,61 @@
+info:
+  name: "GET Operations dashboard | report views and operators' actions: withheld or at least 5"
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: '{{baseUrl}}/api/v2/admin/dashboards/operations?brand_id={{brandId}}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // OSE-2087: report views are a sum of event-days that each reach 5, and
+        // operators' own action counts are floored (owner, 2026-11-16). Whatever
+        // state staging is in, each figure is either withheld or at least 5.
+        const ct = (res.getHeader('Content-Type') || '');
+        if (!ct.includes('application/json')) {
+          test('CF Access blocked — admin route protected', function() {
+            expect([200, 302, 403]).to.include(res.getStatus());
+          });
+          return;
+        }
+        const json = res.getBody();
+        const floored = function(v) {
+          expect(v).to.be.an('object');
+          expect(v.floor).to.eql(5);
+          if (v.suppressed) {
+            expect(v.count).to.eql(null);
+          } else {
+            expect(v.count).to.be.at.least(5);
+          }
+        };
+
+        if (res.getStatus() === 200) {
+          test('report views are withheld or at least 5, never a small number', function() {
+            floored(json.shared_report.views_30d);
+          });
+          test('each of the six counts of what operators did is withheld or at least 5', function() {
+            const keys = ['created', 'updated', 'qr_verified', 'qr_unverified', 'deleted', 'denied'];
+            expect(Object.keys(json.admin_activity_30d).sort()).to.eql(keys.slice().sort());
+            keys.forEach(function(k) { floored(json.admin_activity_30d[k]); });
+          });
+        } else if (res.getStatus() === 401) {
+          test('Auth required', function() {
+            expect(json.code).to.eql('UNAUTH');
+          });
+        } else {
+          // Any other answer checks nothing, so it must not pass quietly.
+          test('the dashboard answered 200 (or 401 without a key)', function() {
+            expect(res.getStatus()).to.eql(200);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
