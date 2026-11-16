@@ -29,8 +29,12 @@ import {
   type SignedLinkRole,
 } from '../lib/shared-report-auth';
 import { buildSharedReport, type SharedReport } from '../lib/shared-report-builder';
+import {
+  campaignWithheldReasons,
+  summarizeCampaigns,
+  CAMPAIGN_TOTAL_WITHHELD_FIELD,
+} from '../lib/campaign-summary';
 import { resolveMintTtlSeconds } from '../lib/mint-ttl';
-import { applyCountFloor } from '../lib/count-floor';
 import { resolveDepth, filterReportByDepth, capDepthToPlan } from '../lib/report-depth';
 import { hasPaidReport, type ReportPlan } from '../lib/report-plan';
 import { logReportAccess } from '../lib/audit-log';
@@ -142,57 +146,32 @@ export async function handleGetSharedReport(
     scopedImpressions = [];
   }
 
-  // Q6: re-derive campaign_summary from scoped impressions when a sponsor scope
-  // was applied. The builder derives campaign_summary pre-scope; for events where
-  // multiple sponsors share a campaign_id the unscoped summary would leak peers'
-  // impression counts into the scoped response.
+  // Q6: re-derive campaign_summary when a sponsor scope was applied. The builder
+  // derives it for every sponsor; where sponsors share a campaign the unscoped
+  // summary would give a sponsor its peers' displays and how many peers there are.
+  // OSE-2046: the same function the builder uses, over this sponsor's own
+  // campaign links and its own rows (each already at or over the floor, OSE-676).
+  // A sponsor link that names no sponsor has no links and no rows (OSE-595).
   let scopedCampaignSummary = result.report.campaign_summary;
+  let suppressionReasons = result.report._meta.suppression_reasons;
   if (resolved.sponsorScope || resolved.sponsorScopeRequired) {
-    const campaignMap = new Map<
-      string,
-      {
-        campaign_id: string;
-        campaign_title: string;
-        total_displays: number;
-        sponsor_count: number;
-        displays_by_surface: Record<string, number>;
-      }
-    >();
-    for (const row of scopedImpressions) {
-      if (!row.campaign_id) continue;
-      // OSE-676: apply the per-(sponsor×surface)-bucket K-anon floor BEFORE
-      // summation, mirroring the builder (shared-report-builder.ts) — a sub-K row
-      // is DROPPED, never summed raw, so the scoped re-derivation cannot leak a
-      // sub-K impression cohort that the unscoped builder floors.
-      const floored = applyCountFloor(row.count);
-      if (floored.count === null) continue;
-      const contribution = floored.count;
-      const ex = campaignMap.get(row.campaign_id);
-      if (ex) {
-        ex.total_displays += contribution;
-        ex.sponsor_count += 1;
-        ex.displays_by_surface[row.surface] =
-          (ex.displays_by_surface[row.surface] ?? 0) + contribution;
-      } else {
-        campaignMap.set(row.campaign_id, {
-          campaign_id: row.campaign_id,
-          campaign_title: row.campaign_title ?? 'unknown',
-          total_displays: contribution,
-          sponsor_count: 1,
-          displays_by_surface: { [row.surface]: contribution },
-        });
-      }
-    }
-    scopedCampaignSummary =
-      campaignMap.size > 0
-        ? [...campaignMap.values()].sort((a, b) => b.total_displays - a.total_displays)
-        : null;
+    const ownLinks = resolved.sponsorScope
+      ? (result.campaignLinks ?? []).filter((link) => link.sponsor_id === resolved.sponsorScope)
+      : [];
+    scopedCampaignSummary = summarizeCampaigns(ownLinks, scopedImpressions);
+    // The note that a campaign total is withheld is about this reader's own
+    // campaign, never a peer's.
+    suppressionReasons = [
+      ...suppressionReasons.filter((r) => r.field !== CAMPAIGN_TOTAL_WITHHELD_FIELD),
+      ...campaignWithheldReasons(scopedCampaignSummary),
+    ];
   }
 
   const builtReport = {
     ...result.report,
     sponsor_displays: scopedImpressions,
     campaign_summary: scopedCampaignSummary,
+    _meta: { ...result.report._meta, suppression_reasons: suppressionReasons },
   };
 
   // OSE-816 — enforce report depth server-side, SPONSOR role ONLY. admin /

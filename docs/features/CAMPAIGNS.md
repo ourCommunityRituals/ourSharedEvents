@@ -111,16 +111,29 @@ label on a sponsor that is on show; an event with no sponsor on show names its c
 
 ## Reports
 
-The SharedReport's `campaign_summary` (Mid depth) is unchanged in shape. A placement linked to a
+The SharedReport's `campaign_summary` (Mid depth) has one row per campaign. A placement linked to a
 campaign outside the event's brand reports with no campaign. Since 2026-11-15 the report reads the
 same effective campaign as the bundle: the event's when the event is in one, else the placement's
 own. The report names a campaign whatever its status, as it did before.
 
+Each row (since 2026-11-16, `summarizeCampaigns` in `lib/campaign-summary.ts`):
+
+- **Which campaigns.** A campaign is listed when a placement of the event is in it and both sides
+  accepted that placement, on an event that chose sponsors. It is listed for the placement, never
+  for a display, so 0 displays read the same as 1 to 4.
+- **`sponsor_count`** is the number of distinct sponsors, each counted once however many surfaces it
+  is on. It counts businesses that agreed to be shown, not people or what they did, so it is exact.
+- **`total_displays`** and **`displays_by_surface`** count displays. A (sponsor, surface) part under
+  5 joins no total. When no part of a campaign reaches 5, `total_displays` is `null` and
+  `displays_by_surface` is empty: the total is withheld, and `_meta.suppression_reasons` carries one
+  entry for `campaign_summary.total_displays` with the words ("fewer than 5 ..."). It is never 0.
+- A sponsor's own link reads its own campaign and its own numbers only.
+
 ## Tests
 
-| Layer                | Where                                                                                                                                                        |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| T0 structural        | `tests/e2e/0-architecture/campaign-brand-and-consent.invariant.spec.ts`, and `campaigns` in `tenant-isolation.invariant.spec.ts`                             |
-| Workers pool         | `workers/oursharedevents/tests/campaigns.spec.ts`, `campaign-events.spec.ts`, `campaign-update.spec.ts`, the brand matrix, `campaign-never-a-filter.spec.ts` |
-| Staging (Bruno)      | `bruno/ose-api/18. Campaigns (S14)`, fixture `bruno/fixtures/campaigns-seed.sql`                                                                             |
-| End to end (browser) | None. No page shows a campaign yet.                                                                                                                          |
+| Layer                | Where                                                                                                                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T0 structural        | `tests/e2e/0-architecture/campaign-brand-and-consent.invariant.spec.ts`, and `campaigns` in `tenant-isolation.invariant.spec.ts`                                                                       |
+| Workers pool         | `workers/oursharedevents/tests/campaigns.spec.ts`, `campaign-events.spec.ts`, `campaign-update.spec.ts`, `shared-report-campaign-summary.spec.ts`, the brand matrix, `campaign-never-a-filter.spec.ts` |
+| Staging (Bruno)      | `bruno/ose-api/18. Campaigns (S14)`, fixture `bruno/fixtures/campaigns-seed.sql`                                                                                                                       |
+| End to end (browser) | None. No page shows a campaign yet.                                                                                                                                                                    |

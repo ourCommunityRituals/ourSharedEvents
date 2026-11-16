@@ -108,6 +108,8 @@ describe('every statement that carries the consent rule carries the opt-in gate'
       'handlers/pages.ts',
       'handlers/sponsor-asset-route.ts',
       'handlers/sponsors.ts',
+      // OSE-2046: which sponsors are in a campaign on a SharedReport.
+      'lib/shared-report-builder.ts',
       'lib/sponsor-card.ts',
       'lib/sponsor-resolver.ts',
     ]);

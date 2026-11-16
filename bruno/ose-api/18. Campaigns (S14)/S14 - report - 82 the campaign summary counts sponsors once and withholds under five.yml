@@ -1,0 +1,91 @@
+info:
+  name: 'S14 | report | campaign summary | each sponsor counts once, and a campaign under 5 is listed with its total withheld'
+  type: http
+  seq: 82
+
+http:
+  method: GET
+  url: '{{baseUrl}}/api/v2/events/camp-rpt-evt/shared-report'
+  headers:
+    - name: Accept
+      value: application/json
+    - name: Authorization
+      value: Bearer {{s14ReportToken}}
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // OSE-2046, AGENTS.md invariant 2. The fixture (campaigns-seed.sql) sets the
+        // displays of every sponsor on camp-rpt-evt; the floor is 5.
+        // NAMED FIELDS ONLY: nothing here compares a whole body, and nothing is
+        // compared across two requests. The three campaigns under the floor are
+        // compared with each other inside this one response.
+        // Mock-layer twin: workers/oursharedevents/tests/shared-report-campaign-summary.spec.ts.
+        const report = (res.getBody() || {}).report || {};
+        const summary = report.campaign_summary || [];
+        const by = function (id) { return summary.filter(function (c) { return c.campaign_id === id; })[0]; };
+        const measures = function (c) {
+          return { total_displays: c.total_displays, sponsor_count: c.sponsor_count, displays_by_surface: c.displays_by_surface };
+        };
+        test('S14 report: 200, and the campaign summary is in it', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(report.campaign_summary).to.be.an('array');
+        });
+        test('S14 report: a sponsor on three surfaces counts once (2 sponsors, not 4)', function () {
+          expect(by('camp_fx_rpt_many')).to.be.an('object');
+          expect(by('camp_fx_rpt_many').sponsor_count).to.eql(2);
+        });
+        test('S14 report: the total is the sum of the published parts, and the part under 5 is in none', function () {
+          expect(by('camp_fx_rpt_many').displays_by_surface).to.eql({ poster: 6, display: 7, public: 8 });
+          expect(by('camp_fx_rpt_many').total_displays).to.eql(21);
+        });
+        test('S14 report: the total equals the sponsor rows published beside it', function () {
+          const rows = (report.sponsor_displays || []).filter(function (r) { return r.campaign_id === 'camp_fx_rpt_many'; });
+          expect(rows.length).to.eql(3);
+          expect(rows.reduce(function (n, r) { return n + r.count; }, 0)).to.eql(21);
+          expect(rows.every(function (r) { return r.sponsor_id === 'sb_camp_rpt_a'; })).to.eql(true);
+        });
+        test('S14 report: a campaign with 0, 1 or 4 displays is listed, by its own title', function () {
+          expect(by('camp_fx_rpt_zero').campaign_title).to.eql('Campaign Fixture Report Zero');
+          expect(by('camp_fx_rpt_one').campaign_title).to.eql('Campaign Fixture Report One');
+          expect(by('camp_fx_rpt_four').campaign_title).to.eql('Campaign Fixture Report Four');
+        });
+        test('S14 report: its total is withheld (null), never 0 and never the count', function () {
+          ['camp_fx_rpt_zero', 'camp_fx_rpt_one', 'camp_fx_rpt_four'].forEach(function (id) {
+            expect(by(id).total_displays).to.eql(null);
+            expect(by(id).displays_by_surface).to.eql({});
+            expect(by(id).sponsor_count).to.eql(1);
+          });
+        });
+        test('S14 report: 0, 1 and 4 displays read the same', function () {
+          expect(measures(by('camp_fx_rpt_one'))).to.eql(measures(by('camp_fx_rpt_zero')));
+          expect(measures(by('camp_fx_rpt_four'))).to.eql(measures(by('camp_fx_rpt_zero')));
+        });
+        test('S14 report: control, 5 displays are published as 5', function () {
+          expect(by('camp_fx_rpt_five').total_displays).to.eql(5);
+          expect(by('camp_fx_rpt_five').displays_by_surface).to.eql({ poster: 5 });
+        });
+        test('S14 report: the withheld total is said in words, once, naming no campaign', function () {
+          const notes = ((report._meta || {}).suppression_reasons || []).filter(function (r) {
+            return r.field === 'campaign_summary.total_displays';
+          });
+          expect(notes.length).to.eql(1);
+          expect(notes[0].reason).to.eql('below_min_sample_size');
+          expect(notes[0].detail).to.match(/^fewer than 5 /);
+          expect(JSON.stringify(notes)).to.not.include('camp_fx_rpt');
+        });
+        test('S14 report: no sponsor row under 5 is published', function () {
+          const rows = report.sponsor_displays || [];
+          expect(rows.length).to.be.above(0);
+          expect(rows.every(function (r) { return r.count >= 5; })).to.eql(true);
+          expect(rows.some(function (r) { return r.sponsor_id === 'sb_camp_rpt_b'; })).to.eql(false);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

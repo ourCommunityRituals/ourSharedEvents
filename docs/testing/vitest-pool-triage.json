@@ -3026,6 +3026,13 @@
       "testCount": 54
     },
     {
+      "file": "workers/oursharedevents/tests/shared-report-campaign-summary.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 23
+    },
+    {
       "file": "workers/oursharedevents/tests/shared-report-date-utc.spec.ts",
       "bucket": "node",
       "needsReview": false,

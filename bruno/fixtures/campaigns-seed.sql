@@ -44,23 +44,41 @@
 -- and take it out again; every pass starts with events.campaign_id NULL on the
 -- three events. camp-ci-evt is the event no root campaign may take.
 --
+-- THE REPORT (OSE-2046, requests 80 to 83). One more event, camp-rpt-evt (root,
+-- sponsors on), read as a SharedReport. Nothing else in the folder touches it.
+-- Every placement on it is accepted by both sides. Displays are seeded here,
+-- per (sponsor, surface); the floor is 5:
+--
+--   camp_fx_rpt_many  sb_camp_rpt_a  poster 6, display 7, public 8   one sponsor, three surfaces
+--                     sb_camp_rpt_b  poster 4                        under the floor: in no total
+--                                    => 2 sponsors, total 21
+--   camp_fx_rpt_zero  sb_camp_rpt_0  none      \
+--   camp_fx_rpt_one   sb_camp_rpt_1  poster 1   } listed, total withheld; the three read alike
+--   camp_fx_rpt_four  sb_camp_rpt_4  poster 4  /
+--   camp_fx_rpt_five  sb_camp_rpt_5  poster 5                        at the floor: 5
+--
 -- The folder also creates one campaign, titled 'Campaign Fixture Created'. Rows
 -- with that title are removed here, so each pass starts from the same state.
 -- Idempotent. Never apply to production.
 
 -- ── idempotency: clear prior fixed-id rows (child -> parent) ──
 -- An event points at its campaign (0110), so the link goes before the campaigns.
-UPDATE events SET campaign_id = NULL WHERE id IN ('camp-on-evt','camp-off-evt','camp-ci-evt');
+UPDATE events SET campaign_id = NULL WHERE id IN ('camp-on-evt','camp-off-evt','camp-ci-evt','camp-rpt-evt');
 DELETE FROM sponsor_displays WHERE sponsor_id IN
-  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci','sb_camp_edit');
+  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci','sb_camp_edit',
+   'sb_camp_rpt_a','sb_camp_rpt_b','sb_camp_rpt_0','sb_camp_rpt_1','sb_camp_rpt_4','sb_camp_rpt_5');
 DELETE FROM sponsor_asset WHERE sponsor_business_id IN
-  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci','sb_camp_edit');
+  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci','sb_camp_edit',
+   'sb_camp_rpt_a','sb_camp_rpt_b','sb_camp_rpt_0','sb_camp_rpt_1','sb_camp_rpt_4','sb_camp_rpt_5');
 DELETE FROM sponsor_placement WHERE sponsor_business_id IN
-  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci','sb_camp_edit');
+  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci','sb_camp_edit',
+   'sb_camp_rpt_a','sb_camp_rpt_b','sb_camp_rpt_0','sb_camp_rpt_1','sb_camp_rpt_4','sb_camp_rpt_5');
 DELETE FROM sponsor_business WHERE id IN
-  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci','sb_camp_edit');
+  ('sb_camp_shown','sb_camp_pending','sb_camp_declined','sb_camp_paused','sb_camp_hidden','sb_camp_mislinked','sb_camp_toggle','sb_camp_ci','sb_camp_edit',
+   'sb_camp_rpt_a','sb_camp_rpt_b','sb_camp_rpt_0','sb_camp_rpt_1','sb_camp_rpt_4','sb_camp_rpt_5');
 DELETE FROM campaigns WHERE id IN
-  ('camp_fx_shown','camp_fx_pending','camp_fx_declined','camp_fx_paused','camp_fx_hidden','camp_fx_other','camp_fx_toggle','camp_fx_edit');
+  ('camp_fx_shown','camp_fx_pending','camp_fx_declined','camp_fx_paused','camp_fx_hidden','camp_fx_other','camp_fx_toggle','camp_fx_edit',
+   'camp_fx_rpt_many','camp_fx_rpt_zero','camp_fx_rpt_one','camp_fx_rpt_four','camp_fx_rpt_five');
 DELETE FROM campaigns WHERE title = 'Campaign Fixture Created'
   AND id NOT IN (SELECT campaign_id FROM sponsor_placement WHERE campaign_id IS NOT NULL);
 
@@ -125,3 +143,74 @@ INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, tier, campaign
   ('spl_camp_toggle',    'sb_camp_toggle',    'camp-on-evt',  'gold', NULL,               'organizer', 1, 1,    1),
   ('spl_camp_ci',        'sb_camp_ci',        'camp-ci-evt',  'gold', 'camp_fx_other',    'organizer', 1, 1,    1),
   ('spl_camp_edit',      'sb_camp_edit',      'camp-on-evt',  'gold', 'camp_fx_edit',     'organizer', 1, 1,    1);
+
+-- ── the report (OSE-2046): its own event, campaigns, sponsors and displays.
+INSERT INTO events (id, brand_id, title, slug, status, is_published, start_date, end_date, timezone, settings_json, data_class)
+VALUES ('camp-rpt-evt', 'root', 'Campaign Fixture (report)', 'camp-rpt-evt', 'active', 0,
+        date('now','+21 days'), date('now','+21 days'), 'America/Chicago', '{"useSponsors":true}', 'synthetic')
+ON CONFLICT(id) DO UPDATE SET brand_id = 'root', status = 'active', is_published = 0,
+  start_date = excluded.start_date, end_date = excluded.end_date,
+  settings_json = excluded.settings_json, data_class = 'synthetic',
+  venue_canonical_id = NULL, event_correlation_id = NULL;
+
+INSERT INTO campaigns (id, brand_id, title, status) VALUES
+  ('camp_fx_rpt_many', 'root', 'Campaign Fixture Report Many', 'active'),
+  ('camp_fx_rpt_zero', 'root', 'Campaign Fixture Report Zero', 'active'),
+  ('camp_fx_rpt_one',  'root', 'Campaign Fixture Report One',  'active'),
+  ('camp_fx_rpt_four', 'root', 'Campaign Fixture Report Four', 'active'),
+  ('camp_fx_rpt_five', 'root', 'Campaign Fixture Report Five', 'active');
+
+INSERT INTO sponsor_business (id, brand_id, name, tier, is_active) VALUES
+  ('sb_camp_rpt_a', 'root', 'Campaign Report Sponsor A',    'gold', 1),
+  ('sb_camp_rpt_b', 'root', 'Campaign Report Sponsor B',    'gold', 1),
+  ('sb_camp_rpt_0', 'root', 'Campaign Report Sponsor Zero', 'gold', 1),
+  ('sb_camp_rpt_1', 'root', 'Campaign Report Sponsor One',  'gold', 1),
+  ('sb_camp_rpt_4', 'root', 'Campaign Report Sponsor Four', 'gold', 1),
+  ('sb_camp_rpt_5', 'root', 'Campaign Report Sponsor Five', 'gold', 1);
+
+INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, tier, campaign_id, source, is_active, sponsor_accepted, organizer_accepted) VALUES
+  ('spl_camp_rpt_a', 'sb_camp_rpt_a', 'camp-rpt-evt', 'gold', 'camp_fx_rpt_many', 'organizer', 1, 1, 1),
+  ('spl_camp_rpt_b', 'sb_camp_rpt_b', 'camp-rpt-evt', 'gold', 'camp_fx_rpt_many', 'organizer', 1, 1, 1),
+  ('spl_camp_rpt_0', 'sb_camp_rpt_0', 'camp-rpt-evt', 'gold', 'camp_fx_rpt_zero', 'organizer', 1, 1, 1),
+  ('spl_camp_rpt_1', 'sb_camp_rpt_1', 'camp-rpt-evt', 'gold', 'camp_fx_rpt_one',  'organizer', 1, 1, 1),
+  ('spl_camp_rpt_4', 'sb_camp_rpt_4', 'camp-rpt-evt', 'gold', 'camp_fx_rpt_four', 'organizer', 1, 1, 1),
+  ('spl_camp_rpt_5', 'sb_camp_rpt_5', 'camp-rpt-evt', 'gold', 'camp_fx_rpt_five', 'organizer', 1, 1, 1);
+
+-- Displays, one row each. The DELETE at the top cleared every row of these
+-- sponsors, so each pass starts from exactly these counts.
+INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, created_at) VALUES
+  ('sd_camp_rpt_a_poster_0', 'sb_camp_rpt_a', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_poster_1', 'sb_camp_rpt_a', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_poster_2', 'sb_camp_rpt_a', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_poster_3', 'sb_camp_rpt_a', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_poster_4', 'sb_camp_rpt_a', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_poster_5', 'sb_camp_rpt_a', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_display_0', 'sb_camp_rpt_a', 'camp-rpt-evt', 'display', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_display_1', 'sb_camp_rpt_a', 'camp-rpt-evt', 'display', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_display_2', 'sb_camp_rpt_a', 'camp-rpt-evt', 'display', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_display_3', 'sb_camp_rpt_a', 'camp-rpt-evt', 'display', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_display_4', 'sb_camp_rpt_a', 'camp-rpt-evt', 'display', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_display_5', 'sb_camp_rpt_a', 'camp-rpt-evt', 'display', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_display_6', 'sb_camp_rpt_a', 'camp-rpt-evt', 'display', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_public_0', 'sb_camp_rpt_a', 'camp-rpt-evt', 'public', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_public_1', 'sb_camp_rpt_a', 'camp-rpt-evt', 'public', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_public_2', 'sb_camp_rpt_a', 'camp-rpt-evt', 'public', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_public_3', 'sb_camp_rpt_a', 'camp-rpt-evt', 'public', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_public_4', 'sb_camp_rpt_a', 'camp-rpt-evt', 'public', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_public_5', 'sb_camp_rpt_a', 'camp-rpt-evt', 'public', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_public_6', 'sb_camp_rpt_a', 'camp-rpt-evt', 'public', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_a_public_7', 'sb_camp_rpt_a', 'camp-rpt-evt', 'public', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_b_poster_0', 'sb_camp_rpt_b', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_b_poster_1', 'sb_camp_rpt_b', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_b_poster_2', 'sb_camp_rpt_b', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_b_poster_3', 'sb_camp_rpt_b', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_1_poster_0', 'sb_camp_rpt_1', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_4_poster_0', 'sb_camp_rpt_4', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_4_poster_1', 'sb_camp_rpt_4', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_4_poster_2', 'sb_camp_rpt_4', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_4_poster_3', 'sb_camp_rpt_4', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_5_poster_0', 'sb_camp_rpt_5', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_5_poster_1', 'sb_camp_rpt_5', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_5_poster_2', 'sb_camp_rpt_5', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_5_poster_3', 'sb_camp_rpt_5', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
+  ('sd_camp_rpt_5_poster_4', 'sb_camp_rpt_5', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00');
