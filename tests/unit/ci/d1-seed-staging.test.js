@@ -19,10 +19,18 @@ let MAX_SQL_BYTES;
 let sqlForFile;
 let stripSqlComments;
 let wranglerArgs;
+let main;
 
 beforeAll(async () => {
-  ({ applyWithRetry, BUSY_WAITS_S, MAX_SQL_BYTES, sqlForFile, stripSqlComments, wranglerArgs } =
-    await import('../../../scripts/ci/d1-seed-staging.mjs'));
+  ({
+    applyWithRetry,
+    BUSY_WAITS_S,
+    MAX_SQL_BYTES,
+    main,
+    sqlForFile,
+    stripSqlComments,
+    wranglerArgs,
+  } = await import('../../../scripts/ci/d1-seed-staging.mjs'));
 });
 
 /** Every fixture a workflow seeds through the script, as repo paths. */
@@ -126,10 +134,16 @@ describe('d1-seed-staging', () => {
     ].join('\n');
     expect(stripSqlComments(sql)).toBe(
       [
-        "INSERT INTO t (a, b) VALUES ('x -- not a comment', 'it''s; fine');",
+        '',
+        "INSERT INTO t (a, b) VALUES ('x -- not a comment', 'it''s; fine'); ",
         '  UPDATE t SET "col--name" = `v/*w*/` WHERE [id--x] = 1;',
-      ].join('\n')
+      ]
+        .join('\n')
+        .trim()
     );
+    // A string that runs over lines keeps every space and blank line in it.
+    const multi = "UPDATE t SET b = 'a  \n\n  -- b /* c */\n'; -- gone";
+    expect(stripSqlComments(multi)).toBe("UPDATE t SET b = 'a  \n\n  -- b /* c */\n';");
     expect(() => stripSqlComments("SELECT 'open")).toThrow(/unclosed quote/);
     expect(() => stripSqlComments('SELECT 1 /* open')).toThrow(/unclosed/);
   });
@@ -166,5 +180,26 @@ describe('d1-seed-staging', () => {
       expect(r, f).toMatchObject({ ok: true });
       expect(r.sql, f).not.toMatch(/^\s*--/m);
     }
+  });
+
+  test('OSE-2090: a refused file stops the step by name, and nothing is sent', async () => {
+    const { mkdtempSync, writeFileSync } = require('node:fs');
+    const { tmpdir } = require('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'seed-'));
+    const good = join(dir, 'good.sql');
+    const bad = join(dir, 'bad.sql');
+    writeFileSync(good, 'UPDATE t SET a = 1; -- fine\n');
+    writeFileSync(bad, 'SELECT * FROM t;\n');
+    const sent = [];
+    const lines = [];
+    const run = (sql) => (db) => {
+      sent.push([db, sql]);
+      return { ok: true, output: '' };
+    };
+    const log = (l) => lines.push(l);
+    expect(await main(['DB', good, bad, good], { run, log })).toBe(1);
+    expect(sent).toEqual([['DB', 'UPDATE t SET a = 1;']]);
+    expect(lines.at(-1)).toMatch(/^::error::DB .*bad\.sql: not applied: the file has a SELECT/);
+    expect(await main(['DB', good], { run, log })).toBe(0);
   });
 });

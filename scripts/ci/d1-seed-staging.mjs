@@ -41,7 +41,8 @@ export const WRITE_HEADS = ['INSERT', 'UPDATE', 'DELETE', 'REPLACE'];
 
 /**
  * The SQL with `--` and `/* *\/` comments taken out, never inside a quoted
- * string or identifier ('…', "…", `…`, […]). Lines left blank are dropped.
+ * string or identifier ('…', "…", `…`, […]). Quoted text is kept byte for
+ * byte, line breaks and spaces included; only the two ends are trimmed.
  * With `blankQuotes`, each quoted span is written as '' instead: the shape of
  * the SQL with no quoted text in it, for the checks in sqlForFile.
  * @param {string} sql
@@ -83,11 +84,7 @@ export function stripSqlComments(sql, { blankQuotes = false } = {}) {
       i++;
     }
   }
-  return out
-    .split('\n')
-    .map((l) => l.trimEnd())
-    .filter((l) => l.trim() !== '')
-    .join('\n');
+  return out.trim();
 }
 
 /**
@@ -176,7 +173,12 @@ function commandRunner(sql) {
   };
 }
 
-async function main(argv) {
+/**
+ * @param {string[]} argv `<DB> <file.sql> [file.sql ...]`
+ * @param {{ run?: (sql: string) => (db: string) => { ok: boolean, output: string }, log?: (line: string) => void }} [deps]
+ * @returns {Promise<number>} the exit code
+ */
+export async function main(argv, { run = commandRunner, log = (line) => console.log(line) } = {}) {
   const [db, ...files] = argv;
   if (!db || files.length === 0) {
     console.error('usage: d1-seed-staging.mjs <DB|FORMS_DB> <file.sql> [file.sql ...]');
@@ -185,15 +187,15 @@ async function main(argv) {
   for (const file of files) {
     const read = sqlForFile(readFileSync(file, 'utf8'));
     if (!read.ok) {
-      console.log(`::error::${db} ${file}: not applied: the file ${read.reason}`);
+      log(`::error::${db} ${file}: not applied: the file ${read.reason}`);
       return 1;
     }
     const ok = await applyWithRetry({
       db,
       file,
-      run: commandRunner(read.sql),
+      run: run(read.sql),
       sleep: (s) => new Promise((res) => setTimeout(res, s * 1000)),
-      log: (line) => console.log(line),
+      log,
     });
     if (!ok) return 1;
   }
