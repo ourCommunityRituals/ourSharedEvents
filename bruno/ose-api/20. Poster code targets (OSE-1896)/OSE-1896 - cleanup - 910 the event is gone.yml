@@ -1,0 +1,27 @@
+info:
+  name: OSE-1896 | cleanup | the event and its codes are gone
+  type: http
+  seq: 910
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{posterTargetEventId}}/poster-codes"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-1896 cleanup: 404 for the deleted event', function () { expect(res.getStatus()).to.eql(404); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
