@@ -16,7 +16,9 @@
  *
  * BORN RED (2026-11-16): one fault at a time in the script, both map-counts test
  * files run, the fault taken out. Every test here failed under at least one.
- * F1 to F8 were run on the first version of this change (a8fa7c8):
+ * F1 to F8 were run on the first version of this change (a8fa7c8). The exact
+ * edit of each fault is in .claude/outputs/CCR-MAP-COUNT-CHECK-SHARE-OPENS-2026-11-16.md
+ * (Solutioning); another form of the same fault can redden a different number:
  *   F1 `return 1` after the differences -> `return 0`
  *      -> a moved tap, a moved share open, a scan row, an answer that cannot be
  *         read, a number given as text (5 red)
