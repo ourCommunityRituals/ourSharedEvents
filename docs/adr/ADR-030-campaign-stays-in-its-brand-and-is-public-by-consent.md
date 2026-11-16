@@ -161,9 +161,18 @@ does is remove the hyperlocal sponsorship from the event."_ Two rules are in it:
    sponsor's own weight and cap (40% premium, 20% mid), never the local floor.
 
 Rule 2 is recorded here as the owner's direction, not built. It is not a campaign change: it is a
-change to the allocation contract in the shared brain, and it needs its numbers from the owner
-(which level gives which local share, and the lowest it may go). Rule 1 is its fixed limit: whatever
-the level, the local share is never zero.
+change to the allocation contract in the shared brain. Rule 1 is its fixed limit: whatever the
+level, the local share is never zero.
+
+What the owner has settled for rule 2 (2026-11-16):
+
+- **The event manager's level decides the local share at their event.** A sponsor's level never
+  changes it; a sponsor's level changes only that sponsor's own weight and cap within the rest. So
+  no sponsor can buy down the local sponsors at someone else's event.
+- **At the free level the local share is 30%** (today's number).
+
+Still to come from the owner before it can be built: the local share at the mid and premium levels
+(or "30% at every level"), and the lowest it may ever be if a level can lower it.
 
 ## Rename and status change (added 2026-11-15, OSE-1552 scope 2)
 
