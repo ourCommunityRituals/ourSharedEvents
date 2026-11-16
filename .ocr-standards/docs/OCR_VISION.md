@@ -78,7 +78,7 @@ Open-ended examples of pluggable entities — drawn from code comments — inclu
 
 The invariant register has one home: `ocr-docs-brain/architectural-invariants.yaml` (schema 1.2.0). **This document does not copy it, so it cannot drift from it.**
 
-**Method.** Parse that file and count `invariants[]` by `status`. Read 2026-11-11: **29 invariants — 17 live, 10 partial, 2 retired**, ids running 1 to 29. Numbers are never reused or renumbered, and a retired entry keeps its number.
+**Method.** Parse that file and count `invariants[]` by `status`. Read 2026-11-15: **30 invariants — 17 live, 11 partial, 2 retired**, ids running 1 to 30. Numbers are never reused or renumbered, and a retired entry keeps its number.
 
 Enforcement lives in code, in three places:
 
