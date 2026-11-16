@@ -8,7 +8,6 @@ gate: stop
 cumulative_score: 0
 system_score: 0
 unresolved: { regulatory: 0, security_critical: 1, critical: 0, high: 3, medium: 7, low: 11 }
-subject_sha: '7089d79a334c9e02157a5ee59e9a9985b989ba79'
 ---
 
 # CCR: infrastructure drift audit, the records against what is there (2026-11-16)
