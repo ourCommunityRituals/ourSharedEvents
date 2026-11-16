@@ -1,6 +1,11 @@
 // Builds the SQL that removes a manifest's rows for some nodes from the full
-// staging site's DB. It never runs SQL: the workflow runs the string with
-// `wrangler d1 execute ocr-db-staging --env staging --remote --file`.
+// staging site's DB. It never runs SQL: run-day.mjs sends the statements with
+// `wrangler d1 execute ocr-db-staging --env staging --remote --command`, in
+// texts of at most MAX_SQL_BYTES (packStatements), never with `--file`: against
+// a remote database `--file` is a D1 import, and staging serves no reads while
+// it runs (OSE-2090). A purge sent in several texts can stop part way; that is
+// safe because every statement is idempotent and children go first, and a node
+// counts as purged only once every text of it has landed.
 //
 // Only ids the manifest recorded are ever named. Child rows go by the parent id
 // they hang off (event_id, sponsor id, poster id), so a row the build did not
@@ -14,11 +19,17 @@
 // matches no row, or an R2 delete of a key that is not there (run-day.mjs
 // r2Delete), succeeds.
 
+import { MAX_SQL_BYTES } from '../ci/d1-seed-staging.mjs';
+
+// D1 refuses one SQL text over 100 KB; the CI seeds keep the same margin.
+export { MAX_SQL_BYTES };
+
 // Ids must look like this before they are put inside a SQL string literal (and,
 // for upload keys, on a wrangler command line). Letters, digits and _ : . / - only.
 // run-day.mjs holds the acceptance UPDATE to the same rule.
 export const SAFE_ID = /^[A-Za-z0-9_:./-]{1,200}$/;
 const SAFE_NAME = /^[a-z_]+$/;
+const bytes = (s) => Buffer.byteLength(s, 'utf8');
 
 // Which manifest items feed which id list. `placement` and `upload` items are
 // never embedded in SQL: placements go by event_id and sponsor id, and uploads
@@ -103,8 +114,59 @@ function itemsFor(manifest, nodeIds) {
 
 const unique = (xs) => [...new Set(xs)];
 
-/** SQL deleting the manifest's rows for `nodeIds`. Empty string when there is nothing to delete. */
-export function buildPurgeSql(manifest, nodeIds) {
+/**
+ * `${head} (a, b, …)` statements, in order, each one short enough that it fits
+ * in a text of `maxBytes` once `;\n` ends it. [] when there are no values.
+ * Throws if one value alone does not fit.
+ */
+export function inListStatements(head, values, maxBytes = MAX_SQL_BYTES) {
+  const out = [];
+  const close = ');\n';
+  let list = [];
+  let size = 0;
+  const flush = () => {
+    if (list.length) out.push(`${head} (${list.join(', ')})`);
+    list = [];
+    size = bytes(`${head} (`) + bytes(close);
+  };
+  flush();
+  for (const value of values) {
+    if (list.length && size + 2 + bytes(value) > maxBytes) flush();
+    const cost = (list.length ? 2 : 0) + bytes(value); // ', ' before all but the first
+    if (size + cost > maxBytes) throw new Error('one value is too long for a SQL text');
+    list.push(value);
+    size += cost;
+  }
+  flush();
+  return out;
+}
+
+/**
+ * Statements as SQL texts of at most `maxBytes` each, in order: `s1;\ns2;\n…`.
+ * Throws on a statement that does not fit in a text of its own.
+ */
+export function packStatements(statements, maxBytes = MAX_SQL_BYTES) {
+  const texts = [];
+  let text = '';
+  for (const statement of statements) {
+    const line = `${statement};\n`;
+    if (bytes(line) > maxBytes) throw new Error('one statement is too long for a SQL text');
+    if (text !== '' && bytes(text) + bytes(line) > maxBytes) {
+      texts.push(text);
+      text = '';
+    }
+    text += line;
+  }
+  if (text !== '') texts.push(text);
+  return texts;
+}
+
+/**
+ * The statements deleting the manifest's rows for `nodeIds`, children first, with
+ * no `;`. A long id list is split, so each fits in one SQL text. [] when there is
+ * nothing to delete.
+ */
+export function buildPurgeStatements(manifest, nodeIds, maxBytes = MAX_SQL_BYTES) {
   const lists = { event: [], sponsor: [], poster: [] };
   for (const item of itemsFor(manifest, nodeIds)) {
     const list = ID_LIST_OF_KIND[item.kind];
@@ -114,13 +176,19 @@ export function buildPurgeSql(manifest, nodeIds) {
   for (const { table, column, ids } of PURGE_TABLES) {
     if (!SAFE_NAME.test(table) || !SAFE_NAME.test(column))
       throw new Error('unsafe table or column');
-    const values = unique(lists[ids]);
-    if (values.length === 0) continue; // never `IN ()`
+    const values = unique(lists[ids]).map(sqlString); // never `IN ()`: [] adds nothing
     statements.push(
-      `DELETE FROM ${table} WHERE ${column} IN (${values.map(sqlString).join(', ')})`
+      ...inListStatements(`DELETE FROM ${table} WHERE ${column} IN`, values, maxBytes)
     );
   }
-  return statements.map((s) => `${s};\n`).join('');
+  return statements;
+}
+
+/** SQL deleting the manifest's rows for `nodeIds`. Empty string when there is nothing to delete. */
+export function buildPurgeSql(manifest, nodeIds) {
+  return buildPurgeStatements(manifest, nodeIds)
+    .map((s) => `${s};\n`)
+    .join('');
 }
 
 /** The R2 keys of the art uploaded for `nodeIds`, for the workflow to delete. */

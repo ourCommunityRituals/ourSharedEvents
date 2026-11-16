@@ -366,10 +366,11 @@ describe('Bruno contract latency budgets', () => {
 
     expect(collection).toContain('const isAdminRegistrationsRead');
     expect(collection).toContain("req.getPath().includes('/forms/registrations')");
-    expect(collection).toContain('Response time < 9000ms');
-    expect(collection).toContain('expect(elapsed).to.be.below(9000)');
-    expect(collection).toContain('Response time < 6000ms');
-    expect(collection).toContain('expect(elapsed).to.be.below(6000)');
+    // OSE-2091: lib/latency-budget.js enforces the budget (one retry of a safe
+    // read, a small per-run allowance, a 2x hard ceiling);
+    // bruno-latency-budget.test.js proves those rules go red on slow responses.
+    expect(collection).toContain('budget: isAdminRegistrationsRead ? 9000 : 6000');
+    expect(collection).toContain("require('./lib/latency-budget.js').enforce(");
   });
 
   // Bruno strips comments with `decomment`, which picks ONE line ending for the
@@ -403,10 +404,18 @@ describe('Bruno contract latency budgets', () => {
 
   test('the latency budget is real code, not folded into a comment line', () => {
     const yaml = require('js-yaml');
-    const doc = yaml.load(readFile('bruno/ose-api/opencollection.yml'));
-    const post = doc.request.scripts.find((s) => s.type === 'after-response').code;
-    const lines = post.split('\n').map((l) => l.trim());
-    expect(lines).toContain('if (isAdminRegistrationsRead) {');
+    for (const collection of [
+      'bruno/ose-api/opencollection.yml',
+      'bruno/ose-pages/opencollection.yml',
+    ]) {
+      const doc = yaml.load(readFile(collection));
+      const post = doc.request.scripts.find((s) => s.type === 'after-response').code;
+      const lines = post.split('\n').map((l) => l.trim());
+      expect(
+        lines.some((l) => l.startsWith("await require('./lib/latency-budget.js').enforce(")),
+        collection
+      ).toBe(true);
+    }
   });
 });
 

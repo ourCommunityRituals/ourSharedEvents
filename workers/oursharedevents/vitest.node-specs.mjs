@@ -421,6 +421,10 @@ export const NODE_SPECS = [
   // handleFormPage with a stub DB, and the forms' scripts in jsdom; no runtime.
   'tests/form-pages-language-golden.spec.ts',
   'tests/form-pages-language.spec.ts',
+  // OSE-1850 follow-up: the skip link on admin sign-in, admin, SharedReport,
+  // poster and display hides by the reading start. The page handlers called
+  // directly, plus a read of src/; no runtime.
+  'tests/offscreen-reading-start.spec.ts',
   // The error label a log line may carry: a pure function, no runtime.
   'tests/error-label.spec.ts',
   // OSE-826: when a registration expires (the later of 90 days and the day

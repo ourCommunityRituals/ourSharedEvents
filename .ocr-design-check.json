@@ -35,19 +35,19 @@
     },
     "workers/oursharedevents/src/templates/admin-signin.html": {
       "own-tokens": 0,
-      "own-stylesheet": 3879,
+      "own-stylesheet": 3799,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/templates/admin.html": {
       "own-tokens": 0,
-      "own-stylesheet": 62604,
+      "own-stylesheet": 62476,
       "raw-hex": 28,
       "foreign-stylesheet": 0
     },
     "workers/oursharedevents/src/templates/display.html": {
       "own-tokens": 0,
-      "own-stylesheet": 5100,
+      "own-stylesheet": 4990,
       "raw-hex": 0,
       "foreign-stylesheet": 0
     },
@@ -59,7 +59,7 @@
     },
     "workers/oursharedevents/src/templates/poster.html": {
       "own-tokens": 0,
-      "own-stylesheet": 15746,
+      "own-stylesheet": 15738,
       "raw-hex": 4,
       "foreign-stylesheet": 0
     },
@@ -71,7 +71,7 @@
     },
     "workers/oursharedevents/src/templates/shared-report.html": {
       "own-tokens": 0,
-      "own-stylesheet": 18746,
+      "own-stylesheet": 18618,
       "raw-hex": 8,
       "foreign-stylesheet": 0
     },

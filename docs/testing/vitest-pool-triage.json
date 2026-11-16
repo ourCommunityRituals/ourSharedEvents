@@ -2025,6 +2025,13 @@
       "testCount": 33
     },
     {
+      "file": "workers/oursharedevents/tests/offscreen-reading-start.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
       "file": "workers/oursharedevents/tests/og-meta.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -2863,6 +2870,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 13
+    },
+    {
+      "file": "workers/oursharedevents/tests/report-views-neighbour-floor.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 5
     },
     {
       "file": "workers/oursharedevents/tests/return-count-rename.spec.ts",

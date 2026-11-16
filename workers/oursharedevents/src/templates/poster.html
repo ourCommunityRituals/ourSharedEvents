@@ -444,28 +444,8 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 0;
 }
-.skip-link {
-  position: absolute;
-  left: -9999px;
-  top: auto;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-}
-.skip-link:focus {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: auto;
-  height: auto;
-  padding: 0.5rem 1rem;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 1rem;
-  z-index: 9999;
-  text-decoration: none;
-  border-bottom: 2px solid var(--accent);
-}
+.skip-link { position: absolute; inset-inline-start: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+.skip-link:focus { position: fixed; top: 0; inset-inline-start: 0; width: auto; height: auto; padding: 0.5rem 1rem; background: var(--surface); color: var(--text); font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid var(--accent); }
 /* OSE-300: phone layout (tighter padding, 100px QR, 44px/16px controls). */
 @media (max-width: 768px) {
   .page-header {

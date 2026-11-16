@@ -500,11 +500,14 @@ describe('every mutated file and every floor is on the list (proven against plan
 //   - `mutation-group` (one per group, a matrix) and `mutation-ci-scripts`: no
 //     job-level `if`, no `needs`, checkout then the scope step, every later step
 //     behind the decision. Each always starts and reports.
-//   - `mutation`, the required check: `needs: mutation-group` with `if: always()`,
-//     so it reports whatever the groups did. Its first step fails it unless every
-//     group succeeded, and runs whatever the scope says (a group that decides
-//     "no run" succeeds, so a broken group must not hide behind that). Then
-//     checkout, scope, and the floor over every group's report, behind the decision.
+//   - `mutation`, the required check: `needs: [mutation-group, mutation-ci-scripts]`
+//     with `if: always()`, so it reports whatever they did. Its first step fails it
+//     unless every group and the CI-scripts pass succeeded, and runs whatever the
+//     scope says (a job that decides "no run" succeeds, so a broken one must not
+//     hide behind that). `mutation-ci-scripts` is not required on its own; owner
+//     ruling 2026-11-06 makes mutation testing a required check, and `mutation` is
+//     that check, so a red CI-scripts pass blocks a merge only through this step.
+//     Then checkout, scope, and the floor over every group's report, behind the decision.
 //   - the matrix lists exactly the groups of mutation-groups.mjs plus the language
 //     pass, and the floor reads a report from each one.
 
@@ -513,6 +516,8 @@ const SCOPED_JOBS = {
   'mutation-ci-scripts': undefined,
 };
 const FINAL_JOB = 'mutation';
+/** Every job the required check waits for, and must find successful. */
+const FINAL_NEEDS = ['mutation-group', 'mutation-ci-scripts'];
 const RUN_UNLESS_FALSE = "steps.scope.outputs.run != 'false'";
 const MAIN_SCRIPT = 'test:mutation';
 const LANGUAGE_SCRIPT = 'test:mutation:language';
@@ -627,22 +632,29 @@ function workflowProblems(wf, groups) {
       out.push(`${FINAL_JOB}: check name changed to "${final.name}"`);
     }
     const needs = [].concat(final.needs || []);
-    if (needs.length !== 1 || needs[0] !== 'mutation-group') {
-      out.push(`${FINAL_JOB}: does not need exactly mutation-group`);
+    if (needs.length !== FINAL_NEEDS.length || !FINAL_NEEDS.every((n) => needs.includes(n))) {
+      out.push(`${FINAL_JOB}: does not need exactly ${FINAL_NEEDS.join(' and ')}`);
     }
     if (!isAlways(final.if)) out.push(`${FINAL_JOB}: is not if: always()`);
     const steps = jobSteps(final);
     const first = steps[0] || {};
-    const firstEnv = Object.values(first.env || {}).join(' ');
-    if (
-      first.if !== undefined ||
-      !firstEnv.includes('needs.mutation-group.result') ||
-      !/!=\s*"success"/.test(String(first.run || '')) ||
-      !/exit 1/.test(String(first.run || ''))
-    ) {
+    const run = String(first.run || '');
+    if (first.if !== undefined || !/exit 1/.test(run)) {
       out.push(
-        `${FINAL_JOB}: the first step does not fail, unconditionally, on a group that did not succeed`
+        `${FINAL_JOB}: the first step does not fail, unconditionally, on a job that did not succeed`
       );
+    } else {
+      // Each job it waits for: an env var holding exactly that job's result, compared with "success".
+      const env = Object.entries(first.env || {});
+      for (const n of FINAL_NEEDS) {
+        const vars = env
+          .filter(([, v]) => String(v).replace(/\s/g, '') === `\${{needs.${n}.result}}`)
+          .map(([k]) => k);
+        const checked = vars.some((v) => run.includes(`"$${v}" != "success"`));
+        if (!checked) {
+          out.push(`${FINAL_JOB}: the first step does not fail when ${n} did not succeed`);
+        }
+      }
     }
     const at = steps.findIndex((s) => s.id === 'scope');
     if (at < 0) {
@@ -812,10 +824,50 @@ describe('the mutation workflow reports on every pull request', () => {
       expect(problems(wf)).toEqual([`${key}: the scope step may fail quietly`]);
     });
 
+    const NEEDS_PROBLEM = `${FINAL_JOB}: does not need exactly mutation-group and mutation-ci-scripts`;
+
     test('mutation: no longer waits for the groups', () => {
       const wf = load();
       delete wf.jobs[FINAL_JOB].needs;
-      expect(problems(wf)).toEqual([`${FINAL_JOB}: does not need exactly mutation-group`]);
+      expect(problems(wf)).toEqual([NEEDS_PROBLEM]);
+    });
+
+    test.each(FINAL_NEEDS)('mutation: does not wait for %s', (dropped) => {
+      const wf = load();
+      wf.jobs[FINAL_JOB].needs = FINAL_NEEDS.filter((n) => n !== dropped);
+      expect(problems(wf)).toEqual([NEEDS_PROBLEM]);
+    });
+
+    test('mutation: waits for one more job than it checks', () => {
+      const wf = load();
+      wf.jobs[FINAL_JOB].needs = [...FINAL_NEEDS, 'mutation-extra'];
+      expect(problems(wf)).toEqual([NEEDS_PROBLEM]);
+    });
+
+    test.each(FINAL_NEEDS)(
+      'mutation: the first step does not check %s (a red one would not block)',
+      (unchecked) => {
+        const wf = load();
+        const first = jobSteps(wf.jobs[FINAL_JOB])[0];
+        for (const [k, v] of Object.entries(first.env)) {
+          if (String(v).includes(`needs.${unchecked}.result`)) delete first.env[k];
+        }
+        expect(problems(wf)).toEqual([
+          `${FINAL_JOB}: the first step does not fail when ${unchecked} did not succeed`,
+        ]);
+      }
+    );
+
+    test('mutation: the CI-scripts result read but never compared', () => {
+      const wf = load();
+      const first = jobSteps(wf.jobs[FINAL_JOB])[0];
+      const v = Object.keys(first.env).find((k) =>
+        String(first.env[k]).includes('needs.mutation-ci-scripts.result')
+      );
+      first.run = first.run.split(`"$${v}"`).join('"success"');
+      expect(problems(wf)).toEqual([
+        `${FINAL_JOB}: the first step does not fail when mutation-ci-scripts did not succeed`,
+      ]);
     });
 
     test.each([undefined, 'success()', "github.event_name == 'pull_request'"])(
@@ -836,14 +888,23 @@ describe('the mutation workflow reports on every pull request', () => {
 
     test.each([
       ['made conditional', (s) => (s.if = RUN_UNLESS_FALSE)],
-      ['not reading the group result', (s) => (s.env = {})],
       ['not failing', (s) => (s.run = 'echo "$GROUPS_RESULT"')],
-    ])('mutation: the group-result step %s', (_label, plant) => {
+    ])('mutation: the result step %s', (_label, plant) => {
       const wf = load();
       plant(jobSteps(wf.jobs[FINAL_JOB])[0]);
       expect(problems(wf)).toEqual([
-        `${FINAL_JOB}: the first step does not fail, unconditionally, on a group that did not succeed`,
+        `${FINAL_JOB}: the first step does not fail, unconditionally, on a job that did not succeed`,
       ]);
+    });
+
+    test('mutation: the result step reading no result at all', () => {
+      const wf = load();
+      jobSteps(wf.jobs[FINAL_JOB])[0].env = {};
+      expect(problems(wf)).toEqual(
+        FINAL_NEEDS.map(
+          (n) => `${FINAL_JOB}: the first step does not fail when ${n} did not succeed`
+        )
+      );
     });
 
     test.each([...SCOPED, FINAL_JOB])(

@@ -1,0 +1,23 @@
+info:
+  name: slow write two
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/slow/w2"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('reached the server', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0

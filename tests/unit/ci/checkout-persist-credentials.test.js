@@ -144,7 +144,7 @@ function actionFiles() {
 
 const load = ({ path }) => yaml.load(readFileSync(path, 'utf8'));
 
-const HR = 'step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1';
+const HR = 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a';
 const CO = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1';
 
 describe('checkouts do not persist the job token', () => {
