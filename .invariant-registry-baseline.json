@@ -3,6 +3,7 @@
   "missing_test_file": {
     "14": "Brain names tests/e2e/0-architecture/mobile-workability.invariant.spec.ts, but mobile workability is enforced by the blocking phone audit (playwright.mobile.config.ts, *-mobile-workability.spec.ts, OSE-1236). Fix: re-point the brain test_file at the real audit, or add a thin meta-gate like qr-decode-matrix.",
     "24": "Brain names tests/audit-layer.spec.ts ('in construction'). The audit layer shipped as workers/oursharedevents/tests/audit-log-brand-scope.invariant.spec.ts, conformance-report.yml (OSE-560) and the audit-log suites. Fix: re-point the brain test_file, then flip status if the invariant is met.",
-    "27": "Brain names no-biometrics.invariant.test.ts, the gate OW shipped (ourWKRP). OSE applies to #27 but has no biometric-absence gate of its own. Fix: add an OSE gate (or re-point the brain at a shared one), then delete this entry."
+    "27": "Brain names no-biometrics.invariant.test.ts, the gate OW shipped (ourWKRP). OSE applies to #27 but has no biometric-absence gate of its own. Fix: add an OSE gate (or re-point the brain at a shared one), then delete this entry.",
+    "30": "Brain names schema-lexicon.spec.ts (OCR-docs c2e2853, 2026-11-15). A bare name is read as a T0 gate under tests/e2e/0-architecture/, but the spec lives at workers/oursharedevents/tests/schema-lexicon.spec.ts and runs in the worker suite. Fix: in the brain, set test_file to tests/schema-lexicon.spec.ts (the check resolves a path with a slash under workers/oursharedevents/), then delete this entry."
   }
 }
