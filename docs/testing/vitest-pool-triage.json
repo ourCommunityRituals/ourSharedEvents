@@ -3180,6 +3180,13 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/shared-report-pending-note-floor.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
+    },
+    {
       "file": "workers/oursharedevents/tests/shared-report-pipeline-invariants.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

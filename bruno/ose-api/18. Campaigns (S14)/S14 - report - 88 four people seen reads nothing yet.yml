@@ -1,0 +1,45 @@
+info:
+  name: 'S14 | report | nothing yet | four people seen: the report carries the nothing-yet note and no count of people'
+  type: http
+  seq: 88
+
+http:
+  method: GET
+  url: '{{baseUrl}}/api/v2/events/camp-rpt-few-evt/shared-report'
+  headers:
+    - name: Accept
+      value: application/json
+    - name: Authorization
+      value: Bearer {{s14FewToken}}
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // OSE-2093, AGENTS.md invariant 2. The fixture gives this event 4 people seen (under the floor of 5) and nothing else.
+        // NAMED FIELDS ONLY, and nothing is compared across two requests: requests
+        // 86 and 88 each hold their own report to the same fixed expectation, so
+        // 0 people and 4 people must read alike.
+        // Mock-layer twin: workers/oursharedevents/tests/shared-report-pending-note-floor.spec.ts.
+        const report = (res.getBody() || {}).report || {};
+        const reasons = (report._meta || {}).suppression_reasons || [];
+        test('S14 nothing yet (four people seen): 200', function () {
+          expect(res.getStatus()).to.eql(200);
+        });
+        test('S14 nothing yet (four people seen): exactly one _event note, materialization_pending', function () {
+          const notes = reasons.filter(function (r) { return r.field === '_event'; });
+          expect(notes.length).to.eql(1);
+          expect(notes[0].reason).to.eql('materialization_pending');
+        });
+        test('S14 nothing yet (four people seen): no count of people is published', function () {
+          expect(report.distinct_scanners).to.eql(null);
+          expect((report.return_rate || {}).sample_size == null).to.eql(true);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

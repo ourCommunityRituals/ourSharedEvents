@@ -68,7 +68,14 @@
 -- with that title are removed here, so each pass starts from the same state.
 -- Idempotent. Never apply to production.
 
+-- THE "NOTHING YET" NOTE (OSE-2093, requests 85 to 88). Two more events with no
+-- scans, no sponsors and no displays, read as SharedReports:
+--   camp-rpt-none-evt  nobody seen
+--   camp-rpt-few-evt   4 people seen (anon_id_returns rows; made-up ids)
+-- Both must carry the same `_event` note: 0 people reads the same as 1 to 4.
+--
 -- ── idempotency: clear prior fixed-id rows (child -> parent) ──
+DELETE FROM anon_id_returns WHERE venue_id IN ('camp-rpt-none-evt','camp-rpt-few-evt');
 -- An event points at its campaign (0110), so the link goes before the campaigns.
 UPDATE events SET campaign_id = NULL WHERE id IN ('camp-on-evt','camp-off-evt','camp-ci-evt','camp-rpt-evt');
 DELETE FROM sponsor_displays WHERE sponsor_id IN
@@ -230,3 +237,21 @@ INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, even
   ('sd_camp_rpt_l4_poster_1', 'sb_camp_rpt_l4', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
   ('sd_camp_rpt_l4_poster_2', 'sb_camp_rpt_l4', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
   ('sd_camp_rpt_l4_poster_3', 'sb_camp_rpt_l4', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00');
+
+-- ── the "nothing yet" note (OSE-2093): two bare events, one with 4 people seen.
+INSERT INTO events (id, brand_id, title, slug, status, is_published, start_date, end_date, timezone, settings_json, data_class)
+VALUES
+  ('camp-rpt-none-evt', 'root', 'Campaign Fixture (report, nobody)', 'camp-rpt-none-evt', 'active', 0,
+   date('now','+21 days'), date('now','+21 days'), 'America/Chicago', '{}', 'synthetic'),
+  ('camp-rpt-few-evt', 'root', 'Campaign Fixture (report, four people)', 'camp-rpt-few-evt', 'active', 0,
+   date('now','+21 days'), date('now','+21 days'), 'America/Chicago', '{}', 'synthetic')
+ON CONFLICT(id) DO UPDATE SET brand_id = 'root', status = 'active', is_published = 0,
+  start_date = excluded.start_date, end_date = excluded.end_date,
+  settings_json = excluded.settings_json, data_class = 'synthetic',
+  venue_canonical_id = NULL, event_correlation_id = NULL;
+
+INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at) VALUES
+  ('camp-rpt-few-person-1', 'camp-rpt-few-evt', '2026-11-01 18:00:00', '2026-11-01 18:00:00'),
+  ('camp-rpt-few-person-2', 'camp-rpt-few-evt', '2026-11-01 18:00:00', '2026-11-01 18:00:00'),
+  ('camp-rpt-few-person-3', 'camp-rpt-few-evt', '2026-11-01 18:00:00', '2026-11-01 18:00:00'),
+  ('camp-rpt-few-person-4', 'camp-rpt-few-evt', '2026-11-01 18:00:00', '2026-11-01 18:00:00');
