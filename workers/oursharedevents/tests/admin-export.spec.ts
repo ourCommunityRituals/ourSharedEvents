@@ -121,6 +121,26 @@ describe('OSE-713 (2): toCsv escapes commas, quotes, and newlines', () => {
         '2026-08-11T00:00:00.000Z'
       )
       .run();
+    // OSE-2087: an export of fewer than 5 rows is withheld, so the crafted row
+    // sits among four plain ones (older, so it stays the first data record).
+    for (let i = 0; i < 4; i++) {
+      await tenv()
+        .FORMS_DB.prepare(
+          `INSERT INTO form_registrations
+             (id, event_id, attendee_name, registration_bucket, status, expires_at, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          `reg-csv-plain-${i}`,
+          EVENT,
+          `Plain ${i}`,
+          '2026-08',
+          'registered',
+          '2099-01-01T00:00:00.000Z',
+          '2026-08-10T00:00:00.000Z'
+        )
+        .run();
+    }
   });
 
   test('csv export quotes and escapes a name with comma/quote/newline', async () => {
@@ -168,9 +188,14 @@ describe('OSE-713 (3): decryption failure surfaces as an error, not a silent nul
     // path still works and only the undecryptable row is flagged.
     const goodCipher = await encryptEmail('ok@example.com', tenv().FORMS_ENCRYPTION_KEY);
 
+    // OSE-2087: an export of fewer than 5 rows is withheld, so three more
+    // readable rows sit beside the two under test.
     for (const [id, cipher] of [
       ['sig-bad', badCipher],
       ['sig-good', goodCipher],
+      ['sig-fill-1', goodCipher],
+      ['sig-fill-2', goodCipher],
+      ['sig-fill-3', goodCipher],
     ] as const) {
       await tenv()
         .FORMS_DB.prepare(

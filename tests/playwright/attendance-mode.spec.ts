@@ -192,7 +192,12 @@ test.describe('online or in person', () => {
           brand_id: 'root',
           status: 'active',
           is_published: true,
-          start_date: new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10),
+          // 45 days out, not 5: these two are live and listed, and the phone
+          // audit shares one database. Five days out lands in "this weekend" on a
+          // Monday and a Tuesday, where landing-empty-window.spec.ts expects that
+          // window to be empty (it went red at 00:00 Monday, Chicago, 2026-11-16).
+          // 45 days is inside the next 90 only, like that spec's own probe.
+          start_date: new Date(Date.now() + 45 * 86_400_000).toISOString().slice(0, 10),
           ...place,
         },
       });

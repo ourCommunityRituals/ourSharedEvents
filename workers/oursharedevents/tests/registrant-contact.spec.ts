@@ -137,6 +137,19 @@ describe('the organizer reads the emails for their own event, audited', () => {
     await register('evt-rc-list', { name: 'Eli' }); // no email: not a contact
     await register('evt-rc-list', { email: 'fay@example.org' }); // email only
 
+    // OSE-2087 (owner, 2026-11-16): two people who left an email is a withheld
+    // list. The read is still audited, and no email comes back.
+    const two = await SELF.fetch('https://t.test/api/v2/admin/events/evt-rc-list/forms/contacts', {
+      headers: ADMIN,
+    });
+    expect(two.status).toBe(200);
+    const twoText = await two.text();
+    expect(JSON.parse(twoText)).toMatchObject({ ok: true, items: [], suppressed: true, floor: 5 });
+    expect(twoText).not.toContain('@example.org');
+    // Three more leave an email: five in all, and the list is shown.
+    for (const n of ['gus', 'hal', 'ivy'])
+      await register('evt-rc-list', { email: `${n}@example.org` });
+
     const res = await SELF.fetch('https://t.test/api/v2/admin/events/evt-rc-list/forms/contacts', {
       headers: ADMIN,
     });
@@ -147,7 +160,13 @@ describe('the organizer reads the emails for their own event, audited', () => {
       items: { name: string | null; email: string }[];
     };
     expect(body.ok).toBe(true);
-    expect(body.items.map((i) => i.email).sort()).toEqual(['dee@example.org', 'fay@example.org']);
+    expect(body.items.map((i) => i.email).sort()).toEqual([
+      'dee@example.org',
+      'fay@example.org',
+      'gus@example.org',
+      'hal@example.org',
+      'ivy@example.org',
+    ]);
     expect(body.items.find((i) => i.email === 'dee@example.org')?.name).toBe('Dee');
 
     const audit = await E.DB.prepare(

@@ -440,9 +440,23 @@ describe('L3 Integration: DB → Forms handler → Admin forms panel', () => {
 
     // Admin reads it back. OSE-665: a single registration is floored (count
     // suppressed); the first-party items list still proves the write.
+    const lone = await fetchJson(`/api/v2/admin/events/${eventId}/forms/registrations`);
+    expect(lone.suppressed).toBe(true);
+    expect(lone.count).toBeNull();
+    // OSE-2087 (owner, 2026-11-16): the rows follow the count. One
+    // registration is a withheld list: no row comes back. With four more the
+    // list is shown, and the row proves the write.
+    expect(lone.items).toEqual([]);
+    for (let i = 0; i < 4; i++) {
+      await (env as unknown as TestEnv).FORMS_DB.prepare(
+        `INSERT INTO form_registrations (id, event_id, registration_bucket, status, attendee_email_hash, created_at)
+         VALUES (?, ?, 'bucket-fill', 'confirmed', ?, '2020-01-01 00:00:00')`
+      )
+        .bind(crypto.randomUUID(), eventId, crypto.randomUUID())
+        .run();
+    }
     const adminBody = await fetchJson(`/api/v2/admin/events/${eventId}/forms/registrations`);
-    expect(adminBody.suppressed).toBe(true);
-    expect(adminBody.count).toBeNull();
+    expect(adminBody.count).toBe(5);
     const items = adminBody.items as { attendee_name: string }[];
     expect(items.some((r) => r.attendee_name === 'Integration Tester')).toBe(true);
   });
@@ -655,11 +669,25 @@ describe('L4 E2E: Admin create → update → forms → export → flags → sur
     const checkins = await fetchJson(`/api/v2/admin/events/${eventId}/forms/checkin-count`);
     expect(checkins.count).toBe(5);
 
-    // Step 7: Export JSON + CSV
+    // Step 7: Export JSON + CSV. OSE-2087 (owner, 2026-11-16): an export of
+    // fewer than 5 rows is withheld, so four more registrations go in first.
+    const loneExport = await fetchJson(
+      `/api/v2/admin/events/${eventId}/forms/export?type=registrations`
+    );
+    expect(loneExport.suppressed).toBe(true);
+    expect(loneExport.items).toEqual([]);
+    for (let i = 0; i < 4; i++) {
+      await (env as unknown as TestEnv).FORMS_DB.prepare(
+        `INSERT INTO form_registrations (id, event_id, registration_bucket, status, attendee_email_hash, created_at)
+         VALUES (?, ?, 'bucket-fill', 'confirmed', ?, '2020-01-01 00:00:00')`
+      )
+        .bind(crypto.randomUUID(), eventId, crypto.randomUUID())
+        .run();
+    }
     const exportJson = await fetchJson(
       `/api/v2/admin/events/${eventId}/forms/export?type=registrations`
     );
-    expect(exportJson.count).toBeGreaterThanOrEqual(1);
+    expect(exportJson.count).toBe(5);
     const csvRes = await SELF.fetch(
       `https://t.test/api/v2/admin/events/${eventId}/forms/export?type=registrations&format=csv`,
       { headers: adminHeaders() }

@@ -31,6 +31,18 @@ runtime:
             expect(data).to.be.an('array');
           });
 
+          // OSE-2087 (owner, 2026-11-16): the rows follow the count. While the
+          // count is withheld no row is returned and there is no next page;
+          // when it is shown there are at least 5 counted registrations.
+          test('rows follow the count: none while it is withheld', function() {
+            if (json.suppressed) {
+              expect(json.items).to.eql([]);
+              expect(json.next_cursor).to.eql(null);
+            } else {
+              expect(json.count).to.be.at.least(5);
+            }
+          });
+
           // OSE-1656: the total is floored (a number from 5 up, else null and
           // suppressed, never 0). Kept for the next request, which holds the
           // stats figure to the same value.

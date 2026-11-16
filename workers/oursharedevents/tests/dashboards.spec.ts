@@ -352,6 +352,47 @@ describe('founder / operations cockpit', () => {
   });
 });
 
+describe("OSE-2087 | operators' own actions are under the floor", () => {
+  // Owner ruling, 2026-11-16: OSE-1656 had listed these as outside the rule;
+  // that is overturned. Born red on main at f62fb82, where each was a plain
+  // number: 3 read 3, and 0 read 0.
+  const ACTIVITY = ['created', 'updated', 'qr_verified', 'qr_unverified', 'deleted', 'denied'];
+  async function audit(brand: string, action: string, outcome: 'success' | 'denied', n: number) {
+    for (let i = 0; i < n; i++) {
+      await tenv.DB.prepare(
+        `INSERT INTO admin_audit_log (id, action, actor, request_id, outcome, brand_id)
+         VALUES (?, ?, 'a@dash-a.test', ?, ?, ?)`
+      )
+        .bind(crypto.randomUUID(), action, crypto.randomUUID(), outcome, brand)
+        .run();
+    }
+  }
+  const activity = async () =>
+    (await call(handleOperationsDashboard, reqAs(A, OPS))).body.admin_activity_30d as Body;
+
+  test('every counter is a floored count; under 5 it is withheld, 0 included', async () => {
+    const before = await activity();
+    for (const k of ACTIVITY) expect(isFloored(before[k]), k).toBe(true);
+    await audit(DASH.brandA, 'UPDATE_EVENT', 'success', 4);
+    const after = await activity();
+    // Neighbours: 4 more updates under the floor move nothing a reader sees.
+    expect(after).toEqual(before);
+    expect(after.updated).toEqual({ count: null, suppressed: true, floor: 5 });
+  });
+
+  test('control: a fifth update in the brand publishes the count', async () => {
+    await audit(DASH.brandA, 'UPDATE_EVENT', 'success', 1);
+    expect((await activity()).updated).toEqual({ count: 5, suppressed: false, floor: 5 });
+  });
+
+  test('a refused action is counted as denied, and floored the same way', async () => {
+    await audit(DASH.brandA, 'DELETE_EVENT', 'denied', 3);
+    const a = await activity();
+    expect(a.denied).toEqual({ count: null, suppressed: true, floor: 5 });
+    expect(a.deleted).toEqual({ count: null, suppressed: true, floor: 5 });
+  });
+});
+
 describe('#9 tenant isolation', () => {
   test('a dash-a operator never sees dash-b numbers', async () => {
     const { body } = await call(handleOperationsDashboard, reqAs(A, OPS));

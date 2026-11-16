@@ -63,6 +63,21 @@ async function mount(contacts: { status?: number; body: unknown }) {
 }
 
 describe('admin: copy registrants’ emails', () => {
+  // OSE-2087 (owner, 2026-11-16): fewer than 5 people who left an email is a
+  // withheld list. Born red on main at f62fb82: the page said "No one has left
+  // an email.", which told 0 from 1 to 4.
+  test('a withheld list says so in words, copies nothing, and never says "No one"', async () => {
+    const { $, copied } = await mount({
+      body: { ok: true, items: [], suppressed: true, floor: 5, decrypt_failed: 0 },
+    });
+    $('copy-registrant-emails')!.click();
+    await flush();
+    expect($('registrant-contacts-msg')!.textContent).toBe(
+      'Fewer than 5 people have left an email. The list shows at 5 or more.'
+    );
+    expect(copied).toEqual([]);
+  });
+
   test('the forms card has the button, and pressing it copies the emails, comma-separated', async () => {
     const { $, calls, copied } = await mount({
       body: {

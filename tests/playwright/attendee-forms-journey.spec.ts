@@ -81,15 +81,29 @@ test('fat finger: an empty name or a mistyped email sends nothing and keeps what
   await expect(page.getByTestId('form-success')).toBeHidden();
 });
 
-test('register: the page confirms it, and the organizer count goes up by one', async ({
+// OSE-2087 (owner, 2026-11-16): a list of fewer than 5 people is withheld, for
+// the organizer too. So one registration cannot be seen "going up by one" on a
+// new event. Four people register first (the list is still withheld, with no
+// row); the registration made on the page is the fifth, and the list appears
+// with all five, this one among them.
+test('register: the page confirms it, and the organizer sees it once there are five', async ({
   page,
   request,
 }) => {
+  type Roster = { items?: { attendee_name?: string }[]; suppressed?: boolean; count?: number };
+  for (let i = 1; i <= 4; i++) {
+    const res = await request.post(`/api/v2/events/${encodeURIComponent(eventId)}/forms/register`, {
+      data: { name: `Earlier ${i}`, email: `earlier.${i}@example.com` },
+    });
+    expect(res.status(), `earlier registration ${i}`).toBe(200);
+  }
   const before = await request.get(
     `/api/v2/admin/events/${encodeURIComponent(eventId)}/forms/registrations`,
     { headers: admin() }
   );
-  const countBefore = ((await before.json()) as { items?: unknown[] }).items?.length ?? 0;
+  const rosterBefore = (await before.json()) as Roster;
+  expect(rosterBefore.suppressed, 'four registrations are a withheld list').toBe(true);
+  expect(rosterBefore.items).toEqual([]);
 
   await page.goto(formUrl('register'));
   await page.getByTestId('register-name-input').fill('Pat Tester');
@@ -102,8 +116,11 @@ test('register: the page confirms it, and the organizer count goes up by one', a
     { headers: admin() }
   );
   expect(after.status()).toBe(200);
-  const countAfter = ((await after.json()) as { items?: unknown[] }).items?.length ?? 0;
-  expect(countAfter).toBe(countBefore + 1);
+  const rosterAfter = (await after.json()) as Roster;
+  expect(rosterAfter.suppressed).toBe(false);
+  expect(rosterAfter.count).toBe(5);
+  expect(rosterAfter.items?.length).toBe(5);
+  expect(rosterAfter.items?.some((r) => r.attendee_name === 'Pat Tester')).toBe(true);
 });
 
 test('a server hiccup says so, keeps the name, and a second tap works', async ({ page }) => {

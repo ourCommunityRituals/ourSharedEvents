@@ -36,7 +36,8 @@ import {
   generateId,
 } from '../lib/forms-db';
 import { corsHeaders } from '../lib/cors';
-import { applyCountFloor } from '../lib/count-floor';
+import { applyCountFloor, floorRows } from '../lib/count-floor';
+import { fewerThan } from '../lib/withheld-words';
 import { COUNT_EVENT_REGISTRATIONS_SQL } from '../lib/registration-count';
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
 import { eventAnonKey } from '../lib/event-anon-key';
@@ -652,15 +653,20 @@ export async function handleAdminRegistrations(
     // organizer's first-party list (keep the response field named attendee_name),
     // falling back to the legacy cleartext column for pre-existing rows. The
     // encrypted column is never surfaced in the response.
-    const items = await decryptAttendeeNames(pageRows, env, eventId);
-
-    logFormEvent('register', eventId, 'admin_read', { count: items.length, paged: true });
     // OSE-665: the aggregate `count` is floored uniformly (same K as the
     // SharedReport surface) so every viewer sees the same representation of a
     // sub-5 cohort. It is the event's count of confirmed, unexpired
-    // registrations (lib/registration-count.ts), not this page's size. `items`
-    // remains the organizer's first-party operational list (#1/#8), exact.
+    // registrations (lib/registration-count.ts), not this page's size.
+    // OSE-2087 (owner, 2026-11-16): the rows follow the count. While the count
+    // is withheld no row is returned, no name is decrypted and there is no
+    // next page: three rows would say "three", and name them.
     const floored = applyCountFloor(total);
+    const items = floored.suppressed ? [] : await decryptAttendeeNames(pageRows, env, eventId);
+
+    logFormEvent('register', eventId, 'admin_read', {
+      withheld: floored.suppressed,
+      paged: true,
+    });
     return jsonResponse(
       {
         ok: true,
@@ -669,7 +675,7 @@ export async function handleAdminRegistrations(
         suppressed: floored.suppressed,
         floor: floored.floor,
         limit: paging.limit,
-        next_cursor: nextCursor,
+        next_cursor: floored.suppressed ? null : nextCursor,
       },
       request
     );
@@ -706,9 +712,21 @@ export async function handleAdminRegistrantContacts(
     )
       .bind(eventId, MAX_REGISTRANT_CONTACTS)
       .all<{ attendee_name_encrypted: string | null; attendee_email_encrypted: string }>();
+    // OSE-2087 (owner, 2026-11-16): fewer than 5 people who left an email is a
+    // withheld list. Nothing is decrypted for it, and 0 reads like 1 to 4.
+    const gate = floorRows(result.results ?? []);
+    if (gate.suppressed) {
+      logFormEvent('register', eventId, 'admin_read', { contacts_withheld: true });
+      const withheld = jsonResponse(
+        { ok: true, items: [], suppressed: true, floor: gate.floor, decrypt_failed: 0 },
+        request
+      );
+      withheld.headers.set('Cache-Control', 'no-store');
+      return withheld;
+    }
     const items: { name: string | null; email: string }[] = [];
     let failed = 0;
-    for (const r of result.results ?? []) {
+    for (const r of gate.items) {
       try {
         items.push({
           email: await decryptText(r.attendee_email_encrypted, key),
@@ -724,7 +742,10 @@ export async function handleAdminRegistrantContacts(
       contacts: items.length,
       decrypt_failed: failed,
     });
-    const res = jsonResponse({ ok: true, items, decrypt_failed: failed }, request);
+    const res = jsonResponse(
+      { ok: true, items, suppressed: false, floor: gate.floor, decrypt_failed: failed },
+      request
+    );
     res.headers.set('Cache-Control', 'no-store');
     return res;
   } catch (err) {
@@ -773,14 +794,14 @@ export async function handleAdminSurveys(
       .bind(eventId)
       .all();
 
-    logFormEvent('survey', eventId, 'admin_read', { count: result.results.length });
-    // OSE-665: aggregate `count` floored uniformly; `items` stays first-party
-    // (PII-scrubbed survey rows the organizer owns).
-    const floored = applyCountFloor(result.results.length);
+    // OSE-665: aggregate `count` floored uniformly. OSE-2087 (owner,
+    // 2026-11-16): the rows follow it; under 5 answers none is returned.
+    const floored = floorRows(result.results);
+    logFormEvent('survey', eventId, 'admin_read', { withheld: floored.suppressed });
     return jsonResponse(
       {
         ok: true,
-        items: result.results,
+        items: floored.items,
         count: floored.count,
         suppressed: floored.suppressed,
         floor: floored.floor,
@@ -841,6 +862,13 @@ function toCsv(rows: Record<string, unknown>[]): string {
  * Exports form data. Surveys only include PII-scrubbed rows.
  * Default format: json. CSV returns a downloadable file.
  */
+/** What each export's rows are, for the words a withheld download carries. */
+const EXPORT_NOUN: Record<string, string> = {
+  registrations: 'registrations',
+  surveys: 'survey answers',
+  'email-signups': 'email sign-ups',
+};
+
 export async function handleAdminExport(
   request: Request,
   env: FormsEnv,
@@ -913,7 +941,32 @@ export async function handleAdminExport(
       );
     }
 
-    logFormEvent(dataType as FormType, eventId, 'admin_read', { count: rows.length, format });
+    // OSE-2087 (owner, 2026-11-16): an export of fewer than 5 rows is withheld,
+    // in both formats. The CSV says so in words, so an opened file never reads
+    // as an empty event.
+    const floored = floorRows(rows);
+    logFormEvent(dataType as FormType, eventId, 'admin_read', {
+      withheld: floored.suppressed,
+      ...(floored.suppressed ? {} : { count: rows.length }),
+      format,
+    });
+    if (floored.suppressed) {
+      if (format === 'csv') {
+        const note = `${fewerThan(floored.floor, EXPORT_NOUN[dataType])}. The list is withheld until there are ${floored.floor} or more.`;
+        return new Response(toCsv([{ withheld: note }]), {
+          headers: {
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': `attachment; filename="${eventId}-${dataType}.csv"`,
+            'X-OSE-Withheld': 'true',
+            ...corsHeaders(request),
+          },
+        });
+      }
+      return jsonResponse(
+        { ok: true, items: [], count: null, suppressed: true, floor: floored.floor },
+        request
+      );
+    }
 
     if (format === 'csv') {
       const csv = toCsv(rows);
@@ -926,7 +979,10 @@ export async function handleAdminExport(
       });
     }
 
-    return jsonResponse({ ok: true, items: rows, count: rows.length }, request);
+    return jsonResponse(
+      { ok: true, items: rows, count: rows.length, suppressed: false, floor: floored.floor },
+      request
+    );
   } catch (err) {
     return handleDbError(dataType as FormType, eventId, errorLabel(err), request);
   }

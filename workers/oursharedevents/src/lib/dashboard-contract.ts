@@ -45,7 +45,10 @@ import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 // 2.0.0 (2026-10-08, OSE-1656): every scan metric and both report-view metrics
 // retyped to `floored`; the `anonymous_exact` class is gone. New metric
 // event.reach.scans_by_day.day (the label beside each floored day).
-export const DASHBOARD_CONTRACT_VERSION = '2.0.0';
+// 3.0.0 (2026-11-16, OSE-2087): admin_activity_30d retyped from one `entity`
+// object to six `floored` metrics, one per action (owner ruling: operators'
+// own actions are under the floor).
+export const DASHBOARD_CONTRACT_VERSION = '3.0.0';
 
 export type DashboardId = 'operations' | 'event' | 'corridor';
 export type PrivacyClass = 'entity' | 'floored';
@@ -97,13 +100,53 @@ export const DASHBOARD_METRICS = {
     source: 'events.created_at',
     description: 'Events created in the last 30 days.',
   },
-  admin_activity_30d: {
+  'admin_activity_30d.created': {
     dashboard: 'operations',
-    privacy: 'entity',
-    path: 'admin_activity_30d',
+    privacy: 'floored',
+    path: 'admin_activity_30d.created',
     source: 'admin_audit_log (brand_id, action, outcome)',
     description:
-      'Admin actions on this brand in the last 30 days, one counter per audit action: created (CREATE_EVENT), updated (UPDATE_EVENT), qr_verified (VERIFY_QR), qr_unverified (UNVERIFY_QR), deleted (DELETE_EVENT), denied (any action refused).',
+      "Admin actions on this brand in the last 30 days: events created (CREATE_EVENT). Each brand's count is floored before the brands in scope are added.",
+  },
+  'admin_activity_30d.updated': {
+    dashboard: 'operations',
+    privacy: 'floored',
+    path: 'admin_activity_30d.updated',
+    source: 'admin_audit_log (brand_id, action, outcome)',
+    description:
+      "Admin actions on this brand in the last 30 days: event updates (UPDATE_EVENT). Each brand's count is floored before the brands in scope are added.",
+  },
+  'admin_activity_30d.qr_verified': {
+    dashboard: 'operations',
+    privacy: 'floored',
+    path: 'admin_activity_30d.qr_verified',
+    source: 'admin_audit_log (brand_id, action, outcome)',
+    description:
+      "Admin actions on this brand in the last 30 days: QR codes verified (VERIFY_QR). Each brand's count is floored before the brands in scope are added.",
+  },
+  'admin_activity_30d.qr_unverified': {
+    dashboard: 'operations',
+    privacy: 'floored',
+    path: 'admin_activity_30d.qr_unverified',
+    source: 'admin_audit_log (brand_id, action, outcome)',
+    description:
+      "Admin actions on this brand in the last 30 days: QR verifications taken back (UNVERIFY_QR). Each brand's count is floored before the brands in scope are added.",
+  },
+  'admin_activity_30d.deleted': {
+    dashboard: 'operations',
+    privacy: 'floored',
+    path: 'admin_activity_30d.deleted',
+    source: 'admin_audit_log (brand_id, action, outcome)',
+    description:
+      "Admin actions on this brand in the last 30 days: events deleted (DELETE_EVENT). Each brand's count is floored before the brands in scope are added.",
+  },
+  'admin_activity_30d.denied': {
+    dashboard: 'operations',
+    privacy: 'floored',
+    path: 'admin_activity_30d.denied',
+    source: 'admin_audit_log (brand_id, action, outcome)',
+    description:
+      "Admin actions on this brand in the last 30 days: admin actions refused (any action refused). Each brand's count is floored before the brands in scope are added.",
   },
   'reach.poster_scans': {
     dashboard: 'operations',

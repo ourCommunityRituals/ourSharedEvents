@@ -17,6 +17,7 @@ import {
   floorCumulativeSeries,
   floorNestedCounts,
   floorPublishedChain,
+  floorRows,
   floorTotalOfParts,
   roundForPublish,
 } from '../src/lib/count-floor';
@@ -62,6 +63,46 @@ describe('applyCountFloor — uniform K-anon floor', () => {
   test('a custom floor is honored and echoed', () => {
     expect(applyCountFloor(7, 10)).toEqual({ count: null, suppressed: true, floor: 10 });
     expect(applyCountFloor(10, 10)).toEqual({ count: 10, suppressed: false, floor: 10 });
+  });
+});
+
+describe('floorRows — a list of people under the floor returns no row (OSE-2087)', () => {
+  // Owner ruling, 2026-11-16: the floor reaches the organizer's own lists. Rows
+  // are a count, so under the floor none is handed back. Seen failing with the
+  // function returning its rows whatever their number.
+  const people = ['Ada', 'Ben', 'Cy', 'Dee', 'Eli', 'Fay'];
+
+  test.each([0, 1, 4])('%i rows: no row, and the count is withheld, never 0', (n) => {
+    expect(floorRows(people.slice(0, n))).toEqual({
+      items: [],
+      count: null,
+      suppressed: true,
+      floor: CORRIDOR_MAP_MIN_COUNT,
+    });
+  });
+
+  test('5 rows: every row, in order, with the exact count', () => {
+    const rows = people.slice(0, 5);
+    const out = floorRows(rows);
+    expect(out).toEqual({ items: rows, count: 5, suppressed: false, floor: 5 });
+    // A copy: changing what is returned never changes the caller's list.
+    expect(out.items).not.toBe(rows);
+  });
+
+  test('one page of a longer list is judged by the size of the whole list', () => {
+    // Two rows of a list of 12 are shown; six rows of a list said to hold 4 are not.
+    expect(floorRows(people.slice(0, 2), 12)).toEqual({
+      items: ['Ada', 'Ben'],
+      count: 12,
+      suppressed: false,
+      floor: 5,
+    });
+    expect(floorRows(people, 4)).toEqual({ items: [], count: null, suppressed: true, floor: 5 });
+  });
+
+  test('the floor can be stricter', () => {
+    expect(floorRows(people, people.length, 10).items).toEqual([]);
+    expect(floorRows(people, people.length, 6).items).toEqual(people);
   });
 });
 

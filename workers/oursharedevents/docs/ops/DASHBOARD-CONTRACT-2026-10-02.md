@@ -2,7 +2,7 @@
 
 Part of OSE-1468. The code is the source of truth:
 
-- Metric registry, privacy classes and the not-measured list: `src/lib/dashboard-contract.ts` (`DASHBOARD_CONTRACT_VERSION` = `2.0.0`)
+- Metric registry, privacy classes and the not-measured list: `src/lib/dashboard-contract.ts` (`DASHBOARD_CONTRACT_VERSION` = `3.0.0`)
 - Queries: `src/handlers/dashboards.ts`
 - Seeded fixture: `tests/helpers/seed-dashboard-fixture.ts`
 - Tests: `tests/dashboards.spec.ts` (26, workers pool); link taps also in `tests/reach-card-neighbour-floor.spec.ts`; corridor scans also in `tests/corridor-scans-neighbour-floor.spec.ts`
@@ -33,7 +33,7 @@ An admin with no brand membership gets 403 `BRAND_SCOPE_DENIED`. A key actor in 
 ```json
 {
   "contract": {
-    "version": "2.0.0",
+    "version": "3.0.0",
     "dashboard": "operations",
     "metrics": ["events.total", "..."],
     "floor": 5
@@ -57,7 +57,7 @@ A caller can pick overlapping views: several brands or one, and `production` or 
 ## Listed and admin activity
 
 - `events.published` counts events on the public list and map now: `is_published = 1` and `status = 'active'`. A published draft is not listed.
-- `admin_activity_30d` has one counter per audit action: `created`, `updated`, `qr_verified`, `qr_unverified`, `deleted` and `denied`. A status change made through `PUT /api/v2/admin/events/:id` is audited as `UPDATE_EVENT`, so it counts as `updated`. Counting those changes as lifecycle transitions needs the audit row to carry the from/to status, which is listed under not measured.
+- `admin_activity_30d` has one counter per audit action: `created`, `updated`, `qr_verified`, `qr_unverified`, `deleted` and `denied`. Each is a floored count since `3.0.0` (OSE-2087, owner ruling 2026-11-16): one brand's count of one action is floored before the brands in scope are added, and under 5 it is withheld, 0 included. A status change made through `PUT /api/v2/admin/events/:id` is audited as `UPDATE_EVENT`, so it counts as `updated`. Counting those changes as lifecycle transitions needs the audit row to carry the from/to status, which is listed under not measured.
 
 ## Sponsors on show
 
@@ -67,7 +67,7 @@ A caller can pick overlapping views: several brands or one, and `production` or 
 
 | Class     | Meaning                                                                                                                                                    | Rule                                                                   |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `entity`  | Counts of things, not people: events, posters, places, sponsor placements, admin actions                                                                   | Exact                                                                  |
+| `entity`  | Counts of things, not people: events, posters, places, sponsor placements                                                                                  | Exact                                                                  |
 | `floored` | Every count of people or of their actions: registrations, check-ins, email signups, short-link taps, poster scans (every grain), flows, SharedReport opens | K = 5 via `lib/count-floor.ts`, per contributing bucket before any sum |
 
 Until `2.0.0` there was an `anonymous_exact` class for poster scans, exact for the organizer, and SharedReport opens were `entity`. OSE-1656 removed the class and retyped both (owner ruling 2026-10-08: no exceptions).
@@ -130,6 +130,8 @@ Adding a metric is a minor bump. Removing or retyping one is a major bump. A tes
 The version follows the response shape. The two link-tap changes (the event figure in #871, then the operations figure on 2026-10-08) changed which taps a figure counts, not its shape, path or class, so the version stayed `1.0.0`. Both can only lower a figure or withhold it.
 
 `1.1.0` (2026-10-08): the corridor's source cells gained `scans_no_destination`, a new metric, so a minor bump. The same change made `source_cells[].scans` the sum of the cell's listed parts; that alone changes which scans the figure counts, not its shape, and can only lower it or withhold it.
+
+`3.0.0` (2026-11-16, OSE-2087): a major bump. `admin_activity_30d` was one `entity` object of six exact numbers. It is now six `floored` metrics, `admin_activity_30d.created` and so on. The owner ruled that operators' own actions are under the floor; OSE-1656 had listed them as outside it.
 
 `2.0.0` (2026-10-08, OSE-1656): a major bump. Every scan metric (`reach.poster_scans`, `participation.anonymous.scans` on both dashboards, `reach.scans`, `reach.scansByDay[].count`) and both `shared_report.views_30d` metrics are retyped to `floored`; each is now a `FlooredCount`, not a number. `event.reach.scans_by_day.day` is new (the label beside each floored day).
 

@@ -218,13 +218,29 @@ test.describe('INJ-006 — XSS payload not reflected unescaped in GET response',
     ).toBeLessThan(300);
 
     // 2. Read it back through the admin registrations list.
-    const read = await request.get(
-      `${BASE_URL}/api/v2/admin/events/${eventId}/forms/registrations`,
-      {
+    const readList = () =>
+      request.get(`${BASE_URL}/api/v2/admin/events/${eventId}/forms/registrations`, {
         headers: adminHeaders(),
         maxRedirects: 0,
+      });
+    let read = await readList();
+    // OSE-2087 (owner, 2026-11-16): a list of fewer than 5 registrations is
+    // withheld, so the payload cannot be read back from a near-empty event.
+    // Four plain registrations bring the list to 5 or more; then it is read again.
+    if (read.status() === 200) {
+      const first = (await read.json()) as { suppressed?: boolean };
+      if (first.suppressed === true) {
+        for (let i = 1; i <= 4; i++) {
+          const filler = await postPastRateLimit(
+            request,
+            `${BASE_URL}/api/v2/events/${eventId}/forms/register`,
+            { name: `Read-back filler ${i}`, email: `${marker}-filler-${i}@example.com` }
+          );
+          expectExercised(filler.status(), `read-back filler ${i}`);
+        }
+        read = await readList();
       }
-    );
+    }
     test.skip(
       [401, 403].includes(read.status()) || (read.status() >= 300 && read.status() < 400),
       `precondition unmet: admin registrations read returned ${read.status()} with the provided credentials`
