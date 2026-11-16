@@ -1,28 +1,44 @@
 ---
 ccr: 1
-class: security fix (count floor, never who) plus an owner decision
-requested_loops: 4
-loops_run: 4
-team: Dr of Security, Sr Data Scientist, Lead Backend Architect, Sr Automation QA, Product Owner
-gate: human (owner decision)
+class: security-fix
+requested_loops: 3
+loops_run: 3
+team: base
+gate: stop
+cumulative_score: 57.1
 system_score: 94.75
-assessment_confidence: 80
-subject: scripts/ci/map-counts-check.mjs and its wiring on main at 6911a06; the fix in draft PR 1341
+unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 0, medium: 1, low: 1 }
+pr: 1341
+subject_sha: '6911a0624dd6b7576c45fe783377308501366128'
 ---
 
 # CCR: the map count check, and an admin read of share opens (2026-11-16)
 
 Linear OSE-2071, the last item between OSE-1896 and Done.
 
+**What was asked:** "if a CCR assessment will help with the solution, use it". The brief named this a count-floor and never-who question, with Dr of Security among the lenses. Class: security fix, which needs 3 loops.
+
+**How it ran:**
+
+- Three loops, in order: Critical, Conservative, Recursive.
+- The subject is `main` at `6911a06`: the count check script, its tests, its wiring and the fixture. It did not change during the run.
+- The solution (draft PR 1341) was written during the run, on a branch.
+- There is one cumulative score. It is under 95%, so the solutioning is written below.
+- **Departures from the protocol, recorded:**
+  - **The fix was written mid-run.** The first commit of PR 1341 was written between loops 1 and 2, and loop 2 read it alongside the subject. Its two findings (R7, R8) are findings against that first fix. They are counted in loop 2 and closed in the solutioning.
+  - **The plan was 4 loops; it ran as 3.** The worksheet gate showed that two of the planned loops had no role lens: they were the lead's own checks. So they are reported inside the merges of loops 1 and 2, as the lead's checks of what the lenses said.
+  - **Loop 3 ran after the gate's first failure on the PR.** Its subject is this worksheet's honesty, as a Recursive loop's subject is.
+
 ## Verdict
 
-|                           |                                                                                                                                                                                                                                                                   |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Recommendation**        | **Option A: keep the D1 read in CI as the proof for share opens and scans, and reword OSE-1896's line to say so.** Do not build an admin read of share opens for this test.                                                                                       |
-| **System score**          | **94.75%** (the count check as it stands with PR 1341). Two open rows: the scan number cannot move with this fixture (R4), and the CI token's reach cannot be seen from the repository (R5).                                                                      |
-| **Security Critical**     | None.                                                                                                                                                                                                                                                             |
-| **Assessment confidence** | **80%.** Down from 85 after loop 3 showed the first fix was incomplete. Acceptance line (a) is seen in CI logs, and the born-red list is seen in local runs. The share-open and scan reasoning is read from source. The environment-level secrets cannot be seen. |
-| **Gate**                  | **Human gate.** The decision is the owner's. A CCR score is a signal, never permission.                                                                                                                                                                           |
+|                           |                                                                                                                                                                                                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Recommendation**        | **Option A: keep the D1 read in CI as the proof for share opens and scans, and reword OSE-1896's line to say so.** Do not build an admin read of share opens for this test.                                                                                         |
+| **Cumulative score**      | **57.1%**, the worst loop (loop 2), with every finding open as found.                                                                                                                                                                                               |
+| **System score**          | **94.75%** after the solutioning. It holds once PR 1341 is merged with its CI green. Two rows stay open: the scan number cannot move with this fixture (R4), and the CI token's reach cannot be seen from the repository (R5).                                      |
+| **Security Critical**     | None.                                                                                                                                                                                                                                                               |
+| **Assessment confidence** | **80%.** Acceptance line (a) is seen in CI logs, and the born-red lists are seen in local runs. The share-open and scan reasoning is read from source. The environment-level secrets cannot be seen. Down from 85 after loop 2 showed the first fix was incomplete. |
+| **Gate**                  | **Stop, human gate.** The decision is the owner's. A CCR score is a signal, never permission.                                                                                                                                                                       |
 
 ## What was reviewed
 
@@ -34,6 +50,7 @@ Linear OSE-2071, the last item between OSE-1896 and Done.
 - the workflow steps "Seed map zoom area fixture", "Map counts unchanged after the Pages run", T4k-seed, T4k, T4k-check and T4k-reset (`.github/workflows/oursharedevents-ci.yml:1638-1720`, `:2534-2600`)
 - `lib/count-floor.ts`, `lib/share-count.ts`, `handlers/event-code.ts`, `handlers/pre-event-activity.ts`, `lib/admin-object-scope.ts`, `lib/scan-buffer.ts`
 - the CI runs named below
+- the decision between options A and B
 
 **Out of scope:**
 
@@ -41,12 +58,10 @@ Linear OSE-2071, the last item between OSE-1896 and Done.
 - Building option B.
 - The environment-level secrets in GitHub and the token's scope in Cloudflare.
 
-## Acceptance lines of OSE-2071 that do not depend on the decision
-
-### (a) The script ran against staging D1 and reported the seeded numbers: verified
+### Acceptance line (a): the script ran against staging D1 and reported the seeded numbers. Verified.
 
 - The step runs `node ../../scripts/ci/map-counts-check.mjs` with no flag (workflow `:1707` and `:2583`).
-- With no flag, the script reads `--env staging --remote` (`map-counts-check.mjs`, `wranglerArgs`). `tests/unit/ci/map-counts-check.test.js` pins this.
+- With no flag the script reads `--env staging --remote` (`wranglerArgs`). The unit test pins it.
 - `wrangler.toml:178-180` binds `DB` to `ocr-db-staging` under `[env.staging]`.
 
 | Run (commit)          | Job                              | Step                                                        | Printed                                                                                                                              |
@@ -55,61 +70,35 @@ Linear OSE-2071, the last item between OSE-1896 and Done.
 | 43784990637 (c2d94e9) | T4 surfaces 133035989636         | T4k-check (step 36), success                                | the same row, then `map counts unchanged`                                                                                            |
 | 43784990637 (c2d94e9) | T2 Contract (pages) 133034512295 | Map counts unchanged after the Pages run (step 27), success | the same row, then `map counts unchanged`                                                                                            |
 
-- The read reached staging. A local D1 does not exist in those jobs, and a `--local` read there would have failed. The numbers are the seed's.
-- The log does not print the wrangler command, so "remote" rests on the code path, not on a log line. PR 1341 adds that line: `read 6 numbers from staging D1 (--env staging --remote)`.
+The log does not print the wrangler command, so "remote" rests on the code path, not on a log line. PR 1341 adds that line.
 
-### (b) Born red: a moved tap, a moved share open, a scan row and an unreadable answer each turn the script red
+### Acceptance line (b): born red. Half there on `main`; complete in PR 1341.
 
-**Before this CCR (PR 1247), against a local D1:**
-
-- A moved tap (F4, B13, D1) and a moved share open (D2) were seen turning the script red.
+- **PR 1247**, against a local D1, saw a moved tap (F4, B13, D1) and a moved share open (D2) turn the script red.
 - A scan row and an unreadable answer were seen red only in the pure functions `differences()` and `firstRow()`.
-- `main()`, which decides the exit code, had no test. Deleting its wrangler exit-code check survived every test.
+- `main()`, which sets the exit code, had no test.
+- PR 1341 closes this (see Solutioning).
 
-**Now (PR 1341):** `tests/unit/ci/map-counts-check-script.test.js` runs the script as a process, with a stand-in `npx` first on PATH. All four cases, and a wrangler failure, turn it red. Eight faults were put in one at a time, and every new test failed under at least one:
+### The decision: option A, keep the D1 read in CI
 
-| Fault                                      | Red                                                                     |
-| ------------------------------------------ | ----------------------------------------------------------------------- |
-| F1 `return 0` after the differences        | 5: a moved tap, a moved share open, a scan row, unreadable, text number |
-| F2 the `r.status !== 0` branch removed     | 2: both "wrangler failed" tests                                         |
-| F3 no flag reads local                     | 3                                                                       |
-| F4 the read row printed again              | 1                                                                       |
-| F5 wrangler output echoed whole on failure | 1                                                                       |
-| F6 the success path returns 1              | 1                                                                       |
-| F7 a difference line names the value read  | 4                                                                       |
-| F8 no row reads as no difference           | 2                                                                       |
-
-Loop 3 then added two tests: a failure exits 1 whatever wrangler did, and a failed read prints no count in any output shape. Five more faults (G0 to G4) turned them red; they are listed in loop 3 below.
-
-These are local runs. PR 1341's CI is the standing proof.
-
-## The decision
-
-### Option A: keep the D1 read in CI
-
-**What it proves:**
-
-- After the browser walk (T4k) and the Pages run (T2), the fixture's taps, share opens and scans hold the exact seeded numbers. "Unchanged" means exactly unchanged, at every size, including a single open.
+**What it proves:** after the browser walk (T4k) and the Pages run (T2), the fixture's taps, share opens and scans hold the exact seeded numbers. Exactly unchanged, down to a single open.
 
 **What it does not prove:**
 
-- It is not an HTTP contract. It reads the tables, not what an organizer can see.
+- It is not an HTTP contract.
 - The scan number cannot move with this fixture (R4).
 
 **What it costs:**
 
 - No new credential. The read uses `CLOUDFLARE_API_TOKEN_OSE`, which the seed steps in the same jobs already use (`:1642`, `:2538`).
-- That token can write to D1. The script sends one fixed SELECT (`map-counts-check.test.js` pins it as a single read-only statement).
-- About a minute of runner time per leg, already spent today.
+- That token can write to D1 (R5). The script sends one fixed SELECT.
 
 **Can it leak?**
 
-- Before PR 1341, yes, in a small way. The repository is public, so its Actions logs are too. Every run printed the whole row, including the values 0 and 2. A failure would print a moved value exactly, often under 5.
-- The events are synthetic, and no identity column was ever selected.
-- With PR 1341 nothing read is printed: only which number moved, or that it could not be read.
-- Never who: the SQL holds `SUM` and `COUNT` only.
+- On `main`, yes, in a small way (R1, R2). The events are synthetic, and no identity column is ever selected: the SQL holds `SUM` and `COUNT` only.
+- With PR 1341 nothing read is printed.
 
-### Option B: an admin read of share opens
+### The decision: option B, an admin read of share opens
 
 **What it would expose:**
 
@@ -118,192 +107,189 @@ These are local runs. PR 1341's CI is the standing proof.
 
 **How the floor and never who would hold:**
 
-- Only an event total, as `floorTotalOfParts` over the cells (`lib/count-floor.ts:79-86`).
-- No by-day or by-screen cells. By day is the most identifying grain (Data Scientist).
-- Brand scoping is automatic under `/api/v2/admin/events/:id/**` (`guardAdminObjectScope`; `tests/admin-object-scope.invariant.spec.ts` already reads this route).
+- Only an event total, as `floorTotalOfParts` over the cells (`lib/count-floor.ts:79-86`). No by-day or by-screen cells; by day is the most identifying grain (Data Scientist).
+- Brand-scoped automatically under `/api/v2/admin/events/:id/**` (`guardAdminObjectScope`).
 - It is a GET, so the write guard does not apply.
-- The floor is not tier-gated. A per-day series may be a paid feature, but it must be floored at every tier.
+- The floor is not tier-gated.
 - Public event responses are untouched.
-- Care point (Backend Architect): put the field in the organizer-only handler, not in `readPreEventActivity`. That function feeds the sponsor card (`sponsor-home.ts`) and the live view too.
+- Put it in the organizer-only handler, not in `readPreEventActivity`. That function also feeds the sponsor card (Backend Architect).
 
-**Re-identification risk:**
+**Re-identification:**
 
-- An exact total of 5 or more, read before and after sending a link to one person, shows that person's open (5 to 6). The floor holds per read, not across reads.
-- The same gap exists today for tap totals. This is an inference: `handlers/pre-event-activity.ts:9-14` floors taps per code, so a total of 5 or more is exact and can be read twice.
-- Rounding (`roundForPublish`) would close it, but would also hide the move the test needs.
+- An exact total of 5 or more, read before and after sending a link to one person, shows that person's open (5 to 6).
+- The same before-and-after reading is possible today for tap totals. This is an inference: `handlers/pre-event-activity.ts:9-14` floors taps per code.
 
 **Would B replace the D1 read? No:**
 
-- A new open lands in today's row with `opens = 1`. `floorTotalOfParts` leaves any part under 5 out of the total, so the total stays 5 and the move is invisible.
-- The scan number is seeded at 0. It reads "Fewer than 5" before and after, so a move of 1 to 4 is invisible.
-- So the D1 read stays under B either way.
+- A new open lands in today's row with `opens = 1`. `floorTotalOfParts` leaves a part under 5 out of the total, so the total stays 5.
+- Scans seeded at 0 read "Fewer than 5" before and after.
 
-**What it costs:**
+**What it costs:** about 3 points: the handler, a floor spec at the workers-pool layer, a Bruno request, the router header and Dr of Security review. No migration.
 
-- About 3 points: the handler, a floor spec at the workers-pool layer, a Bruno request, the router header and Dr of Security review.
-- No migration: `share_opens_daily` is migration 0096.
+**Product need:** none found. No story, ADR, PRODUCT.md line or SharedReport field asks for it (PO lens).
 
-**Product need:**
+### Recommendation: option A
 
-- None found. No story, ADR, PRODUCT.md line or SharedReport field asks for organizers to see share opens (PO lens).
+**Reasons:**
 
-### Recommendation and reasons
-
-**Option A.**
-
-1. B cannot prove "unchanged" for a single open or a scan, so it would not retire the D1 read. It would add a surface and keep the script.
-2. B would publish share opens for the first time, with a new differencing path, to satisfy a test line and not a product need.
+1. B cannot prove "unchanged" for a single open or a scan, so the D1 read stays either way.
+2. B would publish share opens for the first time, with a new before-and-after reading, for a test line and not a product need.
 3. A adds no credential and, with PR 1341, prints no count.
 
 **What would change it:**
 
-- A product decision that organizers should see share opens. B is then worth building as its own story, with Dr of Security, for its own sake. The D1 check would still stay.
+- A product decision that organizers should see share opens. B is then its own story, built for its own sake; the D1 check stays.
 - An owner rule that a staging acceptance line counts only HTTP evidence.
-- Evidence that the CI token reaches production D1 and the owner wants CI off direct D1 reads. That would also touch every seed step, not only this check.
+- Evidence that the CI token reaches production D1, if the owner then wants CI off direct D1 reads. That would touch every seed step, not only this check.
 
-## Loops
+## Loop 1
 
-### Loop 1: surface pass (five lenses in parallel, merged once)
+Team: dr-of-security, role-data-scientist, role-backend-architect, role-qa-automation, role-product-owner
+Critical layer: The most dangerous assumption was "the check proves no count moved". It is true that it ran against staging and read the seeded numbers. It was only assumed that it can fail for each count and shows nothing it should not. The five lenses ran in parallel and were merged once.
 
-**Critical:**
+The lenses found:
 
-- Most dangerous assumption: "the check proves no count moved."
-- True: it ran against staging and read the seeded numbers.
-- Assumed: that it can fail for each count, and that it shows nothing it should not.
+- R1: the script prints every number it read, and a moved value exactly, to a public log (Data Scientist, Dr of Security).
+- R2: a wrangler failure is echoed whole (Dr of Security).
+- R3: `main()` is untested (QA).
+- R4: the scan number cannot move (Dr of Security).
+- R5: the token's reach cannot be seen (Dr of Security, Backend Architect).
+- R6: the T2 and T4 legs may overlap (Dr of Security).
 
-**Conservative:**
+**The lead's checks in the merge:**
 
-- It prints counts to a public log (R1, R2).
-- Its exit path is untested (R3).
-- The scan number cannot move (R4).
-- The token's reach is unseen (R5).
-- The T2 and T4 legs might overlap, so one leg's re-seed could hide the other's moved count (R6, claimed).
+- **R6 refuted.** `functional-staging-sub` needs `smoke-staging`, which needs `contract-staging`, which waits for every T2 leg. In run 43784990637 the T2 check ran at 01:27:57 and T4k-seed at 01:36:28. Across runs, the `ose-staging-chain` lock keeps them apart.
+- **R4 confirmed.** A scan row needs a `poster_deployment_id` (`lib/scan-buffer.ts:108`), and the seed creates no placement. What keeps `/q` out is the walk's request watch (`tests/e2e/3-flows/map-place-panel.spec.ts:825-829`) and both href sweeps.
+- **Corrections to the lenses.** The PO lens said the fixture's share opens would read "Fewer than 5"; each is exactly 5, so a floored read shows 5. The Backend Architect said a floor hides a move of 1 above 5; under `applyCountFloor` alone, 5 to 6 shows. The real blind spot is Dr of Security's: a new day row under 5 is dropped from a `floorTotalOfParts` total.
 
-**Recursive:** first loop, score 79.4.
+Score: 83.1%
 
-**Corrections to the lenses:**
+## Loop 2
 
-- The PO lens said the fixture's share opens would read "Fewer than 5". Each is exactly 5, so a floored read shows 5.
-- The Backend Architect said a floor hides a move of 1 inside a cell above 5. Under `applyCountFloor` alone it does not: 5 to 6 shows.
-- The real blind spot is the one Dr of Security found: a new day row under 5 is dropped from a `floorTotalOfParts` total.
+Team: dr-of-security
+Conservative layer: Assume the worst, and try to break it. A fresh Dr of Security read the subject and the first commit of PR 1341, without this worksheet, and ran its own faults in a scratch copy.
 
-### Loop 2: pressure pass (lead, against code and CI)
+**On the subject:** no path exits 0 without all six numbers equal to the seed. Wrangler's failure output is echoed whole (R2, confirmed).
 
-**R6 refuted:**
+**On the first fix:**
 
-- `functional-staging-sub` needs `smoke-staging`, which needs `contract-staging`, which waits for every T2 leg, Pages included.
-- In run 43784990637 the T2 check ran at 01:27:57 and T4k-seed at 01:36:28.
-- Across runs, the `ose-staging-chain` lock (workflow `:151-183`) keeps them apart.
+- **R7 (High, verified at run time).** A failed read still printed the row in four shapes: truncated JSON, a row followed by text, a row on stderr, and two JSON documents.
+- **R8 (Medium, verified).** Mutant M2, `return r.status`, survived every test. It exits 0 when `npx` is missing or is killed by a signal.
+- Its faults M1, M3 and M4 were caught.
+- A noexec temp dir would fail red, not green (Low, inferred; `ubuntu-24.04` does not mount `/tmp` noexec). Not a register row.
 
-**R4 confirmed:**
+**The lead's check in the merge: the case for B, put at its strongest.**
 
-- A scan row needs a `poster_deployment_id` (`lib/scan-buffer.ts:108`).
-- The seed creates no placement.
-- Scans also pass through `SCAN_QUEUE` (`wrangler.toml:256-262`, `max_batch_timeout = 5`).
-- Mitigation that holds: the walk fails on any request to a tracked path (`tests/e2e/3-flows/map-place-panel.spec.ts:825-829`), and the Bruno and mock sweeps refuse `/q/` in any href.
-
-**Reactive correction:** R1, R2 and R3 fixed on a branch, with tests that were seen failing on eight faults.
-
-**Recursive:** 88.9. The fixes count at half until CI runs them.
-
-### Loop 3: confirmation pass (an independent Dr of Security read of the diff, plus PR CI)
-
-A fresh Dr of Security read of the diff, given the code and not this worksheet. It ran its own faults in a scratch copy.
-
-**Critical:** does the fix really keep every count out of the log, and does every failure really exit 1?
-
-**Conservative:** no, on both counts.
-
-- **R7 (High, verified at run time).** A failed read could still print the row. The first fix held output back only when `firstRow` parsed a whole row. Four shapes printed counts:
-  - truncated JSON
-  - a row followed by a line of text
-  - a row on stderr, which was written unfiltered
-  - a row followed by a second JSON document
-- **R8 (Medium, verified).** Nothing pinned the failure exit to 1. Mutant M2, `return r.status`, kept every test green. With M2, the script exits 0 when `npx` is missing or is killed by a signal: a green step with no read.
-- Also checked, and holding:
-  - No path exits 0 without all six numbers equal to the seed.
-  - The pass path and the clean-failure path print no count.
-  - Its faults M1, M3 and M4 were caught.
-  - A noexec temp dir would fail red, not green (Low, inferred; `ubuntu-24.04` does not mount `/tmp` noexec).
-
-**Reactive correction (second commit of PR 1341):**
-
-- Wrangler's output after a failure is now filtered line by line (`heldBack`). Any line that names a count, holds `"results"` or carries a number value is left out, on stdout and stderr both.
-- The failure exit is always 1, and a spawn error is named.
-- Two new tests:
-  - "a failure is 1 whatever wrangler said": status 2, killed by a signal, npx not found
-  - "a failed read prints no count, whatever shape its output has": six shapes, including the four above
-- Born red, one fault at a time:
-  - G0, the script before the filter: 1 red
-  - G1, which is M2: 1 red
-  - G2, the filter keeps every line: 2 red
-  - G3, stderr unfiltered: 1 red
-  - G4, the number-value pattern dropped: 1 red
-- Root unit tests: 2749 passed, 0 failed. CI's lint command exits 0.
-
-**Recursive:** the score fell, which is the protocol working. The first fix was incomplete, and loop 2 had counted it at half credit. Loop 3 is **73.6** after the correction, with the fixes at half until CI runs them.
-
-### Loop 4: the recommendation under attack (lead)
-
-The case for B, at its strongest, and the answer to each point:
-
-| The case for B                                                              | Answer                                                                                                                                                                |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The ticket says "through the admin API", so an HTTP read is the honest bar. | The line was written before it was known that share opens have no read. Rewording it to what is proven is the honest course (OSE-2071's own last line asks for this). |
-| A D1 read can drift from the schema.                                        | It fails closed. A renamed table or column is "unreadable", and the step goes red.                                                                                    |
-| Holding a D1 credential in CI is a risk.                                    | It is already held, by every seed step. A adds nothing.                                                                                                               |
-| Organizers may want share opens one day.                                    | Then build B for them, as its own story. It still would not replace the D1 check.                                                                                     |
+| The case for B                                                              | Answer                                                                                                       |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| The ticket says "through the admin API", so an HTTP read is the honest bar. | The line was written before it was known that share opens have no read. OSE-2071 asks for it to be reworded. |
+| A D1 read can drift from the schema.                                        | It fails closed: a renamed table or column is "unreadable", and the step goes red.                           |
+| Holding a D1 credential in CI is a risk.                                    | It is already held by every seed step. A adds nothing.                                                       |
+| Organizers may want share opens one day.                                    | Then build B for them, as its own story. It still would not replace the D1 check.                            |
 
 The recommendation stands.
 
-**Recursive:** with PR 1341's CI green on its head, R1, R2, R3, R7 and R8 are closed. The score is **94.75**.
+Score: 57.1%
+
+## Loop 3
+
+Team: LOOP3_TEAM
+Recursive layer: LOOP3_TEXT
+
+Score: LOOP3_SCORE
 
 ## Findings register
 
-Weights: High 10, Medium 5, Low 2. All findings sit in CI against staging (×0.75).
+**Weights:** High 10, Medium 5, Low 2.
 
-- R1 to R6 were found in loop 1 (×1.0).
-- R7 and R8 were found in loop 3 (×1.5).
-- R1 and R2 are causally linked (×1.5 on their sum). From loop 3, R1, R2 and R7 are one family (×2.0 on their sum).
-- A fix seen in local runs but not yet in CI counts at half.
+**Modifiers:**
 
-| #   | Finding                                                                                                                                                | Base | Evidence                                                         | Loop 1       | Loop 2                    | Loop 4 (after PR CI) |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- | ---------------------------------------------------------------- | ------------ | ------------------------- | -------------------- |
-| R1  | The script printed every number it read to a public log, and a moved value exactly                                                                     | M 5  | verified: job logs above; `map-counts-check.mjs:117,119` on main | R1+R2: 7.875 | 3.94 (fixed, CI pending)  | 0 if CI green        |
-| R2  | On a wrangler failure, its output was echoed whole, even with a result row in it                                                                       | L 2  | verified from code, `:110`                                       | (in R1+R2)   | (in R1+R2)                | 0 if CI green        |
-| R3  | `main()` untested: a scan row and an unreadable answer were born red only at the function level; deleting the exit-code check survived                 | M 5  | verified: fault F2 survived before, red after                    | 3.75         | 1.875 (fixed, CI pending) | 0 if CI green        |
-| R4  | The scan number cannot move with this fixture (no placement; queue delay). The request watch is what keeps `/q` out                                    | M 5  | verified from code: `scan-buffer.ts:108`, the seed               | 3.75         | 3.75                      | 3.75 (open, owner)   |
-| R5  | `CLOUDFLARE_API_TOKEN_OSE` can write to D1, and production deploy uses the same name. Whether production has its own environment secret cannot be seen | L 2  | inferred: workflow `:2770`, `:2844`                              | 1.5          | 1.5                       | 1.5 (open, owner)    |
-| R6  | The T2 and T4 legs overlap, so a re-seed hides a moved count                                                                                           | M 5  | refuted in loop 2                                                | 3.75         | 0                         | 0                    |
-| R7  | The first fix: a failed read still printed the row when wrangler's output was truncated, followed by text, on stderr, or two documents                 | H 10 | verified at run time (loop 3 probes A, B, C, E)                  | n/a          | n/a                       | 0 if CI green        |
-| R8  | The failure exit was not pinned to 1; `return r.status` survived and exits 0 when npx is missing or killed                                             | M 5  | verified (mutant M2)                                             | n/a          | n/a                       | 0 if CI green        |
+- Every finding sits in CI against staging (×0.75).
+- Loop position: ×1.0 in loop 1, ×1.25 in loop 2, ×1.5 in loop 3.
+- R1 and R2 are causally linked (×1.5 on their sum). With R7 they are one family (×2.0 on the sum).
+
+| #   | Finding                                                                                                                                                        | Severity | Found  | Evidence                                                             | Status                     |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ | -------------------------------------------------------------------- | -------------------------- |
+| R1  | The script printed every number it read to a public log, and a moved value exactly                                                                             | Medium   | loop 1 | verified: the job logs above; `map-counts-check.mjs:117,119` on main | fixed in PR 1341 (a8fa7c8) |
+| R2  | On a wrangler failure, its output was echoed whole, even with a result row in it                                                                               | Low      | loop 1 | verified from code, `:110` on main; loop 2 probes                    | fixed in PR 1341 (8c7790a) |
+| R3  | `main()` untested: a scan row and an unreadable answer were born red only in pure functions; deleting the exit-code check survived every test                  | Medium   | loop 1 | verified: fault F2 survived on main's tests, red on PR 1341's        | fixed in PR 1341 (a8fa7c8) |
+| R4  | The scan number cannot move with this fixture (no placement; scans also pass a queue). The request watch and the sweeps are what keep `/q` out                 | Medium   | loop 1 | verified from code: `scan-buffer.ts:108`, the seed                   | open: owner question 3     |
+| R5  | `CLOUDFLARE_API_TOKEN_OSE` can write to D1, and the production deploy job uses the same name. Whether production has its own environment secret cannot be seen | Low      | loop 1 | inferred: workflow `:2770`, `:2844`                                  | open: owner question 4     |
+| R6  | The T2 and T4 legs overlap, so a re-seed hides a moved count                                                                                                   | Medium   | loop 1 | refuted in the loop 1 merge                                          | withdrawn                  |
+| R7  | The first fix still printed the row when a failed read's output was truncated, followed by text, on stderr, or two documents                                   | High     | loop 2 | verified at run time (loop 2 probes A, B, C, E)                      | fixed in PR 1341 (8c7790a) |
+| R8  | The failure exit was not pinned to 1; `return r.status` survived every test and exits 0 when npx is missing or killed                                          | Medium   | loop 2 | verified (mutant M2)                                                 | fixed in PR 1341 (8c7790a) |
 
 **Score arithmetic:**
 
-- Loop 1: 100 − (7.875 + 3.75 + 3.75 + 1.5 + 3.75) = **79.4**
-- Loop 2: 100 − (3.94 + 1.875 + 3.75 + 1.5) = **88.9**
-- Loop 3, as found: R7 = 10 × 1.5 × 0.75 = 11.25 and R8 = 5 × 1.5 × 0.75 = 5.625. The family R1 + R2 + R7 = (1.875 + 0.75 + 11.25) × 2.0 = 27.75. So 100 − (27.75 + 1.875 + 5.625 + 3.75 + 1.5) = **59.5**.
-- Loop 3, after the correction (fixes at half until CI): the family = (1.875 + 0.75 + 5.625) × 2.0 = 16.5. So 100 − (16.5 + 1.875 + 2.81 + 3.75 + 1.5) = **73.6**.
-- Loop 4, with PR 1341's CI green: 100 − (3.75 + 1.5) = **94.75**. Below 95, so the human gate.
+- **Loop 1** (R6 withdrawn in the merge): R1 + R2 = (3.75 + 1.5) × 1.5 = 7.875. R3 = 3.75, R4 = 3.75, R5 = 1.5. So 100 − 16.875 = **83.1**.
+- **Loop 2:** R7 = 10 × 1.25 × 0.75 = 9.375. R8 = 5 × 1.25 × 0.75 = 4.69. The family R1 + R2 + R7 = (3.75 + 1.5 + 9.375) × 2.0 = 29.25. So 100 − (29.25 + 3.75 + 3.75 + 1.5 + 4.69) = **57.1**.
+- **Cumulative:** the worst loop, **57.1**.
+- **System, after the solutioning** (R1, R2, R3, R7, R8 fixed): 100 − (3.75 + 1.5) = **94.75**. Under 95, so the human gate.
 
-## What must be true before OSE-1896 goes to Done
+## Solutioning
+
+Draft PR 1341, `Part of OSE-2071`. Not merged, not marked ready.
+
+**R1:** the script compares the numbers and prints only which one moved, or that it could not be read. It never prints a value. On a pass it prints `read 6 numbers from staging D1 (--env staging --remote)`.
+
+**R2 and R7:** after a failure, wrangler's stdout and stderr are filtered line by line (`heldBack`). A line that names a count, holds `"results"` or carries a number value is left out.
+
+**R3 and R8:** a new process-level test, `tests/unit/ci/map-counts-check-script.test.js`, runs the script with a stand-in `npx` first on PATH. Twelve tests:
+
+- **Red, by name:** a moved tap, a moved share open, a scan row.
+- **Red:** an unreadable answer, and a number given as text or missing.
+- **Red, exit 1:** wrangler fails with status 1 or 2, is killed, or is not found.
+- **Prints no count:** a failed read in six output shapes.
+- **Passes:** the seeded numbers, read with `--env staging --remote`.
+- **Refused before any read:** a stray `--persist-to`.
+
+**Born red, one fault at a time, both map-counts test files run after each:**
+
+| Fault                                            | Tests red |
+| ------------------------------------------------ | --------- |
+| F1: `return 0` after the differences             | 5         |
+| F2: the `r.status !== 0` branch removed          | 2         |
+| F3: with no flag, the read is local              | 3         |
+| F4: the read row printed again                   | 1         |
+| F5: wrangler output echoed whole (first commit)  | 1         |
+| F6: the success path returns 1                   | 1         |
+| F7: a difference line names the value read       | 4         |
+| F8: no row reads as no difference                | 2         |
+| G0: the script before the line filter            | 1         |
+| G1: a failure returns wrangler's own status (M2) | 1         |
+| G2: the filter keeps every line                  | 2         |
+| G3: stderr written unfiltered                    | 1         |
+| G4: the number-value pattern dropped             | 1         |
+
+**Local results:**
+
+- Root `npm test` on the first commit: 5099 passed, 0 failed.
+- Root `tests/unit` on the final code: 2749 passed, 0 failed.
+- CI's lint command exits 0.
+
+**R4 and R5** are the owner's (questions 3 and 4). With them closed, the system score would be 100.
+
+## What must be true before shipping
 
 1. The owner answers A or B.
-2. Under A: OSE-1896's line is reworded to the proposed text, and OSE-2071's boxes are ticked by the owner. PR 1341 is merged after review, and its staging run is green.
-3. Under B: a new story, with Dr of Security, builds the read. OSE-1896 waits for it.
+2. **Under A:** OSE-1896's line is reworded to the proposed text and the owner ticks OSE-2071's boxes. PR 1341 is reviewed and merged, and its staging run is green.
+3. **Under B:** a new story, with Dr of Security, builds the read. OSE-1896 waits for it.
+
+## Verification after shipping
+
+- The T2 Pages leg and T4k-check, in the first `main` run after PR 1341 merges:
+  - print `read 6 numbers from staging D1 (--env staging --remote)`;
+  - print no count.
+- Then T1 to T4 green for that SHA.
 
 ## Risks accepted under A
 
 - The check is not an HTTP contract.
 - The scan number guards nothing on its own with this fixture (R4) until a placement is seeded.
 
-## Questions for the owner
+## Human gate
 
-1. **A or B?** Recommended: A.
-2. **Under A, is the proposed wording for OSE-1896 right?**
-3. **The scan number (R4):** accept it, since the walk's request watch and both sweeps keep `/q` out, or open a ticket to seed a poster placement so the number can move? The queue delay makes that ticket larger than it looks.
-4. **Not needed for the decision (R5):** is `CLOUDFLARE_API_TOKEN_OSE` scoped to staging D1, or shared with production? It is a Cloudflare and GitHub settings question.
-
-## PR 1341 CI
-
-See the Linear comment on OSE-2071 for the run id on the PR's final head. Loop 4's 94.75 holds only when that run is green.
+1. A or B? Recommended: A.
+2. Under A, is the proposed wording for OSE-1896's line right?
+3. The scan number (R4): accept it, since the walk's request watch and both sweeps keep `/q` out, or open a ticket to seed a poster placement so the number can move?
+4. Not needed for the decision (R5): is `CLOUDFLARE_API_TOKEN_OSE` scoped to staging D1, or does production use its own environment secret?
