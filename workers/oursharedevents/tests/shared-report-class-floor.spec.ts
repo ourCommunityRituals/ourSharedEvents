@@ -55,6 +55,7 @@ const K = CORRIDOR_MAP_MIN_COUNT;
 const SIGNING_SECRET = 'test-shared-report-signing-secret-do-not-use';
 const EVT = 'test-evt-cf-1';
 const WITHHELD_FIELD = 'sponsor_class_breakdown.total_displays';
+const BATCH_TOKEN = 'test-internal-batch-token-do-not-use';
 
 type ClassName = 'local' | 'mid' | 'premium';
 const CLASSES: ClassName[] = ['local', 'mid', 'premium'];
@@ -349,6 +350,33 @@ describe("a sponsor's own link reads the whole-event class breakdown (owner ruli
       sponsor_count: 2,
       total_displays: K + 2,
     });
+  });
+});
+
+// The batch route (service token) returns the builder's report whole. This is
+// the published branch of the shape: a number at or over the floor beside a
+// null, through that route (CCR 2026-11-16, F9).
+describe('the batch route carries the same class breakdown', () => {
+  test('a published class is its number and a withheld class is null', async () => {
+    await seedSponsor('sp-cf-a', 'premium');
+    await seedSponsor('sp-cf-b', 'local');
+    await setDisplays('sp-cf-a', 'poster', K + 3);
+    await setDisplays('sp-cf-b', 'poster', K - 1);
+    const res = await SELF.fetch('https://test.local/api/v2/events/shared-reports/batch', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${BATCH_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [EVT] }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { reports: Record<string, Report> };
+    expect(body.reports[EVT]!.sponsor_class_breakdown).toEqual({
+      local: { sponsor_count: 1, total_displays: null },
+      mid: { sponsor_count: 0, total_displays: null },
+      premium: { sponsor_count: 1, total_displays: K + 3 },
+    });
+    expect(body.reports[EVT]!.sponsor_class_breakdown).toEqual(
+      (await built()).sponsor_class_breakdown
+    );
   });
 });
 

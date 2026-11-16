@@ -3072,7 +3072,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 20
+      "testCount": 21
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-date-utc.spec.ts",

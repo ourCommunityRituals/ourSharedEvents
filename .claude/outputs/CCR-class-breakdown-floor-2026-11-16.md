@@ -1,129 +1,170 @@
+---
+ccr: 1
+class: security-fix
+requested_loops: 3
+loops_run: 3
+team: base
+gate: stop
+cumulative_score: 33
+system_score: 82
+unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 1, medium: 0, low: 4 }
+pr: 1344
+subject_sha: 'f4ccddba8a2d40b8229a496e01da5cdd402046eb'
+---
+
 # CCR: SharedReport class breakdown floor (PR #1344, OSE-2089)
 
-Date: 2026-11-16. Reviewer: Claude Code (the author of the change), with four independent role agents in loop 1.
+Date: 2026-11-16. The owner asked: "run a CCR on the PR". Run by Claude Code, which also wrote the change under review. Every loop's lenses were independent role agents, each given the diff and asked what is wrong.
 
 ## Verdict
 
-| Item                         | Result                                                                                           |
-| ---------------------------- | ------------------------------------------------------------------------------------------------ |
-| Classification               | Security fix (count floor): 3 to 4 loops                                                         |
-| Loops run                    | 1 of 3. Stopped at the loop 1 gate, as the protocol requires                                     |
-| System score, arithmetic     | **58%** (100 − 42)                                                                               |
-| System score, with the floor | **0%** if finding F1 is ruled a Security Critical (no partial credit). That ruling is question 1 |
-| Score for what the PR added  | 73% (F1 and the other pre-existing findings left out). Shown for information; it is not the gate |
-| Assessment confidence        | High on F1, F2, F3 (each proven at runtime). Medium on F4 to F10 (source read)                   |
-| Gate                         | **Not passed. Human gate.**                                                                      |
+| Item                               | Result                                                      |
+| ---------------------------------- | ----------------------------------------------------------- |
+| Classification                     | Security fix (count floor): 3 loops, base team              |
+| Loops run                          | 3 of 3: Critical, Conservative, Recursive                   |
+| Loop results                       | 58%, 49%, 33%                                               |
+| Cumulative, before any solutioning | **33%**                                                     |
+| System, after solutioning          | **82%**: one High and four Low still open                   |
+| Assessment confidence              | **55%** (the loop 3 auditor's figure; reasons under Loop 3) |
+| Gate                               | **Stop. Human gate.**                                       |
 
-What held: no reviewer found a way to read a count under 5, or a 0, for a class total through any route. The builder arithmetic is unchanged apart from 0 becoming null. Nothing stores or caches a built report. The new tests can fail and are run by named CI jobs.
+What held through all three loops: nobody found a route that returns a 0 or a count under 5 for a class total. The builder arithmetic is unchanged apart from 0 becoming null. Nothing stores or caches a built report. Reading a report twice over time gives nothing under 5.
 
-Status of the change: PR #1344 was merged to `main` as `f6613e2` at 17:02 UTC, while loop 1 was still running. The post-merge staging chain for it has not been read (the newest `main` runs were pending at the time of writing).
+The "after solutioning" figure counts six findings as fixed by PR #1358, which carries this worksheet and is **not merged**. Until it merges, those six are open on `main` and the figure on `main` is 61%.
 
-## A. Setup
+## What was reviewed
 
-- Discipline: Security, with Engineering, QA and Design lenses. Level: Feature.
-- Under review: commit `f4ccddb` (squashed to `f6613e2`): `sponsor_class_breakdown.*.total_displays` is null, with a note, when no (sponsor x surface) row of a class reaches 5; the page prints "Fewer than 5 …".
-- Why it matters: AGENTS.md invariant 2. A wrong fix leaves "0" on a report, or gives back a small count through another field.
-- In scope: `src/lib/sponsor-class-breakdown.ts`, `src/lib/shared-report-builder.ts`, `src/templates/shared-report.html` (class section), the read route's handling of the class breakdown, and the tests and fixture the PR changed.
-- Out of scope: organizer registration, survey and contact lists; admins' own action counts; other report sections.
-- Approver: the owner.
+- Subject: commit `f4ccddb`, squash-merged to `main` as `f6613e2` (PR #1344). `sponsor_class_breakdown.*.total_displays` is null, with one note, when no (sponsor x surface) row of a class reaches 5; the report page prints "Fewer than 5 …".
+- In scope: `src/lib/sponsor-class-breakdown.ts`, `src/lib/shared-report-builder.ts`, the class section of `src/templates/shared-report.html`, the read and batch routes' handling of the breakdown, and the tests and fixture the PR changed.
+- Out of scope: organizer registration, survey and contact lists; admins' own action counts; other report sections, except where a loop found a floor breach in the same report (N1).
+- Why it matters: AGENTS.md invariant 2. A wrong fix leaves "0" on a report or gives a small count back through another field.
 
-## B. Loop 1: surface pass
+### How the run departed from the rules
 
-Team: Dr of Security, Sr Data Scientist, Sr Automation QA, Sr Design FE, run in parallel inside the loop and merged once. Each was given the diff and asked what is wrong, not the author's conclusion. Each listed the commands it ran; none wrote to the repo. The author then proved F1, F2 and F3 with throwaway probes (removed afterwards).
+Said plainly, because loop 3 asked:
 
-**Critical: the most dangerous assumption.** That "class-level" means "never per-competitor". It does not when a class has two sponsors.
+- The author stopped after loop 1 (58%) and reported a human gate, following the stop-below-95% text in `.claude/skills/ccr/SKILL.md`. The worksheet gate (`scripts/ci/ccr-worksheet-check.mjs`, owner rulings 2026-11-01/02) says every loop runs first and a low score is solved afterwards. Loops 2 and 3 were run after CI failed on the first worksheet.
+- Between loop 1 and loop 2 the owner ruled on three questions and the author built a follow-up change (PR #1358). The subject commit itself did not change, and loops 2 and 3 read it at `f6613e2`, not from the working tree.
+- PR #1344 was merged by the owner while loop 1 was still running.
+- The author wrote the code and ran the review.
 
-**Conservative: the worst case.** A sponsor opens its own link and learns one named competitor's exact display total. No person's identity and no count under 5 is involved.
+## Loop 1
 
-**Recursive.** First score, 58% by arithmetic. Below 95%: stop.
+Team: dr-of-security, role-data-scientist, role-qa-automation, role-design-fe
 
-### Findings register
+Critical layer: what is true against what is assumed. The dangerous assumption was that "class-level" means "never per-competitor". In a class of two sponsors it does not: the class total minus the reader's own rows is the other sponsor's total. The author proved F1, F2 and F3 at runtime with throwaway probes.
 
-All found in loop 1 (× 1.0), one surface each (× 1.0), production surface (× 1.0). No correlation multiplier applied.
+Findings F1 to F10. Arithmetic: 15 + 5 + 5 + 5 + six Lows at 2 = 42.
 
-| #   | Finding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Severity                            | From                                     | Evidence                                                                                                                                                                  | Weight |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| F1  | A sponsor's own link carries the whole-event class breakdown. With two sponsors in a class, class total minus the reader's own rows is the other sponsor's exact total. `report-depth.ts:25` calls cross-contamination between sponsors a critical bug; `report-depth.ts:43` says the breakdown is "never per-competitor"; the read route scopes `campaign_summary` for this exact reason (`shared-report-read.ts:149-151`) and not the class breakdown. The PR's new spec asserts a sponsor link gets the whole breakdown. No Linear ticket found. | Critical (security), pending ruling | Pre-existing                             | **Runtime:** sponsor A at 7 and sponsor B at 6, both premium; A's link returned rows `[["sp-cf-a",7]]` and `premium: {sponsor_count: 2, total_displays: 13}`. 13 − 7 = 6. | 15     |
-| F2  | The page trusts any number on the wire. A class total of 0 to 4 prints as that number, and 0 / 0 draws a bar labelled "Local NaN% vs Paid NaN%" (the PR removed the old divide guard). Reachable only if the builder regresses; nothing caches a report. The page has no floor of its own.                                                                                                                                                                                                                                                          | Medium                              | Trust pre-existing; NaN introduced       | **Runtime (jsdom):** wire 0/3/4 printed `0                                                                                                                                | 3      | 4`, "Paid: 7 displays", "Local 0% vs Paid 100%". Wire 0/0/0 printed "Local NaN% vs Paid NaN%". | 5   |
-| F3  | "Paid" is the sum of the published paid classes only. With one paid class withheld, the line and the bar show a partial Paid with nothing saying so. No leak; the figure does not measure what its label says.                                                                                                                                                                                                                                                                                                                                      | Medium                              | Introduced                               | **Runtime (jsdom):** local 10, Anchor withheld, premium 12 printed "Local: 10 displays · Paid: 12 displays" and "Local 45% vs Paid 55%".                                  | 5      |
-| F4  | "Sponsors 0" beside "Fewer than 5 for any one sponsor on any one surface". `sponsor_count` counts sponsors with a published row, so three placed sponsors at 3 displays each read "Sponsors 0". `campaign_summary[].sponsor_count` counts sponsors placed. Two meanings for one field name in one report.                                                                                                                                                                                                                                           | Medium                              | Pairing introduced; meaning pre-existing | Source read: `sponsor-class-breakdown.ts`, `campaign-summary.ts`.                                                                                                         | 5      |
-| F5  | The drawn bar's attributes are no longer checked. `shared-report-attribute-escaping.spec.ts` now asserts the bar is absent for hostile input; no test checks the attributes of a bar that is drawn. Low because only computed numbers can reach it now.                                                                                                                                                                                                                                                                                             | Low                                 | Introduced                               | Source read.                                                                                                                                                              | 2      |
-| F6  | The bar-drawn case has no browser or staging layer. `report-counts-journey` always has Local withheld, so it only asserts the bar is absent. The jsdom guard covers it at the mock layer.                                                                                                                                                                                                                                                                                                                                                           | Low                                 | Introduced                               | Source read.                                                                                                                                                              | 2      |
-| F7  | `report-counts-journey` runs on a local worker on PRs and on staging only in the nightly job, not in T1 to T4. The page's staging layer is nightly.                                                                                                                                                                                                                                                                                                                                                                                                 | Low                                 | Pre-existing                             | `playwright.mobile.config.ts:131`, `mobile-workability-audit.yml`.                                                                                                        | 2      |
-| F8  | Bruno `test()` names may not print: `run-local-vetting.sh` says `bru run` prints "Tests 0/0" for after-response scripts and only the JUnit file has names. Request 83 is like the other 72 in the folder. Not verified either way.                                                                                                                                                                                                                                                                                                                  | Low                                 | Pre-existing                             | `scripts/ci/run-local-vetting.sh:141`.                                                                                                                                    | 2      |
-| F9  | `shared-report-read.spec.ts` shape check went from "is a number" to "null or at least 5". A valid contract, but looser.                                                                                                                                                                                                                                                                                                                                                                                                                             | Low                                 | Introduced                               | Source read.                                                                                                                                                              | 2      |
-| F10 | Wording: the type comment says "distinct sponsors of the class" (it is those with a published row); with both sides withheld the line repeats the long tail twice; the suppression note is never shown on the page (acceptable, the words are in the cells).                                                                                                                                                                                                                                                                                        | Low                                 | Introduced                               | Source read.                                                                                                                                                              | 2      |
+Score: 58%
 
-Arithmetic: 15 + 5 + 5 + 5 + 2 + 2 + 2 + 2 + 2 + 2 = 42. Score 100 − 42 = **58%**.
+## Loop 2
 
-Checked with no finding: every route that emits the breakdown (single, sponsor, batch); storage and caching (responses are `no-store`, no KV, R2 or D1 copy); differencing class totals against rows and campaign totals (every difference is 0 or at least 5); the note's presence (it follows the nulls and names no class); escaping in the changed block; design tokens; the fixture's idempotency and the renumbered Bruno requests; stale expectations of 0 elsewhere in the repo; CI wiring of each new test.
+Team: dr-of-security, role-backend-architect
 
-Not checked by anyone: the Bruno and Playwright runs on staging; a phone-width render of the long phrase in a browser (the blocking mobile job passed on the PR; its report was not opened).
+Conservative layer: assume loop 1 is incomplete and the worst case is true. Both lenses read the subject at `f6613e2` and tried to break it. They could not break: two reads over time (a row moving 3 to 4 changes nothing; at 5 it appears as 5); consistency inside one response (rows, class totals and campaign totals come from one array); other emitters (no export, dashboard or seed publishes display totals without the floor); the depth filter and the batch route (the null and its note always travel together); failure modes (a failed query is a 500, never a 0); consumers of the changed type (nothing does arithmetic on it); rollback.
 
-## Loops 2 and 3
+New findings: N1 (in the same report, outside the class view) and B1. One candidate was withdrawn: a sponsor cannot have two placements at one event (`UNIQUE(sponsor_business_id, event_id)`, migration 0067).
 
-Not run. Loop 1 is under 95%, so the protocol stops here and does not retry.
+Arithmetic: loop 1's 42, plus new findings at × 1.25: 5 × 1.25 + 2 × 1.25 = 8.75. 100 − 50.75, rounded down.
+
+Score: 49%
+
+## Loop 3
+
+Team: role-qa-automation
+
+Recursive layer: was the assessment itself honest. One independent auditor reviewed the register, not the code.
+
+Its corrections, all accepted:
+
+- N1 is a floor breach on a published surface and rates High, not Medium.
+- The author's withdrawal of F9 was not defensible: the loosened test never exercises a published class. F9 was reopened, then fixed with a new test.
+- The author's closure of F8 on a local log was not defensible: a local run is not CI, and CI counts JUnit cases without printing names. F8 is open.
+- The PR's born-red claims ("four planted faults each seen red", "3 Bruno assertions red on main") were never reproduced by any reviewer. They are the author's own runs.
+- Confidence should be lowered because the author wrote the code, ran the review, and proposed closures himself.
+
+Its two new candidates were checked by the author and withdrawn with evidence, which the auditor did not see: the Playwright journey is named in `playwright.mobile.config.ts:131`, which `mobile-workability-audit.yml` runs, and the job passed on PR #1344; the report page has no translation hooks at all (`grep -c i18n shared-report.html` is 0), so no catalog carries its words.
+
+The auditor also said the owner's ruling on F1 needs AGENTS.md invariant 2 amended. Not accepted: invariant 2 is about counts under 5, and the ruling is about counts at or over 5.
+
+Arithmetic, the auditor's own: subject findings 44, its two candidates at × 1.5 = 10.5, N1 at High × 1.25 = 12.5. 100 − 67.
+
+Score: 33%
+
+## Findings register
+
+Weights: Critical 15, High 10, Medium 5, Low 2. "Fixed" means fixed in PR #1358, which is not merged.
+
+| #   | Finding                                                                                                                                                                                                                                  | Severity | From                               | Evidence                                                                                           | Status                                             |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| F1  | A sponsor's own link carries the whole-event class breakdown. In a class of two, class total minus own rows is the other sponsor's exact total.                                                                                          | Critical | Pre-existing                       | Runtime: own row 7; link returned `premium: {sponsor_count: 2, total_displays: 13}`.               | closed: accepted by the owner, 2026-11-16          |
+| F2  | The page trusts any number on the wire: 0 to 4 prints as that number, and 0 / 0 draws "Local NaN% vs Paid NaN%". Reachable only if the builder regresses.                                                                                | Medium   | Trust pre-existing; NaN introduced | Runtime (jsdom): wire 0/3/4 printed `0`, `3`, `4`; wire 0/0/0 printed the NaN bar.                 | fixed: the page floors a class total itself        |
+| F3  | "Paid" is the sum of the published paid classes only, with nothing saying so.                                                                                                                                                            | Medium   | Introduced                         | Runtime (jsdom): local 10, Anchor withheld, premium 12 printed "Paid: 12 displays", 45% / 55%.     | fixed: reads "Paid (classes shown)" (owner ruling) |
+| F4  | "Sponsors 0" beside "Fewer than 5 for any one sponsor": `sponsor_count` counted sponsors with a published row, unlike the campaign summary.                                                                                              | Medium   | Pairing introduced                 | Source read.                                                                                       | fixed: counts sponsors taking part (owner ruling)  |
+| F5  | No test checked the attributes of a bar that is drawn.                                                                                                                                                                                   | Low      | Introduced                         | Source read.                                                                                       | fixed: page test added                             |
+| F6  | The bar-drawn case has no browser or staging layer; the journey only ever asserts the bar absent.                                                                                                                                        | Low      | Introduced                         | Source read.                                                                                       | open                                               |
+| F7  | `report-counts-journey` runs on a local worker on PRs and on staging only nightly, not in T1 to T4.                                                                                                                                      | Low      | Pre-existing                       | `playwright.mobile.config.ts:131`, `mobile-workability-audit.yml`.                                 | open                                               |
+| F8  | Bruno `test()` names: CI counts JUnit cases and does not print names (AGENTS.md: a Bruno run counts only if its names print).                                                                                                            | Low      | Pre-existing                       | `scripts/ci/run-local-vetting.sh:141-165`. Names did print in the author's local `bru run` log.    | open                                               |
+| F9  | The batch-route shape test never exercises a published class.                                                                                                                                                                            | Low      | Introduced                         | `shared-report-read.spec.ts` at `f6613e2`, lines 761-790.                                          | fixed: batch-route test with a published class     |
+| F10 | Wording: with both sides withheld the line repeats the long tail twice; the note is never shown on the page (acceptable, the words are in the cells).                                                                                    | Low      | Introduced                         | Source read.                                                                                       | open                                               |
+| B1  | The schema snapshot (invariant 21) did not list `sponsor_class_breakdown`, so its removal would go unnoticed.                                                                                                                            | Low      | Pre-existing                       | `api-schema-snapshots/shared-report.snapshot.json` at `f6613e2`.                                   | fixed: the field is listed                         |
+| N1  | In the same report: the `_event` / `materialization_pending` note is pushed only when the raw attendee count is exactly 0, so its presence tells 0 from 1 to 4. A floor breach for every reader. Not in the class view. Ticket OSE-2093. | High     | Pre-existing                       | Source read by two readers, `shared-report-builder.ts` "Surface materialization pending". Not run. | open                                               |
+| B2  | A sponsor with placements in two classes could show a total beside a count of 0.                                                                                                                                                         | Low      | Pre-existing                       | Cannot occur: `UNIQUE(sponsor_business_id, event_id)`, migration 0067.                             | withdrawn                                          |
+| N2  | No workflow names the changed Playwright journey.                                                                                                                                                                                        | Low      | Loop 3 candidate                   | It is named: `playwright.mobile.config.ts:131`, run by `mobile-workability-audit.yml`.             | withdrawn                                          |
+| N3  | Translations of the page's words were never checked.                                                                                                                                                                                     | Medium   | Loop 3 candidate                   | The page has no translation hooks (`grep -c i18n` is 0); `withheld-words.ts` says English only.    | withdrawn                                          |
+
+Open after solutioning: one High (N1) and four Low (F6, F7, F8, F10). 100 − 10 − 8 = 82.
+
+Out of scope, noted only: the event delete guard tells a brand admin 0 versus at least 1 display or scan. Recorded on OSE-2093 for an owner decision.
+
+## Solutioning
+
+How the team gets from 33% to 95%.
+
+Done, by owner ruling on 2026-11-16:
+
+1. **F1 accepted.** The owner: the report is data driven; a count over 5 is open knowledge for the sponsors to understand the open competition; what they pay for is the level of data and feature availability; the infrastructure will not remove this capability from local or smaller-market competitors by being bought out of the market. The comments that said "never per-competitor" are corrected, and two tests pin the ruling.
+2. **F4:** `sponsor_count` is "a possession for each sponsor participating in the event". Built as: sponsors placed and accepted by both sides, plus any other with a published row. This reading is the author's and is put back to the owner below.
+3. **F3:** "Labeled as partial". Built as "Paid (classes shown)".
+
+Done, needing no decision, in PR #1358: F2 (the page floors a class total itself), F5, F9 and B1.
+
+Evidence for PR #1358, all the author's own runs in the session container (a test rig, not staging): 14 worker tests red on the old `sponsor_count`, 62 pass; four page tests each red first; Bruno folder `18. Campaigns (S14)` on a local worker, 333 checks, 0 failed; `report-counts-journey` in Chromium on a local worker, 15 passed after one stale expectation was updated.
+
+Still to do:
+
+- **N1 (10 points):** OSE-2093. Use the floored count in the note's condition, with a failing neighbour test first. This alone takes the figure to 92%.
+- **F6 (2):** give the journey a second, local sponsor past the floor so the bar is drawn in a browser.
+- **F7 and F8 (4):** pipeline changes: name `report-counts-journey` in a staging job of the T1 to T4 chain, and print Bruno test names in the T2 step. With N1 and F6 these reach 98%.
+- **F10 (2):** print the long tail once under the table; a wording choice for the owner.
+- An independent reviewer should reproduce the born-red claims of both PRs.
+
+## What must be true before shipping
+
+- [ ] PR #1358 merged, or F2, F3, F4, F5, F9 and B1 are open on `main` again.
+- [ ] The post-merge staging chain (T1 to T4) green for `f6613e2` or a later `main` SHA containing it. Not read at the time of writing.
+- [ ] OSE-2093 (N1) fixed, or accepted by the owner in writing.
+- [ ] The owner confirms the reading of ruling 2 (`sponsor_count`).
+
+## Verification
+
+After PR #1358 merges and deploys to staging:
+
+- [ ] Bruno request 83 in `18. Campaigns (S14)` passes in `T2 Contract → Staging (Bruno)`: local and mid `total_displays` null; sponsors 1, 0 and 6; premium 26.
+- [ ] The nightly staging run of `report-counts-journey` passes.
+- [ ] On a staging report with one paid class withheld, the page reads "Paid (classes shown)".
+
+## Risks accepted
+
+- **F1, accepted by the owner on 2026-11-16:** a sponsor can work out another sponsor's display total, at or over 5, from the class view. This is the intended open competition view, at every depth.
+- Production is held closed, so everything above is exposed on staging only.
 
 ## Human gate
 
-Found in loop 1, Critical layer.
+The gap appeared in loop 1 (Critical layer) and widened in loops 2 and 3.
 
-1. **Is one sponsor working out another sponsor's exact display total a Security Critical?** The code's own comments say sponsors must not see each other's numbers, and `campaign_summary` was scoped for that reason. If yes, the system score is 0% until it is fixed. Information that closes it: your ruling, and which repair you want. Options: (a) on a sponsor's link, give the class breakdown without totals for any class with fewer than three sponsors; (b) on a sponsor's link, leave the class breakdown out; (c) accept it as intended competitive intelligence and correct the comments. Recommendation: (a) is not enough on its own (three sponsors still gives a sum of two), so (b) for sponsor links, keeping the breakdown for the organizer.
-2. **What should `sponsor_count` in the class breakdown count?** Sponsors placed in the class (as the campaign summary does), or sponsors with a published row (today)? Today an organizer with three placed sponsors under the floor reads "Sponsors 0".
-3. **What should "Paid" say when one paid class is withheld?** Options: label it "Paid (classes shown)", or withhold Paid and the bar unless both paid classes are published. Recommendation: the second.
-
-Needing no decision, and proposed as one follow-up PR: a floor on the page itself (a class total under 5, or not a number, reads as withheld, which also removes the NaN bar), and tests for a drawn bar's attributes.
-
-## C. Results
-
-Not filled in: the gate did not pass.
-
-- Must be true before this is called done: questions 1 to 3 answered; F2 repaired; the staging chain green for `f6613e2` or a later `main` SHA containing it.
-- Risk carried today: F1 is live on `main` and was before this PR. Production is held closed, so the exposure is staging.
-
-## Owner ruling and follow-up (2026-11-16, after loop 1)
-
-**Question 1 answered by the owner:** F1 is acceptable. The report is data driven: a count at or over 5 is open knowledge for the sponsors of an event, so they can see the open competition. What a sponsor pays for is the level of data and the features. The infrastructure will not remove this competitive view from local or smaller-market sponsors by letting it be bought out of the market.
-
-F1 is therefore a risk accepted by the owner, not a defect. It leaves the register. The comments that said "never per-competitor" were wrong and are corrected.
-
-Follow-up change (second PR, on top of `main` after #1344):
-
-- F1: the ruling is written into `lib/report-depth.ts` and `docs/features/REPORT-DEPTH.md`, and pinned by two tests in `shared-report-class-floor.spec.ts` (a sponsor link reads the same class totals as the organizer; a peer under the floor stays withheld).
-- F2: repaired. The page floors a class total itself (not a number, or under 5, reads as withheld), which also removes the NaN bar. Three page tests, seen red on the template before the change (cells read "0", "3", "4", "-1").
-- F5: repaired. A page test checks the attributes of a bar that is drawn.
-
-Score after the ruling and the follow-up, still loop 1:
-
-| Open                                                    | Severity | Weight |
-| ------------------------------------------------------- | -------- | ------ |
-| F3 Paid is a partial sum with no label                  | Medium   | 5      |
-| F4 "Sponsors 0" and the two meanings of `sponsor_count` | Medium   | 5      |
-| F6 bar-drawn case has no browser layer                  | Low      | 2      |
-| F7 page test reaches staging only nightly               | Low      | 2      |
-| F8 Bruno test names printing, unverified                | Low      | 2      |
-| F10 wording                                             | Low      | 2      |
-
-100 − 18 = **82%**. F9 is withdrawn (the looser check is the correct contract). The gate is still not passed; questions 2 and 3 remain open, and loops 2 and 3 have not been run.
-
-## Owner rulings on questions 2 and 3 (2026-11-16)
-
-- **Question 2 (F4):** `sponsor_count` is a possession of each sponsor participating in the event. Read as: it counts sponsors placed at the event and accepted by both sides (the campaign summary's rule), not sponsors with a published row. Built so.
-- **Question 3 (F3):** label Paid as partial. Built as "Paid (classes shown)", in the line and on the bar, when exactly one paid class is withheld.
-
-Evidence for the follow-up change, run by the author in the session container (a test rig, not staging):
-
-- `shared-report-class-floor.spec.ts`: 14 tests went red on the builder that counted published rows, 61 pass with the change.
-- Page tests: the partial-label test and the three page-floor tests were each seen red first.
-- Bruno folder `18. Campaigns (S14)` on a local worker with the staging fixture: 333 checks, 0 failed. The test names print in the run log, which settles F8.
-- `tests/playwright/report-counts-journey.spec.ts` in Chromium on a local worker: 15 passed. It first failed on "Paid: 6 displays" (the page now reads "Paid (classes shown): 6 displays"); the expectation was updated.
-
-Register after the rulings and the follow-up, still loop 1:
-
-| Open                                                        | Severity | Weight |
-| ----------------------------------------------------------- | -------- | ------ |
-| F6 bar-drawn case has no browser or staging layer           | Low      | 2      |
-| F7 page test reaches staging only nightly                   | Low      | 2      |
-| F10 with both sides withheld the line repeats the long tail | Low      | 2      |
-
-100 − 6 = **94%**. This is a loop 1 number on a change that has itself not been reviewed. The gate is not passed: loops 2 and 3 have not been run, and they must review the follow-up change, not only the first PR.
+1. N1 (OSE-2093) is a floor breach in the same report and is not fixed. Should it be fixed next, before OSE-2089 is called done?
+2. Ruling 2 was built as "count every sponsor placed at the event and accepted by both sides, shown or not". Is that what "a possession for each sponsor participating in the event" means?
+3. `.claude/skills/ccr/SKILL.md` says stop below 95%; the worksheet gate says run every loop first. Both are governed files. Which one should be corrected, in its own 5-loop CCR?
+4. Should the long withheld phrase be printed once under the class table instead of in each cell and twice in the line (F10)?
