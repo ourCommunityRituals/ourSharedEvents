@@ -68,16 +68,18 @@ describe('map-counts-check: pure rules', () => {
   });
 
   test('one tap more on map-zoom-a is named', () => {
-    expect(m.differences({ ...m.EXPECTED, taps_a: 43 })).toEqual(['taps_a: expected 42, read 43']);
+    expect(m.differences({ ...m.EXPECTED, taps_a: 43 })).toEqual([
+      'taps_a: moved from the seeded value',
+    ]);
   });
 
   test('a share open, a daily tap row and a scan are each named', () => {
     const moved = { ...m.EXPECTED, share_opens: 11, share_open_rows: 3, tap_days: 1, scans: 1 };
     expect(m.differences(moved)).toEqual([
-      'tap_days: expected 0, read 1',
-      'share_opens: expected 10, read 11',
-      'share_open_rows: expected 2, read 3',
-      'scans: expected 0, read 1',
+      'tap_days: moved from the seeded value',
+      'share_opens: moved from the seeded value',
+      'share_open_rows: moved from the seeded value',
+      'scans: moved from the seeded value',
     ]);
   });
 
@@ -85,10 +87,16 @@ describe('map-counts-check: pure rules', () => {
     expect(m.differences(null)).toEqual(['no result row was read']);
     const missing = { ...m.EXPECTED };
     delete missing.scans;
-    expect(m.differences(missing)).toEqual(['scans: expected 0, read null']);
+    expect(m.differences(missing)).toEqual(['scans: unreadable (not a number)']);
     expect(m.differences({ ...m.EXPECTED, taps_a: '42' })).toEqual([
-      'taps_a: expected 42, read "42"',
+      'taps_a: unreadable (not a number)',
     ]);
+  });
+
+  test('a difference never carries the value read (OSE-2071: public log, floor of 5)', () => {
+    const moved = { ...m.EXPECTED, taps_a: 1043, tap_days: 3, share_opens: 4, scans: 2 };
+    for (const line of m.differences(moved)) expect(line).not.toMatch(/\d/);
+    for (const line of m.differences({ ...m.EXPECTED, scans: '3' })) expect(line).not.toMatch(/\d/);
   });
 
   test('the row is found in wrangler output, with or without a notice before it', () => {
