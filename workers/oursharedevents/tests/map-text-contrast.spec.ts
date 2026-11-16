@@ -27,12 +27,19 @@
  * strict reading. The halo is 2 map units a side, about one screen pixel on a
  * phone, and nobody has ruled that it is enough.
  *
- * WHAT IT FOUND is in KNOWN_UNDER below: every pair under the bar on the day
- * this was written, with its ratio. That list is a ratchet, not a pass. A pair
- * on it may not get worse, a pair not on it may not go under the bar, and a
- * pair that now passes must be taken off. What to change so the list empties
- * is a design decision, and the tokens are locked: the owner's question 9
- * (worksheet section 8), slice O6. This file changes no colour.
+ * WHAT IT FOUND is in two lists below: every pair under the bar on the day
+ * this was written, with its ratio. UNDER_EITHER_WAY holds the pairs that are
+ * under however a halo is read; UNDER_WITHOUT_HALO holds haloed text read as
+ * if it had no halo. The lists are a ratchet, not a pass. A pair on one keeps
+ * its number, a pair on neither may not go under the bar, and a pair that now
+ * passes must be taken off. What to change so the lists empty is a design
+ * decision, and the tokens are locked: the owner's question 9 (worksheet
+ * section 8), slice O6. This file changes no colour.
+ *
+ * The same text is measured in a browser by the staging checks' contrast spec
+ * (the street-map review's R27), which takes a halo of a pixel or more for the
+ * background. This file is the layer under it: it needs no page and no
+ * archive, and it fails on the commit that changes a style or a token.
  *
  * How the model errs. A road or a river is a line a few units wide, and a
  * letter that crosses one is judged as if it sat on it whole: strict again.
@@ -47,7 +54,7 @@
  * Node project: pure arithmetic and pure rendering. Registered in
  * vitest.node-specs.mjs.
  */
-// @born-red text drawn on the map (base-map slice B7) | method: 18 faults put into the real source one at a time, the spec run, the file restored; every one turned this file red. In the styles: a block's pale dot paler (.45 to .3) and stronger (.9); a dot's number in the dot's colour; a town name in the border colour, and in a raw hex (the file stops with ".as-t sets no token for fill"); a town name's halo in the text colour; water stronger (.3 to .6); a main road in the muted text colour; the area number muted; the hexagon in the info colour; a fourth rule that sets a font; the narrow-screen block setting a colour. In attendee-map.ts: hexagons drawn stronger over streets (0.35 to 0.6) and with no streets (0.6 to 0.8). In this file: a pair taken off the list, a listed number raised, a pair on the list that nobody draws, and the bar lowered to 3. A token given a pale value cannot be done in the source (colours live in the spine and are locked), so it is done on a copy of the tables in "the gate can fail" | date: 2026-11-16
+// @born-red text drawn on the map (base-map slice B7) | method: 19 faults put into the real source one at a time, the spec run, the file restored; every one turned this file red. In the styles: a block's pale dot paler (.45 to .3) and stronger (.9); a dot's number in the dot's colour; a town name in the border colour, and in a raw hex (the file stops with ".as-t sets no token for fill"); a town name's halo in the text colour; water stronger (.3 to .6); a main road in the muted text colour; the area number muted; the hexagon in the info colour; a fourth rule that sets a font; the narrow-screen block setting a colour. In attendee-map.ts: hexagons drawn stronger over streets (0.35 to 0.6) and with no streets (0.6 to 0.8). In this file: a pair taken off the list, a listed number raised, a pair on the list that nobody draws, a pair moved to the other list, and the bar lowered to 3. A token given a pale value cannot be done in the source (colours live in the spine and are locked), so it is done on a copy of the tables in "the gate can fail" | date: 2026-11-16
 import { describe, expect, test } from 'vitest';
 import { gridDisk, latLngToCell } from 'h3-js';
 import { contrastRatio, primitives, semanticDark, semanticLight } from '@ocr/ui';
@@ -200,6 +207,8 @@ interface Pair {
   name: string;
   /** The lowest ratio over everything the pair covers. */
   ratio: number;
+  /** Haloed text against what is under it, read as if it had no halo. */
+  withoutHalo: boolean;
 }
 
 interface Styles {
@@ -221,8 +230,8 @@ function mapTextPairs(
   for (const theme of THEMES) {
     const rgb = (sel: string, prop: string) =>
       hexToRgb(tokenHex(theme, tokenOf(rules, sel, prop), tables));
-    const lowest = (name: string, ratios: number[]) =>
-      pairs.push({ name: `${theme}: ${name}`, ratio: Math.min(...ratios) });
+    const lowest = (name: string, ratios: number[], withoutHalo = false) =>
+      pairs.push({ name: `${theme}: ${name}`, ratio: Math.min(...ratios), withoutHalo });
 
     // What the street layer paints, bottom up (lib/street-map.ts, the layer's markup).
     const land = rgb('.as-l', 'fill');
@@ -254,12 +263,14 @@ function mapTextPairs(
     lowest('area number against its halo', [ratio(num, numHalo)]);
     lowest(
       'area number on a hexagon, no street map',
-      sweep(plain.low, plain.high).map((a) => ratio(num, over(cell, a, page)))
+      sweep(plain.low, plain.high).map((a) => ratio(num, over(cell, a, page))),
+      true
     );
     for (const [what, ground] of grounds) {
       lowest(
         `area number on a hexagon over ${what}`,
-        sweep(withStreets.low, withStreets.high).map((a) => ratio(num, over(cell, a, ground)))
+        sweep(withStreets.low, withStreets.high).map((a) => ratio(num, over(cell, a, ground))),
+        true
       );
     }
 
@@ -267,7 +278,7 @@ function mapTextPairs(
     //    the area's outline fill (zoomed in) can be drawn over it and its halo.
     lowest('town name against its halo', [ratio(town, townHalo)]);
     for (const [what, ground] of grounds) {
-      lowest(`town name on ${what}`, [ratio(town, ground)]);
+      lowest(`town name on ${what}`, [ratio(town, ground)], true);
     }
     lowest(
       'town name under a hexagon, against its halo',
@@ -280,7 +291,8 @@ function mapTextPairs(
         `town name under a hexagon, on ${what}`,
         sweep(withStreets.low, withStreets.high).map((a) =>
           ratio(over(cell, a, town), over(cell, a, ground))
-        )
+        ),
+        true
       );
     }
     lowest('town name under the zoomed area, against its halo', [
@@ -302,16 +314,44 @@ function mapTextPairs(
 
 /**
  * Pairs under 4.5:1 on 2026-11-16, at @ocr/ui `4a82902e`, each with its ratio
- * cut to two places. The owner's question 9 (worksheet section 8) decides what
- * changes. Until then a pair here keeps its number, and no pair joins the list.
+ * cut to two places, in two lists. The owner's question 9 (worksheet section 8)
+ * decides what changes. Until then a pair keeps its number and no pair joins.
+ *
+ * UNDER_EITHER_WAY: under the bar however a halo is read. The text has no
+ * halo, or the text and its halo are under the same tint.
  */
-const KNOWN_UNDER: Readonly<Record<string, number>> = {
+const UNDER_EITHER_WAY: Readonly<Record<string, number>> = {
+  // A town name with a hexagon drawn over it: the hexagon tints the name and
+  // its halo alike.
+  'light: town name under a hexagon, against its halo': 2.76,
+  'dark: town name under a hexagon, against its halo': 2.47,
+
+  // The number in a block's pale dot. It has no halo, so this is how it reads.
+  "light: dot number on a block's pale dot over land": 2.2,
+  "light: dot number on a block's pale dot over water": 2.94,
+  "light: dot number on a block's pale dot over a river": 3.6,
+  "light: dot number on a block's pale dot over a river in water": 4.18,
+  "light: dot number on a block's pale dot over a small road": 2.8,
+  "dark: dot number on a block's pale dot over land": 2.48,
+  "dark: dot number on a block's pale dot over water": 3.58,
+  "dark: dot number on a block's pale dot over a small road": 3.07,
+};
+
+/**
+ * UNDER_WITHOUT_HALO: haloed text against what is under it, read as if it had
+ * no halo. Each of these texts passes against its own halo, except a town name
+ * under a hexagon (above). If a halo is ruled to be the background (WCAG
+ * technique G18 reads a wide enough outline that way), these are not failures
+ * and the list goes; the halo is 2 map units a side, under one screen pixel on
+ * a 320 px phone. Until someone rules, the numbers are kept from getting worse.
+ */
+const UNDER_WITHOUT_HALO: Readonly<Record<string, number>> = {
   // Drawn today on staging and production (no street layer): the busiest
   // hexagon under its number. The number passes against its halo (15.19).
   'light: area number on a hexagon, no street map': 3.91,
   'dark: area number on a hexagon, no street map': 3.48,
 
-  // With a street layer. Haloed text, read as if it had no halo.
+  // With a street layer.
   'light: area number on a hexagon over a river': 4.4,
   'light: area number on a hexagon over a river in water': 3.81,
   'light: area number on a hexagon over a main road': 3.17,
@@ -329,32 +369,24 @@ const KNOWN_UNDER: Readonly<Record<string, number>> = {
   'dark: town name on a main road': 1.62,
   'dark: town name on a small road': 4.01,
 
-  // A town name with a hexagon drawn over it. The first of each theme fails
-  // with the halo counted: the hexagon tints the name and its halo alike.
-  'light: town name under a hexagon, against its halo': 2.76,
+  // A town name with a hexagon drawn over it.
   'light: town name under a hexagon, on land': 2.89,
   'light: town name under a hexagon, on water': 2.18,
   'light: town name under a hexagon, on a river': 1.8,
   'light: town name under a hexagon, on a river in water': 1.56,
   'light: town name under a hexagon, on a main road': 1.3,
   'light: town name under a hexagon, on a small road': 2.28,
-  'dark: town name under a hexagon, against its halo': 2.47,
   'dark: town name under a hexagon, on land': 2.33,
   'dark: town name under a hexagon, on water': 1.63,
   'dark: town name under a hexagon, on a river': 1.31,
   'dark: town name under a hexagon, on a river in water': 1.12,
   'dark: town name under a hexagon, on a main road': 1.26,
   'dark: town name under a hexagon, on a small road': 1.9,
+};
 
-  // The number in a block's pale dot. It has no halo, so this is how it reads.
-  "light: dot number on a block's pale dot over land": 2.2,
-  "light: dot number on a block's pale dot over water": 2.94,
-  "light: dot number on a block's pale dot over a river": 3.6,
-  "light: dot number on a block's pale dot over a river in water": 4.18,
-  "light: dot number on a block's pale dot over a small road": 2.8,
-  "dark: dot number on a block's pale dot over land": 2.48,
-  "dark: dot number on a block's pale dot over water": 3.58,
-  "dark: dot number on a block's pale dot over a small road": 3.07,
+const KNOWN_UNDER: Readonly<Record<string, number>> = {
+  ...UNDER_EITHER_WAY,
+  ...UNDER_WITHOUT_HALO,
 };
 
 const cut = (r: number) => Math.floor(r * 100) / 100;
@@ -484,6 +516,17 @@ describe('text drawn on the map | contrast in both themes', () => {
     // Each line of a failure is one pair by name with its ratio. `under` is a
     // new failure: fix it, never add it to the list without the owner.
     expect(judge(pairs, KNOWN_UNDER)).toEqual(CLEAN);
+  });
+
+  test('each listed pair is on the list that says how it was read', () => {
+    const pairs = mapTextPairs();
+    const read = new Map(pairs.map((p) => [p.name, p.withoutHalo]));
+    for (const name of Object.keys(UNDER_EITHER_WAY)) expect(read.get(name), name).toBe(false);
+    for (const name of Object.keys(UNDER_WITHOUT_HALO)) expect(read.get(name), name).toBe(true);
+    expect(Object.keys(UNDER_EITHER_WAY)).toHaveLength(10);
+    expect(Object.keys(UNDER_WITHOUT_HALO)).toHaveLength(30);
+    expect(Object.keys(KNOWN_UNDER)).toHaveLength(40);
+    expect(pairs.filter((p) => p.withoutHalo)).toHaveLength(38);
   });
 
   test('text with no halo passes on a marked place, and every halo passes on its own text', () => {
