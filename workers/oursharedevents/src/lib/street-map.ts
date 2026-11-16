@@ -115,6 +115,14 @@ export interface StreetMapEnv {
   STREET_MAP?: string;
   MAP_TILES?: RangeBucket;
   MAP_TILES_ARCHIVE?: string;
+  /**
+   * The etag of the one object streets may be drawn from, unquoted, as R2
+   * gives it. Optional and unset everywhere today: the value exists only once
+   * the archive is loaded. Set, an object under `MAP_TILES_ARCHIVE` with any
+   * other etag is refused and the map is hexagons only (lib/pmtiles.ts,
+   * `r2Source`). Empty is the same as unset.
+   */
+  MAP_TILES_ETAG?: string;
 }
 
 /** A Web Mercator frame: world units (0..1) to SVG units. */
@@ -727,7 +735,9 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
  * (`STREET_MAP` is not "on": nothing is read) or cannot be drawn (no
  * binding, no archive, a frame wider than a street map can show, a part of the
  * frame with no tile, nothing in it to steer by, bad data, more in the tiles
- * than the Worker will decode, too slow). Never throws.
+ * than the Worker will decode, too slow, or the object under the key is not
+ * the one this isolate opened or not the one `MAP_TILES_ETAG` pins; the line
+ * below says `error` for those two). Never throws.
  *
  * A try that reads the bucket writes one STREET_LAYER line saying which of
  * those it was (`emitStreetLayer`); `surface` is the caller's name in it. The
@@ -749,15 +759,17 @@ export async function loadStreetLayer(
   if (!ARCHIVE_NAME.test(name)) return null;
   // Too wide for streets: nothing is read (street-map CCR 2026-11-15, R5).
   if (frameZoom(frameForCells(cells)) < MIN_STREET_ZOOM) return null;
-  const src = r2Source(bucket, name);
+  const src = r2Source(bucket, name, env.MAP_TILES_ETAG);
   // Found missing a moment ago: not asked again yet, and nothing to say.
   if (archiveKnownMissing(src.key)) return null;
   const trace = newStreetTrace();
   const counted: RangeSource = {
     key: src.key,
-    read(offset, length) {
+    // `version` goes through as it came: it is what holds every read of an
+    // opened archive to one object (lib/pmtiles.ts, r2Source).
+    read(offset, length, version) {
       trace.reads += 1;
-      return src.read(offset, length);
+      return src.read(offset, length, version);
     },
   };
   const started = Date.now();

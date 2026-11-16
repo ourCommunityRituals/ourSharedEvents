@@ -140,8 +140,6 @@ it; the report depends on who is asking and on floored counts, and must never be
 ## Not proven
 
 - Anything on staging. No street has been drawn by a Worker.
-- That a lost timeout race leaves the reader's cache usable in the Workers runtime (scenario S10
-  of the worksheet). The first slice tests it.
 - Which Cloudflare Access setup the Cache API sentence means, and so whether an edge store works
   on a closed production host.
 
@@ -156,8 +154,14 @@ it; the report depends on who is asking and on floored counts, and must never be
 
 ## Implementation Notes
 
-- Nothing is implemented. The slices are section 7 of the worksheet: B1 to B9 need no ruling and
-  touch no rule; O1 (the edge store) and O2 (the report) wait for D5 and D2 to D4.
+- None of D2 to D6 is implemented, and neither is the in-isolate store of D5. The slices are
+  section 7 of the worksheet: B1 to B9 need no ruling and touch no rule; O1 (the edge store) and
+  O2 (the report) wait for D5 and D2 to D4.
+- Status, 2026-11-16 (`main` at `44948a04`; the worksheet's section 10 has the evidence): slices
+  B1, B3, B4 and B5 are on `main`, and so is the missing-object half of B2. The lost timeout race
+  this record once listed under "Not proven" was shown in the Workers runtime and the reader
+  corrected (PR 1276). Not built: the etag half of B2, and B6 to B9. The landing and the event
+  list have a per-caller limit (PR 1308), which was slice O4. No archive is loaded.
 - D1 is held today by the code's shape and by `tests/map-areas.spec.ts` (no database read). A
   structural gate for it belongs with the first new surface.
 

@@ -1,6 +1,6 @@
 # ADR-034: A booth and a session are children of one event; participation mode is a column
 
-**Status:** Proposed. A draft for the owner to decide. Nothing is built. Decision 1 (a booth is its own row) was accepted by the owner on 2026-11-14, so booths may be built. Items 8 and 9 record the owner's direction of the same day. The other owner decisions listed below are open.
+**Status:** Proposed. A draft for the owner to decide. Decision 1 (a booth is its own row) was accepted by the owner on 2026-11-14, and booths are built (read 2026-11-16: `migrations/0109_event_booths.sql`, `src/lib/event-booths.ts`, `src/lib/public-booths.ts`, the public stall list and stall pages, and scans per stall; PRs 1250, 1259 and 1316). Sessions and participation mode are not built: no `event_sessions` table and no `participation_mode` column exist. Items 8 and 9 record the owner's direction of the same day. The other owner decisions listed below are open.
 **Date:** 2026-11-14
 **Deciders:** Owner (PO). Sr Architect owns the draft. Dr of Security advises on the membrane.
 **Ticket:** OSE-1997 (epic OSE-1996)

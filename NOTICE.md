@@ -155,7 +155,9 @@ text asks for it or the owner chooses it.
    link added without settling the question, or a legal read first?
 2. **Staging is public.** Does the list above have to be done before the load to staging,
    or do you accept staging showing streets with the credit as it is now, and the list done
-   before production binds?
+   before production binds? **Answered (owner, 2026-11-16):** "Right now it only local and
+   staging testing". Read as: staging may show streets with the credit as it is now, and the
+   list is done before production binds the bucket.
 3. **Do you want the credit inside the picture** (code item 4)? The texts do not ask for
    it. It is the only form that survives a copy of the `<svg>` alone.
 4. **Does a visitor printing a page count as our printed map?** If yes, the address must

@@ -275,21 +275,21 @@ BACKEND_MODE=worker  (ONLY supported mode in production)
 
 ### 6.1 High Priority Risks
 
-| Risk ID   | Description                           | Impact                         | Likelihood | Status                 |
-| --------- | ------------------------------------- | ------------------------------ | ---------- | ---------------------- |
-| **R-001** | Admin HTML pages not Access-protected | Unauthorized admin access      | Medium     | **OPEN**               |
-| **R-002** | No apex → www redirect                | SEO issues, potential phishing | Low        | **OPEN**               |
-| **R-003** | No rate limiting in code              | DoS vulnerability              | Medium     | **NEEDS VERIFICATION** |
-| **R-004** | WAF rules not documented              | Unknown protection level       | Medium     | **NEEDS VERIFICATION** |
+| Risk ID   | Description                           | Impact                         | Likelihood | Status                                                                                                                                                                                                               |
+| --------- | ------------------------------------- | ------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **R-001** | Admin HTML pages not Access-protected | Unauthorized admin access      | Medium     | **OPEN**                                                                                                                                                                                                             |
+| **R-002** | No apex → www redirect                | SEO issues, potential phishing | Low        | **OPEN**                                                                                                                                                                                                             |
+| **R-003** | No rate limiting in code              | DoS vulnerability              | Medium     | **OUT OF DATE** (read 2026-11-16): `lib/public-read-limit.ts` and `lib/rate-limit.ts` exist. Some public reads still have no limiter at the route; see `.claude/outputs/CCR-INFRA-DRIFT-AUDIT-2026-11-16.md`, row A4 |
+| **R-004** | WAF rules not documented              | Unknown protection level       | Medium     | **NEEDS VERIFICATION**                                                                                                                                                                                               |
 
 ### 6.2 Medium Priority Risks
 
-| Risk ID   | Description                        | Impact                     | Likelihood | Status                |
-| --------- | ---------------------------------- | -------------------------- | ---------- | --------------------- |
-| **R-005** | Legacy query param auth            | Credential leakage in logs | Medium     | **DEPRECATED**        |
-| **R-006** | `ALLOW_ADMIN_KEY_FALLBACK` enabled | Weaker auth in some paths  | Low        | **BY DESIGN** (CI/CD) |
-| **R-007** | Multiple wrangler.toml files       | Config drift risk          | Low        | **OPEN**              |
-| **R-008** | Debug endpoints in staging         | Information disclosure     | Low        | **BY DESIGN**         |
+| Risk ID   | Description                        | Impact                     | Likelihood | Status                                                                                                                                                              |
+| --------- | ---------------------------------- | -------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **R-005** | Legacy query param auth            | Credential leakage in logs | Medium     | **DEPRECATED**                                                                                                                                                      |
+| **R-006** | `ALLOW_ADMIN_KEY_FALLBACK` enabled | Weaker auth in some paths  | Low        | **BY DESIGN** (CI/CD), staging only (read 2026-11-16): the flag is declared only under `[env.staging.vars]`, and the production deploy refuses the fallback secrets |
+| **R-007** | Multiple wrangler.toml files       | Config drift risk          | Low        | **OPEN**                                                                                                                                                            |
+| **R-008** | Debug endpoints in staging         | Information disclosure     | Low        | **BY DESIGN**                                                                                                                                                       |
 
 ### 6.3 Cloudflare Toggle Status (Needs Verification)
 

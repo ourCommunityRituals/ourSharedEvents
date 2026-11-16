@@ -111,10 +111,10 @@ This document defines consistent naming conventions and storage rules for CI/CD 
 
 Added 2026-11-15, names only (OSE ADR-035). The pair is one R2 API token.
 
-| Secret Name                  | Type         | Purpose                 | Storage Location | Required           |
-| ---------------------------- | ------------ | ----------------------- | ---------------- | ------------------ |
-| `R2_MAP_TILES_ACCESS_KEY_ID` | R2 API Token | Street-map archive load | GitHub Secrets   | Only around a load |
-| `R2_MAP_TILES_SECRET_KEY`    | R2 API Token | Street-map archive load | GitHub Secrets   | Only around a load |
+| Secret Name                  | Type         | Purpose                 | Storage Location                              | Required           |
+| ---------------------------- | ------------ | ----------------------- | --------------------------------------------- | ------------------ |
+| `R2_MAP_TILES_ACCESS_KEY_ID` | R2 API Token | Street-map archive load | GitHub Secrets, environment `street-map-load` | Only around a load |
+| `R2_MAP_TILES_SECRET_KEY`    | R2 API Token | Street-map archive load | GitHub Secrets, environment `street-map-load` | Only around a load |
 
 - **Scope:** "Object Read & Write" on the bucket `ose-map-tiles` and no other. The owner creates
   the token for a load, sets the pair, and deletes the token and both secrets once the load is
@@ -126,10 +126,13 @@ Added 2026-11-15, names only (OSE ADR-035). The pair is one R2 API token.
 - **Not in `.github-secrets-required.json`:** that file lists standing secrets, and these exist
   only around a load. Whether they exist today was not read.
 - **The Worker does not use them.** It reads the bucket through its `MAP_TILES` binding.
-- **Open (street-map review 2026-11-15, finding R8; threat ledger TL-098):** the workflow lets
-  the pair sit on the `staging` environment or at repository level. The `staging` environment
-  has no branch policy, so neither place limits the pair to `main`. Where the pair should live
-  is an owner decision.
+- **Where the pair lives (owner, 2026-11-16; OSE ADR-035, D5a):** on the GitHub environment
+  `street-map-load`, whose branch list is branch `main` alone, and nowhere else. The load job
+  names that environment; the workflow's first job reads the environment's branch list and stops
+  the run unless it is `main` alone. This answers the street-map review's finding R8 (threat
+  ledger TL-098) for the place the pair is meant to be. **Still open:** nothing reads whether a
+  copy of the pair also sits at repository level, where a job on any branch could read it. The
+  owner sets it on the environment only.
 
 ---
 
@@ -405,7 +408,8 @@ wrangler secret delete OLD_SECRET --env staging
 
 ## Document History
 
-| Date       | Author      | Changes                                           |
-| ---------- | ----------- | ------------------------------------------------- |
-| 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-1.2 naming conventions     |
-| 2026-11-15 | Claude Code | Section 3.5: the street-map load pair, names only |
+| Date       | Author      | Changes                                                                  |
+| ---------- | ----------- | ------------------------------------------------------------------------ |
+| 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-1.2 naming conventions                            |
+| 2026-11-15 | Claude Code | Section 3.5: the street-map load pair, names only                        |
+| 2026-11-16 | Claude Code | Section 3.5: the pair lives on the `street-map-load` environment (owner) |

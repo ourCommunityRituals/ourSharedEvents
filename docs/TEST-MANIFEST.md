@@ -1,5 +1,7 @@
 # TEST-MANIFEST.md — Canonical Test File Registry
 
+> **Out of date (noted 2026-11-16).** The counts below are from 2026-03-31. On 2026-11-16 the worker alone had 552 spec files, and Jest is gone. This file is kept as a record of the EFF-5 audit; it is not the registry. See `/TEST-MANIFEST.md`.
+
 > **Last updated:** 2026-03-31 (EFF-5 / OUR-144)
 >
 > This manifest documents **active test files** — files that run in CI and target the
