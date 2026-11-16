@@ -98,9 +98,11 @@ if they differ. The key must match
 between six and seven days after its date. By that one observation build
 `20261115` is offered through **2026-11-21 (UTC)** and is gone on 2026-11-22.
 The `measure` run, the owner's zoom decision ("Before the load", item 3) and
-the `load` all have to land inside that window. If they do not, the run stops
+the `load` all have to land inside that window. The `measure` run did, on
+2026-11-16 (run 43792020396); the zoom decision and the `load` are still to
+come. If they do not land in time, the run stops
 at "The build is still offered at Protomaps" and the build is moved again, in
-one PR, as it was on 2026-11-16.
+one PR, as it was on 2026-11-16, and measured again.
 
 **Open, for the owner: which kind of build.** Protomaps keeps one kind of build
 longer: the last build of each tileset version ("What the docs say", "Builds go
@@ -418,16 +420,24 @@ writes nothing and can run at any time.
    object is not changed (finding R6). **Measured 2026-11-15 (run
    43753563640), on build `20261109`: 20 GB by dry run, with every zoom kept,
    and it fitted the runner** ("Staging, in order", step 2). That build is
-   gone, and the build named now, `20261115`, is not measured yet. How much
-   of the 20 GB lies above zoom 14 was never measured: that run made one dry
-   run, without a top zoom, so its size alone does not say what a top zoom
-   would save. A `measure` run now makes a second dry run at zoom 14 and
-   prints both sizes ("What the workflow runs", step 3). Its first dispatch,
-   run 43779110535 on 2026-11-16, stopped before the dry runs because build
-   `20261109` was gone, so the second dry run has still never run and there
-   is no top-zoom figure. The next `measure` from `main` gives both sizes for
-   build `20261115`, and the decision and the load have to follow inside that
-   build's window ("Names", "The build's window").
+   gone. How much of its 20 GB lay above zoom 14 was never measured: that run
+   made one dry run, without a top zoom, so its size alone did not say what a
+   top zoom would save. A `measure` run now makes a second dry run at zoom 14
+   and prints both sizes ("What the workflow runs", step 3). Its first
+   dispatch, run 43779110535 on 2026-11-16, stopped before the dry runs
+   because build `20261109` was gone. **Measured 2026-11-16 (run 43792020396),
+   on build `20261115`, the build named now: 20 GB by dry run with every zoom
+   kept, and 9.7 GB with a top zoom of 14, about 10.3 GB less. The larger
+   size fitted the runner.** Both are dry-run figures: the tile data alone,
+   rounded, without the new directories, and not the size of a loaded file.
+   By those figures about half of the file is tiles above zoom 14, which the
+   Worker never reads. **The zoom decision is the owner's, and it is open.**
+   A top zoom is not a setting: the cut keeps every zoom until a PR changes
+   it in the workflow and in this runbook together ("What the workflow
+   runs", step 5), and that PR merges before the load. The decision, that PR
+   if the owner wants a top zoom, and the load have to land inside the
+   build's window, which ends **2026-11-21 (UTC)** ("Names", "The build's
+   window").
 4. **The licence.** [`NOTICE.md`](../../NOTICE.md) lists the duties and what is
    NOT CLEAR. Staging is public, so the first load is the first public street:
    the owner answers its question 2 (before the load, or before production)
@@ -507,14 +517,52 @@ writes nothing and can run at any time.
      and seven days after the build's date. The measure step was skipped, so
      the dry run at the Worker's top zoom has still never run. One PR then
      moved the build, the key, `wrangler.toml` and this runbook to build
-     `20261115` ("What stops a run"). **Build `20261115` is not measured
-     yet**: the 20 GB above is build `20261109`'s, and the next `measure`
-     from `main` is the first for the build named now.
+     `20261115` ("What stops a run"). The 20 GB above is build `20261109`'s;
+     the next run measured the build named now.
 
-   - **What "20 GB" is.** A dry-run figure for build `20261109`: the tile data
+   - **The fourth, 43792020396 on 2026-11-16 at 02:24 UTC (from `main` at
+     `ff96de6f`, the merge of the PR that moved the names, #1310), was green,
+     and is the measurement of build `20261115`.** It was also the first run
+     ever of the second dry run. Build `20261115` was still offered. With
+     every zoom kept, the dry run took 221 requests and 32 seconds and
+     printed:
+
+     ```text
+     Region tiles 46129703, result tile entries 18364711
+     Extract transferred 21 GB (overfetch 0.05) for an archive size of 20 GB
+     ```
+
+     The run's summary: an archive of **20 GB** for build `20261115`; "the cut
+     needs 21.6 GB and the runner has 90.5 GB free", "The cut fits." Both
+     places the workflow looks at had the same 90,467,635,200 bytes free. With
+     `--maxzoom=14` the second dry run took 150 requests and 11 seconds and
+     printed:
+
+     ```text
+     Region tiles 11542161, result tile entries 5299625
+     Extract transferred 10 GB (overfetch 0.05) for an archive size of 9.7 GB
+     ```
+
+     The summary's second part: "with a top zoom of 14, the most the Worker
+     reads, the dry run reports **9.7 GB**", "with every zoom of the build, as
+     a load cuts today, it reports **20 GB**", "that is about 10.3 GB less
+     (both figures are the tile data alone, rounded)". Job 1 read the bucket's
+     two privacy settings again, with the answers in step 1. All eight `LOAD:`
+     steps were skipped: no bucket credential was used and nothing was
+     written. The fit was judged on the larger size, and the run changed
+     nothing about what a load cuts. **Whether the cut gets a top zoom is the
+     owner's decision, before the first load** ("Before the load", item 3),
+     and build `20261115` is offered through 2026-11-21 (UTC).
+
+   - **What "20 GB" is.** A dry-run figure, for build `20261109` and again for
+     build `20261115`: the tile data
      alone, rounded to a
      whole number, so at most 20.55 GB, without the new directories, and with
-     every zoom of the build kept. The byte size of the loaded file comes from
+     every zoom of the build kept. **"9.7 GB"** is the same kind of figure for
+     build `20261115` with no tile above zoom 14: rounded to one decimal, so
+     at most 9.75 GB. "About 10.3 GB less" is one rounded figure taken from
+     the other, so it is not exact either. No file has been cut at either
+     size. The byte size of the loaded file comes from
      the load run (step 5). A `measure` run does not show the cut itself or
      how long it takes, the check with the Worker's reader, or any rclone call
      that reaches the bucket: those are `LOAD:` steps and have never run.
@@ -679,7 +727,9 @@ dashboard.
 
 Build `20261109` fitted: on 2026-11-15 the `measure` run 43753563640 reported
 20 GB by dry run against 90.5 GB free ("Staging, in order", step 2). The build
-named now, `20261115`, is not measured yet. GitHub documents
+named now, `20261115`, fitted too: on 2026-11-16 the `measure` run 43792020396
+reported 20 GB by dry run with every zoom kept, against 90.5 GB free (and
+9.7 GB with a top zoom of 14; the fit is judged on the larger size). GitHub documents
 14 GB of storage for a standard runner and promises no more, so every run
 reads what the runner really has, and the answer can change with the runner
 image or the build. If a run says the file does not fit, the choices are the
@@ -886,10 +936,12 @@ probe in the archive check, before the load.
 it is on `main`. Its first run (43744396310, 2026-11-15) stopped at the rclone
 download; its second (43753563640, the same day) was green through the dry run
 and the fit ("Staging, in order", step 2); its third (43779110535, 2026-11-16)
-stopped at the build check, because build `20261109` was gone. So the
+stopped at the build check, because build `20261109` was gone; its fourth
+(43792020396, the same day, after the names moved to build `20261115`) was
+green through both dry runs and the fit. So the
 downloads, the disk read, the dry run's last line and the fit have been seen
-working on a runner, once, on a build that is no longer offered, and the
-second dry run, at the Worker's top zoom, has never run. No
+working on a runner twice, once on each build, and the
+second dry run, at the Worker's top zoom, once, on the build named now. No
 `LOAD:` step has run anywhere: not the bucket listing, the cut, the check or
 the upload. The workflow's decisions (the names, the bucket's privacy, the size
 against the disk, the key being free, the listed size) are tested on the faults
@@ -950,16 +1002,18 @@ plus major road and 3% of every point drawn; roads that fall short are
 `thin-roads`, which fails the draw. The two numbers come from a workstation run
 over build `20261109` at Protomaps (the comment in
 `workers/oursharedevents/scripts/street-map-archive/check.ts`). No run of the
-eighteen against a United States file exists: the load workflow has three
+eighteen against a United States file exists: the load workflow has four
 `measure` runs and no `load` run (read 2026-11-16), and the check is a `LOAD:`
 step.
 
 Still unmeasured:
 
-- the United States file itself: its byte size (the dry run of 2026-11-15
-  gave 20 GB of tile data, rounded, for build `20261109`; build `20261115`,
-  the one named now, has no dry run yet; "Staging, in order", step 2), how much of
-  that lies above zoom 14, how long the cut takes on a runner and how much
+- the United States file itself: its byte size (the dry runs gave 20 GB of
+  tile data, rounded, with every zoom kept, for build `20261109` on
+  2026-11-15 and for build `20261115`, the one named now, on 2026-11-16, and
+  9.7 GB for build `20261115` with a top zoom of 14; "Staging, in order",
+  step 2; no file has been cut at either size), how long the cut takes on a
+  runner and how much
   memory it needs there, how its directories are laid out (how many leaf
   directories, how many entries in each), and the reader drawing from it. The
   load run gives the byte size; the check measures the layout and the draws on
