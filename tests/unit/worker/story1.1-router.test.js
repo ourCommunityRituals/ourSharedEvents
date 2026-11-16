@@ -156,7 +156,9 @@ describe('Route Coverage (Story 1.1)', () => {
   describe('Health / Status Routes', () => {
     it('should route /health to handleHealth', () => {
       expect(routerSource).toContain("pathname === '/health'");
-      expect(routerSource).toContain('handleHealth(env)');
+      // OSE-2086: behind the per-caller page limit.
+      expect(routerSource).toContain('handleHealth(e)');
+      expect(routerSource).toMatch(/publicPageLimited\(\s*'health'/);
     });
 
     it('should route /api/status as alias for health', () => {
@@ -267,14 +269,18 @@ describe('Route Coverage (Story 1.1)', () => {
   describe('Form Page Routes (QR Landing)', () => {
     it('should route /forms/:eventId to handleFormPage', () => {
       expect(routerSource).toContain('/forms/');
-      expect(routerSource).toContain('handleFormPage(request, env,');
+      // OSE-2086: behind the per-caller page limit.
+      expect(routerSource).toContain('handleFormPage(req, e,');
+      expect(routerSource).toMatch(/limitedPage\('form-page'/);
     });
   });
 
   describe('MVP Surface Routes', () => {
     it('should route /display to handleDisplayPage', () => {
       expect(routerSource).toContain("pathname === '/display'");
-      expect(routerSource).toContain('handleDisplayPage(env)');
+      // OSE-2086: behind the per-caller page limit.
+      expect(routerSource).toContain('handleDisplayPage(e)');
+      expect(routerSource).toMatch(/limitedPage\('display-page'/);
     });
 
     it('should route /poster to handlePosterPage', () => {
@@ -282,12 +288,16 @@ describe('Route Coverage (Story 1.1)', () => {
       // OSE-310: handler now also takes the request so it can look
       // up the format from the path. Match the function-call prefix
       // so future signature additions don't re-break this assertion.
-      expect(routerSource).toMatch(/handlePosterPage\(env\b/);
+      // OSE-2086: behind the per-caller page limit.
+      expect(routerSource).toMatch(/handlePosterPage\(e, req\)/);
+      expect(routerSource).toMatch(/limitedPage\('poster-page'/);
     });
 
     it('should route /sharedReport to handleSharedReportPage', () => {
       expect(routerSource).toContain("pathname === '/sharedReport'");
-      expect(routerSource).toContain('handleSharedReportPage(env)');
+      // OSE-2086: behind the per-caller page limit.
+      expect(routerSource).toContain('handleSharedReportPage(e)');
+      expect(routerSource).toMatch(/limitedPage\('report-page'/);
     });
   });
 

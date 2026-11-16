@@ -1,0 +1,44 @@
+info:
+  name: GET /display - served, not the wait page (OSE-2086)
+  type: http
+  seq: 13
+
+http:
+  method: GET
+  url: '{{baseUrl}}/display'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The TV page is limited per caller (OSE-2086, OSE ADR-038 D7): 600 loads a
+        // minute, then an HTML 429 "wait" page. This run is far under that, so
+        // staging must serve the page itself, with no trace of the limit on it.
+        // The refusal is proven in the workers pool
+        // (tests/public-pages-read-limit.spec.ts) and is not provoked here: 600
+        // loads a minute against staging from CI would be a flood of our own
+        // making.
+        const body = String(res.getBody());
+
+        // 403 is the page's feature flag turned off, as in the folder's first case.
+        test('Returns the page (or its feature-flag 403), not the 429 wait page', function () {
+          expect([200, 403]).to.include(res.getStatus());
+        });
+        test('It is not the wait page', function () {
+          expect(body).to.not.include('data-surface="ose-error"');
+          expect(body).to.not.include('Too many visits at once');
+        });
+        test('A served page carries no Retry-After', function () {
+          expect(!res.getHeader('retry-after')).to.equal(true);
+        });
+        test('No cookie is set', function () {
+          expect(!res.getHeader('set-cookie')).to.equal(true);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

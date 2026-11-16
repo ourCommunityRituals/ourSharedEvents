@@ -2,6 +2,10 @@
  * Every page address the router serves WITHOUT a per-caller limit, and why
  * (OSE-1986).
  *
+ * OSE-2086 (2026-11-16) limited the pages that were listed here as gaps: the
+ * event page, the form pages, the TV, the poster, the SharedReport shell,
+ * /health and /robots.txt. No gap is listed today.
+ *
  * Until 2026-11-16 a limit showed only at its call site in the router, so a new
  * public page could ship with none and nobody would be asked. This list is the
  * other half of `tests/public-page-limit-gate.spec.ts`, which asks the real
@@ -30,11 +34,6 @@ const forward = (): Unlimited => ({
 const postOnly = (): Unlimited => ({
   why: 'POST only; a GET is a fixed 405. The POST has its own limit in the handler.',
 });
-const gap = (what: string): Unlimited => ({
-  why: `${what}. Served with no per-caller limit today.`,
-  gap: 'OSE-2086',
-});
-
 export const UNLIMITED_PAGES: Readonly<Record<string, Unlimited>> = {
   // ── Fixed files and pages ────────────────────────────────────────────────
   '/ui.css': fixed('The shared stylesheet'),
@@ -60,33 +59,6 @@ export const UNLIMITED_PAGES: Readonly<Record<string, Unlimited>> = {
   '/subscribe': postOnly(),
   '/signup': postOnly(),
   '/newsletter': postOnly(),
-
-  // ── Gaps: these read data on every request and have no limit yet ─────────
-  '/events/*': gap('The public event page reads the event from the database'),
-  '/events/:param/:param': gap('The public event page, at its named address'),
-  '/events/:param/(register|checkin|survey|updates)': gap(
-    'A form page reads its event on GET (its POST is limited)'
-  ),
-  '/forms/:param/?': gap('A form page at its older address'),
-  '/events/:param/(tv|poster)': gap("An event's TV and poster"),
-  '/display': gap('The TV page'),
-  '/tv': gap('The TV page'),
-  '/kiosk': gap('The TV page'),
-  '/screen': gap('The TV page'),
-  '/poster': gap('The poster page'),
-  '/posters': gap('The poster page'),
-  '/flyers': gap('The poster page'),
-  '/tabletop': gap('The poster page'),
-  '/tent': gap('The poster page'),
-  '/signage': gap('The poster page'),
-  '/sharedReport': gap('The SharedReport page'),
-  '/report': gap('The SharedReport page'),
-  '/analytics': gap('The SharedReport page'),
-  '/reports': gap('The SharedReport page'),
-  '/insights': gap('The SharedReport page'),
-  '/stats': gap('The SharedReport page'),
-  '/health': gap('The health check pings the database'),
-  '/robots.txt': gap('The crawl policy lists events from the database where a site is indexable'),
 };
 
 /**
@@ -97,5 +69,5 @@ export const UNLIMITED_PAGES: Readonly<Record<string, Unlimited>> = {
 export const PREFIX_SAMPLE_LIMITED: Readonly<Record<string, boolean | Unlimited>> = {
   '/es/': true,
   '/es/events': true,
-  '/es/events/no-such-event': gap('The public event page under a language prefix'),
+  '/es/events/no-such-event': true,
 };
