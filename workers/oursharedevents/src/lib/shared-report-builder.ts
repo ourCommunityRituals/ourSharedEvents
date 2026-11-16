@@ -630,18 +630,18 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
          si.surface         AS surface,
          COUNT(*)           AS count
        FROM sponsor_displays si
-       LEFT JOIN sponsor_business sb ON sb.id = si.sponsor_id
        LEFT JOIN sponsor_placement sp
-              ON sp.sponsor_business_id = si.sponsor_id AND sp.event_id = si.event_id
+              ON sp.sponsor_business_id = si.sponsor_id AND sp.event_id = ?
        LEFT JOIN events e ON e.id = si.event_id
-       LEFT JOIN campaigns c
-              ON c.id = ${EFFECTIVE_CAMPAIGN_ID_SQL}
-             AND c.brand_id = e.brand_id
+       LEFT JOIN campaigns ec ON ec.id = e.campaign_id AND ec.brand_id = e.brand_id
+       LEFT JOIN campaigns c ON c.id = ${EFFECTIVE_CAMPAIGN_ID_SQL} AND c.brand_id = e.brand_id
+       LEFT JOIN sponsor_business sb ON sb.id = si.sponsor_id
        WHERE si.event_id = ?
        GROUP BY si.sponsor_id, sb.name, sb.display_name, c.id, c.title, sp.tier, sp.locality_band, si.surface
        ORDER BY count DESC`
     )
-    .bind(eventId)
+    // Bound twice: the placement join and the WHERE both name this one event.
+    .bind(eventId, eventId)
     .all<{
       sponsor_id: string;
       sponsor_name: string | null;

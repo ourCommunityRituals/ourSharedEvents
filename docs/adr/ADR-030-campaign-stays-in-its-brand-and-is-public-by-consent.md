@@ -125,10 +125,10 @@ options put to the owner:
   older choice is lost.
 
 _Owner, 2026-11-15: B, the event's campaign wins._ **Built on 2026-11-15** as a read rule; nothing
-stored changes. One SQL fragment, `EFFECTIVE_CAMPAIGN_ID_SQL` in `lib/campaigns.ts`, picks the
-event's campaign when the event is in one (and that campaign is in the event's own brand), else the
-placement's own. The public read and the SharedReport both join `campaigns` through it, still on
-the brand match of decision 2. The consent rule of decision 3 does not move: a campaign is public
+stored changes. Each of the two reads (the public read and the SharedReport) joins the event's own
+campaign only on the brand match, then takes that campaign when there is one and the placement's
+own otherwise (`EFFECTIVE_CAMPAIGN_ID_SQL` in `lib/campaigns.ts`), and joins the result on the
+brand match of decision 2 again. No security scan was changed or given an exemption for it. The consent rule of decision 3 does not move: a campaign is public
 only through a placement that is on show, so an event with no sponsor on show names its campaign
 nowhere. Choices made while building, each small and each the owner's to change:
 

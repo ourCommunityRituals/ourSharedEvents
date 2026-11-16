@@ -74,23 +74,29 @@ export interface PublicCampaign {
 }
 
 /**
- * The id of the campaign a placement is read as in (ADR-030 D8). It expects the
- * aliases `e` (the placement's event) and `sp` (the placement).
+ * The id of the campaign a placement is read as in (ADR-030 D8). It expects
+ * three aliases in the statement that uses it:
+ *
+ *   e    the placement's event
+ *   sp   the placement
+ *   ec   the event's own campaign, joined ONLY on the brand match:
+ *        LEFT JOIN campaigns ec ON ec.id = e.campaign_id AND ec.brand_id = e.brand_id
  *
  *   - The event's campaign, when the event is in one AND that campaign is in the
  *     event's own brand. A paused or completed event campaign still wins here:
  *     the caller's own status rule then decides whether it is announced, and the
  *     placement's own campaign does not step in for it.
  *   - Otherwise the placement's own campaign. An event linked past the API to
- *     another brand's campaign counts as an event in none.
+ *     another brand's campaign counts as an event in none (`ec` is then NULL).
  *
  * The caller still joins `campaigns c` on this id AND on `c.brand_id = e.brand_id`:
  * this picks which link is read, it does not prove the brand of the result.
+ *
+ * The `ec` join is written out in each statement, not folded in here, so that
+ * each read of `campaigns` sits beside the bound event id of its own statement,
+ * where the tenant-isolation scan reads it. No exemption is needed for it.
  */
-export const EFFECTIVE_CAMPAIGN_ID_SQL = `COALESCE(
-            (SELECT ec.id FROM campaigns ec
-              WHERE ec.id = e.campaign_id AND ec.brand_id = e.brand_id),
-            sp.campaign_id)`;
+export const EFFECTIVE_CAMPAIGN_ID_SQL = 'COALESCE(ec.id, sp.campaign_id)';
 
 export type FieldResult<T> = { ok: true; value: T } | { ok: false; code: string; message: string };
 
@@ -154,6 +160,7 @@ export async function readShownPlacementCampaigns(
          FROM sponsor_placement sp
          JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
          JOIN events e ON e.id = sp.event_id
+         LEFT JOIN campaigns ec ON ec.id = e.campaign_id AND ec.brand_id = e.brand_id
          JOIN campaigns c ON c.id = ${EFFECTIVE_CAMPAIGN_ID_SQL}
         WHERE sp.event_id = ?
           AND c.brand_id = e.brand_id

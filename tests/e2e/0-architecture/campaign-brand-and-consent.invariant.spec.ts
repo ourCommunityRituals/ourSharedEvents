@@ -21,9 +21,8 @@
  *   4. TWO LINKS, STORED APART; THE EVENT'S WINS WHEN READ (ADR-030 D8, owner
  *      2026-11-15). A placement's campaign and its event's campaign are separate
  *      columns, and no statement writes one from the other. A read takes the
- *      event's campaign first, through ONE fragment (EFFECTIVE_CAMPAIGN_ID_SQL)
- *      that carries the brand match, and only lib/campaigns.ts names an event's
- *      campaign, so a new read cannot take the event's link without it.
+ *      event's campaign first (EFFECTIVE_CAMPAIGN_ID_SQL), and every statement
+ *      that reads an event's campaign joins it only on the brand match.
  *   5. THE LOCALS STILL APPLY (ADR-030 D9). Nothing that orders or picks sponsors
  *      reads a campaign.
  *
@@ -58,7 +57,7 @@
  * that spec on the two new actor reads | date: 2026-11-15
  *
  * @born-red the event's campaign wins (ADR-030 D8) | method: the same. (12) the
- * brand match dropped from EFFECTIVE_CAMPAIGN_ID_SQL; (13) the report's join put
+ * brand match dropped from the `ec` join of the public read; (13) the report's join put
  * back on `sp.campaign_id`; (14) the public read's join put back on
  * `sp.campaign_id` | date: 2026-11-15
  *
@@ -234,7 +233,9 @@ test.describe('Invariant: a campaign stays in its brand and is public only by co
     // The whole file is read, not only its template literals: handlers/events.ts
     // builds its SQL from quoted strings.
     const readers = FILES.filter((f) => readsEventCampaign(code(f))).map(rel);
-    expect(readers).toEqual(['lib/campaigns.ts']);
+    // lib/campaigns.ts (the admin member list and the public read) and the
+    // report. The D8 test below holds each of their reads to the brand match.
+    expect(readers.sort()).toEqual(['lib/campaigns.ts', 'lib/shared-report-builder.ts']);
     // The admin member list is the one read, and it is on the brand match.
     const lib = read('lib/campaigns.ts');
     const fn = lib.slice(lib.indexOf('export async function listCampaignEvents'));
@@ -343,6 +344,9 @@ test.describe('Invariant: a campaign stays in its brand and is public only by co
     expect(flat(sql)).toMatch(/c\.brand_id = e\.brand_id/);
     // ADR-030 D8: it reads the effective campaign, the event's first.
     expect(sql).toContain('JOIN campaigns c ON c.id = ${EFFECTIVE_CAMPAIGN_ID_SQL}');
+    expect(flat(sql)).toMatch(
+      /LEFT JOIN campaigns ec ON ec\.id = e\.campaign_id AND ec\.brand_id = e\.brand_id/
+    );
     expect(lib).toMatch(/import \{ PLACEMENT_ON_SHOW_SQL \} from '\.\/sponsor-card'/);
 
     // The rule it names still holds both sides and the event's own yes.
@@ -369,29 +373,37 @@ test.describe('Invariant: a campaign stays in its brand and is public only by co
     expect(read('lib/public-event-projection.ts')).not.toMatch(/campaign/i);
   });
 
-  test('OSE-1552-INV | D8 | one fragment picks the event’s campaign first, on the brand match', () => {
+  test('OSE-1552-INV | D8 | the event’s campaign is read first, and only on the brand match', () => {
     const lib = read('lib/campaigns.ts');
-    const fragment =
-      lib.match(/export const EFFECTIVE_CAMPAIGN_ID_SQL = `([^`]*)`/)?.[1].replace(/\s+/g, ' ') ??
-      '';
-    // The event's campaign first, and only one in the event's own brand; then
-    // the placement's own. Nothing stored is read from anywhere else.
-    expect(fragment).toMatch(
-      /^COALESCE\( \(SELECT ec\.id FROM campaigns ec WHERE ec\.id = e\.campaign_id AND ec\.brand_id = e\.brand_id\), sp\.campaign_id\)$/
+    // The event's campaign first, then the placement's own.
+    expect(lib).toMatch(
+      /export const EFFECTIVE_CAMPAIGN_ID_SQL = 'COALESCE\(ec\.id, sp\.campaign_id\)';/
     );
-    // Its users: the public read (same file) and the report. Each still joins
-    // `campaigns c` on the brand match (held by the join test above).
-    const users = FILES.filter(
-      (f) => rel(f) !== 'lib/campaigns.ts' && /\bEFFECTIVE_CAMPAIGN_ID_SQL\b/.test(code(f))
+    // `ec` is the event's campaign, and it is joined ONLY on the brand match, in
+    // every statement that uses the expression. The result is joined on the brand
+    // match again.
+    const EC_JOIN =
+      /LEFT JOIN campaigns ec ON ec\.id = e\.campaign_id AND ec\.brand_id = e\.brand_id\b/;
+    const users = FILES.filter((f) =>
+      statements(code(f)).some((q) => q.includes('${EFFECTIVE_CAMPAIGN_ID_SQL}'))
     ).map(rel);
-    expect(users).toEqual(['lib/shared-report-builder.ts']);
-    const report = statements(read('lib/shared-report-builder.ts')).find((q) =>
-      q.includes('${EFFECTIVE_CAMPAIGN_ID_SQL}')
-    );
-    expect(flat(report ?? '')).toMatch(
-      /JOIN campaigns c ON c\.id = \$\{EFFECTIVE_CAMPAIGN_ID_SQL\} AND c\.brand_id = e\.brand_id/
-    );
-    // No read takes a placement's campaign without going through the fragment.
+    expect(users.sort()).toEqual(['lib/campaigns.ts', 'lib/shared-report-builder.ts']);
+    for (const f of FILES) {
+      for (const q of statements(code(f))) {
+        const s = flat(q);
+        const usesExpression = q.includes('${EFFECTIVE_CAMPAIGN_ID_SQL}');
+        const joinsEventCampaign = /\bcampaigns ec\b/.test(s);
+        if (!usesExpression && !joinsEventCampaign) continue;
+        expect(s, `${rel(f)}: the ec join must carry the brand match`).toMatch(EC_JOIN);
+        expect(s, `${rel(f)}: the result is joined on the brand match`).toMatch(
+          /JOIN campaigns c ON c\.id = \$\{EFFECTIVE_CAMPAIGN_ID_SQL\}/
+        );
+        expect(s).toMatch(/\bc\.brand_id = e\.brand_id\b/);
+        // Exactly one read of the event's campaign per statement, the join above.
+        expect((s.match(/\be\.campaign_id\b/g) ?? []).length, rel(f)).toBe(1);
+      }
+    }
+    // No read takes a placement's campaign without going through the expression.
     const bare = FILES.filter((f) =>
       statements(code(f)).some((q) => /\bc\.id = sp\.campaign_id\b/.test(flat(q)))
     ).map(rel);
