@@ -18,10 +18,14 @@
  *      active campaign, and hands out an id and a title and nothing else. The
  *      public event projection never names a campaign.
  *   3. NEVER A FILTER. No code reads a query parameter named for a campaign.
- *   4. TWO LINKS, KEPT APART (OSE-1552 scope 4, an open owner decision). A
- *      placement's campaign and its event's campaign are separate columns. No
- *      statement writes one from the other, and only lib/campaigns.ts reads an
- *      event's campaign, so nothing public can name it.
+ *   4. TWO LINKS, STORED APART; THE EVENT'S WINS WHEN READ (ADR-030 D8, owner
+ *      2026-11-15). A placement's campaign and its event's campaign are separate
+ *      columns, and no statement writes one from the other. A read takes the
+ *      event's campaign first, through ONE fragment (EFFECTIVE_CAMPAIGN_ID_SQL)
+ *      that carries the brand match, and only lib/campaigns.ts names an event's
+ *      campaign, so a new read cannot take the event's link without it.
+ *   5. THE LOCALS STILL APPLY (ADR-030 D9). Nothing that orders or picks sponsors
+ *      reads a campaign.
  *
  * Pyramid coverage:
  *   L0 STATIC (this file)  code shape, node:fs only, no deployed worker.
@@ -52,6 +56,11 @@
  * its SQL from quoted strings; the check now reads the whole file); (10) the
  * classified count in admin-null-actor.invariant.spec.ts left at 3, which failed
  * that spec on the two new actor reads | date: 2026-11-15
+ *
+ * @born-red the event's campaign wins (ADR-030 D8) | method: the same. (12) the
+ * brand match dropped from EFFECTIVE_CAMPAIGN_ID_SQL; (13) the report's join put
+ * back on `sp.campaign_id`; (14) the public read's join put back on
+ * `sp.campaign_id` | date: 2026-11-15
  *
  * @born-red locals on a campaign (owner, 2026-11-15) | method: the same. (11) a
  * constant named for a campaign added to lib/sponsor-resolver.ts | date: 2026-11-15
@@ -332,6 +341,8 @@ test.describe('Invariant: a campaign stays in its brand and is public only by co
     expect(sql).toContain('${PLACEMENT_ON_SHOW_SQL}');
     expect(flat(sql)).toMatch(/c\.status = 'active'/);
     expect(flat(sql)).toMatch(/c\.brand_id = e\.brand_id/);
+    // ADR-030 D8: it reads the effective campaign, the event's first.
+    expect(sql).toContain('JOIN campaigns c ON c.id = ${EFFECTIVE_CAMPAIGN_ID_SQL}');
     expect(lib).toMatch(/import \{ PLACEMENT_ON_SHOW_SQL \} from '\.\/sponsor-card'/);
 
     // The rule it names still holds both sides and the event's own yes.
@@ -356,6 +367,35 @@ test.describe('Invariant: a campaign stays in its brand and is public only by co
     ).map(rel);
     expect(users).toEqual(['handlers/sponsors.ts']);
     expect(read('lib/public-event-projection.ts')).not.toMatch(/campaign/i);
+  });
+
+  test('OSE-1552-INV | D8 | one fragment picks the event’s campaign first, on the brand match', () => {
+    const lib = read('lib/campaigns.ts');
+    const fragment =
+      lib.match(/export const EFFECTIVE_CAMPAIGN_ID_SQL = `([^`]*)`/)?.[1].replace(/\s+/g, ' ') ??
+      '';
+    // The event's campaign first, and only one in the event's own brand; then
+    // the placement's own. Nothing stored is read from anywhere else.
+    expect(fragment).toMatch(
+      /^COALESCE\( \(SELECT ec\.id FROM campaigns ec WHERE ec\.id = e\.campaign_id AND ec\.brand_id = e\.brand_id\), sp\.campaign_id\)$/
+    );
+    // Its users: the public read (same file) and the report. Each still joins
+    // `campaigns c` on the brand match (held by the join test above).
+    const users = FILES.filter(
+      (f) => rel(f) !== 'lib/campaigns.ts' && /\bEFFECTIVE_CAMPAIGN_ID_SQL\b/.test(code(f))
+    ).map(rel);
+    expect(users).toEqual(['lib/shared-report-builder.ts']);
+    const report = statements(read('lib/shared-report-builder.ts')).find((q) =>
+      q.includes('${EFFECTIVE_CAMPAIGN_ID_SQL}')
+    );
+    expect(flat(report ?? '')).toMatch(
+      /JOIN campaigns c ON c\.id = \$\{EFFECTIVE_CAMPAIGN_ID_SQL\} AND c\.brand_id = e\.brand_id/
+    );
+    // No read takes a placement's campaign without going through the fragment.
+    const bare = FILES.filter((f) =>
+      statements(code(f)).some((q) => /\bc\.id = sp\.campaign_id\b/.test(flat(q)))
+    ).map(rel);
+    expect(bare, 'a campaign join on sp.campaign_id alone ignores ADR-030 D8').toEqual([]);
   });
 
   test('OSE-1552-INV | locals | nothing that orders or picks sponsors reads a campaign', () => {

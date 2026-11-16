@@ -11,10 +11,12 @@
  *      in the UPDATE, so the automation key is held to it too. Out-of-brand and
  *      unknown read as the same 404.
  *   2. One campaign per event: a second add moves the event.
- *   3. Not public: nothing an anonymous caller can read changes when an event
- *      joins a campaign.
- *   4. Two links, kept apart: a placement's campaign and its event's campaign
- *      never overwrite each other (OSE-1552 scope 4 is an open owner decision).
+ *   3. Public only by consent: an event's campaign is named only as the label
+ *      on a sponsor whose placement is on show. The event, its sponsor list and
+ *      the events lists never name it.
+ *   4. Two links, stored apart; the event's wins when read (ADR-030 D8, owner
+ *      2026-11-15): a placement is read as in its event's campaign, and its own
+ *      counts only while the event is in none. Neither stored value is changed.
  *   5. Every write passes the admin write guard and is audited.
  *
  * The matrix (tests/brand-matrix.spec.ts) runs the same routes as every brand
@@ -44,6 +46,21 @@
  * sponsor local once it carries a campaign: "the bigger sponsor joining the
  * campaign labels it and changes nothing else" failed | date: 2026-11-15
  *
+ * @born-red the event's campaign wins (ADR-030 D8) | method: the same. (l) the
+ * brand match dropped from EFFECTIVE_CAMPAIGN_ID_SQL: "linked past the API ...
+ * counts as in none" and the report's "another brand's campaign on the event"
+ * failed; (m) the report's join put back on the placement's own campaign: two
+ * report cases failed; (n) the public read's join put back: seven cases failed;
+ * (o) the fragment skipping a paused event campaign: both "does not step in"
+ * cases failed; (p) the order reversed, the placement's own first: five cases
+ * failed | date: 2026-11-15
+ *
+ * Not killed here: replacing the on-show rule in the public read by `1 = 1`
+ * fails tests/campaigns.spec.ts ("the event is a draft") and the T0 invariant,
+ * but not this file's four not-on-show cases, because the bundle attaches a
+ * campaign only to a sponsor it already shows. That is the second lock slice 1
+ * described; the cases here hold the outcome, not which lock gives it.
+ *
  * Not killed alone, and why: dropping only the caller's brand scope from the add
  * UPDATE, or only the campaign lookup scope, changes nothing a caller can see,
  * because the same-brand EXISTS and the route guard return the same 404. They
@@ -53,6 +70,7 @@
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { route } from '../src/router';
+import { buildSharedReport } from '../src/lib/shared-report-builder';
 import {
   BRANDS,
   UNKNOWN_ID,
@@ -166,6 +184,9 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  // Report cases write displays for the sponsor; they go before the sponsor is re-seeded.
+  await env.DB.prepare(`DELETE FROM sponsor_displays WHERE id LIKE 'ce-disp-%'`).run();
+  await env.DB.prepare(`UPDATE campaigns SET status = 'active' WHERE id LIKE 'ce-%'`).run();
   await env.DB.prepare(`UPDATE events SET campaign_id = NULL WHERE id LIKE 'ce-%'`).run();
   await env.DB.prepare(
     `UPDATE sponsor_placement SET campaign_id = NULL WHERE id LIKE 'spl_ce-%'`
@@ -396,20 +417,19 @@ describe('every write passes the admin write guard and is audited', () => {
   });
 });
 
-// ── rule 3: not public ────────────────────────────────────────────────────────
+// ── rule 3: public only through a placement that is on show ───────────────────
 
-describe("an event's campaign is not public", () => {
-  const PUBLIC_READS = (eventId: string) => [
+describe("an event's campaign is public only as a label on a sponsor that is on show", () => {
+  const NO_SPONSOR_READS = (eventId: string) => [
     `/api/v2/events/${eventId}`,
     `/api/v2/events/${eventId}/sponsors`,
-    `/api/v2/events/${eventId}/sponsor-bundle?surface=public`,
     `/api/v2/events?brand=${A.brandId}&limit=100`,
     `/api/v2/events?limit=100`,
   ];
 
-  async function publicTexts(eventId: string): Promise<string[]> {
+  async function texts(paths: string[]): Promise<string[]> {
     const out: string[] = [];
-    for (const path of PUBLIC_READS(eventId)) {
+    for (const path of paths) {
       const res = await callAs({ kind: 'anonymous' }, 'GET', path);
       expect(res.status, path).toBe(200);
       out.push(shape(await res.text()));
@@ -417,16 +437,24 @@ describe("an event's campaign is not public", () => {
     return out;
   }
 
-  test('no public read changes when an event joins a campaign, and none names it', async () => {
-    const before = await publicTexts(evt(A));
+  test('the event, its sponsor list and the events lists do not change, and none names it', async () => {
+    const before = await texts(NO_SPONSOR_READS(evt(A)));
     expect((await callAs(owner(A), 'PUT', eventPath(cmp(A), evt(A)))).status).toBe(200);
-    const after = await publicTexts(evt(A));
+    const after = await texts(NO_SPONSOR_READS(evt(A)));
     expect(after).toEqual(before);
     for (const text of after) {
       expect(text).not.toContain(cmp(A));
       expect(text).not.toContain(TITLE(A));
       expect(text).not.toContain('campaign_id');
     }
+  });
+
+  test('an event with no sponsor on show names its campaign nowhere, the bundle included', async () => {
+    // Event 2 has no sponsor placement at all.
+    expect((await callAs(owner(A), 'PUT', eventPath(cmp(A), evt(A, 2)))).status).toBe(200);
+    const [bundle] = await texts([`/api/v2/events/${evt(A, 2)}/sponsor-bundle?surface=public`]);
+    expect(bundle).not.toContain(cmp(A));
+    expect(bundle).not.toContain(TITLE(A));
   });
 
   test('the public events list cannot be narrowed by a campaign', async () => {
@@ -445,34 +473,57 @@ describe("an event's campaign is not public", () => {
   });
 });
 
-// ── rule 4: two links, kept apart ─────────────────────────────────────────────
+// ── rule 4: two links, stored apart; the event's wins when read (ADR-030 D8) ───
 
-describe("a placement's campaign and its event's campaign never overwrite each other", () => {
-  async function bundleCampaign(eventId: string, sponsorId: string): Promise<unknown> {
+describe("a placement is read as in its event's campaign; its own counts while the event is in none", () => {
+  async function bundleRaw(eventId: string): Promise<string> {
     const res = await callAs(
       { kind: 'anonymous' },
       'GET',
       `/api/v2/events/${eventId}/sponsor-bundle?surface=public`
     );
-    const body = (await res.json()) as {
+    expect(res.status).toBe(200);
+    return res.text();
+  }
+  async function bundleCampaign(eventId: string, sponsorId: string): Promise<unknown> {
+    const body = JSON.parse(await bundleRaw(eventId)) as {
       bundle: { sponsors: Array<{ id: string; campaign?: unknown }> };
     };
-    return body.bundle.sponsors.find((s) => s.id === sponsorId)?.campaign;
+    const sponsor = body.bundle.sponsors.find((s) => s.id === sponsorId);
+    expect(sponsor, `${sponsorId} shows`).toBeDefined();
+    return sponsor?.campaign;
   }
   const placementPath = (campaignId: string, placementId: string) =>
     `/api/v2/admin/campaigns/${campaignId}/placements/${placementId}`;
+  const ONE = { id: cmp(A, 1), title: TITLE(A, 1) };
+  const TWO = { id: cmp(A, 2), title: TITLE(A, 2) };
 
-  test('adding or removing the event leaves the placement in its own campaign', async () => {
+  test("the event's campaign wins over the placement's own, and nothing stored changes", async () => {
     expect((await callAs(owner(A), 'PUT', placementPath(cmp(A, 1), plc(A)))).status).toBe(200);
+    expect(await bundleCampaign(evt(A), spo(A))).toEqual(ONE);
+
     expect((await callAs(owner(A), 'PUT', eventPath(cmp(A, 2), evt(A)))).status).toBe(200);
+    expect(await bundleCampaign(evt(A), spo(A))).toEqual(TWO);
+    // The other campaign is not named at all while the event's wins.
+    expect(await bundleRaw(evt(A))).not.toContain(TITLE(A, 1));
+    // Stored: each link is as it was written.
     expect(await campaignOfPlacement(plc(A))).toBe(cmp(A, 1));
     expect(await campaignOfEvent(evt(A))).toBe(cmp(A, 2));
-    // The public bundle still reads the placement's own campaign.
-    expect(await bundleCampaign(evt(A), spo(A))).toEqual({ id: cmp(A, 1), title: TITLE(A, 1) });
+  });
 
+  test("taking the event out brings the placement's own campaign back", async () => {
+    await callAs(owner(A), 'PUT', placementPath(cmp(A, 1), plc(A)));
+    await callAs(owner(A), 'PUT', eventPath(cmp(A, 2), evt(A)));
     expect((await callAs(owner(A), 'DELETE', eventPath(cmp(A, 2), evt(A)))).status).toBe(200);
+    expect(await bundleCampaign(evt(A), spo(A))).toEqual(ONE);
     expect(await campaignOfPlacement(plc(A))).toBe(cmp(A, 1));
-    expect(await bundleCampaign(evt(A), spo(A))).toEqual({ id: cmp(A, 1), title: TITLE(A, 1) });
+  });
+
+  test("a placement with no campaign of its own is read as in its event's", async () => {
+    expect(await bundleCampaign(evt(A), spo(A))).toBeUndefined();
+    expect((await callAs(owner(A), 'PUT', eventPath(cmp(A), evt(A)))).status).toBe(200);
+    expect(await bundleCampaign(evt(A), spo(A))).toEqual(ONE);
+    expect(await campaignOfPlacement(plc(A))).toBeNull();
   });
 
   test('attaching or detaching the placement leaves the event in its own campaign', async () => {
@@ -482,12 +533,161 @@ describe("a placement's campaign and its event's campaign never overwrite each o
     expect((await callAs(owner(A), 'DELETE', placementPath(cmp(A, 1), plc(A)))).status).toBe(200);
     expect(await campaignOfEvent(evt(A))).toBe(cmp(A, 2));
     expect(await campaignOfPlacement(plc(A))).toBeNull();
+    expect(await bundleCampaign(evt(A), spo(A))).toEqual(TWO);
   });
 
-  test('a placement with no campaign gets none from its event', async () => {
-    expect((await callAs(owner(A), 'PUT', eventPath(cmp(A), evt(A)))).status).toBe(200);
-    expect(await campaignOfPlacement(plc(A))).toBeNull();
+  test.each(['paused', 'completed'])(
+    "a %s event campaign is not announced, and the placement's own does not step in",
+    async (status) => {
+      await callAs(owner(A), 'PUT', placementPath(cmp(A, 1), plc(A)));
+      await callAs(owner(A), 'PUT', eventPath(cmp(A, 2), evt(A)));
+      await env.DB.prepare('UPDATE campaigns SET status = ? WHERE id = ?')
+        .bind(status, cmp(A, 2))
+        .run();
+      expect(await bundleCampaign(evt(A), spo(A))).toBeUndefined();
+      const raw = await bundleRaw(evt(A));
+      expect(raw).not.toContain(TITLE(A, 1));
+      expect(raw).not.toContain(TITLE(A, 2));
+    }
+  );
+
+  test("a paused campaign of the placement's own does not hide the event's active one", async () => {
+    await callAs(owner(A), 'PUT', placementPath(cmp(A, 1), plc(A)));
+    await callAs(owner(A), 'PUT', eventPath(cmp(A, 2), evt(A)));
+    await env.DB.prepare(`UPDATE campaigns SET status = 'paused' WHERE id = ?`)
+      .bind(cmp(A, 1))
+      .run();
+    expect(await bundleCampaign(evt(A), spo(A))).toEqual(TWO);
+  });
+
+  test("an event linked past the API to another brand's campaign counts as in none", async () => {
+    await callAs(owner(A), 'PUT', placementPath(cmp(A, 1), plc(A)));
+    await linkEvent(evt(A), cmp(B));
+    expect(await bundleCampaign(evt(A), spo(A))).toEqual(ONE);
+    const raw = await bundleRaw(evt(A));
+    expect(raw).not.toContain(cmp(B));
+    expect(raw).not.toContain(TITLE(B));
+  });
+
+  test("another brand's event campaign never labels a sponsor, even with no own campaign", async () => {
+    await linkEvent(evt(A), cmp(B));
     expect(await bundleCampaign(evt(A), spo(A))).toBeUndefined();
+    expect(await bundleRaw(evt(A))).not.toContain(TITLE(B));
+  });
+
+  // Consent (ADR-030 decision 3) is not moved by D8: the event's campaign shows
+  // only on a placement that is itself on show.
+  const NOT_ON_SHOW: Array<[string, () => Promise<unknown>]> = [
+    [
+      'the sponsor has not answered',
+      () =>
+        env.DB.prepare('UPDATE sponsor_placement SET sponsor_accepted = NULL WHERE id = ?')
+          .bind(plc(A))
+          .run(),
+    ],
+    [
+      'the organizer said no',
+      () =>
+        env.DB.prepare('UPDATE sponsor_placement SET organizer_accepted = 0 WHERE id = ?')
+          .bind(plc(A))
+          .run(),
+    ],
+    [
+      'the event has not opted in to sponsors',
+      () =>
+        env.DB.prepare(`UPDATE events SET settings_json = '{"useSponsors":false}' WHERE id = ?`)
+          .bind(evt(A))
+          .run(),
+    ],
+    [
+      'the placement is switched off',
+      () =>
+        env.DB.prepare('UPDATE sponsor_placement SET is_active = 0 WHERE id = ?')
+          .bind(plc(A))
+          .run(),
+    ],
+  ];
+  test.each(NOT_ON_SHOW)(
+    "%s: the event's campaign is named nowhere in the bundle",
+    async (_name, arrange) => {
+      expect((await callAs(owner(A), 'PUT', eventPath(cmp(A), evt(A)))).status).toBe(200);
+      await arrange();
+      try {
+        const raw = await bundleRaw(evt(A));
+        expect(raw).not.toContain(cmp(A));
+        expect(raw).not.toContain(TITLE(A));
+        expect(raw).not.toContain('"campaign"');
+      } finally {
+        await env.DB.prepare(
+          `UPDATE events SET settings_json = '{"useSponsors":true}' WHERE id = ?`
+        )
+          .bind(evt(A))
+          .run();
+      }
+    }
+  );
+});
+
+// ── the SharedReport reads the same effective campaign (ADR-030 D8) ───────────
+
+describe("the SharedReport reads a placement as in its event's campaign", () => {
+  async function report(): Promise<{
+    raw: string;
+    campaigns: Array<{ campaign_id: string; campaign_title: string }>;
+  }> {
+    await env.DB.prepare('DELETE FROM sponsor_displays WHERE event_id = ?').bind(evt(A)).run();
+    for (let i = 0; i < 6; i++) {
+      await env.DB.prepare(
+        `INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, event_type, created_at)
+         VALUES (?, ?, ?, 'public', 'mobileBanner', 'impression', '2026-06-01T12:00:00Z')`
+      )
+        .bind(`ce-disp-${i}`, spo(A), evt(A))
+        .run();
+    }
+    const built = (await buildSharedReport(env.DB, evt(A))) as unknown as {
+      sponsor_impressions: {
+        campaign_summary: Array<{ campaign_id: string; campaign_title: string }> | null;
+      };
+    };
+    const raw = JSON.stringify(built);
+    const found = raw.match(/"campaign_summary":(\[[^\]]*\]|null)/)?.[1] ?? 'null';
+    return { raw, campaigns: (JSON.parse(found) as never) ?? [] };
+  }
+  const set = (placementCampaign: string | null, eventCampaign: string | null) =>
+    Promise.all([
+      env.DB.prepare('UPDATE sponsor_placement SET campaign_id = ? WHERE id = ?')
+        .bind(placementCampaign, plc(A))
+        .run(),
+      linkEvent(evt(A), eventCampaign),
+    ]);
+
+  test("the placement's own campaign while the event is in none (as before)", async () => {
+    await set(cmp(A, 1), null);
+    const r = await report();
+    expect(r.raw).toContain(TITLE(A, 1));
+    expect(r.raw).not.toContain(TITLE(A, 2));
+  });
+
+  test("the event's campaign once the event is in one, and the other is not named", async () => {
+    await set(cmp(A, 1), cmp(A, 2));
+    const r = await report();
+    expect(r.raw).toContain(cmp(A, 2));
+    expect(r.raw).toContain(TITLE(A, 2));
+    expect(r.raw).not.toContain(TITLE(A, 1));
+    expect(r.raw).toContain(spo(A)); // the sponsor's displays are still counted
+  });
+
+  test("the event's campaign for a placement with none of its own", async () => {
+    await set(null, cmp(A, 2));
+    expect((await report()).raw).toContain(TITLE(A, 2));
+  });
+
+  test("another brand's campaign on the event is not named; the placement's own is", async () => {
+    await set(cmp(A, 1), cmp(B));
+    const r = await report();
+    expect(r.raw).not.toContain(cmp(B));
+    expect(r.raw).not.toContain(TITLE(B));
+    expect(r.raw).toContain(TITLE(A, 1));
   });
 });
 
@@ -598,7 +798,8 @@ describe('the local sponsors keep their share on an event that is in a campaign'
     );
     expect(put.status).toBe(200);
     const after = await bundleWithoutLabels();
-    expect(after.labelled).toEqual([BIG]);
+    // The event is in the campaign, so every sponsor on show carries it (D8).
+    expect(after.labelled.sort()).toEqual([BIG, LOCAL].sort());
     expect(after.text).toBe(before.text);
     expect(after.ids).toEqual(before.ids);
   });

@@ -27,6 +27,7 @@
  * calls this N times in parallel via Promise.all (S5-Q3 capped at 50).
  */
 
+import { EFFECTIVE_CAMPAIGN_ID_SQL } from './campaigns';
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 import { renderCorridorMap } from './corridor-map';
 import { gridRingUnsafe } from 'h3-js';
@@ -611,9 +612,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // economics (campaign, tier, locality) come from the sponsor_placement for THIS
   // event. Join both off si.sponsor_id (= sponsor_business.id) — placement scoped
   // to si.event_id so a business at multiple events reads its own per-event tier.
-  // Showcase S14: a campaign is read only when it is in THIS event's brand (the
-  // first bound id), so a placement linked to another brand's campaign reports
-  // as having none, neither its id nor its title.
+  // Showcase S14: a campaign is read only when it is in THIS event's brand, so a
+  // placement linked to another brand's campaign reports as having none, neither
+  // its id nor its title.
+  // ADR-030 D8: the campaign read is the placement's EFFECTIVE one, its event's
+  // campaign when the event is in one, else its own (EFFECTIVE_CAMPAIGN_ID_SQL).
   const impressions = await db
     .prepare(
       `SELECT
@@ -630,14 +633,15 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
        LEFT JOIN sponsor_business sb ON sb.id = si.sponsor_id
        LEFT JOIN sponsor_placement sp
               ON sp.sponsor_business_id = si.sponsor_id AND sp.event_id = si.event_id
+       LEFT JOIN events e ON e.id = si.event_id
        LEFT JOIN campaigns c
-              ON c.id = sp.campaign_id
-             AND c.brand_id = (SELECT e.brand_id FROM events e WHERE e.id = ?)
+              ON c.id = ${EFFECTIVE_CAMPAIGN_ID_SQL}
+             AND c.brand_id = e.brand_id
        WHERE si.event_id = ?
        GROUP BY si.sponsor_id, sb.name, sb.display_name, c.id, c.title, sp.tier, sp.locality_band, si.surface
        ORDER BY count DESC`
     )
-    .bind(eventId, eventId)
+    .bind(eventId)
     .all<{
       sponsor_id: string;
       sponsor_name: string | null;

@@ -153,6 +153,20 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
   ],
 
   [
+    'lib/campaigns.ts > EFFECTIVE_CAMPAIGN_ID_SQL: (SELECT ec.id FROM campaigns ec',
+    'A fragment, not a statement (OSE ADR-030 D8): a correlated subquery that reads at ' +
+      "most ONE campaign, the one whose id is the outer event row's `e.campaign_id`, and " +
+      'only when `ec.brand_id = e.brand_id`. Nothing is bound because it has no ' +
+      'parameters of its own; it cannot enumerate, and it cannot return a campaign of ' +
+      'another brand than the event the outer statement already holds. Its two users ' +
+      '(the public read in lib/campaigns.ts and the report in ' +
+      'lib/shared-report-builder.ts) bind the event id and join `campaigns c` on ' +
+      '`c.brand_id = e.brand_id` again. Held by campaign-brand-and-consent.invariant.spec.ts ' +
+      '(the fragment must carry the brand match) and tests/campaign-events.spec.ts ' +
+      '("another brand\'s event campaign never labels a sponsor").',
+  ],
+
+  [
     'handlers/campaigns.ts > handleAdminListCampaigns: FROM campaigns ${where}',
     'Admin list of campaigns (showcase S14). `where` is `WHERE brand_id IN (?, ?)` ' +
       'built from resolveAdminBrandScopeAsync two lines above, so the literal ' +

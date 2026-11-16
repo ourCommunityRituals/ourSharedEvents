@@ -25,11 +25,17 @@
  * only in its own brand (the predicate is in the UPDATE), and no public read
  * names an event's campaign.
  *
- * TWO LINKS, KEPT APART. A placement's campaign (`sponsor_placement.campaign_id`)
- * and its event's campaign (`events.campaign_id`) are separate columns. No
- * statement here copies one to the other, so neither overwrites the other. Which
- * wins when they differ is an open owner decision (OSE-1552 scope 4); until it
- * is made, the public bundle keeps reading the placement's own campaign.
+ * TWO LINKS, STORED APART, AND THE EVENT'S WINS WHEN READ (OSE ADR-030 D8, owner
+ * 2026-11-15). A placement's campaign (`sponsor_placement.campaign_id`) and its
+ * event's campaign (`events.campaign_id`) are separate columns, and no statement
+ * copies one onto the other. When a campaign is READ for a placement, the event's
+ * campaign wins: the placement's own value counts only while its event is in
+ * none (EFFECTIVE_CAMPAIGN_ID_SQL). Nothing stored is lost: take the event out
+ * and the placement's own campaign is read again.
+ *
+ * THE LOCALS STILL APPLY (ADR-030 D9, owner 2026-11-15). A campaign is a label on
+ * a sponsor the bundle already shows. It is never an input to which sponsors
+ * show, their order or their share of rotation.
  *
  * No tier is read: scoping and consent are the same at every tier (invariant 7).
  */
@@ -66,6 +72,25 @@ export interface PublicCampaign {
   id: string;
   title: string;
 }
+
+/**
+ * The id of the campaign a placement is read as in (ADR-030 D8). It expects the
+ * aliases `e` (the placement's event) and `sp` (the placement).
+ *
+ *   - The event's campaign, when the event is in one AND that campaign is in the
+ *     event's own brand. A paused or completed event campaign still wins here:
+ *     the caller's own status rule then decides whether it is announced, and the
+ *     placement's own campaign does not step in for it.
+ *   - Otherwise the placement's own campaign. An event linked past the API to
+ *     another brand's campaign counts as an event in none.
+ *
+ * The caller still joins `campaigns c` on this id AND on `c.brand_id = e.brand_id`:
+ * this picks which link is read, it does not prove the brand of the result.
+ */
+export const EFFECTIVE_CAMPAIGN_ID_SQL = `COALESCE(
+            (SELECT ec.id FROM campaigns ec
+              WHERE ec.id = e.campaign_id AND ec.brand_id = e.brand_id),
+            sp.campaign_id)`;
 
 export type FieldResult<T> = { ok: true; value: T } | { ok: false; code: string; message: string };
 
@@ -109,6 +134,9 @@ export function newCampaignId(): string {
  * The campaign of each sponsor that is on show for this event, keyed by sponsor
  * (sponsor_business) id. This is the only public read of a campaign.
  *
+ * The campaign read is the placement's EFFECTIVE one: its event's campaign when
+ * the event is in one, else its own (EFFECTIVE_CAMPAIGN_ID_SQL, ADR-030 D8).
+ *
  * A row comes back only when ALL of these hold:
  *   - the placement is on show (PLACEMENT_ON_SHOW_SQL: active placement and
  *     business, sponsor accepted, organizer accepted, live event in the
@@ -126,7 +154,7 @@ export async function readShownPlacementCampaigns(
          FROM sponsor_placement sp
          JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
          JOIN events e ON e.id = sp.event_id
-         JOIN campaigns c ON c.id = sp.campaign_id
+         JOIN campaigns c ON c.id = ${EFFECTIVE_CAMPAIGN_ID_SQL}
         WHERE sp.event_id = ?
           AND c.brand_id = e.brand_id
           AND c.status = 'active'
