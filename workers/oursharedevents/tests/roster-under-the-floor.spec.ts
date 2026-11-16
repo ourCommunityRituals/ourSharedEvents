@@ -237,4 +237,76 @@ describe('OSE-2087 | the registrations list follows its count', () => {
     expect(body.items).toEqual([]);
     expect(body.suppressed).toBe(true);
   });
+
+  // Found in review, 2026-11-16: the export and the contacts each withheld by
+  // their own row count, so with 5 rows of which 3 are counted the list was
+  // withheld while the export and the contacts handed over all 5 names.
+  describe('what is read from registrations is withheld whenever the list is', () => {
+    async function fiveRowsThreeCounted(title: string): Promise<string> {
+      const id = await createEvent(title);
+      await seedRegistrations(id, 5);
+      await tenv.FORMS_DB.prepare(
+        `UPDATE form_registrations SET expires_at = '2020-01-01 00:00:00'
+          WHERE id IN (SELECT id FROM form_registrations WHERE event_id = ? LIMIT 2)`
+      )
+        .bind(id)
+        .run();
+      return id;
+    }
+
+    test('the list itself is withheld (the case the others must follow)', async () => {
+      const id = await fiveRowsThreeCounted('Roster three of five: list');
+      const body = (await (await get(id, 'registrations')).json()) as Record<string, unknown>;
+      expect(body.items).toEqual([]);
+      expect(body.suppressed).toBe(true);
+    });
+
+    test('the JSON export gives no row', async () => {
+      const id = await fiveRowsThreeCounted('Roster three of five: export');
+      const res = await get(id, 'export?type=registrations');
+      const text = await res.text();
+      const body = JSON.parse(text) as Record<string, unknown>;
+      expect(body.items).toEqual([]);
+      expect({ count: body.count, suppressed: body.suppressed, floor: body.floor }).toEqual(
+        WITHHELD
+      );
+      for (const name of NAMES) expect(text).not.toContain(name);
+    });
+
+    test('the CSV export says so in words and names no one', async () => {
+      const id = await fiveRowsThreeCounted('Roster three of five: csv');
+      const res = await get(id, 'export?type=registrations&format=csv');
+      expect(res.headers.get('X-OSE-Withheld')).toBe('true');
+      const text = await res.text();
+      expect(text).toContain('Fewer than 5 registrations');
+      for (const name of NAMES) expect(text).not.toContain(name);
+    });
+
+    test('the contacts give no name and no email', async () => {
+      const id = await fiveRowsThreeCounted('Roster three of five: contacts');
+      const res = await get(id, 'contacts');
+      const text = await res.text();
+      const body = JSON.parse(text) as Record<string, unknown>;
+      expect(body.items).toEqual([]);
+      expect(body.suppressed).toBe(true);
+      expect(text).not.toContain('@example.org');
+    });
+
+    test('control: with 5 counted rows the export and the contacts give all 5', async () => {
+      const id = await createEvent('Roster five of five');
+      await seedRegistrations(id, 5);
+      const exp = (await (await get(id, 'export?type=registrations')).json()) as {
+        items: unknown[];
+        suppressed: boolean;
+      };
+      expect(exp.suppressed).toBe(false);
+      expect(exp.items).toHaveLength(5);
+      const con = (await (await get(id, 'contacts')).json()) as {
+        items: unknown[];
+        suppressed: boolean;
+      };
+      expect(con.suppressed).toBe(false);
+      expect(con.items).toHaveLength(5);
+    });
+  });
 });

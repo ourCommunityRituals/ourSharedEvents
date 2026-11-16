@@ -116,7 +116,7 @@ describe('OSE-713 (2): toCsv escapes commas, quotes, and newlines', () => {
         EVENT,
         nastyName,
         '2026-08',
-        'registered',
+        'confirmed',
         '2099-01-01T00:00:00.000Z',
         '2026-08-11T00:00:00.000Z'
       )
@@ -135,7 +135,7 @@ describe('OSE-713 (2): toCsv escapes commas, quotes, and newlines', () => {
           EVENT,
           `Plain ${i}`,
           '2026-08',
-          'registered',
+          'confirmed',
           '2099-01-01T00:00:00.000Z',
           '2026-08-10T00:00:00.000Z'
         )

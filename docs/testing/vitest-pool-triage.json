@@ -2911,7 +2911,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 8
+      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/scan-buffer.spec.ts",
