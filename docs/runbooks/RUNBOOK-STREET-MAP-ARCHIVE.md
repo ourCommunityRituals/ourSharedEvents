@@ -30,6 +30,19 @@ Owner decisions:
   street map (`.claude/outputs/CCR-STREET-MAP-WILL-IT-WORK-2026-11-15.md`) scored
   it 0% and stopped for the owner, who chose to correct before loading. Nothing
   in "Staging, in order" is dispatched until "Before the load" below is done.
+- 2026-11-16: **the bucket is kept.** `ose-map-tiles`, the bucket a staging
+  deploy made on 2026-11-15, is the street-map bucket. It is not remade by hand.
+- 2026-11-16: **the write key lives on a GitHub environment of its own,
+  `street-map-load`, usable from branch `main` only.** The load job names that
+  environment. The workflow's job "The key's environment is main only (reads
+  only)" reads the environment on every run and stops the run unless its branch
+  list is `main` alone ("Staging, in order", step 3).
+- 2026-11-16: **the licence list is done before production, not before the
+  staging load.** Asked whether the list in [`NOTICE.md`](../../NOTICE.md) comes
+  before the load to staging or before production, the owner answered: "Right
+  now it only local and staging testing". Read as: staging may show streets
+  with the credit as it is today, and the list is finished before production
+  binds the bucket.
 
 **Where the data comes from and what its licence asks** is in
 [`NOTICE.md`](../../NOTICE.md), with the cut written out as a statement of
@@ -46,14 +59,15 @@ not on `main`, it is a proposal. Nothing runs until the owner dispatches the
 workflow.
 
 **What stays the owner's**, all of it in a browser: creating the bucket,
-creating the R2 token, setting it as a secret, dispatching the workflow, locking
-the loaded object, deleting the token afterwards, and merging. (The bucket in
-use, `ose-map-tiles`, was not created by the owner: it exists because a staging
-deploy made it on 2026-11-15. See "When the binding lands before the bucket".
-Checking it, and keeping or remaking it, is the owner's.) An agent never
-creates a bucket, never holds or reads the token, never sets a secret, a
-variable or a lock rule, never dispatches the load, and never touches production
-(`AGENTS.md`, Human approval).
+creating the `street-map-load` environment, creating the R2 token, setting it
+as a secret, dispatching the workflow, locking the loaded object, deleting the
+token afterwards, and merging. (The bucket in use, `ose-map-tiles`, was not
+created by the owner: it exists because a staging deploy made it on
+2026-11-15. See "When the binding lands before the bucket". The owner keeps
+it: 2026-11-16.) An agent never creates a bucket or an environment, never
+holds or reads the token, never sets a secret, a variable or a lock rule, never
+dispatches the load, and never touches production (`AGENTS.md`, Human
+approval).
 
 **One bucket, one load.** The steps below load the bucket, and staging reads it
 first. Production reads the same object once it is bound ("Production, later").
@@ -237,10 +251,32 @@ streets from an area that is itself inside a box, near its edge.
 
 ## What the workflow runs
 
-Two jobs. Every command below is in the workflow file, with the names taken from
-its `env`; this section shows no command for a person to type.
+Three jobs. The first two only read, and the third waits for both. Every command
+below is in the workflow file, with the names taken from its `env`; this section
+shows no command for a person to type.
 
-**Job 1, the bucket is private (reads only).** Nobody chose the bucket's
+**The key's environment is main only (reads only).** The third job names the
+GitHub environment `street-map-load`, where the bucket's write key is set
+(owner, 2026-11-16). GitHub starts a job in an environment only from a ref the
+environment's branch list allows, and makes a missing environment on first use
+with no list at all. So this job reads the environment and its branch list
+first, with the run's own token and no secret (`${GITHUB_REPOSITORY}` is this
+repository's name, filled in by the runner):
+
+```bash
+gh api repos/${GITHUB_REPOSITORY}/environments/street-map-load
+```
+
+```bash
+gh api repos/${GITHUB_REPOSITORY}/environments/street-map-load/deployment-branch-policies
+```
+
+One answer passes: the environment exists, it keeps a branch list of its own,
+and the list is branch `main` alone. A missing environment, an error, a list
+that also allows a tag, a pattern or a second branch, and an environment with no
+list all stop the run before the third job starts.
+
+**The bucket is private (reads only).** Nobody chose the bucket's
 settings: a staging deploy made it ("When the binding lands before the bucket"),
 so the job does not take them on trust. It reads them, with the lockfile's
 wrangler and the staging deploy credential CI already uses:
@@ -403,23 +439,23 @@ writes nothing and can run at any time.
    (The Worker also reads a switch, `STREET_MAP`, and draws nothing from a
    loaded object while an environment carries `"off"`. Staging carries `"on"`
    since 2026-11-15, set before any load, so this holds for the load itself.)
-2. **The bucket and the key are settled.** All of it is the owner's, in Cloudflare
-   and GitHub (OSE ADR-035, "Open, for the owner"):
-   - **The bucket.** `ose-map-tiles` exists because a deploy created it, with
-     default settings nobody chose. Check that it has no public r2.dev address
-     and no custom domain, and that its jurisdiction is one the owner accepts. A
-     jurisdiction cannot be changed later: if it is wrong, delete the bucket
-     while it is empty and make it by hand.
-   - **The write key.** Decide where `R2_MAP_TILES_ACCESS_KEY_ID` and
-     `R2_MAP_TILES_SECRET_KEY` live so that only `main` can reach them. The
-     `staging` environment has no branch policy (read 2026-11-15) and cannot get
-     one while every branch must deploy to staging, so a job on any branch can
-     read a secret set there. An environment of its own, limited to `main`, needs
-     a small change to the workflow's `environment:` line in a pull request.
-   - **Empty, just before the load.** A branch deployed to staging holds the
-     `MAP_TILES` binding and could have written the key. The workflow refuses to
-     load when the key is already there; the owner looks at the bucket's object
-     list as well.
+2. **The bucket and the key are settled (owner, 2026-11-16).** What is left is
+   the owner's, in Cloudflare and GitHub:
+   - **The bucket: kept.** `ose-map-tiles`, as the deploy made it (location
+     WNAM, jurisdiction `default`, standard storage). Every run reads that it
+     has no public r2.dev address and no custom domain, and stops if either is
+     on.
+   - **The write key: on the `street-map-load` environment.** The owner makes
+     that environment once, usable from branch `main` only, and sets
+     `R2_MAP_TILES_ACCESS_KEY_ID` and `R2_MAP_TILES_SECRET_KEY` there and
+     nowhere else ("Staging, in order", step 3, has the clicks). The
+     environment is made **before** the next dispatch. A run that finds no
+     environment of that name, or one that a branch could use, stops in the job
+     "The key's environment is main only (reads only)" and the load job does
+     not start.
+   - **Empty, just before the load.** Look at the bucket's object list: it
+     holds no object. The workflow also refuses to load when the key is
+     already there.
 3. **Measure, and decide the zoom. Decided: the cut gets a top zoom of 14
    (owner, 2026-11-16).** `measure` gives the file's size. The build holds
    tiles deeper than the Worker reads (zoom 14 at most); whether
@@ -458,12 +494,12 @@ writes nothing and can run at any time.
    (UTC)** ("Names", "The build's window").
 
 4. **The licence.** [`NOTICE.md`](../../NOTICE.md) lists the duties and what is
-   NOT CLEAR. Staging is public, so the first load is the first public street:
-   the owner answers its question 2 (before the load, or before production)
-   first. Staging carries `STREET_MAP = "on"` (owner 2026-11-15, set before any
-   load), so the load is the first public street and the question is answered
-   before the load. Setting the switch back to `"off"` first (see "Back to
-   hexagons only") is the way to load without showing a street.
+   NOT CLEAR. **Answered (owner, 2026-11-16): the list is done before
+   production, not before the staging load** (the decisions at the top have the
+   owner's words). Staging carries `STREET_MAP = "on"` (owner 2026-11-15, set
+   before any load), so the load puts the first street on a staging page with
+   the credit as it is today. Setting the switch back to `"off"` first (see
+   "Back to hexagons only") is the way to load without showing a street.
 5. **The drawer and its checks are corrected** (findings R7, R17, R18). This
    needs no archive and runs beside the steps above. It must be done before the
    flag is set to `"true"` (step 9 of "Staging, in order"), not before the load.
@@ -483,8 +519,8 @@ writes nothing and can run at any time.
      "There are no custom domains connected to this bucket." The account lists
      the bucket as created 2026-11-15 01:07 UTC, location WNAM, jurisdiction
      `default`, standard storage, with no object. `ose-map-tiles-staging`
-     (created 2026-11-10) was still listed that day. Whether `default` is the
-     jurisdiction the owner accepts is the owner's to say, before the load.
+     (created 2026-11-10) was still listed that day. The owner keeps this
+     bucket as it is (2026-11-16).
      Run 43753563640 read the two privacy settings again the same day, with
      the same two answers.
    - **The rule for any later bucket is unchanged:** the owner creates it
@@ -612,14 +648,29 @@ writes nothing and can run at any time.
      how long it takes, the check with the Worker's reader, or any rclone call
      that reaches the bucket: those are `LOAD:` steps and have never run.
 
-3. **Owner: create the token and set the secret.** In the Cloudflare dashboard:
-   an R2 API token, "Object Read & Write", scoped to `ose-map-tiles` only.
-   In GitHub, repository settings: the Access Key ID as
-   `R2_MAP_TILES_ACCESS_KEY_ID` and the Secret Access Key as
-   `R2_MAP_TILES_SECRET_KEY`, on the `staging` environment (the load job names
-   that environment, so no other job can read them) or as repository secrets (the
-   job reads either). The key pair goes from one browser tab to the other. It
-   never goes into chat, a ticket, a file in this repo or an agent's terminal.
+3. **Owner: make the environment, create the token and set the secret.**
+   - **The environment, once.** In GitHub: the repository's **Settings**,
+     **Environments**, **New environment**, name `street-map-load`,
+     **Configure environment**. Under **Deployment branches and tags** choose
+     **Selected branches and tags**, **Add deployment branch or tag rule**,
+     ref type **Branch**, name `main`, **Add rule**. Leave no other rule in
+     the list. **Required reviewers** is the owner's choice: with the owner
+     ticked, every run waits for the owner's approval before the load job
+     starts, `measure` runs included.
+   - **Check it.** Dispatch `measure` (step 2). The job "The key's environment
+     is main only (reads only)" prints "street-map-load can be used from
+     branch main alone" and the number of required reviewers. If it is red, its
+     message says what the environment allows; change the rule and dispatch
+     again. Set no secret until it is green.
+   - **The token.** In the Cloudflare dashboard: an R2 API token, "Object Read
+     & Write", scoped to `ose-map-tiles` only.
+   - **The secret.** In GitHub, on the `street-map-load` environment's own page
+     (**Environment secrets**, **Add environment secret**): the Access Key ID
+     as `R2_MAP_TILES_ACCESS_KEY_ID` and the Secret Access Key as
+     `R2_MAP_TILES_SECRET_KEY`. Not on the `staging` environment and not as
+     repository secrets. The key pair goes from one browser tab to the other.
+     It never goes into chat, a ticket, a file in this repo or an agent's
+     terminal.
 
 4. **Owner: load.** The same dispatch with `mode` = `load`. Green means the
    bucket lists `us-20261115.pmtiles` at the checked size. Any red is explained
@@ -656,8 +707,9 @@ writes nothing and can run at any time.
      remove the object production reads.
 
 7. **Owner: delete the token** in the Cloudflare dashboard, and the two secrets
-   in GitHub. The Worker reads through its binding, not the token. A refresh
-   makes a new one.
+   on the `street-map-load` environment in GitHub. The environment itself
+   stays, for the next refresh. The Worker reads through its binding, not the
+   token. A refresh makes a new one.
 
 8. **Turn the switch on, and look at staging.** The Worker reads a switch,
    `STREET_MAP`, a plain value in each vars block of `wrangler.toml`
@@ -756,6 +808,8 @@ writes nothing and can run at any time.
 | Type STAGING / Dispatch this workflow from main   | the dispatch was not confirmed, or came from a branch               | dispatch again, from `main`                                                                    |
 | the workflow loads X, the Worker reads Y          | the workflow, `wrangler.toml` and this runbook name different files | a PR that makes the three agree                                                                |
 | the r2.dev public URL is not reported off         | the bucket is public, or the read failed                            | owner: turn public access off in the dashboard, then dispatch again                            |
+| the environment "street-map-load" was not read    | the environment is not made yet, or GitHub did not answer           | owner: step 3, "The environment, once"; then dispatch again                                    |
+| "street-map-load" can be used from …              | the environment's branch list is not branch `main` alone            | owner: leave one rule, branch `main`, in the environment's list; then dispatch again           |
 | `sha256sum` reports FAILED                        | a release file is not the pinned one                                | nothing was unpacked or run; find out why before changing a digest                             |
 | Build … is not offered at Protomaps any more      | the build aged out (about a week)                                   | a PR that moves the build, the key, `wrangler.toml` and this runbook to a listed build         |
 | it does not fit this runner                       | the file is larger than the runner's free disk                      | "If the file does not fit"                                                                     |

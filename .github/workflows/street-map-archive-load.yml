@@ -39,8 +39,12 @@
 #   R2_MAP_TILES_ACCESS_KEY_ID, R2_MAP_TILES_SECRET_KEY
 #       an R2 API token, "Object Read & Write", scoped to ose-map-tiles
 #       only. Read by the load job's three bucket steps and by nothing else. Set
-#       on the `staging` environment (the load job names it) or at repository
-#       level. The owner creates the token and sets the secret; an agent never does.
+#       on the `street-map-load` environment and nowhere else (owner, 2026-11-16):
+#       the load job names it, and the environment's branch list is branch main
+#       alone, so no branch's copy of a workflow can read the pair. The first job
+#       below reads that list and stops the run unless it is main alone. The
+#       owner creates the environment, the token and the secret; an agent never
+#       does.
 #   CLOUDFLARE_ACCOUNT_ID   the R2 endpoint, https://<account>.r2.cloudflarestorage.com
 #   CLOUDFLARE_API_TOKEN_OSE   the bucket-private job only: two reads of the
 #       bucket's settings with the lockfile's wrangler. That job runs on its own
@@ -83,6 +87,10 @@ env:
   PROTOMAPS_BUILD: '20261115'
   ARCHIVE_KEY: us-20261115.pmtiles
   BUCKET: ose-map-tiles
+  # The environment the load job names, typed again here for the job that reads
+  # it (a job's `environment:` cannot take this value from `env`). A test holds
+  # the two and scripts/ci/street-map-archive-load.mjs to one name.
+  LOAD_ENVIRONMENT: street-map-load
   REGION_FILE: docs/runbooks/street-map-us-region.geojson
   # The top zoom of the cut (owner, 2026-11-16): the deepest zoom the Worker
   # reads, MAX_ZOOM in workers/oursharedevents/src/lib/street-map.ts. A test
@@ -166,14 +174,60 @@ jobs:
       - name: 'Stop unless both reads say private'
         run: node scripts/ci/street-map-archive-load.mjs private "$RUNNER_TEMP/dev-url.txt" "$RUNNER_TEMP/domains.txt"
 
+  # Reads only, with the run's own token and no secret. The load job names an
+  # environment, and GitHub makes a missing environment on first use with no
+  # branch list. So this job reads the environment first and the load job waits
+  # for it: a missing or open environment stops the run before the job that
+  # names it starts.
+  key-environment:
+    name: "The key's environment is main only (reads only)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: 'Refuse unless STAGING was typed'
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "STAGING" ]; then
+            echo "::error::Type STAGING in the confirm input. This workflow runs against staging only."
+            exit 1
+          fi
+
+      - name: 'Refuse unless dispatched from main'
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Dispatch this workflow from main. A branch's copy never reaches the staging bucket."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+
+      # A failed read is kept and judged, not skipped: the judge passes one
+      # shape only, so an error answer or an empty file stops the run.
+      - name: 'Read the environment and its branch list'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/environments/${LOAD_ENVIRONMENT}" > "$RUNNER_TEMP/environment.json" || true
+          gh api "repos/${GITHUB_REPOSITORY}/environments/${LOAD_ENVIRONMENT}/deployment-branch-policies" > "$RUNNER_TEMP/branch-list.json" || true
+
+      - name: 'Stop unless the environment allows branch main alone'
+        run: node scripts/ci/street-map-archive-load.mjs environment "$RUNNER_TEMP/environment.json" "$RUNNER_TEMP/branch-list.json"
+
   load:
     name: 'Cut, check and load (or measure only)'
-    needs: [bucket-private]
+    needs: [bucket-private, key-environment]
     runs-on: ubuntu-24.04
     # The cut reads a 139 GB build at Protomaps by byte range; how long the United
     # States part takes is not measured yet. Each long step has its own limit.
     timeout-minutes: 300
-    environment: staging
+    environment: street-map-load
     steps:
       - name: 'Refuse unless STAGING was typed'
         env:
