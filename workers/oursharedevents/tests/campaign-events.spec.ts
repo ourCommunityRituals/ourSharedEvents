@@ -53,6 +53,7 @@
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { route } from '../src/router';
+import { mintBeaconToken } from '../src/lib/beacon-token';
 import {
   BRANDS,
   UNKNOWN_ID,
@@ -150,11 +151,24 @@ async function listed(caller: Parameters<typeof callAs>[0], campaignId: string):
   return body.items.map((i) => i.id);
 }
 
+/** The claim inside a beacon token: the part before the full stop, base64url JSON. */
+function openClaim(body: string): Record<string, unknown> {
+  const pad = '='.repeat((4 - (body.length % 4)) % 4);
+  return JSON.parse(atob(body.replace(/-/g, '+').replace(/_/g, '/') + pad));
+}
+
 /** Error bodies differ only by the id echoed, the request id and the time. */
 function shape(text: string, ...ids: string[]): string {
   let out = text;
   for (const id of ids) out = out.split(id).join('<id>');
   return out
+    .replace(
+      // A beacon token is `<claim>.<HMAC>` (lib/beacon-token.ts). It is compared
+      // as its claim, opened, without the expiry and the signature over it, so
+      // the second a read fell in is not a change and a new field in the claim is.
+      /"beacon_token":"([A-Za-z0-9_-]+)\.[0-9a-f]+"/g,
+      (_, body: string) => `"beacon_token":${JSON.stringify({ ...openClaim(body), exp: '<exp>' })}`
+    )
     .replace(/"requestId":"[^"]*"/g, '"requestId":"<r>"')
     .replace(/"timestamp":"[^"]*"/g, '"timestamp":"<t>"');
 }
@@ -416,6 +430,32 @@ describe("an event's campaign is not public", () => {
     }
     return out;
   }
+
+  // The sponsor bundle carries a beacon token, and the token's claim holds an
+  // expiry in whole seconds. The case below this one reads the bundle twice and
+  // compares the text, so two reads either side of a second differed in the
+  // token alone: it went red on a pull request that touched no campaign code
+  // (run 43783189065, 2026-11-16, expiries ...1247 and ...1248).
+  // @born-red beacon token expiry in the public comparison | method: this case was added while shape() left the token as it came, and its first comparison failed (two tokens one second apart read as a change); then, with the whole token masked in shape() in place of the claim being opened, its "new field" comparison failed (a claim that named the campaign read as no change) | date: 2026-11-16
+  test('the comparison reads a beacon token as its claim: the expiry is not a change, a new field is', async () => {
+    const signing = { SHARED_REPORT_SIGNING_SECRET: 'campaign-events-spec' };
+    const bundle = (token: string | null) =>
+      JSON.stringify({ bundle: { sponsors: [{ id: 'ce-s', beacon_token: token }] } });
+    const first = await mintBeaconToken(signing, evt(A), 'ce-s', 600);
+    const aSecondLater = await mintBeaconToken(signing, evt(A), 'ce-s', 601);
+    expect(first).not.toBeNull();
+    expect(aSecondLater).not.toBe(first);
+    expect(shape(bundle(aSecondLater))).toBe(shape(bundle(first)));
+
+    const claim = openClaim(first!.split('.')[0]);
+    const naming = btoa(JSON.stringify({ ...claim, campaign_id: cmp(A) }))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+    const named = `${naming}.${'0'.repeat(64)}`;
+    expect(shape(bundle(named))).not.toBe(shape(bundle(first)));
+    expect(shape(bundle(named))).toContain(cmp(A));
+  });
 
   test('no public read changes when an event joins a campaign, and none names it', async () => {
     const before = await publicTexts(evt(A));
