@@ -2,7 +2,8 @@
  * OSE-801 (A4, milestone M0) — the honesty lexicon must hold at the persistence
  * layer, not only at the surface.
  *
- * Invariant #25 / the honesty doctrine ban a catalogue of audience-inflation and
+ * Invariant #30 (honesty_lexicon in the OCR-docs brain; this header said #25
+ * until 2026-11-16, which is the sponsor share covenant) bans a catalogue of audience-inflation and
  * re-identification words on every rendered surface. But a lint that guards the
  * surface while the STORAGE layer speaks the banned vocabulary is aspirational —
  * every ORM type, export header, log line and error message inherits a banned

@@ -32,6 +32,11 @@ lexicon had no category for a name that holds a banned word without the banned m
 The shared brain does not settle it. The lexicon is draft article #27 in an OCR-docs proposal, not
 yet in `architectural-invariants.yaml`, and its text knows only ticketed exemptions (OSE-2035).
 
+**Since 2026-11-16 the brain does settle it.** The lexicon is registered as invariant #30,
+`honesty_lexicon`, with the allowance this ADR describes written in as its own kind of exception
+(OCR-docs PR 182). The numbers 26 and 27 had gone to other invariants, so the "#27" above is the
+draft's number, not the registry's.
+
 ## Decision
 
 Keep the name the owner chose, and give the lint a second, separate list:
