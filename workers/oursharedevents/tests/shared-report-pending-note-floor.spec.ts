@@ -26,7 +26,6 @@
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { usePaidReportPlan } from './helpers/paid-report-plan';
-import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 import { mintSignedLinkToken, type SignedLinkRole } from '../src/lib/shared-report-auth';
 
