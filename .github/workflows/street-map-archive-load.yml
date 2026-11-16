@@ -12,15 +12,13 @@
 #
 #   measure (default)  reads the bucket's two privacy settings, downloads the two
 #                      tools and checks their SHA-256, runs `pmtiles extract
-#                      --dry-run` and reports the archive size against the
-#                      runner's free disk. Then the same dry run at the deepest
-#                      zoom the Worker reads, and both sizes in the summary: a
-#                      figure for the owner's zoom decision, which judges
-#                      nothing. Uses no bucket credential and writes nothing
-#                      anywhere.
+#                      --dry-run` at the cut's top zoom and reports the archive
+#                      size against the runner's free disk. Uses no bucket
+#                      credential and writes nothing anywhere.
 #
 #   load               the same, then: refuses if the bucket already holds the key,
-#                      cuts the file, runs the Worker's own reader over it
+#                      cuts the file with the same top zoom, runs the Worker's own
+#                      reader over it
 #                      (scripts/check-street-map-archive.mjs, must end in PASS),
 #                      uploads it under the dated key, and confirms the bucket
 #                      lists the key at the byte size in the check record.
@@ -86,9 +84,10 @@ env:
   ARCHIVE_KEY: us-20261115.pmtiles
   BUCKET: ose-map-tiles
   REGION_FILE: docs/runbooks/street-map-us-region.geojson
-  # The deepest zoom the Worker reads: MAX_ZOOM in
-  # workers/oursharedevents/src/lib/street-map.ts, and a test holds this to it.
-  # Used by the measure's second dry run only. No cut reads it.
+  # The top zoom of the cut (owner, 2026-11-16): the deepest zoom the Worker
+  # reads, MAX_ZOOM in workers/oursharedevents/src/lib/street-map.ts. A test
+  # holds this to it, and the measure step stops unless they agree on the commit
+  # it runs. The dry run and the cut both take it; no deeper tile is loaded.
   WORKER_TOP_ZOOM: '14'
   # go-pmtiles: the release the runbook and the proof were written against. The
   # digest is the one GitHub lists beside the Linux x86_64 release file (read
@@ -300,21 +299,17 @@ jobs:
         timeout-minutes: 30
         env:
           WORK: ${{ steps.work.outputs.dir }}
-          # A choice input: 'measure' or 'load', nothing typed.
-          MODE: ${{ inputs.mode }}
         run: |
           set -euo pipefail
           cd "$WORK"
-          pmtiles extract "https://build.protomaps.com/${PROTOMAPS_BUILD}.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}" --dry-run 2>&1 | tee "$RUNNER_TEMP/dry-run.log"
+          # The cut keeps no tile above the Worker's top zoom (owner, 2026-11-16).
+          # Stop, before any pmtiles command, unless the zoom this file names is
+          # the Worker's MAX_ZOOM on this commit. The cut runs only after this step.
+          node "${GITHUB_WORKSPACE}/scripts/ci/street-map-archive-load.mjs" topzoom
+          # The same command as the cut, with --dry-run: the fit is judged on what is cut.
+          pmtiles extract "https://build.protomaps.com/${PROTOMAPS_BUILD}.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}" --maxzoom="${WORKER_TOP_ZOOM}" --dry-run 2>&1 | tee "$RUNNER_TEMP/dry-run.log"
           FREE="$(df --output=avail -B1 "$WORK" | tail -n 1 | tr -d ' ')"
           node "${GITHUB_WORKSPACE}/scripts/ci/street-map-archive-load.mjs" fits "$RUNNER_TEMP/dry-run.log" "$FREE"
-          # A figure for the owner's zoom decision, in measure mode only: the same
-          # dry run at the deepest zoom the Worker reads. It judges nothing, and a
-          # load neither makes it nor waits on it. The cut above keeps every zoom.
-          if [ "$MODE" = "measure" ]; then
-            pmtiles extract "https://build.protomaps.com/${PROTOMAPS_BUILD}.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}" --maxzoom="${WORKER_TOP_ZOOM}" --dry-run 2>&1 | tee "$RUNNER_TEMP/dry-run-top-zoom.log"
-            node "${GITHUB_WORKSPACE}/scripts/ci/street-map-archive-load.mjs" topzoom "$RUNNER_TEMP/dry-run.log" "$RUNNER_TEMP/dry-run-top-zoom.log"
-          fi
 
       # Before the cut, so an hour is not spent on a key that is taken.
       - name: 'LOAD: the bucket does not hold the key yet (never overwrite)'
@@ -340,7 +335,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$WORK"
-          pmtiles extract "https://build.protomaps.com/${PROTOMAPS_BUILD}.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}"
+          pmtiles extract "https://build.protomaps.com/${PROTOMAPS_BUILD}.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}" --maxzoom="${WORKER_TOP_ZOOM}"
           ls -l "${ARCHIVE_KEY}"
 
       - name: "LOAD: check the file with the Worker's own reader, and stop unless it ends in PASS"

@@ -212,17 +212,16 @@ describe('fits: the dry-run size against the free disk', () => {
   });
 });
 
-// The owner decides, before the first load, whether the cut gets a top zoom
-// (review finding R6): the Worker reads zoom MAX_ZOOM at most, and a loaded
-// object is locked. The measure run of 2026-11-15 (43753563640) gave one
-// figure, 20 GB with every zoom kept, which does not say what a top zoom would
-// save. So `measure` makes a second dry run at the Worker's top zoom and
-// prints both sizes. It judges nothing: the fit is still the first dry run's.
+// The cut keeps no tile above the Worker's top zoom (owner, 2026-11-16; review
+// finding R6): the Worker reads zoom MAX_ZOOM at most, and a loaded object is
+// locked. The measure run 43792020396 gave both sizes for build 20261115 by
+// dry run: 20 GB with every zoom kept, 9.7 GB with a top zoom of 14. So the dry
+// run and the cut both take WORKER_TOP_ZOOM, and the measure step stops before
+// any pmtiles command unless that is the Worker's MAX_ZOOM.
 //
-// @born-red street-map measure, top zoom | method: before the code existed, 27 cases of this file were red (every case of this group on "is not a function", "the real workflow", the six workflow faults that need the step, "the real files agree" and the two runbook faults). With the code in place, eight faults in the real files, one at a time: workerTopZoom answering 14 whatever the source says (4 red); topZoomProblems finding nothing (7 red); the larger-than-the-whole rule off (1 red); a missing capped size let through (1 red); the measure-mode guard removed from the workflow (4 red, "the real workflow" among them); WORKER_TOP_ZOOM set to 15 (3 red: this group's "the real files agree" and the drift group's); the report line removed (4 red); the runbook's top-zoom block removed (4 red) | date: 2026-11-15
-describe("topzoom: the same dry run at the Worker's top zoom, for the owner's zoom decision", () => {
-  const line = (size) =>
-    `2026/11/15 19:39:40 extract.go:612: Extract transferred 21 GB (overfetch 0.05) for an archive size of ${size}\n`;
+// @born-red street-map cut, top zoom | method: with the workflow and the script changed and the runbook left as it was, 6 cases were red ("the real files agree" among them). With all three changed, eight faults in the real files, one at a time: --maxzoom taken off the cut (11 red, "the real workflow" and "the real files agree" among them); --maxzoom taken off the dry run (6 red); the topzoom line taken out of the measure step (5 red); the zoom typed into the cut as a number (10 red); WORKER_TOP_ZOOM set to 15 (2 red); the runbook's cut left without its top zoom (3 red); the runbook's dry run left without it (2 red); fitSummary not naming the zoom (1 red) | date: 2026-11-16
+// @born-red street-map measure, top zoom | method: before the code existed, 27 cases of this file were red (every case of this group on "is not a function", "the real workflow", the six workflow faults that need the step, "the real files agree" and the two runbook faults). With the code in place, faults in the real files, one at a time: workerTopZoom answering 14 whatever the source says (4 red); topZoomProblems finding nothing (7 red); WORKER_TOP_ZOOM set to 15 (3 red: this group's "the real files agree" and the drift group's). The second dry run this line was written for, and its report, were taken out on 2026-11-16 when the cut itself got the top zoom; workerTopZoom and topZoomProblems stayed | date: 2026-11-15
+describe("topzoom: the cut's top zoom is the deepest zoom the Worker reads", () => {
   const source = (zoom) =>
     `export const MAX_TILES = 12;\n/** The deepest zoom read. */\nexport const MAX_ZOOM = ${zoom};\n`;
 
@@ -255,41 +254,26 @@ describe("topzoom: the same dry run at the Worker's top zoom, for the owner's zo
     expect(problems[0]).toMatch(want);
   });
 
-  test('reports both sizes, and says the figure judges nothing', () => {
-    const report = load.topZoomReport(
-      load.parseDryRunSize(line('20 GB')),
-      load.parseDryRunSize(line('9.4 GB')),
-      14
+  test('the summary names the top zoom the size was measured at', () => {
+    const size = load.parseDryRunSize(
+      '2026/11/16 02:26:25 extract.go:612: Extract transferred 10 GB (overfetch 0.05) for an archive size of 9.7 GB\n'
     );
-    expect(report.problems).toEqual([]);
-    const text = report.lines.join('\n');
-    expect(text).toContain('**9.4 GB**');
-    expect(text).toContain('**20 GB**');
-    expect(text).toContain('top zoom of 14');
-    expect(text).toMatch(/about 10\.6 GB less/);
-    expect(text).toMatch(/does not change what a load cuts/);
+    const text = load.fitSummary(size, load.diskVerdict(size, 90e9), {
+      build: '20261115',
+      zoom: '14',
+    });
+    expect(text).toContain('**9.7 GB**');
+    expect(text).toContain('build `20261115`, cut with a top zoom of 14.');
+    expect(text).toContain('the cut needs 10.8 GB and the runner has 90.0 GB free');
   });
 
-  test('two sizes that round the same are reported as no saving it can show', () => {
-    const size = load.parseDryRunSize(line('20 GB'));
-    const report = load.topZoomReport(size, size, 14);
-    expect(report.problems).toEqual([]);
-    expect(report.lines.join('\n')).toMatch(/no saving that the rounded figures show/);
-  });
-
-  test.each([
-    ['the capped dry run printed no size', '20 GB', null, /top zoom .* printed no archive size/],
-    ['the whole dry run printed no size', null, '9.4 GB', /every zoom printed no archive size/],
-    ['a capped size above the whole one', '9.4 GB', '20 GB', /larger than the dry run with every/],
-  ])('rainy: %s is a stop, and nothing is reported', (_, whole, capped, want) => {
-    const report = load.topZoomReport(
-      whole && load.parseDryRunSize(line(whole)),
-      capped && load.parseDryRunSize(line(capped)),
-      14
-    );
-    expect(report.problems).toHaveLength(1);
-    expect(report.problems[0]).toMatch(want);
-    expect(report.lines).toEqual([]);
+  test('rainy: a dry run that printed no size is said so in the summary, not left blank', () => {
+    const text = load.fitSummary(null, load.diskVerdict(null, 90e9), {
+      build: '20261115',
+      zoom: '14',
+    });
+    expect(text).toContain('**unknown size**');
+    expect(text).toContain('the dry run printed no archive size');
   });
 });
 
@@ -622,27 +606,37 @@ function shapeProblems(text) {
   if (!/FREE="\$\(df --output=avail -B1 "\$WORK"/.test(dry)) {
     out.push('the free disk is not read from the disk the file is written to');
   }
-  // The second dry run, at the Worker's top zoom: a figure for the owner's zoom
-  // decision. After the fit (which it never replaces), in measure mode only (a
-  // load does not wait on it), at the zoom the workflow's env names (which a
-  // test holds to the Worker's MAX_ZOOM), and reported beside the first.
+  // The top zoom (owner, 2026-11-16): the cut keeps no tile above the deepest
+  // zoom the Worker reads. The dry run the fit reads and the cut both take it
+  // from the workflow's env, which a test holds to the Worker's MAX_ZOOM, and
+  // the measure step stops before any pmtiles command unless they agree on the
+  // commit it runs. The cut only runs after that step.
+  const TOP_ZOOM = ' --maxzoom="${WORKER_TOP_ZOOM}"';
+  const dryRuns = commands(steps[order['dry run']], 'pmtiles');
+  const cuts = commands(steps[order.cut], 'pmtiles').filter((c) => /^pmtiles extract /.test(c));
   if (
-    !/ fits "\$RUNNER_TEMP\/dry-run\.log" "\$FREE"\n[\s\S]*^if \[ "\$MODE" = "measure" \]; then\n[ \t]+pmtiles extract [^\n]* --maxzoom="\$\{WORKER_TOP_ZOOM\}" --dry-run 2>&1 \| tee "\$RUNNER_TEMP\/dry-run-top-zoom\.log"\n[ \t]+node [^\n]* topzoom "\$RUNNER_TEMP\/dry-run\.log" "\$RUNNER_TEMP\/dry-run-top-zoom\.log"\nfi$/m.test(
+    !/^pmtiles extract [^\n]* --maxzoom="\$\{WORKER_TOP_ZOOM\}" --dry-run 2>&1 \| tee "\$RUNNER_TEMP\/dry-run\.log"$/m.test(
       dry
     )
   ) {
     out.push(
-      "the measure does not end with a dry run at the Worker's top zoom, in measure mode only, reported beside the first"
+      "the fit is not judged on a dry run at the cut's top zoom, taken from the workflow env"
     );
   }
-  if (/--maxzoom[^\n]*tee "\$RUNNER_TEMP\/dry-run\.log"/.test(dry)) {
-    out.push('the fit is judged on a dry run with a top zoom, and the cut keeps every zoom');
+  if (cuts.length !== 1 || !cuts[0].endsWith(TOP_ZOOM)) {
+    out.push(
+      'the cut does not end with the top zoom from the workflow env: it would keep a zoom the Worker never reads, or one no test holds to the Worker'
+    );
   }
-  if (commands(steps[order['dry run']], 'pmtiles').length !== 2) {
-    out.push('the measure step runs pmtiles other than the two dry runs');
+  if (dryRuns.length !== 1) {
+    out.push('the measure step runs pmtiles other than the one dry run');
+  } else if (cuts.length === 1 && dryRuns[0].split(' --dry-run')[0] !== cuts[0]) {
+    out.push('the dry run is not the cut with --dry-run: the fit is judged on another file');
   }
-  if (steps[order['dry run']]?.env?.MODE !== '${{ inputs.mode }}') {
-    out.push('the measure step does not take the mode from the dispatch');
+  if (!/^node [^\n]*street-map-archive-load\.mjs" topzoom\n[\s\S]*^pmtiles extract /m.test(dry)) {
+    out.push(
+      "the measure step does not stop on a top zoom that is not the Worker's, before any pmtiles command"
+    );
   }
   if (!/^\d+$/.test(String(doc.env?.WORKER_TOP_ZOOM ?? ''))) {
     out.push('the top zoom is not a whole number in the workflow env');
@@ -875,55 +869,59 @@ describe('the workflow: dispatched by hand, staging only, the credential where i
       }),
     ],
     [
-      'the top-zoom dry run dropped',
+      'the top zoom taken off the dry run the fit reads',
       doc((d, steps) => {
         const s = stepOf(steps, '--dry-run');
-        s.run = s.run.replace(/\n[ \t]+pmtiles extract [^\n]* --maxzoom=[^\n]*/, '');
+        s.run = s.run.replace(' --maxzoom="${WORKER_TOP_ZOOM}" --dry-run', ' --dry-run');
       }),
     ],
     [
-      'the top-zoom dry run made in load mode too',
+      'the top zoom taken off the cut, so every zoom is loaded',
       doc((d, steps) => {
-        const s = stepOf(steps, '--dry-run');
-        s.run = s.run.replace('if [ "$MODE" = "measure" ]; then', 'if true; then');
+        const s = stepOf(steps, 'ls -l');
+        s.run = s.run.replace(' --maxzoom="${WORKER_TOP_ZOOM}"', '');
       }),
     ],
     [
-      'the top zoom typed into the command, where no test holds it to the Worker',
+      'the top zoom typed into the cut, where no test holds it to the Worker',
       doc((d, steps) => {
-        const s = stepOf(steps, '--dry-run');
-        s.run = s.run.replace('--maxzoom="${WORKER_TOP_ZOOM}"', '--maxzoom=12');
+        const s = stepOf(steps, 'ls -l');
+        s.run = s.run.replace('--maxzoom="${WORKER_TOP_ZOOM}"', '--maxzoom=14');
       }),
     ],
     [
-      'the top-zoom dry run not reported',
+      'the top zoom typed into the dry run, where no test holds it to the Worker',
       doc((d, steps) => {
         const s = stepOf(steps, '--dry-run');
-        s.run = s.run.replace(/\n[ \t]+node [^\n]* topzoom [^\n]*/, '');
+        s.run = s.run.replace('--maxzoom="${WORKER_TOP_ZOOM}"', '--maxzoom=14');
       }),
     ],
     [
-      'the top-zoom dry run written over the log the fit reads',
+      'the cut given a flag the dry run does not have',
       doc((d, steps) => {
-        const s = stepOf(steps, '--dry-run');
-        s.run = s.run.replace('dry-run-top-zoom.log"\n', 'dry-run.log"\n');
+        const s = stepOf(steps, 'ls -l');
+        s.run = s.run.replace(' --region=', ' --minzoom=6 --region=');
       }),
     ],
     [
-      'the top zoom put on the dry run the fit reads',
+      "the top zoom not held to the Worker's before the dry run",
       doc((d, steps) => {
         const s = stepOf(steps, '--dry-run');
-        s.run = s.run.replace(' --dry-run 2>&1', ' --maxzoom=14 --dry-run 2>&1');
+        s.run = s.run.replace(/\nnode [^\n]* topzoom\n/, '\n');
       }),
     ],
     [
-      'the mode typed into the measure step',
-      doc((d, steps) => (stepOf(steps, '--dry-run').env.MODE = 'measure')),
+      "the top zoom held to the Worker's only after the dry run",
+      doc((d, steps) => {
+        const s = stepOf(steps, '--dry-run');
+        const held = /\nnode [^\n]* topzoom\n/.exec(s.run)[0];
+        s.run = `${s.run.replace(held, '\n').trimEnd()}${held}`;
+      }),
     ],
     ['a top zoom that is not a whole number', doc((d) => (d.env.WORKER_TOP_ZOOM = '14.5'))],
     ['no top zoom in the workflow env', doc((d) => delete d.env.WORKER_TOP_ZOOM)],
     [
-      'a third pmtiles command in the measure step',
+      'a second pmtiles command in the measure step',
       doc((d, steps) => {
         const s = stepOf(steps, '--dry-run');
         s.run = `${s.run}\npmtiles show "\${ARCHIVE_KEY}"\n`;
@@ -1095,10 +1093,9 @@ const shown = (runbookText) =>
 const KINDS = {
   'the r2.dev read': /^npx wrangler r2 bucket dev-url get \S+$/,
   'the custom-domain read': /^npx wrangler r2 bucket domain list \S+$/,
-  'the dry run': /^pmtiles extract \S+ \S+ --region=\S+ --dry-run$/,
-  'the top-zoom dry run': /^pmtiles extract \S+ \S+ --region=\S+ --maxzoom=\d+ --dry-run$/,
+  'the dry run': /^pmtiles extract \S+ \S+ --region=\S+ --maxzoom=\d+ --dry-run$/,
   'the bucket listing': /^rclone lsjson r2:\S+ /,
-  'the cut': /^pmtiles extract \S+ \S+ --region=\S+$/,
+  'the cut': /^pmtiles extract \S+ \S+ --region=\S+ --maxzoom=\d+$/,
   'the check': /^node workers\/oursharedevents\/scripts\/check-street-map-archive\.mjs \S+$/,
   'the upload': /^rclone copyto \S+ r2:\S+ /,
 };
@@ -1214,18 +1211,28 @@ describe('the names typed three times are one set of names', () => {
     ['one character of the rclone digest', 'TOOL_RCLONE_SHA256: b00f', 'TOOL_RCLONE_SHA256: b00e'],
     [
       'the cut from a build typed in the command',
-      '"https://build.protomaps.com/${PROTOMAPS_BUILD}.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}"\n',
-      '"https://build.protomaps.com/20261116.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}"\n',
+      '"https://build.protomaps.com/${PROTOMAPS_BUILD}.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}" --maxzoom="${WORKER_TOP_ZOOM}"\n',
+      '"https://build.protomaps.com/20261116.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}" --maxzoom="${WORKER_TOP_ZOOM}"\n',
     ],
     [
       'the cut with a box in place of the region file',
-      '--region="${GITHUB_WORKSPACE}/${REGION_FILE}"\n',
-      '--bbox=-125.1,24.3,-66.8,49.5\n',
+      '--region="${GITHUB_WORKSPACE}/${REGION_FILE}" --maxzoom="${WORKER_TOP_ZOOM}"\n',
+      '--bbox=-125.1,24.3,-66.8,49.5 --maxzoom="${WORKER_TOP_ZOOM}"\n',
     ],
     [
       'the cut with more download threads than the runbook shows',
-      '--region="${GITHUB_WORKSPACE}/${REGION_FILE}"\n',
-      '--region="${GITHUB_WORKSPACE}/${REGION_FILE}" --download-threads=16\n',
+      '--maxzoom="${WORKER_TOP_ZOOM}"\n',
+      '--maxzoom="${WORKER_TOP_ZOOM}" --download-threads=16\n',
+    ],
+    [
+      'the cut with every zoom kept, and the runbook showing a top zoom',
+      ' --maxzoom="${WORKER_TOP_ZOOM}"\n',
+      '\n',
+    ],
+    [
+      'the cut at a zoom typed in the command, and the runbook showing 14',
+      ' --maxzoom="${WORKER_TOP_ZOOM}"\n',
+      ' --maxzoom=13\n',
     ],
     [
       'the check run on the whole build',
@@ -1310,16 +1317,10 @@ describe('the names typed three times are one set of names', () => {
       'check-street-map-archive.mjs us-20261151.pmtiles',
     ],
     ['the dry run not shown', /^ *```bash\n *pmtiles extract .* --dry-run\n *```\n/m, ''],
-    [
-      'the top-zoom dry run not shown',
-      /^ *```bash\n *pmtiles extract .* --maxzoom=\d+ --dry-run\n *```\n/m,
-      '',
-    ],
-    [
-      'the top-zoom dry run shown at another zoom',
-      '--maxzoom=14 --dry-run',
-      '--maxzoom=15 --dry-run',
-    ],
+    ['the dry run shown at another zoom', '--maxzoom=14 --dry-run', '--maxzoom=15 --dry-run'],
+    ['the dry run shown with every zoom kept', ' --maxzoom=14 --dry-run', ' --dry-run'],
+    ['the cut shown at another zoom', /( --maxzoom=)14(\n *```)/, '$115$2'],
+    ['the cut shown with every zoom kept', /( --region=\S+) --maxzoom=14(\n *```)/, '$1$2'],
     ['the bucket listing not shown', /^ *```bash\n *rclone lsjson .*\n *```\n/m, ''],
     [
       'the privacy read shown on another bucket',

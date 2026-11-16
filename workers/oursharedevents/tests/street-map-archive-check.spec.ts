@@ -36,8 +36,14 @@ const PROBES: Probe[] = [
 ];
 
 const tiles = (): FixtureTile[] => tilesForCells([CELL]).tiles;
+/**
+ * An archive as the load cuts it: finest zoom 14, the cut's top zoom (owner,
+ * 2026-11-16). The shared fixture's own default is 15, a whole Protomaps build.
+ */
+const archive: typeof pmtilesArchive = (t, opts = {}) =>
+  pmtilesArchive(t, { maxZoom: 14, ...opts });
 const good = (opts: Parameters<typeof pmtilesArchive>[1] = {}) =>
-  pmtilesArchive(tiles(), { gzip: true, ...opts });
+  archive(tiles(), { gzip: true, ...opts });
 const run = (
   bytes: Uint8Array,
   opts: Parameters<typeof checkArchive>[2] = {},
@@ -62,7 +68,7 @@ describe('street-map archive check | an archive the Worker can read passes', () 
     expect(r.problems).toEqual([]);
     expect(r.header).toMatchObject({
       minZoom: 0,
-      maxZoom: 15,
+      maxZoom: 14,
       tileType: 1,
       tileCompression: 2,
       internalCompression: 2,
@@ -103,7 +109,7 @@ describe('street-map archive check | an archive the Worker can read passes', () 
     for (const p of inside) {
       for (const t of tilesForCells(p.cells).tiles) all.set(`${t.z}/${t.x}/${t.y}`, t);
     }
-    const bytes = await pmtilesArchive([...all.values()], { gzip: true, leaf: true });
+    const bytes = await archive([...all.values()], { gzip: true, leaf: true });
     const r = await checkArchive(memSource(bytes), bytes.length);
     expect(r.problems).toEqual([]);
     expect(r.probes).toHaveLength(defaultProbes().length);
@@ -186,6 +192,20 @@ describe('street-map archive check | a file that is not a readable archive', () 
     expect(r.problems).toContain('header: finest zoom is 13; the zoomed area reads zoom 14');
     expect((await run(await good({ maxZoom: 14 }))).problems).toEqual([]);
   });
+
+  // Owner, 2026-11-16: the cut keeps zoom 14 at most (`pmtiles extract
+  // --maxzoom`, which writes that zoom into the new header), and a loaded object
+  // is locked. A file cut without the flag carries the build's own finest zoom.
+  // @born-red street-map check, the cut's top zoom | method: with the rule in check.ts and the fixtures of this file still at the shared default of 15, 19 of its 33 cases were red, every archive meant to pass among them; with the fixtures at 14 and the rule taken out again, this case alone was red | date: 2026-11-16
+  it('an archive that keeps a zoom the Worker never reads is named: it was cut without its top zoom', async () => {
+    const whole = await run(await good({ maxZoom: 15 }));
+    expect(whole.problems).toEqual([
+      'header: finest zoom is 15; the cut keeps zoom 14 at most, and the Worker reads no deeper',
+    ]);
+    expect(whole.header).toMatchObject({ maxZoom: 15 });
+    // The same tiles under the cut's own header pass, so the zoom is the one fault.
+    expect((await run(await good({ maxZoom: 14 }))).problems).toEqual([]);
+  });
 });
 
 describe('street-map archive check | a file that is not whole', () => {
@@ -244,7 +264,7 @@ describe('street-map archive check | the reader limits', () => {
     view.setUint32(48, run === 0 ? length : 0, true);
     view.setUint32(56, run === 0 ? at + length : at, true);
     view.setUint32(64, run === 1 ? length : 0, true);
-    bytes.set([1, 1, 1, 0, 15], 97);
+    bytes.set([1, 1, 1, 0, 14], 97);
     bytes.set(root, 127);
     return { bytes, size: at + length };
   }
@@ -371,7 +391,7 @@ describe('street-map archive check | directories', () => {
     view.setUint32(40, 127 + root.length, true);
     view.setUint32(48, leafSection.length, true);
     view.setUint32(56, out.length, true);
-    out.set([1, 1, 1, 0, 15], 97);
+    out.set([1, 1, 1, 0, 14], 97);
     out.set(root, 127);
     out.set(leafSection, 127 + root.length);
     return out;
@@ -439,7 +459,7 @@ describe('street-map archive check | draws', () => {
         ],
       },
     ]);
-    const bytes = await pmtilesArchive(
+    const bytes = await archive(
       tiles().map((t) => ({ ...t, data: lake })),
       { gzip: true }
     );
@@ -476,7 +496,7 @@ describe('street-map archive check | draws', () => {
       x === Math.floor(wx * 2 ** 14) && y === Math.floor(wy * 2 ** 14) ? [lake, ...layers] : [lake]
     );
     expect(r.z).toBe(14);
-    return run(await pmtilesArchive(all, { gzip: true }), { probes: [PROBES[0]!] });
+    return run(await archive(all, { gzip: true }), { probes: [PROBES[0]!] });
   };
   /** `points` points of road in lines of 50, each swinging so no two points merge. */
   const road = (kind: string, points: number, row = 0): FixtureLayer['features'] =>

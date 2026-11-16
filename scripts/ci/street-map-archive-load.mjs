@@ -11,9 +11,9 @@
  *
  *   names    the build, key and bucket the workflow names are the ones wrangler.toml binds
  *   private  the bucket has no r2.dev URL and no custom domain (wrangler's two reads)
+ *   topzoom  the top zoom the dry run and the cut take is the deepest zoom the
+ *            Worker reads (owner, 2026-11-16: the cut keeps no deeper tile)
  *   fits     the size `pmtiles extract --dry-run` reports fits the runner's free disk
- *   topzoom  the same dry run at the Worker's top zoom, beside the first (a figure
- *            for the owner's zoom decision; it judges nothing and changes no cut)
  *   absent   the bucket does not hold the key yet (an object is never overwritten)
  *   loaded   the bucket lists the key at the byte size in the check record
  *   summary  size and SHA-256 from the check record, for the job summary
@@ -189,9 +189,10 @@ export function workerTopZoom(sourceText) {
 }
 
 /**
- * Why the second dry run may not be made at `zoom` (the workflow's
- * WORKER_TOP_ZOOM), as sentences: it is only a figure worth reading when it is
- * the zoom the Worker really stops at.
+ * Why the file may not be cut with a top zoom of `zoom` (the workflow's
+ * WORKER_TOP_ZOOM), as sentences. The cut keeps no tile above it, and a loaded
+ * object is locked: a zoom below the Worker's leaves the zoomed area without
+ * its tiles, and a zoom above it loads tiles the Worker never reads.
  */
 export function topZoomProblems(zoom, sourceText) {
   const worker = workerTopZoom(sourceText);
@@ -207,46 +208,17 @@ export function topZoomProblems(zoom, sourceText) {
 }
 
 /**
- * The two dry-run sizes side by side, for the job summary. `whole` is the dry
- * run the fit is judged on (every zoom of the build), `capped` the same region
- * with a top zoom. Both are rounded figures of the tile data alone, so the
- * difference is "about". A capped size above the whole one means the two logs
- * are not what they are named, and nothing is reported.
+ * The job-summary lines for the dry run the fit is judged on. `zoom` is the top
+ * zoom the dry run and the cut both take (WORKER_TOP_ZOOM).
  */
-export function topZoomReport(whole, capped, zoom) {
-  if (!whole) {
-    return { problems: ['the dry run with every zoom printed no archive size'], lines: [] };
-  }
-  if (!capped) {
-    return {
-      problems: [`the dry run with a top zoom of ${zoom} printed no archive size`],
-      lines: [],
-    };
-  }
-  if (capped.bytes > whole.upperBytes) {
-    return {
-      problems: [
-        `the dry run with a top zoom of ${zoom} reports ${capped.text}, larger than the dry run with every zoom (${whole.text}): the two logs are not what they are named`,
-      ],
-      lines: [],
-    };
-  }
-  const less = whole.bytes - capped.bytes;
-  return {
-    problems: [],
-    lines: [
-      '### Street-map archive: what a top zoom would change',
-      '',
-      `- with a top zoom of ${zoom}, the most the Worker reads, the dry run reports **${capped.text}**.`,
-      `- with every zoom of the build, as a load cuts today, it reports **${whole.text}**.`,
-      less > 0
-        ? `- that is about ${gb(less)} less (both figures are the tile data alone, rounded).`
-        : '- no saving that the rounded figures show.',
-      '',
-      "This is a figure for the owner's decision. It does not change what a load cuts, and the fit above is judged on the larger size.",
-      '',
-    ],
-  };
+export function fitSummary(size, verdict, { build, zoom }) {
+  return [
+    '### Street-map archive: size before the cut',
+    '',
+    `- \`pmtiles extract --dry-run\` reports an archive of **${size?.text ?? 'unknown size'}** (tile data, rounded) for build \`${build}\`, cut with a top zoom of ${zoom}.`,
+    `- ${verdict.reason}.`,
+    '',
+  ].join('\n');
 }
 
 /**
@@ -359,28 +331,15 @@ const COMMANDS = {
   fits([log, free]) {
     const size = parseDryRunSize(readFileSync(log, 'utf8'));
     const verdict = diskVerdict(size, free);
-    say(
-      [
-        '### Street-map archive: size before the cut',
-        '',
-        `- \`pmtiles extract --dry-run\` reports an archive of **${size?.text ?? 'unknown size'}** (tile data, rounded) for build \`${named().build}\`.`,
-        `- ${verdict.reason}.`,
-        '',
-      ].join('\n')
-    );
+    say(fitSummary(size, verdict, { build: named().build, zoom: process.env.WORKER_TOP_ZOOM }));
     return stop(verdict.fits ? [] : [verdict.reason], 'The cut fits.');
   },
-  topzoom([wholeLog, cappedLog]) {
+  topzoom() {
     const zoom = process.env.WORKER_TOP_ZOOM;
-    const wrong = topZoomProblems(zoom, readFileSync(join(ROOT, STREET_MAP_SOURCE), 'utf8'));
-    if (wrong.length) return stop(wrong, '');
-    const report = topZoomReport(
-      parseDryRunSize(readFileSync(wholeLog, 'utf8')),
-      parseDryRunSize(readFileSync(cappedLog, 'utf8')),
-      Number(zoom)
+    return stop(
+      topZoomProblems(zoom, readFileSync(join(ROOT, STREET_MAP_SOURCE), 'utf8')),
+      `Top zoom ${zoom}: the deepest zoom the Worker reads, and the deepest the cut keeps.`
     );
-    if (report.problems.length === 0) say(report.lines.join('\n'));
-    return stop(report.problems, `Top zoom ${zoom}: both sizes are in the summary.`);
   },
   absent([listing]) {
     const key = named().key;

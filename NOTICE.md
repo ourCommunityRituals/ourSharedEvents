@@ -79,10 +79,11 @@ applies (duty L10).
    v1.31.2:
 
    ```bash
-   pmtiles extract https://build.protomaps.com/20261115.pmtiles us-20261115.pmtiles --region=docs/runbooks/street-map-us-region.geojson
+   pmtiles extract https://build.protomaps.com/20261115.pmtiles us-20261115.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14
    ```
 
-4. **What the command changes:** it keeps the tiles that touch the region, and every parent
+4. **What the command changes:** it keeps the tiles that touch the region, down to zoom 14
+   and no deeper (owner, 2026-11-16: the Worker reads zoom 14 at most), and every parent
    tile of a kept tile, and writes new directories for them. Tiles are copied as they are.
    Nothing is added, corrected or joined to other data (runbook, "What the docs say",
    read from the tool's source at `v1.31.2`).
