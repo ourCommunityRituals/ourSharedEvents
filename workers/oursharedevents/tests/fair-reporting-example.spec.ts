@@ -26,8 +26,8 @@
  *
  * Placement: node project (pure, reads the doc).
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import { boothCounts, type BoothRef, type PlacementRef } from '../src/lib/booth-counts';
 import { BOOTH_CATEGORIES } from '../src/lib/event-booths';
@@ -149,7 +149,22 @@ function exampleRows(): [string, string][] {
   ];
 }
 
-const DOC = join(__dirname, '..', '..', '..', 'docs', 'features', 'FAIR-REPORTING.md');
+/**
+ * The doc lives at the repository root. This spec also runs from a copy of the
+ * worker folder (the mutation pass works in a sandbox under it), so the path is
+ * found by walking up, not counted in fixed steps. Not finding it is an error:
+ * the test must never pass without the doc.
+ */
+function findDoc(): string {
+  let dir = __dirname;
+  for (let i = 0; i < 8; i += 1) {
+    const candidate = join(dir, 'docs', 'features', 'FAIR-REPORTING.md');
+    if (existsSync(candidate)) return candidate;
+    dir = dirname(dir);
+  }
+  throw new Error('docs/features/FAIR-REPORTING.md was not found above ' + __dirname);
+}
+const DOC = findDoc();
 
 /** The rows of the doc's example table, between its markers. */
 function docRows(): Map<string, string> {
