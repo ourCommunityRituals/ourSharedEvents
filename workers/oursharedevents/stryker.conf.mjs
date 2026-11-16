@@ -86,7 +86,16 @@ const config = {
     'src/lib/event-type-catalog.ts',
     'src/lib/event-type-catalog-read.ts',
     'src/lib/landing-area.ts',
-    rangeOf('src/handlers/pages.ts', 'let typeCategories:', 'const areaOpts = {'),
+    // The landing's catalog read (started with the event list since OSE-2094),
+    // then the zoomed area's panel links and the origin. Killed by
+    // landing-category-scenarios.spec.ts, landing-reads-together.spec.ts and
+    // map-place-links.spec.ts.
+    rangeOf(
+      'src/handlers/pages.ts',
+      'const typeCategoriesRead',
+      'categoryByTypeId(await readEventTypeCatalog(db))'
+    ),
+    rangeOf('src/handlers/pages.ts', 'const zoomCell = zoom.cell;', 'const areaOpts = {'),
     rangeOf(
       'src/handlers/events.ts',
       'export async function handleAdminListEventTypes(',
