@@ -6667,8 +6667,8 @@
             item.querySelector('[data-testid="stall-code-link"]').textContent = p.scan_url === null || p.scan_url === undefined ? '' : String(p.scan_url);
             var print = item.querySelector('[data-testid="stall-code-print"]');
             print.setAttribute('data-pd-id', String(p.id));
-            print.setAttribute('aria-label', 'Print the code ' + name);
-            item.querySelector('[data-testid="stall-code-posters"]').setAttribute('aria-label', 'Show the code ' + name + ' in Posters');
+            print.setAttribute('aria-label', 'Print: ' + name);
+            item.querySelector('[data-testid="stall-code-posters"]').setAttribute('aria-label', 'Show in Posters: ' + name);
             codes.appendChild(item);
           });
           codes.hidden = !codes.children.length;

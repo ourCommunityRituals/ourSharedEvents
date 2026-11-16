@@ -639,6 +639,18 @@ describe('the card shows what the server says', () => {
     expect(win._pdItems.get('pd_1').qr_data_uri).toBe('');
   });
 
+  test('every named button’s name begins with the words it shows (WCAG 2.5.3)', () => {
+    const { win, doc } = mount();
+    render(win, { booths: BOOTHS, counts: COUNTS, placements: [PLACEMENT] });
+    const named = [...doc.querySelectorAll('#stalls-list button[aria-label]')];
+    expect(named.length).toBeGreaterThanOrEqual(8);
+    for (const b of named) {
+      expect(b.getAttribute('aria-label')!.startsWith(b.textContent!.trim()), b.outerHTML).toBe(
+        true
+      );
+    }
+  });
+
   test('a live fair links each stall in use to its public page', () => {
     const { win, q, rows, inRow } = mount();
     render(win, {
