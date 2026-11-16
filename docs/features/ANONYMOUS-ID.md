@@ -35,7 +35,7 @@ Most event platforms collect personal data first and worry about privacy later. 
 You can scan any QR code at any event knowing no personal data is captured. If you voluntarily fill out a form (registration, survey, email signup), that data enters a **separate, temporary** system with strict lifecycle rules:
 
 - Email → hashed immediately, never stored raw
-- Registration → name and email cleared the day after the event; the rest auto-deleted 90 days after registering
+- Registration → name and email cleared the night after the day after the event; the rest auto-deleted 90 days after registering, or the day after the event if that is later (OSE-826)
 - Survey comments → PII-scrubbed by daily job
 - Email signup → encrypted, auto-deleted after 30 days
 

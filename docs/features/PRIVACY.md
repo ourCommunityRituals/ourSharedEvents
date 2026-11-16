@@ -65,7 +65,7 @@ When a customer **voluntarily** fills out a form, that data enters a separate sy
 | Name       | Encrypted at rest; cleared the day after the event                                                                                                                        |
 | Email      | Optional. Hashed (keyed) for dedup and erasure; if given, also kept encrypted so the organizer can reach the person about this event, and cleared the day after the event |
 | Timestamp  | Bucketed to the hour (e.g., "2026-03-27T14") — no exact times                                                                                                             |
-| All fields | Auto-deleted 90 days after registering (`expires_at`)                                                                                                                     |
+| All fields | Auto-deleted 90 days after registering, or the day after the event if that is later (`expires_at`, OSE-826)                                                               |
 
 ### Check-In
 
@@ -124,7 +124,7 @@ A Cloudflare Worker cron trigger runs daily and executes 3 independent phases:
 DELETE FROM form_registrations WHERE expires_at IS NOT NULL AND expires_at < ?
 ```
 
-TTL: 90 days from submission.
+TTL: 90 days from submission, or the end of the day after the event if that is later (`registrationExpiresAt` in `src/lib/retention-windows.ts`, OSE-826). A row with no usable event date keeps the 90 days alone. Name and email go sooner: the night after the day after the event (`runRegistrationContactClear` in `src/index.ts`).
 
 ### Phase 2: Scrub Survey PII
 

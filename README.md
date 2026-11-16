@@ -283,12 +283,14 @@ Stories are tracked in [Linear](https://linear.app/oursharedevents) under the **
 
 ### Test Pyramid
 
-| Layer            | Tool           | Scope                                      | When                |
-| ---------------- | -------------- | ------------------------------------------ | ------------------- |
-| Unit/Integration | Vitest         | Handler logic, flag resolution, encryption | CI (every PR)       |
-| API Contract     | Newman/Postman | All 30+ endpoints against mock + staging   | Local + CI          |
-| Smoke (FE)       | Playwright     | 5 surfaces render, critical flows          | CI (every PR)       |
-| Regression (FE)  | Playwright     | Full visual + behavioral                   | Local (pre-release) |
+This table is a short guide. What CI runs, and what "done" needs, is in `AGENTS.md` (Quality gates, Definition of Done).
+
+| Layer            | Tool       | Scope                                       | When                |
+| ---------------- | ---------- | ------------------------------------------- | ------------------- |
+| Unit/Integration | Vitest     | Handler logic, flag resolution, encryption  | CI (every PR)       |
+| API Contract     | Bruno      | API and page contracts against staging (T2) | CI (after merge)    |
+| Smoke (FE)       | Playwright | 5 surfaces render, critical flows           | CI (every PR)       |
+| Regression (FE)  | Playwright | Full visual + behavioral                    | Local (pre-release) |
 
 ### Running Tests
 
