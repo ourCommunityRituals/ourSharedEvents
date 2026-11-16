@@ -9,7 +9,6 @@ cumulative_score: 57.1
 system_score: 92.5
 unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 0, medium: 1, low: 2 }
 pr: 1341
-subject_sha: '6911a0624dd6b7576c45fe783377308501366128'
 ---
 
 # CCR: the map count check, and an admin read of share opens (2026-11-16)
