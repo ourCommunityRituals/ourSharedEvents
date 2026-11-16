@@ -19,6 +19,8 @@ export const NODE_SPECS = [
   'tests/count-floor.spec.ts',
   // OSE-2004 — scans per stall from the floored poster-hour cells (pure lib)
   'tests/booth-counts.spec.ts',
+  // OSE-2004 — no stall leaves for BigQuery (row guard + exporter sources)
+  'tests/booth-export-boundary.spec.ts',
   // OSE-1782 — derived gate: no count published except through count-floor.ts
   // (reads the projection's field list and the src/ tree; no runtime).
   'tests/count-floor-publication.derived.spec.ts',

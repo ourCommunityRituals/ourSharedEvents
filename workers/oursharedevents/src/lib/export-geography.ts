@@ -17,9 +17,14 @@
 
 import { getResolution, isValidCell } from 'h3-js';
 
-/** Column names that carry sub-corridor geography. */
+/**
+ * Column names that carry sub-corridor geography, or a grain finer than an
+ * event inside it: a stall at a fair is a spot on the hall floor, so a booth or
+ * stall reference never leaves either (OSE-2004: no stall-level row goes to
+ * BigQuery unless the acceptance contract, OCR-154, names it).
+ */
 const SUB_CORRIDOR_KEY =
-  /^(h3(_res\d+)?|cell|lat|lon|lng|latitude|longitude|where_address|address|poster_deployment_id|placement_id|placement_label|qr_token)$/i;
+  /^(h3(_res\d+)?|cell|lat|lon|lng|latitude|longitude|where_address|address|poster_deployment_id|placement_id|placement_label|qr_token|booth|booth_id|booth_number|booth_name|stall|stall_id|stall_number|hall_x|hall_y)$/i;
 
 /** Finest H3 resolution allowed out of the boundary (the corridor node). */
 export const CORRIDOR_H3_RESOLUTION = 7;
