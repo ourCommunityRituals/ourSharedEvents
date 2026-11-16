@@ -1,0 +1,34 @@
+info:
+  name: OSE-1896 | setup | a synthetic draft event for this run
+  type: http
+  seq: 10
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"attendance_mode\": \"in_person\", \"location\": \"OSE-1896 Hall\", \"title\": \"OSE-1896 poster code targets (staging, synthetic)\", \"is_published\": false, \"data_class\": \"synthetic\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-1896 setup: the event is created', function () { expect(res.getStatus()).to.eql(201); expect(b.id).to.be.a('string'); });
+        bru.setVar('posterTargetEventId', b.id || 'missing-event');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
