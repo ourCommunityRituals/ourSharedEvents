@@ -23,6 +23,7 @@
  */
 // @born-red the outcome line | method: 15 faults in src/lib/street-map.ts, one at a time, each seen failing here and put back: the emit call removed from loadStreetLayer (24 cases failed); thin and no-tile swapped (the case named for each); drew said for a null layer (12); a timeout said as error ("timeout" and the late read of the miss window); no-archive said as error (6); every error said as no-archive (the four "error" cases); `trace.gap = true` removed ("no-tile"); `trace.reads += 1` removed (11, on r2Reads); `trace.z` and `trace.tiles` not set (4 each); `Date.now() - started` turned to a sum ("ms is the time the try took" and 7 more); the 0 floor under ms removed ("a clock that steps back"); the surface written as given ("a surface that is not one of the two"); `cells` added to the payload ("what the line is given beyond its own fields"); the catch in emitStreetLayer rethrowing ("a line that cannot be written") | date: 2026-11-15
 // @born-red the miss window | method: 11 faults, one at a time, each seen failing here and put back. In src/lib/pmtiles.ts: `MISSING.set` removed from r2Source; `<` turned to `<=` in archiveKnownMissing, the window twice as long, and the window never ending ("not a millisecond longer", "the object lands", "the source"); a miss remembered at any offset ("a later read that finds no object", "an object deleted under an isolate", "the source"); every throw of the read remembered as a miss (the "threw" and "broke in its body" cases); the miss marked before the read comes back and cleared when it does ("threw" and "came back after the limit"); a short answer to the first read taken for no object ("came back short"); the key written without the name ("a key at a time"); `MISSING.clear()` removed from resetPmtilesCache. In src/lib/street-map.ts: the `archiveKnownMissing` line removed from loadStreetLayer ("asked once", "not a millisecond longer", "the object lands") | date: 2026-11-15
+// @born-red a replaced or unpinned object is `error` in the log | method: "error: the object is not the one MAP_TILES_ETAG pins" failed on the loader of 44948a04 (it drew), and with the pin not compared or not handed to r2Source. The row "the object under the key was replaced before the tiles were read" passed on 44948a04 by chance (the new bytes at the old offsets were not gzip) and failed with a changed object marked as missing (the reader said no-archive) | date: 2026-11-16
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { latLngToCell } from 'h3-js';
 import {
@@ -241,6 +242,14 @@ describe('street layer outcome | one line for each try that reads the bucket', (
       3,
     ],
     [
+      'the object under the key was replaced before the tiles were read',
+      (a) =>
+        scriptedBucket(DEFAULT_ARCHIVE, a, (n) =>
+          n === 2 ? { replaceWith: new Uint8Array(4096).fill(7) } : 'ok'
+        ),
+      3,
+    ],
+    [
       'the object is not a PMTiles archive',
       () => scriptedBucket(DEFAULT_ARCHIVE, new Uint8Array(4096).fill(7), () => 'ok'),
       1,
@@ -259,6 +268,24 @@ describe('street layer outcome | one line for each try that reads the bucket', (
       surface: 'landing',
       r2Reads: reads,
     });
+  });
+
+  it('error: the object is not the one MAP_TILES_ETAG pins. One read, said each time, and not taken for a missing object', async () => {
+    const { archive } = await sound();
+    const bucket = fakeBucket(DEFAULT_ARCHIVE, archive);
+    const env = { ...ON, MAP_TILES: bucket, MAP_TILES_ETAG: 'another-object' };
+    expect(await loadStreetLayer(env, [BLUE7], { surface: 'map-areas' })).toBeNull();
+    expect(await loadStreetLayer(env, [BLUE7], { surface: 'map-areas' })).toBeNull();
+    expect(bucket.gets).toHaveLength(2);
+    expect(lines()).toHaveLength(2);
+    for (const l of lines()) {
+      expect(l).toMatchObject({ outcome: 'error', surface: 'map-areas', z: null, r2Reads: 1 });
+    }
+    // The line still says nothing of the object: no etag, no name.
+    expect(written().join('')).not.toContain('another-object');
+    expect(written().join('')).not.toContain(bucket.etag);
+    // With the pin taken off, the same object draws.
+    expect(await loadStreetLayer({ ...ON, MAP_TILES: bucket }, [BLUE7])).not.toBeNull();
   });
 
   it('ms is the time the try took, by the clock', async () => {

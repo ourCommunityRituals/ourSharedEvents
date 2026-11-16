@@ -67,6 +67,17 @@ owner creates for the load, sets as the secrets `R2_MAP_TILES_ACCESS_KEY_ID` and
 `R2_MAP_TILES_SECRET_KEY`, and deletes afterwards. The workflow adds a new key and never changes
 or removes an object. It has no production input and no production credential.
 
+**D5a. Where the write key lives (owner, 2026-11-16).** On a GitHub environment of its own,
+`street-map-load`, whose branch list is branch `main` alone. The load job names that environment
+and no other job does. GitHub starts a job in an environment only from a ref its branch list
+allows, so a branch's copy of any workflow cannot read the pair, which the `staging` environment
+could not promise (below). Two things hold it: the workflow's first job reads the environment and
+its branch list and stops the run unless the list is `main` alone, before the job that names the
+environment starts (GitHub makes a missing environment on first use, with no list); and
+`tests/integration/adr008-wiring.test.js` fails when any other job names it. The owner makes the
+environment in the browser; no script and no agent does. Not held by anything: that the pair is
+set there and not also at repository level, which no job can read from the outside.
+
 **D6. Who creates the bucket.** The owner, before the pull request that names it merges. See
 "What happened" below: this part of the decision was not kept.
 
@@ -163,18 +174,24 @@ With no lock, a mistake or a stolen token on the staging side could change what 
 - Two Workers reading one bucket on this account.
 - The settings of the bucket the deploy made: its jurisdiction, and that it has no public
   address. The workflow's first job reads the two public-address settings; no run has happened.
-- That a replaced object would be noticed. The Worker pins no etag or hash of the object it reads
-  (review finding R13).
+- That a replaced object would be noticed, on staging. Since 2026-11-16 the Worker carries the etag
+  of an archive's first read on every later read of it and drops what it kept when R2 answers that
+  the object has changed, and it reads an optional pinned etag, `MAP_TILES_ETAG`
+  (`lib/pmtiles.ts`, `r2Source`). That is held by tests against a fake bucket and against the R2
+  of the Workers test pool; with no object loaded, nothing of it has run against the real bucket.
+  The pin is set in no environment, and no hash of the loaded object is compared with the check's
+  record (review finding R13, still open for those two parts).
 
 ## Open, for the owner
 
-The review's human gate (questions 2 and 3) is not answered by this record:
+The review's human gate (questions 2 and 3), as it stands on 2026-11-16:
 
-1. Keep the bucket the deploy made, after checking it, or delete it while it is empty and make it
-   by hand. A bucket's jurisdiction cannot be changed later.
-2. Where the R2 write key lives so that only `main` can reach it. The `staging` environment cannot
-   be it as it stands, because branches must deploy there.
-3. Whether AGENTS.md should name bucket creation among the things an agent, and a deploy, never
+1. **Answered (owner, 2026-11-16): keep it.** The bucket the deploy made stays as it is (location
+   WNAM, jurisdiction `default`); it is not deleted and remade by hand.
+2. **Answered (owner, 2026-11-16): the `street-map-load` environment, branch `main` only** (D5a).
+   Accepted by merging the pull request that moved the load job there. The `staging` environment
+   could not be it, because branches must deploy there.
+3. **Open.** Whether AGENTS.md should name bucket creation among the things an agent, and a deploy, never
    does. AGENTS.md is a governed file; the sentence is proposed in the pull request, not edited
    here.
 

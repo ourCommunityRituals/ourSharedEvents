@@ -29,6 +29,7 @@
 // @born-red the switch (STREET_MAP) | method: six faults in loadStreetLayer (src/lib/street-map.ts), one at a time, each seen failing in "street map | the switch (STREET_MAP)": the switch line removed (19 tests failed, here and in map-areas.spec.ts and street-map-landing.spec.ts); any set value counted as on (17); the value trimmed and lower-cased before the compare (6: "ON", "On", " on", "on ", the non-string case and the landing's "ON"); the switch read after the bucket (19, on the count of reads alone); the compare turned round (72, "on: the layer is drawn" among them); STREET_MAP_ON set to 'true' (59, "the one value that draws" among them). Before any spec passed STREET_MAP, the switch alone failed 52 tests that draw | date: 2026-11-15
 // @born-red every tile of the frame, the frame's decode limits, the edges of the world (street-map CCR 2026-11-15, R15, R2, R49) | method: 9 faults injected one at a time in src/lib/street-map.ts and one in src/lib/mvt.ts, each seen failing the case named for it in the PR's fault list. The first puts main's lines back (a tile that is there is drawn): the R15 case failed. With the frame limit not passed to the decoder, and with the tile limit taken out, the "one point more" archive of that case drew. The three edge cases pin what the frame already did, so their red is the injected fault alone | date: 2026-11-15
 // @born-red a river is a line (the last survivor of street-map.ts in the mutation run) | method: `feat.type === 2` turned to `true` in drawStreetLayer (src/lib/street-map.ts), the mutant that survived on main (run 43731915136) and on PR 1295; "a river is a line in the water layer" seen failing on it (rivers: 6 points drawn, 2 wanted) while the other 229 cases of the four street specs stayed green, then the line put back | date: 2026-11-15
+// @born-red the object under the key is replaced, or is not the pinned one (S12) | method: the block run on the loader and reader of 44948a04: "replaced between two requests" and "MAP_TILES_ETAG is another etag" failed, and so did "never who: the reads depend on the cells alone" once it asked for the etag on every get after the first. Then faults, one at a time, each put back: the loader's counting source not handing the version on ("replaced between two requests" and the never-who case); `env.MAP_TILES_ETAG` not handed to r2Source ("is another etag", "the pinned object replaced"); the pin not compared in src/lib/pmtiles.ts (the same two); a changed archive not forgotten ("replaced between two requests": the third request had no streets) | date: 2026-11-16
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   cellToBoundary,
@@ -80,6 +81,7 @@ import {
   resetPmtilesCache,
 } from '../src/lib/pmtiles';
 import {
+  etagOf,
   fakeBucket,
   memSource,
   paddedTile,
@@ -2192,6 +2194,108 @@ describe('street map | the edges of the world', () => {
   });
 });
 
+// The object under the archive's key is meant never to change (ADR-035 D2). If
+// it does, an isolate that has it open holds directories for the old bytes
+// (street-map scenario pass 2026-11-15, S12). The loader's part: the reader's
+// record of the object goes through its counting source on every read, a
+// changed object costs one request its streets and no more, and MAP_TILES_ETAG
+// reaches the read.
+describe('street map | the object under the key is replaced, or is not the pinned one', () => {
+  const NAME = 'us-20261115.pmtiles';
+  const line = (at: (t: number) => [number, number]) =>
+    Array.from({ length: 65 }, (_, i) => at(i * 64));
+  /** The build every other case draws: a highway and a minor road in each tile. */
+  const first = () => pmtilesArchive(tilesForCells([BLUE7]).tiles, { gzip: true, leaf: true });
+  /** Another build of the same area: a highway and a major road, and no minor road. */
+  const second = () =>
+    pmtilesArchive(
+      tilesOfFrame([BLUE7], () => [
+        {
+          name: 'roads',
+          features: [
+            { type: 2, props: { kind: 'highway' }, parts: [line((t) => [t, 1000])] },
+            { type: 2, props: { kind: 'major_road' }, parts: [line((t) => [3000, t])] },
+          ],
+        },
+      ]).tiles,
+      { gzip: true, leaf: true }
+    );
+  const MINOR = 'class="as-r as-1"';
+  const MAJOR = 'class="as-r as-2"';
+  const load = (bucket: ReturnType<typeof fakeBucket>, etag?: string) =>
+    loadStreetLayer(
+      { STREET_MAP: 'on', MAP_TILES: bucket, MAP_TILES_ARCHIVE: NAME, MAP_TILES_ETAG: etag },
+      [BLUE7]
+    );
+  const conditions = (bucket: ReturnType<typeof fakeBucket>, from = 0) =>
+    bucket.gets.slice(from).map((g) => g.onlyIf?.etagMatches);
+
+  it('the two builds draw different roads', async () => {
+    const a = await load(fakeBucket(NAME, await first()));
+    resetPmtilesCache();
+    const b = await load(fakeBucket(NAME, await second()));
+    expect(a!.svg).toContain(MINOR);
+    expect(a!.svg).not.toContain(MAJOR);
+    expect(b!.svg).toContain(MAJOR);
+    expect(b!.svg).not.toContain(MINOR);
+  });
+
+  it('replaced between two requests: the next map has no streets for one read, and the one after draws the new streets', async () => {
+    const bucket = fakeBucket(NAME, await first());
+    expect((await load(bucket))!.svg).toContain(MINOR);
+    const was = bucket.etag;
+    expect(conditions(bucket)).toEqual([undefined, was, was]);
+
+    bucket.replace(await second());
+    const swapped = bucket.gets.length;
+    expect(await load(bucket)).toBeNull();
+    // The tiles, asked for under the old etag; R2 gave no bytes. Nothing more is read.
+    expect(conditions(bucket, swapped)).toEqual([was]);
+
+    const clean = bucket.gets.length;
+    const next = await load(bucket);
+    expect(next!.svg).toContain(MAJOR);
+    expect(next!.svg).not.toContain(MINOR);
+    expect(bucket.gets[clean]).toStrictEqual({ key: NAME, range: { offset: 0, length: 16384 } });
+    expect(conditions(bucket, clean)).toEqual([undefined, bucket.etag, bucket.etag]);
+  });
+
+  it('MAP_TILES_ETAG unset or empty: any object under the key is drawn', async () => {
+    for (const etag of [undefined, '']) {
+      resetPmtilesCache();
+      expect((await load(fakeBucket(NAME, await first()), etag))!.svg).toContain(MINOR);
+    }
+  });
+
+  it("MAP_TILES_ETAG is the object's etag: drawn, in the same three reads", async () => {
+    const bucket = fakeBucket(NAME, await first());
+    expect((await load(bucket, bucket.etag))!.svg).toContain(MINOR);
+    expect(bucket.gets).toHaveLength(3);
+  });
+
+  it('MAP_TILES_ETAG is another etag: no streets, one read a request, and no throw', async () => {
+    const bucket = fakeBucket(NAME, await first());
+    const pinned = etagOf(await second());
+    expect(await load(bucket, pinned)).toBeNull();
+    expect(await load(bucket, pinned)).toBeNull();
+    expect(bucket.gets).toHaveLength(2);
+    expect(conditions(bucket)).toEqual([undefined, undefined]);
+    // The pinned build under the key draws.
+    bucket.replace(await second());
+    expect((await load(bucket, pinned))!.svg).toContain(MAJOR);
+  });
+
+  it('the pinned object replaced: streets stop at the next request and stay off', async () => {
+    const bucket = fakeBucket(NAME, await first());
+    const pinned = bucket.etag;
+    expect((await load(bucket, pinned))!.svg).toContain(MINOR);
+    bucket.replace(await second());
+    expect(await load(bucket, pinned)).toBeNull();
+    expect(await load(bucket, pinned)).toBeNull();
+    expect(await load(bucket, pinned)).toBeNull();
+  });
+});
+
 describe('street map | the archive read: fat fingers, security, network', () => {
   // The name wrangler.toml sets: the United States subset (owner 2026-11-10).
   const CONFIGURED = 'us-20261115.pmtiles';
@@ -2448,8 +2552,15 @@ describe('street map | the archive read: fat fingers, security, network', () => 
     const ranges = (g: typeof a.gets) =>
       g.map((x) => `${x.range!.offset}+${x.range!.length}`).sort();
     expect(ranges(b.gets)).toEqual(ranges(a.gets));
-    // A get carries a key and a byte range, nothing else.
-    for (const g of a.gets) expect(Object.keys(g).sort()).toEqual(['key', 'range']);
+    // A get carries a key and a byte range. After the first it also carries one
+    // condition, the etag of the object the first read came from: a fact about
+    // the archive, the same for every reader. Nothing else.
+    expect(Object.keys(a.gets[0]!).sort()).toEqual(['key', 'range']);
+    expect(a.gets.length).toBeGreaterThan(1);
+    for (const g of a.gets.slice(1)) {
+      expect(Object.keys(g).sort()).toEqual(['key', 'onlyIf', 'range']);
+      expect(g.onlyIf).toStrictEqual({ etagMatches: a.etag });
+    }
   });
 
   // ── network ────────────────────────────────────────────────────────────────

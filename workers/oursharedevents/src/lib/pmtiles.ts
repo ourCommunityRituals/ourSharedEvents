@@ -20,11 +20,26 @@
 // hostile file could make the Worker hold more than it has, and that ends the
 // isolate and the page with it.
 
+/**
+ * Which object the reads of one opened archive came from. The reader makes one
+ * for each open, hands it to every read of that archive, and keeps it with the
+ * directories. A source whose object can be replaced under its key (R2) writes
+ * the object's etag in it on the first read and holds every later read to it.
+ */
+export interface ObjectVersion {
+  etag?: string;
+}
+
 /** Where the archive's bytes come from. R2 in the Worker; a buffer in tests. */
 export interface RangeSource {
-  /** Stable name for caching (archive key plus its version). */
+  /** Stable name for caching (the archive's key). */
   readonly key: string;
-  read(offset: number, length: number): Promise<Uint8Array>;
+  /**
+   * `version` is the reader's record of which object it is reading. A source
+   * that wraps another hands it on untouched; one with nothing to tell apart
+   * (a buffer, a file) ignores it.
+   */
+  read(offset: number, length: number, version?: ObjectVersion): Promise<Uint8Array>;
 }
 
 export interface PmtilesHeader {
@@ -79,6 +94,11 @@ export const TILE_TYPE_MVT = 1;
 export class PmtilesError extends Error {}
 /** The bucket holds no object under the archive's key. Not a failed read. */
 export class ArchiveNotFoundError extends PmtilesError {}
+/**
+ * The object under the key is not the one this isolate opened, or not the one
+ * the configuration pins.
+ */
+export class ArchiveChangedError extends PmtilesError {}
 
 function u64(view: DataView, at: number): number {
   const lo = view.getUint32(at, true);
@@ -254,6 +274,8 @@ interface Opened {
   root: DirEntry[];
   /** Decoded leaf directories by offset in the file, oldest first. */
   leaves: Map<number, DirEntry[]>;
+  /** The object these were read from; every later read is held to it. */
+  version: ObjectVersion;
 }
 
 /**
@@ -293,18 +315,20 @@ type LeafReads = Map<number, Promise<DirEntry[]>>;
 async function open(src: RangeSource): Promise<Opened> {
   const hit = OPENED.get(src.key);
   if (hit) return hit;
-  const first = await src.read(0, FIRST_READ_BYTES);
+  const version: ObjectVersion = {};
+  const first = await src.read(0, FIRST_READ_BYTES, version);
   const header = parseHeader(first);
   const off = header.rootDirectoryOffset;
   const len = directoryLength(header.rootDirectoryLength);
-  const raw = off + len <= first.length ? first.subarray(off, off + len) : await src.read(off, len);
+  const raw =
+    off + len <= first.length ? first.subarray(off, off + len) : await src.read(off, len, version);
   const root = decodeDirectory(
     await decompress(raw, header.internalCompression, MAX_DIRECTORY_BYTES)
   );
   // Kept only now that it is whole. A failed or abandoned open leaves nothing:
   // the next page tries again. (An object that is not there is the one thing
   // remembered, by the R2 source and for a minute: MISS_MEMORY_MS.)
-  const opened: Opened = { header, root, leaves: new Map() };
+  const opened: Opened = { header, root, leaves: new Map(), version };
   OPENED.set(src.key, opened);
   return opened;
 }
@@ -351,7 +375,7 @@ async function leaf(
   if (reading) return reading;
   const length = directoryLength(e.length);
   const read = src
-    .read(at, length)
+    .read(at, length, o.version)
     .then((raw) => decompress(raw, o.header.internalCompression, MAX_DIRECTORY_BYTES))
     .then(decodeDirectory)
     .then((entries) => {
@@ -478,7 +502,7 @@ export async function readTiles(
   const long = stored.find((e) => e.length > MAX_TILE_BYTES);
   if (long) throw new PmtilesError(`tile of ${long.length} bytes is over the limit`);
   const reads = planReads(stored.map((e) => ({ offset: at(e), length: e.length })));
-  const chunks = await Promise.all(reads.map((r) => src.read(r.offset, r.length)));
+  const chunks = await Promise.all(reads.map((r) => src.read(r.offset, r.length, o.version)));
   const done = new Map<DirEntry, Promise<Uint8Array>>();
   const bytesOf = (e: DirEntry): Promise<Uint8Array> => {
     const hit = done.get(e);
@@ -511,12 +535,20 @@ export async function readTile(
   return (await readTiles(src, z, [[x, y]]))[0]!;
 }
 
-/** Minimal shape of the R2 binding this module reads (`R2Bucket` satisfies it). */
+/**
+ * Minimal shape of the R2 binding this module reads (`R2Bucket` satisfies it).
+ * A get whose `onlyIf` fails is answered with the object's record and no body:
+ * no `arrayBuffer` (R2 Workers API reference, read 2026-11-15, and seen in
+ * workerd, tests/street-map-runtime.spec.ts).
+ */
 export interface RangeBucket {
   get(
     key: string,
-    options?: { range?: { offset: number; length: number } }
-  ): Promise<{ arrayBuffer(): Promise<ArrayBuffer>; etag?: string } | null>;
+    options?: {
+      range?: { offset: number; length: number };
+      onlyIf?: { etagMatches?: string };
+    }
+  ): Promise<{ etag: string; arrayBuffer?(): Promise<ArrayBuffer> } | null>;
 }
 
 /**
@@ -532,17 +564,46 @@ export interface RangeBucket {
  * read"). So an object deleted under an isolate that has it open is asked for
  * on every view by that isolate, and found missing each time, until the
  * isolate ends: a new one reads from offset 0 and remembers.
+ *
+ * ONE OBJECT FOR ONE OPENED ARCHIVE (street-map scenario pass 2026-11-15, S12).
+ * The directories an isolate keeps are offsets into one object. If another
+ * object is put under the key, those offsets point into the wrong bytes for as
+ * long as the isolate lives. So the first read of an archive writes the
+ * object's etag into the reader's `version`, and every later read of that
+ * archive, in this request or a later one, carries it as
+ * `onlyIf: { etagMatches }` beside its range. It is the unquoted `etag`, not
+ * `httpEtag`: workerd refuses a quoted one. When R2 answers with no body the
+ * object has changed: what the isolate kept for the key is dropped and the read
+ * throws, so that request has no streets and the next opens the new object from
+ * its first byte. The condition rides on a read that was being made anyway; no
+ * request is added.
+ *
+ * `pinned` is `MAP_TILES_ETAG`: when it is set, an object with any other etag
+ * is refused at the first read, before anything of it is kept.
  */
-export function r2Source(bucket: RangeBucket, name: string): RangeSource {
+export function r2Source(bucket: RangeBucket, name: string, pinned?: string): RangeSource {
   const key = `r2:${name}`;
   return {
     key,
-    async read(offset, length) {
-      const obj = await bucket.get(name, { range: { offset, length } });
+    async read(offset, length, version) {
+      const held = version?.etag;
+      const range = { offset, length };
+      const obj = await bucket.get(
+        name,
+        held === undefined ? { range } : { range, onlyIf: { etagMatches: held } }
+      );
       if (!obj) {
         if (offset === 0) MISSING.set(key, Date.now() + MISS_MEMORY_MS);
         throw new ArchiveNotFoundError('archive not found');
       }
+      if (!obj.arrayBuffer) {
+        OPENED.delete(key);
+        throw new ArchiveChangedError('the object under the key has changed');
+      }
+      if (pinned && obj.etag !== pinned) {
+        throw new ArchiveChangedError('the object is not the pinned one');
+      }
+      if (version) version.etag = obj.etag;
       return new Uint8Array(await obj.arrayBuffer());
     },
   };

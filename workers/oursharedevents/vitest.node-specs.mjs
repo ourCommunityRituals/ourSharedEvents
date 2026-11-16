@@ -109,6 +109,9 @@ export const NODE_SPECS = [
   'tests/as-display-public-admin.spec.ts',
   'tests/briefing.spec.ts',
   'tests/color-contrast.spec.ts',
+  // Base-map slice B7: the contrast of text drawn on the map, computed from the
+  // token values in both themes (pure arithmetic and pure rendering)
+  'tests/map-text-contrast.spec.ts',
   'tests/demo-banner.spec.ts',
   'tests/pdf-export.spec.ts',
   'tests/poster-mobile-workability.spec.ts',

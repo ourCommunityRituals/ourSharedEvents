@@ -146,6 +146,113 @@ describe('private: only the two exact answers that mean private pass', () => {
   });
 });
 
+// @born-red street-map load, environment judge | method: before environmentProblems existed the file did not load. Then, in the function, one fault at a time, 2026-11-16: the name comparison taken out (3 red: "does not exist", "another environment's answer", "an answer with no name"); the null-policy stop taken out (2: "no branch list", "the staging environment as it stands today"); the protected_branches comparison taken out (1: "every protected branch"); the total_count stop taken out (1: "cut short"); the list length not held to one (3: the release tag, the second branch, main listed twice); the ref compared by name only (1: "a tag named main").
+describe('environment: only a branch list of main alone passes', () => {
+  // GitHub's two answers for the main-automation environment, read 2026-11-16
+  // without a token (the repository is public), with the name changed.
+  const NAME = 'street-map-load';
+  const environment = (over = {}) =>
+    JSON.stringify({
+      id: 24326794458,
+      name: NAME,
+      can_admins_bypass: true,
+      protection_rules: [{ id: 68834018, type: 'branch_policy' }],
+      deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
+      ...over,
+    });
+  const MAIN = { id: 63082354, name: 'main', type: 'branch' };
+  const list = (policies = [MAIN], total = policies.length) =>
+    JSON.stringify({ total_count: total, branch_policies: policies });
+  const NOT_FOUND = JSON.stringify({ message: 'Not Found', status: '404' });
+
+  test('the environment exists and allows branch main alone', () => {
+    expect(load.environmentProblems(environment(), list())).toEqual([]);
+  });
+
+  test('a required reviewer is counted and is not a stop', () => {
+    const reviewed = environment({
+      protection_rules: [
+        { id: 1, type: 'required_reviewers', reviewers: [{ type: 'User', reviewer: { id: 7 } }] },
+        { id: 2, type: 'branch_policy' },
+      ],
+    });
+    expect(load.environmentProblems(reviewed, list())).toEqual([]);
+    expect(load.environmentReviewers(reviewed)).toBe(1);
+    expect(load.environmentReviewers(environment())).toBe(0);
+    expect(load.environmentReviewers(NOT_FOUND)).toBe(0);
+  });
+
+  test.each([
+    ['the environment does not exist', NOT_FOUND, NOT_FOUND, /was not read/],
+    ['the read printed nothing', '', '', /was not read/],
+    ['an answer that is not JSON', 'gh: Not Found (HTTP 404)', list(), /was not read/],
+    ['an answer that was never read', undefined, undefined, /was not read/],
+    ["another environment's answer", environment({ name: 'staging' }), list(), /was not read/],
+    ['an answer with no name', environment({ name: undefined }), list(), /was not read/],
+    [
+      'no branch list: every branch and tag (what GitHub makes on first use)',
+      environment({ protection_rules: [], deployment_branch_policy: null }),
+      NOT_FOUND,
+      /every branch and tag/,
+    ],
+    [
+      'every protected branch',
+      environment({
+        deployment_branch_policy: { protected_branches: true, custom_branch_policies: false },
+      }),
+      list([]),
+      /every protected branch/,
+    ],
+    ['the branch list not read', environment(), NOT_FOUND, /branch list .* was not read/],
+    ['the branch list empty', environment(), list([]), /no ref at all/],
+    ['the branch list cut short', environment(), list([MAIN], 2), /cut short: 1 of 2/],
+    [
+      'main and a release tag',
+      environment(),
+      list([MAIN, { id: 2, name: 'v*', type: 'tag' }]),
+      /branch main, tag v\*/,
+    ],
+    [
+      'main and a second branch',
+      environment(),
+      list([MAIN, { id: 3, name: 'claude/*', type: 'branch' }]),
+      /branch main, branch claude\/\*/,
+    ],
+    ['main listed twice', environment(), list([MAIN, MAIN]), /branch main, branch main/],
+    [
+      'a pattern that also matches main',
+      environment(),
+      list([{ ...MAIN, name: 'main*' }]),
+      /branch main\*/,
+    ],
+    ['a tag named main', environment(), list([{ ...MAIN, type: 'tag' }]), /tag main/],
+    ['every branch by pattern', environment(), list([{ ...MAIN, name: '*' }]), /branch \*/],
+  ])('rainy: %s is a stop', (_, environmentText, policiesText, why) => {
+    const problems = load.environmentProblems(environmentText, policiesText);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatch(why);
+  });
+
+  test('the staging environment as it stands today is a stop: it has no branch list', () => {
+    // GET /repos/.../environments/staging, read 2026-11-16.
+    const staging = JSON.stringify({
+      name: 'staging',
+      protection_rules: [],
+      deployment_branch_policy: null,
+    });
+    expect(load.environmentProblems(staging, NOT_FOUND, 'staging')).toEqual([
+      '"staging" can be used from every branch and tag: it has no branch list',
+    ]);
+  });
+
+  test('the name is the one the workflow types twice', () => {
+    const d = yaml.load(workflow());
+    expect(load.LOAD_ENVIRONMENT).toBe('street-map-load');
+    expect(d.jobs.load.environment).toBe(load.LOAD_ENVIRONMENT);
+    expect(d.env.LOAD_ENVIRONMENT).toBe(load.LOAD_ENVIRONMENT);
+  });
+});
+
 describe('fits: the dry-run size against the free disk', () => {
   // go-pmtiles v1.31.2 logs with a date, a time and file:line in front.
   const line = (size) =>
@@ -405,6 +512,7 @@ function shapeProblems(text) {
   const jobs = doc.jobs ?? {};
   const loadJob = jobs.load ?? {};
   const privateJob = jobs['bucket-private'] ?? {};
+  const keyJob = jobs['key-environment'] ?? {};
   const steps = loadJob.steps ?? [];
 
   // Dispatched by hand, and nothing else.
@@ -432,8 +540,10 @@ function shapeProblems(text) {
   ) {
     out.push('two loads can run at once, or one can be cancelled under an upload');
   }
-  if (Object.keys(jobs).sort().join() !== 'bucket-private,load') {
-    out.push(`the jobs are "${Object.keys(jobs).join()}", not bucket-private and load`);
+  if (Object.keys(jobs).sort().join() !== 'bucket-private,key-environment,load') {
+    out.push(
+      `the jobs are "${Object.keys(jobs).join()}", not bucket-private, key-environment and load`
+    );
   }
 
   // Each job refuses first: STAGING typed, then main.
@@ -484,6 +594,48 @@ function shapeProblems(text) {
   }
   if (!(loadJob.needs ?? []).includes('bucket-private')) {
     out.push('load does not wait for the bucket to be read as private');
+  }
+
+  // Where the bucket credential lives (owner, 2026-11-16): an environment of
+  // its own, read as main only before the job that names it starts.
+  const wanted = load.LOAD_ENVIRONMENT;
+  if (loadJob.environment !== wanted) {
+    out.push(`load names the environment ${JSON.stringify(loadJob.environment)}, not "${wanted}"`);
+  }
+  if (doc.env?.LOAD_ENVIRONMENT !== wanted) {
+    out.push(`the environment that is read is not "${wanted}", the one load names`);
+  }
+  for (const [id, job] of Object.entries(jobs)) {
+    if (id !== 'load' && job.environment !== undefined) {
+      out.push(`${id}: names an environment; only load does`);
+    }
+  }
+  if (![].concat(loadJob.needs ?? []).includes('key-environment')) {
+    out.push('load does not wait for its environment to be read as main only');
+  }
+  if (secretsIn(keyJob).length) out.push('key-environment reads a secret');
+  const reads = (keyJob.steps ?? []).flatMap((s) => commands(s, 'gh'));
+  const readOf = 'gh api "repos/${GITHUB_REPOSITORY}/environments/${LOAD_ENVIRONMENT}';
+  if (
+    reads.length !== 2 ||
+    reads[0] !== `${readOf}" > "$RUNNER_TEMP/environment.json" || true` ||
+    reads[1] !== `${readOf}/deployment-branch-policies" > "$RUNNER_TEMP/branch-list.json" || true`
+  ) {
+    out.push('key-environment runs something other than the two reads of the environment');
+  }
+  if (
+    !/^node scripts\/ci\/street-map-archive-load\.mjs environment "\$RUNNER_TEMP\/environment\.json" "\$RUNNER_TEMP\/branch-list\.json"$/.test(
+      run((keyJob.steps ?? []).at(-1)).trim()
+    )
+  ) {
+    out.push('key-environment does not end by judging the two reads');
+  }
+  if (
+    keyJob.if !== undefined ||
+    keyJob['continue-on-error'] !== undefined ||
+    (keyJob.steps ?? []).some((s) => s.if !== undefined || s['continue-on-error'] !== undefined)
+  ) {
+    out.push('key-environment can be skipped, or can fail without stopping the run');
   }
   const holders = steps.filter((s) => BUCKET_SECRETS.some((n) => secretsIn(s).includes(n)));
   for (const step of holders) {
@@ -1019,6 +1171,122 @@ describe('the workflow: dispatched by hand, staging only, the credential where i
     expect(shapeProblems(text)).not.toEqual([]);
   });
 
+  // The key's environment (owner, 2026-11-16), each fault by its own sentence.
+  // @born-red street-map load, key environment | method: seen red on the real workflow, one fault at a time, 2026-11-16: `environment: staging` put back on the load job (5 cases red across this file and tests/integration/adr008-wiring.test.js); `key-environment` taken out of `needs` (3); LOAD_ENVIRONMENT set to staging in the workflow env (4); a `gh api --method PUT` added beside the two reads (3); the judge step given `continue-on-error` (3); `environment: street-map-load` added to bucket-private (4). "the real workflow" was red each time. The cases below feed each rule its own fault and ask for its own sentence.
+  const key = (d) => d.jobs['key-environment'];
+  test.each([
+    [
+      'the load job back on the staging environment',
+      doc((d) => (d.jobs.load.environment = 'staging')),
+      'load names the environment "staging", not "street-map-load"',
+    ],
+    [
+      'the load job with no environment',
+      doc((d) => delete d.jobs.load.environment),
+      'load names the environment undefined, not "street-map-load"',
+    ],
+    [
+      'the environment chosen by an input',
+      doc((d) => (d.jobs.load.environment = '${{ inputs.mode }}')),
+      'load names the environment "${{ inputs.mode }}", not "street-map-load"',
+    ],
+    [
+      'the environment written as an object',
+      doc((d) => (d.jobs.load.environment = { name: 'street-map-load', url: 'https://x.test' })),
+      'load names the environment {"name":"street-map-load","url":"https://x.test"}, not "street-map-load"',
+    ],
+    [
+      'another environment read than the one load names',
+      doc((d) => (d.env.LOAD_ENVIRONMENT = 'staging')),
+      'the environment that is read is not "street-map-load", the one load names',
+    ],
+    [
+      'the job that reads the environment names it, so GitHub would make it',
+      doc((d) => (key(d).environment = 'street-map-load')),
+      'key-environment: names an environment; only load does',
+    ],
+    [
+      'bucket-private given the environment',
+      doc((d) => (d.jobs['bucket-private'].environment = 'street-map-load')),
+      'bucket-private: names an environment; only load does',
+    ],
+    [
+      'load waits for the bucket read only',
+      doc((d) => (d.jobs.load.needs = ['bucket-private'])),
+      'load does not wait for its environment to be read as main only',
+    ],
+    [
+      'the bucket credential given to the job that reads the environment',
+      doc((d) => (key(d).steps.at(-2).env.K = '${{ secrets.R2_MAP_TILES_SECRET_KEY }}')),
+      'key-environment reads a secret',
+    ],
+    [
+      'the environment changed by the job that reads it',
+      doc(
+        (d) =>
+          (key(d).steps.at(-2).run +=
+            'gh api --method PUT "repos/${GITHUB_REPOSITORY}/environments/${LOAD_ENVIRONMENT}"\n')
+      ),
+      'key-environment runs something other than the two reads of the environment',
+    ],
+    [
+      'the staging environment read by name',
+      doc(
+        (d) =>
+          (key(d).steps.at(-2).run = key(d)
+            .steps.at(-2)
+            .run.replaceAll('${LOAD_ENVIRONMENT}', 'staging'))
+      ),
+      'key-environment runs something other than the two reads of the environment',
+    ],
+    [
+      'a failed read stops the step before the judge sees it',
+      doc((d) => (key(d).steps.at(-2).run = key(d).steps.at(-2).run.replaceAll(' || true', ''))),
+      'key-environment runs something other than the two reads of the environment',
+    ],
+    [
+      'the two reads never judged',
+      doc((d) => key(d).steps.pop()),
+      'key-environment does not end by judging the two reads',
+    ],
+    [
+      'the judge given the files the other way round',
+      doc(
+        (d) =>
+          (key(d).steps.at(-1).run =
+            'node scripts/ci/street-map-archive-load.mjs environment "$RUNNER_TEMP/branch-list.json" "$RUNNER_TEMP/environment.json"')
+      ),
+      'key-environment does not end by judging the two reads',
+    ],
+    [
+      'the judge may fail',
+      doc((d) => (key(d).steps.at(-1)['continue-on-error'] = true)),
+      'key-environment can be skipped, or can fail without stopping the run',
+    ],
+    [
+      'the judge runs in load mode only',
+      doc((d) => (key(d).steps.at(-1).if = LOAD_ONLY)),
+      'key-environment can be skipped, or can fail without stopping the run',
+    ],
+    [
+      'the whole job skipped in measure mode',
+      doc((d) => (key(d).if = LOAD_ONLY)),
+      'key-environment can be skipped, or can fail without stopping the run',
+    ],
+  ])('key environment: %s', (_, fault, sentence) => {
+    expect(shapeProblems(fault(workflow()))).toContain(sentence);
+  });
+
+  test('key-environment removed: load would start in an environment nobody read', () => {
+    const text = doc((d) => delete d.jobs['key-environment'])(workflow());
+    expect(shapeProblems(text)).toEqual(
+      expect.arrayContaining([
+        'the jobs are "bucket-private,load", not bucket-private, key-environment and load',
+        'key-environment does not end by judging the two reads',
+      ])
+    );
+  });
+
   // The fault of the first measure run, by its sentence, so the rule that
   // holds it is the one seen red and not another rule that happens to fail.
   // @born-red rclone env names | method: the real workflow with TOOL_RCLONE_VERSION renamed back to RCLONE_VERSION failed "the real workflow" and this case's first line; the rule's two loops switched off in turn failed this case; in CI the fault itself was red, run 43744396310 | date: 2026-11-15
@@ -1077,7 +1345,7 @@ function ranCommands(workflowText) {
 
 /** The commands the runbook must show, each one, exactly: every one that cuts, checks, reads or writes the bucket. */
 const mustBeShown = (command) =>
-  (/^(?:\.\/|npx )?(?:wrangler|pmtiles|rclone)\b/.test(command) ||
+  (/^(?:\.\/|npx )?(?:wrangler|pmtiles|rclone|gh)\b/.test(command) ||
     command.includes('check-street-map-archive.mjs')) &&
   !/^\.\/(?:pmtiles|rclone) version$/.test(command);
 
@@ -1093,6 +1361,9 @@ const shown = (runbookText) =>
 const KINDS = {
   'the r2.dev read': /^npx wrangler r2 bucket dev-url get \S+$/,
   'the custom-domain read': /^npx wrangler r2 bucket domain list \S+$/,
+  'the read of the environment': /^gh api repos\/\S+\/environments\/[a-z-]+$/,
+  'the read of its branch list':
+    /^gh api repos\/\S+\/environments\/[a-z-]+\/deployment-branch-policies$/,
   'the dry run': /^pmtiles extract \S+ \S+ --region=\S+ --maxzoom=\d+ --dry-run$/,
   'the bucket listing': /^rclone lsjson r2:\S+ /,
   'the cut': /^pmtiles extract \S+ \S+ --region=\S+ --maxzoom=\d+$/,
@@ -1140,6 +1411,12 @@ function driftProblems(workflowText, tomlText, runbookText) {
     ['the first secret', '`R2_MAP_TILES_ACCESS_KEY_ID`'],
     ['the second secret', '`R2_MAP_TILES_SECRET_KEY`'],
     ['the artifact', '`street-map-archive-check-record`'],
+    // The clicks that make the environment, and where the pair is set.
+    ['the environment, where it is made,', `**New environment**, name \`${env.LOAD_ENVIRONMENT}\``],
+    [
+      'the environment, where the pair is set,',
+      `on the \`${env.LOAD_ENVIRONMENT}\` environment's own page`,
+    ],
     ['the answer that means no public URL', `"${load.DEV_URL_OFF}"`],
     ['the answer that means no custom domain', `"${load.NO_DOMAINS}"`],
     ['the region file', `--region=${env.REGION_FILE}`],
@@ -1322,6 +1599,27 @@ describe('the names typed three times are one set of names', () => {
     ['the cut shown at another zoom', /( --maxzoom=)14(\n *```)/, '$115$2'],
     ['the cut shown with every zoom kept', /( --region=\S+) --maxzoom=14(\n *```)/, '$1$2'],
     ['the bucket listing not shown', /^ *```bash\n *rclone lsjson .*\n *```\n/m, ''],
+    // @born-red street-map load, runbook names the key's environment | method: each slip below is the fault; and on the real files, 2026-11-16, with LOAD_ENVIRONMENT renamed in the workflow alone "the real files agree" was red on six sentences (both reads shown that the workflow does not run, both reads run that the runbook does not show, and the two places the runbook names the environment).
+    [
+      'the read of the environment not shown',
+      /^ *```bash\n *gh api \S+\/environments\/street-map-load\n *```\n/m,
+      '',
+    ],
+    [
+      'the read of the branch list shown for another environment',
+      'environments/street-map-load/deployment-branch-policies',
+      'environments/staging/deployment-branch-policies',
+    ],
+    [
+      'the environment made under another name',
+      '**New environment**, name `street-map-load`',
+      '**New environment**, name `street-map-loads`',
+    ],
+    [
+      'the pair set on the staging environment',
+      "on the `street-map-load` environment's own page",
+      "on the `staging` environment's own page",
+    ],
     [
       'the privacy read shown on another bucket',
       'dev-url get ose-map-tiles',

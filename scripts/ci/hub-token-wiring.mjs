@@ -130,12 +130,19 @@ export const MAIN_AUTOMATION_ENV = 'main-automation';
  * (steps release-tag-ruleset, production-gate, main-automation; OSE-1693). A name that is not
  * here (a typo, or a step name such as production-gate) would make GitHub create a new,
  * unprotected environment on first use.
+ *
+ * street-map-load (owner, 2026-11-16) is the one name here that apply-github.mjs does not make:
+ * the owner creates it in the browser (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md), and the
+ * load workflow's own first job reads its branch list and stops the run unless it is branch main
+ * alone, before the job that names it starts (tests/unit/ci/street-map-archive-load.test.js).
  */
+export const STREET_MAP_LOAD_ENV = 'street-map-load';
 export const ALLOWED_ENVIRONMENTS = Object.freeze([
   'staging',
   'production',
   'copilot',
   MAIN_AUTOMATION_ENV,
+  STREET_MAP_LOAD_ENV,
 ]);
 
 /**

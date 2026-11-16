@@ -27,9 +27,11 @@
 // @born-red planet-sized layout and leaf entry budget | method: 6 faults injected one at a time in src/lib/pmtiles.ts (header offsets cut to 32 bits, directory offsets cut to 32 bits, one leaf level only, a run covering only its first tile, leaves never kept, the entry budget never applied), each planet and budget case seen failing on at least one; the budget cases also seen failing before the budget existed. "is laid out as meant" checks the fixture, not the reader | date: 2026-11-09
 // @born-red limits on what an archive may ask the Worker to hold | method: every case in that block was written before the limits existed and seen failing (the reader asked for the stated length and unpacked to the end; the never-ending gzip case ended the test worker); then 11 faults injected one at a time in src/lib/pmtiles.ts (each of the three stated-length checks removed, > turned to >= in the directory, tile and unpack limits, the cancel removed, each unpack given the other's limit, a frame refused only when every tile is over), each seen failing at least one case | date: 2026-11-14
 // @born-red directory count bound (street-map CCR 2026-11-15, R2) | method: the five cases of "a directory's count is held to what its bytes can hold" seen failing on main's rule (count against the byte length: each read on to "truncated varint", the 2 MiB one after making 2,097,149 entries), then 3 faults injected one at a time in decodeDirectory (the count held to the byte length; the count's own bytes counted as room; three bytes an entry), each seen failing its case | date: 2026-11-15
+// @born-red one object for one opened archive, and the pinned etag (street-map scenario pass 2026-11-15, S12) | method: the block run on the reader of 44948a04, which sent no condition and took no pin: 13 of its 16 cases failed (the three that passed are the fixture check, the read with no version and the empty pin). Then 11 faults in src/lib/pmtiles.ts, one at a time, each seen failing here and put back: the leaf read not handed the version (5 cases); the tile read not handed it (7); the root read past the first not handed it (the case named for it, alone); `OPENED.delete` removed from the changed branch (4: the next request threw again); the etag never written to the version (9); the pin not compared (5); the no-body check removed (6); `OPENED.clear()` for `OPENED.delete(key)` ("another key stays open", alone); a changed object marked as missing ("not taken for a missing one"); the condition sent on the first read too (4, on the first get's shape); the pin's compare turned round (7) | date: 2026-11-16
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   archiveHeader,
+  archiveKnownMissing,
   decodeDirectory,
   decompress,
   findEntry,
@@ -40,6 +42,7 @@ import {
   readTiles,
   resetPmtilesCache,
   zxyToTileId,
+  ArchiveChangedError,
   PmtilesError,
   HEADER_BYTES,
   MAX_DIRECTORY_BYTES,
@@ -52,11 +55,13 @@ import {
   type RangeSource,
 } from '../src/lib/pmtiles';
 import {
+  etagOf,
   fakeBucket,
   gzip,
   memSource,
   planetArchive,
   pmtilesArchive,
+  scriptedBucket,
   sparseSource,
   varint,
   type PlanetTile,
@@ -1186,6 +1191,218 @@ describe('pmtiles | R2 source', () => {
   it('throws when the object is missing', async () => {
     const src = r2Source(fakeBucket('map.pmtiles', bytes('x')), 'other.pmtiles');
     await expect(src.read(0, 1)).rejects.toThrow(/archive not found/);
+  });
+});
+
+// The directories an isolate keeps are offsets into one object. Before
+// 2026-11-16 nothing tied a later read to that object: with another object put
+// under the key, the reader went on asking for the old offsets, in the new
+// bytes, for as long as the isolate lived (street-map scenario pass 2026-11-15,
+// S12; CCR R13). Now the first read's etag rides on every later read.
+describe('pmtiles | one object for one opened archive (R2)', () => {
+  const NAME = 'map.pmtiles';
+  const FIRST = { offset: 0, length: 16384 };
+  const t325 = { z: 3, x: 2, y: 5, data: bytes('tile-OLD') };
+  const old = () => pmtilesArchive([t325], { leaf: true });
+  // Another build: a tile ahead of 3/2/5 in the file, so the same tile sits at
+  // another offset. Read at the old offset, the new bytes give the wrong tile.
+  const other = () =>
+    pmtilesArchive(
+      [
+        { z: 3, x: 2, y: 4, data: bytes('tile-324') },
+        { z: 3, x: 2, y: 5, data: bytes('tile-NEW') },
+      ],
+      { leaf: true }
+    );
+  const conditions = (gets: { onlyIf?: { etagMatches?: string } }[]) =>
+    gets.map((g) => g.onlyIf?.etagMatches);
+
+  it('the fixture: read at the old offsets, the other build gives another tile', async () => {
+    const a = memSource(await old());
+    const b = memSource(await other());
+    await readTile(a, 3, 2, 5);
+    const tileRead = a.reads[a.reads.length - 1]!;
+    expect(text(await a.read(...tileRead))).toBe('tile-OLD');
+    expect(text(await b.read(...tileRead))).not.toBe('tile-NEW');
+    expect(text(await readTile(b, 3, 2, 5))).toBe('tile-NEW');
+  });
+
+  it('the first read carries no condition; every later read of the archive carries its etag', async () => {
+    const bucket = fakeBucket(NAME, await old());
+    expect(text(await readTile(r2Source(bucket, NAME), 3, 2, 5))).toBe('tile-OLD');
+    // Header and root, the leaf directory, the tile.
+    expect(bucket.gets).toHaveLength(3);
+    expect(bucket.gets[0]).toStrictEqual({ key: NAME, range: FIRST });
+    expect(Object.keys(bucket.gets[0]!).sort()).toEqual(['key', 'range']);
+    for (const g of bucket.gets.slice(1)) {
+      expect(Object.keys(g).sort()).toEqual(['key', 'onlyIf', 'range']);
+      expect(g.onlyIf).toStrictEqual({ etagMatches: bucket.etag });
+      expect(g.range!.offset).toBeGreaterThan(0);
+    }
+    // The next request has its own source and finds the archive open: its one
+    // read, the tile, is held to the same object.
+    expect(text(await readTile(r2Source(bucket, NAME), 3, 2, 5))).toBe('tile-OLD');
+    expect(bucket.gets).toHaveLength(4);
+    expect(bucket.gets[3]!.onlyIf).toStrictEqual({ etagMatches: bucket.etag });
+  });
+
+  it('a root directory that sits past the first read is held to the object the header came from', async () => {
+    const id = zxyToTileId(t325.z, t325.x, t325.y);
+    const root = dirOf([{ tileId: id, offset: 0, length: t325.data.length, runLength: 1 }]);
+    const bucket = fakeBucket(NAME, rawArchive({ root, rootAt: 20000, data: t325.data }).archive);
+    expect(text(await readTile(r2Source(bucket, NAME), 3, 2, 5))).toBe('tile-OLD');
+    expect(bucket.gets.map((g) => g.range!.offset)).toEqual([0, 20000, 20000 + root.length]);
+    expect(conditions(bucket.gets)).toEqual([undefined, bucket.etag, bucket.etag]);
+  });
+
+  it('the object replaced between two requests: the next read throws and keeps nothing, and the one after reads the new object from its first byte', async () => {
+    const bucket = fakeBucket(NAME, await old());
+    await readTile(r2Source(bucket, NAME), 3, 2, 5);
+    const oldEtag = bucket.etag;
+    bucket.replace(await other());
+    expect(bucket.etag).not.toBe(oldEtag);
+
+    const before = bucket.gets.length;
+    const stale = readTile(r2Source(bucket, NAME), 3, 2, 5);
+    await expect(stale).rejects.toBeInstanceOf(ArchiveChangedError);
+    await expect(stale).rejects.toBeInstanceOf(PmtilesError);
+    await expect(stale).rejects.toThrow('the object under the key has changed');
+    // One read, the tile, asked for under the old etag. No second request.
+    expect(conditions(bucket.gets.slice(before))).toEqual([oldEtag]);
+
+    const clean = bucket.gets.length;
+    expect(text(await readTile(r2Source(bucket, NAME), 3, 2, 5))).toBe('tile-NEW');
+    const after = bucket.gets.slice(clean);
+    expect(after[0]).toStrictEqual({ key: NAME, range: FIRST });
+    // The header, the leaf directory and the tile again: the old leaves went too.
+    expect(conditions(after)).toEqual([undefined, bucket.etag, bucket.etag]);
+    // And it stays open: one read from here on.
+    await readTile(r2Source(bucket, NAME), 3, 2, 5);
+    expect(bucket.gets.length - clean).toBe(4);
+  });
+
+  for (const [what, n] of [
+    ['the leaf directory', 1],
+    ['the tile', 2],
+  ] as const) {
+    it(`the object replaced inside one request, before ${what} is read: that request throws, and the next reads the new object`, async () => {
+      const next = await other();
+      const bucket = scriptedBucket(NAME, await old(), (i) =>
+        i === n ? { replaceWith: next } : 'ok'
+      );
+      await expect(readTile(r2Source(bucket, NAME), 3, 2, 5)).rejects.toBeInstanceOf(
+        ArchiveChangedError
+      );
+      expect(bucket.gets).toHaveLength(n + 1);
+      expect(text(await readTile(r2Source(bucket, NAME), 3, 2, 5))).toBe('tile-NEW');
+      expect(conditions(bucket.gets.slice(n + 1))).toEqual([undefined, bucket.etag, bucket.etag]);
+    });
+  }
+
+  it('only the archive that changed is forgotten: another key stays open', async () => {
+    const a = fakeBucket('a.pmtiles', await old());
+    const b = fakeBucket('b.pmtiles', await old());
+    await readTile(r2Source(a, 'a.pmtiles'), 3, 2, 5);
+    await readTile(r2Source(b, 'b.pmtiles'), 3, 2, 5);
+    a.replace(await other());
+    await expect(readTile(r2Source(a, 'a.pmtiles'), 3, 2, 5)).rejects.toBeInstanceOf(
+      ArchiveChangedError
+    );
+    const before = b.gets.length;
+    expect(text(await readTile(r2Source(b, 'b.pmtiles'), 3, 2, 5))).toBe('tile-OLD');
+    expect(b.gets.length - before).toBe(1);
+  });
+
+  it('a changed object is not taken for a missing one: nothing is remembered, the next request asks', async () => {
+    const bucket = fakeBucket(NAME, await old());
+    const src = r2Source(bucket, NAME);
+    await readTile(src, 3, 2, 5);
+    bucket.replace(await other());
+    await expect(readTile(r2Source(bucket, NAME), 3, 2, 5)).rejects.toBeInstanceOf(
+      ArchiveChangedError
+    );
+    expect(archiveKnownMissing(src.key)).toBe(false);
+  });
+
+  it('a read with no version from the reader sends no condition and still answers', async () => {
+    const bucket = fakeBucket(NAME, bytes('0123456789'));
+    const src = r2Source(bucket, NAME);
+    expect(text(await src.read(2, 3))).toBe('234');
+    expect(text(await src.read(5, 2))).toBe('56');
+    expect(conditions(bucket.gets)).toEqual([undefined, undefined]);
+  });
+
+  it('a version handed in by the reader is filled with the etag on the first read and used on the next', async () => {
+    const bucket = fakeBucket(NAME, bytes('0123456789'));
+    const src = r2Source(bucket, NAME);
+    const version: { etag?: string } = {};
+    await src.read(0, 4, version);
+    expect(version).toStrictEqual({ etag: bucket.etag });
+    await src.read(4, 4, version);
+    expect(conditions(bucket.gets)).toEqual([undefined, bucket.etag]);
+    bucket.replace(bytes('abcdefghij'));
+    await expect(src.read(4, 4, version)).rejects.toBeInstanceOf(ArchiveChangedError);
+    // The reader's record is left as it was: it names the object that was read.
+    expect(version.etag).not.toBe(bucket.etag);
+  });
+
+  describe('a pinned etag (MAP_TILES_ETAG)', () => {
+    it("the object's own etag: read as with no pin", async () => {
+      const bucket = fakeBucket(NAME, await old());
+      expect(text(await readTile(r2Source(bucket, NAME, bucket.etag), 3, 2, 5))).toBe('tile-OLD');
+      expect(conditions(bucket.gets)).toEqual([undefined, bucket.etag, bucket.etag]);
+    });
+
+    it('empty is no pin', async () => {
+      const bucket = fakeBucket(NAME, await old());
+      expect(text(await readTile(r2Source(bucket, NAME, ''), 3, 2, 5))).toBe('tile-OLD');
+    });
+
+    it('another etag: refused at the first read, nothing kept, and not taken for a missing object', async () => {
+      const bucket = fakeBucket(NAME, await old());
+      const pinned = etagOf(await other());
+      for (const round of [1, 2]) {
+        const src = r2Source(bucket, NAME, pinned);
+        const refused = readTile(src, 3, 2, 5);
+        await expect(refused).rejects.toBeInstanceOf(ArchiveChangedError);
+        await expect(refused).rejects.toThrow('the object is not the pinned one');
+        // The first read alone, each time: no directory of this object was kept.
+        expect(bucket.gets).toHaveLength(round);
+        expect(bucket.gets[round - 1]).toStrictEqual({ key: NAME, range: FIRST });
+        expect(archiveKnownMissing(src.key)).toBe(false);
+      }
+    });
+
+    it('a quoted etag is another etag: the pin is the etag as R2 gives it', async () => {
+      const bucket = fakeBucket(NAME, await old());
+      await expect(
+        readTile(r2Source(bucket, NAME, `"${bucket.etag}"`), 3, 2, 5)
+      ).rejects.toBeInstanceOf(ArchiveChangedError);
+    });
+
+    it('the pinned object replaced: refused from then on, and read again once the pinned object is back', async () => {
+      const first = await old();
+      const bucket = fakeBucket(NAME, first);
+      const pinned = bucket.etag;
+      await readTile(r2Source(bucket, NAME, pinned), 3, 2, 5);
+      bucket.replace(await other());
+      await expect(readTile(r2Source(bucket, NAME, pinned), 3, 2, 5)).rejects.toThrow(
+        'the object under the key has changed'
+      );
+      await expect(readTile(r2Source(bucket, NAME, pinned), 3, 2, 5)).rejects.toThrow(
+        'the object is not the pinned one'
+      );
+      bucket.replace(first);
+      expect(text(await readTile(r2Source(bucket, NAME, pinned), 3, 2, 5))).toBe('tile-OLD');
+    });
+
+    it('a direct read, with no version, is held to the pin too', async () => {
+      const bucket = fakeBucket(NAME, bytes('0123456789'));
+      await expect(r2Source(bucket, NAME, 'another').read(0, 4)).rejects.toThrow(
+        'the object is not the pinned one'
+      );
+      expect(text(await r2Source(bucket, NAME, bucket.etag).read(0, 4))).toBe('0123');
+    });
   });
 });
 
