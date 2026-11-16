@@ -122,8 +122,14 @@ then global); every plan read fails closed.
 ## Sections by depth (additive ladder)
 
 Each tier is a superset of the one below. `sponsor_class_breakdown` is present at
-**every** depth (OSE-719): it is class-level aggregate — the tier-neutral
-competitive view — never per-competitor, so it is never a paid section.
+**every** depth (OSE-719), on a sponsor's own link too: it is the tier-neutral
+competitive view, so it is never a paid section.
+
+Owner ruling, 2026-11-16 (OSE-2089): a count at or over the floor is open
+knowledge between the sponsors of an event. In a class of two sponsors, one can
+work out the other's total from the class total and its own rows; that is
+accepted. A sponsor pays for depth of data and features, and the report never
+takes the competitive view away from a local or smaller sponsor.
 
 The floor applies to it at every depth (OSE-2089): a class with no sponsor at 5
 displays on any one surface has `total_displays: null` and one

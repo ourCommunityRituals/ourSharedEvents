@@ -1299,13 +1299,18 @@
                 // words, never as 0 (invariant 2). A total is a sum of floored
                 // parts, so the words say which part did not reach 5.
                 const WITHHELD_TAIL = 'for any one sponsor on any one surface';
-                const shown = (c) => (c && typeof c.total_displays === 'number' ? c.total_displays : null);
+                // The page floors too: a total that is not a number, or is under
+                // 5, reads as withheld whatever the worker sent.
+                const shown = (c) => (c && typeof c.total_displays === 'number' && c.total_displays >= 5 ? c.total_displays : null);
                 const cell = (n) => (n == null ? esc(oseFewerThan(5, WITHHELD_TAIL)) : fmtInt(n));
                 const line = (n) => (n == null ? esc(oseFewerThan(5, 'displays ' + WITHHELD_TAIL, true)) : fmtInt(n));
                 const localImpr = shown(scb.local);
                 const midImpr = shown(scb.mid);
                 const premiumImpr = shown(scb.premium);
                 // Paid is the published classes only; withheld when neither is.
+                // With one paid class withheld it is a part of Paid, and says so
+                // (owner ruling 2026-11-16).
+                const paidLabel = (midImpr == null) !== (premiumImpr == null) ? 'Paid (classes shown)' : 'Paid';
                 const paidImpr = midImpr == null && premiumImpr == null ? null : (midImpr || 0) + (premiumImpr || 0);
                 const localSponsors = scb.local ? scb.local.sponsor_count : 0;
                 const midSponsors = scb.mid ? scb.mid.sponsor_count : 0;
@@ -1330,12 +1335,12 @@
                   '<tr data-testid="sponsor-class-row-premium"><td data-label="Class">Premium</td><td data-label="Sponsors" data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-label="Displays" data-testid="premium-displays">' + cell(premiumImpr) + '</td></tr>' +
                   '</tbody></table>' +
                   (bothShown
-                    ? '<div class="local-vs-paid-bar" data-testid="local-vs-paid-bar" aria-label="Local ' + esc(localPct) + '% vs Paid ' + esc(paidPct) + '%">' +
+                    ? '<div class="local-vs-paid-bar" data-testid="local-vs-paid-bar" aria-label="Local ' + esc(localPct) + '% vs ' + esc(paidLabel) + ' ' + esc(paidPct) + '%">' +
                       '<div class="bar-local" data-testid="bar-local" style="width:' + localPct + '%" title="Local ' + esc(localPct) + '%"></div>' +
-                      '<div class="bar-paid" data-testid="bar-paid" style="width:' + paidPct + '%" title="Paid ' + esc(paidPct) + '%"></div>' +
+                      '<div class="bar-paid" data-testid="bar-paid" style="width:' + paidPct + '%" title="' + esc(paidLabel) + ' ' + esc(paidPct) + '%"></div>' +
                       '</div>'
                     : '') +
-                  '<p class="report-note" data-testid="local-vs-paid-delta">Local: <strong data-testid="local-displays-total">' + line(localImpr) + '</strong>' + (localImpr == null ? '' : ' displays') + ' · Paid: <strong data-testid="paid-displays-total">' + line(paidImpr) + '</strong>' + (paidImpr == null ? '' : ' displays') + '</p>' +
+                  '<p class="report-note" data-testid="local-vs-paid-delta">Local: <strong data-testid="local-displays-total">' + line(localImpr) + '</strong>' + (localImpr == null ? '' : ' displays') + ' · ' + esc(paidLabel) + ': <strong data-testid="paid-displays-total">' + line(paidImpr) + '</strong>' + (paidImpr == null ? '' : ' displays') + '</p>' +
                   '</section>'
                 );
               })()

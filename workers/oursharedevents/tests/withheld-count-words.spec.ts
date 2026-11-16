@@ -512,10 +512,79 @@ describe('the report class breakdown', () => {
     expectWords(at('mid-displays'), `Fewer than 5 ${TAIL}`);
     expect(at('premium-displays')).toBe('12');
     expectWords(at('local-displays-total'), `fewer than 5 displays ${TAIL}`);
-    // Paid is the published classes: 12, with the withheld one in no sum.
-    expect(at('local-vs-paid-delta')).toContain('Paid: 12 displays');
+    // Paid is the published classes: 12, with the withheld one in no sum, and
+    // it says it is a part (owner ruling 2026-11-16).
+    expect(at('local-vs-paid-delta')).toContain('Paid (classes shown): 12 displays');
     expect(doc.querySelector('[data-testid="local-vs-paid-bar"]')).toBeNull();
     expect(at('signed-link-sponsor-class-breakdown')).not.toMatch(/\d+%|\b0 displays|null|NaN/);
+  });
+
+  // The page floors too (CCR 2026-11-16, F2): it does not trust the worker.
+  // @born-red | method: run against the template before `shown` checked the
+  // floor: the cells read "0", "3", "4" and the bar "Local 0% vs Paid 100%";
+  // with three zeros the bar read "Local NaN% vs Paid NaN%" | date: 2026-11-16
+  for (const [name, totals] of [
+    ['0, 3 and 4', [0, 3, 4]],
+    ['three zeros', [0, 0, 0]],
+    ['text and a negative', ['12', -1, 4.5]],
+  ] as Array<[string, unknown[]]>) {
+    test(`a class total under 5 sent as a number reads as withheld (${name})`, async () => {
+      const cls = (t: unknown) => ({ sponsor_count: 0, total_displays: t }) as unknown as Cls;
+      const { doc, at } = await openClasses({
+        local: cls(totals[0]),
+        mid: cls(totals[1]),
+        premium: cls(totals[2]),
+      });
+      for (const c of ['local', 'mid', 'premium'])
+        expectWords(at(`${c}-displays`), `Fewer than 5 ${TAIL}`);
+      expectWords(at('local-displays-total'), `fewer than 5 displays ${TAIL}`);
+      expectWords(at('paid-displays-total'), `fewer than 5 displays ${TAIL}`);
+      expect(doc.querySelector('[data-testid="local-vs-paid-bar"]')).toBeNull();
+      expect(at('signed-link-sponsor-class-breakdown')).not.toMatch(/\d+%|NaN|null/);
+    });
+  }
+
+  // Owner ruling 2026-11-16 (CCR F3): with one paid class withheld, Paid is a
+  // part of Paid and is labelled as one, in the line and on the bar.
+  // @born-red | method: run against the template before `paidLabel`: the line
+  // read "Paid: 12 displays" and the bar "Local 45% vs Paid 55%" | date: 2026-11-16
+  test('one paid class withheld: Paid is labelled as partial, in the line and on the bar', async () => {
+    const { doc, at } = await openClasses({
+      local: { sponsor_count: 1, total_displays: 10 },
+      mid: { sponsor_count: 2, total_displays: null },
+      premium: { sponsor_count: 1, total_displays: 12 },
+    });
+    expectWords(at('mid-displays'), `Fewer than 5 ${TAIL}`);
+    expect(at('local-vs-paid-delta')).toBe(
+      'Local: 10 displays · Paid (classes shown): 12 displays'
+    );
+    const bar = doc.querySelector('[data-testid="local-vs-paid-bar"]')!;
+    expect(bar.getAttribute('aria-label')).toBe('Local 45% vs Paid (classes shown) 55%');
+    expect(doc.querySelector('[data-testid="bar-paid"]')!.getAttribute('title')).toBe(
+      'Paid (classes shown) 55%'
+    );
+    // The count of sponsors taking part stays a number beside a withheld total.
+    expect(at('mid-sponsor-count')).toBe('2');
+  });
+
+  test('a drawn bar carries only its own attributes, with whole percentages', async () => {
+    const { doc } = await openClasses({
+      local: { sponsor_count: 1, total_displays: 5 },
+      mid: { sponsor_count: 1, total_displays: 5 },
+      premium: { sponsor_count: 1, total_displays: 1990 },
+    });
+    const bar = doc.querySelector('[data-testid="local-vs-paid-bar"]')!;
+    expect(bar.getAttributeNames().sort()).toEqual(['aria-label', 'class', 'data-testid']);
+    expect(bar.getAttribute('aria-label')).toBe('Local 0% vs Paid 100%');
+    expect([...bar.children].map((c) => c.getAttribute('data-testid'))).toEqual([
+      'bar-local',
+      'bar-paid',
+    ]);
+    for (const part of bar.children) {
+      expect(part.getAttributeNames().sort()).toEqual(['class', 'data-testid', 'style', 'title']);
+      expect(part.getAttribute('style')).toMatch(/^width:\d{1,3}%$/);
+      expect(part.getAttribute('title')).toMatch(/^(Local|Paid) \d{1,3}%$/);
+    }
   });
 
   test('guard: every class published reads as numbers, with the bar', async () => {

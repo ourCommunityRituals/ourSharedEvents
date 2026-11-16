@@ -26,9 +26,6 @@ runtime:
         // Mock-layer twin: workers/oursharedevents/tests/shared-report-class-floor.spec.ts.
         const report = (res.getBody() || {}).report || {};
         const scb = report.sponsor_class_breakdown || {};
-        const measures = function (c) {
-          return { total_displays: c.total_displays, sponsor_count: c.sponsor_count };
-        };
         test('S14 class report: 200, and the class breakdown is in it', function () {
           expect(res.getStatus()).to.eql(200);
           expect(scb.local).to.be.an('object');
@@ -42,15 +39,17 @@ runtime:
           expect(scb.mid.total_displays).to.eql(null);
         });
         test('S14 class report: 0 and 4 displays read the same', function () {
-          expect(measures(scb.local)).to.eql(measures(scb.mid));
+          expect(scb.local.total_displays).to.eql(scb.mid.total_displays);
         });
-        test('S14 class report: sponsor_count stays a number beside a withheld total', function () {
-          expect(scb.local.sponsor_count).to.eql(0);
+        test('S14 class report: sponsor_count is the sponsors taking part, shown or not (owner ruling 2026-11-16)', function () {
+          // One local sponsor is placed (4 displays); none is mid; six are premium,
+          // of which two have a published row.
+          expect(scb.local.sponsor_count).to.eql(1);
           expect(scb.mid.sponsor_count).to.eql(0);
+          expect(scb.premium.sponsor_count).to.eql(6);
         });
-        test('S14 class report: control, the published class is the sum of its published rows (26, from 2 sponsors)', function () {
+        test('S14 class report: control, the published class is the sum of its published rows (26)', function () {
           expect(scb.premium.total_displays).to.eql(26);
-          expect(scb.premium.sponsor_count).to.eql(2);
           const rows = report.sponsor_displays || [];
           expect(rows.reduce(function (n, r) { return n + r.count; }, 0)).to.eql(26);
         });
