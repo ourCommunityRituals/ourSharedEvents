@@ -1,0 +1,38 @@
+info:
+  name: 'S14 | report | setup | the report fixture event reads on a plan with the paid report'
+  type: http
+  seq: 80
+
+http:
+  method: PUT
+  url: '{{baseUrl}}/api/v2/admin/events/camp-rpt-evt/flags/analytics.shared-report'
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "enabled": true
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // OSE-2046. The campaign summary is a Mid section, and staging may be on Free
+        // when this folder runs. This puts the paid report on for ONE synthetic
+        // fixture event (camp-rpt-evt, bruno/fixtures/campaigns-seed.sql); request 83
+        // takes it off again. No other event and no global flag is touched.
+        test('S14 report setup: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('S14 report setup: the override is stored', function () {
+          expect(res.getBody().ok).to.eql(true);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

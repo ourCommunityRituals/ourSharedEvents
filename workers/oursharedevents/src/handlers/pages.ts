@@ -357,9 +357,12 @@ export const PAGE_LIMIT_RETRY_SECONDS = 60;
 export function pageLimitResponse(
   request: Request,
   pathLang: Lang | undefined,
-  target: '/' | '/events'
+  // The page's own path, without a language prefix. Only ever a path on this
+  // site: one that could be read as another host goes to the landing.
+  target: string
 ): Response {
   const lang = pathLang ?? preferredLang(request);
+  if (!target.startsWith('/') || target.startsWith('//') || target.includes('\\')) target = '/';
   const page = renderErrorPage(
     429,
     msg(lang, 'limit.title'),

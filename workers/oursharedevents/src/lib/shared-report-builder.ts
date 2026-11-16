@@ -27,6 +27,7 @@
  * calls this N times in parallel via Promise.all (S5-Q3 capped at 50).
  */
 
+import { campaignWithheldReasons, summarizeCampaigns, type CampaignLink } from './campaign-summary';
 import { EFFECTIVE_CAMPAIGN_ID_SQL } from './campaigns';
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 import { renderCorridorMap } from './corridor-map';
@@ -38,7 +39,7 @@ import {
   floorCorridorBaseline,
   floorTotalOfParts,
 } from './count-floor';
-import { sponsorTitle } from './sponsor-card';
+import { eventUsesSponsorsSql, sponsorTitle } from './sponsor-card';
 import {
   formatHourBucketLabel,
   parseUtcInstant,
@@ -185,6 +186,43 @@ export function publishCorridorBaseline(
   };
 }
 
+/**
+ * The campaign of each sponsor placed at this event (OSE-2046).
+ *
+ * The campaign is read as the `sponsor_displays` statement in `buildSharedReport`
+ * reads it: the EFFECTIVE one (the event's when the event is in one, else the
+ * placement's own, ADR-030 D8), and only a campaign of the event's own brand.
+ *
+ * It starts from the placements, not from the displays, so which campaigns a
+ * report lists never depends on how often anything was shown. A placement
+ * counts when both sides accepted it and the event chose sponsors (invariant 6,
+ * OSE-1900): a sponsor that has not agreed, or was declined, is not counted and
+ * does not put its campaign on a report. The event's status is not read, since a
+ * report is mostly read after the event has ended.
+ */
+async function readCampaignLinks(db: D1Database, eventId: string): Promise<CampaignLink[]> {
+  const links = await db
+    .prepare(
+      `SELECT DISTINCT
+         c.id                   AS campaign_id,
+         c.title                AS campaign_title,
+         sp.sponsor_business_id AS sponsor_id
+       FROM sponsor_placement sp
+       JOIN events e ON e.id = sp.event_id
+       LEFT JOIN campaigns ec ON ec.id = e.campaign_id AND ec.brand_id = e.brand_id
+       JOIN campaigns c ON c.id = ${EFFECTIVE_CAMPAIGN_ID_SQL} AND c.brand_id = e.brand_id
+       WHERE sp.event_id = ?
+         AND sp.is_active = 1
+         AND sp.sponsor_accepted = 1
+         AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
+         AND ${eventUsesSponsorsSql('e')}
+       ORDER BY c.id, sp.sponsor_business_id`
+    )
+    .bind(eventId)
+    .all<CampaignLink>();
+  return links.results ?? [];
+}
+
 export interface SharedReport {
   event_id: string;
   event_title: string;
@@ -251,18 +289,31 @@ export interface SharedReport {
   }>;
 
   /**
-   * Per-campaign aggregate for this event. Null when no sponsors have a
-   * campaign_id. Exposed at mid/premium depth — enterprise comparison surface.
-   * Each row aggregates all sponsor_displays rows for the campaign so a
-   * brand can compare campaign reach across events via the batch endpoint.
-   * displays_by_surface lets enterprise see which placement formats drove
-   * reach without additional client-side grouping.
+   * Per-campaign aggregate for this event (`summarizeCampaigns`). Null when no
+   * placement of the event is in a campaign. Exposed at mid/premium depth, the
+   * enterprise comparison surface: a brand can compare campaign reach across
+   * events via the batch endpoint, and displays_by_surface says which placement
+   * formats drove it.
    */
   campaign_summary: Array<{
     campaign_id: string;
     campaign_title: string;
-    total_displays: number;
+    /**
+     * Displays of the campaign's sponsors at this event: the sum of the
+     * (sponsor x surface) rows published in `sponsor_displays`. Null when no row
+     * of the campaign reached the floor (withheld; 0 reads the same as 1 to 4).
+     */
+    total_displays: number | null;
+    /**
+     * Distinct sponsors in the campaign at this event: those placed and accepted
+     * by both sides, and any other with a published row. A count of businesses
+     * that agreed to be shown, not of people or what they did (the `entity`
+     * class of lib/dashboard-contract.ts), so it is exact and has no floor, and
+     * each sponsor counts once however many surfaces it is on. It does not move
+     * with displays under the floor.
+     */
     sponsor_count: number;
+    /** Per surface, the published rows only. A surface with none is absent. */
     displays_by_surface: Record<string, number>;
   }> | null;
 
@@ -335,7 +386,16 @@ export interface SharedReport {
 }
 
 export type BuildResult =
-  | { ok: true; report: SharedReport }
+  | {
+      ok: true;
+      report: SharedReport;
+      /**
+       * Which sponsor is in which campaign at this event (`readCampaignLinks`).
+       * Not part of the report: the read route uses it to rebuild the campaign
+       * summary for one sponsor's own link. Absent reads as none.
+       */
+      campaignLinks?: CampaignLink[];
+    }
   | { ok: false; error: 'NOT_FOUND' | 'MATERIALIZATION_PENDING' };
 
 interface EventRow {
@@ -678,48 +738,12 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       count: r.count,
     }));
 
-  // Derive campaign_summary by aggregating sponsorDisplays rows that have
-  // a campaign_id. No extra DB call — the data is already fetched above.
-  // OSE-683: each (sponsor × surface) impression row is a contributing bucket.
-  // Apply the per-bucket K-anon floor BEFORE summation — a row with count < K is
-  // DROPPED, never summed raw — so a sub-K impression cohort can't be laundered
-  // into a campaign total (nor recovered by differencing against the exact
-  // per-surface sponsor_displays rows the same reader can already see).
-  const campaignMap = new Map<
-    string,
-    {
-      campaign_id: string;
-      campaign_title: string;
-      total_displays: number;
-      sponsor_count: number;
-      displays_by_surface: Record<string, number>;
-    }
-  >();
-  for (const row of sponsorDisplays) {
-    if (!row.campaign_id) continue;
-    const floored = applyCountFloor(row.count);
-    if (floored.count === null) continue; // sub-K bucket — drop before summation
-    const contribution = floored.count;
-    const existing = campaignMap.get(row.campaign_id);
-    if (existing) {
-      existing.total_displays += contribution;
-      existing.sponsor_count += 1;
-      existing.displays_by_surface[row.surface] =
-        (existing.displays_by_surface[row.surface] ?? 0) + contribution;
-    } else {
-      campaignMap.set(row.campaign_id, {
-        campaign_id: row.campaign_id,
-        campaign_title: row.campaign_title ?? 'unknown',
-        total_displays: contribution,
-        sponsor_count: 1,
-        displays_by_surface: { [row.surface]: contribution },
-      });
-    }
-  }
-  const campaignSummary =
-    campaignMap.size > 0
-      ? [...campaignMap.values()].sort((a, b) => b.total_displays - a.total_displays)
-      : null;
+  // campaign_summary (OSE-2046): the campaigns come from the event's placements,
+  // the numbers from the sponsorDisplays rows published above (each already at
+  // or over the floor, OSE-683), so a total cannot be differenced against them.
+  const campaignLinks = await readCampaignLinks(db, eventId);
+  const campaignSummary = summarizeCampaigns(campaignLinks, sponsorDisplays);
+  suppression.push(...campaignWithheldReasons(campaignSummary));
 
   // SR-25: sponsor_class_breakdown — class-level aggregates from sponsorDisplays.
   // Mapping: is_local=true → 'local'; non-local + tier in top set → 'premium'; else → 'mid'.
@@ -1042,6 +1066,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
 
   return {
     ok: true,
+    campaignLinks,
     report: {
       event_id: event.id,
       event_title: event.title,

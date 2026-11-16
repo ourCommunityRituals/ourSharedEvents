@@ -1,0 +1,23 @@
+info:
+  name: 'S14 | report | teardown | the paid report override on the report fixture event is removed'
+  type: http
+  seq: 83
+
+http:
+  method: DELETE
+  url: '{{baseUrl}}/api/v2/admin/events/camp-rpt-evt/flags/analytics.shared-report'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Puts camp-rpt-evt back on staging's own plan (request 80 set the override).
+        test('S14 report teardown: 200', function () { expect(res.getStatus()).to.eql(200); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

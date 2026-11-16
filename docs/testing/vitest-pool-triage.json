@@ -2508,6 +2508,13 @@
       "testCount": 10
     },
     {
+      "file": "workers/oursharedevents/tests/public-pages-read-limit.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 11
+    },
+    {
       "file": "workers/oursharedevents/tests/public-projection-routing.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -3038,6 +3045,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 54
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-campaign-summary.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 23
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-date-utc.spec.ts",
