@@ -12,6 +12,11 @@
  *                                  (OSE-1986, OSE ADR-038): 600 loads a minute; past that an HTML
  *                                  429 in the page's language. GET /events has the same limit,
  *                                  counted apart.
+ *                                  OSE-2086 (ADR-038 D7): the same limit, counted apart for each
+ *                                  kind, on the event page, the form pages (GET), the TV, the
+ *                                  poster and the SharedReport shell. /health and /api/status
+ *                                  take the same number and answer JSON; /robots.txt takes the
+ *                                  public-read default.
  *   POST /near                   → phone's rough box (form body g=) → 303 /?zip=
  *   GET /admin                   → admin dashboard (auth required)
  *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)
@@ -213,6 +218,7 @@ import {
   publicCountLimited,
   publicPageLimited,
   publicReadLimited,
+  type PublicReadLimitEnv,
 } from './lib/public-read-limit.js';
 import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
 import { EVENT_DEFAULT_THUMB_PATH, eventDefaultThumbResponse } from './lib/event-thumb.js';
@@ -562,6 +568,22 @@ async function reportPlanFor(
   return { plan: await readReportPlan(env.FORMS_DB), platform: false };
 }
 
+/**
+ * A public page behind the per-caller page limit (OSE-2086, OSE ADR-038 D7).
+ * A refused reader gets the wait page in their language, with a link back to
+ * the page they asked for. `path` is that page without a language prefix.
+ */
+type PageLang = Parameters<typeof pageLimitResponse>[1];
+
+function limitedPage<E>(
+  scope: string,
+  path: string,
+  lang: PageLang | undefined,
+  handler: (request: Request, env: E) => Promise<Response>
+): (request: Request, env: E & PublicReadLimitEnv) => Promise<Response> {
+  return publicPageLimited(scope, handler, (req) => pageLimitResponse(req, lang, path));
+}
+
 export async function route(
   request: Request,
   env: RouterEnv,
@@ -728,13 +750,18 @@ export async function route(
   if (langPrefix) {
     const page = matchLanguagePage(langPrefix.rest);
     if (page?.kind === 'event') {
-      return handlePublicEventPage(request, env, page.id, page.name, langPrefix.lang);
+      // OSE-2086: the same scope as the bare event page.
+      return limitedPage('event-page', langPrefix.rest, langPrefix.lang, (req, e: typeof env) =>
+        handlePublicEventPage(req, e, page.id, page.name, langPrefix.lang)
+      )(request, env);
     }
     if (page?.kind === 'form') {
       // OSE-1850: the same form page as /events/<id>/<screen>, in the path's
       // language. The form still posts to the unprefixed API, which stores
       // nothing about the language.
-      return handleFormPage(request, env, page.id, 1, page.screen, langPrefix.lang);
+      return limitedPage('form-page', langPrefix.rest, langPrefix.lang, (req, e: typeof env) =>
+        handleFormPage(req, e, page.id, 1, page.screen, langPrefix.lang)
+      )(request, env);
     }
     if (page?.kind === 'landing') {
       // OSE-1986: the same scope as the bare landing, so a prefix is no second
@@ -859,7 +886,12 @@ export async function route(
 
   // ── Crawl policy — robots.txt + sitemap.xml (lib/crawl-policy) ───────────
   if (pathname === '/robots.txt' && (method === 'GET' || method === 'HEAD')) {
-    return handleRobotsTxt(request, env);
+    // OSE-2086: where a site is indexable this lists events from D1, so it
+    // takes the public-read default, as the sitemap does.
+    return publicReadLimited('robots', async (req, e: typeof env) => handleRobotsTxt(req, e))(
+      request,
+      env
+    );
   }
   if (pathname === '/sitemap.xml' && (method === 'GET' || method === 'HEAD')) {
     // Reads D1 (every published event id), so it takes the public-read default.
@@ -867,7 +899,14 @@ export async function route(
   }
 
   if (pathname === '/health' || pathname === '/api/status') {
-    return handleHealth(env);
+    // OSE-2086: it pings D1 on every request. The page number (600 a minute),
+    // not the API's, so a monitor and a deploy check behind one address are not
+    // refused; past it the answer is the API's JSON 429.
+    return publicPageLimited(
+      'health',
+      (_req, e: typeof env) => handleHealth(e),
+      () => publicReadLimitResponse()
+    )(request, env);
   }
 
   // ── UEC code resolution (OSE-320) — public, no auth ─────────────────────
@@ -2552,7 +2591,9 @@ export async function route(
   // A trailing slash is a fat finger, not a different page (OSE-1754).
   const formPageMatch = pathname.match(/^\/forms\/([^/]+)\/?$/);
   if (formPageMatch && method === 'GET') {
-    return handleFormPage(request, env, formPageMatch[1]);
+    return limitedPage('form-page', pathname, undefined, (req, e: typeof env) =>
+      handleFormPage(req, e, formPageMatch[1])
+    )(request, env);
   }
 
   // ── Subscribe (email capture) ─────────────────────────────────────────────
@@ -2615,7 +2656,13 @@ export async function route(
   // /display?event= and /poster?event= keep working (printed and saved links).
   const eventScreenMatch = pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/(tv|poster)$/);
   if (eventScreenMatch && (method === 'GET' || method === 'HEAD')) {
-    return eventScreenMatch[2] === 'tv' ? handleDisplayPage(env) : handlePosterPage(env, request);
+    return eventScreenMatch[2] === 'tv'
+      ? limitedPage('display-page', pathname, undefined, (_req, e: typeof env) =>
+          handleDisplayPage(e)
+        )(request, env)
+      : limitedPage('poster-page', pathname, undefined, (req, e: typeof env) =>
+          handlePosterPage(e, req)
+        )(request, env);
   }
   // Its forms too: /events/<id>/register, /checkin, /survey and /updates (the
   // email signup). /forms/<id>?type= keeps answering for printed and saved links.
@@ -2623,7 +2670,9 @@ export async function route(
     /^\/events\/([A-Za-z0-9_-]{1,128})\/(register|checkin|survey|updates)$/
   );
   if (eventFormMatch && (method === 'GET' || method === 'HEAD')) {
-    return handleFormPage(request, env, eventFormMatch[1], 1, eventFormMatch[2] as EventFormScreen);
+    return limitedPage('form-page', pathname, undefined, (req, e: typeof env) =>
+      handleFormPage(req, e, eventFormMatch[1], 1, eventFormMatch[2] as EventFormScreen)
+    )(request, env);
   }
 
   // ── A stall at a fair (OSE-1998, OSE ADR-034) — /events/<id>/booths/<number>
@@ -2650,13 +2699,17 @@ export async function route(
   // forwards a name that is not the event's own to the right one.
   const eventNamedMatch = pathname.match(/^\/events\/([A-Za-z0-9_-]{1,128})\/([a-z0-9-]{1,100})$/);
   if (eventNamedMatch && method === 'GET') {
-    return handlePublicEventPage(request, env, eventNamedMatch[1], eventNamedMatch[2]);
+    return limitedPage('event-page', pathname, undefined, (req, e: typeof env) =>
+      handlePublicEventPage(req, e, eventNamedMatch[1], eventNamedMatch[2])
+    )(request, env);
   }
   if (pathname.startsWith('/events/') && method === 'GET') {
     const eventId = pathname.slice('/events/'.length);
     // Reject sub-paths like /events/:id/whatever — those don't exist yet.
     if (eventId && !eventId.includes('/')) {
-      return handlePublicEventPage(request, env, eventId);
+      return limitedPage('event-page', pathname, undefined, (req, e: typeof env) =>
+        handlePublicEventPage(req, e, eventId)
+      )(request, env);
     }
   }
 
@@ -2753,7 +2806,9 @@ export async function route(
     pathname === '/kiosk' ||
     pathname === '/screen'
   ) {
-    return handleDisplayPage(env);
+    return limitedPage('display-page', pathname, undefined, (_req, e: typeof env) =>
+      handleDisplayPage(e)
+    )(request, env);
   }
 
   if (
@@ -2766,7 +2821,9 @@ export async function route(
   ) {
     // OSE-310: handler reads `request` to look up the format via
     // posterProductForPath() and attach data-poster-format to body.
-    return handlePosterPage(env, request);
+    return limitedPage('poster-page', pathname, undefined, (req, e: typeof env) =>
+      handlePosterPage(e, req)
+    )(request, env);
   }
 
   if (
@@ -2782,7 +2839,9 @@ export async function route(
     // without the paid report caps every viewer at Local (capDepthToPlan). This
     // used to refuse the whole page on Free (OSE-1206's 403), which left a Free
     // event with no report at all.
-    return handleSharedReportPage(env);
+    return limitedPage('report-page', pathname, undefined, (_req, e: typeof env) =>
+      handleSharedReportPage(e)
+    )(request, env);
   }
 
   // ── Privacy policy (BE-10) ─────────────────────────────────────────────────

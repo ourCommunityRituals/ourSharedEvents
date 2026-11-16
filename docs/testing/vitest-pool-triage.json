@@ -2501,6 +2501,13 @@
       "testCount": 10
     },
     {
+      "file": "workers/oursharedevents/tests/public-pages-read-limit.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 11
+    },
+    {
       "file": "workers/oursharedevents/tests/public-projection-routing.spec.ts",
       "bucket": "node",
       "needsReview": false,

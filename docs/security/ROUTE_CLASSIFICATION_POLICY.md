@@ -131,8 +131,11 @@ chosen by the server from H3 cell ids. No route serves a tile or the archive its
   landing still reads and draws the street layer on every request it serves, with no stored
   copy (street-map review 2026-11-15, finding R5; threat ledger TL-100, still open for that
   half).
-- Other pages in the table above still have no limit. They are listed, each with its reason or
-  its ticket, in `workers/oursharedevents/tests/helpers/unlimited-pages.ts`, and
+- The event page, the form pages (GET), the TV, the poster and the SharedReport shell have the
+  same limit, counted apart for each kind (OSE-2086, OSE ADR-038 D7). `/health` and `/api/status`
+  take the same number and answer JSON past it; `/robots.txt` takes the public-read default.
+- The pages still without a limit are fixed content, forwards and POST targets. Each is listed
+  with its reason in `workers/oursharedevents/tests/helpers/unlimited-pages.ts`, and
   `tests/public-page-limit-gate.spec.ts` fails when a page is neither limited nor on that list.
 - No archive is loaded today, so both routes answer with hexagons only.
 

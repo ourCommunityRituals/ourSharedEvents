@@ -65,6 +65,36 @@ nothing about where a reader is comes from it. This ADR is the written exception
 not changed here, because a change to it needs a five-loop review with the owner at each loop;
 the sentence to add there is "except `CF-Connecting-IP` as a rate-limit bucket key (OSE ADR-038)".
 
+**D7. The other pages that read data (OSE-2086, added 2026-11-16).** The gate in D5 found 23 more
+page addresses served with no limit. They are now behind the same wrapper and the same number, 600
+loads a minute for each caller, with one allowance for each kind of page:
+
+| Scope          | Addresses                                                                                     |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| `event-page`   | `/events/<id>`, `/events/<id>/<name>`, and both under a language prefix                       |
+| `form-page`    | `/events/<id>/register`, `/checkin`, `/survey`, `/updates` (GET), prefixed too; `/forms/<id>` |
+| `display-page` | `/display`, `/tv`, `/kiosk`, `/screen`, `/events/<id>/tv`                                     |
+| `poster-page`  | `/poster`, `/posters`, `/flyers`, `/tabletop`, `/tent`, `/signage`, `/events/<id>/poster`     |
+| `report-page`  | `/sharedReport`, `/report`, `/analytics`, `/reports`, `/insights`, `/stats` (the shell)       |
+| `health`       | `/health`, `/api/status`                                                                      |
+
+A poster link, a TV and a door. The story asked that these are never refused, by counting without
+refusing or by choosing a number and writing it down. The number is chosen: 600. Counting without
+refusing (`publicCountLimited`) fits a link that writes a count; these pages write nothing, so
+there would be nothing to stop and the limit would do nothing. Six hundred a minute is ten loads a
+second from one address for a whole minute, with no 10-second layer, which a room of phones at a
+door or a wall of TVs does not reach. The poster links people scan (`/q/`, `/e/`) still never
+refuse. The owner can change the number for one scope without changing the others.
+
+A refused reader gets the wait page of D4 with a link back to the page they asked for: the path
+only, never the query, so a SharedReport token is not written into it.
+
+`/health` answers a machine, so past the limit it gets the API's JSON 429, on the page number so a
+monitor and a deploy check behind one address are not refused. `/robots.txt` takes the API's
+public-read default, as `/sitemap.xml` does.
+
+No page address is on the known-gap list after this.
+
 ## Alternatives Considered
 
 ### Alternative A: The API's limit and the 10-second layer, as they are
@@ -105,8 +135,8 @@ fooled by how the code is laid out.
 - The landing and the list can no longer be read without bound from one address.
 - A refused person gets a page they can read, in their language.
 - A new public page cannot ship without a limit or a written reason.
-- The gate found 23 page addresses that read data with no limit. They are listed with a ticket
-  (OSE-2086) instead of being unknown.
+- The gate found 23 page addresses that read data with no limit. They were listed with a ticket
+  (OSE-2086) instead of being unknown, and D7 limits them.
 
 ### Negative
 
@@ -140,7 +170,7 @@ fooled by how the code is laid out.
 
 ## References
 
-- OSE-1986 (this story), OSE-2086 (the pages still without a limit), OSE-1247 (the first public
+- OSE-1986 (this story), OSE-2086 (the pages that were still without a limit; D7), OSE-1247 (the first public
   read limit), OSE-1509 (the edge layer).
 - OSE ADR-027 D7 (why this is its own story), OSE ADR-031 (the page list held to the route table).
 - Threat ledger TL-100. Street-map review 2026-11-15, findings R5 and R37.
