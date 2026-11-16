@@ -6,12 +6,13 @@
  * file" and runs the rest, so the checks in that file never run and the run stays
  * green. A gate that cannot run counts as absent (AGENTS.md, Quality gates).
  *
- * Seen 2026-11-16, while writing folder "20. Poster link targets": three request
- * names held "javascript: link" and "http: link" unquoted. A colon and a space
- * inside a plain YAML value starts a nested mapping, so three of the folder's four
- * refusal requests were skipped. The run printed no failure for them.
+ * Seen 2026-11-16, in a Bruno folder for the poster link rule that has since been
+ * folded into "20. Poster code targets (OSE-1896)": three request names held
+ * "javascript: link" and "http: link" unquoted. A colon and a space inside a plain
+ * YAML value starts a nested mapping, so three of that folder's four refusal
+ * requests were skipped. The run printed no failure for them.
  *
- * Born red: this test failed on those three files (named below in the message),
+ * Born red: this test failed on those three files, naming each,
  * then passed when their names were quoted. Also seen failing with a request
  * file's `http.method` removed, and with its `seq` removed.
  */
