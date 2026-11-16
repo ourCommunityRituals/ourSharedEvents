@@ -76,7 +76,9 @@ function fullReport(): Record<string, unknown> {
     corridor_density: [{ cell: '89266454447ffff', count: 20 }],
     corridor_map: { svg: '<svg/>' },
     headcount_trend: [{ date: '2026-06-01', count: 99 }],
-    _meta: { built_at: '2026-07-28T00:00:00Z' },
+    // suppression_reasons is always on a built report; a sponsor link's read
+    // rewrites its campaign entry (OSE-2046).
+    _meta: { built_at: '2026-07-28T00:00:00Z', suppression_reasons: [] },
   };
 }
 
