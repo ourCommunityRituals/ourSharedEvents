@@ -39,17 +39,17 @@ beforeAll(async () => {
 // ─── 1. The decisions ────────────────────────────────────────────────────────
 
 describe('names: the workflow loads the file the Worker reads, into the bucket staging binds', () => {
-  const NAMED = { build: '20261109', key: 'us-20261109.pmtiles', bucket: 'ose-map-tiles' };
+  const NAMED = { build: '20261115', key: 'us-20261115.pmtiles', bucket: 'ose-map-tiles' };
   const TOML_OK = [
     '[env.staging]',
     '[[env.staging.r2_buckets]]',
     'binding = "MAP_TILES"',
     'bucket_name = "ose-map-tiles"',
     '[env.staging.vars]',
-    'MAP_TILES_ARCHIVE = "us-20261109.pmtiles"',
+    'MAP_TILES_ARCHIVE = "us-20261115.pmtiles"',
     '[env.production]',
     '[env.production.vars]',
-    'MAP_TILES_ARCHIVE = "us-20261109.pmtiles"',
+    'MAP_TILES_ARCHIVE = "us-20261115.pmtiles"',
     '',
   ].join('\n');
 
@@ -58,10 +58,10 @@ describe('names: the workflow loads the file the Worker reads, into the bucket s
   });
 
   test.each([
-    ['two digits of the date swapped in the key', { key: 'us-20261019.pmtiles' }],
-    ['the key of another build', { key: 'us-20261110.pmtiles', build: '20261110' }],
-    ['the build moved and the key left behind', { build: '20261110' }],
-    ['the whole build named as the key', { key: '20261109.pmtiles' }],
+    ['two digits of the date swapped in the key', { key: 'us-20261151.pmtiles' }],
+    ['the key of another build', { key: 'us-20261116.pmtiles', build: '20261116' }],
+    ['the build moved and the key left behind', { build: '20261116' }],
+    ['the whole build named as the key', { key: '20261115.pmtiles' }],
     ['the planet name of 2026-11-09', { key: 'planet-20261109.pmtiles' }],
     ['a production bucket (there is none: one bucket)', { bucket: 'ose-map-tiles-production' }],
     ['the bucket of before 2026-11-14', { bucket: 'ose-map-tiles-staging' }],
@@ -93,7 +93,7 @@ describe('names: the workflow loads the file the Worker reads, into the bucket s
 
   test('a production block that reads another archive is a problem, not a pass', () => {
     const split = TOML_OK.replace(
-      /MAP_TILES_ARCHIVE = "us-20261109\.pmtiles"\n$/,
+      /MAP_TILES_ARCHIVE = "us-20261115\.pmtiles"\n$/,
       'MAP_TILES_ARCHIVE = "us-20261003.pmtiles"\n'
     );
     expect(split).not.toBe(TOML_OK);
@@ -294,7 +294,7 @@ describe("topzoom: the same dry run at the Worker's top zoom, for the owner's zo
 });
 
 describe('absent and loaded: what the bucket lists', () => {
-  const KEY = 'us-20261109.pmtiles';
+  const KEY = 'us-20261115.pmtiles';
   const entry = (over = {}) => ({ Path: KEY, Name: KEY, Size: 21000000123, IsDir: false, ...over });
   const RECORD = {
     check: 'street-map-archive',
@@ -314,7 +314,7 @@ describe('absent and loaded: what the bucket lists', () => {
 
   test('a key that is there is never overwritten', () => {
     expect(load.overwriteProblems(JSON.stringify([entry()]), KEY).join(' ')).toMatch(
-      /already holds "us-20261109\.pmtiles" \(21000000123 bytes\)\. An object is never overwritten/
+      /already holds "us-20261115\.pmtiles" \(21000000123 bytes\)\. An object is never overwritten/
     );
     // Even a stub of zero bytes: the name is taken.
     expect(load.overwriteProblems(JSON.stringify([entry({ Size: 0 })]), KEY)).not.toEqual([]);
@@ -377,12 +377,12 @@ describe('absent and loaded: what the bucket lists', () => {
   test('the summary carries the size and the SHA-256', () => {
     const md = load.summaryMarkdown(RECORD, {
       bucket: 'ose-map-tiles',
-      build: '20261109',
+      build: '20261115',
       state: 'loaded',
     });
     expect(md).toContain('`21000000123` (21.0 GB)');
     expect(md).toContain(`\`${'a'.repeat(64)}\``);
-    expect(md).toContain('`us-20261109.pmtiles`');
+    expect(md).toContain('`us-20261115.pmtiles`');
     expect(md).toContain('`ose-map-tiles`');
   });
 });
@@ -1174,6 +1174,11 @@ describe('the names typed three times are one set of names', () => {
   // runbook; PMTILES_SHA256 in the workflow changed by one character;
   // `--download-threads=16` added to the cut and not to the dry run (the cut is
   // the dry run without its last flag, so commands are compared as whole lines).
+  // Seen red again on 2026-11-16, when build 20261109 had aged out and the names
+  // moved to 20261115, one file at a time: the workflow's two names alone (this
+  // test said the workflow loads us-20261115.pmtiles and the Worker reads
+  // us-20261109.pmtiles); wrangler.toml's two blocks alone; both, with the
+  // runbook's commands left on the old build.
   test('the real files agree', () => {
     expect(driftProblems(workflow(), toml(), runbook())).toEqual([]);
   });
@@ -1187,15 +1192,15 @@ describe('the names typed three times are one set of names', () => {
   test.each([
     [
       'the key with two digits swapped',
-      'ARCHIVE_KEY: us-20261109.pmtiles',
-      'ARCHIVE_KEY: us-20261019.pmtiles',
+      'ARCHIVE_KEY: us-20261115.pmtiles',
+      'ARCHIVE_KEY: us-20261151.pmtiles',
     ],
     [
       'the key of the build after',
-      'ARCHIVE_KEY: us-20261109.pmtiles',
-      'ARCHIVE_KEY: us-20261110.pmtiles',
+      'ARCHIVE_KEY: us-20261115.pmtiles',
+      'ARCHIVE_KEY: us-20261116.pmtiles',
     ],
-    ['the build moved, the key left', "PROTOMAPS_BUILD: '20261109'", "PROTOMAPS_BUILD: '20261110'"],
+    ['the build moved, the key left', "PROTOMAPS_BUILD: '20261115'", "PROTOMAPS_BUILD: '20261116'"],
     ['the uploads bucket', 'BUCKET: ose-map-tiles', 'BUCKET: ose-uploads-staging'],
     ['the dev bucket', 'BUCKET: ose-map-tiles', 'BUCKET: ose-map-tiles-dev'],
     [
@@ -1210,7 +1215,7 @@ describe('the names typed three times are one set of names', () => {
     [
       'the cut from a build typed in the command',
       '"https://build.protomaps.com/${PROTOMAPS_BUILD}.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}"\n',
-      '"https://build.protomaps.com/20261110.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}"\n',
+      '"https://build.protomaps.com/20261116.pmtiles" "${ARCHIVE_KEY}" --region="${GITHUB_WORKSPACE}/${REGION_FILE}"\n',
     ],
     [
       'the cut with a box in place of the region file',
@@ -1249,8 +1254,8 @@ describe('the names typed three times are one set of names', () => {
   test.each([
     [
       'the archive name on staging',
-      /^(\[env\.staging\][\s\S]*?MAP_TILES_ARCHIVE = ")us-20261109(\.pmtiles")/m,
-      '$1us-20261110$2',
+      /^(\[env\.staging\][\s\S]*?MAP_TILES_ARCHIVE = ")us-20261115(\.pmtiles")/m,
+      '$1us-20261116$2',
     ],
     [
       'the staging bucket',
@@ -1259,8 +1264,8 @@ describe('the names typed three times are one set of names', () => {
     ],
     [
       'the archive name on production only',
-      /(MAP_TILES_ARCHIVE = ")us-20261109(\.pmtiles"(?![\s\S]*MAP_TILES_ARCHIVE = ))/,
-      '$1us-20261110$2',
+      /(MAP_TILES_ARCHIVE = ")us-20261115(\.pmtiles"(?![\s\S]*MAP_TILES_ARCHIVE = ))/,
+      '$1us-20261116$2',
     ],
   ])('fat finger in wrangler.toml: %s', (_, from, to) => {
     const text = toml().replace(from, to);
@@ -1272,12 +1277,12 @@ describe('the names typed three times are one set of names', () => {
     [
       'a command for a person: delete the object',
       '## Staging, in order',
-      '```bash\nrclone delete r2:ose-map-tiles/us-20261109.pmtiles\n```\n\n## Staging, in order',
+      '```bash\nrclone delete r2:ose-map-tiles/us-20261115.pmtiles\n```\n\n## Staging, in order',
     ],
     [
       'a command for a person: cut it on your machine',
       '## Staging, in order',
-      '```bash\npmtiles extract https://build.protomaps.com/20261109.pmtiles us.pmtiles --bbox=-125,24,-66,49\n```\n\n## Staging, in order',
+      '```bash\npmtiles extract https://build.protomaps.com/20261115.pmtiles us.pmtiles --bbox=-125,24,-66,49\n```\n\n## Staging, in order',
     ],
     [
       'a command for a person: make the bucket public',
@@ -1296,13 +1301,13 @@ describe('the names typed three times are one set of names', () => {
     ],
     [
       'the upload shown to another key',
-      'r2:ose-map-tiles/us-20261109.pmtiles --immutable',
-      'r2:ose-map-tiles/us-20261019.pmtiles --immutable',
+      'r2:ose-map-tiles/us-20261115.pmtiles --immutable',
+      'r2:ose-map-tiles/us-20261151.pmtiles --immutable',
     ],
     [
       'the check shown on another file',
-      'check-street-map-archive.mjs us-20261109.pmtiles',
-      'check-street-map-archive.mjs us-20261019.pmtiles',
+      'check-street-map-archive.mjs us-20261115.pmtiles',
+      'check-street-map-archive.mjs us-20261151.pmtiles',
     ],
     ['the dry run not shown', /^ *```bash\n *pmtiles extract .* --dry-run\n *```\n/m, ''],
     [
@@ -1351,8 +1356,8 @@ describe('the names typed three times are one set of names', () => {
     expect(load.WRANGLER_PATH).toBe(parity.WRANGLER_PATH);
     expect(load.boundNames(toml())).toEqual({
       bucket: 'ose-map-tiles',
-      key: 'us-20261109.pmtiles',
-      productionKey: 'us-20261109.pmtiles',
+      key: 'us-20261115.pmtiles',
+      productionKey: 'us-20261115.pmtiles',
     });
   });
 });

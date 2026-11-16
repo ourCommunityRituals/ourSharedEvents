@@ -82,8 +82,8 @@ env:
   WORKER_DIR: workers/oursharedevents
   # The three names. The same values are in wrangler.toml (MAP_TILES_ARCHIVE in
   # both environment blocks, the staging MAP_TILES bucket) and in the runbook.
-  PROTOMAPS_BUILD: '20261109'
-  ARCHIVE_KEY: us-20261109.pmtiles
+  PROTOMAPS_BUILD: '20261115'
+  ARCHIVE_KEY: us-20261115.pmtiles
   BUCKET: ose-map-tiles
   REGION_FILE: docs/runbooks/street-map-us-region.geojson
   # The deepest zoom the Worker reads: MAX_ZOOM in
