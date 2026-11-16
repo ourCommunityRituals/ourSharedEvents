@@ -147,32 +147,16 @@ which sponsors show, their order, or their share of rotation, so the local spons
 as on one that is not. This binds the build of B as well. Held today by the T0 invariant (nothing
 that orders or picks sponsors names a campaign) and by `tests/campaign-events.spec.ts`.
 
-**D9, the owner's fuller statement (2026-11-16).** Said about an event whose campaign belongs to
-another brand: _"This is where depending on the level the event manager and sponsor has purchased
-for SharedReport access will dictate the percentage of local allotment to the event, but it never
-does is remove the hyperlocal sponsorship from the event."_ Two rules are in it:
+**D9, as the owner put it on 2026-11-16:** a campaign _"never does is remove the hyperlocal
+sponsorship from the event."_ That is the whole of the rule this record holds, and the code
+enforces it: no campaign code can hide a sponsor or change a share, and the local class keeps its
+floor whenever an event has a local sponsor (`allocateShares`, brain invariant 25).
 
-1. **A campaign, of any brand, never removes the local sponsors from an event.** Holds today. No
-   campaign code can hide a sponsor or change a share, and the local class keeps its floor whenever
-   an event has a local sponsor (`allocateShares`, brain invariant 25).
-2. **The local share's size depends on the level bought.** **Not what the code does today.** The
-   local floor is one number for every event, 30% (`local_floor_pct` in `lib/sponsor-allocation.ts`,
-   mirrored from `ocr-docs-brain/sponsor-allocation.yaml`). What a level changes today is a paying
-   sponsor's own weight and cap (40% premium, 20% mid), never the local floor.
-
-Rule 2 is recorded here as the owner's direction, not built. It is not a campaign change: it is a
-change to the allocation contract in the shared brain. Rule 1 is its fixed limit: whatever the
-level, the local share is never zero.
-
-What the owner has settled for rule 2 (2026-11-16):
-
-- **The event manager's level decides the local share at their event.** A sponsor's level never
-  changes it; a sponsor's level changes only that sponsor's own weight and cap within the rest. So
-  no sponsor can buy down the local sponsors at someone else's event.
-- **At the free level the local share is 30%** (today's number).
-
-Still to come from the owner before it can be built: the local share at the mid and premium levels
-(or "30% at every level"), and the lowest it may ever be if a level can lower it.
+**Nothing about how the local share is sized is decided or changed here.** The allocation contract
+(`ocr-docs-brain/sponsor-allocation.yaml`, mirrored in `lib/sponsor-allocation.ts`) is as it was:
+one local floor for every event. That contract belongs to the shared brain and the org vision
+(`OCR-docs/docs/OCR_VISION.md`: "If it is not written here, it does not exist at the org level"),
+not to an OSE decision record about campaigns.
 
 ## Rename and status change (added 2026-11-15, OSE-1552 scope 2)
 
