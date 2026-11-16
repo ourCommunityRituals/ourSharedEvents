@@ -280,8 +280,11 @@ export function renderErrorPage(
   ctaLabel: string = 'Browse upcoming events',
   // OSE-1519: a page that names a real event is not an error to the reader, so
   // it drops the "Error 4xx" label and may carry a short list of what is next.
-  opts: { label?: string | null; extraHtml?: string } = {}
+  // OSE-1986: `lang` writes the page's language and direction and puts the
+  // footer in that language. The caller passes text already in it.
+  opts: { label?: string | null; extraHtml?: string; lang?: Lang } = {}
 ): Response {
+  const lang = opts.lang ?? DEFAULT_LANG;
   const esc = (s: string) =>
     s
       .replace(/&/g, '&amp;')
@@ -299,7 +302,7 @@ export function renderErrorPage(
       ? ''
       : '<p class="error-status" data-testid="error-status">' + statusText + '</p>';
   const content = `<!DOCTYPE html>
-<html lang="en" data-surface="ose-error">
+<html lang="${lang}" dir="${DIRECTION[lang]}" data-surface="ose-error">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -322,7 +325,7 @@ export function renderErrorPage(
   </style>
 </head>
 <body>
-  <header data-testid="error-header"><a href="/" data-testid="error-brand">OurSharedEvents</a></header>
+  <header data-testid="error-header"><a href="${withLangPrefix(lang, '/')}" data-testid="error-brand">OurSharedEvents</a></header>
   <main data-testid="error-main">
     ${statusLine}
     <h1 class="error-title" data-testid="error-title">${safeTitle}</h1>
@@ -335,7 +338,43 @@ export function renderErrorPage(
 </html>`;
   // OSE-1519: the shared footer (© + Browse Events + Privacy), the same partial
   // every other public page uses, instead of a line of its own.
-  return html(injectLegalFooter(content, 'error'), status);
+  return html(injectLegalFooter(content, 'error', undefined, lang), status);
+}
+
+/** How long a refused reader is asked to wait: the limit counts by the minute. */
+export const PAGE_LIMIT_RETRY_SECONDS = 60;
+
+/**
+ * The page a reader gets when the landing or the event list is refused by the
+ * per-caller limit (OSE-1986; lib/public-read-limit.ts, publicPageLimited).
+ *
+ * A page, not the API's JSON, in the language the page itself would have used:
+ * the path's prefix when there is one, else Accept-Language. "Try again" goes to
+ * the page's own address in that language and carries nothing from the request,
+ * so no query string is written back into the page. Not stored by anything: the
+ * next request is counted afresh.
+ */
+export function pageLimitResponse(
+  request: Request,
+  pathLang: Lang | undefined,
+  target: '/' | '/events'
+): Response {
+  const lang = pathLang ?? preferredLang(request);
+  const page = renderErrorPage(
+    429,
+    msg(lang, 'limit.title'),
+    msg(lang, 'limit.body'),
+    // A prefixed address goes back to itself; a bare one stays bare.
+    pathLang ? withLangPrefix(pathLang, target) : target,
+    msg(lang, 'limit.again'),
+    { label: msg(lang, 'limit.status'), lang }
+  );
+  const headers = new Headers(page.headers);
+  headers.set('Retry-After', String(PAGE_LIMIT_RETRY_SECONDS));
+  headers.set('Cache-Control', 'no-store');
+  // A bare address chose its language from the header, as the page does.
+  if (!pathLang) headers.set('Vary', 'Accept-Language');
+  return new Response(page.body, { status: 429, headers });
 }
 
 // ─── Public list page — OSE-1243 ──────────────────────────────────────────────

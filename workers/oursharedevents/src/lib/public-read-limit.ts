@@ -176,6 +176,42 @@ export function publicReadLimited<E>(
 }
 
 /**
+ * Page loads per minute per caller for a public PAGE (the landing and the event
+ * list), OSE-1986.
+ *
+ * Higher than `PUBLIC_READ_MAX`, and on purpose. A page is opened by people, and
+ * a venue's Wi-Fi puts a whole room behind one address: at a door, two hundred
+ * phones open the landing inside a minute. The edge layer's 60 per 10 s would
+ * refuse the 61st of them. `isPublicReadLimited` skips the edge layer for any
+ * `max` above `PUBLIC_READ_MAX`, so at 600 only the per-minute count applies:
+ * ten loads a second, sustained for a minute, from one address.
+ *
+ * What that gives up: the per-minute count lives in KV, which is eventually
+ * consistent, so a flood can run past 600 before it is refused. The number and
+ * the trade are recorded in OSE ADR-038, for the owner to change.
+ */
+export const PUBLIC_PAGE_MAX = 600;
+
+/**
+ * Wrap a public PAGE so the limit is applied and a refused reader gets a page.
+ *
+ * The same limit and fail-open rule as `publicReadLimited`. The difference is
+ * the refusal: `refused` builds it, so a person gets HTML in the page's language
+ * and not the API's JSON. The refusal is built only when a request is refused.
+ */
+export function publicPageLimited<E>(
+  scope: string,
+  handler: (request: Request, env: E) => Promise<Response>,
+  refused: (request: Request) => Response,
+  max: number = PUBLIC_PAGE_MAX
+): (request: Request, env: E & PublicReadLimitEnv) => Promise<Response> {
+  return async (request: Request, env: E & PublicReadLimitEnv) => {
+    if (await isPublicReadLimited(request, env, scope, max)) return refused(request);
+    return handler(request, env);
+  };
+}
+
+/**
  * Wrap a public route that COUNTS something on every request: a poster scan
  * (`/q/`) or a short-link click (`/s/`). OSE-1496.
  *

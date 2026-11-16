@@ -53,6 +53,7 @@ See [ADR-RECONCILIATION-PROCESS.md](ADR-RECONCILIATION-PROCESS.md) for the full 
 | [ADR-035](ADR-035-street-map-one-bucket.md)                                | Keep the street-map archive in one bucket that staging and production both read                                           | Proposed   | 2026-11-15 |
 | [ADR-036](ADR-036-street-layer-as-the-base-map.md)                         | Make the street layer the one base map, asked for with cells only                                                         | Proposed   | 2026-11-15 |
 | [ADR-037](ADR-037-what-a-migration-dry-run-may-print.md)                   | A migration dry run prints counts, and on production it obeys the under-5 floor                                           | Accepted   | 2026-11-15 |
+| [ADR-038](ADR-038-landing-read-limit.md)                                   | Limit the landing and the event list by the minute; a refused reader gets a page                                          | Proposed   | 2026-11-16 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 

@@ -168,6 +168,11 @@ export const pl: Record<MessageKey, string> = {
             Uczestnicy nigdy się nie logują i nic tutaj ich nie nazywa.`,
   'footer.browse': 'Przeglądaj wydarzenia',
   'footer.privacy': 'Prywatność',
+  'limit.status': 'Proszę czekać',
+  'limit.title': 'Zbyt wiele odwiedzin naraz',
+  'limit.body':
+    'To połączenie otworzyło tę stronę wiele razy w ciągu ostatniej minuty. Odczekaj minutę i spróbuj ponownie.',
+  'limit.again': 'Spróbuj ponownie',
   'when.all.chip': 'Wszystko',
   'when.all.heading': 'Nadchodzące wydarzenia',
   'when.all.empty': 'Na razie nic nie zaplanowano. Zajrzyj wkrótce.',

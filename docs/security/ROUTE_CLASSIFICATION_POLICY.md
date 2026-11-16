@@ -124,10 +124,16 @@ chosen by the server from H3 cell ids. No route serves a tile or the archive its
 - `/api/v2/map/areas` is rate-limited at the router (`publicReadLimited('map-areas')`) and sets
   its own `Cache-Control`. It takes cells only: a coordinate-shaped parameter is a 400, as is any
   resolution but 7 and a 13th cell.
-- `/` is listed above with rate limiting as a required control, and the router has no limit
-  for it. That gap is older than the street map; the street map adds an R2 read and a draw
-  to each request once an archive is loaded (street-map review 2026-11-15, finding R5; threat
-  ledger TL-100).
+- `/`, its aliases, its language prefixes and `/events` are rate-limited at the router
+  (`publicPageLimited`, OSE-1986, OSE ADR-038): 600 loads a minute for each caller, and past that
+  an HTML 429 in the page's language. The limit is a count by the minute; the 10-second edge
+  layer is not applied to a page, so a venue behind one address is not refused by it. The
+  landing still reads and draws the street layer on every request it serves, with no stored
+  copy (street-map review 2026-11-15, finding R5; threat ledger TL-100, still open for that
+  half).
+- Other pages in the table above still have no limit. They are listed, each with its reason or
+  its ticket, in `workers/oursharedevents/tests/helpers/unlimited-pages.ts`, and
+  `tests/public-page-limit-gate.spec.ts` fails when a page is neither limited nor on that list.
 - No archive is loaded today, so both routes answer with hexagons only.
 
 ### 4.2 Privileged Routes

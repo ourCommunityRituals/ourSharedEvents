@@ -298,7 +298,10 @@ describe('Route Coverage (Story 1.1)', () => {
       // the DataProvider ctx (mirrors handlePublicPage), so the call passes ctx.
       // The call also passes the request (the landing page names its canonical
       // address from it); match the call, not the argument list.
-      expect(routerSource).toMatch(/handleLandingPage\(env, ctx\b/);
+      // OSE-1986: the call sits inside publicPageLimited, which hands the handler
+      // its own request and env (`req`, `e`). Match the wrapped call and the scope.
+      expect(routerSource).toMatch(/handleLandingPage\(e, ctx\b/);
+      expect(routerSource).toMatch(/publicPageLimited\(\s*'landing'/);
     });
 
     it('should route /events and /public to handlePublicPage', () => {
@@ -309,7 +312,9 @@ describe('Route Coverage (Story 1.1)', () => {
       // seam). Match the call, not the argument list — this assertion exists to
       // prove the route dispatches here, and pinning it to an arity turns every
       // future signature change into a false failure.
-      expect(routerSource).toMatch(/handlePublicPage\(env\b/);
+      // OSE-1986: wrapped in publicPageLimited, as the landing is.
+      expect(routerSource).toMatch(/handlePublicPage\(e, ctx\b/);
+      expect(routerSource).toMatch(/publicPageLimited\(\s*'events-page'/);
     });
 
     it('should route /briefing to handleBriefingPage', () => {

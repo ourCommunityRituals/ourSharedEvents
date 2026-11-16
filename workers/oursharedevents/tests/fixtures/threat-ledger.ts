@@ -2118,7 +2118,7 @@ const STREET_MAP_ARCHIVE: ThreatEntry[] = [
     red_birth: null,
     last_run_green: null,
     notes:
-      'docs/security/ROUTE_CLASSIFICATION_POLICY.md lists "/" with rate limiting as a required control; the router has none for it, which is older than the street map. The area-map limit is tested in tests/map-areas-route.spec.ts. Close with a stored copy of the drawn layer and a limit on "/" (CCR 2026-11-15, R5).',
+      'Half closed. The limit: "/", its aliases, its language prefixes and /events are behind publicPageLimited since OSE-1986 (600 loads a minute per caller, OSE ADR-038), tested in tests/landing-read-limit.spec.ts and held by tests/public-page-limit-gate.spec.ts. The area-map limit is tested in tests/map-areas-route.spec.ts. Still open: the landing reads, decodes and draws on every request it serves, with no stored copy of the drawn layer, so a caller under the limit still spends an R2 read a load (CCR 2026-11-15, R5). The threat text above describes the state before OSE-1986.',
   },
   {
     id: 'TL-101',

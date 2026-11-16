@@ -8,6 +8,10 @@
  *                                  that is many places lists every match to choose from
  *                                  ("Springfield, IL" …) and the events of all of them
  *                                  (lib/place-search.ts). ?zip= lists events near a zip.
+ *                                  Limited per caller, with its aliases and language prefixes
+ *                                  (OSE-1986, OSE ADR-038): 600 loads a minute; past that an HTML
+ *                                  429 in the page's language. GET /events has the same limit,
+ *                                  counted apart.
  *   POST /near                   → phone's rough box (form body g=) → 303 /?zip=
  *   GET /admin                   → admin dashboard (auth required)
  *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)
@@ -205,6 +209,7 @@ import {
   isPublicReadLimited,
   publicReadLimitResponse,
   publicCountLimited,
+  publicPageLimited,
   publicReadLimited,
 } from './lib/public-read-limit.js';
 import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
@@ -252,6 +257,7 @@ import {
   handleAdminPage,
   handleAdminSignInPage,
   handleLandingPage,
+  pageLimitResponse,
   handleSubscribe,
   handleDisplayPage,
   handlePosterPage,
@@ -727,10 +733,20 @@ export async function route(
       return handleFormPage(request, env, page.id, 1, page.screen, langPrefix.lang);
     }
     if (page?.kind === 'landing') {
-      return handleLandingPage(env, ctx, request, langPrefix.lang);
+      // OSE-1986: the same scope as the bare landing, so a prefix is no second
+      // allowance.
+      return publicPageLimited(
+        'landing',
+        (req, e: typeof env) => handleLandingPage(e, ctx, req, langPrefix.lang),
+        (req) => pageLimitResponse(req, langPrefix.lang, '/')
+      )(request, env);
     }
     if (page?.kind === 'events') {
-      return handlePublicPage(env, ctx, request, langPrefix.lang);
+      return publicPageLimited(
+        'events-page',
+        (req, e: typeof env) => handlePublicPage(e, ctx, req, langPrefix.lang),
+        (req) => pageLimitResponse(req, langPrefix.lang, '/events')
+      )(request, env);
     }
     if (page?.kind === 'share') {
       // The same count and per-caller limit as /e/<code>: a share open, what + when.
@@ -2518,7 +2534,15 @@ export async function route(
     pathname === '/about' ||
     pathname === '/info'
   ) {
-    return handleLandingPage(env, ctx, request);
+    // OSE-1986: limited per caller. Every request here reads the event list
+    // from D1 and, with an archive loaded, the street tiles from R2 (threat
+    // TL-100). One scope for the landing and its aliases; a refused reader gets
+    // a page in their language, not the API's JSON.
+    return publicPageLimited(
+      'landing',
+      (req, e: typeof env) => handleLandingPage(e, ctx, req),
+      (req) => pageLimitResponse(req, undefined, '/')
+    )(request, env);
   }
 
   // ── Landing "Use my location": a rough box in, the nearest zip out ────────
@@ -2638,7 +2662,12 @@ export async function route(
     return Response.redirect(target.toString(), 301);
   }
   if (pathname === '/events') {
-    return handlePublicPage(env, ctx, request);
+    // OSE-1986: limited per caller, its own scope.
+    return publicPageLimited(
+      'events-page',
+      (req, e: typeof env) => handlePublicPage(e, ctx, req),
+      (req) => pageLimitResponse(req, undefined, '/events')
+    )(request, env);
   }
 
   // ── Admin aliases ─────────────────────────────────────────────────────────
