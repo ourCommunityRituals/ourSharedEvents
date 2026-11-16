@@ -1,7 +1,8 @@
 # The Where step, our own map, and the map choice: one design (2026-11-16)
 
 **Status:** confirmed by the owner on 2026-11-16, with all four decisions in section 8 as
-recommended. Nothing is built. The slices are ticketed (section 9). It was written as a read-only
+recommended. **Two of the four (D1 and D4) are in question again:** answers the owner gave later
+that day, recorded in ADR-039, disagree with them (section 8). They wait on the owner. Nothing is built. The slices are ticketed (section 9). It was written as a read-only
 pass: no code, test or migration was changed. Nothing here was run; every "today" line is a source read on `main` at
 `e7d21601`, with the lines given. Paths are under `workers/oursharedevents/src/` unless they say
 otherwise.
@@ -351,6 +352,25 @@ four below is decided as recommended:
   place, never for a home. This answers the precision review's decision 2 for this design. It
   puts no text into `OCR_VISION.md` or invariant 3; that still needs the new ADR.
 - **D4.** Cells that came from a Google point are cleared with the points.
+
+**Two of the four are in question again (found 2026-11-16, later the same day).** About forty
+minutes after "Confirm all four", the owner answered four questions in the session that keeps
+ADR-039, and that record (PR 1369, commit `1fafe532`) holds two answers that disagree with D1
+and D4:
+
+|                           | This worksheet                                                        | ADR-039, as recorded                                                                                       |
+| ------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| A zip and the map         | D1: no cell is made from a zip; an event nobody placed has no hexagon | C1, "Zip, plus a tap", read there as: "the zip centre's hexagon is where an event sits until someone taps" |
+| Cells from a Google point | D4: cleared with the points                                           | C3, "Keep cells, clear points"                                                                             |
+
+Neither record overrides the other. The button "Zip, plus a tap" can be read either way: as this
+worksheet's rule (the zip finds, the tap places) or as the ADR's (the zip also lights a hexagon).
+Section 4 is the evidence against the second reading: it sends a wrong corridor to BigQuery as if
+exact, and sets the one-way corridor latch. **Until the owner says which stands, D1 and D4 are
+not settled.** What is held: nothing in W1 or W2 depends on either (W1 makes no cell from a zip,
+which is also what the code does today); W7 does not start; and no slice may store a zip-centre
+cell. D2 and D3 are not touched by the ADR's answers. The ADR's C2 ("Our own area map") agrees
+with this worksheet's recommendation on the venue picture and settles it.
 
 The three lines after the list (sponsor "local", the venue picture, when the lookup route goes)
 were recommendations on ADR-039's own questions. The owner's answer was to the four; those three
