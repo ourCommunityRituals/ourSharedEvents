@@ -28,7 +28,8 @@ function ciCollections() {
 }
 
 const RID = '0b4f6c1e-9a7d-4c2b-8e3f-1a2b3c4d5e6f';
-const SECRET_URL = 'https://stg.oursharedevents.com/r/sig_SECRET123?token=abc';
+// A signed link's path stands in for any URL that must never reach the log.
+const LINK_URL = 'https://stg.oursharedevents.com/r/signed-link-path?k=v';
 const BODY_TEXT = 'Mount Greenwood row 4c4381db';
 
 /** Run a collection's after-response script; return the lines it logged. */
@@ -50,8 +51,8 @@ function runAfterResponse(rel, { status, body, headers = {}, method = 'GET', tes
     getResponseTime: () => 10,
   };
   const req = {
-    getUrl: () => SECRET_URL,
-    getPath: () => '/r/sig_SECRET123',
+    getUrl: () => LINK_URL,
+    getPath: () => '/r/signed-link-path',
     getMethod: () => method,
     getHeader: () => undefined,
     getName: () => 'a request',
@@ -111,12 +112,12 @@ describe('OSE-2090: a 5xx in a staging Bruno run keeps its code and request id',
       });
       expect(odd).toEqual(['[5xx] GET status=503 code=- requestId=-']);
       // Only the shapes the Worker makes: a UUID, or req-<digits>. A token is not one.
-      const token = runAfterResponse(rel, {
+      const notAnId = runAfterResponse(rel, {
         status: 503,
         body: {},
-        headers: { 'X-Request-Id': 'a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6' },
+        headers: { 'X-Request-Id': 'ab12'.repeat(8) },
       });
-      expect(token).toEqual(['[5xx] GET status=503 code=- requestId=-']);
+      expect(notAnId).toEqual(['[5xx] GET status=503 code=- requestId=-']);
       const fallback = runAfterResponse(rel, {
         status: 503,
         body: {},
@@ -124,7 +125,7 @@ describe('OSE-2090: a 5xx in a staging Bruno run keeps its code and request id',
       });
       expect(fallback).toEqual(['[5xx] GET status=503 code=- requestId=req-1794843930645']);
       for (const l of [...lines, ...odd]) {
-        expect(l).not.toMatch(/SECRET|token|Greenwood|4c4381db/);
+        expect(l).not.toMatch(/signed-link|Greenwood|4c4381db/);
       }
     });
 
