@@ -24,7 +24,8 @@ const P = Math.min(...Object.values(SEED_COUNTS));
 const EXPECTED = { a: P, b: P };
 const MISSING = '✘ [ERROR] The specified key does not exist.';
 const DONE = {
-  d1: '🚣 Executed 3 queries in 1.20ms',
+  // D1's query endpoint (wrangler 4.161.0 logResult); an import prints "Executed <n> queries"
+  d1: '🚣 Executed 3 commands in 1.20ms',
   get: 'Download complete.',
   put: 'Upload complete.',
   delete: 'Delete complete.',
@@ -68,7 +69,8 @@ function world({ index, objects = {}, fail = () => false, raw, strictDeletes = f
   const wrangler = async (args) => {
     const fileAt = args.indexOf('--file');
     const file = fileAt >= 0 ? args[fileAt + 1] : null;
-    const call = { args, sql: args[0] === 'd1' ? files.get(file) : null };
+    // d1 SQL arrives as the --command argument; a d1 --file never reaches here (assertStaging)
+    const call = { args, sql: args[0] === 'd1' ? args[args.indexOf('--command') + 1] : null };
     calls.push(call);
     order.push(args[0] === 'd1' ? `d1:${call.sql.split(' ')[0]}` : `r2:${args[2]}`);
     if (fail(call)) return { code: 1, stdout: '', stderr: 'boom' };
@@ -367,7 +369,9 @@ describe('wrangler target', () => {
       fs: { writeFileSync() {}, readFileSync: () => '' },
       tmpDir: '/tmp',
     });
-    await expect(cloud.d1File('SELECT 1;')).resolves.toBeUndefined();
+    await expect(cloud.d1Execute(["DELETE FROM events WHERE id IN ('e1')"])).resolves.toBe(
+      undefined
+    );
     for (const bad of [
       ['d1', 'execute', 'x', '--env', 'production', '--remote'],
       ['d1', 'execute', 'x', '--env', 'staging-full', '--remote'],
@@ -491,9 +495,18 @@ describe('wrangler target', () => {
         '--env',
         'staging',
         '--remote',
-        '--yes',
-        '--file',
-        '/tmp/production-notes/stock-1-d1.sql',
+        '--command',
+        "DELETE FROM events WHERE id IN ('e1');\n",
+      ],
+      [
+        'd1',
+        'execute',
+        'ocr-db-staging',
+        '--env',
+        'staging',
+        '--remote',
+        '--command',
+        "UPDATE sponsor_placement SET sponsor_accepted = 1, organizer_accepted = 1 WHERE id IN ('p1');\n",
       ],
       [
         'r2',
@@ -504,7 +517,7 @@ describe('wrangler target', () => {
         'staging',
         '--remote',
         '--file',
-        '/tmp/x',
+        '/tmp/production-notes/stock-1-get.json',
       ],
       [
         'r2',
@@ -2136,7 +2149,7 @@ describe('check honesty: an unverified read keeps the load and turns the run red
     const busy = 'X [ERROR] A long-running import is in progress for this database';
     let tries = 0;
     const wrangler = async (args) => {
-      const sql = args[0] === 'd1' ? w.files.get(args[args.indexOf('--file') + 1]) : '';
+      const sql = args[0] === 'd1' ? args[args.indexOf('--command') + 1] : '';
       if (sql.startsWith('UPDATE')) {
         tries += 1;
         return { code: 1, stdout: '', stderr: busy };
@@ -2160,7 +2173,9 @@ describe('check honesty: an unverified read keeps the load and turns the run red
     const answers = [{ code: 1, stdout: '', stderr: 'D1_ERROR: SQLITE_BUSY' }];
     const wrangler = async (args) => answers.shift() || w.wrangler(args);
     const cloud = rd.makeCloud({ wrangler, fs: w.fs, tmpDir: '/tmp', sleep: async () => {} });
-    await expect(cloud.d1File('SELECT 1;')).resolves.toBeUndefined();
+    await expect(cloud.d1Execute(["DELETE FROM events WHERE id IN ('e1')"])).resolves.toBe(
+      undefined
+    );
   });
 
   test('a wrangler that exits 0 without its completion line failed (a signal-killed child)', async () => {
@@ -2172,7 +2187,7 @@ describe('check honesty: an unverified read keeps the load and turns the run red
         sleep: async () => {},
       });
       const call = {
-        d1: () => cloud.d1File('SELECT 1;'),
+        d1: () => cloud.d1Execute(["DELETE FROM events WHERE id IN ('e1')"]),
         get: () => cloud.r2Get('stock/x.json'),
         put: () => cloud.r2Put('stock/x.json', '{}'),
         delete: () => cloud.r2Delete('events/x/a.png'),
