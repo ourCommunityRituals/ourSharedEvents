@@ -17,6 +17,8 @@ export const NODE_SPECS = [
   // Batch 1 — pure-logic units (import a src/ module, assert its output; no DOM,
   // no axe, no cloudflare:test, no fs). Proven green in the node project.
   'tests/count-floor.spec.ts',
+  // OSE-2004 — scans per stall from the floored poster-hour cells (pure lib)
+  'tests/booth-counts.spec.ts',
   // OSE-1782 — derived gate: no count published except through count-floor.ts
   // (reads the projection's field list and the src/ tree; no runtime).
   'tests/count-floor-publication.derived.spec.ts',
