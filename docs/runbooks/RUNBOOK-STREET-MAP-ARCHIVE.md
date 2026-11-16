@@ -449,9 +449,10 @@ writes nothing and can run at any time.
      one. `MAX_ZOOM` cannot be raised alone: the test that holds
      `WORKER_TOP_ZOOM` to it fails, and the check refuses a file that stops
      short of it;
-   - the next `measure` from `main`, after the PR that made this change
-     merges, is the first run of the new shape. It gives the size and the fit
-     of the file as it will be cut.
+   - the first `measure` from `main` in the new shape, run 43810516745 on
+     2026-11-16, gave the size and the fit of the file as it will be cut:
+     9.7 GB by dry run, 10.8 GB needed, 90.5 GB free, "The cut fits."
+     ("Staging, in order", step 2).
 
    The load has to land inside the build's window, which ends **2026-11-21
    (UTC)** ("Names", "The build's window").
@@ -572,13 +573,30 @@ writes nothing and can run at any time.
      the same day, that the cut gets a top zoom of 14** ("Before the load",
      item 3). Build `20261115` is offered through 2026-11-21 (UTC).
 
-   - **No run has measured in the shape the workflow has since that
+   - **The fifth, 43810516745 on 2026-11-16 at 05:29 UTC (from `main` at
+     `a4d6cd4f`, the merge of the PR that gave the cut its top zoom, #1326),
+     was green, and is the first run in the shape the workflow has since that
      decision:** one dry run, at the top zoom, with the fit judged on it, after
-     the step has held `WORKER_TOP_ZOOM` to the Worker's `MAX_ZOOM`. The next
-     `measure` from `main` is the first. The 9.7 GB above came from the same
-     command (`--maxzoom=14 --dry-run`, same build, same region), so that is
-     the size to expect, and the fit to expect is 10.8 GB needed against the
-     runner's free disk.
+     the step has held `WORKER_TOP_ZOOM` to the Worker's `MAX_ZOOM`. That stop
+     ran first and printed "Top zoom 14: the deepest zoom the Worker reads, and
+     the deepest the cut keeps." Build `20261115` was still offered. The dry
+     run took 150 requests and 10 seconds and printed:
+
+     ```text
+     Region tiles 11542161, result tile entries 5299625
+     Extract transferred 10 GB (overfetch 0.05) for an archive size of 9.7 GB
+     ```
+
+     The same tile counts and the same size as the fourth run's second dry
+     run, as expected of the same command on the same build. The run's
+     summary: an archive of **9.7 GB** for build `20261115`, "cut with a top
+     zoom of 14"; "the cut needs 10.8 GB and the runner has 90.5 GB free",
+     "The cut fits." Both places the workflow looks at had 90,467,258,368
+     bytes free. Job 1 read the bucket's two privacy settings again, with the
+     answers in step 1. All eight `LOAD:` steps were skipped: no bucket
+     credential was used and nothing was written. **This is the size and the
+     fit of the file as a load cuts it**, still a dry-run figure (the tile
+     data alone, rounded, so at most 9.75 GB, without the new directories).
 
    - **What "20 GB" is.** A dry-run figure, for build `20261109` and again for
      build `20261115`: the tile data
@@ -972,7 +990,9 @@ working on a runner twice, once on each build, and the
 dry run at the Worker's top zoom once, on the build named now, as a second
 dry run that judged nothing. Since 2026-11-16 that dry run is the only one and
 the fit is judged on it, after a step that holds the workflow's top zoom to
-the Worker's; no run has been made in that shape yet. No
+the Worker's; the workflow's fifth run (43810516745, 2026-11-16) was green in
+that shape, so the stop, the one dry run and the fit on the smaller file have
+been seen working on a runner once. No
 `LOAD:` step has run anywhere: not the bucket listing, the cut, the check or
 the upload. The workflow's decisions (the names, the bucket's privacy, the size
 against the disk, the key being free, the listed size) are tested on the faults
@@ -1033,7 +1053,7 @@ plus major road and 3% of every point drawn; roads that fall short are
 `thin-roads`, which fails the draw. The two numbers come from a workstation run
 over build `20261109` at Protomaps (the comment in
 `workers/oursharedevents/scripts/street-map-archive/check.ts`). No run of the
-eighteen against a United States file exists: the load workflow has four
+eighteen against a United States file exists: the load workflow has five
 `measure` runs and no `load` run (read 2026-11-16), and the check is a `LOAD:`
 step.
 
