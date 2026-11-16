@@ -27,11 +27,15 @@
  *      both themes at every width: 2.10:1 light and 2.38:1 dark, where 4.5:1 is
  *      needed (3:1 from 18.7 px bold). It is `--on-accent` on `--accent` at 45%
  *      over the map (lib/map-zoom-style.ts, `.amap-blk .amap-dot`).
- *   2. On the landing map at 320 px the halo of the area numbers and town names
+ *   2. Where the landing map keeps its whole 600-unit frame on a 320 px screen
+ *      (areas spread side to side), the halo of the area numbers and town names
  *      is 0.93 px on screen, under the judge's 1 px floor, so it is not counted
  *      and they are judged against the map: 2.47 to 2.78:1 and 1.62 to 1.71:1.
  *      At 375 px the halo is 1.1 px and both pass. WCAG gives no figure for a
- *      halo's width; 1 px is this judge's own floor.
+ *      halo's width; 1 px is this judge's own floor. Where the map is drawn
+ *      square on a narrow screen (`data-tall`, OSE-2084: areas in the middle of
+ *      the drawing, as staging's are) the halo is 1.5 px and both pass. The pin
+ *      on the first fixture caught that change the day this was rebased.
  * What passes: town names against their halo (5.5:1 or more), the number on a
  * solid dot (5.8:1 or more), area numbers against their halo (15:1).
  *
@@ -108,14 +112,36 @@ function rows(): Row[] {
   ];
 }
 
+/**
+ * Three areas side by side, four events each: the landing leads with its map,
+ * and the areas reach past the middle of the drawing, so a narrow screen keeps
+ * the whole frame (attendee-map.ts, `tall`) and everything on it is at its
+ * smallest.
+ */
+function wideRows(): Row[] {
+  const cells = [-87.95, -87.6806, -87.41].map((lon) => latLngToCell(41.6573, lon, 7));
+  return cells.flatMap((cell, i) => {
+    const [lat, lon] = cellToLatLng(cell);
+    return [1, 2, 3, 4].map((n) =>
+      ev(20 + i * 4 + n, { lat, lon, h3_res7: cell, place_kind: 'business' })
+    );
+  });
+}
+
 const ZOOMED = `/?area=${BLUE_ISLAND}`;
 type Scheme = 'light' | 'dark';
 
 /** Serve the rendered page and /ui.css from ORIGIN, in this theme; abort everything else. */
-async function open(page: Page, path: string, scheme: Scheme, width: number): Promise<void> {
+async function open(
+  page: Page,
+  path: string,
+  scheme: Scheme,
+  width: number,
+  events: Row[] = rows()
+): Promise<void> {
   await page.setViewportSize({ width, height: 812 });
   await page.emulateMedia({ colorScheme: scheme });
-  const html = await renderLanding(path, rows());
+  const html = await renderLanding(path, events);
   const css = await uiCss();
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
@@ -168,15 +194,21 @@ function record(where: string, judged: MapTextJudged): void {
 const count = (judged: MapTextJudged, kind: string) =>
   judged.texts.filter((t) => t.kind === kind).length;
 
+/** The narrowest halo among the texts on screen, in CSS px. */
+const thinnestHalo = (judged: MapTextJudged) =>
+  Math.min(...judged.texts.map((t) => t.halo?.px ?? Infinity));
+
 /**
- * What the judge finds on the shipped styles, by page and width: the kinds of
- * text under their ratio. Exact: a kind that starts to pass, or a new kind that
- * fails, turns the test red. The figures and the reason are at the head of this
- * file; nothing here excuses a failure on staging (T4k has no such list).
+ * What the judge finds on the shipped styles: the kinds of text under their
+ * ratio. Exact: a kind that starts to pass, or a new kind that fails, turns the
+ * test red. The figures and the reason are at the head of this file; nothing
+ * here excuses a failure on staging (T4k has no such list).
  */
 const FINDINGS = {
-  zoomed: () => ['pale dot number'],
-  landing: (width: number) => (width < 343 ? ['area number', 'town name'] : []),
+  zoomed: ['pale dot number'],
+  /** The landing's own map: nothing where the halo is 1 px or more; under it, every text drawn. */
+  landing: (haloPx: number, drawn: string[]) =>
+    haloPx < 1 ? ['area number', 'town name'].filter((k) => drawn.includes(k)) : [],
 };
 
 const WIDTHS = [320, 375, 1280];
@@ -201,7 +233,7 @@ for (const width of WIDTHS) {
       );
       expect(judged.lines.length, 'every text on screen has a verdict').toBe(judged.texts.length);
 
-      expect(judged.failedKinds, judged.failures.join('\n')).toEqual(FINDINGS.zoomed());
+      expect(judged.failedKinds, judged.failures.join('\n')).toEqual(FINDINGS.zoomed);
       // The finding is every pale dot, not one of them by chance.
       expect(judged.failures.length, judged.failures.join('\n')).toBe(3);
       console.log(
@@ -209,9 +241,7 @@ for (const width of WIDTHS) {
       );
     });
 
-    test(`landing map, ${where}: area numbers and town names reach AA where their halo is 1 px or more`, async ({
-      page,
-    }) => {
+    test(`landing map, ${where}: area numbers and town names reach AA`, async ({ page }) => {
       await open(page, '/', scheme, width);
       const judged = await judgeMapTextOn(page);
       record(`landing map, ${where}`, judged);
@@ -219,13 +249,42 @@ for (const width of WIDTHS) {
       expect(count(judged, 'other'), 'no text on the map this judge does not know').toBe(0);
       expect(count(judged, 'area number'), 'two numbered areas').toBe(2);
       expect(count(judged, 'town name'), 'at least one town name is drawn').toBeGreaterThan(0);
+      // Two areas in the middle of the drawing: a narrow screen shows them square.
+      expect(thinnestHalo(judged), 'every halo is 1 px or more').toBeGreaterThanOrEqual(1);
+      expect(judged.failedKinds, judged.failures.join('\n')).toEqual([]);
+    });
 
-      expect(judged.failedKinds, judged.failures.join('\n')).toEqual(FINDINGS.landing(width));
+    test(`landing map on its whole frame, ${where}: area numbers and town names reach AA where their halo is 1 px or more`, async ({
+      page,
+    }) => {
+      await open(page, '/', scheme, width, wideRows());
+      await expect(
+        page.locator('[data-testid="amap"][data-tall]'),
+        'this fixture keeps the whole frame on every screen'
+      ).toHaveCount(0);
+      const judged = await judgeMapTextOn(page);
+      record(`landing map on its whole frame, ${where}`, judged);
+
+      expect(count(judged, 'other'), 'no text on the map this judge does not know').toBe(0);
+      // Whether a town name is drawn here depends on where the synthetic tiles
+      // put one; the area numbers carry the same halo and are always drawn.
+      expect(count(judged, 'area number'), 'three numbered areas').toBe(3);
+
+      const halo = thinnestHalo(judged);
+      // 320 px is where the finding is: the test must be looking at it there.
+      if (width === 320) expect(halo, 'the halo at 320 px on the whole frame').toBeLessThan(1);
+      else expect(halo, `the halo at ${width} px`).toBeGreaterThanOrEqual(1);
+      expect(judged.failedKinds, judged.failures.join('\n')).toEqual(
+        FINDINGS.landing(
+          halo,
+          judged.texts.map((t) => t.kind)
+        )
+      );
       if (judged.failures.length > 0) {
         // Under the floor, and for that reason only: the same text passes at 375 px.
         for (const line of judged.failures) expect(line).toContain('under the 1 px floor');
         console.log(
-          `::warning title=Map text contrast, a known finding::landing map, ${where}: ${judged.failures[0]}`
+          `::warning title=Map text contrast, a known finding::landing map on its whole frame, ${where}: ${judged.failures[0]}`
         );
       }
     });
