@@ -102,6 +102,16 @@ export const MUTATION_GROUPS = Object.freeze({
   ]),
   forms: Object.freeze(['src/handlers/form-pages.ts', 'src/lib/event-staleness.ts']),
   tiles: Object.freeze(['src/lib/mvt.ts', 'src/lib/pmtiles.ts']),
+  // W1 (OSE-2095, 2026-11-16): the ZIP at the Where step and the search that
+  // reads it. Its own job: zip-areas.ts reads the 33,791-zip table, and its
+  // specs share nothing with the other groups' costliest specs.
+  zip: Object.freeze([
+    'src/lib/event-zip.ts',
+    'src/lib/zip-areas.ts',
+    'src/lib/place-names.ts',
+    'src/lib/place-search.ts',
+    'src/lib/export-geography.ts',
+  ]),
 });
 
 /** The file a mutate entry names: `src/x.ts` or a range `src/x.ts:10-20`. */

@@ -109,6 +109,7 @@ import {
   INVALID_ZIP_CODE_MESSAGE,
   ZIP_NOT_STORED_ONLINE,
   readZipField,
+  suggestZip,
   zipNotInTableWarning,
   type ZipWarning,
 } from '../lib/event-zip';
@@ -2177,6 +2178,39 @@ export async function handleAdminListEventTemplates(
     );
     return errorResponse('DB_ERROR', 'Failed to list event templates', 503, rid);
   }
+}
+
+/**
+ * POST /api/v2/admin/zip-suggest — W1 (OSE-2095): the ZIP the wizard fills in
+ * from what the organizer typed, by the server's own rules (lib/event-zip.ts
+ * suggestZip). Body: { address?, place? }. A POST so a typed address never sits
+ * in a URL or an access log. Reads no table but the zip and town lists, writes
+ * nothing, stores nothing; admin-gated by the router.
+ */
+export async function handleAdminZipSuggest(request: Request): Promise<Response> {
+  const rid = requestId();
+  let body: Record<string, unknown>;
+  try {
+    const text = await request.text();
+    if (text.length > 4096) {
+      return errorResponse('PAYLOAD_TOO_LARGE', 'Body must be under 4KB', 400, rid);
+    }
+    const parsed: unknown = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('shape');
+    body = parsed as Record<string, unknown>;
+  } catch {
+    return errorResponse('INVALID_BODY', 'Request body must be a JSON object', 400, rid);
+  }
+  return Response.json(
+    { ok: true, ...suggestZip(body.address, body.place) },
+    {
+      headers: {
+        ...corsHeaders(request),
+        'Cache-Control': 'no-store',
+        'X-Request-Id': rid,
+      },
+    }
+  );
 }
 
 /**

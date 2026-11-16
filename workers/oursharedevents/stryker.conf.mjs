@@ -86,6 +86,20 @@ const config = {
     'src/lib/event-type-catalog.ts',
     'src/lib/event-type-catalog-read.ts',
     'src/lib/landing-area.ts',
+    // W1 (OSE-2095, owner 2026-11-16) — the ZIP at the Where step: the zip finds
+    // an event, and a zip never becomes a cell. event-zip.ts reads the field and
+    // makes the wizard's fill-in; zip-areas.ts decides which zip an event is in
+    // (a no-cell event: the zip it gives); place-names.ts and place-search.ts
+    // carry that rule to /events?q= and the landing's ?where=; export-geography.ts
+    // refuses the zip names at the BigQuery boundary. Killed by
+    // event-zip-unit.spec.ts, landing-where-unit.spec.ts, place-search.spec.ts,
+    // booth-export-boundary.spec.ts and admin-wizard-where-zip.spec.ts. The
+    // handler lines that call them (events.ts) run only in the workers pool.
+    'src/lib/event-zip.ts',
+    'src/lib/zip-areas.ts',
+    'src/lib/place-names.ts',
+    'src/lib/place-search.ts',
+    'src/lib/export-geography.ts',
     rangeOf('src/handlers/pages.ts', 'let typeCategories:', 'const areaOpts = {'),
     rangeOf(
       'src/handlers/events.ts',

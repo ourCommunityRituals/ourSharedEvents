@@ -1,0 +1,32 @@
+info:
+  name: The ZIP at the Where step (OSE-2095)
+  type: folder
+request: {}
+docs: |-
+  W1 of the Where-step design (owner 2026-11-16): the zip finds an event; only
+  the organizer's tap on our own map places it. A ZIP is never made into a cell.
+
+  This folder is the staging layer of OSE-2095 (CI/CD ticket OSE-2102):
+
+  - stock totals: the stock search counts for 60655 and Oak Lawn are read before
+    (seq 5, 6) and after (seq 60, 61) and must match: this run's events are far
+    from the stock area (Bozeman, MT) or unlisted;
+  - sunny: an event created live with ZIP 59718 and no address is listed by
+    /?zip=59718, /events?q=59718, /events?q=Bozeman, MT and /?where=Bozeman, MT,
+    and not by /?zip=59715 (another Bozeman ZIP); the public list carries no
+    zip_code;
+  - rainy: a PO-box ZIP the Census table lacks (60454) saves with the
+    ZIP_NOT_IN_TABLE note; a ZIP sent with an online event is not stored
+    (ZIP_NOT_STORED_ONLINE);
+  - fat finger: four digits, letters, an inner space, a street, a JSON number
+    are each a 400 INVALID_ZIP_CODE, on create and on update;
+  - the wizard's fill-in (POST /api/v2/admin/zip-suggest) answers the address
+    ZIP, and nothing for a town of many ZIPs.
+
+  No fixture. The folder makes its own synthetic events and deletes them at the
+  end (seq 900-910). The rainy and fat-finger events are unlisted drafts. A
+  leftover from a stopped run is synthetic and the daily staging rebuild
+  clears it. The requests run in seq order.
+
+  Mock-layer twins: workers/oursharedevents/tests/event-zip.spec.ts,
+  event-zip-unit.spec.ts and admin-wizard-where-zip.spec.ts.

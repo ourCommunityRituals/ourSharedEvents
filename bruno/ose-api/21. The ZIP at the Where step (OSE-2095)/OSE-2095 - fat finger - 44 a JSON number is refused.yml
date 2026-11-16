@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2095 | fat finger | a JSON number is a 400"
+  type: http
+  seq: 44
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"attendance_mode\":\"in_person\",\"location\":\"OSE-2095 Hall\",\"title\":\"OSE-2095 zip fat finger (staging, synthetic)\",\"is_published\":false,\"data_class\":\"synthetic\",\"zip_code\":60406}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2095 fat finger (a JSON number): 400 INVALID_ZIP_CODE', function () { expect(res.getStatus()).to.eql(400); expect(b.code).to.eql('INVALID_ZIP_CODE'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

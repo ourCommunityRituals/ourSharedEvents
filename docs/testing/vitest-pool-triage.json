@@ -457,6 +457,13 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/admin-wizard-where-zip.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 15
+    },
+    {
       "file": "workers/oursharedevents/tests/admin-write-guard.derived.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1332,6 +1339,20 @@
       "testCount": 5
     },
     {
+      "file": "workers/oursharedevents/tests/event-zip-unit.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-zip.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 23
+    },
+    {
       "file": "workers/oursharedevents/tests/events-5w-schema.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -1791,7 +1812,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 24
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/landing-where.spec.ts",
@@ -3576,7 +3597,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): env.DB",
-      "testCount": 17
+      "testCount": 19
     },
     {
       "file": "workers/oursharedevents/tests/standards-propagation.spec.ts",

@@ -1,0 +1,27 @@
+info:
+  name: "OSE-2095 | cleanup | delete the online draft"
+  type: http
+  seq: 902
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/api/v2/admin/events/{{w1OnlineId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2095 cleanup: the online draft is deleted', function () { expect(res.getStatus()).to.eql(200); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

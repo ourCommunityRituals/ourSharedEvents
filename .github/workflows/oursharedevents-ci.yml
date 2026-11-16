@@ -2239,7 +2239,8 @@ jobs:
           PW_LABEL='T4b: Core Journeys' scripts/pw-guarded.sh \
             --config=playwright.e2e-smoke.config.ts \
             tests/e2e/3-flows/sponsor-journey.spec.ts \
-            tests/e2e/3-flows/cross-brand-isolation.spec.ts
+            tests/e2e/3-flows/cross-brand-isolation.spec.ts \
+            tests/e2e/3-flows/where-step-zip.spec.ts
         timeout-minutes: 8
 
       # T4c split (OSE-554): register/checkin + all validation/structure are

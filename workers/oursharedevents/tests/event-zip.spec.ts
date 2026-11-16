@@ -366,3 +366,60 @@ describe('W1 repeat: "Repeat this event" copies the ZIP', () => {
     expect(body.zip_code).toBe('60406');
   });
 });
+
+// ── 5. The wizard's fill-in route ────────────────────────────────────────────
+
+describe('W1 POST /api/v2/admin/zip-suggest: the fill-in, by the server rules', () => {
+  const ask = (body: unknown, headers: Record<string, string> = ADMIN, method = 'POST') =>
+    SELF.fetch('https://t.test/api/v2/admin/zip-suggest', {
+      method,
+      headers,
+      ...(method === 'POST' ? { body: JSON.stringify(body) } : {}),
+    });
+
+  test('sunny: an address that ends in a ZIP, and a one-ZIP town', async () => {
+    const a = await ask({ address: '1 Main St, Blue Island, IL 60406-1234' });
+    expect(a.status).toBe(200);
+    expect(a.headers.get('Cache-Control')).toBe('no-store');
+    expect(await a.json()).toEqual({ ok: true, zip: '60406', from: 'address' });
+    const b = await ask({ address: '3200 W 95th St, Evergreen Park, IL' });
+    expect(await b.json()).toEqual({
+      ok: true,
+      zip: '60805',
+      from: 'town',
+      town: 'Evergreen Park, IL',
+    });
+  });
+
+  test('edge: a town of many ZIPs and a street number fill nothing', async () => {
+    expect(await (await ask({ address: '1 Main St, Blue Island, IL' })).json()).toEqual({
+      ok: true,
+      zip: null,
+      from: null,
+    });
+    expect(await (await ask({ address: '12345 S Pulaski Rd' })).json()).toEqual({
+      ok: true,
+      zip: null,
+      from: null,
+    });
+  });
+
+  test('rainy: not signed in is refused; a body that is not an object is a 400', async () => {
+    const anon = await ask(
+      { address: 'x' },
+      { 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'same-origin' }
+    );
+    expect([401, 403]).toContain(anon.status);
+    const arr = await ask(['60406']);
+    expect(arr.status).toBe(400);
+    expect(((await arr.json()) as { code: string }).code).toBe('INVALID_BODY');
+  });
+
+  test('it is a POST: a GET with the address in the URL is not served', async () => {
+    const res = await SELF.fetch(
+      'https://t.test/api/v2/admin/zip-suggest?address=1%20Main%20St%2C%20IL%2060406',
+      { headers: ADMIN }
+    );
+    expect(res.status).not.toBe(200);
+  });
+});

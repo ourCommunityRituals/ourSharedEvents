@@ -14,7 +14,8 @@
  * with its own code; a well-formed one the Census table lacks (a PO-box zip)
  * still saves, and the answer says so.
  */
-import { findZipArea, normalizeZip } from './zip-areas';
+import { addressZip, findZipArea, normalizeZip } from './zip-areas';
+import { findPlaces } from './place-search';
 
 export const INVALID_ZIP_CODE = 'INVALID_ZIP_CODE';
 export const INVALID_ZIP_CODE_MESSAGE =
@@ -61,3 +62,65 @@ export const ZIP_NOT_STORED_ONLINE: ZipWarning = {
   code: 'ZIP_NOT_STORED_ONLINE',
   message: 'An online event has no place, so the ZIP code was not stored.',
 };
+
+/** What the wizard may fill the ZIP box with, and why. */
+export interface ZipSuggestion {
+  zip: string | null;
+  /** 'address': the address ends with it; 'town': a town with exactly one zip. */
+  from: 'address' | 'town' | null;
+  /** The town it came from ("Evergreen Park, IL"), when from is 'town'. */
+  town?: string;
+}
+
+/** The longest text read for a suggestion (the address box's own limit). */
+export const SUGGEST_TEXT_MAX = 500;
+
+/**
+ * The town names a text may give: "…, Blue Island, IL" gives "Blue Island, IL"
+ * and "IL"; a place name typed with its town ("Rock Island Public House, Blue
+ * Island") gives "Blue Island". The whole text is tried for the place name only
+ * (an address is never a town by itself).
+ */
+function townCandidates(text: string, whole: boolean): string[] {
+  const parts = text
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  if (parts.length >= 2) out.push(`${parts[parts.length - 2]}, ${parts[parts.length - 1]}`);
+  if (parts.length >= 2) out.push(parts[parts.length - 1]);
+  if (whole) out.push(text.trim());
+  return out;
+}
+
+/**
+ * The ZIP the wizard fills in (W1, owner 2026-11-16), the server's own rules:
+ * the zip the address ends with (zip-areas.ts addressZip), else a town named in
+ * the address or the place name that is exactly one place with exactly one zip
+ * (place-search.ts findPlaces). A town with many zips, or a name that is many
+ * places, fills nothing: the organizer types it. A suggestion only; the
+ * organizer can change it, and nothing here is stored.
+ */
+export function suggestZip(address: unknown, place: unknown): ZipSuggestion {
+  const a = typeof address === 'string' ? address.slice(0, SUGGEST_TEXT_MAX) : '';
+  const p = typeof place === 'string' ? place.slice(0, SUGGEST_TEXT_MAX) : '';
+  const fromAddress = addressZip(a);
+  if (fromAddress) return { zip: fromAddress, from: 'address' };
+  const tried = new Set<string>();
+  for (const [text, whole] of [
+    [a, false],
+    [p, true],
+  ] as const) {
+    if (!text.trim()) continue;
+    for (const c of townCandidates(text, whole)) {
+      if (tried.has(c)) continue;
+      tried.add(c);
+      const matches = findPlaces(c);
+      if (matches.length === 0) continue;
+      // A name that is many places, or a place of many zips: the organizer says.
+      if (matches.length > 1 || matches[0].zips.length !== 1) return { zip: null, from: null };
+      return { zip: matches[0].zips[0], from: 'town', town: matches[0].label };
+    }
+  }
+  return { zip: null, from: null };
+}

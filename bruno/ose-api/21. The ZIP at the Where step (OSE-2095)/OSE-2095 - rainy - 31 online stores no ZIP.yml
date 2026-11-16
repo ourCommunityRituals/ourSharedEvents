@@ -1,0 +1,36 @@
+info:
+  name: "OSE-2095 | rainy | a ZIP sent with an online event is not stored"
+  type: http
+  seq: 31
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"attendance_mode\":\"online\",\"title\":\"OSE-2095 online ZIP (staging, synthetic)\",\"zip_code\":\"59718\",\"is_published\":false,\"data_class\":\"synthetic\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        function codes(b) { return (b.warnings || []).map(function (w) { return w.code; }); }
+        test('OSE-2095 online: 201', function () { expect(res.getStatus()).to.eql(201); });
+        test('OSE-2095 online: the answer says the ZIP was not stored', function () { expect(codes(b)).to.include('ZIP_NOT_STORED_ONLINE'); });
+        bru.setVar('w1OnlineId', b.id || 'missing-online');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
