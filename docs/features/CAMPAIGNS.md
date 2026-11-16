@@ -24,10 +24,16 @@ An event is in at most one campaign, of its own brand (`events.campaign_id`, mig
 **The two links are stored separately.** Putting an event in a campaign does not change its
 placements, and putting a placement in a campaign does not change its event.
 
-**Decided by the owner on 2026-11-15, not built yet (ADR-030 D8):** when the two differ, the
-event's campaign wins. A placement on an event that is in a campaign will be read as in that
-campaign; its own value counts only while the event is in none. Until that is built, the public
-bundle still reads the placement's own campaign and nothing reads the event's in public.
+**When a campaign is read, the event's wins (owner, 2026-11-15; ADR-030 D8).** A placement on an
+event that is in a campaign is read as in that campaign. Its own campaign counts only while the
+event is in none. This holds in the public sponsor bundle and in the SharedReport.
+
+- Nothing stored changes. Take the event out and the placement's own campaign is read again.
+- A sponsor with no campaign of its own carries its event's campaign.
+- If the event's campaign is paused or completed, no campaign is named. The placement's own does
+  not step in for it.
+- An event's campaign in another brand (only possible past the API) counts as none.
+- The admin sponsor list still shows each placement's own stored `campaign_id`.
 
 **The locals still apply on a campaign (owner, 2026-11-15).** A campaign is a label on a sponsor.
 It never decides which sponsors show, their order, or their share of rotation. The local sponsors'
@@ -67,8 +73,7 @@ public bundle at once, its sponsor still shows, and making it active again bring
 The audit log records `UPDATE_CAMPAIGN`, `ADD_CAMPAIGN_EVENT` and `REMOVE_CAMPAIGN_EVENT` on the
 campaign.
 
-Not built yet (OSE-1552): the event's campaign winning over a placement's (decided, see above),
-suggestions, and one SharedReport across a campaign's events.
+Not built yet (OSE-1552): suggestions, and one SharedReport across a campaign's events.
 
 ## For a public page (ourWKRP's showcase, or any reader)
 
@@ -81,17 +86,20 @@ carry:
 
 - It is there only when that sponsor's placement on this event is **on show**: the event chose to
   have sponsors, the sponsor accepted, the organizer accepted.
+- It is the event's campaign when the event is in one, and otherwise the placement's own (see
+  above). So every sponsor on show at an event that is in an active campaign carries that campaign.
 - It is there only while the campaign is `active`, and only when the campaign is in the event's own
   brand.
 - A sponsor with no campaign has no `campaign` field. It is never `null`.
 - `id` and `title` are the whole of it.
 
 To show a station's partner: read the bundle of each upcoming event of the station, and show a
-sponsor whose `campaign.id` is the station's campaign. Store nothing; the bundle is the source.
+sponsor whose `campaign.id` is the station's campaign. Since 2026-11-15, putting the station's
+events in the campaign is enough: their sponsors on show then carry it. Store nothing; the bundle is the source.
 
 Nothing else in public names a campaign: not the event (`GET /api/v2/events/:id`), not
-`/events/:id/sponsors`, not the events list. This holds for an event that is in a campaign too:
-an event's own campaign is admin-only.
+`/events/:id/sponsors`, not the events list. An event's campaign reaches the public only as the
+label on a sponsor that is on show; an event with no sponsor on show names its campaign nowhere.
 
 ## What you cannot do, by design
 
@@ -104,7 +112,9 @@ an event's own campaign is admin-only.
 ## Reports
 
 The SharedReport's `campaign_summary` (Mid depth) is unchanged in shape. A placement linked to a
-campaign outside the event's brand now reports with no campaign.
+campaign outside the event's brand reports with no campaign. Since 2026-11-15 the report reads the
+same effective campaign as the bundle: the event's when the event is in one, else the placement's
+own. The report names a campaign whatever its status, as it did before.
 
 ## Tests
 

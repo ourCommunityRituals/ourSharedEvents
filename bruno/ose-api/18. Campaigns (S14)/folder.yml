@@ -21,8 +21,10 @@ docs: |-
 
   Requests 30 to 52 (OSE-1552 scope 1): an event can be in one campaign of its
   own brand. They put camp-on-evt in camp_fx_toggle, move it to camp_fx_shown and
-  take it out, and change no placement. An event's campaign is not public, and a
-  placement's own campaign is never overwritten by its event's.
+  take it out, and change no placement. While the event is in a campaign, every
+  sponsor of it that is on show is read as in that campaign (OSE ADR-030 D8); a
+  placement's own campaign is never overwritten and reads again once the event
+  is taken out. The event itself, and a sponsor not on show, never name it.
 
   Requests 60 to 75 (OSE-1552 scope 2): rename a campaign, or change its status.
   They change camp_fx_edit and nothing else. An update takes a title and a

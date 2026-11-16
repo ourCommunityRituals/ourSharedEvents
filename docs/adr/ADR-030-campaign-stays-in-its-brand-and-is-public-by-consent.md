@@ -124,10 +124,21 @@ options put to the owner:
 - **D. The event's campaign overwrites.** Adding the event rewrites its placements' campaigns. The
   older choice is lost.
 
-_Owner, 2026-11-15: B, the event's campaign wins._ **Decided, not built.** The code today is still
-A: the public bundle and the SharedReport read the placement's own campaign. Building B changes
-those two reads and nothing stored, and the consent rule of decision 3 does not move: a campaign is
-still public only through a placement that is on show.
+_Owner, 2026-11-15: B, the event's campaign wins._ **Built on 2026-11-15** as a read rule; nothing
+stored changes. Each of the two reads (the public read and the SharedReport) joins the event's own
+campaign only on the brand match, then takes that campaign when there is one and the placement's
+own otherwise (`EFFECTIVE_CAMPAIGN_ID_SQL` in `lib/campaigns.ts`), and joins the result on the
+brand match of decision 2 again. No security scan was changed or given an exemption for it. The consent rule of decision 3 does not move: a campaign is public
+only through a placement that is on show, so an event with no sponsor on show names its campaign
+nowhere. Choices made while building, each small and each the owner's to change:
+
+- **A paused or completed event campaign is not announced, and the placement's own does not step
+  in for it.** The event is still "in" that campaign; decision 4 only stops it being announced.
+- **An event linked past the API to another brand's campaign counts as in none**, so the
+  placement's own campaign is read.
+- **The SharedReport names the effective campaign whatever its status**, as it named a placement's
+  campaign whatever its status before.
+- **The admin sponsor list keeps showing the placement's own stored `campaign_id`.**
 
 **D9. The locals still apply on a campaign.** _Owner, 2026-11-15: "The locals still apply even on
 a campaign."_ A campaign is a label on a sponsor the bundle already shows. It is never an input to
@@ -135,6 +146,17 @@ which sponsors show, their order, or their share of rotation, so the local spons
 (brain invariant 25; `lib/sponsor-allocation.ts`) holds on an event that is in a campaign exactly
 as on one that is not. This binds the build of B as well. Held today by the T0 invariant (nothing
 that orders or picks sponsors names a campaign) and by `tests/campaign-events.spec.ts`.
+
+**D9, as the owner put it on 2026-11-16:** a campaign _"never does is remove the hyperlocal
+sponsorship from the event."_ That is the whole of the rule this record holds, and the code
+enforces it: no campaign code can hide a sponsor or change a share, and the local class keeps its
+floor whenever an event has a local sponsor (`allocateShares`, brain invariant 25).
+
+**Nothing about how the local share is sized is decided or changed here.** The allocation contract
+(`ocr-docs-brain/sponsor-allocation.yaml`, mirrored in `lib/sponsor-allocation.ts`) is as it was:
+one local floor for every event. That contract belongs to the shared brain and the org vision
+(`OCR-docs/docs/OCR_VISION.md`: "If it is not written here, it does not exist at the org level"),
+not to an OSE decision record about campaigns.
 
 ## Rename and status change (added 2026-11-15, OSE-1552 scope 2)
 
@@ -178,8 +200,9 @@ completing a campaign takes its name out of the public bundle at once, and its s
 - Tests: `tests/campaigns.spec.ts` and the brand matrix (workers pool);
   `tests/campaign-never-a-filter.spec.ts` (static); the T0 invariant named above;
   `bruno/ose-api/18. Campaigns (S14)` with `bruno/fixtures/campaigns-seed.sql` (staging).
-- Not built here, and still owned by OSE-1552: D8 (the event's campaign wins), suggestions, the
-  campaign SharedReport. Rename and status change were added on 2026-11-15; their tests are
+- Not built here, and still owned by OSE-1552: suggestions, the campaign SharedReport. D8 was
+  built on 2026-11-15 (`tests/campaign-events.spec.ts`, the T0 invariant's D8 check, Bruno
+  request 34). Rename and status change were added on 2026-11-15; their tests are
   `tests/campaign-update.spec.ts` and requests 60 to 75 of the Bruno folder. The event-to-campaign link was added on 2026-11-15 (see "The event
   link"); its tests are `tests/campaign-events.spec.ts`, the same T0 invariant, and requests 30 to
   52 of the Bruno folder.
