@@ -2,8 +2,9 @@
 
 **Status:** Proposed. **The direction is the owner's ruling of 2026-11-16** ("The owner's ruling",
 below): Google Maps is removed from our own systems, our own map is the map of record, and links
-out for navigation stay. **How each call is replaced is not chosen**: those choices are in "Open,
-for the owner", and merging the pull request that carries this record accepts none of them.
+out for navigation stay. **Four of the choices that followed are the owner's too**, made the same day ("The owner's
+choices"). The rest are in "Open, for the owner", and merging the pull request that carries this
+record accepts none of those.
 Nothing is built. It stays Proposed, not Accepted, because the code still calls Google: by this
 repository's rule an Accepted record describes what is live. No runtime code changes with it, and
 neither does `AGENTS.md`, `CLAUDE.md` or `OCR_VISION.md`.
@@ -163,8 +164,25 @@ What it does not decide, and this record does not decide for the owner:
 - The sponsor's "local" rule, the fonts in ourWKRP, and a rule for every product.
 - Any of the location-precision review's decisions.
 
+Four of these were put to the owner later the same day and answered; see "The owner's choices".
+
 The Calendar link is not navigation. It stays under the owner's scope statement in "Context"
 (linking out is understood), not under this sentence.
+
+### The owner's choices
+
+Put to the owner on 2026-11-16 as four questions, each with the options this record sets out and
+the author's recommendation marked. The owner picked one answer to each. The answers are quoted
+as they were offered.
+
+| #   | Question                                                                                                | The owner's answer         | What it means here                                                                                                                                                                                                                             |
+| --- | ------------------------------------------------------------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | With Google's lookup removed, how should an event get its place on the map?                             | "Zip, plus a tap"          | Options 1 and 2 together. Every event is placed from the zip in its address, and the organizer can tap a hexagon on our own map to put it in the exact area. Option 3 is not taken.                                                            |
+| C2  | Google's venue picture on the event page and the SharedReport is going. What should stand in its place? | "Our own area map"         | Swapped in one change after the street archive is on staging: the event's area from our own streets, so the page is never left without a map. An area about 2.4 km across, not a pin.                                                          |
+| C3  | What should happen to the points already stored from Google's lookup?                                   | "Keep cells, clear points" | The H3 cells already worked out stay. The readers of a stored point move to cells or words, and then the stored latitude and longitude are cleared. Whether a cell worked out from a Google point may be kept is still a question for counsel. |
+| C4  | ourWKRP's showcase pages load their fonts from Google's font hosts. What should be done?                | "Host them ourselves"      | The same fonts served from our own site. A change in the ourWKRP repository, with its own ticket there. Nothing was changed there by this record.                                                                                              |
+
+These four are choices, not builds. What each still leaves open is in "Open, for the owner".
 
 ### The choices that remain
 
@@ -534,22 +552,23 @@ Of merging this record: none on behaviour. The lookup runs as it does today.
 ## Open, for the owner
 
 Settled by the owner on 2026-11-16 and no longer open: Google Maps goes from our own systems
-(D1), our own map is the map of record (D2), and links out for navigation stay (D3). Everything
-below is still open.
+(D1), our own map is the map of record (D2), links out for navigation stay (D3), an event is
+placed from its zip and by a tap (C1), our own area map stands where the venue image was (C2),
+cells are kept and stored points cleared (C3), and ourWKRP hosts its own fonts (C4). The numbers
+below are kept from earlier drafts so that references to them still hold.
 
-1. **How an event gets its place (G1).** Option 1, option 2, or both. Keeping the Google lookup is
-   refused (D1). Option 3 sends the address to a third party that is not Google, so the ruling's
-   words do not refuse it; the author does not recommend it.
+1. **How an event gets its place (G1).** Answered: C1, options 1 and 2 together.
 2. **If option 1:** cells only (1a), or a coordinate that is dropped (1b)? Res 7 only, or res 9
    too? The second half is the open precision decision.
-3. **If option 2:** is the zip centre's hexagon an acceptable place for an event on the map? What
+3. **Option 2, chosen:** the zip centre's hexagon is where an event sits until someone taps. What
    should an organizer see when a zip is not in the table?
-4. **If option 3:** which service, who reads its terms, and may a home address be sent to it?
-5. **Stored points.** Keep them, clear them once nothing reads them, or place events again. For
-   counsel: may a cell worked out from a Google point be kept after 30 days?
+4. **Option 3:** not taken (C1). Nothing to answer.
+5. **Stored points.** Answered: C3. Still for counsel: may a cell worked out from a Google point
+   be kept after 30 days?
 6. **The kind of place** (business or address): asked of the organizer, or dropped?
-7. **The venue image (G4):** Google's picture goes (D1). In its place: the event's area drawn from
-   our own map, or nothing (OSE-1985)? On the SharedReport's event list too?
+7. **The venue image (G4):** Answered: C2, on the event page and the SharedReport. Whether the
+   report's small picture is redrawn or folded into the report's own map is OSE ADR-036's D2,
+   which is still open there.
 8. **The poster's spot (G2):** a tap on our own map, at res 9 as the rule already allows? May the
    lookup route go before the tap exists, leaving the two number boxes?
 9. **The sponsor's area (G3):** when a sponsor's place comes from a zip, is "local" the same zip
@@ -560,8 +579,7 @@ below is still open.
     last. Is the gate that keeps Google Maps from coming back wanted with it?
 12. **A rule for every product:** is "no product calls Google Maps from its own systems" wanted as
     an org invariant in OCR-docs? It would be its own ADR there.
-13. **Not a map, found in passing:** ourWKRP's showcase pages load fonts from Google's font hosts.
-    Leave it, or host the fonts ourselves?
+13. **The fonts in ourWKRP:** Answered: C4. The ticket and the change belong in ourWKRP.
 
 The location-precision review's own decisions stay open and are not restated as questions here.
 
@@ -576,15 +594,15 @@ of Google's is taken away, each Google call is replaced before its code is remov
 goes last. A slice is not built until the owner has answered the open questions it names.
 Linear was searched on 2026-11-16 for work that already exists; the last column is what was found.
 
-| #   | Slice                                                                                                                                                                                            | Waits on                                                                   | Already in Linear                                                                                |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| S0  | The street archive loaded on staging, and the staging street cases binding. An owner step (OSE ADR-035). The build now cut is offered until about 2026-11-21 by one observation.                 | The owner                                                                  | OSE-2064 (the load), OSE-1535 (release work)                                                     |
-| S1  | G1 by option 2: a save places an event from its zip, with no outbound request. The Google lookup stays as the fallback until S6.                                                                 | Open question 1 and 3                                                      | None found. OSE-1717 (ask for the place name and the address separately) touches the form        |
-| S2  | G4: the event page shows the event's area from our own map where Google's picture was, and the venue-image route goes in the same change.                                                        | S0; open question 7                                                        | OSE-1985. OSE-1498 (the route's limits) ends with the route                                      |
-| S3  | G3: a sponsor draft's area from its zip.                                                                                                                                                         | Open question 9                                                            | None found                                                                                       |
-| S4  | The admin map: an organizer taps a hexagon to place an event (option 1), and a poster (G2). The admin lookup route goes in the same change.                                                      | S0; open questions 1, 2 and 8; the precision decision for an event's res 9 | None found. OSE-1357 (poster address to cells) and OSE-1504 (the route's limits) are the nearest |
-| S5  | Stored points: the readers listed under "What is kept" move to cells or words, then the points are cleared.                                                                                      | Open question 5; the precision review for public outputs                   | None found                                                                                       |
-| S6  | The end: the nightly lookups, `lib/geo.ts`, `lib/maps.ts` and their tests go; the source gate lands and is seen red; the secret's name leaves the config comments; the owner removes the secret. | S1 to S4; open question 11                                                 | None found                                                                                       |
+| #   | Slice                                                                                                                                                                                            | Waits on                                                                             | Already in Linear                                                                                |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| S0  | The street archive loaded on staging, and the staging street cases binding. An owner step (OSE ADR-035). The build now cut is offered until about 2026-11-21 by one observation.                 | The owner                                                                            | OSE-2064 (the load), OSE-1535 (release work)                                                     |
+| S1  | G1 by option 2: a save places an event from its zip, with no outbound request. The Google lookup stays as the fallback until S6.                                                                 | Chosen (C1). Open question 3 is a detail of the slice                                | None found. OSE-1717 (ask for the place name and the address separately) touches the form        |
+| S2  | G4: the event page shows the event's area from our own map where Google's picture was, and the venue-image route goes in the same change.                                                        | S0. Chosen (C2)                                                                      | OSE-1985. OSE-1498 (the route's limits) ends with the route                                      |
+| S3  | G3: a sponsor draft's area from its zip.                                                                                                                                                         | Open question 9                                                                      | None found                                                                                       |
+| S4  | The admin map: an organizer taps a hexagon to place an event (option 1), and a poster (G2). The admin lookup route goes in the same change.                                                      | S0. Chosen (C1). Open questions 2 and 8; the precision decision for an event's res 9 | None found. OSE-1357 (poster address to cells) and OSE-1504 (the route's limits) are the nearest |
+| S5  | Stored points: the readers listed under "What is kept" move to cells or words, then the points are cleared.                                                                                      | Chosen (C3). The precision review, for what public outputs carry instead             | None found                                                                                       |
+| S6  | The end: the nightly lookups, `lib/geo.ts`, `lib/maps.ts` and their tests go; the source gate lands and is seen red; the secret's name leaves the config comments; the owner removes the secret. | S1 to S4; open question 11                                                           | None found                                                                                       |
 
 Tickets the ruling turns round, for the owner or the epic's keeper to cancel or reword, not
 touched here: OSE-1688 (turn on the Geocoding API for the Maps key), OSE-555 (provision the Maps
