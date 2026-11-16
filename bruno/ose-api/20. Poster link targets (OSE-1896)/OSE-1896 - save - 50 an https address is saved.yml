@@ -1,0 +1,35 @@
+info:
+  name: OSE-1896 | happy | save | an https link target is saved
+  type: http
+  seq: 50
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{linkTargetEventId}}/poster-codes"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"codes\": [{\"kind\": \"donation\", \"target_url\": \"https://give.ose-1896.example/a\"}]}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        const give = (b.codes || []).filter(function (c) { return c.kind === 'donation'; });
+        test('OSE-1896 save: 200', function () { expect(res.getStatus()).to.eql(200); expect(b.ok).to.eql(true); });
+        test('OSE-1896 save: the donation code holds the https address', function () { expect(give.length).to.eql(1); expect(give[0].target_url).to.eql('https://give.ose-1896.example/a'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -1,0 +1,30 @@
+info:
+  name: OSE-1896 | read | the refused writes wrote nothing
+  type: http
+  seq: 40
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{linkTargetEventId}}/poster-codes"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        const snap = JSON.stringify((b.codes || []).map(function (c) { return [c.kind, c.target_url]; }));
+        test('OSE-1896 read: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-1896 read: the codes are what they were before the three refused writes', function () { expect(snap).to.eql(bru.getVar('linkTargetBefore')); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

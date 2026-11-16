@@ -1,0 +1,31 @@
+info:
+  name: OSE-1896 | read | the poster's codes before any write
+  type: http
+  seq: 20
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{linkTargetEventId}}/poster-codes"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        const snap = JSON.stringify((b.codes || []).map(function (c) { return [c.kind, c.target_url]; }));
+        test('OSE-1896 read: 200 with a list of codes', function () { expect(res.getStatus()).to.eql(200); expect(b.codes).to.be.an('array'); });
+        test('OSE-1896 read: no code has a link target yet', function () { expect((b.codes || []).filter(function (c) { return c.target_url; })).to.eql([]); });
+        bru.setVar('linkTargetBefore', snap);
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
