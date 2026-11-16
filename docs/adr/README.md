@@ -52,7 +52,7 @@ See [ADR-RECONCILIATION-PROCESS.md](ADR-RECONCILIATION-PROCESS.md) for the full 
 | [ADR-034](ADR-034-booths-sessions-and-participation-mode.md)               | A booth and a session are children of one event; participation mode is a column                                           | Proposed   | 2026-11-14 |
 | [ADR-035](ADR-035-street-map-one-bucket.md)                                | Keep the street-map archive in one bucket that staging and production both read                                           | Proposed   | 2026-11-15 |
 | [ADR-036](ADR-036-street-layer-as-the-base-map.md)                         | Make the street layer the one base map, asked for with cells only                                                         | Proposed   | 2026-11-15 |
-| [ADR-037](ADR-037-what-a-migration-dry-run-may-print.md)                   | A migration dry run prints counts, and on production it obeys the under-5 floor                                           | Proposed   | 2026-11-15 |
+| [ADR-037](ADR-037-what-a-migration-dry-run-may-print.md)                   | A migration dry run prints counts, and on production it obeys the under-5 floor                                           | Accepted   | 2026-11-15 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 

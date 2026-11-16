@@ -1,7 +1,8 @@
 # ADR-037: A migration dry run prints counts, and on production it obeys the floor
 
-**Status:** Proposed. The owner asked for a production dry run on 2026-11-15, on the condition that it
-respects the invariants. This ADR is how it does. It moves to Accepted on the owner's word (OSE-2085).
+**Status:** Accepted. The owner asked for a production dry run on 2026-11-15, on the condition that it
+respects the invariants. This ADR is how it does. The owner merged it (PR #1293) and accepted it in
+words the same day (OSE-2085).
 **Date:** 2026-11-15
 **Deciders:** Owner (PO). Dr of Security advises on what a public log may hold; DevOps owns the deploy jobs.
 **Tickets:** OSE-2085 (this decision and its code), OSE-2016 (the staging dry run it extends)
@@ -109,7 +110,7 @@ in this pipeline to put it.
 
 ### C. No dry run on production
 
-The state before this ADR, and the fallback if the owner declines it. The cost is the one OSE-2012
+The state before this ADR. The cost is the one OSE-2012
 met: the counts are read after the migration, when they can no longer change the decision.
 
 ### D. Apply the strict rule everywhere, staging's main database too

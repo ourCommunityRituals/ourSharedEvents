@@ -105,7 +105,7 @@ file that cannot be run stops the job before anything is applied
 
 **On demand:** the workflow "Migration dry run (staging)" runs one named file against staging.
 
-**On production, the deploy runs it, under a stricter rule** (ADR-037, Proposed; OSE-2085). The
+**On production, the deploy runs it, under a stricter rule** (ADR-037; OSE-2085). The
 production deploy job has the same step above its two apply steps
 (`--pending --env production --remote`). This repository is public, so its logs are public, and a
 dry run on production therefore prints counts and nothing else:

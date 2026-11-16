@@ -212,6 +212,87 @@ describe('fits: the dry-run size against the free disk', () => {
   });
 });
 
+// The owner decides, before the first load, whether the cut gets a top zoom
+// (review finding R6): the Worker reads zoom MAX_ZOOM at most, and a loaded
+// object is locked. The measure run of 2026-11-15 (43753563640) gave one
+// figure, 20 GB with every zoom kept, which does not say what a top zoom would
+// save. So `measure` makes a second dry run at the Worker's top zoom and
+// prints both sizes. It judges nothing: the fit is still the first dry run's.
+//
+// @born-red street-map measure, top zoom | method: before the code existed, 27 cases of this file were red (every case of this group on "is not a function", "the real workflow", the six workflow faults that need the step, "the real files agree" and the two runbook faults). With the code in place, eight faults in the real files, one at a time: workerTopZoom answering 14 whatever the source says (4 red); topZoomProblems finding nothing (7 red); the larger-than-the-whole rule off (1 red); a missing capped size let through (1 red); the measure-mode guard removed from the workflow (4 red, "the real workflow" among them); WORKER_TOP_ZOOM set to 15 (3 red: this group's "the real files agree" and the drift group's); the report line removed (4 red); the runbook's top-zoom block removed (4 red) | date: 2026-11-15
+describe("topzoom: the same dry run at the Worker's top zoom, for the owner's zoom decision", () => {
+  const line = (size) =>
+    `2026/11/15 19:39:40 extract.go:612: Extract transferred 21 GB (overfetch 0.05) for an archive size of ${size}\n`;
+  const source = (zoom) =>
+    `export const MAX_TILES = 12;\n/** The deepest zoom read. */\nexport const MAX_ZOOM = ${zoom};\n`;
+
+  test("the real files agree: the workflow's top zoom is the Worker's MAX_ZOOM", () => {
+    const env = yaml.load(workflow()).env;
+    const worker = load.workerTopZoom(read(load.STREET_MAP_SOURCE));
+    expect(Number.isInteger(worker)).toBe(true);
+    expect(load.topZoomProblems(env.WORKER_TOP_ZOOM, read(load.STREET_MAP_SOURCE))).toEqual([]);
+    expect(Number(env.WORKER_TOP_ZOOM)).toBe(worker);
+  });
+
+  test("reads the Worker's top zoom from its source, on either line ending", () => {
+    expect(load.workerTopZoom(source(14))).toBe(14);
+    expect(load.workerTopZoom(source(9).replace(/\n/g, '\r\n'))).toBe(9);
+    expect(load.topZoomProblems('14', source(14))).toEqual([]);
+    expect(load.topZoomProblems(14, source(14))).toEqual([]);
+  });
+
+  test.each([
+    ["a zoom that is not the Worker's", '15', source(14), /the Worker reads zoom 14 at most/],
+    ['no top zoom in the workflow', undefined, source(14), /WORKER_TOP_ZOOM/],
+    ['a top zoom that is not a whole number', '14.5', source(14), /WORKER_TOP_ZOOM/],
+    ['a top zoom that is a word', 'deep', source(14), /WORKER_TOP_ZOOM/],
+    ['no MAX_ZOOM in the source', '14', 'export const MAX_TILES = 12;\n', /MAX_ZOOM/],
+    ['a MAX_ZOOM that is not a plain number', '14', source('Math.min(14, 15)'), /MAX_ZOOM/],
+    ['a MAX_ZOOM that is not exported', '14', 'const MAX_ZOOM = 14;\n', /MAX_ZOOM/],
+  ])('rainy: %s is a stop', (_, zoom, text, want) => {
+    const problems = load.topZoomProblems(zoom, text);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatch(want);
+  });
+
+  test('reports both sizes, and says the figure judges nothing', () => {
+    const report = load.topZoomReport(
+      load.parseDryRunSize(line('20 GB')),
+      load.parseDryRunSize(line('9.4 GB')),
+      14
+    );
+    expect(report.problems).toEqual([]);
+    const text = report.lines.join('\n');
+    expect(text).toContain('**9.4 GB**');
+    expect(text).toContain('**20 GB**');
+    expect(text).toContain('top zoom of 14');
+    expect(text).toMatch(/about 10\.6 GB less/);
+    expect(text).toMatch(/does not change what a load cuts/);
+  });
+
+  test('two sizes that round the same are reported as no saving it can show', () => {
+    const size = load.parseDryRunSize(line('20 GB'));
+    const report = load.topZoomReport(size, size, 14);
+    expect(report.problems).toEqual([]);
+    expect(report.lines.join('\n')).toMatch(/no saving that the rounded figures show/);
+  });
+
+  test.each([
+    ['the capped dry run printed no size', '20 GB', null, /top zoom .* printed no archive size/],
+    ['the whole dry run printed no size', null, '9.4 GB', /every zoom printed no archive size/],
+    ['a capped size above the whole one', '9.4 GB', '20 GB', /larger than the dry run with every/],
+  ])('rainy: %s is a stop, and nothing is reported', (_, whole, capped, want) => {
+    const report = load.topZoomReport(
+      whole && load.parseDryRunSize(line(whole)),
+      capped && load.parseDryRunSize(line(capped)),
+      14
+    );
+    expect(report.problems).toHaveLength(1);
+    expect(report.problems[0]).toMatch(want);
+    expect(report.lines).toEqual([]);
+  });
+});
+
 describe('absent and loaded: what the bucket lists', () => {
   const KEY = 'us-20261109.pmtiles';
   const entry = (over = {}) => ({ Path: KEY, Name: KEY, Size: 21000000123, IsDir: false, ...over });
@@ -541,6 +622,31 @@ function shapeProblems(text) {
   if (!/FREE="\$\(df --output=avail -B1 "\$WORK"/.test(dry)) {
     out.push('the free disk is not read from the disk the file is written to');
   }
+  // The second dry run, at the Worker's top zoom: a figure for the owner's zoom
+  // decision. After the fit (which it never replaces), in measure mode only (a
+  // load does not wait on it), at the zoom the workflow's env names (which a
+  // test holds to the Worker's MAX_ZOOM), and reported beside the first.
+  if (
+    !/ fits "\$RUNNER_TEMP\/dry-run\.log" "\$FREE"\n[\s\S]*^if \[ "\$MODE" = "measure" \]; then\n[ \t]+pmtiles extract [^\n]* --maxzoom="\$\{WORKER_TOP_ZOOM\}" --dry-run 2>&1 \| tee "\$RUNNER_TEMP\/dry-run-top-zoom\.log"\n[ \t]+node [^\n]* topzoom "\$RUNNER_TEMP\/dry-run\.log" "\$RUNNER_TEMP\/dry-run-top-zoom\.log"\nfi$/m.test(
+      dry
+    )
+  ) {
+    out.push(
+      "the measure does not end with a dry run at the Worker's top zoom, in measure mode only, reported beside the first"
+    );
+  }
+  if (/--maxzoom[^\n]*tee "\$RUNNER_TEMP\/dry-run\.log"/.test(dry)) {
+    out.push('the fit is judged on a dry run with a top zoom, and the cut keeps every zoom');
+  }
+  if (commands(steps[order['dry run']], 'pmtiles').length !== 2) {
+    out.push('the measure step runs pmtiles other than the two dry runs');
+  }
+  if (steps[order['dry run']]?.env?.MODE !== '${{ inputs.mode }}') {
+    out.push('the measure step does not take the mode from the dispatch');
+  }
+  if (!/^\d+$/.test(String(doc.env?.WORKER_TOP_ZOOM ?? ''))) {
+    out.push('the top zoom is not a whole number in the workflow env');
+  }
   const check = run(steps[order.check]);
   if (
     !/STATUS=\$\?[\s\S]*"\$STATUS" -ne 0 \] \|\| \[ "\$\(tail -n 1 "\$RUNNER_TEMP\/check\.log"\)" != "PASS" \][\s\S]*exit 1/.test(
@@ -768,6 +874,61 @@ describe('the workflow: dispatched by hand, staging only, the credential where i
         s.run = s.run.replace('-B1 "$WORK"', '-B1 /');
       }),
     ],
+    [
+      'the top-zoom dry run dropped',
+      doc((d, steps) => {
+        const s = stepOf(steps, '--dry-run');
+        s.run = s.run.replace(/\n[ \t]+pmtiles extract [^\n]* --maxzoom=[^\n]*/, '');
+      }),
+    ],
+    [
+      'the top-zoom dry run made in load mode too',
+      doc((d, steps) => {
+        const s = stepOf(steps, '--dry-run');
+        s.run = s.run.replace('if [ "$MODE" = "measure" ]; then', 'if true; then');
+      }),
+    ],
+    [
+      'the top zoom typed into the command, where no test holds it to the Worker',
+      doc((d, steps) => {
+        const s = stepOf(steps, '--dry-run');
+        s.run = s.run.replace('--maxzoom="${WORKER_TOP_ZOOM}"', '--maxzoom=12');
+      }),
+    ],
+    [
+      'the top-zoom dry run not reported',
+      doc((d, steps) => {
+        const s = stepOf(steps, '--dry-run');
+        s.run = s.run.replace(/\n[ \t]+node [^\n]* topzoom [^\n]*/, '');
+      }),
+    ],
+    [
+      'the top-zoom dry run written over the log the fit reads',
+      doc((d, steps) => {
+        const s = stepOf(steps, '--dry-run');
+        s.run = s.run.replace('dry-run-top-zoom.log"\n', 'dry-run.log"\n');
+      }),
+    ],
+    [
+      'the top zoom put on the dry run the fit reads',
+      doc((d, steps) => {
+        const s = stepOf(steps, '--dry-run');
+        s.run = s.run.replace(' --dry-run 2>&1', ' --maxzoom=14 --dry-run 2>&1');
+      }),
+    ],
+    [
+      'the mode typed into the measure step',
+      doc((d, steps) => (stepOf(steps, '--dry-run').env.MODE = 'measure')),
+    ],
+    ['a top zoom that is not a whole number', doc((d) => (d.env.WORKER_TOP_ZOOM = '14.5'))],
+    ['no top zoom in the workflow env', doc((d) => delete d.env.WORKER_TOP_ZOOM)],
+    [
+      'a third pmtiles command in the measure step',
+      doc((d, steps) => {
+        const s = stepOf(steps, '--dry-run');
+        s.run = `${s.run}\npmtiles show "\${ARCHIVE_KEY}"\n`;
+      }),
+    ],
     ['the cut runs in measure mode', doc((d, steps) => delete stepOf(steps, 'ls -l').if)],
     [
       'the upload runs in measure mode',
@@ -935,6 +1096,7 @@ const KINDS = {
   'the r2.dev read': /^npx wrangler r2 bucket dev-url get \S+$/,
   'the custom-domain read': /^npx wrangler r2 bucket domain list \S+$/,
   'the dry run': /^pmtiles extract \S+ \S+ --region=\S+ --dry-run$/,
+  'the top-zoom dry run': /^pmtiles extract \S+ \S+ --region=\S+ --maxzoom=\d+ --dry-run$/,
   'the bucket listing': /^rclone lsjson r2:\S+ /,
   'the cut': /^pmtiles extract \S+ \S+ --region=\S+$/,
   'the check': /^node workers\/oursharedevents\/scripts\/check-street-map-archive\.mjs \S+$/,
@@ -1143,6 +1305,16 @@ describe('the names typed three times are one set of names', () => {
       'check-street-map-archive.mjs us-20261019.pmtiles',
     ],
     ['the dry run not shown', /^ *```bash\n *pmtiles extract .* --dry-run\n *```\n/m, ''],
+    [
+      'the top-zoom dry run not shown',
+      /^ *```bash\n *pmtiles extract .* --maxzoom=\d+ --dry-run\n *```\n/m,
+      '',
+    ],
+    [
+      'the top-zoom dry run shown at another zoom',
+      '--maxzoom=14 --dry-run',
+      '--maxzoom=15 --dry-run',
+    ],
     ['the bucket listing not shown', /^ *```bash\n *rclone lsjson .*\n *```\n/m, ''],
     [
       'the privacy read shown on another bucket',
