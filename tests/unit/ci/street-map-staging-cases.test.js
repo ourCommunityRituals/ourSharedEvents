@@ -84,13 +84,26 @@
  * The right place (2026-11-16, R17): the area-map case holds the layer to a
  * named town of the area (streetMapTownAnchor). Faulted the same way:
  *   A1  api: the distance is not asked (any place for the name passes)
+ *         -> "the town drawn out of place: 29 units passes, 31 fails, a tile away
+ *            fails" and "tiles one step out of place: the roads still pass, the
+ *            place fails"
  *   A2  api: ANCHOR_UNITS 30 to 300
+ *         -> "the town drawn out of place" alone
  *   A3  api: any town name passes (the name is not compared)
+ *         -> "another town in its place (a file cut for another area)" and "a file
+ *            cut for another place (the same roads, another town)"
  *   A4  api: with the flag "true" an empty anchor is let through
+ *         -> 'anchor empty, flag "true": fails by name' alone
  *   A5  api: the anchor is not held to the frame
+ *         -> "an anchor outside the frame (a town of another place)" alone
  *   A6  api: longitude projected with the sign turned
+ *         -> 16 tests: every test that gives the API case a set anchor, "the
+ *            town drawn where it is" and "the right tiles" among them
  *   A7  api: the anchor-empty NOT RUN test asserts nothing
- *         -> __A__
+ *         -> "anchor empty, flag missing or mistyped: that NOT RUN test fails by
+ *            name" alone
+ *   The limit itself is held from both sides at 29 and 31, not at 30: the frame
+ *   is floating point, and a name drawn exactly 30 away reads as a hair over.
  *
  * These read the spec's source. What the judge does in a browser is seen in
  * tests/e2e/2-pages/street-map-contrast.component.spec.ts; no run of the spec
@@ -751,9 +764,12 @@ describe('the area-map case holds the street layer to its place (R17)', () => {
     ]);
   });
 
-  test('the town drawn out of place: 30 units passes, 31 fails, a tile away fails', () => {
-    expect(api(layer({ ...roads, at: [330, 180] })).failed).toEqual([]);
-    expect(api(layer({ ...roads, at: [300, 150] })).failed).toEqual([]);
+  test('the town drawn out of place: 29 units passes, 31 fails, a tile away fails', () => {
+    // The frame is floating point: it puts Mokena a hair off (300, 180), so a
+    // name drawn exactly 30 away reads as just over or just under. 29 and 31
+    // stand either side of the limit.
+    expect(api(layer({ ...roads, at: [329, 180] })).failed).toEqual([]);
+    expect(api(layer({ ...roads, at: [300, 151] })).failed).toEqual([]);
     for (const at of [
       [331, 180],
       [300, 211],

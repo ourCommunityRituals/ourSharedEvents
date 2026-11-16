@@ -43,8 +43,49 @@
  * forces one fault into the live page (a town name in the road's colour, a halo
  * in the text's colour, a halo too thin, a number in its dot's colour, …) and
  * the judge must fail on that kind of text. Then the judge itself was faulted,
- * one fault at a time, this file run on Chromium, and the fault taken out:
- *   __BORN_RED__
+ * one fault at a time, this file run on Chromium, and the fault taken out
+ * (2026-11-16, of 42 tests):
+ *   In scripts/ci/map-text-contrast.mjs, the rule:
+ *   P1  every verdict passes
+ *         -> 29: the six zoomed-area tests, the two whole-frame tests at 320 px,
+ *            all twenty "the judge fails" tests, and the cut town name
+ *   P2  a halo of any width, and one that lets the map through, counts
+ *         -> 4: the two whole-frame tests at 320 px, and "a town name's halo too
+ *            thin to count" in both themes
+ *   P3  a pale dot taken for a solid one
+ *         -> 8: the six zoomed-area tests, and "every dot drawn pale" in both themes
+ *   P4  the best background decides, not the worst
+ *         -> 16: the same eight page tests as P1, and four faults in both themes
+ *            (road colour with no halo, halo too thin, stroke over the fill, an
+ *            area number with no halo)
+ *   In helpers/map-text-contrast.ts, the reader:
+ *   R1  every stroke taken for a halo, painted first or not
+ *         -> 2: "a town name's stroke painted over its fill, so it is no halo"
+ *   R2  the opacity of the groups round an element not read
+ *         -> 6: stroke over the fill, the street layer drawn faint, an area
+ *            number with no halo, each in both themes
+ *   R3  a shape's fill read as solid whatever its opacity
+ *         -> 12: the six zoomed-area tests, and three faults in both themes
+ *   R4  the halo taken as the whole stroke, in drawing units
+ *         -> 4: the same four as P2
+ *   R5  a pale dot's number named as a solid dot's
+ *   R6  the dot under a number not read
+ *         -> each 10: the six zoomed-area tests, "a solid dot's number in the
+ *            dot's colour" and "every dot drawn pale" in both themes
+ *   R7  the text's colour taken from `color`, not from its fill
+ *         -> 19: the six zoomed-area tests, twelve of the "the judge fails"
+ *            tests, and "the judge refuses a paint it cannot read"
+ *   R8  a text of a kind the judge does not know left out
+ *         -> "a text on the map the judge does not know is counted, never passed over"
+ *   R9  no shape drawn before a text is read
+ *         -> 10: the two whole-frame tests at 320 px, and four faults in both themes
+ *   R10 only a text whose middle is inside the map's box is judged
+ *         -> "a town name the frame cuts is still judged, and a fault in it is found"
+ *   R11 every text read is judged, drawn or not
+ *   R12 every text is said to be rendered
+ *         -> each: "a text that is not drawn is not judged: a display:none copy
+ *            and an empty <text> are read and left out"
+ * The whole file then passed on WebKit (42 of 42).
  *
  * It runs in the T0 `component` shard (playwright.component.config.ts), on
  * Chromium and WebKit. Every request goes to ORIGIN and is answered by the
@@ -53,7 +94,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { cellToLatLng, latLngToCell } from 'h3-js';
 import { ORIGIN, renderLanding, uiCss } from '../helpers/render-landing-map';
-import { judgeMapTextOn, type MapTextJudged } from '../helpers/map-text-contrast';
+import { judgeMapTextOn, readMapText, type MapTextJudged } from '../helpers/map-text-contrast';
 
 const BLUE_ISLAND = latLngToCell(41.6573, -87.6806, 7);
 const BEVERLY = latLngToCell(41.7135, -87.6812, 7);
@@ -418,4 +459,70 @@ test('a text on the map the judge does not know is counted, never passed over', 
   expect(count(judged, 'other')).toBe(1);
   // It is judged like any other text: against the map, as it has no halo.
   expect(judged.lines.some((l) => l.includes('other "a label nobody listed"'))).toBe(true);
+});
+
+// What the judge reads is every text that is rendered. Whether its middle is
+// inside the map's box is not asked: half a name at the edge is still read by a
+// person.
+test('a town name the frame cuts is still judged, and a fault in it is found', async ({ page }) => {
+  await open(page, ZOOMED, 'light', 375);
+  const before = await judgeMapTextOn(page);
+  expect(before.failedKinds, 'before the fault').not.toContain('town name');
+  // One name is moved until its middle is 2 units past the left edge, and
+  // drawn in the road's colour with no halo.
+  const moved = await page.evaluate(() => {
+    const svg = document.querySelector<SVGSVGElement>('[data-testid="amap-svg"]')!;
+    const box = svg.getBoundingClientRect();
+    const name = [...svg.querySelectorAll<SVGTextElement>('text.as-t')].find((t) => {
+      const r = t.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      return r.width > 0 && x > box.left && x < box.right && y > box.top && y < box.bottom;
+    });
+    if (!name) return null;
+    name.setAttribute('x', String(svg.viewBox.baseVal.x - 2));
+    name.setAttribute('style', 'fill:var(--border-strong);stroke:none');
+    return (name.textContent ?? '').trim();
+  });
+  expect(moved, 'a town name inside the frame, to move').not.toBeNull();
+  const after = await judgeMapTextOn(page);
+  // The same texts as before: the moved one was not dropped.
+  expect(after.texts.length).toBe(before.texts.length);
+  const cut = (j: MapTextJudged) => j.texts.filter((t) => !t.shown).length;
+  expect(cut(after) - cut(before), 'one more text has its middle off the map').toBe(1);
+  expect(after.failedKinds, after.lines.join('\n')).toContain('town name');
+  const lines = after.failures.filter((l) => l.includes(': town name "'));
+  expect(lines, 'the cut name is the one that fails').toHaveLength(1);
+  expect(lines[0]).toContain(`town name "${moved}"`);
+});
+
+test('a text that is not drawn is not judged: a display:none copy and an empty <text> are read and left out', async ({
+  page,
+}) => {
+  await open(page, ZOOMED, 'light', 375);
+  const before = await judgeMapTextOn(page);
+  await page.evaluate(() => {
+    const svg = document.querySelector('[data-testid="amap-svg"]')!;
+    for (const [words, style] of [
+      ['a copy nobody sees', 'display:none'],
+      ['', ''],
+    ]) {
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('x', '300');
+      t.setAttribute('y', '180');
+      if (style) t.setAttribute('style', style);
+      t.textContent = words;
+      svg.appendChild(t);
+    }
+  });
+  // The reader saw both, and says neither is rendered.
+  const read = (await readMapText(page)).filter((t) => t.kind === 'other');
+  expect(read.map((t) => [t.text, t.rendered])).toEqual([
+    ['a copy nobody sees', false],
+    ['', false],
+  ]);
+  const judged = await judgeMapTextOn(page);
+  expect(count(judged, 'other')).toBe(0);
+  expect(judged.texts.length).toBe(before.texts.length);
+  expect(judged.lines.some((l) => l.includes('a copy nobody sees'))).toBe(false);
 });

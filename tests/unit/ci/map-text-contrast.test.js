@@ -19,9 +19,52 @@
  * hexagon" below): 2.76:1 light and 2.48:1 dark under the busiest area (50%),
  * and under 4.5:1 from a strength of about 22%.
  *
- * BORN RED (2026-11-15). The module was faulted, one fault at a time, this file
- * run, and the fault taken out. What is written is what was seen:
- *   __BORN_RED__
+ * BORN RED (2026-11-15, and run again 2026-11-16). The module was faulted, one
+ * fault at a time, this file run, and the fault taken out. What is written is
+ * what was seen. Most cases run once in each theme, so a name counts twice:
+ *   M1  luminance: the sRGB curve taken out, a channel used as it is
+ *         -> 17 tests, "luminance: black is 0, white is 1, and the published mid
+ *            grey" and "the two greys every contrast checker is held to" among them
+ *   M2  ratio: the 0.05 of flare taken out
+ *         -> 13 tests, "ratio: 21:1 for black on white, 1:1 for a colour on
+ *            itself, either way round" among them
+ *   M3  large text: 18.67 px taken as large whatever its weight, 24 px not asked
+ *         -> "large text is 24 px, or 18.67 px bold; anything else needs 4.5"
+ *   M4  a paint over a colour: the two shares turned round
+ *         -> 7 tests, "a paint over a colour: none of it, all of it, and a share
+ *            of each channel" among them
+ *   M5  a paint that is not a plain colour read as black
+ *         -> "anything that is not a plain colour throws by name, and never reads
+ *            as a colour"
+ *   M6  a halo of any width counts
+ *         -> "a halo under 1 px is not counted: the name is judged against the
+ *            map, and fails" (both themes), and "judgeMapText: the failures by line"
+ *   M7  a halo that lets the map through counts
+ *         -> "a halo that lets the map through is not counted" (both themes)
+ *   M8  a pale dot taken for a solid one
+ *         -> "the number on a pale dot (45%) is under AA, and under the large-text
+ *            ratio too" (both themes), and "judgeMapText: the failures by line"
+ *   M9  shapes drawn over a text tint nothing
+ *         -> "a town name under a hexagon" and "the area's own tint (6%)" (both themes)
+ *   M10 the best background decides, not the worst
+ *         -> 18 tests, "no halo and no plate: every colour of the map is under
+ *            the text, and the worst decides" among them
+ *   M11 the ratio rounded to one decimal before it is held to what it needs
+ *   M12 the printed ratio rounded, not cut
+ *         -> each: "a ratio is cut, never rounded up: 4.499 is printed 4.49 and fails"
+ *   M13 an opaque shape over the whole frame hides nothing drawn before it
+ *         -> "an opaque shape over the whole frame hides the page; later paints
+ *            add to it", "the paints of one layer are alternatives", and the pale
+ *            dot's test in one theme
+ *   M14 the paints of one layer laid on each other
+ *         -> "the paints of one layer are alternatives: two hexagons never lie on
+ *            one point"
+ *   M15 a faint text judged as if it were solid
+ *         -> "a faint text is laid over what is behind it before it is judged"
+ *            (both themes)
+ *   M16 a tint laid on the text and not on what is behind it
+ *         -> "a town name under a hexagon: the tint is laid on the name and its
+ *            halo alike" (both themes)
  */
 const LIGHT = {
   bg: 'rgb(244, 238, 226)',
@@ -319,7 +362,9 @@ describe('the verdict, as a person reads it', () => {
     const line = m.verdictLine(m.judgeText(townName(LIGHT)));
     expect(line).toMatch(/^passes: town name "Blue Island" \(16\.0 px, weight 600\) 6\.0\d:1 /);
     expect(line).toContain('against its halo (#5E584F on #F4EEE2), needs 4.5:1; halo 1.2 px');
-    expect(line).toMatch(/; with nothing of its own behind it 1\.7\d:1 over the edge of a highway$/);
+    expect(line).toMatch(
+      /; with nothing of its own behind it 1\.7\d:1 over the edge of a highway$/
+    );
   });
 
   test('judgeMapText: the failures by line, the failing kinds sorted, and each kind by its worst text', () => {

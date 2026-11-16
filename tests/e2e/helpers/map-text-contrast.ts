@@ -34,7 +34,12 @@ export interface MapTextRead {
   /** Font size on screen, in CSS px. */
   px: number;
   weight: number;
-  /** Its middle is inside the map's box: a name the frame cuts off is not read. */
+  /**
+   * It has a box on screen: it is drawn. A copy that is `display:none`, or a
+   * `<text>` with nothing in it, has none. This is what the judge goes by.
+   */
+  rendered: boolean;
+  /** Its middle is inside the map's box. A name the frame cuts is rendered and may not be shown. */
   shown: boolean;
   fill: { color: string; alpha: number };
   /** A stroke painted under the fill; `px` is what shows outside the letter on screen. */
@@ -227,6 +232,7 @@ export async function readMapText(page: Page): Promise<MapTextRead[]> {
         text: (el.textContent ?? '').trim(),
         px: parseFloat(cs.fontSize) * scale,
         weight: Number(cs.fontWeight),
+        rendered: r.width > 0 && r.height > 0,
         shown: mid[0] > box.left && mid[0] < box.right && mid[1] > box.top && mid[1] < box.bottom,
         fill: { color: cs.fill, alpha: parseFloat(cs.fillOpacity) * group },
         halo,
@@ -240,7 +246,7 @@ export async function readMapText(page: Page): Promise<MapTextRead[]> {
 }
 
 export interface MapTextJudged {
-  /** Every text that is on screen, as read. */
+  /** Every text that is rendered, as read. */
   texts: MapTextRead[];
   /** One line a text: the ratio, what it was taken against, what it needs. */
   lines: string[];
@@ -252,9 +258,13 @@ export interface MapTextJudged {
   summary: string[];
 }
 
-/** Read the map's text from the page and judge it. */
+/**
+ * Read the map's text from the page and judge it: every text that is rendered.
+ * A name the frame cuts is still judged, since the part of it that shows is
+ * read by a person; a copy that is not drawn (`display:none`) is not.
+ */
 export async function judgeMapTextOn(page: Page): Promise<MapTextJudged> {
-  const texts = (await readMapText(page)).filter((t) => t.shown);
+  const texts = (await readMapText(page)).filter((t) => t.rendered);
   const judged = judgeMapText(texts) as {
     verdicts: { pass: boolean }[];
     failures: string[];
