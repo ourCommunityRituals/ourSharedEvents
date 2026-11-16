@@ -775,13 +775,16 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
       reports: Record<string, { sponsor_class_breakdown: unknown }>;
     };
     const breakdown = body.reports['test-evt-sr25-breakdown']?.sponsor_class_breakdown as
-      Record<string, { sponsor_count: number; total_displays: number }> | undefined;
+      Record<string, { sponsor_count: number; total_displays: number | null }> | undefined;
     expect(breakdown).toBeDefined();
     expect(breakdown).toHaveProperty('local');
     expect(breakdown).toHaveProperty('mid');
     expect(breakdown).toHaveProperty('premium');
     expect(typeof breakdown!.local.sponsor_count).toBe('number');
-    expect(typeof breakdown!.local.total_displays).toBe('number');
+    // OSE-2089: a number, or null when the class is under the floor; never 0.
+    expect(breakdown!.local.total_displays === null || breakdown!.local.total_displays >= 5).toBe(
+      true
+    );
     expect(typeof breakdown!.mid.sponsor_count).toBe('number');
     expect(typeof breakdown!.premium.sponsor_count).toBe('number');
   });
@@ -802,7 +805,7 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
     };
     expect(body.ok).toBe(true);
     const breakdown = body.report.sponsor_class_breakdown as
-      Record<string, { sponsor_count: number; total_displays: number }> | undefined;
+      Record<string, { sponsor_count: number; total_displays: number | null }> | undefined;
     expect(breakdown).toBeDefined();
     expect(breakdown).toHaveProperty('local');
     expect(breakdown).toHaveProperty('mid');

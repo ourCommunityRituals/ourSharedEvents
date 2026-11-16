@@ -513,7 +513,8 @@ describe('sponsor_displays[].count passes the same floor as its rollups', () => 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.report.sponsor_displays).toEqual([]);
-    expect(r.report.sponsor_class_breakdown.mid.total_displays).toBe(0);
+    // OSE-2089: withheld (null), never 0.
+    expect(r.report.sponsor_class_breakdown.mid.total_displays).toBeNull();
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
 

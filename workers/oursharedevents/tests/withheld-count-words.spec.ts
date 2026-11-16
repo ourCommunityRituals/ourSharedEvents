@@ -443,6 +443,97 @@ describe('the report funnel', () => {
   });
 });
 
+// OSE-2089: the class breakdown on a signed-link report. A class with no
+// (sponsor x surface) row at the floor arrives as `total_displays: null`; the
+// page must say so in words, in the table and in the Local vs Paid line, and
+// must not draw a share for it (a bar at 0% is the same "0").
+// @born-red OSE-2089 | method: run against main's template (6911a06), which
+// printed fmtInt(null) = a dash in the cells, "0 displays" for Paid and a bar
+// titled "Local 0%" / "Paid 100%": the two withheld tests went red; the
+// all-published test is a guard and stayed green | date: 2026-11-16
+describe('the report class breakdown', () => {
+  const TAIL = 'for any one sponsor on any one surface';
+  type Cls = { sponsor_count: number; total_displays: number | null };
+  async function openClasses(scb: { local: Cls; mid: Cls; premium: Cls }) {
+    const dom = new JSDOM(REPORT_HTML, {
+      url: 'https://ose.test/sharedReport?eventId=evt_1&token=tok.abc',
+      runScripts: 'dangerously',
+      pretendToBeVisual: true,
+      beforeParse(w) {
+        (w as unknown as { fetch: unknown }).fetch = async (input: string) => {
+          const url = String(input);
+          const body = url.endsWith('/shared-report')
+            ? {
+                ok: true,
+                report: {
+                  event_title: 'Bocce night',
+                  event_start_date: '2026-09-26',
+                  sponsor_class_breakdown: scb,
+                },
+              }
+            : { ok: false };
+          return new Response(JSON.stringify(body), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        };
+      },
+    });
+    const doc = dom.window.document;
+    for (let i = 0; i < 120 && !doc.querySelector('[data-testid="sponsor-class-table"]'); i++)
+      await new Promise((r) => setTimeout(r, 25));
+    return {
+      doc,
+      at: (id: string) => doc.querySelector(`[data-testid="${id}"]`)?.textContent,
+    };
+  }
+  const none: Cls = { sponsor_count: 0, total_displays: null };
+
+  test('every class withheld: words in each row and in the line, no bar, no 0', async () => {
+    const { doc, at } = await openClasses({ local: none, mid: none, premium: none });
+    for (const cls of ['local', 'mid', 'premium']) {
+      expectWords(at(`${cls}-displays`), `Fewer than 5 ${TAIL}`);
+      // The count of businesses is not a count of people: it stays a number.
+      expect(at(`${cls}-sponsor-count`)).toBe('0');
+    }
+    expectWords(at('local-displays-total'), `fewer than 5 displays ${TAIL}`);
+    expectWords(at('paid-displays-total'), `fewer than 5 displays ${TAIL}`);
+    expect(doc.querySelector('[data-testid="local-vs-paid-bar"]')).toBeNull();
+    expect(at('signed-link-sponsor-class-breakdown')).not.toMatch(/\d+%|\b0 displays|null|NaN/);
+  });
+
+  test('one side withheld: no share is drawn, so the withheld side is not "0%"', async () => {
+    const { doc, at } = await openClasses({
+      local: none,
+      mid: none,
+      premium: { sponsor_count: 1, total_displays: 12 },
+    });
+    expectWords(at('local-displays'), `Fewer than 5 ${TAIL}`);
+    expectWords(at('mid-displays'), `Fewer than 5 ${TAIL}`);
+    expect(at('premium-displays')).toBe('12');
+    expectWords(at('local-displays-total'), `fewer than 5 displays ${TAIL}`);
+    // Paid is the published classes: 12, with the withheld one in no sum.
+    expect(at('local-vs-paid-delta')).toContain('Paid: 12 displays');
+    expect(doc.querySelector('[data-testid="local-vs-paid-bar"]')).toBeNull();
+    expect(at('signed-link-sponsor-class-breakdown')).not.toMatch(/\d+%|\b0 displays|null|NaN/);
+  });
+
+  test('guard: every class published reads as numbers, with the bar', async () => {
+    const { doc, at } = await openClasses({
+      local: { sponsor_count: 2, total_displays: 10 },
+      mid: { sponsor_count: 1, total_displays: 6 },
+      premium: { sponsor_count: 1, total_displays: 24 },
+    });
+    expect(at('local-displays')).toBe('10');
+    expect(at('mid-displays')).toBe('6');
+    expect(at('premium-displays')).toBe('24');
+    expect(at('local-vs-paid-delta')).toBe('Local: 10 displays · Paid: 30 displays');
+    const bar = doc.querySelector('[data-testid="local-vs-paid-bar"]');
+    expect(bar?.getAttribute('aria-label')).toBe('Local 25% vs Paid 75%');
+    expect(at('signed-link-sponsor-class-breakdown')).not.toMatch(/[Ff]ewer than/);
+  });
+});
+
 describe("the sponsor's reach line", () => {
   test('both withheld: words for each, and scans say "in any one hour"', () => {
     const html = renderPreEventReach({

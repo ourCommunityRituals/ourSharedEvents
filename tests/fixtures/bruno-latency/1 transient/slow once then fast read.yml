@@ -1,0 +1,23 @@
+info:
+  name: slow once then fast read
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/slow-once/a"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('reached the server', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0

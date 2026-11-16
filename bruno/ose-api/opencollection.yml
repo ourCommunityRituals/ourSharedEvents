@@ -42,20 +42,41 @@ request:
       }
   - type: after-response
     code: |-
-      // Collection-level test: measure latency on every request
+      // OSE-2090: a 5xx keeps what finds it again in the Worker's logs: the status,
+      // the error code and the request id. Never the URL (a signed link is a
+      // credential) and never the body. A value prints only when it has the shape of
+      // a code or an id; anything else prints as '-'.
+      (function () {
+        // Never let this block cost a request its other checks.
+        try {
+          var status = res.getStatus();
+          if (!(status >= 500)) return;
+          var body = res.getBody();
+          var json = body && typeof body === 'object' ? body : {};
+          var code = typeof json.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(json.code) ? json.code : '-';
+          var rid = res.getHeader('X-Request-Id');
+          if (typeof rid !== 'string' || rid === '') rid = json.requestId;
+          rid = typeof rid === 'string' && /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|req-[0-9]{1,16})$/i.test(rid) ? rid : '-';
+          var method = String(req.getMethod() || '').toUpperCase();
+          console.log('[5xx] ' + (/^[A-Z]{1,10}$/.test(method) ? method : '-') + ' status=' + status + ' code=' + code + ' requestId=' + rid);
+        } catch (e) {
+          console.log('[5xx] diagnostics failed: ' + (e && /^[A-Za-z]{1,40}$/.test(e.name) ? e.name : 'Error'));
+        }
+      })();
+      
+      // Collection-level test: a latency budget on every request (OSE-2091).
+      // One slow sample is retried or allowed, never the gate on its own; a slow
+      // retry, a sample at 2x budget or a third slow sample in the run fails.
+      // Rules: lib/latency-budget.js.
       const elapsed = Date.now() - bru.getVar('requestStartTime');
+      // Admin registrations decrypts organizer-visible attendee names before responding;
+      // live staging can exceed the generic API budget while still staying usable.
       const isAdminRegistrationsRead = req.getPath().includes('/forms/registrations');
-       // Admin registrations decrypts organizer-visible attendee names before responding;
-       // live staging can exceed the generic API budget while still staying usable.
-       if (isAdminRegistrationsRead) {
-           test(`Response time < 9000ms (actual: ${elapsed}ms)`, function() {
-               expect(elapsed).to.be.below(9000);
-           });
-       } else {
-           test(`Response time < 6000ms (actual: ${elapsed}ms)`, function() {
-               expect(elapsed).to.be.below(6000);
-           });
-       }
+      await require('./lib/latency-budget.js').enforce({
+          bru: bru, req: req, res: res, test: test, expect: expect,
+          elapsed: elapsed,
+          budget: isAdminRegistrationsRead ? 9000 : 6000
+      });
 
       // Verify JSON content-type on API responses
       // Skip: CORS preflight (204 no body), CF Access blocks (HTML instead of JSON),

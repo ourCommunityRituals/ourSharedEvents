@@ -37,7 +37,7 @@
  *   - the unscoped summary handed to a sponsor link; every link of the event
  *     handed to a sponsor link; a peer's withheld note left on a sponsor link.
  *
- * Staging twin: bruno/ose-api/18. Campaigns (S14), requests 80 to 83.
+ * Staging twin: bruno/ose-api/18. Campaigns (S14), requests 80 to 84.
  */
 
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';

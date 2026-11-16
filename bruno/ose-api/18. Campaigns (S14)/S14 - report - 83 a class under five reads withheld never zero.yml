@@ -1,0 +1,76 @@
+info:
+  name: 'S14 | report | class breakdown | a class with no sponsor at 5 displays has its total withheld, never 0'
+  type: http
+  seq: 83
+
+http:
+  method: GET
+  url: '{{baseUrl}}/api/v2/events/camp-rpt-evt/shared-report'
+  headers:
+    - name: Accept
+      value: application/json
+    - name: Authorization
+      value: Bearer {{s14ReportToken}}
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // OSE-2089, AGENTS.md invariant 2. The fixture (campaigns-seed.sql) sets the
+        // displays of every sponsor on camp-rpt-evt; the floor is 5. Six sponsors
+        // are premium (gold, not local); one is local with 4 displays; none is mid.
+        // NAMED FIELDS ONLY: nothing here compares a whole body, and nothing is
+        // compared across two requests. The two classes under the floor are
+        // compared with each other inside this one response.
+        // Mock-layer twin: workers/oursharedevents/tests/shared-report-class-floor.spec.ts.
+        const report = (res.getBody() || {}).report || {};
+        const scb = report.sponsor_class_breakdown || {};
+        const measures = function (c) {
+          return { total_displays: c.total_displays, sponsor_count: c.sponsor_count };
+        };
+        test('S14 class report: 200, and the class breakdown is in it', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(scb.local).to.be.an('object');
+          expect(scb.mid).to.be.an('object');
+          expect(scb.premium).to.be.an('object');
+        });
+        test('S14 class report: a class with 4 displays has its total withheld (null), never 0 and never 4', function () {
+          expect(scb.local.total_displays).to.eql(null);
+        });
+        test('S14 class report: a class with no sponsor has its total withheld (null), never 0', function () {
+          expect(scb.mid.total_displays).to.eql(null);
+        });
+        test('S14 class report: 0 and 4 displays read the same', function () {
+          expect(measures(scb.local)).to.eql(measures(scb.mid));
+        });
+        test('S14 class report: sponsor_count stays a number beside a withheld total', function () {
+          expect(scb.local.sponsor_count).to.eql(0);
+          expect(scb.mid.sponsor_count).to.eql(0);
+        });
+        test('S14 class report: control, the published class is the sum of its published rows (26, from 2 sponsors)', function () {
+          expect(scb.premium.total_displays).to.eql(26);
+          expect(scb.premium.sponsor_count).to.eql(2);
+          const rows = report.sponsor_displays || [];
+          expect(rows.reduce(function (n, r) { return n + r.count; }, 0)).to.eql(26);
+        });
+        test('S14 class report: the local sponsor under 5 is in no published row', function () {
+          const rows = report.sponsor_displays || [];
+          expect(rows.some(function (r) { return r.sponsor_id === 'sb_camp_rpt_l4'; })).to.eql(false);
+        });
+        test('S14 class report: the withheld total is said in words, once, naming no class', function () {
+          const notes = ((report._meta || {}).suppression_reasons || []).filter(function (r) {
+            return r.field === 'sponsor_class_breakdown.total_displays';
+          });
+          expect(notes.length).to.eql(1);
+          expect(notes[0].reason).to.eql('below_min_sample_size');
+          expect(notes[0].detail).to.match(/^fewer than 5 /);
+          expect(notes[0].detail).to.not.match(/local|mid|premium|anchor/i);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
