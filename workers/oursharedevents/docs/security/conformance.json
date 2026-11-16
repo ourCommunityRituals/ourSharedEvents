@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-11-15",
-  "commit": "9daa2fe6",
-  "run_url": "https://github.com/ourCommunityRituals/ourSharedEvents/actions/runs/43776152649",
+  "generated_at": "2026-11-16",
+  "commit": "ff96de6f",
+  "run_url": "https://github.com/ourCommunityRituals/ourSharedEvents/actions/runs/43791825546",
   "schema_version": "1.0.0",
   "story": "OSE-560",
   "summary": {
-    "total": 29,
+    "total": 30,
     "enforced": 17,
     "partial": 8,
-    "gap": 2,
+    "gap": 3,
     "retired": 2,
     "threat_entries": 101,
     "open_threats": 12
@@ -361,6 +361,18 @@
       "last_attacked": "2026-10-13",
       "last_green": "2026-10-13",
       "threat_count": 1,
+      "open_threat_count": 0,
+      "brain_conformance": []
+    },
+    {
+      "id": 30,
+      "name": "honesty_lexicon",
+      "label": "#30 — Honesty Lexicon",
+      "invariant_status": "partial",
+      "enforcement_status": "gap",
+      "last_attacked": null,
+      "last_green": null,
+      "threat_count": 0,
       "open_threat_count": 0,
       "brain_conformance": []
     }
