@@ -31,6 +31,8 @@ const en = {
   'calendar.subscribe': 'Subscribe to calendar',
   'calendar.subscribe.apple': 'Apple Calendar',
   'calendar.subscribe.ics': 'Calendar address (.ics)',
+  // OSE-1998: the event page's link to a fair's stall list. No count.
+  'stalls.see': 'See the stalls',
   'directions.pre': 'Get directions',
   'directions.live': 'Navigate now',
   'video.watch': '▶ Watch the video',
@@ -430,6 +432,7 @@ const es: Record<MessageKey, string> = {
   'calendar.subscribe': 'Suscribirse al calendario',
   'calendar.subscribe.apple': 'Calendario de Apple',
   'calendar.subscribe.ics': 'Dirección del calendario (.ics)',
+  'stalls.see': 'Ver los puestos',
   'directions.pre': 'Cómo llegar',
   'directions.live': 'Cómo llegar',
   'video.watch': '▶ Ver el video',
