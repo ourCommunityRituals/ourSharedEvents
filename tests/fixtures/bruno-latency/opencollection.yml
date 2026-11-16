@@ -1,0 +1,24 @@
+opencollection: 1.0.0
+
+info:
+  name: Latency budget born-red fixture (OSE-2091)
+
+request:
+  scripts:
+    - type: before-request
+      code: |-
+        bru.setVar('requestStartTime', Date.now());
+    - type: after-response
+      code: |-
+        // Same wiring as bruno/ose-api and bruno/ose-pages, with a small budget so
+        // the run stays short. lib/latency-budget.js is copied in by the test.
+        const elapsed = Date.now() - bru.getVar('requestStartTime');
+        await require('./lib/latency-budget.js').enforce({ bru: bru, req: req, res: res, test: test, expect: expect, elapsed: elapsed, budget: Number(bru.getEnvVar('budget')) });
+
+docs:
+  content: |-
+    Run only by tests/integration/bruno-latency-budget.test.js against a local
+    server that delays chosen paths. Never against staging.
+  type: text/markdown
+bundled: false
+extensions: {}

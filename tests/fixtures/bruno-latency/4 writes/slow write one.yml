@@ -1,0 +1,26 @@
+info:
+  name: slow write one
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/slow/w1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        bru.setVar('latencySlowSamples', 0);
+    - type: after-response
+      code: |-
+        test('reached the server', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
