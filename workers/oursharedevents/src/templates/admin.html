@@ -1801,6 +1801,40 @@
           'series-reject': function (el) {
             if (window.seriesWrite) window.seriesWrite(argOf(el, 'event-id'), 'POST', '/reject', { series_id: argOf(el, 'series-id'), reason: 'not_recurring' }, el);
           },
+          // OSE-1998: the Stalls card. Row buttons carry data-booth-id.
+          'stalls-toggle': function (el) {
+            if (window.stallsToggle) window.stallsToggle(el);
+          },
+          'stall-add': function (el) {
+            if (window.stallAdd) window.stallAdd(el);
+          },
+          'stalls-bulk-check': function (el) {
+            if (window.stallsBulkRun) window.stallsBulkRun(el);
+          },
+          'stalls-bulk-save': function (el) {
+            if (window.stallsBulkSave) window.stallsBulkSave(el);
+          },
+          'stall-edit': function (el) {
+            if (window.stallEditOpen) window.stallEditOpen(el);
+          },
+          'stall-save': function (el) {
+            if (window.stallEditSave) window.stallEditSave(el);
+          },
+          'stall-cancel': function (el) {
+            if (window.stallPanelClose) window.stallPanelClose(el);
+          },
+          'stall-out': function (el) {
+            if (window.stallOutAsk) window.stallOutAsk(el);
+          },
+          'stall-out-yes': function (el) {
+            if (window.stallOutConfirm) window.stallOutConfirm(el);
+          },
+          'stall-back': function (el) {
+            if (window.stallBack) window.stallBack(el);
+          },
+          'stall-code': function (el) {
+            if (window.stallMakeCode) window.stallMakeCode(el);
+          },
           'reload-page': function () {
             location.reload();
           },
@@ -6198,6 +6232,792 @@
 
         loadSponsors();
       })();
+    </script>
+
+    <!-- Stalls (OSE-1998, OSE ADR-034). The stalls of a fair: list them, add
+         one or a pasted list, change one, take one out of use, make a code for
+         one, and read each stall's scans. Hidden until an event is selected,
+         and folded to its title and a one-line summary until opened, as the
+         Sponsors card is. Built from classes that already exist (@ocr/ui's btn,
+         card-title, sub-line and detail-card; this page's mcard-*, create-form,
+         create-msg, create-field-error, pc-list and pd-link): it adds no CSS. Rows are <template>
+         skeletons, cloned and filled with textContent, so their test ids stay
+         literal for the registry and nothing from the server reaches innerHTML.
+         A stall never holds a person (ADR-034 item 5). Its scans read through
+         oseFewerThan when withheld, and the list keeps the organizer's order,
+         never a count's (ADR-034 item 6). -->
+    <div class="card stalls-card" id="stalls-card" data-testid="stalls-card" hidden>
+      <div class="mcard-head">
+        <div>
+          <h2 class="mcard-title">Stalls</h2>
+          <p class="sub-line" id="stalls-summary" data-testid="stalls-summary" aria-live="polite"></p>
+        </div>
+        <button type="button" class="btn btn-secondary" id="stalls-toggle" data-action="stalls-toggle" data-testid="stalls-toggle" aria-expanded="false" aria-controls="stalls-body">Show</button>
+      </div>
+
+      <div id="stalls-body" data-testid="stalls-body" hidden>
+        <div class="mcard-body">
+          <p class="sub-line" id="stalls-total" data-testid="stalls-total" hidden></p>
+          <p class="sub-line" id="stalls-no-stall" data-testid="stalls-no-stall" hidden></p>
+          <p class="sub-line" id="stalls-public-note" data-testid="stalls-public-note" hidden>Each stall in use gets its own public page once the fair is live.</p>
+          <p class="sub-line" id="stalls-empty" data-testid="stalls-empty" hidden>No stalls yet. Add one below, or paste a list.</p>
+          <ul class="pc-list" id="stalls-list" data-testid="stalls-list" aria-label="Stalls"></ul>
+        </div>
+
+        <form class="mcard-body" id="stalls-add" data-testid="stalls-add" novalidate>
+          <h3 class="card-title">Add a stall</h3>
+          <div class="create-form">
+            <div>
+              <label for="stall-number">Stall number</label>
+              <input type="text" id="stall-number" data-testid="stall-number-input" maxlength="20" autocomplete="off" aria-describedby="stall-number-error" />
+              <p class="create-field-error" id="stall-number-error" data-testid="stall-number-error" hidden></p>
+            </div>
+            <div>
+              <label for="stall-name">Trading name</label>
+              <input type="text" id="stall-name" data-testid="stall-name-input" maxlength="120" autocomplete="off" aria-describedby="stall-name-hint stall-name-error" />
+              <p class="create-field-error" id="stall-name-error" data-testid="stall-name-error" hidden></p>
+            </div>
+            <div class="full-width">
+              <label for="stall-category">Category</label>
+              <select id="stall-category" data-testid="stall-category-input" aria-describedby="stall-category-error"></select>
+              <p class="create-field-error" id="stall-category-error" data-testid="stall-category-error" hidden></p>
+            </div>
+          </div>
+          <p class="sub-line" id="stall-name-hint" data-testid="stall-name-hint">The trading name is the one the public sees. Never a person’s email address or phone number.</p>
+          <div class="flex-row">
+            <button type="button" class="btn btn-primary" id="stall-add-btn" data-action="stall-add" data-testid="stall-add-btn">Add the stall</button>
+          </div>
+        </form>
+
+        <form class="mcard-body" id="stalls-bulk" data-testid="stalls-bulk" novalidate>
+          <h3 class="card-title">Add many stalls</h3>
+          <div class="create-form">
+            <div class="full-width">
+              <label for="stalls-bulk-text">One stall per line: number, trading name, category</label>
+              <textarea id="stalls-bulk-text" data-testid="stalls-bulk-text" rows="6" autocomplete="off" spellcheck="false" aria-describedby="stalls-bulk-hint"></textarea>
+            </div>
+          </div>
+          <p class="sub-line" id="stalls-bulk-hint" data-testid="stalls-bulk-hint"></p>
+          <div class="flex-row">
+            <button type="button" class="btn btn-secondary" id="stalls-bulk-check" data-action="stalls-bulk-check" data-testid="stalls-bulk-check">Check the list</button>
+            <button type="button" class="btn btn-primary" id="stalls-bulk-save" data-action="stalls-bulk-save" data-testid="stalls-bulk-save" hidden>Add these stalls</button>
+          </div>
+          <div id="stalls-bulk-result" data-testid="stalls-bulk-result" aria-live="polite" hidden>
+            <p class="create-msg success" id="stalls-bulk-ok-title" data-testid="stalls-bulk-ok-title"></p>
+            <ul class="pc-list" id="stalls-bulk-ok-list" data-testid="stalls-bulk-ok-list"></ul>
+            <p class="create-field-error" id="stalls-bulk-refused-title" data-testid="stalls-bulk-refused-title"></p>
+            <ul class="pc-list" id="stalls-bulk-refused-list" data-testid="stalls-bulk-refused-list"></ul>
+          </div>
+        </form>
+
+        <div class="mcard-body">
+          <p class="create-msg" id="stalls-msg" data-testid="stalls-msg" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <template id="stall-row-tpl">
+        <li class="detail-card" data-testid="stall-row">
+          <div class="detail-card-text">
+            <span class="detail-card-label" data-testid="stall-row-number"></span>
+            <span class="detail-card-main" data-testid="stall-row-name"></span>
+            <span class="detail-card-sub" data-testid="stall-row-category"></span>
+            <span class="detail-card-sub" data-testid="stall-row-state"></span>
+            <span class="detail-card-sub" data-testid="stall-row-scans"></span>
+            <a class="detail-card-sub" data-testid="stall-row-public-link" target="_blank" rel="noopener noreferrer"></a>
+            <ul class="pc-list" data-testid="stall-codes" aria-label="Codes"></ul>
+            <div data-testid="stall-row-panel"></div>
+          </div>
+          <div class="detail-card-actions" data-testid="stall-row-actions">
+            <button type="button" class="btn btn-secondary" data-action="stall-edit" data-testid="stall-row-edit">Change</button>
+            <button type="button" class="btn btn-secondary" data-action="stall-code" data-testid="stall-row-code">Make a code</button>
+            <button type="button" class="btn btn-secondary" data-action="stall-out" data-testid="stall-row-out">Take out of use</button>
+            <button type="button" class="btn btn-secondary" data-action="stall-back" data-testid="stall-row-back">Put back in use</button>
+          </div>
+        </li>
+      </template>
+      <template id="stall-code-tpl">
+        <li data-testid="stall-code">
+          <span class="sub-line" data-testid="stall-code-label"></span>
+          <div class="pd-link"><code data-testid="stall-code-link"></code></div>
+          <div class="detail-card-actions">
+            <button type="button" class="btn btn-secondary" data-action="pd-print" data-testid="stall-code-print">Print</button>
+            <button type="button" class="btn btn-secondary" data-action="ecb-jump" data-target="poster-deployments-card" data-testid="stall-code-posters">Show in Posters</button>
+          </div>
+        </li>
+      </template>
+      <template id="stall-edit-tpl">
+        <div class="create-form" data-testid="stall-edit-form">
+          <div>
+            <label data-label="number">Stall number</label>
+            <input type="text" data-field="number" data-testid="stall-edit-number" maxlength="20" autocomplete="off" />
+            <p class="create-field-error" data-error="number" hidden></p>
+          </div>
+          <div>
+            <label data-label="name">Trading name</label>
+            <input type="text" data-field="name" data-testid="stall-edit-name" maxlength="120" autocomplete="off" />
+            <p class="create-field-error" data-error="name" hidden></p>
+          </div>
+          <div class="full-width">
+            <label data-label="category">Category</label>
+            <select data-field="category" data-testid="stall-edit-category"></select>
+            <p class="create-field-error" data-error="category" hidden></p>
+          </div>
+          <div class="full-width detail-card-actions">
+            <button type="button" class="btn btn-primary" data-action="stall-save" data-testid="stall-edit-save">Save the changes</button>
+            <button type="button" class="btn btn-secondary" data-action="stall-cancel" data-testid="stall-edit-cancel">Cancel</button>
+          </div>
+        </div>
+      </template>
+      <template id="stall-out-tpl">
+        <div data-testid="stall-out-confirm" role="group">
+          <p class="sub-line" data-testid="stall-out-text"></p>
+          <div class="detail-card-actions">
+            <button type="button" class="btn btn-secondary" data-action="stall-out-yes" data-testid="stall-out-yes">Take it out of use</button>
+            <button type="button" class="btn btn-secondary" data-action="stall-cancel" data-testid="stall-out-no">Keep it in use</button>
+          </div>
+        </div>
+      </template>
+    </div>
+    <script>
+      // @ose-booth-rules:begin (copied from src/lib/event-booths.ts and src/lib/booth-page-render.ts; tests/admin-stalls-card.spec.ts fails when it differs)
+      window.OSE_BOOTH = {
+        categories: [
+          ['food', 'Food and drink'],
+          ['craft', 'Craft'],
+          ['art', 'Art'],
+          ['books', 'Books'],
+          ['clothing', 'Clothing'],
+          ['services', 'Services'],
+          ['community', 'Community'],
+          ['other', 'Other'],
+        ],
+        numberMax: 20,
+        nameMax: 120,
+        bulkMax: 200,
+      };
+      // @ose-booth-rules:end
+      /** OSE-1998: a category's words from its value; '' for none, or for one the page does not know. */
+      window.stallCategoryLabel = function (value) {
+        var list = window.OSE_BOOTH.categories;
+        for (var i = 0; i < list.length; i++) if (list[i][0] === value) return list[i][1];
+        return '';
+      };
+      /**
+       * OSE-1998: check one stall the way the server does (lib/event-booths.ts),
+       * so a mistake is shown before anything is sent. The server still decides.
+       * `category` may be a value ("craft") or its words ("Craft"), in
+       * any case; empty is no category. Answers { ok: true, value } or
+       * { ok: false, field, reason }, the reason in words.
+       */
+      window.stallCheck = function (f) {
+        var B = window.OSE_BOOTH;
+        var raw = function (v) { return v === null || v === undefined ? '' : String(v); };
+        var no = function (field, reason) { return { ok: false, field: field, reason: reason }; };
+        var CONTROL = /[\u0000-\u001f\u007f]/;
+        var number = raw(f && f.number);
+        if (CONTROL.test(number)) return no('number', 'The stall number has a character that is not text. Type it again.');
+        number = number.trim();
+        if (!number) return no('number', 'Give the stall a number.');
+        if (number.length > B.numberMax) return no('number', 'A stall number is ' + B.numberMax + ' characters at most.');
+        var name = raw(f && f.name);
+        if (CONTROL.test(name)) return no('name', 'The trading name has a character that is not text. Type it again.');
+        name = name.trim().replace(/\s+/g, ' ');
+        if (!name) return no('name', 'Give the stall the name it trades under.');
+        if (name.length > B.nameMax) return no('name', 'A trading name is ' + B.nameMax + ' characters at most.');
+        if (/\S@\S/.test(name)) return no('name', 'That looks like an email address. Use the name the stall trades under.');
+        if (/(?:\d[\s().-]*){7,}/.test(name)) return no('name', 'That looks like a phone number. Use the name the stall trades under.');
+        var said = raw(f && f.category).trim();
+        var category = null;
+        if (said) {
+          var key = said.toLowerCase();
+          B.categories.forEach(function (c) {
+            if (c[0] === key || c[1].toLowerCase() === key) category = c[0];
+          });
+          if (!category) {
+            return no('category', '“' + said + '” is not a category. Use one of: ' + B.categories.map(function (c) { return c[1]; }).join(', ') + '.');
+          }
+        }
+        return { ok: true, value: { number: number, name: name, category: category } };
+      };
+      /**
+       * OSE-1998: read a pasted list of stalls and say what would be added and
+       * which lines are refused, before anything is sent. One stall per line:
+       *
+       *   12, Rosa Bakery, food
+       *   A3, "Smith, Jones & Co", craft        a name with a comma is quoted
+       *   14<tab>Bread & Co<tab>Craft             a line copied from a spreadsheet
+       *
+       * A line holding a tab is split on tabs; any other line on commas, where a
+       * field in double quotes may hold commas ("" is a quote inside one). The
+       * parts are number, trading name and an optional category; empty parts at
+       * the end of a line are dropped. Blank lines are skipped, and every other
+       * line keeps its own line number. A line is refused, with a reason, when it
+       * has more than three parts or an open quote, when a part fails
+       * stallCheck, when another line has its number (both lines, in any case),
+       * or when a stall of this fair already has it (`taken`, in use or not). A
+       * list of more than bulkMax stalls is refused whole. Nothing here writes.
+       */
+      window.stallsBulkCheck = function (text, taken) {
+        var B = window.OSE_BOOTH;
+        var lines = String(text === null || text === undefined ? '' : text).split(/\r\n|\r|\n/);
+        var split = function (line) {
+          if (line.indexOf('\t') > -1) return line.split('\t');
+          var out = [];
+          var cur = '';
+          var quoted = false;
+          for (var i = 0; i < line.length; i++) {
+            var ch = line.charAt(i);
+            if (quoted) {
+              if (ch !== '"') cur += ch;
+              else if (line.charAt(i + 1) === '"') { cur += '"'; i++; }
+              else quoted = false;
+            } else if (ch === '"' && !cur.trim()) { quoted = true; cur = ''; }
+            else if (ch === ',') { out.push(cur); cur = ''; }
+            else cur += ch;
+          }
+          if (quoted) return null;
+          out.push(cur);
+          return out;
+        };
+        var filled = lines.filter(function (l) { return l.trim() !== ''; }).length;
+        if (filled > B.bulkMax) return { ok: false, rows: [], refused: [], over: filled };
+        var seen = [];
+        var linesOf = Object.create(null);
+        lines.forEach(function (line, i) {
+          if (!line.trim()) return;
+          var n = i + 1;
+          var parts = split(line);
+          if (parts === null) { seen.push({ line: n, reason: 'A double quote is opened and not closed.' }); return; }
+          while (parts.length > 3 && !parts[parts.length - 1].trim()) parts.pop();
+          var key = String(parts[0] || '').trim().toLowerCase();
+          if (key) linesOf[key] = (linesOf[key] || []).concat(n);
+          if (parts.length > 3) { seen.push({ line: n, reason: 'This line has more than three parts. If the name has a comma, put the name in double quotes.' }); return; }
+          var c = window.stallCheck({ number: parts[0], name: parts[1], category: parts[2] });
+          if (!c.ok) {
+            var hint = c.field === 'category' && line.indexOf('\t') === -1 ? ' If the name has a comma, put the name in double quotes.' : '';
+            seen.push({ line: n, reason: c.reason + hint });
+            return;
+          }
+          seen.push({ line: n, row: { line: n, number: c.value.number, name: c.value.name, category: c.value.category } });
+        });
+        var had = Object.create(null);
+        (Array.isArray(taken) ? taken : []).forEach(function (t) { had[String(t).toLowerCase()] = true; });
+        var kept = [];
+        var refused = [];
+        // In line order: a line is refused for its own fault first, then for a
+        // number another line or another stall already has.
+        seen.forEach(function (s) {
+          if (!s.row) { refused.push(s); return; }
+          var key = s.row.number.toLowerCase();
+          var others = linesOf[key].filter(function (l) { return l !== s.line; });
+          if (others.length) refused.push({ line: s.line, reason: 'Line ' + others.join(' and line ') + ' has the same stall number. Each stall needs its own.' });
+          else if (had[key]) refused.push({ line: s.line, reason: 'Stall ' + s.row.number + ' is already on this fair. A stall out of use keeps its number.' });
+          else kept.push(s.row);
+        });
+        return { ok: refused.length === 0 && kept.length > 0, rows: kept, refused: refused, over: 0 };
+      };
+      /**
+       * OSE-1998: a stall's scans in words, the way the poster list says a
+       * poster's. Published only as a number at or over its floor; anything
+       * else reads through oseFewerThan, never as 0. `locked` is the plan cap.
+       */
+      window.stallScansText = function (v, locked) {
+        if (locked) return 'Scan counts come with the Mid plan';
+        if (!v || typeof v !== 'object') return 'Scan counts could not be read just now';
+        var floor = Number(v.floor) >= 1 ? Number(v.floor) : 5;
+        var n = v.count;
+        if (v.suppressed || typeof n !== 'number' || !isFinite(n) || n < floor) return oseFewerThan(v.floor, 'scans in any hour');
+        return String(n) + ' scans';
+      };
+      /**
+       * OSE-1998: what a refused stall write means, in words, by its code. The
+       * server's own sentence is never shown. `field` says where to show it.
+       */
+      window.stallRefusal = function (code, fallback) {
+        var SAID = {
+          DUPLICATE_NUMBER: ['number', 'Another stall of this fair has that number. A stall out of use keeps its number.'],
+          INVALID_NUMBER: ['number', 'Give the stall a number of ' + window.OSE_BOOTH.numberMax + ' characters at most.'],
+          INVALID_NAME: ['name', 'Use the name the stall trades under: ' + window.OSE_BOOTH.nameMax + ' characters at most, and no email address or phone number.'],
+          INVALID_CATEGORY: ['category', 'Choose a category from the list.'],
+          BOOTH_NOT_FOUND: ['', 'That stall is no longer on this fair. The list is up to date now.'],
+        };
+        var hit = Object.prototype.hasOwnProperty.call(SAID, code) ? SAID[code] : null;
+        return hit ? { field: hit[0], reason: hit[1] } : { field: '', reason: fallback || 'Could not save the stall. Nothing was changed. Try again.' };
+      };
+      /** OSE-1998: one request to a stall route. Never throws; `data` is null when nothing readable came back. */
+      window.stallsFetch = async function (url, method, body) {
+        var init;
+        if (method) {
+          init = { method: method, headers: { 'Content-Type': 'application/json' } };
+          if (body) init.body = JSON.stringify(body);
+        }
+        var res = null;
+        var data = null;
+        try {
+          res = await fetch(url, init);
+          try { data = await res.json(); } catch (x) { data = null; }
+        } catch (x) { res = null; }
+        return { ok: !!(res && res.ok && data && data.ok), status: res ? res.status : 0, data: data };
+      };
+      /**
+       * OSE-1998: fill the Stalls card from what the three reads answered.
+       * `data` is { booths, counts, placements }, or null when the stalls could
+       * not be read; `counts` and `placements` are null when theirs failed.
+       * Every server string goes in as text, and the order is the server's.
+       */
+      window.renderStallsCard = function (id, data) {
+        var byId = function (x) { return document.getElementById(x); };
+        var box = byId('stalls-card');
+        if (!box) return;
+        var e = window._oseList && window._oseList.byId[String(id)];
+        if (!e) { box.hidden = true; return; }
+        var B = window.OSE_BOOTH;
+        box.hidden = false;
+        box.setAttribute('data-event-id', String(e.id));
+        window._stallsEventId = String(e.id);
+        var select = byId('stall-category');
+        if (!select.options.length) window.stallCategoryOptions(select);
+        byId('stalls-bulk-hint').textContent = 'The category is optional. If a name has a comma, put the name in double quotes. Up to ' + B.bulkMax + ' stalls at a time. Check the list first: nothing is added until you choose to add it.';
+        var list = byId('stalls-list');
+        while (list.firstChild) list.removeChild(list.firstChild);
+        var summary = byId('stalls-summary');
+        var show = function (elId, text) {
+          var el = byId(elId);
+          el.hidden = !text;
+          el.textContent = text || '';
+        };
+        if (!data) {
+          summary.textContent = 'Could not read this event’s stalls. Reload the page to try again.';
+          byId('stalls-add').hidden = true;
+          byId('stalls-bulk').hidden = true;
+          ['stalls-total', 'stalls-no-stall', 'stalls-public-note', 'stalls-empty'].forEach(function (x) { show(x, ''); });
+          window._stallsById = Object.create(null);
+          window._stallsTaken = [];
+          return;
+        }
+        byId('stalls-add').hidden = false;
+        byId('stalls-bulk').hidden = false;
+        var booths = Array.isArray(data.booths) ? data.booths : [];
+        var inUse = booths.filter(function (b) { return b && b.is_active; }).length;
+        var out = booths.length - inUse;
+        summary.textContent = !booths.length
+          ? 'No stalls yet.'
+          : inUse + (inUse === 1 ? ' stall' : ' stalls') + ' in use' + (out ? ', ' + out + ' out of use' : '') + '.';
+        show('stalls-empty', booths.length ? '' : 'No stalls yet. Add one below, or paste a list.');
+
+        var counts = data.counts && typeof data.counts === 'object' ? data.counts : null;
+        var locked = !!(counts && counts.plan && Array.isArray(counts.plan.locked_sections) &&
+          counts.plan.locked_sections.indexOf('booths.scans') > -1);
+        var scansOf = Object.create(null);
+        if (counts && Array.isArray(counts.booths)) counts.booths.forEach(function (c) { if (c && c.id) scansOf[String(c.id)] = c.scans; });
+        show('stalls-total', counts && booths.length ? 'The whole fair: ' + window.stallScansText(counts.total, false) : '');
+        var noStall = counts && counts.no_stall && counts.no_stall.scans;
+        show('stalls-no-stall', noStall && !locked && booths.length ? 'Codes at no stall: ' + window.stallScansText(noStall, false) : '');
+        var live = String(e.status || '').trim().toLowerCase() === 'active';
+        show('stalls-public-note', booths.length && !live ? 'Each stall in use gets its own public page once the fair is live.' : '');
+
+        var placements = Array.isArray(data.placements) ? data.placements : [];
+        var codesOf = Object.create(null);
+        if (!(window._pdItems instanceof Map)) window._pdItems = new Map();
+        placements.forEach(function (p) {
+          if (!p || !p.booth_id || !p.id) return;
+          var key = String(p.booth_id);
+          codesOf[key] = (codesOf[key] || []).concat(p);
+          var qr = typeof p.qr_data_uri === 'string' && p.qr_data_uri.indexOf('data:image/') === 0 ? p.qr_data_uri : '';
+          window._pdItems.set(p.id, {
+            qr_data_uri: qr,
+            scan_url: p.scan_url === null || p.scan_url === undefined ? '' : String(p.scan_url),
+            label: p.placement_label === null || p.placement_label === undefined ? '' : String(p.placement_label),
+          });
+        });
+
+        window._stallsById = Object.create(null);
+        window._stallsTaken = [];
+        var rowTpl = byId('stall-row-tpl');
+        var codeTpl = byId('stall-code-tpl');
+        booths.forEach(function (b) {
+          if (!b || !/^[A-Za-z0-9_-]{1,128}$/.test(String(b.id))) return;
+          var bid = String(b.id);
+          var number = String(b.number);
+          window._stallsById[bid] = b;
+          window._stallsTaken.push(number.toLowerCase());
+          var row = rowTpl.content.firstElementChild.cloneNode(true);
+          var at = function (x) { return row.querySelector('[data-testid="' + x + '"]'); };
+          row.setAttribute('data-booth-id', bid);
+          at('stall-row-number').textContent = 'Stall ' + number;
+          at('stall-row-name').textContent = String(b.name);
+          var label = window.stallCategoryLabel(b.category);
+          if (label) at('stall-row-category').textContent = label;
+          else at('stall-row-category').remove();
+          if (b.is_active) at('stall-row-state').remove();
+          else at('stall-row-state').textContent = 'Out of use. Its codes still point at it, and its past scans still count.';
+          at('stall-row-scans').textContent = counts && Object.prototype.hasOwnProperty.call(scansOf, bid)
+            ? window.stallScansText(scansOf[bid], locked)
+            : window.stallScansText(null, locked);
+          var link = at('stall-row-public-link');
+          if (live && b.is_active) {
+            link.setAttribute('href', '/events/' + encodeURIComponent(String(e.id)) + '/booths/' + encodeURIComponent(number));
+            link.textContent = 'Open the public page of stall ' + number;
+          } else link.remove();
+          var codes = at('stall-codes');
+          (codesOf[bid] || []).forEach(function (p) {
+            var item = codeTpl.content.firstElementChild.cloneNode(true);
+            var name = p.placement_label === null || p.placement_label === undefined ? 'Code' : String(p.placement_label);
+            item.querySelector('[data-testid="stall-code-label"]').textContent = name + (Number(p.is_active) === 1 ? '' : ' (taken down)');
+            item.querySelector('[data-testid="stall-code-link"]').textContent = p.scan_url === null || p.scan_url === undefined ? '' : String(p.scan_url);
+            var print = item.querySelector('[data-testid="stall-code-print"]');
+            print.setAttribute('data-pd-id', String(p.id));
+            print.setAttribute('aria-label', 'Print: ' + name);
+            item.querySelector('[data-testid="stall-code-posters"]').setAttribute('aria-label', 'Show in Posters: ' + name);
+            codes.appendChild(item);
+          });
+          codes.hidden = !codes.children.length;
+          var keep = b.is_active ? ['stall-edit', 'stall-code', 'stall-out'] : ['stall-edit', 'stall-back'];
+          var WORDS = { 'stall-edit': 'Change stall ', 'stall-code': 'Make a code for stall ', 'stall-out': 'Take out of use: stall ', 'stall-back': 'Put back in use: stall ' };
+          Array.prototype.slice.call(row.querySelectorAll('[data-testid="stall-row-actions"] button')).forEach(function (btn) {
+            var action = btn.getAttribute('data-action');
+            if (keep.indexOf(action) === -1) { btn.remove(); return; }
+            btn.setAttribute('data-booth-id', bid);
+            btn.setAttribute('aria-label', WORDS[action] + number);
+          });
+          list.appendChild(row);
+        });
+      };
+      /** OSE-1998: the category choices, from the rules, "No category" first. `chosen` is selected. */
+      window.stallCategoryOptions = function (select, chosen) {
+        while (select.firstChild) select.removeChild(select.firstChild);
+        [['', 'No category']].concat(window.OSE_BOOTH.categories).forEach(function (c) {
+          var o = document.createElement('option');
+          o.value = c[0];
+          o.textContent = c[1];
+          select.appendChild(o);
+        });
+        select.value = chosen || '';
+      };
+      /** OSE-1998: read the selected event's stalls, their counts and its codes, then fill the card. */
+      window._stallsSeq = 0;
+      window.loadStalls = async function (id) {
+        var seq = ++window._stallsSeq;
+        var base = '/api/v2/admin/events/' + encodeURIComponent(String(id));
+        var got = await Promise.all([
+          window.stallsFetch(base + '/booths'),
+          window.stallsFetch(base + '/booths/counts'),
+          window.stallsFetch(base + '/poster-deployments'),
+        ]);
+        if (seq !== window._stallsSeq) return;
+        var data = got[0].ok && Array.isArray(got[0].data.booths)
+          ? {
+              booths: got[0].data.booths,
+              counts: got[1].ok ? got[1].data : null,
+              placements: got[2].ok && Array.isArray(got[2].data.items) ? got[2].data.items : null,
+            }
+          : null;
+        window.renderStallsCard(id, data);
+      };
+      /** OSE-1998: say what a stall action did, in the card's status line. */
+      window.stallsSay = function (text, failed) {
+        var m = document.getElementById('stalls-msg');
+        if (!m) return;
+        m.textContent = text;
+        m.className = failed ? 'create-msg error' : 'create-msg success';
+      };
+      /** OSE-1998: show (or clear, with '') a refusal on one field, in its error line. */
+      window.stallFieldSay = function (input, error, text) {
+        if (!input || !error) return;
+        error.textContent = text || '';
+        error.hidden = !text;
+        if (text) input.setAttribute('aria-invalid', 'true');
+        else input.removeAttribute('aria-invalid');
+      };
+      /** OSE-1998: Show and Hide fold the card's body. */
+      window.stallsToggle = function (el) {
+        var body = document.getElementById('stalls-body');
+        if (!body) return;
+        var open = body.hidden;
+        body.hidden = !open;
+        el.setAttribute('aria-expanded', String(open));
+        el.textContent = open ? 'Hide' : 'Show';
+      };
+      /** OSE-1998: add one stall from the form: checked here, then sent, then the list is read again. */
+      window.stallAdd = async function (btn) {
+        var id = window._stallsEventId;
+        if (!id) return;
+        var get = function (x) { return document.getElementById(x); };
+        var fields = { number: get('stall-number'), name: get('stall-name'), category: get('stall-category') };
+        Object.keys(fields).forEach(function (k) { window.stallFieldSay(fields[k], get('stall-' + k + '-error'), ''); });
+        var c = window.stallCheck({ number: fields.number.value, name: fields.name.value, category: fields.category.value });
+        if (!c.ok) {
+          window.stallFieldSay(fields[c.field], get('stall-' + c.field + '-error'), c.reason);
+          fields[c.field].focus();
+          return;
+        }
+        var body = { number: c.value.number, name: c.value.name };
+        if (c.value.category) body.category = c.value.category;
+        if (btn) btn.disabled = true;
+        var r = await window.stallsFetch('/api/v2/admin/events/' + encodeURIComponent(id) + '/booths', 'POST', body);
+        if (btn) btn.disabled = false;
+        if (!r.ok) {
+          var why = window.stallRefusal(r.data && r.data.code);
+          if (why.field) {
+            window.stallFieldSay(fields[why.field], get('stall-' + why.field + '-error'), why.reason);
+            fields[why.field].focus();
+          } else window.stallsSay(why.reason, true);
+          return;
+        }
+        fields.number.value = '';
+        fields.name.value = '';
+        fields.category.value = '';
+        await window.loadStalls(id);
+        window.stallsSay('Stall ' + c.value.number + ' is added.', false);
+        fields.number.focus();
+      };
+      /** OSE-1998: one line of a checked list, as the organizer will read it. */
+      window.stallsBulkLine = function (r) {
+        var label = window.stallCategoryLabel(r.category);
+        return 'Line ' + r.line + ': stall ' + r.number + ', ' + r.name + (label ? ' (' + label + ')' : '');
+      };
+      /** OSE-1998: fill the bulk box's result: what will be added, and which lines are refused. */
+      window.stallsBulkShow = function (okTitle, okLines, refusedTitle, refusedLines) {
+        var get = function (x) { return document.getElementById(x); };
+        var fill = function (listId, lines) {
+          var ul = get(listId);
+          while (ul.firstChild) ul.removeChild(ul.firstChild);
+          lines.forEach(function (text) {
+            var li = document.createElement('li');
+            li.textContent = text;
+            ul.appendChild(li);
+          });
+          ul.hidden = !lines.length;
+        };
+        get('stalls-bulk-ok-title').textContent = okTitle;
+        get('stalls-bulk-ok-title').hidden = !okTitle;
+        fill('stalls-bulk-ok-list', okLines);
+        get('stalls-bulk-refused-title').textContent = refusedTitle;
+        get('stalls-bulk-refused-title').hidden = !refusedTitle;
+        fill('stalls-bulk-refused-list', refusedLines);
+        get('stalls-bulk-result').hidden = !okTitle && !refusedTitle;
+      };
+      /** OSE-1998: Check the list. Shows exactly what would be added; writes nothing. */
+      window.stallsBulkRun = function () {
+        var text = document.getElementById('stalls-bulk-text').value;
+        var res = window.stallsBulkCheck(text, window._stallsTaken || []);
+        window._stallsBulkChecked = { text: text, res: res };
+        var save = document.getElementById('stalls-bulk-save');
+        var B = window.OSE_BOOTH;
+        var plural = function (n, one, many) { return n + ' ' + (n === 1 ? one : many); };
+        if (res.over) {
+          window.stallsBulkShow('', [], 'That list has ' + res.over + ' stalls. Add up to ' + B.bulkMax + ' at a time.', []);
+        } else if (!res.rows.length && !res.refused.length) {
+          window.stallsBulkShow('', [], 'Paste at least one stall, one per line.', []);
+        } else {
+          window.stallsBulkShow(
+            res.rows.length ? 'Ready to add: ' + plural(res.rows.length, 'stall', 'stalls') + '.' : '',
+            res.rows.map(window.stallsBulkLine),
+            res.refused.length ? 'Refused: ' + plural(res.refused.length, 'line', 'lines') + '. Nothing is added until every line is right.' : '',
+            res.refused.map(function (x) { return 'Line ' + x.line + ': ' + x.reason; })
+          );
+        }
+        save.hidden = !res.ok;
+        save.textContent = 'Add these ' + plural(res.rows.length, 'stall', 'stalls');
+        return res;
+      };
+      /**
+       * OSE-1998: add the checked list in one request, all or nothing. Only the
+       * list as it was last checked and shown is sent; a list changed since is
+       * checked and shown again instead. A refusal names each line it refused.
+       */
+      window.stallsBulkSave = async function (btn) {
+        var id = window._stallsEventId;
+        var text = document.getElementById('stalls-bulk-text').value;
+        var last = window._stallsBulkChecked;
+        if (!id) return;
+        if (!last || last.text !== text) {
+          window.stallsBulkRun();
+          window.stallsSay('The list changed since it was checked. Read what will be added, then choose to add it.', true);
+          return;
+        }
+        if (!last.res.ok) return;
+        var rows = last.res.rows;
+        var body = {
+          booths: rows.map(function (r) {
+            var one = { number: r.number, name: r.name };
+            if (r.category) one.category = r.category;
+            return one;
+          }),
+        };
+        if (btn) btn.disabled = true;
+        var r = await window.stallsFetch('/api/v2/admin/events/' + encodeURIComponent(id) + '/booths/bulk', 'POST', body);
+        if (btn) btn.disabled = false;
+        document.getElementById('stalls-bulk-save').hidden = true;
+        window._stallsBulkChecked = null;
+        if (r.ok) {
+          document.getElementById('stalls-bulk-text').value = '';
+          window.stallsBulkShow('', [], '', []);
+          await window.loadStalls(id);
+          var made = r.data && typeof r.data.created === 'number' ? r.data.created : rows.length;
+          window.stallsSay('Added ' + made + (made === 1 ? ' stall.' : ' stalls.'), false);
+          return;
+        }
+        var failed = r.data && Array.isArray(r.data.failed) ? r.data.failed : [];
+        var lines = [];
+        failed.forEach(function (f) {
+          var row = rows[Number(f && f.index)];
+          if (!row) return;
+          var why = f.code === 'DUPLICATE_NUMBER' ? 'Another stall already has this number.' : window.stallRefusal(f.code).reason;
+          lines.push('Line ' + row.line + ': stall ' + row.number + '. ' + why);
+        });
+        if (lines.length) {
+          window.stallsBulkShow('', [], 'Nothing was saved. Refused: ' + lines.length + (lines.length === 1 ? ' line. Fix it' : ' lines. Fix them') + ', then check the list again.', lines);
+        } else {
+          window.stallsBulkShow('', [], '', []);
+          window.stallsSay('Could not add the stalls. Nothing was saved. Try again.', true);
+        }
+      };
+      /** OSE-1998: the stall a row button names, and the row and panel it sits in. */
+      window.stallOf = function (el) {
+        var row = el && el.closest ? el.closest('[data-testid="stall-row"]') : null;
+        var bid = row ? row.getAttribute('data-booth-id') : '';
+        var b = bid && window._stallsById ? window._stallsById[bid] : null;
+        return b ? { booth: b, row: row, panel: row.querySelector('[data-testid="stall-row-panel"]') } : null;
+      };
+      /** OSE-1998: open the change form in a stall's row, filled from the stall. */
+      window.stallEditOpen = function (el) {
+        var s = window.stallOf(el);
+        if (!s) return;
+        while (s.panel.firstChild) s.panel.removeChild(s.panel.firstChild);
+        var form = document.getElementById('stall-edit-tpl').content.firstElementChild.cloneNode(true);
+        var bid = String(s.booth.id);
+        ['number', 'name', 'category'].forEach(function (k) {
+          var input = form.querySelector('[data-field="' + k + '"]');
+          var label = form.querySelector('[data-label="' + k + '"]');
+          var error = form.querySelector('[data-error="' + k + '"]');
+          input.id = 'stall-edit-' + k + '-' + bid;
+          error.id = input.id + '-error';
+          label.setAttribute('for', input.id);
+          input.setAttribute('aria-describedby', error.id);
+        });
+        form.querySelector('[data-field="number"]').value = String(s.booth.number);
+        form.querySelector('[data-field="name"]').value = String(s.booth.name);
+        window.stallCategoryOptions(form.querySelector('[data-field="category"]'), window.stallCategoryLabel(s.booth.category) ? s.booth.category : '');
+        s.panel.appendChild(form);
+        form.querySelector('[data-field="number"]').focus();
+      };
+      /** OSE-1998: close a row's open form or question, and put the cursor back on the row. */
+      window.stallPanelClose = function (el) {
+        var s = window.stallOf(el);
+        if (!s) return;
+        while (s.panel.firstChild) s.panel.removeChild(s.panel.firstChild);
+        var back = s.row.querySelector('[data-action="stall-edit"]');
+        if (back) back.focus();
+      };
+      /** OSE-1998: save a change: only what changed is sent. Refusals show at their field. */
+      window.stallEditSave = async function (el) {
+        var s = window.stallOf(el);
+        var id = window._stallsEventId;
+        if (!s || !id) return;
+        var form = s.panel.querySelector('[data-testid="stall-edit-form"]');
+        var field = function (k) { return form.querySelector('[data-field="' + k + '"]'); };
+        var error = function (k) { return form.querySelector('[data-error="' + k + '"]'); };
+        ['number', 'name', 'category'].forEach(function (k) { window.stallFieldSay(field(k), error(k), ''); });
+        var c = window.stallCheck({ number: field('number').value, name: field('name').value, category: field('category').value });
+        if (!c.ok) {
+          window.stallFieldSay(field(c.field), error(c.field), c.reason);
+          field(c.field).focus();
+          return;
+        }
+        var b = s.booth;
+        var patch = {};
+        if (c.value.number !== String(b.number)) patch.number = c.value.number;
+        if (c.value.name !== String(b.name)) patch.name = c.value.name;
+        if (c.value.category !== (b.category === undefined ? null : b.category)) patch.category = c.value.category;
+        if (!Object.keys(patch).length) {
+          window.stallPanelClose(el);
+          window.stallsSay('Nothing was changed.', false);
+          return;
+        }
+        el.disabled = true;
+        var r = await window.stallsFetch('/api/v2/admin/events/' + encodeURIComponent(id) + '/booths/' + encodeURIComponent(String(b.id)), 'PUT', patch);
+        el.disabled = false;
+        if (!r.ok) {
+          var why = window.stallRefusal(r.data && r.data.code);
+          if (why.field) {
+            window.stallFieldSay(field(why.field), error(why.field), why.reason);
+            field(why.field).focus();
+            return;
+          }
+          await window.loadStalls(id);
+          window.stallsSay(why.reason, true);
+          return;
+        }
+        await window.loadStalls(id);
+        window.stallsSay('Stall ' + c.value.number + ' is saved.', false);
+      };
+      /** OSE-1998: ask before taking a stall out of use, and say plainly what that does and does not do. */
+      window.stallOutAsk = function (el) {
+        var s = window.stallOf(el);
+        if (!s) return;
+        while (s.panel.firstChild) s.panel.removeChild(s.panel.firstChild);
+        var ask = document.getElementById('stall-out-tpl').content.firstElementChild.cloneNode(true);
+        var number = String(s.booth.number);
+        ask.querySelector('[data-testid="stall-out-text"]').textContent =
+          'Take stall ' + number + ' out of use? Its codes keep pointing at it and its past scans still count. It is not deleted, and you can put it back in use.';
+        ask.setAttribute('aria-label', 'Take stall ' + number + ' out of use');
+        s.panel.appendChild(ask);
+        ask.querySelector('[data-action="stall-out-yes"]').focus();
+      };
+      /** OSE-1998: one write about one stall, then the list is read again and the card says what happened. */
+      window.stallWrite = async function (el, method, url, body, said, failSaid) {
+        var id = window._stallsEventId;
+        if (!id) return;
+        if (el) el.disabled = true;
+        var r = await window.stallsFetch(url, method, body);
+        if (el) el.disabled = false;
+        await window.loadStalls(id);
+        if (r.ok) window.stallsSay(said, false);
+        else window.stallsSay(window.stallRefusal(r.data && r.data.code, failSaid).reason, true);
+        return r;
+      };
+      /** OSE-1998: Yes, take it out of use. DELETE never removes the stall. */
+      window.stallOutConfirm = async function (el) {
+        var s = window.stallOf(el);
+        var id = window._stallsEventId;
+        if (!s || !id) return;
+        await window.stallWrite(el, 'DELETE', '/api/v2/admin/events/' + encodeURIComponent(id) + '/booths/' + encodeURIComponent(String(s.booth.id)), null,
+          'Stall ' + s.booth.number + ' is out of use. Nothing was deleted.');
+      };
+      /** OSE-1998: put a stall that is out of use back in use. */
+      window.stallBack = async function (el) {
+        var s = window.stallOf(el);
+        var id = window._stallsEventId;
+        if (!s || !id) return;
+        await window.stallWrite(el, 'PUT', '/api/v2/admin/events/' + encodeURIComponent(id) + '/booths/' + encodeURIComponent(String(s.booth.id)), { is_active: true },
+          'Stall ' + s.booth.number + ' is back in use.');
+      };
+      /**
+       * OSE-1998: make a code for a stall. It is an ordinary placement at the
+       * venue that points at the stall (POST …/poster-deployments with
+       * booth_id), so the Posters card shows, prints and takes it down as it
+       * does every other code.
+       */
+      window.stallMakeCode = async function (el) {
+        var s = window.stallOf(el);
+        var id = window._stallsEventId;
+        if (!s || !id) return;
+        var body = {
+          placement_label: ('Stall ' + s.booth.number + ' · ' + s.booth.name).slice(0, 200),
+          placement_type: 'venue',
+          booth_id: String(s.booth.id),
+        };
+        var r = await window.stallWrite(el, 'POST', '/api/v2/admin/events/' + encodeURIComponent(id) + '/poster-deployments', body,
+          'A code for stall ' + s.booth.number + ' is made. Print it here, or find it under Posters.',
+          'Could not make the code. Nothing was changed. Try again.');
+        if (r && r.ok && typeof window.loadPosterDeployments === 'function') window.loadPosterDeployments(id);
+      };
+      window.addEventListener('ose:event-selected', function (ev) {
+        var d = ev.detail || {};
+        window.stallsSay('', false);
+        window.loadStalls(d.id);
+      });
     </script>
 
     <!-- Posters — step 4. Each deployment is one physical placement and mints its
