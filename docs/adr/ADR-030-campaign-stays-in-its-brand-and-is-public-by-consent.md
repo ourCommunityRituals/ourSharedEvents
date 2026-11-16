@@ -147,6 +147,24 @@ which sponsors show, their order, or their share of rotation, so the local spons
 as on one that is not. This binds the build of B as well. Held today by the T0 invariant (nothing
 that orders or picks sponsors names a campaign) and by `tests/campaign-events.spec.ts`.
 
+**D9, the owner's fuller statement (2026-11-16).** Said about an event whose campaign belongs to
+another brand: _"This is where depending on the level the event manager and sponsor has purchased
+for SharedReport access will dictate the percentage of local allotment to the event, but it never
+does is remove the hyperlocal sponsorship from the event."_ Two rules are in it:
+
+1. **A campaign, of any brand, never removes the local sponsors from an event.** Holds today. No
+   campaign code can hide a sponsor or change a share, and the local class keeps its floor whenever
+   an event has a local sponsor (`allocateShares`, brain invariant 25).
+2. **The local share's size depends on the level bought.** **Not what the code does today.** The
+   local floor is one number for every event, 30% (`local_floor_pct` in `lib/sponsor-allocation.ts`,
+   mirrored from `ocr-docs-brain/sponsor-allocation.yaml`). What a level changes today is a paying
+   sponsor's own weight and cap (40% premium, 20% mid), never the local floor.
+
+Rule 2 is recorded here as the owner's direction, not built. It is not a campaign change: it is a
+change to the allocation contract in the shared brain, and it needs its numbers from the owner
+(which level gives which local share, and the lowest it may go). Rule 1 is its fixed limit: whatever
+the level, the local share is never zero.
+
 ## Rename and status change (added 2026-11-15, OSE-1552 scope 2)
 
 `PUT /api/v2/admin/campaigns/:id` takes a title, a status, or both, and nothing else (decision 5
