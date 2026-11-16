@@ -28,6 +28,8 @@ variables:
     value: "false"
   - name: streetMapSwitch
     value: "on"
+  - name: streetMapTownAnchor
+    value: ""
   - secret: true
     name: ocrCiEdgeToken
   - name: edgeStrict

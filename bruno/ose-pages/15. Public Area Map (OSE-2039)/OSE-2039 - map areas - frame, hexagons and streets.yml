@@ -35,6 +35,28 @@ runtime:
         // wrong had 8,999 points of water and 1 of road; the sparsest good frame
         // measured had 253 (one area over Sawyer, Michigan).
         //
+        // The right place, not just any roads (street-map CCR 2026-11-15, R17). The
+        // road count passes on the streets of any town. What ties the layer to
+        // THIS area is a town: streetMapTownAnchor in the environment file names one
+        // that lies inside this frame, as "Name|lat|lng" (the town's own point, as
+        // OpenStreetMap has it). The layer must draw that name, and draw it where
+        // that town is: the point is put through the frame this answer carries and
+        // the name must sit within ANCHOR_UNITS of it. A file cut for another
+        // place draws other names; tiles one step out of place draw the name about
+        // a tile away (256 units, give or take a zoom step), far past 30.
+        //   anchor empty, flag not "true"   a test named NOT RUN says the place is
+        //                                   not checked.
+        //   anchor empty, flag "true"       a named test fails: the flag may not be
+        //                                   set without a town to hold the place.
+        //   anchor set                      it must read as "Name|lat|lng" and lie
+        //                                   inside the frame; with streets drawn
+        //                                   the name is looked for, whatever the
+        //                                   flag. With none drawn the street tests
+        //                                   below speak for the whole layer.
+        // Which towns a real file names in this frame is not known until one is
+        // drawn on staging, so the anchor is set in the PR that sets the flag
+        // (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md, "Staging, in order", step 9).
+        //
         // The switch (STREET_MAP in wrangler.toml, read by lib/street-map.ts;
         // street-map CCR 2026-11-15, R20). streetMapSwitch in the environment file
         // is a copy of staging's value (tests/unit/ci/env-parity.test.js holds the
@@ -54,6 +76,32 @@ runtime:
           : sw === 'on'
             ? 'Street-map switch: STREET_MAP is "on" for this environment (streetMapArchiveLoaded says whether streets must be drawn)'
             : 'Street-map switch: the environment file sets streetMapSwitch to "on" or "off"';
+        const anchorRaw = String(bru.getEnvVar('streetMapTownAnchor') || '');
+        const ANCHOR_UNITS = 30;
+        const ANCHOR_SET = 'Right place: streetMapTownAnchor is "Name|lat|lng", a town inside this frame';
+        const anchorOf = function (raw) {
+          const m = /^([^|]{1,60})\|(-?\d{1,2}(?:\.\d+)?)\|(-?\d{1,3}(?:\.\d+)?)$/.exec(raw);
+          return m ? { name: m[1], lat: Number(m[2]), lng: Number(m[3]) } : null;
+        };
+        // Latitude and longitude to this answer's frame: Web Mercator, as
+        // lib/street-map.ts (toWorld, project) draws it.
+        const inFrame = function (frame, lat, lng) {
+          const s = Math.sin((lat * Math.PI) / 180);
+          const wx = (lng + 180) / 360;
+          const wy = 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+          return [(wx - frame.x0) * frame.scale, (wy - frame.y0) * frame.scale];
+        };
+        // The town names of a street layer, each with the point it is drawn at.
+        const townNames = function (layer) {
+          const out = [];
+          const re = /<text class="as-t" x="(-?\d+)" y="(-?\d+)"[^>]*>([^<]*)<\/text>/g;
+          let m;
+          while ((m = re.exec(layer)) !== null) {
+            const name = m[3].replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+            out.push({ name: name, x: Number(m[1]), y: Number(m[2]) });
+          }
+          return out;
+        };
         const ROAD_FLOOR = 50;
         const roadCommands = function (layer) {
           let n = 0;
@@ -152,6 +200,39 @@ runtime:
               expect(flag, 'a NOT RUN test passes only while the environment file sets streetMapArchiveLoaded to "false"').to.equal('false');
             });
           }
+        }
+
+        if (anchorRaw === '') {
+          if (loaded) {
+            test('Right place: streetMapTownAnchor names a town of this area (streetMapArchiveLoaded is true for this environment)', function () {
+              expect(anchorRaw, 'streetMapArchiveLoaded is "true" and streetMapTownAnchor is empty: with no town named, any town\'s streets pass here').to.not.equal('');
+            });
+          } else {
+            test('NOT RUN (no town is named for this area: streetMapTownAnchor is empty): the street layer is of this place, a named town drawn where that town is', function () {
+              expect(flag, 'a NOT RUN test passes only while the environment file sets streetMapArchiveLoaded to "false"').to.equal('false');
+            });
+          }
+        } else {
+          const anchor = anchorOf(anchorRaw);
+          const at = anchor && json.frame ? inFrame(json.frame, anchor.lat, anchor.lng) : null;
+          test(ANCHOR_SET, function () {
+            expect(anchor, 'streetMapTownAnchor is not "Name|lat|lng"').to.not.equal(null);
+            expect(at[0], 'the town lies left or right of this frame').to.be.within(0, 600);
+            expect(at[1], 'the town lies above or below this frame').to.be.within(0, 360);
+          });
+          if (json.streets) {
+            test('Right place: the town named in streetMapTownAnchor is drawn, where that town is (within 30 units)', function () {
+              expect(anchor, 'streetMapTownAnchor is not "Name|lat|lng"').to.not.equal(null);
+              const drawn = townNames(String(json.streets.svg));
+              const names = drawn.map(function (d) { return d.name; });
+              const found = drawn.filter(function (d) { return d.name === anchor.name; });
+              expect(found.length, 'the street layer names ' + (names.join(', ') || 'no town') + ', and not ' + anchor.name).to.be.at.least(1);
+              const off = Math.min.apply(null, found.map(function (d) { return Math.hypot(d.x - at[0], d.y - at[1]); }));
+              expect(off, anchor.name + ' is drawn ' + Math.round(off) + ' units from where it is (' + Math.round(at[0]) + ', ' + Math.round(at[1]) + ')').to.be.at.most(ANCHOR_UNITS);
+            });
+          }
+          // With no street layer there is no name to look for: the street tests
+          // above already say NOT RUN, or fail, for the whole layer.
         }
 
 settings:
