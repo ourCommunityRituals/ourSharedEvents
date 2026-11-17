@@ -374,6 +374,157 @@ describe('the street map reaches staging before production', () => {
   test('the wrangler.toml these cases read is the one the parity check reads', () => {
     expect(parity.WRANGLER_PATH).toBe('workers/oursharedevents/wrangler.toml');
   });
+
+  // Street-map scenario pass, gap G14: nobody had walked a refresh of the
+  // archive ("Refreshing the archive" in the runbook) against these rules with
+  // production bound. Each step below is the wrangler.toml text and the flag of
+  // one pull request, in the runbook's order, put through the parity check
+  // (compareEnvironments), the preflight's binding check
+  // (checkProductionBindings) and the staging-first rule above
+  // (orderProblems). Each test says what those checks do with that step TODAY.
+  // It pins behaviour; it is not a rule. Which order a refresh should take with
+  // production bound is the owner's (runbook, "Refreshing the archive").
+  //
+  // "Production bound" is the state the runbook's "Production, later" PR leaves:
+  // a production MAP_TILES binding naming the staging bucket, and MAP_TILES
+  // gone from DARK_ON_PRODUCTION. That PR also removes the open MAP_TILES entry
+  // from UNDECIDED in env-parity.mjs. This file cannot edit that list, so the
+  // parity check calls the entry stale on every bound step; the walk sets that
+  // one finding aside (`STALE`) and step 0 shows it is the only one.
+  // @born-red refresh walk with production bound | method: each fault below was injected and the named tests seen failing, then reverted: (1) orderProblems' rule "production binds MAP_TILES while the staging cases can still print NOT RUN" switched off: "step 1 as the runbook writes it" and "step 1 with production left on the old key" failed; (2) MAP_TILES_ARCHIVE added to INTENTIONAL_VALUE_DIFFERENCES in env-parity.mjs: "step 1 with production left on the old key" and "step 3 with production left on the old key" failed; (3) `withKey` made to change nothing: the six tests that move the key failed on its guard, step 0 passed; (4) the STALE filter widened to drop every unlisted finding: both "production left on the old key" tests failed; (5) orderProblems made to refuse any production binding: every walk test failed, the accepted steps on the new refusal; (6) the runbook without the walk's sentences (before they were written): "the runbook says which step is refused" failed | date: 2026-11-16
+  describe('a refresh walked with production bound (scenario G14)', () => {
+    const NEW_KEY = 'us-20991231.pmtiles';
+    const STALE = 'stale-undecided:binding:r2_buckets:MAP_TILES';
+    const keyIn = (toml, side) => {
+      const at = toml.search(/^\[env\.production\]/m);
+      const block = side === 'production' ? toml.slice(at) : toml.slice(0, at);
+      return /^MAP_TILES_ARCHIVE = "([^"]*)"\r?$/m.exec(block)?.[1];
+    };
+    /** The key in one environment's block (staging's is the last before production's). */
+    const withKey = (toml, side, key) => {
+      const at = toml.search(/^\[env\.production\]/m);
+      const line = /^MAP_TILES_ARCHIVE = "[^"]*"(\r?)$/m;
+      const head = toml.slice(0, at);
+      const tail = toml.slice(at);
+      let out;
+      if (side === 'production') {
+        out = head + tail.replace(line, `MAP_TILES_ARCHIVE = "${key}"$1`);
+      } else {
+        const stgAt = head.search(/^\[env\.staging\]/m);
+        out =
+          head.slice(0, stgAt) +
+          head.slice(stgAt).replace(line, `MAP_TILES_ARCHIVE = "${key}"$1`) +
+          tail;
+      }
+      expect(keyIn(out, side), `${side} carries ${key}`).toBe(key);
+      return out;
+    };
+    const both = (toml, key) => withKey(withKey(toml, 'staging', key), 'production', key);
+
+    let DARK_TODAY;
+    let checkProductionBindings;
+    beforeAll(async () => {
+      ({ DARK_ON_PRODUCTION: DARK_TODAY, checkProductionBindings } =
+        await import('../../../scripts/prod-preflight.mjs'));
+    });
+    /** DARK_ON_PRODUCTION as the PR that binds production leaves it. */
+    const darkBound = () => DARK_TODAY.filter((b) => b !== 'r2_buckets/MAP_TILES');
+
+    /** What each check says of one step. Empty lists and "pass" are accepted. */
+    function walk(toml, envYaml, dark) {
+      const unlisted = parity
+        .compareEnvironments(toml)
+        .findings.filter((f) => f.level === 'unlisted')
+        .map((f) => f.key);
+      return {
+        parity: unlisted.filter((k) => k !== STALE),
+        preflight: checkProductionBindings(toml).status,
+        order: orderProblems(toml, envYaml, dark),
+      };
+    }
+    const ACCEPTED = { parity: [], preflight: 'pass', order: [] };
+    const NOT_RUN_REFUSAL =
+      'production binds MAP_TILES while the staging cases can still print NOT RUN: set streetMapArchiveLoaded to "true" first, in a PR whose staging run drew streets';
+
+    // Production bound, archive seen on staging, both blocks on today's key.
+    const start = () => withProduction(real());
+
+    test('step 0, where a refresh starts (production bound, the archive seen): accepted', () => {
+      const toml = start();
+      expect(keyIn(toml, 'staging')).toBe(keyIn(toml, 'production'));
+      expect(keyIn(toml, 'staging')).not.toBe(NEW_KEY);
+      expect(
+        parity
+          .compareEnvironments(toml)
+          .findings.filter((f) => f.level === 'unlisted')
+          .map((f) => f.key)
+      ).toEqual([STALE]);
+      expect(walk(toml, withFlag(stagingEnv(), 'true'), darkBound())).toEqual(ACCEPTED);
+    });
+
+    test('step 1 as the runbook writes it (the new key in both blocks, the flag "false"): refused by the staging-first rule', () => {
+      const toml = both(start(), NEW_KEY);
+      expect(walk(toml, withFlag(stagingEnv(), 'false'), darkBound())).toEqual({
+        parity: [],
+        preflight: 'pass',
+        order: [NOT_RUN_REFUSAL],
+      });
+    });
+
+    test('step 1 with production left on the old key ("production moves at its own deploy"): refused by the parity check and the staging-first rule', () => {
+      const toml = withKey(start(), 'staging', NEW_KEY);
+      expect(walk(toml, withFlag(stagingEnv(), 'false'), darkBound())).toEqual({
+        parity: ['value:MAP_TILES_ARCHIVE'],
+        preflight: 'pass',
+        order: [NOT_RUN_REFUSAL],
+      });
+    });
+
+    test('step 1 with the flag left "true": accepted by these checks, while the flag says loaded for a key nothing has loaded', () => {
+      const toml = both(start(), NEW_KEY);
+      expect(walk(toml, withFlag(stagingEnv(), 'true'), darkBound())).toEqual(ACCEPTED);
+    });
+
+    // Step 2 is the load: the workflow run and the lock rule change no file here.
+
+    test('step 3, the flag back to "true" with the new key in both blocks: accepted', () => {
+      const toml = both(start(), NEW_KEY);
+      expect(walk(toml, withFlag(stagingEnv(), 'true'), darkBound())).toEqual(ACCEPTED);
+    });
+
+    test('step 3 with production left on the old key: refused by the parity check', () => {
+      const toml = withKey(start(), 'staging', NEW_KEY);
+      expect(walk(toml, withFlag(stagingEnv(), 'true'), darkBound())).toEqual({
+        parity: ['value:MAP_TILES_ARCHIVE'],
+        preflight: 'pass',
+        order: [],
+      });
+    });
+
+    test('the one order these checks accept at every step: production unbound in step 1 and bound again after step 3', () => {
+      // Unbound is today's wrangler.toml, DARK_ON_PRODUCTION and UNDECIDED as
+      // they are on main, with the key moved in both blocks.
+      const unbound = both(real(), NEW_KEY);
+      expect(BINDS.production.test(unbound)).toBe(false);
+      const step1 = walk(unbound, withFlag(stagingEnv(), 'false'), DARK_TODAY);
+      const step3 = walk(unbound, withFlag(stagingEnv(), 'true'), DARK_TODAY);
+      const rebound = walk(both(start(), NEW_KEY), withFlag(stagingEnv(), 'true'), darkBound());
+      expect(step1).toEqual(ACCEPTED);
+      expect(step3).toEqual(ACCEPTED);
+      expect(rebound).toEqual(ACCEPTED);
+    });
+
+    test('the runbook says which step is refused with production bound, and names this walk', () => {
+      const runbook = fs.readFileSync(
+        path.join(__dirname, '../../../docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md'),
+        'utf8'
+      );
+      const at = runbook.indexOf('## Refreshing the archive');
+      const section = runbook.slice(at, runbook.indexOf('\n## ', at + 1)).replace(/\s+/g, ' ');
+      expect(section).toContain('a refresh walked with production bound (scenario G14)');
+      expect(section).toContain('Step 1 as written above is refused');
+    });
+  });
 });
 
 // Street-map CCR 2026-11-15, R20: the street layer has a switch the Worker

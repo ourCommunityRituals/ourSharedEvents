@@ -961,6 +961,10 @@ What sharing means, said plainly:
   `streetMapArchiveLoaded` is `"false"`.** Such a commit names a key that is not
   loaded yet; production would find no object and draw hexagons only, with no
   error. Nothing checks this today.
+- **A refresh as "Refreshing the archive" writes it is refused once production
+  is bound**: its first PR fails the staging-first rule. How a refresh runs
+  with production bound is open for the owner ("This order with production
+  bound", under "Refreshing the archive").
 
 Binding the bucket is not a launch: production stays closed and no
 `PRODUCTION_LIVE` is set.
@@ -1012,6 +1016,65 @@ name changes would avoid that, and would mean running the workflow from a branch
 with the bucket credential, which the stock load refuses for the same reason
 (CCR 2026-11-07 R-06). Changing the region is the same steps with a new region
 file.
+
+### This order with production bound (walked 2026-11-16, not yet decided)
+
+The steps above hold while production has no `MAP_TILES` binding, which is
+today. Once production is bound ("Production, later"), they were walked against
+the checks as they stand: each step's `wrangler.toml` and flag put through the
+parity check (`compareEnvironments` in `scripts/ci/env-parity.mjs`), the
+preflight's binding check (`checkProductionBindings` in
+`scripts/prod-preflight.mjs`) and the staging-first rule in
+`tests/unit/ci/env-parity.test.js`. The walk is that file's block "a refresh
+walked with production bound (scenario G14)". What it finds:
+
+| Step, with production bound                                        | Parity check                             | Staging-first rule                                                  | Today       |
+| ------------------------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------- | ----------- |
+| 0. Where a refresh starts: both blocks on the old key, flag `true` | passes                                   | passes                                                              | accepted    |
+| 1. As written above: new key in both blocks, flag `"false"`        | passes                                   | **refuses**: production bound while the staging cases print NOT RUN | **refused** |
+| 1. New key on staging only, production left on the old one         | **refuses**: `MAP_TILES_ARCHIVE` differs | **refuses**, as above                                               | **refused** |
+| 1. New key in both blocks, flag left `"true"`                      | passes                                   | passes                                                              | accepted    |
+| 3. Flag back to `"true"`, new key in both blocks                   | passes                                   | passes                                                              | accepted    |
+| 3. Flag `"true"`, production still on the old key                  | **refuses**: `MAP_TILES_ARCHIVE` differs | passes                                                              | **refused** |
+
+The preflight's binding check passes at every step: it compares bindings, not
+keys. Step 2 (the load) and step 4 (removing the old object) change no file.
+
+So, with production bound:
+
+- **Step 1 as written above is refused**, by the staging-first rule (the test
+  "step 1 as the runbook writes it"). The PR could not merge.
+- **"The old object stays for production" cannot be done by naming it.** Both
+  blocks must carry one key, so production cannot be held on the old key in
+  `wrangler.toml`; it moves to the new key in the same commit staging does,
+  and reads it from production's next deploy. The old object is still read
+  by a production deploy made before that commit, which is what step 4 waits
+  for.
+- **Leaving the flag `"true"` in step 1 passes these checks and is not a way
+  through.** The flag would then say the archive is loaded while the key it
+  names is not, and the staging street cases, which fail by name when the flag
+  is `"true"` and no street is drawn, would fail that PR's staging run and
+  every `main` run until the load. That changes what the flag means.
+- **One order passes every check with no rule changed: production unbound for
+  the length of the refresh.** Step 1 also takes production's binding out (and
+  puts `r2_buckets/MAP_TILES` back on `DARK_ON_PRODUCTION`, and the open entry
+  back in `env-parity.mjs`), steps 2 and 3 as written, then a PR binds
+  production again as in "Production, later". Production draws hexagons only
+  for that time, and the lines it changes are owner decisions. It is not
+  written here as the procedure.
+
+**Open, for the owner: how a refresh runs once production is bound.** No order
+keeps production bound through a refresh unless one of these changes, and
+choosing is the owner's:
+
+1. production unbound for the length of a refresh, as above (no rule changes;
+   production has no streets until it is bound again);
+2. a flag per key, so the staging cases can tell "the old key is loaded" from
+   "the new key is loaded" (the flag's meaning changes);
+3. production kept on the old key until the new one is seen, which needs the
+   parity check to allow `MAP_TILES_ARCHIVE` to differ for that time (the
+   parity rule changes);
+4. something else the owner names.
 
 ## Back to hexagons only
 
