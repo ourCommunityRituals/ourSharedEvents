@@ -198,6 +198,17 @@ const SURFACES: Surface[] = [
       '[data-testid="subscribe-submit"], [data-testid="cta-primary"], header a:not(.ose-langmenu-item), .hero a, .hero button',
   },
   {
+    // OSE-1990: the attendee map's own address. It is the landing page opened on
+    // its map view, so it is held to the landing's contract. A local worker has
+    // fewer events than the landing's rule asks for, so what is measured here
+    // is the map view's note and example, which the landing surface above never
+    // shows on entry.
+    path: '/map',
+    name: 'attendee map',
+    primaryCtaSelector:
+      '[data-testid="subscribe-submit"], [data-testid="cta-primary"], header a:not(.ose-langmenu-item), .hero a, .hero button',
+  },
+  {
     path: '/events',
     name: 'public events listing',
     primaryCtaSelector: 'main a, [data-testid*="event"]',

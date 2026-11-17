@@ -6,7 +6,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 21
+      "testCount": 23
     },
     {
       "file": "workers/oursharedevents/tests/admin-664-who-rich-content.spec.ts",
@@ -727,7 +727,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 20
+      "testCount": 21
     },
     {
       "file": "workers/oursharedevents/tests/category-registry.spec.ts",
@@ -1714,7 +1714,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 26
+      "testCount": 27
     },
     {
       "file": "workers/oursharedevents/tests/i18n-polish-arabic.spec.ts",
@@ -1770,7 +1770,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 44
+      "testCount": 48
     },
     {
       "file": "workers/oursharedevents/tests/landing-categories.spec.ts",
@@ -1939,6 +1939,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/map-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 30
     },
     {
       "file": "workers/oursharedevents/tests/map-place-links.spec.ts",
@@ -2162,7 +2169,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 29
+      "testCount": 30
     },
     {
       "file": "workers/oursharedevents/tests/platform-scope-tenant-writes.invariant.spec.ts",

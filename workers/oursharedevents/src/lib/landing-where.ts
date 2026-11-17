@@ -12,7 +12,8 @@
  * A phone also gets "Use my location", which the person presses (or has already
  * allowed). The phone works out a rough box itself and sends only that, in a
  * form body to POST /near; the server turns it into the nearest zip and sends
- * the browser to /?zip=NNNNN. From then on the page works from the zip area
+ * the browser to /?zip=NNNNN (to /map?zip=NNNNN when the form was on the map's
+ * own address, OSE-1990). From then on the page works from the zip area
  * alone. Nothing is stored and nothing is logged by this code. (Cloudflare's
  * request logs record page addresses, which is why the rough box travels in the
  * body and only the zip appears in the address.)
@@ -108,14 +109,26 @@ function boxValue(state: WhereState): string {
 }
 
 /**
+ * The page the box is on: the landing, or the map's own address (OSE-1990).
+ * The box, the choices under it and "Change" answer on that same page. A closed
+ * set, never text from a visitor: it is written into an action and two links.
+ */
+export type WherePage = '/' | '/map';
+
+/**
  * Every place a name means, each a link that narrows the search to it. All of
  * them, in state order: the person chooses; the page never picks one. Styled
  * by /ui.css only (`source-list` wraps, `filter-chip` is a 44px target): the
  * landing carries no stylesheet of its own for this (spine design check).
- * Each link stays in the page's language (OSE-1762).
+ * Each link stays in the page's language (OSE-1762) and on the page it is on.
  */
-function renderChoices(typed: string, matches: readonly PlaceMatch[], lang: Lang): string {
-  const home = withLangPrefix(lang, '/');
+function renderChoices(
+  typed: string,
+  matches: readonly PlaceMatch[],
+  lang: Lang,
+  page: string
+): string {
+  const home = withLangPrefix(lang, page);
   const items = matches
     .map(
       (m) =>
@@ -139,12 +152,17 @@ const LICENSE_LINK = '<a href="https://creativecommons.org/licenses/by/4.0/">CC 
  * is in the template, hidden until its script shows it. Town names come from
  * GeoNames (CC BY 4.0), credited under the box.
  */
-export function renderWhere(state: WhereState, lang: Lang = DEFAULT_LANG): string {
+export function renderWhere(
+  state: WhereState,
+  lang: Lang = DEFAULT_LANG,
+  page: WherePage = '/'
+): string {
   const value = boxValue(state);
   const note = message(state, lang);
-  const choices = state.kind === 'choose' ? renderChoices(state.typed, state.matches, lang) : '';
+  const choices =
+    state.kind === 'choose' ? renderChoices(state.typed, state.matches, lang, page) : '';
   const credit = fmt(lang, 'where.credit', { geonames: GEONAMES_LINK, license: LICENSE_LINK });
-  return `<form class="where-form" method="get" action="${withLangPrefix(lang, '/')}" role="search" data-testid="where-form">
+  return `<form class="where-form" method="get" action="${withLangPrefix(lang, page)}" role="search" data-testid="where-form">
           <label for="where-input" class="where-label">${msg(lang, 'where.label')}</label>
           <div class="where-row">
             <input id="where-input" name="where" class="input" type="text"
@@ -158,8 +176,12 @@ export function renderWhere(state: WhereState, lang: Lang = DEFAULT_LANG): strin
 }
 
 /** The area heading: the zip or place searched, when there is one. */
-export function renderAreaHeading(state: WhereState, lang: Lang = DEFAULT_LANG): string {
-  const change = `<a class="where-change" href="${withLangPrefix(lang, '/')}?change=1" data-testid="where-change">${msg(lang, 'where.change')}</a>`;
+export function renderAreaHeading(
+  state: WhereState,
+  lang: Lang = DEFAULT_LANG,
+  page: WherePage = '/'
+): string {
+  const change = `<a class="where-change" href="${withLangPrefix(lang, page)}?change=1" data-testid="where-change">${msg(lang, 'where.change')}</a>`;
   if (state.kind === 'zip') {
     return `${fmt(lang, 'where.near', { where: escapeHtml(state.area.zip) })} ${change}`;
   }
@@ -194,28 +216,39 @@ function emptyArea(line: string, lang: Lang): string {
         </div>`;
 }
 
-export function injectWhere(html: string, state: WhereState, lang: Lang = DEFAULT_LANG): string {
+export function injectWhere(
+  html: string,
+  state: WhereState,
+  lang: Lang = DEFAULT_LANG,
+  page: WherePage = '/'
+): string {
   return injectMarker(
-    injectMarker(html, WHERE_MARKER, renderWhere(state, lang)),
+    injectMarker(html, WHERE_MARKER, renderWhere(state, lang, page)),
     AREA_HEADING_MARKER,
-    renderAreaHeading(state, lang)
+    renderAreaHeading(state, lang, page)
   );
 }
 
 /**
  * The phone's location form posts to /near, which answers with the landing for
  * the zip. On a page in another language the form says which, so the answer is
- * in it too (OSE-1762). The English form is as it was: no field, the English
- * landing. Sent in the form body with the box, used for the redirect, kept nowhere.
+ * in it too (OSE-1762). On the map's own address the form says that as well,
+ * and the answer is the map page (OSE-1990). The English landing's form is as
+ * it was: no field, the English landing. Sent in the form body with the box,
+ * used for the redirect, kept nowhere.
  */
 const NEAR_FORM_FIELD = '<input type="hidden" name="g" />';
+/** What the form on /map sends, and the only value POST /near takes for it. */
+const NEAR_PAGE_MAP = 'map';
 
-export function injectNearLang(html: string, lang: Lang): string {
-  if (lang === DEFAULT_LANG || !html.includes(NEAR_FORM_FIELD)) return html;
-  return html.replace(
-    NEAR_FORM_FIELD,
-    `${NEAR_FORM_FIELD}\n          <input type="hidden" name="lang" value="${lang}" />`
-  );
+export function injectNearLang(html: string, lang: Lang, page: WherePage = '/'): string {
+  if (!html.includes(NEAR_FORM_FIELD)) return html;
+  const fields = [NEAR_FORM_FIELD];
+  if (lang !== DEFAULT_LANG) fields.push(`<input type="hidden" name="lang" value="${lang}" />`);
+  if (page === '/map') {
+    fields.push(`<input type="hidden" name="page" value="${NEAR_PAGE_MAP}" />`);
+  }
+  return fields.length === 1 ? html : html.replace(NEAR_FORM_FIELD, fields.join('\n          '));
 }
 
 /**
@@ -232,6 +265,9 @@ export async function handleNear(request: Request): Promise<Response> {
   // The page's language, when the form came from a page in another one. Only a
   // listed language is taken; anything else is the default.
   let lang: Lang = DEFAULT_LANG;
+  // The page the form came from: the landing, or the map's own address. One
+  // word is taken for it; anything else is the landing. Never an address.
+  let page: WherePage = '/';
   const type = (request.headers.get('Content-Type') ?? '').split(';')[0].trim().toLowerCase();
   if (type === 'application/x-www-form-urlencoded') {
     try {
@@ -239,6 +275,7 @@ export async function handleNear(request: Request): Promise<Response> {
       g = form.get('g');
       const asked = form.get('lang');
       if (isLang(asked)) lang = asked;
+      if (form.get('page') === NEAR_PAGE_MAP) page = '/map';
     } catch {
       g = null;
     }
@@ -248,7 +285,7 @@ export async function handleNear(request: Request): Promise<Response> {
     return Response.json({ ok: false, error: 'INVALID_AREA' }, { status: 400, headers: noStore });
   }
   const area = nearestZipArea(center.lat, center.lon);
-  const home = withLangPrefix(lang, '/');
+  const home = withLangPrefix(lang, page);
   const to = area ? `${home}?zip=${area.zip}` : `${home}?nozip=1`;
   return new Response(null, { status: 303, headers: { Location: to, ...noStore } });
 }

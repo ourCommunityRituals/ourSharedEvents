@@ -107,6 +107,10 @@ const OUTSIDE_THE_FOLDER: Readonly<Record<string, { why: Why; reason: string }>>
   '/landing': { why: 'site', reason: 'Landing alias.' },
   '/about': { why: 'site', reason: 'Landing alias.' },
   '/info': { why: 'site', reason: 'Landing alias.' },
+  '/map': {
+    why: 'site',
+    reason: "The attendee map's own address (OSE-1990): every area, not one event.",
+  },
   '/near': { why: 'site', reason: 'Landing "Use my location".' },
   '/subscribe': { why: 'site', reason: 'Site email capture.' },
   '/brands/:param/calendar.ics': {

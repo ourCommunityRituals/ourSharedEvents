@@ -1,0 +1,84 @@
+info:
+  name: OSE-1990 | GET /map?area=872664405ffffff | no map link reaches tracking or check-in
+  type: http
+  seq: 11
+
+http:
+  method: GET
+  url: "{{baseUrl}}/map?area=872664405ffffff"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The map's own address (OSE-1990) is held to the rule the landing's zoomed
+        // map is held to. This is the twin of "OSE-1896 | GET /?area=872664405ffffff |
+        // no map link reaches tracking or check-in": the same seeded area
+        // (bruno/fixtures/map-zoom-area-seed.sql) and the same sweep, every href from
+        // the map's wrapper up to the Share script. None may be a poster scan (/q/),
+        // a counted short link (/s/), a share-code screen (/e/ /r/ /c/) or a
+        // check-in, with or without a language prefix and with or without an origin.
+        // What differs at /map: the way back is /map, and no link in the map leaves
+        // for the landing page.
+        // This request runs before "taps after", so reading /map is also inside the
+        // window in which the seeded tap total must not move.
+        const body = String(res.getBody());
+        const start = body.indexOf('data-testid="amap-wrap"');
+        const end = body.indexOf('data-testid="share-script"');
+        const zoomed = start >= 0 && end > start ? body.slice(start, end) : '';
+        const hrefs = Array.from(zoomed.matchAll(/href="([^"]*)"/g)).map(function (m) { return m[1]; });
+        const TRACKED = /^(?:https?:\/\/[^\/]+)?(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/(?:q|s|e|r|c)\//i;
+
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        test('It is the map page: Back to all areas returns to /map, and the canonical is /map', function () {
+          const backTag = (/<a\b[^>]*data-testid="amap-back"[^>]*>/.exec(zoomed) || [''])[0];
+          expect((/href="([^"]*)"/.exec(backTag) || [])[1]).to.equal('/map');
+          const canonicals = body.match(/<link rel="canonical"[^>]*>/g) || [];
+          expect(canonicals.length).to.equal(1);
+          expect(canonicals[0]).to.match(/href="https?:\/\/[^\/"]+\/map"/);
+        });
+
+        test('The sweep has something to sweep (the zoomed part and its links were found)', function () {
+          expect(zoomed.length).to.be.above(1000);
+          // 3 list rows + 10 event links, then per panel: Prev/Next, the card links, Show all.
+          expect(hrefs.length).to.be.at.least(40);
+          expect(hrefs).to.include('/events/map-zoom-a/register');
+        });
+
+        test('No link starts with /q/, /s/, /e/, /r/ or /c/', function () {
+          expect(hrefs.filter(function (h) { return TRACKED.test(h); })).to.eql([]);
+        });
+
+        test('No link contains checkin or check-in', function () {
+          expect(hrefs.filter(function (h) { return /check-?in/i.test(h); })).to.eql([]);
+        });
+
+        test('None of the seeded short codes is on the page at all', function () {
+          for (const code of ['mzPub1', 'mzReg1', 'mzChk1', 'mzTix1', 'mzDon1', 'mzHtp1', 'mzOff1', 'mzTix2']) {
+            expect(body, code).to.not.include(code);
+          }
+        });
+
+        // With a street layer on the page the map credits its sources, inside the
+        // zoomed part: OpenStreetMap's copyright page in the page's language, and
+        // Protomaps (lib/attendee-map.ts). Those two links are known then, and only
+        // then, as in the landing's twin of this request.
+        const streets = body.includes('data-testid="amap-streets"');
+        const lang = (/<html lang="([a-z]{2})"/.exec(body) || [])[1];
+        const credit = ['https://www.openstreetmap.org/copyright/' + lang, 'https://protomaps.com'];
+
+        test('Every link is a place on this page, the map page, an event page, a register form or an https site (with streets: or the map credit)', function () {
+          const known = /^(?:#amap-(?:dot-[1-3]|places)|\/(?:[a-z]{2}\/)?map(?:\?[^"]*)?|\/events\/map-zoom-[a-j](?:\/map-zoom-[a-j]|\/register)?|https:\/\/[a-z.-]+\.map-zoom\.example\/[ab])$/;
+          expect(hrefs.filter(function (h) { return !known.test(h) && !(streets && credit.includes(h)); })).to.eql([]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

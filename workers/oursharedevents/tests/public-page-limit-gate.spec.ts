@@ -102,7 +102,16 @@ describe('OSE-1986 | every page address is limited, or listed with a reason', ()
   }
 
   test('the landing and the event list are not on the unlimited list', () => {
-    for (const shape of ['/', '/home', '/welcome', '/landing', '/about', '/info', '/events']) {
+    for (const shape of [
+      '/',
+      '/home',
+      '/welcome',
+      '/landing',
+      '/about',
+      '/info',
+      '/map',
+      '/events',
+    ]) {
       expect(UNLIMITED_PAGES[shape], shape).toBeUndefined();
     }
   });

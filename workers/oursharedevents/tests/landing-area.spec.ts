@@ -344,6 +344,43 @@ describe('the landing threshold (LIST_MAX): doors lead below it, the map leads a
     expect(out.html).not.toContain('once this area has');
   });
 
+  // The map's own address, /map (OSE-1990): the page opens on the map view.
+  // Only the open view changes. What the map draws, and `leadsWithMap`, follow
+  // the same count and the same latch as on the landing.
+  it('mapFirst below it: the map view opens, on the same note, and the rule is not passed', () => {
+    const items = Array.from({ length: LIST_MAX - 1 }, (_, i) => ev({ id: `e${i}` }));
+    const out = renderLandingArea(items, { now: NOW, mapFirst: true });
+    expect(out.defaultView).toBe('map');
+    expect(out.leadsWithMap).toBe(false);
+    expect(out.html).toContain('id="view-map" class="toggle-radio" checked');
+    expect(out.html).not.toContain('id="view-list" class="toggle-radio" checked');
+    expect(out.html).toContain(`There are ${LIST_MAX - 1} so far`);
+    expect(out.html).toContain('data-testid="amap-example"');
+    expect(out.html).not.toContain('data-testid="amap-svg"');
+    expect(out.mapCells).toEqual([]);
+    expect(out.html.split('data-testid="area-card"').length - 1).toBe(LIST_MAX - 1);
+  });
+
+  it('mapFirst off, or not a plain true, leaves the list open below the rule', () => {
+    const items = Array.from({ length: 3 }, (_, i) => ev({ id: `e${i}` }));
+    for (const mapFirst of [false, undefined, 'yes' as unknown as boolean]) {
+      const out = renderLandingArea(items, { now: NOW, mapFirst });
+      expect(out.defaultView, String(mapFirst)).toBe('list');
+      expect(out.html, String(mapFirst)).toContain('id="view-list" class="toggle-radio" checked');
+    }
+  });
+
+  it('mapFirst at the rule changes nothing: the map already leads', () => {
+    const items = Array.from({ length: LIST_MAX }, (_, i) => ev({ id: `e${i}` }));
+    const plain = renderLandingArea(items, { now: NOW });
+    expect(renderLandingArea(items, { now: NOW, mapFirst: true })).toEqual(plain);
+    expect(renderLandingArea(items, { now: NOW, mapFirst: false })).toEqual(plain);
+  });
+
+  it('mapFirst with no events is the plain empty state', () => {
+    expect(renderLandingArea([], { now: NOW, mapFirst: true })).toEqual(renderEmptyLandingArea());
+  });
+
   it('events beyond the widest window do not count toward the crossover', () => {
     const near = Array.from({ length: 3 }, (_, i) => ev({ id: `n${i}`, startDateISO: inDays(5) }));
     const far = Array.from({ length: 20 }, (_, i) =>

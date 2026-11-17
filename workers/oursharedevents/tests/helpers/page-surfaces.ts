@@ -73,6 +73,7 @@ export const PAGE_SURFACES: Readonly<Record<string, PageSurface>> = {
   '/landing': page('Landing alias.', '/landing'),
   '/about': page('Landing alias.', '/about'),
   '/info': page('Landing alias.', '/info'),
+  '/map': page("The attendee map's own address: the landing opened on its map view.", '/map'),
   '/near': notPage('Landing "Use my location": a POST target; GET forwards 303 to /.', '/near'),
 
   // ── Events ───────────────────────────────────────────────────────────────
@@ -206,6 +207,7 @@ export const PAGE_SURFACES: Readonly<Record<string, PageSurface>> = {
  */
 export const LANGUAGE_PREFIX_SAMPLES: readonly string[] = [
   '/es/',
+  '/es/map',
   '/es/events',
   '/es/events/no-such-event',
 ];

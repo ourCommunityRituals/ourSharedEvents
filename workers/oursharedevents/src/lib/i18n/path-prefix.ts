@@ -46,6 +46,8 @@ export type LanguagePage =
   | { kind: 'event'; id: string; name?: string }
   | { kind: 'share'; code: string }
   | { kind: 'landing' }
+  // The attendee map's own address (OSE-1990): `/es/map`.
+  | { kind: 'map' }
   | { kind: 'events' }
   // OSE-1850: an event's form screens (register, check in, feedback, updates).
   | { kind: 'form'; id: string; screen: EventFormScreen };
@@ -64,6 +66,7 @@ const EVENT_FORM = /^\/events\/([A-Za-z0-9_-]{1,128})\/(register|checkin|survey|
 export function matchLanguagePage(rest: string): LanguagePage | null {
   // OSE-1762: the landing (`/es/`, `/es`) and the event list (`/es/events`).
   if (rest === '/') return { kind: 'landing' };
+  if (rest === '/map') return { kind: 'map' };
   if (rest === '/events') return { kind: 'events' };
   // OSE-1850: a form screen is a page under a prefix. The other screens (tv,
   // poster, calendar) are not: they have not joined the language layer.

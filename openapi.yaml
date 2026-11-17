@@ -296,6 +296,65 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /map:
+    get:
+      tags:
+        - Public
+      summary: The attendee map's own address
+      description: |
+        The landing page opened on its map view (owner 2026-11-11 and 2026-11-17).
+        The landing keeps its own list and map. What the map draws is decided as
+        on the landing, by the same 10-event rule: below it the page shows the
+        note and the example map, never a real area.
+
+        Everything on the page answers at `/map`: a hexagon opens
+        `/map?area=<cell>`, "Back to all areas" returns to `/map` and keeps the
+        search, and the search box, its choices and "Change" stay on `/map`. The
+        canonical link is `/map` with no query. The same page is served under a
+        language prefix (`/es/map`). The phone's location button on `/map` answers
+        on `/map` too: its form sends `page=map` to `POST /near`, which answers
+        303 to `/map?zip=` of the nearest zip.
+
+        Place, not person: `area` is an H3 res-7 cell and nothing else. Any other
+        value is ignored and is never written back into the page. No cookie is set.
+      operationId: attendeeMapPage
+      security: []
+      parameters:
+        - name: area
+          in: query
+          required: false
+          description: An H3 res-7 cell, 15 hex characters. Opens that area zoomed in. Any other value is ignored.
+          schema:
+            type: string
+            pattern: '^[0-9a-f]{15}$'
+        - name: where
+          in: query
+          required: false
+          description: A town or city name, or a 5-digit zip, read as on the landing page (`/`).
+          schema:
+            type: string
+            maxLength: 60
+        - name: zip
+          in: query
+          required: false
+          description: A 5-digit zip, read as on the landing page (`/`). Sent by POST /near when the location form on `/map` asked.
+          schema:
+            type: string
+            pattern: '^\d{5}(-\d{4})?$'
+      responses:
+        '200':
+          description: The landing page, opened on its map view.
+          content:
+            text/html:
+              schema:
+                type: string
+        '429':
+          description: Too many loads from one caller in a minute, counted together with the landing page. An HTML page in the reader's language.
+          content:
+            text/html:
+              schema:
+                type: string
+
 components:
   securitySchemes:
     adminKey:
