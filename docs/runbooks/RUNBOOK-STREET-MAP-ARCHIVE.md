@@ -773,33 +773,56 @@ writes nothing and can run at any time.
    for streets, and an archive found missing less than a minute ago read
    nothing and write no line.
 
-   In every staging run's `T2: Bruno Pages contract` log, the landing case and
-   the area-map case each print one test whose name starts `Street-map switch:`
-   and says which way the switch is. With it off, that test fails if a street
-   layer is drawn. With it on, in the next staging run's
-   `T2: Bruno Pages contract` log, the four cases that read
-   `streetMapArchiveLoaded` (the two landing cases, the area-map case in folder
-   15 and the zoomed list case in folder 16) print their street assertions and no
-   `NOT RUN` line. The three road tests among them (the two landing cases and
-   the area-map case) pass only with 50 or more path commands of highway plus
-   major road (`ROAD_FLOOR`), so a layer of water with a stub of road is red by
-   name. In T4k, the first test of `tests/e2e/3-flows/map-place-panel.spec.ts`
-   records which page was drawn, the "no street map" note or the dot map over
-   streets, as a test annotation.
+   **Read the next staging run.** In its `T2: Bruno Pages contract` job:
+   - **The switch.** The landing case and the area-map case each print one
+     test whose name starts `Street-map switch:` and says which way the switch
+     is. With it off, that test fails if a street layer is drawn.
+   - **What was not checked.** The job summary lists every test of the run
+     whose name starts `NOT RUN (`, each with its request. The four cases that
+     read `streetMapArchiveLoaded` (the two landing cases, the area-map case in
+     folder 15 and the zoomed list case in folder 16) each carry one while no
+     street is drawn, and the area-map case carries one more while
+     `streetMapTownAnchor` is empty. A `NOT RUN` test passes only while the flag
+     is exactly `"false"`. With streets drawn, the four street names are gone
+     from the summary and the street assertions are in the log in their place.
+   - **Roads, not any path.** The three road tests (the two landing cases and
+     the area-map case) pass only with 50 or more path commands of highway plus
+     major road (`ROAD_FLOOR`), so a layer of water with a stub of road is red
+     by name.
 
-9. **Make the staging cases binding.** One-line PR: `streetMapArchiveLoaded` to
-   `"true"` in `bruno/ose-pages/environments/ose-staging.yml`. It comes after
-   step 8: the flag may not be `"true"` while `STREET_MAP` is `"off"` on staging
-   (`tests/unit/ci/env-parity.test.js`). From then on a
-   staging run that draws no streets is red, not a printed `NOT RUN`. **As things
-   stand that PR is red on the four T4k axe tests.**
-   `tests/e2e/3-flows/map-place-panel.spec.ts` (`sortUndecided`, and the lines
-   after its call) sets apart the text drawn on the map itself, town names and
-   dot numbers, whose contrast axe cannot decide over streets. While the flag is
-   `"false"` that is a warning in the run ("T4k street map text contrast NOT
-   DECIDED"); once it is `"true"` it is a failure. So that contrast is judged
-   another way first, and the spec changed to match, before this PR. Seen on a
-   local Worker over a synthetic archive (PR #1272), not on staging.
+   In T4k (`tests/e2e/3-flows/map-place-panel.spec.ts`):
+   - The first test records which page was drawn, the "no street map" note or
+     the dot map over streets, as a test annotation.
+   - With streets drawn, the four accessibility tests measure the contrast of
+     every text on the map and record each kind's lowest ratio as a
+     `map-text-contrast` annotation. A text under its ratio is a warning in the
+     run, "T4k street map text UNDER ITS CONTRAST RATIO", while the flag is
+     `"false"`. Step 9 waits until a run carries no such warning.
+
+9. **Make the staging cases binding.** One PR, two lines in
+   `bruno/ose-pages/environments/ose-staging.yml`. It comes after step 8: the
+   flag may not be `"true"` while `STREET_MAP` is `"off"` on staging
+   (`tests/unit/ci/env-parity.test.js`).
+   - **First, no contrast warning.** The last staging run with streets drawn
+     carries no "T4k street map text UNDER ITS CONTRAST RATIO" warning. Once
+     the flag is `"true"` that warning is a failure, by name, with the measured
+     ratio. **This is what holds step 9 today:** the number on a pale dot
+     (`.amap-blk .amap-dot` in `lib/map-zoom-style.ts`) measures under 2.5:1 in
+     both themes, where 4.5:1 is needed. Its style is changed first, in a PR of
+     its own; the colours are the owner's choice, from `packages/tokens`.
+   - **Name a town.** Set `streetMapTownAnchor` to `"Name|lat|lng"`: a town
+     the street layer names inside the frame of area `872664570ffffff` and its
+     six neighbours, with that town's own point as OpenStreetMap has it. Take
+     the name from the `<text class="as-t">` elements of `streets.svg` in
+     staging's answer to `/api/v2/map/areas?cells=872664570ffffff&around=1`.
+     The area-map case then fails unless the layer draws that name within 30
+     units of where the town is, so a file cut for another place, or tiles out
+     of place, is red by name.
+   - **Set the flag.** `streetMapArchiveLoaded` to `"true"`. With the flag
+     `"true"` and no town named, the area-map case fails by name.
+   - **Read that PR's staging run.** No test named `NOT RUN` for the street
+     layer or the town is in the T2 summary, and T4k is green. From then on a
+     staging run that draws no streets is red by name.
 
 ## What stops a run
 

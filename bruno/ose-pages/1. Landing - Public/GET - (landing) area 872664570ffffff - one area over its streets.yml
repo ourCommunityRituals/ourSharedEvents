@@ -19,7 +19,9 @@ runtime:
         //
         // The rule under test in both states (location-precision CCR, F41): a dot is
         // drawn only over a street layer. With no street layer the places are a list.
-        // The three states are the same as in the landing case before this one.
+        // The three states are the same as in the landing case before this one, and
+        // so is NOT RUN: a test of that name, which passes only while the flag is
+        // exactly "false".
         //
         // Roads, not any path (street-map CCR 2026-11-15, R17), as in that case:
         // the M and L commands of the highway path (as-r as-3) and the major-road
@@ -28,7 +30,8 @@ runtime:
         // measured had 253 (one area over Sawyer, Michigan).
         const body = String(res.getBody());
         const has = function (id) { return body.includes('data-testid="' + id + '"'); };
-        const loaded = String(bru.getEnvVar('streetMapArchiveLoaded')) === 'true';
+        const flag = String(bru.getEnvVar('streetMapArchiveLoaded'));
+        const loaded = flag === 'true';
         const ROAD_FLOOR = 50;
         const roadCommands = function (layer) {
           let n = 0;
@@ -93,7 +96,9 @@ runtime:
               expect(has('amap-streets'), 'the environment file says the street-map archive is loaded, and the zoomed area drew no street layer').to.equal(true);
             });
           } else {
-            console.log('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): dots over the street layer, OpenStreetMap credit');
+            test('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): dots over the street layer, OpenStreetMap credit', function () {
+              expect(flag, 'a NOT RUN test passes only while the environment file sets streetMapArchiveLoaded to "false"').to.equal('false');
+            });
           }
         }
 

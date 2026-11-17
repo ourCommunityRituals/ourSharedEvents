@@ -365,7 +365,8 @@ describe('the street map reaches staging before production', () => {
     ];
     for (const text of cases) {
       expect(text).toContain("bru.getEnvVar('streetMapArchiveLoaded')");
-      expect(text).toMatch(/console\.log\('NOT RUN \(street-map archive not loaded/);
+      expect(text).toMatch(/test\('NOT RUN \(street-map archive not loaded/);
+      expect(text).not.toMatch(/console\.\w+\([^\n]*NOT RUN/);
       expect(text).toMatch(/streetMapArchiveLoaded is true for this environment/);
     }
   });

@@ -123,6 +123,27 @@
  * Not seen failing here: a water-only street layer. This spec does not count
  * roads; the Bruno street cases do, and failed on that layer on the same rig.
  *
+ * THE CONTRAST OF TEXT ON THE MAP IS MEASURED (2026-11-16, street-map CCR R27).
+ * T2 above was a dead end: with the flag "true" the four axe tests failed because
+ * axe could not decide, so the flag could never be set on a green chain. Text
+ * drawn on the map is now judged by measurement (helpers/map-text-contrast.ts
+ * reads the colours this theme resolved; scripts/ci/map-text-contrast.mjs has
+ * the rule), and "not decided" is gone for it:
+ *   under its ratio, flag "false"  -> reported: an annotation, and a warning
+ *                                     with the figures, once a test
+ *   under its ratio, flag "true"   -> the axe test fails by name, with the figures
+ *   a text the judge does not know, a dot with no number read, or a node axe
+ *   left undecided in the drawing that holds no text -> fails, whatever the flag
+ * No street layer is on staging, so no run of this spec has judged a text yet.
+ * The judge itself is born red where streets can be drawn today:
+ * tests/e2e/2-pages/street-map-contrast.component.spec.ts (the real landing
+ * handler over a synthetic archive, both themes, Chromium and WebKit, in T0).
+ * What it finds there is what this spec will find on staging once streets are
+ * drawn: the number on a pale dot is 2.10:1 (light) and 2.38:1 (dark), under
+ * AA. So the flag still cannot be set until that number is drawn another way;
+ * the difference is that the run now says which text, and by how much.
+ * tests/unit/ci/street-map-staging-cases.test.js holds this spec's lines.
+ *
  * BORN RED (2026-11-15, the Share test and the stg edge). On staging "Share hands
  * the share sheet that card's own link and title" was red in four of eight main
  * runs (43668128696, 43669630533, 43674376427, 43676301628). What it recorded was
@@ -151,11 +172,13 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { edgeOwnRequest } from '../../../scripts/ci/edge-read.mjs';
+import { judgeMapTextOn } from '../helpers/map-text-contrast';
 import {
   AREA,
   AREA_PATH,
   BASE_URL,
   EVENTS_AT,
+  PLACES,
   STREETS_LOADED,
   TITLE,
   card,
@@ -570,6 +593,23 @@ async function onTheDrawing(page: Page, selectors: string[]): Promise<boolean[]>
   );
 }
 
+/** Which of these selectors name a `<text>` of the drawing, or an element that holds one? */
+async function holdsMapText(page: Page, selectors: string[]): Promise<boolean[]> {
+  return page.evaluate(
+    (sels) =>
+      sels.map((s) => {
+        try {
+          const el = document.querySelector(s);
+          if (!el || el.closest('[data-testid="amap-svg"]') == null) return false;
+          return el.closest('text') != null || el.querySelector('text') != null;
+        } catch {
+          return false;
+        }
+      }),
+    selectors
+  );
+}
+
 /**
  * What axe could not decide, sorted. With no street layer on the page nothing is
  * sorted: every undecided rule is a failure, as before.
@@ -586,9 +626,13 @@ async function onTheDrawing(page: Page, selectors: string[]): Promise<boolean[]>
  *   on the map      Town names over roads and water, and the one-digit numbers
  *                   on the dots (axe does not judge text that short). axe cannot
  *                   decide these at all. They come back as `onTheMap`, and the
- *                   caller fails on them once the street map is binding.
+ *                   caller judges every text of the drawing by measurement
+ *                   (helpers/map-text-contrast.ts). Only a node that is a
+ *                   `<text>`, or holds one, is handed over: the judge reads
+ *                   text and nothing else.
  *
- * Any other rule, or a node this cannot place, stays undecided, so it fails.
+ * Any other rule, a node this cannot place, or a node in the drawing with no
+ * text in it, stays undecided, so it fails.
  */
 async function sortUndecided(
   page: Page,
@@ -609,10 +653,16 @@ async function sortUndecided(
     page,
     nodes.map((n) => n.selector ?? ':not(*)')
   );
+  const text = await holdsMapText(
+    page,
+    nodes.map((n) => n.selector ?? ':not(*)')
+  );
   const contrast = (n: (typeof nodes)[number]) =>
     n.rule === 'color-contrast' && n.selector !== null;
-  const onTheMap = nodes.filter((n, i) => contrast(n) && drawn[i]).map((n) => n.name);
-  const undecided = nodes.filter((n) => !contrast(n)).map((n) => n.name);
+  const onTheMap = nodes.filter((n, i) => contrast(n) && drawn[i] && text[i]).map((n) => n.name);
+  const undecided = nodes
+    .filter((n, i) => !contrast(n) || (drawn[i] && !text[i]))
+    .map((n) => n.name);
   if (nodes.some((n, i) => contrast(n) && !drawn[i])) {
     const hide = await page.addStyleTag({
       content: '[data-testid="amap-streets"]{display:none!important}',
@@ -651,7 +701,7 @@ test.describe('Zoomed map: accessibility in both themes (OSE-1886, OSE-1891)', (
       }) => {
         await page.setViewportSize({ width: screen.width, height: screen.height });
         await page.emulateMedia({ colorScheme: scheme });
-        const mapTextUndecided = new Set<string>();
+        const mapTextUnderRatio = new Set<string>();
         for (const hash of ['', '#amap-dot-1', '#amap-dot-2']) {
           await gotoArea(page, hash);
           await expect.poll(() => openPanels(page)).toEqual(hash ? [Number(hash.slice(-1))] : []);
@@ -698,26 +748,54 @@ test.describe('Zoomed map: accessibility in both themes (OSE-1886, OSE-1891)', (
             undecided,
             `axe could not decide these rules on ${AREA_PATH}${hash}, ${scheme}, ${screen.name}`
           ).toEqual([]);
-          if (onTheMap.length > 0) {
-            for (const name of onTheMap) mapTextUndecided.add(name);
+          // Text drawn on the map is decided by measurement, not by axe: every
+          // `<text>` of the drawing, from the colours this theme resolved
+          // (helpers/map-text-contrast.ts). What axe left undecided there
+          // (onTheMap) is among the texts read.
+          if ((await page.getByTestId('amap-streets').count()) === 0) {
+            expect(onTheMap, 'no street layer: no text is set apart as drawn on the map').toEqual(
+              []
+            );
+            continue;
+          }
+          const judged = await judgeMapTextOn(page);
+          for (const line of judged.summary) {
             test.info().annotations.push({
-              type: 'axe-map-text-not-decided',
-              description: `${hash || 'list'} ${scheme} ${screen.name}: ${onTheMap.join(' | ')}`,
+              type: 'map-text-contrast',
+              description: `${hash || 'list'} ${scheme} ${screen.name}: ${line}`,
+            });
+          }
+          expect(
+            judged.texts.filter((t) => t.kind === 'other').map((t) => t.text),
+            'a text on the map the contrast judge does not know'
+          ).toEqual([]);
+          // A dot is drawn for every place, and a number on every dot: the judge
+          // read the page, or it judged nothing.
+          expect(
+            judged.texts.filter((t) => t.kind === 'dot number' || t.kind === 'pale dot number')
+              .length,
+            `the contrast judge read a number for each of the ${PLACES.length} dots ` +
+              `(axe left undecided on the map: ${onTheMap.join(' | ') || 'nothing'})`
+          ).toBe(PLACES.length);
+          if (judged.failures.length > 0) {
+            for (const line of judged.failures) mapTextUnderRatio.add(line);
+            test.info().annotations.push({
+              type: 'map-text-under-its-ratio',
+              description: `${hash || 'list'} ${scheme} ${screen.name}: ${judged.failures.join(' | ')}`,
             });
             expect(
               STREETS_LOADED,
-              `streetMapArchiveLoaded is "true", so the street map is binding, and axe cannot ` +
-                `judge the contrast of the text drawn on it (${onTheMap.join(' | ')}). ` +
-                `Judge it another way before the flag is set (street-map CCR, R24).`
+              `streetMapArchiveLoaded is "true", so the street map is binding, and text drawn ` +
+                `on it is under its contrast ratio, by measurement:\n${judged.failures.join('\n')}`
             ).toBe(false);
           }
         }
         // Shown where a person looks, once a test: not hidden, and not red while
         // the street map is not binding. The annotations above name each text.
-        if (mapTextUndecided.size > 0) {
+        if (mapTextUnderRatio.size > 0) {
           console.log(
-            `::warning title=T4k street map text contrast NOT DECIDED::${scheme} theme on a ${screen.name}: ` +
-              `axe cannot judge ${mapTextUndecided.size} text(s) drawn on the street map (town names, dot numbers). ` +
+            `::warning title=T4k street map text UNDER ITS CONTRAST RATIO::${scheme} theme on a ${screen.name}: ` +
+              `${[...mapTextUnderRatio].join(' | ')}. ` +
               `Not a failure while streetMapArchiveLoaded is "false"; a failure once it is "true".`
           );
         }
