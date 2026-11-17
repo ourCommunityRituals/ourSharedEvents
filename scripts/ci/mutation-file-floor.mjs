@@ -60,6 +60,7 @@ export const FLOORS = {
   // 23, with one equivalent mutant disabled in the source with its reason (the
   // '' fallback of the website, read only by startsWith('https://')). OSE-1955
   // (2026-11-11) added the sponsor query of fetchEventPageSocialData at 1 of 1.
+  // G11 (2026-11-16) added the landing's street call at 10 of 10.
   'src/handlers/pages.ts': 100,
   // OSE-1955 (2026-11-11): the rest of the sponsor thumbnails, at the scores of
   // the run that added them. sponsor-logo.ts (the host rule, validateLogoUrl and
@@ -126,6 +127,17 @@ export const FLOORS = {
   // its `// Stryker disable` line, which never took, is gone from the source.
   // Three more are disabled in the source with their reasons. Never lower.
   'src/lib/street-map.ts': 99.6,
+  // The street layer's two callers (base-map plan, gap G11, 2026-11-16). The
+  // public area map's handler, map-areas.ts, the whole file: a local run of the
+  // render group scored 107 of 107 (0 timed out). The first run left 13 alive,
+  // 11 of them killed since by tests in map-areas.spec.ts (each refusal's whole
+  // body, the 256-character limit at its edge, the surface in the STREET_LAYER
+  // line). The other two are disabled in the source with their reason: the
+  // Regex mutants that drop `^` or `$` from the strip of STREET_STYLE's tags,
+  // which open and close that constant and appear nowhere else in it. The
+  // landing's street call joined pages.ts above at 10 of 10, with one
+  // equivalent `?.` disabled in the source with its reason. Never lower.
+  'src/handlers/map-areas.ts': 100,
   // W1 (OSE-2095, owner 2026-11-16): the ZIP at the Where step, group `zip`.
   // event-zip.ts whole; the other four only in the ranges W1 wrote or changed
   // (rangeOf in stryker.conf.mjs). A local run, 2026-11-16, after the merge of

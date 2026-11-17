@@ -104,6 +104,10 @@ export const MUTATION_PATHS = Object.freeze([
   'workers/oursharedevents/tests/pmtiles.spec.ts',
   'workers/oursharedevents/tests/street-map.spec.ts',
   'workers/oursharedevents/tests/street-map-landing.spec.ts',
+  // The landing's street call (a marker range of pages.ts) and the public area
+  // map's handler are mutated since 2026-11-16 (G11). This spec kills the
+  // landing's; map-areas.spec.ts, above, the handler's.
+  'workers/oursharedevents/tests/landing-street-call.spec.ts',
   'workers/oursharedevents/tests/fat-finger.property.spec.ts',
   // W1 (OSE-2095): the ZIP at the Where step and the search that reads it
   // (group `zip`), and the node specs that kill its mutants.
