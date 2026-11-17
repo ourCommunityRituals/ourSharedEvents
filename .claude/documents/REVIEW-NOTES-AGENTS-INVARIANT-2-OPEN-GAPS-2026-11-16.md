@@ -12,7 +12,7 @@ Date: 2026-11-16 · Story: OSE-2087 · Class: governance file (5+ loops, human g
 
 |                                                           |                                                                                                              |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| System score (the proposed change: "the gaps are closed") | **29%**                                                                                                      |
+| System score (the proposed change: "the gaps are closed") | loop 1: **29%** · loop 2: **0%**                                                                             |
 | Assessment confidence                                     | about 70%: three findings were read in source by two readers; nothing was run; eleven handlers were not read |
 | Gate                                                      | **Fail.** Below 95%. Human gate, questions below                                                             |
 
