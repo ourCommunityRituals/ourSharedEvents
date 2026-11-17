@@ -302,7 +302,7 @@ export const pl: Record<MessageKey, string> = {
   'map.listCaptionNamed':
     '{events} w tym obszarze ({name}) w ciągu najbliższych {days} dni, według miejsca. Miejsce to kwartał, nigdy adres ulicy.',
   'map.noTiles':
-    '<strong>Mapy ulic tego obszaru jeszcze tu nie ma.</strong> Jego miejsca są wymienione poniżej. Otwórz miejsce, aby zobaczyć jego wydarzenia.',
+    '<strong>Mapy ulic tego obszaru jeszcze tu nie ma.</strong> Jego wydarzenia są wymienione poniżej.',
   'map.zoomEmpty': '<strong>Brak nadchodzących wydarzeń w tym obszarze.</strong>',
   'map.unplaced': 'Gdzieś w tym obszarze',
   'map.dotTitle': 'Punkt {n}: {count}',

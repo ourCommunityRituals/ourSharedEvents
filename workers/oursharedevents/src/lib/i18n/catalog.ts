@@ -325,7 +325,7 @@ const en = {
   'map.listCaptionNamed':
     '{events} in this area ({name}) over the next {days} days, listed by place. A place is a block, never a street address.',
   'map.noTiles':
-    '<strong>The street map for this area is not here yet.</strong> Its places are listed below. Open a place to see its events.',
+    '<strong>The street map for this area is not here yet.</strong> Its events are listed below.',
   'map.zoomEmpty': '<strong>No upcoming events in this area.</strong>',
   'map.unplaced': 'Somewhere in this area',
   'map.dotTitle': 'Spot {n}: {count}',
@@ -718,7 +718,7 @@ const es: Record<MessageKey, string> = {
   'map.listCaptionNamed':
     '{events} en esta zona ({name}) en los próximos {days} días, por lugar. Un lugar es una cuadra, nunca una dirección.',
   'map.noTiles':
-    '<strong>El mapa de calles de esta zona todavía no está disponible.</strong> Sus lugares aparecen abajo. Abre un lugar para ver sus eventos.',
+    '<strong>El mapa de calles de esta zona todavía no está disponible.</strong> Sus eventos aparecen abajo.',
   'map.zoomEmpty': '<strong>No hay eventos próximos en esta zona.</strong>',
   'map.unplaced': 'En algún lugar de esta zona',
   'map.dotTitle': 'Punto {n}: {count}',

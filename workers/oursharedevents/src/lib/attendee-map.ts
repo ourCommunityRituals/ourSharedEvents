@@ -816,7 +816,7 @@ function renderZoom(
         days,
       })
     : fmt(lang, streets ? 'map.zoomCaption' : 'map.listCaption', { events, days });
-  // No street map, no floating dots (OSE-1894): the places are the list below.
+  // No street map, no floating dots (OSE-1894): the event cards below are the list.
   const drawing = streets
     ? zoomSvg(cell, dots, lang, streets)
     : `<div class="map-placeholder" data-testid="amap-no-tiles" role="status"><p>${msg(lang, 'map.noTiles')}</p></div>`;

@@ -401,6 +401,24 @@ describe('no street map: the places are a list, with their panels', () => {
     expect(html).toMatch(/<a href="#amap-dot-2" class="[^"]*" data-testid="amap-dot"/);
   });
 
+  // @born-red no-tiles note still sending people to the removed place list | method: old en, es and pl text put back, seen failing at the first language (en)
+  test('edge: with no street map the note points at the event cards, not at a place list, in all four languages', () => {
+    const note = (lang: string) =>
+      /data-testid="amap-no-tiles" role="status"><p>(.*?)<\/p>/s.exec(
+        bare([ev('a')], { lang }).html
+      )![1]!;
+    const want: Record<string, [string, RegExp]> = {
+      en: ['Its events are listed below.', /Open a place|places are listed/],
+      es: ['Sus eventos aparecen abajo.', /Abre un lugar|Sus lugares/],
+      pl: ['Jego wydarzenia są wymienione poniżej.', /Otwórz miejsce|Jego miejsca/],
+      ar: ['فعالياتها مذكورة أدناه.', /افتح مكانًا|أماكنها/],
+    };
+    for (const [lang, [has, gone]] of Object.entries(want)) {
+      expect(note(lang), lang).toContain(has);
+      expect(note(lang), lang).not.toMatch(gone);
+    }
+  });
+
   test('the caption speaks of places, not dots, in English and Spanish', () => {
     const caption = (html: string) => /<figcaption[^>]*>(.*?)<\/figcaption>/s.exec(html)![1]!;
     const en = caption(bare([ev('a')]).html);
