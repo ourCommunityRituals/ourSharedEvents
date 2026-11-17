@@ -124,6 +124,8 @@ test.describe('create flow: live preview and review', () => {
     await expect(page.getByTestId('wizard-preview-title')).toHaveText('Your event name');
     await page.getByTestId('wizard-event-name').pressSequentially('Thursday Trivia');
     await page.getByTestId('wizard-event-venue').pressSequentially('Rock Island Public House');
+    // Keystrokes send nothing: what is typed so far stays in the page.
+    expect(sent, `requests while typing:\n${sent.join('\n')}`).toEqual([]);
     await page.getByTestId('wizard-event-date').fill('2026-10-24');
     await page.getByTestId('wizard-event-time').fill('18:00');
     await page.getByTestId('wizard-event-what').evaluate((el) => {
@@ -142,7 +144,14 @@ test.describe('create flow: live preview and review', () => {
       '<b>Bold?</b> Teams and snacks'
     );
     expect(await preview.locator('b').count(), 'typed markup is shown as text').toBe(0);
-    expect(sent, `requests while typing:\n${sent.join('\n')}`).toEqual([]);
+    // Leaving the name box asks for a ZIP once (W1, OSE-2095): a POST to our own
+    // zip-suggest route, so the text is never in a URL; it reads only the zip and
+    // town lists and stores nothing. Nothing else is sent: the preview is local.
+    const zipAsk = (r: string) => r.startsWith('POST ') && r.endsWith('/api/v2/admin/zip-suggest');
+    expect(
+      sent.filter((r) => !zipAsk(r)),
+      `requests besides the ZIP fill-in:\n${sent.join('\n')}`
+    ).toEqual([]);
   });
 
   test('a draft that is missing its time and type: review says so, Publish sends nothing and opens the field, Change fixes the rest', async ({
