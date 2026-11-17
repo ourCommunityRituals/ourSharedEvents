@@ -297,7 +297,8 @@ jobs:
 
         # Run audit and capture output in JSON format for processing
         set +e
-        npm audit --json > .security-reports/npm-audit.json 2>&1
+        # stderr apart: an npm warning inside the JSON made jq read 0 findings.
+        npm audit --json > .security-reports/npm-audit.json 2> .security-reports/npm-audit.stderr.txt
         AUDIT_EXIT_CODE=$?
 
         # Also get human-readable output
@@ -328,35 +329,27 @@ jobs:
         echo "low_count=$LOW" >> $GITHUB_OUTPUT
         echo "total_count=$TOTAL" >> $GITHUB_OUTPUT
 
-        # Determine if we should fail
-        BLOCKING_COUNT=$((CRITICAL + HIGH))
-
-        if [ "$BLOCKING_COUNT" -gt 0 ]; then
-          echo ""
-          echo "=============================================="
-          echo "❌ BLOCKING VULNERABILITIES FOUND"
-          echo "=============================================="
-          echo "Critical: $CRITICAL"
-          echo "High: $HIGH"
-          echo ""
-          echo "These must be resolved before merging."
-          echo "See docs/SECURITY.md for remediation guidance."
-          echo "=============================================="
+        # The decision (OSE-1489): every high or critical advisory blocks unless
+        # .security-exceptions.json holds an active, approved entry for that
+        # advisory id in that package (high: 30 days at most; critical: never).
+        # An expired or malformed entry fails, and so does a report npm could not
+        # write (an endpoint error no longer reads as zero findings).
+        # tests/unit/ci/npm-audit-gate.test.js holds the cases.
+        set +e
+        node scripts/ci/npm-audit-gate.mjs .security-reports/npm-audit.json .security-exceptions.json | tee .security-reports/gate.txt
+        GATE_EXIT=${PIPESTATUS[0]}
+        set -e
+        echo ""
+        if [ "$GATE_EXIT" -ne 0 ]; then
+          echo "These must be resolved, or excepted per docs/security/SECURITY.md#exception-process, before merging."
           echo "audit_status=failed" >> $GITHUB_OUTPUT
-          # High/critical severity vulnerabilities fail the gate (merge-blocking).
           exit 1
-        else
-          echo ""
-          echo "✅ No high or critical vulnerabilities found"
-          echo "audit_status=pass" >> $GITHUB_OUTPUT
-
-          if [ "$TOTAL" -gt 0 ]; then
-            echo ""
-            echo "Note: Found $MODERATE moderate and $LOW low severity issues."
-            echo "These don't block merging but should be addressed."
-          fi
-          exit 0
         fi
+        echo "audit_status=pass" >> $GITHUB_OUTPUT
+        if [ "$TOTAL" -gt 0 ]; then
+          echo "Note: $TOTAL findings in all (counts above include excepted ones); moderate and low do not block."
+        fi
+        exit 0
 
     - name: Upload audit report
       if: always()
@@ -382,7 +375,7 @@ jobs:
         if [ "$AUDIT_STATUS" == "pass" ]; then
           echo "### ✅ No Blocking Vulnerabilities" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "All dependencies are clear of high and critical severity issues." >> $GITHUB_STEP_SUMMARY
+          echo "No high or critical advisory without an active exception." >> $GITHUB_STEP_SUMMARY
         else
           echo "### ❌ BLOCKING: Vulnerabilities Detected" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -399,6 +392,12 @@ jobs:
         echo "| 🟡 Moderate | $MODERATE | No |" >> $GITHUB_STEP_SUMMARY
         echo "| 🟢 Low | $LOW | No |" >> $GITHUB_STEP_SUMMARY
         echo "| **Total** | **$TOTAL** | |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Counts include advisories excepted in \`.security-exceptions.json\`. The gate's decision:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        cat .security-reports/gate.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "(the gate did not run)" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
 
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Remediation" >> $GITHUB_STEP_SUMMARY
@@ -406,7 +405,7 @@ jobs:
         echo "If vulnerabilities were found:" >> $GITHUB_STEP_SUMMARY
         echo "1. Run \`npm audit\` locally to see details" >> $GITHUB_STEP_SUMMARY
         echo "2. Run \`npm audit fix\` to auto-fix compatible updates" >> $GITHUB_STEP_SUMMARY
-        echo "3. See [docs/SECURITY.md](../docs/SECURITY.md) for manual fixes" >> $GITHUB_STEP_SUMMARY
+        echo "3. See docs/security/SECURITY.md for manual fixes and the exception process" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "---" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
