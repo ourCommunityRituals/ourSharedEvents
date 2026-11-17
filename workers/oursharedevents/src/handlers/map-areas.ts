@@ -177,6 +177,7 @@ export async function handleMapAreas(request: Request, env: StreetMapEnv): Promi
             // The layer's rules, without the <style> tags. They read @ocr/ui
             // colour tokens (--surface, --info, --border, --border-strong,
             // --text-muted, --bg) from the page they are put in.
+            // Stryker disable next-line Regex: equivalent mutants. Dropping `^` or `$` changes nothing: STREET_STYLE is one constant that opens with its only <style> and closes with its only </style>.
             css: STREET_STYLE.replace(/^<style>|<\/style>$/g, ''),
             // OpenStreetMap's licence asks for the credit wherever its data
             // shows: it goes with the street layer and never without it.

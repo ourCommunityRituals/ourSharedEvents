@@ -499,8 +499,15 @@ describe('street map | the credit, in the page language, wherever streets are dr
     // The credit is built in one place.
     expect(map.split('data-testid="amap-credit"')).toHaveLength(2);
     // The public area map: the layer is sent once, inside the object that holds
-    // its credit, and that object is null when there is no layer.
-    const api = readFileSync(join(SRC, 'handlers', 'map-areas.ts'), 'utf8');
+    // its credit, and that object is null when there is no layer. This reads the
+    // file's text, so under Stryker (which mutates map-areas.ts whole since
+    // 2026-11-16 and runs this spec from a copy at .stryker-tmp/sandbox-*/, where
+    // the file is rewritten with every mutant in it) it reads the checkout's own
+    // copy, three folders up. The mutants there are killed by what the handler
+    // answers (map-areas.spec.ts), never by its spelling.
+    const sandbox = /[\\/]\.stryker-tmp[\\/]/.test(__dirname);
+    const apiSrc = sandbox ? join(__dirname, '..', '..', '..', 'src') : SRC;
+    const api = readFileSync(join(apiSrc, 'handlers', 'map-areas.ts'), 'utf8');
     expect(api.match(/\blayer\.svg\b/g) ?? []).toHaveLength(1);
     expect(api).toMatch(
       /streets: layer\s*\? \{[^}]*svg: layer\.svg,[^}]*credit: \{ html: streetCredit\('en'\)[^}]*\}[^}]*\}\s*: null/
