@@ -34,6 +34,7 @@ import { summarizeUnhandledError } from './lib/unhandled-error-log';
 
 import { errorLabel } from './lib/error-label';
 import { injectTestSiteNotice } from './lib/test-site-notice';
+import { applyTransportHeaders } from './lib/transport-headers';
 export type { RouterEnv as Env };
 
 export default {
@@ -47,7 +48,10 @@ export default {
     // on the diagnostic routes so the drift stays readable.
     const drift = await checkSchema(env);
     if (drift && !isDiagnosticPath(new URL(request.url).pathname)) {
-      return schemaDriftResponse(drift);
+      const refused = schemaDriftResponse(drift);
+      const withTransport = new Response(refused.body, refused);
+      applyTransportHeaders(withTransport.headers);
+      return withTransport;
     }
 
     const startedAt = Date.now();
@@ -90,6 +94,9 @@ export default {
     // Pre-revenue by contract, not by choice.
     const patched = new Response(response.body, response);
     patched.headers.set('X-Monetization-Inert', 'true');
+    // OSE-2118: HSTS and nosniff on every answer, not only on pages; a value a
+    // handler set is kept (lib/transport-headers.ts).
+    applyTransportHeaders(patched.headers);
     // Staging only: every HTML page says it is for testing (lib/test-site-notice.ts).
     return injectTestSiteNotice(patched, env);
   },
