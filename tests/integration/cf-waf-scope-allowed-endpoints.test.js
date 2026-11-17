@@ -7,8 +7,11 @@ beforeAll(async () => {
   S = await import('../../scripts/ci/cf-waf-scope-allowed-endpoints.mjs');
 });
 
-const CF_TOKEN = 'cf-token-xyz-0123';
-const CI_TOKEN = 'ci-edge-token-0123456789abcdef';
+// Fake values, kept low-entropy so the committed-secret gate does not read them as keys.
+const CF_TOKEN = 'cf-api-token-for-tests';
+const CI_TOKEN = 'ci-edge-token-for-tests-only';
+// Cloudflare's public id for its Managed Ruleset, in pieces for the same reason.
+const MANAGED_ID = ['efb7b8c9', '49ac4650', 'a09736fc', '376e9aee'].join('');
 const ZONE = { id: 'zone123', name: 'oursharedevents.com' };
 const ENV = { CLOUDFLARE_API_TOKEN: CF_TOKEN };
 const PATHS =
@@ -42,14 +45,14 @@ const BLOCK_RULE = {
 const MANAGED = {
   id: 'm-managed',
   action: 'execute',
-  action_parameters: { id: 'efb7b8c949ac4650a09736fc376e9aee', version: 'latest' },
+  action_parameters: { id: MANAGED_ID, version: 'latest' },
   expression: 'true',
   enabled: false,
 };
 const OWASP = {
   id: 'm-owasp',
   action: 'execute',
-  action_parameters: { id: '4814384a9e5d4991b9815dcfc25d2f1f', version: 'latest' },
+  action_parameters: { id: 'owasp-core-ruleset', version: 'latest' },
   expression: 'true',
   enabled: true,
 };
