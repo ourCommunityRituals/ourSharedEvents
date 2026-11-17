@@ -26,3 +26,9 @@
 /scripts/check-pr-secret-exposure.allowlist.json               @bereasonable13
 /tests/e2e/0-architecture/ci-approval-gate-safety.invariant.spec.ts  @bereasonable13
 /docs/adr/ADR-020-copilot-ci-human-approval-gate.md            @bereasonable13
+
+# ── Dependency audit exceptions (OSE-1489) ────────────────────────────────────
+# An entry here lets a known high advisory through the merge-blocking audit, so
+# adding or extending one is a security-owner decision, never an agent's.
+/.security-exceptions.json                                      @bereasonable13
+/scripts/ci/npm-audit-gate.mjs                                  @bereasonable13
