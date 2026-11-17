@@ -11,8 +11,12 @@
  *     zip_code = ZIP. The create is answered here (route.fulfill), so this spec
  *     writes no event to staging: the API side is Bruno folder 21.
  *
- * Auth: OSE_ADMIN_BEARER (a local worker) or the CF Access service token
- * (staging), sent on every request the page makes. An unmet precondition is a
+ * Auth, sent on every request the page makes: Authorization: Bearer with the
+ * admin key (OSE_ADMIN_BEARER on a local worker, ADMIN_KEY in T4b), plus the CF
+ * Access service token and X-OCR-Internal when given. Staging needs the Access
+ * token and the Bearer key together: the token alone passes the edge and is then
+ * refused by the worker (401; T4d's admin sign-in gate test holds that). Same
+ * headers as sponsor-journey and launch-story-smoke. An unmet precondition is a
  * failure, not a skip.
  *
  * Mock-layer twin: workers/oursharedevents/tests/admin-wizard-where-zip.spec.ts.
@@ -23,7 +27,8 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 
-const BEARER = process.env.OSE_ADMIN_BEARER ?? '';
+const BEARER = process.env.OSE_ADMIN_BEARER || process.env.ADMIN_KEY || '';
+const X_OCR_INTERNAL = process.env.X_OCR_INTERNAL ?? '';
 const CF_ID = process.env.CF_ACCESS_CLIENT_ID ?? '';
 const CF_SECRET = process.env.CF_ACCESS_CLIENT_SECRET ?? '';
 const MIN_TOUCH = 44;
@@ -35,15 +40,15 @@ const SIZES = [
 ] as const;
 
 function authHeaders(): Record<string, string> {
-  if (BEARER) return { Authorization: `Bearer ${BEARER}` };
-  return { 'CF-Access-Client-Id': CF_ID, 'CF-Access-Client-Secret': CF_SECRET };
+  const headers: Record<string, string> = { Authorization: `Bearer ${BEARER}` };
+  if (X_OCR_INTERNAL) headers['X-OCR-Internal'] = X_OCR_INTERNAL;
+  if (CF_ID) headers['CF-Access-Client-Id'] = CF_ID;
+  if (CF_SECRET) headers['CF-Access-Client-Secret'] = CF_SECRET;
+  return headers;
 }
 
 async function openWizard(page: Page, size: { width: number; height: number }): Promise<void> {
-  expect(
-    BEARER || (CF_ID && CF_SECRET),
-    'an admin credential (OSE_ADMIN_BEARER, or the CF Access service token) is required'
-  ).toBeTruthy();
+  expect(BEARER, 'the admin key (OSE_ADMIN_BEARER or ADMIN_KEY) is required').toBeTruthy();
   await page.setViewportSize(size);
   await page.setExtraHTTPHeaders(authHeaders());
   const res = await page.goto('/admin', { waitUntil: 'domcontentloaded' });
