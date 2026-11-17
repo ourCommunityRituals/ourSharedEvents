@@ -292,6 +292,70 @@ describe('OSE-2087 | the registrations list follows its count', () => {
       expect(text).not.toContain('@example.org');
     });
 
+    // Found in loop 2 of the invariant 2 review, 2026-11-17, by two readers: the
+    // gate passed at 5 counted, and then every row came back, the uncounted ones
+    // with them. 7 rows of which 5 count: a reader of 7 rows beside a count of 5
+    // learns that 2 are not counted, and who. That group of 2 is under the floor.
+    describe('7 rows of which 5 are counted: only the counted rows are read', () => {
+      async function sevenRowsFiveCounted(title: string): Promise<string> {
+        const id = await createEvent(title);
+        await seedRegistrations(id, 7);
+        await tenv.FORMS_DB.prepare(
+          `UPDATE form_registrations SET expires_at = '2020-01-01 00:00:00'
+            WHERE id IN (SELECT id FROM form_registrations WHERE event_id = ? LIMIT 2)`
+        )
+          .bind(id)
+          .run();
+        return id;
+      }
+
+      test('the list gives 5 rows beside its count of 5, and no further page', async () => {
+        const id = await sevenRowsFiveCounted('Roster five of seven: list');
+        const body = (await (await get(id, 'registrations')).json()) as {
+          items: unknown[];
+          count: number;
+          next_cursor: string | null;
+        };
+        expect(body.count).toBe(5);
+        expect(body.items).toHaveLength(5);
+        expect(body.next_cursor).toBeNull();
+      });
+
+      test('paging the list never reaches an uncounted row', async () => {
+        const id = await sevenRowsFiveCounted('Roster five of seven: paging');
+        let cursor: string | null = null;
+        let seen = 0;
+        for (let page = 0; page < 10; page++) {
+          const path: string =
+            'registrations?limit=2' + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+          const body = (await (await get(id, path)).json()) as {
+            items: unknown[];
+            next_cursor: string | null;
+          };
+          seen += body.items.length;
+          cursor = body.next_cursor;
+          if (!cursor) break;
+        }
+        expect(seen).toBe(5);
+      });
+
+      test('the JSON export gives 5 rows', async () => {
+        const id = await sevenRowsFiveCounted('Roster five of seven: export');
+        const body = (await (await get(id, 'export?type=registrations')).json()) as {
+          items: unknown[];
+          count: number;
+        };
+        expect(body.items).toHaveLength(5);
+        expect(body.count).toBe(5);
+      });
+
+      test('the contacts give 5 people', async () => {
+        const id = await sevenRowsFiveCounted('Roster five of seven: contacts');
+        const body = (await (await get(id, 'contacts')).json()) as { items: unknown[] };
+        expect(body.items).toHaveLength(5);
+      });
+    });
+
     test('control: with 5 counted rows the export and the contacts give all 5', async () => {
       const id = await createEvent('Roster five of five');
       await seedRegistrations(id, 5);

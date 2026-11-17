@@ -1,0 +1,17 @@
+{
+  "_readme": "Read by the Dependency Vulnerability Audit (scripts/ci/npm-audit-gate.mjs) and security-sla-enforcement.yml. One entry per advisory and package; high runs at most 30 days, critical never. Process: docs/security/SECURITY.md#exception-process. Owner review required (CODEOWNERS).",
+  "exceptions": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "severity": "high",
+      "reason": "ReDoS in picomatch <= 4.0.7 (CVE-2026-112366), published 2026-11-17 with no patched release (4.0.7 is the latest; fix pending upstream in micromatch/picomatch#194). Reached only through dev tooling: vite, vitest, tinyglobby, fdir, jscodeshift, lint-staged. `npm audit --omit=dev` reports 0 at the root and in workers/oursharedevents, so it is not in the deployed Worker.",
+      "mitigation": "Dev and CI only: the globs picomatch compiles come from this repo's own config and test files, never from a request or a user. Remove this entry and bump picomatch as soon as a patched release is published.",
+      "addedBy": "Claude Code (dependency-audit session)",
+      "approvedBy": "Owner (Matthew Zdano), in session 2026-11-17",
+      "addedDate": "2026-11-17",
+      "reviewDate": "2026-12-17",
+      "ticket": "OSE-1489"
+    }
+  ]
+}

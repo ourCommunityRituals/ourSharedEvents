@@ -520,59 +520,47 @@ Some vulnerabilities may require temporary exceptions. Use this process sparingl
 
 ### Creating an Exception
 
-1. **Create Exception Entry**
+The Dependency Vulnerability Audit enforces this file (OSE-1489): `scripts/ci/npm-audit-gate.mjs` reads `.security-exceptions.json` and blocks every high or critical advisory without an active entry. The file and the script are CODEOWNERS-locked, so an exception is the security owner's decision, never an agent's.
 
-   Add to `.security-exceptions.json` (create if needed):
+1. **Add an entry to `.security-exceptions.json`**
 
    ```json
    {
      "exceptions": [
        {
-         "id": "CVE-YYYY-XXXXX",
+         "id": "GHSA-xxxx-xxxx-xxxx",
          "package": "package-name",
-         "reason": "Only affects server-side rendering which we don't use",
-         "addedBy": "developer@example.com",
-         "addedDate": "2025-12-10",
-         "reviewDate": "2026-01-10",
-         "approvedBy": "security-lead@example.com"
+         "severity": "high",
+         "reason": "What the advisory is, why no fix can be taken now, and where the package is reached from",
+         "mitigation": "The compensating control: why the vulnerable path is not reachable or not exploitable here",
+         "addedBy": "who wrote the entry",
+         "approvedBy": "the security owner, and where they approved it",
+         "addedDate": "2026-11-17",
+         "reviewDate": "2026-12-17",
+         "ticket": "OSE-###"
        }
      ]
    }
    ```
 
-2. **Document in PR**
+   The gate fails the run when an entry:
 
-   Include in your PR:
+   - is not a GHSA id, or misses any field above but `ticket`
+   - is for a **critical** advisory (never excepted)
+   - runs longer than its severity allows: **high 30 days**, moderate 90, low 180 (`reviewDate − addedDate`)
+   - has reached its `reviewDate` (it expires on the day it is due)
+   - gives a severity the audit report does not
 
-   ```markdown
-   ## Security Exception Request
+   An entry covers one advisory in one package. A new advisory in the same package still blocks. An entry the report no longer needs is printed as unused: remove it. A report npm could not write (an endpoint error, an empty file) fails the gate instead of reading as zero findings.
 
-   **CVE:** CVE-YYYY-XXXXX
-   **Package:** package-name@1.0.0
-   **Severity:** High
+2. **Document it in the PR** with the advisory, the package, the justification, the mitigation and the review date.
 
-   **Justification:** This vulnerability affects the server-side rendering
-   functionality which our application does not use. The vulnerable code
-   path is never executed in our deployment.
-
-   **Mitigation:** Added input validation in api_processInput() to prevent
-   malicious payloads from reaching this code.
-
-   **Review Date:** 2026-01-10
-   ```
-
-3. **Get Approval**
-
-   Exceptions require approval from:
-   - Team lead or security designee
-   - Must be documented in the PR
+3. **Get approval** from the security owner (CODEOWNERS review on the PR).
 
 ### Exception Review
 
-Exceptions are automatically reviewed:
-
-- **30 days:** Re-evaluate if fix is available
-- **90 days:** Exception expires and must be renewed or fixed
+- `security-sla-enforcement.yml` lists entries at or past their review date each week.
+- On the review date the audit itself goes red: renew the entry with a fresh approval (within the same severity window) or take the fix.
 
 ---
 
