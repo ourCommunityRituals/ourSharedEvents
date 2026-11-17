@@ -1,0 +1,61 @@
+info:
+  name: "OSE-1998 | sunny | page | GET /events/:id/booths lists the stalls in use, grouped, with no count"
+  type: http
+  seq: 188
+
+# Mock-layer twin: workers/oursharedevents/tests/booth-list-page.spec.ts. Named
+# fields only (status, headers, the <h1>, the presence of a string), never the
+# whole page: the staging edge adds markup of its own to an HTML page. 403 with
+# cf-mitigated is the edge challenging a script client on an HTML page.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/{{boothLiveFairId}}/booths"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the page read was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        var fair = bru.getVar('boothLiveFairId');
+        if (!edge) {
+          test('OSE-1998 list: 200 HTML', function () { expect(res.getStatus()).to.eql(200); expect(res.getHeader('content-type') || '').to.include('text/html'); });
+          test('OSE-1998 list: the fair, then the stalls in use, each a link to its page', function () {
+            expect(body).to.include('OSE-1998 public stall fair (staging, synthetic)');
+            expect(body).to.include('Stall L1'); expect(body).to.include('Live Honey');
+            expect(body).to.include('href="/events/' + fair + '/booths/L1"');
+            expect(body).to.include('href="/events/' + fair + '/booths/L2"');
+          });
+          test('OSE-1998 list: grouped under the fixed labels, Other last', function () {
+            var food = body.indexOf('>Food and drink</h2>');
+            var other = body.indexOf('>Other</h2>');
+            expect(food).to.be.above(-1); expect(other).to.be.above(food);
+          });
+          test('OSE-1998 list: a stall out of use is not listed', function () { expect(body).to.not.include('Closing Stall'); expect(body).to.not.include('/booths/L3"'); });
+          test('OSE-1998 list: a markup-shaped name is escaped', function () { expect(body).to.include('&lt;b&gt;Bold&lt;/b&gt; &amp; Co'); expect(body).to.not.include('<b>Bold</b>'); });
+          test('OSE-1998 list: exactly one <h1>, and it says Stalls', function () {
+            var h1s = body.match(/<h1\b[^>]*>[^<]*<\/h1>/gi) || [];
+            expect(h1s.length).to.eql(1); expect(h1s[0]).to.match(/>Stalls<\/h1>$/);
+          });
+          test('OSE-1998 list: no cookie', function () { expect(!res.getHeader('set-cookie')).to.equal(true); });
+          test('OSE-1998 list: no count of any kind', function () {
+            expect(body).to.not.match(/\b(scans?|scanned|visits?|visitors?|signed up|checked in|fewer than|total)\b/i);
+            expect(body).to.not.match(/\b\d+\s+stalls?\b/i);
+          });
+          test('OSE-1998 list: off the map, so not indexed', function () { expect(res.getHeader('x-robots-tag')).to.eql('noindex'); });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
