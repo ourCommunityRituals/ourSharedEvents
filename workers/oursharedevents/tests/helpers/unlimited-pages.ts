@@ -68,6 +68,7 @@ export const UNLIMITED_PAGES: Readonly<Record<string, Unlimited>> = {
  */
 export const PREFIX_SAMPLE_LIMITED: Readonly<Record<string, boolean | Unlimited>> = {
   '/es/': true,
+  '/es/map': true,
   '/es/events': true,
   '/es/events/no-such-event': true,
 };

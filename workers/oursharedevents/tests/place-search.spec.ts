@@ -331,4 +331,33 @@ describe('the landing reads ?where=: name first, then zip', () => {
     expect(renderAreaHeading(where('?where=Springfield'))).toContain('href="/?change=1"');
     expect(renderPlaceEmpty('Oak Lawn, IL')).toMatch(/Nothing in Oak Lawn, IL yet/);
   });
+
+  // OSE-1990: the map has its own address, and a search made there answers there.
+  test("on the map's own address the box, the choices and Change stay on /map", () => {
+    const many = where('?where=Springfield');
+    const choiceHrefs = (html: string) =>
+      [...html.matchAll(/<a class="filter-chip" href="([^"]*)" data-testid="where-choice">/g)].map(
+        (m) => m[1]!
+      );
+
+    const box = renderWhere(many, 'en', '/map');
+    expect(box).toMatch(/<form class="where-form" method="get" action="\/map" role="search"/);
+    expect(choiceHrefs(box).length).toBeGreaterThan(1);
+    for (const h of choiceHrefs(box)) expect(h.startsWith('/map?where=Springfield')).toBe(true);
+    expect(renderAreaHeading(many, 'en', '/map')).toContain('href="/map?change=1"');
+
+    // In another language the page is /es/map.
+    const es = renderWhere(many, 'es', '/map');
+    expect(es).toContain('action="/es/map"');
+    for (const h of choiceHrefs(es)) expect(h.startsWith('/es/map?where=Springfield')).toBe(true);
+    expect(renderAreaHeading(many, 'es', '/map')).toContain('href="/es/map?change=1"');
+
+    // The landing's box is as it was, with or without the page named.
+    for (const html of [renderWhere(many), renderWhere(many, 'en', '/')]) {
+      expect(html).toContain('action="/"');
+      expect(choiceHrefs(html).length).toBe(choiceHrefs(box).length);
+      for (const h of choiceHrefs(html)) expect(h.startsWith('/?where=Springfield')).toBe(true);
+    }
+    expect(renderAreaHeading(many)).toContain('href="/?change=1"');
+  });
 });

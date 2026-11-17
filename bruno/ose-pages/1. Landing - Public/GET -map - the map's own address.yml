@@ -1,0 +1,78 @@
+info:
+  name: GET /map (the attendee map's own address)
+  type: http
+  seq: 31
+
+# OSE-1990 (owner, 2026-11-11 and 2026-11-17): the map has an address of its
+# own. /map is the landing page opened on its map view; the landing keeps its
+# own list and map. 403 is accepted because the edge may challenge a script
+# client on an HTML page; the page tests run only on a real 200.
+http:
+  method: GET
+  url: "{{baseUrl}}/map?utm_source=bruno"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('Returns 200 or 403 (edge challenge)', function () {
+          expect([200, 403]).to.include(res.getStatus());
+        });
+        if (res.getStatus() === 200) {
+          const body = String(res.getBody());
+          const has = function (id) { return body.includes('data-testid="' + id + '"'); };
+          const checked = function (id) {
+            return new RegExp('<input type="radio" name="view" id="' + id + '"[^>]*\\schecked').test(body);
+          };
+
+          test('Is the page, not the error page', function () {
+            expect(res.getHeader('Content-Type')).to.include('text/html');
+            expect(body).to.include('<!DOCTYPE html>');
+            expect(body).to.include('data-surface="ose-landing"');
+            expect(has('public-error')).to.equal(false);
+          });
+
+          test('Opens on the map view, not the list', function () {
+            expect(checked('view-map')).to.equal(true);
+            expect(checked('view-list')).to.equal(false);
+          });
+
+          test('The canonical is /map, once, with no query', function () {
+            const tags = body.match(/<link rel="canonical" href="[^"]*"/g) || [];
+            expect(tags.length).to.eql(1);
+            const href = tags[0].replace('<link rel="canonical" href="', '').replace('"', '');
+            expect(href.indexOf('http')).to.eql(0);
+            expect(href.endsWith('/map')).to.eql(true);
+            expect(href.indexOf('?')).to.eql(-1);
+          });
+
+          test('The search box answers on /map', function () {
+            const m = body.match(/<form class="where-form" method="get" action="([^"]*)"/);
+            expect(m && m[1]).to.equal('/map');
+          });
+
+          test('The location form says it is the map page', function () {
+            const form = (body.match(/<form id="near-form"[\s\S]*?<\/form>/) || [''])[0];
+            expect(form).to.include('<input type="hidden" name="page" value="map" />');
+          });
+
+          test('Every hexagon link stays on /map', function () {
+            const links = body.match(/<a\b[^>]*data-testid="amap-zoom"[^>]*>/g) || [];
+            links.forEach(function (tag) {
+              const href = (tag.match(/href="([^"]*)"/) || [])[1] || '';
+              expect(href).to.match(/^\/map\?area=[0-9a-f]{15}$/);
+            });
+          });
+
+          test('Sets no cookie', function () {
+            expect(res.getHeader('set-cookie')).to.be.oneOf([undefined, null, '']);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -1,0 +1,46 @@
+info:
+  name: GET /map?area=872664570fffff (map page) - a mistyped area never zooms
+  type: http
+  seq: 32
+
+# OSE-1990: the same fat-finger case as the landing's (seq 28), at the map's own
+# address. A res-7 cell has 15 characters; this one has 14. It is ignored: the
+# whole map page is served, never an error page and never a zoom.
+http:
+  method: GET
+  url: "{{baseUrl}}/map?area=872664570fffff"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('Returns 200 or 403 (edge challenge)', function () {
+          expect([200, 403]).to.include(res.getStatus());
+        });
+        if (res.getStatus() === 200) {
+          const body = String(res.getBody());
+          const has = function (id) { return body.includes('data-testid="' + id + '"'); };
+
+          test('Is the map page, not the error page', function () {
+            expect(body).to.include('<!DOCTYPE html>');
+            expect(has('public-error')).to.equal(false);
+          });
+
+          test('Opens no area: no zoom, no way back, no dot', function () {
+            expect(body).to.not.include('data-zoom="');
+            expect(has('amap-back')).to.equal(false);
+            expect(has('amap-dot')).to.equal(false);
+          });
+
+          test('Does not echo what was typed', function () {
+            expect(body).to.not.include('872664570fffff"');
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

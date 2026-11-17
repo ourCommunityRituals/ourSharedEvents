@@ -17,7 +17,11 @@
  *                                  poster and the SharedReport shell. /health and /api/status
  *                                  take the same number and answer JSON; /robots.txt takes the
  *                                  public-read default.
- *   POST /near                   → phone's rough box (form body g=) → 303 /?zip=
+ *   GET /map                     → the attendee map's own address (OSE-1990): the landing page
+ *                                  opened on its map view, in the landing's limit scope. Its
+ *                                  hexagon and Back links stay on /map. /<lang>/map too.
+ *   POST /near                   → phone's rough box (form body g=) → 303 /?zip=, or
+ *                                  /map?zip= when the form on /map sent it (page=map)
  *   GET /admin                   → admin dashboard (auth required)
  *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)
  *   GET /ui-toast.js             → shared OCR toast script (@ocr/ui), loaded by admin and sponsor home
@@ -781,6 +785,14 @@ export async function route(
         'landing',
         (req, e: typeof env) => handleLandingPage(e, ctx, req, langPrefix.lang),
         (req) => pageLimitResponse(req, langPrefix.lang, '/')
+      )(request, env);
+    }
+    if (page?.kind === 'map') {
+      // OSE-1990: the map's own address under a prefix, in the landing's scope.
+      return publicPageLimited(
+        'landing',
+        (req, e: typeof env) => handleLandingPage(e, ctx, req, langPrefix.lang, { mapFirst: true }),
+        (req) => pageLimitResponse(req, langPrefix.lang, '/map')
       )(request, env);
     }
     if (page?.kind === 'events') {
@@ -2641,6 +2653,18 @@ export async function route(
       'landing',
       (req, e: typeof env) => handleLandingPage(e, ctx, req),
       (req) => pageLimitResponse(req, undefined, '/')
+    )(request, env);
+  }
+
+  // ── The attendee map's own address (owner, 2026-11-11; OSE-1990) ──────────
+  // The landing page, opened on its map view. It makes the landing's reads, so
+  // it is counted in the landing's scope: a second address is no second
+  // allowance (OSE-1986).
+  if (pathname === '/map') {
+    return publicPageLimited(
+      'landing',
+      (req, e: typeof env) => handleLandingPage(e, ctx, req, undefined, { mapFirst: true }),
+      (req) => pageLimitResponse(req, undefined, '/map')
     )(request, env);
   }
 

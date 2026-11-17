@@ -1,7 +1,7 @@
 info:
   name: OSE-1896 | taps after | unchanged by reading the zoomed pages
   type: http
-  seq: 11
+  seq: 12
 
 http:
   method: GET
@@ -20,8 +20,9 @@ runtime:
     - type: after-response
       code: |-
         // The "after" read (see "taps before", the first request of this folder).
-        // Between the two, this folder read /?area= eight times. A map page that
-        // counted a tap, or resolved a /s/ code while rendering, would move this.
+        // Between the two, this folder read /?area= nine times and /map?area= once
+        // (OSE-1990). A map page that counted a tap, or resolved a /s/ code while
+        // rendering, would move this.
         // Share opens have no HTTP read; CI reads them, and the taps again, from D1
         // right after this collection (scripts/ci/map-counts-check.mjs).
         const json = res.getBody();

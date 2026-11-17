@@ -2991,9 +2991,19 @@ export async function handleLandingPage(
   ctx?: DataProviderCtx | null,
   request?: Request,
   /** OSE-1762: the language in the address (`/es/`); it beats the header. */
-  pathLang?: Lang
+  pathLang?: Lang,
+  /**
+   * The map's own address, /map (owner, 2026-11-11; OSE-1990). The same page,
+   * the same reads and the same rule for what the map draws. It opens on the
+   * map view, so the area leads the page, and its links stay on /map.
+   */
+  opts?: { mapFirst?: boolean }
 ): Promise<Response> {
   const lang = pathLang ?? (request ? preferredLang(request) : DEFAULT_LANG);
+  const mapFirst = opts?.mapFirst === true;
+  // The address this page calls its own: in its links, its search box, its
+  // canonical and its language switch.
+  const pagePath = mapFirst ? CANONICAL_PATH.map : CANONICAL_PATH.landing;
   let where: WhereState;
   try {
     where = readWhere(request ? new URL(request.url) : null);
@@ -3007,9 +3017,9 @@ export async function handleLandingPage(
   // is ignored.
   let zoom: ReturnType<typeof landingZoom>;
   try {
-    zoom = landingZoom(request ? new URL(request.url) : null, withLangPrefix(lang, '/'));
+    zoom = landingZoom(request ? new URL(request.url) : null, withLangPrefix(lang, pagePath));
   } catch {
-    zoom = landingZoom(null, withLangPrefix(lang, '/'));
+    zoom = landingZoom(null, withLangPrefix(lang, pagePath));
   }
   let area;
   try {
@@ -3083,6 +3093,7 @@ export async function handleLandingPage(
       zoomHref: (cell: string) => zoom.href(cell),
       zoom: zoom.cell ? { cell: zoom.cell, backHref: zoom.href() } : undefined,
       typeCategories,
+      mapFirst,
     };
     area = renderLandingArea(items as LandingAreaItem[], areaOpts);
     // The street map under the hexagons (lib/street-map.ts): drawn for exactly
@@ -3125,13 +3136,13 @@ export async function handleLandingPage(
     injectEventCardCss(
       withLanguageSwitch(
         injectLegalFooter(
-          injectNearLang(fillTemplate(LANDING_HTML, lang), lang),
+          injectNearLang(fillTemplate(LANDING_HTML, lang), lang, pagePath),
           'landing',
           undefined,
           lang
         ),
         lang,
-        CANONICAL_PATH.landing,
+        pagePath,
         switchQuery(where)
       ),
       PLACE_PANEL_CSS
@@ -3144,17 +3155,19 @@ export async function handleLandingPage(
       injectLanguageAlternates(
         injectCanonical(
           injectWhere(
+            // At /map the area's own default view is the map, so it leads already.
             injectLandingArea(shell, area, { areaFirst: searched || zoom.cell !== null }),
             where,
-            lang
+            lang,
+            pagePath
           ),
           request,
           env,
-          withLangPrefix(lang, CANONICAL_PATH.landing)
+          withLangPrefix(lang, pagePath)
         ),
         request,
         env,
-        CANONICAL_PATH.landing
+        pagePath
       ),
       lang
     )

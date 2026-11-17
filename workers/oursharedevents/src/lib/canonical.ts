@@ -26,6 +26,8 @@ export interface CanonicalEnv {
 
 export const CANONICAL_PATH = {
   landing: '/',
+  // The attendee map's own address (owner, 2026-11-11; OSE-1990).
+  map: '/map',
   events: '/events',
   privacy: '/privacy',
 } as const;

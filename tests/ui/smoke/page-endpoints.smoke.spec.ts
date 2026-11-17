@@ -28,6 +28,8 @@ const PUBLIC_PAGES: { path: string; surface: string }[] = [
   { path: '/landing', surface: 'Landing' },
   { path: '/about', surface: 'Landing' },
   { path: '/info', surface: 'Landing' },
+  // The attendee map's own address (OSE-1990).
+  { path: '/map', surface: 'Landing' },
 
   // Events / Public
   { path: '/events', surface: 'Events' },

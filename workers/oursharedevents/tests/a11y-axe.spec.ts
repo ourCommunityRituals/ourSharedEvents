@@ -86,6 +86,19 @@ describe('A11Y-7: axe-core WCAG 2.0 AA — zero critical/serious violations', ()
     await scanPage('Landing page', await handleLandingPage({} as never).then((r) => r.text()));
   });
 
+  test('attendee map page (/map)', async () => {
+    // OSE-1990: the landing page opened on its map view, at its own address.
+    await scanPage(
+      'Attendee map page',
+      await handleLandingPage({} as never, null, new Request('https://t.test/map'), undefined, {
+        mapFirst: true,
+      }).then((r) => r.text())
+    );
+    // The page scanned is the map's own: its search box answers at /map. With no
+    // database there is no event, so this is the page's empty state.
+    expect(document.querySelector('form.where-form')?.getAttribute('action')).toBe('/map');
+  });
+
   test('register form', async () => {
     await scanPage(
       'Register form',
@@ -347,6 +360,19 @@ describe('A11Y-7 / OSE-1762: the event list and the landing in Spanish', () => {
       expect(document.documentElement.getAttribute('lang')).toBe('es');
     });
   }
+
+  // The map's own address (OSE-1990): the same page opened on its map view, with
+  // a search that finds a zip and a name that is many places.
+  const mapPage = (query: string) =>
+    handleLandingPage({} as never, null, new Request(`https://t.test/es/map${query}`), 'es', {
+      mapFirst: true,
+    });
+  for (const query of ['', '?zip=60406', '?where=Springfield']) {
+    test(`/es/map${query}`, async () => {
+      await scanPage(`Spanish map page ${query}`, await (await mapPage(query)).text());
+      expect(document.documentElement.getAttribute('lang')).toBe('es');
+    });
+  }
 });
 
 // Polish (OSE-1957) and Arabic, the first right-to-left language (epic OSE-1959,
@@ -412,6 +438,20 @@ describe('A11Y-7 / OSE-1957, OSE-1971: Polish and Arabic pages, menu closed and 
         async () =>
           (
             await handleLandingPage({} as never, null, new Request(`https://t.test/${lang}/`), lang)
+          ).text(),
+      ],
+      [
+        // OSE-1990: the map's own address, the landing opened on its map view.
+        'map page',
+        async () =>
+          (
+            await handleLandingPage(
+              {} as never,
+              null,
+              new Request(`https://t.test/${lang}/map`),
+              lang,
+              { mapFirst: true }
+            )
           ).text(),
       ],
     ];

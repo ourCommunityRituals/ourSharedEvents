@@ -1,0 +1,45 @@
+info:
+  name: POST /near from the map page (answers on /map)
+  type: http
+  seq: 33
+
+# OSE-1990: "Use my location" on /map answers on /map. The form on /map sends
+# page=map with the phone's rough box, and POST /near answers 303 to /map?zip=
+# of the nearest zip. The box is the one tests/landing-where.spec.ts uses,
+# centered in Posen, IL. The request stores nothing. 403 is accepted because the
+# edge may challenge a script client; the redirect is read only on a real 303.
+http:
+  method: POST
+  url: "{{baseUrl}}/near"
+  headers:
+    - name: Content-Type
+      value: application/x-www-form-urlencoded
+  body:
+    type: text
+    data: "g=dp3su&page=map"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('Answers 303 or 403 (edge challenge), never the page itself', function () {
+          expect([303, 403]).to.include(res.getStatus());
+        });
+        if (res.getStatus() === 303) {
+          test('Goes to the map page for the nearest zip', function () {
+            expect(String(res.getHeader('location'))).to.equal('/map?zip=60469');
+          });
+
+          test('Is not stored and sets no cookie', function () {
+            expect(String(res.getHeader('cache-control'))).to.equal('no-store');
+            expect(res.getHeader('set-cookie')).to.be.oneOf([undefined, null, '']);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

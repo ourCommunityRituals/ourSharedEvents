@@ -166,8 +166,20 @@ describe('OSE-1761 matchLanguagePage | the pages that exist under a prefix', () 
     expect(matchLanguagePage('/events')).toEqual({ kind: 'events' });
   });
 
+  it("the attendee map's own address is a page under a prefix (OSE-1990)", () => {
+    expect(matchLanguagePage('/map')).toEqual({ kind: 'map' });
+    expect(parseLangPrefix('/es/map')).toEqual({ lang: 'es', rest: '/map' });
+    expect(withLangPrefix('es', '/map')).toBe('/es/map');
+    expect(withLangPrefix('en', '/map')).toBe('/map');
+  });
+
   it('nothing else is a page under a prefix', () => {
     const others = [
+      // Only the exact address is the map page.
+      '/map/',
+      '/map/x',
+      '/maps',
+      '/MAP',
       // The landing's other names stay English-only addresses.
       '/home',
       '/welcome',

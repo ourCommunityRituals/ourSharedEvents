@@ -35,7 +35,7 @@ interface TestEnv {
 const tenv = (): TestEnv => env as unknown as TestEnv;
 
 const ORIGIN = 'https://t.test';
-const LANDING = ['/', '/home', '/welcome', '/landing', '/about', '/info'];
+const LANDING = ['/', '/home', '/welcome', '/landing', '/about', '/info', '/map'];
 const PREFIXED = LANGUAGES.filter((l) => l !== 'en');
 
 let nextIp = 10;
@@ -86,7 +86,7 @@ describe('OSE-1986 | which addresses are limited', () => {
     const ip = freshIp();
     await spend('landing', ip);
     for (const lang of PREFIXED) {
-      for (const path of [`/${lang}/`, `/${lang}`]) {
+      for (const path of [`/${lang}/`, `/${lang}`, `/${lang}/map`]) {
         const res = await get(path, ip);
         expect(res.status, path).toBe(429);
         await res.arrayBuffer();

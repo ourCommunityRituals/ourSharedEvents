@@ -323,6 +323,12 @@ export function renderLandingArea(
     placeLinks?: ReadonlyMap<string, PlaceLinks>;
     /** Zoomed in: the site's origin, for the link a Share button carries. */
     origin?: string | null;
+    /**
+     * The map's own address, /map (owner, 2026-11-11 and 2026-11-17): the page
+     * opens on the map view. Only the view that is open changes. What the map
+     * draws is decided as on the landing, by the same count and the same latch.
+     */
+    mapFirst?: boolean;
   }
 ): RenderedLandingArea {
   const lang = opts?.lang ?? DEFAULT_LANG;
@@ -390,7 +396,7 @@ export function renderLandingArea(
   const areaLatched = opts?.areaLatched === true && windowCount > 0;
   // A zoom was asked for with a tap: it opens on the map.
   const leadsWithMap = windowCount >= LIST_MAX || areaLatched || zoom !== undefined;
-  const defaultView: 'list' | 'map' = leadsWithMap ? 'map' : 'list';
+  const defaultView: 'list' | 'map' = leadsWithMap || opts?.mapFirst === true ? 'map' : 'list';
 
   // The map is drawn from the same `live` set as the cards, at corridor (res-7)
   // precision only, and gated on how many events it would actually show.

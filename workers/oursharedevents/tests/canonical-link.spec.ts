@@ -131,6 +131,15 @@ describe('canonical | /events, / and /privacy', () => {
     }
   });
 
+  test('/map: names `/map`, whatever the query, and never the landing', async () => {
+    for (const p of ['/map', '/map?ref=x', '/map?zip=60406']) {
+      const text = await (await get('stg.oursharedevents.com', p)).text();
+      const tags = canonicals(text);
+      expect(tags, p).toHaveLength(1);
+      expect(hrefOf(tags[0]), p).toBe('https://stg.oursharedevents.com/map');
+    }
+  });
+
   test('/privacy and /privacy-policy: both name /privacy', async () => {
     for (const p of ['/privacy', '/privacy-policy', '/privacy?phase=2']) {
       const text = await (await get('stg.oursharedevents.com', p)).text();
@@ -164,7 +173,12 @@ describe('canonical | /events, / and /privacy', () => {
   });
 
   test('paths come from one table', () => {
-    expect(CANONICAL_PATH).toEqual({ landing: '/', events: '/events', privacy: '/privacy' });
+    expect(CANONICAL_PATH).toEqual({
+      landing: '/',
+      map: '/map',
+      events: '/events',
+      privacy: '/privacy',
+    });
   });
 });
 
