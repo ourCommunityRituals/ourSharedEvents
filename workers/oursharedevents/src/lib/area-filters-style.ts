@@ -13,6 +13,11 @@
  * A module of its own for the same reason as map-zoom-style.ts: the ADR-008
  * design check gives each source file one 400-char inline style budget. No
  * colour is set here; the chip's look is the shared filter chip's.
+ *
+ * On a phone the hidden radios shrink to 1 px. They are never pressed (their
+ * labels are, and the radios take no pointer), but at their default 13 px a
+ * radio whose label is folded away read as a small touch target in the phone
+ * audit (mobile-workability.spec.ts, PR checks of 2026-11-17).
  */
 
 /** Screen width, in px, from which the filters always show. */
@@ -22,4 +27,4 @@ export const FILTERS_FOLD_PX = 600;
 export const FILTERS_TOGGLE_ID = 'filters-open';
 
 export const AREA_FILTERS_STYLE =
-  '<style>@media(max-width:599.98px){#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn{display:none}}</style>';
+  '<style>@media(max-width:599.98px){.toggle-radio{width:1px;height:1px;margin:0}#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn{display:none}}</style>';

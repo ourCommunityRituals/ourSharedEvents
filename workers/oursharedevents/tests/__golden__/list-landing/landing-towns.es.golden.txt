@@ -346,7 +346,7 @@
 #win-next-90:checked ~ .toggles label[for='win-next-90']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-next-90:checked ~ .toggles label[for='win-next-90']::before{content:'\2713';margin-inline-end:.35rem}#win-next-90:focus-visible ~ .toggles label[for='win-next-90']{outline:3px solid var(--accent);outline-offset:2px}#win-next-90:checked ~ .area .event-card:not(.when-next-90),#win-next-90:checked ~ .area .amap-f:not(.when-next-90){display:none}
 .area-window-empty{display:none}
 #win-weekend:checked ~ .area .win-empty-weekend{display:block}
-</style><style>@media(max-width:599.98px){#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn{display:none}}</style>
+</style><style>@media(max-width:599.98px){.toggle-radio{width:1px;height:1px;margin:0}#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn{display:none}}</style>
         <div class="toggles" data-testid="area-toggles">
           <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">Vista</legend><label class="disc-chip" for="view-list">Lista</label><label class="disc-chip" for="view-map">Mapa</label></fieldset>
           <div class="disc-chips area-filters-btn"><label class="disc-chip" for="filters-open" data-testid="area-filters-btn">Filtros</label></div>
