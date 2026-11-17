@@ -680,15 +680,19 @@ hexagon gets a different one.
 **How many rows: not counted.** It needs a read of the staging and production databases, which
 this record's author does not make. It is one count for each table (for events: rows with
 `place_checked_at` set and a point). It may be none: with no key set the lookup never runs, and
-whether the key is set on either environment was not read.
+whether the key is set on either environment was not read. A comment in `lib/maps.ts` says it was
+put on staging on 2026-04-23; a comment is not the environment.
 
 ### 4. What flows on to BigQuery
 
 **Credentials are separate.** BigQuery is reached by workload identity (`WIF_*`,
 `GCP_PROJECT_ID`, `GCP_PROJECT_NUMBER`, `BIGQUERY_DATASET_ID`; `cloud/config.ts`,
 `cloud/bigquery.ts`, `google/auth.ts`). Maps uses one key name. Removing Maps touches no BigQuery
-setting. Whether the Maps key sits in the same Google Cloud project or billing account as
-BigQuery cannot be read from the repository.
+setting. **One Google Cloud project, by the comments:** `lib/maps.ts` and `lib/geo.ts` say the two
+Maps APIs were switched on in the project that `GCP_PROJECT_ID` names for BigQuery. So that
+project stays in use after Maps goes, and switching the two Maps APIs off in it is an owner step
+in Google's console, beside removing the key. The console was not read, and nothing in the
+repository says which billing account pays.
 
 **No point reaches BigQuery, and no Google-derived point ever did.** The exports select named
 columns, and `assertCorridorGrainRow` (`lib/export-geography.ts`) throws on any row that carries
@@ -1030,8 +1034,9 @@ Of merging this record: none on behaviour. The lookup runs as it does today.
   session and its worksheet, the second by the hand-over note of the session that asked it. The
   author saw neither being given.
 - Stored geography: every row count. Whether any poster row holds Google's wording of an address.
-  How the warehouse's own views treat `unknown` or choose the latest row. Whether the Maps key
-  and BigQuery share a Google Cloud project or billing account.
+  How the warehouse's own views treat `unknown` or choose the latest row. That Maps and BigQuery
+  share one Google Cloud project is what two code comments say; Google's console was not read,
+  and the billing account is not in the repository.
 - Stored geography in the other repositories is a read of each local copy's `main`. OCR-docs and
   five of the six small product repositories were behind their remotes and were read at the
   older commit.
