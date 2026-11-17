@@ -126,6 +126,23 @@ export const FLOORS = {
   // its `// Stryker disable` line, which never took, is gone from the source.
   // Three more are disabled in the source with their reasons. Never lower.
   'src/lib/street-map.ts': 99.6,
+  // W1 (OSE-2095, owner 2026-11-16): the ZIP at the Where step, group `zip`.
+  // event-zip.ts whole; the other four only in the ranges W1 wrote or changed
+  // (rangeOf in stryker.conf.mjs). A local run, 2026-11-16, after the merge of
+  // main 5bef37cd: 151 mutants, 150 killed. event-zip.ts 94 of 94 (three lines
+  // disabled in the source with their reasons), zip-areas.ts 31 of 31,
+  // place-names.ts 10 of 10, place-search.ts 10 of 10. export-geography.ts 5 of
+  // 6: the survivor is SUB_CORRIDOR_KEY without its `^`, which would refuse
+  // any name that only ends in a listed one. No column any exporter writes
+  // ends in one, so no test tells them apart, and a test that pinned the `^`
+  // would pin the guard to exact names, which the W1 security read lists as a
+  // gap to close (`zipcode`, `postcode`). Raise to 100 when the guard is
+  // widened. Never lower.
+  'src/lib/event-zip.ts': 100,
+  'src/lib/zip-areas.ts': 100,
+  'src/lib/place-names.ts': 100,
+  'src/lib/place-search.ts': 100,
+  'src/lib/export-geography.ts': 83.33,
 };
 
 /** One file's score from its mutants, or null when it has no valid mutant. */

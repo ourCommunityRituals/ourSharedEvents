@@ -173,12 +173,14 @@ describe('suggestZip: what the wizard fills in (the server rules)', () => {
       from: 'town',
       town: 'Evergreen Park, IL',
     });
-    // A trailing comma is an empty part, dropped.
-    expect(suggestZip('3200 W 95th St, Evergreen Park, IL,', '')).toEqual({
-      zip: '60805',
-      from: 'town',
-      town: 'Evergreen Park, IL',
-    });
+    // A trailing comma is an empty part, dropped; so is a blank one after it.
+    for (const tail of [',', ', ', ',  ,']) {
+      expect(suggestZip(`3200 W 95th St, Evergreen Park, IL${tail}`, ''), tail).toEqual({
+        zip: '60805',
+        from: 'town',
+        town: 'Evergreen Park, IL',
+      });
+    }
   });
 
   test('fat finger: only the first 500 characters of each box are read', () => {
@@ -189,6 +191,17 @@ describe('suggestZip: what the wizard fills in (the server rules)', () => {
     expect(suggestZip(`x, Evergreen Park, IL 60805`, '')).toEqual({
       zip: '60805',
       from: 'address',
+    });
+    // The place name's cut: 498 characters and ", " fill the 500, so the town
+    // after them is never read; the same name short is.
+    expect(suggestZip('', `${'x'.repeat(498)}, Evergreen Park, IL`)).toEqual({
+      zip: null,
+      from: null,
+    });
+    expect(suggestZip('', 'x, Evergreen Park, IL')).toEqual({
+      zip: '60805',
+      from: 'town',
+      town: 'Evergreen Park, IL',
     });
   });
 

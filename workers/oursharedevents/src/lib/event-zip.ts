@@ -6,9 +6,11 @@
  * Stored in `events.zip_code` (migration 0021; nothing wrote it before W1) as
  * five digits. It is words, like the place name and the address: zip and town
  * search read it (lib/zip-areas.ts eventZip), and nothing else reads it as a
- * place. It is never turned into a cell or a point, never published (the public
- * projection is an allowlist without it) and never exported (the runtime guard
- * in lib/export-geography.ts refuses the name).
+ * place. It is never turned into a cell or a point, never sent as a field (the
+ * public projection is an allowlist without it) and never exported (the runtime
+ * guard in lib/export-geography.ts refuses the name). A search does say which
+ * zip an event without a cell is in: that is what the zip is for, and it is the
+ * venue's zip the organizer gives, coarser than the address a page may show.
  *
  * Asked for, not required: automation may omit it. A malformed one is refused
  * with its own code; a well-formed one the Census table lacks (a PO-box zip)
