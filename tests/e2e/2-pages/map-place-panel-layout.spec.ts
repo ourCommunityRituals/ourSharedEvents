@@ -287,7 +287,7 @@ test.describe('Place panel layout on this device profile (OSE-1891)', () => {
     page,
   }) => {
     await gotoArea(page);
-    await expect(page.getByTestId('amap-place-link')).toHaveCount(0);
+    await expect(page.locator('a.amap-zoom')).toHaveCount(0);
     await expect(page.getByTestId('amap-legend')).toHaveCount(0);
     const back = await page
       .getByTestId('amap-back')

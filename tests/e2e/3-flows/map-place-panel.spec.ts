@@ -261,7 +261,7 @@ test.describe('Zoomed map: the place panel opens under the list (OSE-1891)', () 
     expect(await openPanels(page), 'no panel is open before a tap').toEqual([]);
     // No text list of places: the event cards are the list (owner, 2026-11-17).
     await expect(page.getByTestId('amap-legend')).toHaveCount(0);
-    await expect(page.getByTestId('amap-place-link')).toHaveCount(0);
+    await expect(page.locator('a.amap-zoom')).toHaveCount(0);
     // The note and no drawing, or the dot map over streets: never a half of each.
     const drawing = await expectZoomDrawing(page);
     test.info().annotations.push({
