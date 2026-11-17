@@ -81,6 +81,7 @@ seed bruno/fixtures/covenant-sponsors-reset.sql
 seed bruno/fixtures/covenant-sponsors-seed.sql
 seed bruno/fixtures/sponsor-public-card-seed.sql
 seed bruno/fixtures/opt-in-sponsors-seed.sql
+seed bruno/fixtures/sponsor-line-seed.sql
 seed bruno/fixtures/sponsor-thumb-seed.sql
 seed bruno/fixtures/attendance-mode-seed.sql
 seed bruno/fixtures/declared-series-seed.sql

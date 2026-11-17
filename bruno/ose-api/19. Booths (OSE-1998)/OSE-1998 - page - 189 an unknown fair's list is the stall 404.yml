@@ -1,0 +1,51 @@
+info:
+  name: "OSE-1998 | rainy | page | the stall list of an unknown event answers the stall page's 404"
+  type: http
+  seq: 189
+
+# Compares named fields with the unknown stall's 404 (seq 185): the status, the
+# page title and the <h1>. Never the whole page: the staging edge adds markup of
+# its own to every HTML read.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/ose-1998-no-such-fair/booths"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the page read was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        var titleOf = function (h) { var m = /<title>([^<]*)<\/title>/i.exec(h || ''); return m ? m[1] : null; };
+        var h1sOf = function (h) { return ((h || '').match(/<h1\b[^>]*>[^<]*<\/h1>/gi) || []); };
+        if (!edge) {
+          test('OSE-1998 list: 404 HTML', function () { expect(res.getStatus()).to.eql(404); expect(res.getHeader('content-type') || '').to.include('text/html'); });
+          test('OSE-1998 list: the stall 404 title and its one <h1>', function () {
+            expect(titleOf(body)).to.include('find that stall');
+            expect(h1sOf(body).length).to.eql(1);
+          });
+          bru.setVar('boothListNotFoundTitle', titleOf(body));
+          bru.setVar('boothListNotFoundH1', h1sOf(body)[0] || null);
+          var stall404 = bru.getVar('boothNotFoundBody');
+          if (stall404) {
+            test('OSE-1998 list: the same title and <h1> as an unknown stall', function () {
+              expect(titleOf(body)).to.eql(titleOf(stall404));
+              expect(h1sOf(body)).to.eql(h1sOf(stall404));
+            });
+          }
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

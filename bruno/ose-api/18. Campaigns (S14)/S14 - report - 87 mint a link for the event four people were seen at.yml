@@ -1,0 +1,37 @@
+info:
+  name: 'S14 | report | setup | mint an organizer link for the report event with four people seen'
+  type: http
+  seq: 87
+
+http:
+  method: POST
+  url: '{{baseUrl}}/api/v2/admin/events/camp-rpt-few-evt/shared-report/mint-link'
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "role": "bar_owner",
+        "ttl_days": 1
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('S14 nothing-yet link (four people seen): 200 with a token', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(res.getBody().ok).to.eql(true);
+          expect(res.getBody().token).to.be.a('string');
+        });
+        bru.setVar('s14FewToken', res.getBody().token || '');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

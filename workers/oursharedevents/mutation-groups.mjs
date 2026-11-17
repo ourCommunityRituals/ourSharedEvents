@@ -47,7 +47,7 @@
 //   - Every target in stryker.conf.mjs belongs to exactly one group. A target
 //     in no group would not be mutated in CI; a file in two groups would be
 //     scored in two reports, which mutation-file-floor.mjs refuses.
-//   - A file is one group, all its ranges together (pages.ts has five).
+//   - A file is one group, all its ranges together (pages.ts has six).
 //
 // TESTS PER GROUP (less work, the same kills). A mutant can only be killed by
 // a spec that loads the mutated file, directly or through its imports. So each

@@ -71,6 +71,16 @@ const PUBLIC_BOOTH_BY_NUMBER_SQL = `SELECT b.id AS id, b.number AS number, b.nam
     WHERE b.event_id = ? AND e.brand_id = ? AND b.number = ? AND b.is_active = 1
     LIMIT 1`;
 
+/** The address of a fair's stall list (GET /events/:id/booths). */
+export function boothListPath(eventId: string): string {
+  return `/events/${encodeURIComponent(eventId)}/booths`;
+}
+
+/** The address of one stall's page (GET /events/:id/booths/:number). */
+export function boothPagePath(eventId: string, number: string): string {
+  return `${boothListPath(eventId)}/${encodeURIComponent(number)}`;
+}
+
 /** Field by field: a column added to the query does not travel by itself. */
 function toPublicBooth(row: PublicBooth): PublicBooth {
   return {
@@ -83,6 +93,20 @@ function toPublicBooth(row: PublicBooth): PublicBooth {
   };
 }
 
+/**
+ * The stalls in use of one event of `brandId`, in the organizer's order.
+ * Throws on a database error, so the stall list page can tell "no stalls" from
+ * "try again". The event read uses `fetchPublicBoothsOf`, which fails to none.
+ */
+export async function readPublicBoothsOf(
+  db: D1Database,
+  eventId: string,
+  brandId: string
+): Promise<PublicBooth[]> {
+  const rs = await db.prepare(PUBLIC_BOOTHS_OF_EVENT_SQL).bind(eventId, brandId).all<PublicBooth>();
+  return (rs.results ?? []).map(toPublicBooth);
+}
+
 /** The stalls in use of one event of `brandId`, in the organizer's order. */
 export async function fetchPublicBoothsOf(
   db: D1Database | undefined | null,
@@ -91,14 +115,36 @@ export async function fetchPublicBoothsOf(
 ): Promise<PublicBooth[]> {
   try {
     if (!db || !eventId || !brandId) return [];
-    const rs = await db
-      .prepare(PUBLIC_BOOTHS_OF_EVENT_SQL)
-      .bind(eventId, brandId)
-      .all<PublicBooth>();
-    return (rs.results ?? []).map(toPublicBooth);
+    return await readPublicBoothsOf(db, eventId, brandId);
   } catch {
     /* fail open: no stalls, never a broken event read */
     return [];
+  }
+}
+
+// Whether the event has at least one stall in use: the event page's "See the
+// stalls" link needs a yes or no, never the rows or how many there are.
+const HAS_PUBLIC_BOOTHS_SQL = `SELECT 1 AS one
+     FROM event_booths b
+     JOIN events e ON e.id = b.event_id
+    WHERE b.event_id = ? AND e.brand_id = ? AND b.is_active = 1
+    LIMIT 1`;
+
+/**
+ * True when one event of `brandId` has a stall in use. Fails to false: the
+ * event page then shows no link to its stalls, never a broken page.
+ */
+export async function hasPublicBooths(
+  db: D1Database | undefined | null,
+  eventId: string,
+  brandId: string
+): Promise<boolean> {
+  try {
+    if (!db || !eventId || !brandId) return false;
+    const row = await db.prepare(HAS_PUBLIC_BOOTHS_SQL).bind(eventId, brandId).first();
+    return row !== null;
+  } catch {
+    return false;
   }
 }
 

@@ -1,0 +1,528 @@
+/**
+ * The contrast of the text drawn on the street map, judged by measurement, at
+ * the COMPONENT level (street-map CCR 2026-11-15, findings R27 and R38).
+ *
+ * axe cannot decide text drawn over the street layer: town names and dot numbers
+ * come back "incomplete". On staging that was a failure once the street map was
+ * binding, so `streetMapArchiveLoaded` could never be set on a green chain
+ * (R27). The judge here decides it from the colours the browser resolved from
+ * the tokens, in the theme on screen: the text against its halo, or against the
+ * dot it sits on, or against every colour drawn under it
+ * (scripts/ci/map-text-contrast.mjs has the rule; helpers/map-text-contrast.ts
+ * reads the page). The same judge runs on staging in
+ * tests/e2e/3-flows/map-place-panel.spec.ts (T4k).
+ *
+ * The page is the real landing handler over a synthetic archive
+ * (helpers/render-landing-map.ts), as in street-map-sizes.component.spec.ts:
+ * no Worker, no D1, no R2. The archive proves the styles, never what a real
+ * tile holds. Staging has no archive yet, so this is the layer that sees text
+ * over streets today.
+ *
+ * WHAT IT FOUND (2026-11-15, Chromium; the figures are in each test's
+ * annotations on every run). Styles are not changed here: colours come from
+ * packages/tokens and the choice is the owner's. Each finding is pinned below
+ * (FINDINGS) by the exact kinds of text that fail, so a fix turns the test red
+ * until the pin is taken out, and a new failure turns it red at once.
+ *   1. The number on a pale dot (a place that is not a business) is under AA in
+ *      both themes at every width: 2.10:1 light and 2.38:1 dark, where 4.5:1 is
+ *      needed (3:1 from 18.7 px bold). It is `--on-accent` on `--accent` at 45%
+ *      over the map (lib/map-zoom-style.ts, `.amap-blk .amap-dot`).
+ *   2. Where the landing map keeps its whole 600-unit frame on a 320 px screen
+ *      (areas spread side to side), the halo of the area numbers and town names
+ *      is 0.93 px on screen, under the judge's 1 px floor, so it is not counted
+ *      and they are judged against the map: 2.47 to 2.78:1 and 1.62 to 1.71:1.
+ *      At 375 px the halo is 1.1 px and both pass. WCAG gives no figure for a
+ *      halo's width; 1 px is this judge's own floor. Where the map is drawn
+ *      square on a narrow screen (`data-tall`, OSE-2084: areas in the middle of
+ *      the drawing, as staging's are) the halo is 1.5 px and both pass. The pin
+ *      on the first fixture caught that change the day this was rebased.
+ * What passes: town names against their halo (5.5:1 or more), the number on a
+ * solid dot (5.8:1 or more), area numbers against their halo (15:1).
+ *
+ * BORN RED. The "the judge fails" tests below are the standing proof: each
+ * forces one fault into the live page (a town name in the road's colour, a halo
+ * in the text's colour, a halo too thin, a number in its dot's colour, …) and
+ * the judge must fail on that kind of text. Then the judge itself was faulted,
+ * one fault at a time, this file run on Chromium, and the fault taken out
+ * (2026-11-16, of 42 tests):
+ *   In scripts/ci/map-text-contrast.mjs, the rule:
+ *   P1  every verdict passes
+ *         -> 29: the six zoomed-area tests, the two whole-frame tests at 320 px,
+ *            all twenty "the judge fails" tests, and the cut town name
+ *   P2  a halo of any width, and one that lets the map through, counts
+ *         -> 4: the two whole-frame tests at 320 px, and "a town name's halo too
+ *            thin to count" in both themes
+ *   P3  a pale dot taken for a solid one
+ *         -> 8: the six zoomed-area tests, and "every dot drawn pale" in both themes
+ *   P4  the best background decides, not the worst
+ *         -> 16: the same eight page tests as P1, and four faults in both themes
+ *            (road colour with no halo, halo too thin, stroke over the fill, an
+ *            area number with no halo)
+ *   In helpers/map-text-contrast.ts, the reader:
+ *   R1  every stroke taken for a halo, painted first or not
+ *         -> 2: "a town name's stroke painted over its fill, so it is no halo"
+ *   R2  the opacity of the groups round an element not read
+ *         -> 6: stroke over the fill, the street layer drawn faint, an area
+ *            number with no halo, each in both themes
+ *   R3  a shape's fill read as solid whatever its opacity
+ *         -> 12: the six zoomed-area tests, and three faults in both themes
+ *   R4  the halo taken as the whole stroke, in drawing units
+ *         -> 4: the same four as P2
+ *   R5  a pale dot's number named as a solid dot's
+ *   R6  the dot under a number not read
+ *         -> each 10: the six zoomed-area tests, "a solid dot's number in the
+ *            dot's colour" and "every dot drawn pale" in both themes
+ *   R7  the text's colour taken from `color`, not from its fill
+ *         -> 19: the six zoomed-area tests, twelve of the "the judge fails"
+ *            tests, and "the judge refuses a paint it cannot read"
+ *   R8  a text of a kind the judge does not know left out
+ *         -> "a text on the map the judge does not know is counted, never passed over"
+ *   R9  no shape drawn before a text is read
+ *         -> 10: the two whole-frame tests at 320 px, and four faults in both themes
+ *   R10 only a text whose middle is inside the map's box is judged
+ *         -> "a town name the frame cuts is still judged, and a fault in it is found"
+ *   R11 every text read is judged, drawn or not
+ *   R12 every text is said to be rendered
+ *         -> each: "a text that is not drawn is not judged: a display:none copy
+ *            and an empty <text> are read and left out"
+ * The whole file then passed on WebKit (42 of 42).
+ *
+ * It runs in the T0 `component` shard (playwright.component.config.ts), on
+ * Chromium and WebKit. Every request goes to ORIGIN and is answered by the
+ * routes; anything else is aborted.
+ */
+import { test, expect, type Page } from '@playwright/test';
+import { cellToLatLng, latLngToCell } from 'h3-js';
+import { ORIGIN, renderLanding, uiCss } from '../helpers/render-landing-map';
+import { judgeMapTextOn, readMapText, type MapTextJudged } from '../helpers/map-text-contrast';
+
+const BLUE_ISLAND = latLngToCell(41.6573, -87.6806, 7);
+const BEVERLY = latLngToCell(41.7135, -87.6812, 7);
+
+type Row = Record<string, unknown>;
+
+/** A date `days` from today, as the events table holds it. */
+function dayFrom(days: number): string {
+  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+function ev(n: number, over: Row): Row {
+  const d = dayFrom(2 + n);
+  return {
+    id: `evt_k${String(n).padStart(2, '0')}`,
+    slug: `contrast-${n}`,
+    title: `Contrast Event ${n}`,
+    status: 'active',
+    is_published: 1,
+    timezone: 'America/Chicago',
+    location: 'Rock Island Public House',
+    where_address: '13328 Olde Western Ave, Blue Island, IL 60406',
+    template_id: 'bar_night',
+    event_type_id: 'etr-ent-trivia',
+    cover_image_url: null,
+    start_date: d,
+    end_date: d,
+    starts_at: `${d}T23:00:00Z`,
+    ...over,
+  };
+}
+
+/**
+ * The same shape as street-map-sizes.component.spec.ts: five places in one area
+ * (two businesses, so two solid dots; three not, so three pale dots) and six
+ * events in a second area, so the landing leads with its map of two areas.
+ */
+function rows(): Row[] {
+  const [lat, lon] = cellToLatLng(BLUE_ISLAND);
+  const at = (dLat: number, dLon: number, place_kind: string) => ({
+    lat: lat + dLat,
+    lon: lon + dLon,
+    h3_res7: BLUE_ISLAND,
+    place_kind,
+  });
+  const [bLat, bLon] = cellToLatLng(BEVERLY);
+  const beverly = { lat: bLat, lon: bLon, h3_res7: BEVERLY, place_kind: 'business' };
+  return [
+    ev(1, at(0, 0, 'business')),
+    ev(2, at(0.007, 0, 'address')),
+    ev(3, at(-0.007, 0, 'address')),
+    ev(4, at(0, 0.01, 'business')),
+    ev(5, at(0, -0.01, 'address')),
+    ev(6, at(0, 0, 'business')),
+    ...[7, 8, 9, 10, 11, 12].map((n) => ev(n, beverly)),
+  ];
+}
+
+/**
+ * Three areas side by side, four events each: the landing leads with its map,
+ * and the areas reach past the middle of the drawing, so a narrow screen keeps
+ * the whole frame (attendee-map.ts, `tall`) and everything on it is at its
+ * smallest.
+ */
+function wideRows(): Row[] {
+  const cells = [-87.95, -87.6806, -87.41].map((lon) => latLngToCell(41.6573, lon, 7));
+  return cells.flatMap((cell, i) => {
+    const [lat, lon] = cellToLatLng(cell);
+    return [1, 2, 3, 4].map((n) =>
+      ev(20 + i * 4 + n, { lat, lon, h3_res7: cell, place_kind: 'business' })
+    );
+  });
+}
+
+const ZOOMED = `/?area=${BLUE_ISLAND}`;
+type Scheme = 'light' | 'dark';
+
+/** Serve the rendered page and /ui.css from ORIGIN, in this theme; abort everything else. */
+async function open(
+  page: Page,
+  path: string,
+  scheme: Scheme,
+  width: number,
+  events: Row[] = rows()
+): Promise<void> {
+  await page.setViewportSize({ width, height: 812 });
+  await page.emulateMedia({ colorScheme: scheme });
+  const html = await renderLanding(path, events);
+  const css = await uiCss();
+  await page.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin !== ORIGIN) return route.abort();
+    if (url.pathname === '/' || url.pathname === '') {
+      return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
+    }
+    if (url.pathname === '/ui.css') {
+      return route.fulfill({ status: 200, contentType: 'text/css; charset=utf-8', body: css });
+    }
+    return route.fulfill({ status: 404, body: '' });
+  });
+  const res = await page.goto(`${ORIGIN}${path}`, { waitUntil: 'load' });
+  expect(res?.status()).toBe(200);
+  await expect(page.getByTestId('amap-streets')).toHaveCount(1);
+  // The theme asked for is the theme on screen, or "both themes" is one theme twice.
+  const bg = await page.evaluate(() => {
+    const seen = [document.body, document.documentElement]
+      .map((el) => getComputedStyle(el).backgroundColor)
+      .find((c) => c !== 'rgba(0, 0, 0, 0)' && c !== 'transparent');
+    return seen ?? '';
+  });
+  const [r, g, b] = (bg.match(/\d+/g) ?? []).map(Number);
+  expect((r ?? 0) + (g ?? 0) + (b ?? 0) > 382 ? 'light' : 'dark', `page background ${bg}`).toBe(
+    scheme
+  );
+  await page.getByTestId('amap-svg').scrollIntoViewIfNeeded();
+}
+
+/**
+ * Put a style fault on the live page. The page's own style blocks are in its
+ * body, so the fault goes after them, at the end of the body: a block in the
+ * head would lose to them and change nothing.
+ */
+async function addFault(page: Page, css: string): Promise<void> {
+  await page.evaluate((text) => {
+    const style = document.createElement('style');
+    style.textContent = text;
+    document.body.appendChild(style);
+  }, css);
+}
+
+/** Every verdict into the report, so a pass says how much room it had. */
+function record(where: string, judged: MapTextJudged): void {
+  for (const line of judged.summary) {
+    test.info().annotations.push({ type: 'map-text-contrast', description: `${where}: ${line}` });
+  }
+}
+
+const count = (judged: MapTextJudged, kind: string) =>
+  judged.texts.filter((t) => t.kind === kind).length;
+
+/** The narrowest halo among the texts on screen, in CSS px. */
+const thinnestHalo = (judged: MapTextJudged) =>
+  Math.min(...judged.texts.map((t) => t.halo?.px ?? Infinity));
+
+/**
+ * What the judge finds on the shipped styles: the kinds of text under their
+ * ratio. Exact: a kind that starts to pass, or a new kind that fails, turns the
+ * test red. The figures and the reason are at the head of this file; nothing
+ * here excuses a failure on staging (T4k has no such list).
+ */
+const FINDINGS = {
+  zoomed: ['pale dot number'],
+  /** The landing's own map: nothing where the halo is 1 px or more; under it, every text drawn. */
+  landing: (haloPx: number, drawn: string[]) =>
+    haloPx < 1 ? ['area number', 'town name'].filter((k) => drawn.includes(k)) : [],
+};
+
+const WIDTHS = [320, 375, 1280];
+const THEMES: Scheme[] = ['light', 'dark'];
+
+for (const width of WIDTHS) {
+  for (const scheme of THEMES) {
+    const where = `${width} px, ${scheme}`;
+
+    test(`zoomed area, ${where}: town names and solid dot numbers reach AA; the pale dot's number is the one finding`, async ({
+      page,
+    }) => {
+      await open(page, ZOOMED, scheme, width);
+      const judged = await judgeMapTextOn(page);
+      record(`zoomed area, ${where}`, judged);
+
+      expect(count(judged, 'other'), 'no text on the map this judge does not know').toBe(0);
+      expect(count(judged, 'town name'), 'at least one town name is drawn').toBeGreaterThan(0);
+      expect(count(judged, 'dot number'), 'the two businesses are two solid dots').toBe(2);
+      expect(count(judged, 'pale dot number'), 'the three other places are three pale dots').toBe(
+        3
+      );
+      expect(judged.lines.length, 'every text on screen has a verdict').toBe(judged.texts.length);
+
+      expect(judged.failedKinds, judged.failures.join('\n')).toEqual(FINDINGS.zoomed);
+      // The finding is every pale dot, not one of them by chance.
+      expect(judged.failures.length, judged.failures.join('\n')).toBe(3);
+      console.log(
+        `::warning title=Map text contrast, a known finding::zoomed area, ${where}: ${judged.failures[0]}`
+      );
+    });
+
+    test(`landing map, ${where}: area numbers and town names reach AA`, async ({ page }) => {
+      await open(page, '/', scheme, width);
+      const judged = await judgeMapTextOn(page);
+      record(`landing map, ${where}`, judged);
+
+      expect(count(judged, 'other'), 'no text on the map this judge does not know').toBe(0);
+      expect(count(judged, 'area number'), 'two numbered areas').toBe(2);
+      expect(count(judged, 'town name'), 'at least one town name is drawn').toBeGreaterThan(0);
+      // Two areas in the middle of the drawing: a narrow screen shows them square.
+      expect(thinnestHalo(judged), 'every halo is 1 px or more').toBeGreaterThanOrEqual(1);
+      expect(judged.failedKinds, judged.failures.join('\n')).toEqual([]);
+    });
+
+    test(`landing map on its whole frame, ${where}: area numbers and town names reach AA where their halo is 1 px or more`, async ({
+      page,
+    }) => {
+      await open(page, '/', scheme, width, wideRows());
+      await expect(
+        page.locator('[data-testid="amap"][data-tall]'),
+        'this fixture keeps the whole frame on every screen'
+      ).toHaveCount(0);
+      const judged = await judgeMapTextOn(page);
+      record(`landing map on its whole frame, ${where}`, judged);
+
+      expect(count(judged, 'other'), 'no text on the map this judge does not know').toBe(0);
+      // Whether a town name is drawn here depends on where the synthetic tiles
+      // put one; the area numbers carry the same halo and are always drawn.
+      expect(count(judged, 'area number'), 'three numbered areas').toBe(3);
+
+      const halo = thinnestHalo(judged);
+      // 320 px is where the finding is: the test must be looking at it there.
+      if (width === 320) expect(halo, 'the halo at 320 px on the whole frame').toBeLessThan(1);
+      else expect(halo, `the halo at ${width} px`).toBeGreaterThanOrEqual(1);
+      expect(judged.failedKinds, judged.failures.join('\n')).toEqual(
+        FINDINGS.landing(
+          halo,
+          judged.texts.map((t) => t.kind)
+        )
+      );
+      if (judged.failures.length > 0) {
+        // Under the floor, and for that reason only: the same text passes at 375 px.
+        for (const line of judged.failures) expect(line).toContain('under the 1 px floor');
+        console.log(
+          `::warning title=Map text contrast, a known finding::landing map on its whole frame, ${where}: ${judged.failures[0]}`
+        );
+      }
+    });
+  }
+}
+
+/**
+ * The judge can fail. Each case forces one fault into the live page, in both
+ * themes, and names the kind of text that must then be under its ratio. Tokens
+ * only, as the page's own styles are.
+ */
+const FAULTS: {
+  name: string;
+  path: string;
+  css: string;
+  fails: string;
+  /** A part of the failing line, when the reason matters. */
+  says?: string;
+}[] = [
+  {
+    name: 'a town name in the road colour, with no halo',
+    path: ZOOMED,
+    css: '.as-t{fill:var(--border-strong);stroke:none}',
+    fails: 'town name',
+    says: '1.00:1 against the edge of a highway',
+  },
+  {
+    name: 'a town name in the road colour, halo kept',
+    path: ZOOMED,
+    css: '.as-t{fill:var(--border-strong)}',
+    fails: 'town name',
+    says: 'against its halo',
+  },
+  {
+    name: "a town name's halo in the text's own colour",
+    path: ZOOMED,
+    css: '.as-t{stroke:var(--text-muted)}',
+    fails: 'town name',
+    says: 'against its halo',
+  },
+  {
+    name: "a town name's halo too thin to count",
+    path: ZOOMED,
+    css: '.as-t{stroke-width:1}',
+    fails: 'town name',
+    says: 'under the 1 px floor',
+  },
+  {
+    name: "a town name's stroke painted over its fill, so it is no halo",
+    path: ZOOMED,
+    css: '.as-t{paint-order:normal}',
+    fails: 'town name',
+    says: 'against the edge of a highway',
+  },
+  {
+    name: 'the street layer drawn faint, town names with it',
+    path: ZOOMED,
+    css: '[data-testid="amap-streets"]{opacity:.3}',
+    fails: 'town name',
+  },
+  {
+    name: "a solid dot's number in the dot's colour",
+    path: ZOOMED,
+    css: '.amap-dn{fill:var(--accent)}',
+    fails: 'dot number',
+    says: '1.00:1 against its dot',
+  },
+  {
+    name: 'every dot drawn pale',
+    path: ZOOMED,
+    css: '.amap-dot{fill-opacity:.2}',
+    fails: 'dot number',
+    says: 'its dot at 20% over',
+  },
+  {
+    name: "an area number in the page's colour",
+    path: '/',
+    css: '.amap-num{fill:var(--bg)}',
+    fails: 'area number',
+    says: '1.00:1 against its halo',
+  },
+  {
+    name: 'an area number with no halo',
+    path: '/',
+    css: '.amap-num{stroke:none}',
+    fails: 'area number',
+    says: 'against the edge of a hexagon',
+  },
+];
+
+for (const fault of FAULTS) {
+  for (const scheme of THEMES) {
+    test(`the judge fails: ${fault.name} (${scheme})`, async ({ page }) => {
+      await open(page, fault.path, scheme, 375);
+      // Sound before the fault: this kind of text passes on the shipped styles.
+      const before = await judgeMapTextOn(page);
+      expect(before.failedKinds, 'before the fault').not.toContain(fault.fails);
+      await addFault(page, fault.css);
+      const after = await judgeMapTextOn(page);
+      expect(after.failedKinds, after.lines.join('\n')).toContain(fault.fails);
+      const lines = after.failures.filter((l) => l.includes(`: ${fault.fails} "`));
+      expect(lines.length, 'the failing lines name that kind').toBeGreaterThan(0);
+      if (fault.says) {
+        for (const line of lines) expect(line).toContain(fault.says);
+      }
+    });
+  }
+}
+
+test('the judge refuses a paint it cannot read: a town name filled with a pattern throws by name', async ({
+  page,
+}) => {
+  await open(page, ZOOMED, 'light', 375);
+  await addFault(page, '.as-t{fill:url(#no-such-pattern)}');
+  await expect(judgeMapTextOn(page)).rejects.toThrow(/is not a plain colour/);
+});
+
+test('a text on the map the judge does not know is counted, never passed over', async ({
+  page,
+}) => {
+  await open(page, ZOOMED, 'light', 375);
+  await page.evaluate(() => {
+    const svg = document.querySelector('[data-testid="amap-svg"]')!;
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', '300');
+    t.setAttribute('y', '180');
+    t.textContent = 'a label nobody listed';
+    svg.appendChild(t);
+  });
+  const judged = await judgeMapTextOn(page);
+  expect(count(judged, 'other')).toBe(1);
+  // It is judged like any other text: against the map, as it has no halo.
+  expect(judged.lines.some((l) => l.includes('other "a label nobody listed"'))).toBe(true);
+});
+
+// What the judge reads is every text that is rendered. Whether its middle is
+// inside the map's box is not asked: half a name at the edge is still read by a
+// person.
+test('a town name the frame cuts is still judged, and a fault in it is found', async ({ page }) => {
+  await open(page, ZOOMED, 'light', 375);
+  const before = await judgeMapTextOn(page);
+  expect(before.failedKinds, 'before the fault').not.toContain('town name');
+  // One name is moved until its middle is 2 units past the left edge, and
+  // drawn in the road's colour with no halo.
+  const moved = await page.evaluate(() => {
+    const svg = document.querySelector<SVGSVGElement>('[data-testid="amap-svg"]')!;
+    const box = svg.getBoundingClientRect();
+    const name = [...svg.querySelectorAll<SVGTextElement>('text.as-t')].find((t) => {
+      const r = t.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      return r.width > 0 && x > box.left && x < box.right && y > box.top && y < box.bottom;
+    });
+    if (!name) return null;
+    name.setAttribute('x', String(svg.viewBox.baseVal.x - 2));
+    name.setAttribute('style', 'fill:var(--border-strong);stroke:none');
+    return (name.textContent ?? '').trim();
+  });
+  expect(moved, 'a town name inside the frame, to move').not.toBeNull();
+  const after = await judgeMapTextOn(page);
+  // The same texts as before: the moved one was not dropped.
+  expect(after.texts.length).toBe(before.texts.length);
+  const cut = (j: MapTextJudged) => j.texts.filter((t) => !t.shown).length;
+  expect(cut(after) - cut(before), 'one more text has its middle off the map').toBe(1);
+  expect(after.failedKinds, after.lines.join('\n')).toContain('town name');
+  const lines = after.failures.filter((l) => l.includes(': town name "'));
+  expect(lines, 'the cut name is the one that fails').toHaveLength(1);
+  expect(lines[0]).toContain(`town name "${moved}"`);
+});
+
+test('a text that is not drawn is not judged: a display:none copy and an empty <text> are read and left out', async ({
+  page,
+}) => {
+  await open(page, ZOOMED, 'light', 375);
+  const before = await judgeMapTextOn(page);
+  await page.evaluate(() => {
+    const svg = document.querySelector('[data-testid="amap-svg"]')!;
+    for (const [words, style] of [
+      ['a copy nobody sees', 'display:none'],
+      ['', ''],
+    ]) {
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('x', '300');
+      t.setAttribute('y', '180');
+      if (style) t.setAttribute('style', style);
+      t.textContent = words;
+      svg.appendChild(t);
+    }
+  });
+  // The reader saw both, and says neither is rendered.
+  const read = (await readMapText(page)).filter((t) => t.kind === 'other');
+  expect(read.map((t) => [t.text, t.rendered])).toEqual([
+    ['a copy nobody sees', false],
+    ['', false],
+  ]);
+  const judged = await judgeMapTextOn(page);
+  expect(count(judged, 'other')).toBe(0);
+  expect(judged.texts.length).toBe(before.texts.length);
+  expect(judged.lines.some((l) => l.includes('a copy nobody sees'))).toBe(false);
+});

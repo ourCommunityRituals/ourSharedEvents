@@ -72,6 +72,8 @@ export const MUTATION_PATHS = Object.freeze([
   'workers/oursharedevents/src/handlers/events.ts',
   'workers/oursharedevents/tests/landing-area.spec.ts',
   'workers/oursharedevents/tests/landing-category-scenarios.spec.ts',
+  // OSE-2094: the landing's catalog read starts with the event list.
+  'workers/oursharedevents/tests/landing-reads-together.spec.ts',
   'workers/oursharedevents/tests/list-landing-language-golden.spec.ts',
   'workers/oursharedevents/tests/list-landing-spanish.spec.ts',
   'workers/oursharedevents/tests/helpers/list-landing-rows.ts',

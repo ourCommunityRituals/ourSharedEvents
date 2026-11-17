@@ -625,11 +625,18 @@
       "testCount": 2
     },
     {
+      "file": "workers/oursharedevents/tests/booth-list-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 26
+    },
+    {
       "file": "workers/oursharedevents/tests/booth-page.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 20
+      "testCount": 21
     },
     {
       "file": "workers/oursharedevents/tests/born-red-harness.spec.ts",
@@ -1808,6 +1815,13 @@
       "testCount": 19
     },
     {
+      "file": "workers/oursharedevents/tests/landing-reads-together.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
+    },
+    {
       "file": "workers/oursharedevents/tests/landing-where-unit.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -2932,7 +2946,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 8
+      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/scan-buffer.spec.ts",
@@ -3201,6 +3215,13 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/shared-report-pending-note-floor.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
+    },
+    {
       "file": "workers/oursharedevents/tests/shared-report-pipeline-invariants.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -3458,6 +3479,20 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-line-pick.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 48
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-line-titles.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/sponsor-logo.spec.ts",

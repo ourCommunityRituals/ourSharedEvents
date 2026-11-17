@@ -39,9 +39,16 @@
  *                                  (OSE-1850); /es stands for any listed language. The form posts
  *                                  to the unprefixed API; no language is stored.
  *   GET /events/:id/calendar.ics → public event calendar download
+ *   GET /events/:id/booths       → a fair's stalls (OSE-1998, OSE ADR-034): the fair's title and
+ *                                  date, its sponsor strip when sponsors are on show, one <h1>
+ *                                  "Stalls", the stalls in use grouped by category (fixed labels,
+ *                                  "Other" last), each a link to its stall page. An unknown or
+ *                                  closed event, or one with no stall in use, is the stall page's
+ *                                  404. No count, no cookie; rate-limited.
  *   GET /events/:id/booths/:number → one stall at a fair (OSE-1998, OSE ADR-034): the fair's title
  *                                  and date, its sponsor strip when sponsors are on show, the
- *                                  stall's number, trading name and category, a link to the fair.
+ *                                  stall's number, trading name and category, a link to the
+ *                                  fair's stall list and one to the fair.
  *                                  The number is read in any case. An unknown or closed event,
  *                                  number or stall is one 404. No count, no cookie; rate-limited.
  *   GET /brands/:brand/calendar.ics → a brand's public events as one calendar feed (OSE-2013):
@@ -279,6 +286,7 @@ import {
   type PagesEnv,
 } from './handlers/pages';
 import { handleBoothPage } from './handlers/booth-page';
+import { handleBoothListPage } from './handlers/booth-list-page';
 import { handleAdminBoothCounts } from './handlers/booth-counts';
 import { handleBriefingPage } from './handlers/briefing';
 import { handleDemoIndex, handleDemoSite } from './handlers/demo';
@@ -2698,6 +2706,19 @@ export async function route(
       return renderErrorPage(429, 'Too many requests', 'Give it a minute and try again.');
     }
     return handleBoothPage(request, env, boothPageMatch[1], boothPageMatch[2]);
+  }
+
+  // ── A fair's stalls (OSE-1998, OSE ADR-034) — /events/<id>/booths ─────────
+  // Matched before the event page's /events/<id>/<name>, which would otherwise
+  // take "booths" as a name (canonical.ts keeps "booths" out of event names).
+  // Rate-limited like the stall page, counted apart; past the limit, the same
+  // house page. Not on the language layer: under /es/ it is the ordinary 404.
+  const boothListMatch = pathname.match(/^\/events\/([^/]{1,200})\/booths$/);
+  if (boothListMatch && method === 'GET') {
+    if (await isPublicReadLimited(request, env, 'booth-list-page')) {
+      return renderErrorPage(429, 'Too many requests', 'Give it a minute and try again.');
+    }
+    return handleBoothListPage(request, env, boothListMatch[1]);
   }
 
   // ── Public event landing page (OSE-243a) ──────────────────────────────────
