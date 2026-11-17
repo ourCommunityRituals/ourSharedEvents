@@ -94,6 +94,9 @@ export const NODE_SPECS = [
   'tests/sponsor-logo.spec.ts',
   'tests/sponsor-share-covenant.spec.ts',
   'tests/sponsor-share-rotation.spec.ts',
+  // OSE-1901 — the one-name sponsor line picks by the covenant share (pure pick,
+  // the read over a fake D1, and the staging folder's literal held to the code)
+  'tests/sponsor-line-pick.spec.ts',
   'tests/uec-module.spec.ts',
 
   // Batch 3 (OSE-946 c3) — unlocked by the `.html`-as-Text loader added to

@@ -1,0 +1,56 @@
+info:
+  name: OSE-1901 | sunny + rainy | events list API | sponsor_titles names the covenant pick for this hour
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events?brand=root"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The fixture event's cycle, one letter an hour (see the folder notes).
+        const CYCLE = 'LLTMLTLBTLLLMLBTTTTMTLLMBLTMTTLMTMTLTLTLMLTMTTLLLTLTTLTTTLTLTTLLLMMLLMMTTTMLLTTTMTLLLTBTLMLBTBTTMLTM';
+        const NAMES = { T: 'Covline Top Level', M: 'Covline Middle', B: 'Covline Base', L: 'Covline Local' };
+        const HOUR = 3600000;
+        const nameAt = function (ms) { return NAMES[CYCLE.charAt(Math.floor(ms / HOUR) % CYCLE.length)]; };
+        const now = Date.now();
+        const into = now % HOUR;
+        const due = [nameAt(now)];
+        if (into < 120000) due.push(nameAt(now - HOUR));
+        if (into > HOUR - 120000) due.push(nameAt(now + HOUR));
+
+        const body = res.getBody();
+        const listed = (body.items || []).map(function (e) { return e.id; });
+        const titles = body.sponsor_titles || {};
+        const title = titles['covline-evt'];
+        test('OSE-1901: 200 and the fixture event is in the list', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(listed).to.include('covline-evt');
+        });
+        test('OSE-1901 sunny: the line is one of the four sponsors both sides agreed to', function () {
+          expect(['Covline Top Level', 'Covline Middle', 'Covline Base', 'Covline Local']).to.include(title);
+        });
+        test('OSE-1901 sunny: it is the covenant pick for this clock hour', function () {
+          expect(due, 'hour ' + Math.floor(now / HOUR) + ', read ' + title).to.include(title);
+        });
+        test('OSE-1901 rainy: a sponsor that has not answered, was declined or is switched off is named nowhere', function () {
+          const all = JSON.stringify(titles);
+          expect(all).to.not.include('Covline Pending');
+          expect(all).to.not.include('Covline Declined');
+          expect(all).to.not.include('Covline Inactive');
+        });
+        test('OSE-1901 edge: the line carries a name and nothing else (no level, no local flag)', function () {
+          expect(typeof title).to.eql('string');
+          Object.keys(titles).forEach(function (k) { expect(typeof titles[k]).to.eql('string'); });
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
