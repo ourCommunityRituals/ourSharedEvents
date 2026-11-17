@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/api/v2/admin/events/{{testEventId}}/forms/registrations"
+  url: '{{baseUrl}}/api/v2/admin/events/{{testEventId}}/forms/registrations'
   auth: inherit
 
 runtime:
@@ -22,6 +22,9 @@ runtime:
         const json = res.getBody();
 
         if (res.getStatus() === 200) {
+          // Kept for the export request after this one: the export is withheld
+          // whenever this list is (OSE-2087).
+          bru.setVar('registrationsListWithheld', json.suppressed === true ? 'yes' : 'no');
           test('ok is true', function() {
             expect(json.ok).to.eql(true);
           });

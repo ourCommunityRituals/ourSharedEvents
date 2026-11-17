@@ -9,10 +9,14 @@ docs: |-
   spot on the hall plan, and never a person (ADR-034 decision 5). A poster
   placement may point at a booth in use of its own event (`booth_id`).
 
-  The public side (seq 180 to 187): GET /api/v2/events/:id carries the stalls
+  The public side (seq 180 to 191): GET /api/v2/events/:id carries the stalls
   in use beside the event (`booths`, six fields each; the list read carries
   none), and GET /events/:id/booths/:number is the public stall page. A draft
   fair shows no stalls, and an unknown, closed or out-of-use stall is one 404.
+  GET /events/:id/booths is the fair's stall list (seq 188 to 190): the stalls
+  in use grouped by category, no count; an unknown event and a draft fair answer
+  the stall page's 404, compared by status, page title and <h1> only. The fair's
+  event page links to it with "See the stalls" (seq 191).
 
   No fixture. The folder makes its own two synthetic, unlisted draft events
   (seq 10 and 11) and one synthetic live fair that is off the map (seq 12, so
@@ -34,7 +38,7 @@ docs: |-
   The requests run in `seq` order.
 
   Mock-layer twins: workers/oursharedevents/tests/event-booths.spec.ts,
-  public-event-booths.spec.ts and booth-page.spec.ts.
+  public-event-booths.spec.ts, booth-page.spec.ts and booth-list-page.spec.ts.
 
   The "same page" check (seq 185 to 187) compares the whole 404 page but for two
   things that are new on every read: the script the edge adds for its JavaScript

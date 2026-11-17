@@ -6,11 +6,12 @@
 // (tests/e2e/helpers/map-zoom-area.ts). The workflow passes the flag to neither:
 // a second copy could say something else (tests/unit/ci/street-map-staging-cases.test.js).
 //
-// "false": a zoomed area with no street layer is right, and the street
-//          assertions print NOT RUN.
+// "false": a zoomed area with no street layer is right, and a test named
+//          NOT RUN says which street assertions were left out.
 // "true":  a zoomed area with no street layer fails by name.
-// The owner sets it to "true" in a one-line PR once streets have been seen on
-// staging (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md).
+// The owner sets it to "true" once streets have been seen on staging, in the PR
+// that also names a town in streetMapTownAnchor
+// (docs/runbooks/RUNBOOK-STREET-MAP-ARCHIVE.md, "Staging, in order", step 9).
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

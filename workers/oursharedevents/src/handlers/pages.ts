@@ -21,6 +21,7 @@ import { validateLogoUrl } from '../lib/sponsor-logo';
 import { sponsorTitle, sponsorCardPath } from '../lib/sponsor-card';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { PLACEMENT_EVENT_USES_SPONSORS_SQL } from '../lib/sponsor-card';
+import { boothListPath, hasPublicBooths } from '../lib/public-booths';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 import { hashEmail, encryptText } from '../lib/pii';
 import { guardTurnstile, type TurnstileEnv } from '../lib/turnstile';
@@ -921,7 +922,7 @@ function renderEventActions(
   shareUrl: string,
   nonce: string,
   lang: Lang,
-  opts: { calendar?: boolean; inert?: boolean } = {}
+  opts: { calendar?: boolean; inert?: boolean; stallsHref?: string } = {}
 ): string {
   const calendarLabel = msg(lang, 'calendar.label');
   const icsLabel = msg(lang, 'calendar.ics');
@@ -961,9 +962,15 @@ function renderEventActions(
   // When there is no menu the row is byte for byte what it was before OSE-2045.
   const subscribe =
     opts.inert === true ? '' : renderSubscribeMenu(row, new URL(shareUrl).origin, lang);
+  // OSE-1998: a fair with a stall in use links to its stall list. The handler
+  // passes the address only when that list opens; the link carries no count.
+  // The row's own outlined button class, so no new style is needed.
+  const stalls = opts.stallsHref
+    ? `<a class="ose-calendar-link" data-testid="event-stalls-link" href="${esc(opts.stallsHref)}">${msg(lang, 'stalls.see')}</a>`
+    : '';
   return `<div class="ose-event-actions" data-testid="event-actions">
   ${renderShareBlock(shareLink, row.title, nonce, lang, opts.inert === true)}
-  ${menu}${subscribe ? `\n  ${subscribe}` : ''}
+  ${menu}${subscribe ? `\n  ${subscribe}` : ''}${stalls ? `\n  ${stalls}` : ''}
 </div>`;
 }
 
@@ -1403,6 +1410,8 @@ export function renderPreEventHtml(
     nextEvents?: NextEventRow[];
     /** OSE-1761: the query the language switch carries over (`carriedQuery`). */
     pageQuery?: string;
+    /** OSE-1998: the fair's stall list, when it has a stall in use. */
+    stallsHref?: string;
   }
 ): string {
   const nonce = opts?.nonce ?? '';
@@ -1561,7 +1570,7 @@ ${SPONSOR_LIST_CSS}
 
     ${renderEventChoices(row, formContext, 'pre', lang, preview)}
 
-    ${renderEventActions(row, shareUrl, nonce, lang, { inert: preview })}
+    ${renderEventActions(row, shareUrl, nonce, lang, { inert: preview, stallsHref: opts?.stallsHref })}
 
     ${
       whyPurpose
@@ -1621,6 +1630,8 @@ export function renderEventLiveHtml(
     nextEvents?: NextEventRow[];
     /** OSE-1761: the query the language switch carries over (`carriedQuery`). */
     pageQuery?: string;
+    /** OSE-1998: the fair's stall list, when it has a stall in use. */
+    stallsHref?: string;
   }
 ): string {
   const nonce = opts?.nonce ?? '';
@@ -1767,7 +1778,7 @@ ${SPONSOR_LIST_CSS}
 
     ${renderEventChoices(row, formContext, 'live', lang, false)}
 
-    ${renderEventActions(row, shareUrl, nonce, lang)}
+    ${renderEventActions(row, shareUrl, nonce, lang, { stallsHref: opts?.stallsHref })}
 
     ${
       whyPurpose
@@ -1874,7 +1885,13 @@ export function renderPostEventHtml(
   shareUrl: string,
   nextEvents: NextEventRow[],
   social?: EventPageSocialData,
-  opts?: { nonce?: string; lang?: Lang; pageQuery?: string }
+  opts?: {
+    nonce?: string;
+    lang?: Lang;
+    pageQuery?: string;
+    /** OSE-1998: the fair's stall list, when it has a stall in use. */
+    stallsHref?: string;
+  }
 ): string {
   const nonce = opts?.nonce ?? '';
   const lang = opts?.lang ?? DEFAULT_LANG;
@@ -2113,7 +2130,7 @@ ${SPONSOR_LIST_CSS}
        the return loop (share the recap, find the next one) — curated, bounded (an
        <aside>, visually demoted, always after the recap), never a full listing. -->
     <aside class="ose-suggestions" data-testid="suggestions-margin" data-region="suggestions" aria-labelledby="next-heading">
-      ${renderEventActions(row, shareUrl, nonce, lang, { calendar: false })}
+      ${renderEventActions(row, shareUrl, nonce, lang, { calendar: false, stallsHref: opts?.stallsHref })}
       ${suggestionsInner}
       <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
         <h2 id="connect-heading" class="ose-suggestions-heading">${msg(lang, 'connect.heading')}</h2>
@@ -2427,10 +2444,14 @@ export async function handlePublicEventPage(
 
   // Fetch social data (sponsors + counts) and the other events at this venue
   // (OSE-1518) in parallel; both fail open, so the page always renders.
-  const [social, nextEvents] = await Promise.all([
+  // OSE-1998: the stall list opens only for a live event with a stall in use
+  // (handlers/booth-list-page.ts), so the link is offered under that same rule.
+  const [social, nextEvents, hasStalls] = await Promise.all([
     fetchEventPageSocialData(env, row.id),
     nextEventsAtVenue(env, row),
+    status === 'active' ? hasPublicBooths(env.DB, row.id, row.brand_id) : Promise.resolve(false),
   ]);
+  const stallsHref = hasStalls ? boothListPath(row.id) : undefined;
 
   let body: string;
   if (phase === 'pre_event') {
@@ -2440,6 +2461,7 @@ export async function handlePublicEventPage(
       formContext: preEventFormContext,
       nextEvents,
       pageQuery,
+      stallsHref,
     });
   } else if (phase === 'event') {
     body = renderEventLiveHtml(row, shareUrl, social, {
@@ -2448,6 +2470,7 @@ export async function handlePublicEventPage(
       formContext: liveEventFormContext,
       nextEvents,
       pageQuery,
+      stallsHref,
     });
   } else {
     // post_event: real recap + return loop (OSE-245 ose-client-ready package).
@@ -2456,7 +2479,12 @@ export async function handlePublicEventPage(
     // OSE-657: a curated few upcoming events at the same venue — the subtle
     // margin, bounded by MAX_POST_EVENT_SUGGESTIONS (never an exhaustive list).
     // Read above, in parallel with the social data.
-    body = renderPostEventHtml(row, shareUrl, nextEvents, social, { nonce, lang, pageQuery });
+    body = renderPostEventHtml(row, shareUrl, nextEvents, social, {
+      nonce,
+      lang,
+      pageQuery,
+      stallsHref,
+    });
   }
 
   // OSE-1012/1013: the /events/:id page is where the demo event actually renders
@@ -2985,6 +3013,31 @@ export async function handleLandingPage(
   }
   let area;
   try {
+    const db = (env as LandingEnv).DB;
+    // OSE-2094: the reads below do not need the event list, so they start with
+    // it rather than one after another. Each keeps its own fallback, and each
+    // settles to it even when the list read throws, so nothing is left
+    // rejected. T2 measured the landing at 3.2 to 4.5 s in the minute after a
+    // staging deploy while other pages stayed under 3 s; this is one round trip
+    // where there were four. tests/landing-reads-together.spec.ts.
+    //
+    // §6.2b latch: corridors that have ever reached the threshold stay on the
+    // map. Brand-bound read; a missing table (pre-0084) just means none yet.
+    // The landing's own latch rides in the same table: once the area has held
+    // LIST_MAX events it keeps leading with the map.
+    const latchesRead = db
+      ? (async () => readLatches(db as D1Database, 'root'))().catch(() => null)
+      : Promise.resolve(null);
+    // OSE-1522: the consented sponsor by the title on each card, as on /events.
+    const sponsorTitlesRead = (async () => fetchSponsorTitles(db, 'root'))().catch(
+      () => new Map<string, string>()
+    );
+    // Owner 2026-11-09: the Type row is the categories of the event-type
+    // catalog, read through the same query as the Create Event picker. A failed
+    // read only folds every event into "Other" (one choice, so no row); the
+    // cards still show. tests/landing-category-scenarios.spec.ts.
+    const typeCategoriesRead: Promise<Map<string, TypeCategory> | undefined> = (async () =>
+      categoryByTypeId(await readEventTypeCatalog(db)))().catch(() => undefined);
     const dp = getDataProvider(env as LandingEnv, ctx ?? null);
     const result = await dp.listEvents('root');
     // OSE-2012: an online event is link only. It has no cell, so it could never
@@ -3002,32 +3055,13 @@ export async function handleLandingPage(
       // One name, many places: the events of every match, while the person picks.
       items = items.filter(inPlaceMatches(where.matches));
     }
-    // §6.2b latch: corridors that have ever reached the threshold stay on the
-    // map. Brand-bound read; a missing table (pre-0084) just means none yet.
-    // The landing's own latch rides in the same table: once the area has held
-    // LIST_MAX events it keeps leading with the map.
-    let latched = new Set<string>();
-    let areaLatched = false;
-    if ((env as LandingEnv).DB) {
-      try {
-        const l = await readLatches((env as LandingEnv).DB as D1Database, 'root');
-        latched = l.corridors;
-        areaLatched = l.landingArea;
-      } catch {
-        latched = new Set();
-      }
-    }
-    // OSE-1522: the consented sponsor by the title on each card, as on /events.
-    const sponsorTitles = await fetchSponsorTitles((env as LandingEnv).DB, 'root');
-    // Owner 2026-11-09: the Type row is the categories of the event-type
-    // catalog, read through the same query as the Create Event picker.
-    let typeCategories: Map<string, TypeCategory> | undefined;
-    try {
-      typeCategories = categoryByTypeId(await readEventTypeCatalog((env as LandingEnv).DB));
-    } catch {
-      // A failed read only folds every event into "Other" (one choice, so no
-      // row); the cards still show. tests/landing-category-scenarios.spec.ts.
-    }
+    const [latches, sponsorTitles, typeCategories] = await Promise.all([
+      latchesRead,
+      sponsorTitlesRead,
+      typeCategoriesRead,
+    ]);
+    const latched = latches?.corridors ?? new Set<string>();
+    const areaLatched = latches?.landingArea ?? false;
     // Zoomed in: each event's own links and share code, for its panel card.
     // Direct destinations only; a map tap is never counted (OSE-1897).
     const zoomCell = zoom.cell;

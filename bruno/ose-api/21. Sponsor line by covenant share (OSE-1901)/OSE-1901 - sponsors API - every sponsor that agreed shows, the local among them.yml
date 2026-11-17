@@ -1,0 +1,31 @@
+info:
+  name: OSE-1901 | sunny + rainy | sponsors API | where more than one sponsor shows, all four do, the local among them
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/covline-evt/sponsors"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The one-name line shows one sponsor an hour. A surface that shows more
+        // than one (the event page, the poster, the TV) shows them all, so a local
+        // that agreed is always among them (owner, 2026-11-09).
+        const body = res.getBody();
+        const ids = (body.items || []).map(function (s) { return s.id; }).sort();
+        test('OSE-1901: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-1901 sunny: the four sponsors both sides agreed to, and only those', function () {
+          expect(ids).to.eql(['covline-base', 'covline-local', 'covline-mid', 'covline-top']);
+        });
+        test('OSE-1901 sunny: the local is among them', function () { expect(ids).to.include('covline-local'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

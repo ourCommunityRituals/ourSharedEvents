@@ -27,6 +27,7 @@ export const pl: Record<MessageKey, string> = {
   'calendar.subscribe': 'Subskrybuj kalendarz',
   'calendar.subscribe.apple': 'Kalendarz Apple',
   'calendar.subscribe.ics': 'Adres kalendarza (.ics)',
+  'stalls.see': 'Zobacz stoiska',
   'directions.pre': 'Wskazówki dojazdu',
   'directions.live': 'Prowadź teraz',
   'video.watch': '▶ Obejrzyj film',

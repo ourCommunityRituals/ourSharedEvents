@@ -714,7 +714,11 @@ export async function handleAdminRegistrantContacts(
       .all<{ attendee_name_encrypted: string | null; attendee_email_encrypted: string }>();
     // OSE-2087 (owner, 2026-11-16): fewer than 5 people who left an email is a
     // withheld list. Nothing is decrypted for it, and 0 reads like 1 to 4.
-    const gate = floorRows(result.results ?? []);
+    const contactRows = result.results ?? [];
+    const gate = floorRows(
+      contactRows,
+      await registrationsGateCount(env, eventId, contactRows.length)
+    );
     if (gate.suppressed) {
       logFormEvent('register', eventId, 'admin_read', { contacts_withheld: true });
       const withheld = jsonResponse(
@@ -751,6 +755,27 @@ export async function handleAdminRegistrantContacts(
   } catch (err) {
     return handleDbError('register', eventId, errorLabel(err), request);
   }
+}
+
+/**
+ * How many rows a list read out of registrations may count on (OSE-2087).
+ *
+ * The registrations list is withheld by the event's counted total: confirmed,
+ * and not past retention (`lib/registration-count.ts`). The export and the
+ * contacts read the same table without that filter, and each used its own row
+ * count: with 5 rows of which 3 are counted, the list was withheld and the
+ * other two handed over all 5 names. A list read from registrations is
+ * withheld whenever the list is, so its count is never more than that total.
+ */
+async function registrationsGateCount(
+  env: FormsEnv,
+  eventId: string,
+  rowCount: number
+): Promise<number> {
+  const row = await env.FORMS_DB.prepare(COUNT_EVENT_REGISTRATIONS_SQL)
+    .bind(eventId)
+    .first<{ cnt: number }>();
+  return Math.min(rowCount, row?.cnt ?? 0);
 }
 
 // ─── Admin: Check-in Count ──────────────────────────────────────────────────────
@@ -905,12 +930,19 @@ export async function handleAdminExport(
     // DE-01 / A-5: decrypt attendee names for the export (CSV or JSON), never
     // expose raw ciphertext. Reuses the same decrypt + legacy-fallback policy as
     // the admin list; drops attendee_name_encrypted from the output.
-    if (dataType === 'registrations') {
+    // The gate comes first: nothing is decrypted for a withheld export. An
+    // export of registrations follows the counted total, like the list.
+    const gateCount =
+      dataType === 'registrations'
+        ? await registrationsGateCount(env, eventId, rows.length)
+        : rows.length;
+    const withheld = floorRows(rows, gateCount).suppressed;
+    if (dataType === 'registrations' && !withheld) {
       rows = await decryptAttendeeNames(rows, env, eventId);
     }
 
     // Decrypt email addresses for admin export — never expose raw ciphertext
-    if (dataType === 'email-signups' && env.FORMS_ENCRYPTION_KEY) {
+    if (dataType === 'email-signups' && !withheld && env.FORMS_ENCRYPTION_KEY) {
       const key = env.FORMS_ENCRYPTION_KEY;
       rows = await Promise.all(
         rows.map(async (row) => {
@@ -944,7 +976,7 @@ export async function handleAdminExport(
     // OSE-2087 (owner, 2026-11-16): an export of fewer than 5 rows is withheld,
     // in both formats. The CSV says so in words, so an opened file never reads
     // as an empty event.
-    const floored = floorRows(rows);
+    const floored = floorRows(rows, gateCount);
     logFormEvent(dataType as FormType, eventId, 'admin_read', {
       withheld: floored.suppressed,
       ...(floored.suppressed ? {} : { count: rows.length }),

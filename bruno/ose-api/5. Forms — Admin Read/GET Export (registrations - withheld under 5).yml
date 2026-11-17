@@ -1,11 +1,11 @@
 info:
-  name: "GET Export | registrations: no row under 5"
+  name: 'GET Export | registrations: no row under 5'
   type: http
   seq: 6
 
 http:
   method: GET
-  url: "{{baseUrl}}/api/v2/admin/events/{{testEventId}}/forms/export?type=registrations"
+  url: '{{baseUrl}}/api/v2/admin/events/{{testEventId}}/forms/export?type=registrations'
   auth: inherit
 
 runtime:
@@ -37,6 +37,16 @@ runtime:
               expect(json.items).to.eql([]);
             } else {
               expect(json.items.length + (json.decrypt_failed || 0)).to.be.at.least(5);
+            }
+          });
+
+          test('withheld whenever the registrations list is withheld', function() {
+            const list = bru.getVar('registrationsListWithheld');
+            // The list request runs first in this folder. Without its answer
+            // there is nothing to compare, and that must not pass quietly.
+            expect(['yes', 'no']).to.include(list);
+            if (list === 'yes') {
+              expect(json.suppressed).to.eql(true);
             }
           });
         } else if (res.getStatus() === 401) {
