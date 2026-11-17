@@ -27,7 +27,8 @@ otherwise.
 **How this sits beside ADR-039 (PR 1369).** That record lists the four Google calls (G1 to G4) and the
 options. This worksheet settles how G1 is replaced and what the three open points come to. It
 departs from the ADR's recommendation 1 in one way, on evidence the ADR did not have: **a zip is
-never turned into a stored map cell** (section 3). It is for the ADR's author to fold in.
+never turned into a stored map cell** (section 3). The owner ruled for this reading on 2026-11-16
+(section 13). It is for the ADR's author to fold in.
 
 ---
 
@@ -275,11 +276,12 @@ sponsor card, its SharedReport and the admin. Nowhere else. Its zip is used by n
   and `lib/event-repeat.ts:141-146` copy it). They read the cells or the words instead.
 - **Then the points are cleared**, in a migration of its own with a backup first (the owner's
   2026-10-26 decision 3).
-- **Cells that came from a Google point:** recommended, cleared in the same migration. Google's
-  policy page gives a 30-day limit on a kept point and no exception for a value worked out from
-  it. Those events stay listed and found by zip, and get a hexagon again when someone places
-  them. The staging stock seed and the Bruno fixtures carry cells instead of coordinates. This
-  one is the owner's call (section 8).
+- **Cells that came from a Google point are kept** (the owner's ruling of 2026-11-16, section 13:
+  "Keep cells, clear points"). The migration clears points only and no cell, so those events
+  keep their hexagon. Google's policy page gives a 30-day limit on a kept point and no exception
+  for a value worked out from it; whether such a cell may be kept past the 30 days is still a
+  question for counsel. The staging stock seed and the Bruno fixtures carry cells instead of
+  coordinates.
 
 ### The dot rule without Google's place types
 
@@ -303,13 +305,13 @@ code goes. ADR-039's S0 to S6 are the frame; W1 to W8 are these slices.
 | Step | What changes                                                                                                                                                                                                                                             | Google after it           |
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
 | W1   | Zip at the Where step, stored; search by zip for an event with no cell; export guard names                                                                                                                                                               | Unchanged                 |
-| W2   | Readers off the stored point: dots from the block, no `lat`/`lon` in the two public APIs, Directions by words, poster and repeat copy cells                                                                                                              | Unchanged                 |
+| W2   | Readers off the stored point: dots from the block, no `lat`/`lon` in the two public APIs, Directions by words, a venue poster takes cells                                                                                                                | Unchanged                 |
 | S0   | The street archive loaded on staging (owner step; the build is offered through 2026-11-21)                                                                                                                                                               | Unchanged                 |
 | W3   | The place picker in the admin, for an event's area and a poster's spot. **G1 goes in this change** (the lookup on create and update, and the nightly job at `index.ts:160`). **G2 goes in this change** (`POST /api/v2/admin/geocode`, `router.ts:2229`) | G3, G4 left               |
-| W4   | The block step and the organizer's kind, for an event. Waits on the precision ruling                                                                                                                                                                     | G3, G4 left               |
+| W4   | The block step and the organizer's kind, for an event. Waits on W3                                                                                                                                                                                       | G3, G4 left               |
 | W5   | **G4:** the event page and the report show the event's area from our own map; the venue-image route goes in the same change (OSE-1985)                                                                                                                   | G3 left                   |
 | W6   | **G3:** a sponsor draft keeps its zip, with the owner's "local" rule                                                                                                                                                                                     | None                      |
-| W7   | Stored points cleared; Google-derived cells per the owner; fixtures and seed to cells                                                                                                                                                                    | None                      |
+| W7   | Stored points cleared; cells already stored are kept; fixtures and seed to cells                                                                                                                                                                         | None                      |
 | W8   | `lib/geo.ts`, `lib/maps.ts`, the lookup and both nightly jobs deleted; a source gate fails on a Google Maps host or key name; the owner removes the secret                                                                                               | None, and a gate holds it |
 
 Two things the order protects. The landing hexagons never empty: G1 stays until the picker that
@@ -350,9 +352,12 @@ four below is decided as recommended:
 - **D3.** A block and a dot only by the organizer's own tap, only for a business or public
   place, never for a home. This answers the precision review's decision 2 for this design. It
   puts no text into `OCR_VISION.md` or invariant 3; that still needs the new ADR.
-- **D4.** Cells that came from a Google point are cleared with the points.
+- **D4.** Cells that came from a Google point are cleared with the points. **Replaced the same
+  day (section 13):** cells already stored are kept, and only the stored points are cleared.
 
-**Two of the four are in question again (found 2026-11-16, later the same day).** About forty
+**Two of the four were in question for about an hour, and the owner then ruled (section 13).**
+D1 stands as written. D4 is replaced by "Keep cells, clear points". What follows is the record of
+the question, kept so the ruling can be read against it. About forty
 minutes after "Confirm all four", the owner answered four questions in the session that keeps
 ADR-039, and that record (PR 1369, commit `1fafe532`) holds two answers that disagree with D1
 and D4:
@@ -362,14 +367,15 @@ and D4:
 | A zip and the map         | D1: no cell is made from a zip; an event nobody placed has no hexagon | C1, "Zip, plus a tap", read there as: "the zip centre's hexagon is where an event sits until someone taps" |
 | Cells from a Google point | D4: cleared with the points                                           | C3, "Keep cells, clear points"                                                                             |
 
-Neither record overrides the other. The button "Zip, plus a tap" can be read either way: as this
+Neither record overrode the other. The button "Zip, plus a tap" can be read either way: as this
 worksheet's rule (the zip finds, the tap places) or as the ADR's (the zip also lights a hexagon).
 Section 4 is the evidence against the second reading: it sends a wrong corridor to BigQuery as if
-exact, and sets the one-way corridor latch. **Until the owner says which stands, D1 and D4 are
-not settled.** What is held: nothing in W1 or W2 depends on either (W1 makes no cell from a zip,
-which is also what the code does today); W7 does not start; and no slice may store a zip-centre
-cell. D2 and D3 are not touched by the ADR's answers. The ADR's C2 ("Our own area map") agrees
-with this worksheet's recommendation on the venue picture and settles it.
+exact, and sets the one-way corridor latch. **The owner settled both the same day (section 13):**
+the zip finds and the tap places, so no slice may store a zip-centre cell; cells already stored
+are kept and stored points are cleared, so W7 clears points only. While the question was open
+nothing in W1 or W2 depended on either answer (W1 makes no cell from a zip, which is also what
+the code does today). D2 and D3 were not touched by the ADR's answers. The ADR's C2 ("Our own
+area map") agrees with this worksheet's recommendation on the venue picture and settles it.
 
 The three lines after the list (sponsor "local", the venue picture, when the lookup route goes)
 were recommendations on ADR-039's own questions. The owner's answer was to the four; those three
@@ -384,8 +390,9 @@ stand as recommendations and are written that way on their tickets.
 3. **The block and the dot** (precision decision 2): **res 9 only by the organizer's own tap, only
    for a business or public place, never for a home** (recommended), or res 7 only with places
    listed by name, or a block for any address as the code does today.
-4. **Cells that came from a Google point: clear them with the points** (recommended), or keep the
-   cells and clear only the points. Counsel may have a view on the second.
+4. **Cells that came from a Google point: clear them with the points** (recommended at the time),
+   or keep the cells and clear only the points. **The owner chose the second (section 13).**
+   Counsel may still have a view on it.
 
 From ADR-039's own list, with this design's recommendation: question 9, sponsor "local" is the
 same zip or the same tapped hexagon; question 7, the venue picture is the event's area from our
@@ -456,7 +463,8 @@ the export-grain invariant in T0.
 - `GET /api/v2/events` and `GET /api/v2/events/map` send no `lat` or `lon`, with the API notice
   ADR-016 asks for.
 - Directions links carry the address or the place name, never a point.
-- A venue poster takes the event's cells; "repeat this event" copies the zip and the cells.
+- A venue poster takes the event's cells. ("Repeat this event" is not in this slice: it copies
+  the zip in W1 and the cells in W3, so W1 and W2 share no file.)
 - A canary event with a known point: no public page, API answer, link or file contains it at any
   rounding (the precision review's gate G1).
 
@@ -474,7 +482,7 @@ the export-grain invariant in T0.
 
 ### W3. The place picker, and the end of G1 and G2
 
-Waits on S0 and on decisions 1 and 2.
+Waits on S0. Decisions 1 and 2 are made (sections 8 and 13).
 
 **Acceptance**
 
@@ -504,7 +512,7 @@ journey in T3; the mobile audit.
 
 ### W4. The block and the organizer's kind
 
-Waits on decision 3.
+Waits on W3. Decision 3 is made (section 8).
 
 **Acceptance:** a business or public place may go on to a block; the row gains `h3_res9` and
 `place_kind` as the organizer said; a home is never offered the step; the landing dot and panel
@@ -535,11 +543,13 @@ on each side of the rule's line; an address with no zip; a ZIP+4; born red by fo
 
 ### W7. Stored points cleared
 
-Waits on W2 and decision 4. **Acceptance:** a backup, then a migration that nulls every `lat` and
-`lon` on events, posters and drafts, and the Google-derived cells if so decided; fixtures and the
+Waits on W2 and W3. Decision 4 is made (section 13): points are cleared, cells are kept.
+**Acceptance:** a backup, then a migration that nulls every `lat` and `lon` on events, posters
+and drafts and clears no cell; as many rows hold a cell after it as before; fixtures and the
 stock seed carry cells; the daily stock totals still hold. **Cases:** counted on staging before
-and after; a row placed by tap is untouched; born red by a check that fails if any point remains.
-**CI/CD ticket:** a schema-level check in T0 that no handler writes those columns.
+and after; a row placed by tap is untouched; a row a Google answer placed keeps both cells and
+loses its point; born red by a check that fails if any point remains, and by one that fails if a
+cell is lost. **CI/CD ticket:** a schema-level check in T0 that no handler writes those columns.
 
 ### W8. The end
 
@@ -601,7 +611,13 @@ answered, word for word: "Yes, that".
   those worked out from a Google point included. Stored points are cleared once nothing reads
   them. Whether such a cell may be kept past Google's 30 days is still a question for counsel.
 - **What changes in the slices.** W7 clears points only, never cells, and is no longer on hold
-  for this reason; it still waits on W2 and W3. Section 5's "cells that came from a Google
-  point: cleared" and section 9's W7 lines are superseded by this section. Nothing else changes.
-- **Owed after this ruling:** ADR-039 reworded on C1; Linear OSE-2100 (W7) retitled and its hold
-  note removed; the note on OSE-2095 removed. Not done by this session.
+  for this reason; it still waits on W2 and W3. Nothing else changes. Sections 5, 6, 8 and 9
+  were brought into line with this ruling on 2026-11-16, in a change after the one that first
+  put this worksheet on `main` (PR 1377), so they no longer speak of clearing a cell.
+- **Done after this ruling (2026-11-16):** Linear OSE-2100 (W7) and its CI/CD ticket OSE-2108
+  say points are cleared and cells are kept; OSE-2095 says the rule is settled.
+- **Still owed:** ADR-039 reworded on C1. It reached `main` in PR 1369 at `1fafe532` with the
+  other reading still in it: its C1 row ("Every event is placed from the zip in its address"),
+  its open question 3 ("the zip centre's hexagon is where an event sits until someone taps") and
+  its slice S1 ("a save places an event from its zip"). Those lines are not the rule. The
+  rewording is with the ADR's keeper.
