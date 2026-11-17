@@ -1,0 +1,53 @@
+info:
+  name: GET / (landing) - the top menu offers the map
+  type: http
+  seq: 34
+
+# Part of OSE-1990 (owner, 2026-11-17): the map has an address of its own, and
+# the landing's top menu is the way to it. Events first, then Map. The landing is
+# neither of them, so neither link says it is this page; /map marks its own link
+# (the /map case in this folder). The workers-pool twin is
+# workers/oursharedevents/tests/map-page.spec.ts.
+http:
+  method: GET
+  url: "{{baseUrl}}/"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const body = String(res.getBody());
+        // The header menu's links, in the order they are written.
+        const nav = (body.match(/<nav data-testid="landing-nav"[\s\S]*?<\/nav>/) || [''])[0];
+        const links = (nav.match(/<a\b[^>]*>/g) || []).map(function (tag) {
+          return {
+            id: (tag.match(/data-testid="([^"]*)"/) || [])[1] || '',
+            href: (tag.match(/href="([^"]*)"/) || [])[1] || '',
+            current: (tag.match(/aria-current="([^"]*)"/) || [])[1] || null,
+          };
+        });
+
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+        test('It is the landing', function () {
+          expect(body).to.include('data-surface="ose-landing"');
+        });
+        test('The top menu offers Events and then Map', function () {
+          expect(links.map(function (l) { return l.id; })).to.eql(['nav-events', 'nav-map']);
+        });
+        test('Events goes to /events and Map goes to /map', function () {
+          expect(links.map(function (l) { return l.href; })).to.eql(['/events', '/map']);
+        });
+        test('The landing marks neither link as this page', function () {
+          expect(links.map(function (l) { return l.current; })).to.eql([null, null]);
+          expect(body).to.not.include('aria-current="page"');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

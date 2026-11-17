@@ -15,7 +15,8 @@
  *     focus, and colour-contrast issues jsdom is blind to — on the surfaces a
  *     browser can actually reach on the unseeded local worker.
  *
- * SCOPE — the four publicly-reachable surfaces. /admin, /sharedReport and
+ * SCOPE — the publicly-reachable surfaces: the landing, the attendee map
+ * (/map), the public listing, the poster and the display. /admin, /sharedReport and
  * /sponsor need a CF Access JWT / minted signed token that the local worker has
  * no way to satisfy in a headless browser, so they stay on the jsdom gate (which
  * reaches them by calling the handler directly). They are documented here, not
@@ -48,6 +49,9 @@ const PEOPLE_SCREENS = [PHONE, DESKTOP, TABLET];
 
 const SURFACES: { name: string; path: string; screens: Screen[] }[] = [
   { name: 'landing', path: '/', screens: PEOPLE_SCREENS },
+  // The map's own address: the landing's shell, with the top menu's Map link
+  // marked as the page being read (part of OSE-1990).
+  { name: 'attendee map', path: '/map', screens: PEOPLE_SCREENS },
   { name: 'public listing', path: '/events', screens: PEOPLE_SCREENS },
   { name: 'poster', path: '/poster', screens: PEOPLE_SCREENS },
   { name: 'display', path: '/display', screens: [TV] },

@@ -96,6 +96,7 @@ import {
   renderAnyPlaceEmpty,
   type WhereState,
 } from '../lib/landing-where';
+import { markLandingNav } from '../lib/landing-nav';
 import { fillTemplate } from '../lib/i18n/template';
 import { inZipOwnArea } from '../lib/zip-areas';
 import { inPlaceMatches } from '../lib/place-search';
@@ -3136,7 +3137,11 @@ export async function handleLandingPage(
     injectEventCardCss(
       withLanguageSwitch(
         injectLegalFooter(
-          injectNearLang(fillTemplate(LANDING_HTML, lang), lang, pagePath),
+          injectNearLang(
+            markLandingNav(fillTemplate(LANDING_HTML, lang), pagePath),
+            lang,
+            pagePath
+          ),
           'landing',
           undefined,
           lang

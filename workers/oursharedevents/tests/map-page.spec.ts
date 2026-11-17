@@ -347,6 +347,123 @@ describe('/map: its own address in every language', () => {
   });
 });
 
+// The way to the map (owner, 2026-11-17): the top menu of the landing and of
+// /map offers Events and then Map. On /map the Map link says it is this page.
+describe('the top menu: the way to the map, and which page this is', () => {
+  /** The header menu's links, in the order they are written. */
+  const menu = (html: string) => {
+    const nav = html.match(/<nav data-testid="landing-nav"[\s\S]*?<\/nav>/)?.[0] ?? '';
+    return [...nav.matchAll(/<a\b([^>]*)>([^<]*)<\/a>/g)].map((m) => ({
+      id: m[1].match(/data-testid="([^"]*)"/)?.[1] ?? '',
+      href: m[1].match(/href="([^"]*)"/)?.[1] ?? '',
+      words: m[2].trim(),
+      current: m[1].match(/aria-current="([^"]*)"/)?.[1] ?? null,
+    }));
+  };
+  const pageMarks = (html: string) => html.match(/aria-current="page"/g) ?? [];
+
+  test.each([
+    ['/', '/events', 'Events', '/map', 'Map'],
+    ['/home', '/events', 'Events', '/map', 'Map'],
+    ['/es/', '/es/events', 'Eventos', '/es/map', 'Mapa'],
+    ['/pl/', '/pl/events', 'Wydarzenia', '/pl/map', 'Mapa'],
+    ['/ar/', '/ar/events', 'الفعاليات', '/ar/map', 'الخريطة'],
+  ])(
+    'the landing at %s offers Events and then Map, in its language, and marks neither',
+    async (path, events, eventsWords, map, mapWords) => {
+      const html = await page(path);
+      expect(menu(html)).toEqual([
+        { id: 'nav-events', href: events, words: eventsWords, current: null },
+        { id: 'nav-map', href: map, words: mapWords, current: null },
+      ]);
+      expect(pageMarks(html)).toHaveLength(0);
+    }
+  );
+
+  test.each([
+    ['/map', '/events', 'Events', '/map', 'Map'],
+    ['/es/map', '/es/events', 'Eventos', '/es/map', 'Mapa'],
+    ['/pl/map', '/pl/events', 'Wydarzenia', '/pl/map', 'Mapa'],
+    ['/ar/map', '/ar/events', 'الفعاليات', '/ar/map', 'الخريطة'],
+  ])(
+    'at %s the Map link is the page being read, once, and Events is not',
+    async (path, events, eventsWords, map, mapWords) => {
+      const html = await page(path);
+      expect(menu(html)).toEqual([
+        { id: 'nav-events', href: events, words: eventsWords, current: null },
+        { id: 'nav-map', href: map, words: mapWords, current: 'page' },
+      ]);
+      expect(pageMarks(html)).toHaveLength(1);
+    }
+  );
+
+  test('the landing marks no link, whichever view it opens on', async () => {
+    // At the rule the landing opens on its map, and a zoom keeps it there; a
+    // search opens it on the list. It is the landing each time.
+    for (const [path, view] of [
+      ['/', 'map'],
+      [`/?area=${BLUE_ISLAND}`, 'map'],
+      ['/?zip=60406', 'list'],
+    ]) {
+      const html = await page(path);
+      expect(openView(html), path).toBe(view);
+      expect(
+        menu(html).map((l) => l.current),
+        path
+      ).toEqual([null, null]);
+      expect(pageMarks(html), path).toHaveLength(0);
+    }
+  });
+
+  test('a zoom or a search at /map keeps the mark, and the link stays the bare /map', async () => {
+    for (const path of [
+      `/map?area=${BLUE_ISLAND}`,
+      '/map?zip=60406',
+      '/map?where=Springfield',
+      '/map?nozip=1',
+      '/map?change=1',
+    ]) {
+      const html = await page(path);
+      expect(menu(html)[1], path).toEqual({
+        id: 'nav-map',
+        href: '/map',
+        words: 'Map',
+        current: 'page',
+      });
+      expect(pageMarks(html), path).toHaveLength(1);
+    }
+  });
+
+  test('nothing a visitor types reaches the menu or adds a mark', async () => {
+    const typed = '"><a href="/x" data-testid="nav-map" aria-current="page">x</a>';
+    const html = await page(`/map?where=${encodeURIComponent(typed)}&area=${typed.length}`);
+    expect(menu(html)).toEqual([
+      { id: 'nav-events', href: '/events', words: 'Events', current: null },
+      { id: 'nav-map', href: '/map', words: 'Map', current: 'page' },
+    ]);
+    expect(pageMarks(html)).toHaveLength(1);
+    expect(hrefs(html, 'nav-map')).toEqual(['/map']);
+  });
+
+  test('the page being read is said in weight as well as in colour', async () => {
+    const html = await page('/map');
+    // One rule draws the name and the page being read: heavy, in the text colour.
+    const rule = html.match(/\[aria-current='page'\]\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toMatch(/font-weight:\s*700/);
+    expect(rule).toMatch(/color:\s*var\(--text\)/);
+  });
+
+  test('the menu is still one nav with a name, and the page still has one h1', async () => {
+    for (const path of ['/', '/map', '/ar/map']) {
+      const html = await page(path);
+      expect(html.match(/<nav data-testid="landing-nav" aria-label="[^"]+"/g), path).toHaveLength(
+        1
+      );
+      expect(html.match(/<h1[\s>]/g) ?? [], path).toHaveLength(1);
+    }
+  });
+});
+
 describe('/map: never who', () => {
   beforeAll(async () => {
     // One event gets a place, and two codes on its poster: a giving link and a

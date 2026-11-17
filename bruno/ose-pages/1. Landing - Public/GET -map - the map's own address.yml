@@ -65,6 +65,23 @@ runtime:
             });
           });
 
+          // The way here is the top menu's Map link (owner, 2026-11-17). On this
+          // page it says it is the page being read; the Events link does not.
+          test('The top menu marks Map as this page, and only Map', function () {
+            const nav = (body.match(/<nav data-testid="landing-nav"[\s\S]*?<\/nav>/) || [''])[0];
+            const tags = nav.match(/<a\b[^>]*>/g) || [];
+            const of = function (id) {
+              return tags.filter(function (tag) { return tag.includes('data-testid="' + id + '"'); });
+            };
+            expect(of('nav-map').length).to.equal(1);
+            expect(of('nav-map')[0]).to.include('href="/map"');
+            expect(of('nav-map')[0]).to.include('aria-current="page"');
+            expect(of('nav-events').length).to.equal(1);
+            expect(of('nav-events')[0]).to.include('href="/events"');
+            expect(of('nav-events')[0]).to.not.include('aria-current');
+            expect((body.match(/aria-current="page"/g) || []).length).to.equal(1);
+          });
+
           test('Sets no cookie', function () {
             expect(res.getHeader('set-cookie')).to.be.oneOf([undefined, null, '']);
           });

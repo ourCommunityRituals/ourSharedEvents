@@ -163,6 +163,7 @@ export const ar: Record<MessageKey, string> = {
   'landing.homeLabel': 'الصفحة الرئيسية لـ OurSharedEvents',
   'landing.navLabel': 'الرئيسية',
   'landing.events': 'الفعاليات',
+  'landing.map': 'الخريطة',
   'landing.lead': 'ماذا يجري بالقرب منك؟',
   'landing.whereLabel': 'أين أنت؟',
   'landing.nearMe': 'استخدم موقعي',

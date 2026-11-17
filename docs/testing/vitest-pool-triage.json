@@ -1973,7 +1973,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 30
+      "testCount": 37
     },
     {
       "file": "workers/oursharedevents/tests/map-place-links.spec.ts",

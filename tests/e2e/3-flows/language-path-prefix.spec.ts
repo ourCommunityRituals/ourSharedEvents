@@ -360,7 +360,38 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
     await expect(page.locator('[data-testid="landing-h1"]')).toHaveText('¿Qué pasa cerca de ti?');
     await expect(page.locator('[data-testid="where-submit"]')).toHaveText('Buscar eventos');
     await expect(page.locator('[data-testid="nav-events"]')).toHaveAttribute('href', '/es/events');
+    await expect(page.locator('[data-testid="nav-map"]')).toHaveAttribute('href', '/es/map');
     await expect(page.locator('[data-testid="language-switch-en"]')).toHaveText('Inglés');
+  });
+
+  // The way to the map's own address is the top menu (owner, 2026-11-17; part of
+  // OSE-1990). From the Spanish landing the link keeps the language, the page
+  // it opens is on its map view, and there the link says it is this page.
+  test('the Spanish landing’s Map link opens /es/map on its map view, and is marked there', async ({
+    page,
+  }) => {
+    await page.route('**/cdn-cgi/challenge-platform/**', (route) => route.abort());
+    const res = await page.goto(`${BASE_URL}/es/`, { waitUntil: 'domcontentloaded' });
+    expect(res?.status(), 'the Spanish landing is served by the Worker').toBe(200);
+
+    const map = page.locator('[data-testid="nav-map"]');
+    await expect(map).toHaveText('Mapa');
+    // On the landing neither link is the page being read.
+    await expect(page.locator('[data-testid="landing-nav"] [aria-current]')).toHaveCount(0);
+
+    await map.click();
+    await expect(page).toHaveURL(`${BASE_URL}/es/map`);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+    await expect(page.locator('html')).toHaveAttribute('data-surface', 'ose-landing');
+    await expect(page.locator('#view-map')).toBeChecked();
+    await expect(page.locator('[data-testid="landing-nav"] [aria-current="page"]')).toHaveCount(1);
+    await expect(page.locator('[data-testid="nav-map"]')).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/es\/map$/);
+
+    // The name is the way back, and the landing is the landing again.
+    await page.locator('[data-testid="landing-logo"]').click();
+    await expect(page).toHaveURL(`${BASE_URL}/es/`);
+    await expect(page.locator('[data-testid="landing-nav"] [aria-current]')).toHaveCount(0);
   });
 
   // ── The header Language menu (owner 2026-11-10) ───────────────────────────
