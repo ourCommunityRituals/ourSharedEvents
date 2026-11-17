@@ -17,6 +17,16 @@ export const COUNTED_REGISTRATION_SQL =
   "status = 'confirmed' AND (expires_at IS NULL OR expires_at > datetime('now'))";
 
 /**
+ * The WHERE clause for reading an event's registration rows: one `?`, the
+ * event id. Rows are a count too (OSE-2087): a list that returns every row
+ * beside a count of the counted ones gives the uncounted group back, by
+ * subtraction and by name. So a read of rows uses this, and returns only the
+ * rows the count counts. Whole and fixed, so the forms handler joins it to its
+ * statement with `+` and interpolates nothing.
+ */
+export const COUNTED_REGISTRATION_ROWS_WHERE = `event_id = ? AND ${COUNTED_REGISTRATION_SQL}`;
+
+/**
  * The count for one event: one `?`, the event id; one column, `cnt`. Whole, so
  * a handler passes it to `.prepare()` as it is and builds no SQL of its own
  * (the forms handler may not interpolate into a statement:
