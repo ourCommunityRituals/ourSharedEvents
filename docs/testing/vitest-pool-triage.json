@@ -3824,6 +3824,13 @@
       "testCount": 5
     },
     {
+      "file": "workers/oursharedevents/tests/transport-headers.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 8
+    },
+    {
       "file": "workers/oursharedevents/tests/turnstile-render.spec.ts",
       "bucket": "node",
       "needsReview": false,

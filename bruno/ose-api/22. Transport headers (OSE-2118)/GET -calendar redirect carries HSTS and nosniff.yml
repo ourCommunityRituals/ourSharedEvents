@@ -1,0 +1,41 @@
+info:
+  name: GET /calendar redirect carries HSTS and nosniff
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/calendar"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-2118: a redirect from the Worker carries the transport headers too.
+
+        test('OSE-2118: /calendar answers with a 301 to /events', function() {
+
+        \    expect(res.getStatus()).to.eql(301);
+
+        \    expect(res.getHeader('Location') || '').to.match(/\\/events$/);
+
+        });
+
+        test('OSE-2118: redirect carries Strict-Transport-Security', function() {
+
+        \    expect(res.getHeader('Strict-Transport-Security') || '').to.eql('max-age=31536000; includeSubDomains');
+
+        });
+
+        test('OSE-2118: redirect carries X-Content-Type-Options: nosniff', function() {
+
+        \    expect(res.getHeader('X-Content-Type-Options') || '').to.eql('nosniff');
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
