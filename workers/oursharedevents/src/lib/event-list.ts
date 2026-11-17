@@ -326,7 +326,6 @@ export const PLACE_PANEL_CSS = `
       .amap-t { position: absolute; top: 0; left: 0; width: 1px; height: 1px; }
       .amap-p { display: none; margin-top: 1rem; padding-top: 0.75rem; border-top: 3px solid var(--accent); }
       .amap-t:target + .amap-p { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
-      .amap-wrap:has(.amap-t:target) .amap-legend, .amap-wrap:has(.amap-t:target) [data-testid="amap-unplaced"] { display: none; }
       .amap-ph { font-size: 1.25rem; margin: 0; color: var(--text); }
       .amap-pm { font-size: 0.95rem; color: var(--text-muted); margin: 0; }
       .amap-pn { display: grid; grid-template-columns: 1fr 1fr; gap: var(--tap-gap, 12px); }

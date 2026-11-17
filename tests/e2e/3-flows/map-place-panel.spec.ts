@@ -187,7 +187,7 @@ import {
   openPanels,
   panel,
   passStgEdge,
-  placeRow,
+  openPlace,
   throwIfEdgeAnswered,
 } from '../helpers/map-zoom-area';
 
@@ -256,10 +256,12 @@ async function focusRing(page: Page): Promise<{ on: string; ring: boolean }> {
 }
 
 test.describe('Zoomed map: the place panel opens under the list (OSE-1891)', () => {
-  test('a tap on a place row opens only its panel, at the top of the screen', async ({ page }) => {
+  test('a tap on a place opens only its panel, at the top of the screen', async ({ page }) => {
     await gotoArea(page);
     expect(await openPanels(page), 'no panel is open before a tap').toEqual([]);
-    await expect(page.getByTestId('amap-legend')).toBeVisible();
+    // No text list of places: the event cards are the list (owner, 2026-11-17).
+    await expect(page.getByTestId('amap-legend')).toHaveCount(0);
+    await expect(page.getByTestId('amap-place-link')).toHaveCount(0);
     // The note and no drawing, or the dot map over streets: never a half of each.
     const drawing = await expectZoomDrawing(page);
     test.info().annotations.push({
@@ -267,7 +269,7 @@ test.describe('Zoomed map: the place panel opens under the list (OSE-1891)', () 
       description: `${AREA_PATH} drew the ${drawing} page; streetMapArchiveLoaded is "${STREETS_LOADED}"`,
     });
 
-    await placeRow(page, 2).click();
+    await openPlace(page, 2);
 
     await expect(page).toHaveURL(/#amap-dot-2$/);
     await expect.poll(() => openPanels(page)).toEqual([2]);
@@ -275,8 +277,6 @@ test.describe('Zoomed map: the place panel opens under the list (OSE-1891)', () 
     await expect(panel(page, 2).getByTestId('amap-card')).toHaveCount(2);
     await expect(card(page, 'map-zoom-b').locator('h3')).toHaveText(TITLE['map-zoom-b']);
     await expect(card(page, 'map-zoom-b').getByTestId('amap-open')).toBeVisible();
-    // The full list steps aside while a place is open.
-    await expect(page.getByTestId('amap-legend')).toBeHidden();
     // The map's block, not the panel, is what scrolls to the top of the screen.
     const top = await page
       .getByTestId('amap-wrap')
@@ -291,7 +291,7 @@ test.describe('Zoomed map: the place panel opens under the list (OSE-1891)', () 
     page,
   }) => {
     await gotoArea(page);
-    await placeRow(page, 1).click();
+    await openPlace(page, 1);
     await expect.poll(() => openPanels(page)).toEqual([1]);
     // The first place has no Prev, the last no Next.
     await expect(panel(page, 1).getByTestId('amap-prev')).toHaveCount(0);
@@ -310,14 +310,12 @@ test.describe('Zoomed map: the place panel opens under the list (OSE-1891)', () 
       await expect.poll(() => openPanels(page)).toEqual(want);
     }
     await expect(page).toHaveURL(new RegExp(`area=${AREA}$`));
-    await expect(page.getByTestId('amap-legend')).toBeVisible();
 
-    await placeRow(page, 3).click();
+    await openPlace(page, 3);
     await expect.poll(() => openPanels(page)).toEqual([3]);
     await panel(page, 3).getByTestId('amap-all').click();
     await expect(page).toHaveURL(/#amap-places$/);
     await expect.poll(() => openPanels(page)).toEqual([]);
-    await expect(page.getByTestId('amap-legend')).toBeVisible();
   });
 
   test('a shared link to #amap-dot-2 opens on place 2', async ({ page }) => {
@@ -329,37 +327,38 @@ test.describe('Zoomed map: the place panel opens under the list (OSE-1891)', () 
   });
 
   for (const hash of ['#amap-dot-99', '#amap-dot-0', '#amap-dot-x']) {
-    test(`a link to ${hash} shows the full list, no panel and no error`, async ({ page }) => {
+    test(`a link to ${hash} opens no panel and raises no error`, async ({ page }) => {
       const errors: string[] = [];
       page.on('pageerror', (e) => errors.push(e.message));
       await gotoArea(page, hash);
       expect(await openPanels(page)).toEqual([]);
-      await expect(page.getByTestId('amap-legend')).toBeVisible();
-      await expect(page.getByTestId('amap-legend-dot')).toHaveCount(3);
+      await expect(page.getByTestId('amap-legend')).toHaveCount(0);
       expect(errors).toEqual([]);
     });
   }
 
-  test('keyboard: Tab to a place, Enter opens it, Tab lands in its panel; the focus ring shows', async ({
+  test('keyboard: a place opens, Tab lands in its panel; the focus ring shows', async ({
     page,
   }) => {
     await gotoArea(page);
-    await page.getByTestId('amap-back').focus();
-    let reached = false;
-    for (let i = 0; i < 12 && !reached; i++) {
-      await page.keyboard.press('Tab');
-      reached = await page.evaluate(
-        () =>
-          document.activeElement?.getAttribute('data-testid') === 'amap-place-link' &&
-          document.activeElement?.getAttribute('href') === '#amap-dot-2'
-      );
+    if ((await page.locator('[data-testid="amap-dot"][href="#amap-dot-2"]').count()) > 0) {
+      // Over a street map the dot is a link: Tab reaches it and Enter opens it.
+      await page.getByTestId('amap-back').focus();
+      let reached = false;
+      for (let i = 0; i < 12 && !reached; i++) {
+        await page.keyboard.press('Tab');
+        reached = await page.evaluate(
+          () =>
+            document.activeElement?.getAttribute('data-testid') === 'amap-dot' &&
+            document.activeElement?.getAttribute('href') === '#amap-dot-2'
+        );
+      }
+      expect(reached, 'Tab reaches the dot of place 2').toBe(true);
+      await page.keyboard.press('Enter');
+    } else {
+      // No dots to tap: a shared link opens the place, as it does for a visitor.
+      await openPlace(page, 2);
     }
-    expect(reached, 'Tab reaches the row of place 2').toBe(true);
-    expect(await focusRing(page), 'the focused place row shows a focus ring').toMatchObject({
-      ring: true,
-    });
-
-    await page.keyboard.press('Enter');
     await expect.poll(() => openPanels(page)).toEqual([2]);
 
     await page.keyboard.press('Tab');
@@ -379,7 +378,7 @@ test.describe('Zoomed map: the place panel opens under the list (OSE-1891)', () 
     });
   });
 
-  test('scripts off: the list still opens each panel, and a shared link still lands', async ({
+  test('scripts off: a shared link opens each panel, and Prev and Next still walk them', async ({
     browser,
   }) => {
     const context = await browser.newContext({ javaScriptEnabled: false, locale: 'en-US' });
@@ -387,7 +386,7 @@ test.describe('Zoomed map: the place panel opens under the list (OSE-1891)', () 
       const page = await context.newPage();
       await gotoArea(page);
       await expect(panel(page, 2)).toBeHidden();
-      await placeRow(page, 2).click();
+      await gotoArea(page, '#amap-dot-2');
       await expect(panel(page, 2)).toBeVisible();
       await expect(panel(page, 1)).toBeHidden();
       await expect(panel(page, 3)).toBeHidden();
@@ -424,7 +423,8 @@ test.describe('Zoomed map: in and out, and the pills (OSE-1886)', () => {
 
     await expect(page).toHaveURL(new RegExp(`[?&]area=${AREA}$`));
     await expect(page.locator(`[data-testid="amap"][data-zoom="${AREA}"]`)).toHaveCount(1);
-    await expect(page.getByTestId('amap-legend-dot')).toHaveCount(3);
+    await expect(page.getByTestId('amap-panel')).toHaveCount(3);
+    await expect(page.getByTestId('amap-legend')).toHaveCount(0);
 
     await page.getByTestId('amap-back').click();
 
@@ -436,19 +436,19 @@ test.describe('Zoomed map: in and out, and the pills (OSE-1886)', () => {
 
   test('the When pills filter the places, with no script', async ({ page }) => {
     await gotoArea(page);
-    await expect(page.getByTestId('amap-legend-dot')).toHaveCount(3);
-    for (const n of [1, 2, 3]) await expect(placeRow(page, n)).toBeVisible();
+    await expect(page.getByTestId('amap-panel')).toHaveCount(3);
 
     // On a phone the When row folds behind the Filters chip (lib/area-filters-style.ts).
     const filters = page.getByTestId('area-filters-btn');
     if (await filters.isVisible()) await filters.click();
     // Only map-zoom-d (place 3) is within 7 days; places 1 and 2 are 10 days out or more.
     await page.locator('label[for="win-week"]').click();
-    await expect(placeRow(page, 1)).toBeHidden();
-    await expect(placeRow(page, 2)).toBeHidden();
-    await expect(placeRow(page, 3)).toBeVisible();
+    await openPlace(page, 1);
+    await expect(panel(page, 1)).toBeHidden();
+    await openPlace(page, 2);
+    await expect(panel(page, 2)).toBeHidden();
 
-    await placeRow(page, 3).click();
+    await openPlace(page, 3);
     await expect.poll(() => openPanels(page)).toEqual([3]);
     await expect(card(page, 'map-zoom-d')).toBeVisible();
     for (const later of EVENTS_AT[3].slice(1)) await expect(card(page, later)).toBeHidden();

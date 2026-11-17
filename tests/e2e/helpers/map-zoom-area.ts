@@ -55,8 +55,17 @@ export const TITLE: Record<string, string> = {
 export const panel = (page: Page, n: number): Locator =>
   page.locator(`[data-testid="amap-panel"][data-n="${n}"]`);
 
-export const placeRow = (page: Page, n: number): Locator =>
-  page.locator(`[data-testid="amap-place-link"][href="#amap-dot-${n}"]`);
+/**
+ * Open place `n` the way a visitor does: tap its dot when the street map is
+ * drawn, else follow its link (`#amap-dot-N`), one history entry either way.
+ * The zoomed page has no text list of places (owner, 2026-11-17); the event
+ * cards are the list, and a panel opens from a dot or a shared link.
+ */
+export async function openPlace(page: Page, n: number): Promise<void> {
+  const dot = page.locator(`[data-testid="amap-dot"][href="#amap-dot-${n}"]`);
+  if ((await dot.count()) > 0) await dot.click();
+  else await page.evaluate((h) => (window.location.hash = h), `#amap-dot-${n}`);
+}
 
 export const card = (page: Page, eventId: string): Locator =>
   page.locator(`[data-testid="amap-card"][data-event-id="${eventId}"]`);

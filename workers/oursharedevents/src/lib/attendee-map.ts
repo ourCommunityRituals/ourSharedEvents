@@ -768,26 +768,13 @@ function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets: string): str
   );
 }
 
-function zoomLegend(
-  dots: MapDot[],
-  unplaced: { id: string; name: string; classes: string[] }[],
-  lang: Lang,
-  sponsorTitles?: ReadonlyMap<string, string>
-): string {
-  const row = (events: { id: string; name: string; classes: string[] }[]) =>
-    events
-      .map((e) => eventLink(e, lang, sponsorTitles, ['amap-f', ...e.classes].join(' ')))
-      .join(' ');
-  const rows = dots
-    .map(
-      (d) =>
-        `<li value="${d.n}" class="${escapeHtml(`amap-f ${dotClasses(d.events)}`.trim())}" data-testid="amap-legend-dot"><a class="amap-zoom" href="${dotHref(d)}" data-testid="amap-place-link">${fmt(lang, 'map.place', { n: d.n })}</a>: ${row(d.events)}</li>`
-    )
-    .join('');
-  const rest = unplaced.length
-    ? `<p class="amap-f ${escapeHtml(dotClasses(unplaced))}" data-testid="amap-unplaced"><strong>${msg(lang, 'map.unplaced')}:</strong> ${row(unplaced)}</p>`
-    : '';
-  return `<ol class="amap-legend" id="amap-places" data-testid="amap-legend">${rows}</ol>${rest}`;
+/**
+ * The zoomed area has no text list of places: the event cards below the map are
+ * the list (owner, 2026-11-17). This is only the anchor "Show all places" in a
+ * panel points at, so closing a panel leaves the map as it was.
+ */
+function zoomLegend(): string {
+  return `<span id="amap-places" data-testid="amap-places-anchor"></span>`;
 }
 
 /**
@@ -816,7 +803,7 @@ function renderZoom(
     };
   }
   const area = attendeeMapAreas(inArea, now, lang).areas[0]!;
-  const { dots, unplaced } = mapDots(cell, inArea, lang);
+  const { dots } = mapDots(cell, inArea, lang);
   const streets =
     streetLayer && streetLayer.cellsKey === cellsKey([cell]) ? streetLayer.svg : undefined;
   const credit = streets ? streetCredit(lang) : '';
@@ -844,7 +831,7 @@ function renderZoom(
               ${MAP_STYLE}${ZOOM_STYLE}${streets ? STREET_STYLE : ''}${NARROW_MAP_STYLE}
               ${back}
               ${drawing}
-              ${zoomLegend(dots, unplaced, lang, sponsorTitles)}
+              ${zoomLegend()}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>${credit}
             </figure>${panels}</div>`;
   return { html, state: 'map', count: inArea.length, areas: [{ ...area, n: 1 }] };

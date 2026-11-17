@@ -316,19 +316,14 @@ function zoomPage(
         Array.from({ length: dots }, (_, i) => dot(i + 1)).join('') +
         '</svg>'
       : '';
-  const rows = [1, 2, 3]
-    .map(
-      (n) =>
-        `<li value="${n}" data-testid="amap-legend-dot"><a class="amap-zoom" href="#amap-dot-${n}" data-testid="amap-place-link">Place ${n}</a>: Zip Own Area Check (Mount Greenwood)</li>`
-    )
-    .join('');
   return (
     '<html lang="en"><body><h1>Events near you</h1>' +
     `<div class="amap-wrap" data-testid="amap-wrap"><figure class="amap" data-testid="amap" data-zoom="${cell}">` +
     '<p><a class="amap-back" href="/" data-testid="amap-back">All areas</a></p>' +
     svg +
     (note ? NOTE : '') +
-    `<ol class="amap-legend" id="amap-places" data-testid="amap-legend">${rows}</ol>` +
+    '<span id="amap-places" data-testid="amap-places-anchor"></span>' +
+    '<section class="amap-p" data-testid="amap-panel" data-n="1"><h3>Zip Own Area Check (Mount Greenwood)</h3></section>' +
     '<figcaption id="amap-caption" data-testid="amap-caption">3 events</figcaption>' +
     (streets || credit ? CREDIT : '') +
     extra +

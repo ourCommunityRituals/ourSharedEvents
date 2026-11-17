@@ -283,13 +283,12 @@ test.describe('Place panel layout on this device profile (OSE-1891)', () => {
     expect(await openPanels(page)).toEqual([2]);
   });
 
-  test('the place rows and the Prev / Next chips are at least 44 px tall', async ({ page }) => {
+  test('the Prev / Next chips are at least 44 px tall, and no text list of places sits above the cards', async ({
+    page,
+  }) => {
     await gotoArea(page);
-    const rowHeights = await page
-      .getByTestId('amap-place-link')
-      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
-    expect(rowHeights.length).toBe(3);
-    for (const h of rowHeights) expect(h, 'a place row').toBeGreaterThanOrEqual(TARGET_MIN - EPS);
+    await expect(page.getByTestId('amap-place-link')).toHaveCount(0);
+    await expect(page.getByTestId('amap-legend')).toHaveCount(0);
     const back = await page
       .getByTestId('amap-back')
       .evaluate((el) => el.getBoundingClientRect().height);

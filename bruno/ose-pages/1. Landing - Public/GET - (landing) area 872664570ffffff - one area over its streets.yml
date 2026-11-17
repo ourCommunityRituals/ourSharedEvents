@@ -60,7 +60,8 @@ runtime:
 
         test('Lists the event in that area (Mount Greenwood)', function () {
           expect(body).to.include('Zip Own Area Check (Mount Greenwood)');
-          expect(has('amap-place-link')).to.equal(true);
+          expect(has('amap-panel')).to.equal(true);
+          expect(has('amap-place-link')).to.equal(false);
         });
 
         test('Does not list the events of the neighbouring areas', function () {
