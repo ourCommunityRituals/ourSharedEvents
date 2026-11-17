@@ -31,7 +31,7 @@ import { OSM_COPYRIGHT_URL } from '../src/lib/attendee-map';
 import { LANGUAGES, type Lang } from '../src/lib/i18n/languages';
 import { TILE_LIMITS } from '../src/lib/mvt';
 import { MAX_TILE_UNPACKED_BYTES, resetPmtilesCache } from '../src/lib/pmtiles';
-import { DEFAULT_ARCHIVE } from '../src/lib/street-map';
+import { DEFAULT_ARCHIVE, resetStreetLayerCache } from '../src/lib/street-map';
 import {
   fakeBucket,
   paddedTile,
@@ -89,6 +89,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   resetPmtilesCache();
+  resetStreetLayerCache();
   state.rows = sentinel(MANY);
   state.secondPassThrows = false;
 });
@@ -236,6 +237,8 @@ describe('street map | the landing page handler', () => {
     );
 
     state.secondPassThrows = true;
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     const before = bucket.gets.length;
     const html = await landing({ STREET_MAP: 'on', MAP_TILES: bucket });
     // The layer was read and was good: it is the drawing with it that threw.

@@ -162,6 +162,10 @@ it; the report depends on who is asking and on floored counts, and must never be
   this record once listed under "Not proven" was shown in the Workers runtime and the reader
   corrected (PR 1276). Not built: the etag half of B2, and B6 to B9. The landing and the event
   list have a per-caller limit (PR 1308), which was slice O4. No archive is loaded.
+- Status, 2026-11-17 (`main` at `5bef37cd`): the etag half of B2 is on `main` (PR 1363) and so is
+  B7 (PR 1364). The in-isolate store of D5 is pull request 1388 (slice B6): a drawn layer is kept
+  under the archive's key and etag, the drawer's version, the frame's size and the cells, for an
+  hour at most. D2 to D4 and the edge store of D5 are not built and wait for the owner.
 - D1 is held today by the code's shape and by `tests/map-areas.spec.ts` (no database read). A
   structural gate for it belongs with the first new surface.
 

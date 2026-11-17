@@ -16,8 +16,9 @@
 // exactly as the hexagons do; no event lat/lon and no viewer location is read.
 // The server, not the visitor, chooses which tiles to read, so no tile request
 // says what a person looked at. One line is logged for each try that reads the
-// bucket (STREET_LAYER, below): what came of it, on which surface, and five
-// numbers. No cell, no tile address, nothing of the request.
+// bucket, and for each layer handed out from those kept (STREET_LAYER, below):
+// what came of it, on which surface, and five numbers. No cell, no tile
+// address, nothing of the request.
 //
 // FAIL SOFT. No binding, no archive, a part of the frame with no tile, a damaged
 // tile, a tile or a frame that holds more than the Worker will decode
@@ -42,14 +43,30 @@
 // (MIN_STREET_ZOOM); the point budget pays roads before water and thins or cuts
 // a kind to fit, never leaving one out for another (POINT_SHARES, fitParts);
 // and a layer with no road to steer by is no layer (layerShows).
+//
+// DRAWN LAYERS ARE KEPT, IN THE ISOLATE ONLY (base-map scenario pass 2026-11-15,
+// S14 and section 6.4 tier 1; OSE ADR-036 D5, the part that needs no ruling).
+// A frame drawn once serves the requests for it that follow in the same
+// isolate: no read, no decode, no draw. What is kept is the street layer alone,
+// under the archive's key, the etag of the object it was read from, the
+// drawer's version, the frame's size, the cells and the cells that carry a
+// number. Nothing else is in the name: no event, no token, no brand, no count,
+// nothing of a request. So a kept layer says what its cells say and is right
+// for every reader. Never kept: a null (a missing object is remembered by the
+// reader for a minute, lib/pmtiles.ts; a slow, failed or thin try is asked
+// again), and never a map with hexagons, numbers or dots on it. The store is
+// held to KEPT_LAYER_CHARS, the layer not asked for the longest going first,
+// and a layer is handed out for KEPT_LAYER_MS and no longer.
 
 import { cellToBoundary, cellToLatLng } from 'h3-js';
 import {
   ArchiveNotFoundError,
+  archiveEtag,
   archiveHeader,
   archiveKnownMissing,
   r2Source,
   readTiles,
+  type ObjectVersion,
   type RangeBucket,
   type RangeSource,
 } from './pmtiles.js';
@@ -717,6 +734,152 @@ export async function buildStreetLayer(
   return { cellsKey: cellsKey(cells), svg: drawing.svg, drawn: drawing.drawn };
 }
 
+/**
+ * The drawer's version, part of the name a drawn layer is kept under. Inside
+ * one isolate it never differs: an isolate runs one build of this file. It is
+ * in the name so the same name can serve a store that outlives the isolate
+ * (OSE ADR-036 D5, the edge store, which is the owner's to decide and is not
+ * built). Raise it with any change to what `drawStreetLayer` writes.
+ */
+export const DRAWER_VERSION = 1;
+
+/**
+ * Characters of drawn layers, with their names, kept in an isolate at most. A
+ * layer measured about 100 KB, so this is about 30 of them; a character is one
+ * byte in the isolate, or two when a town name is not Latin-1, so it is 3 MB
+ * to 6 MB of a Worker's 128 MB.
+ */
+export const KEPT_LAYER_CHARS = 3_000_000;
+
+/**
+ * How long a kept layer is handed out, in milliseconds, counted from before
+ * its tiles were read. A kept layer is handed out with no read, so nothing
+ * checks its object is still the one in the bucket (the etag rides on reads,
+ * lib/pmtiles.ts). This is the longest an isolate goes on showing streets from
+ * an object that was replaced or removed under its key, when no other frame's
+ * read has noticed first. It is the hour the public area map's answer may
+ * already be kept by a reader (handlers/map-areas.ts, max-age).
+ */
+export const KEPT_LAYER_MS = 3_600_000;
+
+interface KeptLayer {
+  layer: StreetLayer;
+  /** The zoom its tiles were read at, for the line a hand-out writes. */
+  z: number | null;
+  /** Characters it is counted as: its name and its markup. */
+  chars: number;
+  /** The time from which it is no longer handed out. */
+  until: number;
+}
+
+/** Kept layers by frame name; the one not asked for the longest is first. */
+const KEPT = new Map<string, KeptLayer>();
+/** The object every kept layer was drawn from (`keptSource`). */
+let keptOf = '';
+let keptChars = 0;
+
+/**
+ * The name of one object: the source's key and the object's etag. With no etag
+ * (no archive open under the key) it is a name nothing is ever kept under.
+ */
+export function keptSource(key: string, etag: string | undefined): string {
+  return JSON.stringify([key, etag]);
+}
+
+/**
+ * The name of one frame's layer: the drawer's version, the frame's size, the
+ * cells it is fitted to and the cells that carry a number. Cell ids only.
+ */
+export function layerName(
+  cells: readonly string[],
+  numbered: readonly string[] = cells,
+  w = MAP_W,
+  h = MAP_H
+): string {
+  return `${DRAWER_VERSION}|${w}x${h}|${cellsKey(cells)}|${cellsKey(numbered)}`;
+}
+
+/**
+ * The etag of the one object a try's reads were held to, or undefined when
+ * that cannot be said: nothing was read, the object gave no etag, or the
+ * archive was opened more than once in the try (the object changed under the
+ * key part way, and the reader opened what is there now). `versions` are the
+ * `version` of each read: an opened archive has one for all its reads.
+ */
+export function keptEtag(versions: ReadonlySet<ObjectVersion | undefined>): string | undefined {
+  const [version] = versions;
+  return versions.size === 1 ? version?.etag : undefined;
+}
+
+/** How many layers are kept, and the characters they are counted as. */
+export function keptStreetLayers(): { layers: number; chars: number } {
+  return { layers: KEPT.size, chars: keptChars };
+}
+
+/** Forget every kept layer (tests, and a layer of another object arriving). */
+export function resetStreetLayerCache(): void {
+  KEPT.clear();
+  keptChars = 0;
+}
+
+/**
+ * The layer kept for this frame of this object, or null: nothing kept for it,
+ * the kept layers are another object's, or its time is up (it is dropped
+ * then). A layer handed out becomes the last to go.
+ */
+export function keptStreetLayer(
+  source: string,
+  name: string,
+  now: number
+): { layer: StreetLayer; z: number | null } | null {
+  if (source !== keptOf) return null;
+  const kept = KEPT.get(name);
+  if (!kept) return null;
+  KEPT.delete(name);
+  if (now >= kept.until) {
+    keptChars -= kept.chars;
+    return null;
+  }
+  KEPT.set(name, kept);
+  return { layer: kept.layer, z: kept.z };
+}
+
+/**
+ * Keep a drawn layer for the frames that follow, until `now` + KEPT_LAYER_MS.
+ * Layers of another object go first: an isolate reads one archive, so another
+ * key or etag means the old object is not coming back. Then the layers not
+ * asked for the longest go until all fit KEPT_LAYER_CHARS; a layer larger than
+ * that by itself is not kept. The layer is frozen: every request for the frame
+ * is handed the same one.
+ */
+export function keepStreetLayer(
+  source: string,
+  name: string,
+  layer: StreetLayer,
+  z: number | null,
+  now: number
+): void {
+  const chars = name.length + layer.svg.length;
+  if (chars > KEPT_LAYER_CHARS) return;
+  if (source !== keptOf) {
+    resetStreetLayerCache();
+    keptOf = source;
+  }
+  const old = KEPT.get(name);
+  if (old) {
+    KEPT.delete(name);
+    keptChars -= old.chars;
+  }
+  Object.freeze(layer.drawn);
+  KEPT.set(name, { layer: Object.freeze(layer), z, chars, until: now + KEPT_LAYER_MS });
+  keptChars += chars;
+  for (const [first, kept] of KEPT) {
+    if (keptChars <= KEPT_LAYER_CHARS) return;
+    KEPT.delete(first);
+    keptChars -= kept.chars;
+  }
+}
+
 /** The street layer's time limit ran out. */
 class StreetTimeout extends Error {}
 
@@ -741,10 +904,16 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
  *
  * A try that reads the bucket writes one STREET_LAYER line saying which of
  * those it was (`emitStreetLayer`); `surface` is the caller's name in it. The
- * exits that read nothing write nothing: the switch off, no binding, a bad
- * name, a frame too wide, and an archive this isolate found missing less than
- * a minute ago (lib/pmtiles.ts, MISS_MEMORY_MS), which is not asked for again
- * until the minute is up.
+ * exits that have no layer and read nothing write nothing: the switch off, no
+ * binding, a bad name, a frame too wide, and an archive this isolate found
+ * missing less than a minute ago (lib/pmtiles.ts, MISS_MEMORY_MS), which is
+ * not asked for again until the minute is up.
+ *
+ * A frame this isolate has drawn from the object it has open is handed out
+ * from the kept layers with nothing read ("DRAWN LAYERS ARE KEPT", above). It
+ * writes the line too: `drew`, the layer's zoom, and 0 tiles, 0 reads and 0
+ * ms, which is how a kept layer is told from a drawn one in the log. With
+ * `MAP_TILES_ETAG` set, only a layer of the pinned object is handed out.
  */
 export async function loadStreetLayer(
   env: StreetMapEnv | null | undefined,
@@ -762,17 +931,33 @@ export async function loadStreetLayer(
   const src = r2Source(bucket, name, env.MAP_TILES_ETAG);
   // Found missing a moment ago: not asked again yet, and nothing to say.
   if (archiveKnownMissing(src.key)) return null;
+  const frame = layerName(cells, opts?.numbered);
+  const started = Date.now();
+  // Drawn before, from the object this isolate has open: nothing is read.
+  // With nothing open there is no etag, and nothing is kept under none.
+  const open = archiveEtag(src.key);
+  if (!env.MAP_TILES_ETAG || env.MAP_TILES_ETAG === open) {
+    const kept = keptStreetLayer(keptSource(src.key, open), frame, started);
+    if (kept) {
+      const trace = { ...newStreetTrace(), z: kept.z };
+      emitStreetLayer({ outcome: 'drew', surface: opts?.surface, trace, ms: 0 });
+      return kept.layer;
+    }
+  }
   const trace = newStreetTrace();
+  // The objects this try's reads were held to. An opened archive has one
+  // `version` for all its reads, so one here means one object.
+  const versions = new Set<ObjectVersion | undefined>();
   const counted: RangeSource = {
     key: src.key,
     // `version` goes through as it came: it is what holds every read of an
     // opened archive to one object (lib/pmtiles.ts, r2Source).
     read(offset, length, version) {
       trace.reads += 1;
+      versions.add(version);
       return src.read(offset, length, version);
     },
   };
-  const started = Date.now();
   let layer: StreetLayer | null = null;
   let outcome: StreetOutcome;
   try {
@@ -780,8 +965,16 @@ export async function loadStreetLayer(
       buildStreetLayer(counted, cells, MAP_W, MAP_H, opts?.numbered, trace),
       opts?.timeoutMs ?? STREET_TIMEOUT_MS
     );
-    if (layer) outcome = 'drew';
-    else outcome = trace.gap ? 'no-tile' : 'thin';
+    if (layer) {
+      outcome = 'drew';
+      // Kept only when every read was of one object whose etag is known. An
+      // archive opened again part way (the object changed under the key) is
+      // drawn for this page and not kept.
+      const etag = keptEtag(versions);
+      if (etag !== undefined) {
+        keepStreetLayer(keptSource(src.key, etag), frame, layer, trace.z, started);
+      }
+    } else outcome = trace.gap ? 'no-tile' : 'thin';
   } catch (e) {
     if (e instanceof StreetTimeout) outcome = 'timeout';
     else outcome = e instanceof ArchiveNotFoundError ? 'no-archive' : 'error';

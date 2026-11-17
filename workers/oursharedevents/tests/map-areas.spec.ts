@@ -42,6 +42,7 @@ import {
   STREET_STYLE,
   frameForCells,
   project,
+  resetStreetLayerCache,
 } from '../src/lib/street-map';
 import { fakeBucket, pmtilesArchive, tilesForCells } from './helpers/street-map-fixtures';
 
@@ -79,7 +80,10 @@ const pointsOf = (cell: string, framed: string[]) => {
     .join(' ');
 };
 
-beforeEach(() => resetPmtilesCache());
+beforeEach(() => {
+  resetPmtilesCache();
+  resetStreetLayerCache();
+});
 
 describe('public area map | what is refused', () => {
   it('a coordinate-shaped parameter is refused, and nothing is read', async () => {
