@@ -2985,6 +2985,31 @@ export async function handleLandingPage(
   }
   let area;
   try {
+    const db = (env as LandingEnv).DB;
+    // OSE-2094: the reads below do not need the event list, so they start with
+    // it rather than one after another. Each keeps its own fallback, and each
+    // settles to it even when the list read throws, so nothing is left
+    // rejected. T2 measured the landing at 3.2 to 4.5 s in the minute after a
+    // staging deploy while other pages stayed under 3 s; this is one round trip
+    // where there were four. tests/landing-reads-together.spec.ts.
+    //
+    // §6.2b latch: corridors that have ever reached the threshold stay on the
+    // map. Brand-bound read; a missing table (pre-0084) just means none yet.
+    // The landing's own latch rides in the same table: once the area has held
+    // LIST_MAX events it keeps leading with the map.
+    const latchesRead = db
+      ? (async () => readLatches(db as D1Database, 'root'))().catch(() => null)
+      : Promise.resolve(null);
+    // OSE-1522: the consented sponsor by the title on each card, as on /events.
+    const sponsorTitlesRead = (async () => fetchSponsorTitles(db, 'root'))().catch(
+      () => new Map<string, string>()
+    );
+    // Owner 2026-11-09: the Type row is the categories of the event-type
+    // catalog, read through the same query as the Create Event picker. A failed
+    // read only folds every event into "Other" (one choice, so no row); the
+    // cards still show. tests/landing-category-scenarios.spec.ts.
+    const typeCategoriesRead: Promise<Map<string, TypeCategory> | undefined> = (async () =>
+      categoryByTypeId(await readEventTypeCatalog(db)))().catch(() => undefined);
     const dp = getDataProvider(env as LandingEnv, ctx ?? null);
     const result = await dp.listEvents('root');
     // OSE-2012: an online event is link only. It has no cell, so it could never
@@ -3002,32 +3027,13 @@ export async function handleLandingPage(
       // One name, many places: the events of every match, while the person picks.
       items = items.filter(inPlaceMatches(where.matches));
     }
-    // §6.2b latch: corridors that have ever reached the threshold stay on the
-    // map. Brand-bound read; a missing table (pre-0084) just means none yet.
-    // The landing's own latch rides in the same table: once the area has held
-    // LIST_MAX events it keeps leading with the map.
-    let latched = new Set<string>();
-    let areaLatched = false;
-    if ((env as LandingEnv).DB) {
-      try {
-        const l = await readLatches((env as LandingEnv).DB as D1Database, 'root');
-        latched = l.corridors;
-        areaLatched = l.landingArea;
-      } catch {
-        latched = new Set();
-      }
-    }
-    // OSE-1522: the consented sponsor by the title on each card, as on /events.
-    const sponsorTitles = await fetchSponsorTitles((env as LandingEnv).DB, 'root');
-    // Owner 2026-11-09: the Type row is the categories of the event-type
-    // catalog, read through the same query as the Create Event picker.
-    let typeCategories: Map<string, TypeCategory> | undefined;
-    try {
-      typeCategories = categoryByTypeId(await readEventTypeCatalog((env as LandingEnv).DB));
-    } catch {
-      // A failed read only folds every event into "Other" (one choice, so no
-      // row); the cards still show. tests/landing-category-scenarios.spec.ts.
-    }
+    const [latches, sponsorTitles, typeCategories] = await Promise.all([
+      latchesRead,
+      sponsorTitlesRead,
+      typeCategoriesRead,
+    ]);
+    const latched = latches?.corridors ?? new Set<string>();
+    const areaLatched = latches?.landingArea ?? false;
     // Zoomed in: each event's own links and share code, for its panel card.
     // Direct destinations only; a map tap is never counted (OSE-1897).
     const zoomCell = zoom.cell;
