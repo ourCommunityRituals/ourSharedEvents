@@ -285,11 +285,13 @@ const en = {
   'area.view': 'View',
   'area.list': 'List',
   'area.map': 'Map',
+  'area.filters': 'Filters',
   // The neighborhood map (lib/attendee-map.ts).
   'map.near': 'near {venue}',
   'map.exampleLabel':
     'Example map: three neighborhoods drawn as numbered hexagons, the busiest shaded deepest',
   'map.listedBelow': '{note} &mdash; every event is listed below.',
+  'map.seeList': 'See the list of events',
   'map.exampleCaption':
     '<strong>Example.</strong> This is what the map looks like once neighborhoods fill in: one numbered hexagon each, a few square kilometres, never a street address.',
   'map.corridorNote':
@@ -308,6 +310,8 @@ const en = {
   'map.areasOne': '{n} neighborhood',
   'map.caption':
     '{events} in {areas}, every kind, over the next {days} days (the filters above change the list, not the map). Each hexagon is a few square kilometres, never a street address.',
+  'map.captionFiltered':
+    '{events} in {areas} over the next {days} days. The filters above narrow the map and the list. Each hexagon is a few square kilometres, never a street address.',
   'map.credit': 'Street map data © {osm} contributors, prepared by {protomaps}.',
   'map.tapToZoom': 'Tap a hexagon to see its events on the map.',
   'map.zoomIn': 'Zoom in',
@@ -675,10 +679,12 @@ const es: Record<MessageKey, string> = {
   'area.view': 'Vista',
   'area.list': 'Lista',
   'area.map': 'Mapa',
+  'area.filters': 'Filtros',
   'map.near': 'cerca de {venue}',
   'map.exampleLabel':
     'Mapa de ejemplo: tres barrios dibujados como hexágonos numerados; el de más actividad, con el tono más oscuro',
   'map.listedBelow': '{note} &mdash; todos los eventos aparecen abajo.',
+  'map.seeList': 'Ver la lista de eventos',
   'map.exampleCaption':
     '<strong>Ejemplo.</strong> Así se verá el mapa cuando se llenen los barrios: un hexágono numerado para cada uno, de unos pocos kilómetros cuadrados, nunca una dirección.',
   'map.corridorNote':
@@ -697,6 +703,8 @@ const es: Record<MessageKey, string> = {
   'map.areasOne': '{n} barrio',
   'map.caption':
     '{events} en {areas}, de todo tipo, en los próximos {days} días (los filtros de arriba cambian la lista, no el mapa). Cada hexágono mide unos pocos kilómetros cuadrados y nunca es una dirección.',
+  'map.captionFiltered':
+    '{events} en {areas} en los próximos {days} días. Los filtros de arriba acotan el mapa y la lista. Cada hexágono mide unos pocos kilómetros cuadrados y nunca es una dirección.',
   'map.credit': 'Datos del mapa de calles © colaboradores de {osm}, preparados por {protomaps}.',
   'map.tapToZoom': 'Toca un hexágono para ver sus eventos en el mapa.',
   'map.zoomIn': 'Acercar',

@@ -6,7 +6,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 23
+      "testCount": 24
     },
     {
       "file": "workers/oursharedevents/tests/admin-664-who-rich-content.spec.ts",
@@ -538,7 +538,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 62
+      "testCount": 69
     },
     {
       "file": "workers/oursharedevents/tests/attendee-name-encryption.spec.ts",
@@ -1791,7 +1791,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 48
+      "testCount": 53
     },
     {
       "file": "workers/oursharedevents/tests/landing-categories.spec.ts",

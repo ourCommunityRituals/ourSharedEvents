@@ -439,6 +439,9 @@ test.describe('Zoomed map: in and out, and the pills (OSE-1886)', () => {
     await expect(page.getByTestId('amap-legend-dot')).toHaveCount(3);
     for (const n of [1, 2, 3]) await expect(placeRow(page, n)).toBeVisible();
 
+    // On a phone the When row folds behind the Filters chip (lib/area-filters-style.ts).
+    const filters = page.getByTestId('area-filters-btn');
+    if (await filters.isVisible()) await filters.click();
     // Only map-zoom-d (place 3) is within 7 days; places 1 and 2 are 10 days out or more.
     await page.locator('label[for="win-week"]').click();
     await expect(placeRow(page, 1)).toBeHidden();

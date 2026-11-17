@@ -904,8 +904,9 @@ describe('design budget', () => {
     expect(onScreen(html, 320)).toMatchObject({ tall: true, shown: MAP_H });
     expect(onScreen(html, 479).tall).toBe(true);
     expect(onScreen(html, 480)).toMatchObject({ tall: false, shown: MAP_W });
+    // Its hexagons are links, so the drawing is a group (OSE-2112).
     expect(html).toContain(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${MAP_W} ${MAP_H}" preserveAspectRatio="xMidYMid slice" role="img" `
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${MAP_W} ${MAP_H}" preserveAspectRatio="xMidYMid slice" role="group" `
     );
     const left = (MAP_W - MAP_H) / 2;
     const cells = [...html.matchAll(/<polygon class="amap-cell" points="([^"]+)"/g)].map((m) =>

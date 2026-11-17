@@ -428,7 +428,10 @@ describe('served pages', () => {
   test('landing: no filter is a sponsor, and no card is tagged by its sponsor', async () => {
     const html = await page('/');
     expect(html).toContain('Supported by ECF Landing Sponsor');
-    const toggles = html.split('data-testid="area-toggles"')[1]?.split('</div>')[0] ?? '';
+    // The chip rows: List and Map, then the folded window, type and Where rows
+    // (area-filters, the attendee-map grade of 2026-11-17), up to the area.
+    const toggles =
+      html.split('data-testid="area-toggles"')[1]?.split('<div class="area"')[0] ?? '';
     expect(toggles, 'the filter row is on the landing').toContain('toggle-window');
     expect(toggles).not.toMatch(/sponsor/i);
     // No radio, rule or card class the CSS-only filters hang on names a sponsor.

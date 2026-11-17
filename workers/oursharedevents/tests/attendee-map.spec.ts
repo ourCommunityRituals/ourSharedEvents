@@ -16,8 +16,9 @@
 // @born-red attendee-map mutants | method: StrykerJS mutants of src/lib/attendee-map.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
 
 import { describe, it, expect } from 'vitest';
-import { latLngToCell } from 'h3-js';
+import { gridDisk, latLngToCell } from 'h3-js';
 import {
+  namesClear,
   renderAttendeeMap,
   attendeeMapAreas,
   townOf,
@@ -408,7 +409,8 @@ describe('attendee map | place names (the free base: no map service)', () => {
     const towns = ['Alsip', 'Posen', 'Harvey', 'Dolton', 'Riverdale'];
     const items = towns.flatMap((t, c) =>
       Array.from({ length: G }, (_, i) =>
-        ev(c * 10 + i, { h3_res7: cellAt(c), where_address: `1 Main St, ${t}, IL` })
+        // Three cells apart, so no two names lie over each other (that case is below).
+        ev(c * 10 + i, { h3_res7: cellAt(c * 3), where_address: `1 Main St, ${t}, IL` })
       )
     );
     const five = renderAttendeeMap(items, { now: NOW });
@@ -418,6 +420,50 @@ describe('attendee map | place names (the free base: no map service)', () => {
 
     const four = renderAttendeeMap(items.slice(0, 4 * G), { now: NOW });
     expect(four.html.match(/data-testid="amap-area-name"/g)?.length).toBe(4);
+  });
+
+  // The grade of 2026-11-17: on staging "near A hall" lay over "Oak Lawn" and
+  // over another area's number. Born red: with namesClear keeping every name,
+  // the neighbours below draw two names, and the namesClear cases fail.
+  it('a name that would lie over another name or number is left to the legend', () => {
+    // As on staging: three neighbouring areas and one far off, so the three are
+    // drawn small and close together.
+    const near = gridDisk(cellAt(0), 1).slice(0, 3);
+    const cells = [...near, cellAt(8)];
+    const towns = ['Oak Lawn', 'Hometown', 'Evergreen Park', 'Alsip'];
+    const items = towns.flatMap((t, c) =>
+      Array.from({ length: G }, (_, i) =>
+        ev(c * 10 + i, { h3_res7: cells[c], where_address: `1 Main St, ${t}, IL` })
+      )
+    );
+    const out = renderAttendeeMap(items, { now: NOW });
+    const drawn = out.html.match(/data-testid="amap-area-name"/g)?.length ?? 0;
+    expect(drawn).toBeGreaterThan(0);
+    expect(drawn).toBeLessThan(4);
+    expect(out.html.match(/data-testid="amap-legend-name"/g)?.length).toBe(4);
+  });
+
+  it('namesClear: busiest first; clear of the others, of the frame edge, never of its own number', () => {
+    const at = (cell: string, x: number, y: number, name: string) => ({
+      cell,
+      mid: [x, y] as [number, number],
+      name,
+    });
+    // Alone, in the middle: kept, though its own number sits just above it.
+    expect([...namesClear([at('a', 300, 100, 'Posen')], 600)]).toEqual(['a']);
+    // Two names side by side: the first (the busiest) is kept.
+    expect([...namesClear([at('a', 300, 100, 'Posen'), at('b', 380, 100, 'Alsip')], 600)]).toEqual([
+      'a',
+    ]);
+    // Far apart: both.
+    expect(namesClear([at('a', 100, 100, 'Posen'), at('b', 400, 100, 'Alsip')], 600).size).toBe(2);
+    // Under another area's number: left out.
+    expect([...namesClear([at('a', 300, 100, 'Posen'), at('b', 300, 70, 'Alsip')], 600)]).toEqual([
+      'a',
+    ]);
+    // Past the frame's edge: left out. No name: nothing.
+    expect(namesClear([at('a', 20, 100, 'Riverdale')], 600).size).toBe(0);
+    expect(namesClear([at('a', 300, 100, '')], 600).size).toBe(0);
   });
 
   it('a long name is shortened in the hexagon and whole in the legend; no address reaches the page', () => {
@@ -728,5 +774,92 @@ describe('attendee map | area names, order and shading, edge by edge', () => {
     expect(out.html).not.toContain(STREET_STYLE);
     expect(out.html).not.toContain('Supported by');
     expect(renderAttendeeMap(many(G - 1, { startDateISO: soon })).state).toBe('thin');
+  });
+});
+
+// The attendee-map grade of 2026-11-17: the edges of each new rule, one case a
+// side, so a changed number or comparison fails by name (the mutation floor,
+// scripts/ci/mutation-file-floor.mjs).
+describe('attendee map | the grade of 2026-11-17, at the edges', () => {
+  const at = (cell: string, x: number, y: number, name: string) => ({
+    cell,
+    mid: [x, y] as [number, number],
+    name,
+  });
+  // 'Ab': 18 units either side of its middle, from 14 to 48 units below it.
+  const kept = (...labels: ReturnType<typeof at>[]) => [...namesClear(labels, 600)];
+
+  it('a name may touch the frame edge, and not pass it', () => {
+    expect(kept(at('a', 18, 100, 'Ab'))).toEqual(['a']);
+    expect(kept(at('a', 17.9, 100, 'Ab'))).toEqual([]);
+    expect(kept(at('a', 582, 100, 'Ab'))).toEqual(['a']);
+    expect(kept(at('a', 582.1, 100, 'Ab'))).toEqual([]);
+  });
+
+  it('a name may touch another number on each side, and not overlap it', () => {
+    // b's number is 16 units round its middle; a's name runs 82 to 118 across, 114 to 148 down.
+    const right = (x: number) => kept(at('a', 100, 100, 'Ab'), at('b', x, 131, ''));
+    expect(right(134)).toEqual(['a']);
+    expect(right(133.9)).toEqual([]);
+    const left = (x: number) => kept(at('a', 100, 100, 'Ab'), at('b', x, 131, ''));
+    expect(left(66)).toEqual(['a']);
+    expect(left(66.1)).toEqual([]);
+    const above = (y: number) => kept(at('a', 100, 100, 'Ab'), at('b', 100, y, ''));
+    expect(above(98)).toEqual(['a']);
+    expect(above(98.1)).toEqual([]);
+    const below = (y: number) => kept(at('a', 100, 100, 'Ab'), at('b', 100, y, ''));
+    expect(below(164)).toEqual(['a']);
+    expect(below(163.9)).toEqual([]);
+  });
+
+  it('a name may touch a name kept before it, and not overlap it', () => {
+    // a's name ends at 118 across; b's starts at its middle less 18.
+    expect(kept(at('a', 100, 100, 'Ab'), at('b', 136, 300, 'Ab'))).toEqual(['a', 'b']);
+    expect(kept(at('a', 100, 100, 'Ab'), at('b', 136, 134, 'Ab'))).toEqual(['a', 'b']);
+    expect(kept(at('a', 100, 100, 'Ab'), at('b', 135.9, 133.9, 'Ab'))).toEqual(['a']);
+  });
+
+  it('below the gate elsewhere the note points nowhere: only the landing has the list', () => {
+    const out = renderAttendeeMap(many(CORRIDOR_READY_MIN_EVENTS - 1), { now: NOW });
+    expect(out.html).toContain('data-testid="area-map-thin" role="status">');
+    expect(out.html).not.toContain('area-map-thin-list');
+    expect(out.html).not.toContain('See the list');
+    const landing = renderAttendeeMap(many(3), { now: NOW, area: { count: 3, min: 10 } });
+    expect(landing.html).toContain(
+      'every event is listed below.</p><p><a class="btn btn-outline" href="#area-list" data-testid="area-map-thin-list">See the list of events</a></p>\n            </div>'
+    );
+  });
+
+  it('with filter classes: each area, legend row and link carries them, separators inside', () => {
+    const items = [ev(1), ev(2), ev(3, { h3_res7: BEV7 })];
+    const filterClasses = new Map([
+      ['e1', ['when-week', 'modality-online']],
+      ['e2', ['when-month']],
+      // e3 has none: its area and link carry the marker class alone.
+    ]);
+    const html = renderAttendeeMap(items, {
+      now: NOW,
+      area: { count: 10, min: 10 },
+      filterClasses,
+    }).html;
+    expect(html).toContain(
+      `<g class="amap-f when-week modality-online when-month" data-testid="amap-area" data-cell="${BLUE7}"`
+    );
+    expect(html).toContain(`<g class="amap-f" data-testid="amap-area" data-cell="${BEV7}"`);
+    expect(html).toContain(
+      '<li value="1" class="amap-f when-week modality-online when-month" data-testid="amap-legend-area"><strong>2 events:</strong> ' +
+        '<span class="amap-f when-week modality-online"><a href="/events/e1" data-testid="amap-event">Event 1</a></span> ' +
+        '<span class="amap-f when-month">&middot; <a href="/events/e2" data-testid="amap-event">Event 2</a></span></li>'
+    );
+    expect(html).toContain(
+      '<li value="2" class="amap-f" data-testid="amap-legend-area"><strong>1 event:</strong> <span class="amap-f"><a href="/events/e3" data-testid="amap-event">Event 3</a></span></li>'
+    );
+    expect(html).toContain('The filters above narrow the map and the list.');
+    // Without them (every other surface): plain, as before.
+    const plain = renderAttendeeMap(items, { now: NOW, area: { count: 10, min: 10 } }).html;
+    expect(plain).not.toContain('amap-f');
+    expect(plain).toContain(
+      '<a href="/events/e1" data-testid="amap-event">Event 1</a> &middot; <a href="/events/e2"'
+    );
   });
 });

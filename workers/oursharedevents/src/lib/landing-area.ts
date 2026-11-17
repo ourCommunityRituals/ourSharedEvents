@@ -70,13 +70,14 @@ import {
   type WhenOption,
 } from './event-discovery.js';
 import { renderEventCard } from './event-list.js';
-import { renderAttendeeMap, type ZoomEvent } from './attendee-map.js';
+import { AREA_LIST_ID, renderAttendeeMap, type ZoomEvent } from './attendee-map.js';
 import type { PlaceLinks } from './map-place-links.js';
 import { getResolution, isValidCell } from 'h3-js';
 import { CORRIDOR_RES } from './h3-tagging.js';
 import type { StreetLayer } from './street-map.js';
 import { toPublicEvent } from './public-event-projection.js';
 import { msg } from './i18n/catalog.js';
+import { AREA_FILTERS_STYLE, FILTERS_TOGGLE_ID } from './area-filters-style.js';
 import { DEFAULT_LANG, type Lang } from './i18n/languages.js';
 import { OTHER_CATEGORY_CODE, type TypeCategory } from './event-type-catalog.js';
 
@@ -415,6 +416,8 @@ export function renderLandingArea(
       zoomHref: opts?.zoomHref,
       placeLinks: opts?.placeLinks,
       origin: opts?.origin,
+      // The pills narrow the hexagons as they narrow the cards (grade, 2026-11-17).
+      filterClasses: new Map(live.map((e) => [str(e.id), classesOf.get(e)!])),
       // Zoomed in: each event's place and filter classes, for its dot.
       zoom: zoom && {
         cell: zoom.cell,
@@ -522,7 +525,7 @@ function buildAreaMarkup(args: {
 
   // ── generated rules: selected look + focus ring + (for filters) the hide rule ──
   const rules: string[] = [];
-  for (const id of ['view-list', 'view-map']) rules.push(chipRules(id));
+  for (const id of ['view-list', 'view-map', FILTERS_TOGGLE_ID]) rules.push(chipRules(id));
   for (const w of LANDING_WINDOWS) {
     rules.push(chipRules(`win-${w}`) + hide(`win-${w}`, `when-${w}`));
   }
@@ -560,8 +563,16 @@ function buildAreaMarkup(args: {
     ? `<fieldset class="disc-chips" data-testid="toggle-modality"><legend class="disc-label">${msg(lang, 'area.where')}</legend>${pill('mod-all', msg(lang, 'area.all'))}${pill('mod-online', msg(lang, 'area.online'))}${pill('mod-inperson', msg(lang, 'area.inPerson'))}</fieldset>`
     : '';
 
+  // On a phone the window, type and Where groups fold behind one Filters chip,
+  // so the map starts near the top (the grade of 2026-11-17; area-filters-style.ts).
+  // The chip is a checkbox's label, beside List and Map; wider screens show the
+  // groups and no chip.
+  const filtersChip = `<div class="disc-chips area-filters-btn"><label class="disc-chip" for="${FILTERS_TOGGLE_ID}" data-testid="area-filters-btn">${msg(lang, 'area.filters')}</label></div>`;
   const toggles = `<div class="toggles" data-testid="area-toggles">
           <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">${msg(lang, 'area.view')}</legend>${pill('view-list', msg(lang, 'area.list'))}${pill('view-map', msg(lang, 'area.map'))}</fieldset>
+          ${filtersChip}
+        </div>
+        <div class="toggles area-filters" data-testid="area-filters">
           <fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">${msg(lang, 'disc.when')}</legend>${LANDING_WINDOWS.map((w) => pill(`win-${w}`, discoveryChipLabel(w, lang))).join('')}</fieldset>
           ${typePills}
           ${modPills}
@@ -582,12 +593,13 @@ function buildAreaMarkup(args: {
           <div class="view-map" data-testid="area-map">
             ${mapHtml}
           </div>
-          <div class="view-list" data-testid="area-list">${emptyMessages}${cards}
+          <div class="view-list" id="${AREA_LIST_ID}" data-testid="area-list">${emptyMessages}${cards}
           </div>
         </div>`;
 
-  return `${viewRadios}${winRadios}${typeRadios}${modRadios}
-        ${winStyle}${typeStyle}
+  const filtersToggle = `<input type="checkbox" id="${FILTERS_TOGGLE_ID}" class="toggle-radio" />`;
+  return `${viewRadios}${winRadios}${typeRadios}${modRadios}${filtersToggle}
+        ${winStyle}${typeStyle}${AREA_FILTERS_STYLE}
         ${toggles}
         ${area}`;
 }
@@ -602,17 +614,41 @@ function buildAreaMarkup(args: {
 export function injectLandingArea(
   html: string,
   area: RenderedLandingArea,
-  opts?: { areaFirst?: boolean }
+  opts?: { areaFirst?: boolean; mapFirst?: boolean }
 ): string {
   if (!html.includes(LANDING_AREA_MARKER)) return html;
   // A zip search answers with its results first (owner 2026-10-10).
   const view = opts?.areaFirst ? 'map' : area.defaultView;
-  return injectMarker(orderLandingSections(html, view), LANDING_AREA_MARKER, area.html);
+  return injectMarker(
+    orderLandingSections(html, view, { whereAfterArea: opts?.mapFirst === true }),
+    LANDING_AREA_MARKER,
+    area.html
+  );
 }
 
 const DOORS_START = '<!--OCR_DOORS_START-->';
 const DOORS_END = '<!--OCR_DOORS_END-->';
 const AFTER_AREA = '<!--OCR_AFTER_AREA-->';
+const WHERE_START = '<!--OCR_WHERE_START-->';
+const WHERE_END = '<!--OCR_WHERE_END-->';
+
+/**
+ * The search box ("Town or zip code") on /map follows the map (the grade of
+ * 2026-11-17: on a phone the map started about two screens down). It moves to
+ * just after the area, ahead of anything the doors rule puts there. Anywhere
+ * else, and in a template without the markers, only the markers go.
+ */
+function placeWhere(html: string, afterArea: boolean): string {
+  const a = html.indexOf(WHERE_START);
+  const b = html.indexOf(WHERE_END);
+  // Stryker disable next-line EqualityOperator: equivalent mutant. Two markers never share an index, so `b <= a` and `b < a` agree.
+  if (a < 0 || b < a) return html;
+  const where = html.slice(a + WHERE_START.length, b);
+  const rest = html.slice(0, a) + html.slice(b + WHERE_END.length);
+  const c = rest.indexOf(AFTER_AREA);
+  if (!afterArea || c < 0) return html.slice(0, a) + where + html.slice(b + WHERE_END.length);
+  return rest.slice(0, c) + where + rest.slice(c);
+}
 
 /**
  * Which leads the landing page (PO, 2026-10-03). Fewer than LIST_MAX events:
@@ -622,7 +658,12 @@ const AFTER_AREA = '<!--OCR_AFTER_AREA-->';
  * threshold: this reads the same `defaultView` the list/map toggle uses.
  * Markers are always removed; a template without them is returned unchanged.
  */
-export function orderLandingSections(html: string, defaultView: 'list' | 'map'): string {
+export function orderLandingSections(
+  page: string,
+  defaultView: 'list' | 'map',
+  opts?: { whereAfterArea?: boolean }
+): string {
+  const html = placeWhere(page, opts?.whereAfterArea === true);
   const a = html.indexOf(DOORS_START);
   const b = html.indexOf(DOORS_END);
   const c = html.indexOf(AFTER_AREA);

@@ -272,9 +272,11 @@ export const ar: Record<MessageKey, string> = {
   'area.view': 'العرض',
   'area.list': 'قائمة',
   'area.map': 'خريطة',
+  'area.filters': 'المرشّحات',
   'map.near': 'قرب {venue}',
   'map.exampleLabel': 'خريطة مثال: ثلاثة أحياء مرسومة كسداسيات مرقّمة، والأكثر نشاطًا بأغمق لون',
   'map.listedBelow': '{note} &mdash; كل الفعاليات مذكورة أدناه.',
+  'map.seeList': 'عرض قائمة الفعاليات',
   'map.exampleCaption':
     '<strong>مثال.</strong> هكذا تبدو الخريطة حين تمتلئ الأحياء: سداسي مرقّم لكل حي، بضعة كيلومترات مربعة، ولا عنوان شارع أبدًا.',
   'map.corridorNote':
@@ -293,6 +295,8 @@ export const ar: Record<MessageKey, string> = {
   'map.areasOne': 'حي واحد ({n})',
   'map.caption':
     '{events}؛ {areas}؛ من كل الأنواع، خلال الأيام الـ{days} القادمة (المرشّحات أعلاه تغيّر القائمة لا الخريطة). كل سداسي بضعة كيلومترات مربعة، ولا عنوان شارع أبدًا.',
+  'map.captionFiltered':
+    '{events}؛ {areas}؛ خلال الأيام الـ{days} القادمة. المرشّحات أعلاه تضيّق الخريطة والقائمة. كل سداسي بضعة كيلومترات مربعة، ولا عنوان شارع أبدًا.',
   'map.credit': 'بيانات خريطة الشوارع © المساهمون في {osm}، من إعداد {protomaps}.',
   'map.tapToZoom': 'المس سداسيًا لترى فعالياته على الخريطة.',
   'map.zoomIn': 'تكبير',

@@ -52,9 +52,12 @@
 // tier — there is no map service behind it. An area whose events carry neither
 // stays a number.
 //
-// The landing's type / modality / product radios do not re-draw the map (it is
-// CSS-only, no JS), so the caption says what the map shows: every kind, the
-// next CORRIDOR_WINDOW_DAYS days. The filtered list sits right below.
+// THE LANDING'S FILTERS NARROW THE HEXAGONS TOO (the grade of 2026-11-17).
+// Each hexagon, legend row and event link carries the window, type and
+// modality classes of its events (`filterClasses`), and the landing's own
+// CSS-only hide rules (lib/landing-area.ts, `.amap-f`) hide a hexagon when none
+// of its events match, as they hide a zoomed dot. Still no JS. A hexagon's
+// number, shading and count stay those of every event in it.
 //
 // ZOOMED IN ON ONE AREA (owner, 2026-11-09). On the landing each hexagon links
 // to `?area=<cell>`, which draws that one res-7 area over the street map with a
@@ -351,9 +354,17 @@ const exampleSvg = (lang: Lang) =>
     .join('') +
   `</svg>`;
 
-function thinHtml(note: string, lang: Lang): string {
+/** The list under the landing's map (lib/landing-area.ts), where every event is. */
+export const AREA_LIST_ID = 'area-list';
+
+function thinHtml(note: string, lang: Lang, toList: boolean): string {
+  // On the landing the note points to the list it names (the grade of
+  // 2026-11-17: under the gate a new area saw a picture and no way on).
+  const link = toList
+    ? `<p><a class="btn btn-outline" href="#${AREA_LIST_ID}" data-testid="area-map-thin-list">${msg(lang, 'map.seeList')}</a></p>`
+    : '';
   return `<div class="map-placeholder" data-testid="area-map-thin" role="status">
-              <p>${fmt(lang, 'map.listedBelow', { note })}</p>
+              <p>${fmt(lang, 'map.listedBelow', { note })}</p>${link}
             </div>
             <figure class="amap" data-testid="amap-example">
               ${MAP_STYLE}
@@ -411,7 +422,8 @@ function svgFor(
   areas: AttendeeMapArea[],
   lang: Lang,
   streets?: string,
-  zoomHref?: (cell: string) => string
+  zoomHref?: (cell: string) => string,
+  filterClasses?: FilterClasses
 ): { svg: string; tall: boolean; links: 0 | 1 | 2 | 3 | null } {
   // Web Mercator, the street map's projection, so the hexagons sit on its
   // streets. The frame comes from the cell ids alone.
@@ -426,13 +438,23 @@ function svgFor(
     mid: project(frame, ...cellToLatLng(a.cell)),
   }));
   const fx = (v: number) => v.toFixed(1);
-  /** The name under an area's number, cut to fit, while the hexagons are few and large. */
-  const shortName = (a: AttendeeMapArea) =>
+  const cutName = (a: AttendeeMapArea) =>
     !a.name || areas.length > SVG_NAME_MAX_AREAS
       ? ''
       : a.name.length > SVG_NAME_MAX_CHARS
         ? `${a.name.slice(0, SVG_NAME_MAX_CHARS - 1)}…`
         : a.name;
+  const shown = namesClear(
+    rings.map(({ a, mid }) => ({ cell: a.cell, mid, name: cutName(a) })),
+    W
+  );
+  /**
+   * The name under an area's number, cut to fit, while the hexagons are few and
+   * large, and only where it lies clear of every other name and number (the
+   * grade of 2026-11-17: "near A hall" lay over "Oak Lawn"). The list under the
+   * map names every area either way.
+   */
+  const shortName = (a: AttendeeMapArea) => (shown.has(a.cell) ? cutName(a) : '');
 
   // Each hexagon's box, and how far its name reaches either side of its middle.
   const span = (vs: number[]) => Math.max(...vs) - Math.min(...vs);
@@ -491,15 +513,80 @@ function svgFor(
         : links === 0
           ? `<a href="${href}" data-testid="amap-area-link">${body}</a>`
           : `<a class="amap-w${links}" href="${href}" data-testid="amap-area-link">${body}</a><g class="amap-n${links}">${body}</g>`;
-      return `<g data-testid="amap-area" data-cell="${a.cell}" data-count="${k}">${inner}</g>`;
+      return `<g${areaClassAttr(a, filterClasses)} data-testid="amap-area" data-cell="${a.cell}" data-count="${k}">${inner}</g>`;
     })
     .join('');
   const cut = tall ? ' preserveAspectRatio="xMidYMid slice"' : '';
+  // OSE-2112: a drawing that holds links is a group, as the zoomed drawing is
+  // (OSE-1889). Inside role="img" every child is presentational, so a screen
+  // reader would skip the hexagon links the keyboard still stops on. With no
+  // link in it, the drawing is one picture.
+  const role = links === null ? 'img' : 'group';
   return {
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"${cut} role="img" aria-labelledby="amap-caption" data-testid="amap-svg">${streets ?? ''}${shapes}</svg>`,
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"${cut} role="${role}" aria-labelledby="amap-caption" data-testid="amap-svg">${streets ?? ''}${shapes}</svg>`,
     tall,
     links,
   };
+}
+
+/** Event id to the landing's filter classes for it (window, type, modality). */
+export type FilterClasses = ReadonlyMap<string, readonly string[]>;
+
+/** Every filter class an area's events carry: a pill hides the area only when none match. */
+function areaClasses(a: AttendeeMapArea, filterClasses: FilterClasses): string {
+  const all = a.events.flatMap((e) => filterClasses.get(e.id) ?? []);
+  return ['amap-f', ...new Set(all)].join(' ');
+}
+
+/** ` class="amap-f …"` on the landing, nothing anywhere else. */
+function areaClassAttr(a: AttendeeMapArea, filterClasses?: FilterClasses): string {
+  return filterClasses ? ` class="${escapeHtml(areaClasses(a, filterClasses))}"` : '';
+}
+
+/** Half the height of a hexagon's number, and the band its name is set in, in map units. */
+const NUM_HALF_UNITS = 16;
+const NAME_TOP_UNITS = 14;
+const NAME_BOTTOM_UNITS = 48;
+
+type Box = [left: number, top: number, right: number, bottom: number];
+const overlaps = (p: Box, q: Box) => p[0] < q[2] && q[0] < p[2] && p[1] < q[3] && q[1] < p[3];
+
+/**
+ * The cells whose name may be drawn under their number: in order (the busiest
+ * area first), a name is kept when its box lies inside the frame and clear of
+ * every other area's number and of every name kept before it. Boxes are measured at the
+ * largest size a name is set in (NAME_HALF_UNITS a letter).
+ */
+export function namesClear(
+  labels: readonly { cell: string; mid: readonly [number, number]; name: string }[],
+  width: number
+): Set<string> {
+  const numbers: Box[] = labels.map(({ mid: [x, y] }) => [
+    x - NUM_HALF_UNITS,
+    y - NUM_HALF_UNITS,
+    x + NUM_HALF_UNITS,
+    y + NUM_HALF_UNITS,
+  ]);
+  // Stryker disable next-line ArrayDeclaration: equivalent mutant. A string in this list is never a box: every comparison overlaps() makes with its letters is false, so it lies over no name.
+  const kept: Box[] = [];
+  const cells = new Set<string>();
+  for (const [i, { cell, mid, name }] of labels.entries()) {
+    if (!name) continue;
+    const half = name.length * NAME_HALF_UNITS;
+    const box: Box = [
+      mid[0] - half,
+      mid[1] + NAME_TOP_UNITS,
+      mid[0] + half,
+      mid[1] + NAME_BOTTOM_UNITS,
+    ];
+    const inFrame = box[0] >= 0 && box[2] <= width;
+    // Its own number sits just above it, so only the others are in the way.
+    const others = numbers.filter((_, j) => j !== i);
+    if (!inFrame || [...others, ...kept].some((b) => overlaps(b, box))) continue;
+    kept.push(box);
+    cells.add(cell);
+  }
+  return cells;
 }
 
 /** One event's link in a legend, with its consented sponsor (OSE-1522). */
@@ -507,25 +594,41 @@ function eventLink(
   e: { id: string; name: string },
   lang: Lang,
   sponsorTitles?: ReadonlyMap<string, string>,
-  classes?: string
+  classes?: string,
+  before = ''
 ): string {
   const sponsor = sponsorTitles?.get(e.id);
   const by = sponsor
     ? ` <span data-testid="amap-event-sponsor">${fmt(lang, 'map.sponsor', { sponsor: escapeHtml(sponsor) })}</span>`
     : '';
   const link = `<a href="${withLangPrefix(lang, `/events/${escapeHtml(e.id)}`)}" data-testid="amap-event">${escapeHtml(e.name)}</a>${by}`;
-  return classes ? `<span class="${escapeHtml(classes)}">${link}</span>` : link;
+  return classes ? `<span class="${escapeHtml(classes)}">${before}${link}</span>` : link;
 }
 
 function legendFor(
   areas: AttendeeMapArea[],
   lang: Lang,
   sponsorTitles?: ReadonlyMap<string, string>,
-  zoomHref?: (cell: string) => string
+  zoomHref?: (cell: string) => string,
+  filterClasses?: FilterClasses
 ): string {
   const rows = areas
     .map((a) => {
-      const links = a.events.map((e) => eventLink(e, lang, sponsorTitles)).join(' &middot; ');
+      // On the landing each link carries its event's filter classes, so a pill
+      // hides it; the separator rides inside the link's own span with it.
+      const links = filterClasses
+        ? a.events
+            .map((e, i) =>
+              eventLink(
+                e,
+                lang,
+                sponsorTitles,
+                ['amap-f', ...(filterClasses.get(e.id) ?? [])].join(' '),
+                i > 0 ? '&middot; ' : ''
+              )
+            )
+            .join(' ')
+        : a.events.map((e) => eventLink(e, lang, sponsorTitles)).join(' &middot; ');
       const k = a.events.length;
       const place = a.name
         ? `<span data-testid="amap-legend-name">${escapeHtml(a.name)}</span> &middot; `
@@ -533,7 +636,7 @@ function legendFor(
       const zoom = zoomHref
         ? ` <a class="amap-zoom" href="${escapeHtml(zoomHref(a.cell))}" data-testid="amap-zoom">${msg(lang, 'map.zoomIn')}</a>`
         : '';
-      return `<li value="${a.n}" data-testid="amap-legend-area"><strong>${place}${eventCount(k, lang)}:</strong> ${links}${zoom}</li>`;
+      return `<li value="${a.n}"${areaClassAttr(a, filterClasses)} data-testid="amap-legend-area"><strong>${place}${eventCount(k, lang)}:</strong> ${links}${zoom}</li>`;
     })
     .join('');
   return `<ol class="amap-legend" data-testid="amap-legend">${rows}</ol>`;
@@ -784,6 +887,11 @@ export function renderAttendeeMap(
     placeLinks?: PanelOptions['placeLinks'];
     /** Zoomed in: the site's origin, for the link a Share button carries. */
     origin?: string | null;
+    /**
+     * The landing: each event's filter classes, so its pills hide the hexagons,
+     * legend rows and links whose events none match (CSS only).
+     */
+    filterClasses?: FilterClasses;
   }
 ): RenderedAttendeeMap {
   const lang = opts?.lang ?? DEFAULT_LANG;
@@ -816,10 +924,10 @@ export function renderAttendeeMap(
         : gate
           ? msg(lang, 'map.noPlace')
           : corridorNote(busiest, lang);
-    return { html: thinHtml(note, lang), state: 'thin', count: 0, areas: [] };
+    return { html: thinHtml(note, lang, !!gate), state: 'thin', count: 0, areas: [] };
   }
 
-  const caption = fmt(lang, 'map.caption', {
+  const caption = fmt(lang, opts?.filterClasses ? 'map.captionFiltered' : 'map.caption', {
     events: eventCount(count, lang),
     areas: fmtCount(lang, drawn.length, { one: 'map.areasOne', other: 'map.areas' }),
     days: CORRIDOR_WINDOW_DAYS,
@@ -829,7 +937,7 @@ export function renderAttendeeMap(
       ? opts.streets.svg
       : undefined;
   const credit = streets ? streetCredit(lang) : '';
-  const map = svgFor(drawn, lang, streets, opts?.zoomHref);
+  const map = svgFor(drawn, lang, streets, opts?.zoomHref, opts?.filterClasses);
   // "Tap a hexagon" only where a hexagon is a link.
   const tap =
     map.links === null
@@ -840,7 +948,7 @@ export function renderAttendeeMap(
   const html = `<figure class="amap" data-testid="amap"${map.tall ? ' data-tall' : ''}>
               ${MAP_STYLE}${streets ? STREET_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}${NARROW_MAP_STYLE}${map.links ? LINK_STYLE : ''}
               ${map.svg}
-              ${legendFor(drawn, lang, opts?.sponsorTitles, opts?.zoomHref)}
+              ${legendFor(drawn, lang, opts?.sponsorTitles, opts?.zoomHref, opts?.filterClasses)}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}${tap}</figcaption>${credit}
             </figure>`;
   return { html, state: 'map', count, areas: drawn };
