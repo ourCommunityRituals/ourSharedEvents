@@ -19,14 +19,7 @@
         --muted: var(--text-muted, #5a5a5a);
         --line: var(--border, rgba(42, 42, 42, 0.12));
       }
-      * {
-        box-sizing: border-box;
-      }
-      html,
       body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--text);
         font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
         line-height: 1.5;
         overflow-wrap: anywhere;
@@ -35,11 +28,15 @@
       .skip-link:focus { inset-inline-start: 1rem; top: 1rem; background: var(--accent); color: var(--on-accent); padding: 0.5rem 1rem; z-index: 10; }
       header {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
-        gap: 1rem;
+        gap: 0 1rem;
         padding: 0.75rem 1.25rem;
         border-bottom: 1px solid var(--line);
+      }
+      header nav {
+        margin-inline: -0.75rem;
       }
       .logo,
       nav a {
@@ -48,10 +45,13 @@
         min-height: 44px;
         text-decoration: none;
       }
-      .logo {
-        font-size: 1.15rem;
+      .logo,
+      [aria-current='page'] {
         font-weight: 700;
         color: var(--text);
+      }
+      .logo {
+        font-size: 1.15rem;
       }
       nav a {
         padding: 0 0.75rem;
@@ -166,6 +166,7 @@
       </div>
       <nav data-testid="landing-nav" aria-label="{{t:landing.navLabel}}">
         <a href="/{{langdir}}events" data-testid="nav-events">{{t:landing.events}}</a>
+        <a href="/{{langdir}}map" data-testid="nav-map">{{t:landing.map}}</a>
       </nav>
     </header>
 

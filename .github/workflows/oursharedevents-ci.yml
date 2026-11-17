@@ -840,6 +840,14 @@ jobs:
       # street layer "incomplete", so every text on the map is measured from the
       # colours the theme resolved (scripts/ci/map-text-contrast.mjs), light and
       # dark. T4k runs the same judge on staging once streets are drawn there.
+      #
+      # landing-menu.component.spec.ts (owner 2026-11-17, part of OSE-1990) measures
+      # the top menu of the landing and of /map on the local worker: Events and
+      # Map at seven widths from a 320 px phone to a desktop, in the four
+      # languages. The name stays on one line, the two links share a row under it
+      # or beside it and never over it, nothing scrolls sideways, each link is a
+      # 44 px target, and on /map the Map link is the heavier one. The worker has
+      # no events, which the header does not need.
       - name: 'Component: viewport specs vs local worker'
         if: matrix.shard == 'component'
         run: |
@@ -852,7 +860,8 @@ jobs:
             tests/e2e/2-pages/a11y-axe-surfaces.spec.ts \
             tests/e2e/2-pages/sponsor-thumbnails.component.spec.ts \
             tests/e2e/2-pages/street-map-sizes.component.spec.ts \
-            tests/e2e/2-pages/street-map-contrast.component.spec.ts
+            tests/e2e/2-pages/street-map-contrast.component.spec.ts \
+            tests/e2e/2-pages/landing-menu.component.spec.ts
 
   # T0 test sub-gates: keep the existing required context `T0 Gate (tests)` as
   # an aggregate below, but split the former 9+ minute long-pole job into

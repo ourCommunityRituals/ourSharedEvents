@@ -154,6 +154,7 @@ export const pl: Record<MessageKey, string> = {
   'landing.homeLabel': 'Strona główna OurSharedEvents',
   'landing.navLabel': 'Główna',
   'landing.events': 'Wydarzenia',
+  'landing.map': 'Mapa',
   'landing.lead': 'Co się dzieje w pobliżu?',
   'landing.whereLabel': 'Gdzie jesteś?',
   'landing.nearMe': 'Użyj mojej lokalizacji',
