@@ -42,7 +42,12 @@ docs: |-
   no sponsor, and a class whose one sponsor has 4 displays, both have their
   total withheld (null, with the words in the notes), never 0.
 
+  Requests 85 to 88 (OSE-2093): two bare fixture events read as reports, one
+  with nobody seen and one with 4 people seen. Each must carry the same
+  "nothing yet" note and no count of people: 0 reads the same as 1 to 4.
+
   Mock-layer twins: workers/oursharedevents/tests/campaigns.spec.ts,
   tests/campaign-events.spec.ts, tests/campaign-update.spec.ts,
-  tests/shared-report-campaign-summary.spec.ts and
-  tests/shared-report-class-floor.spec.ts.
+  tests/shared-report-campaign-summary.spec.ts,
+  tests/shared-report-class-floor.spec.ts and
+  tests/shared-report-pending-note-floor.spec.ts.
