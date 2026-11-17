@@ -786,9 +786,13 @@ writes nothing and can run at any time.
      is exactly `"false"`. With streets drawn, the four street names are gone
      from the summary and the street assertions are in the log in their place.
    - **Roads, not any path.** The three road tests (the two landing cases and
-     the area-map case) pass only with 50 or more path commands of highway plus
-     major road (`ROAD_FLOOR`), so a layer of water with a stub of road is red
-     by name.
+     the area-map case) hold the drawer's own rule (`layerShows` in
+     `lib/street-map.ts`): a highway or major-road path, and `MIN_ROAD_POINTS`
+     (100) path commands of highway, major and minor road in all, so a layer
+     of water with a stub of road is red by name and every layer the Worker
+     shows passes. Each case carries a copy of the number;
+     `tests/unit/ci/street-map-staging-cases.test.js` fails by name when a copy
+     or the count differs from the drawer's.
 
    In T4k (`tests/e2e/3-flows/map-place-panel.spec.ts`):
    - The first test records which page was drawn, the "no street map" note or

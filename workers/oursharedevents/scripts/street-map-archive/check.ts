@@ -45,7 +45,12 @@ import {
   type PmtilesHeader,
   type RangeSource,
 } from '../../src/lib/pmtiles.js';
-import { MAX_ZOOM, readStreetDrawing, type DrawnPoints } from '../../src/lib/street-map.js';
+import {
+  MAX_ZOOM,
+  MIN_ROAD_POINTS,
+  readStreetDrawing,
+  type DrawnPoints,
+} from '../../src/lib/street-map.js';
 
 /** Leaf directories the reader follows below the root (lib/pmtiles.ts, MAX_DEPTH). */
 export const READER_MAX_DEPTH = 3;
@@ -59,8 +64,15 @@ export const READER_MAX_DEPTH = 3;
  * (Anchorage); the layer the old drawing made of 19 areas of Manhattan held 1
  * point of 9,000. A third of the thinnest, so a real cut is not refused for a
  * quiet city, and a layer of water with a road or two is.
+ *
+ * The number is the drawer's own (lib/street-map.ts, MIN_ROAD_POINTS), so it
+ * has one owner (base-map plan, gap G12, 2026-11-16). Counted here of highway
+ * and major road alone, it asks for at least what `layerShows` asks of all
+ * road, so every draw this check passes is one the Worker shows.
+ * tests/unit/ci/street-map-staging-cases.test.js fails by name if this line
+ * carries a number of its own or the count here changes.
  */
-export const MIN_MAIN_ROAD_POINTS = 100;
+export const MIN_MAIN_ROAD_POINTS = MIN_ROAD_POINTS;
 export const MIN_MAIN_ROAD_SHARE = 0.03;
 
 export interface Probe {

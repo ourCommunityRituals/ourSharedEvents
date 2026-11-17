@@ -185,7 +185,7 @@ const scriptOf = (which) =>
 
 // Test names, as the cases print them.
 const ROADS =
-  'The street layer holds roads: 50 path commands or more of highway or major road (water alone fails)';
+  "The street layer holds roads by the drawer's rule: a highway or major road, and MIN_ROAD_POINTS path commands of road in all (water alone fails)";
 const BINDING = 'The street layer is drawn (streetMapArchiveLoaded is true for this environment)';
 const Z16_STREETS =
   'With a street layer: the area and a dot per place are drawn over it, and no "not here" note';
@@ -510,26 +510,153 @@ describe('the street cases need roads, not any path (R17)', () => {
         expect(roads(MINOR_ONLY).failed).toContain(ROADS);
       });
 
-      test('49 commands of highway and major road fail, 50 pass', () => {
-        expect(roads(layer({ major: 20, highway: 29 })).failed).toContain(ROADS);
-        expect(roads(layer({ major: 20, highway: 30 })).passed).toContain(ROADS);
-        expect(roads(layer({ highway: 50 })).passed).toContain(ROADS);
-        expect(roads(layer({ major: 50 })).passed).toContain(ROADS);
+      // The drawer's floor (lib/street-map.ts, layerShows, MIN_ROAD_POINTS 100):
+      // highway, major and minor road together, once a highway or major road
+      // is there. Until 2026-11-16 the cases had a floor of their own, 50 of
+      // highway and major road alone, and failed the first layer below,
+      // which the drawer shows (G12).
+      test('99 commands of road fail, 100 pass; minor road counts once a main road is there', () => {
+        expect(roads(layer({ highway: 1, minor: 99 })).passed).toContain(ROADS);
+        expect(roads(layer({ major: 20, highway: 29, minor: 50 })).failed).toContain(ROADS);
+        expect(roads(layer({ major: 20, highway: 30, minor: 50 })).passed).toContain(ROADS);
+        expect(roads(layer({ highway: 100 })).passed).toContain(ROADS);
+        expect(roads(layer({ major: 100 })).passed).toContain(ROADS);
+        expect(roads(layer({ highway: 99, water: 9000, rivers: 900 })).failed).toContain(ROADS);
+        expect(roads(layer({ minor: 100 })).failed).toContain(ROADS);
       });
     });
   }
 
-  test('the three cases share one floor and one count', () => {
-    const count =
-      /const ROAD_FLOOR = 50;\n\s*const roadCommands = function \(layer\) \{[\s\S]*?\n\s*\};/;
+  test('the three cases share one count', () => {
+    const count = /const roadPoints = function \(layer\) \{[\s\S]*?\n\s*\};/;
     const texts = ['landing', 'area', 'api'].map((w) => scriptOf(w).match(count)?.[0]);
     expect(texts[0]).toBeTruthy();
-    expect(texts[0]).toContain('/<path class="as-r as-[23]" d="[^"]*"/g');
+    expect(texts[0]).toContain('/<path class="as-r as-([123])" d="([^"]*)"/g');
     expect(texts[1].replace(/\s+/g, ' ')).toBe(texts[0].replace(/\s+/g, ' '));
     expect(texts[2].replace(/\s+/g, ' ')).toBe(texts[0].replace(/\s+/g, ' '));
     for (const w of ['landing', 'area', 'api']) {
       expect(scriptOf(w)).not.toContain('as-(w|v|r as-[123])');
     }
+  });
+});
+
+// One owner for the road floor (base-map plan, gap G12, 2026-11-16). The drawer
+// (lib/street-map.ts) shows a layer only when layerShows(drawn) is true, and
+// MIN_ROAD_POINTS is its number. Bruno cannot import TypeScript, so the three
+// road cases carry a copy, and the archive check takes the drawer's own. These
+// tests read the drawer, and fail by name when a case or the check carries
+// another number or another measure. Born red, one fault at a time, this file
+// run, the fault taken out:
+//   G1  landing: MIN_ROAD_POINTS 100 to 50
+//         -> 3 tests: "carries the drawer's MIN_ROAD_POINTS", "decides as the
+//            drawer decides", and the landing's "99 commands of road fail"
+//   G2  area: the count back to highway and major road only (`as-([23])`)
+//         -> 6 tests: "share one count", "decides as the drawer decides", and
+//            four of the area case's (its "99 commands", "over the floor")
+//   G3  api: water counted as minor road (`as-(?:r as-)?([123w])`)
+//         -> 4 tests: "share one count", "decides as the drawer decides", the
+//            api case's "the measured wrong layer" and "99 commands"
+//   G4  lib/street-map.ts: MIN_ROAD_POINTS 100 to 120, the cases left at 100
+//         -> "carries the drawer's MIN_ROAD_POINTS" and "decides as the drawer
+//            decides" (the archive check held: it takes the drawer's number)
+//   G5  check.ts: `MIN_MAIN_ROAD_POINTS = 100`, a number of its own
+//         -> "the archive check takes its floor from the drawer" alone
+//   G6  check.ts: main counted with minor road too
+//         -> "the archive check takes its floor from the drawer" alone
+//   G7  landing: the `> 0` main-road assertion made `>= 0`
+//         -> NOTHING failed: the line before it (a highway or major-road path
+//            that starts with M) already holds that rule, since the drawer
+//            writes a path only when it has a point. So G7b:
+//   G7b landing: that line and the `> 0` assertion both dropped
+//         -> 3 tests: the landing's "minor roads alone" and "99 commands", and
+//            "decides as the drawer decides"
+describe("one road floor: the cases hold the drawer's own rule and number (G12)", () => {
+  const ROAD_CASES = ['landing', 'area', 'api'];
+  const bodies = {
+    landing: (streets) => landingPage({ streets }),
+    area: (streets) => zoomPage(MG, { streets, dots: 1 }),
+    api: (streets) => areasAnswer(streets),
+  };
+  let street;
+  beforeAll(async () => {
+    street = await import('../../../workers/oursharedevents/src/lib/street-map.ts');
+  });
+
+  test("each road case carries the drawer's MIN_ROAD_POINTS, once, and no floor of its own", () => {
+    for (const w of ROAD_CASES) {
+      const found = [...scriptOf(w).matchAll(/const MIN_ROAD_POINTS = (\d+);/g)].map((m) =>
+        Number(m[1])
+      );
+      expect(found, `${w}: MIN_ROAD_POINTS in the case, against lib/street-map.ts`).toEqual([
+        street.MIN_ROAD_POINTS,
+      ]);
+      expect(scriptOf(w), `${w}: a floor of its own`).not.toMatch(/ROAD_FLOOR|roadCommands/);
+    }
+  });
+
+  test('every road case decides as the drawer decides, at and around the floor', () => {
+    const F = street.MIN_ROAD_POINTS;
+    const disagree = [];
+    for (const highway of [0, 1, F - 2, F - 1, F]) {
+      for (const major of [0, 1]) {
+        for (const minor of [0, 1, F - 2, F - 1, F]) {
+          for (const water of [0, 9000]) {
+            const drawn = { highway, major, minor, water, rivers: 0 };
+            const shows = street.layerShows(drawn);
+            for (const w of ROAD_CASES) {
+              const r = run(w, { body: bodies[w](layer(drawn)), flag: 'true' });
+              const passes = r.passed.includes(ROADS);
+              const named = passes || r.failed.includes(ROADS);
+              if (!named || passes !== shows) {
+                disagree.push(`${w} ${JSON.stringify(drawn)}: drawer ${shows}, case ${passes}`);
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(disagree).toEqual([]);
+  });
+
+  test('the drawer writes one command a point, so the case counts what the drawer counted', async () => {
+    const fx =
+      await import('../../../workers/oursharedevents/tests/helpers/street-map-fixtures.ts');
+    const cells = [MG];
+    const bytes = await fx.pmtilesArchive(fx.tilesForCells(cells).tiles, { gzip: true });
+    const drawing = await street.readStreetDrawing(fx.memSource(bytes), cells);
+    const commands = (cls) => {
+      const m = new RegExp(`<path class="${cls}" d="([^"]*)"`).exec(drawing.svg);
+      return m ? (m[1].match(/[ML]/g) || []).length : 0;
+    };
+    expect({
+      highway: commands('as-r as-3'),
+      major: commands('as-r as-2'),
+      minor: commands('as-r as-1'),
+    }).toEqual({
+      highway: drawing.drawn.highway,
+      major: drawing.drawn.major,
+      minor: drawing.drawn.minor,
+    });
+    expect(street.layerShows(drawing.drawn)).toBe(true);
+    for (const w of ROAD_CASES) {
+      const r = run(w, { body: bodies[w](drawing.svg), flag: 'true' });
+      expect(r.passed, w).toContain(ROADS);
+    }
+  });
+
+  test('the archive check takes its floor from the drawer, and counts highway and major road', async () => {
+    const src = read('workers', 'oursharedevents', 'scripts', 'street-map-archive', 'check.ts');
+    expect(src).toMatch(/^export const MIN_MAIN_ROAD_POINTS = MIN_ROAD_POINTS;$/m);
+    expect(src).toMatch(
+      /import \{[^}]*\bMIN_ROAD_POINTS\b[^}]*\} from '\.\.\/\.\.\/src\/lib\/street-map\.js';/
+    );
+    // Main road only, held to the drawer's floor of all road: every draw the
+    // check passes is one layerShows passes.
+    expect(src).toContain('const main = drawn.highway + drawn.major;');
+    expect(src).toContain('main >= MIN_MAIN_ROAD_POINTS && main >= all * MIN_MAIN_ROAD_SHARE');
+    const check =
+      await import('../../../workers/oursharedevents/scripts/street-map-archive/check.ts');
+    expect(check.MIN_MAIN_ROAD_POINTS).toBe(street.MIN_ROAD_POINTS);
   });
 });
 

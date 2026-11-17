@@ -124,6 +124,23 @@ const config = {
     // were mutated, and the file's floor read 100 for that part alone. Killed
     // by street-map.spec.ts, street-map-landing.spec.ts and map-areas.spec.ts.
     'src/lib/street-map.ts',
+    // The two callers of the street layer (base-map plan, gap G11, 2026-11-16).
+    // The public area map's handler, the whole file: what it refuses (a
+    // coordinate, no cells, too many, a cell that is not one or not resolution
+    // 7, a bad `around`), the frame it fits, the outlines and centres it
+    // projects, the street layer it hands on with its CSS and OpenStreetMap
+    // credit, and the two cache lifetimes. The file is small and almost all
+    // decision, so its strings are the error codes and headers a caller reads,
+    // not page text. And the landing's own street call in pages.ts: the second
+    // pass drawn only for cells the first pass drew, with the surface named in
+    // the STREET_LAYER line, and a second pass that throws keeps the first.
+    // Killed by map-areas.spec.ts and landing-street-call.spec.ts.
+    'src/handlers/map-areas.ts',
+    rangeOf(
+      'src/handlers/pages.ts',
+      'if (area.mapCells?.length) {',
+      'area = renderEmptyLandingArea(lang);'
+    ),
     // OSE-1936 (epic OSE-1927, owner 2026-11-10) — the header Language menu: the
     // whole renderer, and in pages.ts only the two places that put it on a page
     // (the event top bar, and the marker on /events and the landing). Killed by

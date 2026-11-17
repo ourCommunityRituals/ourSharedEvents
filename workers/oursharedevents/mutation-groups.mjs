@@ -14,7 +14,9 @@
 //   render   the street layer and the page renderers:             19%
 //            street-map.ts, every pages.ts range, the Language
 //            menu, the sponsor art and logo rules (with tiles,
-//            below, until 2026-11-15)
+//            below, until 2026-11-15); since 2026-11-16 the
+//            public area map's handler, map-areas.ts, whose
+//            specs all reach street-map.ts already
 //
 //   forms    the form pages on the language layer (PR 1192):     own job
 //            form-pages.ts and event-staleness.ts
@@ -95,6 +97,7 @@ export const MUTATION_GROUPS = Object.freeze({
   ]),
   render: Object.freeze([
     'src/lib/street-map.ts',
+    'src/handlers/map-areas.ts',
     'src/handlers/pages.ts',
     'src/lib/i18n/language-menu.ts',
     'src/lib/sponsor-logo.ts',

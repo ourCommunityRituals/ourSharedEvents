@@ -24,7 +24,8 @@
 // @born-red the around frame | method: the frame fitted to the areas alone, then the streets loaded for the areas alone; "around=1 fits the frame to the neighbours and returns their outlines" and "with around=1 the streets are drawn for the wider frame" failed | date: 2026-11-14
 // @born-red no database | method: `await (env as any).DB.prepare('SELECT 1')` added to the handler; "no database binding is touched" failed | date: 2026-11-14
 // @born-red the switch off | method: the switch line removed from loadStreetLayer, then the switch read after the bucket; "the switch off: 200, hexagons only, kept briefly, and the bucket is never asked" failed on each (streets drawn; then the bucket asked) | date: 2026-11-15
-import { describe, it, expect, beforeEach } from 'vitest';
+// @born-red the whole handler under mutation (base-map plan G11) | method: Stryker on handlers/map-areas.ts (MUTATION_GROUP=render). Before the three tests below were added, 13 of 109 mutants survived: the seven refusal sentences emptied and `ok: false` made true (now "each refusal says what was wrong"), `raw.length > 256` made `>=` (now "256 characters ... 257 are refused unread"), the loader's options emptied and its surface "map-areas" emptied (now "the STREET_LAYER line names this route"), and two Regex mutants of the CSS's tag strip (equivalent, disabled in the source with the reason). After: 107 of 107 killed, 2 ignored | date: 2026-11-16
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { cellToBoundary, cellToLatLng, cellToParent, gridDisk, latLngToCell } from 'h3-js';
 import {
   MAX_AREA_CELLS,
@@ -158,6 +159,60 @@ describe('public area map | what is refused', () => {
     const { res } = await get('?cells=x');
     expect(res.headers.get('Cache-Control')).toBe('no-store');
   });
+
+  // Mutation (base-map plan, G11, 2026-11-16): the whole body of each refusal,
+  // its sentence included, since a static-site build shows that sentence to the
+  // person who wrote the cell list.
+  it('each refusal says what was wrong, in one body: ok false, its status, its code, its sentence', async () => {
+    const refusal = (code: string, error: string) => ({ ok: false, status: 400, code, error });
+    const cases: [string, ReturnType<typeof refusal>][] = [
+      [
+        `?cells=${BLUE7}&lat=41.65`,
+        refusal(
+          'COORDINATES_NOT_ACCEPTED',
+          "This endpoint does not accept a position. Pass H3 resolution-7 cells as 'cells'."
+        ),
+      ],
+      ['', refusal('CELLS_REQUIRED', "Missing required 'cells' parameter.")],
+      [
+        `?cells=${Array(500).fill(BLUE7).join(',')}`,
+        refusal('TOO_MANY_CELLS', 'At most 12 cells.'),
+      ],
+      [
+        `?cells=${gridDisk(BLUE7, 2).slice(0, 13).join(',')}`,
+        refusal('TOO_MANY_CELLS', 'At most 12 cells.'),
+      ],
+      ['?cells=x', refusal('CELL_INVALID', 'Not a valid H3 cell.')],
+      [
+        `?cells=${latLngToCell(41.6573, -87.68, 9)}`,
+        refusal(
+          'CELL_RESOLUTION',
+          'Every cell must be resolution 7. Other resolutions are not served.'
+        ),
+      ],
+      [`?cells=${BLUE7}&around=2`, refusal('AROUND_INVALID', "'around' is 0 or 1.")],
+    ];
+    for (const [q, want] of cases) {
+      const { res, body } = await get(q);
+      expect(res.status, q.slice(0, 40)).toBe(400);
+      expect(body, q.slice(0, 40)).toEqual(want);
+    }
+  });
+
+  // The list's length is held before any cell in it is looked at: 256
+  // characters are read cell by cell, 257 are not. 16 copies of a cell are 255
+  // characters with their commas; one more comma makes an empty, invalid cell.
+  it('256 characters of cells are looked at; 257 are refused unread', async () => {
+    const sixteen = Array(16).fill(BLUE7).join(',');
+    expect(`${sixteen},`).toHaveLength(256);
+    const at = await get(`?cells=${sixteen},`);
+    expect(at.res.status).toBe(400);
+    expect(at.body.code).toBe('CELL_INVALID');
+    const over = await get(`?cells=${sixteen},x`);
+    expect(`${sixteen},x`).toHaveLength(257);
+    expect(over.res.status).toBe(400);
+    expect(over.body.code).toBe('TOO_MANY_CELLS');
+  });
 });
 
 describe('public area map | the frame and the hexagons', () => {
@@ -259,6 +314,26 @@ describe('public area map | the streets', () => {
     );
     // Only the street archive was read, from the street bucket.
     expect(new Set(bucket.gets.map((g) => g.key))).toEqual(new Set([DEFAULT_ARCHIVE]));
+  });
+
+  // The STREET_LAYER log line (lib/street-map.ts, emitStreetLayer) says which
+  // caller read the bucket. Mutation (G11, 2026-11-16): a route that named no
+  // surface, or another, was written as "other" and no test saw it.
+  it('the STREET_LAYER line names this route as the surface', async () => {
+    const { bucket } = await streetBucket([BLUE7]);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const { body } = await get(`?cells=${BLUE7}`, { STREET_MAP: 'on', MAP_TILES: bucket });
+      expect(body.streets).not.toBeNull();
+      const lines = log.mock.calls
+        .map((c) => String(c[0]))
+        .filter((s) => s.includes('"STREET_LAYER"'))
+        .map((s) => JSON.parse(s) as Record<string, unknown>);
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toMatchObject({ outcome: 'drew', surface: 'map-areas' });
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it('with around=1 the streets are drawn for the wider frame', async () => {
