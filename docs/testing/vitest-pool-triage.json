@@ -3621,6 +3621,13 @@
       "testCount": 6
     },
     {
+      "file": "workers/oursharedevents/tests/street-layer-kept.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 37
+    },
+    {
       "file": "workers/oursharedevents/tests/street-layer-outcome.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -3646,7 +3653,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, createExecutionContext, waitOnExecutionContext",
-      "testCount": 22
+      "testCount": 23
     },
     {
       "file": "workers/oursharedevents/tests/street-map.spec.ts",

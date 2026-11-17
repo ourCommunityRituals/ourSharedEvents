@@ -34,6 +34,7 @@ import {
   frameZoom,
   loadStreetLayer,
   newStreetTrace,
+  resetStreetLayerCache,
   type StreetLayerLine,
 } from '../src/lib/street-map';
 import {
@@ -68,6 +69,7 @@ let log: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   resetPmtilesCache();
+  resetStreetLayerCache();
   now = T0;
   vi.spyOn(Date, 'now').mockImplementation(() => now);
   log = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -112,6 +114,8 @@ describe('street layer outcome | one line for each try that reads the bucket', (
     // Exactly one line, and it is the whole of what the loader wrote.
     expect(written()).toHaveLength(1);
     // The next map of the area in the isolate: the directories are kept, one read.
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     await loadStreetLayer({ ...ON, MAP_TILES: bucket }, [BLUE7], { surface: 'landing' });
     expect(lines()).toHaveLength(2);
     expect(lines()[1]).toMatchObject({ outcome: 'drew', z: r.z, tiles: tiles.length, r2Reads: 1 });
@@ -503,6 +507,8 @@ describe('street layer miss window | an empty bucket is asked once a minute', ()
     expect(bucket.gets).toHaveLength(4);
     expect(lines().map((l) => l.outcome)).toEqual(['no-archive', 'drew']);
     // And the view after that: the directories are kept, one read.
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     expect(await loadStreetLayer(env, [BLUE7], { surface: 'landing' })).not.toBeNull();
     expect(bucket.gets).toHaveLength(5);
   });
@@ -552,6 +558,8 @@ describe('street layer miss window | an empty bucket is asked once a minute', ()
     const env = { ...ON, MAP_TILES: bucket };
     expect(await loadStreetLayer(env, [BLUE7])).not.toBeNull();
     expect(bucket.gets).toHaveLength(3);
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     for (const view of [1, 2, 3]) {
       expect(await loadStreetLayer(env, [BLUE7])).toBeNull();
       expect(bucket.gets).toHaveLength(3 + view);

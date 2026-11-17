@@ -51,7 +51,12 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi 
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import worker from '../src/index';
 import { MISS_MEMORY_MS, resetPmtilesCache } from '../src/lib/pmtiles';
-import { DEFAULT_ARCHIVE, STREET_TIMEOUT_MS, type StreetLayerLine } from '../src/lib/street-map';
+import {
+  DEFAULT_ARCHIVE,
+  STREET_TIMEOUT_MS,
+  resetStreetLayerCache,
+  type StreetLayerLine,
+} from '../src/lib/street-map';
 import {
   pmtilesArchive,
   tilesForCells,
@@ -239,6 +244,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   // A cold isolate: nothing kept from the test before.
   resetPmtilesCache();
+  resetStreetLayerCache();
   await E.MAP_TILES.put(KEY, archive);
 });
 
@@ -247,6 +253,7 @@ afterEach(() => vi.restoreAllMocks());
 // Leave the pool as it was found: other specs expect no archive and their own events.
 afterAll(async () => {
   resetPmtilesCache();
+  resetStreetLayerCache();
   await E.MAP_TILES.delete(KEY);
   await E.DB.prepare("DELETE FROM events WHERE id LIKE 'street-runtime-%'").run();
 });
@@ -271,8 +278,25 @@ describe('the street layer in the Workers runtime | drawing from R2', () => {
     expect(ranges.every((r) => typeof r.offset === 'number')).toBe(true);
   });
 
-  test('the next map of that area in the isolate is one read: the directories are kept', async () => {
+  // Base-map scenario pass 2026-11-15, S14 (gap G8): one draw of a frame serves
+  // the requests that follow it in the isolate. Born red 2026-11-16: on the
+  // loader of 5bef37cd this case counted one read, the tiles, and drew again.
+  test('the next map of that area in the isolate reads nothing: the drawn layer is kept', async () => {
+    const first = await areas();
+    const lines = watchLog();
+    const bucket = watchBucket();
+    const { body } = await areas();
+    expect(body.streets).not.toBeNull();
+    expect(body.streets!.svg).toBe(first.body.streets!.svg);
+    expect(bucket.mock.calls).toHaveLength(0);
+    expect(lines()).toMatchObject([
+      { outcome: 'drew', surface: 'map-areas', tiles: 0, r2Reads: 0 },
+    ]);
+  });
+
+  test('with the drawn layer put aside, the next map of that area is one read: the directories are kept', async () => {
     await areas();
+    resetStreetLayerCache();
     const bucket = watchBucket();
     const { body } = await areas();
     expect(body.streets).not.toBeNull();
@@ -560,6 +584,8 @@ describe('the street layer in the Workers runtime | one object for one opened ar
     expect((await areas()).body.streets).not.toBeNull();
     expect(conditionsOf(bucket)).toEqual([undefined, etag, etag]);
     // The next request finds the archive open: its one read is held to it too.
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     expect((await areas()).body.streets).not.toBeNull();
     expect(conditionsOf(bucket)).toEqual([undefined, etag, etag, etag]);
   });
@@ -574,6 +600,8 @@ describe('the street layer in the Workers runtime | one object for one opened ar
     // Another object under the same key. Nothing the isolate keeps is reset.
     const now = (await E.MAP_TILES.put(KEY, otherArchive)).etag;
     expect(now).not.toBe(was);
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     const bucket = watchBucket();
     const swapped = await areas();
     expect(swapped.status).toBe(200);
@@ -599,6 +627,8 @@ describe('the street layer in the Workers runtime | one object for one opened ar
     expect(first.html).toContain(STREETS);
     expect(first.html).toContain(MINOR);
     await E.MAP_TILES.put(KEY, otherArchive);
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     const swapped = await landing();
     expect(swapped.status).toBe(200);
     expect(swapped.html).toContain(HEXAGONS);
