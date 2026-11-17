@@ -35,14 +35,21 @@ runtime:
         //
         // Roads, not any path (street-map CCR 2026-11-15, R17). The check before
         // this one took any path, water included, and the layer measured as wrong
-        // was 8,999 points of water and one point of road. What is counted here is
-        // the M and L commands of the highway path (as-r as-3) and of the
-        // major-road path (as-r as-2): the roads a reader finds their way by, and
-        // the ones the drawer keeps first. Minor roads (as-r as-1) are left out, as
-        // a dense frame may rightly draw none.
-        // ROAD_FLOOR is 50. The wrong layer had 1. The sparsest good frame measured
-        // had 253 (one area over Sawyer, Michigan), so 50 leaves a small town room
-        // and still fails a layer whose points all went to water.
+        // was 8,999 points of water and one point of road.
+        //
+        // The drawer's own rule, with the drawer's own number (base-map plan, gap
+        // G12, 2026-11-16). lib/street-map.ts shows a layer only when it holds a
+        // highway or a major road, and MIN_ROAD_POINTS points of highway, major and
+        // minor road in all (layerShows). The drawer writes one M or L command per
+        // point it counts, one path per kind: highway as-r as-3, major road
+        // as-r as-2, minor road as-r as-1. So the commands counted here are the
+        // drawer's own counts, and every layer the drawer shows passes. Until
+        // then this case had its own floor (50 of highway and major road alone),
+        // which a layer the drawer shows could fail by name. MIN_ROAD_POINTS is a
+        // copy: tests/unit/ci/street-map-staging-cases.test.js reads the drawer's
+        // value and fails by name when this one, or the count, differs. The wrong
+        // layer had 1; the sparsest good frame measured had 253 of highway and
+        // major road alone (one area over Sawyer, Michigan).
         //
         // The switch (STREET_MAP in wrangler.toml, read by lib/street-map.ts;
         // street-map CCR 2026-11-15, R20). streetMapSwitch in the environment file
@@ -65,12 +72,15 @@ runtime:
           : sw === 'on'
             ? 'Street-map switch: STREET_MAP is "on" for this environment (streetMapArchiveLoaded says whether streets must be drawn)'
             : 'Street-map switch: the environment file sets streetMapSwitch to "on" or "off"';
-        const ROAD_FLOOR = 50;
-        const roadCommands = function (layer) {
-          let n = 0;
-          (layer.match(/<path class="as-r as-[23]" d="[^"]*"/g) || []).forEach(function (p) {
-            n += (p.slice(p.indexOf(' d="')).match(/[ML]/g) || []).length;
-          });
+        const MIN_ROAD_POINTS = 100;
+        const roadPoints = function (layer) {
+          const n = { highway: 0, major: 0, minor: 0 };
+          const kind = { 3: 'highway', 2: 'major', 1: 'minor' };
+          const re = /<path class="as-r as-([123])" d="([^"]*)"/g;
+          let m;
+          while ((m = re.exec(layer)) !== null) {
+            n[kind[m[1]]] += (m[2].match(/[ML]/g) || []).length;
+          }
           return n;
         };
 
@@ -109,11 +119,13 @@ runtime:
             expect(at('amap-area')).to.be.above(at('amap-streets'));
           });
 
-          test('The street layer holds roads: 50 path commands or more of highway or major road (water alone fails)', function () {
+          test('The street layer holds roads by the drawer\'s rule: a highway or major road, and MIN_ROAD_POINTS path commands of road in all (water alone fails)', function () {
             const from = at('amap-streets');
             const layer = body.slice(from, body.indexOf('</g>', from));
+            const n = roadPoints(layer);
             expect(layer, 'no highway (as-r as-3) or major-road (as-r as-2) path in the street layer').to.match(/<path class="as-r as-[23]" d="M/);
-            expect(roadCommands(layer), 'M and L commands in the highway and major-road paths').to.be.at.least(ROAD_FLOOR);
+            expect(n.highway + n.major, 'M and L commands in the highway and major-road paths').to.be.above(0);
+            expect(n.highway + n.major + n.minor, 'M and L commands in the highway, major-road and minor-road paths').to.be.at.least(MIN_ROAD_POINTS);
           });
 
           test('The OpenStreetMap credit shows with the streets', function () {

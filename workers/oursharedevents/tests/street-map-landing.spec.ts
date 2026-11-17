@@ -31,7 +31,7 @@ import { OSM_COPYRIGHT_URL } from '../src/lib/attendee-map';
 import { LANGUAGES, type Lang } from '../src/lib/i18n/languages';
 import { TILE_LIMITS } from '../src/lib/mvt';
 import { MAX_TILE_UNPACKED_BYTES, resetPmtilesCache } from '../src/lib/pmtiles';
-import { DEFAULT_ARCHIVE } from '../src/lib/street-map';
+import { DEFAULT_ARCHIVE, resetStreetLayerCache } from '../src/lib/street-map';
 import {
   fakeBucket,
   paddedTile,
@@ -89,6 +89,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   resetPmtilesCache();
+  resetStreetLayerCache();
   state.rows = sentinel(MANY);
   state.secondPassThrows = false;
 });
@@ -236,6 +237,8 @@ describe('street map | the landing page handler', () => {
     );
 
     state.secondPassThrows = true;
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     const before = bucket.gets.length;
     const html = await landing({ STREET_MAP: 'on', MAP_TILES: bucket });
     // The layer was read and was good: it is the drawing with it that threw.
@@ -496,8 +499,15 @@ describe('street map | the credit, in the page language, wherever streets are dr
     // The credit is built in one place.
     expect(map.split('data-testid="amap-credit"')).toHaveLength(2);
     // The public area map: the layer is sent once, inside the object that holds
-    // its credit, and that object is null when there is no layer.
-    const api = readFileSync(join(SRC, 'handlers', 'map-areas.ts'), 'utf8');
+    // its credit, and that object is null when there is no layer. This reads the
+    // file's text, so under Stryker (which mutates map-areas.ts whole since
+    // 2026-11-16 and runs this spec from a copy at .stryker-tmp/sandbox-*/, where
+    // the file is rewritten with every mutant in it) it reads the checkout's own
+    // copy, three folders up. The mutants there are killed by what the handler
+    // answers (map-areas.spec.ts), never by its spelling.
+    const sandbox = /[\\/]\.stryker-tmp[\\/]/.test(__dirname);
+    const apiSrc = sandbox ? join(__dirname, '..', '..', '..', 'src') : SRC;
+    const api = readFileSync(join(apiSrc, 'handlers', 'map-areas.ts'), 'utf8');
     expect(api.match(/\blayer\.svg\b/g) ?? []).toHaveLength(1);
     expect(api).toMatch(
       /streets: layer\s*\? \{[^}]*svg: layer\.svg,[^}]*credit: \{ html: streetCredit\('en'\)[^}]*\}[^}]*\}\s*: null/

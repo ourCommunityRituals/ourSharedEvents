@@ -28,31 +28,60 @@ says nothing about streets until that flag is `"true"`: the street cases print N
 
 Once an archive is loaded and the street layer is switched on (`STREET_MAP = "on"` for that
 environment in `wrangler.toml`; it is `"on"` on staging since 2026-11-15, set before any load,
-and `"off"` on production; off reads nothing from the bucket, and on with no object in the
-bucket asks the bucket and finds nothing each time a map would draw streets, because a miss is
-not remembered), the code on `main` draws streets on two surfaces and no other:
+and `"off"` on production; off reads nothing from the bucket, and on with no object under the
+key asks the bucket and finds nothing, and then that isolate does not ask again for 60 seconds:
+a miss is remembered for `MISS_MEMORY_MS = 60_000` in `lib/pmtiles.ts`, and `loadStreetLayer`
+in `lib/street-map.ts` asks `archiveKnownMissing` before any read), the code on `main` draws
+streets on two surfaces and no other:
 
-| Surface                                              | What it draws                                                                     | Limit                                                                                                     |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| The landing map (`/`)                                | Streets under every hexagon in view, in the frame fitted to those hexagons        | 12 tiles, zoom 14 or coarser; no zoom floor, so a frame a country wide still reads tiles and draws little |
-| The zoomed area (`/?area=<res-7 cell>`)              | One area over its streets, with a numbered dot per place                          | The same read; with no street layer it lists the places and draws no dots                                 |
-| The public area map (`GET /api/v2/map/areas`)        | The same street layer, handed to a reader outside OSE as SVG markup (OSE ADR-033) | The same read; below zoom 7 (a frame about 600 km across) it reads no tile and answers hexagons only      |
-| Event page, `/events`, display, poster, SharedReport | Hexagons only. No street layer is drawn there                                     | —                                                                                                         |
+| Surface                                              | What it draws                                                                     | Limit                                                                                                                                                                                       |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The landing map (`/`)                                | Streets under every hexagon in view, in the frame fitted to those hexagons        | 12 tiles at most (`MAX_TILES`), zoom 14 or coarser (`MAX_ZOOM`); a frame wider than zoom 7 (`MIN_STREET_ZOOM`, about 600 km across) reads no tile and draws hexagons only, for every caller |
+| The zoomed area (`/?area=<res-7 cell>`)              | One area over its streets, with a numbered dot per place                          | The same read; with no street layer it lists the places and draws no dots                                                                                                                   |
+| The public area map (`GET /api/v2/map/areas`)        | The same street layer, handed to a reader outside OSE as SVG markup (OSE ADR-033) | The same read and the same zoom-7 floor                                                                                                                                                     |
+| Event page, `/events`, display, poster, SharedReport | Hexagons only. No street layer is drawn there                                     | —                                                                                                                                                                                           |
 
 The layer is water, roads in three weights (highways, major roads, minor roads) and up to six
-town names. It is capped at 9,000 path points (`MAX_POINTS`).
+town names (`MAX_LABELS`). It is capped at 9,000 path points (`MAX_POINTS`). The archive is cut
+with a top zoom of 14, the finest zoom the Worker reads (`MAX_ZOOM = 14`); the Worker also keeps
+to the zooms the archive's header gives.
+
+What else bounds a read, in the code on `main` (`lib/street-map.ts`, `lib/pmtiles.ts`,
+`lib/mvt.ts`, `lib/public-read-limit.ts`):
+
+- **Decode limits by count.** One tile may hold at most 30,000 features, 150,000 points and
+  150,000 properties (`TILE_LIMITS`); the tiles of one frame together at most 60,000,
+  300,000 and 300,000 (`FRAME_LIMITS`). Past either, the map is hexagons only.
+- **One object per opened archive.** Every read after an isolate's first carries the etag of
+  the object that first read came from (`onlyIf: { etagMatches }`, `r2Source`); an object
+  changed under the key gives no bytes, and that request draws hexagons only. An optional
+  `MAP_TILES_ETAG` pins the one object streets may be drawn from; it is set in no block of
+  `wrangler.toml` today.
+- **A time limit.** A layer slower than 1.5 s is dropped (`STREET_TIMEOUT_MS = 1500`).
+- **Page loads per caller.** `/` and `/events` are limited to 600 loads a minute per caller
+  (`PUBLIC_PAGE_MAX`); the public area map takes the public-read limit of 360 a minute
+  (`PUBLIC_READ_MAX`).
+- **One log line per try that reads the bucket.** `STREET_LAYER` (`emitStreetLayer`) gives
+  what came of it (`drew`, `no-archive`, `no-tile`, `thin`, `timeout` or `error`), the
+  surface, the zoom, the tile count, the R2 reads and the time. A try that reads nothing (the
+  switch off, no binding, a frame too wide, a miss remembered) writes no line.
 
 **Not proven, and found wanting by the street-map review of 2026-11-15**
 (`.claude/outputs/CCR-STREET-MAP-WILL-IT-WORK-2026-11-15.md`, score 0%, stopped at a human gate):
 
 - No real archive has gone through the Worker's reader and drawer in a Worker. The United
   States file has never been cut or read (finding R1).
-- The point cap is spent on water first, and a feature that does not fit is skipped whole. In
+- The point cap was spent on water first, and a feature that did not fit was skipped whole. In
   the review's workstation run a 19-area frame over Manhattan drew water and no roads, and a
-  7-area frame drew no minor roads (finding R7). A wide frame is not a street map today.
+  7-area frame drew no minor roads (finding R7). The code on `main` since pays roads before
+  water (`POINT_SHARES`), thins a kind to fit before it cuts (`fitParts`), and shows no layer
+  without a highway or major road and 100 road points (`layerShows`, `MIN_ROAD_POINTS`). That
+  has not been seen on a loaded archive.
 - The 1.5 s limit, the Worker's CPU and memory for a dense frame, and reads from R2 are
-  unmeasured (findings R2, R3).
-- Nothing tells a thin or wrong layer from a good one at run time (finding R18).
+  unmeasured (findings R2, R3). What is bounded is the decode, by count (`TILE_LIMITS`,
+  `FRAME_LIMITS`, above), not by a measurement in a Worker.
+- At run time the `STREET_LAYER` line tells a `thin` layer (one `layerShows` refused) from
+  one drawn (finding R18). A layer that passes and is wrong is not told from a good one.
 - The data's licence duties are in [`../../NOTICE.md`](../../NOTICE.md): the credit is in the
   code; some duties are NOT CLEAR and wait for the owner.
 
@@ -107,6 +136,19 @@ month in storage (decision 4).
 3. **Google is the only per-view map cost today, and it is driven by unpaid public
    traffic.** It is free up to 10,000 loads a month. Before public traffic nears
    that, either cap the Google quota or move the venue image to the self-hosted map.
+
+   **What the code calls today (read 2026-11-16).** The Worker still calls Google
+   in two ways: the venue image (`lib/maps.ts`, Static Maps, through
+   `GET /api/v2/maps/venue-image`) and the geocoder (`geocodeVenue` in `lib/geo.ts`),
+   which an event save that changes the place and the nightly place job reach
+   (`lib/event-place.ts`, at most 25 a night, `PLACE_BACKFILL_MAX`), and so do
+   `POST /api/v2/admin/geocode` (`handlers/geocode.ts`) and a sponsor's onboarding
+   draft that carries an address (`POST /api/v2/sponsors/draft`,
+   `handlers/sponsors-draft.ts`). The street map makes no Google call. OSE ADR-039
+   records the owner's ruling of 2026-11-16 that our own systems stop calling Google
+   Maps (links a visitor chooses to open stay). It is **Proposed**: nothing is built,
+   and the two calls above are live code.
+
 4. **The street map is drawn by the server, as SVG** (owner, 2026-11-09), not as an
    interactive map in the browser. It keeps hex-map standard rule 10 (no JavaScript,
    no browser fetch), and the server, not the visitor, picks which tiles to read, so
@@ -242,8 +284,10 @@ Google Cloud is the only hard ceiling on the bill.
 `OPERATION_COST` logs one line per request with a masked route label. Since the edge
 cache, the count of `GET /api/v2/maps/venue-image` lines per month is an **upper
 bound** on billable Google loads (cache hits are counted but not billed); the exact
-count is in the Google Cloud console for the key. A self-hosted street map would add
-one tile route to count the same way.
+count is in the Google Cloud console for the key. The street map has no tile route: the
+Worker reads the bucket itself while it draws a page, and each try that reads it writes
+one `STREET_LAYER` line with its count of R2 reads (`r2Reads`), so the R2 reads it
+causes are counted from those lines.
 
 ## Sources (read 2026-10-03)
 

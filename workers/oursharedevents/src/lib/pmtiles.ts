@@ -410,6 +410,17 @@ export async function archiveHeader(src: RangeSource): Promise<PmtilesHeader> {
   return (await open(src)).header;
 }
 
+/**
+ * The etag of the object this isolate has open under a source's key, or
+ * undefined when it has none open: never opened, or dropped because the object
+ * changed (`r2Source`). Reads nothing. A drawn layer is kept under it
+ * (lib/street-map.ts, "DRAWN LAYERS ARE KEPT"), so a layer drawn from one
+ * object is never handed out once the isolate has another one open.
+ */
+export function archiveEtag(key: string): string | undefined {
+  return OPENED.get(key)?.version.etag;
+}
+
 /** The directory entry that holds this tile's bytes, or null when the archive has none. */
 async function tileEntry(
   src: RangeSource,

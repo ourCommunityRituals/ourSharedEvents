@@ -3099,6 +3099,7 @@ export async function handleLandingPage(
     // The street map under the hexagons (lib/street-map.ts): drawn for exactly
     // the cells the first pass drew, then the area is drawn again with it. No
     // binding, or any failure, leaves the hexagons-only map from the first pass.
+    // Stryker disable next-line OptionalChaining: equivalent mutant. mapCells is absent only on the empty area (renderEmptyLandingArea); reading .length of it throws before any read, and the catch below serves that same empty area.
     if (area.mapCells?.length) {
       const streets = await loadStreetLayer(env as LandingEnv, area.mapCells, {
         surface: 'landing',

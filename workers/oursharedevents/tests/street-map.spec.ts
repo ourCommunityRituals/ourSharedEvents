@@ -60,6 +60,7 @@ import {
   frameZoom,
   layerShows,
   loadStreetLayer,
+  resetStreetLayerCache,
   STREET_MAP_ON,
   project,
   readStreetDrawing,
@@ -104,7 +105,10 @@ const NORTH7 = latLngToCell(NORTH.lat, NORTH.lon, 7);
 // Los Angeles: no tile in common with the Chicago cells at any zoom the map reads.
 const FAR7 = latLngToCell(34.05, -118.25, 7);
 
-beforeEach(() => resetPmtilesCache());
+beforeEach(() => {
+  resetPmtilesCache();
+  resetStreetLayerCache();
+});
 
 const items = (n: number, cell = BLUE7): AttendeeMapItem[] =>
   Array.from({ length: n }, (_, i) => ({
@@ -1802,6 +1806,8 @@ describe('street map | loading (fail soft)', () => {
     expect(first).toBeGreaterThan(tiles.length + 2);
     expect(first).toBeLessThanOrEqual(1 + dirs.length + tiles.length);
     // The next map of the same area, in the same isolate, reads only its tiles.
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     expect(await loadStreetLayer(env, [BLUE7])).toEqual(layer);
     expect(bucket.gets.length - first).toBe(tiles.length);
   });
@@ -1828,6 +1834,8 @@ describe('street map | loading (fail soft)', () => {
     expect(await buildStreetLayer(apartSrc, [BLUE7])).toEqual(first);
     expect(apartSrc.reads.filter(([off]) => off >= 5 * 2 ** 30)).toHaveLength(tiles.length);
     expect(first!.svg.match(/M-?\d+ -?\d+L/g)!.length).toBeGreaterThanOrEqual(tiles.length);
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     expect(await loadStreetLayer({ STREET_MAP: 'on', MAP_TILES: bucket }, [BLUE7])).toEqual(first);
     expect(bucket.gets).toHaveLength(4);
     // The one tile read is every tile's bytes and nothing else.
@@ -2247,6 +2255,8 @@ describe('street map | the object under the key is replaced, or is not the pinne
     expect(conditions(bucket)).toEqual([undefined, was, was]);
 
     bucket.replace(await second());
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     const swapped = bucket.gets.length;
     expect(await load(bucket)).toBeNull();
     // The tiles, asked for under the old etag; R2 gave no bytes. Nothing more is read.
@@ -2285,11 +2295,13 @@ describe('street map | the object under the key is replaced, or is not the pinne
     expect((await load(bucket, pinned))!.svg).toContain(MAJOR);
   });
 
-  it('the pinned object replaced: streets stop at the next request and stay off', async () => {
+  it('the pinned object replaced: streets stop at the next read and stay off', async () => {
     const bucket = fakeBucket(NAME, await first());
     const pinned = bucket.etag;
     expect((await load(bucket, pinned))!.svg).toContain(MINOR);
     bucket.replace(await second());
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     expect(await load(bucket, pinned)).toBeNull();
     expect(await load(bucket, pinned)).toBeNull();
     expect(await load(bucket, pinned)).toBeNull();
@@ -2652,6 +2664,8 @@ describe('street map | the archive read: fat fingers, security, network', () => 
     expect(two).toEqual(one);
     expect(bucket.gets.filter((g) => g.range!.offset === 0)).toHaveLength(2);
     // The directories are kept once whole: a third request reads the tiles only.
+    // The kept layer is put aside: this is about the reader (kept layers: street-layer-kept.spec.ts).
+    resetStreetLayerCache();
     const before = bucket.gets.length;
     expect(drawn(await loadStreetLayer(env, [BLUE7]))).toBe(true);
     expect(bucket.gets.length - before).toBe(1);

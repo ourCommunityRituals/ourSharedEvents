@@ -182,9 +182,15 @@ export const NODE_SPECS = [
   'tests/mvt.spec.ts',
   'tests/street-map.spec.ts',
   'tests/street-map-landing.spec.ts',
+  // The landing's own call for the street layer (the pages.ts block Stryker
+  // mutates): its surface in the log line, when it asks, how many passes.
+  'tests/landing-street-call.spec.ts',
   // The street layer's outcome line and the one-minute memory of a missing
   // archive, over fake buckets with the clock held by the test.
   'tests/street-layer-outcome.spec.ts',
+  // Drawn street layers kept in the isolate: one draw of a frame serves the
+  // requests that follow, over fake buckets with the clock held by the test.
+  'tests/street-layer-kept.spec.ts',
   'tests/map-areas.spec.ts',
   // The check a cut archive passes before it is loaded into R2
   // (scripts/street-map-archive/check.ts), over in-memory archives.
