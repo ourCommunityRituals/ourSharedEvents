@@ -14,6 +14,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { createLiveEvent, waitUntilListed } from './helpers/sponsor-home-seed';
+import { openAreaFilters } from './helpers/area-filters';
 import { zoneDay } from './helpers/lifecycle-seed';
 
 const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER || '';
@@ -52,6 +53,7 @@ test.describe('landing: an empty time window says so', () => {
   test('every window shows either cards or its own message, never neither', async ({ page }) => {
     const res = await page.goto('/');
     expect(res?.status()).toBe(200);
+    await openAreaFilters(page);
     await expect(page.locator('[data-testid="toggle-window"]')).toBeVisible();
 
     const empty: string[] = [];
@@ -96,6 +98,7 @@ test.describe('landing: an empty time window says so', () => {
       await expect(page.locator('[data-testid^="area-window-empty-"]')).toHaveCount(0);
       return;
     }
+    await openAreaFilters(page);
     for (const w of WINDOWS) {
       await page.locator(`label[for="win-${w}"]`).click();
       if ((await visibleCards(page)) > 0) continue;

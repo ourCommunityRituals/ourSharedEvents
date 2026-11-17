@@ -25,6 +25,8 @@ import { handleDemoIndex, handleDemoSite } from '../src/handlers/demo';
 import SPONSOR_HOME_HTML from '../src/templates/sponsor-home.html';
 import { renderSponsorHomePage, type PlacementRow } from '../src/lib/sponsor-home-render';
 import { renderSponsorCardPage } from '../src/lib/sponsor-card-render';
+import { gridDisk, gridRing, latLngToCell } from 'h3-js';
+import { renderEmptyLandingArea, renderLandingArea } from '../src/lib/landing-area';
 
 async function axeScan(html: string): Promise<axe.Result[]> {
   document.open();
@@ -521,5 +523,75 @@ describe('A11Y-7: the demo sites, one <h1> each and no skipped heading level', (
         }
       });
     });
+  }
+});
+
+/**
+ * OSE-2112: the area map with events on it. Every scan above builds the landing
+ * with no database, so the page they read has no map, and the hexagon links
+ * inside it were never read by axe. Here the area is rendered from events and
+ * put in the real page in place of its empty state.
+ *
+ * BORN RED (2026-11-17): with the drawing back on role="img" whatever it holds,
+ * both tests fail with "[serious] nested-interactive".
+ */
+describe('A11Y-7 / OSE-2112: the area map with events, hexagon links announced', () => {
+  const NOW = Date.parse('2026-11-09T12:00:00Z');
+  const CELL = latLngToCell(41.6565, -87.681, 7);
+  // Neighbours: drawn large, so every hexagon is a link at every width.
+  const NEAR = gridDisk(CELL, 1).filter((c) => c !== CELL);
+  // Five areas apart: drawn smaller, so a hexagon is a link only on a wider
+  // screen (lib/map-link-style.ts), drawn once as a link and once plain.
+  const FAR = [CELL, gridRing(CELL, 5)[0]!];
+
+  function pageWith(cells: string[], mapFirst: boolean): Promise<string> {
+    const items = Array.from({ length: 12 }, (_, i) => ({
+      id: `e${i}`,
+      name: `Event ${i}`,
+      startDateISO: '2026-11-20',
+      phase: 'pre_event',
+      venue: 'Hall, Blue Island, IL 60406',
+      h3_res7: cells[i % cells.length],
+    }));
+    const area = renderLandingArea(items, {
+      now: NOW,
+      mapFirst,
+      zoomHref: (c) => `/map?area=${c}`,
+    });
+    return handleLandingPage(
+      {} as never,
+      null,
+      new Request(mapFirst ? 'https://t.test/map' : 'https://t.test/'),
+      undefined,
+      { mapFirst }
+    )
+      .then((r) => r.text())
+      .then((html) => {
+        const empty = renderEmptyLandingArea().html;
+        expect(html).toContain(empty);
+        return html.replace(empty, area.html);
+      });
+  }
+
+  for (const [name, cells] of [
+    ['large hexagons, links at every width', [CELL, ...NEAR.slice(0, 3)]],
+    ['small hexagons, links from a wider screen', FAR],
+  ] as const) {
+    for (const mapFirst of [false, true]) {
+      test(`${mapFirst ? '/map' : '/'}: ${name}`, async () => {
+        await scanPage(`Area map, ${name}`, await pageWith([...cells], mapFirst));
+        const links = document.querySelectorAll('[data-testid="amap-area-link"]');
+        expect(links.length, 'the drawing holds hexagon links').toBeGreaterThan(0);
+        expect(document.querySelector('[data-testid="amap-svg"]')?.getAttribute('role')).toBe(
+          'group'
+        );
+        // Each link is named by its area: number, place and event count.
+        for (const a of links) {
+          expect(a.querySelector('title')?.textContent).toMatch(
+            /^Area \d+, Blue Island: \d+ events?$/
+          );
+        }
+      });
+    }
   }
 });

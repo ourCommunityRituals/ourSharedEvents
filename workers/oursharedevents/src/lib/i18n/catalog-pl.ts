@@ -263,10 +263,12 @@ export const pl: Record<MessageKey, string> = {
   'area.view': 'Widok',
   'area.list': 'Lista',
   'area.map': 'Mapa',
+  'area.filters': 'Filtry',
   'map.near': 'w pobliżu: {venue}',
   'map.exampleLabel':
     'Przykładowa mapa: trzy okolice narysowane jako ponumerowane sześciokąty, najbardziej ruchliwa w najciemniejszym odcieniu',
   'map.listedBelow': '{note} &mdash; wszystkie wydarzenia są wymienione poniżej.',
+  'map.seeList': 'Zobacz listę wydarzeń',
   'map.exampleCaption':
     '<strong>Przykład.</strong> Tak wygląda mapa, gdy okolice się zapełnią: po jednym ponumerowanym sześciokącie, kilka kilometrów kwadratowych, nigdy adres ulicy.',
   'map.corridorNote':
@@ -285,6 +287,8 @@ export const pl: Record<MessageKey, string> = {
   'map.areasOne': '{n} okolica',
   'map.caption':
     '{events}; {areas}; wszystkie rodzaje, w ciągu najbliższych {days} dni (filtry powyżej zmieniają listę, nie mapę). Każdy sześciokąt to kilka kilometrów kwadratowych, nigdy adres ulicy.',
+  'map.captionFiltered':
+    '{events}; {areas}; w ciągu najbliższych {days} dni. Filtry powyżej zawężają mapę i listę. Każdy sześciokąt to kilka kilometrów kwadratowych, nigdy adres ulicy.',
   'map.credit': 'Dane mapy ulic © współtwórcy {osm}, przygotowane przez {protomaps}.',
   'map.tapToZoom': 'Dotknij sześciokąta, aby zobaczyć jego wydarzenia na mapie.',
   'map.zoomIn': 'Przybliż',

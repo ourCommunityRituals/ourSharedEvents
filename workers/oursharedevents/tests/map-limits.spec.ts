@@ -324,8 +324,10 @@ describe('the taller box is used only where it cuts no area', () => {
   });
 
   test('names are not drawn on a map of more than four areas, and then do not count', () => {
-    const area = (): Drawn => ({ x0: 150, x1: 270, high: TALL, town: ELEVEN });
-    const four = landing([area(), area(), area(), area()]);
+    // Each area 64 units below the one before (its middle is half its height),
+    // so no name lies over another area's name or number (grade, 2026-11-17).
+    const area = (k = 0): Drawn => ({ x0: 150, x1: 270, high: TALL + 128 * k, town: ELEVEN });
+    const four = landing([area(0), area(1), area(2), area(3)]);
     expect(named(four)).toEqual([ELEVEN, ELEVEN, ELEVEN, ELEVEN]);
     expect(page(four, 4)).toEqual(whole);
     const five = landing([area(), area(), area(), area(), area()]);

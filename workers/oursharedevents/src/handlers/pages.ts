@@ -3161,7 +3161,10 @@ export async function handleLandingPage(
         injectCanonical(
           injectWhere(
             // At /map the area's own default view is the map, so it leads already.
-            injectLandingArea(shell, area, { areaFirst: searched || zoom.cell !== null }),
+            injectLandingArea(shell, area, {
+              areaFirst: searched || zoom.cell !== null,
+              mapFirst,
+            }),
             where,
             lang,
             pagePath

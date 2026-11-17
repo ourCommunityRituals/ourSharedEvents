@@ -589,3 +589,123 @@ describe('OSE-1824 | the landing sections keep their order rules', () => {
     expect(injectLandingArea(page, render([ev()]))).toBe(page);
   });
 });
+
+// The attendee-map grade of 2026-11-17 (thread "Improve the attendee map").
+// BORN RED (2026-11-17): each block was run against main's landing-area.ts and
+// attendee-map.ts and failed; then against this change, green.
+describe('the attendee-map grade: phone filters, the search on /map, filters on the hexagons', () => {
+  const CELL_A = '872664544ffffff';
+  const CELL_B = '87266456dffffff';
+  /** Twelve events over two areas, online ones among them, so every row shows. */
+  const twelve = (): LandingAreaItem[] =>
+    Array.from({ length: 12 }, (_, i) =>
+      i < 10
+        ? ev({
+            id: `p${i}`,
+            h3_res7: i % 2 ? CELL_B : CELL_A,
+            startDateISO: inDays(i < 5 ? 3 : 40),
+          })
+        : ev({ id: `o${i}`, venue: '', lat: undefined, lon: undefined, startDateISO: inDays(3) })
+    );
+
+  it('the window, type and Where rows sit in one fold, opened by a Filters chip beside List and Map', () => {
+    const html = render(twelve()).html;
+    const head = html.indexOf('data-testid="area-toggles"');
+    const fold = html.indexOf('data-testid="area-filters"');
+    expect(head).toBeGreaterThan(-1);
+    expect(fold).toBeGreaterThan(head);
+    // List, Map and the Filters chip come before the fold; the rows inside it.
+    expect(html.indexOf('data-testid="area-filters-btn"')).toBeGreaterThan(head);
+    expect(html.indexOf('data-testid="area-filters-btn"')).toBeLessThan(fold);
+    expect(html.indexOf('data-testid="toggle-window"')).toBeGreaterThan(fold);
+    expect(html.indexOf('data-testid="toggle-modality"')).toBeGreaterThan(fold);
+    expect(html).toContain('<div class="toggles area-filters" data-testid="area-filters">');
+    // The chip labels a checkbox that sits with the radios, before both rows,
+    // so the fold's rule (~) reaches it and nothing is stored.
+    const box = html.indexOf('<input type="checkbox" id="filters-open" class="toggle-radio" />');
+    expect(box).toBeGreaterThan(-1);
+    expect(box).toBeLessThan(head);
+    expect(html).toContain(
+      '<div class="disc-chips area-filters-btn"><label class="disc-chip" for="filters-open"'
+    );
+    expect(html).toContain('#filters-open:not(:checked)~.area-filters{display:none}');
+    expect(html).toContain('.area-filters-btn{display:none}');
+  });
+
+  it('on /map the search follows the map; on the landing it stays first; the markers go', () => {
+    const page = [
+      '<h1>x</h1><!--OCR_WHERE_START--><section class="where">W</section><!--OCR_WHERE_END-->',
+      '<!--OCR_DOORS_START-->DOORSX<!--OCR_DOORS_END-->',
+      `<section>${LANDING_AREA_MARKER}</section><!--OCR_AFTER_AREA-->T`,
+    ].join('');
+    const area = render(twelve());
+    const atMap = injectLandingArea(page, area, { mapFirst: true });
+    const atLanding = injectLandingArea(page, area);
+    for (const out of [atMap, atLanding]) {
+      expect(out).not.toContain('OCR_WHERE_');
+      expect(out.match(/class="where"/g)?.length).toBe(1);
+    }
+    const order = (out: string, ...ids: string[]) => ids.map((s) => out.indexOf(s));
+    // /map, twelve events: the map, then the search, then the doors.
+    const [mapAt, whereAt, doorsAt] = order(atMap, 'data-testid="area"', 'class="where"', 'DOORSX');
+    expect(mapAt).toBeLessThan(whereAt);
+    expect(whereAt).toBeLessThan(doorsAt);
+    // The landing: the search first, as before.
+    expect(atLanding.indexOf('class="where"')).toBeLessThan(
+      atLanding.indexOf('data-testid="area"')
+    );
+  });
+
+  it('the search moves only when both its markers and the end of the area are there', () => {
+    const W = '<!--OCR_WHERE_START-->W<!--OCR_WHERE_END-->';
+    // No area end to move it to: it stays, and its markers go.
+    expect(orderLandingSections(`a${W}bc`, 'map', { whereAfterArea: true })).toBe('aWbc');
+    // At the very start of the page, too.
+    expect(orderLandingSections(`${W}b`, 'list')).toBe('Wb');
+    // The area's end first in the page: the search still goes just before it.
+    expect(
+      orderLandingSections(`<!--OCR_AFTER_AREA-->q${W}`, 'map', { whereAfterArea: true })
+    ).toBe('W<!--OCR_AFTER_AREA-->q');
+    expect(orderLandingSections(`a${W}b`, 'list')).toBe('aWb');
+    // One marker alone, or the two the wrong way round: the page is left as it is.
+    expect(
+      orderLandingSections('a<!--OCR_WHERE_START-->W<!--OCR_AFTER_AREA-->', 'map', {
+        whereAfterArea: true,
+      })
+    ).toBe('a<!--OCR_WHERE_START-->W<!--OCR_AFTER_AREA-->');
+    const back = 'a<!--OCR_WHERE_END-->W<!--OCR_WHERE_START-->b<!--OCR_AFTER_AREA-->';
+    expect(orderLandingSections(back, 'map', { whereAfterArea: true })).toBe(back);
+    // Both, and the area's end: the search goes just before it.
+    expect(
+      orderLandingSections(`a${W}b<!--OCR_AFTER_AREA-->c`, 'map', { whereAfterArea: true })
+    ).toBe('abW<!--OCR_AFTER_AREA-->c');
+  });
+
+  it("each hexagon, legend row and event link carries its events' filter classes", () => {
+    const html = render(twelve()).html;
+    const hex = (cell: string) =>
+      html.match(
+        new RegExp(`<g class="([^"]*)" data-testid="amap-area" data-cell="${cell}"`)
+      )?.[1] ?? '';
+    // Area A holds events in this week and in the next 90 days, all in person.
+    expect(hex(CELL_A).split(' ')).toEqual(
+      expect.arrayContaining(['amap-f', 'when-week', 'when-next-90', 'modality-inperson'])
+    );
+    expect(hex(CELL_A)).not.toContain('modality-online');
+    // The same pill rule that hides a card hides an area none of whose events match.
+    expect(html).toContain(
+      '#mod-online:checked ~ .area .event-card:not(.modality-online),#mod-online:checked ~ .area .amap-f:not(.modality-online){display:none}'
+    );
+    expect(html).toMatch(/<li value="\d+" class="amap-f [^"]*" data-testid="amap-legend-area">/);
+    expect(html).toMatch(/<span class="amap-f [^"]*">(&middot; )?<a href="\/events\/p\d"/);
+    expect(html).toContain('The filters above narrow the map and the list.');
+  });
+
+  it('under the gate the map note points to the list, which carries the id it names', () => {
+    const html = render([ev({ id: 'a', h3_res7: CELL_A })]).html;
+    expect(html).toContain(
+      'href="#area-list" data-testid="area-map-thin-list">See the list of events</a>'
+    );
+    expect(html).toContain('<div class="view-list" id="area-list" data-testid="area-list">');
+  });
+});

@@ -19,6 +19,7 @@
  * local worker that config starts. Relative URLs only: the config owns the host.
  */
 import { test, expect, type Page } from '@playwright/test';
+import { openAreaFilters } from './helpers/area-filters';
 import {
   createLiveEvent,
   seedSponsorCard,
@@ -218,6 +219,7 @@ test.describe('landing: an area with events', () => {
     await expect(page.getByTestId('toggle-view')).toBeVisible();
     await expect(page.locator('label[for="view-list"]')).toBeVisible();
     await expect(page.locator('label[for="view-map"]')).toBeVisible();
+    await openAreaFilters(page);
     await expect(page.getByTestId('toggle-window')).toBeVisible();
     for (const w of ['weekend', 'week', 'month', 'next-90']) {
       await expect(page.locator(`label[for="win-${w}"]`), `window ${w}`).toBeVisible();
@@ -268,6 +270,7 @@ test.describe('landing: the Type row is the event categories', () => {
 
   test('a category chip shows every type under it, and only those', async ({ page }) => {
     await loadAndRecord(page);
+    await openAreaFilters(page);
     const row = page.getByTestId('toggle-type');
     await expect(row).toBeVisible();
     // Real category names, never a type id made readable ("Etr Art Music").
