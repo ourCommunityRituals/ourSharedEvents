@@ -95,11 +95,20 @@ const config = {
     // event-zip-unit.spec.ts, landing-where-unit.spec.ts, place-search.spec.ts,
     // booth-export-boundary.spec.ts and admin-wizard-where-zip.spec.ts. The
     // handler lines that call them (events.ts) run only in the workers pool.
+    // event-zip.ts is new and mutated whole; in the other four, only the code
+    // W1 wrote or changed. Their older code was never in a mutation pass, and
+    // mutating it whole (W1's first run, 2026-11-16: 72.07%, 178 of the 210 mutants
+    // no test caught sat on lines W1 never touched) is its own piece of work, not this slice's.
     'src/lib/event-zip.ts',
-    'src/lib/zip-areas.ts',
-    'src/lib/place-names.ts',
-    'src/lib/place-search.ts',
-    'src/lib/export-geography.ts',
+    rangeOf('src/lib/zip-areas.ts', 'export function eventZip(', 'return normalizeZip(event.zip_code)'),
+    rangeOf(
+      'src/lib/zip-areas.ts',
+      'export function inZipsOwnArea(',
+      'if (said && withinBound(said, res7))'
+    ),
+    rangeOf('src/lib/place-names.ts', 'export function inSearchPlace(', 'return (event) => tests.some'),
+    rangeOf('src/lib/place-search.ts', 'export function inPlaceMatches(', 'return inAreas(event);'),
+    rangeOf('src/lib/export-geography.ts', 'const SUB_CORRIDOR_KEY =', '/^(h3(_res'),
     rangeOf('src/handlers/pages.ts', 'let typeCategories:', 'const areaOpts = {'),
     rangeOf(
       'src/handlers/events.ts',

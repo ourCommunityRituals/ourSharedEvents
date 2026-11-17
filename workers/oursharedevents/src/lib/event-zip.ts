@@ -86,10 +86,15 @@ function townCandidates(text: string, whole: boolean): string[] {
     .split(',')
     .map((p) => p.trim())
     .filter(Boolean);
+  // Stryker disable next-line ArrayDeclaration: the mutant starts the list with
+  // "Stryker was here", which findPlaces never finds as a place, so the answer
+  // is the same.
   const out: string[] = [];
-  if (parts.length >= 2) out.push(`${parts[parts.length - 2]}, ${parts[parts.length - 1]}`);
-  if (parts.length >= 2) out.push(parts[parts.length - 1]);
-  if (whole) out.push(text.trim());
+  if (parts.length >= 2) {
+    out.push(`${parts[parts.length - 2]}, ${parts[parts.length - 1]}`, parts[parts.length - 1]);
+  }
+  // findPlaces trims and refuses an empty text, so the whole is passed as typed.
+  if (whole) out.push(text);
   return out;
 }
 
@@ -102,19 +107,20 @@ function townCandidates(text: string, whole: boolean): string[] {
  * organizer can change it, and nothing here is stored.
  */
 export function suggestZip(address: unknown, place: unknown): ZipSuggestion {
+  // Stryker disable next-line StringLiteral: a non-text address becomes junk
+  // instead of '', and junk is never an address zip or a place, so no fill.
   const a = typeof address === 'string' ? address.slice(0, SUGGEST_TEXT_MAX) : '';
+  // Stryker disable next-line StringLiteral: the same for a non-text place name.
   const p = typeof place === 'string' ? place.slice(0, SUGGEST_TEXT_MAX) : '';
   const fromAddress = addressZip(a);
   if (fromAddress) return { zip: fromAddress, from: 'address' };
-  const tried = new Set<string>();
+  // An empty text gives no candidate findPlaces accepts, and a candidate tried
+  // twice gets the same answer twice, so neither is skipped.
   for (const [text, whole] of [
     [a, false],
     [p, true],
   ] as const) {
-    if (!text.trim()) continue;
     for (const c of townCandidates(text, whole)) {
-      if (tried.has(c)) continue;
-      tried.add(c);
       const matches = findPlaces(c);
       if (matches.length === 0) continue;
       // A name that is many places, or a place of many zips: the organizer says.

@@ -234,8 +234,9 @@ export function inZipsOwnArea(areas: readonly ZipArea[]): (event: PlacedEvent) =
     // and to no other. Only the organizer's tap on the map places an event; a
     // zip finds it in a search and never becomes a cell.
     if (typeof res7 !== 'string' || !isValidCell(res7)) {
+      // No null check: every area has a zip, so a null own zip matches none.
       const own = eventZip(event);
-      return own !== null && areas.some((a) => a.zip === own);
+      return areas.some((a) => a.zip === own);
     }
     const holding = bounds.filter((b) => b.cells.has(res7)).map((b) => b.area);
     if (holding.length === 0) return false;

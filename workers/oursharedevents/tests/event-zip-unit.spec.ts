@@ -7,8 +7,17 @@
  *   reading the address ahead of the box; each turned a test red | date: 2026-11-16
  */
 import { describe, expect, test } from 'vitest';
-import { readZipField, suggestZip } from '../src/lib/event-zip';
-import { eventZip } from '../src/lib/zip-areas';
+import { h3IndexToSplitLong, latLngToCell } from 'h3-js';
+import {
+  INVALID_ZIP_CODE,
+  INVALID_ZIP_CODE_MESSAGE,
+  readZipField,
+  suggestZip,
+  ZIP_NOT_STORED_ONLINE,
+  zipNotInTableWarning,
+} from '../src/lib/event-zip';
+import { CORRIDOR_RES } from '../src/lib/h3-tagging';
+import { eventZip, findZipArea, inZipOwnArea } from '../src/lib/zip-areas';
 import { findSearchPlace, inSearchPlace } from '../src/lib/place-names';
 import { findPlaces, inPlaceMatches } from '../src/lib/place-search';
 import { assertCorridorGrainRow } from '../src/lib/export-geography';
@@ -55,6 +64,39 @@ describe('readZipField', () => {
   });
 });
 
+describe('the codes and notes the API answers with', () => {
+  test('a malformed ZIP: its code and what it asks for', () => {
+    expect(INVALID_ZIP_CODE).toBe('INVALID_ZIP_CODE');
+    expect(INVALID_ZIP_CODE_MESSAGE).toBe(
+      'zip_code must be a 5-digit US ZIP code ("60406", or "60406-1234" which keeps the first five), or empty to clear it'
+    );
+  });
+
+  test('a ZIP the table lacks: saved, with a note naming it', () => {
+    expect(zipNotInTableWarning('60454')).toEqual({
+      code: 'ZIP_NOT_IN_TABLE',
+      message:
+        'ZIP 60454 was saved, but it is not in the zip-area table (a PO-box ZIP, or a typo). A search for it finds this event only by the ZIP itself.',
+    });
+  });
+
+  test('a ZIP with an online event: not stored, and the answer says so', () => {
+    expect(ZIP_NOT_STORED_ONLINE).toEqual({
+      code: 'ZIP_NOT_STORED_ONLINE',
+      message: 'An online event has no place, so the ZIP code was not stored.',
+    });
+  });
+});
+
+describe('inZipOwnArea: a cell that is not text is no cell', () => {
+  test('a valid cell as a split-long pair is read as no cell, so the zip decides', () => {
+    const cell = latLngToCell(41.6939, -87.7025, CORRIDOR_RES); // 60655 (Mount Greenwood)
+    const mine = inZipOwnArea(findZipArea('60655')!);
+    // h3-js counts the pair as a valid cell; only `typeof` keeps it out.
+    expect(mine({ h3_res7: h3IndexToSplitLong(cell), zip_code: '60655' })).toBe(true);
+  });
+});
+
 describe('eventZip: the box, else the address', () => {
   test('the box wins; else the address zip; else none', () => {
     expect(eventZip({ zip_code: '60406', where_address: 'Chicago, IL 60643' })).toBe('60406');
@@ -68,6 +110,15 @@ describe('the runtime export guard refuses the zip names (matching the static ga
   for (const name of ['zip', 'zip_code', 'postal_code', 'ZIP_CODE']) {
     test(`a row carrying "${name}" is refused`, () => {
       expect(() => assertCorridorGrainRow({ event_id: 'e', [name]: '60406' })).toThrow();
+    });
+  }
+  // The same list's cell names, by name alone (the value is not cell-shaped, so
+  // only the name can refuse it): a bare "h3", and a two-digit resolution.
+  for (const name of ['h3', 'h3_res10', 'H3_RES15']) {
+    test(`a row carrying "${name}" is refused by its name`, () => {
+      expect(() => assertCorridorGrainRow({ event_id: 'e', [name]: 'withheld' })).toThrow(
+        `sub-corridor column "${name}"`
+      );
     });
   }
   test('a row without them passes', () => {
@@ -107,6 +158,40 @@ describe('suggestZip: what the wizard fills in (the server rules)', () => {
     expect(suggestZip(undefined, 42)).toEqual({ zip: null, from: null });
   });
 
+  test('the town is the last part of an address, never the address alone', () => {
+    // "Evergreen Park" alone (no state) as the last part of an address.
+    expect(suggestZip('123 Main St, Evergreen Park', '')).toEqual({
+      zip: '60805',
+      from: 'town',
+      town: 'Evergreen Park, IL',
+    });
+    // An address with no comma is never read as a town by itself.
+    expect(suggestZip('Evergreen Park', '')).toEqual({ zip: null, from: null });
+    // The place name alone is: the whole text is tried for it.
+    expect(suggestZip('', 'Evergreen Park')).toEqual({
+      zip: '60805',
+      from: 'town',
+      town: 'Evergreen Park, IL',
+    });
+    // A trailing comma is an empty part, dropped.
+    expect(suggestZip('3200 W 95th St, Evergreen Park, IL,', '')).toEqual({
+      zip: '60805',
+      from: 'town',
+      town: 'Evergreen Park, IL',
+    });
+  });
+
+  test('fat finger: only the first 500 characters of each box are read', () => {
+    const pad = 'x'.repeat(495);
+    const long = `${pad}, Evergreen Park, IL 60805`;
+    expect(suggestZip(long, long)).toEqual({ zip: null, from: null });
+    // The same text short enough is read.
+    expect(suggestZip(`x, Evergreen Park, IL 60805`, '')).toEqual({
+      zip: '60805',
+      from: 'address',
+    });
+  });
+
   test('fat finger: a street number shaped like a zip is not one', () => {
     expect(suggestZip('12345 S Pulaski Rd', '')).toEqual({ zip: null, from: null });
     expect(suggestZip('PO Box 60406', '')).toEqual({ zip: null, from: null });
@@ -130,6 +215,11 @@ describe('inSearchPlace (/events?q=): the W1 rule through place-names', () => {
     expect(po({ where_address: 'PO Box 1, Oak Lawn, IL 60454' })).toBe(true);
     expect(po({ zip_code: '60453', where_address: 'PO Box 1, Oak Lawn, IL 60454' })).toBe(false);
     expect(po({})).toBe(false);
+  });
+
+  test('an event WITH a cell in a Census zip is found by its cell, no zip given', () => {
+    const cell = latLngToCell(41.6939, -87.7025, CORRIDOR_RES); // 60655 (Mount Greenwood)
+    expect(inSearchPlace(findSearchPlace('60655')!)({ h3_res7: cell })).toBe(true);
   });
 
   test('a town lists the no-cell events of every one of its zips', () => {

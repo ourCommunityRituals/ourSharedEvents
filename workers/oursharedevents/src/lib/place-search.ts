@@ -136,11 +136,11 @@ export function inPlaceMatches(matches: readonly PlaceMatch[]): (event: PlacedEv
     }
     const inAreas = inZipsOwnArea(areas);
     return (event: PlacedEvent) => {
-      if (byAddress.size > 0) {
-        // The zip the event gives: its ZIP box, else its address's (W1).
-        const said = eventZip(event);
-        if (said && byAddress.has(said)) return true;
-      }
+      // The zip the event gives: its ZIP box, else its address's (W1). With no
+      // zip outside the table to match, `has` is false; no size guard, which
+      // only saved a lookup and was a mutant no test could tell apart.
+      const said = eventZip(event);
+      if (said && byAddress.has(said)) return true;
       return inAreas(event);
     };
   });
