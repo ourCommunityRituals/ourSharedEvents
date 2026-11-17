@@ -38,7 +38,10 @@ import {
 import { corsHeaders } from '../lib/cors';
 import { applyCountFloor, floorRows } from '../lib/count-floor';
 import { fewerThan } from '../lib/withheld-words';
-import { COUNT_EVENT_REGISTRATIONS_SQL } from '../lib/registration-count';
+import {
+  COUNT_EVENT_REGISTRATIONS_SQL,
+  COUNTED_REGISTRATION_ROWS_WHERE,
+} from '../lib/registration-count';
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
 import { eventAnonKey } from '../lib/event-anon-key';
 import {
@@ -630,7 +633,9 @@ export async function handleAdminRegistrations(
     const after = paging.after;
     // Fixed fragments only; every value reaches SQL through .bind().
     const pageQuery =
-      'SELECT id, event_id, source_placement_id, attendee_name, attendee_name_encrypted, attendee_email_hash, registration_bucket, status, created_at FROM form_registrations WHERE event_id = ?' +
+      'SELECT id, event_id, source_placement_id, attendee_name, attendee_name_encrypted, attendee_email_hash, registration_bucket, status, created_at FROM form_registrations WHERE ' +
+      // Only the rows the count counts (OSE-2087): see COUNTED_REGISTRATION_ROWS_WHERE.
+      COUNTED_REGISTRATION_ROWS_WHERE +
       (after ? ' AND (created_at < ? OR (created_at = ? AND id < ?))' : '') +
       ' ORDER BY created_at DESC, id DESC LIMIT ?';
     const result = await env.FORMS_DB.prepare(pageQuery)
@@ -705,11 +710,12 @@ export async function handleAdminRegistrantContacts(
   if (!key)
     return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503, request);
   try {
-    const result = await env.FORMS_DB.prepare(
-      `SELECT attendee_name_encrypted, attendee_email_encrypted FROM form_registrations
-        WHERE event_id = ? AND attendee_email_encrypted IS NOT NULL
-        ORDER BY created_at ASC, id ASC LIMIT ?`
-    )
+    // Only the rows the count counts (OSE-2087). Fixed fragments, joined outside .prepare().
+    const contactsQuery =
+      'SELECT attendee_name_encrypted, attendee_email_encrypted FROM form_registrations WHERE ' +
+      COUNTED_REGISTRATION_ROWS_WHERE +
+      ' AND attendee_email_encrypted IS NOT NULL ORDER BY created_at ASC, id ASC LIMIT ?';
+    const result = await env.FORMS_DB.prepare(contactsQuery)
       .bind(eventId, MAX_REGISTRANT_CONTACTS)
       .all<{ attendee_name_encrypted: string | null; attendee_email_encrypted: string }>();
     // OSE-2087 (owner, 2026-11-16): fewer than 5 people who left an email is a
@@ -909,7 +915,10 @@ export async function handleAdminExport(
       // DE-01 / A-5: select the encrypted name column; decrypted below into the
       // `attendee_name` output field (never expose raw ciphertext).
       query =
-        'SELECT id, event_id, attendee_name, attendee_name_encrypted, registration_bucket, status, created_at FROM form_registrations WHERE event_id = ? ORDER BY created_at DESC';
+        'SELECT id, event_id, attendee_name, attendee_name_encrypted, registration_bucket, status, created_at FROM form_registrations WHERE ' +
+        // Only the rows the count counts (OSE-2087).
+        COUNTED_REGISTRATION_ROWS_WHERE +
+        ' ORDER BY created_at DESC';
       break;
     case 'surveys':
       query =
