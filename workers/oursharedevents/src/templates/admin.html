@@ -2154,17 +2154,49 @@
               </select>
               <p class="muted-sm" id="wizard-event-mode-note" data-testid="wizard-event-mode-note" hidden>An online event has no place. It stays off the map and the events list; people open it by its link.</p>
             </div>
+            <!-- W1 (OSE-2095, owner 2026-11-16) and OSE-1717: the place name,
+                 the street address and the ZIP, each in its own box. The name
+                 goes as `location`, the address as `where_address`, the ZIP as
+                 `zip_code`. The ZIP is how zip and town search find the event;
+                 it is never made into a map cell. It is filled in from an
+                 address that ends in one or a town with one ZIP, and the
+                 organizer can change it. Asked for, not required. -->
             <div id="wizard-event-venue-field">
-              <label for="wizard-event-venue">Where is it? <span class="required-star">*</span></label>
+              <label for="wizard-event-venue">Place name <span class="required-star">*</span></label>
               <input
                 type="text"
                 id="wizard-event-venue"
                 data-testid="wizard-event-venue"
-                placeholder="Rock Island Public House, Blue Island"
+                placeholder="Rock Island Public House"
                 maxlength="500"
                 required
                 aria-required="true"
               />
+            </div>
+            <div id="wizard-event-address-field">
+              <label for="wizard-event-address">Street address (optional)</label>
+              <input
+                type="text"
+                id="wizard-event-address"
+                data-testid="wizard-event-address"
+                placeholder="13126 S Western Ave, Blue Island, IL 60406"
+                maxlength="500"
+                autocomplete="off"
+              />
+            </div>
+            <div id="wizard-event-zip-field">
+              <label for="wizard-event-zip">ZIP code</label>
+              <input
+                type="text"
+                id="wizard-event-zip"
+                data-testid="wizard-event-zip"
+                placeholder="60406"
+                maxlength="10"
+                inputmode="numeric"
+                autocomplete="off"
+                aria-describedby="wizard-event-zip-note"
+              />
+              <p class="muted-sm" id="wizard-event-zip-note" data-testid="wizard-event-zip-note">People who search by ZIP code or town find your event by this.</p>
             </div>
           </div>
 
@@ -2724,6 +2756,17 @@
           function wizardMode() {
             return document.getElementById('wizard-event-mode').value;
           }
+          // W1: the ZIP box. '' when empty or online, the five digits when it is
+          // a ZIP ("60406-1234" keeps five), null when it is not one. The server
+          // checks it again (INVALID_ZIP_CODE).
+          var WIZARD_ZIP_MSG = 'A ZIP code is five digits, like 60406. Fix it or leave the box empty.';
+          function wizardZip() {
+            if (wizardMode() === 'online') return '';
+            var raw = document.getElementById('wizard-event-zip').value.trim();
+            if (!raw) return '';
+            var m = /^(\d{5})(?:-\d{4})?$/.exec(raw);
+            return m ? m[1] : null;
+          }
           function step1Required() {
             return STEP1_FIELDS.filter(function (id) {
               return id !== 'wizard-event-venue' || wizardMode() !== 'online';
@@ -2738,11 +2781,22 @@
           function isStep1Msg(text) {
             return /^Add .+ to continue$/.test(String(text || ''));
           }
-          // Online: the place field is hidden, emptied and not required.
+          // Online: the place fields are hidden, emptied and not required.
           function syncWizardMode() {
             var online = wizardMode() === 'online';
             var venue = document.getElementById('wizard-event-venue');
             document.getElementById('wizard-event-venue-field').hidden = online;
+            // W1: the address and the ZIP go with the place.
+            ['wizard-event-address', 'wizard-event-zip'].forEach(function (id) {
+              var el = document.getElementById(id);
+              document.getElementById(id + '-field').hidden = online;
+              if (online && el.value) {
+                el.value = '';
+                el.dataset.auto = '';
+                el.dataset.touched = '';
+              }
+              if (online) el.removeAttribute('aria-invalid');
+            });
             document.getElementById('wizard-event-mode-note').hidden = !online;
             // The map question has nothing to ask: an online event is never on
             // the map or the list.
@@ -2806,6 +2860,14 @@
               });
               setMsg(step1Msg(empty.map(function (el) { return el.id; })), 'error');
               empty[0].focus();
+              return true;
+            }
+            // W1: a ZIP is optional, but one that is there must be a ZIP.
+            if (wizardZip() === null) {
+              var zipBox = document.getElementById('wizard-event-zip');
+              zipBox.setAttribute('aria-invalid', 'true');
+              setMsg(WIZARD_ZIP_MSG, 'error');
+              zipBox.focus();
               return true;
             }
             // A date that has passed is asked about once, then allowed: an
@@ -2931,6 +2993,15 @@
             body.attendance_mode = wizardMode();
             var venueVal = body.attendance_mode === 'online' ? '' : document.getElementById('wizard-event-venue').value.trim();
             if (venueVal) body.location = venueVal;
+            // W1 / OSE-1717: the address and the ZIP, each in its own field.
+            var addressVal = body.attendance_mode === 'online' ? '' : document.getElementById('wizard-event-address').value.trim();
+            if (addressVal) body.where_address = addressVal;
+            var zipVal = wizardZip();
+            if (zipVal === null) {
+              setMsg(WIZARD_ZIP_MSG, 'error');
+              return;
+            }
+            if (zipVal) body.zip_code = zipVal;
             // OSE-1245 / OSE-1560 — sent exactly as the organizer chose it, and
             // omitted when they did not (the API then keeps the event off the
             // map and remembers that nobody chose). Never sent as a guess.
@@ -3048,10 +3119,18 @@
                 var mapNoteEl = document.getElementById('wizard-map-note');
                 if (mapNoteEl) {
                   var mapNote = data.map && data.map.note ? String(data.map.note) : '';
-                  // The zip search finds an event by its place on the map.
+                  // W1: zip and town search find an event by its ZIP, so a place
+                  // not found on the map is still found by people searching its
+                  // ZIP. The note never asks for the town in the place name.
                   if (data.place === 'not_found') {
-                    mapNote = (mapNote ? mapNote + ' ' : '') + 'We couldn’t find that place on the map. Add the town or street so nearby searches show it.';
+                    mapNote = (mapNote ? mapNote + ' ' : '') + (zipVal
+                      ? 'We couldn’t find that place on the map. People searching ZIP ' + zipVal + ' or its town will still find it.'
+                      : 'We couldn’t find that place on the map. Add its ZIP code so people searching by ZIP or town find it.');
                   }
+                  // A ZIP the zip list lacks still saved; the server says so.
+                  (Array.isArray(data.warnings) ? data.warnings : []).forEach(function (w) {
+                    if (w && w.code === 'ZIP_NOT_IN_TABLE' && w.message) mapNote = (mapNote ? mapNote + ' ' : '') + String(w.message);
+                  });
                   mapNoteEl.textContent = mapNote;
                   mapNoteEl.hidden = !mapNote;
                 }
@@ -3260,7 +3339,7 @@
           // and returns to the review; it never reaches createEvent. The fields
           // are the ones already on steps 1-2, so the preview beside them
           // follows every keystroke.
-          var EDIT_FIELDS = ['wizard-event-name', 'wizard-event-date', 'wizard-event-time', 'wizard-event-tz', 'wizard-event-mode', 'wizard-event-venue', 'wizard-event-what', 'wizard-category'];
+          var EDIT_FIELDS = ['wizard-event-name', 'wizard-event-date', 'wizard-event-time', 'wizard-event-tz', 'wizard-event-mode', 'wizard-event-venue', 'wizard-event-address', 'wizard-event-zip', 'wizard-event-what', 'wizard-category'];
           function fire(el, type) {
             el.dispatchEvent(new Event(type, { bubbles: true }));
           }
@@ -3338,17 +3417,28 @@
               setMsg('Pick a date for that start time.', 'error');
               return;
             }
+            var editZip = wizardZip();
+            if (editZip === null) {
+              var zipBox = document.getElementById('wizard-event-zip');
+              zipBox.setAttribute('aria-invalid', 'true');
+              setMsg(WIZARD_ZIP_MSG, 'error');
+              zipBox.focus();
+              return;
+            }
             var body = {
               title: title,
               // OSE-2012: an event turned online gives up its place.
               attendance_mode: modeVal,
               location: online ? null : venueVal,
+              // W1 / OSE-1717: the address and the ZIP are edited here too; an
+              // empty box clears its field, and online clears both.
+              where_address: online ? null : document.getElementById('wizard-event-address').value.trim() || null,
+              zip_code: editZip || null,
               timezone: document.getElementById('wizard-event-tz').value,
               start_date: dateVal || null,
               start_time: timeVal || null,
               what_short: document.getElementById('wizard-event-what').value.trim() || null,
             };
-            if (online) body.where_address = null;
             var typeId = window.oseTypePicker ? window.oseTypePicker.value('wizard-event-type') : '';
             if (typeId) body.event_type_id = typeId;
             var save = document.getElementById('wizard-save-edit-btn');
@@ -3686,6 +3776,69 @@
               goNext();
             });
           });
+
+          // ── W1 (OSE-2095): the ZIP box fills itself in ───────────────────────
+          // From an address that ends in a ZIP, or a town with exactly one ZIP,
+          // by the server's own rules (POST /api/v2/admin/zip-suggest; a POST so
+          // the address stays out of URLs). A ZIP the organizer typed is theirs
+          // and is never overwritten; one filled in here follows the address.
+          var zipEl = document.getElementById('wizard-event-zip');
+          var addressEl = document.getElementById('wizard-event-address');
+          var venueEl = document.getElementById('wizard-event-venue');
+          var zipSeq = 0;
+          zipEl.addEventListener('input', function () {
+            zipEl.dataset.auto = '';
+            zipEl.dataset.touched = zipEl.value.trim() ? '1' : '';
+            if (wizardZip() !== null) {
+              zipEl.removeAttribute('aria-invalid');
+              var m = document.getElementById('wizard-msg');
+              if (m && m.textContent === WIZARD_ZIP_MSG) setMsg('');
+            }
+          });
+          async function suggestZipNow() {
+            if (zipEl.dataset.touched === '1' || wizardMode() === 'online') return;
+            var seq = ++zipSeq;
+            var address = addressEl.value.trim();
+            var place = venueEl.value.trim();
+            var found = null;
+            if (address || place) {
+              try {
+                var res = await fetch('/api/v2/admin/zip-suggest', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ address: address, place: place }),
+                });
+                if (!res.ok) return;
+                var d = await res.json();
+                found = d && typeof d.zip === 'string' ? d.zip : null;
+              } catch (e) {
+                return;
+              }
+            }
+            // A newer keystroke, or the organizer typed a ZIP meanwhile: keep theirs.
+            if (seq !== zipSeq || zipEl.dataset.touched === '1') return;
+            if (found) {
+              zipEl.value = found;
+              zipEl.dataset.auto = '1';
+              zipEl.removeAttribute('aria-invalid');
+            } else if (zipEl.dataset.auto === '1') {
+              zipEl.value = '';
+              zipEl.dataset.auto = '';
+            }
+          }
+          // Asked once when the organizer leaves the address or the name box
+          // (change), not on every keystroke: by the time they reach the ZIP
+          // box it is filled in.
+          [addressEl, venueEl].forEach(function (el) {
+            el.addEventListener('change', suggestZipNow);
+          });
+          [addressEl, zipEl].forEach(function (el) {
+            el.addEventListener('keydown', function (ev) {
+              if (ev.key !== 'Enter' || wiz.step !== 1) return;
+              ev.preventDefault();
+              goNext();
+            });
+          });
         })();
       </script>
 
@@ -3945,7 +4098,9 @@
             if (mode === 'online') {
               put('wizard-preview-where', 'Online', false);
             } else {
-              put('wizard-preview-where', venue ? (mode === 'both' ? 'Online and in person · ' : 'In person · ') + venue : 'Add a place.', !venue);
+              // OSE-1717: the page shows the place name, then its address.
+              var addr = val('wizard-event-address');
+              put('wizard-preview-where', venue ? (mode === 'both' ? 'Online and in person · ' : 'In person · ') + venue + (addr ? ', ' + addr : '') : 'Add a place.', !venue);
             }
             put('wizard-preview-map', mode === 'online'
               ? 'Off the map and list. An online event opens by its link and codes.'
@@ -4004,7 +4159,11 @@
               row('type', 'Event type', t || 'not chosen', m.indexOf('event_type') >= 0, { step: 2, focus: 'wizard-category' }),
               val('wizard-event-mode') === 'online'
                 ? row('where', 'Where', 'Online', false, { step: 1, focus: 'wizard-event-mode' })
-                : row('where', 'Where', (val('wizard-event-venue') || 'not set') + (val('wizard-event-mode') === 'both' ? ' and online' : ''), !val('wizard-event-venue'), { step: 1, focus: 'wizard-event-venue' }),
+                : row('where', 'Where', (val('wizard-event-venue') || 'not set') +
+                    // W1 / OSE-1717: the address and the ZIP, as they will be saved.
+                    (val('wizard-event-address') ? ', ' + val('wizard-event-address') : '') +
+                    (val('wizard-event-zip') ? ' · ZIP ' + val('wizard-event-zip') : ' · no ZIP') +
+                    (val('wizard-event-mode') === 'both' ? ' and online' : ''), !val('wizard-event-venue'), { step: 1, focus: 'wizard-event-venue' }),
               row('map', 'Map', val('wizard-event-mode') === 'online' ? 'off the map and list: an online event opens by its link' : mapOn() ? 'on the map and list' : 'off the map and list', false, null),
               row('codes', 'Codes', codes, false, null),
             ];
@@ -4476,6 +4635,24 @@
                 placeholder="12345 South Western Ave, Blue Island IL 60406"
                 maxlength="500"
               />
+            </div>
+            <!-- W1 (OSE-2095): the ZIP, stored as `zip_code`. Zip and town search
+                 find the event by it; it is never made into a map cell. Asked
+                 for in person and both; optional. -->
+            <div class="full-width">
+              <label for="create-zip">ZIP code</label>
+              <input
+                type="text"
+                id="create-zip"
+                name="zip_code"
+                data-testid="create-zip"
+                placeholder="60406"
+                maxlength="10"
+                inputmode="numeric"
+                autocomplete="off"
+                aria-describedby="create-zip-note"
+              />
+              <p class="muted-sm" id="create-zip-note">People who search by ZIP code or town find the event by this.</p>
             </div>
             <div class="full-width">
               <label for="create-why-purpose">Why (purpose)</label>
@@ -9854,7 +10031,7 @@
       // switched off, and a line says what "online" means for discovery.
       document.getElementById('create-event-mode').addEventListener('change', function (ev) {
         var online = ev.target.value === 'online';
-        ['create-venue', 'create-where-address'].forEach(function (id) {
+        ['create-venue', 'create-where-address', 'create-zip'].forEach(function (id) {
           var el = document.getElementById(id);
           if (!el) return;
           el.disabled = online;
@@ -9921,6 +10098,17 @@
           return;
         }
         createVenueEl.removeAttribute('aria-invalid');
+        // W1: the ZIP is optional; one that is there must be a ZIP.
+        const createZipEl = document.getElementById('create-zip');
+        const createZipRaw = modeVal === 'online' || !createZipEl ? '' : createZipEl.value.trim();
+        if (createZipRaw && !/^\d{5}(?:-\d{4})?$/.test(createZipRaw)) {
+          msg.textContent = 'A ZIP code is five digits, like 60406. Fix it or leave the box empty.';
+          msg.className = 'create-msg error';
+          createZipEl.setAttribute('aria-invalid', 'true');
+          createZipEl.focus();
+          return;
+        }
+        if (createZipEl) createZipEl.removeAttribute('aria-invalid');
 
         if (window.oseCreateCoreCheck(document)) return;
 
@@ -9955,6 +10143,7 @@
             ['create-why-purpose', 'why_purpose'],
             ['create-how-details', 'how_details'],
             ['create-where-address', 'where_address'],
+            ['create-zip', 'zip_code'],
           ];
           for (const [domId, apiField] of fivew) {
             const el = document.getElementById(domId);
@@ -9962,7 +10151,10 @@
             if (val) body[apiField] = val;
           }
           // Online: no place of any kind is sent (the fields are disabled too).
-          if (modeVal === 'online') delete body.where_address;
+          if (modeVal === 'online') {
+            delete body.where_address;
+            delete body.zip_code;
+          }
 
           // OSE-1245 / OSE-1560 — sent as the operator set it once they have
           // touched the box, omitted when they have not (the API then keeps the
@@ -9997,7 +10189,12 @@
             // OSE-R-005: bar owners don't need to see (or copy) internal event
             // IDs. Stash the id in a dataset attribute for support/test access
             // while the visible toast stays in plain English.
-            msg.textContent = 'Event created.' + (data.map && data.map.note ? ' ' + data.map.note : '');
+            // W1: a ZIP the zip list lacks still saved; the server says so.
+            const zipNotes = (Array.isArray(data.warnings) ? data.warnings : [])
+              .filter((w) => w && w.code === 'ZIP_NOT_IN_TABLE' && w.message)
+              .map((w) => ' ' + String(w.message))
+              .join('');
+            msg.textContent = 'Event created.' + (data.map && data.map.note ? ' ' + data.map.note : '') + zipNotes;
             if (data.id) {
               msg.dataset.eventId = String(data.id);
               // OSE-667: remember the new event so the forced reload re-selects

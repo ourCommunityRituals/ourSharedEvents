@@ -1,0 +1,26 @@
+info:
+  name: "OSE-2095 | public | GET /api/v2/events carries no zip_code"
+  type: http
+  seq: 25
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events?brand=root"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const raw = JSON.stringify(res.getBody());
+        const items = (res.getBody() || {}).items || [];
+        test('OSE-2095 public: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-2095 public: the run event is in the list', function () { expect(items.some(function (i) { return i.id === bru.getVar('w1ZipEventId'); })).to.eql(true); });
+        test('OSE-2095 public: no item carries zip_code', function () { expect(raw).to.not.include('"zip_code"'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -1,0 +1,36 @@
+info:
+  name: "OSE-2095 | rainy | a ZIP the Census table lacks saves, with a note"
+  type: http
+  seq: 30
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"attendance_mode\":\"in_person\",\"location\":\"OSE-2095 Hall\",\"title\":\"OSE-2095 PO box ZIP (staging, synthetic)\",\"is_published\":false,\"data_class\":\"synthetic\",\"zip_code\":\"60454\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        function codes(b) { return (b.warnings || []).map(function (w) { return w.code; }); }
+        test('OSE-2095 rainy: 201, saved', function () { expect(res.getStatus()).to.eql(201); });
+        test('OSE-2095 rainy: the answer says the ZIP is not in the table', function () { expect(codes(b)).to.include('ZIP_NOT_IN_TABLE'); });
+        bru.setVar('w1PoBoxId', b.id || 'missing-po');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

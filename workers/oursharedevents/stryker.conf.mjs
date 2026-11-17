@@ -86,6 +86,38 @@ const config = {
     'src/lib/event-type-catalog.ts',
     'src/lib/event-type-catalog-read.ts',
     'src/lib/landing-area.ts',
+    // W1 (OSE-2095, owner 2026-11-16) — the ZIP at the Where step: the zip finds
+    // an event, and a zip never becomes a cell. event-zip.ts reads the field and
+    // makes the wizard's fill-in; zip-areas.ts decides which zip an event is in
+    // (a no-cell event: the zip it gives); place-names.ts and place-search.ts
+    // carry that rule to /events?q= and the landing's ?where=; export-geography.ts
+    // refuses the zip names at the BigQuery boundary. Killed by
+    // event-zip-unit.spec.ts, landing-where-unit.spec.ts, place-search.spec.ts,
+    // booth-export-boundary.spec.ts and admin-wizard-where-zip.spec.ts. The
+    // handler lines that call them (events.ts) run only in the workers pool.
+    // event-zip.ts is new and mutated whole; in the other four, only the code
+    // W1 wrote or changed. Their older code was never in a mutation pass, and
+    // mutating it whole (W1's first run, 2026-11-16: 72.07%, and
+    // 178 of the 210 mutants no test caught sat on lines W1 never touched) is
+    // its own piece of work, not this slice's.
+    'src/lib/event-zip.ts',
+    rangeOf(
+      'src/lib/zip-areas.ts',
+      'export function eventZip(',
+      'return normalizeZip(event.zip_code)'
+    ),
+    rangeOf(
+      'src/lib/zip-areas.ts',
+      'export function inZipsOwnArea(',
+      'if (said && withinBound(said, res7))'
+    ),
+    rangeOf(
+      'src/lib/place-names.ts',
+      'export function inSearchPlace(',
+      'return (event) => tests.some'
+    ),
+    rangeOf('src/lib/place-search.ts', 'export function inPlaceMatches(', 'return inAreas(event);'),
+    rangeOf('src/lib/export-geography.ts', 'const SUB_CORRIDOR_KEY =', '/^(h3(_res'),
     // The landing's catalog read (started with the event list since OSE-2094),
     // then the zoomed area's panel links and the origin. Killed by
     // landing-category-scenarios.spec.ts, landing-reads-together.spec.ts and

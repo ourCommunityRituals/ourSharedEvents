@@ -66,6 +66,8 @@
  *   GET /api/v2/admin/events     → admin event list (auth required)
  *   GET /api/v2/admin/event-templates → seeded event templates (auth, OSE-868)
  *   GET /api/v2/admin/event-types     → Category → Type catalog for the picker (auth, OSE-1344)
+ *   POST /api/v2/admin/zip-suggest    → the ZIP the wizard fills in from a typed address or one-zip town;
+ *                                       reads the zip and town lists only, stores nothing (auth, W1 OSE-2095)
  *   PUT    /api/v2/admin/events/:id → update event (auth required)
  *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
  *   POST   /api/v2/admin/events/:id/repeat → draft copy of a finished event, new date, nothing about who took part (auth, rate-limited, audited, OSE-1531)
@@ -239,6 +241,7 @@ import {
   handleDeleteEvent,
   handleAdminListEventTemplates,
   handleAdminListEventTypes,
+  handleAdminZipSuggest,
   handleBackfillH3Cells,
   type EventsEnv,
 } from './handlers/events';
@@ -1099,6 +1102,14 @@ export async function route(
     const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleAdminListEventTypes(request, env);
+  }
+
+  // POST /api/v2/admin/zip-suggest — W1 (OSE-2095): the wizard's ZIP fill-in.
+  // Admin-gated; a POST so a typed address stays out of URLs and logs.
+  if (pathname === '/api/v2/admin/zip-suggest' && method === 'POST') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminZipSuggest(request);
   }
 
   if (pathname === '/api/v2/admin/events' && method === 'POST') {

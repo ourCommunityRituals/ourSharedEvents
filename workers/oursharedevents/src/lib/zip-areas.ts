@@ -18,16 +18,21 @@
  * wider is the person's choice). An event is in a zip's own area when
  * (inZipOwnArea):
  *
- *   1. its address ends in that zip ("…, IL 60453"), the zip the venue itself
- *      gives; or, when its address names no zip we know near the event,
+ *   1. its own zip is that zip: the ZIP the organizer typed (`events.zip_code`,
+ *      W1), else the zip its address ends in ("…, IL 60453"); or, when it gives
+ *      no zip we know near the event,
  *   2. its cell's center is nearer that zip's center than any other zip's.
  *
  * and, either way, its area cell lies within NEAR_RING_STEPS rings of the zip's
- * cell (about 10 miles): an outer bound. An address zip whose own bound does not
+ * cell (about 10 miles): an outer bound. A zip whose own bound does not
  * hold the event (a typo, another state) is ignored, so the event falls to
  * rule 2 instead of vanishing. The table has zip centers only, no
  * boundaries; rule 2 cuts the country into one area per zip, so an event
  * shows for one zip at most.
+ *
+ * An event with NO cell (not placed on the map) is in the own area of the zip
+ * it gives, and of no other (owner 2026-11-16, W1). The zip finds it; it is
+ * never turned into a cell, so no hexagon is lit from it.
  */
 import {
   cellToLatLng,
@@ -155,6 +160,16 @@ export interface PlacedEvent {
   h3_res7?: unknown;
   h3_res9?: unknown;
   where_address?: unknown;
+  zip_code?: unknown;
+}
+
+/**
+ * The zip an event gives (W1, owner 2026-11-16): the ZIP the organizer typed
+ * (`events.zip_code`), else the zip its address ends with. A words-only fact:
+ * it finds the event in a search and is never turned into a cell or a point.
+ */
+export function eventZip(event: PlacedEvent): string | null {
+  return normalizeZip(event.zip_code) ?? addressZip(event.where_address);
 }
 
 // The other zips that could be nearer a point in the 8-ring bound: every zip
@@ -215,12 +230,20 @@ export function inZipsOwnArea(areas: readonly ZipArea[]): (event: PlacedEvent) =
   const around = new Map<string, ZipArea[]>();
   return (event) => {
     const res7 = event.h3_res7;
-    if (typeof res7 !== 'string') return false;
+    // W1 (owner 2026-11-16): an event with no cell belongs to the zip it gives,
+    // and to no other. Only the organizer's tap on the map places an event; a
+    // zip finds it in a search and never becomes a cell.
+    if (typeof res7 !== 'string' || !isValidCell(res7)) {
+      // No null check: every area has a zip, so a null own zip matches none.
+      const own = eventZip(event);
+      return areas.some((a) => a.zip === own);
+    }
     const holding = bounds.filter((b) => b.cells.has(res7)).map((b) => b.area);
     if (holding.length === 0) return false;
-    // The address's zip decides when it is a zip we know whose own 8-ring bound
-    // holds the event; a zip from far away (a typo) is ignored, not trusted.
-    const said = findZipArea(addressZip(event.where_address));
+    // The event's own zip (the ZIP box, else its address) decides when it is a
+    // zip we know whose own 8-ring bound holds the event; a zip from far away (a
+    // typo) is ignored, not trusted.
+    const said = findZipArea(eventZip(event));
     if (said && withinBound(said, res7)) return holding.some((a) => a.zip === said.zip);
     // Otherwise: the zip whose center is nearest the event's finest cell (the
     // res-9 placement when it has one). That zip is within the bound's reach of

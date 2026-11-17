@@ -17,8 +17,8 @@
  * named tests were seen failing, and the fault was taken out again | date:
  * 2026-11-16 | the list of faults is in the PR text.
  */
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import fc from 'fast-check';
 import { describe, expect, test } from 'vitest';
 import { renderEventCard } from '../src/lib/event-list';
@@ -728,7 +728,20 @@ describe('never who: nothing about the visitor can reach the pick', () => {
 // code: change the pick and this goes red until the folder is regenerated.
 
 describe('staging fixture: the Bruno folder and its seed match this code', () => {
-  const ROOT = resolve(__dirname, '..', '..', '..');
+  // The repository root: the nearest folder above the Worker that holds
+  // bruno/fixtures. Not a fixed depth: Stryker runs this spec from a copy of the
+  // Worker at workers/oursharedevents/.stryker-tmp/sandbox-*, two levels deeper,
+  // whenever a mutate target is in its import graph (sponsor-resolver.ts imports
+  // zip-areas.ts, in the zip group). As in spine-keys-writers.spec.ts.
+  const ROOT = ((): string => {
+    let dir = resolve(__dirname, '..', '..', '..');
+    while (!existsSync(resolve(dir, 'bruno', 'fixtures'))) {
+      const up = dirname(dir);
+      if (up === dir) throw new Error(`no bruno/fixtures above ${__dirname}`);
+      dir = up;
+    }
+    return dir;
+  })();
   const EVENT = 'covline-evt';
   const FIXTURE: Array<LineCandidate & { letter: string }> = [
     { letter: 'T', id: 'covline-top', title: 'Covline Top Level', tier: 'title', isLocal: false },

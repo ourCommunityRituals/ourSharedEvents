@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2095 | fat finger | an update with a bad ZIP is a 400"
+  type: http
+  seq: 45
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{w1PoBoxId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"zip_code\":\"5971\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2095 fat finger (update): 400 INVALID_ZIP_CODE', function () { expect(res.getStatus()).to.eql(400); expect(b.code).to.eql('INVALID_ZIP_CODE'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

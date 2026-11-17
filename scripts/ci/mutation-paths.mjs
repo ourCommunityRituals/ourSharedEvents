@@ -109,6 +109,18 @@ export const MUTATION_PATHS = Object.freeze([
   // landing's; map-areas.spec.ts, above, the handler's.
   'workers/oursharedevents/tests/landing-street-call.spec.ts',
   'workers/oursharedevents/tests/fat-finger.property.spec.ts',
+  // W1 (OSE-2095): the ZIP at the Where step and the search that reads it
+  // (group `zip`), and the node specs that kill its mutants.
+  'workers/oursharedevents/src/lib/event-zip.ts',
+  'workers/oursharedevents/src/lib/zip-areas.ts',
+  'workers/oursharedevents/src/lib/place-names.ts',
+  'workers/oursharedevents/src/lib/place-search.ts',
+  'workers/oursharedevents/src/lib/export-geography.ts',
+  'workers/oursharedevents/tests/event-zip-unit.spec.ts',
+  'workers/oursharedevents/tests/landing-where-unit.spec.ts',
+  'workers/oursharedevents/tests/place-search.spec.ts',
+  'workers/oursharedevents/tests/booth-export-boundary.spec.ts',
+  'workers/oursharedevents/tests/admin-wizard-where-zip.spec.ts',
   // OSE-1936: the header Language menu and the node specs that kill its mutants
   // (pages.ts and the list/landing specs are listed above).
   'workers/oursharedevents/src/lib/i18n/language-menu.ts',

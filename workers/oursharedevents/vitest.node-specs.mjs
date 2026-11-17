@@ -277,6 +277,9 @@ export const NODE_SPECS = [
   'tests/landing-where-unit.spec.ts',
   // Search by town name first, then zip; one name can be many places (owner 2026-11-06).
   'tests/place-search.spec.ts',
+  // W1 (OSE-2095): the ZIP field reader and the export guard's zip names.
+  'tests/event-zip-unit.spec.ts',
+  'tests/admin-wizard-where-zip.spec.ts',
   // The landing doors name their action in ?start= and the admin front door steps aside (owner, 2026-10-27).
   'tests/admin-start-param.spec.ts',
   'tests/admin-surface-links-not-live.spec.ts',

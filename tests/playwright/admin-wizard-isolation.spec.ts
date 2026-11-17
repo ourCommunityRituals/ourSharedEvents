@@ -174,12 +174,14 @@ test.describe('OSE-1237 admin launch wizard — owns the screen', () => {
     await page.waitForTimeout(400);
     const after = await page.evaluate(() => document.documentElement.scrollHeight);
     // Two screens for the form, plus half of one for the foldable preview that sits
-    // below it on a phone (OSE-1528). The dashboard leak this guards is ~15,000px.
+    // below it on a phone (OSE-1528), plus a quarter since the Where step asks for
+    // the street address and the ZIP in boxes of their own (W1, OSE-2095: 2,084px at
+    // 375x812, over the old 2,030). The dashboard leak this guards is ~15,000px.
     expect(
       after,
       `wizard state is ${after}px on a ${MOBILE.height}px screen (dashboard is ${dashboard}px) — ` +
         `dashboard content is still rendering below the wizard`
-    ).toBeLessThanOrEqual(MOBILE.height * 2.5);
+    ).toBeLessThanOrEqual(MOBILE.height * 2.75);
   });
 
   test('header and legal footer survive — chrome is not dashboard', async ({ page }) => {

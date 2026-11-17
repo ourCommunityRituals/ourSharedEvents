@@ -283,10 +283,13 @@ export class DataProvider {
       // filter on it: the brand API returns online events. The surfaces that
       // leave them out (/events, the landing) do so with withoutLinkOnly
       // (lib/attendance-mode.ts).
+      // zip_code (W1, owner 2026-11-16) is read for zip and town search only
+      // (lib/zip-areas.ts eventZip). It is NOT published: the public projection
+      // is an allowlist without it.
       `SELECT id, brand_id, title, slug, status, description, location,
               start_date, end_date, timezone, starts_at, cover_image_url, created_at, updated_at,
               legal_clearance_tier, template_id, event_type_id,
-              what_short, who_host, why_purpose, how_details, where_address,
+              what_short, who_host, why_purpose, how_details, where_address, zip_code,
               lat, lon, corridor_id, h3_res9, h3_res7, place_kind, attendance_mode
        FROM events
        WHERE is_published = 1 AND brand_id = ? AND status = 'active' AND ${listedSql()}

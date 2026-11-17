@@ -1,0 +1,37 @@
+info:
+  name: "OSE-2095 | setup | a live event, ZIP 59718, no address"
+  type: http
+  seq: 10
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"attendance_mode\":\"in_person\",\"location\":\"OSE-2095 Zip Check Hall\",\"zip_code\":\"59718-0001\",\"title\":\"OSE-2095 Zip Check Night (staging, synthetic)\",\"status\":\"active\",\"is_published\":true,\"data_class\":\"synthetic\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        function codes(b) { return (b.warnings || []).map(function (w) { return w.code; }); }
+        test('OSE-2095 sunny: the event is created live', function () { expect(res.getStatus()).to.eql(201); expect(b.event_status).to.eql('active'); expect(b.id).to.be.a('string'); });
+        test('OSE-2095 sunny: no ZIP note for a known ZIP', function () { expect(codes(b)).to.not.include('ZIP_NOT_IN_TABLE'); });
+        test('OSE-2095 sunny: the ZIP placed nothing on the map', function () { expect(b.place).to.not.eql('on_map'); });
+        bru.setVar('w1ZipEventId', b.id || 'missing-event');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

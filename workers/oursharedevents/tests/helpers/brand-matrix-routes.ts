@@ -463,6 +463,8 @@ export const ROUTE_EXEMPTIONS: Readonly<Record<string, string>> = {
   '/api/v2/admin/event-templates':
     'Global read-only catalogue of layout templates; no brand_id column.',
   '/api/v2/admin/event-types': 'Global read-only event-type registry; no brand_id column.',
+  '/api/v2/admin/zip-suggest':
+    'W1 (OSE-2095): reads only the bundled Census zip and town lists, touches no database and stores nothing; the answer depends on the text sent alone (tests/event-zip.spec.ts, "W1 POST /api/v2/admin/zip-suggest").',
   '/api/v2/admin/flags':
     'Platform flag registry (key actor / platform brand only, AUD-3); tested by global-flags-key-actor.invariant.spec.ts.',
   '/api/v2/admin/flags/tiers': 'Platform tier catalogue; platform-only, not a tenant table.',

@@ -1,0 +1,34 @@
+info:
+  name: "OSE-2095 | fill-in | the address ZIP, ZIP+4 kept to five"
+  type: http
+  seq: 50
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/zip-suggest"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"address\":\"1 Main St, Blue Island, IL 60406-1234\",\"place\":\"Eagles Hall\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2095 fill-in: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-2095 fill-in: 60406 from the address', function () { expect(b.zip).to.eql('60406'); expect(b.from).to.eql('address'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

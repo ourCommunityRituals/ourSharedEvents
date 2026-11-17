@@ -345,3 +345,47 @@ describe('Surface filtering', () => {
     expect(filtered.length).toBe(3);
   });
 });
+
+// ─── W1 (OSE-2095): a ZIP written at the Where step changes no sponsor ───────────
+//
+// The Where step now writes events.zip_code, which the Path-2 area filter reads
+// (lib/sponsor-resolver.ts, "Geo filter"). Path 2 is dark in every environment
+// (SPONSOR_GEO_MATCH_ENABLED = "0", ADR-019), so as deployed a ZIP changes no
+// sponsor an event shows: Path 1 (the organizer's own accepted placements) has
+// no geography. With the flag on, the zip filter is Path 2's intended behaviour
+// (Q2 above). Stated in the W1 PR; this holds the deployed half.
+//
+// @born-red w1-zip-sponsors | method: the resolver's default made
+//   `geoMatchEnabled ?? true`; the zip and no-zip events then differed and the
+//   test went red | date: 2026-11-16
+
+describe('W1: a ZIP on the event changes no sponsor while Path 2 is dark', () => {
+  beforeAll(async () => {
+    await seedEvent('evt-w1-dummy', {});
+    await seedSponsor('sp-w1-far', 'evt-w1-dummy', { tier: 'gold' });
+    await seedSponsorEventType('sp-w1-far', 'bar_night');
+    await seedSponsorArea('sp-w1-far', { zipCode: '90210' });
+    for (const [id, zip] of [
+      ['evt-w1-nozip', undefined],
+      ['evt-w1-zip', '60406'],
+    ] as const) {
+      await seedEvent(id, { templateId: 'bar_night', zipCode: zip });
+      await seedSponsor(`sp-w1-own-${id}`, id, { tier: 'silver' });
+    }
+  });
+
+  test('the flag is off in this environment, as in every wrangler environment', () => {
+    expect(
+      (env as unknown as { SPONSOR_GEO_MATCH_ENABLED?: string }).SPONSOR_GEO_MATCH_ENABLED
+    ).not.toBe('1');
+  });
+
+  test('the same sponsors show with and without a ZIP (default resolver, as deployed)', async () => {
+    const ids = async (eventId: string) =>
+      (await resolveSponsorsForEvent(env.DB, eventId))
+        .map((s) => s.id.replace(eventId, 'EV'))
+        .sort();
+    expect(await ids('evt-w1-zip')).toEqual(await ids('evt-w1-nozip'));
+    expect(await ids('evt-w1-zip')).toEqual(['sp-w1-own-EV']);
+  });
+});
