@@ -24,6 +24,14 @@ runtime:
         if (res.getStatus() === 200) {
           // Kept for the export request after this one: the export is withheld
           // whenever this list is (OSE-2087).
+          test('rows are the counted rows: a full list is never longer than its count', function() {
+            // OSE-2087: rows beside a smaller count give the uncounted group back.
+            if (!json.suppressed && json.next_cursor === null) {
+              expect(json.items.length).to.eql(json.count);
+            } else if (!json.suppressed) {
+              expect(json.items.length).to.be.at.most(json.count);
+            }
+          });
           bru.setVar('registrationsListWithheld', json.suppressed === true ? 'yes' : 'no');
           test('ok is true', function() {
             expect(json.ok).to.eql(true);

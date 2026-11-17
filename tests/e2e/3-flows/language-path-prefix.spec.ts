@@ -542,10 +542,14 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
         );
         expect(overflow, `${path} scrolls sideways at 320 px`).toBeLessThanOrEqual(0);
 
+        // A `.toggle-radio` (a radio, or the Filters checkbox of #1399) is a
+        // hidden CSS switch: it takes no pointer and its chip label is the
+        // control, which `.disc-chip` measures. Measuring the switch itself
+        // failed staging run 44100869066 on correct behaviour.
         const small = await page.evaluate(() => {
           const out: string[] = [];
           for (const el of document.querySelectorAll<HTMLElement>(
-            'input:not([type="hidden"]):not([type="radio"]), button, .disc-chip, .ose-lang a, .btn'
+            'input:not([type="hidden"]):not([type="radio"]):not(.toggle-radio), button, .disc-chip, .ose-lang a, .btn'
           )) {
             const box = el.getBoundingClientRect();
             if (box.width === 0 && box.height === 0) continue; // not shown
