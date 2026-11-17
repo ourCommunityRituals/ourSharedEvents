@@ -1,8 +1,7 @@
 # The Where step, our own map, and the map choice: one design (2026-11-16)
 
 **Status:** confirmed by the owner on 2026-11-16, with all four decisions in section 8 as
-recommended. **Two of the four (D1 and D4) are in question again:** answers the owner gave later
-that day, recorded in ADR-039, disagree with them (section 8). They wait on the owner. Nothing is built. The slices are ticketed (section 9). It was written as a read-only
+recommended. **The owner then ruled on the two that were in question (section 13):** D1 stands, and D4 is replaced by "keep cells, clear points". Nothing is built. The slices are ticketed (section 9). It was written as a read-only
 pass: no code, test or migration was changed. Nothing here was run; every "today" line is a source read on `main` at
 `e7d21601`, with the lines given. Paths are under `workers/oursharedevents/src/` unless they say
 otherwise.
@@ -587,3 +586,22 @@ list its commands; then the lines that carry a conclusion were re-read by the le
 read from PR 1369's head without touching its branch. The precision review was read from its
 worksheet in worktree `nervous-goldstine-a50ad3` and its final loop file in the review's notes
 folder. Linear was searched for duplicates; nothing was created or changed there.
+
+## 13. The owner's ruling on the conflict (2026-11-16)
+
+Section 8 records that D1 and D4 disagreed with two answers in ADR-039. The owner was asked:
+"Should a zip only find an event (no hexagon until tapped), with already-stored cells kept?" and
+answered, word for word: "Yes, that".
+
+- **D1 stands.** A zip only finds an event. No cell is made from a zip, and an event has no
+  hexagon until someone places it. ADR-039's reading of C1 ("the zip centre's hexagon is where an
+  event sits until someone taps") is not the rule; "Zip, plus a tap" means the zip finds and the
+  tap places.
+- **D4 is replaced by ADR-039's C3: "Keep cells, clear points".** Cells already stored stay,
+  those worked out from a Google point included. Stored points are cleared once nothing reads
+  them. Whether such a cell may be kept past Google's 30 days is still a question for counsel.
+- **What changes in the slices.** W7 clears points only, never cells, and is no longer on hold
+  for this reason; it still waits on W2 and W3. Section 5's "cells that came from a Google
+  point: cleared" and section 9's W7 lines are superseded by this section. Nothing else changes.
+- **Owed after this ruling:** ADR-039 reworded on C1; Linear OSE-2100 (W7) retitled and its hold
+  note removed; the note on OSE-2095 removed. Not done by this session.
