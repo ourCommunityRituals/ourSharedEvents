@@ -2,7 +2,7 @@
 
 Date: 2026-11-16 · Story: OSE-2087 · Class: governance file (5+ loops, human gate after every loop) · `main` at `e7d2160`
 
-**Status: loop 1 of 5 done. Stopped at the human gate. Nothing in AGENTS.md has been changed.**
+**Status: loop 2 of 5 done (2026-11-17). Stopped at the human gate after loop 2. Nothing in AGENTS.md has been changed.**
 
 **These are working notes, not the worksheet.** The repository's worksheet gate (`scripts/ci/ccr-worksheet-check.mjs`) reads `.claude/outputs` and fails a worksheet that has run fewer loops than its class needs, so a five-loop review has no valid worksheet until all five loops exist. The worksheet, with its frontmatter, is written to `.claude/outputs` when loop 5 is done. A first copy of these notes was put there and failed that gate (PR 1372, `T0 Tests (root-vitest)`).
 
@@ -12,7 +12,7 @@ Date: 2026-11-16 · Story: OSE-2087 · Class: governance file (5+ loops, human g
 
 |                                                           |                                                                                                              |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| System score (the proposed change: "the gaps are closed") | **29%**                                                                                                      |
+| System score (the proposed change: "the gaps are closed") | loop 1: **29%** · loop 2: **0%**                                                                             |
 | Assessment confidence                                     | about 70%: three findings were read in source by two readers; nothing was run; eleven handlers were not read |
 | Gate                                                      | **Fail.** Below 95%. Human gate, questions below                                                             |
 
@@ -83,6 +83,68 @@ The sentence cannot say the gaps are closed. Before loop 2 I need:
    - My recommendation: **C**, with the findings above recorded on OSE-2087.
 
 F4 needs no ruling: it is a bug in my own change and contradicts ruling 2. I will fix it in its own draft PR.
+
+## What happened between loop 1 and loop 2
+
+- The owner merged these notes (PR 1372) and the F4 fix (PR 1373, `f0ccab6`; staging chain green on the later `main` SHA `19499bb`, run 43989506055). The four loop 1 questions were not answered.
+- The owner then wrote "Please continue" (2026-11-17). I read that as leave to run loop 2, not as answers to the questions.
+- F4 is therefore closed. F6's location is corrected below.
+
+## Loop 2 (Conservative lens: assume the worst case)
+
+Team: dr-of-security, role-data-scientist (both read-only; each listed its commands), with the main session. `main` at `1e2bc84`.
+
+Conservative layer: assume a patient, hostile brand admin who can call every admin route for their own brand as often as they like, and can register, scan and check in as a member of the public. Assume also that loop 1's unread handlers hide something. Does the floor still hold?
+
+It does not. Two readers independently found the same new leak in the code this story shipped, and the data-science lens found two ways the floor is passed without any single figure under 5 being published.
+
+### New findings (first seen in loop 2: weight × 1.25)
+
+| #   | Finding                                                                                                                                                                                                                                                                                                                           | Evidence                                                                    | Weight                     |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------- |
+| F10 | **A second defect in the lists-under-the-floor work (mine).** Once an event has 5 counted registrations, the list, the export and the contacts return every row, the uncounted ones with them (past retention, waiting for the nightly purge). 7 rows of which 5 count: the reader learns that 2 are not counted, and who.        | **Proven by 4 failing tests**; fix in draft PR 1402, not merged             | Critical 15 × 1.25 = 18.75 |
+| F11 | **One action at a time.** Every admin count is exact from 5 up. Read 7, wait, read 8: one person's action is seen. The public event page rounds to a multiple of 5 (`roundForPublish`, `lib/public-event-projection.ts:107`); no admin route does. The invariant as written ("a count below 5 is withheld") does not forbid this. | source read; not run                                                        | Medium 5 × 1.25 = 6.25     |
+| F12 | **Padding a part.** Totals are sums of parts that each reach 5 (a poster-hour, an event-day, a link). An admin who adds 3 scans of their own to a poster-hour holding a stranger's 2 makes it 5; it enters the sum, and the stranger's 2 is known. Whether scans are deduplicated per person was not traced.                      | source read (`lib/scan-cells.ts`); not run                                  | High 10 × 1.25 = 12.5      |
+| F13 | Different windows of the same figure (30 days against all time) may subtract to a group under 5.                                                                                                                                                                                                                                  | **not traced**: named as a risk by the data-science lens, not shown in code | Medium 5 × 1.25 = 6.25     |
+| F14 | The public recap's "showed up" share is a plain ratio, not `flooredRatePct`. Both of its inputs are already published exactly, so it adds nothing new.                                                                                                                                                                            | `handlers/pages.ts:2112-2116` (sweep's reading)                             | Low 2 × 1.25 = 2.5         |
+| F15 | The data-subject erase answer gives exact per-person row counts for a named email, and logs them. Platform only. It may be a lawful receipt.                                                                                                                                                                                      | `handlers/data-subject.ts:246-298` (sweep's reading)                        | Low 2 × 1.25 = 2.5         |
+| F16 | The demo page prints "had only N scans" for a count under 5. Mock data, but it shows the thing the rule forbids. (I noted this on 2026-11-15 and did not act on it.)                                                                                                                                                              | `handlers/demo.ts:579-584` (sweep's reading)                                | Low 2 × 1.25 = 2.5         |
+
+### Loop 1 findings, restated
+
+| #       | State after loop 2                                                                                                                                                                                                                                                                                                                                                                                      | Weight              |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| F1 + F2 | open; unchanged                                                                                                                                                                                                                                                                                                                                                                                         | (15 + 5) × 1.5 = 30 |
+| F3      | open; unchanged                                                                                                                                                                                                                                                                                                                                                                                         | 10                  |
+| F4      | **closed** (PR 1373)                                                                                                                                                                                                                                                                                                                                                                                    | 0                   |
+| F5      | open; unchanged                                                                                                                                                                                                                                                                                                                                                                                         | 5                   |
+| F6      | open; **location corrected**: the guard is in `handleDeleteEvent`, `handlers/events.ts:2049-2063`, and tells 0 from 1 or more of scans, returns and sponsor displays together                                                                                                                                                                                                                           | 2                   |
+| F7      | **partly closed**: the corridor and event dashboards, the SharedReport builder and read, sponsor home render, the Live view, booth counts, the poster list, feature flags and BigQuery were read and are floored. Still unread: campaigns, brand calendar, map areas, poster codes, `sponsors.ts`, the rest of `sponsor-home.ts` and `pages.ts`, `portfolio-rollup.ts` and `event-stats.ts` beyond grep | half: 5             |
+| F8      | open; unchanged                                                                                                                                                                                                                                                                                                                                                                                         | 2                   |
+
+### Checked in loop 2 and found sound
+
+- One registrations definition is used by the list total, `/stats`, the dashboard and the gate.
+- Rates: `flooredRatePct` withholds when the remainder is 1 to 4, and the SharedReport refuses 100%.
+- A failed read and a zero both read as withheld; no route was found that tells 0 from 1 to 4 except F6.
+- No `X-Total-Count`-style header exists. No route reads the PII audit log.
+
+Score: 0%
+
+Arithmetic: carried 30 + 10 + 5 + 2 + 5 + 2 = 54; new 18.75 + 6.25 + 12.5 + 6.25 + 2.5 + 2.5 + 2.5 = 51.25; total 105.25, so 100 − 105.25 is below zero and reads as 0%. Loop 1 was 29%. The drop is the second lens finding what the first did not; it is not argued back up.
+
+What is proven and what is not: F10 is proven by tests. Everything else in loop 2 is from reading source. F13 was not traced at all and may not exist.
+
+## Human gate (loop 2, Conservative layer)
+
+The four loop 1 questions stand. Loop 2 adds a larger one.
+
+5. **What does the rule protect: a number, or a person?** As written, invariant 2 stops any count under 5 from being published. It does not stop someone learning about one person by reading 7 and then 8 (F11), or by padding a poster-hour with their own scans (F12). Closing those means admin counts stop being exact: rounded to a multiple of 5 like the public page, or bucketed. Do you want that, or is "no count under 5" the rule and the rest accepted?
+6. Is the data-subject erase receipt (F15) a named exception?
+
+My recommendation on 5: keep the rule as written for now, and have the "Open gaps" sentence name F11 and F12 honestly instead of implying the floor is complete. Rounding every admin count is a product change with a cost to organizers, and deserves its own story and your decision, not a side effect of this review.
+
+Loop 3 (Adversarial) runs after your answer or your leave to continue.
 
 ## Before shipping (not yet met)
 
