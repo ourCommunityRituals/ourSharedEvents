@@ -1057,11 +1057,18 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   }
 
   // Surface materialization pending when essentially no signal exists yet.
-  if (distinctScanners === null && distinctAnonsHere === 0 && sponsorDisplays.length === 0) {
+  // OSE-2093: "no people yet" is read through the floor, never as a raw 0. The
+  // note used to appear at exactly 0 people and go at 1, so its presence told 0
+  // from 1 to 4. Under the floor reads the same as none (invariant 2).
+  if (
+    distinctScanners === null &&
+    applyCountFloor(distinctAnonsHere).suppressed &&
+    sponsorDisplays.length === 0
+  ) {
     suppression.push({
       field: '_event',
       reason: 'materialization_pending',
-      detail: 'no scan_aggregates, anon_id_returns, or sponsor_displays for this event yet',
+      detail: 'no published scan, attendee or sponsor display count for this event yet',
     });
   }
 

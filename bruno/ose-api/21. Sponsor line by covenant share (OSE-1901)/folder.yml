@@ -1,0 +1,26 @@
+info:
+  name: Sponsor line by covenant share (OSE-1901)
+  type: folder
+request: {}
+docs: |-
+  A spot that shows ONE sponsor name by an event's title (the card line on the
+  landing, /events and the map's place panel; the TV's "also coming up") picks
+  the name by the covenant share (owner, 2026-11-09; OCR-docs invariant 25). A
+  higher paid level comes up more often, up to its cap; locals keep at least
+  30%. The pick reads the event id, the clock hour and the event's own
+  consented sponsors, and nothing about the visitor.
+
+  Fixture: bruno/fixtures/sponsor-line-seed.sql, applied before this run. One
+  listed event, covline-evt, with four sponsors that show (hours of a 100-hour
+  cycle: top level 40, middle 18, base 6, local 36) and three that never may.
+
+  What staging shows depends on the hour, so the two line requests carry the
+  fixture event's whole cycle as a literal, one letter an hour, and read the
+  letter for the hour of the request. Within two minutes of the turn of an
+  hour either neighbour is taken, for a clock that is not the runner's.
+  workers/oursharedevents/tests/sponsor-line-pick.spec.ts ("staging fixture")
+  holds the literal to the code: change the pick and that test goes red until
+  the literal is regenerated.
+
+  Mock-layer twins: tests/sponsor-line-pick.spec.ts and
+  tests/sponsor-line-titles.spec.ts in workers/oursharedevents.

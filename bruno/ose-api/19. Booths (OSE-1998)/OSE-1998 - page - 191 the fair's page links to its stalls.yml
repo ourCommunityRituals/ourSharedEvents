@@ -1,0 +1,41 @@
+info:
+  name: "OSE-1998 | sunny | page | the live fair's event page offers See the stalls, with no count"
+  type: http
+  seq: 191
+
+# Mock-layer twin: the event-page block of
+# workers/oursharedevents/tests/booth-list-page.spec.ts. Named fields only.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/{{boothLiveFairId}}"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the page read was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        if (!edge) {
+          test('OSE-1998 event page: 200 HTML', function () { expect(res.getStatus()).to.eql(200); expect(res.getHeader('content-type') || '').to.include('text/html'); });
+          test('OSE-1998 event page: See the stalls, to the fair\'s list, with no count', function () {
+            var link = /<a\b[^>]*data-testid="event-stalls-link"[^>]*>([^<]*)<\/a>/.exec(body);
+            expect(link, 'the link is on the page').to.not.equal(null);
+            expect(link[0]).to.include('href="/events/' + bru.getVar('boothLiveFairId') + '/booths"');
+            expect(link[1]).to.eql('See the stalls');
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

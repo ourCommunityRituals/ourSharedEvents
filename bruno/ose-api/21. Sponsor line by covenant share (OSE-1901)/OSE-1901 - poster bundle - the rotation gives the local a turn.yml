@@ -1,0 +1,36 @@
+info:
+  name: OSE-1901 | sunny | poster bundle | the one-at-a-time rotation gives the local a turn and the top level the most turns
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/covline-evt/poster-bundle"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const body = res.getBody();
+        const turns = body.sponsor_rotation || [];
+        const count = function (id) { return turns.filter(function (t) { return t === id; }).length; };
+        test('OSE-1901: 200 with a rotation', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(turns.length).to.be.above(0);
+        });
+        test('OSE-1901 sunny: the local has a turn', function () { expect(count('covline-local')).to.be.above(0); });
+        test('OSE-1901 sunny: every sponsor that agreed has a turn, and nobody else', function () {
+          expect(Array.from(new Set(turns)).sort()).to.eql(['covline-base', 'covline-local', 'covline-mid', 'covline-top']);
+        });
+        test('OSE-1901 sunny: the top level has more turns than the middle, and the middle more than the base', function () {
+          expect(count('covline-top')).to.be.above(count('covline-mid'));
+          expect(count('covline-mid')).to.be.above(count('covline-base'));
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

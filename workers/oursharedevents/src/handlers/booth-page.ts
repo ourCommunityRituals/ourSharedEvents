@@ -30,7 +30,11 @@ export interface BoothPageEnv {
 export const BOOTH_NOT_OPEN_COPY =
   "This stall isn't open to the public. Its fair may not be published yet, or the stall may have closed. See what's coming up next.";
 
-function notFound(): Response {
+/**
+ * The one 404 every closed stall address answers, the stall list's included
+ * (GET /events/:id/booths): the same title, heading and copy, byte for byte.
+ */
+export function boothNotFound(): Response {
   return renderErrorPage(
     404,
     "We couldn't find that stall",
@@ -40,7 +44,7 @@ function notFound(): Response {
   );
 }
 
-function unavailable(): Response {
+export function boothUnavailable(): Response {
   return renderErrorPage(
     503,
     "We're having trouble loading this stall",
@@ -65,7 +69,7 @@ export function parseBoothNumberSegment(raw: string): string | null {
   return number;
 }
 
-interface FairRow {
+export interface FairRow {
   id: string;
   brand_id: string;
   title: string;
@@ -82,7 +86,10 @@ interface FairRow {
  * (both sides accepted, a live event in the sponsor's own brand, the event
  * opted in to sponsors). Fails to none: the stall still renders.
  */
-async function fetchFairSponsors(db: D1Database, eventId: string): Promise<BoothPageSponsor[]> {
+export async function fetchFairSponsors(
+  db: D1Database,
+  eventId: string
+): Promise<BoothPageSponsor[]> {
   try {
     const rs = await db
       .prepare(
@@ -113,17 +120,19 @@ async function fetchFairSponsors(db: D1Database, eventId: string): Promise<Booth
   }
 }
 
-export async function handleBoothPage(
-  _request: Request,
+/**
+ * The fair behind a public stall address, under the public event read's own
+ * rule (only a live event is public), or the response to send instead: the
+ * one 404 for an id that cannot be one, an unknown event or one that is not
+ * public, and 503 when the database cannot answer. The stall page and the
+ * stall list both open through here, so they never disagree.
+ */
+export async function readPublicFair(
   env: BoothPageEnv,
-  eventId: string,
-  rawNumber: string
-): Promise<Response> {
-  if (!env.DB) return unavailable();
-  if (!/^[A-Za-z0-9_-]{1,128}$/.test(eventId)) return notFound();
-  const number = parseBoothNumberSegment(rawNumber);
-  if (number === null) return notFound();
-
+  eventId: string
+): Promise<{ fair: FairRow; db: D1Database } | { response: Response }> {
+  if (!env.DB) return { response: boothUnavailable() };
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(eventId)) return { response: boothNotFound() };
   let fair: FairRow | null;
   try {
     fair = await env.DB.prepare(
@@ -133,33 +142,60 @@ export async function handleBoothPage(
       .bind(eventId)
       .first<FairRow>();
   } catch {
-    return unavailable();
+    return { response: boothUnavailable() };
   }
   // The public event read's own rule: only a live event is public.
-  if (!fair || !canRender(parseEventState(fair.status ?? ''), 'public')) return notFound();
+  if (!fair || !canRender(parseEventState(fair.status ?? ''), 'public')) {
+    return { response: boothNotFound() };
+  }
+  return { fair, db: env.DB };
+}
+
+/**
+ * A rendered stall page as sent: private and short (a stall can close, or a
+ * sponsor leave, at any time), and not indexed when the fair is off the map.
+ */
+export function fairPageResponse(body: string, noindex: boolean): Response {
+  const res = html(body);
+  res.headers.set('Cache-Control', 'private, max-age=60');
+  if (noindex) res.headers.set('X-Robots-Tag', 'noindex');
+  return res;
+}
+
+export async function handleBoothPage(
+  _request: Request,
+  env: BoothPageEnv,
+  eventId: string,
+  rawNumber: string
+): Promise<Response> {
+  if (!env.DB) return boothUnavailable();
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(eventId)) return boothNotFound();
+  const number = parseBoothNumberSegment(rawNumber);
+  if (number === null) return boothNotFound();
+
+  const read = await readPublicFair(env, eventId);
+  if ('response' in read) return read.response;
+  const { fair, db } = read;
 
   let booth;
   try {
-    booth = await fetchPublicBoothByNumber(env.DB, fair.id, fair.brand_id, number);
+    booth = await fetchPublicBoothByNumber(db, fair.id, fair.brand_id, number);
   } catch {
-    return unavailable();
+    return boothUnavailable();
   }
-  if (!booth) return notFound();
+  if (!booth) return boothNotFound();
 
-  const sponsors = await fetchFairSponsors(env.DB, fair.id);
+  const sponsors = await fetchFairSponsors(db, fair.id);
   // Open by link but off the map, as the fair's own page is: not indexed.
   const noindex = fair.is_published !== 1;
-  const res = html(
+  return fairPageResponse(
     renderBoothPage({
       event: { id: fair.id, title: fair.title, slug: fair.slug },
       when: formatEventWhen(fair),
       booth,
       sponsors,
       noindex,
-    })
+    }),
+    noindex
   );
-  // Private and short: a stall can close, or a sponsor leave, at any time.
-  res.headers.set('Cache-Control', 'private, max-age=60');
-  if (noindex) res.headers.set('X-Robots-Tag', 'noindex');
-  return res;
 }

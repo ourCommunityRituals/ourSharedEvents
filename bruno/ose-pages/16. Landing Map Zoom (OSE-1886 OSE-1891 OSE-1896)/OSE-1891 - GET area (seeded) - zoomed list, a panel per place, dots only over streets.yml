@@ -22,15 +22,17 @@ runtime:
         // This area is inside the region the street-map archive covers, so the
         // page changes from the first to the second the day the archive is loaded.
         // The environment says which is expected (streetMapArchiveLoaded):
-        //   not "true"   either page passes; with no street layer the dot-map
-        //                assertions print NOT RUN.
+        //   not "true"   either page passes; with no street layer a test named
+        //                NOT RUN says the dot-map assertions were not checked. It
+        //                passes only while the flag is exactly "false".
         //   "true"       a page with no street layer fails by name.
         // The same three states as "1. Landing - Public", the two street cases.
         const body = String(res.getBody());
         const count = function (re) { return (body.match(re) || []).length; };
         const has = function (id) { return body.includes('data-testid="' + id + '"'); };
         const at = function (id) { return body.indexOf('data-testid="' + id + '"'); };
-        const loaded = String(bru.getEnvVar('streetMapArchiveLoaded')) === 'true';
+        const flag = String(bru.getEnvVar('streetMapArchiveLoaded'));
+        const loaded = flag === 'true';
         // The zoomed part: from the map's wrapper to the Share script after the panels.
         const zoomed = body.slice(body.indexOf('data-testid="amap-wrap"'), body.indexOf('data-testid="share-script"'));
 
@@ -70,7 +72,9 @@ runtime:
               expect(has('amap-streets'), 'the environment file says the street-map archive is loaded, and the zoomed area drew no street layer').to.equal(true);
             });
           } else {
-            console.log('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): the area and a dot per place over the street layer');
+            test('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): the area and a dot per place over the street layer', function () {
+              expect(flag, 'a NOT RUN test passes only while the environment file sets streetMapArchiveLoaded to "false"').to.equal('false');
+            });
           }
         }
 

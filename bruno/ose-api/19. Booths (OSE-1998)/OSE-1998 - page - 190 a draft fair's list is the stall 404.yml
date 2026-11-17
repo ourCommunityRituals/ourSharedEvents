@@ -1,0 +1,44 @@
+info:
+  name: "OSE-1998 | rainy | page | the stall list of a draft fair answers the same 404 as an unknown event"
+  type: http
+  seq: 190
+
+# The draft fair (seq 10) has stalls, and its list still answers the 404 of
+# seq 189: the same status, page title and <h1>. Named fields only.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/{{boothFairId}}/booths"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the page read was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        var titleOf = function (h) { var m = /<title>([^<]*)<\/title>/i.exec(h || ''); return m ? m[1] : null; };
+        var h1sOf = function (h) { return ((h || '').match(/<h1\b[^>]*>[^<]*<\/h1>/gi) || []); };
+        if (!edge) {
+          test('OSE-1998 list: 404 HTML', function () { expect(res.getStatus()).to.eql(404); expect(res.getHeader('content-type') || '').to.include('text/html'); });
+          test('OSE-1998 list: no stall of the draft fair is named', function () { expect(body).to.not.include('/booths/'); });
+          if (bru.getVar('boothListNotFoundTitle')) {
+            test('OSE-1998 list: the same title and <h1> as an unknown event', function () {
+              expect(titleOf(body)).to.eql(bru.getVar('boothListNotFoundTitle'));
+              expect(h1sOf(body)[0] || null).to.eql(bru.getVar('boothListNotFoundH1'));
+            });
+          }
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

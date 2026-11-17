@@ -7,7 +7,8 @@
  *   1. a stall in use of a live fair renders: the fair's title and date, the
  *      sponsor strip when the fair has sponsors on show (AGENTS.md invariant 6:
  *      below the title and date, above the content), the stall's number, name
- *      and category, a link to the fair's page; exactly one <h1>;
+ *      and category, a link to the fair's stall list, a link to the fair's
+ *      page; exactly one <h1>;
  *   2. the number is read in any case and as typed on the table card;
  *   3. an unknown event, an event that is not public, an unknown number and a
  *      stall out of use answer the same 404, byte for byte;
@@ -25,6 +26,8 @@
  *   4. the sponsor strip moved under the stall card: 1 red;
  *   5. the rate-limit check taken off the route: 1 red.
  * date: 2026-11-14
+ * The link to the fair's stall list (2026-11-16): its test id renamed in the
+ * render, "a link to every stall of the fair" went red (1 red).
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
@@ -33,6 +36,7 @@ import { route, type RouterEnv } from '../src/router';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { BOOTH_NOT_OPEN_COPY, parseBoothNumberSegment } from '../src/handlers/booth-page';
 import { escapeHtml } from '../src/lib/html-escape';
+import { attrsOf, textsOf, visibleText } from './helpers/visible-text';
 
 interface TestEnv {
   DB: D1Database;
@@ -213,6 +217,20 @@ describe('a stall in use of a live fair renders', () => {
     expect(res.body).toContain('<title>Stall A12 · Juniper Ceramics · Spring Makers Fair</title>');
   });
 
+  test('a link to every stall of the fair, above the link to the fair', async () => {
+    const { body } = await get(page(FAIR, 'A12'));
+    expect(await textsOf(body, '[data-testid="booth-all-stalls-link"]')).toEqual([
+      'All stalls at this fair',
+    ]);
+    expect(await attrsOf(body, '[data-testid="booth-all-stalls-link"]', 'href')).toEqual([
+      `/events/${FAIR}/booths`,
+    ]);
+    const all = body.indexOf('data-testid="booth-all-stalls-link"');
+    const fair = body.indexOf('data-testid="booth-event-link"');
+    expect(all).toBeGreaterThan(body.indexOf('data-testid="booth"'));
+    expect(fair).toBeGreaterThan(all);
+  });
+
   test('exactly one <h1>, and it is the stall', async () => {
     const res = await get(page(FAIR, 'A12'));
     expect(countH1(res.body)).toBe(1);
@@ -362,33 +380,6 @@ describe('stored text is hostile input', () => {
     expect(parseBoothNumberSegment('a12')).toBe('a12');
   });
 });
-
-/**
- * The text a reader sees: every text node of the page except what sits inside
- * a script or a style element. Read with the HTML parser the Worker runtime
- * ships, not with a pattern over the markup.
- */
-async function visibleText(html: string): Promise<string> {
-  const parts: string[] = [];
-  let hidden = 0;
-  await new HTMLRewriter()
-    .on('script, style', {
-      element(el) {
-        hidden += 1;
-        el.onEndTag(() => {
-          hidden -= 1;
-        });
-      },
-    })
-    .onDocument({
-      text(chunk) {
-        if (hidden === 0) parts.push(chunk.text);
-      },
-    })
-    .transform(new Response(html))
-    .text();
-  return parts.join(' ');
-}
 
 describe('no cookie and no count', () => {
   test('neither the page nor the 404 sets a cookie', async () => {

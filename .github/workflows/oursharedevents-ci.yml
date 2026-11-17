@@ -834,6 +834,12 @@ jobs:
       # is the layer that measures them on screen: a 44 px dot target and no map
       # text under 13 px at 320 and 375 px, light and dark, and the whole frame at
       # 480 px (where the narrow rule ends) and on a desktop.
+      #
+      # street-map-contrast.component.spec.ts (street-map CCR 2026-11-15, R27 and
+      # R38) is the same page judged for contrast: axe calls text drawn over the
+      # street layer "incomplete", so every text on the map is measured from the
+      # colours the theme resolved (scripts/ci/map-text-contrast.mjs), light and
+      # dark. T4k runs the same judge on staging once streets are drawn there.
       - name: 'Component: viewport specs vs local worker'
         if: matrix.shard == 'component'
         run: |
@@ -845,7 +851,8 @@ jobs:
             tests/e2e/2-pages/form-pages-responsive.spec.ts \
             tests/e2e/2-pages/a11y-axe-surfaces.spec.ts \
             tests/e2e/2-pages/sponsor-thumbnails.component.spec.ts \
-            tests/e2e/2-pages/street-map-sizes.component.spec.ts
+            tests/e2e/2-pages/street-map-sizes.component.spec.ts \
+            tests/e2e/2-pages/street-map-contrast.component.spec.ts
 
   # T0 test sub-gates: keep the existing required context `T0 Gate (tests)` as
   # an aggregate below, but split the former 9+ minute long-pole job into
@@ -1516,6 +1523,21 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/opt-in-sponsors-seed.sql
 
+      # OSE-1901: one listed event with four sponsors that show (one per paid
+      # level, one local) and three that never may, for Bruno folder 21 "Sponsor
+      # line by covenant share". The folder reads which name the one-name line
+      # shows this hour against the event's literal cycle. NOT continue-on-error:
+      # a missing fixture fails here by name, not as a wrong name in the contract run.
+      - name: 'Seed sponsor line fixtures (OSE-1901)'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/sponsor-line-seed.sql
+
       # OSE-2014 (OSE ADR-029): a series an organizer declares, for Bruno folder 18.
       # Own brands ('series-ci', 'series-ci-other'), unpublished, synthetic. The
       # folder declares, attaches, detaches, confirms and rejects; this seed puts
@@ -1776,6 +1798,10 @@ jobs:
           echo "Stage 1 of the fail-fast chain — a red here skips T3 E2E smoke + T4 functional." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Collection:** \`${{ matrix.collection }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          # What this run says, by test name, it did not check (a Bruno case that
+          # leaves assertions out names a test "NOT RUN (...)"). Never fails the step.
+          node scripts/ci/bruno-not-run.mjs ".test-results/${{ matrix.junit }}" >> $GITHUB_STEP_SUMMARY
 
   contract-staging:
     name: 'T2 Contract → Staging (Bruno)'
