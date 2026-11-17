@@ -3029,6 +3029,8 @@ export async function handleLandingPage(
       ? (async () => readLatches(db as D1Database, 'root'))().catch(() => null)
       : Promise.resolve(null);
     // OSE-1522: the consented sponsor by the title on each card, as on /events.
+    // The binding is spelled out, not `db`: tests/sponsor-line-pick.spec.ts holds
+    // every caller to a database binding and a brand (never who), by its text.
     const sponsorTitlesRead = (async () =>
       fetchSponsorTitles((env as LandingEnv).DB, 'root'))().catch(() => new Map<string, string>());
     // Owner 2026-11-09: the Type row is the categories of the event-type
