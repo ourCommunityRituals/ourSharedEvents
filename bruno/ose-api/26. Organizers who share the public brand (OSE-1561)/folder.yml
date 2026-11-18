@@ -1,0 +1,26 @@
+info:
+  name: Organizers who share the public brand (OSE-1561)
+  type: folder
+request: {}
+docs: |-
+  Two organizers with no brand of their own are both members of the public
+  brand `root`. Inside it the person who created a row is the boundary
+  (OSE ADR-022, decision 2a): organizer A cannot list, read or change
+  organizer B's events, sponsors, campaigns or form data, and "not yours"
+  answers the same 404 as "does not exist".
+
+  THIS FOLDER DOES NOT RUN YET. It needs two organizer identities in `root`
+  on the environment, passed as organizerAClientId / organizerAClientSecret
+  and organizerBClientId / organizerBClientSecret. Staging has none; adding
+  them is the owner's step. Until then every request is skipped, logs
+  NOT RUN, and records no passing test. The workers-pool spec
+  (workers/oursharedevents/tests/public-brand-owner-wall.spec.ts) is the
+  layer that runs today.
+
+  No fixture file. Each organizer creates their own event, sponsor and
+  campaign through the API, so the creator is real, and the last three
+  requests delete what can be deleted. A campaign has no delete route: the
+  one this folder creates stays, titled "Owner wall campaign B".
+
+  The requests run in `seq` order. Every check names a field (a status, a
+  code, an id, a title); no request compares a whole body with another.

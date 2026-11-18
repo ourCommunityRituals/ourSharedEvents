@@ -30,6 +30,9 @@
  * tests/event-series.spec.ts.
  */
 
+import { type AdminEnv } from '../auth/admin';
+import { PUBLIC_BRAND_ID, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
+import { resolveOwnerRule } from '../lib/admin-owner-scope';
 import { corsHeaders } from '../lib/cors';
 import { errorLabel } from '../lib/error-label';
 import {
@@ -42,8 +45,34 @@ import {
   type SeriesRow,
 } from '../lib/event-series';
 
-export interface EventSeriesEnv {
+export interface EventSeriesEnv extends AdminEnv, AdminBrandScopeEnv {
   DB?: D1Database;
+}
+
+/**
+ * What the caller may reach beside the event in the path: that event's brand,
+ * and inside the public brand, for a caller held to their own rows, only rows
+ * they created (OSE-1561). The event in the path is already proved by the router
+ * guard. These routes also name other events and a series in the BODY, which the
+ * guard cannot see, so every read and write below carries this.
+ */
+interface Reach {
+  brandId: string;
+  /** The server-verified creator to match, or null when the brand is the whole boundary. */
+  creator: string | null;
+}
+
+async function reachOf(request: Request, env: EventSeriesEnv, brandId: string): Promise<Reach> {
+  const rule = await resolveOwnerRule(request, env);
+  const ownRows = brandId === PUBLIC_BRAND_ID && rule.standing === 'own-rows';
+  return { brandId, creator: ownRows ? rule.actor : null };
+}
+
+/** ` AND <col> = ?` for the creator, when the reach has one. Beside the brand, never instead. */
+function creatorClause(reach: Reach, col: string): { sql: string; binds: string[] } {
+  return reach.creator === null
+    ? { sql: '', binds: [] }
+    : { sql: ` AND ${col} = ?`, binds: [reach.creator] };
 }
 
 const SERIES_SELECT = `es.id, es.venue_id, es.series_name, es.cadence, es.day_of_week,
@@ -93,51 +122,59 @@ async function eventRef(db: D1Database, id: string): Promise<EventRef | null> {
     .first<EventRef>();
 }
 
-/** A series, only when its anchor event belongs to `brandId`. */
+/** A series, only when its anchor event is within the caller's reach. */
 async function seriesInBrand(
   db: D1Database,
   seriesId: string,
-  brandId: string
+  reach: Reach
 ): Promise<SeriesRow | null> {
+  const mine = creatorClause(reach, 'anchor.created_by');
   return db
     .prepare(
       `SELECT ${SERIES_SELECT}
          FROM event_series es
          JOIN events anchor ON anchor.id = es.venue_id
-        WHERE es.id = ? AND anchor.brand_id = ?`
+        WHERE es.id = ? AND anchor.brand_id = ?${mine.sql}`
     )
-    .bind(seriesId, brandId)
+    .bind(seriesId, reach.brandId, ...mine.binds)
     .first<SeriesRow>();
 }
 
 /**
- * The events `ids` names, only those of `brandId`. A caller compares the count:
- * one missing means an id is unknown or another brand's, and the whole request
- * is refused without saying which.
+ * The events `ids` names, only those within the caller's reach. A caller
+ * compares the count: one missing means an id is unknown, another brand's or
+ * (in the public brand) another person's, and the whole request is refused
+ * without saying which.
  */
-async function eventsInBrand(db: D1Database, ids: string[], brandId: string): Promise<EventRef[]> {
+async function eventsInBrand(db: D1Database, ids: string[], reach: Reach): Promise<EventRef[]> {
   if (ids.length === 0) return [];
   const marks = ids.map(() => '?').join(', ');
+  const mine = creatorClause(reach, 'created_by');
   const rows = await db
-    .prepare(`SELECT id, brand_id, series_id FROM events WHERE id IN (${marks}) AND brand_id = ?`)
-    .bind(...ids, brandId)
+    .prepare(
+      `SELECT id, brand_id, series_id FROM events WHERE id IN (${marks}) AND brand_id = ?${mine.sql}`
+    )
+    .bind(...ids, reach.brandId, ...mine.binds)
     .all<EventRef>();
   return rows.results ?? [];
 }
 
-/** Sets `series_id` and nothing else, on events of one brand that the guard allows. */
+/** Sets `series_id` and nothing else, on events within the caller's reach. */
 function attachStatement(
   db: D1Database,
   seriesId: string,
   ids: string[],
-  brandId: string,
+  reach: Reach,
   onlyFrom: 'unattached' | 'any'
 ): D1PreparedStatement {
   const marks = ids.map(() => '?').join(', ');
   const free = onlyFrom === 'unattached' ? ' AND series_id IS NULL' : '';
+  const mine = creatorClause(reach, 'created_by');
   return db
-    .prepare(`UPDATE events SET series_id = ? WHERE id IN (${marks}) AND brand_id = ?${free}`)
-    .bind(seriesId, ...ids, brandId);
+    .prepare(
+      `UPDATE events SET series_id = ? WHERE id IN (${marks}) AND brand_id = ?${mine.sql}${free}`
+    )
+    .bind(seriesId, ...ids, reach.brandId, ...mine.binds);
 }
 
 async function guarded(
@@ -181,17 +218,19 @@ export async function handleGetEventSeries(
   return guarded(request, 'handleGetEventSeries', async () => {
     const event = await eventRef(db, eventId);
     if (!event) return noEvent(request, eventId);
-    const own = event.series_id ? await seriesInBrand(db, event.series_id, event.brand_id) : null;
+    const reach = await reachOf(request, env, event.brand_id);
+    const own = event.series_id ? await seriesInBrand(db, event.series_id, reach) : null;
+    const mine = creatorClause(reach, 'anchor.created_by');
     const pending = await db
       .prepare(
         `SELECT ${SERIES_SELECT}
            FROM event_series es
            JOIN events anchor ON anchor.id = es.venue_id
-          WHERE es.state = 'pending' AND anchor.brand_id = ?
+          WHERE es.state = 'pending' AND anchor.brand_id = ?${mine.sql}
           ORDER BY es.detected_at DESC, es.id
           LIMIT 100`
       )
-      .bind(event.brand_id)
+      .bind(reach.brandId, ...mine.binds)
       .all<SeriesRow>();
     return reply(request, 200, {
       event_id: event.id,
@@ -218,8 +257,9 @@ export async function handleDeclareEventSeries(
   return guarded(request, 'handleDeclareEventSeries', async () => {
     const anchor = await eventRef(db, eventId);
     if (!anchor) return noEvent(request, eventId);
+    const reach = await reachOf(request, env, anchor.brand_id);
     const others = input.value.event_ids.filter((id) => id !== anchor.id);
-    const found = await eventsInBrand(db, others, anchor.brand_id);
+    const found = await eventsInBrand(db, others, reach);
     if (found.length !== others.length) return noAttachTarget(request);
     if (anchor.series_id || found.some((e) => e.series_id)) return taken(request);
 
@@ -245,9 +285,9 @@ export async function handleDeclareEventSeries(
           now,
           now
         ),
-      attachStatement(db, id, joining, anchor.brand_id, 'unattached'),
+      attachStatement(db, id, joining, reach, 'unattached'),
     ]);
-    const made = await seriesInBrand(db, id, anchor.brand_id);
+    const made = await seriesInBrand(db, id, reach);
     if (!made) return fail(request, 503, 'DB_ERROR', 'The series could not be saved');
     return reply(request, 201, {
       event_id: anchor.id,
@@ -270,11 +310,12 @@ export async function handleAttachEventSeries(
   return guarded(request, 'handleAttachEventSeries', async () => {
     const event = await eventRef(db, eventId);
     if (!event) return noEvent(request, eventId);
-    const series = await seriesInBrand(db, input.value.series_id, event.brand_id);
+    const reach = await reachOf(request, env, event.brand_id);
+    const series = await seriesInBrand(db, input.value.series_id, reach);
     if (!series) return noSeries(request);
     if (series.state !== 'confirmed')
       return fail(request, 409, 'SERIES_NOT_CONFIRMED', 'Only a confirmed series takes events');
-    await attachStatement(db, series.id, [event.id], event.brand_id, 'any').run();
+    await attachStatement(db, series.id, [event.id], reach, 'any').run();
     return reply(request, 200, { series: projectSeries(series), attached: [event.id] });
   });
 }
@@ -315,12 +356,13 @@ export async function handleConfirmEventSeries(
   return guarded(request, 'handleConfirmEventSeries', async () => {
     const event = await eventRef(db, eventId);
     if (!event) return noEvent(request, eventId);
-    const series = await seriesInBrand(db, input.value.series_id, event.brand_id);
+    const reach = await reachOf(request, env, event.brand_id);
+    const series = await seriesInBrand(db, input.value.series_id, reach);
     if (!series) return noSeries(request);
     if (series.state !== 'pending')
       return fail(request, 409, 'SERIES_NOT_PENDING', 'Only a pending suggestion can be confirmed');
     const joining = input.value.event_ids;
-    const found = await eventsInBrand(db, joining, event.brand_id);
+    const found = await eventsInBrand(db, joining, reach);
     if (found.length !== joining.length) return noAttachTarget(request);
     if (found.some((e) => e.series_id)) return taken(request);
 
@@ -336,9 +378,9 @@ export async function handleConfirmEventSeries(
         .bind(now, now, input.value.name, series.id),
     ];
     if (joining.length > 0)
-      statements.push(attachStatement(db, series.id, joining, event.brand_id, 'unattached'));
+      statements.push(attachStatement(db, series.id, joining, reach, 'unattached'));
     await db.batch(statements);
-    const saved = await seriesInBrand(db, series.id, event.brand_id);
+    const saved = await seriesInBrand(db, series.id, reach);
     return reply(request, 200, { series: projectSeries(saved ?? series), attached: joining });
   });
 }
@@ -356,7 +398,8 @@ export async function handleRejectEventSeries(
   return guarded(request, 'handleRejectEventSeries', async () => {
     const event = await eventRef(db, eventId);
     if (!event) return noEvent(request, eventId);
-    const series = await seriesInBrand(db, input.value.series_id, event.brand_id);
+    const reach = await reachOf(request, env, event.brand_id);
+    const series = await seriesInBrand(db, input.value.series_id, reach);
     if (!series) return noSeries(request);
     if (series.state !== 'pending')
       return fail(request, 409, 'SERIES_NOT_PENDING', 'Only a pending suggestion can be rejected');
@@ -368,7 +411,7 @@ export async function handleRejectEventSeries(
       )
       .bind(input.value.reason, now, series.id)
       .run();
-    const saved = await seriesInBrand(db, series.id, event.brand_id);
+    const saved = await seriesInBrand(db, series.id, reach);
     return reply(request, 200, { series: projectSeries(saved ?? series) });
   });
 }

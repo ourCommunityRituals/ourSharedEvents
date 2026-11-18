@@ -1,0 +1,49 @@
+info:
+  name: "OSE-1561 | sunny | sponsors | organizer B reads their own sponsor, name unchanged"
+  type: http
+  seq: 45
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/sponsors/{{ownerWallSponsorB}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{organizerBClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{organizerBClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1561: this folder runs as TWO organizers of the public brand `root`.
+        // Staging has no such identities yet; adding them is the owner's step.
+        // Until then this request is skipped and logs NOT RUN; it records no passing test.
+        if (
+          !bru.getEnvVar('organizerAClientId') || !bru.getEnvVar('organizerAClientSecret') ||
+          !bru.getEnvVar('organizerBClientId') || !bru.getEnvVar('organizerBClientSecret')
+        ) {
+          console.log('NOT RUN (OSE-1561 setup pending): no two organizer identities in root on this environment');
+          bru.runner.skipRequest();
+        }
+        if (!bru.getVar('ownerWallSponsorB')) {
+          console.log('NOT RUN (OSE-1561: an earlier request in this folder did not leave ownerWallSponsorB)');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('OSE-1561 sponsors: the creator reaches their own sponsor: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-1561 sponsors: its name is what organizer B wrote', function () {
+          const b = res.getBody();
+          expect((b.item || {}).name).to.eql('Owner wall sponsor B');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -748,7 +748,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 10
+      "testCount": 11
     },
     {
       "file": "workers/oursharedevents/tests/codeql-src-findings.spec.ts",
@@ -2520,6 +2520,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-brand-owner-wall.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 35
     },
     {
       "file": "workers/oursharedevents/tests/public-event-booths.spec.ts",

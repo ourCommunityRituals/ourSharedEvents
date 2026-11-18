@@ -63,6 +63,8 @@ import {
   type AdminEnv,
 } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
+import { ownerPredicate, resolveOwnerRule, type OwnerRule } from '../lib/admin-owner-scope';
+import { isAdminObjectInScope } from '../lib/admin-object-scope';
 // NOTE: maybeTag is imported here because sponsors.ts is an admin/creation-time
 // handler — NOT a scan-path handler. The hot-path invariant (S-6.3.1c) permits
 // this import. Do NOT add sponsors.ts to the SCAN_PATH list in h3-tagging.spec.ts.
@@ -198,6 +200,27 @@ async function resolvePoolBrand(
   return requested || 'root';
 }
 
+/**
+ * OSE-1561: a placement belongs to the event it is on. For a caller held to
+ * their own rows in the public brand, a sponsor they created can still hold a
+ * placement on someone else's event (the sponsor asked to join it and that
+ * organizer said yes). That placement is not theirs to read or change. This is
+ * ` AND EXISTS (… the placement's event is one they may reach …)`, to put beside
+ * the placement join or the placement write; an empty string for everyone else.
+ * `placementEventCol` is a column name written here, never request input.
+ */
+function ownPlacementSql(
+  rule: OwnerRule,
+  placementEventCol: string
+): { sql: string; binds: string[] } {
+  const own = ownerPredicate(rule, 'oe.brand_id', 'oe.created_by');
+  if (!own) return { sql: '', binds: [] };
+  return {
+    sql: ` AND EXISTS (SELECT 1 FROM events oe WHERE oe.id = ${placementEventCol} AND ${own.sql})`,
+    binds: own.binds,
+  };
+}
+
 function isValidContentType(request: Request): boolean {
   return isJsonContentType(request.headers.get('content-type'));
 }
@@ -270,6 +293,11 @@ export async function handleAdminListSponsors(
   // list starts from sponsor_business and LEFT JOINs placements — a pool sponsor
   // is one row with event_id = null and its business tier. ?eventId= still keeps
   // only that event's placements.
+  // OSE-1561: the owner rule for this caller. It narrows which sponsors are
+  // listed (the WHERE, below) and which of a sponsor's placements are joined
+  // (`ownSp`, on the placement join).
+  const ownerRule = await resolveOwnerRule(request, env, scope);
+  const ownSp = ownPlacementSql(ownerRule, 'sp.event_id');
   const cols = `sb.id AS id, sp.event_id AS event_id, sb.name AS name,
                 sb.display_name AS display_name, sb.address_line AS address_line,
                 sb.contact_phone AS contact_phone, sb.contact_email AS contact_email,
@@ -285,7 +313,7 @@ export async function handleAdminListSponsors(
                 COALESCE(sp.created_at, sb.created_at) AS created_at,
                 COALESCE(sp.updated_at, sb.updated_at) AS updated_at`;
   const from = `sponsor_business sb
-                LEFT JOIN sponsor_placement sp ON sp.sponsor_business_id = sb.id
+                LEFT JOIN sponsor_placement sp ON sp.sponsor_business_id = sb.id${ownSp.sql}
                 LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
                 LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'`;
   const where: string[] = [];
@@ -307,6 +335,16 @@ export async function handleAdminListSponsors(
     where.push(clause.sql.replace(/^ AND /, ''));
     binds.push(...clause.params);
   }
+  // OSE-1561: inside the public brand the sponsor's creator is the boundary. One
+  // more bound condition beside the brand cap: a caller held to their own rows
+  // there lists only the sponsors they created (lib/admin-owner-scope.ts).
+  const own = ownerPredicate(ownerRule, 'sb.brand_id', 'sb.created_by');
+  if (own) {
+    where.push(own.sql);
+    binds.push(...own.binds);
+  }
+  // The placement join is written before the WHERE, so its binds go first.
+  binds.unshift(...ownSp.binds);
   const sql =
     `SELECT ${cols} FROM ${from}` +
     (where.length ? ` WHERE ${where.join(' AND ')}` : '') +
@@ -420,6 +458,8 @@ export async function handleAdminGetSponsor(
 
   // OSE-799 A2: reconstruct the sponsor from the split model; scope on brand_id.
   const clause = brandScopeClause(scope.brandIds, 'sb.brand_id');
+  // OSE-1561: join only a placement on an event the caller may reach.
+  const ownPlacement = ownPlacementSql(await resolveOwnerRule(request, env), 'sp.event_id');
   try {
     const row = await env.DB.prepare(
       `SELECT sb.id AS id, sp.event_id AS event_id, sb.name AS name,
@@ -434,14 +474,15 @@ export async function handleAdminGetSponsor(
               sb.lat AS lat, sb.lon AS lon, sb.h3_res9 AS h3_res9, sb.h3_res7 AS h3_res7,
               sp.created_at AS created_at, sp.updated_at AS updated_at
          FROM sponsor_business sb
-         LEFT JOIN sponsor_placement sp ON sp.sponsor_business_id = sb.id
+         LEFT JOIN sponsor_placement sp ON sp.sponsor_business_id = sb.id${ownPlacement.sql}
          LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
          LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'
         WHERE sb.id = ?${clause.sql}
         ORDER BY sp.created_at ASC
         LIMIT 1`
     )
-      .bind(id, ...clause.params)
+      // The join's binds come first: the join is written before the WHERE.
+      .bind(...ownPlacement.binds, id, ...clause.params)
       .first();
     if (!row) return errorResponse('NOT_FOUND', `Sponsor not found: ${id}`, 404, rid);
 
@@ -624,6 +665,12 @@ export async function handleAdminCreateSponsor(
           scope.mode === 'all' ||
           (scope.mode === 'scoped' && scope.brandIds.includes(eventBrandId));
         if (!inScope) eventBrandId = null;
+        // OSE-1561: the same proof the router guard makes for an id in the path.
+        // Inside the public brand the event must also be one the caller created,
+        // or organizer A could put a sponsor on organizer B's event by naming it.
+        else if (!(await isAdminObjectInScope(request, env, { kind: 'event', id: eventId }))) {
+          eventBrandId = null;
+        }
       } else if (!isDevOpenAdmin(env)) {
         logNullAdminActorDenied('sponsor-create', env, rid);
         eventBrandId = null;
@@ -654,13 +701,16 @@ export async function handleAdminCreateSponsor(
   // gets its own id.
   const businessId = id;
   const placementId = eventId ? generateId('spl') : null;
+  // OSE-1561: who created it, from the server-verified caller and never from the
+  // body. Inside the public brand this is who may reach the sponsor afterwards.
+  const createdBy = extractAdminActor(request, env);
   const stmts = [
     env.DB.prepare(
       `INSERT INTO sponsor_business
          (id, brand_id, name, website_url, tier, display_name, address_line,
           contact_phone, contact_email, header_text, header_image_url,
-          lat, lon, h3_res9, h3_res7, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          lat, lon, h3_res9, h3_res7, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       businessId,
       brandId,
@@ -677,6 +727,7 @@ export async function handleAdminCreateSponsor(
       sponsorLon,
       sponsorH3Res9,
       sponsorH3Res7,
+      createdBy,
       now,
       now
     ),
@@ -944,7 +995,10 @@ export async function handleAdminUpdateSponsor(
     )
       .bind(sponsorId, attachId)
       .first<{ h3_res7: string | null }>();
-    if (!ev) {
+    // OSE-1561: and the caller must be able to reach that event. Inside the public
+    // brand that means they created it; sharing the brand is not enough. Same
+    // answer as an event that does not exist.
+    if (!ev || !(await isAdminObjectInScope(request, env, { kind: 'event', id: attachId }))) {
       return errorResponse(
         'EVENT_NOT_FOUND',
         "event_id does not resolve to an event in this sponsor's brand",
@@ -1011,6 +1065,10 @@ export async function handleAdminUpdateSponsor(
   // coords change, is_local is re-derived server-side per placement from the new
   // corridor cell vs each placement's event cell (#25 — never client-set). One
   // UPDATE covers every placement the business holds.
+  // OSE-1561: `ownSp` keeps the write to placements on events the caller may
+  // reach. A caller held to their own rows in the public brand does not change a
+  // placement on someone else's event, even for a sponsor they created.
+  const ownSp = ownPlacementSql(await resolveOwnerRule(request, env), 'sponsor_placement.event_id');
   const placementSetParts = [...placementSets];
   const placementBind = [...placementVals];
   if (hasCoords) {
@@ -1024,8 +1082,8 @@ export async function handleAdminUpdateSponsor(
     placementBind.push(now);
     stmts.push(
       env.DB.prepare(
-        `UPDATE sponsor_placement SET ${placementSetParts.join(', ')} WHERE sponsor_business_id = ?`
-      ).bind(...placementBind, sponsorId)
+        `UPDATE sponsor_placement SET ${placementSetParts.join(', ')} WHERE sponsor_business_id = ?${ownSp.sql}`
+      ).bind(...placementBind, sponsorId, ...ownSp.binds)
     );
   }
 
