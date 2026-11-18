@@ -24,10 +24,21 @@ runtime:
         // The edge refuses a /q scan from a CI runner that does not carry the CI
         // edge token (X-OCR-CI): the stg skip rule covers /q/* for that header
         // alone (docs/runbooks/RUNBOOK-STG-CI-SKIP-RULE.md). A 403 here is the
-        // edge, not the Worker: the Worker never answers /q 403. The edge may set
-        // cookies of its own, so "no cookie" means no ose_anon cookie (the
-        // Worker's only one), not an empty Set-Cookie.
-        var setCookie = [].concat(res.getHeader('set-cookie') || []).join('\n');
+        // edge, not the Worker: the Worker never answers /q 403.
+        // Cookies: the edge may set Cloudflare's own (names starting __cf, _cf,
+        // cf_ or CF_). Any other name is one the Worker set (today only
+        // ose_anon, lib/anonymous-id.ts), and fails the "no cookie" check. The
+        // NAMES are logged, never a value, so a run shows where a cookie came from.
+        var cookieNames = [];
+        [].concat(res.getHeader('set-cookie') || []).forEach(function (h) {
+          // One header may carry several cookies joined by commas.
+          String(h).split(/,(?=\s*[A-Za-z0-9_.-]+=)/).forEach(function (c) {
+            var name = c.split('=')[0].trim();
+            if (name) cookieNames.push(name);
+          });
+        });
+        var workerCookies = cookieNames.filter(function (n) { return !/^(__cf|_cf|cf_)/i.test(n); });
+        console.log('OSE-2144 scan 70 cookie names: ' + (cookieNames.join(',') || '(none)'));
         test('OSE-2144 control: 302 to the event page', function () {
           expect(res.getStatus()).to.eql(302);
           expect(String(res.getHeader('location') || '')).to.include('/events/lc-live-evt');
