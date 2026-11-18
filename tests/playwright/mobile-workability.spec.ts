@@ -409,7 +409,21 @@ async function loadSurface(page: Page, surface: Surface): Promise<void> {
   ]);
 }
 
-async function getInteractiveLocators(page: Page): Promise<Locator[]> {
+interface TouchTarget {
+  tag: string;
+  testid: string;
+  box: { x: number; y: number; width: number; height: number };
+}
+
+/**
+ * Every real touch target on the page, measured in ONE call to the page
+ * (OSE-2114). The audit used to ask the browser about each element in turn,
+ * several round trips each and every one re-finding the element by its index,
+ * so a long list page (/events with a few hundred cards) ran past the 30 s
+ * test limit while checking nothing new. One evaluate takes about the same time
+ * at 50 links and at 500. The filters and exemptions are the same as before.
+ */
+async function getTouchTargets(page: Page): Promise<TouchTarget[]> {
   // Buttons, links styled as buttons, form controls — anything a human
   // would tap. We exclude hidden elements (display:none / hidden attr).
   const selector = [
@@ -421,12 +435,12 @@ async function getInteractiveLocators(page: Page): Promise<Locator[]> {
     '[role="button"]:not([hidden])',
     '[role="link"]:not([hidden])',
   ].join(', ');
-  const all = await page.locator(selector).all();
-  // Filter to "real" touch targets. Playwright's isVisible() returns true
-  // for elements positioned off-screen (e.g. `.skip-link` at left:-9999px
-  // is "visible" by CSS rules even though no user will ever tap it), which
-  // produces noisy 1×1 touch-target violations. Filter additionally on:
-  //   - bounding box exists
+  const viewport = page.viewportSize();
+  const viewportW = viewport?.width ?? 375;
+  // Filter to "real" touch targets, the same rules the per-element loop had:
+  //   - visible: a non-empty box and not visibility:hidden (what Playwright's
+  //     isVisible() reads); an element positioned off-screen (e.g.
+  //     `.skip-link` at left:-9999px) passes that, so also:
   //   - box is inside the viewport (x >= 0 catches offscreen-left skip
   //     links; x < viewport.width catches offscreen-right elements)
   //   - width AND height >= 4 px (anything smaller is decorative or
@@ -438,67 +452,54 @@ async function getInteractiveLocators(page: Page): Promise<Locator[]> {
   //     text, the size of the target is not constrained." Primary CTAs
   //     styled as buttons or block-level links remain subject — only
   //     the inline-within-text-flow case is exempt.
+  //   - WCAG 2.5.5 label-target exemption (OSE-1236). 2.5.5 sizes the
+  //     TARGET — "the region that will accept a pointer action" — not the
+  //     painted control. A 18×18 checkbox inside a <label> that is itself
+  //     >= 44px tall has a 44px target: tapping anywhere on that row toggles
+  //     it. @ocr/ui's .checkbox-label / .radio-option already carry
+  //     min-height:44px. The exemption is conditional on the label ACTUALLY
+  //     meeting the floor, so a checkbox in a cramped label still fails.
   // The 4 px floor is generous; legitimate small targets like badges
   // and icons are typically 16+ px wide.
-  const viewport = page.viewportSize();
-  const viewportW = viewport?.width ?? 375;
-  const real: Locator[] = [];
-  for (const loc of all) {
-    if (!(await loc.isVisible().catch(() => false))) continue;
-    const box = await loc.boundingBox().catch(() => null);
-    if (!box) continue;
-    if (box.width < 4 || box.height < 4) continue; // decorative / a11y-only
-    if (box.x < 0 || box.x >= viewportW) continue; // offscreen
-    // OCR-42 inline-text exemption
-    const isInlineTextLink = await loc
-      .evaluate((el) => {
-        if (el.tagName.toLowerCase() !== 'a') return false;
-        const display = getComputedStyle(el).display;
-        if (display !== 'inline') return false;
-        const parent = el.parentElement;
-        if (!parent) return false;
-        const textFlowParents = new Set(['p', 'li', 'dt', 'dd', 'span', 'em', 'strong', 'label']);
-        return textFlowParents.has(parent.tagName.toLowerCase());
-      })
-      .catch(() => false);
-    if (isInlineTextLink) continue;
-
-    // WCAG 2.5.5 label-target exemption (OSE-1236).
-    //
-    // 2.5.5 sizes the TARGET — "the region that will accept a pointer action"
-    // — not the painted control. A 18×18 checkbox inside a <label> that is
-    // itself >= 44px tall has a 44px target: tapping anywhere on that row
-    // toggles it. That is how every design system ships a checkbox, and
-    // @ocr/ui's .checkbox-label / .radio-option already carry min-height:44px.
-    //
-    // Without this the audit reported four 18×18 "violations" that were
-    // already compliant, and the only way to satisfy it would have been to
-    // paint a 44px checkbox — worse for everyone. Same shape as the
-    // inline-text exemption above: narrow, principled, and stated.
-    //
-    // The exemption is conditional on the label ACTUALLY meeting the floor, so
-    // a checkbox in a cramped label still fails.
-    const hasLabelSizedTarget = await loc
-      .evaluate((el, floor) => {
-        const t = (el as HTMLInputElement).type;
-        if (el.tagName.toLowerCase() !== 'input') return false;
-        if (t !== 'checkbox' && t !== 'radio') return false;
-        // Either a wrapping <label> or one bound by for=""
-        const wrapper = el.closest('label');
-        const bound = el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`) : null;
-        for (const l of [wrapper, bound]) {
-          if (!l) continue;
-          const r = l.getBoundingClientRect();
-          if (Math.round(r.height) >= floor && Math.round(r.width) >= floor) return true;
+  return page.evaluate(
+    ({ selector, viewportW, floor }) => {
+      const textFlowParents = new Set(['p', 'li', 'dt', 'dd', 'span', 'em', 'strong', 'label']);
+      const out: TouchTarget[] = [];
+      for (const el of Array.from(document.querySelectorAll(selector))) {
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) continue; // not visible
+        const cs = getComputedStyle(el);
+        if (cs.visibility === 'hidden') continue; // not visible
+        if (r.width < 4 || r.height < 4) continue; // decorative / a11y-only
+        if (r.left < 0 || r.left >= viewportW) continue; // offscreen
+        const tag = el.tagName.toLowerCase();
+        // OCR-42 inline-text exemption
+        if (tag === 'a' && cs.display === 'inline') {
+          const parent = el.parentElement;
+          if (parent && textFlowParents.has(parent.tagName.toLowerCase())) continue;
         }
-        return false;
-      }, MIN_TOUCH_TARGET_PX)
-      .catch(() => false);
-    if (hasLabelSizedTarget) continue;
-
-    real.push(loc);
-  }
-  return real;
+        // OSE-1236 label-target exemption
+        const t = (el as HTMLInputElement).type;
+        if (tag === 'input' && (t === 'checkbox' || t === 'radio')) {
+          const wrapper = el.closest('label');
+          const bound = el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`) : null;
+          const labelSized = [wrapper, bound].some((l) => {
+            if (!l) return false;
+            const lr = l.getBoundingClientRect();
+            return Math.round(lr.height) >= floor && Math.round(lr.width) >= floor;
+          });
+          if (labelSized) continue;
+        }
+        out.push({
+          tag,
+          testid: el.getAttribute('data-testid') ?? '(no testid)',
+          box: { x: r.left, y: r.top, width: r.width, height: r.height },
+        });
+      }
+      return out;
+    },
+    { selector, viewportW, floor: MIN_TOUCH_TARGET_PX }
+  );
 }
 
 async function getInputLocators(page: Page): Promise<Locator[]> {
@@ -550,11 +551,9 @@ for (const surface of SURFACES) {
     }) => {
       test.skip(!!skipReasonFor(surface), skipReasonFor(surface) ?? '');
       await loadSurface(page, surface);
-      const interactives = await getInteractiveLocators(page);
+      const targets = await getTouchTargets(page);
       const violations: string[] = [];
-      for (const loc of interactives) {
-        const box = await loc.boundingBox();
-        if (!box) continue;
+      for (const { tag, testid, box } of targets) {
         // OCR-42 precision fix — compare ROUNDED dimensions against the
         // 44px floor so a 43.99px-rendered element (which displays as
         // "44" in any reasonable measurement) is treated as satisfying
@@ -564,8 +563,6 @@ for (const surface of SURFACES) {
         const w = Math.round(box.width);
         const h = Math.round(box.height);
         if (w < MIN_TOUCH_TARGET_PX || h < MIN_TOUCH_TARGET_PX) {
-          const tag = await loc.evaluate((el) => el.tagName.toLowerCase());
-          const testid = (await loc.getAttribute('data-testid').catch(() => null)) ?? '(no testid)';
           violations.push(`<${tag} data-testid="${testid}"> = ${w}×${h}`);
         }
       }

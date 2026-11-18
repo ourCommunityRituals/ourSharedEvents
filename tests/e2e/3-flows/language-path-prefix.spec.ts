@@ -7,7 +7,9 @@
  * link that keeps its prefix, a printed code that does not change, and the paths
  * a prefix must never reach.
  *
- * It creates its own event (a 2099 date, a per-run slug) and removes it after.
+ * It creates its own event (a 2099 date, a per-run slug) and removes it after:
+ * deleted, or archived when it has scans (OSE-2114). It also archives what
+ * earlier runs left listed.
  */
 
 import { test, expect, type Browser } from '@playwright/test';
@@ -64,6 +66,64 @@ async function adminFetch(request: Req, method: string, path: string, body?: obj
   return resp;
 }
 
+const EVENT_PATH = (id: string) => `/api/v2/admin/events/${encodeURIComponent(id)}`;
+
+/**
+ * Take this spec's event off the public pages for good (OSE-2114). The delete
+ * route refuses a scanned event with 409 EVENT_HAS_ACTIVITY, by design, and
+ * names the archive as the way out. An archived event is not listed on /events,
+ * the landing page or /map. A cleanup that cannot do either fails the step, so
+ * a leftover turns the run red instead of piling up on staging.
+ */
+async function removeEvent(request: Req, id: string): Promise<void> {
+  const del = await adminFetch(request, 'DELETE', EVENT_PATH(id));
+  if (del.status() === 409) {
+    const archived = await adminFetch(request, 'PUT', EVENT_PATH(id), { status: 'archived' });
+    expect(archived.status(), `archive event ${id} after the delete answered 409`).toBe(200);
+    return;
+  }
+  expect([200, 404], `delete event ${id}`).toContain(del.status());
+}
+
+// Slugs this spec mints, one prefix per describe block.
+const OWN_SLUG = /^language-(prefix|pairwise|forms)-/;
+const LEFTOVER_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Archive what earlier runs left listed (OSE-2114): active root events with
+ * this spec's slugs, created more than a day ago, so a run still in flight is
+ * never touched. Archive only, never delete: every row stays and can be set
+ * back to active.
+ */
+async function archiveLeftovers(request: Req): Promise<number> {
+  const cutoff = Date.now() - LEFTOVER_AGE_MS;
+  const stale: string[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 50; page++) {
+    const q = `/api/v2/admin/events?status=active&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+    const resp = await adminFetch(request, 'GET', q);
+    expect(resp.status(), 'list active events').toBe(200);
+    const body = await resp.json();
+    for (const e of body.items as Array<Record<string, string>>) {
+      const created = Date.parse(e.created_at);
+      if (e.brand_id === 'root' && OWN_SLUG.test(e.slug ?? '') && created < cutoff)
+        stale.push(e.id);
+    }
+    if (!body.pagination?.hasMore) break;
+    cursor = body.pagination.nextCursor;
+  }
+  // Eight at a time: the first run after this lands meets about 200 of them.
+  for (let i = 0; i < stale.length; i += 8) {
+    await Promise.all(
+      stale.slice(i, i + 8).map(async (id) => {
+        const archived = await adminFetch(request, 'PUT', EVENT_PATH(id), { status: 'archived' });
+        expect(archived.status(), `archive leftover event ${id}`).toBe(200);
+      })
+    );
+  }
+  return stale.length;
+}
+
 /**
  * The first answer to a GET, before any redirect, with its Location readable.
  * A fresh browser each time, because Bot Fight Mode challenges Node's HTTP client
@@ -98,6 +158,12 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
 
   test.beforeAll(async ({ request }) => {
     precondition(!ADMIN_KEY, 'ADMIN_KEY or X_OCR_INTERNAL is required');
+    // The first run after OSE-2114 archives about 200 leftovers; later runs a few.
+    test.setTimeout(240_000);
+    const archivedLeftovers = await archiveLeftovers(request);
+    console.log(
+      `[OSE-2114] archived ${archivedLeftovers} leftover test event(s) from earlier runs`
+    );
     slug = `language-prefix-${RUN_ID}`;
     const created = await adminFetch(request, 'POST', '/api/v2/admin/events', {
       brand_id: 'root',
@@ -144,17 +210,18 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
   });
 
   test.afterAll(async ({ request }) => {
-    for (const path of [
-      deploymentId && `/api/v2/admin/poster-deployments/${encodeURIComponent(deploymentId)}`,
-      eventId && `/api/v2/admin/events/${encodeURIComponent(eventId)}`,
-    ]) {
-      if (!path) continue;
+    if (deploymentId) {
       try {
-        await adminFetch(request, 'DELETE', path);
+        await adminFetch(
+          request,
+          'DELETE',
+          `/api/v2/admin/poster-deployments/${encodeURIComponent(deploymentId)}`
+        );
       } catch {
-        // Best-effort: the slug is per-run unique and the date is 2099.
+        // Best-effort: a placement is not listed anywhere public on its own.
       }
     }
+    if (eventId) await removeEvent(request, eventId);
   });
 
   test('the Spanish page, its head, and a switch that is a plain link both ways', async ({
@@ -664,12 +731,7 @@ test.describe('Polish and Arabic on staging, pairwise rows (OSE-1972)', () => {
   });
 
   test.afterAll(async ({ request }) => {
-    if (!eventId) return;
-    try {
-      await adminFetch(request, 'DELETE', `/api/v2/admin/events/${encodeURIComponent(eventId)}`);
-    } catch {
-      // Best-effort: the slug is per-run unique and the date is 2099.
-    }
+    if (eventId) await removeEvent(request, eventId);
   });
 
   for (const row of PW_ROWS) {
@@ -810,12 +872,7 @@ test.describe('Form pages in every language on staging (OSE-1850)', () => {
   });
 
   test.afterAll(async ({ request }) => {
-    if (!eventId) return;
-    try {
-      await adminFetch(request, 'DELETE', `/api/v2/admin/events/${encodeURIComponent(eventId)}`);
-    } catch {
-      // Best-effort: the slug is per-run unique and the date is 2099.
-    }
+    if (eventId) await removeEvent(request, eventId);
   });
 
   for (const row of FORM_ROWS) {
