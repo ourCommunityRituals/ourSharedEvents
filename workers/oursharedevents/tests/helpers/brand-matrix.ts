@@ -111,6 +111,18 @@ export async function seedBrandFixture(): Promise<void> {
     )
       .bind(`${b.marker}booth`, b.activeEventId, `${b.marker}booth`)
       .run();
+    // OSE-2127: a draft vote set with one song on the live event, so a refused
+    // cross-brand vote write has a row it would have changed (the snapshot).
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO vote_sets (id, event_id, played_by) VALUES (?, ?, 'object')`
+    )
+      .bind(`${b.marker}vset`, b.activeEventId)
+      .run();
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO votable_objects (id, event_id, set_id, kind, label) VALUES (?, ?, ?, 'song', ?)`
+    )
+      .bind(`${b.marker}vobj`, b.activeEventId, `${b.marker}vset`, `${b.marker}vote`)
+      .run();
   }
   (routerEnv as { ADMIN_BRAND_MEMBERSHIP?: string }).ADMIN_BRAND_MEMBERSHIP = membershipJson();
 }
@@ -249,6 +261,19 @@ export async function snapshotFixture(): Promise<string> {
   out.event_booths = (
     await env.DB.prepare(
       `SELECT * FROM event_booths WHERE id LIKE 'bm-%' OR event_id LIKE 'bm-%' ORDER BY id`
+    ).all()
+  ).results;
+  // A refused cross-brand vote write must leave every vote set and object as it was (OSE-2127).
+  out.vote_sets = (
+    await env.DB.prepare(
+      `SELECT id, event_id, state, played_by, pepper_epoch, is_final, secret_margin, secret_floor
+         FROM vote_sets WHERE event_id LIKE 'bm-%' ORDER BY id`
+    ).all()
+  ).results;
+  out.votable_objects = (
+    await env.DB.prepare(
+      `SELECT id, event_id, label, state, closes_at, group_id, booth_id
+         FROM votable_objects WHERE event_id LIKE 'bm-%' ORDER BY id`
     ).all()
   ).results;
   // A refused cross-brand series write must leave no series row either (OSE ADR-029).
