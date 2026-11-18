@@ -1,6 +1,6 @@
 # ADR-040: An anonymous vote is a counter on an object, never a row about a voter
 
-**Status:** Accepted. The owner accepted this ADR by merging PR #1414 on 2026-11-18. The owner answered every question on 2026-11-17 and 2026-11-18 (comments on PRs #1413 and #1414; D6 and D10 in the owner's own session on 2026-11-18; Q6 to Q12 in question forms on 2026-11-18). Amended twice on 2026-11-18: decision 6 after the S0 spike (OSE-2122) and a three-loop CCR (PR #1416, merged in #1417); then decisions 1 to 10 after the five-loop S1 CCR (PR #1418) and the owner's answers to it, including the reversal of D3. Still open: Q13 (a secret random voter floor), the level of detail in the published report (OSE-520), and the owner's wording for the house-rule card and the report. Nothing here is built.
+**Status:** Accepted. The owner accepted this ADR by merging PR #1414 on 2026-11-18. The owner answered every question on 2026-11-17 and 2026-11-18 (comments on PRs #1413 and #1414; D6 and D10 in the owner's own session on 2026-11-18; Q6 to Q12 in question forms on 2026-11-18). Amended twice on 2026-11-18: decision 6 after the S0 spike (OSE-2122) and a three-loop CCR (PR #1416, merged in #1417); then decisions 1 to 10 after the five-loop S1 CCR (PR #1418) and the owner's answers to it, including the reversal of D3, in PR #1420 (a draft until the owner merges it). Still open: Q13 (a secret random voter floor), Q14 (whether one vote may feed two results), the level of detail in the published report (OSE-520), and the owner's wording for the house-rule card and the report. Nothing here is built.
 **Date:** 2026-11-17. Amended 2026-11-18 (decision 6 after S0; decisions 1 to 10 after the S1 CCR).
 **Deciders:** Owner (PO). Sr Architect owns the draft. Dr of Security advises on the membrane.
 **Ticket:** OSE-1193 (blocks OSE-2000 under the fairs epic OSE-1996; step 1 of OW-218, Fist of Five)
@@ -65,7 +65,7 @@ The tables are additive and live in `DB`, never in `FORMS_DB` and never on OurWK
 - `vote_tallies`: two counters per object, up and "not for me".
 - `vote_receipts` and `vote_participants`: one-vote markers.
 
-There is no per-vote row, no voter id and no vote time. A receipt carries no side. It is `HMAC(K_receipt, k ‖ object_id)`, where k is the per-event voter key from decision 6 and `K_receipt` is a server-only subkey. A participant marker is `HMAC(K_participant, k ‖ set_id)`, under its own subkey, so it can never equal a receipt. No cookie value reaches the vote route or the vote tables, and k is stored nowhere, so the database is not a list of voters. Receipts and participant markers are deleted when the set becomes final (decision 4), never when it only closes.
+There is no per-vote row, no voter id and no vote time. A receipt carries no side. It is `HMAC(K_receipt, k ‖ object_id)`, where k is the per-event voter key from decision 6 and `K_receipt` is a server-only subkey. A participant marker is `HMAC(K_participant, k ‖ set_id)`, under its own subkey, so it can never equal a receipt. No cookie value reaches the vote route or the vote tables, and k is stored nowhere, so the database is not a list of voters. Receipts and participant markers are deleted when the set becomes final (decision 4), never when it only closes. Tallies are deleted 30 days after final; only the published outcomes are kept. Every set reaches final (decision 4), so nothing is kept without a bound.
 
 ### 2. A vote finds its song by an id, never by the clock
 
@@ -93,13 +93,13 @@ A person has one vote per object:
 
 Dedup is the receipt per object. A duplicate changes nothing and answers the same as a counted vote. "To start" means the limits may be loosened later by a new decision; none is built for that now.
 
-**Reopening (owner, 2026-11-18, C3) and the final lock (Q10).** A host may reopen a closed object or vote set while the event is still on, to recover from a timing mistake. This is safe only because no count is read before the set is final (decision 7), so nobody can compare a count before and after the reopen. Results are computed once. Computing them sets a one-way `final` flag on the set. After it, nothing reopens the set or adds an object to it: not a host, not N1, and not a change to the event's dates or status. Every close, reopen and finalization is written to the audit log. A receipt survives a reopen, so a person who already voted on an object still cannot vote on it twice.
+**Reopening (owner, 2026-11-18, C3) and the final lock (Q10).** A host may reopen a closed object or vote set while the event is still on, to recover from a timing mistake. This is safe only because no count is read before the set is final (decision 7), so nobody can compare a count before and after the reopen. Results are computed once. Computing them sets a one-way `final` flag on the set. After it, nothing reopens the set or adds an object to it: not a host, not N1, and not a change to the event's dates or status. If nobody computes results within 7 days of the event's end date (or of the set's last close, when the event has no end date), a scheduled job computes them, which sets final. A void set is finalized the same way and publishes nothing. These two numbers, 7 and 30 days, are proposed defaults the owner may change. Every close, reopen and finalization is written to the audit log. A receipt survives a reopen, so a person who already voted on an object still cannot vote on it twice.
 
 ### 5. The voter page is on OSE
 
 The voter page is `GET /events/:id/vote`. It is styled like a form page, but it is not a forms route: it uses no forms API and sets no cookie. It explains the vote, carries the house rule (decision 9), and shows the sponsor strip below the title and date. The OurWKRP room screen shows only the event's vote code, a `/q` code on OSE, never an OurWKRP short link.
 
-The vote write is a `POST` outside `/api/v2/events*`, handled on the `DB` side. It reads no cookie: it never reads the `Cookie` header and never sets one (D3 reversed, 2026-11-18). It takes JSON only and checks `Sec-Fetch-Site: same-origin`, and the page cannot be framed. A gate fails if the vote route's files read the `Cookie` header or `ose_anon`. AGENTS.md invariant 4 is unchanged: `/q` stays the only reader on the vote path.
+The vote write is a `POST` outside `/api/v2/events*`, handled on the `DB` side. It reads no cookie: it never reads the `Cookie` header and never sets one (D3 reversed, 2026-11-18). It takes JSON only and checks `Sec-Fetch-Site: same-origin`, and the page cannot be framed. The vote `POST` and the public open-objects read each have a rate limit at the route (`lib/public-read-limit.ts`). An address used as a limit key is a key only, never stored or logged (invariant 3). A gate fails if the vote route's files read the `Cookie` header or `ose_anon`. AGENTS.md invariant 4 is unchanged: `/q` stays the only reader on the vote path.
 
 ### 6. Presence
 
@@ -107,11 +107,11 @@ A vote counts only from a browser that scanned this event's vote code. Every coo
 
 - At `/q`, a vote-kind code, with a set open and `VOTING_ENABLED` on, derives a per-event voter key `k = HMAC(K_voter, len(cookie) ‖ cookie ‖ event_id)`. `K_voter` comes from `ANON_ID_HASH_PEPPER` by HKDF under its own label, separate from the scan key, the pass seal, the receipt key and the participant key. k differs at every event and is stored nowhere.
 - `/q` mints a pass only when the pepper is set and the scan was stored, or was a duplicate of one stored. The uncounted path mints none, a missing key mints none, and a failed write mints none.
-- The pass is `{event_id, expiry, pepper_epoch, k}`, sealed with a MAC under its own key in each environment. `/q` puts it in the redirect's fragment (`/events/:id/vote#t=…`), so it is never in a query string, a `Referer` or a request log.
+- The pass is `{event_id, expiry, pepper_epoch, k}`, sealed with a MAC under `K_pass`, which comes from `ANON_ID_HASH_PEPPER` by HKDF under its own label, so it differs in each environment. `/q` puts it in the redirect's fragment (`/events/:id/vote#t=…`), so it is never in a query string, a `Referer` or a request log.
 - The voter page reads the fragment and removes it from the address bar at once. It keeps the pass in memory only, writes nothing to storage, and posts it in the JSON body. With no pass, it says to scan the code on the screen again.
 - A pass lasts 30 minutes (Q12), and a re-scan renews it. A re-scan in the same browser gives the same k, so the same receipts.
 - The vote route checks the MAC (in constant time), the event, the expiry and the epoch. No log line and no CI output carries the pass, k, a receipt or the `Location` header.
-- **The pepper epoch.** S3 stamps `vote_sets.pepper_epoch` with `pepperEpoch(ANON_ID_HASH_PEPPER)` (`lib/anon-id-hash.ts`) when the set first opens, and never restamps it. A pass carries the epoch it was minted under. If the pepper rotates while the set is open, the epochs differ, every later vote is refused, and the set is marked void with its reason. A void set publishes nothing, and a reopen cannot clear the void. A missing pepper has no epoch, and no epoch never matches. The pepper is not rotated while a vote set is open (runbook).
+- **The pepper epoch.** S3 stamps `vote_sets.pepper_epoch` with `pepperEpoch(ANON_ID_HASH_PEPPER)` (`lib/anon-id-hash.ts`) when the set first opens, and never restamps it. A pass carries the epoch it was minted under. The vote route compares three epochs: the pass's, the set's and the current one (`pepperEpoch` of the pepper it runs with). All three must match. If the pepper rotates while the set is open, they differ, every later vote is refused, and the vote route marks the set void, with its reason, on the first mismatch. A pass minted before the rotation is refused too, so no one gets a second receipt under the new key. A void set publishes nothing, and a reopen cannot clear the void. A missing pepper has no epoch, and no epoch never matches. The pepper is not rotated while a vote set is open (runbook).
 
 **S0 result (OSE-2122, 2026-11-18).** `/q` counts scans per address, across all events: an edge binding (60 per 10 s) and KV (360 a minute). Past either, it sends the visitor on with no cookie (`handlers/qr-scan.ts:168-181`). On staging, 150 fresh browsers from one address each got a cookie and a counted scan, once over 20 s and once over 5 s, through the CI path (Room burst (stg) runs 44227517345 and 44231501658; 150 of 150 each time). The 5-second run passed the edge binding's nominal rate, and why is not yet explained. The pass is not built yet. Not measured: real phones, production, carrier shared addresses, more than 360 scans a minute.
 
@@ -123,7 +123,7 @@ A vote counts only from a browser that scanned this event's vote code. Every coo
   - Every such cap gives one person a way to lock the room out.
 - Presence is the pass above, checked by the vote route (decision 5).
 - Cookie signing (OSE-1496) no longer comes first. It does not block the vote route.
-- Presence comes from the event's vote code, on the poster and on the room screen (Q6). A per-song code is not used; it would change this decision and need its own CCR.
+- Presence comes from the event's vote code, on the poster and on the room screen (Q6). The vote code is a second `/q` code beside the poster's form code; the form code keeps today's redirect to the event page. A per-song code is not used; it would change this decision and need its own CCR.
 - Real phones are untested, because agents cannot get past staging's edge check. The owner accepts that risk. The vote page tells anyone whose scan did not register to scan the code again.
 - The cookie-mint cap (N2, OSE-2126) is on hold, with two triggers:
   - Refusals seen in a real room: raise the `/q` limit for that event (a limit above 360 skips the edge binding).
@@ -131,19 +131,19 @@ A vote counts only from a browser that scanned this event's vote code. Every coo
 
 ### 7. Results after the set is final
 
-No tally, winner or outcome appears before the set is final, and none on the display (invariant 5). Before then, no surface shows a vote count or a vote-set counter: not the admin list, the live monitor, audit details, the display or `display-config`. Invariant 2 holds for the brand's own admin.
+No tally, winner or outcome appears before the set is final, and none on the display (invariant 5). Before then, no surface shows a vote count or a vote-set counter: not the admin list, the live monitor, audit details, the display or `display-config`. The display and `display-config` carry no vote word at all: no "voting open" flag and no open-objects list. Invariant 2 holds for the brand's own admin.
 
 After the event, results are computed once (decision 4). Only these are published, to anyone, the brand admin included (Q7, Q8):
 
 - **No per-object number.** No up or "not for me" count, for any object, is ever published. No total of them is published either: not for a team, not across objects, not across nights.
 - **10 voters first.** Nothing is published unless at least 10 distinct voters voted in the set (participant markers, counted raw).
-- **Outcomes only.** For each result the set reports (the winner of the night, or a song's result against the champion), only the outcome: the winner, or "too close to call", and the champion retains.
+- **Outcomes only.** For each result the set reports, only the outcome: the winner, or "too close to call", and the champion retains. A result is either a song's result against the champion, or the winner of the night: the song (or team) with the largest up count, against the runner-up.
 - **The winner rule.** It runs on the unpublished up counts only; "not for me" counts are not used in the margin. A winner needs an up-count lead of at least T. T is a secret whole number drawn for that result, uniform from 5 to 9 (Q8 A).
-- **How T is drawn.** It comes from `crypto.getRandomValues`, by rejection sampling, so no value is more likely. It is drawn when the objects open, before any vote. It is stored only on the server, in a column no route returns, and never logged. It is set to null when the set is final. It is never published, and the outcome does not reveal it.
+- **How T is drawn.** It comes from `crypto.getRandomValues`, by rejection sampling, so no value is more likely. It is drawn when the objects open, before any vote. It is stored only on the server, in a column no route returns, and never logged. The night's T is drawn when the set opens. It is set to null when the set is final, and it is never published. An outcome tells only whether the hidden lead cleared T, so a person who controls a result's votes learns a bound on that result's T, and nothing about any other result's T.
 - **No count of voters** is published, for a night or a season, and no participation figure (Q8-2).
 - Own-team voting is allowed.
 
-**What the random margin does, and does not do.** It is a reduction the owner accepted knowingly (Q8, 2026-11-18), not a fix. One person who controls every vote but one can still learn that last vote about one time in five per try; with a fixed margin, every time. No fixed publishing rule can do better while one person can vote from many browsers. T is drawn per result, not once per night, so a person who controls a few results with their own browsers cannot learn T there and use it on the target's result. The card says plainly that the margin varies (decision 9).
+**What the random margin does, and does not do.** It is a reduction the owner accepted knowingly (Q8, 2026-11-18), not a fix. One person who controls every vote but one can still learn that last vote about one time in five per try; with a fixed margin, every time. No fixed publishing rule can do better while one person can vote from many browsers. T is drawn per result, not once per night, so a person who controls a few results with their own browsers cannot learn T there and use it on the target's result. The "one in five" is per result. A song's up vote feeds two results, its own result against the champion and the winner of the night, each with its own T, so that vote is exposed to two draws: about one time in three (1 − 0.8 × 0.8 = 0.36). Whether one vote may feed two results is an open owner question (Q14). The card says plainly that the margin varies (decision 9).
 
 **The 10-voter rule still shows one fact.** Whether anything is published at all shows whether at least 10 people voted. Someone with 9 browsers can therefore tell whether one other person voted, though not how. Dropping the voter count (Q8-2) did not remove this. The same random step could narrow it: a secret floor drawn per set from 10 to 14. That is an open owner question (Still open, Q13).
 
@@ -159,12 +159,12 @@ Once at least 10 distinct people have voted, the event gets a **fun results repo
 
 The owner accepts these residual risks, and the voter page states them in plain words so the room can self-police:
 
-- **Colluders.** Five or more people who know their own votes can work out one other person's vote from a published result.
+- **Colluders.** People who know their own votes and together cast every vote but one can sometimes work out that last vote from an outcome: about one time in five per result (the same risk as "one vote can decide an outcome").
 - **Several browsers.** Someone who scans with several browsers can vote more than once.
 - **A script.** One person with a script can cast many votes. Signing the cookie would not stop it: a browser with no cookie gets a fresh one, and a pass, in one request.
-- **One vote can decide an outcome.** One person who casts every vote but one can, about one time in five per try, learn that last vote from the outcome. The margin varies to make this rare; it cannot make it impossible (decision 7).
+- **One vote can decide an outcome.** One person who casts every vote but one can, about one time in five per result, learn that last vote from the outcome; about one time in three when the vote feeds two results. The margin varies to make this rare; it cannot make it impossible (decision 7).
 - **Remote voting.** A photo of the code lets someone vote from elsewhere while voting is open.
-- **A forwarded pass.** The pass works for whoever holds it. Someone who gets a person's vote link while it is valid can vote in their place, once per song. The person's own vote then answers like a counted one, so they cannot tell. It reveals no identity.
+- **A forwarded pass.** The pass works for whoever holds it. Someone who gets a person's vote link while it is valid can vote in their place, once per song. The person's own vote then answers like a counted one, so they cannot tell. Whoever holds the pass may also learn, from how fast a duplicate answers, which songs the person already voted on. It reveals no identity.
 - **Database history.** For 30 days, D1's history can link a scan to a vote by the order of writes, and it holds the secret margins until then.
 - **Log timing.** Cloudflare's logs record when each vote arrives, to the millisecond. With one song open, that time names the song. Only the account holder can see them.
 - **Timing.** A duplicate may answer faster than a counted vote.
@@ -178,11 +178,12 @@ Voting turns on when an admin opens a vote set for the event (D6 = A). No fair s
 
 ## Still open
 
-| Id        | Question                                                                                                                                                                         | Proposed default                                             | Blocks                                     |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------ |
-| Q13       | The 10-voter rule shows whether at least 10 voted, so someone with 9 browsers can tell whether one other person voted. Make the floor a secret random number per set (10 to 14)? | Yes: the same reduction as the margin, about 1 in 5 per try. | S5 (OSE-2130)                              |
-| C2 detail | How much detail does the published report carry, so it builds trust without narrowing to a person?                                                                               | Work it out in OSE-520, inside decision 7.                   | The fun report (OSE-520)                   |
-| Wording   | The owner's words for the house-rule card and the report: the ten risks in decision 9; the margin varies; the 10-voter rule does not stop stuffing; for fun.                     | A plain draft is on OSE-2122. The owner's words govern.      | The voter page (S4b), the report (OSE-520) |
+| Id        | Question                                                                                                                                                                                               | Proposed default                                                                                        | Blocks                                     |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Q14       | A song's up vote feeds two results (its own result and the night winner), each with its own secret margin, so it is exposed about one time in three, not one in five. Publish only one result per set? | Yes: publish the winner of the night only, and no per-song result, which keeps it at about one in five. | S5 (OSE-2130), OSE-520                     |
+| Q13       | The 10-voter rule shows whether at least 10 voted, so someone with 9 browsers can tell whether one other person voted. Make the floor a secret random number per set (10 to 14)?                       | Yes: the same reduction as the margin, about 1 in 5 per try.                                            | S5 (OSE-2130)                              |
+| C2 detail | How much detail does the published report carry, so it builds trust without narrowing to a person?                                                                                                     | Work it out in OSE-520, inside decision 7.                                                              | The fun report (OSE-520)                   |
+| Wording   | The owner's words for the house-rule card and the report: the ten risks in decision 9; the margin varies; the 10-voter rule does not stop stuffing; for fun.                                           | A plain draft is on OSE-2122. The owner's words govern.                                                 | The voter page (S4b), the report (OSE-520) |
 
 ## Alternatives Considered
 
@@ -224,7 +225,7 @@ This was D3 as first decided, with an amendment to AGENTS.md invariant 4 (S1g).
 - Five new tables, a pass from `/q`, and a secret margin per result.
 - A vote needs a pass from `/q`. The S0 spike showed that 150 browsers behind one address each get a cookie and a counted scan through the CI path. Real phones are untested, and the owner accepts that (decision 6).
 - The pass is a bearer token for 30 minutes (decision 9).
-- The residual risks are carried by a house rule, not by code. They include one person with a script, one vote deciding an outcome about one time in five, and a forwarded pass (decision 9).
+- The residual risks are carried by a house rule, not by code. They include one person with a script, one vote deciding an outcome about one time in five per result, and a forwarded pass (decision 9).
 
 ### Neutral
 
@@ -257,7 +258,7 @@ Every test is seen failing first, at the workers-pool layer and on staging (Brun
 ## References
 
 - **Tickets:** OSE-1193, OSE-1192, OSE-2000, OSE-1996, OSE-513, OSE-514, OSE-518, OSE-520, OSE-1496, OSE-2122 to OSE-2135; OW-73, OW-218, OW-219, OW-220.
-- **PRs:** #1407 (the readiness CCR), #1413 (its revert, with the owner's answers), #1414 (this ADR), #1415 (the room-burst measurement), #1416 (the presence CCR), #1417 (the presence amendment), #1418 (the S1 CCR on the decided text).
+- **PRs:** #1407 (the readiness CCR), #1413 (its revert, with the owner's answers), #1414 (this ADR), #1415 (the room-burst measurement), #1416 (the presence CCR), #1417 (the presence amendment), #1418 (the S1 CCR on the decided text), #1420 (this amendment).
 - **ADRs:** ADR-034 (booths, participation mode), ADR-032 (a mode as a column).
 - **Rules:** AGENTS.md invariants 1, 2, 3, 4 and 5.
 
