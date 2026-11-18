@@ -57,8 +57,10 @@
  *          every guard: event live, set open, not final, not void, object open,
  *          window ahead. The final guard is held here because 0111's CHECK
  *          (final means closed) hides its removal from any runtime test;
+ *        - it names no table but votable_objects, vote_sets and events: never a
+ *          tally, receipt or marker;
  *        - its answer object is built field by field: no spread in the read's
- *          files;
+ *          files, and those files never name a cookie or ose_anon;
  *        - only handlers/vote-objects.ts imports the read, and only router.ts
  *          imports that handler; the route is under /api/v2/vote/, outside
  *          /api/v2/events*, is wrapped in publicReadLimited, and is routed only
@@ -676,12 +678,24 @@ const DISPLAY_FILES = [
   'web/display/index.html',
 ];
 
+/**
+ * The only tables the open-objects read may name: the objects, their set (for
+ * its state, final and void flags) and the event (for its status). Never a
+ * tally, a receipt or a marker: even "has anyone voted on this song" is a count
+ * under the floor (security review M2, 2026-11-18).
+ */
+const OPEN_READ_TABLES = ['votable_objects', 'vote_sets', 'events'];
+
 /** What is wrong with the open-objects read's SQL. Empty when it holds. */
 function openReadProblems(sql: string): string[] {
   const out: string[] = [];
   const flat = normalize(sql);
   const select = /^SELECT\s+(.*?)\s+FROM\s+votable_objects\s+o\b/i.exec(flat);
   if (!select) return ['the read does not SELECT ... FROM votable_objects o'];
+  const read = [...flat.matchAll(/\b(?:FROM|JOIN)\s+(\w+)/gi)].map((m) => m[1].toLowerCase());
+  const stray = read.filter((t) => !OPEN_READ_TABLES.includes(t));
+  if (stray.length)
+    out.push(`it reads ${stray.join(', ')}; only ${OPEN_READ_TABLES.join(', ')} may be read`);
   const cols = select[1].split(',').map((c) => c.trim());
   if (cols.join(', ') !== 'o.id, o.kind, o.label, o.closes_at')
     out.push(`it selects ${cols.join(', ')}; only o.id, o.kind, o.label, o.closes_at may be read`);
@@ -765,6 +779,16 @@ test.describe('Invariant: the public vote read and the switch (OSE-2135)', () =>
     expect(calls.length, 'handleVoteObjects is called from one place in the router').toBe(1);
   });
 
+  test('OSE-2135 | cookie | the read and the switch never name a cookie or ose_anon', () => {
+    const bad = [OPEN_OBJECTS_LIB, OPEN_OBJECTS_HANDLER, SWITCH_LIB].filter((file) =>
+      /cookie|ose_anon/i.test(byFile.get(file)?.code ?? 'cookie (file missing)')
+    );
+    expect(
+      bad,
+      'ADR-040 decision 5: the vote path reads no cookie and sets none; /q stays the only reader (AGENTS.md invariant 4).'
+    ).toEqual([]);
+  });
+
   test('OSE-2135 | switch | only lib/voting-switch.ts names VOTING_ENABLED in code', () => {
     const naming = SOURCES.filter(({ code }) => /\bVOTING_ENABLED\b/.test(code)).map((s) => s.file);
     expect(
@@ -794,6 +818,22 @@ test.describe('Invariant: the public vote read and the switch (OSE-2135)', () =>
         AND s.state = 'open' AND s.is_final = 0 AND s.is_void = 0
         AND o.state = 'open' AND o.closes_at IS NOT NULL AND o.closes_at > ? LIMIT ?`;
     expect(openReadProblems(good)).toEqual([]);
+    expect(
+      openReadProblems(
+        good.replace(
+          'LIMIT ?',
+          'AND NOT EXISTS (SELECT 1 FROM vote_receipts r WHERE r.object_id = o.id) LIMIT ?'
+        )
+      )
+    ).toEqual(['it reads vote_receipts; only votable_objects, vote_sets, events may be read']);
+    expect(
+      openReadProblems(
+        good.replace(
+          'JOIN vote_sets s',
+          'JOIN vote_tallies t ON t.object_id = o.id JOIN vote_sets s'
+        )
+      )
+    ).toContain('it reads vote_tallies; only votable_objects, vote_sets, events may be read');
     expect(
       openReadProblems(
         good.replace('o.label, o.closes_at', 'o.label, o.closes_at, s.counted_votes')

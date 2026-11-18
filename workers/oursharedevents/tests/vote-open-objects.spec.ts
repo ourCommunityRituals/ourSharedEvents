@@ -192,6 +192,14 @@ beforeEach(async () => {
     `DELETE FROM vote_tallies WHERE object_id IN (SELECT id FROM votable_objects WHERE event_id LIKE ?)`,
     like
   );
+  await run(
+    `DELETE FROM vote_receipts WHERE object_id IN (SELECT id FROM votable_objects WHERE event_id LIKE ?)`,
+    like
+  );
+  await run(
+    `DELETE FROM vote_participants WHERE set_id IN (SELECT id FROM vote_sets WHERE event_id LIKE ?)`,
+    like
+  );
   await run(`DELETE FROM votable_objects WHERE event_id LIKE ?`, like);
   await run(`DELETE FROM vote_sets WHERE event_id LIKE ?`, like);
   await run(`DELETE FROM admin_audit_log WHERE resource_id LIKE ?`, like);
@@ -311,15 +319,29 @@ describe('2. the answer is an allowlist: id, kind, label, and nothing else', () 
     expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}/); // no date or time of any kind
   });
 
-  test('the bytes do not move when a counter does', async () => {
-    const ids = await night(NIGHT, ['Song one']);
+  test('the bytes do not move when a counter, a receipt or a marker does', async () => {
+    const ids = await night(NIGHT, ['Song one', 'Song two']);
     await openSong(NIGHT, ids['Song one']);
+    await openSong(NIGHT, ids['Song two']);
     const before = (await read(NIGHT)).text;
     await run(
       `UPDATE vote_tallies SET up_count = 7, down_count = 3 WHERE object_id = ?`,
       ids['Song one']
     );
     await run(`UPDATE vote_sets SET counted_votes = 10 WHERE event_id = ?`, NIGHT);
+    expect((await read(NIGHT)).text).toBe(before);
+    // "Has anyone voted on this song" is a count under the floor too (security
+    // review M2): one song with a receipt, one without, must read alike.
+    await run(
+      `INSERT INTO vote_receipts (object_id, receipt) VALUES (?, ?)`,
+      ids['Song one'],
+      'a'.repeat(64)
+    );
+    await run(
+      `INSERT INTO vote_participants (set_id, marker) SELECT id, ? FROM vote_sets WHERE event_id = ?`,
+      'b'.repeat(64),
+      NIGHT
+    );
     expect((await read(NIGHT)).text).toBe(before);
   });
 
@@ -400,9 +422,10 @@ describe('3. only what is open now is listed', () => {
     const ids = await night(NIGHT, ['Song one']);
     await openSong(NIGHT, ids['Song one']);
     expect(await labels(NIGHT)).toEqual(['Song one']);
-    // What S5 will do when it computes results. The CHECK in 0111 wants a final
-    // set closed, so the open flag is tested apart from state here: the object
-    // stays open with its window ahead, and the set's final flag alone hides it.
+    // What S5 will do when it computes results. 0111's CHECK makes a final set
+    // closed, so this case passes on the set-state guard as well: removing only
+    // `s.is_final = 0` from the read leaves it green. That guard is held by the
+    // T0 gate instead (votes-never-who rule 8; security review L2).
     await run(
       `UPDATE vote_sets SET is_final = 1, final_at = '2026-11-18 20:00:00', state = 'closed',
               secret_margin = NULL, secret_floor = NULL WHERE event_id = ?`,
