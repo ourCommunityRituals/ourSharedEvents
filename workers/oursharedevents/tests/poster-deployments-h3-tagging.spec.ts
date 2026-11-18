@@ -532,7 +532,11 @@ describe('8b–8e. attribution rule gate — physical res9, digital res7, no dev
   // which a person presses, sends only a 5-character geohash box and gets back
   // a zip. Its limits are asserted in tests/landing-where.spec.ts. No scan or
   // click path may read position, and no other served file may ask.
-  const POSITION_READERS = ['src/templates/landing.html'];
+  // The second (owner 2026-11-18, "an accessible you are here icon" after "Use
+  // my location"): the map's script, which a person presses too. It draws the
+  // dot and the distances on the phone and sends nothing: no fetch, beacon,
+  // storage or address change, asserted in tests/map-pan.spec.ts.
+  const POSITION_READERS = ['src/templates/landing.html', 'src/lib/map-pan-script.ts'];
 
   test('8b. nothing the Worker serves asks the browser for its position (admin included)', () => {
     const served = sourcesMatching(

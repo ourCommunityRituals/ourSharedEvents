@@ -6,12 +6,13 @@
  * Node project: pure functions and pure drawing. Registered in
  * vitest.node-specs.mjs.
  */
-// @born-red street names and landmarks | method: faults put into lib/street-labels.ts and lib/street-map.ts one at a time, this file run, the file restored; each turned it red: names drawn under the hexagons (the group moved before the streets' end); the rotation not folded (a name upside down); a run shorter than its name accepted; the hexagon number boxes left out of `taken`; tier 2 placed at full size; a ref of any shape used as a highway's number; an unknown landmark kind drawn; the landmark budget raised; the pois decode allowed to fail the street layer; the phone band left out of placement | date: 2026-11-18
+// @born-red street names and landmarks | method: faults put into lib/street-labels.ts and lib/street-map.ts one at a time, this file run, the file restored; each turned it red: names drawn under the hexagons (the group moved before the streets' end); the rotation not folded (a name upside down); a run shorter than its name accepted; the hexagon number boxes left out of `taken`; tier 2 placed at full size; a ref of any shape used as a highway's number; an unknown landmark kind drawn; the landmark budget raised; the pois decode allowed to fail the street layer; the phone band left out of placement; the transit kinds left out of LANDMARK_KINDS; the parking sign dropped | date: 2026-11-18
 import { describe, expect, it } from 'vitest';
 import {
   LANDMARK_KINDS,
   MAX_LANDMARKS,
   MAX_STREET_NAMES,
+  PARKING_SIGN,
   PHONE_BAND,
   landmarkOf,
   longestRun,
@@ -160,6 +161,27 @@ describe('landmarks', () => {
     expect(landmarkOf({ kind: 'constructor', name: 'Proto' }, 1, 2)).toBeNull();
     expect(landmarkOf({ kind: 'park' }, 1, 2)).toBeNull();
     expect(LANDMARK_KINDS.get('train_station')).toBe(0);
+  });
+
+  it('all public transport and parking (owner, 2026-11-18): every stop kind, and an unnamed lot is "P"', () => {
+    for (const kind of [
+      'subway_station',
+      'light_rail_station',
+      'tram_stop',
+      'ferry_terminal',
+      'bus_station',
+      'bus_stop',
+    ]) {
+      expect(landmarkOf({ kind, name: 'Vermont St' }, 1, 2)?.text, kind).toBe('Vermont St');
+      // A stop with no name is not drawn: a bare mark says nothing.
+      expect(landmarkOf({ kind }, 1, 2), kind).toBeNull();
+    }
+    expect(landmarkOf({ kind: 'parking' }, 1, 2)?.text).toBe(PARKING_SIGN);
+    expect(landmarkOf({ kind: 'parking', name: '  ' }, 1, 2)?.text).toBe(PARKING_SIGN);
+    expect(landmarkOf({ kind: 'parking', name: 'Metra Lot' }, 1, 2)?.text).toBe('Metra Lot');
+    // Rail and bus stations rank with the trains, ahead of a park.
+    expect(LANDMARK_KINDS.get('bus_station')!).toBeLessThan(LANDMARK_KINDS.get('park')!);
+    expect(LANDMARK_KINDS.get('parking')!).toBeLessThan(LANDMARK_KINDS.get('park')!);
   });
 
   it('the most important first (min_zoom), a mark and its name, at most MAX_LANDMARKS at first', () => {

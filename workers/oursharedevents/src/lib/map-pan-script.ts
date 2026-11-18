@@ -24,7 +24,8 @@
  *   - A scale bar in miles, worked out from the drawing's real size on screen.
  *   - Where the visitor already allowed location, or taps "Show where I am": a
  *     ringed dot where they are, the distance to each area in the list under
- *     the map, and a line read out by a screen reader naming the nearest area.
+ *     the map with the nearest put first, and a line read out by a screen
+ *     reader naming the nearest area.
  *
  * NEVER WHO, NEVER WHERE (invariant 3: geolocation picks what to show and is
  * never stored). The position is read by the phone and used by the phone: it
@@ -243,6 +244,15 @@ const SCRIPT = String.raw`(function () {
         row.appendChild(s);
       }
       s.textContent = ' · ' + say('from', fmt(d));
+      row.setAttribute('data-d', d.toFixed(3));
+    });
+    // Nearest first: the list under the map is put in order of distance. Each
+    // row keeps its number (its value), so it still matches its hexagon.
+    [].forEach.call(fig.querySelectorAll('ol.amap-legend'), function (ol) {
+      [].slice.call(ol.children)
+        .filter(function (li) { return li.hasAttribute('data-d'); })
+        .sort(function (a, b) { return +a.getAttribute('data-d') - +b.getAttribute('data-d'); })
+        .forEach(function (li) { ol.appendChild(li); });
     });
     mark();
     status.textContent = say(inFrame(proj(lat, lng)) ? 'you' : 'outside') + (best ? ' ' + say('nearest', fmt(best.d), best.name) : '');

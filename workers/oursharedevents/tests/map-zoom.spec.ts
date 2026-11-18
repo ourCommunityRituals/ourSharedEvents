@@ -1112,6 +1112,39 @@ describe('the place panel under the map', () => {
     );
   });
 
+  // @born-red Take me there | method: a coordinate passed to directionsUrls in lib/map-place-panel.ts, this file run (2 red), restored | date: 2026-11-18
+  test('sunny: Take me there, in Google Maps and in Apple Maps, searches the address the event page shows (owner, 2026-11-18)', () => {
+    const html = panelled([
+      ev('a', {
+        venue: 'Harbor Lanes',
+        where_address: '13501 S Western Ave, Blue Island',
+      } as Partial<ZoomEvent>),
+    ]);
+    const acts = /<div class="amap-acts"[^>]*>(.*?)<\/div>/s.exec(html)![1]!;
+    const order = [
+      ...acts.matchAll(/data-testid="(amap-register|amap-go-google|amap-go-apple|amap-link)"/g),
+    ].map((m) => m[1]);
+    expect(order).toEqual(['amap-register', 'amap-go-google', 'amap-go-apple', 'amap-link']);
+    const q = encodeURIComponent('13501 S Western Ave, Blue Island');
+    expect(acts).toContain(
+      `href="https://www.google.com/maps/search/?api=1&amp;query=${q}" target="_blank" rel="noopener noreferrer" data-testid="amap-go-google" aria-label="Take me there (Google Maps): directions to Event a">Take me there (Google Maps)</a>`
+    );
+    expect(acts).toContain(`href="https://maps.apple.com/?q=${q}" target="_blank"`);
+    // The venue name when there is no street address.
+    expect(panelled([ev('b', { venue: 'Harbor Lanes' })])).toContain(
+      'href="https://maps.apple.com/?q=Harbor%20Lanes"'
+    );
+  });
+
+  test('never where: Take me there carries no coordinate; none when nothing says where, or once over', () => {
+    // Only a point, no address or venue: no button, as the point stays off the page.
+    const pointOnly = panelled([ev('a')]);
+    expect(pointOnly).not.toContain('amap-go-');
+    expect(pointOnly).not.toContain(String(RIPH.lat));
+    const over = panelled([ev('a', { phase: 'post_event', venue: 'Harbor Lanes' })]);
+    expect(over).not.toContain('amap-go-');
+  });
+
   test('sunny: Share is the event page share: its /e/ code, else its page, and one script for all', () => {
     const html = panelled([ev('a'), ev('b', far)]);
     expect(html).toContain(

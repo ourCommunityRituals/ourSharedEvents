@@ -291,6 +291,43 @@ test.describe('where location is allowed', () => {
     }
   });
 
+  // @born-red nearest first | method: the reorder in lib/map-pan-script.ts made a no-op, these run (Beverly red), restored | date: 2026-11-18
+  for (const [where, cell] of [
+    ['Blue Island', BLUE_ISLAND],
+    ['Beverly', BEVERLY],
+  ] as const) {
+    test(`near ${where}, its area is first in the list, still with its own number`, async ({
+      browser,
+    }) => {
+      const [lat, lon] = cellToLatLng(cell);
+      context = await browser.newContext({
+        viewport: { width: 375, height: 812 },
+        geolocation: { latitude: lat + 0.002, longitude: lon + 0.002 },
+        permissions: ['geolocation'],
+      });
+      const page = await context.newPage();
+      await open(page, '/', true);
+      await expect(page.getByTestId('amap-dist')).toHaveCount(2);
+      const rows = page.locator('ol.amap-legend > li[data-area]');
+      await expect(rows.first()).toHaveAttribute('data-area', cell);
+      // Nearest first, and each row keeps the number its hexagon shows.
+      const order = await rows.evaluateAll((lis) =>
+        lis.map((li) => ({
+          d: Number(li.getAttribute('data-d')),
+          n: li.getAttribute('value'),
+          cell: li.getAttribute('data-area'),
+        }))
+      );
+      expect(order.map((o) => o.d)).toEqual([...order.map((o) => o.d)].sort((x, y) => x - y));
+      for (const o of order) {
+        const num = page
+          .locator(`g[data-testid="amap-area"][data-cell="${o.cell}"] .amap-num`)
+          .first();
+        expect(((await num.textContent()) ?? '').trim()).toMatch(new RegExp(`^${o.n}`));
+      }
+    });
+  }
+
   test('on a phone, a two-finger pinch zooms the map and never scrolls the page', async ({
     browser,
   }) => {

@@ -71,6 +71,16 @@ export const LANDMARK_KINDS = new Map<string, number>(
   [
     'train_station',
     'station',
+    // Public transport and where to leave the car (owner, 2026-11-18, for
+    // attendees aged 55 to 75: "all public transportation"). Every stop kind
+    // Protomaps names; a parking lot with no name shows the sign "P".
+    'subway_station',
+    'light_rail_station',
+    'tram_stop',
+    'ferry_terminal',
+    'bus_station',
+    'parking',
+    'bus_stop',
     'aerodrome',
     'hospital',
     'university',
@@ -90,6 +100,9 @@ export const LANDMARK_KINDS = new Map<string, number>(
     'marina',
   ].map((k, i) => [k, i])
 );
+
+/** What an unnamed parking lot shows: the sign drivers know in every language. */
+export const PARKING_SIGN = 'P';
 
 /** One straight run of a named road, in map units. */
 export interface RoadRun {
@@ -143,8 +156,14 @@ export function longestRun(
 /** A landmark from a `pois` feature, or null when it is not one this map draws. */
 export function landmarkOf(props: Record<string, unknown>, x: number, y: number): Landmark | null {
   const order = LANDMARK_KINDS.get(String(props.kind));
-  const name = props['name:en'] ?? props.name;
-  if (order === undefined || typeof name !== 'string' || !name.trim()) return null;
+  const named = props['name:en'] ?? props.name;
+  const name =
+    typeof named === 'string' && named.trim()
+      ? named
+      : props.kind === 'parking'
+        ? PARKING_SIGN
+        : '';
+  if (order === undefined || !name.trim()) return null;
   const mz = Number(props.min_zoom);
   const t = name.trim();
   const text =

@@ -1791,7 +1791,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 53
+      "testCount": 59
     },
     {
       "file": "workers/oursharedevents/tests/landing-categories.spec.ts",
@@ -2001,7 +2001,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 78
+      "testCount": 80
     },
     {
       "file": "workers/oursharedevents/tests/maps.spec.ts",
@@ -3667,7 +3667,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 15
+      "testCount": 16
     },
     {
       "file": "workers/oursharedevents/tests/street-layer-kept.spec.ts",
@@ -3724,6 +3724,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/sunset.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 7
     },
     {
       "file": "workers/oursharedevents/tests/surface-deep-link.spec.ts",

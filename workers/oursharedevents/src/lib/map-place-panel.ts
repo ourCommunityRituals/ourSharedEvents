@@ -27,12 +27,18 @@ import { DEFAULT_LANG, type Lang } from './i18n/languages.js';
 import { withLangPrefix } from './i18n/path-prefix.js';
 import { eventShareUrl, renderShareButton, shareScript } from './share-button.js';
 import type { PlaceLinks } from './map-place-links.js';
+import { directionsUrls } from './geo-link.js';
 
 /** Cards one panel shows before pointing at the full list. */
 export const PANEL_CARD_MAX = 12;
 
 /** What a panel needs to know about one event (the public projection). */
-export type PanelEvent = EventListItem & { location?: unknown; classes?: readonly string[] };
+export type PanelEvent = EventListItem & {
+  location?: unknown;
+  /** The street address the event page shows; Directions search it (OSE-660). */
+  where_address?: unknown;
+  classes?: readonly string[];
+};
 
 export interface PanelPlace {
   /** 1-based, the number printed in the dot. */
@@ -101,6 +107,25 @@ export function panelActions(e: PanelEvent, opts: PanelOptions = {}): string {
     out.push(
       `<a class="cta cta-secondary" href="${escapeHtml(withLangPrefix(lang, eventFormPath(id, 'register')))}" data-testid="amap-register">${msg(lang, 'cta.register')}</a>`
     );
+  }
+  // "Take me there" (owner, 2026-11-18, for attendees aged 55 to 75): the
+  // event page's two Directions choices (owner 2026-10-11, Google Maps and
+  // Apple Maps), as two buttons in the grid. They search the text the event
+  // page shows, its street address else its venue, as the poster does. Never
+  // its point: no coordinate reaches the map's page (lib/attendee-map). Link-out
+  // only: nothing leaves the page until the visitor taps one.
+  const go = wrapped
+    ? null
+    : directionsUrls(null, null, venueOf(e) || null, str(e.where_address).trim() || null);
+  if (go) {
+    for (const [which, href, key] of [
+      ['google', go.google, 'map.goGoogle'],
+      ['apple', go.apple, 'map.goApple'],
+    ] as const) {
+      out.push(
+        `<a class="cta cta-secondary" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" data-testid="amap-go-${which}" aria-label="${fmt(lang, 'map.goLabel', { name: safeName, app: msg(lang, key) })}">${msg(lang, key)}</a>`
+      );
+    }
   }
   const links = opts.placeLinks?.get(id);
   for (const l of links?.links ?? []) {

@@ -182,6 +182,7 @@ export const NODE_SPECS = [
   'tests/mvt.spec.ts',
   'tests/street-map.spec.ts',
   'tests/street-labels.spec.ts',
+  'tests/sunset.spec.ts',
   'tests/map-pan.spec.ts',
   'tests/street-map-landing.spec.ts',
   // The landing's own call for the street layer (the pages.ts block Stryker

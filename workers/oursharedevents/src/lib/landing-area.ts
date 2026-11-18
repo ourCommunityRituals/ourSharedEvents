@@ -72,7 +72,8 @@ import {
 import { renderEventCard } from './event-list.js';
 import { AREA_LIST_ID, renderAttendeeMap, type ZoomEvent } from './attendee-map.js';
 import type { PlaceLinks } from './map-place-links.js';
-import { getResolution, isValidCell } from 'h3-js';
+import { cellToLatLng, getResolution, isValidCell } from 'h3-js';
+import { endsBeforeDark } from './sunset.js';
 import { CORRIDOR_RES } from './h3-tagging.js';
 import type { StreetLayer } from './street-map.js';
 import { toPublicEvent } from './public-event-projection.js';
@@ -105,6 +106,9 @@ export interface LandingAreaItem {
  * The landing's window pills (OSE-1362): a subset of the /events `when` set, so
  * "Next 7 days" here is exactly "Next 7 days" there. Widest LAST.
  */
+/** The class of an in-person event that is over before sunset (lib/sunset). */
+export const DAYLIGHT_CLASS = 'daylight';
+
 export const LANDING_WINDOWS = [
   'weekend',
   'week',
@@ -200,6 +204,17 @@ function modalityOf(item: LandingAreaItem): 'online' | 'inperson' {
  * in — decided by the shared inWhenWindow, never by a landing-local rule. An
  * event outside every window carries none and is hidden until it comes into range.
  */
+/**
+ * Where the sun is reckoned for an event: its own point, else the middle of its
+ * area. The place of the event, never the visitor (invariant 3).
+ */
+function sunPlace(e: LandingAreaItem): [number | null, number | null] {
+  if (isFiniteNum(e.lat) && isFiniteNum(e.lon)) return [Number(e.lat), Number(e.lon)];
+  const cell = str(e.h3_res7);
+  if (cell && isValidCell(cell)) return cellToLatLng(cell);
+  return [null, null];
+}
+
 function windowClasses(e: LandingAreaItem, now: Date): string[] {
   return LANDING_WINDOWS.filter((w) => inWhenWindow(e, w, now)).map((w) => `when-${w}`);
 }
@@ -351,6 +366,8 @@ export function renderLandingArea(
 
   const categoryMap = new Map<string, { label: string; order: number }>(); // by slug
   const modalities = new Set<string>();
+  // How many listed events are over before dark (owner, 2026-11-18).
+  let daylightCount = 0;
   let windowCount = 0;
   // Each card's filter classes, so a zoomed map's dots can carry the same ones.
   const classesOf = new Map<LandingAreaItem, string[]>();
@@ -371,6 +388,11 @@ export function renderLandingArea(
       const modality = modalityOf(e);
       modalities.add(modality);
       const classes = [...windows, category.slug, 'product-ose', `modality-${modality}`];
+      // Home before dark: in person and over before sunset where it is held.
+      if (modality === 'inperson' && endsBeforeDark(e, ...sunPlace(e))) {
+        classes.push(DAYLIGHT_CLASS);
+        daylightCount += 1;
+      }
       classesOf.set(e, classes);
 
       return renderEventCard(
@@ -438,6 +460,8 @@ export function renderLandingArea(
     defaultView,
     mapHtml,
     mixedModality: modalities.size > 1,
+    // Offered only when it can change what is shown.
+    mixedDaylight: daylightCount > 0 && daylightCount < live.length,
     emptyWindows: LANDING_WINDOWS.filter((w) => !filledWindows.has(`when-${w}`)),
     lang,
   });
@@ -499,11 +523,22 @@ function buildAreaMarkup(args: {
   mapHtml: string;
   /** Both online and in-person events are listed, so the Where choice can differ. */
   mixedModality: boolean;
+  /** Some listed events end before dark and some do not, so the choice can differ. */
+  mixedDaylight: boolean;
   /** Windows with no listed event: each gets a message instead of a blank list. */
   emptyWindows: readonly LandingWindow[];
   lang: Lang;
 }): string {
-  const { cards, categories, defaultView, mapHtml, mixedModality, emptyWindows, lang } = args;
+  const {
+    cards,
+    categories,
+    defaultView,
+    mapHtml,
+    mixedModality,
+    mixedDaylight,
+    emptyWindows,
+    lang,
+  } = args;
   const listChecked = defaultView === 'list';
   // A refinement is offered only when it can change what is shown.
   const showTypes = categories.length > 1;
@@ -522,6 +557,9 @@ function buildAreaMarkup(args: {
       radio('mod-online', 'mod', false) +
       radio('mod-inperson', 'mod', false)
     : '';
+  const dayRadios = mixedDaylight
+    ? radio('day-all', 'day', true) + radio('day-light', 'day', false)
+    : '';
 
   // ── generated rules: selected look + focus ring + (for filters) the hide rule ──
   const rules: string[] = [];
@@ -539,6 +577,10 @@ function buildAreaMarkup(args: {
     rules.push(chipRules('mod-all'));
     rules.push(chipRules('mod-online') + hide('mod-online', 'modality-online'));
     rules.push(chipRules('mod-inperson') + hide('mod-inperson', 'modality-inperson'));
+  }
+  if (mixedDaylight) {
+    rules.push(chipRules('day-all'));
+    rules.push(chipRules('day-light') + hide('day-light', DAYLIGHT_CLASS));
   }
   const winStyle = `<style data-testid="area-window-css">\n${rules.join('\n')}\n</style>`;
   // Category pills are dynamic, so their rules are too. A card (and a map dot)
@@ -562,6 +604,9 @@ function buildAreaMarkup(args: {
   const modPills = mixedModality
     ? `<fieldset class="disc-chips" data-testid="toggle-modality"><legend class="disc-label">${msg(lang, 'area.where')}</legend>${pill('mod-all', msg(lang, 'area.all'))}${pill('mod-online', msg(lang, 'area.online'))}${pill('mod-inperson', msg(lang, 'area.inPerson'))}</fieldset>`
     : '';
+  const dayPills = mixedDaylight
+    ? `<fieldset class="disc-chips" data-testid="toggle-daylight"><legend class="disc-label">${msg(lang, 'area.timeOfDay')}</legend>${pill('day-all', msg(lang, 'area.anyTime'))}${pill('day-light', msg(lang, 'area.beforeDark'))}</fieldset>`
+    : '';
 
   // On a phone the window, type and Where groups fold behind one Filters chip,
   // so the map starts near the top (the grade of 2026-11-17; area-filters-style.ts).
@@ -575,7 +620,7 @@ function buildAreaMarkup(args: {
         <div class="toggles area-filters" data-testid="area-filters">
           <fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">${msg(lang, 'disc.when')}</legend>${LANDING_WINDOWS.map((w) => pill(`win-${w}`, discoveryChipLabel(w, lang))).join('')}</fieldset>
           ${typePills}
-          ${modPills}
+          ${modPills}${dayPills}
         </div>`;
 
   // OSE-1354: the map view never hides the cards. The map (lib/attendee-map) sits
@@ -598,7 +643,7 @@ function buildAreaMarkup(args: {
         </div>`;
 
   const filtersToggle = `<input type="checkbox" id="${FILTERS_TOGGLE_ID}" class="toggle-radio" />`;
-  return `${viewRadios}${winRadios}${typeRadios}${modRadios}${filtersToggle}
+  return `${viewRadios}${winRadios}${typeRadios}${modRadios}${dayRadios}${filtersToggle}
         ${winStyle}${typeStyle}${AREA_FILTERS_STYLE}
         ${toggles}
         ${area}`;
