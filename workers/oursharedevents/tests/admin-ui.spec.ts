@@ -28,6 +28,34 @@ async function fetchAdminHtml(): Promise<string> {
   return res.text();
 }
 
+/**
+ * The page with every script element cut out, so a count sees markup only, not
+ * the HTML strings the scripts build. Plain string scanning, not a regex: an end
+ * tag may carry whitespace or attributes ("</script >"), and a filter regex is
+ * the wrong tool for that (CodeQL js/bad-tag-filter). An unclosed script element
+ * drops the rest of the page, which can only make a count smaller.
+ */
+function withoutScripts(html: string): string {
+  const lower = html.toLowerCase();
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const open = lower.indexOf('<script', at);
+    if (open === -1) return out + html.slice(at);
+    out += html.slice(at, open);
+    const close = lower.indexOf('</script', open);
+    if (close === -1) return out;
+    const end = lower.indexOf('>', close);
+    if (end === -1) return out;
+    at = end + 1;
+  }
+}
+
+/** A string matched literally inside a RegExp. */
+function reEscape(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ADMIN-2: Tier badge + gated UI
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -128,7 +156,7 @@ describe('ADMIN-12: No inline styles in admin HTML', () => {
     // HTML attributes and should not trigger this guard.
     const bodyStart = html.indexOf('<body'); // the <body> tag carries a class now
     const bodyHtml = html.slice(bodyStart);
-    const bodyNoScripts = bodyHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+    const bodyNoScripts = withoutScripts(bodyHtml);
     expect(bodyNoScripts).not.toMatch(/style="/);
   });
 
@@ -194,10 +222,16 @@ describe('OSE-1328: forms-card uniform anatomy', () => {
     const html = await fetchAdminHtml();
     // .card = token-driven base from /ui.css; the forms-card class is kept so
     // the context-bar ecbJump target (querySelector('.forms-card')) still resolves.
-    expect(html).toContain('class="card forms-card"');
-    expect(html).toMatch(/class="mcard-head"[\s\S]*?class="mcard-title"/);
-    expect(html).toContain('class="mcard-body"');
-    expect(html).toContain('.mcard-head {');
+    // Since the 2026-11-18 FE pass the anatomy is @ocr/ui's sectioned card
+    // (.card--sectioned > .card-header > .card-title, .card-body); the page keeps
+    // no copy of its own.
+    expect(html).toContain('class="card card--sectioned forms-card"');
+    expect(html).toMatch(
+      /class="card card--sectioned forms-card"[\s\S]*?class="card-header"[\s\S]*?class="card-title">Reg &amp; Forms/
+    );
+    expect(html).toContain('class="card-body"');
+    expect(html, 'no forked card anatomy').not.toMatch(/\.mcard-(head|title|body)\s*\{/);
+    expect(html).not.toContain('class="mcard-');
     // No bespoke card chrome (shadow) left on the forms-card rule.
     expect(html).not.toMatch(/\.forms-card\s*\{[^}]*box-shadow/);
   });
@@ -216,16 +250,15 @@ describe('OSE-1328: forms-card uniform anatomy', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('OSE-1328: poster-deployments-card uniform anatomy', () => {
-  test('poster-deployments-card adopts .card + .mcard-* (no longer borrows .sponsors-card-header)', async () => {
+  test('poster-deployments-card adopts the shared sectioned card (no longer borrows .sponsors-card-header)', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('class="card poster-deployments-card"');
-    // Its header uses the shared .mcard-head/.mcard-title, not the sponsors-card piggyback.
+    expect(html).toContain('class="card card--sectioned poster-deployments-card"');
+    // Header: the shared .card-header/.card-title, its one action at the right (.card-action).
     expect(html).toMatch(
-      /class="card poster-deployments-card"[\s\S]*?class="mcard-head"[\s\S]*?class="mcard-title">Posters/
+      /class="card card--sectioned poster-deployments-card"[\s\S]*?class="card-header"[\s\S]*?class="card-title">Posters[\s\S]*?class="btn btn-outline add-spon-btn card-action"/
     );
-    // The three cluster cards now share ONE grouped padding:0 base rule (DRY —
-    // slice 3 retired the per-card chrome); assert poster-deployments is in it.
-    expect(html).toMatch(/\.poster-deployments-card[,{][\s\S]*?padding: 0/);
+    // .card--sectioned carries padding:0, so the page keeps no per-card padding rule.
+    expect(html).not.toMatch(/\.poster-deployments-card[,{][^}]*padding: 0/);
     // The add-spon-btn hover raw hex was routed to the token in the same change.
     expect(html).not.toContain('#3a56d4');
   });
@@ -256,11 +289,11 @@ describe('OSE-1328: sponsors + poster-art cluster (god-class retired)', () => {
   test('sponsors-card adopts .card + .mcard-* (keeps .sponsors-card hook + testid)', async () => {
     const html = await fetchAdminHtml();
     // .card base + the sponsors-card class kept for ecbJump + the [data-testid] lookup (admin.html ~2717)
-    expect(html).toContain('class="card sponsors-card"');
+    expect(html).toContain('class="card card--sectioned sponsors-card"');
     expect(html).toMatch(
-      /class="card sponsors-card"[\s\S]*?class="mcard-head"[\s\S]*?class="mcard-title">Sponsors/
+      /class="card card--sectioned sponsors-card"[\s\S]*?class="card-header"[\s\S]*?class="card-title">Sponsors[\s\S]*?class="flex-row card-action"/
     );
-    expect(html).toContain('class="mcard-body"');
+    expect(html).toContain('class="card-body"');
     // wiring preserved
     expect(html).toContain('id="spon-form-wrap"');
     expect(html).toContain('data-testid="sponsors-list"');
@@ -270,10 +303,10 @@ describe('OSE-1328: sponsors + poster-art cluster (god-class retired)', () => {
 
   test('poster-art-card adopts .card + .mcard-* and DROPS the sponsors-card piggyback', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('class="card poster-art-card"');
+    expect(html).toContain('class="card card--sectioned poster-art-card"');
     expect(html).not.toContain('class="sponsors-card poster-art-card"'); // decoupled
     expect(html).toMatch(
-      /class="card poster-art-card"[\s\S]*?class="mcard-head"[\s\S]*?class="mcard-title">Poster art/
+      /class="card card--sectioned poster-art-card"[\s\S]*?class="card-header"[\s\S]*?class="card-title">Poster art/
     );
     // R4 (OSE-1319) hydration wiring preserved
     expect(html).toContain('id="pa-panel"');
@@ -293,14 +326,14 @@ describe('OSE-1328: sponsors + poster-art cluster (god-class retired)', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('OSE-1328: dashboard-card uniform anatomy', () => {
-  test('dashboard-card adopts .card + .mcard-* (title in header, stats+lifecycle in body)', async () => {
+  test('dashboard-card adopts the shared sectioned card (title in header, stats+lifecycle in body)', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('class="card dashboard-card"');
+    expect(html).toContain('class="card card--sectioned dashboard-card"');
     expect(html).toMatch(
-      /class="card dashboard-card"[\s\S]*?class="mcard-head"[\s\S]*?class="mcard-title[^"]*"[^>]*>Event Dashboard/
+      /class="card card--sectioned dashboard-card"[\s\S]*?class="card-header"[\s\S]*?class="card-title[^"]*"[^>]*>Event Dashboard/
     );
-    expect(html).toContain('class="mcard-body"');
-    // base rule adopts the anatomy (padding:0), no bespoke card chrome (shadow).
+    expect(html).toContain('class="card-body"');
+    // base rule keeps padding:0, no bespoke card chrome (shadow).
     expect(html).toMatch(/\.dashboard-card\s*\{[\s\S]*?padding: 0/);
     expect(html).not.toMatch(/\.dashboard-card\s*\{[^}]*box-shadow/);
   });
@@ -546,8 +579,9 @@ describe('ADMIN-15 Structure: Copy buttons', () => {
     // Strip <script> blocks before counting — JS template strings may contain
     // <button class="copy-btn"> snippets for dynamically injected content
     // (e.g. mint-link-btn, mint-copy-btn); only surface-card static buttons count.
-    const htmlNoScripts = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
-    const copyBtns = htmlNoScripts.match(/<button[^>]*class="copy-btn"[^>]*>/g) ?? [];
+    const htmlNoScripts = withoutScripts(html);
+    const copyBtns =
+      htmlNoScripts.match(/<button[^>]*class="btn btn-secondary copy-btn"[^>]*>/g) ?? [];
     expect(copyBtns.length).toBe(9); // +1: pd-create-btn (OSE-636 poster deployment form); +3: poster codes Add / Save / Undo (OSE-1357 p2); +1: TV display Save
   });
 });
@@ -555,15 +589,14 @@ describe('ADMIN-15 Structure: Copy buttons', () => {
 // ── Layer 2: CSS — copy button states ────────────────────────────────────────
 
 describe('ADMIN-15 CSS: Copy button visual states', () => {
-  test('default copy-btn style defined', async () => {
+  // Since the 2026-11-18 FE pass a copy button is @ocr/ui's .btn .btn-secondary
+  // (48px, 16px label, focus ring, hover from /ui.css); only "copied" is this page's.
+  test('copy buttons are the shared secondary button, with no forked base or hover rule', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('.copy-btn {');
-    expect(html).toMatch(/\.copy-btn\s*\{[^}]*cursor:\s*pointer/);
-  });
-
-  test('hover state defined', async () => {
-    const html = await fetchAdminHtml();
-    expect(html).toContain('.copy-btn:hover');
+    const htmlNoScripts = withoutScripts(html);
+    expect(htmlNoScripts).not.toMatch(/class="copy-btn/);
+    expect(html).not.toMatch(/\.copy-btn\s*\{/);
+    expect(html).not.toContain('.copy-btn:hover');
   });
 
   test('copied success state with green styling', async () => {
@@ -963,5 +996,99 @@ describe('ADMIN-2 Backend: legal_clearance_tier field in admin events API', () =
     expect(item).toBeDefined();
     // API returns the raw DB value — the UI template clamps it to 1-5
     expect(item!.legal_clearance_tier).toBe(6);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FE pass 2026-11-18: the admin speaks @ocr/ui's header, card and button
+// vocabulary (spine packages/ui/src/styles.ts at the .ocr-hub-ref pin) and keeps
+// no forked copy of it. Canvas: packages/ui/design-system/canvas/OrgDashboard.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('FE pass: @ocr/ui header, sectioned cards and the .btn family', () => {
+  const css = (html: string) =>
+    [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join('\n');
+  const markup = (html: string) => withoutScripts(html);
+
+  test('the header is the shared .header: a .brand label over the one <h1>', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toMatch(/<header class="header admin-header" data-testid="admin-header"/);
+    expect(html).toMatch(
+      /<span class="brand" data-testid="admin-brand">ourSharedEvents<\/span>\s*<h1>/
+    );
+    expect(markup(html).match(/<h1[\s>]/g)?.length, 'one <h1> per page').toBe(1);
+    // The page no longer paints its own header chrome over the shared one.
+    expect(css(html)).not.toMatch(/(^|\n)\s*header\s*\{[^}]*background/);
+    expect(css(html)).not.toMatch(/(^|\n)\s*header span\s*\{/);
+  });
+
+  test('every card with a header is a .card--sectioned card, and no .mcard-* copy is left', async () => {
+    const html = markup(await fetchAdminHtml());
+    const heads = [...html.matchAll(/class="card-header"/g)].map((m) => m.index!);
+    expect(heads.length).toBeGreaterThanOrEqual(11);
+    for (const at of heads) {
+      const open = html.lastIndexOf('class="card ', at);
+      const cls = html.slice(open, html.indexOf('"', open + 7) + 1);
+      expect(cls, `card around the header at ${at}`).toContain('card--sectioned');
+    }
+    expect(html).not.toContain('mcard-');
+  });
+
+  test('actions are .btn: primary = accent fill, the rest secondary or outline', async () => {
+    // Scripts included: most rows (sponsors, codes, the TV list) are built as HTML strings.
+    const html = await fetchAdminHtml();
+    const page = html;
+    for (const [hook, variant] of [
+      ['create-btn', 'btn-primary'],
+      ['copy-btn', 'btn-secondary'],
+      ['add-spon-btn', 'btn-outline'],
+      ['cancel-btn', 'btn-secondary'],
+      ['spon-action-btn', 'btn-secondary'],
+      ['retry-btn', 'btn-secondary'],
+    ] as const) {
+      // A whole class token: wizard-copy-btn is the wizard's own and not this hook.
+      const tags = [
+        ...page.matchAll(new RegExp(`class="((?:[^"]* )?${hook}(?: [^"]*)?)"`, 'g')),
+      ].map((m) => m[1]);
+      expect(tags.length, `${hook} is on the page`).toBeGreaterThan(0);
+      for (const cls of tags) expect(cls, hook).toMatch(new RegExp(`^btn ${variant} `));
+    }
+    // The status builder renders the same family.
+    expect(html).toContain(
+      `class="btn ' + (a.primary ? 'btn-primary' : 'btn-secondary') + ' event-status-btn`
+    );
+  });
+
+  test('the page keeps no forked button chrome and never re-colours the shared buttons', async () => {
+    const sheet = css(await fetchAdminHtml());
+    for (const sel of [
+      '.create-btn',
+      '.copy-btn',
+      '.add-spon-btn',
+      '.cancel-btn',
+      '.spon-action-btn',
+      '.event-status-btn',
+    ]) {
+      const esc = reEscape(sel);
+      expect(sheet, `${sel} has no base rule of its own`).not.toMatch(
+        new RegExp(`(^|\\n)\\s*${esc}\\s*\\{`)
+      );
+      expect(sheet, `${sel} has no hover rule of its own`).not.toMatch(
+        new RegExp(`(^|\\n)\\s*${esc}:hover`)
+      );
+    }
+    // The launch wizard's 56px primary (.launch-wizard .create-btn) is the one
+    // scoped exception: the README's --tap-min-primary, which .btn-primary lacks.
+    // A green fill read as "done", not "act": the primary action is the accent.
+    expect(sheet).not.toMatch(/\.event-status-btn\.primary\s*\{[^}]*--success/);
+    // @ocr/ui owns .btn-primary / .btn-secondary / .btn-outline (the outline lost its accent here).
+    expect(sheet).not.toMatch(/(^|[\s,])\.btn-(primary|secondary|outline)\s*[,{]/);
+  });
+
+  test('table headings read in both themes and nothing casts a shadow on a card or table', async () => {
+    const sheet = css(await fetchAdminHtml());
+    expect(sheet).not.toMatch(/(^|\n)\s*th\s*\{[^}]*color:\s*#fff/);
+    expect(sheet).not.toMatch(/(^|\n)\s*table\s*\{[^}]*box-shadow/);
+    expect(sheet).not.toMatch(/\.skeleton\s*\{[^}]*#[0-9a-f]{3,6}/i);
   });
 });

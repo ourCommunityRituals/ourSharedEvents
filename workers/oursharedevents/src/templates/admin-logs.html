@@ -11,6 +11,7 @@
     <script src="/ui-toast.js" defer></script>
     <style>
       main{max-width:760px;margin:0 auto;padding:1rem 16px 3rem}
+      .header>div{min-width:0;overflow-wrap:anywhere}
       .lg-tabs,.lg-filters{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
       .lg-list{list-style:none;display:grid;gap:8px;padding:0}
       .lg-filters .form-field{flex:1 1 150px;margin:0}
@@ -18,7 +19,10 @@
   </head>
   <body>
     <header class="header">
-      <h1>Logs</h1>
+      <div>
+        <span class="brand">ourSharedEvents admin</span>
+        <h1>Logs</h1>
+      </div>
       <nav aria-label="Admin pages">
         <a class="btn btn-link" href="/admin" data-testid="logs-nav-admin">Admin</a>
         <a class="btn btn-link" href="/api/v2/admin/screens/settings" data-testid="logs-nav-settings">Settings</a>

@@ -21,7 +21,7 @@ import ADMIN_HTML from '../src/templates/admin.html';
 const EVT = 'evt_pd_ui_1357';
 
 function cardMarkup(html: string): string {
-  const start = html.indexOf('<div class="card poster-deployments-card"');
+  const start = html.indexOf('<div class="card card--sectioned poster-deployments-card"');
   const end = html.indexOf('<!-- R4 (OSE-1319)', start);
   expect(start, 'poster card markup').toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
