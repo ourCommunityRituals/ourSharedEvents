@@ -15,8 +15,11 @@
 //
 // Env: GITHUB_TOKEN (issues: write), GITHUB_REPOSITORY, GITHUB_RUN_ID,
 // GITHUB_SERVER_URL, NEEDS (`${{ toJSON(needs) }}`), ANNOUNCE_KEY, ANNOUNCE_TITLE,
-// optional ANNOUNCE_HINT (what to do first) and ANNOUNCE_ASSIGNEE (a GitHub login).
-// Only job names and results from NEEDS are ever written; outputs are ignored.
+// optional ANNOUNCE_HINT (what to do first), ANNOUNCE_ASSIGNEE (a GitHub login) and
+// ANNOUNCE_DETAIL (why this run is red, in the run's own words; OSE-2082).
+// Only job names and results from NEEDS are ever written; outputs in NEEDS are
+// ignored. ANNOUNCE_DETAIL is the one piece of run text that reaches the issue, so
+// it is cut to one short line of plain characters first (detailLine).
 
 import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -26,6 +29,21 @@ const KEY_RE = /^[a-z0-9][a-z0-9-]{0,48}$/;
 const LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 const JOB_RE = /^[A-Za-z0-9_-]{1,100}$/;
 const RED_RESULTS = new Set(['failure', 'cancelled']);
+
+const DETAIL_MAX = 600;
+
+/**
+ * ANNOUNCE_DETAIL as one line that is safe in an issue: letters, digits, spaces and
+ * plain punctuation only. No @ (a mention), # (an issue link), backtick, bracket or
+ * angle bracket (markup), and nothing past DETAIL_MAX characters. '' when empty.
+ */
+export function detailLine(text) {
+  const line = String(text ?? '')
+    .replace(/\s+/g, ' ')
+    .replace(/[^A-Za-z0-9 .,:;=/()'_!?+-]/g, '')
+    .trim();
+  return line.length > DETAIL_MAX ? `${line.slice(0, DETAIL_MAX)}…` : line;
+}
 
 export const labelFor = (key) => `ci-red:${key}`;
 export const markerFor = (key) => `<!-- announce-run:${key} -->`;
@@ -142,7 +160,10 @@ export async function announce(env, deps = {}) {
     return { action: 'closed', number: open.number };
   }
 
-  const redLine = `Red at ${when}: ${url}. Failed: ${v.red.join(', ')} (${jobs}).`;
+  const detail = detailLine(env.ANNOUNCE_DETAIL);
+  const redLine = `Red at ${when}: ${url}. Failed: ${v.red.join(', ')} (${jobs}).${
+    detail ? `\n\n**Why:** ${detail}` : ''
+  }`;
   if (open) {
     const c = await gh('POST', `/issues/${open.number}/comments`, {
       body: `Still red. ${redLine}`,

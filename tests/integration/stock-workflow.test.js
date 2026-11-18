@@ -15,7 +15,8 @@ const ROOT = join(__dirname, '..', '..');
 const WF_PATH = join(ROOT, '.github', 'workflows', 'stock-data-full.yml');
 const wf = yaml.load(readFileSync(WF_PATH, 'utf8'));
 const jobs = wf.jobs || {};
-const CHAIN = ['seed', 'build', 'check-swap'];
+// preflight is the edge check that runs before anything is loaded (OSE-2082)
+const CHAIN = ['preflight', 'seed', 'build', 'check-swap'];
 const needsOf = (job) => {
   const n = jobs[job] && jobs[job].needs;
   return n === undefined ? [] : Array.isArray(n) ? n : [n];
@@ -67,10 +68,12 @@ describe('triggers and posture', () => {
     expect(jobs.announce.permissions).toEqual({ contents: 'read', issues: 'write' });
   });
 
-  // One writer on stg at a time (CCR 2026-11-07 R-07; tests/integration/stg-writer-concurrency.test.js).
-  test('one run at a time, never cancelled by the next', () => {
+  // OSE-2082: the run holds the staging chain's lock, so it never overlaps T1–T4
+  // (tests/integration/staging-chain-lock.test.js). The jobs that write still take
+  // stg-writer (CCR 2026-11-07 R-07; tests/integration/stg-writer-concurrency.test.js).
+  test('one run at a time, in the staging chain’s lock, never cancelled by the next', () => {
     expect(wf.concurrency).toEqual({
-      group: 'stg-writer',
+      group: 'ose-staging-chain',
       'cancel-in-progress': false,
       queue: 'max',
     });
@@ -88,14 +91,14 @@ describe('triggers and posture', () => {
 });
 
 describe('the job chain', () => {
-  test('seed → build → check-swap, then announce', () => {
+  test('preflight → seed → build → check-swap, then announce', () => {
     expect(Object.keys(jobs)).toEqual([...CHAIN, 'announce']);
-    expect(needsOf('seed')).toEqual([]);
+    expect(needsOf('preflight')).toEqual([]);
     for (let i = 1; i < CHAIN.length; i++) expect(needsOf(CHAIN[i])).toEqual([CHAIN[i - 1]]);
   });
 
   test('only check-swap overrides the default success() gate, and never on a skip or cancel', () => {
-    // seed and build add only the main-only guard (CCR 2026-11-07 R-06)
+    // preflight, seed and build add only the main-only guard (CCR 2026-11-07 R-06)
     for (const job of CHAIN.slice(0, -1)) {
       expect(jobs[job].if, job).toBe("${{ github.ref == 'refs/heads/main' }}");
     }
@@ -151,22 +154,102 @@ describe('one staging site (owner 2026-11-06)', () => {
     }
   });
 
-  test('check-swap sends the CI edge token its public reads need (OSE-939)', () => {
-    const step = stepsOf('check-swap').find((s) => /run-day\.mjs/.test(String(s.run || '')));
-    expect(step.env.OCR_CI_EDGE_TOKEN).toBe('${{ secrets.OCR_CI_EDGE_TOKEN }}');
-    // only the step that reads the site holds it
+  test('X-OCR-CI reaches the preflight and check steps only (OSE-939, OSE-2082)', () => {
+    const check = stepsOf('check-swap').find((s) => /run-day\.mjs/.test(String(s.run || '')));
+    const edge = stepsOf('preflight').find((s) => /edge-probe\.mjs/.test(String(s.run || '')));
+    expect(check.env.OCR_CI_EDGE_TOKEN).toBe('${{ secrets.OCR_CI_EDGE_TOKEN }}');
+    expect(edge.env.OCR_CI_EDGE_TOKEN).toBe('${{ secrets.OCR_CI_EDGE_TOKEN }}');
+    // only the two steps that read the public site hold it: not the seed, the
+    // build (it writes through the admin API) or announce
+    const holders = [];
     for (const job of Object.keys(jobs)) {
       for (const s of stepsOf(job)) {
-        if (s === step) continue;
-        expect(JSON.stringify(s), `${job}/${s.name}`).not.toContain('OCR_CI_EDGE_TOKEN');
+        if (JSON.stringify(s).includes('OCR_CI_EDGE_TOKEN')) holders.push(`${job}/${s.name}`);
       }
+      expect(JSON.stringify(jobs[job].env || {}), job).not.toContain('OCR_CI_EDGE_TOKEN');
     }
+    expect(holders).toEqual([
+      'preflight/Read stg as the stock check does',
+      'check-swap/Check, swap and purge',
+    ]);
+    expect(JSON.stringify(wf.env)).not.toContain('OCR_CI_EDGE_TOKEN');
   });
 
   test('every wrangler command in the workflow targets --env staging', () => {
     for (const line of code.split('\n').filter((l) => /\bwrangler\b/.test(l))) {
       expect(line).toMatch(/--env staging(\s|$)/);
     }
+  });
+});
+
+// OSE-2082. 2026-11-07 → 11-14: every run loaded a day, was challenged at the edge
+// in its check, and purged stg. The edge is asked first now.
+// Born red (each fault injected alone in the workflow, then removed):
+//   W1 preflight moved after seed                      -> "is the first job" fails
+//   W2 seed loses `needs: [preflight]`                 -> the same case and the chain case fail
+//   W3 preflight given ADMIN_KEY                       -> "reads only" fails
+//   W4 seed given always() (runs after a red preflight) -> "a failed edge check" fails
+//   W5 check-swap given always()                       -> "a failed edge check" fails
+//   W6 ANNOUNCE_DETAIL removed                         -> "the announce issue" fails
+//   W7 the edge token given to the build step          -> "X-OCR-CI reaches" fails
+describe('edge first (OSE-2082)', () => {
+  test('the preflight job is the first job, needs nothing, and seed needs it', () => {
+    expect(Object.keys(jobs)[0]).toBe('preflight');
+    expect(needsOf('preflight')).toEqual([]);
+    expect(needsOf('seed')).toEqual(['preflight']);
+    // every other job waits for it, directly or through the chain
+    const reaches = (job, seen = new Set()) => {
+      if (job === 'preflight') return true;
+      if (seen.has(job)) return false;
+      seen.add(job);
+      return needsOf(job).some((n) => reaches(n, seen));
+    };
+    for (const job of Object.keys(jobs)) expect(reaches(job), job).toBe(true);
+  });
+
+  test('it runs the probe’s own reads, as the preflight', () => {
+    const runs = stepsOf('preflight')
+      .map((s) => String(s.run || ''))
+      .filter((r) => /edge-probe/.test(r));
+    expect(runs).toEqual(['node scripts/stock/edge-probe.mjs --preflight']);
+  });
+
+  test('it reads only: the edge token and the Access service token, no Cloudflare token, no admin key', () => {
+    const named = [...JSON.stringify(jobs.preflight).matchAll(/secrets\.([A-Z0-9_]+)/g)]
+      .map((m) => m[1])
+      .sort();
+    expect(named).toEqual(['CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET', 'OCR_CI_EDGE_TOKEN']);
+    expect(JSON.stringify(jobs.preflight)).not.toMatch(/wrangler|vars\./);
+    expect(jobs.preflight.concurrency).toBeUndefined();
+  });
+
+  test('a failed edge check skips seed, build and check-swap: nothing is loaded or purged', () => {
+    // seed and build keep the default success() gate on their needs
+    for (const job of ['seed', 'build']) {
+      expect(jobs[job].if, job).toBe("${{ github.ref == 'refs/heads/main' }}");
+      expect(String(jobs[job].if), job).not.toMatch(/always\(\)|failure\(\)|cancelled\(\)/);
+    }
+    // check-swap runs only after a build that ran; a skipped build is neither
+    const cond = String(jobs['check-swap'].if);
+    expect(cond).not.toMatch(/always\(\)|'skipped'|needs\.preflight|needs\.seed/);
+    expect(cond).toMatch(
+      /\(needs\.build\.result == 'success' \|\| needs\.build\.result == 'failure'\)/
+    );
+  });
+
+  test('the announce issue carries the edge check’s reason, or the build’s error', () => {
+    expect(jobs.preflight.outputs).toEqual({ reason: '${{ steps.edge.outputs.reason }}' });
+    expect(stepsOf('preflight').find((s) => s.id === 'edge').run).toContain('--preflight');
+    expect(jobs.build.outputs).toEqual({ error: '${{ steps.build.outputs.error }}' });
+    expect(stepsOf('build').find((s) => s.id === 'build').run).toBe(
+      'node scripts/stock/run-day.mjs build'
+    );
+    const step = stepsOf('announce').find((s) => /announce-run\.mjs/.test(String(s.run || '')));
+    expect(step.env.ANNOUNCE_DETAIL).toBe(
+      '${{ needs.preflight.outputs.reason || needs.build.outputs.error }}'
+    );
+    expect(step.env.ANNOUNCE_HINT).toContain('scripts/ci/cf-waf-stg-ci-skip.mjs');
+    expect(step.env.ANNOUNCE_HINT).toContain('Super Bot Fight Mode');
   });
 });
 

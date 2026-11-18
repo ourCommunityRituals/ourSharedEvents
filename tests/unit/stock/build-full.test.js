@@ -236,7 +236,7 @@ describe('createClient', () => {
       throw new Error(`boom ${SECRET}`);
     });
     const err = await c.get('/api/v2/admin/sponsors').catch((e) => e);
-    expect(err.message).toBe('GET /api/v2/admin/sponsors failed: network error');
+    expect(err.message).toBe('GET /api/v2/admin/sponsors failed: network error (3 tries)');
   });
 
   test('paces to at most 5 requests per second', async () => {
