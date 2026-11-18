@@ -26,7 +26,7 @@ OSE is one product in the OurCommunityRituals (OCR) line: event infrastructure, 
 The org list is `OCR-docs/ocr-docs-brain/architectural-invariants.yaml`; `[#n]` maps a decision to it, `[OSE]` marks what only OSE states.
 
 1. **Never who, only how many.** [#1 #7] Publish counts, never identities. Presenters who opt in are the only exception.
-2. **The under-5 floor has no exceptions** [#7 OSE]: a published count below 5 is withheld, for a brand's own admin too and at every tier. Totals and rates use `lib/count-floor.ts` (`floorTotalOfParts`, `flooredRatePct`). A withheld count reads in words ("Fewer than 5"), never as 0. Open gaps: OSE-2087 (rows and exact counts an admin still reads).
+2. **The under-5 floor has no exceptions** [#7 OSE]: a published count below 5 is withheld, for a brand's own admin too and at every tier. Totals and rates use `lib/count-floor.ts` (`floorTotalOfParts`, `flooredRatePct`). A withheld count reads in words ("Fewer than 5"), never as 0. Open gaps: OSE-2087 and the list in `docs/brain/CONSTRAINTS.md`.
 3. **Place, not person** [OSE]: location is an H3 cell, res 7 (the area a link was published into) or res 9 (a physical placement), never request geo or IP; no `CF-IP*` header is read. Public reads refuse coordinate-shaped input (`/api/v2/events/map`); admin placement writes take coordinates only to derive the cell.
 4. **No cookies on public surfaces** [#1], except the anonymous `ose_anon` token (one-year lifetime) on `/q` and the forms routes (owner ruling 2026-10-22). `/s` sets none. Geolocation picks what to show and is never stored.
 5. **The display shows no counts** [OSE]. The public check-in answer carries no count; counts are post-event.
