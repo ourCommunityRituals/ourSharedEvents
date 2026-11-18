@@ -1378,7 +1378,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 23
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/events-5w-schema.spec.ts",

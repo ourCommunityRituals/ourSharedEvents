@@ -30,5 +30,13 @@ docs: |-
   leftover from a stopped run is synthetic and the daily staging rebuild
   clears it. The requests run in seq order.
 
+  The search checks (seq 20-24, 910) find this run's event by its card,
+  data-event-id="<w1ZipEventId>", never by the title: every run uses the same
+  title, so a stopped run's leftover is still listed under 59718 until the
+  rebuild (OSE-2146: run 44338955374 was cut off between seq 10 and 900, and the
+  next three runs failed seq 910 on its leftover). A "not listed" check also
+  fails when no id was captured, so it never passes on an empty match.
+  Gate: tests/integration/bruno-zip-search-own-event.test.js.
+
   Mock-layer twins: workers/oursharedevents/tests/event-zip.spec.ts,
   event-zip-unit.spec.ts and admin-wizard-where-zip.spec.ts.
