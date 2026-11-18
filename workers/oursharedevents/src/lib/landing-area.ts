@@ -643,7 +643,7 @@ function buildAreaMarkup(args: {
         </div>`;
 
   const filtersToggle = `<input type="checkbox" id="${FILTERS_TOGGLE_ID}" class="toggle-radio" />`;
-  return `${viewRadios}${winRadios}${typeRadios}${modRadios}${dayRadios}${filtersToggle}
+  return `${viewRadios}${filtersToggle}${winRadios}${typeRadios}${modRadios}${dayRadios}
         ${winStyle}${typeStyle}${AREA_FILTERS_STYLE}
         ${toggles}
         ${area}`;

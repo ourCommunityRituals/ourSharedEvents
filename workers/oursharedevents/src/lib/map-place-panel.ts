@@ -100,8 +100,11 @@ export function panelActions(e: PanelEvent, opts: PanelOptions = {}): string {
   const pageHref = escapeHtml(withLangPrefix(lang, page));
   const wrapped = e.phase === 'post_event';
   const out: string[] = [];
+  // The name a screen reader or voice control hears starts with the words on
+  // the button (WCAG 2.5.3 Label in Name, OSE-2070): "Open event: <name>".
+  const openText = msg(lang, wrapped ? 'card.recap' : 'map.openEvent');
   out.push(
-    `<a class="cta" href="${pageHref}" data-testid="amap-open" aria-label="${fmt(lang, 'card.open', { name: safeName })}">${msg(lang, wrapped ? 'card.recap' : 'map.openEvent')}</a>`
+    `<a class="cta" href="${pageHref}" data-testid="amap-open" aria-label="${fmt(lang, 'map.openNamed', { label: openText, name: safeName })}">${openText}</a>`
   );
   if (!wrapped) {
     out.push(

@@ -1,0 +1,73 @@
+# WCAG audit: the map held to WCAG 2.0, 2.1 and 2.2, levels A and AA, on call.
+#
+# Owner, 2026-11-18: "playwright automation test mutation tests dedicated to
+# the WCAG 2.0 and 2.2 Accessibility standards … available for on call and
+# future mandatory execution".
+#
+#   - Mandatory: the same specs run on every PR and push in the T0 Gate
+#     (component) step of oursharedevents-ci.yml, a required check.
+#   - On call: Actions -> "WCAG audit" -> Run workflow, on any branch. It also
+#     runs each night, so a change in a browser or in axe-core shows up on main
+#     without waiting for a PR.
+#
+# What runs: tests/e2e/2-pages/wcag-map.component.spec.ts (every WCAG A/AA rule
+# axe-core has, measured checks for the criteria axe cannot decide, and one
+# mutation test per check) and tests/e2e/2-pages/a11y-axe-surfaces.spec.ts (the
+# other surfaces), in Chromium and WebKit, on a local worker. Read only.
+name: WCAG audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '45 9 * * *'
+
+concurrency:
+  group: wcag-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  wcag:
+    name: WCAG 2.0 / 2.1 / 2.2 A and AA (Chromium and WebKit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2
+        with:
+          egress-policy: audit
+      - name: Checkout OSE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+      - name: Install root dependencies
+        run: npm ci --prefer-offline || npm ci
+      - name: Install worker dependencies
+        working-directory: workers/oursharedevents
+        run: npm ci --prefer-offline || npm ci
+      - name: Install Playwright browsers
+        timeout-minutes: 10
+        run: |
+          bash scripts/ci/install-playwright-browsers.sh chromium webkit
+          node scripts/ci/warm-playwright-browser.mjs webkit
+      - name: WCAG audit
+        run: |
+          PW_LABEL='WCAG audit' scripts/pw-guarded.sh \
+            --config=playwright.component.config.ts \
+            tests/e2e/2-pages/wcag-map.component.spec.ts \
+            tests/e2e/2-pages/a11y-axe-surfaces.spec.ts

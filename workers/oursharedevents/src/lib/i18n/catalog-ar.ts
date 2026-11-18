@@ -341,6 +341,7 @@ export const ar: Record<MessageKey, string> = {
   'map.placesNav': 'الأماكن في هذه المنطقة',
   'map.allPlaces': 'اعرض كل الأماكن',
   'map.openEvent': 'افتح الفعالية',
+  'map.openNamed': '{label}، {name}',
   'map.goGoogle': 'خذني إلى هناك (خرائط Google)',
   'map.goApple': 'خذني إلى هناك (خرائط Apple)',
   'map.goLabel': '{app}: الاتجاهات إلى {name}',

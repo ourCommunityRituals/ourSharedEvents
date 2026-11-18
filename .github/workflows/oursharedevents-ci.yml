@@ -851,6 +851,13 @@ jobs:
       # location is allowed; no request beyond the page; buttons hidden with
       # scripts off.
       #
+      # wcag-map.component.spec.ts (owner 2026-11-18: WCAG 2.0 and 2.2, "on call
+      # and future mandatory execution") holds the same map page to every WCAG
+      # 2.0, 2.1 and 2.2 A/AA rule axe has, plus measured checks for 1.4.10,
+      # 1.4.12, 2.4.7, 2.4.11, 2.5.7, 2.5.8 and 3.1.1, at 320 to 1280 px, light
+      # and dark; its mutation tests inject a fault per check. On call: the
+      # "WCAG audit" workflow, or `npm run test:wcag`.
+      #
       # landing-menu.component.spec.ts (owner 2026-11-17, part of OSE-1990) measures
       # the top menu of the landing and of /map on the local worker: Events and
       # Map at seven widths from a 320 px phone to a desktop, in the four
@@ -872,6 +879,7 @@ jobs:
             tests/e2e/2-pages/street-map-sizes.component.spec.ts \
             tests/e2e/2-pages/street-map-contrast.component.spec.ts \
             tests/e2e/2-pages/street-map-pan.component.spec.ts \
+            tests/e2e/2-pages/wcag-map.component.spec.ts \
             tests/e2e/2-pages/landing-menu.component.spec.ts
 
   # T0 test sub-gates: keep the existing required context `T0 Gate (tests)` as
