@@ -11,6 +11,8 @@ docs: |-
   - stock totals: the stock search counts for 60655 and Oak Lawn are read before
     (seq 5, 6) and after (seq 60, 61) and must match: this run's events are far
     from the stock area (Bozeman, MT) or unlisted;
+    the count leaves out the pages leg's own fixture events (ids start zip-own-),
+    which come and go while this leg runs (OSE-2137); a real event still counts;
   - sunny: an event created live with ZIP 59718 and no address is listed by
     /?zip=59718, /events?q=59718, /events?q=Bozeman, MT and /?where=Bozeman, MT,
     and not by /?zip=59715 (another Bozeman ZIP); the public list carries no
