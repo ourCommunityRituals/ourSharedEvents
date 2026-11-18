@@ -32,6 +32,9 @@
  */
 // @born-red landing hexagon links are touch targets (OSE-2084) | method: the six tests seen failing on the source as it was (a staging hexagon link: 28.1 px at 320 px), then 16 faults injected one at a time, each put back (the floor at 30 px; the taller box never used, used though it cuts an area, without its 480 px floor, without slice, without data-tall, its rule removed, its rule 4/3; one step too early; small hexagons linked at every width; hexagons under the last step linked; the plain copy dropped; the link style not sent; its third step at 700 px; the linked copies not hidden first; "Tap a hexagon" always said); each turned this file red. Then StrykerJS on src/lib/attendee-map.ts: 18 mutants of the new code survived the first run (the name's reach on each side, the box holding an area on each side, a row of five linked from 480 px, large hexagons keeping the whole frame); each is killed now, by the test that names it | date: 2026-11-15
 // @born-red attendee-map mutants | method: StrykerJS mutants of src/lib/attendee-map.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
+import { PAN_SCRIPT } from '../src/lib/map-pan-script';
+import { PAN_STYLE } from '../src/lib/map-pan-style';
+import { LABEL_STYLE } from '../src/lib/map-label-style';
 import { describe, expect, test } from 'vitest';
 import {
   cellToBoundary,
@@ -1109,6 +1112,40 @@ describe('the place panel under the map', () => {
     );
   });
 
+  // @born-red Take me there | method: a coordinate passed to directionsUrls in lib/map-place-panel.ts, this file run (2 red), restored | date: 2026-11-18
+  test('sunny: Take me there, in Google Maps and in Apple Maps, searches the address the event page shows (owner, 2026-11-18)', () => {
+    const html = panelled([
+      ev('a', {
+        venue: 'Harbor Lanes',
+        where_address: '13501 S Western Ave, Blue Island',
+      } as Partial<ZoomEvent>),
+    ]);
+    const acts = /<div class="amap-acts"[^>]*>(.*?)<\/div>/s.exec(html)![1]!;
+    const order = [
+      ...acts.matchAll(/data-testid="(amap-register|amap-go-google|amap-go-apple|amap-link)"/g),
+    ].map((m) => m[1]);
+    // After the organizer's links, so Register keeps its place beside them.
+    expect(order).toEqual(['amap-register', 'amap-link', 'amap-go-google', 'amap-go-apple']);
+    const q = encodeURIComponent('13501 S Western Ave, Blue Island');
+    expect(acts).toContain(
+      `href="https://www.google.com/maps/search/?api=1&amp;query=${q}" target="_blank" rel="noopener noreferrer" data-testid="amap-go-google" aria-label="Take me there (Google Maps): directions to Event a (opens another site)">Take me there (Google Maps)</a>`
+    );
+    expect(acts).toContain(`href="https://maps.apple.com/?q=${q}" target="_blank"`);
+    // The venue name when there is no street address.
+    expect(panelled([ev('b', { venue: 'Harbor Lanes' })])).toContain(
+      'href="https://maps.apple.com/?q=Harbor%20Lanes"'
+    );
+  });
+
+  test('never where: Take me there carries no coordinate; none when nothing says where, or once over', () => {
+    // Only a point, no address or venue: no button, as the point stays off the page.
+    const pointOnly = panelled([ev('a')]);
+    expect(pointOnly).not.toContain('amap-go-');
+    expect(pointOnly).not.toContain(String(RIPH.lat));
+    const over = panelled([ev('a', { phase: 'post_event', venue: 'Harbor Lanes' })]);
+    expect(over).not.toContain('amap-go-');
+  });
+
   test('sunny: Share is the event page share: its /e/ code, else its page, and one script for all', () => {
     const html = panelled([ev('a'), ev('b', far)]);
     expect(html).toContain(
@@ -1122,7 +1159,8 @@ describe('the place panel under the map', () => {
 
   test('rainy: no origin (no request) means no Share button and no script; the panel still works', () => {
     const html = zoomed([ev('a')]).html;
-    expect(html).not.toContain('<script');
+    // The map's own zoom script (lib/map-pan-script.ts) is the only script.
+    expect(html.split(PAN_SCRIPT).join('')).not.toContain('<script');
     expect(html).not.toContain('share-btn');
     expect(html).toContain('data-testid="amap-open"');
   });
@@ -1237,7 +1275,11 @@ describe('the zoomed area, edge by edge', () => {
       .map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`)
       .join(' ');
     expect(zoomed([ev('a')]).html).toContain(
-      `<polygon class="amap-zone" points="${ring}" data-testid="amap-zone" data-cell="${CELL}"/>`
+      `<polygon class="amap-zone" points="${ring}" data-testid="amap-zone" data-cell="${CELL}" data-ll="${cellToLatLng(
+        CELL
+      )
+        .map((v) => v.toFixed(5))
+        .join(',')}" data-name="1"/>`
     );
   });
 
@@ -1256,7 +1298,7 @@ describe('the zoomed area, edge by edge', () => {
     // No text list sits between the drawing and the caption, only the anchor.
     expect(html).not.toContain('data-testid="amap-legend-dot"');
     expect(html).toMatch(
-      /<\/svg>\s*<span id="amap-places"[^>]*><\/span>\s*<figcaption id="amap-caption"/
+      /<\/svg><div class="amap-ctl"[^>]*>.*?<\/div>\s*<span id="amap-places"[^>]*><\/span>\s*<figcaption id="amap-caption"/
     );
   });
 
@@ -1288,7 +1330,9 @@ describe('the zoomed area, edge by edge', () => {
     expect(zoomed([ev('a')], { lang: 'es' }).html).toContain(
       '<p class="amap-credit" data-testid="amap-credit">Datos del mapa de calles © colaboradores de <a href="https://www.openstreetmap.org/copyright/es">OpenStreetMap</a>, preparados por <a href="https://protomaps.com">Protomaps</a>.</p>'
     );
-    expect(html).toContain(`${MAP_STYLE}${ZOOM_STYLE}${STREET_STYLE}${NARROW_MAP_STYLE}\n`);
+    expect(html).toContain(
+      `${MAP_STYLE}${ZOOM_STYLE}${STREET_STYLE}${LABEL_STYLE}${PAN_STYLE}${NARROW_MAP_STYLE}\n`
+    );
     expect(caption(html)).toBe(
       `1 event in this area over the next ${CORRIDOR_WINDOW_DAYS} days. A solid dot is a named place, shown on its block; a pale dot marks only its block.`
     );

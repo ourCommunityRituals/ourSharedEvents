@@ -350,7 +350,8 @@ const FAULTS: {
     path: ZOOMED,
     css: '.as-t{fill:var(--border-strong);stroke:none}',
     fails: 'town name',
-    says: '1.00:1 against the edge of a highway',
+    // The fixture's named street (a major road) is drawn after its highway.
+    says: '1.00:1 against the edge of a major road',
   },
   {
     name: 'a town name in the road colour, halo kept',
@@ -378,13 +379,27 @@ const FAULTS: {
     path: ZOOMED,
     css: '.as-t{paint-order:normal}',
     fails: 'town name',
-    says: 'against the edge of a highway',
+    says: 'against the edge of a major road',
   },
   {
-    name: 'the street layer drawn faint, town names with it',
+    // Names are drawn in a group of their own over the hexagons (amap-labels).
+    name: 'the street layer and its names group drawn faint',
     path: ZOOMED,
-    css: '[data-testid="amap-streets"]{opacity:.3}',
+    css: '[data-testid="amap-streets"],[data-testid="amap-labels"]{opacity:.3}',
     fails: 'town name',
+  },
+  {
+    name: "a street name's halo too thin to count",
+    path: '/',
+    css: '.as-n{stroke-width:1}',
+    fails: 'street name',
+    says: 'under the 1 px floor',
+  },
+  {
+    name: 'a landmark name in the road colour, with no halo',
+    path: '/',
+    css: '.as-p{fill:var(--border-strong);stroke:none}',
+    fails: 'landmark name',
   },
   {
     name: "a solid dot's number in the dot's colour",

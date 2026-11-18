@@ -843,6 +843,11 @@ test.describe('Zoomed map: using it moves no count (OSE-1896)', () => {
     await context.route(/^https:\/\/(www\.openstreetmap\.org|protomaps\.com)(\/|$)/, (route) =>
       route.fulfill({ status: 200, contentType: 'text/html', body: '<title>credit</title>' })
     );
+    // "Take me there" (owner, 2026-11-18) leaves for Google Maps and Apple Maps.
+    // Answered here too: the walk follows each, and no run reads either site.
+    await context.route(/^https:\/\/(www\.google\.com\/maps\/|maps\.apple\.com\/)/, (route) =>
+      route.fulfill({ status: 200, contentType: 'text/html', body: '<title>directions</title>' })
+    );
     await context.addInitScript(() => {
       Object.defineProperty(Navigator.prototype, 'share', {
         configurable: true,
@@ -873,15 +878,26 @@ test.describe('Zoomed map: using it moves no count (OSE-1896)', () => {
     // Follow each destination once, the way a tap would.
     const destinations = [...new Set(hrefs.filter((h) => !h.startsWith('#')))];
     const outside = destinations.filter((h) => /^https?:\/\//.test(h) && !h.startsWith(origin));
+    // Directions search the address text the event page shows, never a point.
+    const DIRECTIONS =
+      /^https:\/\/(www\.google\.com\/maps\/search\/\?api=1&query=|maps\.apple\.com\/\?q=)/;
+    const directions = outside.filter((h) => DIRECTIONS.test(h));
+    expect(directions.length, 'Take me there is offered').toBeGreaterThan(0);
+    expect
+      .soft(
+        directions.filter((h) => /-?\d{1,3}\.\d+(%2C|,)-?\d{1,3}\.\d+/.test(h)),
+        'no directions link carries a coordinate'
+      )
+      .toEqual([]);
     const inside = destinations.filter((h) => !outside.includes(h));
     // The street map's credit is there exactly when streets are drawn.
     const streets = (await page.getByTestId('amap-streets').count()) > 0;
     expect
       .soft(
-        outside.sort(),
+        outside.filter((h) => !DIRECTIONS.test(h)).sort(),
         streets
-          ? 'the only outside links are the organizer https links on the poster and the street map credit'
-          : 'the only outside links are the organizer https links on the poster'
+          ? 'besides Take me there, the only outside links are the organizer https links on the poster and the street map credit'
+          : 'besides Take me there, the only outside links are the organizer https links on the poster'
       )
       .toEqual(
         [

@@ -62,10 +62,21 @@ runtime:
         const streets = body.includes('data-testid="amap-streets"');
         const lang = (/<html lang="([a-z]{2})"/.exec(body) || [])[1];
         const credit = ['https://www.openstreetmap.org/copyright/' + lang, 'https://protomaps.com'];
+        // "Take me there" (owner, 2026-11-18): Google Maps and Apple Maps, searching
+        // the address text the event page shows. Never a coordinate: the zoomed map
+        // puts no point on the page (lib/attendee-map.ts).
+        const DIRECTIONS = /^https:\/\/(?:www\.google\.com\/maps\/search\/\?api=1&amp;query=|maps\.apple\.com\/\?q=)[^"&]+$/;
 
         test('Every link is a place on this page, an event page, a register form or an https site (with streets: or the map credit)', function () {
           const known = /^(?:#amap-(?:dot-[1-3]|places)|\/(?:[a-z]{2}\/)?(?:\?[^"]*)?|\/events\/map-zoom-[a-j](?:\/map-zoom-[a-j]|\/register)?|https:\/\/[a-z.-]+\.map-zoom\.example\/[ab])$/;
-          expect(hrefs.filter(function (h) { return !known.test(h) && !(streets && credit.includes(h)); })).to.eql([]);
+          expect(hrefs.filter(function (h) { return !known.test(h) && !DIRECTIONS.test(h) && !(streets && credit.includes(h)); })).to.eql([]);
+        });
+
+        test('Take me there is offered, and searches text, never a coordinate', function () {
+          const go = hrefs.filter(function (h) { return DIRECTIONS.test(h); });
+          expect(go.length).to.be.above(0);
+          expect(go.length % 2).to.equal(0);
+          expect(go.filter(function (h) { return /-?\d{1,3}\.\d+(?:%2C|,)-?\d{1,3}\.\d+/.test(h); })).to.eql([]);
         });
 
 settings:

@@ -1833,7 +1833,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 53
+      "testCount": 61
     },
     {
       "file": "workers/oursharedevents/tests/landing-categories.spec.ts",
@@ -2025,6 +2025,13 @@
       "testCount": 37
     },
     {
+      "file": "workers/oursharedevents/tests/map-pan.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
       "file": "workers/oursharedevents/tests/map-place-links.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -2043,7 +2050,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 78
+      "testCount": 80
     },
     {
       "file": "workers/oursharedevents/tests/maps.spec.ts",
@@ -3726,6 +3733,13 @@
       "testCount": 6
     },
     {
+      "file": "workers/oursharedevents/tests/street-labels.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 20
+    },
+    {
       "file": "workers/oursharedevents/tests/street-layer-kept.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -3765,7 +3779,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 109
+      "testCount": 110
     },
     {
       "file": "workers/oursharedevents/tests/subscribe-calendar-menu.spec.ts",
@@ -3780,6 +3794,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/sunset.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 7
     },
     {
       "file": "workers/oursharedevents/tests/surface-deep-link.spec.ts",

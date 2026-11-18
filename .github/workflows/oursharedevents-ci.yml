@@ -844,6 +844,13 @@ jobs:
       # colours the theme resolved (scripts/ci/map-text-contrast.mjs), light and
       # dark. T4k runs the same judge on staging once streets are drawn there.
       #
+      # street-map-pan.component.spec.ts (owner 2026-11-18, "a small script on
+      # the map only") drives the map's zoom script on the same page: +, −,
+      # whole map, Ctrl + scroll, the keyboard and a drag; text kept at its size
+      # on screen; 44 px buttons; the you-are-here mark and distances where
+      # location is allowed; no request beyond the page; buttons hidden with
+      # scripts off.
+      #
       # landing-menu.component.spec.ts (owner 2026-11-17, part of OSE-1990) measures
       # the top menu of the landing and of /map on the local worker: Events and
       # Map at seven widths from a 320 px phone to a desktop, in the four
@@ -864,6 +871,7 @@ jobs:
             tests/e2e/2-pages/sponsor-thumbnails.component.spec.ts \
             tests/e2e/2-pages/street-map-sizes.component.spec.ts \
             tests/e2e/2-pages/street-map-contrast.component.spec.ts \
+            tests/e2e/2-pages/street-map-pan.component.spec.ts \
             tests/e2e/2-pages/landing-menu.component.spec.ts
 
   # T0 test sub-gates: keep the existing required context `T0 Gate (tests)` as

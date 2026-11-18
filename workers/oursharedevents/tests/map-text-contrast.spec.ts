@@ -63,6 +63,7 @@ import { NARROW_MAP_STYLE } from '../src/lib/map-narrow-style';
 import { LINK_STYLE } from '../src/lib/map-link-style';
 import { CORRIDOR_READY_MIN_EVENTS } from '../src/lib/corridor-readiness';
 import { STREET_STYLE, cellsKey } from '../src/lib/street-map';
+import { LABEL_STYLE } from '../src/lib/map-label-style';
 
 /** WCAG 2.2, 1.4.3 (AA), text that is not large. */
 const AA_TEXT = 4.5;
@@ -215,14 +216,27 @@ interface Styles {
   map: string;
   zoom: string;
   street: string;
+  labels: string;
 }
-const SHIPPED: Styles = { map: MAP_STYLE, zoom: ZOOM_STYLE, street: STREET_STYLE };
+const SHIPPED: Styles = {
+  map: MAP_STYLE,
+  zoom: ZOOM_STYLE,
+  street: STREET_STYLE,
+  labels: LABEL_STYLE,
+};
+
+/** The names the street layer draws, and the rule each is painted by. */
+const NAME_KINDS: readonly (readonly [string, string])[] = [
+  ['town name', '.as-t'],
+  ['street name', '.as-n'],
+  ['landmark name', '.as-p'],
+];
 
 function mapTextPairs(
   styles: Styles = SHIPPED,
   tables: Record<Theme, Record<string, string>> = SEMANTIC
 ): Pair[] {
-  const rules = styleRules(styles.map, styles.zoom, styles.street);
+  const rules = styleRules(styles.map, styles.zoom, styles.street, styles.labels);
   const withStreets = hexagonAlphas(true);
   const plain = hexagonAlphas(false);
   const pairs: Pair[] = [];
@@ -251,8 +265,6 @@ function mapTextPairs(
     const cell = rgb('.amap-cell', 'fill');
     const num = rgb('.amap-num', 'fill');
     const numHalo = rgb('.amap-num', 'stroke');
-    const town = rgb('.as-t', 'fill');
-    const townHalo = rgb('.as-t', 'stroke');
     const zone = rgb('.amap-zone', 'fill');
     const zoneAlpha = alphaOf(rules, '.amap-zone', 'fill-opacity');
     const dot = rgb('.amap-dot', 'fill');
@@ -274,30 +286,28 @@ function mapTextPairs(
       );
     }
 
-    // 2. A town name. It is in the street layer, so a hexagon (the landing) or
-    //    the area's outline fill (zoomed in) can be drawn over it and its halo.
-    lowest('town name against its halo', [ratio(town, townHalo)]);
-    for (const [what, ground] of grounds) {
-      lowest(`town name on ${what}`, [ratio(town, ground)], true);
+    // 2. The names in the street layer: a town, a major street, a landmark
+    //    (lib/street-labels.ts). Since 2026-11-18 they are drawn over the
+    //    hexagons and the zoomed area's outline, not under them, so nothing
+    //    tints a name and its halo: it sits on a ground, a hexagon over a
+    //    ground, or the outline's fill over a ground.
+    for (const [kind, sel] of NAME_KINDS) {
+      const text = rgb(sel, 'fill');
+      lowest(`${kind} against its halo`, [ratio(text, rgb(sel, 'stroke'))]);
+      for (const [what, ground] of grounds) {
+        lowest(`${kind} on ${what}`, [ratio(text, ground)], true);
+        lowest(
+          `${kind} over a hexagon, on ${what}`,
+          sweep(withStreets.low, withStreets.high).map((a) => ratio(text, over(cell, a, ground))),
+          true
+        );
+        lowest(
+          `${kind} over the zoomed area, on ${what}`,
+          [ratio(text, over(zone, zoneAlpha, ground))],
+          true
+        );
+      }
     }
-    lowest(
-      'town name under a hexagon, against its halo',
-      sweep(withStreets.low, withStreets.high).map((a) =>
-        ratio(over(cell, a, town), over(cell, a, townHalo))
-      )
-    );
-    for (const [what, ground] of grounds) {
-      lowest(
-        `town name under a hexagon, on ${what}`,
-        sweep(withStreets.low, withStreets.high).map((a) =>
-          ratio(over(cell, a, town), over(cell, a, ground))
-        ),
-        true
-      );
-    }
-    lowest('town name under the zoomed area, against its halo', [
-      ratio(over(zone, zoneAlpha, town), over(zone, zoneAlpha, townHalo)),
-    ]);
 
     // 3. The number in a dot. A dot is drawn over the zoomed area's fill.
     lowest('dot number on a marked place', [ratio(dotNum, dot)]);
@@ -321,11 +331,6 @@ function mapTextPairs(
  * halo, or the text and its halo are under the same tint.
  */
 const UNDER_EITHER_WAY: Readonly<Record<string, number>> = {
-  // A town name with a hexagon drawn over it: the hexagon tints the name and
-  // its halo alike.
-  'light: town name under a hexagon, against its halo': 2.76,
-  'dark: town name under a hexagon, against its halo': 2.47,
-
   // The number in a block's pale dot. It has no halo, so this is how it reads.
   "light: dot number on a block's pale dot over land": 2.2,
   "light: dot number on a block's pale dot over water": 2.94,
@@ -346,42 +351,82 @@ const UNDER_EITHER_WAY: Readonly<Record<string, number>> = {
  * a 320 px phone. Until someone rules, the numbers are kept from getting worse.
  */
 const UNDER_WITHOUT_HALO: Readonly<Record<string, number>> = {
-  // Drawn today on staging and production (no street layer): the busiest
-  // hexagon under its number. The number passes against its halo (15.19).
+  // 2026-11-18: the names moved over the hexagons (lib/street-labels.ts). The
+  // town-name pairs "under a hexagon" are gone, with the two that failed
+  // against their own halo; every name now passes against its halo. Street and
+  // landmark names joined, in the text colour. Each line below is a name read
+  // as if it had no halo, on a road, river or water it may cross. Listed with
+  // the owner's review of that change (PR "Make the event map easier to read").
   'light: area number on a hexagon, no street map': 3.91,
-  'dark: area number on a hexagon, no street map': 3.48,
-
-  // With a street layer.
   'light: area number on a hexagon over a river': 4.4,
   'light: area number on a hexagon over a river in water': 3.81,
   'light: area number on a hexagon over a main road': 3.17,
+  'light: town name over a hexagon, on land': 2.83,
+  'light: town name on water': 4.04,
+  'light: town name over a hexagon, on water': 2.13,
+  'light: town name over the zoomed area, on water': 3.86,
+  'light: town name on a river': 2.83,
+  'light: town name over a hexagon, on a river': 1.76,
+  'light: town name over the zoomed area, on a river': 2.75,
+  'light: town name on a river in water': 2.13,
+  'light: town name over a hexagon, on a river in water': 1.52,
+  'light: town name over the zoomed area, on a river in water': 2.09,
+  'light: town name on a main road': 1.71,
+  'light: town name over a hexagon, on a main road': 1.27,
+  'light: town name over the zoomed area, on a main road': 1.71,
+  'light: town name over a hexagon, on a small road': 2.23,
+  'light: town name over the zoomed area, on a small road': 4.33,
+  'light: street name over a hexagon, on a river': 4.4,
+  'light: street name over a hexagon, on a river in water': 3.81,
+  'light: street name on a main road': 4.27,
+  'light: street name over a hexagon, on a main road': 3.17,
+  'light: street name over the zoomed area, on a main road': 4.27,
+  'light: landmark name over a hexagon, on a river': 4.4,
+  'light: landmark name over a hexagon, on a river in water': 3.81,
+  'light: landmark name on a main road': 4.27,
+  'light: landmark name over a hexagon, on a main road': 3.17,
+  'light: landmark name over the zoomed area, on a main road': 4.27,
+  'dark: area number on a hexagon, no street map': 3.48,
   'dark: area number on a hexagon over water': 4.08,
   'dark: area number on a hexagon over a river': 3.28,
   'dark: area number on a hexagon over a river in water': 2.8,
   'dark: area number on a hexagon over a main road': 3.15,
-  'light: town name on water': 4.04,
-  'light: town name on a river': 2.83,
-  'light: town name on a river in water': 2.13,
-  'light: town name on a main road': 1.71,
+  'dark: town name over a hexagon, on land': 2.49,
   'dark: town name on water': 3,
+  'dark: town name over a hexagon, on water': 1.75,
+  'dark: town name over the zoomed area, on water': 2.89,
   'dark: town name on a river': 1.86,
+  'dark: town name over a hexagon, on a river': 1.4,
+  'dark: town name over the zoomed area, on a river': 1.85,
   'dark: town name on a river in water': 1.34,
+  'dark: town name over a hexagon, on a river in water': 1.2,
+  'dark: town name over the zoomed area, on a river in water': 1.36,
   'dark: town name on a main road': 1.62,
+  'dark: town name over a hexagon, on a main road': 1.35,
+  'dark: town name over the zoomed area, on a main road': 1.62,
   'dark: town name on a small road': 4.01,
-
-  // A town name with a hexagon drawn over it.
-  'light: town name under a hexagon, on land': 2.89,
-  'light: town name under a hexagon, on water': 2.18,
-  'light: town name under a hexagon, on a river': 1.8,
-  'light: town name under a hexagon, on a river in water': 1.56,
-  'light: town name under a hexagon, on a main road': 1.3,
-  'light: town name under a hexagon, on a small road': 2.28,
-  'dark: town name under a hexagon, on land': 2.33,
-  'dark: town name under a hexagon, on water': 1.63,
-  'dark: town name under a hexagon, on a river': 1.31,
-  'dark: town name under a hexagon, on a river in water': 1.12,
-  'dark: town name under a hexagon, on a main road': 1.26,
-  'dark: town name under a hexagon, on a small road': 1.9,
+  'dark: town name over a hexagon, on a small road': 2.03,
+  'dark: town name over the zoomed area, on a small road': 3.79,
+  'dark: street name over a hexagon, on water': 4.08,
+  'dark: street name on a river': 4.34,
+  'dark: street name over a hexagon, on a river': 3.28,
+  'dark: street name over the zoomed area, on a river': 4.31,
+  'dark: street name on a river in water': 3.12,
+  'dark: street name over a hexagon, on a river in water': 2.8,
+  'dark: street name over the zoomed area, on a river in water': 3.16,
+  'dark: street name on a main road': 3.77,
+  'dark: street name over a hexagon, on a main road': 3.15,
+  'dark: street name over the zoomed area, on a main road': 3.77,
+  'dark: landmark name over a hexagon, on water': 4.08,
+  'dark: landmark name on a river': 4.34,
+  'dark: landmark name over a hexagon, on a river': 3.28,
+  'dark: landmark name over the zoomed area, on a river': 4.31,
+  'dark: landmark name on a river in water': 3.12,
+  'dark: landmark name over a hexagon, on a river in water': 2.8,
+  'dark: landmark name over the zoomed area, on a river in water': 3.16,
+  'dark: landmark name on a main road': 3.77,
+  'dark: landmark name over a hexagon, on a main road': 3.15,
+  'dark: landmark name over the zoomed area, on a main road': 3.77,
 };
 
 const KNOWN_UNDER: Readonly<Record<string, number>> = {
@@ -450,12 +495,12 @@ describe('text drawn on the map | the arithmetic', () => {
 });
 
 describe('text drawn on the map | what is read from the source', () => {
-  const rules = styleRules(MAP_STYLE, ZOOM_STYLE, STREET_STYLE);
+  const rules = styleRules(MAP_STYLE, ZOOM_STYLE, STREET_STYLE, LABEL_STYLE);
 
   test('the three kinds of text are the only text the style blocks set', () => {
     // A fourth kind of map text has to be added to the model before it ships.
     const withFont = [...rules].filter(([, d]) => 'font' in d || 'font-size' in d).map(([s]) => s);
-    expect(withFont.sort()).toEqual(['.amap-dn', '.amap-num', '.as-t']);
+    expect(withFont.sort()).toEqual(['.amap-dn', '.amap-num', '.as-n', '.as-p', '.as-t']);
   });
 
   test('the narrow-screen block and the link block set no colour', () => {
@@ -505,9 +550,9 @@ describe('text drawn on the map | contrast in both themes', () => {
 
   test('the model judges every pair in both themes', () => {
     const pairs = mapTextPairs();
-    expect(pairs).toHaveLength(60);
-    expect(pairs.filter((p) => p.name.startsWith('light: '))).toHaveLength(30);
-    expect(new Set(pairs.map((p) => p.name)).size).toBe(60);
+    expect(pairs).toHaveLength(144);
+    expect(pairs.filter((p) => p.name.startsWith('light: '))).toHaveLength(72);
+    expect(new Set(pairs.map((p) => p.name)).size).toBe(144);
     for (const p of pairs) expect(p.ratio).toBeGreaterThanOrEqual(1);
   });
 
@@ -523,10 +568,10 @@ describe('text drawn on the map | contrast in both themes', () => {
     const read = new Map(pairs.map((p) => [p.name, p.withoutHalo]));
     for (const name of Object.keys(UNDER_EITHER_WAY)) expect(read.get(name), name).toBe(false);
     for (const name of Object.keys(UNDER_WITHOUT_HALO)) expect(read.get(name), name).toBe(true);
-    expect(Object.keys(UNDER_EITHER_WAY)).toHaveLength(10);
-    expect(Object.keys(UNDER_WITHOUT_HALO)).toHaveLength(30);
-    expect(Object.keys(KNOWN_UNDER)).toHaveLength(40);
-    expect(pairs.filter((p) => p.withoutHalo)).toHaveLength(38);
+    expect(Object.keys(UNDER_EITHER_WAY)).toHaveLength(8);
+    expect(Object.keys(UNDER_WITHOUT_HALO)).toHaveLength(70);
+    expect(Object.keys(KNOWN_UNDER)).toHaveLength(78);
+    expect(pairs.filter((p) => p.withoutHalo)).toHaveLength(122);
   });
 
   test('text with no halo passes on a marked place, and every halo passes on its own text', () => {
@@ -536,7 +581,10 @@ describe('text drawn on the map | contrast in both themes', () => {
       for (const name of [
         'area number against its halo',
         'town name against its halo',
-        'town name under the zoomed area, against its halo',
+        'street name against its halo',
+        'landmark name against its halo',
+        'street name on land',
+        'landmark name on land',
         'dot number on a marked place',
         'town name on land',
         'area number on a hexagon over land',

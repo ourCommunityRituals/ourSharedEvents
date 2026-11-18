@@ -709,3 +709,115 @@ describe('the attendee-map grade: phone filters, the search on /map, filters on 
     expect(html).toContain('<div class="view-list" id="area-list" data-testid="area-list">');
   });
 });
+
+// @born-red home before dark filter | method: the class push removed from lib/landing-area.ts, this file run (2 red), restored | date: 2026-11-18
+describe('home before dark (owner, 2026-11-18, for attendees aged 55 to 75)', () => {
+  // NOW is 2026-09-13; Chicago's sunset on 2026-09-16 is about 23:58Z.
+  const day = (hhmm: string, d = 16) => `2026-09-${d}T${hhmm}:00Z`;
+  const afternoon = ev({ id: 'aft', startDateISO: day('18:00'), endDateISO: day('20:00') });
+  const evening = ev({ id: 'eve', startDateISO: day('23:30'), endDateISO: day('02:00', 17) });
+  const classOf = (html: string, id: string) =>
+    html.match(
+      new RegExp(`class="(event-card[^"]*)"[^>]*>(?:(?!</article>).)*?/events/${id}"`, 's')
+    )?.[1] ?? '';
+
+  it('an in-person event over before sunset carries `daylight`; an evening one does not', () => {
+    const { html } = render([afternoon, evening]);
+    expect(classOf(html, 'aft')).toContain('daylight');
+    expect(classOf(html, 'eve')).not.toContain('daylight');
+  });
+
+  it('the choice is offered when it can change what is shown, with its hide rule', () => {
+    const { html } = render([afternoon, evening]);
+    expect(html).toContain('data-testid="toggle-daylight"');
+    expect(html).toContain('<legend class="disc-label">Time of day</legend>');
+    expect(html).toContain('>Home before dark</label>');
+    expect(html).toMatch(
+      /<input type="radio" name="day" id="day-all" class="toggle-radio" checked \/>/
+    );
+    expect(html).toContain(
+      '#day-light:checked ~ .area .event-card:not(.daylight),#day-light:checked ~ .area .amap-f:not(.daylight){display:none}'
+    );
+    expect(html).toContain('<input type="radio" name="day" id="day-light" class="toggle-radio" />');
+    expect(html).toContain(
+      "#day-all:checked ~ .toggles label[for='day-all']{background:var(--accent)"
+    );
+    expect(html).toContain(
+      "#day-light:checked ~ .toggles label[for='day-light']{background:var(--accent)"
+    );
+    // It sits with the other filters, behind the phone's Filters chip.
+    const filters = html.indexOf('data-testid="area-filters"');
+    expect(html.indexOf('data-testid="toggle-daylight"')).toBeGreaterThan(filters);
+  });
+
+  it('not offered when every event, or none, is over before dark', () => {
+    expect(render([afternoon]).html).not.toContain('toggle-daylight');
+    expect(render([evening]).html).not.toContain('toggle-daylight');
+    expect(render([afternoon]).html).not.toContain('id="day-light"');
+  });
+
+  it('never promises what the data cannot tell: online, a date with no time, no place', () => {
+    const online = ev({
+      id: 'onl',
+      lat: undefined,
+      lon: undefined,
+      venue: '',
+      startDateISO: day('18:00'),
+    });
+    const dateOnly = ev({ id: 'dat', startDateISO: '2026-09-16' });
+    const { html } = render([afternoon, online, dateOnly]);
+    expect(classOf(html, 'onl')).not.toContain('daylight');
+    // An online event that names an area is still not "home before dark": nobody travels.
+    const onlineArea = ev({
+      id: 'ona',
+      lat: undefined,
+      lon: undefined,
+      venue: '',
+      h3_res7: '872664c1effffff',
+      startDateISO: day('18:00'),
+    });
+    expect(classOf(render([onlineArea, afternoon, evening]).html, 'ona')).not.toContain('daylight');
+    expect(classOf(html, 'dat')).not.toContain('daylight');
+  });
+
+  it('an event with no point is reckoned at the middle of its area', () => {
+    const cell = '872664c1effffff'; // a res-7 cell on Chicago's South Side
+    const byArea = ev({
+      id: 'are',
+      lat: undefined,
+      lon: undefined,
+      h3_res7: cell,
+      startDateISO: day('18:00'),
+    });
+    expect(classOf(render([byArea, evening]).html, 'are')).toContain('daylight');
+  });
+
+  it('half a point is no point: the area is used, and a string that is no cell is no place', () => {
+    const cell = '872664c1effffff';
+    const latOnly = ev({ id: 'lat', lon: undefined, h3_res7: cell, startDateISO: day('18:00') });
+    const lonOnly = ev({ id: 'lon', lat: undefined, h3_res7: cell, startDateISO: day('18:00') });
+    const noCell = ev({
+      id: 'bad',
+      lat: undefined,
+      lon: undefined,
+      // Not a cell, though h3 would read it as a point in Chicago.
+      h3_res7: '972664c1effffff',
+      startDateISO: day('18:00'),
+    });
+    const { html } = render([latOnly, lonOnly, noCell, evening]);
+    expect(classOf(html, 'lat')).toContain('daylight');
+    expect(classOf(html, 'lon')).toContain('daylight');
+    expect(classOf(html, 'bad')).not.toContain('daylight');
+  });
+
+  it('the Time of day row, word for word', () => {
+    expect(render([afternoon, evening]).html).toContain(
+      '<fieldset class="disc-chips" data-testid="toggle-daylight"><legend class="disc-label">Time of day</legend><label class="disc-chip" for="day-all">Any time</label><label class="disc-chip" for="day-light">Home before dark</label></fieldset>'
+    );
+  });
+
+  it('in Spanish', () => {
+    const { html } = renderLandingArea([afternoon, evening], { now: NOW, lang: 'es' });
+    expect(html).toContain('>En casa antes del anochecer</label>');
+  });
+});

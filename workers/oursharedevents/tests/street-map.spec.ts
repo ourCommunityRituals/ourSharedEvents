@@ -30,6 +30,7 @@
 // @born-red every tile of the frame, the frame's decode limits, the edges of the world (street-map CCR 2026-11-15, R15, R2, R49) | method: 9 faults injected one at a time in src/lib/street-map.ts and one in src/lib/mvt.ts, each seen failing the case named for it in the PR's fault list. The first puts main's lines back (a tile that is there is drawn): the R15 case failed. With the frame limit not passed to the decoder, and with the tile limit taken out, the "one point more" archive of that case drew. The three edge cases pin what the frame already did, so their red is the injected fault alone | date: 2026-11-15
 // @born-red a river is a line (the last survivor of street-map.ts in the mutation run) | method: `feat.type === 2` turned to `true` in drawStreetLayer (src/lib/street-map.ts), the mutant that survived on main (run 43731915136) and on PR 1295; "a river is a line in the water layer" seen failing on it (rivers: 6 points drawn, 2 wanted) while the other 229 cases of the four street specs stayed green, then the line put back | date: 2026-11-15
 // @born-red the object under the key is replaced, or is not the pinned one (S12) | method: the block run on the loader and reader of 44948a04: "replaced between two requests" and "MAP_TILES_ETAG is another etag" failed, and so did "never who: the reads depend on the cells alone" once it asked for the etag on every get after the first. Then faults, one at a time, each put back: the loader's counting source not handing the version on ("replaced between two requests" and the never-who case); `env.MAP_TILES_ETAG` not handed to r2Source ("is another etag", "the pinned object replaced"); the pin not compared in src/lib/pmtiles.ts (the same two); a changed archive not forgotten ("replaced between two requests": the third request had no streets) | date: 2026-11-16
+import { LABELS_OPEN } from '../src/lib/street-map';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   cellToBoundary,
@@ -42,6 +43,7 @@ import {
 import {
   DEFAULT_ARCHIVE,
   FRAME_LIMITS,
+  POI_LIMITS,
   MAX_LABELS,
   MAX_POINTS,
   MAX_TILES,
@@ -1656,7 +1658,10 @@ describe('street map | loading (fail soft)', () => {
     expect(one!.svg).toContain('>Nexto</text>');
     // Same frame, same tiles, same key either way.
     expect(one!.cellsKey).toBe(all!.cellsKey);
-    expect(one!.svg.replace(/<text[^>]*>Nexto<\/text>/, '')).toBe(all!.svg);
+    // Without its one name the names group is left empty.
+    expect(one!.svg.replace(/<text[^>]*>Nexto<\/text>/, '').replace(`${LABELS_OPEN}</g>`, '')).toBe(
+      all!.svg
+    );
 
     // And through the loader, which is what the handler calls.
     const env = { STREET_MAP: 'on', MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) };
@@ -2748,5 +2753,47 @@ describe('street map | on the attendee map', () => {
     const second = renderLandingArea(many, { now: NOW, streets });
     expect(second.html).toContain('data-testid="amap-streets"');
     expect(second.html).toContain('data-testid="amap-credit"');
+  });
+});
+
+// The landmarks' own budget (lib/street-map.ts, POI_LIMITS; 2026-11-18): a frame
+// whose places are past it is drawn with its streets and no landmark, never
+// refused for them.
+// @born-red landmark budget | method: the catch in readStreetDrawing made to rethrow, this test run (red), restored | date: 2026-11-18
+describe('street map | the landmarks budget', () => {
+  const withPois = (points: number) =>
+    tilesForCells([BLUE7], () => [
+      {
+        name: 'pois',
+        features: [
+          { type: 1, props: { kind: 'park', name: 'Kelly Park' }, parts: [[[2048, 1800]]] },
+          ...(points
+            ? [
+                {
+                  type: 1 as const,
+                  props: { kind: 'bench' },
+                  parts: [
+                    Array.from({ length: points }, (_, j) => [j % 4096, 100] as [number, number]),
+                  ],
+                },
+              ]
+            : []),
+        ],
+      },
+    ]).tiles;
+
+  it('under the budget the landmarks are drawn; past it the streets are, with none', async () => {
+    expect(POI_LIMITS).toEqual({ features: 20_000, points: 20_000, props: 200_000 });
+    const under = await buildStreetLayer(memSource(await pmtilesArchive(withPois(0))), [BLUE7]);
+    expect(under!.svg).toContain('>Kelly Park</text>');
+    // Each tile alone is under the budget; the frame together is past it, so
+    // the landmarks of the tiles read before the one that passed it go too.
+    const tiles = withPois(0).length;
+    expect(tiles).toBeGreaterThanOrEqual(2);
+    const each = Math.ceil(POI_LIMITS.points / tiles) + 1;
+    expect(each).toBeLessThan(POI_LIMITS.points);
+    const over = await buildStreetLayer(memSource(await pmtilesArchive(withPois(each))), [BLUE7]);
+    expect(over!.svg).toContain('class="as-r as-3"');
+    expect(over!.svg).not.toContain('Kelly Park');
   });
 });
