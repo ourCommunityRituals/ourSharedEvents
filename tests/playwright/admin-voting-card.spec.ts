@@ -82,6 +82,8 @@ test.describe('admin: the Voting card', () => {
     const back = page.getByTestId('ecb-nav-your-events');
     if (await back.isVisible()) await back.click();
     else await page.click('[data-testid="admin-path-events"]');
+    // The list opens on Drafts; a Published night (OSE-2142) is under All.
+    await page.getByTestId('events-filter-all').click();
     const row = page.locator(`[data-testid="event-row-${id}"]`);
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.click();
@@ -92,6 +94,8 @@ test.describe('admin: the Voting card', () => {
     await page.setExtraHTTPHeaders(AUTH);
     await page.goto('/admin', { waitUntil: 'domcontentloaded' });
     await page.click('[data-testid="admin-path-events"]');
+    // The list opens on Drafts; the night is Published from the second case on.
+    await page.getByTestId('events-filter-all').click();
     const row = page.locator(`[data-testid="event-row-${eventId}"]`);
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.click();
