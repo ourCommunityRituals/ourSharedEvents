@@ -201,8 +201,9 @@ describe('resolveCorridorId (BE-24b: H3 res7 cell as corridor identifier)', () =
   });
 
   // ── OSE-633: TEST-GEO-01 — RESOLVE_CORRIDOR_ERROR catch branch ─────────────
-  // h3-js throws when coordinates are NaN (the only input that triggers the
-  // catch branch — out-of-range numeric values are silently wrapped by h3-js).
+  // h3-js throws when coordinates are NaN or Infinity (the inputs that reach
+  // the catch branch). It wraps finite out-of-range values without throwing,
+  // so resolveCorridorId refuses those itself, before h3-js sees them.
   // resolveCorridorId must return null (not throw) and emit RESOLVE_CORRIDOR_ERROR.
 
   test('OSE-633 | TEST-GEO-01 | NaN lat | returns null without throwing', async () => {
@@ -217,5 +218,73 @@ describe('resolveCorridorId (BE-24b: H3 res7 cell as corridor identifier)', () =
 
   test('OSE-633 | TEST-GEO-01 | both NaN | resolveCorridorId is exception-safe (never throws)', async () => {
     await expect(resolveCorridorId({}, NaN, NaN)).resolves.toBeNull();
+  });
+
+  // The three cases above pass with the log line deleted. These hold the line
+  // itself, and the out-of-range case h3-js does not refuse: it wraps a
+  // latitude of 999 into a real-looking cell somewhere else on the globe.
+  function corridorErrorLines(spy: ReturnType<typeof vi.spyOn>): Record<string, unknown>[] {
+    const lines: Record<string, unknown>[] = [];
+    for (const call of spy.mock.calls) {
+      try {
+        const parsed = JSON.parse(String(call[0])) as Record<string, unknown>;
+        if (parsed.type === 'RESOLVE_CORRIDOR_ERROR') lines.push(parsed);
+      } catch {
+        // not a structured line
+      }
+    }
+    return lines;
+  }
+
+  test.each([
+    ['latitude above 90', 999, -87],
+    ['latitude below -90', -90.5, -87],
+    ['longitude above 180', 41.6, 181],
+    ['longitude below -180', 41.6, -1e9],
+  ])('OSE-633 | TEST-GEO-01 | %s | returns null, never a wrapped cell', async (_name, lat, lng) => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await expect(resolveCorridorId({}, lat, lng)).resolves.toBeNull();
+      expect(corridorErrorLines(spy)).toEqual([
+        { type: 'RESOLVE_CORRIDOR_ERROR', reason: 'coordinates_out_of_range', lat, lng },
+      ]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('OSE-633 | TEST-GEO-01 | NaN lat | one RESOLVE_CORRIDOR_ERROR line with lat and lng fields', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await resolveCorridorId({}, NaN, -87);
+      const lines = corridorErrorLines(spy);
+      expect(lines).toHaveLength(1);
+      // JSON has no NaN: the bad latitude reads as null in the line.
+      expect(lines[0]).toEqual({
+        type: 'RESOLVE_CORRIDOR_ERROR',
+        reason: 'h3_cell_computation_failed',
+        lat: null,
+        lng: -87,
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('OSE-633 | TEST-GEO-01 | the poles and the antimeridian are in range | a cell, and no error line', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      for (const [lat, lng] of [
+        [90, 0],
+        [-90, 0],
+        [0, 180],
+        [0, -180],
+      ]) {
+        expect(await resolveCorridorId({}, lat, lng)).toMatch(/^87[0-9a-f]{13}$/);
+      }
+      expect(corridorErrorLines(spy)).toEqual([]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
