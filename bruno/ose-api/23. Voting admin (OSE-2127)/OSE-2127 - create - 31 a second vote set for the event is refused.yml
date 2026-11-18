@@ -1,0 +1,33 @@
+info:
+  name: OSE-2127 | create | a second vote set for the event is refused
+  type: http
+  seq: 31
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"played_by\": \"team\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2127 create: 409 VOTE_SET_EXISTS', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('VOTE_SET_EXISTS'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

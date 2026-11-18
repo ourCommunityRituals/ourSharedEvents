@@ -1781,6 +1781,22 @@
           'series-reject': function (el) {
             if (window.seriesWrite) window.seriesWrite(argOf(el, 'event-id'), 'POST', '/reject', { series_id: argOf(el, 'series-id'), reason: 'not_recurring' }, el);
           },
+          // OSE-2127: the Voting card. Row buttons carry data-object-id and data-move.
+          'votes-toggle': function (el) {
+            if (window.votesToggle) window.votesToggle(el);
+          },
+          'votes-make': function (el) {
+            if (window.votesMake) window.votesMake(el);
+          },
+          'votes-set-move': function (el) {
+            if (window.votesSetMove) window.votesSetMove(el);
+          },
+          'vote-move': function (el) {
+            if (window.voteMove) window.voteMove(el);
+          },
+          'vote-add': function (el) {
+            if (window.voteAdd) window.voteAdd(el);
+          },
           // OSE-1998: the Stalls card. Row buttons carry data-booth-id.
           'stalls-toggle': function (el) {
             if (window.stallsToggle) window.stallsToggle(el);
@@ -7177,6 +7193,282 @@
         var d = ev.detail || {};
         window.stallsSay('', false);
         window.loadStalls(d.id);
+      });
+    </script>
+
+    <!-- Voting (OSE-2127, OSE ADR-040 decisions 3, 4 and 10). A host sets up the
+         event's one vote set, adds the songs or stalls people can vote on, and
+         opens, closes and reopens voting and each one's window. Hidden until an
+         event is selected, folded like the Stalls card, built from the same
+         existing classes (it adds no CSS). Rows are <template> skeletons filled
+         with textContent. NO COUNT: the card shows states and windows only. The
+         answer it reads carries no count, no secret and no epoch, and nothing
+         here would show one if it did (decision 7: no number before final). -->
+    <div class="card votes-card" id="votes-card" data-testid="votes-card" hidden>
+      <div class="mcard-head">
+        <div>
+          <h2 class="mcard-title">Voting</h2>
+          <p class="sub-line" id="votes-summary" data-testid="votes-summary" aria-live="polite"></p>
+        </div>
+        <button type="button" class="btn btn-secondary" id="votes-toggle" data-action="votes-toggle" data-testid="votes-toggle" aria-expanded="false" aria-controls="votes-body">Show</button>
+      </div>
+
+      <div id="votes-body" data-testid="votes-body" hidden>
+        <div class="mcard-body">
+          <p class="sub-line" data-testid="votes-note">Votes are anonymous. No count shows here, or anywhere, until the results are final.</p>
+          <div id="votes-make" data-testid="votes-make" hidden>
+            <label for="votes-played-by">Who wins</label>
+            <select id="votes-played-by" data-testid="votes-played-by">
+              <option value="object">The song or stall with the most votes</option>
+              <option value="team">The team with the most votes</option>
+            </select>
+            <p class="sub-line" data-testid="votes-make-hint">This cannot change once voting is set up.</p>
+            <div class="flex-row">
+              <button type="button" class="btn btn-primary" data-action="votes-make" data-testid="votes-make-btn">Set up voting</button>
+            </div>
+          </div>
+          <div class="detail-card-actions" id="votes-set-actions" data-testid="votes-set-actions" hidden>
+            <button type="button" class="btn btn-primary" id="votes-open" data-action="votes-set-move" data-move="open" data-testid="votes-open">Open voting</button>
+            <button type="button" class="btn btn-secondary" id="votes-close" data-action="votes-set-move" data-move="close" data-testid="votes-close">Close voting</button>
+            <button type="button" class="btn btn-secondary" id="votes-reopen" data-action="votes-set-move" data-move="reopen" data-testid="votes-reopen">Reopen voting</button>
+          </div>
+          <p class="sub-line" id="votes-empty" data-testid="votes-empty" hidden>Nothing to vote on yet. Add a song or a stall below.</p>
+          <ul class="pc-list" id="votes-list" data-testid="votes-list" aria-label="What people can vote on"></ul>
+        </div>
+
+        <form class="mcard-body" id="votes-add" data-testid="votes-add" novalidate hidden>
+          <h3 class="card-title">Add something to vote on</h3>
+          <div class="create-form">
+            <div>
+              <label for="vote-label">Name</label>
+              <input type="text" id="vote-label" data-testid="vote-label-input" maxlength="80" autocomplete="off" aria-describedby="vote-label-hint vote-label-error" />
+              <p class="create-field-error" id="vote-label-error" data-testid="vote-label-error" hidden></p>
+            </div>
+            <div>
+              <label for="vote-kind">Kind</label>
+              <select id="vote-kind" data-testid="vote-kind-input">
+                <option value="song">Song</option>
+                <option value="stall">Stall</option>
+              </select>
+            </div>
+          </div>
+          <p class="sub-line" id="vote-label-hint" data-testid="vote-label-hint">The name of the song or stall. Never a person’s email address or phone number.</p>
+          <div class="flex-row">
+            <button type="button" class="btn btn-primary" data-action="vote-add" data-testid="vote-add-btn">Add it</button>
+          </div>
+        </form>
+        <p class="sub-line" id="votes-team-note" data-testid="votes-team-note" hidden>On a team night, OurWKRP adds each song with its team.</p>
+
+        <div class="mcard-body">
+          <p class="create-msg" id="votes-msg" data-testid="votes-msg" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <template id="vote-row-tpl">
+        <li class="detail-card" data-testid="vote-row">
+          <div class="detail-card-text">
+            <span class="detail-card-main" data-testid="vote-row-label"></span>
+            <span class="detail-card-sub" data-testid="vote-row-kind"></span>
+            <span class="detail-card-sub" data-testid="vote-row-state"></span>
+          </div>
+          <div class="detail-card-actions" data-testid="vote-row-actions">
+            <button type="button" class="btn btn-secondary" data-action="vote-move" data-move="open" data-testid="vote-row-open">Open</button>
+            <button type="button" class="btn btn-secondary" data-action="vote-move" data-move="close" data-testid="vote-row-close">Close</button>
+            <button type="button" class="btn btn-secondary" data-action="vote-move" data-move="reopen" data-testid="vote-row-reopen">Reopen</button>
+          </div>
+        </li>
+      </template>
+    </div>
+    <script>
+      /** OSE-2127: one request to a votables route. Never throws; `data` is null when nothing readable came back. */
+      window.votesFetch = async function (url, method, body) {
+        var init;
+        if (method) {
+          init = { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) };
+        }
+        var res = null;
+        var data = null;
+        try {
+          res = await fetch(url, init);
+          try { data = await res.json(); } catch (x) { data = null; }
+        } catch (x) { res = null; }
+        return { ok: !!(res && res.ok && data && data.ok), status: res ? res.status : 0, data: data };
+      };
+      /** OSE-2127: plain words for each refusal the votables routes give. */
+      window.votesRefusal = function (code) {
+        var SAID = {
+          INVALID_LABEL: 'Use the name of the song or stall: 80 characters at most, and no email address or phone number.',
+          KIND_MISMATCH: 'A vote holds one kind: all songs, or all stalls.',
+          VOTE_SET_FINAL: 'The results are final. Voting cannot open again.',
+          EVENT_OVER: 'The event is over. Voting cannot open again.',
+          VOTE_SET_NOT_OPEN: 'Open voting first, then open a song or stall.',
+          PEPPER_NOT_SET: 'Voting cannot open on this site yet: the anonymous key is not set up.',
+          PEPPER_CHANGED: 'The anonymous key changed since voting first opened, so no vote could count. Voting stays closed.',
+          WRONG_STATE: 'That changed in another window. The list is up to date now.',
+          VOTE_SET_EXISTS: 'This event already has its vote. The list is up to date now.',
+        };
+        return Object.prototype.hasOwnProperty.call(SAID, code) ? SAID[code] : 'Could not save. Nothing was changed. Try again.';
+      };
+      window.votesSay = function (text, failed) {
+        var m = document.getElementById('votes-msg');
+        if (!m) return;
+        m.textContent = text;
+        m.className = failed ? 'create-msg error' : 'create-msg success';
+      };
+      window.votesToggle = function (el) {
+        var body = document.getElementById('votes-body');
+        if (!body) return;
+        var open = body.hidden;
+        body.hidden = !open;
+        el.setAttribute('aria-expanded', String(open));
+        el.textContent = open ? 'Hide' : 'Show';
+      };
+      /** OSE-2127: how one object's state reads. A window is shown as its closing time. */
+      window.voteRowState = function (o) {
+        if (o.open_now && o.closes_at) {
+          var at = new Date(o.closes_at);
+          var when = isNaN(at.getTime()) ? '' : at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+          return when ? 'Open until ' + when : 'Open';
+        }
+        if (o.state === 'draft') return 'Not opened yet';
+        return 'Closed';
+      };
+      /** OSE-2127: the summary line under the title. */
+      window.votesSummary = function (set) {
+        if (!set) return 'Voting is not set up for this event.';
+        if (set.final) return 'Voting is over and the results are final.';
+        if (set.state === 'open') return 'Voting is open.';
+        if (set.state === 'closed') return 'Voting is closed. You can reopen it while the event is on.';
+        return 'Voting is set up, not open yet.';
+      };
+      /** OSE-2127: fill the card from { set, objects }, or say the vote could not be read. */
+      window.renderVotesCard = function (id, data) {
+        var byId = function (x) { return document.getElementById(x); };
+        var box = byId('votes-card');
+        if (!box) return;
+        if (!id) { box.hidden = true; return; }
+        box.hidden = false;
+        window._votesEventId = String(id);
+        var list = byId('votes-list');
+        while (list.firstChild) list.removeChild(list.firstChild);
+        if (!data) {
+          byId('votes-summary').textContent = 'Could not read the vote. Try again in a moment.';
+          ['votes-make', 'votes-set-actions', 'votes-add', 'votes-empty', 'votes-team-note'].forEach(function (x) { byId(x).hidden = true; });
+          return;
+        }
+        var set = data.set || null;
+        var objects = Array.isArray(data.objects) ? data.objects : [];
+        byId('votes-summary').textContent = window.votesSummary(set);
+        byId('votes-make').hidden = !!set;
+        var actions = byId('votes-set-actions');
+        actions.hidden = !set || set.final;
+        if (set && !set.final) {
+          // A .btn sets its own display, which beats the hidden attribute: set both.
+          [['votes-open', 'draft'], ['votes-close', 'open'], ['votes-reopen', 'closed']].forEach(function (pair) {
+            var btn = byId(pair[0]);
+            btn.hidden = set.state !== pair[1];
+            btn.style.display = btn.hidden ? 'none' : '';
+          });
+        }
+        var team = !!set && set.played_by === 'team';
+        byId('votes-add').hidden = !set || set.final || team;
+        byId('votes-team-note').hidden = !team || set.final;
+        byId('votes-empty').hidden = !set || objects.length > 0;
+        var kind = byId('vote-kind');
+        if (objects.length) { kind.value = objects[0].kind === 'stall' ? 'stall' : 'song'; kind.disabled = true; }
+        else kind.disabled = false;
+        var tpl = byId('vote-row-tpl');
+        objects.forEach(function (o) {
+          if (!o || !/^[A-Za-z0-9_-]{1,128}$/.test(String(o.id))) return;
+          var row = tpl.content.firstElementChild.cloneNode(true);
+          var at = function (x) { return row.querySelector('[data-testid="' + x + '"]'); };
+          row.setAttribute('data-object-id', String(o.id));
+          at('vote-row-label').textContent = String(o.label);
+          at('vote-row-kind').textContent = o.kind === 'stall' ? 'Stall' : 'Song';
+          at('vote-row-state').textContent = window.voteRowState(o);
+          var expired = o.state === 'open' && !o.open_now;
+          var keep = [];
+          if (set && set.state === 'open' && !set.final) {
+            if (o.state === 'draft') keep = ['open'];
+            else if (o.state === 'open' && o.open_now) keep = ['close'];
+            else if (o.state === 'closed' || expired) keep = ['reopen'];
+          } else if (set && !set.final && o.state === 'open' && o.open_now) keep = ['close'];
+          Array.prototype.slice.call(row.querySelectorAll('[data-testid="vote-row-actions"] button')).forEach(function (btn) {
+            var move = btn.getAttribute('data-move');
+            if (keep.indexOf(move) === -1) { btn.remove(); return; }
+            btn.setAttribute('data-object-id', String(o.id));
+            btn.setAttribute('aria-label', btn.textContent + ': ' + String(o.label));
+          });
+          list.appendChild(row);
+        });
+      };
+      window._votesSeq = 0;
+      window.loadVotes = async function (id) {
+        var seq = ++window._votesSeq;
+        if (!id) { window.renderVotesCard(null, null); return; }
+        var r = await window.votesFetch('/api/v2/admin/events/' + encodeURIComponent(String(id)) + '/votables');
+        if (seq !== window._votesSeq) return;
+        window.renderVotesCard(id, r.ok ? { set: r.data.set, objects: r.data.objects } : null);
+      };
+      /** OSE-2127: send one write, then read the card again and say what happened. */
+      window.votesWrite = async function (btn, tail, body, done) {
+        var id = window._votesEventId;
+        if (!id) return null;
+        if (btn) btn.disabled = true;
+        var r = await window.votesFetch('/api/v2/admin/events/' + encodeURIComponent(id) + '/votables' + tail, 'POST', body);
+        if (btn) btn.disabled = false;
+        await window.loadVotes(id);
+        if (r.ok) window.votesSay(done, false);
+        else window.votesSay(window.votesRefusal(r.data && r.data.code), true);
+        return r;
+      };
+      window.votesMake = function (btn) {
+        var v = document.getElementById('votes-played-by').value === 'team' ? 'team' : 'object';
+        return window.votesWrite(btn, '', { played_by: v }, 'Voting is set up. Add what people can vote on, then open voting.');
+      };
+      window.votesSetMove = function (btn) {
+        var move = btn.getAttribute('data-move');
+        var WORDS = { open: 'Voting is open.', close: 'Voting is closed.', reopen: 'Voting is open again.' };
+        if (!Object.prototype.hasOwnProperty.call(WORDS, move)) return null;
+        return window.votesWrite(btn, '/' + move, {}, WORDS[move]);
+      };
+      window.voteMove = function (btn) {
+        var move = btn.getAttribute('data-move');
+        var oid = btn.getAttribute('data-object-id') || '';
+        var WORDS = { open: 'It is open for votes.', close: 'It is closed.', reopen: 'It is open for votes again.' };
+        if (!Object.prototype.hasOwnProperty.call(WORDS, move) || !/^[A-Za-z0-9_-]{1,128}$/.test(oid)) return null;
+        return window.votesWrite(btn, '/objects/' + encodeURIComponent(oid) + '/' + move, {}, WORDS[move]);
+      };
+      window.voteAdd = async function (btn) {
+        var input = document.getElementById('vote-label');
+        var error = document.getElementById('vote-label-error');
+        error.hidden = true;
+        error.textContent = '';
+        input.removeAttribute('aria-invalid');
+        var label = input.value.trim().replace(/\s+/g, ' ');
+        var kind = document.getElementById('vote-kind').value === 'stall' ? 'stall' : 'song';
+        var bad = !label || label.length > 80 || /\S@\S/.test(label) || /(?:\d[\s().-]*){7,}/.test(label);
+        if (bad) {
+          error.textContent = window.votesRefusal('INVALID_LABEL');
+          error.hidden = false;
+          input.setAttribute('aria-invalid', 'true');
+          input.focus();
+          return null;
+        }
+        var r = await window.votesWrite(btn, '/objects', { kind: kind, label: label }, (kind === 'stall' ? 'Stall' : 'Song') + ' added.');
+        if (r && r.ok) input.value = '';
+        else if (r && r.data && r.data.code === 'INVALID_LABEL') {
+          error.textContent = window.votesRefusal('INVALID_LABEL');
+          error.hidden = false;
+          input.setAttribute('aria-invalid', 'true');
+          input.focus();
+        }
+        return r;
+      };
+      window.addEventListener('ose:event-selected', function (ev) {
+        var d = ev.detail || {};
+        window.votesSay('', false);
+        window.loadVotes(d.id);
       });
     </script>
 

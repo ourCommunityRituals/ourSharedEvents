@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-11-16 — 739 ids.
+ * Generated 2026-11-18 — 770 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 514 ids
+    // admin.html — 545 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -478,6 +478,37 @@
       'tv-save',
       'tv-screen-row',
       'tv-screens',
+      'vote-add-btn',
+      'vote-kind-input',
+      'vote-label-error',
+      'vote-label-hint',
+      'vote-label-input',
+      'vote-row',
+      'vote-row-actions',
+      'vote-row-close',
+      'vote-row-kind',
+      'vote-row-label',
+      'vote-row-open',
+      'vote-row-reopen',
+      'vote-row-state',
+      'votes-add',
+      'votes-body',
+      'votes-card',
+      'votes-close',
+      'votes-empty',
+      'votes-list',
+      'votes-make',
+      'votes-make-btn',
+      'votes-make-hint',
+      'votes-msg',
+      'votes-note',
+      'votes-open',
+      'votes-played-by',
+      'votes-reopen',
+      'votes-set-actions',
+      'votes-summary',
+      'votes-team-note',
+      'votes-toggle',
       'wizard-back-btn',
       'wizard-cancel-edit-btn',
       'wizard-category',
