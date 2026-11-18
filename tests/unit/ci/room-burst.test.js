@@ -157,7 +157,9 @@ describe('summarize', () => {
 });
 
 describe('burst: what is sent and what is kept', () => {
-  const SECRET = 'anon_5f0c1d2e-SECRET-VALUE';
+  // A stand-in cookie value, marked so a leak is easy to find in a test failure.
+  const COOKIE_VALUE = 'anon_5f0c1d2e-LEAK-MARKER';
+  const ACCESS_VALUE = 'access-test-value';
 
   function fakeFetch(seen) {
     return async (url, init) => {
@@ -166,7 +168,7 @@ describe('burst: what is sent and what is kept', () => {
         status: 302,
         headers: [
           ['location', TO_EVENT],
-          ['set-cookie', `ose_anon=${SECRET}; HttpOnly; Secure; SameSite=Lax; Path=/`],
+          ['set-cookie', `ose_anon=${COOKIE_VALUE}; HttpOnly; Secure; SameSite=Lax; Path=/`],
         ],
       });
     };
@@ -177,7 +179,7 @@ describe('burst: what is sent and what is kept', () => {
     const headers = B.scanHeaders({
       OCR_CI_EDGE_TOKEN: 'ci-token-0123456789abcdef',
       CF_ACCESS_CLIENT_ID: 'id',
-      CF_ACCESS_CLIENT_SECRET: 'secret',
+      CF_ACCESS_CLIENT_SECRET: ACCESS_VALUE,
     });
     const results = await B.burst({
       base: BASE,
@@ -212,15 +214,15 @@ describe('burst: what is sent and what is kept', () => {
       retry: null,
       scans: { before: 0, placementRows: 2, returnRows: 2, distinctIds: 2 },
     }).join('\n');
-    expect(JSON.stringify(results)).not.toContain('SECRET');
-    expect(report).not.toContain('SECRET');
+    expect(JSON.stringify(results)).not.toContain('LEAK-MARKER');
+    expect(report).not.toContain('LEAK-MARKER');
     expect(report).toContain('| Cookie minted (Worker, counted) | 2 | - |');
   });
 
   test('scanOnce keeps only the cookie name, never its value', async () => {
     const answer = await B.scanOnce(`${BASE}/q/qrt_room_burst`, {}, fakeFetch([]));
     expect(answer.setCookies).toEqual(['ose_anon=']);
-    expect(JSON.stringify(answer)).not.toContain('SECRET');
+    expect(JSON.stringify(answer)).not.toContain('LEAK-MARKER');
     expect(B.classify(answer)).toBe('minted');
   });
 
