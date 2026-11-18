@@ -111,6 +111,14 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
       'The request-path reads go through guardAdminObjectScope and bind the event id.',
   ],
   [
+    'lib/vote-sets.ts > runVoteFinalJob: AND NOT EXISTS (SELECT 1 FROM events e',
+    'Nightly vote final job, its OSE-2142 step (OSE ADR-040 decision 11) — no request, ' +
+      'no caller brand. It closes each vote set that is open while its own event is not ' +
+      'Published (a status written outside the app). It reads only that event status, ' +
+      'by the set row, and writes only the set state. Nothing is returned to a caller; ' +
+      'the job logs a count of sets closed, a number only.',
+  ],
+  [
     'lib/corridor-latch.ts > latchReadyCorridors: FROM events',
     'Nightly corridor latch (runCorridorLatch, index.ts scheduled — no request, ' +
       'no caller brand). `INSERT OR IGNORE … SELECT brand_id, h3_res7 FROM events … ' +
