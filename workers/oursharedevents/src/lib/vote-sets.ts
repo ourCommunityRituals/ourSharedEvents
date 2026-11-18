@@ -291,6 +291,21 @@ async function whySetRefused(
 }
 
 /**
+ * With no pepper, voting cannot open. A set that does not exist or is final
+ * says so first, so a final set answers VOTE_SET_FINAL whatever the pepper.
+ */
+async function noPepper(db: D1Database, eventId: string): Promise<VoteFail> {
+  const set = await readVoteSet(db, eventId);
+  if (!set) return NO_SET;
+  if (set.final) return FINAL;
+  return fail(
+    409,
+    'PEPPER_NOT_SET',
+    'Voting cannot open here: the anonymous key is not configured'
+  );
+}
+
+/**
  * First open: draft → open. Stamps the pepper epoch and draws T and V, once.
  * With no pepper, refuses: a set that opens with no epoch could never count.
  */
@@ -301,12 +316,7 @@ export async function openVoteSet(
   nowIso: string
 ): Promise<VoteResult<VoteSetView>> {
   const epoch = await pepperEpoch(pepper);
-  if (!epoch)
-    return fail(
-      409,
-      'PEPPER_NOT_SET',
-      'Voting cannot open here: the anonymous key is not configured'
-    );
+  if (!epoch) return noPepper(db, eventId);
   const margin = drawUniform(SECRET_MARGIN_RANGE[0], SECRET_MARGIN_RANGE[1]);
   const floor = drawUniform(SECRET_FLOOR_RANGE[0], SECRET_FLOOR_RANGE[1]);
   const res = await db
@@ -332,12 +342,7 @@ export async function reopenVoteSet(
   nowIso: string
 ): Promise<VoteResult<VoteSetView>> {
   const epoch = await pepperEpoch(pepper);
-  if (!epoch)
-    return fail(
-      409,
-      'PEPPER_NOT_SET',
-      'Voting cannot open here: the anonymous key is not configured'
-    );
+  if (!epoch) return noPepper(db, eventId);
   const res = await db
     .prepare(
       `UPDATE vote_sets

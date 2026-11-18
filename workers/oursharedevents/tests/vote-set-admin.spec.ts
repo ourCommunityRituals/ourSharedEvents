@@ -440,6 +440,18 @@ describe('5. the first open stamps the epoch and draws T and V, once', () => {
     });
   });
 
+  test('a final set says final even with no pepper; no set says so too', async () => {
+    const none = await call('POST', vp(A2, '/open'), A, {}, { ANON_ID_HASH_PEPPER: undefined });
+    expect(none.json.code).toBe('VOTE_SET_NOT_FOUND');
+    await call('POST', vp(A1), A, {});
+    await call('POST', vp(A1, '/finalize'), A, {});
+    for (const tail of ['/open', '/reopen']) {
+      const res = await call('POST', vp(A1, tail), A, {}, { ANON_ID_HASH_PEPPER: undefined });
+      expect(res.status, tail).toBe(409);
+      expect(res.json.code, tail).toBe('VOTE_SET_FINAL');
+    }
+  });
+
   test('a reopen under another pepper is refused: no vote could count there', async () => {
     await openNight();
     await call('POST', vp(A1, '/close'), A, {});

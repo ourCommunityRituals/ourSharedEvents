@@ -57,6 +57,7 @@ echo "::group::Start local worker on ${BASE}"
     --var SHARED_REPORT_SIGNING_SECRET:local-signing-secret-1234567890 \
     --var FORMS_ENCRYPTION_KEY:local-forms-key-1234567890123456789 \
     --var FORMS_HASH_PEPPER:local-pepper-1234567890 \
+    --var ANON_ID_HASH_PEPPER:local-anon-pepper-12345678901234567890 \
     --var PUBLISH_GRACE_MINUTES:1) >"$WORKER_LOG" 2>&1 &
 WORKER_PID=$!
 for _ in $(seq 1 60); do
