@@ -1062,6 +1062,249 @@ describe('OSE-634: refreshCorridorBaselines — CORRIDOR_BASELINE_REFRESH_COMPLE
   });
 });
 
+// ─── OSE-634: SRE-OBS-01 — the run's summary line ───────────────────────────
+//
+// SHARED_REPORT_MATERIALIZE_COMPLETE is the materialization summary: one line a
+// run, written whatever the phases found, so a quiet healthy run and a broken
+// run read differently. It is aggregate-only: no event, cell or person is named
+// in it, and a counter that counts people or their scans is withheld under the
+// floor (AGENTS.md invariant 2).
+
+const SUMMARY_KEYS = [
+  'count_floor',
+  'ok',
+  'phases',
+  'timestamp',
+  'total_duration_ms',
+  'total_errors',
+  'type',
+];
+const SUMMARY_PHASE_KEYS = [
+  'duration_ms',
+  'errors',
+  'events_processed',
+  'phase',
+  'rows_skipped',
+  'rows_upserted',
+];
+
+interface SummaryPhase {
+  phase: string;
+  events_processed: number;
+  rows_upserted: number | null;
+  rows_skipped: number | null;
+  errors: number;
+  duration_ms: number;
+}
+
+/** Runs `fn` and returns every structured console.log line of the given type. */
+async function logLinesOf(
+  type: string,
+  fn: () => Promise<unknown>
+): Promise<Record<string, unknown>[]> {
+  const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    await fn();
+    const lines: Record<string, unknown>[] = [];
+    for (const call of spy.mock.calls) {
+      // One argument only: a second one would be an unsealed way out.
+      expect(call).toHaveLength(1);
+      try {
+        const parsed = JSON.parse(String(call[0])) as Record<string, unknown>;
+        if (parsed.type === type) lines.push(parsed);
+      } catch {
+        // not a structured line
+      }
+    }
+    return lines;
+  } finally {
+    spy.mockRestore();
+    errSpy.mockRestore();
+  }
+}
+
+function phaseOf(line: Record<string, unknown>, name: string): SummaryPhase {
+  const found = (line.phases as SummaryPhase[]).find((p) => p.phase === name);
+  expect(found, `phase ${name} is missing from the summary line`).toBeDefined();
+  return found!;
+}
+
+describe('OSE-634: runSharedReportMaterialization — the summary line', () => {
+  beforeEach(async () => {
+    await resetForTest();
+  });
+
+  test('OSE-634 | SRE-OBS-01 | nothing in the window | one summary line, ok, every phase at zero', async () => {
+    const before = Date.now();
+    const lines = await logLinesOf('SHARED_REPORT_MATERIALIZE_COMPLETE', () =>
+      runSharedReportMaterialization({ DB: tenv().DB, ANON_ID_HASH_PEPPER: TEST_PEPPER })
+    );
+    expect(lines).toHaveLength(1);
+    const line = lines[0];
+    expect(Object.keys(line).sort()).toEqual(SUMMARY_KEYS);
+    expect(line.ok).toBe(true);
+    expect(line.total_errors).toBe(0);
+    expect(line.count_floor).toBe(5);
+    expect(typeof line.total_duration_ms).toBe('number');
+    const at = Date.parse(String(line.timestamp));
+    expect(at).toBeGreaterThanOrEqual(before);
+    expect(at).toBeLessThanOrEqual(Date.now());
+    const phases = line.phases as SummaryPhase[];
+    expect(phases.map((p) => p.phase)).toEqual([
+      'scan_aggregation',
+      'h3_cell_backfill',
+      'anon_id_returns',
+      'corridor_density_baseline',
+      'event_series_detector',
+    ]);
+    for (const p of phases) {
+      expect(Object.keys(p).sort()).toEqual(SUMMARY_PHASE_KEYS);
+      // A healthy empty run says zero events and zero errors, in numbers.
+      expect(p.events_processed).toBe(0);
+      expect(p.errors).toBe(0);
+      expect(p.duration_ms).toBeGreaterThanOrEqual(0);
+    }
+    // Rows that are places or events are exact, so zero reads as zero.
+    expect(phaseOf(line, 'corridor_density_baseline').rows_upserted).toBe(0);
+    expect(phaseOf(line, 'h3_cell_backfill').rows_upserted).toBe(0);
+    expect(phaseOf(line, 'event_series_detector').rows_upserted).toBe(0);
+    expect(phaseOf(line, 'scan_aggregation').rows_upserted).toBe(0);
+  });
+
+  test('OSE-634 | SRE-OBS-01 | seeded run | the summary and the baseline line are both written', async () => {
+    await seedEvent({
+      id: 'test-evt-mat-sum',
+      start_offset_hours: -6,
+      end_offset_hours: -4,
+    });
+    for (let i = 0; i < 6; i++) await seedScan('test-evt-mat-sum', `anon_sum_${i}`);
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    let types: unknown[];
+    let summary: Record<string, unknown> | undefined;
+    try {
+      const r = await runSharedReportMaterialization({
+        DB: tenv().DB,
+        ANON_ID_HASH_PEPPER: TEST_PEPPER,
+      });
+      expect(r.totalErrors).toBe(0);
+      const parsed = spy.mock.calls.map((c) => JSON.parse(String(c[0])) as Record<string, unknown>);
+      types = parsed.map((l) => l.type);
+      summary = parsed.find((l) => l.type === 'SHARED_REPORT_MATERIALIZE_COMPLETE');
+    } finally {
+      spy.mockRestore();
+    }
+    expect(types.filter((t) => t === 'CORRIDOR_BASELINE_REFRESH_COMPLETE')).toHaveLength(1);
+    expect(types.filter((t) => t === 'SHARED_REPORT_MATERIALIZE_COMPLETE')).toHaveLength(1);
+    // The summary is the last word of the run.
+    expect(types[types.length - 1]).toBe('SHARED_REPORT_MATERIALIZE_COMPLETE');
+    const returns = phaseOf(summary!, 'anon_id_returns');
+    expect(returns.events_processed).toBe(1);
+    // Six people is at the floor or above: the number is given.
+    expect(returns.rows_upserted).toBe(6);
+  });
+
+  test('OSE-634 | SRE-OBS-01 | never who | a people counter under the floor is withheld, not zero and not exact', async () => {
+    await seedEvent({
+      id: 'test-evt-mat-few',
+      start_offset_hours: -6,
+      end_offset_hours: -4,
+    });
+    for (let i = 0; i < 3; i++) await seedScan('test-evt-mat-few', `anon_few_${i}`);
+    let result: Awaited<ReturnType<typeof runSharedReportMaterialization>> | undefined;
+    const lines = await logLinesOf('SHARED_REPORT_MATERIALIZE_COMPLETE', async () => {
+      result = await runSharedReportMaterialization({
+        DB: tenv().DB,
+        ANON_ID_HASH_PEPPER: TEST_PEPPER,
+      });
+    });
+    // The run itself did the work on three people...
+    expect(result!.phases[2].rowsUpserted).toBe(3);
+    // ...and the line does not say so.
+    const returns = phaseOf(lines[0], 'anon_id_returns');
+    expect(returns.events_processed).toBe(1);
+    expect(returns.rows_upserted).toBeNull();
+    expect(returns.rows_skipped).toBeNull();
+    // Scans skipped for want of a cell are people's actions too.
+    expect(phaseOf(lines[0], 'scan_aggregation').rows_skipped).toBeNull();
+    // No event is named anywhere in the line.
+    expect(JSON.stringify(lines[0])).not.toContain('test-evt-mat-few');
+  });
+
+  test('OSE-634 | SRE-OBS-01 | a phase fails | ok is false and the other phases are still reported', async () => {
+    const real = tenv().DB;
+    const failing = new Proxy(real, {
+      get(target, prop) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            if (/corridor_density_baseline/.test(sql)) throw new Error('injected failure');
+            return target.prepare(sql);
+          };
+        }
+        const value = Reflect.get(target, prop) as unknown;
+        return typeof value === 'function'
+          ? (value as (...a: unknown[]) => unknown).bind(target)
+          : value;
+      },
+    });
+    const lines = await logLinesOf('SHARED_REPORT_MATERIALIZE_COMPLETE', () =>
+      runSharedReportMaterialization({ DB: failing, ANON_ID_HASH_PEPPER: TEST_PEPPER })
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0].ok).toBe(false);
+    expect(lines[0].total_errors).toBeGreaterThanOrEqual(1);
+    expect((lines[0].phases as SummaryPhase[]).length).toBe(5);
+    expect(phaseOf(lines[0], 'corridor_density_baseline').errors).toBeGreaterThanOrEqual(1);
+    expect(phaseOf(lines[0], 'event_series_detector').errors).toBe(0);
+  });
+});
+
+describe('OSE-634: refreshCorridorBaselines — which kind of key the baseline was built from', () => {
+  beforeEach(async () => {
+    await resetForTest();
+  });
+
+  test('OSE-634 | SRE-OBS-01 | an H3 key and no legacy key | the line counts one and zero', async () => {
+    const db = tenv().DB;
+    await seedEvent({ id: 'test-evt-mat-h3a', start_offset_hours: -24 * 3 });
+    await seedEvent({ id: 'test-evt-mat-h3b', start_offset_hours: -24 * 4 });
+    // Two events, one cell (one of them stored in capitals): one key.
+    await db
+      .prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`)
+      .bind('872664540ffffff', 'test-evt-mat-h3a')
+      .run();
+    await db
+      .prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`)
+      .bind('872664540FFFFFF', 'test-evt-mat-h3b')
+      .run();
+    const lines = await logLinesOf('CORRIDOR_BASELINE_REFRESH_COMPLETE', () =>
+      refreshCorridorBaselines({ DB: db })
+    );
+    expect(lines).toHaveLength(1);
+    expect(Object.keys(lines[0]).sort()).toEqual([
+      'duration_ms',
+      'errors',
+      'h3_key_count',
+      'legacy_key_count',
+      'rows_skipped',
+      'rows_upserted',
+      'type',
+    ]);
+    expect(lines[0].h3_key_count).toBe(1);
+    expect(lines[0].legacy_key_count).toBe(0);
+    // The key itself never reaches the line.
+    expect(JSON.stringify(lines[0])).not.toContain('872664540');
+  });
+
+  test('OSE-634 | SRE-OBS-01 | nothing to read | both key counts are zero', async () => {
+    const lines = await logLinesOf('CORRIDOR_BASELINE_REFRESH_COMPLETE', () =>
+      refreshCorridorBaselines({ DB: tenv().DB })
+    );
+    expect(lines[0].h3_key_count).toBe(0);
+    expect(lines[0].legacy_key_count).toBe(0);
+  });
+});
+
 // ─── OSE-632: aggregateScanBuckets ───────────────────────────────────────────
 
 describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {

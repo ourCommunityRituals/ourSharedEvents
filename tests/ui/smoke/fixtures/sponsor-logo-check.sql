@@ -153,3 +153,9 @@ VALUES
   ('spl_thumb_ten_08', 'sp_thumb_ten_08', 'evt_sponsor_thumb_ten', 'gold', 'organizer', 'ctok_thumb_ten_08', 'dtok_thumb_ten_08', 1, 1, 1),
   ('spl_thumb_ten_09', 'sp_thumb_ten_09', 'evt_sponsor_thumb_ten', 'gold', 'organizer', 'ctok_thumb_ten_09', 'dtok_thumb_ten_09', 1, 1, 1)
 ON CONFLICT(id) DO UPDATE SET is_active = 1, sponsor_accepted = 1, organizer_accepted = 1;
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('evt_sponsor_logo_check', 'evt_sponsor_thumb_ten');

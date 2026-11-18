@@ -30,6 +30,7 @@ import {
   PLACE_BACKFILL_MAX,
 } from '../src/lib/event-place';
 import { fetchPlaceLinks } from '../src/lib/map-place-links';
+import { CORE_TIME_AND_TYPE } from './helpers/core-values';
 
 interface TestEnv {
   DB: D1Database;
@@ -458,6 +459,7 @@ describe('the zip search then finds the event', () => {
       title: 'Zip Night At RIPH',
       location: 'Rock Island Public House, Blue Island',
       status: 'active',
+      ...CORE_TIME_AND_TYPE,
       is_published: true,
       start_date: new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10),
     });
@@ -515,6 +517,7 @@ describe('a tapped hexagon: /?area= zooms into its events (owner, 2026-11-09)', 
       title,
       location: 'Rock Island Public House',
       status: 'active',
+      ...CORE_TIME_AND_TYPE,
       is_published: true,
       start_date: soon(),
     });
@@ -529,6 +532,7 @@ describe('a tapped hexagon: /?area= zooms into its events (owner, 2026-11-09)', 
       title: 'Zoom Backyard',
       location: '1 Home St, Blue Island',
       status: 'active',
+      ...CORE_TIME_AND_TYPE,
       is_published: true,
       start_date: soon(),
     });

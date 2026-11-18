@@ -53,6 +53,10 @@ test.describe('Golden Path — First-Time Organizer', () => {
         attendance_mode: 'in_person',
         title: EVENT_NAME,
         start_date: '2026-08-15',
+        // OSE-2036: an event created past draft owes a start time and an event
+        // type. The type is one the migrations seed (0024).
+        start_time: '18:00',
+        event_type_id: 'etr-rec-bocce',
         location: 'Beverly Arts Center',
         status: 'active',
         is_published: true,

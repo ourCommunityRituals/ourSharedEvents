@@ -229,13 +229,28 @@ export async function geocodeVenue(
  * enough to span a commercial strip, small enough to be commercially distinct
  * from adjacent neighborhoods.
  *
- * Returns null only if the h3 cell computation fails (invalid coordinates).
+ * Returns null when the coordinates are outside the globe or the h3 cell
+ * computation fails (NaN, Infinity), with one RESOLVE_CORRIDOR_ERROR line.
  */
 export async function resolveCorridorId(
   _env: MapsEnv,
   lat: number,
   lng: number
 ): Promise<string | null> {
+  // h3-js refuses NaN and Infinity, but it wraps a finite value outside the
+  // globe (a latitude of 999) into a real-looking cell somewhere else. A
+  // corrupted coordinate must end as no corridor, never as the wrong one.
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    console.log(
+      JSON.stringify({
+        type: 'RESOLVE_CORRIDOR_ERROR',
+        reason: 'coordinates_out_of_range',
+        lat,
+        lng,
+      })
+    );
+    return null;
+  }
   try {
     return latLngToCell(lat, lng, 7);
   } catch {

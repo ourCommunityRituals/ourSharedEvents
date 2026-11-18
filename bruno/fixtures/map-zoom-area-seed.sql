@@ -126,3 +126,9 @@ WHERE event_id IN ('map-zoom-a', 'map-zoom-b', 'map-zoom-c', 'map-zoom-d',
 INSERT INTO share_opens_daily (event_id, screen, phase, day, opens) VALUES
   ('map-zoom-a', 'event', 'pre_event', '2026-01-01', 5),
   ('map-zoom-b', 'event', 'pre_event', '2026-01-01', 5);
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('map-zoom-a', 'map-zoom-b', 'map-zoom-c', 'map-zoom-d', 'map-zoom-e', 'map-zoom-f', 'map-zoom-g', 'map-zoom-h', 'map-zoom-i', 'map-zoom-j');

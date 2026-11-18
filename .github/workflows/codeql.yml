@@ -1,6 +1,8 @@
-# CodeQL — Self-hosted SAST on every PR/push to main + weekly deep scan
+# CodeQL — SAST on every PR/push to main + weekly deep scan
 #
-# Runs on self-hosted (Bloodraven) to avoid GitHub-hosted billing dependency.
+# Runs on a GitHub-hosted runner (`runs-on: ubuntu-24.04`, below). Corrected
+# 2026-11-18: this header said it ran self-hosted (Bloodraven); the comments
+# further down that name the self-hosted runner describe why a step was added.
 # By owning the pull_request trigger, GitHub's default code scanning setup is
 # suppressed — preventing billing-blocked "Analyze" jobs from firing on PRs.
 # Python excluded: no production Python in OSE; self-hosted runner trips the

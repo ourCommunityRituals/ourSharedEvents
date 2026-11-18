@@ -42,3 +42,9 @@ INSERT OR IGNORE INTO poster_deployments
 VALUES
   ('pd_local_launch_001', 'test-event-001', 'qrt_local_launch_001', 'Library window',
    'Beverly Branch Library', 1, datetime('now'), datetime('now'));
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('test-event-001');

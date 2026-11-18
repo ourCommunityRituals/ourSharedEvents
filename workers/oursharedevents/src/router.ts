@@ -22,7 +22,14 @@
  *                                  hexagon and Back links stay on /map. /<lang>/map too.
  *   POST /near                   → phone's rough box (form body g=) → 303 /?zip=, or
  *                                  /map?zip= when the form on /map sent it (page=map)
+ *   GET /home /welcome /landing /about /info → the landing page at five more addresses, in the
+ *                                  landing's limit scope
  *   GET /admin                   → admin dashboard (auth required)
+ *   GET /manage /dashboard /create → the admin dashboard at three more addresses (auth required)
+ *   GET /briefing /overview /summary → the briefing page (auth required, platform actors only, OSE-574)
+ *   GET /privacy /privacy-policy → the privacy policy page
+ *   GET /demo                    → the demo site's front door (public, mock data only, OSE-605)
+ *   GET /demo/:site              → one of the standing demo sites
  *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)
  *   GET /ui-toast.js             → shared OCR toast script (@ocr/ui), loaded by admin and sponsor home
  *   GET /ui-preview              → component showcase for Claude Design (no auth)
@@ -42,6 +49,14 @@
  *   GET /es/events/:id/register|checkin|survey|updates → the form page in that language
  *                                  (OSE-1850); /es stands for any listed language. The form posts
  *                                  to the unprefixed API; no language is stored.
+ *   GET /events                  → the public events list page; limited per caller, its own scope
+ *   GET /events/:id              → the public event page (any path under /events/ with one segment)
+ *   GET /events/:id/:name        → the same page at its readable address (OSE-1684); a name that
+ *                                  is not the event's own is forwarded to the right one
+ *   GET /events/:id/tv|poster    → the event's TV and poster, the addresses the platform writes;
+ *                                  /display?event= and /poster?event= keep working
+ *   GET /public /schedule /calendar /agenda /lineup → 301 to /events, query string kept (OSE-1520)
+ *   GET /event /event/*rest      → 301 to /events and /events/<rest>: the singular people type
  *   GET /events/:id/calendar.ics → public event calendar download
  *   GET /events/:id/booths       → a fair's stalls (OSE-1998, OSE ADR-034): the fair's title and
  *                                  date, its sponsor strip when sponsors are on show, one <h1>
@@ -72,6 +87,8 @@
  *   GET /api/v2/admin/event-types     → Category → Type catalog for the picker (auth, OSE-1344)
  *   POST /api/v2/admin/zip-suggest    → the ZIP the wizard fills in from a typed address or one-zip town;
  *                                       reads the zip and town lists only, stores nothing (auth, W1 OSE-2095)
+ *   POST /api/v2/admin/events/backfill-h3-cells → one-shot H3 backfill of event cells (auth, OSE-489)
+ *   GET  /api/v2/admin/events/portfolio-rollup  → the brand-scoped rollup strip (auth, OSE-669)
  *   PUT    /api/v2/admin/events/:id → update event (auth required)
  *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
  *   POST   /api/v2/admin/events/:id/repeat → draft copy of a finished event, new date, nothing about who took part (auth, rate-limited, audited, OSE-1531)
@@ -107,16 +124,23 @@
  *   GET  /api/v2/admin/events/:id/forms/checkin-count  → check-in count (admin)
  *   GET  /api/v2/admin/events/:id/forms/surveys        → surveys, PII-scrubbed (admin)
  *   GET  /api/v2/admin/events/:id/forms/email-signups  → email signup count (admin)
+ *   GET  /api/v2/admin/events/:id/forms/contacts       → registrant contacts (admin, audited)
+ *   GET  /api/v2/admin/events/:id/forms/export         → forms export (admin, audited)
  *   GET  /events/:id/register|checkin|survey|updates  → public form page (OSE-1684)
  *   GET  /forms/:eventId?type=register|checkin|survey|email  → the same page at its older address
  *   POST /subscribe              → email capture
+ *   POST /signup /newsletter      → email capture at two more addresses
  *   GET /display                  → TV/kiosk live event display
+ *   GET /tv /kiosk /screen        → the same display at three more addresses
  *   GET /q/:token                 → poster QR scan: records an anonymous scan, 302 to the event page; per-caller count limit, never a 429 (OSE-625, OSE-1496)
+ *   GET /s/*code                  → shortlink resolver: 302, counts a click (counter and time only); per-caller count limit (OSE-240, OSE-1496)
  *   GET /e/:code /p/:code         → 302 to the event page / poster; a share open (what + when, never who; OSE-1684)
  *   GET /r/:code /c/:code         → 302 to that event's register / check-in form; a share open
  *   GET /tv/:code                 → 302 to that event's TV; typed on the TV, not counted
  *   GET /poster                   → printable poster with QR codes
+ *   GET /posters /flyers /tabletop /tent /signage → the poster at five more addresses; the path picks the format (OSE-310)
  *   GET /sharedReport             → shareable analytics dashboard
+ *   GET /report /analytics /reports /insights /stats → the SharedReport page at five more addresses
  *   GET /api/v2/uec/resolve?code=<id|label>  → UEC code resolution (OSE-320)
  *                                            — returns canonical metadata + QR data URI.
  *                                            UEC is a semantic-category contract
@@ -135,6 +159,8 @@
  *   POST   /api/v2/admin/sponsor-requests/:id/respond → organizer approves/declines a sponsor's request
  *   GET    /api/v2/admin/sponsors/:id          → get sponsor
  *   POST   /api/v2/admin/sponsors              → create sponsor
+ *   POST   /api/v2/admin/sponsors/promote      → promote a sponsor onboarding draft to a live sponsor (audited, OSE-736)
+ *   POST   /api/v2/admin/sponsors/:id/home-link → mint the sponsor's own page link (rate-limited, audited)
  *   PUT    /api/v2/admin/sponsors/:id          → update sponsor
  *   DELETE /api/v2/admin/sponsors/:id          → soft delete
  *   PUT    /api/v2/admin/sponsors/:id/event-types  → set event type associations
@@ -147,11 +173,17 @@
  *   GET    /api/v2/events/:id/sponsor-bundle   → sponsor bundle (surface filtering)
  *   GET    /api/v2/sponsors/:id/logo[?slot=sidebar] → logo proxy (edge-cached; misses rate-limited)
  *   GET    /sponsors/:id                       → public sponsor card: title, location, contact (0083)
+ *   GET    /sponsor?t=<token>                  → the sponsor's own page (token-gated, read-limited)
  *   GET    /sponsor-default-logo.svg           → the OSE default sponsor image (0083)
  *   GET    /event-default-thumb.svg            → the OSE default event card image
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
  *   POST   /api/v2/sponsor/requests            → sponsor asks to back an event (sponsor-home token in body)
+ *   POST   /api/v2/sponsor/placements/:id/respond → a sponsor accepts or declines a placement (sponsor-home token in body; rate-limited)
+ *   POST   /api/v2/sponsors/draft              → onboarding draft capture (signed invite token, OSE-732)
+ *   POST   /api/v2/sponsors/draft/:draftToken/asset/:format → upload one asset format for a draft (invite token, OSE-733)
+ *   GET    /api/v2/sponsors/:id/asset/:format  → serve one asset format, always 200 (OSE-735)
+ *   GET    /api/v2/maps/venue-image?event=<id> → venue map image, proxied so the key stays server-side; rate-limited, edge-cached (OSE-217)
  *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
  *   GET    /api/v2/events/:id/display-config   → TV order + dwell + league/donate links + event QR (ETag, 304)
  *   GET    /api/v2/vote/:eventId/objects        → what a voter can vote on now: {objects:[{id,kind,label}]}; no count, no time (OSE-2135, OSE ADR-040). Routed only while VOTING_ENABLED is "on" (lib/voting-switch.ts); off, it is the router's own 404. Limited per caller: 600 a minute
@@ -176,10 +208,12 @@
  *   GET    /api/v2/admin/dashboards/operations      → founder cockpit, brand-scoped aggregates
  *   GET    /api/v2/admin/dashboards/corridor        → event cells, source cells, flows (res 7)
  *   GET    /api/v2/admin/events/:id/dashboard       → organizer / partner report, one event
+ *   GET    /api/v2/admin/events/:id/stats           → dashboard aggregate counts for one event (OSE-896)
  *
  *   Admin Audit Log (auth required — OSE-212):
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
  *                                             (?scope=brand&source=&since=&brand= for the Logs screen)
+ *   GET    /api/v2/admin/subscribers        → email subscribers, paginated; each read is audited (OSE-207)
  *
  *   Admin Logs + Settings screens (auth required; handlers/admin-screens.ts):
  *   GET    /api/v2/admin/screens/logs       → Logs page (HTML; reads the audit-log route above)

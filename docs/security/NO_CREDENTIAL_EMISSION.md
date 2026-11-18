@@ -20,7 +20,7 @@ trusted (the `@born-red` notes in each file say how).
 | ------------ | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Source gate  | `tests/e2e/0-architecture/credential-emission.invariant.spec.ts` (T0 `invariants`) | Reads every file under `workers/oursharedevents/src`. A credential request header (`Authorization`, `Cookie`, `Cf-Access-Jwt-Assertion`, `CF-Access-Client-Secret`, `X-OCR-Internal`), the request's headers taken whole, or a secret binding (`env.NAME`) may not reach `console.*`, a `Response`, a response header, or a helper that writes one. |
 | Runtime gate | `workers/oursharedevents/tests/credential-echo.derived.spec.ts` (workers pool)     | Sends every method to every route in the router: with refused credentials, with accepted ones, with a database that fails and with a router that fails. No answer and no log line may carry a credential that was sent or the value of a secret binding.                                                                                            |
-| Redaction    | `workers/oursharedevents/src/lib/log-redact.ts`, installed in `src/index.ts`       | Every console line is redacted before it is written: a value under a credential header name, any `Bearer` value, any `eyJ…` run (a JWT or one of this Worker's signed links). The unhandled-error line also removes, by value, what the failing request carried in its credential headers.                                                          |
+| Redaction    | `workers/oursharedevents/src/lib/log-redact.ts`, installed in `src/index.ts`       | Every console line is redacted before it is written: a value under a credential header name, any `Bearer` value, any `eyJ…` run (a JWT or one of this Worker's signed links). The unhandled-error line also removes, by value, what the failing request carried in its credential headers (not its cookies: see Limits).                            |
 
 On staging the Bruno folder `bruno/ose-api/24. No credential in any answer
 (OSE-1475)` asks four routes and reads the answers the same way.
@@ -31,6 +31,14 @@ On staging the Bruno folder `bruno/ose-api/24. No credential in any answer
   with neither (the admin key written as a bare string under some other key) is
   not recognised by it. The two gates are what keep such a line from being
   written.
+- The Worker does not read a request's cookie to keep it out of a log line.
+  Only three files may read the cookie (`votes-never-who.invariant.spec.ts`,
+  owner 2026-11-18: no new reader), and the log code is not one of them. A
+  cookie is masked when it is logged under a name ending in `cookie`, or when
+  it has a token's shape (an Access cookie is a JWT). A bare cookie value with
+  neither, repeated in the text of an unhandled error, is written as it came.
+  Removing it by value means listing `src/lib/unhandled-error-log.ts` as a
+  cookie reader, which is the owner's decision.
 - Workers Logs cannot be read from a test. Redaction is proven in the workers
   pool, not on staging.
 - The source gate reads text, not types. A credential that travels through an
@@ -49,6 +57,16 @@ list is fixed, in `SIGNED_LINK_PRODUCTS` (runtime gate) and `MINT_SITES`
 | `POST /api/v2/admin/sponsors/:id/home-link`             | `url` in the JSON answer            | The organizer who asked. Admin only, rate-limited, audited.    |
 | `GET /sponsor` (opened with the sponsor's own link)     | The page's links to `/sharedReport` | That sponsor: each link is signed for them and one event.      |
 | `GET /api/v2/events/:id/sponsor-bundle`                 | `beacon_token` per sponsor          | Public by design. Sent back with an impression. Opens nothing. |
+| `GET /q/:token?type=vote`                               | `Location`: `/events/:id/vote#t=…`  | The browser that scanned. A vote pass: 30 minutes, one event.  |
+
+The last row is a vote pass, not a signed link (`vp1.…`, `src/lib/vote-pass.ts`,
+OSE ADR-040 decision 6). It is in the same two lists and is held to its one
+place the same way. The runtime gate fails a pass in a body, in any other
+header, in a query string, or on any other address. The source gate fails a
+second caller of `issueVotePass`, a second use of the pass inside `/q`, and a
+log line or an answer built in `lib/vote-pass.ts`. Voting is off in every
+environment today (`VOTING_ENABLED = "off"` in `wrangler.toml`), so no pass is
+minted on staging and no staging check sees one yet.
 
 The anonymous `ose_anon` cookie is not a sign-in. It is sent back as its own
 cookie on `/q` and the forms routes (AGENTS.md invariant 4) and nowhere else.

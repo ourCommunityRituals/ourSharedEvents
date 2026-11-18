@@ -119,6 +119,10 @@ async function createEvent(request, fields) {
       status: 'active',
       is_published: true,
       start_date: futureDate(),
+      // OSE-2036: an event created past draft owes a start time and an event
+      // type. The type is one the migrations seed (0024).
+      start_time: '18:00',
+      event_type_id: 'etr-rec-bocce',
       ...fields,
     },
   });

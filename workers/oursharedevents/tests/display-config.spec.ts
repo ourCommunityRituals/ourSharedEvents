@@ -10,6 +10,7 @@
 
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
+import { CORE_VALUES } from './helpers/core-values';
 
 interface TestEnv {
   DB: D1Database;
@@ -49,6 +50,7 @@ async function createEvent(extra: Record<string, unknown> = {}): Promise<string>
       location: 'Test Hall',
       title: `TV ${crypto.randomUUID()}`,
       status: 'active',
+      ...CORE_VALUES,
       ...extra,
     }),
   });
