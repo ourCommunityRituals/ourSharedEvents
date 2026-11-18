@@ -154,6 +154,7 @@
  *   POST   /api/v2/sponsor/requests            → sponsor asks to back an event (sponsor-home token in body)
  *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
  *   GET    /api/v2/events/:id/display-config   → TV order + dwell + league/donate links + event QR (ETag, 304)
+ *   GET    /api/v2/vote/:eventId/objects        → what a voter can vote on now: {objects:[{id,kind,label}]}; no count, no time (OSE-2135, OSE ADR-040). Routed only while VOTING_ENABLED is "on" (lib/voting-switch.ts); off, it is the router's own 404. Limited per caller: 600 a minute
  *
  *   Poster Deployments Admin (auth required):
  *   POST   /api/v2/admin/events/:id/poster-deployments  → create deployment (with H3 tagging; optional booth_id, an active booth of the same event)
@@ -238,6 +239,7 @@ import {
   publicCountLimited,
   publicPageLimited,
   publicReadLimited,
+  PUBLIC_PAGE_MAX,
   type PublicReadLimitEnv,
 } from './lib/public-read-limit.js';
 import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
@@ -273,6 +275,8 @@ import {
   handleUpdateEventBooth,
 } from './handlers/event-booths';
 import { handleVotables, matchVotablesRoute } from './handlers/votables';
+import { handleVoteObjects } from './handlers/vote-objects';
+import { votingEnabled, type VotingSwitchEnv } from './lib/voting-switch';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
   handleOperationsDashboard,
@@ -500,6 +504,7 @@ export type RouterEnv = PagesEnv &
   CalendarEnv &
   AdminObjectScopeEnv &
   SponsorHomeEnv &
+  VotingSwitchEnv &
   RateLimitEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
@@ -2303,6 +2308,24 @@ export async function route(
     const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleAdminGeocode(request, env);
+  }
+
+  // GET /api/v2/vote/:eventId/objects — what a voter can vote on now (OSE-2135,
+  // S3c of OSE-1193; OSE ADR-040 decisions 5 and 7). Outside /api/v2/events*.
+  // THE KILL SWITCH: with VOTING_ENABLED anything but "on", this block is
+  // skipped and the request falls to the router's own 404 at the end, so the
+  // path answers exactly as if voting did not exist. On, it is limited per
+  // caller at 600 a minute (PUBLIC_PAGE_MAX), above the edge layer: a room of
+  // phones behind one venue address opens the voter page at once, and 150
+  // readers from one address in 20 s must all be served (the story's load bar).
+  const voteObjectsMatch = pathname.match(/^\/api\/v2\/vote\/([^/]+)\/objects$/);
+  if (voteObjectsMatch && method === 'GET' && votingEnabled(env)) {
+    const id = voteObjectsMatch[1];
+    return publicReadLimited(
+      'vote-objects',
+      (req, e: typeof env) => handleVoteObjects(req, e, id),
+      PUBLIC_PAGE_MAX
+    )(request, env);
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────

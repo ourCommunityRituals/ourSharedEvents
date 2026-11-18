@@ -1,0 +1,43 @@
+info:
+  name: "OSE-2135 | on | the read lists the open song: id, kind and label only"
+  type: http
+  seq: 70
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/vote/{{voteReadNightId}}/objects"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') !== 'on') {
+          console.log('NOT RUN (VOTING_ENABLED is off on this environment): the open-read half runs only while it is on');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        function strayKeys(v, path, out) {
+          out = out || [];
+          if (Array.isArray(v)) { v.forEach(function (x, i) { strayKeys(x, path + '[' + i + ']', out); }); }
+          else if (v && typeof v === 'object') {
+            Object.keys(v).forEach(function (k) {
+              if (['objects', 'id', 'kind', 'label'].indexOf(k) < 0) out.push(path + '.' + k);
+              strayKeys(v[k], path + '.' + k, out);
+            });
+          }
+          return out;
+        }
+        const b = res.getBody() || {};
+        const text = JSON.stringify(b);
+        test('OSE-2135 on: 200, the open song only; the draft song is not listed', function () { expect(res.getStatus()).to.eql(200); expect(b.objects).to.eql([{ id: bru.getVar('voteReadSongOneId'), kind: 'song', label: 'Read song one' }]); });
+        test('OSE-2135 on: an allowlist: one key, three fields, no count, time or state', function () { expect(Object.keys(b)).to.eql(['objects']); expect(strayKeys(b, '$')).to.eql([]); expect(text).to.not.match(/count|tall|secret|epoch|void|final|receipt|marker|closes|state|\d{4}-\d{2}-\d{2}/i); });
+        test('OSE-2135 on: not stored, and no cookie', function () { expect(res.getHeader('cache-control')).to.eql('no-store'); expect(res.getHeader('set-cookie')).to.be.undefined; });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

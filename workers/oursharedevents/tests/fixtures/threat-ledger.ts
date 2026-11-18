@@ -2137,6 +2137,41 @@ const STREET_MAP_ARCHIVE: ThreatEntry[] = [
   },
 ];
 
+// OSE-2135 (S3c of OSE-1193; OSE ADR-040): the public open-objects read. Its
+// security review (dr-of-security, 2026-11-18) left these two open.
+const VOTE_PUBLIC_READ: ThreatEntry[] = [
+  {
+    id: 'TL-102',
+    layer: 'worker_surface',
+    threat:
+      'GET /api/v2/vote/:eventId/objects makes a vote object label public while it is open, for the first time. A label is free text checked only for email and phone shapes (lib/votes.ts), so a host can type a person into it ("Wonderwall, Jane D."), and anyone holding the event id can read when that song was open. ADR-040 (Q9) allows a person as the object only if they opted in as a presenter.',
+    severity: 'MEDIUM',
+    target_invariant: { number: 1, name: 'anonymous_id' },
+    mitigation_story: null,
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'Event ids are evt_ plus a UUID, so a caller cannot guess one; the read lists only open objects of a live event. Proposed for the owner: a line in ADR-040 that labels become public at the read, and a note on the admin label field (S4b, OSE-2129, or the Voting card). No code can tell a song title from a name.',
+  },
+  {
+    id: 'TL-103',
+    layer: 'worker_surface',
+    threat:
+      'The open-objects read is limited at 600 a minute per address, above the 10-second edge layer, so a room behind one venue address is served. The per-minute count lives in KV and fails open, so a flood from one address meets no working ceiling: D1 reads and Worker time, not a leak.',
+    severity: 'LOW',
+    target_invariant: null,
+    mitigation_story: null,
+    test_ref: null,
+    status: 'open',
+    red_birth: null,
+    last_run_green: null,
+    notes:
+      'The same trade as the pages (OSE ADR-038, PUBLIC_PAGE_MAX). Proposed: a dedicated edge rate-limit binding sized for a room (for example 300 per 10 s) for the vote read and the vote POST, with S4c (OSE-2134). The voter page (S4b) should not poll the list.',
+  },
+];
+
 export const THREAT_LEDGER: ThreatEntry[] = [
   ...D1_BOUNDARY,
   ...WORKER_SURFACE,
@@ -2161,6 +2196,7 @@ export const THREAT_LEDGER: ThreatEntry[] = [
   ...ADMIN_IDENTITY_HARDENING,
   ...ANALYTIC_LAYER,
   ...STREET_MAP_ARCHIVE,
+  ...VOTE_PUBLIC_READ,
 ];
 
 export const THREAT_LEDGER_META = {

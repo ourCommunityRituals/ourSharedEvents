@@ -1,0 +1,23 @@
+info:
+  name: "OSE-2135 | display | display-config carries no vote word, song or id with a song open"
+  type: http
+  seq: 80
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{voteReadNightId}}/display-config"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const text = JSON.stringify(res.getBody());
+        test('OSE-2135 display: no vote word, no song and no object id on the TV read (invariant 5)', function () { expect(res.getStatus()).to.eql(200); expect(text).to.not.match(/vot(e|ing|able)|tall(y|ies)|ballot|receipt|participant|winner/i); expect(text).to.not.contain('Read song'); expect(text).to.not.contain(bru.getVar('voteReadSongOneId')); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

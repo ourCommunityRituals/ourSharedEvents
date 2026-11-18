@@ -714,6 +714,152 @@ describe('the street-layer switch (STREET_MAP)', () => {
   });
 });
 
+// OSE-2135 (S3c of OSE-1193; OSE ADR-040): the voting kill switch, `VOTING_ENABLED`
+// in each vars block of wrangler.toml. Exactly "on" turns the public vote
+// surfaces on; the Worker reads anything else as off, which is safe and silent,
+// so these rules make the value be written, as one of the two words, in every
+// block. Production may be "on" only once staging is, and the Bruno copy
+// (votingSwitch, which picks the half of each voting Bruno folder that runs) must match
+// staging. "As it stands" pins all three off: only the owner turns voting on,
+// and that PR changes a line here.
+// @born-red voting switch | method: each rule is fed the fault that turns it red, in the cases below. Then the real files were faulted one at a time and "the real files agree" or "as it stands" seen failing on each: production set to "on" with staging "off"; staging set to "on" with the copy left at "off"; the copy set to "on"; staging mistyped "ON"; production's line removed. VOTING_ENABLED taken off INTENTIONAL_VALUE_DIFFERENCES failed "the parity check lists a staging-first difference"; VOTING_ON set to 'true' failed "the word the rules call on" | date: 2026-11-18
+describe('the voting kill switch (VOTING_ENABLED)', () => {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- the repository's own files, by a path written in this file
+  const root = (p) => fs.readFileSync(path.join(__dirname, '../../../', p), 'utf8');
+  const STAGING_ENV = 'bruno/ose-api/environments/ose-staging.yml';
+  const toml = () => root('workers/oursharedevents/wrangler.toml');
+  const stagingEnv = () => root(STAGING_ENV);
+  const NAMES = ['local dev', 'staging', 'production'];
+
+  function blocks(tomlText) {
+    const stgAt = tomlText.search(/^\[env\.staging\]/m);
+    const prodAt = tomlText.search(/^\[env\.production\]/m);
+    return {
+      'local dev': tomlText.slice(0, stgAt),
+      staging: tomlText.slice(stgAt, prodAt),
+      production: tomlText.slice(prodAt),
+    };
+  }
+  const join = (b) => b['local dev'] + b.staging + b.production;
+  const valueIn = (block) => /^VOTING_ENABLED = "([^"]*)"\r?$/m.exec(block)?.[1];
+  const copyIn = (yaml) => /name: votingSwitch\r?\n\s+value: "([^"]*)"/.exec(yaml)?.[1];
+
+  /** What is wrong, as sentences. Pure: takes the two files' text. */
+  function switchProblems(tomlText, envYaml) {
+    const out = [];
+    const value = {};
+    for (const [name, block] of Object.entries(blocks(tomlText))) {
+      value[name] = valueIn(block);
+      if (value[name] === undefined) {
+        out.push(`${name} has no VOTING_ENABLED: write "on" or "off"`);
+      } else if (value[name] !== 'on' && value[name] !== 'off') {
+        out.push(
+          `${name} sets VOTING_ENABLED to "${value[name]}": the Worker turns voting on only for "on", so write "on" or "off"`
+        );
+      }
+    }
+    if (value.production === 'on' && value.staging !== 'on') {
+      out.push('production has VOTING_ENABLED "on" and staging does not: staging goes first');
+    }
+    const copy = copyIn(envYaml);
+    if (copy !== value.staging) {
+      out.push(
+        `${STAGING_ENV} says votingSwitch "${copy}" and wrangler.toml says VOTING_ENABLED "${value.staging}" on staging: the voting Bruno folders would run the wrong half`
+      );
+    }
+    return out;
+  }
+
+  /** The real file with one block's value replaced; the line must be there. */
+  const at = (tomlText, name, v) => {
+    const b = blocks(tomlText);
+    expect(valueIn(b[name]), `${name} has a VOTING_ENABLED line`).toBeDefined();
+    return join({
+      ...b,
+      [name]: b[name].replace(/^VOTING_ENABLED = "[^"]*"(\r?)$/m, `VOTING_ENABLED = "${v}"$1`),
+    });
+  };
+  const withCopy = (yaml, v) => {
+    const out = yaml.replace(/(name: votingSwitch\r?\n\s+value: )"[^"]*"/, `$1"${v}"`);
+    expect(copyIn(out)).toBe(v);
+    return out;
+  };
+  const allOff = () =>
+    at(at(at(toml(), 'local dev', 'off'), 'staging', 'off'), 'production', 'off');
+  const stagingOn = () => at(allOff(), 'staging', 'on');
+
+  test('the real files agree', () => {
+    expect(switchProblems(toml(), stagingEnv())).toEqual([]);
+  });
+
+  test('the word the rules call on is the word the Worker reads', () => {
+    const src = root('workers/oursharedevents/src/lib/voting-switch.ts');
+    expect(/^export const VOTING_ON = '([^']*)';\r?$/m.exec(src)?.[1]).toBe('on');
+    expect(src).toMatch(/^ {2}return env\?\.VOTING_ENABLED === VOTING_ON;\r?$/m);
+  });
+
+  // The owner's rule (OSE-2135 DevOps gate): off on staging and production, on
+  // only where the owner turns it on. Off for local dev too, so a test that
+  // needs it on says so.
+  test('as it stands: off for local dev, off for staging, off on production', () => {
+    const b = blocks(toml());
+    for (const name of NAMES) expect(valueIn(b[name]), name).toBe('off');
+    expect(copyIn(stagingEnv())).toBe('off');
+  });
+
+  test('a block with no value, or a value that is neither word: refused', () => {
+    for (const name of NAMES) {
+      const b = blocks(allOff());
+      const gone = join({
+        ...b,
+        [name]: b[name].replace(/^VOTING_ENABLED = /m, 'VOTING_ENABLE = '),
+      });
+      expect(switchProblems(gone, stagingEnv())).toContain(
+        `${name} has no VOTING_ENABLED: write "on" or "off"`
+      );
+      for (const typo of ['ON', 'true', '1', 'on ', 'yes', '']) {
+        expect(switchProblems(at(allOff(), name, typo), stagingEnv()).join(' | ')).toContain(
+          `${name} sets VOTING_ENABLED to "${typo}": the Worker turns voting on only for "on"`
+        );
+      }
+    }
+  });
+
+  test('production on before staging: refused; after staging: in order', () => {
+    expect(switchProblems(at(allOff(), 'production', 'on'), withCopy(stagingEnv(), 'off'))).toEqual(
+      ['production has VOTING_ENABLED "on" and staging does not: staging goes first']
+    );
+    expect(
+      switchProblems(at(stagingOn(), 'production', 'on'), withCopy(stagingEnv(), 'on'))
+    ).toEqual([]);
+  });
+
+  test('staging turned on, and the copy with it: in order; the copy left behind: refused', () => {
+    expect(switchProblems(allOff(), withCopy(stagingEnv(), 'off'))).toEqual([]);
+    expect(switchProblems(stagingOn(), withCopy(stagingEnv(), 'on'))).toEqual([]);
+    expect(switchProblems(stagingOn(), withCopy(stagingEnv(), 'off'))).toEqual([
+      `${STAGING_ENV} says votingSwitch "off" and wrangler.toml says VOTING_ENABLED "on" on staging: the voting Bruno folders would run the wrong half`,
+    ]);
+    expect(switchProblems(allOff(), withCopy(stagingEnv(), 'on'))).toEqual([
+      `${STAGING_ENV} says votingSwitch "on" and wrangler.toml says VOTING_ENABLED "off" on staging: the voting Bruno folders would run the wrong half`,
+    ]);
+  });
+
+  test('the parity check lists a staging-first difference as intentional, not unlisted', () => {
+    const same = parity.compareEnvironments(allOff());
+    expect(same.findings.filter((f) => f.key === 'value:VOTING_ENABLED')).toEqual([]);
+    const stagingFirst = parity.compareEnvironments(stagingOn());
+    expect(keys(stagingFirst, 'unlisted')).toEqual([]);
+    expect(keys(stagingFirst, 'intentional')).toContain('value:VOTING_ENABLED');
+    // One side only is still unlisted: the value is written in both.
+    const b = blocks(allOff());
+    const oneSide = parity.compareEnvironments(
+      join({ ...b, production: b.production.replace(/^VOTING_ENABLED = "[^"]*"\r?\n/m, '') })
+    );
+    expect(keys(oneSide, 'unlisted')).toContain('only-in-staging:VOTING_ENABLED');
+  });
+});
+
 // Fat fingers (owner 2026-11-10). The bucket and the object key are typed by
 // hand: in wrangler.toml, and in the commands the runbook shows, which since
 // 2026-11-14 are the ones the load workflow runs, not ones the owner types
