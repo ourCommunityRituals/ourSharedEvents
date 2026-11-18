@@ -161,6 +161,9 @@ Choices (pick one before step 30):
 1. **A separate agent account for Claude sessions.** Connect a different GitHub account at
    claude.ai for agent work. Give it **Write** on the repos, keep it **out of** `maintainers`,
    and do **not** make it an admin. You keep reviewing as yourself.
+   Note: the Security Human Gate would still see that account as a person, so it could
+   apply the override label and approve by itself. Branch protection's code-owner review
+   still blocks the merge. A follow-up makes the gate count only `maintainers`.
 2. **Agents work through GitHub Actions with the App token.** The `@claude` job in
    `claude-review.yml` (or a new one) mints an `ocr-agent` token and pushes as `ocr-agent[bot]`.
    Cleanest identity; more setup.
