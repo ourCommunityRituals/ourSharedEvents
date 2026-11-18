@@ -24,10 +24,28 @@
  *         -> "a live required check the file lacks is a weakening"
  *   W4  --apply PUTs before it compares (the guard moved after the PUT)
  *         -> "--apply refuses before any PUT when it would weaken"
+ *
+ * BORN RED (2026-11-18, after Dr of Security's review: W4 alone only read source order).
+ * The CLI is now run against a fake `gh` on PATH that answers the read with live
+ * protection holding a review rule and records any PUT:
+ *   W5  the refusal's exit removed (warns, then PUTs anyway)
+ *         -> "a real --apply run sends no PUT when it would weaken"
+ *   W6  the override condition inverted (refuses only WITH --allow-weaken)
+ *         -> "a real --apply run sends no PUT when it would weaken",
+ *            "--allow-weaken lets a planned rollback through"
  */
 
-const { readFileSync } = require('node:fs');
+const {
+  readFileSync,
+  mkdtempSync,
+  writeFileSync,
+  existsSync,
+  chmodSync,
+  rmSync,
+} = require('node:fs');
+const { tmpdir } = require('node:os');
 const { join } = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const ROOT = join(__dirname, '..', '..', '..');
 const SCRIPT = join(ROOT, 'scripts', 'apply-branch-protection.mjs');
@@ -143,5 +161,56 @@ describe('--apply wiring (source read, no network)', () => {
   test('the override is an explicit flag, named in the usage line', () => {
     expect(src).toContain("'--allow-weaken'");
     expect(src).toMatch(/usage:.*--allow-weaken/);
+  });
+});
+
+describe('--apply against a fake gh (no network)', () => {
+  // Live protection as GitHub would return it: the file's checks plus a review rule set by hand.
+  const fileBody = JSON.parse(
+    readFileSync(join(ROOT, 'tools', 'ci', 'main-branch-protection.json'), 'utf8')
+  );
+  const live = {
+    required_status_checks: fileBody.required_status_checks,
+    enforce_admins: { enabled: true },
+    allow_force_pushes: { enabled: false },
+    allow_deletions: { enabled: false },
+    required_pull_request_reviews: {
+      required_approving_review_count: 1,
+      require_code_owner_reviews: true,
+    },
+  };
+  let dir;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'fake-gh-'));
+    writeFileSync(join(dir, 'live.json'), JSON.stringify(live));
+    const fake = [
+      '#!/usr/bin/env node',
+      "const fs = require('fs'); const path = require('path');",
+      'const args = process.argv.slice(2); const d = __dirname;',
+      "if (args.includes('PUT')) { fs.writeFileSync(path.join(d, 'PUT_SENT'), 'x'); process.stdout.write('{}'); process.exit(0); }",
+      "process.stdout.write(fs.readFileSync(path.join(d, 'live.json'), 'utf8'));",
+    ].join('\n');
+    writeFileSync(join(dir, 'gh'), fake);
+    chmodSync(join(dir, 'gh'), 0o755);
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  const apply = (...extra) =>
+    spawnSync(process.execPath, [SCRIPT, '--apply', ...extra], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}` },
+    });
+
+  test('a real --apply run sends no PUT when it would weaken', () => {
+    const r = apply();
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/REFUSED/);
+    expect(r.stderr).toMatch(/required-review rule would be removed/);
+    expect(existsSync(join(dir, 'PUT_SENT'))).toBe(false);
+  });
+
+  test('--allow-weaken lets a planned rollback through', () => {
+    apply('--allow-weaken');
+    expect(existsSync(join(dir, 'PUT_SENT'))).toBe(true);
   });
 });

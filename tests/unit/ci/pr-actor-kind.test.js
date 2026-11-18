@@ -36,6 +36,23 @@
  *            "one person approving twice counts once"
  *   P6  unreadable input reads as "no bot, zero approvals" (catch returns defaults)
  *         -> "the CLI fails closed on input it cannot read"
+ *
+ * BORN RED (2026-11-18, Dr of Security review of this change). Found: the old label
+ * check `grep -c … || echo "0"` gives "0\n0" when no label matches, `[ … -eq 0 ]` then
+ * errors, the `if` reads false, and the gate PASSED WITHOUT A LABEL (reproduced under
+ * bash -eo pipefail). Same method as above:
+ *   P7  the workflow as main has it (seen on that workflow)
+ *         -> "the label check is decided by the classifier, with no grep-count fallback",
+ *            and the three other "the gate uses the classifier" tests
+ *   P8  hasLabel() matches a substring ("security:human-override-requested" counts)
+ *         -> "a label must match exactly"
+ *   P9  labelAppliedByHuman() ignores the actor (any `labeled` event counts)
+ *         -> "a label put on by a bot does not count",
+ *            "a label taken off and put back by a bot does not count"
+ *   P10 labelAppliedByHuman() ignores a later `unlabeled`
+ *         -> "a label taken off and put back by a bot does not count"
+ *   P11 humanApprovals() ignores the head commit (commit_id not compared)
+ *         -> "an approval of an older commit does not count"
  */
 
 const { readFileSync } = require('node:fs');
@@ -52,12 +69,29 @@ beforeAll(async () => {
 });
 
 const user = (login, type = 'User') => ({ login, type });
-const review = (login, state, assoc = 'MEMBER', type = 'User', at = '2026-11-18T00:00:00Z') => ({
+const HEAD = 'a'.repeat(40);
+const OLD = 'b'.repeat(40);
+const review = (
+  login,
+  state,
+  assoc = 'MEMBER',
+  type = 'User',
+  at = '2026-11-18T00:00:00Z',
+  commit = HEAD
+) => ({
   user: user(login, type),
   state,
   author_association: assoc,
   submitted_at: at,
+  commit_id: commit,
 });
+const labeled = (name, login, type = 'User', event = 'labeled', at = '2026-11-18T00:00:00Z') => ({
+  event,
+  label: { name },
+  actor: user(login, type),
+  created_at: at,
+});
+const LABEL = 'security:human-override';
 
 describe('isBotUser(): decided by account type, not by letters in a name', () => {
   test('an App author is a bot by account type', () => {
@@ -84,22 +118,24 @@ describe('isBotUser(): decided by account type, not by letters in a name', () =>
 
 describe('humanApprovals(): whose approval counts', () => {
   test('a member approval counts once', () => {
-    expect(kind.humanApprovals([review('alice', 'APPROVED')])).toBe(1);
+    expect(kind.humanApprovals(HEAD, [review('alice', 'APPROVED')])).toBe(1);
   });
   test('an owner approval counts', () => {
-    expect(kind.humanApprovals([review('bereasonable13', 'APPROVED', 'OWNER')])).toBe(1);
+    expect(kind.humanApprovals(HEAD, [review('bereasonable13', 'APPROVED', 'OWNER')])).toBe(1);
   });
   test('a bot approval does not count', () => {
-    expect(kind.humanApprovals([review('ocr-agent[bot]', 'APPROVED', 'NONE', 'Bot')])).toBe(0);
-    expect(kind.humanApprovals([review('ocr-agent', 'APPROVED', 'MEMBER', 'Bot')])).toBe(0);
+    expect(kind.humanApprovals(HEAD, [review('ocr-agent[bot]', 'APPROVED', 'NONE', 'Bot')])).toBe(
+      0
+    );
+    expect(kind.humanApprovals(HEAD, [review('ocr-agent', 'APPROVED', 'MEMBER', 'Bot')])).toBe(0);
   });
   test('an approval from an account without write association does not count', () => {
-    expect(kind.humanApprovals([review('drive-by', 'APPROVED', 'NONE')])).toBe(0);
-    expect(kind.humanApprovals([review('drive-by', 'APPROVED', 'CONTRIBUTOR')])).toBe(0);
+    expect(kind.humanApprovals(HEAD, [review('drive-by', 'APPROVED', 'NONE')])).toBe(0);
+    expect(kind.humanApprovals(HEAD, [review('drive-by', 'APPROVED', 'CONTRIBUTOR')])).toBe(0);
   });
   test('an approval later replaced by changes requested does not count', () => {
     expect(
-      kind.humanApprovals([
+      kind.humanApprovals(HEAD, [
         review('alice', 'APPROVED', 'MEMBER', 'User', '2026-11-18T01:00:00Z'),
         review('alice', 'CHANGES_REQUESTED', 'MEMBER', 'User', '2026-11-18T02:00:00Z'),
       ])
@@ -107,22 +143,68 @@ describe('humanApprovals(): whose approval counts', () => {
   });
   test('a comment after an approval leaves the approval standing', () => {
     expect(
-      kind.humanApprovals([
+      kind.humanApprovals(HEAD, [
         review('alice', 'APPROVED', 'MEMBER', 'User', '2026-11-18T01:00:00Z'),
         review('alice', 'COMMENTED', 'MEMBER', 'User', '2026-11-18T02:00:00Z'),
       ])
     ).toBe(1);
   });
   test('a dismissed approval does not count', () => {
-    expect(kind.humanApprovals([review('alice', 'DISMISSED')])).toBe(0);
+    expect(kind.humanApprovals(HEAD, [review('alice', 'DISMISSED')])).toBe(0);
   });
   test('one person approving twice counts once', () => {
     expect(
-      kind.humanApprovals([
+      kind.humanApprovals(HEAD, [
         review('alice', 'APPROVED', 'MEMBER', 'User', '2026-11-18T01:00:00Z'),
         review('alice', 'APPROVED', 'MEMBER', 'User', '2026-11-18T02:00:00Z'),
       ])
     ).toBe(1);
+  });
+  test('an approval of an older commit does not count', () => {
+    expect(
+      kind.humanApprovals(HEAD, [review('alice', 'APPROVED', 'MEMBER', 'User', undefined, OLD)])
+    ).toBe(0);
+  });
+  test('without a head commit nothing counts (fail closed)', () => {
+    expect(kind.humanApprovals('', [review('alice', 'APPROVED')])).toBe(0);
+  });
+});
+
+describe('the override label', () => {
+  test('hasLabel() finds the label on a REST pull request', () => {
+    expect(kind.hasLabel({ labels: [{ name: 'risk:low' }, { name: LABEL }] }, LABEL)).toBe(true);
+    expect(kind.hasLabel({ labels: [{ name: 'risk:low' }] }, LABEL)).toBe(false);
+    expect(kind.hasLabel({ labels: [] }, LABEL)).toBe(false);
+  });
+  test('a label must match exactly', () => {
+    expect(kind.hasLabel({ labels: [{ name: `${LABEL}-requested` }] }, LABEL)).toBe(false);
+  });
+  test('a label put on by a person counts', () => {
+    expect(kind.labelAppliedByHuman([labeled(LABEL, 'bereasonable13')], LABEL)).toBe(true);
+  });
+  test('a label put on by a bot does not count', () => {
+    expect(kind.labelAppliedByHuman([labeled(LABEL, 'ocr-agent[bot]', 'Bot')], LABEL)).toBe(false);
+    expect(kind.labelAppliedByHuman([labeled(LABEL, 'ocr-agent', 'Bot')], LABEL)).toBe(false);
+  });
+  test('a label taken off and put back by a bot does not count', () => {
+    expect(
+      kind.labelAppliedByHuman(
+        [
+          labeled(LABEL, 'alice', 'User', 'labeled', '2026-11-18T01:00:00Z'),
+          labeled(LABEL, 'alice', 'User', 'unlabeled', '2026-11-18T02:00:00Z'),
+          labeled(LABEL, 'ocr-agent[bot]', 'Bot', 'labeled', '2026-11-18T03:00:00Z'),
+        ],
+        LABEL
+      )
+    ).toBe(false);
+  });
+  test('other labels and events are ignored', () => {
+    expect(
+      kind.labelAppliedByHuman(
+        [labeled('risk:low', 'alice'), { event: 'closed', actor: user('alice') }],
+        LABEL
+      )
+    ).toBe(false);
   });
 });
 
@@ -142,14 +224,26 @@ describe('CLI', () => {
     const lines = [review('alice', 'APPROVED'), review('ocr-agent', 'APPROVED', 'MEMBER', 'Bot')]
       .map((r) => JSON.stringify(r))
       .join('\n');
-    expect(run(['human-approvals'], lines).stdout.trim()).toBe('1');
+    expect(run(['human-approvals', HEAD], lines).stdout.trim()).toBe('1');
   });
   test('human-approvals reads an empty list as zero', () => {
-    expect(run(['human-approvals'], '').stdout.trim()).toBe('0');
+    expect(run(['human-approvals', HEAD], '').stdout.trim()).toBe('0');
+  });
+  test('has-label and label-applied-by-human read REST JSON', () => {
+    expect(
+      run(['has-label', LABEL], JSON.stringify({ labels: [{ name: LABEL }] })).stdout.trim()
+    ).toBe('true');
+    expect(
+      run(['label-applied-by-human', LABEL], JSON.stringify(labeled(LABEL, 'alice'))).stdout.trim()
+    ).toBe('true');
+    expect(run(['label-applied-by-human', LABEL], '').stdout.trim()).toBe('false');
   });
   test('the CLI fails closed on input it cannot read', () => {
     expect(run(['author-is-bot'], 'not json').status).not.toBe(0);
-    expect(run(['human-approvals'], '{"user": ').status).not.toBe(0);
+    expect(run(['human-approvals', HEAD], '{"user": ').status).not.toBe(0);
+    expect(run(['human-approvals'], '').status).not.toBe(0);
+    expect(run(['has-label'], '{"labels": []}').status).not.toBe(0);
+    expect(run(['label-applied-by-human', LABEL], 'nope').status).not.toBe(0);
     expect(run(['no-such-mode'], '{}').status).not.toBe(0);
   });
 });
@@ -165,6 +259,12 @@ describe('the gate uses the classifier', () => {
     expect(verify.run).toContain('scripts/ci/pr-actor-kind.mjs author-is-bot');
     expect(verify.run).toContain('scripts/ci/pr-actor-kind.mjs human-approvals');
     expect(verify.run).toMatch(/gh api [^\n]*pulls\/\$\{?PR_NUMBER\}?\/reviews/);
+  });
+  test('the label check is decided by the classifier, with no grep-count fallback', () => {
+    expect(verify.run).toContain('scripts/ci/pr-actor-kind.mjs has-label');
+    expect(verify.run).toContain('scripts/ci/pr-actor-kind.mjs label-applied-by-human');
+    expect(verify.run).not.toMatch(/grep -c[^\n]*\|\|\s*echo/);
+    expect(verify.run).toMatch(/human-approvals "\$HEAD_SHA"/);
   });
   test('no letters-in-a-login rule is left in the gate', () => {
     const all = steps.map((s) => s.run || '').join('\n');

@@ -119,12 +119,17 @@ jobs:
           echo "  2. Apply the 'security:human-override' label with justification"
           echo ""
 
-          # Check if the human override label exists
-          HAS_OVERRIDE=$(gh pr view "$PR_NUMBER" \
-            --json labels \
-            --jq '.labels[].name' 2>/dev/null | grep -c "security:human-override" || echo "0")
+          # REST, not `gh pr view --json`: REST gives each account its type ("Bot"/"User").
+          # A read that fails stops this step (bash -eo pipefail), so the gate stays shut.
+          PR_JSON="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          PR_AUTHOR="$(printf '%s' "$PR_JSON" | jq -r '.user.login')"
+          HEAD_SHA="$(printf '%s' "$PR_JSON" | jq -r '.head.sha')"
 
-          if [ "$HAS_OVERRIDE" -eq 0 ]; then
+          # Is the override label on the PR? (The old count-with-fallback printed two zeros
+          # when no label matched, the number test errored, and the gate passed without a label.)
+          HAS_OVERRIDE="$(printf '%s' "$PR_JSON" | node scripts/ci/pr-actor-kind.mjs has-label security:human-override)"
+
+          if [ "$HAS_OVERRIDE" != "true" ]; then
             echo "❌ BLOCKED: No 'security:human-override' label found."
             echo ""
             echo "To proceed, a human reviewer must:"
@@ -137,17 +142,21 @@ jobs:
             exit 1
           fi
 
-          # Verify the label was applied by a human (check PR timeline)
+          # Verify the label was applied by a human: the label's latest labeled/unlabeled
+          # event must be a `labeled` by a person. A bot (the agent's App too) cannot override itself.
           echo "Override label found. Verifying it was applied by a human..."
+          LABEL_BY_HUMAN="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/events?per_page=100" --jq '.[]' \
+            | node scripts/ci/pr-actor-kind.mjs label-applied-by-human security:human-override)"
+          if [ "$LABEL_BY_HUMAN" != "true" ]; then
+            echo "❌ BLOCKED: the 'security:human-override' label was last applied by a bot, not a person."
+            echo "A person must remove the label and apply it again."
+            exit 1
+          fi
 
-          # REST, not `gh pr view --json`: REST gives each account its type ("Bot"/"User").
-          # A read that fails stops this step (bash -eo pipefail), so the gate stays shut.
-          PR_JSON="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
-          PR_AUTHOR="$(printf '%s' "$PR_JSON" | jq -r '.user.login')"
-
-          # Human approvals: people with write access whose latest decision is APPROVED
+          # Human approvals: people with a write-level association whose latest decision is
+          # APPROVED, on the current head commit
           HUMAN_APPROVAL="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" --jq '.[]' \
-            | node scripts/ci/pr-actor-kind.mjs human-approvals)"
+            | node scripts/ci/pr-actor-kind.mjs human-approvals "$HEAD_SHA")"
 
           # The PR author: if it is a bot (an App, Dependabot, Actions), a human must APPROVE
           IS_BOT_AUTHOR="$(printf '%s' "$PR_JSON" | node scripts/ci/pr-actor-kind.mjs author-is-bot)"
