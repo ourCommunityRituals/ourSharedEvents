@@ -7,10 +7,8 @@ http:
   method: GET
   url: "{{baseUrl}}/q/qrt_lc_archived"
   headers:
-    - name: CF-Access-Client-Id
-      value: "{{cfAccessClientId}}"
-    - name: CF-Access-Client-Secret
-      value: "{{cfAccessClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
     - name: X-OCR-CI
       value: "{{ocrCiEdgeToken}}"
     - name: Accept
@@ -24,15 +22,19 @@ runtime:
     - type: after-response
       code: |-
         // The edge refuses a /q scan from a CI runner that does not carry the CI
-        // edge token (X-OCR-CI), the same headers folder 25 sends (OSE-939). A
-        // 403 here is the edge, not the Worker: the Worker never answers /q 403.
+        // edge token (X-OCR-CI): the stg skip rule covers /q/* for that header
+        // alone (docs/runbooks/RUNBOOK-STG-CI-SKIP-RULE.md). A 403 here is the
+        // edge, not the Worker: the Worker never answers /q 403. The edge may set
+        // cookies of its own, so "no cookie" means no ose_anon cookie (the
+        // Worker's only one), not an empty Set-Cookie.
+        var setCookie = [].concat(res.getHeader('set-cookie') || []).join('\n');
         // The same answer as a code nobody issued (request 71): the scan is not
         // looked up, so nothing is counted and no anonymous cookie is set.
         test('OSE-2144 rainy: archived: 302 to /, no event id, no cookie', function () {
           expect(res.getStatus()).to.eql(302);
           expect(res.getHeader('location')).to.eql('/');
           expect(String(res.getHeader('location') || '')).to.not.include('lc-archived-evt');
-          expect(res.getHeader('set-cookie')).to.be.oneOf([undefined, null]);
+          expect(setCookie).to.not.include('ose_anon=');
         });
 
 settings:

@@ -1,7 +1,10 @@
 info:
   name: 'OSE-2144 | exception | SharedReport | setup | mint an organizer link for the archived event'
   type: http
-  seq: 90
+  seq: 60
+
+# Runs before the /q scans (seq 70 on), so nothing the edge sets on a scan
+# answer can ride along on this admin call or the report read after it.
 
 http:
   method: POST
