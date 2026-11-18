@@ -8,7 +8,12 @@
 #   2. Checks if any security scan has failed
 #   3. If failures exist, requires a human-applied "security:human-override" label
 #   4. Verifies the label was applied by a human (not a bot)
-#   5. This check is a REQUIRED status check — no merge without it passing
+#   5. Advisory until the owner makes "🛑 Security Human Gate" a required check: it is not
+#      in tools/ci/main-branch-protection.json (read 2026-11-18).
+#
+# Who is a bot is decided by account type on the REST API (scripts/ci/pr-actor-kind.mjs),
+# never by letters in a login: agent PRs will come from a GitHub App (`ocr-agent[bot]`),
+# and a teammate whose login holds "bot" or "claude" is a person.
 #
 # To configure as required:
 #   Settings > Branches > main > Require status checks > "Security Human Gate"
@@ -25,6 +30,7 @@ on:
 
 permissions:
   pull-requests: read
+  issues: read # label events and override comments are read through the issues API
   checks: read
   statuses: read
   actions: read
@@ -39,6 +45,11 @@ jobs:
     name: "🛑 Security Human Gate"
     runs-on: ubuntu-24.04
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2
+        with:
+          egress-policy: audit
+
       - name: Check for security scan failures
         id: check-scans
         env:
@@ -81,6 +92,15 @@ jobs:
 
           echo "security_failed=$SECURITY_FAILED" >> $GITHUB_OUTPUT
 
+      # Only the classifier; no token is stored, and nothing from the PR is installed.
+      - name: Checkout the bot classifier
+        if: steps.check-scans.outputs.security_failed == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci/pr-actor-kind.mjs
+          sparse-checkout-cone-mode: false
+
       - name: Verify human override if security failed
         if: steps.check-scans.outputs.security_failed == 'true'
         env:
@@ -100,12 +120,17 @@ jobs:
           echo "  2. Apply the 'security:human-override' label with justification"
           echo ""
 
-          # Check if the human override label exists
-          HAS_OVERRIDE=$(gh pr view "$PR_NUMBER" \
-            --json labels \
-            --jq '.labels[].name' 2>/dev/null | grep -c "security:human-override" || echo "0")
+          # REST, not `gh pr view --json`: REST gives each account its type ("Bot"/"User").
+          # A read that fails stops this step (bash -eo pipefail), so the gate stays shut.
+          PR_JSON="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          PR_AUTHOR="$(printf '%s' "$PR_JSON" | jq -r '.user.login')"
+          HEAD_SHA="$(printf '%s' "$PR_JSON" | jq -r '.head.sha')"
 
-          if [ "$HAS_OVERRIDE" -eq 0 ]; then
+          # Is the override label on the PR? (The old count-with-fallback printed two zeros
+          # when no label matched, the number test errored, and the gate passed without a label.)
+          HAS_OVERRIDE="$(printf '%s' "$PR_JSON" | node scripts/ci/pr-actor-kind.mjs has-label security:human-override)"
+
+          if [ "$HAS_OVERRIDE" != "true" ]; then
             echo "❌ BLOCKED: No 'security:human-override' label found."
             echo ""
             echo "To proceed, a human reviewer must:"
@@ -118,21 +143,24 @@ jobs:
             exit 1
           fi
 
-          # Verify the label was applied by a human (check PR timeline)
+          # Verify the label was applied by a human: the label's latest labeled/unlabeled
+          # event must be a `labeled` by a person. A bot (the agent's App too) cannot override itself.
           echo "Override label found. Verifying it was applied by a human..."
-
-          # Check for a human review approval
-          HUMAN_APPROVAL=$(gh pr view "$PR_NUMBER" \
-            --json reviews \
-            --jq '[.reviews[] | select(.state == "APPROVED" and (.author.login | test("bot|\\[bot\\]|github-actions"; "i") | not))] | length' \
-            2>/dev/null || echo "0")
-
-          # Check the PR author — if it's a bot, we need human approval
-          PR_AUTHOR=$(gh pr view "$PR_NUMBER" --json author --jq '.author.login' 2>/dev/null || echo "")
-          IS_BOT_AUTHOR=false
-          if echo "$PR_AUTHOR" | grep -qiE "bot|\[bot\]|github-actions|dependabot|claude"; then
-            IS_BOT_AUTHOR=true
+          LABEL_BY_HUMAN="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/events?per_page=100" --jq '.[]' \
+            | node scripts/ci/pr-actor-kind.mjs label-applied-by-human security:human-override)"
+          if [ "$LABEL_BY_HUMAN" != "true" ]; then
+            echo "❌ BLOCKED: the 'security:human-override' label was last applied by a bot, not a person."
+            echo "A person must remove the label and apply it again."
+            exit 1
           fi
+
+          # Human approvals: people with a write-level association whose latest decision is
+          # APPROVED, on the current head commit
+          HUMAN_APPROVAL="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" --jq '.[]' \
+            | node scripts/ci/pr-actor-kind.mjs human-approvals "$HEAD_SHA")"
+
+          # The PR author: if it is a bot (an App, Dependabot, Actions), a human must APPROVE
+          IS_BOT_AUTHOR="$(printf '%s' "$PR_JSON" | node scripts/ci/pr-actor-kind.mjs author-is-bot)"
 
           if [ "$IS_BOT_AUTHOR" = "true" ] && [ "$HUMAN_APPROVAL" -eq 0 ]; then
             echo ""
@@ -144,10 +172,10 @@ jobs:
           fi
 
           # Check for a human comment explaining the override
-          OVERRIDE_COMMENTS=$(gh pr view "$PR_NUMBER" \
-            --json comments \
-            --jq '[.comments[] | select(.body | test("security override|override reason|security exception"; "i")) | select(.author.login | test("bot|\\[bot\\]|github-actions"; "i") | not)] | length' \
-            2>/dev/null || echo "0")
+          # Warning only, so a failed read counts as none rather than stopping the step.
+          OVERRIDE_COMMENTS=$( { gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
+            --jq '.[] | select(.body | test("security override|override reason|security exception"; "i")) | select(.user.type != "Bot" and (.user.login | endswith("[bot]") | not)) | .id' \
+            2>/dev/null || true; } | wc -l)
 
           if [ "$OVERRIDE_COMMENTS" -eq 0 ]; then
             echo ""

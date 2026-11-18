@@ -32,3 +32,8 @@
 # adding or extending one is a security-owner decision, never an agent's.
 /.security-exceptions.json                                      @bereasonable13
 /scripts/ci/npm-audit-gate.mjs                                  @bereasonable13
+
+# ── Security Human Gate bot classifier (agent identity) ──────────────────────
+# Decides whose approval counts in the security override, so it is locked like
+# the workflow that runs it.
+/scripts/ci/pr-actor-kind.mjs                                   @bereasonable13

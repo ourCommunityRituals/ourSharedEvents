@@ -11,6 +11,7 @@
 //   node scripts/apply-branch-protection.mjs --check          # read live protection, diff vs JSON, exit 1 on drift (CI-safe, read-only, needs repo admin)
 //   node scripts/apply-branch-protection.mjs --check-checks   # same for the REQUIRED CHECKS only, readable with the default GITHUB_TOKEN (no admin)
 //   node scripts/apply-branch-protection.mjs --apply          # PUT the JSON to GitHub (requires admin on the repo)
+//   node scripts/apply-branch-protection.mjs --apply --allow-weaken  # same, even when it loosens what is live
 //   node scripts/apply-branch-protection.mjs --self-test      # run the pure diff cases
 //
 // `--check` and `--apply` need the `gh` CLI authenticated with a token that has repo admin.
@@ -18,6 +19,15 @@
 // token with read access sees. It compares the required contexts and flags a
 // phantom (app_id null), and it FAILS on an API error rather than skipping.
 // Deterministic: no clock, no randomness. Drift check compares the fields we own.
+//
+// `--apply` PUTs the WHOLE body, and GitHub takes that body as the complete new state:
+// a rule turned on by hand in the settings page that this file does not hold is deleted.
+// So `--apply` reads live protection first and stops, sending nothing, when the PUT would
+// loosen one of the fields normalize() owns: required reviews (count, code-owner, dismiss
+// stale, last push), required checks, admin enforcement, force push and deletion
+// (weakenings() below). NOT covered, so still replaced silently: strict, conversation
+// resolution, linear history, push restrictions, bypass allowances, check app_id pins. `--allow-weaken` is the owner's deliberate override,
+// for a planned rollback only (OSE-1698: "field to null, re-apply from the JSON").
 
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -99,11 +109,14 @@ function readLive() {
 
 export function diff(expected, actual) {
   const out = [];
-  if (expected.strict !== actual.strict) out.push(`strict: want ${expected.strict}, got ${actual.strict}`);
+  if (expected.strict !== actual.strict)
+    out.push(`strict: want ${expected.strict}, got ${actual.strict}`);
   if (expected.enforce_admins !== actual.enforce_admins)
     out.push(`enforce_admins: want ${expected.enforce_admins}, got ${actual.enforce_admins}`);
   if (expected.allow_force_pushes !== actual.allow_force_pushes)
-    out.push(`allow_force_pushes: want ${expected.allow_force_pushes}, got ${actual.allow_force_pushes}`);
+    out.push(
+      `allow_force_pushes: want ${expected.allow_force_pushes}, got ${actual.allow_force_pushes}`
+    );
   if (expected.allow_deletions !== actual.allow_deletions)
     out.push(`allow_deletions: want ${expected.allow_deletions}, got ${actual.allow_deletions}`);
   if (JSON.stringify(expected.reviews ?? null) !== JSON.stringify(actual.reviews ?? null)) {
@@ -113,7 +126,48 @@ export function diff(expected, actual) {
   }
   const ec = expected.checks.join('|');
   const ac = actual.checks.join('|');
-  if (ec !== ac) out.push(`required checks:\n    want: [${expected.checks.join(', ')}]\n    got:  [${actual.checks.join(', ')}]`);
+  if (ec !== ac)
+    out.push(
+      `required checks:\n    want: [${expected.checks.join(', ')}]\n    got:  [${actual.checks.join(', ')}]`
+    );
+  return out;
+}
+
+/**
+ * Every way a PUT of `expected` would LOOSEN the `live` protection. Both are
+ * normalize()d. Empty means the PUT keeps or tightens every rule we own.
+ * Separate from diff(): a stricter live state is drift (the file must catch up),
+ * but only a looser result is a weakening.
+ * @returns {string[]}
+ */
+export function weakenings(expected, live) {
+  const out = [];
+  if (live.enforce_admins && !expected.enforce_admins)
+    out.push('admin enforcement would be turned off');
+  if (!live.allow_force_pushes && expected.allow_force_pushes)
+    out.push('force pushes to main would be allowed');
+  if (!live.allow_deletions && expected.allow_deletions) out.push('deleting main would be allowed');
+  const lr = live.reviews;
+  const er = expected.reviews;
+  if (lr) {
+    if (!er) {
+      out.push(
+        `the required-review rule would be removed (live: ${JSON.stringify(lr)}, file: null)`
+      );
+    } else {
+      if (er.count < lr.count)
+        out.push(`required approvals would drop from ${lr.count} to ${er.count}`);
+      if (lr.codeOwners && !er.codeOwners)
+        out.push('code-owner review would no longer be required');
+      if (lr.dismissStale && !er.dismissStale)
+        out.push('stale approvals would no longer be dismissed');
+      if (lr.lastPush && !er.lastPush) out.push('last-push approval would no longer be required');
+    }
+  }
+  const want = new Set(expected.checks);
+  for (const c of live.checks) {
+    if (!want.has(c)) out.push(`required check "${c}" would be removed`);
+  }
   return out;
 }
 
@@ -175,13 +229,23 @@ function runSelfTest() {
       1,
     ],
     ['unprotected -> drift', diffChecks(['A'], null), 1],
-    ['summary: unprotected branch -> null', checksFromBranchSummary({ protected: false }) === null ? [] : ['x'], 0],
     [
-      'summary: protection disabled -> null',
-      checksFromBranchSummary({ protected: true, protection: { enabled: false } }) === null ? [] : ['x'],
+      'summary: unprotected branch -> null',
+      checksFromBranchSummary({ protected: false }) === null ? [] : ['x'],
       0,
     ],
-    ['summary: checks keep their app_id', diffChecks(['A'], checksFromBranchSummary(summary([real('A')]))), 0],
+    [
+      'summary: protection disabled -> null',
+      checksFromBranchSummary({ protected: true, protection: { enabled: false } }) === null
+        ? []
+        : ['x'],
+      0,
+    ],
+    [
+      'summary: checks keep their app_id',
+      diffChecks(['A'], checksFromBranchSummary(summary([real('A')]))),
+      0,
+    ],
     [
       'reviews: none wanted, none live -> no drift',
       diff(normalize({ required_pull_request_reviews: null }), normalize({})),
@@ -256,6 +320,22 @@ function runSelfTest() {
       0,
     ],
     [
+      'weaken: file says null, live has a review rule -> refused',
+      weakenings(
+        normalize({ required_pull_request_reviews: null }),
+        normalize({ required_pull_request_reviews: { required_approving_review_count: 1 } })
+      ),
+      1,
+    ],
+    [
+      'weaken: the file turns reviews on -> allowed',
+      weakenings(
+        normalize({ required_pull_request_reviews: { required_approving_review_count: 1 } }),
+        normalize({})
+      ),
+      0,
+    ],
+    [
       'summary: contexts-only response -> every context counts as a phantom',
       diffChecks(['A'], checksFromBranchSummary(contextsOnly)),
       1,
@@ -265,7 +345,9 @@ function runSelfTest() {
   for (const [name, drift, want] of cases) {
     const ok = drift.length === want;
     if (!ok) failed++;
-    console.log(`${ok ? 'PASS' : 'FAIL'} - ${name} (expected ${want} finding(s), got ${drift.length})`);
+    console.log(
+      `${ok ? 'PASS' : 'FAIL'} - ${name} (expected ${want} finding(s), got ${drift.length})`
+    );
   }
   if (failed > 0) {
     process.stderr.write(`\nself-test: ${failed} case(s) failed.\n`);
@@ -275,17 +357,26 @@ function runSelfTest() {
 }
 
 function checkChecksOnly(body) {
-  const r = gh(['api', `repos/${REPO}/branches/${BRANCH}`, '-H', 'Accept: application/vnd.github+json']);
+  const r = gh([
+    'api',
+    `repos/${REPO}/branches/${BRANCH}`,
+    '-H',
+    'Accept: application/vnd.github+json',
+  ]);
   if (r.code !== 0) {
     // Never a silent skip: a check that cannot read is a check that does not run.
-    process.stderr.write(`[branch-protection] cannot read the branch summary: ${r.stderr.trim()}\n`);
+    process.stderr.write(
+      `[branch-protection] cannot read the branch summary: ${r.stderr.trim()}\n`
+    );
     process.exit(1);
   }
   const live = checksFromBranchSummary(JSON.parse(r.stdout));
   const expected = (body.required_status_checks?.checks ?? []).map((c) => c.context);
   const drift = diffChecks(expected, live);
   if (drift.length > 0) {
-    process.stderr.write('[branch-protection] REQUIRED-CHECKS DRIFT vs tools/ci/main-branch-protection.json:\n');
+    process.stderr.write(
+      '[branch-protection] REQUIRED-CHECKS DRIFT vs tools/ci/main-branch-protection.json:\n'
+    );
     for (const d of drift) process.stderr.write(`  - ${d}\n`);
     process.stderr.write(
       'Re-apply with --apply (needs repo admin) or update the JSON if the change is intended.\n'
@@ -306,6 +397,21 @@ function main() {
   const expected = normalize(body);
 
   if (mode === '--apply') {
+    // Read before writing: the PUT replaces everything, so compare first (see the header).
+    const before = readLive();
+    if (before.protected) {
+      const loosen = weakenings(expected, normalize(before));
+      if (loosen.length > 0 && !process.argv.includes('--allow-weaken')) {
+        process.stderr.write(
+          '[branch-protection] REFUSED: applying tools/ci/main-branch-protection.json would weaken main:\n'
+        );
+        for (const l of loosen) process.stderr.write(`  - ${l}\n`);
+        process.stderr.write(
+          'Nothing was sent. Update the JSON to hold the live rule, or, for a planned rollback only, re-run with --allow-weaken.\n'
+        );
+        process.exit(1);
+      }
+    }
     const r = gh(
       [
         'api',
@@ -326,7 +432,7 @@ function main() {
     process.stdout.write('[branch-protection] applied. Verifying...\n');
   } else if (mode !== '--check') {
     process.stderr.write(
-      'usage: node scripts/apply-branch-protection.mjs --check | --check-checks | --apply | --self-test\n'
+      'usage: node scripts/apply-branch-protection.mjs --check | --check-checks | --apply [--allow-weaken] | --self-test\n'
     );
     process.exit(2);
   }
@@ -341,9 +447,13 @@ function main() {
   const actual = normalize(live);
   const drift = diff(expected, actual);
   if (drift.length > 0) {
-    process.stderr.write('[branch-protection] DRIFT detected vs tools/ci/main-branch-protection.json:\n');
+    process.stderr.write(
+      '[branch-protection] DRIFT detected vs tools/ci/main-branch-protection.json:\n'
+    );
     for (const d of drift) process.stderr.write(`  - ${d}\n`);
-    process.stderr.write('Re-apply with --apply (needs repo admin) or update the JSON if the change is intended.\n');
+    process.stderr.write(
+      'Re-apply with --apply (needs repo admin) or update the JSON if the change is intended.\n'
+    );
     process.exit(1);
   }
   process.stdout.write('[branch-protection] OK — live protection matches source of truth.\n');
