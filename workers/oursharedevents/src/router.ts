@@ -87,6 +87,13 @@
  *   PUT    /api/v2/admin/events/:id/booths/:boothId → change a booth of this event (auth, audited)
  *   DELETE /api/v2/admin/events/:id/booths/:boothId → take a booth out of use; never removed, its placements stay (auth, audited)
  *   GET    /api/v2/admin/events/:id/booths/counts → scans per stall, per category, for placements with no stall, and the fair's total, each a FlooredCount from the floored poster-hour cells; any_withheld is a boolean (auth, plan-capped like the poster list, OSE-2004)
+ *   GET    /api/v2/admin/events/:id/votables → the event's vote set and its objects; no count, no T or V, no epoch (auth, OSE-2127, OSE ADR-040)
+ *   POST   /api/v2/admin/events/:id/votables → make the event's one vote set, played by objects or teams (auth, audited)
+ *   POST   /api/v2/admin/events/:id/votables/open|reopen|close → open (stamps the epoch, draws T and V once), reopen, close the set; refused when final (auth, audited)
+ *   POST   /api/v2/admin/events/:id/votables/finalize → make a set that never opened final, for good (auth, audited)
+ *   POST   /api/v2/admin/events/:id/votables/objects → add a song or stall to the set (auth, audited)
+ *   PUT    /api/v2/admin/events/:id/votables/objects/:oid → change an object of this event (auth, audited)
+ *   POST   /api/v2/admin/events/:id/votables/objects/:oid/open|reopen|close → an object's window; closes_at set by the server (auth, audited)
  *   GET    /api/v2/admin/events/:id/preview → draft/ready pre-event page, HTML, no-store + noindex (auth, OSE-1355)
  *   GET    /api/v2/admin/events/:id/poster-preview → draft/ready poster, HTML, no-store + noindex (auth)
  *   GET    /api/v2/admin/events/:id/live → organizer's live view of one event, HTML, no-store + noindex (auth)
@@ -147,6 +154,7 @@
  *   POST   /api/v2/sponsor/requests            → sponsor asks to back an event (sponsor-home token in body)
  *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
  *   GET    /api/v2/events/:id/display-config   → TV order + dwell + league/donate links + event QR (ETag, 304)
+ *   GET    /api/v2/vote/:eventId/objects        → what a voter can vote on now: {objects:[{id,kind,label}]}; no count, no time (OSE-2135, OSE ADR-040). Routed only while VOTING_ENABLED is "on" (lib/voting-switch.ts); off, it is the router's own 404. Limited per caller: 600 a minute
  *
  *   Poster Deployments Admin (auth required):
  *   POST   /api/v2/admin/events/:id/poster-deployments  → create deployment (with H3 tagging; optional booth_id, an active booth of the same event)
@@ -231,6 +239,7 @@ import {
   publicCountLimited,
   publicPageLimited,
   publicReadLimited,
+  PUBLIC_PAGE_MAX,
   type PublicReadLimitEnv,
 } from './lib/public-read-limit.js';
 import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
@@ -265,6 +274,9 @@ import {
   handleListEventBooths,
   handleUpdateEventBooth,
 } from './handlers/event-booths';
+import { handleVotables, matchVotablesRoute } from './handlers/votables';
+import { handleVoteObjects } from './handlers/vote-objects';
+import { votingEnabled, type VotingSwitchEnv } from './lib/voting-switch';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
   handleOperationsDashboard,
@@ -492,6 +504,7 @@ export type RouterEnv = PagesEnv &
   CalendarEnv &
   AdminObjectScopeEnv &
   SponsorHomeEnv &
+  VotingSwitchEnv &
   RateLimitEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
@@ -1474,6 +1487,40 @@ export async function route(
     return response;
   }
 
+  // /api/v2/admin/events/:id/votables — the event's vote set and what can be
+  // voted on (OSE-2127, OSE ADR-040 decisions 3, 4 and 10). The event in the
+  // path is brand-scoped by guardAdminObjectScope above, and the admin write
+  // guard has checked every write. The handler reads an object only with the
+  // path event bound. Each write is audited against the event, with no detail:
+  // no count, no secret and no rule is ever in the row.
+  // Two matchers, the root and the root with a tail, so the write-guard gate
+  // (tests/helpers/admin-write-routes.ts) can derive a sample path for each. One
+  // statement, so the tenant gate reads them as one route for its requireAdmin
+  // window (tenant-isolation.invariant.spec.ts, "within 20 lines").
+  const adminVotablesRoot = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/votables$/),
+    adminVotablesSub = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/votables\/(.+)$/);
+  const adminVotablesMatch = adminVotablesRoot ?? adminVotablesSub;
+  const votablesRoute = adminVotablesMatch
+    ? matchVotablesRoute(method, adminVotablesSub ? `/${adminVotablesSub[2]}` : '')
+    : null;
+  if ((adminVotablesRoot || adminVotablesSub) && adminVotablesMatch && votablesRoute) {
+    const votesEventId = adminVotablesMatch[1];
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      if (votablesRoute.action)
+        _audit(reqId, votablesRoute.action, 'denied', 'event', votesEventId);
+      return authRes;
+    }
+    const response = await handleVotables(request, env, votesEventId, votablesRoute);
+    if (!votablesRoute.action) return response; // a read is not audited
+    // The handler mints its own X-Request-Id; the audit row holds that same
+    // reference, so a lookup by the answer's reference finds the row.
+    const ref = _withReference(response, reqId);
+    _audit(ref.ref, votablesRoute.action, _auditOutcome(response), 'event', votesEventId);
+    return ref.res;
+  }
+
   // POST /api/v2/admin/events/:id/repeat — OSE-1531 "Repeat this event": a DRAFT
   // copy of the event (name, place, kind, time, settings; a new date; never who
   // took part). Rate-limited like the report mint, and the limit runs before auth
@@ -2261,6 +2308,24 @@ export async function route(
     const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleAdminGeocode(request, env);
+  }
+
+  // GET /api/v2/vote/:eventId/objects — what a voter can vote on now (OSE-2135,
+  // S3c of OSE-1193; OSE ADR-040 decisions 5 and 7). Outside /api/v2/events*.
+  // THE KILL SWITCH: with VOTING_ENABLED anything but "on", this block is
+  // skipped and the request falls to the router's own 404 at the end, so the
+  // path answers exactly as if voting did not exist. On, it is limited per
+  // caller at 600 a minute (PUBLIC_PAGE_MAX), above the edge layer: a room of
+  // phones behind one venue address opens the voter page at once, and 150
+  // readers from one address in 20 s must all be served (the story's load bar).
+  const voteObjectsMatch = pathname.match(/^\/api\/v2\/vote\/([^/]+)\/objects$/);
+  if (voteObjectsMatch && method === 'GET' && votingEnabled(env)) {
+    const id = voteObjectsMatch[1];
+    return publicReadLimited(
+      'vote-objects',
+      (req, e: typeof env) => handleVoteObjects(req, e, id),
+      PUBLIC_PAGE_MAX
+    )(request, env);
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────

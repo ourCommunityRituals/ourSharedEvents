@@ -58,7 +58,21 @@ const posterCodes = ({ codes, limit = 3 }) => ({
 // GET /api/v2/events (handlers/events.ts handleListEvents)
 const publicEvents = (items) => ({ ok: true, status: 200, items, sponsor_titles: {} });
 
+// GET /api/v2/admin/events (handlers/events.ts handleAdminListEvents): read after a
+// failed event create, to see whether its row landed (OSE-2082)
+const adminEventList = (items) => ({
+  ok: true,
+  items,
+  pagination: { limit: 100, hasMore: false, nextCursor: null },
+});
+
+// GET /api/v2/admin/events/:id/poster-deployments (handleAdminListPosterDeployments):
+// read after a failed poster create (OSE-2082)
+const posterList = (items) => ({ ok: true, items, event_address: null });
+
 module.exports = {
+  adminEventList,
+  posterList,
   eventCreate,
   posterCreate,
   shortLinks,

@@ -12,6 +12,7 @@
  * Data source: D1 database (DB binding)
  */
 
+import { eventHasVoteSet } from '../lib/vote-sets';
 import {
   coreValuesMissing,
   coreValuesRefusal,
@@ -2074,6 +2075,17 @@ export async function handleDeleteEvent(
       return errorResponse(
         'EVENT_HAS_ACTIVITY',
         'Event has recorded scans or sponsor impressions; archive it (PUT status=archived) instead of deleting',
+        409,
+        rid
+      );
+    }
+
+    // A vote set is never deleted (OSE ADR-040 decision 4, OSE-2127), and its
+    // rows point at the event, so an event with one is archived, not deleted.
+    if (await eventHasVoteSet(env.DB, eventId)) {
+      return errorResponse(
+        'EVENT_HAS_VOTE_SET',
+        'Event has a vote set, which is never deleted; archive it (PUT status=archived) instead of deleting',
         409,
         rid
       );

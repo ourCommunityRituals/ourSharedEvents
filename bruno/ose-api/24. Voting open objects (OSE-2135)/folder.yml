@@ -1,0 +1,31 @@
+info:
+  name: Voting open objects (OSE-2135)
+  type: folder
+request: {}
+docs: |-
+  Voting S3c (OSE-2135, part of OSE-1193; OSE ADR-040 decisions 5, 7 and 10).
+  The public open-objects read, GET /api/v2/vote/:eventId/objects, and the
+  VOTING_ENABLED kill switch.
+
+  The folder has two halves, chosen by votingSwitch in the environment file, a
+  copy of VOTING_ENABLED in [env.staging.vars] (tests/unit/ci/env-parity.test.js
+  holds them equal):
+
+  - off (staging today): the read is the router's own 404, byte for byte the
+    answer to a path that never existed (seq 59 and 60). The on half logs NOT
+    RUN and records no passing test.
+  - on (only once the owner turns it on): the read lists the open song with id,
+    kind and label only; a draft song, a closed song, an unknown event and an
+    archived event list nothing (seq 70, 71, 91 and 910). The off half logs NOT
+    RUN.
+
+  Both halves: a write to the read path is the router 404 (seq 75), and the
+  TV's display-config carries no vote word, song or id while a song is open
+  (seq 80, AGENTS.md invariant 5).
+
+  No fixture. Seq 10 makes one synthetic, unlisted live event; the admin routes
+  (S3, not switched) set up the set and two songs. A vote set is never deleted,
+  so seq 905 archives the event. Each run leaves one archived synthetic event on
+  staging. Opening the set needs ANON_ID_HASH_PEPPER on staging (seq 40).
+
+  Mock-layer twin: workers/oursharedevents/tests/vote-open-objects.spec.ts.

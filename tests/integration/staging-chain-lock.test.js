@@ -162,3 +162,109 @@ describe('one staging chain at a time', () => {
     expect(branches).toHaveLength(5);
   });
 });
+
+/**
+ * OSE-2082: "Stock data (stg)" never runs while T1–T4 run on stg, in either order.
+ *
+ * On 2026-11-14 the first stock run after a seven-day outage died on one 503 from
+ * the admin API while T4 Functional was running on stg (stock run 43533830657; T4
+ * 00:25–00:29Z). The stock workflow's run-level group was `stg-writer`, which T4 is
+ * not in. The stock run now joins the chain's lock for its whole run.
+ *
+ * Born red (each fault injected alone, then removed):
+ *   L1 the stock group back to `stg-writer`            -> the trigger cases and "T4 and a stock run" fail
+ *   L2 the stock group keyed by event (…-${{ github.event_name }}) -> the same cases fail
+ *   L3 cancel-in-progress: true on the stock workflow   -> the "never cancelled" and "GitHub accepts" cases fail
+ *   L4 queue removed from the stock workflow            -> the "queues in order" case fails
+ *   L5 run-level `stg-writer` plus a job asking for the chain's lock -> "one order" fails
+ */
+describe('the stock run shares the staging chain’s lock (OSE-2082)', () => {
+  const WF = join(__dirname, '..', '..', '.github', 'workflows');
+  const { readdirSync } = require('node:fs');
+  const stock = yaml.load(readFileSync(join(WF, 'stock-data-full.yml'), 'utf8'));
+  // Every way a stock run starts. Its jobs run only from main.
+  const STOCK_TRIGGERS = {
+    'the morning schedule': ctx({ event: 'schedule' }),
+    'a dispatch on main': ctx({ event: 'workflow_dispatch' }),
+  };
+  const sc = stock.concurrency;
+  // A value with no `${{ }}` is the literal itself, not an expression.
+  const lit = (v, g) => (String(v).includes('${{') ? evaluate(v, g) : v);
+  const stockGroup = (g) => lit(sc.group, g);
+  const stockCancel = (g) => lit(sc['cancel-in-progress'], g);
+  const stockQueue = (g) => {
+    const q = String(sc.queue ?? 'single');
+    return q.includes('${{') ? evaluate(q, g) : q;
+  };
+
+  test('the triggers above are every trigger the stock workflow has', () => {
+    expect(Object.keys(stock.on ?? stock[true]).sort()).toEqual(['schedule', 'workflow_dispatch']);
+  });
+
+  test.each(Object.keys(STOCK_TRIGGERS))(
+    '%s takes the staging lock for the whole run, queues in order and is never cancelled',
+    (name) => {
+      const g = STOCK_TRIGGERS[name];
+      expect(stockGroup(g)).toBe(LOCK);
+      expect(stockCancel(g)).toBe(false);
+      expect(stockQueue(g)).toBe('max');
+    }
+  );
+
+  const chainTriggers = Object.keys(TRIGGERS).filter((k) => touchesStaging(TRIGGERS[k]));
+  const pairs = chainTriggers.flatMap((c) => Object.keys(STOCK_TRIGGERS).map((s) => [c, s]));
+
+  test.each(pairs)('%s and a stock run from %s wait for each other', (chain, stockTrigger) => {
+    expect(groupFor(TRIGGERS[chain])).toBe(stockGroup(STOCK_TRIGGERS[stockTrigger]));
+  });
+
+  test('T4 and a stock run cannot hold stg at once: every trigger that runs T4 is in the stock run’s group', () => {
+    const t4 = Object.keys(ci.jobs).filter((id) => /^T4\b/.test(String(ci.jobs[id].name)));
+    expect(t4.length).toBeGreaterThan(0);
+    // A job-level group would replace nothing: the run-level lock is held while any
+    // job of the run exists. So it is enough that every trigger that can run a T4
+    // job resolves to the stock run's group.
+    const runsT4 = (g) =>
+      t4.some((id) => {
+        const cond = ci.jobs[id].if;
+        if (cond === undefined) return true;
+        try {
+          return Boolean(evaluate(cond, g));
+        } catch {
+          // a condition over needs.* or always(): treat the job as able to run
+          return true;
+        }
+      });
+    const withT4 = Object.keys(TRIGGERS).filter(
+      (k) => touchesStaging(TRIGGERS[k]) && runsT4(TRIGGERS[k])
+    );
+    expect(withT4).toEqual(
+      expect.arrayContaining(['push to main', 'dispatch run_functional only'])
+    );
+    for (const k of withT4) {
+      for (const s of Object.values(STOCK_TRIGGERS)) {
+        expect(groupFor(TRIGGERS[k]), k).toBe(stockGroup(s));
+      }
+    }
+  });
+
+  test('the two stg locks are always taken in one order: the chain’s for the run, then stg-writer for a job', () => {
+    // A run that held stg-writer and had a job waiting for the chain's lock could
+    // stand off against a chain run whose T2 pages leg waits for stg-writer.
+    const groupText = (c) => (c === undefined ? '' : String(typeof c === 'string' ? c : c.group));
+    for (const file of readdirSync(WF).filter((f) => /\.ya?ml$/.test(f))) {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- the repo's own workflow files
+      const wf = yaml.load(readFileSync(join(WF, file), 'utf8'));
+      const runLevel = groupText(wf.concurrency);
+      for (const [id, job] of Object.entries(wf.jobs || {})) {
+        const jobLevel = groupText(job.concurrency);
+        if (jobLevel.includes(LOCK)) {
+          // nobody asks for the chain's lock per job
+          throw new Error(`${file} job ${id} takes ${LOCK} per job; it is a run-level lock`);
+        }
+        if (runLevel.includes('stg-writer')) expect(jobLevel, `${file}/${id}`).not.toContain(LOCK);
+      }
+    }
+    expect(groupText(stock.concurrency)).toBe(LOCK);
+  });
+});

@@ -1,10 +1,13 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- reads the repo's own workflows */
 /**
- * stg has one database (CCR 2026-11-07 R-07). Four jobs write to it outside a
+ * stg has one database (CCR 2026-11-07 R-07). These jobs write to it outside a
  * deploy: the daily stock load, the T2 pages leg (it publishes and unpublishes
- * the landing zip fixture), the nightly event lifecycle and the rollback drill.
+ * the landing zip fixture), the nightly event lifecycle, the rollback drill and
+ * the example fair (stg-example-fair.yml, by hand, OSE-2009).
  * They share one concurrency group, `stg-writer`, so no two of them write at
  * the same time; a second one waits and is never cancelled out from under a run.
+ * The stock load and the T2 pages leg take it per job, because their runs hold the
+ * staging chain's lock (OSE-2082); the others hold it for the whole run.
  *
  * Every member sets `queue: max`: waiting runs line up first in, first out (up
  * to 100) instead of GitHub's default of one waiting run, where a third arrival
@@ -26,12 +29,32 @@ const load = (file) => yaml.load(readFileSync(join(WF, file), 'utf8'));
 const STG_WRITER = { group: 'stg-writer', 'cancel-in-progress': false, queue: 'max' };
 
 describe('one writer on stg at a time', () => {
-  test.each(['stock-data-full.yml', 'staging-event-lifecycle.yml', 'staging-rollback-drill.yml'])(
+  test.each([
+    'staging-event-lifecycle.yml',
+    'staging-rollback-drill.yml',
+    // OSE-2009: the example fair, loaded or removed by hand.
+    'stg-example-fair.yml',
+  ])(
     '%s is in the stg-writer group, queued first in first out, never cancelled by the next',
     (file) => {
       expect(load(file).concurrency).toEqual(STG_WRITER);
     }
   );
+
+  // OSE-2082: the stock run holds the staging chain's lock for the whole run
+  // (staging-chain-lock.test.js), so, like the chain's T2 pages leg, it takes
+  // stg-writer per job: each job that can write to stg, and no other.
+  // Born red: with the group taken off build or check-swap, this fails.
+  test('each stock job that can write to stg is in the stg-writer group; the others are not', () => {
+    const wf = load('stock-data-full.yml');
+    const writes = (job) =>
+      /secrets\.(ADMIN_KEY|CLOUDFLARE_API_TOKEN)/.test(JSON.stringify(wf.jobs[job]));
+    const writers = Object.keys(wf.jobs).filter(writes);
+    expect(writers).toEqual(['build', 'check-swap']);
+    for (const job of Object.keys(wf.jobs)) {
+      expect(wf.jobs[job].concurrency, job).toEqual(writes(job) ? STG_WRITER : undefined);
+    }
+  });
 
   test('the T2 pages leg is in the stg-writer group; the other T2 legs keep their own', () => {
     const ci = load('oursharedevents-ci.yml');

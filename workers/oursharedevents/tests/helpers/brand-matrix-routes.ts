@@ -104,6 +104,12 @@ function boothPath(eventId: string): string {
   return `/api/v2/admin/events/${eventId}/booths/${eventId.replace(/-active$/, '-booth')}`;
 }
 
+/** `bm-<brand>-active` with that brand's own song, `bm-<brand>-vobj` (OSE-2127). */
+function voteObjectPath(tail: string): (eventId: string) => string {
+  return (eventId) =>
+    `/api/v2/admin/events/${eventId}/votables/objects/${eventId.replace(/-active$/, '-vobj')}${tail}`;
+}
+
 /** `bm-<brand>-campaign` with that brand's own live event, `bm-<brand>-active`. */
 function campaignEventPath(campaignId: string): string {
   const eventId = campaignId.replace(/-campaign$/, '-active');
@@ -267,6 +273,31 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
     body: () => ({ name: 'bm-cross-write' }),
   }),
   eventRoute('/api/v2/admin/events/:id/booths/:id', 'DELETE', '', { path: boothPath }),
+  // OSE-2127: the vote set and its objects. Each live event holds a draft set
+  // and one song (brand-matrix.ts); the snapshot holds both tables.
+  eventRoute('/api/v2/admin/events/:id/votables', 'GET', '/votables'),
+  eventRoute('/api/v2/admin/events/:id/votables', 'POST', '/votables', {
+    body: () => ({ played_by: 'object' }),
+  }),
+  eventRoute('/api/v2/admin/events/:id/votables/(.+)', 'POST', '/votables/open', {
+    variant: 'open the set',
+    body: () => ({}),
+  }),
+  eventRoute('/api/v2/admin/events/:id/votables/(.+)', 'POST', '', {
+    variant: 'add an object',
+    path: (id) => `/api/v2/admin/events/${id}/votables/objects`,
+    body: () => ({ kind: 'song', label: 'bm-cross-write' }),
+  }),
+  eventRoute('/api/v2/admin/events/:id/votables/(.+)', 'POST', '', {
+    variant: 'open an object',
+    path: voteObjectPath('/open'),
+    body: () => ({}),
+  }),
+  eventRoute('/api/v2/admin/events/:id/votables/(.+)', 'PUT', '', {
+    variant: 'change an object',
+    path: voteObjectPath(''),
+    body: () => ({ label: 'bm-cross-write' }),
+  }),
   eventRoute('/api/v2/admin/events/:id/verify-qr', 'POST', '/verify-qr'),
   eventRoute('/api/v2/admin/events/:id/unverify-qr', 'POST', '/unverify-qr'),
   eventRoute('/api/v2/admin/events/:id/backup', 'POST', '/backup'),

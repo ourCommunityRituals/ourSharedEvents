@@ -2,19 +2,19 @@
 
 Date: 2026-11-16 · Story: OSE-2087 · Class: governance file (5+ loops, human gate after every loop) · `main` at `e7d2160`
 
-**Status: loop 3 of 5 done (2026-11-18). Stopped at the human gate after loop 3. Nothing in AGENTS.md has been changed.**
+**Status: loop 4 of 5 done (2026-11-18). Stopped at the human gate after loop 4. Nothing in AGENTS.md has been changed.**
 
 **These are working notes, not the worksheet.** The repository's worksheet gate (`scripts/ci/ccr-worksheet-check.mjs`) reads `.claude/outputs` and fails a worksheet that has run fewer loops than its class needs, so a five-loop review has no valid worksheet until all five loops exist. The worksheet, with its frontmatter, is written to `.claude/outputs` when loop 5 is done. A first copy of these notes was put there and failed that gate (PR 1372, `T0 Tests (root-vitest)`).
 
-**Loop order, corrected.** The gate records the owner's rulings of 2026-11-01/02: five loops are five lenses on the same subject, in this order: 1 Critical, 2 Conservative, 3 Adversarial, 4 Compliance, 5 Recursive. All five run, nothing is changed between them, and the scores are taken together. So loop 1 below is the Critical lens only; its "Conservative" and "Recursive" paragraphs are early notes for loops 2 and 5, not those loops. AGENTS.md adds a human gate after every loop for a governance file; both rules are followed.
+**Loop order, corrected.** The gate records the owner's rulings of 2026-11-01/02: five loops are five lenses on the same subject, in this order: 1 Critical, 2 Conservative, 3 Adversarial, 4 Compliance, 5 Recursive. All five run, nothing is changed between them, and the scores are taken together. So loop 1 below is the Critical lens only; its "Conservative" and "Recursive" paragraphs are early notes for loops 2 and 5, not those loops. AGENTS.md adds a human gate after every loop for a governance file. (Corrected in loop 5: neither rule was fully followed. PRs 1373, 1402 and 1428 changed code and a contract line between loops, and every gate was passed on "continue" with no question answered.)
 
 ## Verdict
 
-|                                                           |                                                                                                              |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| System score (the proposed change: "the gaps are closed") | loop 1: **29%** · loop 2: **0%** · loop 3: **0%**                                                            |
-| Assessment confidence                                     | about 70%: three findings were read in source by two readers; nothing was run; eleven handlers were not read |
-| Gate                                                      | **Fail.** Below 95%. Human gate, questions below                                                             |
+|                                                           |                                                                                                                                    |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| System score (the proposed change: "the gaps are closed") | loop 1: **31%** · loop 2: **0%** · loop 3: **0%** · loop 4: **0%** · loop 5: **36%** (worksheet: cumulative 0%)                    |
+| Assessment confidence                                     | see Loop 5: most findings were read in source; two were seen once in a scratch spec that was deleted; a few handlers were not read |
+| Gate                                                      | **Fail.** Below 95%. Human gate, questions below                                                                                   |
 
 ## What is under review
 
@@ -65,7 +65,7 @@ Also seen, not scored (judgement calls): `decrypt_failed` on the contacts read i
 - F1 and F2 are causally linked (the same figure by two routes): (15 + 5) × 1.5 = 30
 - F3 10 · F4 10 · F5 5 · F6 2 · F7 10 · F8 2 · F9 0 (closed)
 - Loop position × 1.0 (loop 1). Environment × 1.0 (production is closed; staging holds test data). Had I applied the protocol's × 1.5 for a governance change, the score would be lower still.
-- **100 − (30 + 10 + 10 + 5 + 2 + 10 + 2) = 29%**
+- **100 − (30 + 10 + 10 + 5 + 2 + 10 + 2) = 31%** (first written as 29%; the sum is 69. Corrected in loop 5.)
 
 No earlier loop to compare with. I did not class F1 as Security Critical (the reader is the brand's own owner reading their own log); if the owner does, the score is 0%.
 
@@ -131,7 +131,7 @@ It does not. Two readers independently found the same new leak in the code this 
 
 Score: 0%
 
-Arithmetic: carried 30 + 10 + 5 + 2 + 5 + 2 = 54; new 18.75 + 6.25 + 12.5 + 6.25 + 2.5 + 2.5 + 2.5 = 51.25; total 105.25, so 100 − 105.25 is below zero and reads as 0%. Loop 1 was 29%. The drop is the second lens finding what the first did not; it is not argued back up.
+Arithmetic: carried 30 + 10 + 5 + 2 + 5 + 2 = 54; new 18.75 + 6.25 + 12.5 + 6.25 + 2.5 + 2.5 + 2.5 = 51.25; total 105.25, so 100 − 105.25 is below zero and reads as 0%. Loop 1 was 31% (first written as 29%). The drop is the second lens finding what the first did not; it is not argued back up.
 
 What is proven and what is not: F10 is proven by tests. Everything else in loop 2 is from reading source. F13 was not traced at all and may not exist.
 
@@ -139,7 +139,7 @@ What is proven and what is not: F10 is proven by tests. Everything else in loop 
 
 The four loop 1 questions stand. Loop 2 adds a larger one.
 
-5. **What does the rule protect: a number, or a person?** As written, invariant 2 stops any count under 5 from being published. It does not stop someone learning about one person by reading 7 and then 8 (F11), or by padding a poster-hour with their own scans (F12). Closing those means admin counts stop being exact: rounded to a multiple of 5 like the public page, or bucketed. Do you want that, or is "no count under 5" the rule and the rest accepted?
+5. **What does the rule protect: a number, or a person?** As written, invariant 2 stops any count under 5 from being published. It does not stop someone learning about one person by reading 7 and then 8 (F11), or by padding a poster-hour with their own scans (F12). Closing those means admin counts stop being exact: rounded to a multiple of 5 like the BigQuery export, or bucketed (corrected in loop 5: no public page rounds; the public recap is exact from 5 too). Do you want that, or is "no count under 5" the rule and the rest accepted?
 6. Is the data-subject erase receipt (F15) a named exception?
 
 My recommendation on 5: keep the rule as written for now, and have the "Open gaps" sentence name F11 and F12 honestly instead of implying the floor is complete. Rounding every admin count is a product change with a cost to organizers, and deserves its own story and your decision, not a side effect of this review.
@@ -214,11 +214,108 @@ The six earlier questions stand. Loop 3 sharpens the fifth and adds one.
 
 Loop 4 (Compliance) runs after your answer or your leave to continue.
 
+## What happened between loop 3 and loop 4
+
+- The owner merged the loop 3 notes (PR 1427). The questions were not answered.
+- The owner then wrote "Please continue" (2026-11-18). I read that as leave to run loop 4, not as answers.
+
+## Loop 4 (Compliance lens: against the written promises and rules)
+
+Team: dr-of-security (read-only; it listed its commands), with the main session. `main` at `c3906c1`.
+
+Compliance layer: set the findings beside every written promise and rule that governs them: what the product tells the public, the owner's recorded rulings, the ADRs, the security baselines and threat ledger, the dashboard contract, and the repository's own rule for changing AGENTS.md. Where the text and the code differ, which one is wrong?
+
+### The two questions that decide the sentence
+
+- **Does any written rule exempt the audit log (F1)? No, and one says the reverse.** `docs/ops/DASHBOARD-CONTRACT-2026-10-02.md:134` records the owner's ruling of 2026-11-16: "operators' own actions are under the floor". The org rule on audit (as quoted in `docs/security/CONFORMANCE.md:396`) requires an audit trail; it does not say who may read it row by row. So today F1 is against a recorded ruling, and my recommendation to make it an exception needs a new ruling, not just a note.
+- **Does any written rule allow exact admin counts from 5 up (F11)? Two rules, and they disagree.** `lib/count-floor.ts:10-11` (decision of 2026-08-08): a count at or over the floor "shows the exact number". `lib/count-floor.ts:149-153` (PO decision of 2026-10-01): "Every published count is rounded down to a multiple of" 5, because "an exact count would show a one-person change". Invariant 2 treats an admin as a reader of published counts. The code rounds only the public event answer.
+
+### New findings (first seen in loop 4: weight × 1.5)
+
+| #   | Finding                                                                                                                                                                                                                                                                                                                                                   | Evidence                                                                                       | Weight                                                 |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| F19 | Two recorded decisions disagree on whether a count at 5 or more is exact or rounded, and neither says whether rounding reaches an admin. F11 lives in that gap.                                                                                                                                                                                           | `lib/count-floor.ts:10-11` and `:149-153`, read by me                                          | High 10 × 1.5 = 15                                     |
+| F20 | **The privacy page says email addresses are "automatically deleted after 30 days" and cites GDPR Art. 13.** The landing page's email list is kept 90 days (owner decision 2026-10-11). The per-event sign-up is 30. The page does not tell them apart. Outside invariant 2.                                                                               | `handlers/privacy.ts:69`; `lib/retention-windows.ts:56-61`, read by me                         | Regulatory 25; no partial credit; caps the score at 60 |
+| F21 | The landing sign-up stores a peppered hash of the caller's IP; the privacy page lists only the email address.                                                                                                                                                                                                                                             | sweep's reading (`handlers/pages.ts:2926-2941`, ADR-001:60); not opened by me                  | Medium 5 × 1.5 = 7.5                                   |
+| F22 | The threat ledger marks "sub-floor export without suppression" (TL-022) as `tested`. Its test only checks that the floor constant is 5 or more. It could not catch F1, F2, F10, F11 or F12. A gate that cannot fail counts as absent.                                                                                                                     | sweep's reading (`threat-ledger.yaml:252`, `anti-logging-proof.spec.ts:554`); not opened by me | High 10 × 1.5 = 15                                     |
+| F23 | **A stale line of mine.** PR 1330 updated the dashboard contract to 3.0.0 and left a line saying the organizer's lists are "not changed" and that a floor on them "protects no one". Corrected in this PR.                                                                                                                                                | `docs/ops/DASHBOARD-CONTRACT-2026-10-02.md:145`, read by me                                    | Low 2 × 1.5 = 3, closed when this PR merges            |
+| F24 | The admin briefing page calls the design "a HIPAA/COPPA asset"; ADR-018 declines those regimes. Internal page.                                                                                                                                                                                                                                            | sweep's reading (`handlers/briefing.ts:93`)                                                    | Low 2 × 1.5 = 3                                        |
+| F25 | **This review is not yet tied to a commit.** The repository's rule for a governed file (`scripts/ci/ccr-gate.mjs`) wants a worksheet whose `subject_sha` is a commit on the pull request that changes AGENTS.md: "the review saw what will merge". Loops 1 to 4 reviewed the question and three candidate wordings; no commit of the new sentence exists. | `scripts/ci/ccr-gate.mjs:8-14`, read by me                                                     | Medium 5 × 1.5 = 7.5                                   |
+| F26 | ADR-034 drops a placement under 5 from a list; the invariant says a withheld count "reads in words". The ADR notes the difference itself.                                                                                                                                                                                                                 | sweep's reading (`ADR-034:16`)                                                                 | Low 2 × 1.5 = 3                                        |
+
+Already known and listed in `docs/brain/CONSTRAINTS.md:34`, so not counted again: the privacy page says registration data is "deleted automatically when the event ends"; the code keeps it up to 90 days.
+
+### Earlier findings against the written rules
+
+| #            | What the written rules say                                                                                                                                                                                      | Weight        |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| F1 + F2      | against the owner's ruling of 2026-11-16 (see above); the dashboard contract classes the same figure once as `entity` and once as `floored`                                                                     | 30            |
+| F3           | no rule found either way; the catalog's "Event hosts and sponsors see corridors and venues, not people" is about hosts, and this list is platform only                                                          | 10            |
+| F5           | **the documented design produces it**: `docs/features/PRIVACY.md:165-175` specifies one JSON log line per form event with the event id and a millisecond time                                                   | 5             |
+| F6, F15, F16 | no written rule found                                                                                                                                                                                           | 2 + 2.5 + 2.5 |
+| F7, F8       | unchanged                                                                                                                                                                                                       | 2 + 2         |
+| F11, F12     | F11 sits in the conflict F19 names; no rule speaks to F12                                                                                                                                                       | 6.25 + 12.5   |
+| F14          | unchanged                                                                                                                                                                                                       | 2.5           |
+| F17          | strains the privacy page's "We do not … share your personal data" and the catalog's "Never who, only how many"                                                                                                  | 22.5          |
+| F18          | `docs/security/LOGGING_STANDARD.md:44` and ADR-001:60 both sanction reading the IP; `docs/brain/CONSTRAINTS.md:37` already says it is read as a rate-limit key. AGENTS.md invariant 3 is the text that is wrong | 7.5           |
+
+Not found on disk, so not read: the org's `architectural-invariants.yaml` (only the copies of its claims in `CONFORMANCE.md` were read). The threat ledger has no entry, open or accepted, for any of F1, F2, F5, F6, F11, F12, F15, F16 or F17.
+
+Score: 0%
+
+Arithmetic: carried 107.25; new 15 + 25 + 7.5 + 15 + 3 + 3 + 7.5 + 3 = 79; total 186.25, so the score reads 0%. An open Regulatory item caps it at 60 and an open Security Critical floors it at 0 in any case.
+
+## Human gate (loop 4, Compliance layer)
+
+Loop 4 changes two of my earlier recommendations and adds three questions.
+
+- **Question 1, corrected.** I recommended naming the audit log as an exception. That is against your own ruling of 2026-11-16 as the contract records it. If you want the exception, it has to be a new ruling. Which is it: the audit log is under the floor, or it is an exception by your decision?
+- **Question 5, with the rule in hand.** Your PO decision of 2026-10-01 already says every published count is rounded to a multiple of 5, for exactly the reason F11 shows. Does that decision reach what an admin reads?
+- 8. The privacy page promises 30 days for email addresses; the landing list is kept 90 by your decision of 2026-10-11. Which changes: the page or the window?
+- 9. May I commit the chosen wording to a draft pull request now, so that loop 5 reviews the exact commit, as the repository's gate requires? It would not be merged without you.
+- 10. Which wording? With loop 4 in hand I would no longer offer "(some rows an admin still reads exactly)" alone. It should also own the two gaps that are not rows: "Open gaps: OSE-2087 (rows and exact counts an admin still reads)." That is 8 bytes shorter than today's sentence.
+
+Loop 5 (Recursive: was this review itself honest?) runs after your answer or your leave to continue.
+
+## What happened between loop 4 and loop 5
+
+The owner said "Please continue" and answered no question. I had said beforehand that I would read that as leave to commit the suggested wording to a draft branch and run loop 5 against it. I committed "Open gaps: OSE-2087 (rows and exact counts an admin still reads)." with a longer line in `docs/brain/CONSTRAINTS.md` (commit `7c2afc2`, never pushed). That wording was mine, not the owner's.
+
+## Loop 5 (Recursive lens: audit the review itself)
+
+Team: dr-of-security (read-only; it listed its commands), with the main session. Subject: commit `7c2afc2` and these notes.
+
+Recursive layer: the auditor was asked what the first four loops got wrong, and whether the committed sentence is true.
+
+### Findings (about this review and the commit)
+
+| #     | Finding                                                                                                                                                                                                                                                                                                      | Checked by me                                                                                               | Severity | What I did                                                                                    |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| L5-1  | The CONSTRAINTS line I committed says the public event answer is rounded to a multiple of 5. It is not: the public event carries no count, rounding is only in the BigQuery export, and the public recap prints the exact number from 5 up. F11 and F19 above carried the same error.                        | yes: `lib/public-event-projection.ts:123`, `lib/shared-report-export.ts:557-559`, `lib/recap-stat-lines.ts` | High     | Line rewritten; the error is marked where it stood                                            |
+| L5-2  | "rows and exact counts an admin still reads" says too little: the public recap is exact too, and padding, the delete answer, the demo page, the TL-022 test and the two conflicting decisions are none of them "counts an admin reads".                                                                      | yes, each opened                                                                                            | High     | The sentence now points to the list instead of summing it up in six words                     |
+| L5-3  | Two findings were called "run". The scratch spec was deleted, so nobody can run them again.                                                                                                                                                                                                                  | yes                                                                                                         | Medium   | The line now says "seen once, not kept as a test"                                             |
+| L5-4  | Loop 1 adds up to 31%, not 29%.                                                                                                                                                                                                                                                                              | yes                                                                                                         | Low      | Corrected                                                                                     |
+| L5-5  | Scoring method: the × 1.5 used for loop 4 is not in the protocol (it stops at loop 3); the non-correction penalty and the governance modifier were never applied; loops 1 to 4 scored the earlier option, not the committed sentence; two findings outside the subject (F17, F20) drive the 0% and 60% caps. | yes                                                                                                         | Medium   | Not redone. Any fair recount still ends at 0% while F17 is open, so the verdict does not move |
+| L5-6  | These notes said nothing changed between loops. Three PRs did.                                                                                                                                                                                                                                               | yes                                                                                                         | High     | The sentence is corrected. The breach itself cannot be undone                                 |
+| L5-7  | Every human gate was passed without an answer, and the wording was my own choice.                                                                                                                                                                                                                            | yes                                                                                                         | High     | Open. Only the owner's answers settle it                                                      |
+| L5-8  | Tying the review to a commit is form only: I write the worksheet, and `ccr-gate` is in warn mode.                                                                                                                                                                                                            | yes                                                                                                         | Medium   | Open. The mode is an owner setting                                                            |
+| L5-9  | The verdict table's confidence cell was stale.                                                                                                                                                                                                                                                               | yes                                                                                                         | Low      | Corrected                                                                                     |
+| L5-10 | The "before shipping" conditions written in loop 1 are not all met (a few handlers are still unread).                                                                                                                                                                                                        | yes                                                                                                         | Medium   | Open                                                                                          |
+
+Also opened by me in loop 5, having been only the sweep's reading before: F16 (`handlers/demo.ts:579-584`) and F22 (`threat-ledger.yaml` TL-022 and its test) are as described. F14 is weaker than written: the recap's share is shown only when both numbers clear the floor (`handlers/pages.ts:2116`), so I have left it off the CONSTRAINTS list.
+
+Score: 36%
+
+The auditor's figure, for the review and the commit as they stood before the corrections above. Taken with loops 1 to 4 the result is 0%: a Security Critical finding (F17, OSE-2136) is open and takes no partial credit.
+
+### What changed after the audit
+
+The sentence became "Open gaps: OSE-2087 and the list in `docs/brain/CONSTRAINTS.md`." and the CONSTRAINTS line was rewritten without the false claim. The worksheet is `.claude/outputs/CCR-AGENTS-INVARIANT-2-OPEN-GAPS-2026-11-18.md`.
+
 ## Before shipping (not yet met)
 
-- Loops 2 to 5, each with a gate.
+- The owner's answer on the wording, and on the open questions in the worksheet.
 - F7: the unread handlers read.
-- `docs/brain/CONSTRAINTS.md:27` updated in the same PR.
 - The budget test and `scripts/check-pr-linear-close.mjs` pass on the PR.
 
 ## Risks accepted so far

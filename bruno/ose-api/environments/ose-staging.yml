@@ -22,5 +22,11 @@ variables:
     value: ""
   - name: workerVersion
     value: ""
+  # A copy of VOTING_ENABLED in [env.staging.vars] of wrangler.toml (OSE-2135).
+  # The voting folders (24, and S3b's 25) run their switch-off half while this
+  # is "off" and their switch-on half while it is "on"; the other logs NOT RUN. tests/unit/ci/
+  # env-parity.test.js holds the two equal. It turns nothing on by itself.
+  - name: votingSwitch
+    value: "off"
   - secret: true
     name: ocrInternalSecret

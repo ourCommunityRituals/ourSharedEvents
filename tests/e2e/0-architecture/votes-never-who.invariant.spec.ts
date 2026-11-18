@@ -28,6 +28,11 @@
  *          by plain `column = 1`, never in a tuple or an expression;
  *        - pepper_epoch and played_by are set only by a write whose WHERE says
  *          the column IS NULL (stamped once, never restamped);
+ *        - secret_margin and secret_floor are set to a value only by a write
+ *          whose WHERE says `pepper_epoch IS NULL`: drawn once, at the first
+ *          open, never at a reopen (OSE-2127); setting them to NULL is final's;
+ *        - a write that sets a vote set's state to 'open' carries an
+ *          `is_final = 0` guard, so a final set never reopens (OSE-2127);
  *        - nothing replaces, upserts, deletes or drops a vote set;
  *        - a write to votable_objects carries an `is_final = 0` guard, so no
  *          object is added to, or reopened in, a final set;
@@ -45,6 +50,25 @@
  *   7. SEPARATE KEYS (decision 1). Every `ose:…:vN` HKDF label in the Worker,
  *      in any quote style, appears once; the three vote labels exist and are not
  *      the scan key's.
+ *   8. THE PUBLIC READ AND THE SWITCH (OSE-2135, S3c; decisions 5 and 7,
+ *      AGENTS.md invariants 4 and 5):
+ *        - the open-objects read (src/lib/vote-open-objects.ts) selects only
+ *          o.id, o.kind, o.label and o.closes_at, binds the event, and carries
+ *          every guard: event live, set open, not final, not void, object open,
+ *          window ahead. The final guard is held here because 0111's CHECK
+ *          (final means closed) hides its removal from any runtime test;
+ *        - it names no table but votable_objects, vote_sets and events: never a
+ *          tally, receipt or marker;
+ *        - its answer object is built field by field: no spread in the read's
+ *          files, and those files never name a cookie or ose_anon;
+ *        - only handlers/vote-objects.ts imports the read, and only router.ts
+ *          imports that handler; the route is under /api/v2/vote/, outside
+ *          /api/v2/events*, is wrapped in publicReadLimited, and is routed only
+ *          when votingEnabled(env);
+ *        - no Worker file but lib/voting-switch.ts names VOTING_ENABLED in
+ *          code, so "on" has one spelling (S3b and S4a call votingEnabled);
+ *        - the display's files (the TV page, its web copy and display-config)
+ *          carry no vote word, no vote path and no vote import.
  *
  * What it cannot see: a value carried out by a variable (a listed lib file that
  * returns `row` to a handler). S3 and S5 add workers-pool tests that their
@@ -79,6 +103,10 @@ const DB_MIGRATIONS = join(WORKER_DIR, 'migrations');
 const FORMS_MIGRATIONS = join(WORKER_DIR, 'migrations-forms');
 const SRC_DIR = join(WORKER_DIR, 'src');
 const VOTES_LIB = 'src/lib/votes.ts';
+const VOTE_SETS_LIB = 'src/lib/vote-sets.ts';
+const OPEN_OBJECTS_LIB = 'src/lib/vote-open-objects.ts';
+const OPEN_OBJECTS_HANDLER = 'src/handlers/vote-objects.ts';
+const SWITCH_LIB = 'src/lib/voting-switch.ts';
 
 /**
  * Every Worker file that names a vote table, and why. A route story (S3, S4a,
@@ -86,14 +114,21 @@ const VOTES_LIB = 'src/lib/votes.ts';
  */
 const VOTE_TABLE_FILES: Record<string, string> = {
   [VOTES_LIB]: 'The table list itself (VOTE_TABLES), read by the gates. It holds no SQL.',
+  [VOTE_SETS_LIB]:
+    'S3 (OSE-2127): every write to vote_sets and votable_objects: create, open, reopen, close, the final lock and the nightly final job; it makes the tally row with its object and deletes markers at final.',
+  [OPEN_OBJECTS_LIB]:
+    'S3c (OSE-2135): the public open-objects read. One SELECT of id, kind, label and closes_at from votable_objects, joined to vote_sets for its state, final and void flags only. No write, no counter, no secret (rule 8).',
 };
 
 /**
- * Files that may name the secret margin or the secret floor. Empty: nothing
- * draws or reads them yet. S3 (draw at the first open) and S5 (read at final)
- * add their own lib file here; a handler can never be listed.
+ * Files that may name the secret margin or the secret floor. S3 draws them at
+ * the first open; S5 (read at final) adds its own lib file here. A handler can
+ * never be listed.
  */
-const SECRET_READERS: Record<string, string> = {};
+const SECRET_READERS: Record<string, string> = {
+  [VOTE_SETS_LIB]:
+    'S3 (OSE-2127) writes T and V once, at the first open, and nulls them at final. It never reads them back.',
+};
 
 /**
  * Files that may name the live counters. Empty: nothing counts yet. S4a (the
@@ -109,6 +144,10 @@ const COUNT_COLUMNS = [
   'up_count',
   'down_count',
 ];
+/** An INSERT that writes a receipt or a marker: the vote route's write (S4a). */
+const MARKER_WRITE =
+  /\b(?:INSERT|REPLACE)\b[^;]*\bINTO\s+(?:vote_receipts|vote_participants|vote_team_markers)\b/i;
+
 const MARKER_AND_COUNTER_TABLES = [
   'vote_tallies',
   'vote_receipts',
@@ -298,6 +337,22 @@ function flagProblems(raw: string, sqlComments = true): string[] {
           out.push(`is_final is not set to the literal 1: ${part}`);
         if (/\bis_void\b/i.test(part) && !/^is_void\s*=\s*1$/i.test(part))
           out.push(`is_void is not set to the literal 1: ${part}`);
+        // Any state but the literal 'closed' (a bound `state = ?` included) may
+        // open the set, so it needs the final guard (security review L6).
+        if (
+          /^state\s*=/i.test(part) &&
+          !/^state\s*=\s*'closed'$/i.test(part) &&
+          !/\bis_final\s*=\s*0\b/i.test(where)
+        )
+          out.push(`sets a vote set's state without an "is_final = 0" guard: ${part}`);
+        for (const col of ['secret_margin', 'secret_floor']) {
+          if (
+            new RegExp(`^${col}\\s*=`, 'i').test(part) &&
+            !new RegExp(`^${col}\\s*=\\s*NULL$`, 'i').test(part) &&
+            !/\bpepper_epoch\s+IS\s+NULL\b/i.test(where)
+          )
+            out.push(`${col} is drawn without a "pepper_epoch IS NULL" guard: ${part}`);
+        }
         for (const col of ['pepper_epoch', 'played_by']) {
           if (
             new RegExp(`^${col}\\s*=`, 'i').test(part) &&
@@ -450,6 +505,29 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
     ).toEqual([]);
   });
 
+  // OSE-2127 (security review M1). ADR-040 decision 1: every set reaches final,
+  // so nothing is kept without a bound. In S3, final skips a set that opened
+  // (src/lib/vote-sets.ts FINALIZABLE: results arrive with S5), which is safe
+  // only while nothing writes a receipt or a marker. The day a Worker file
+  // writes one (the vote route, S4a), the nightly job must already make every
+  // set final, with its result computed in the same step (S5).
+  test('OSE-2127 | final | no receipt or marker is written while final skips a set that opened', () => {
+    const writers = SOURCES.filter(({ code }) =>
+      sqlLiterals(code).some((sql) => MARKER_WRITE.test(normalize(sql)))
+    ).map((s) => s.file);
+    const lib = SOURCES.find((s) => s.file === VOTE_SETS_LIB);
+    expect(lib, `${VOTE_SETS_LIB} is read`).toBeTruthy();
+    const job = lib!.code.match(/\bjob:\s*\([^)]*\)\s*=>\s*`([^`]*)`/)?.[1] ?? '';
+    expect(job, 'FINALIZABLE.job is found').not.toBe('');
+    const skipsOpened = /pepper_epoch\s+IS\s+NULL/i.test(job);
+    expect(
+      skipsOpened ? writers : [],
+      'A receipt or marker writer exists, but the nightly job still makes final only the sets ' +
+        'that never opened (or are void). Widen FINALIZABLE.job to every set and compute the ' +
+        'result in the same batch (S5) before, or with, the vote route.'
+    ).toEqual([]);
+  });
+
   test('OSE-2125 | secret | no route returns T or V, and no number before final', () => {
     const naming = (cols: string[]) =>
       SOURCES.filter(({ code }) => nameRe(cols).test(code)).map((s) => s.file);
@@ -537,6 +615,11 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       'UPDATE vote_sets SET ${col} = ? WHERE id = ?',
       "INSERT INTO votable_objects (id, event_id, set_id, kind, label) VALUES (?, ?, ?, 'song', ?)",
       "UPDATE votable_objects SET state = 'open' WHERE id = ?",
+      // OSE-2127: a reopen that redraws T or V, and an open with no final guard.
+      "UPDATE vote_sets SET state = 'open', secret_margin = ?, secret_floor = ? WHERE id = ? AND is_final = 0",
+      'UPDATE vote_sets SET secret_floor = 12 WHERE id = ?',
+      "UPDATE vote_sets SET state = 'open' WHERE event_id = ? AND state = 'closed'",
+      'UPDATE vote_sets SET state = ? WHERE id = ?',
     ];
     expect(reopen.filter((sql) => flagProblems(sql).length === 0)).toEqual([]);
     // A shell line: its --command flag is not a SQL comment.
@@ -550,12 +633,22 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       "UPDATE vote_sets SET is_final = 1, final_at = ?, state = 'closed', secret_margin = NULL, secret_floor = NULL WHERE id = ?",
       "UPDATE vote_sets SET is_void = 1, void_reason = 'pepper_epoch' WHERE id = ?",
       'UPDATE vote_sets SET pepper_epoch = ? WHERE id = ? AND pepper_epoch IS NULL',
+      "UPDATE vote_sets SET state = 'open', pepper_epoch = ?, secret_margin = ?, secret_floor = ? WHERE id = ? AND is_final = 0 AND pepper_epoch IS NULL",
+      "UPDATE vote_sets SET state = 'open' WHERE event_id = ? AND state = 'closed' AND is_final = 0",
+      "UPDATE vote_sets SET state = 'closed' WHERE event_id = ? AND state = 'open'",
       "UPDATE votable_objects SET state = 'open' WHERE id = ? AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
       'INSERT INTO vote_sets (id, event_id) VALUES (?, ?)',
       'SELECT is_final FROM vote_sets WHERE id = ?',
     ];
     expect(fine.filter((sql) => flagProblems(sql).length > 0)).toEqual([]);
 
+    expect(
+      MARKER_WRITE.test('INSERT OR IGNORE INTO vote_receipts (object_id, receipt) VALUES (?, ?)')
+    ).toBe(true);
+    expect(
+      MARKER_WRITE.test('INSERT INTO vote_team_markers (set_id, team_id, marker) SELECT ?, ?, ?')
+    ).toBe(true);
+    expect(MARKER_WRITE.test('DELETE FROM vote_receipts WHERE object_id = ?')).toBe(false);
     expect(isExporter('src/handlers/bigquery.ts', '')).toBe(true);
     expect(isExporter('src/lib/x.ts', 'await bigQueryInsertRows(env, rows)')).toBe(true);
     expect(isExporter('src/lib/votes.ts', '')).toBe(false);
@@ -572,5 +665,226 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
     expect(sqlLiterals("db.prepare('UPDATE vote_sets SET is_final = 1 WHERE id = ?')")).toEqual([
       'UPDATE vote_sets SET is_final = 1 WHERE id = ?',
     ]);
+  });
+});
+
+/** The words a vote would arrive under on the display (decision 7). */
+const DISPLAY_VOTE_WORDS = /vot(?:e|ing|able)|tall(?:y|ies)|ballot|receipt|participant|winner/i;
+
+/** The display's own files: the TV page, its web copy and its config read. */
+const DISPLAY_FILES = [
+  'workers/oursharedevents/src/templates/display.html',
+  'workers/oursharedevents/src/handlers/display-config.ts',
+  'web/display/index.html',
+];
+
+/**
+ * The only tables the open-objects read may name: the objects, their set (for
+ * its state, final and void flags) and the event (for its status). Never a
+ * tally, a receipt or a marker: even "has anyone voted on this song" is a count
+ * under the floor (security review M2, 2026-11-18).
+ */
+const OPEN_READ_TABLES = ['votable_objects', 'vote_sets', 'events'];
+
+/** What is wrong with the open-objects read's SQL. Empty when it holds. */
+function openReadProblems(sql: string): string[] {
+  const out: string[] = [];
+  const flat = normalize(sql);
+  const select = /^SELECT\s+(.*?)\s+FROM\s+votable_objects\s+o\b/i.exec(flat);
+  if (!select) return ['the read does not SELECT ... FROM votable_objects o'];
+  const read = [...flat.matchAll(/\b(?:FROM|JOIN)\s+(\w+)/gi)].map((m) => m[1].toLowerCase());
+  const stray = read.filter((t) => !OPEN_READ_TABLES.includes(t));
+  if (stray.length)
+    out.push(`it reads ${stray.join(', ')}; only ${OPEN_READ_TABLES.join(', ')} may be read`);
+  const cols = select[1].split(',').map((c) => c.trim());
+  if (cols.join(', ') !== 'o.id, o.kind, o.label, o.closes_at')
+    out.push(`it selects ${cols.join(', ')}; only o.id, o.kind, o.label, o.closes_at may be read`);
+  const guards: [RegExp, string][] = [
+    [/\bo\.event_id\s*=\s*\?/i, 'o.event_id = ?'],
+    [/\be\.id\s*=\s*\?/i, 'e.id = ?'],
+    [/\be\.status\s*=\s*'active'/i, "e.status = 'active'"],
+    [/\bs\.state\s*=\s*'open'/i, "s.state = 'open'"],
+    [/\bs\.is_final\s*=\s*0\b/i, 's.is_final = 0'],
+    [/\bs\.is_void\s*=\s*0\b/i, 's.is_void = 0'],
+    [/\bo\.state\s*=\s*'open'/i, "o.state = 'open'"],
+    [/\bo\.closes_at\s*>\s*\?/i, 'o.closes_at > ?'],
+  ];
+  const where = flat.slice(flat.search(/\bWHERE\b/i));
+  for (const [re, name] of guards) if (!re.test(where)) out.push(`the WHERE lacks ${name}`);
+  return out;
+}
+
+/** The router block that serves the read, from its match to its return. */
+function routerVoteBlock(code: string): string {
+  const from = code.indexOf('const voteObjectsMatch');
+  if (from < 0) return '';
+  const to = code.indexOf(')(request, env);', from);
+  return to < 0 ? '' : code.slice(from, to + 16);
+}
+
+/** What is wrong with the router block. Empty when it holds. */
+function routerProblems(block: string): string[] {
+  if (!block) return ['router.ts has no voteObjectsMatch block'];
+  const out: string[] = [];
+  const path = /pathname\.match\(\/\^((?:\\\/|[^/])+?)\(/.exec(block)?.[1] ?? '';
+  if (!path.startsWith('\\/api\\/v2\\/vote\\/'))
+    out.push(`the read's path ${path || '(unreadable)'} is not under /api/v2/vote/`);
+  const cond = /if\s*\(([^)]*\([^)]*\)[^)]*|[^)]*)\)\s*\{/.exec(block)?.[1] ?? '';
+  if (!/\bvotingEnabled\(env\)/.test(cond))
+    out.push('the read is routed without votingEnabled(env) in its condition');
+  if (!/return\s+publicReadLimited\(\s*'vote-objects'/.test(block))
+    out.push("the read is not returned through publicReadLimited('vote-objects', ...)");
+  return out;
+}
+
+test.describe('Invariant: the public vote read and the switch (OSE-2135)', () => {
+  const byFile = new Map(SOURCES.map((s) => [s.file, s]));
+
+  test('OSE-2135 | read | it selects only id, kind, label and closes_at, with every guard', () => {
+    const src = byFile.get(OPEN_OBJECTS_LIB);
+    expect(src, `${OPEN_OBJECTS_LIB} exists`).toBeTruthy();
+    const sqls = sqlLiterals(src!.code);
+    expect(sqls.length, 'the read holds exactly one SQL statement').toBe(1);
+    expect(openReadProblems(sqls[0])).toEqual([]);
+    expect(READS_STAR.test(sqls[0])).toBe(false);
+  });
+
+  test('OSE-2135 | read | its answer is built field by field, never spread from a row', () => {
+    for (const file of [OPEN_OBJECTS_LIB, OPEN_OBJECTS_HANDLER]) {
+      const src = byFile.get(file);
+      expect(src, `${file} exists`).toBeTruthy();
+      expect(/\.\.\.\s*[A-Za-z_$]/.test(src!.code), `${file} spreads a value`).toBe(false);
+      expect(/Object\.assign\(/.test(src!.code), `${file} copies with Object.assign`).toBe(false);
+    }
+    expect(byFile.get(OPEN_OBJECTS_LIB)!.code).toMatch(
+      /return \{ id: String\(row\.id\), kind: row\.kind as VotableKind, label: String\(row\.label\) \};/
+    );
+  });
+
+  test('OSE-2135 | read | only its handler imports it, and only the router imports the handler', () => {
+    const importers = (mod: string) =>
+      SOURCES.filter(({ code }) =>
+        new RegExp(`from\\s+['"][./]*[\\w/]*${mod}(?:\\.js)?['"]`).test(code)
+      )
+        .map((s) => s.file)
+        .sort();
+    expect(importers('lib/vote-open-objects')).toEqual([OPEN_OBJECTS_HANDLER]);
+    expect(importers('handlers/vote-objects')).toEqual(['src/router.ts']);
+  });
+
+  test('OSE-2135 | route | under /api/v2/vote/, limited, and routed only when the switch is on', () => {
+    const router = byFile.get('src/router.ts')!.code;
+    expect(routerProblems(routerVoteBlock(router))).toEqual([]);
+    const calls = router.match(/\bhandleVoteObjects\(/g) ?? [];
+    expect(calls.length, 'handleVoteObjects is called from one place in the router').toBe(1);
+  });
+
+  test('OSE-2135 | cookie | the read and the switch never name a cookie or ose_anon', () => {
+    const bad = [OPEN_OBJECTS_LIB, OPEN_OBJECTS_HANDLER, SWITCH_LIB].filter((file) =>
+      /cookie|ose_anon/i.test(byFile.get(file)?.code ?? 'cookie (file missing)')
+    );
+    expect(
+      bad,
+      'ADR-040 decision 5: the vote path reads no cookie and sets none; /q stays the only reader (AGENTS.md invariant 4).'
+    ).toEqual([]);
+  });
+
+  test('OSE-2135 | switch | only lib/voting-switch.ts names VOTING_ENABLED in code', () => {
+    const naming = SOURCES.filter(({ code }) => /\bVOTING_ENABLED\b/.test(code)).map((s) => s.file);
+    expect(
+      naming,
+      'Read the switch with votingEnabled(env) from src/lib/voting-switch.ts, so "on" has one spelling.'
+    ).toEqual([SWITCH_LIB]);
+  });
+
+  test('OSE-2135 | display | the TV page, its web copy and display-config carry nothing of the vote', () => {
+    const bad: string[] = [];
+    for (const rel of DISPLAY_FILES) {
+      const path = join(REPO_ROOT, rel);
+      expect(existsSync(path), `${rel} exists`).toBe(true);
+      const code = stripTs(readFileSync(path, 'utf8'));
+      if (DISPLAY_VOTE_WORDS.test(code)) bad.push(`${rel}: a vote word`);
+      if (/\/api\/v2\/vote\b/.test(code)) bad.push(`${rel}: the vote path`);
+      if (/vote-open-objects|vote-objects|vote-sets|lib\/votes\b|voting-switch/.test(code))
+        bad.push(`${rel}: a vote import`);
+    }
+    expect(bad, 'The display shows no vote content (AGENTS.md invariant 5).').toEqual([]);
+  });
+
+  test('OSE-2135 | gate | the rules can fail (negative controls)', () => {
+    const good = `SELECT o.id, o.kind, o.label, o.closes_at FROM votable_objects o
+      JOIN vote_sets s ON s.id = o.set_id AND s.event_id = o.event_id
+      WHERE o.event_id = ? AND EXISTS (SELECT 1 FROM events e WHERE e.id = ? AND e.status = 'active')
+        AND s.state = 'open' AND s.is_final = 0 AND s.is_void = 0
+        AND o.state = 'open' AND o.closes_at IS NOT NULL AND o.closes_at > ? LIMIT ?`;
+    expect(openReadProblems(good)).toEqual([]);
+    expect(
+      openReadProblems(
+        good.replace(
+          'LIMIT ?',
+          'AND NOT EXISTS (SELECT 1 FROM vote_receipts r WHERE r.object_id = o.id) LIMIT ?'
+        )
+      )
+    ).toEqual(['it reads vote_receipts; only votable_objects, vote_sets, events may be read']);
+    expect(
+      openReadProblems(
+        good.replace(
+          'JOIN vote_sets s',
+          'JOIN vote_tallies t ON t.object_id = o.id JOIN vote_sets s'
+        )
+      )
+    ).toContain('it reads vote_tallies; only votable_objects, vote_sets, events may be read');
+    expect(
+      openReadProblems(
+        good.replace('o.label, o.closes_at', 'o.label, o.closes_at, s.counted_votes')
+      ).join()
+    ).toMatch(/only o\.id/);
+    expect(openReadProblems(good.replace('o.label,', 'o.label, o.group_id,')).join()).toMatch(
+      /only o\.id/
+    );
+    for (const [guard, name] of [
+      [' AND s.is_final = 0', 's.is_final = 0'],
+      [' AND s.is_void = 0', 's.is_void = 0'],
+      ["s.state = 'open' AND ", "s.state = 'open'"],
+      [" AND e.status = 'active'", "e.status = 'active'"],
+      ["AND o.state = 'open' ", "o.state = 'open'"],
+    ])
+      expect(openReadProblems(good.replace(guard, '')), name).toContain(`the WHERE lacks ${name}`);
+
+    const block = `const voteObjectsMatch = pathname.match(/^\\/api\\/v2\\/vote\\/([^/]+)\\/objects$/);
+  if (voteObjectsMatch && method === 'GET' && votingEnabled(env)) {
+    const id = voteObjectsMatch[1];
+    return publicReadLimited(
+      'vote-objects',
+      (req, e: typeof env) => handleVoteObjects(req, e, id),
+      PUBLIC_PAGE_MAX
+    )(request, env);`;
+    expect(routerProblems(routerVoteBlock(block))).toEqual([]);
+    expect(routerProblems(routerVoteBlock(block.replace(' && votingEnabled(env)', '')))).toEqual([
+      'the read is routed without votingEnabled(env) in its condition',
+    ]);
+    expect(
+      routerProblems(
+        routerVoteBlock(
+          block.replace('vote\\/([^', 'events\\/([^').replace('\\/vote\\/', '\\/events\\/')
+        )
+      )
+    ).toHaveLength(1);
+    expect(
+      routerProblems(
+        routerVoteBlock(
+          block.replace(
+            `return publicReadLimited(
+      'vote-objects',
+      (req, e: typeof env) => handleVoteObjects(req, e, id),
+      PUBLIC_PAGE_MAX
+    )(request, env);`,
+            'return handleVoteObjects(request, env, id); foo)(request, env);'
+          )
+        )
+      )
+    ).toEqual(["the read is not returned through publicReadLimited('vote-objects', ...)"]);
+    expect(DISPLAY_VOTE_WORDS.test('const panes = ["event", "voting"]')).toBe(true);
+    expect(DISPLAY_VOTE_WORDS.test('const panes = ["event", "league"]')).toBe(false);
   });
 });

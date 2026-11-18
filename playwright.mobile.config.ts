@@ -113,6 +113,8 @@ const LOCAL_SIGNING_SECRET = randomBytes(32).toString('hex');
  */
 const LOCAL_FORMS_KEY = randomBytes(32).toString('hex');
 const LOCAL_FORMS_PEPPER = randomBytes(32).toString('hex');
+// OSE-2127: opening a vote set stamps the pepper epoch; with no pepper it refuses.
+const LOCAL_ANON_PEPPER = randomBytes(32).toString('hex');
 
 // Read by the spec at import time. The config module is evaluated in the
 // runner AND in each test worker process, so this reaches the spec in both.
@@ -128,7 +130,7 @@ const config = defineConfig({
   // against an empty local D1 while no longer testing what it was written for.
   // A spec joins this gate only by being named.
   testMatch:
-    /(mobile-workability|a11y-profile|admin-wizard-isolation|admin-csp-controls|admin-back-to-your-events|admin-sponsor-form|sponsor-home-flow|landing-theme|landing-empty-window|landing-page|poster-to-page-journey|publish-loop-journey|admin-deep-dive-journey|sponsor-surfaces-journey|attendee-forms-journey|report-counts-journey|form-sponsor-logo-fallback|admin-create-preview|admin-logs-settings-journey|event-page-choices|poster-layout|poster-digital-actions|display-phone-sponsor-lead|report-repeat-journey|display-tv-board|toast-service|attendance-mode|admin-stalls-card|booth-list-page)\.spec\.ts/,
+    /(mobile-workability|a11y-profile|admin-wizard-isolation|admin-csp-controls|admin-back-to-your-events|admin-sponsor-form|sponsor-home-flow|landing-theme|landing-empty-window|landing-page|poster-to-page-journey|publish-loop-journey|admin-deep-dive-journey|sponsor-surfaces-journey|attendee-forms-journey|report-counts-journey|form-sponsor-logo-fallback|admin-create-preview|admin-logs-settings-journey|event-page-choices|poster-layout|poster-digital-actions|display-phone-sponsor-lead|report-repeat-journey|display-tv-board|toast-service|attendance-mode|admin-stalls-card|admin-voting-card|booth-list-page)\.spec\.ts/,
 
   // Seeds a live event + sponsor and mints its /sponsor link so the phone audit
   // measures the real sponsor surface instead of skipping it. Runs after the
@@ -255,6 +257,7 @@ const config = defineConfig({
       ` --var SHARED_REPORT_SIGNING_SECRET:${LOCAL_SIGNING_SECRET}` +
       ` --var FORMS_ENCRYPTION_KEY:${LOCAL_FORMS_KEY}` +
       ` --var FORMS_HASH_PEPPER:${LOCAL_FORMS_PEPPER}` +
+      ` --var ANON_ID_HASH_PEPPER:${LOCAL_ANON_PEPPER}` +
       // Publish grace window ON, as deployed, but 1 minute instead of 10 so a
       // spec can watch an event go from "live by link only" to listed.
       // helpers/sponsor-home-seed.ts waitUntilListed() waits it out.

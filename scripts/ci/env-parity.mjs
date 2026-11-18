@@ -45,6 +45,8 @@ export const INTENTIONAL_VALUE_DIFFERENCES = {
     'a separate Access app per environment, so a separate audience; production is pinned (OSE-1353), staging is still unpinned (OSE-1377)',
   STREET_MAP:
     'the street layer is switched on one environment at a time, staging first (owner 2026-11-09). Production has no MAP_TILES binding yet, so its value does nothing until it is bound; production may be "on" only once staging is (tests/unit/ci/env-parity.test.js)',
+  VOTING_ENABLED:
+    'the voting kill switch (lib/voting-switch.ts, OSE-2135, OSE ADR-040). Off in both today. Only the owner turns it on, not before the voter page (S4b, OSE-2129) ships, and staging first: production may be "on" only once staging is (tests/unit/ci/env-parity.test.js), so production stays inert for voting until the owner says otherwise',
 };
 
 /** Settings only one environment may carry, and why. */

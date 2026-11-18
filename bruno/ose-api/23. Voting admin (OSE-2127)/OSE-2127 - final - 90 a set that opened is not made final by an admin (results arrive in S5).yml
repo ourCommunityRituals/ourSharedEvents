@@ -1,0 +1,33 @@
+info:
+  name: OSE-2127 | final | a set that opened is not made final by an admin (results arrive in S5)
+  type: http
+  seq: 90
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/finalize"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2127 final: 409 RESULTS_NOT_BUILT, still not final', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('RESULTS_NOT_BUILT'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

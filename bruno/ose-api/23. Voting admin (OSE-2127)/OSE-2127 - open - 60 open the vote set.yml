@@ -1,0 +1,45 @@
+info:
+  name: OSE-2127 | open | open the vote set
+  type: http
+  seq: 60
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/open"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        function guardedKeys(v, out) {
+          out = out || [];
+          if (Array.isArray(v)) { v.forEach(function (x) { guardedKeys(x, out); }); }
+          else if (v && typeof v === 'object') {
+            Object.keys(v).forEach(function (k) {
+              if (/secret|margin|floor|counted|duplicate|refused|up_count|down_count|tall(y|ies)|receipt|marker|participant|epoch|void|count|^t$|^v$/i.test(k)) out.push(k);
+              guardedKeys(v[k], out);
+            });
+          }
+          return out;
+        }
+        test('OSE-2127 open: 200, open, opened', function () { expect(res.getStatus()).to.eql(200); expect(b.set.state).to.eql('open'); expect(b.set.opened).to.eql(true); expect(b.set.final).to.eql(false); });
+        test('OSE-2127 no guarded key in the answer (no count, secret, epoch, void, receipt or marker)', function () { expect(guardedKeys(b)).to.eql([]); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

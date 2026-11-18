@@ -1,0 +1,79 @@
+# The example fair on staging (OSE-2009): one made-up fair with twelve stalls,
+# so the stall list, the stall pages and the event page's "See the stalls" link
+# can be shown to a person on stg.
+#
+# WHY DISPATCH ONLY: it is data for showing, not a test. The owner runs it by
+# hand after merge, once to load the fair and again to change its state or to
+# remove it. No schedule, no push: nothing loads it by itself.
+#
+#   action load    create the fair from scripts/ci/example-fair.json, or bring
+#                  the one already there back to the fixture (never a second fair)
+#   action remove  delete the fair and its stalls (archived instead if it has scans)
+#   state draft         the ticket's words: not public, all three pages answer 404
+#   state open-by-link  live by link but off the map: the pages open, no list,
+#                       map or search shows it, and the stall pages send noindex
+#
+# Staging only (scripts/ci/example-fair.mjs refuses production first, then every
+# host but stg.oursharedevents.com). It writes through the admin API, never by a
+# D1 write, and touches only the event with the fixture's slug that its own marks
+# say it made. The daily stock load deletes only rows its manifest names, so the
+# fair survives it. Runbook: docs/runbooks/RUNBOOK-STG-EXAMPLE-FAIR.md.
+#
+# Secrets (repo level, the ones the nightly event lifecycle and the T2 Bruno run
+# already use): ADMIN_KEY, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET,
+# OCR_CI_EDGE_TOKEN. No new secret, no Cloudflare API token: the job only calls
+# the site.
+
+name: Example fair (stg)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'load the example fair, or remove it'
+        type: choice
+        options: [load, remove]
+        default: load
+      state:
+        description: 'draft (pages 404) or open-by-link (pages open, off the map); load only'
+        type: choice
+        options: [draft, open-by-link]
+        default: draft
+
+permissions:
+  contents: read
+
+# One writer on stg at a time, as the stock load, the lifecycle and the rollback
+# drill. A run waits; it is never cancelled out from under another.
+concurrency:
+  group: stg-writer
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  example-fair:
+    name: 'Example fair: load or remove'
+    # Only from main, as the stock load (CCR 2026-11-07 R-06): a dispatch from a
+    # branch skips the job, so a branch's script never reaches stg with these secrets.
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+
+      # Node built-ins and repo files only: no install, no package scripts.
+      - name: 'Load or remove the example fair, then read its pages back'
+        timeout-minutes: 8
+        env:
+          EXAMPLE_FAIR_ACTION: ${{ inputs.action }}
+          EXAMPLE_FAIR_STATE: ${{ inputs.state }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+        run: node scripts/ci/example-fair.mjs

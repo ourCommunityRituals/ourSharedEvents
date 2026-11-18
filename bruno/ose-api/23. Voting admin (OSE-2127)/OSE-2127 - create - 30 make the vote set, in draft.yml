@@ -1,0 +1,33 @@
+info:
+  name: OSE-2127 | create | make the vote set, in draft
+  type: http
+  seq: 30
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"played_by\": \"object\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2127 create: 201, draft, never opened, not final', function () { expect(res.getStatus()).to.eql(201); expect(b.set.state).to.eql('draft'); expect(b.set.opened).to.eql(false); expect(b.set.final).to.eql(false); expect(b.set.played_by).to.eql('object'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

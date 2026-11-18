@@ -1,0 +1,28 @@
+{
+  "note": "A made-up example fair for the staging site only (OSE-2009). Every name here is invented: no real fair, business, person or address. scripts/ci/example-fair.mjs loads it through the admin API; tests/unit/ci/example-fair.test.js refuses it if any text looks like an email address, a phone number or a web address. No sponsors: a sponsor needs both sides to accept.",
+  "event": {
+    "title": "Lantern Row Craft Fair",
+    "slug": "example-fair-lantern-row",
+    "description": "A made-up example fair on the staging site, for showing the stall pages. It is not a real event, and the stalls and their names are invented.",
+    "location": "Lantern Row Community Hall",
+    "attendance_mode": "in_person",
+    "event_type_id": "etr-mkt-craft",
+    "start_date": "2027-09-18",
+    "start_time": "10:00",
+    "timezone": "America/Chicago"
+  },
+  "stalls": [
+    { "number": "A1", "name": "Marigold Dumpling Cart", "category": "food" },
+    { "number": "A2", "name": "Second Spoon Soups", "category": "food" },
+    { "number": "A3", "name": "Pocket Pie Window", "category": "food" },
+    { "number": "B1", "name": "Wobbly Teapot Pottery", "category": "craft" },
+    { "number": "B2", "name": "Knotwork Basket Bench", "category": "craft" },
+    { "number": "B3", "name": "Tinder and Twine Candles", "category": "craft" },
+    { "number": "C1", "name": "Paper Heron Prints", "category": "art" },
+    { "number": "C2", "name": "Blue Ladder Watercolors", "category": "art" },
+    { "number": "C3", "name": "Inkwell Alley Sketches", "category": "art" },
+    { "number": "D1", "name": "Dog-Ear Paperbacks", "category": "books" },
+    { "number": "D2", "name": "Lantern Row Book Swap", "category": "books" },
+    { "number": "D3", "name": "Moth and Margin Zines", "category": "books" }
+  ]
+}

@@ -69,9 +69,8 @@ const SCAN_TABLES = [
   // The vote tables (0111, OSE-2125, OSE ADR-040). A vote moves the counters,
   // receipts and markers; the set and its objects sit beside them, so they are
   // held to the same hour rule. Only votable_objects.closes_at may be finer: it
-  // names a song's window, never a voter (decision 3). It has no writer yet, and
-  // an entry here with no finding is stale, so S3 lists it below when it first
-  // writes the column, with that reason.
+  // names a song's window, never a voter (decision 3). S3 (OSE-2127) writes it
+  // and lists it below with that reason.
   'vote_sets', // one per event: counters with no object and no time
   'votable_objects', // what can be voted on; written by an admin or N1, never a voter
   'vote_tallies', // up and "not for me" counters per object
@@ -174,6 +173,13 @@ const ALLOWLIST: Record<string, AllowEntry> = {
     kinds: ['coarse-clock'],
     reason:
       "The 0111 default is strftime('%Y-%m-%d %H:00:00', 'now'): the hour an object was made, by an admin or N1, never a voter's time.",
+  },
+  // OSE-2127 (S3): an object's window. lib/vote-sets.ts sets it when an admin or
+  // N1 opens the object: now plus the window, to the second.
+  'votable_objects.closes_at': {
+    kinds: ['js-clock'],
+    reason:
+      "The end of a song's or stall's voting window, set by the server when the object opens (ADR-040 decision 3). It times the song, never a voter: no vote row holds a time, and the receipt and tally rows have no time column.",
   },
   'votable_objects.updated_at': {
     kinds: ['coarse-clock'],
