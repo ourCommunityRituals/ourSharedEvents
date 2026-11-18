@@ -2,7 +2,7 @@
 
 Date: 2026-11-16 · Story: OSE-2087 · Class: governance file (5+ loops, human gate after every loop) · `main` at `e7d2160`
 
-**Status: loop 2 of 5 done (2026-11-17). Stopped at the human gate after loop 2. Nothing in AGENTS.md has been changed.**
+**Status: loop 3 of 5 done (2026-11-18). Stopped at the human gate after loop 3. Nothing in AGENTS.md has been changed.**
 
 **These are working notes, not the worksheet.** The repository's worksheet gate (`scripts/ci/ccr-worksheet-check.mjs`) reads `.claude/outputs` and fails a worksheet that has run fewer loops than its class needs, so a five-loop review has no valid worksheet until all five loops exist. The worksheet, with its frontmatter, is written to `.claude/outputs` when loop 5 is done. A first copy of these notes was put there and failed that gate (PR 1372, `T0 Tests (root-vitest)`).
 
@@ -12,7 +12,7 @@ Date: 2026-11-16 · Story: OSE-2087 · Class: governance file (5+ loops, human g
 
 |                                                           |                                                                                                              |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| System score (the proposed change: "the gaps are closed") | loop 1: **29%** · loop 2: **0%**                                                                             |
+| System score (the proposed change: "the gaps are closed") | loop 1: **29%** · loop 2: **0%** · loop 3: **0%**                                                            |
 | Assessment confidence                                     | about 70%: three findings were read in source by two readers; nothing was run; eleven handlers were not read |
 | Gate                                                      | **Fail.** Below 95%. Human gate, questions below                                                             |
 
@@ -145,6 +145,74 @@ The four loop 1 questions stand. Loop 2 adds a larger one.
 My recommendation on 5: keep the rule as written for now, and have the "Open gaps" sentence name F11 and F12 honestly instead of implying the floor is complete. Rounding every admin count is a product change with a cost to organizers, and deserves its own story and your decision, not a side effect of this review.
 
 Loop 3 (Adversarial) runs after your answer or your leave to continue.
+
+## What happened between loop 2 and loop 3
+
+- The owner merged the loop 2 notes (PR 1403) and the F10 fix (PR 1402, `6aa6cc9`; staging chain green on that SHA, run 44146765597). The six questions were not answered.
+- The owner then wrote "please continue" (2026-11-18). I read that as leave to run loop 3, not as answers.
+- F10 is therefore closed.
+
+## Loop 3 (Adversarial lens: attack it)
+
+Team: dr-of-security (read-only; it listed its commands), with the main session, which ran four attacks against the worker in the workers test pool. `main` at `273cbdd`. The probe file was a scratch spec, deleted after the run and never committed.
+
+Adversarial layer: stop reading and try it. Take the two loop 2 findings that were only read, and the oldest loop 1 finding, and attack the running code. Separately, attack the boundaries nobody had looked at: another brand, another role, the public routes, errors, identifiers, caches.
+
+### Attacks run (the main session; runtime, not source reading)
+
+| Probe                          | What was done                                                                                                                               | What came back                                                                                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P1 padding (F12)               | An event with one poster. Two cookie-less scans through the real `/q/` route, then read `/stats`. Three more cookie-less scans, read again. | `{count: null, suppressed: true}`, then `{count: 5, suppressed: false}`. **The attack works.** Someone who made the last three scans knows the first two were strangers. |
+| P1b the same browser repeating | Five scans carrying one `ose_anon` cookie.                                                                                                  | 1 row; the count stays withheld. Repeats by one browser are deduplicated per poster-hour. That does not stop P1: a private window has no cookie.                         |
+| P2 audit log (F1)              | Create an event, then `GET /api/v2/admin/audit-log?scope=brand&action=CREATE_EVENT`.                                                        | 200, with one row per action (`action`, `actor`, `resource_id`, `created_at`, …). **Proven.** The dashboard withholds the same count.                                    |
+| P3 one action at a time (F11)  | Five registrations, read the count; a sixth, read again.                                                                                    | 5, then 6. **Proven.**                                                                                                                                                   |
+
+### New findings (first seen in loop 3: weight × 1.5)
+
+| #   | Finding                                                                                                                                                                                                                                                                                                                                                                      | Evidence                                                                                                            | Weight                                               |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| F17 | **The public email sign-up tells anyone whether a named email already signed up for an event.** No login. `{ok, id, duplicate: true}` for an email that has signed up; the form page shows "You're already signed up!". That is who, not how many (invariant 1), about one named person. A probe of an email that has not signed up signs that person up. Filed as OSE-2136. | source read by two readers (`handlers/forms.ts` `handleFormEmailSignup`; `handlers/form-pages.ts:747`); **not run** | Security Critical 15 × 1.5 = 22.5; no partial credit |
+| F18 | AGENTS.md invariant 3 says "no `CF-IP*` header is read". `CF-Connecting-IP` is read in five places as a rate-limit key (`lib/public-read-limit.ts:67` says so). Not a count leak. The sentence in the governance file says other than what the code does.                                                                                                                    | grep, read                                                                                                          | Medium 5 × 1.5 = 7.5                                 |
+
+F17 is outside the sentence under review (it is invariant 1, not 2) and is scored because the review found it and it is open. Production is closed and staging holds test data, so no real person is exposed today.
+
+### Earlier findings, restated
+
+| #             | State after loop 3                                                                                                                                                                                                                                                                                                                                                                                                    | Weight |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| F1 + F2       | open; F1 **now proven at runtime** (P2)                                                                                                                                                                                                                                                                                                                                                                               | 30     |
+| F3            | open; unchanged                                                                                                                                                                                                                                                                                                                                                                                                       | 10     |
+| F5            | open; unchanged                                                                                                                                                                                                                                                                                                                                                                                                       | 5      |
+| F6            | open; unchanged                                                                                                                                                                                                                                                                                                                                                                                                       | 2      |
+| F7            | **nearly closed**: campaigns, brand calendar, map areas, poster codes, portfolio rollup, event stats, `sponsors.ts`, `sponsor-home.ts`, `pages.ts`, the report export and `lib/shared-report.ts` were read and hold no exact count of people. Unread: `lib/admin-settings.ts`, and handlers that serve no counts by their names (`privacy`, `geocode`, `upload`, `venue-image`, `uec-resolve`, `sponsor-asset-route`) | 2      |
+| F8            | open; unchanged                                                                                                                                                                                                                                                                                                                                                                                                       | 2      |
+| F10           | **closed** (PR 1402)                                                                                                                                                                                                                                                                                                                                                                                                  | 0      |
+| F11           | open; **now proven at runtime** (P3)                                                                                                                                                                                                                                                                                                                                                                                  | 6.25   |
+| F12           | open; **now proven at runtime** (P1)                                                                                                                                                                                                                                                                                                                                                                                  | 12.5   |
+| F13           | **withdrawn**: scans have no time window on any route, and report views have only the 30-day one. There are no two windows to subtract.                                                                                                                                                                                                                                                                               | 0      |
+| F14, F15, F16 | open; unchanged                                                                                                                                                                                                                                                                                                                                                                                                       | 7.5    |
+
+### Attacked and held
+
+- **Another brand.** Events, posters and campaigns are scoped by one guard; sponsors, home links and sponsor requests scope inside their handlers and answer 404; the audit log's brand view is limited to brands the caller owns; a forged brand on the portfolio route is refused. Not traced: event-series ids and the batch report endpoint.
+- **Another role.** A sponsor's report token sees only its own rows; depth removes sections and does not change a floor.
+- **Public routes.** The public event answer has no count field; the check-in answer is `{ok: true}`; the display config, booth pages, poster bundle and calendars carry no count.
+- **Identifiers and caches.** Ids are random; no ordinal is returned. Admin, report and sponsor answers are `no-store`.
+- Registration and subscribe answer the same for a known and an unknown email.
+
+All of "attacked and held" is from reading source. Timing was not measured anywhere.
+
+Score: 0%
+
+Arithmetic: carried 30 + 10 + 5 + 2 + 2 + 2 + 6.25 + 12.5 + 7.5 = 77.25; new 22.5 + 7.5 = 30; total 107.25, so the score reads 0%. An unresolved Security Critical finding floors it at 0 in any case.
+
+## Human gate (loop 3, Adversarial layer)
+
+The six earlier questions stand. Loop 3 sharpens the fifth and adds one.
+
+5 (sharper). Padding is now proven, not theory: an organizer who scans their own poster three times from private windows turns a withheld "2 strangers scanned" into a published 5. Do you accept that, or should a figure need 5 **different** contributors that the reader cannot supply themselves? I do not see a cheap fix: scans are anonymous by design, so the system cannot tell the organizer's scans from a stranger's. 7. OSE-2136: may the email sign-up page stop saying "You're already signed up!" so that it answers the same for everyone?
+
+Loop 4 (Compliance) runs after your answer or your leave to continue.
 
 ## Before shipping (not yet met)
 
