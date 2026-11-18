@@ -16,6 +16,8 @@
 # second set of databases. stg stays open (robots.txt disallows indexing), and
 # every stg page says "Testing purposes only" and that nothing is an endorsement.
 #
+#   preflight    the stock check's own public reads, before anything else (OSE-2082):
+#                if the edge challenges CI, the run stops here and touches nothing
 #   seed         the committed seed re-based to today → accepted rows + businesses
 #                (scripts/stock/seed.mjs); no network, no secrets
 #   build        accepted rows → today's events, sponsors, posters and art, plus a manifest
@@ -32,6 +34,12 @@
 # so the announce job opens a GitHub issue for it, and "stg watch" (stg-watch.yml)
 # reads the searches on its own schedule.
 # Design: docs/superpowers/specs/2026-11-04-staging-full-environment-design.md.
+#
+# Fail fast, and say why (OSE-2082, after the 2026-11-07 → 11-14 outage): the edge
+# check runs first; the run takes the staging chain's lock, so it never overlaps
+# T1–T4; the admin client tries a 502/503/504 again where repeating is safe
+# (scripts/stock/client.mjs); and a failed build prints its reason, which the
+# announce issue carries.
 #
 # Secrets (repo level, the ones the T2 Bruno run already uses): CLOUDFLARE_API_TOKEN_OSE
 # and CLOUDFLARE_ACCOUNT_ID (build and check-swap: R2 and D1 on --env staging only),
@@ -54,16 +62,34 @@ on:
 permissions:
   contents: read
 
-# One writer on stg at a time (CCR 2026-11-07 R-07): the stock load, the T2 pages leg,
-# the event lifecycle and the rollback drill
-# share this group. A second run waits; it is never cancelled out from under a run.
+# Never while T1–T4 run on stg, in either order (OSE-2082). The whole run joins the
+# staging chain's lock, `ose-staging-chain` (oursharedevents-ci.yml): a stock run
+# waits for a chain that is running, and a merge's chain waits for a stock run.
+# On 2026-11-14 the first run after a seven-day outage died on one 503 while
+# T4 Functional was running on stg (run 43533830657); the old run-level group,
+# `stg-writer`, did not cover T4.
+#
+# Why this lock and not the other way round: the chain's lock spans a whole run, so
+# T1 → T4 run against one build. A lock per job (T1–T4's jobs joining `stg-writer`)
+# would let a stock run start between T2 and T4. And the order of the two locks is
+# fixed: a run takes `ose-staging-chain` first, then a job takes `stg-writer`. The
+# chain already does that (its T2 pages leg). If this workflow held `stg-writer`
+# for the run and asked for the chain per job, a stock run and a chain would each
+# hold the lock the other waits for.
+#
+# One writer on stg at a time still holds (CCR 2026-11-07 R-07): the two jobs that
+# write (build, check-swap) each take `stg-writer`, which the event lifecycle, the
+# rollback drill and the example fair hold for their runs. One of those can now
+# run between the build and the check, never during either.
+#
 # queue: max lines waiting runs up first in, first out (up to 100) instead of
-# GitHub's default of one waiting run, which a third arrival cancels.
-# The group does not hold back the T2 api, T3 or T4 legs, or people on stg, so the
-# load writes D1 only with `d1 execute --command` (D1's query endpoint), never with
-# `--file`, a remote import that takes staging offline for reads (OSE-2090).
+# GitHub's default of one waiting run, which a third arrival cancels. GitHub refuses
+# queue: max with cancel-in-progress: true, so nothing here is ever cancelled.
+# The load writes D1 only with `d1 execute --command` (D1's query endpoint), never
+# with `--file`, a remote import that takes staging offline for reads (OSE-2090).
+# Gates: tests/integration/staging-chain-lock.test.js, stg-writer-concurrency.test.js.
 concurrency:
-  group: stg-writer
+  group: ose-staging-chain
   cancel-in-progress: false
   queue: max
 
@@ -71,11 +97,44 @@ env:
   WORKER_DIR: 'workers/oursharedevents'
 
 jobs:
-  # Reads only committed files: no secrets, no geocoding, no network.
+  # Edge first (OSE-2082). The stock check's own public reads (/q/, /s/,
+  # /events/<id> and a zip page, with X-OCR-CI and the Access service token), made
+  # before anything is loaded. If the edge challenges one, or stg does not answer as
+  # the Worker does, this job fails; seed, build and check-swap are then skipped, so
+  # nothing on stg is loaded and nothing is purged. Reads only: no Cloudflare token,
+  # no admin key. The same reads as "stg edge probe" (scripts/stock/edge-probe.mjs).
   # Every job runs only from main (CCR 2026-11-07 R-06): a dispatch from another
   # branch skips the chain, so a branch's scripts never reach stg with this token.
+  preflight:
+    name: 'Edge check: can CI read stg?'
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      reason: ${{ steps.edge.outputs.reason }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Read stg as the stock check does
+        id: edge
+        timeout-minutes: 3
+        env:
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: node scripts/stock/edge-probe.mjs --preflight
+
+  # Reads only committed files: no secrets, no geocoding, no network.
   seed:
     name: 'Seed: re-base to today'
+    needs: [preflight]
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -105,8 +164,15 @@ jobs:
     name: 'Build the day'
     needs: [seed]
     if: ${{ github.ref == 'refs/heads/main' }}
+    # One writer on stg at a time: see the note on the run's own lock, above.
+    concurrency:
+      group: stg-writer
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      error: ${{ steps.build.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -140,7 +206,10 @@ jobs:
       # check-swap still runs to purge the partial manifest. The job allows 30.
       # The Cloudflare token is for R2 only: the manifest object and the index in
       # ose-uploads-staging, every command --env staging --remote.
+      # On failure the step prints `build failed: <reason>`, writes it to the step
+      # summary and sets the output `error`, which the announce issue carries.
       - name: Build
+        id: build
         timeout-minutes: 25
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -166,7 +235,13 @@ jobs:
     name: 'Check, then swap per node'
     needs: [build]
     # Also after a failed build, to purge its partial manifest.
+    # A failed edge check skips seed and build, so this job is skipped too: nothing
+    # is purged for a reason outside the product.
     if: ${{ github.ref == 'refs/heads/main' && !cancelled() && (needs.build.result == 'success' || needs.build.result == 'failure') }}
+    concurrency:
+      group: stg-writer
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -223,7 +298,7 @@ jobs:
   # wider token, and only issues: write; it holds no Cloudflare or admin secret.
   announce:
     name: 'Announce: open or close the stock issue'
-    needs: [seed, build, check-swap]
+    needs: [preflight, seed, build, check-swap]
     if: ${{ always() && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -243,6 +318,11 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
           ANNOUNCE_KEY: stock-data-stg
           ANNOUNCE_TITLE: 'Stock data (stg) is red: stg may hold no stock events'
-          ANNOUNCE_HINT: 'Open the run and read the check-swap `node … failed:` and `search … failed:` lines. edge-challenged means the stg edge blocks CI (dispatch "stg edge probe"; an edge setting, the owner''s).'
+          ANNOUNCE_HINT: 'If a "Why" line is above, start there. Otherwise open the run and read the check-swap `node … failed:` and `search … failed:` lines. edge-challenged means the stg edge blocks CI: the stg CI skip rule must skip Super Bot Fight Mode on every path. The owner runs `scripts/ci/cf-waf-stg-ci-skip.mjs` (docs/runbooks/RUNBOOK-STG-CI-SKIP-RULE.md); don''t edit the dashboard. Then dispatch "stg edge probe" and wait for green before the next stock run.'
+          # Why this run is red, in its own words: the edge check's reason (path, Ray
+          # ID and fix) or the build's error. One line each, built by the scripts from
+          # fixed text, paths, statuses and Ray IDs; announce-run.mjs cuts it to plain
+          # characters before it reaches the issue.
+          ANNOUNCE_DETAIL: ${{ needs.preflight.outputs.reason || needs.build.outputs.error }}
           ANNOUNCE_ASSIGNEE: ${{ vars.PR_REVIEWER }}
         run: node scripts/ci/announce-run.mjs

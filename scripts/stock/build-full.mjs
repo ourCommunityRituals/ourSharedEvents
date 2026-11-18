@@ -48,6 +48,35 @@ function bySectorThenStart(a, b) {
   return rank(a) - rank(b) || byStart || String(a.title).localeCompare(String(b.title));
 }
 
+// ── Did a failed create land? (OSE-2082) ────────────────────────────────────
+// client.mjs tries a create again after a 502/503/504 only when a read shows its
+// row is not there. Each read below answers for one create: the row it made (the
+// client takes it as the answer and sends nothing again), or null (not there).
+// A row counts as this create's only if it carries the create's own fields, is not
+// already on the manifest, and was made no earlier than the create was sent: the
+// load before this one holds rows with the same names until the swap.
+
+// How far the site's clock may be behind this runner's and a row still be new.
+const CLOCK_SLACK_MS = 120_000;
+
+// A row with no readable created_at could be new: it is never ruled out by time.
+function madeSince(item, sentAt) {
+  const t = Date.parse(String(item && item.created_at));
+  return Number.isNaN(t) || t >= sentAt - CLOCK_SLACK_MS;
+}
+
+// An error that ends the call: client.mjs passes it on and does not try again.
+const finalError = (message) => Object.assign(new Error(message), { final: true });
+
+/** The one row among `found`, null for none; two that could be it stop the build. */
+function theOne(found, what) {
+  const byId = [...new Map(found.map((i) => [i.id, i])).values()];
+  if (byId.length > 1) {
+    throw finalError(`${what}: ${byId.length} rows could be the one a failed create made`);
+  }
+  return byId[0] ?? null;
+}
+
 // A local photo (stock/art, local-art.mjs) is read from disk; an Instagram post
 // is downloaded.
 async function loadArt(post, fetchFn, readFile) {
@@ -117,6 +146,8 @@ export async function buildDay({
   // Called with the manifest after every id it records, so the caller can save it
   // as it grows: a build killed mid-run still leaves what it created on record.
   onRecord = () => {},
+  // the runner's clock, to tell a row a failed create made from an older one
+  now = Date.now,
 }) {
   const want = (node) => {
     const n = expected && expected[node];
@@ -131,6 +162,7 @@ export async function buildDay({
     manifest.items.push({ kind, id, node, ...extra });
     onRecord(manifest);
   };
+  const onManifest = (id) => manifest.items.some((i) => i.id === id);
 
   // picture -> the address of its first upload in this build (the art for the sponsors)
   const artPool = new Map();
@@ -142,7 +174,8 @@ export async function buildDay({
     const tierOf = { mid: new Map(), local: new Map() };
     for (const business of businesses) {
       const tier = sponsorTier(business, regionals);
-      const res = await client.post('/api/v2/admin/sponsors', {
+      const sponsorSentAt = now();
+      const sponsorBody = {
         brand_id: 'root',
         name: business.name,
         address_line: business.address,
@@ -151,6 +184,20 @@ export async function buildDay({
         // geocodes address_line (handleAdminCreateSponsor)
         lat: business.lat,
         lon: business.lng,
+      };
+      // Only the id is used from the answer, so a sponsor that landed is taken over.
+      const sponsorLanded = async () => {
+        const listed = await client.get('/api/v2/admin/sponsors?brand_id=root');
+        const mine = theOne(
+          ((listed && listed.items) || []).filter(
+            (i) => i && i.name === business.name && !onManifest(i.id) && madeSince(i, sponsorSentAt)
+          ),
+          'POST /api/v2/admin/sponsors'
+        );
+        return mine ? { id: mine.id } : null;
+      };
+      const res = await client.post('/api/v2/admin/sponsors', sponsorBody, {
+        landed: sponsorLanded,
       });
       record('sponsor', res.id, business.node, { tier });
       if (tier === 'premium' && !anchorOf.has(business.node)) anchorOf.set(business.node, res.id);
@@ -201,7 +248,8 @@ export async function buildDay({
       for (const row of rows) {
         const startDate = chicagoDate(row.starts_at);
         const end = endDateOf(row, startDate);
-        const ev = await client.post('/api/v2/admin/events', {
+        const eventSentAt = now();
+        const eventBody = {
           brand_id: 'root',
           status: 'active',
           is_published: true,
@@ -221,17 +269,61 @@ export async function buildDay({
           timezone: 'America/Chicago',
           lat: row.lat,
           lon: row.lng,
+        };
+        const ev = await client.post('/api/v2/admin/events', eventBody, {
+          // The create's answer carries the event's short code, and the admin list
+          // does not. So an event that landed is put on the manifest, for the purge,
+          // and the build stops: it is never made twice and never left unnamed.
+          landed: async () => {
+            const listed = await client.get('/api/v2/admin/events?limit=100');
+            const mine = theOne(
+              ((listed && listed.items) || []).filter(
+                (i) =>
+                  i &&
+                  i.title === eventBody.title &&
+                  i.start_date === eventBody.start_date &&
+                  i.location === eventBody.location &&
+                  !onManifest(i.id) &&
+                  madeSince(i, eventSentAt)
+              ),
+              'POST /api/v2/admin/events'
+            );
+            if (!mine) return null;
+            record('event', mine.id, node);
+            throw finalError(
+              'POST /api/v2/admin/events failed, but the event was made; it is on the manifest for the purge and was not made again'
+            );
+          },
         });
         record('event', ev.id, node);
         if (end.skip) manifest.warnings.push(`${ev.id} ends_at not sent: ${end.skip}`);
 
-        const poster = await client.post(`/api/v2/admin/events/${ev.id}/poster-deployments`, {
-          placement_label: row.venue,
-          placement_type: 'venue',
-        });
+        // The event is this build's own and seconds old, so a poster on it with this
+        // label is this create's. The list carries its id and QR token.
+        const posterBody = { placement_label: row.venue, placement_type: 'venue' };
+        const posterLanded = async () => {
+          const listed = await client.get(`/api/v2/admin/events/${ev.id}/poster-deployments`);
+          const mine = theOne(
+            ((listed && listed.items) || []).filter(
+              (i) =>
+                i &&
+                i.placement_label === posterBody.placement_label &&
+                i.placement_type === posterBody.placement_type
+            ),
+            'POST /api/v2/admin/events/:id/poster-deployments'
+          );
+          return mine ? { id: mine.id, qr_token: mine.qr_token } : null;
+        };
+        const poster = await client.post(
+          `/api/v2/admin/events/${ev.id}/poster-deployments`,
+          posterBody,
+          { landed: posterLanded }
+        );
         record('poster', poster.id, node);
-        // mints the event's /e/ share code; the /s/ routing link is the create's shortcode
-        await client.post(`/api/v2/admin/events/${ev.id}/short-links`, {});
+        // mints the event's /e/ share code; the /s/ routing link is the create's shortcode.
+        // The route makes the code on the first ask and answers every later ask with the
+        // same one (ensureEventCode), so asking again is safe.
+        await client.post(`/api/v2/admin/events/${ev.id}/short-links`, {}, { idempotent: true });
         if (typeof poster.qr_token !== 'string' || !PATH_TOKEN.test(poster.qr_token)) {
           throw new Error('unsafe QR token from the admin API');
         }

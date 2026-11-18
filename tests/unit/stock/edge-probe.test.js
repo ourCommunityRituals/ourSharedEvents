@@ -293,3 +293,124 @@ describe('stg edge probe workflow', () => {
     expect(text).not.toMatch(/CLOUDFLARE_API_TOKEN|ADMIN_KEY|wrangler/);
   });
 });
+
+/**
+ * OSE-2082: the stock workflow's first job. For seven days (2026-11-07 to 11-14)
+ * each stock run learned the edge was challenging it only after it had loaded a
+ * day, and then purged it. `--preflight` asks first.
+ *
+ * Born red (each fault injected alone in scripts/stock/edge-probe.mjs, then removed):
+ *   P1 preflightVerdict always ok            -> the challenged and unexpected-answer cases fail
+ *   P2 the Ray ID left out of the reason     -> "names the path, the Ray ID and the fix" fails
+ *   P3 the fix sentence left out             -> the same case fails
+ *   P4 the reason not written to the output  -> "hands the reason to the announce job" fails
+ *   P5 the preflight reads the plain shape   -> "makes the stock check's own reads" fails
+ */
+describe('the stock run’s edge check (--preflight)', () => {
+  const pre = (env, fetch) => {
+    const out = [];
+    const files = {};
+    return ep
+      .preflight(env, {
+        fetch,
+        write: (s) => out.push(s),
+        appendFile: (f, s) => {
+          files[f] = (files[f] || '') + s;
+        },
+      })
+      .then((code) => ({ code, out: out.join(''), files }));
+  };
+  const GH = { ...ENV, GITHUB_STEP_SUMMARY: 'summary.md', GITHUB_OUTPUT: 'output.txt' };
+  const CHALLENGE_RAY = 'a5711b195919fa42-SEA';
+
+  test('makes the stock check’s own reads of the pages the check reads, and no other', async () => {
+    const { fetch, seen } = edge({ challenge: [] });
+    const r = await pre(GH, fetch);
+    expect(r.code).toBe(0);
+    expect(seen.map((c) => new URL(c.url).pathname + new URL(c.url).search)).toEqual([
+      '/q/edge-probe',
+      '/s/edge-probe',
+      '/events/test-event-001',
+      '/?zip=60453',
+    ]);
+    for (const c of seen) {
+      expect(c.init.method).toBe('GET');
+      expect(c.init.headers['X-OCR-CI']).toBe(ENV.OCR_CI_EDGE_TOKEN);
+      expect(c.init.headers['CF-Access-Client-Id']).toBe(ENV.CF_ACCESS_CLIENT_ID);
+    }
+  });
+
+  test('green: says the run goes on, and writes no reason', async () => {
+    const r = await pre(GH, edge({ challenge: [] }).fetch);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('The stock run goes on.');
+    expect(r.files['summary.md']).toContain('## Stock data: edge check');
+    expect(r.files['output.txt']).toBeUndefined();
+  });
+
+  test('a challenged /s/ or /events/ read stops the run: the reason names the path, the Ray ID and the fix', async () => {
+    const r = await pre(GH, edge({ challenge: ['check'] }).fetch);
+    expect(r.code).toBe(1);
+    const reason =
+      `Stopped before the seed; nothing on stg was loaded or purged. edge-challenged: /s/edge-probe ray=${CHALLENGE_RAY}, /events/test-event-001 ray=${CHALLENGE_RAY}. ` +
+      "Fix: the stg CI skip rule must skip Super Bot Fight Mode on every path. Run scripts/ci/cf-waf-stg-ci-skip.mjs; don't edit the dashboard.";
+    expect(r.out).toContain(reason);
+    expect(r.files['summary.md']).toContain(reason);
+  });
+
+  test('hands the reason to the announce job as the step output `reason`, on one line', async () => {
+    const r = await pre(GH, edge({ challenge: ['check'] }).fetch);
+    const output = r.files['output.txt'];
+    expect(output).toMatch(
+      /^reason=Stopped before the seed; .*edge-challenged: \/s\/edge-probe ray=/
+    );
+    expect(output.trimEnd().split('\n')).toHaveLength(1);
+  });
+
+  test('one challenged read is enough', async () => {
+    const fetch = (url, init) =>
+      new URL(url).pathname.startsWith('/events/')
+        ? challenged(CHALLENGE_RAY)
+        : edge({ challenge: [] }).fetch(url, init);
+    const { ok, bad, reason } = ep.preflightVerdict(
+      await Promise.all(
+        ep.PREFLIGHT_PATHS.map((p) => ep.probeOne(ep.shapeFetch('check', ENV, fetch), 'check', p))
+      )
+    );
+    expect(ok).toBe(false);
+    expect(bad.map((r) => r.path)).toEqual(['/events/test-event-001']);
+    expect(reason).toContain(`edge-challenged: /events/test-event-001 ray=${CHALLENGE_RAY}. Fix:`);
+  });
+
+  test('an answer that is not the Worker’s stops the run too, and is not called a challenge', async () => {
+    const fetch = (url, init) =>
+      new URL(url).pathname.startsWith('/s/')
+        ? passed(503, RAY)
+        : edge({ challenge: [] }).fetch(url, init);
+    const r = await pre(GH, fetch);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain(
+      `Stopped before the seed; nothing on stg was loaded or purged. not the Worker's answer: /s/edge-probe status 503 ray=${RAY}.`
+    );
+    expect(r.out).not.toContain('Super Bot Fight Mode');
+  });
+
+  test('a read that never answers stops the run', async () => {
+    const r = await pre(GH, () => Promise.reject(new TypeError('fetch failed')));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("not the Worker's answer: /q/edge-probe no answer");
+  });
+
+  test('without the edge token it fails before any read', async () => {
+    const { fetch, seen } = edge({ challenge: [] });
+    const r = await pre({ ...GH, OCR_CI_EDGE_TOKEN: '' }, fetch);
+    expect(r.code).toBe(1);
+    expect(seen).toHaveLength(0);
+  });
+
+  test('prints no secret, in the log, the summary or the output', async () => {
+    const r = await pre(GH, edge({ challenge: ['check'] }).fetch);
+    const text = [r.out.replace(/::add-mask::.*\n/g, ''), ...Object.values(r.files)].join('\n');
+    for (const secret of SECRETS) expect(text).not.toContain(secret);
+  });
+});
