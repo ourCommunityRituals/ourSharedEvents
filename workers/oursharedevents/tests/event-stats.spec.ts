@@ -17,6 +17,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { describe, test, expect, beforeAll } from 'vitest';
+import { CORE_VALUES } from './helpers/core-values';
 
 const ADMIN = { Authorization: 'Bearer test-admin-key-e2e-2026' };
 
@@ -50,6 +51,7 @@ async function createEvent(title: string): Promise<string> {
       location: 'Test Hall',
       title,
       status: 'active',
+      ...CORE_VALUES,
     }),
   });
   expect(res.status).toBe(201);

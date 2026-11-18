@@ -219,6 +219,7 @@ and is wired — and let the mechanism do the scanning.
 | `place-name-search.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `qr-decode-matrix.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `rendered-surface-lexicon.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `router-route-list.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `runtime-llm-free.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `scan-path-split.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `shared-report-schema.invariant.spec.ts` | #21 shared_report_schema_stability |

@@ -1,0 +1,47 @@
+info:
+  name: GET /events page carries HSTS and nosniff
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-2118: an HTML page carries the transport headers (set by the page, kept by the fetch seam).
+
+        test('OSE-2118: the Worker answered (no edge challenge)', function() {
+
+        \    expect(res.getHeader('cf-mitigated') || '').to.eql('');
+
+        });
+
+        test('OSE-2118: /events answers with an HTML page', function() {
+
+        \    expect(res.getStatus()).to.eql(200);
+
+        \    expect(String(res.getHeader('Content-Type') || '').indexOf('text/html')).to.eql(0);
+
+        });
+
+        test('OSE-2118: page carries Strict-Transport-Security', function() {
+
+        \    expect(res.getHeader('Strict-Transport-Security') || '').to.eql('max-age=31536000; includeSubDomains');
+
+        });
+
+        test('OSE-2118: page carries X-Content-Type-Options: nosniff', function() {
+
+        \    expect(res.getHeader('X-Content-Type-Options') || '').to.eql('nosniff');
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

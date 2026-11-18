@@ -63,3 +63,9 @@ VALUES
    'Phase-1 gate-exercise fixture', 'OSG', 'Prove the tier gate still refuses sub-Phase-2',
    datetime('now','-1 hour'), datetime('now','+3 hours'),
    1, 'synthetic');
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('evt_forms_phase2', 'evt_forms_phase1');

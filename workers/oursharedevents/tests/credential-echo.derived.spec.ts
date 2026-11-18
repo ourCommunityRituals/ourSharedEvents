@@ -28,7 +28,9 @@
  * Signed links are a route's product, not a leak, and they are classified, not
  * hidden: SIGNED_LINK_PRODUCTS names each route that mints one and the one
  * place in its answer the link may sit. A signed link anywhere else fails, and
- * each product has a test that sees the link where the table says.
+ * each product has a test that sees the link where the table says. The vote
+ * pass `/q` mints is in the same table, held to one place: the end of the
+ * redirect's `Location`, after `/events/:id/vote#t=`.
  *
  * A failure names the request, the status, the credential's NAME and where it
  * was found. It never prints a value.
@@ -52,6 +54,22 @@
  *   A first version of the fault wrote `authorization=…` beside each value and
  *   stayed green, because the console wrapper masks a value under a header
  *   name; the fault now quotes the bare values | date: 2026-11-18
+ *   Later the same day the cookie values came out of that removal: the Worker
+ *   no longer reads a request's cookie to do it (no new cookie reader, owner
+ *   2026-11-18). The fault repeats the cookies under their header's name, and
+ *   "a limit, stated" below says what that leaves.
+ * @born-red the vote pass held to one place | method: six faults, one at a
+ *   time. src/handlers/qr-scan.ts made to repeat the redirect's address in a
+ *   second header, then to answer with it as the body; lib/vote-pass.ts made to
+ *   put the pass in the query (`?t=`), then on another page's address; the /q
+ *   row's place taken out of SIGNED_LINK_PRODUCTS; findLeaks made to stop
+ *   looking for a pass. "A vote scan answers 302 with one pass" failed on all
+ *   six, and the made-up-answers test on the last two | date: 2026-11-18
+ * @born-red the stated cookie limit | method: lib/unhandled-error-log.ts made
+ *   to read the cookie header and remove its values again: "a limit, stated"
+ *   failed. A first try put the fault inside the loop over the listed headers,
+ *   where a request with cookies alone never reaches it, and stayed GREEN; the
+ *   fault was moved, not the test | date: 2026-11-18
  * @born-red the fetch error in the maps and geocode lines | method: run against
  *   lib/maps.ts and lib/geo.ts as they were on main, with an upstream error that
  *   names the address it failed on: MAPS_FETCH_ERROR and GEO_FETCH_ERROR carried
@@ -103,6 +121,7 @@ const { default: worker } = await import('../src/index');
 const { isLogRedactionInstalled } = await import('../src/lib/log-redact');
 const { mintSponsorHomeToken } = await import('../src/lib/sponsor-home-auth');
 import type { RouterEnv } from '../src/router';
+import { createVoteSet, openVoteSet } from '../src/lib/vote-sets';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 import {
   SAMPLE_ID,
@@ -114,6 +133,7 @@ import {
   type Answer,
   type Probe,
   type SignedLinkRule,
+  VOTE_PASS_SHAPE,
 } from './helpers/credential-echo';
 
 interface TestEnv {
@@ -123,6 +143,7 @@ interface TestEnv {
   X_OCR_INTERNAL: string;
   ALLOWED_ADMIN_EMAILS?: string;
   SHARED_REPORT_SIGNING_SECRET: string;
+  ANON_ID_HASH_PEPPER: string;
   TEST_MIGRATION_STATEMENTS: string;
   TEST_FORMS_MIGRATION_STATEMENTS: string;
   TEST_SOURCE_FILES_JSON: string;
@@ -317,6 +338,10 @@ interface SignedLinkProduct extends SignedLinkRule {
  * out: to the organizer who asked (the two admin mints), to the sponsor whose
  * page it is, or to the page that must send it back with a beacon. Anything
  * else that carries one fails the sweep.
+ *
+ * The vote pass is the fifth product and a different token (`vp1.…`): `/q`
+ * hands it to the browser that scanned, in the redirect's fragment and nowhere
+ * else (OSE ADR-040 decision 6).
  */
 const SIGNED_LINK_PRODUCTS: readonly SignedLinkProduct[] = [
   {
@@ -342,6 +367,12 @@ const SIGNED_LINK_PRODUCTS: readonly SignedLinkProduct[] = [
     path: /^\/api\/v2\/events\/[^/]+\/sponsor-bundle$/,
     jsonFields: ['beacon_token'],
     why: 'Public by design: the display sends it back with an impression or a click so the count can be trusted. It opens nothing and names one sponsor on one event.',
+  },
+  {
+    method: 'GET',
+    path: /^\/q\/[^/]+$/,
+    votePass: { header: 'location', before: /^https?:\/\/[^/?#]+\/events\/[^/?#]+\/vote#t=$/ },
+    why: "A scan of an event's vote code, with voting on and the set open, is answered 302 with a 30-minute pass for that browser at that event. It rides only in the fragment, which a browser sends to no server.",
   },
 ];
 
@@ -832,9 +863,14 @@ describe('no answer and no log line carries a credential', () => {
             h.get('X-OCR-Internal') ?? '',
             h.get('Cf-Access-Jwt-Assertion') ?? '',
             h.get('CF-Access-Client-Secret') ?? '',
-            ...(h.get('Cookie') ?? '').split(';').map((pair) => pair.slice(pair.indexOf('=') + 1)),
           ];
-          return new Error(`upstream refused the call and said: ${said.join(' | ')}`);
+          // The cookies are repeated under their header's name. The Worker
+          // does not read a request's cookie to remove it by value (no new
+          // cookie reader, owner 2026-11-18), so the name is what the console
+          // wrapper has to go on. "A limit, stated" below is the other half.
+          return new Error(
+            `upstream refused the call and said: ${said.join(' | ')} | cookie: ${h.get('Cookie') ?? ''}`
+          );
         };
         const r = await sweep(headers, sweepEnv(), [...ALL_PROBES, ...extra], sample);
         expect(r.failures, name).toEqual([]);
@@ -848,6 +884,24 @@ describe('no answer and no log line carries a credential', () => {
     },
     SWEEP_TIMEOUT_MS
   );
+
+  test('a limit, stated: a cookie value an error repeats bare is masked by its shape or not at all', async () => {
+    // The unhandled-error line removes by value only what it reads off the
+    // request, and it does not read the cookie header. An Access cookie is a
+    // JWT, so the wrapper masks it by shape. A session cookie and the
+    // anonymous id have no shape: repeated with no name beside them, they stay.
+    fault.atRouter = () =>
+      new Error(`upstream said: ${SENT.cookieJwt} | ${SENT.session} | ${SENT.anon}`);
+    logLines = [];
+    const r = await send('GET', '/health', REFUSED_COOKIE_ONLY, sweepEnv());
+    expect(r.status).toBe(500);
+    const line = logLines.find((l) => l.includes('UNHANDLED_ERROR')) ?? '';
+    expect(line.includes(SENT.cookieJwt), 'the Access cookie, a JWT').toBe(false);
+    expect(line.includes(SENT.session), 'a shapeless cookie value, bare').toBe(true);
+    expect(line.includes(SENT.anon), 'the anonymous id, bare').toBe(true);
+    // The answer itself still carries none of them.
+    expect(findLeaks(r.answer, ALL_PROBES, null)).toEqual([]);
+  });
 });
 
 // ── Each signed-link product is seen where the table says ────────────────────
@@ -921,5 +975,100 @@ describe('signed links are where their route is classified to put them', () => {
     expect(r.status).toBe(401);
     const probes = [{ name: 'the refused report token', value: refused }];
     expect(findLeaks(r.answer, probes, signedLinkRuleFor('GET', path))).toEqual([]);
+  });
+});
+
+// ── The vote pass is seen where the table says, and only there ───────────────
+
+describe('the vote pass rides only in the fragment of the /q redirect', () => {
+  const EVENT = 'ce-vote-1';
+  const CODE = 'qrt_ce_vote_0001';
+  const PATH = `/q/${CODE}`;
+  const votingOn = () => sweepEnv({ VOTING_ENABLED: 'on' });
+  const onePass = (text: string): string[] => [...text.matchAll(VOTE_PASS_SHAPE)].map((m) => m[0]);
+
+  beforeAll(async () => {
+    await E.DB.prepare(
+      `INSERT OR REPLACE INTO events (id, brand_id, title, slug, status, start_date, created_at, updated_at)
+       VALUES (?, ?, 'Credential Echo Vote Night', ?, 'active', date('now'), datetime('now'), datetime('now'))`
+    )
+      .bind(EVENT, BRAND, EVENT)
+      .run();
+    await E.DB.prepare(
+      `INSERT OR REPLACE INTO poster_deployments (id, event_id, qr_token, placement_label, is_active, created_at)
+       VALUES (?, ?, ?, 'Room screen', 1, datetime('now'))`
+    )
+      .bind(`pd-${EVENT}`, EVENT, CODE)
+      .run();
+    const made = await createVoteSet(E.DB, EVENT, 'object');
+    const opened = await openVoteSet(E.DB, EVENT, E.ANON_ID_HASH_PEPPER, new Date().toISOString());
+    if (!made.ok || !opened.ok) throw new Error('the vote set could not be made and opened');
+  });
+
+  test('a vote scan answers 302 with one pass, at the end of Location, after /events/:id/vote#t=', async () => {
+    logLines = [];
+    const r = await send('GET', `${PATH}?type=vote`, {}, votingOn());
+    expect(r.status).toBe(302);
+    const location = r.answer.headers.find(([n]) => n.toLowerCase() === 'location')?.[1] ?? '';
+    const passes = onePass(location);
+    expect(passes).toHaveLength(1);
+    expect(location.endsWith(`/events/${EVENT}/vote#t=${passes[0]}`)).toBe(true);
+    expect(new URL(location).search).toBe('');
+    // No other header and no body carries it.
+    const elsewhere = r.answer.headers.filter(([n]) => n.toLowerCase() !== 'location');
+    expect(onePass(JSON.stringify(elsewhere) + r.answer.body)).toEqual([]);
+    // Classified: clean under its rule. Unclassified: the same answer is a leak.
+    expect(findLeaks(r.answer, ALL_PROBES, signedLinkRuleFor('GET', PATH))).toEqual([]);
+    expect(findLeaks(r.answer, ALL_PROBES, null).map((l) => l.where)).toEqual(['header location']);
+    // Any other route carrying the same answer fails too: the rule is per route.
+    expect(
+      findLeaks(r.answer, ALL_PROBES, signedLinkRuleFor('GET', '/sponsor')).map((l) => l.where)
+    ).toEqual(['header location']);
+    // No log line written for the scan carries the pass.
+    expect(logLines.filter((l) => l.includes(passes[0]) || onePass(l).length > 0)).toEqual([]);
+  });
+
+  test('the same scan with voting off, or with no vote type, carries no pass at all', async () => {
+    for (const [query, withEnv] of [
+      ['?type=vote', sweepEnv({ VOTING_ENABLED: 'off' })],
+      ['', votingOn()],
+    ] as const) {
+      const r = await send('GET', `${PATH}${query}`, {}, withEnv);
+      expect(r.status).toBe(302);
+      expect(onePass(JSON.stringify(r.answer.headers) + r.answer.body), query).toEqual([]);
+    }
+  });
+
+  test('a pass anywhere but that place is a leak (negative controls on made-up answers)', async () => {
+    const real = await send('GET', `${PATH}?type=vote`, {}, votingOn());
+    const location = real.answer.headers.find(([n]) => n.toLowerCase() === 'location')?.[1] ?? '';
+    const pass = onePass(location)[0];
+    expect(pass).toBeTruthy();
+    const rule = signedLinkRuleFor('GET', PATH);
+    const leaksOf = (answer: Answer): string[] =>
+      findLeaks(answer, [], rule).map((l) => `${l.where}: ${l.what}`);
+    const target = `${HOST}/events/${EVENT}/vote`;
+    // The place itself is clean.
+    expect(leaksOf({ headers: [['location', `${target}#t=${pass}`]], body: '' })).toEqual([]);
+    for (const [what, answer] of [
+      ['in the body', { headers: [], body: JSON.stringify({ pass }) }],
+      ['in the query string', { headers: [['location', `${target}?t=${pass}`]], body: '' }],
+      [
+        'in the path',
+        { headers: [['location', `${HOST}/events/${EVENT}/vote/${pass}`]], body: '' },
+      ],
+      ['followed by more', { headers: [['location', `${target}#t=${pass}&next=1`]], body: '' }],
+      ['twice', { headers: [['location', `${target}#t=${pass}#t=${pass}`]], body: '' }],
+      [
+        'on another page',
+        { headers: [['location', `${HOST}/events/${EVENT}#t=${pass}`]], body: '' },
+      ],
+      ['in a second header', { headers: [['x-vote-pass', pass]], body: '' }],
+      ['in a cookie', { headers: [['set-cookie', `vp=${pass}; HttpOnly`]], body: '' }],
+    ] as Array<[string, Answer]>) {
+      expect(leaksOf(answer), what).toHaveLength(1);
+    }
+    // A failure names where and what, never the pass.
+    expect(leaksOf({ headers: [['x-vote-pass', pass]], body: '' }).join(' ')).not.toContain(pass);
   });
 });

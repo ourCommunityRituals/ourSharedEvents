@@ -15,7 +15,9 @@ on:
     paths: ['**/*.md', '.github/workflows/docs-ci.yml']
   workflow_dispatch:
 
-# Pin bash for self-hosted Windows runner (default would be PowerShell).
+# bash is already the default on ubuntu-24.04; kept explicit so a runner change
+# cannot switch these steps to another shell. (Written for the self-hosted
+# Windows runner, where the default was PowerShell; corrected 2026-11-18.)
 defaults:
   run:
     shell: bash
