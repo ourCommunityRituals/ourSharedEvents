@@ -142,7 +142,7 @@ The 2026-10-08 ruling reached past the corridor: the operations total minus the 
 - Every scan figure, on every surface, is the sum of the poster-hours that clear the floor (`floorTotalOfParts`): a poster on its card, a day on the chart, the event on the card, `/stats` and its dashboard, the brand on the operations dashboard, a corridor part, and the sponsor's line. So any two of them differ by a sum of cells that each clear the floor, and none can be subtracted from another, or from the report, to get a group under 5 back. `tests/corridor-scans-neighbour-floor.spec.ts` now asserts that one more scan on a left-out flow moves neither the operations total nor the event's.
 - Report opens are floored per event per day, the same way.
 - The First-Scan gauge and the timeline's "People scanning" step read withheld until one poster has 5 scans in one hour: a gauge that showed 1 would tell "nobody" from "1 to 4".
-- Not changed: the organizer's registration and survey lists. They are the organizer's own consented rows, which the organizer reads one by one (`lib/count-floor.ts`, scope note). A count floor on a list whose every row the reader holds protects no one.
+- Superseded on 2026-11-16 (owner ruling, OSE-2087): this note said the organizer's registration and survey lists were not changed. They now return no rows under 5, as do the forms export and the registrant contacts, and the rows returned are the counted rows only (`lib/count-floor.ts` `floorRows`; `lib/registration-count.ts`).
 
 ## Next slices (not in this change)
 
