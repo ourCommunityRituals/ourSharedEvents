@@ -157,7 +157,10 @@ of 2026-11-18 are in the first column.
   automation key where an environment turns it on. Migration 0112 writes no
   creator for existing rows; it does not guess one.
 - **A placement belongs to the event it is on.** The organizer who created the
-  event answers a sponsor's request to join it.
+  event answers a sponsor's request to join it. A sponsor one organizer created
+  can hold a placement on another organizer's event (the sponsor asked, that
+  organizer agreed); the sponsor's creator is not shown that placement and
+  cannot change it.
 - **The two brand dashboards** (operations, corridor) sum a whole brand, so they
   leave `root` out for a caller held to their own rows. Their own events are
   reported one at a time and summed by the portfolio roll-up.
@@ -187,6 +190,18 @@ done:
    it is anchored on), and a campaign's event list shows every event in the
    campaign, which can include another organizer's only if the brand owner put
    it there.
+8. Counts for the `root` brand owner. The two count routes under an event's
+   forms (check-in count, sign-up count) are refused to them with the rest of
+   the form data, but the event's stats and the portfolio roll-up still give
+   them the floored registration and check-in counts of other organizers'
+   events. Counts name nobody; whether "never named form data" should reach
+   them is the owner's call.
+9. Event flag overrides. `GET /api/v2/admin/flags?scope=event` and
+   `GET /api/v2/admin/flags/resolve?eventId=` take an event id from the query
+   and check neither brand nor creator, so any signed-in admin reads the flag
+   state of any event. This is older than 2a and is not limited to `root`.
+   Flag writes are guarded. The flags live in the forms database and the events
+   in the main one, so closing it is its own piece of work.
 
 ### 2b. The plan belongs to the brand.
 

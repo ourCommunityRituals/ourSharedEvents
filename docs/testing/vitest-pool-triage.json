@@ -2512,7 +2512,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): env.DB",
-      "testCount": 32
+      "testCount": 35
     },
     {
       "file": "workers/oursharedevents/tests/public-event-booths.spec.ts",

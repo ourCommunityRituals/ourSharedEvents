@@ -538,6 +538,63 @@ describe("OSE-1561 a sponsor's request is answered by the organizer of that even
   });
 });
 
+// ── a sponsor placed on someone else's event ─────────────────────────────────
+
+describe("OSE-1561 a placement on another person's event is that person's, not the sponsor creator's", () => {
+  // Organizer A created the sponsor. The sponsor asked to join organizer B's
+  // draft event and organizer B said yes, so the placement is live on B's event.
+  const CROSS = 'spl_bm-orgb-from-orga';
+  const tierOf = (placementId: string) =>
+    env.DB.prepare('SELECT tier FROM sponsor_placement WHERE id = ?')
+      .bind(placementId)
+      .first<{ tier: string }>();
+
+  beforeAll(async () => {
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO sponsor_placement
+         (id, sponsor_business_id, event_id, tier, source, polarity, locality_band,
+          click_token, display_token, is_active, sponsor_accepted, organizer_accepted)
+       VALUES (?, ?, ?, 'primary', 'sponsor_request', 1, 0, 'ct_cross_orga', 'dt_cross_orga', 1, 1, 1)`
+    )
+      .bind(CROSS, ORG_A.sponsorId, ORG_B.draftEventId)
+      .run();
+  });
+
+  test("organizer A's sponsor lists do not show the placement on organizer B's event", async () => {
+    const all = await (await callAs(A, 'GET', '/api/v2/admin/sponsors')).text();
+    expect(all).toContain(ORG_A.sponsorId); // their sponsor is still listed
+    expect(all).not.toContain(CROSS);
+    expect(all).not.toContain('ct_cross_orga');
+    expect(all).not.toContain('dt_cross_orga');
+    const byEvent = (await (
+      await callAs(A, 'GET', `/api/v2/admin/sponsors?eventId=${ORG_B.draftEventId}`)
+    ).json()) as { items: unknown[] };
+    expect(byEvent.items).toEqual([]);
+    // Positive control: the placement is there, and the brand owner is shown it.
+    const owner = await (
+      await callAs(as(ROOT_OWNER), 'GET', `/api/v2/admin/sponsors?eventId=${ORG_B.draftEventId}`)
+    ).text();
+    expect(owner).toContain(CROSS);
+  });
+
+  test("reading the sponsor by id never returns the placement on organizer B's event", async () => {
+    const res = await callAs(A, 'GET', `/api/v2/admin/sponsors/${ORG_A.sponsorId}`);
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).not.toContain(ORG_B.draftEventId);
+    expect(text).not.toContain('ct_cross_orga');
+  });
+
+  test("changing the sponsor's tier does not change the placement on organizer B's event", async () => {
+    const res = await callAs(A, 'PUT', `/api/v2/admin/sponsors/${ORG_A.sponsorId}`, {
+      tier: 'gold',
+    });
+    expect(res.status, await res.clone().text()).toBe(200);
+    expect(await tierOf(ORG_A.placementId)).toEqual({ tier: 'gold' }); // their own event
+    expect(await tierOf(CROSS)).toEqual({ tier: 'primary' }); // organizer B's event
+  });
+});
+
 // ── the creator is recorded by the server ────────────────────────────────────
 
 describe('OSE-1561 a new sponsor and a new campaign record who created them', () => {
