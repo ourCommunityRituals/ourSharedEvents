@@ -184,7 +184,7 @@ export async function readPosterReach(db: D1Database, eventId: string): Promise<
         `SELECT pd.id, pd.placement_label, pd.location_desc, pd.address, pd.placement_type,
                 pd.h3_res7, pd.is_active
            FROM poster_deployments pd
-          WHERE pd.event_id = ?`
+          WHERE pd.event_id = ? AND pd.is_vote_code = 0`
       )
       .bind(eventId)
       .all<PlacementRow>();

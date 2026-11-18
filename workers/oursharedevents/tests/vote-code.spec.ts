@@ -42,6 +42,10 @@ import { handleQrScan, qrScanTarget, type QrScanEnv } from '../src/handlers/qr-s
 import { openVotePass } from '../src/lib/vote-pass';
 import { EVENT_LIVE, EVENT_PUBLISHED_STATUS } from '../src/lib/event-live';
 import { runVoteFinalJob } from '../src/lib/vote-sets';
+import { readEventScanCells, scansOf } from '../src/lib/scan-cells';
+import { buildSharedReport } from '../src/lib/shared-report-builder';
+import { readPosterReach } from '../src/lib/poster-reach';
+import { readPreEventActivity } from '../src/lib/pre-event-activity';
 
 interface TestEnv {
   DB: D1Database;
@@ -398,6 +402,52 @@ describe('OSE-2140 | the room has its own vote code', () => {
     const r = await call('POST', vp(PREP, '/code'), {});
     expect(r.status).toBe(201);
     expect((await call('POST', vp(PREP), {})).status).toBe(201);
+  });
+});
+
+describe('OSE-2140 | the vote code is not a poster in any number (owner, 2026-11-18)', () => {
+  /** n placement scans in one hour, enough to clear the K-floor of 5. */
+  async function seedScans(posterId: string, n: number) {
+    for (let i = 0; i < n; i++)
+      await run(
+        `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket, created_at)
+         VALUES (?, ?, ?, '2099-06-01T20:00', datetime('now'))`,
+        `spe-vcode-${posterId}-${i}`,
+        NIGHT,
+        posterId
+      );
+  }
+
+  test('OSE-2140 | PRIVACY | a vote-code scan is in no poster figure: not the SharedReport attribution, the cells, reach or the poster count', async () => {
+    const code = await makeCode();
+    await seedScans(POSTER_ID, 6);
+    await seedScans(code.id, 7);
+
+    const cells = await readEventScanCells(tenv.DB, NIGHT);
+    expect(new Set(cells.map((c) => c.poster))).toEqual(new Set([POSTER_ID]));
+
+    const report = await buildSharedReport(tenv.DB, NIGHT);
+    expect(report.ok, JSON.stringify(report)).toBe(true);
+    if (!report.ok) return;
+    const ids = report.report.poster_attribution.map((p) => p.poster_deployment_id);
+    expect(ids).toContain(POSTER_ID);
+    expect(ids).not.toContain(code.id);
+    expect(JSON.stringify(report.report)).not.toContain('(room screen)');
+
+    const reach = await readPosterReach(tenv.DB, NIGHT);
+    expect(JSON.stringify(reach)).not.toContain(code.id);
+    expect(reach.totals.scans).toEqual(scansOf(cells));
+
+    const activity = await readPreEventActivity(tenv.DB, NIGHT);
+    expect(activity.posters).toBe(1);
+
+    // The brand's operations dashboard: poster scans (also its anonymous
+    // participation figure) and active posters leave the vote code out.
+    const ops = await call('GET', '/api/v2/admin/dashboards/operations?data_class=all');
+    expect(ops.status, JSON.stringify(ops.json)).toBe(200);
+    expect(ops.json.reach.poster_scans).toEqual(scansOf(cells));
+    expect(ops.json.participation.anonymous.scans).toEqual(scansOf(cells));
+    expect(ops.json.reach.active_posters).toBe(1);
   });
 });
 

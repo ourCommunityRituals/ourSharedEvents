@@ -92,7 +92,7 @@ export async function readPreEventActivity(
     db
       .prepare(
         `SELECT COUNT(*) AS posters, COUNT(DISTINCT h3_res7) AS places
-           FROM poster_deployments WHERE event_id = ? AND is_active = 1`
+           FROM poster_deployments WHERE event_id = ? AND is_active = 1 AND is_vote_code = 0`
       )
       .bind(eventId),
     strict

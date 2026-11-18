@@ -259,13 +259,16 @@ async function readBrandOps(
         )
         .bind(brand, dc)
     ),
-    // One row per poster-hour, the cell every scan figure is a sum of.
+    // One row per poster-hour, the cell every scan figure is a sum of. Never
+    // the room's vote code (OSE-2140; owner, 2026-11-18): its scans would be
+    // a rough participation figure for the vote (OSE ADR-040).
     all<{ n: number }>(
       db
         .prepare(
           `SELECT COUNT(*) AS n FROM scan_placement_events s
              JOIN events e ON e.id = s.event_id
-            WHERE e.brand_id = ? AND ${DC}
+             JOIN poster_deployments pd ON pd.id = s.poster_deployment_id
+            WHERE e.brand_id = ? AND ${DC} AND pd.is_vote_code = 0
             GROUP BY s.poster_deployment_id, ${scanHourSql('s')}`
         )
         .bind(brand, dc)
@@ -288,7 +291,7 @@ async function readBrandOps(
         .prepare(
           `SELECT COUNT(*) AS cnt FROM poster_deployments pd
              JOIN events e ON e.id = pd.event_id
-            WHERE e.brand_id = ? AND ${DC} AND pd.is_active = 1`
+            WHERE e.brand_id = ? AND ${DC} AND pd.is_active = 1 AND pd.is_vote_code = 0`
         )
         .bind(brand, dc)
     ),

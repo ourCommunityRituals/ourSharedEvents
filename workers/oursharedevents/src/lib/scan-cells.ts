@@ -44,6 +44,11 @@ export interface ScanCell {
  * Every poster-hour cell of one event, raw. Never publish a cell: pass them
  * through the functions below. Throws on a failed read; callers decide
  * whether that is a 503 or an empty card.
+ *
+ * Never the room's vote code (OSE-2140; owner, 2026-11-18): it is the room
+ * screen, not a poster, and its scans would publish a rough participation
+ * figure for the vote, which OSE ADR-040 rules out. So no poster figure built
+ * on these cells counts it: per-poster scans, reach, booths, the scans gauge.
  */
 export async function readEventScanCells(db: D1Database, eventId: string): Promise<ScanCell[]> {
   const res = await db
@@ -51,9 +56,11 @@ export async function readEventScanCells(db: D1Database, eventId: string): Promi
       `SELECT poster_deployment_id AS poster, ${SCAN_HOUR_SQL} AS hour, COUNT(*) AS n
          FROM scan_placement_events
         WHERE event_id = ?
+          AND poster_deployment_id NOT IN (SELECT id FROM poster_deployments
+                                            WHERE event_id = ? AND is_vote_code = 1)
         GROUP BY poster_deployment_id, ${SCAN_HOUR_SQL}`
     )
-    .bind(eventId)
+    .bind(eventId, eventId)
     .all<ScanCell>();
   return (res.results ?? []).map((r) => ({
     poster: String(r.poster),
