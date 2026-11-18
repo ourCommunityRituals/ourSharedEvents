@@ -28,9 +28,9 @@ Date 2026-11-18. Five loops. Repo `main` at `0459690a`. Subject: ADR-040 as amen
 | Cumulative score      | **0%**. Loop 1 alone scored 0.                                                                                                                     |
 | System score          | **0%**. No finding is closed yet. Solutioning below is a plan, not a fix.                                                                          |
 | Assessment confidence | 70 → 74 → 78 → 80 → 82. It rose in every loop. Loop 5 checked the citations and merged double counts.                                              |
-| Gate                  | **Stop.** Six owner questions (Q6 to Q11), about 12 ADR text edits, and ticket updates.                                                            |
+| Gate                  | **Stop.** Seven owner questions (Q6 to Q12; Q12 added after the run), about 12 ADR text edits, and ticket updates.                                 |
 | Security Critical     | **None.** Nothing is built. G2 would become Security Critical if S5 shipped before Q8 is answered.                                                 |
-| Recommendation        | Do not treat ADR-040 as ready to build from yet. Merge #1417 with the text edits, answer Q6 to Q11, fix the tickets, then run a confirmation loop. |
+| Recommendation        | Do not treat ADR-040 as ready to build from yet. Merge #1417 with the text edits, answer Q6 to Q12, fix the tickets, then run a confirmation loop. |
 
 **Why the score is 0.** One Critical and 15 High findings are open. Most are quick. About half are wording or consistency fixes in the ADR. About a third are ticket updates. Six need the owner.
 
@@ -248,7 +248,7 @@ The path to 95% has three parts, all after this review: ADR edits, owner answers
   - Match "can start now" to the ticket blockers.
   - Change `docs/adr/README.md:58` to Accepted. (T6, T8, K6)
 
-**Owner questions:** Q6 to Q11, in "Human gate" below.
+**Owner questions:** Q6 to Q12, in "Human gate" below.
 
 **Ticket updates (no ADR change).** Each item is proposed for the owner. This CCR edits no ticket.
 
@@ -287,7 +287,7 @@ The path to 95% has three parts, all after this review: ADR edits, owner answers
 
 ADR-040 is "shipped" as a build basis when S2, S3 and S4a can start from it safely:
 
-- The owner has answered Q6 to Q11.
+- The owner has answered Q6 to Q12.
 - E1 to E12 (or the owner's version of them) are on `main`.
 - T1 has a story. T2, T3 and T4 are updated.
 - If Q8 is A: the invariant 1 and 2 pointer has its own 5-loop governance CCR, with a human gate each loop, before S5. That could join S1g (OSE-2124).
@@ -297,7 +297,7 @@ ADR-040 is "shipped" as a build basis when S2, S3 and S4a can start from it safe
 
 1. This worksheet, in its own draft PR. No other file.
 2. PR #1417 takes E1 to E12, or the owner's version of them, plus the index line. The owner merges it.
-3. The owner's answers to Q6 to Q11 are recorded in the ADR's answers table, dated.
+3. The owner's answers to Q6 to Q12 are recorded in the ADR's answers table, dated.
 4. Linear: the new stories, and the ticket updates listed in Solutioning.
 5. A confirmation CCR loop on the amended text. Its worksheet updates this one, or follows it.
 
@@ -347,6 +347,10 @@ The gate is stop. These are the owner's questions, numbered after the presence C
    - **Recommendation: A.** Today the end date is optional and anyone with admin access can change it, so a host could read, move it, reopen and read again.
 6. **Q11. Should the house-rule card also say two more things?** First, anyone with a photo of the poster can vote from elsewhere for the whole day. Second, Cloudflare's own logs time each vote to the millisecond, which the account holder can see. (H6, G11. Found in loop 2, Conservative layer; loop 3, Adversarial layer.)
    - **Recommendation: yes.** Fold both into the card wording you still owe.
+7. **Q12. If you adopt the fragment ticket (see the addendum), do you accept that a forwarded vote link lets someone vote in a person's place, once per song, and that the person cannot tell? How long should a ticket last?** (CK-4. Found after the run.)
+   - A: Accept. The ticket lasts 30 minutes and a re-scan renews it. The card names the risk.
+   - B: Accept with the whole event day. That is simpler, but the window is wider.
+   - **Recommendation: A.** 30 minutes covers a four-song, 20-minute set, and a re-scan is cheap when the room screen shows the `/q` code (Q6 A).
 
 What is verified, inferred and not checked:
 
@@ -371,3 +375,107 @@ What is verified, inferred and not checked:
   - why the S0 runs passed the edge binding;
   - D1 batch behaviour under load.
 - **Not checked:** OurWKRP's code; production; real phones and in-app scanners; Linear comments other than the tickets' descriptions; `OCR-docs` `architectural-invariants.yaml` (not in this repo).
+
+## Addendum: D3 reversed, and the fragment ticket (2026-11-18, after the run)
+
+**Input.** After the five loops, the owner's parent session reported that the owner reversed D3. The owner's words, as quoted on OSE-2124: "How does this get limited on anonymous tokens? There should be no exceptions to keep the privacy footprint clean and unexploitable. Once there is a seam, it's a way in."
+
+So there is no new reader of `ose_anon`, invariant 4 stays as it is, and S1g (OSE-2124) is on hold. This session has not seen those words in a source the owner typed, so they are recorded here as reported.
+
+**The candidate design under test.**
+
+- Every cookie read stays inside `/q`.
+- `/q` derives a per-event voter key k from the cookie and the event id.
+- `/q` puts a presence ticket holding k in the redirect's fragment.
+- The vote page keeps the ticket in memory and posts it in the JSON body.
+- The vote route checks the ticket's seal and never reads a cookie.
+
+**How it was tested.** One Dr of Security pass, read-only, against source at `2b33976`. The five loops above are unchanged. The ruling of 2026-11-02 keeps a run's loops fixed. This addendum does not change the register's counts.
+
+**Verdict.** The design holds, and is better than D3 as decided, if all six conditions below are met. The score stays at 0%. F1 is still open until Q6 is answered A and the `/q` story (T1) exists.
+
+Conditions:
+
+1. Q6 is answered A. The room screen shows a vote-kind `/q` code, and `/q` sends the visitor to `/events/:id/vote#t=…`.
+2. A receipt is keyed by the server: `HMAC(K_receipt, k ‖ object_id)`, never `HMAC(k, object_id)`. k sits in the ticket in clear, so anyone holding a forwarded ticket could otherwise compute that browser's receipts and match them against the database (CK-2).
+3. Separate HKDF labels for the voter key, the ticket seal, receipts and participants. The cookie is length-prefixed. The key is never the scan key (CK-3).
+4. A ticket is minted only when the pepper is set, the scan was stored or was a duplicate, a set is open, and `VOTING_ENABLED` is on. The ticket carries the pepper epoch (CK-5, CK-7).
+5. The fragment is removed at once with `history.replaceState`. The ticket is short-lived and is never written to storage. No log, and no CI output, carries the ticket, k, a receipt or the `Location` header (CK-4, CK-5, CK-9).
+6. The owner accepts the silent bearer risk in the card's own words (CK-4, Q12).
+
+| Id    | Weight   | Finding                                                                                                                                                             | Evidence                                                                         |
+| ----- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| CK-1  | Critical | The design closes F1 only with Q6 A and a vote-kind `/q` target. `qrScanTarget` passes no object and maps unknown types to `register`.                              | `qr-scan.ts:91, 106-107` (verified)                                              |
+| CK-2  | High     | `receipt = HMAC(k, object_id)` with k in clear lets a ticket holder compute that browser's receipts. Key the receipt on the server.                                 | design (inferred)                                                                |
+| CK-3  | Medium   | k is unlinkable across events only with its own HKDF label, length-prefixed input, and never the scan key or the raw `SHA-256(x\|pepper)` form.                     | `scan-node-key.ts:18-20, 47`; `anon-id-hash.ts:41` (verified)                    |
+| CK-4  | High     | The ticket is a bearer token. A forwarded link votes first, and the person's own vote then answers as a duplicate, so they cannot tell.                             | ADR l.76 (inferred)                                                              |
+| CK-5  | Medium   | Mint only for a vote-kind code with a set open. The ticket rides in a response header (`Location`), so logging or CI output that prints it would leak it.           | design (inferred)                                                                |
+| CK-6  | Low      | The fragment survives the 301 and 308 redirects (RFC 9110 §10.2.2) and never reaches `Referer`, but the language switch and a reload drop it.                       | `language-switch.ts:43`; `pages.ts:2416`; `router.ts:698` (inferred, no browser) |
+| CK-7  | Medium   | Mint only from a stored or duplicate scan. Today a failed write still redirects, and the queue path knows only "enqueued". Either would break decision 8's nesting. | `qr-scan.ts:235, 255-270` (verified)                                             |
+| CK-8  | Low      | The route reads no cookie, so a ticketless cross-site POST gains nothing. Cookie tossing at `/q` remains. Keep JSON-only and same-origin.                           | inferred                                                                         |
+| CK-9  | Medium   | S4a's log ban must name the ticket, k and receipts.                                                                                                                 | inferred                                                                         |
+| CK-10 | Low      | Cross-site scripting on `/vote` could read the ticket. Copy the nonce CSP with `connect-src 'self'`.                                                                | `pages.ts:237` (inferred)                                                        |
+
+**What it closes, if adopted with the conditions:**
+
+- F4, with H3 merged into it: no cookie hash travels, and no query string or `Referer` carries the ticket.
+- H2: each in-app browser gets its own cookie and ticket at `/q`.
+- The CSRF half of H4.
+- The S1g dependency, with no governance change.
+
+**What it changes:**
+
+- F1: a fix exists, but only under Q6 A plus T1.
+- H1: no link from the event page is needed under Q6 A.
+- H9: the page can tell a missing ticket on its own.
+- T2: S4a gets a new gate list.
+
+**What stays:** F2, F3, F5 to F10, G1 to G4, G11, K1 and the rest.
+
+**Proposed ADR-040 text (the owner decides).**
+
+- **D3 row.** "**Reversed** (owner, 2026-11-18): 'How does this get limited on anonymous tokens? There should be no exceptions to keep the privacy footprint clean and unexploitable. Once there is a seam, it's a way in.' No new reader of `ose_anon`." In the third column: "Decisions 5 and 6. Invariant 4 is unchanged. S1g is cancelled."
+- **Decision 1, the receipt sentences.** "A receipt carries no side. It is `HMAC(K_receipt, k ‖ object_id)`. Here k is the per-event voter key from decision 6, and `K_receipt` is a server-only subkey. A participant marker is `HMAC(K_participant, k ‖ set_id)`, under its own subkey. No cookie value reaches the vote route or the vote tables. Receipts and participant markers are deleted when the set becomes final."
+- **Decision 5.** "The voter page is `GET /events/:id/vote`. It is styled like a form page, but it is not a forms route. It uses no forms API and sets no cookie. It explains the vote, carries the house rule (decision 9), and shows the sponsor strip below the title and date. The OurWKRP room screen shows only the event's vote code. That code is a `/q` code on OSE, never an OurWKRP short link, and it lands on this page. The vote write is a `POST` outside `/api/v2/events*`, handled on the `DB` side. It reads no cookie: it never reads the `Cookie` header and never sets one (D3 reversed, 2026-11-18). It takes JSON only and checks `Sec-Fetch-Site: same-origin`. A gate fails if the vote route's files read the `Cookie` header or `ose_anon`. AGENTS.md invariant 4 is unchanged: `/q` stays the only reader on the vote path."
+- **Decision 6, the presence paragraph.**
+  - "A vote counts only from a browser that scanned this event's vote code. Every cookie read stays inside `/q`."
+  - "At `/q`, a vote-kind code, with a set open and `VOTING_ENABLED` on, derives a per-event voter key: `k = HMAC(K_voter, len(cookie) ‖ cookie ‖ event_id)`. `K_voter` comes from `ANON_ID_HASH_PEPPER` by HKDF, under its own label. That label is separate from the scan key, the ticket key and the receipt key. k differs at every event and is stored nowhere."
+  - "`/q` mints a ticket only when the pepper is set and the scan was stored, or was a duplicate of one stored. The uncounted path mints none, and a missing key mints none."
+  - "The ticket is `{event_id, expiry, pepper_epoch, k}`, sealed with a MAC under its own key in each environment. `/q` puts it in the redirect's fragment (`/events/:id/vote#t=…`). So it is never in a query string, a `Referer` or a request log."
+  - "The voter page reads the fragment and removes it from the address bar at once. It keeps the ticket in memory only, writes nothing to storage, and posts the ticket in the JSON body. With no ticket, the page says to scan the code on the screen again."
+  - "A ticket lasts 30 minutes (Q12), and a re-scan renews it. A re-scan in the same browser gives the same k, so the same receipts."
+  - "The vote route checks the MAC (in constant time), the event, the expiry and the epoch. No log line and no CI output carries the ticket, k, a receipt or the `Location` header."
+- **Decision 9, a new line.** "**A forwarded vote link.** The ticket works for whoever holds it. Someone who gets a person's vote link while it is valid can vote in their place, once per song. The person's own vote then answers like a counted one, so they cannot tell. It reveals no identity."
+- **Implementation Notes.** S4a and S4b wait on S2, S3 and the `/q` ticket story, no longer on S1g.
+
+**Proposed ticket edits (the owner decides; none made).**
+
+- **S1g (OSE-2124).** Cancel. Its reader-list gate moves into S4a as "the vote route reads no cookie".
+- **The `/q` ticket story (new, T1).** Its acceptance, each item seen failing first, at both layers:
+  - a vote-kind code mints a ticket only with a set open and `VOTING_ENABLED` on;
+  - the ticket is only in the `Location` fragment, never in the query string;
+  - no ticket on the uncounted path, with no pepper, or after a failed write;
+  - one cookie at two events gives two different k values;
+  - k is never equal to the scan key;
+  - nothing logs `Location`.
+- **S4a (OSE-2128).**
+  - Delete check 3 (the read-only parser). Check 4 becomes: the ticket's MAC (constant time), event, expiry and pepper epoch.
+  - "no ose_anon: refused [getOrCreateAnonId used]" becomes "no ticket: refused, nothing written, no Set-Cookie [ticket check skipped]".
+  - New static gate, listed in T0: "the vote route never reads the `Cookie` header or `ose_anon` [a cookie read added]".
+  - "pepper missing [raw cookie fallback]" becomes "[unkeyed fallback]".
+  - Add these tests: a ticket for another event is refused; an expired ticket is refused (mock layer, with a controlled clock); a wrong-epoch ticket is refused; a ticket with k altered fails the MAC.
+  - Add: "a receipt cannot be computed from the ticket alone [receipt = HMAC(k, object)]".
+  - Add, at both layers: "a re-scan gives the same k, so a second vote on one object counts once".
+  - The log ban also names the ticket, k and receipts.
+  - In Bruno, "refusal with no cookie" becomes "refusal with no ticket". The 10-voter case reads the ticket from the `Location` fragment and never prints `Location`.
+  - Blocked by the `/q` ticket story, not by S1g.
+- **S4b (OSE-2129).**
+  - The page reads the fragment and removes it with `history.replaceState` before any other script runs.
+  - It keeps the ticket in memory only. Playwright asserts that cookies, `localStorage`, `sessionStorage` and IndexedDB are unchanged.
+  - It posts the ticket in the JSON body.
+  - It shows the "scan the code on the screen again" message.
+  - Headers: `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, a nonce CSP with `connect-src 'self'`, and `frame-ancestors 'none'`.
+  - The language switch keeps the ticket, or asks for a re-scan.
+  - The house-rule list adds four risks: a script, zero or not, a forwarded link, and remote voting.
+- **S2 (OSE-2125).** Name the receipt and participant subkeys. No column holds k.
+- **N1 (OW-220).** The room screen shows the event's `/q` vote code, not the vote page's URL.
