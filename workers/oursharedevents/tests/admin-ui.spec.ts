@@ -28,6 +28,34 @@ async function fetchAdminHtml(): Promise<string> {
   return res.text();
 }
 
+/**
+ * The page with every script element cut out, so a count sees markup only, not
+ * the HTML strings the scripts build. Plain string scanning, not a regex: an end
+ * tag may carry whitespace or attributes ("</script >"), and a filter regex is
+ * the wrong tool for that (CodeQL js/bad-tag-filter). An unclosed script element
+ * drops the rest of the page, which can only make a count smaller.
+ */
+function withoutScripts(html: string): string {
+  const lower = html.toLowerCase();
+  let out = '';
+  let at = 0;
+  for (;;) {
+    const open = lower.indexOf('<script', at);
+    if (open === -1) return out + html.slice(at);
+    out += html.slice(at, open);
+    const close = lower.indexOf('</script', open);
+    if (close === -1) return out;
+    const end = lower.indexOf('>', close);
+    if (end === -1) return out;
+    at = end + 1;
+  }
+}
+
+/** A string matched literally inside a RegExp. */
+function reEscape(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ADMIN-2: Tier badge + gated UI
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -128,7 +156,7 @@ describe('ADMIN-12: No inline styles in admin HTML', () => {
     // HTML attributes and should not trigger this guard.
     const bodyStart = html.indexOf('<body'); // the <body> tag carries a class now
     const bodyHtml = html.slice(bodyStart);
-    const bodyNoScripts = bodyHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+    const bodyNoScripts = withoutScripts(bodyHtml);
     expect(bodyNoScripts).not.toMatch(/style="/);
   });
 
@@ -551,7 +579,7 @@ describe('ADMIN-15 Structure: Copy buttons', () => {
     // Strip <script> blocks before counting — JS template strings may contain
     // <button class="copy-btn"> snippets for dynamically injected content
     // (e.g. mint-link-btn, mint-copy-btn); only surface-card static buttons count.
-    const htmlNoScripts = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+    const htmlNoScripts = withoutScripts(html);
     const copyBtns =
       htmlNoScripts.match(/<button[^>]*class="btn btn-secondary copy-btn"[^>]*>/g) ?? [];
     expect(copyBtns.length).toBe(9); // +1: pd-create-btn (OSE-636 poster deployment form); +3: poster codes Add / Save / Undo (OSE-1357 p2); +1: TV display Save
@@ -565,7 +593,7 @@ describe('ADMIN-15 CSS: Copy button visual states', () => {
   // (48px, 16px label, focus ring, hover from /ui.css); only "copied" is this page's.
   test('copy buttons are the shared secondary button, with no forked base or hover rule', async () => {
     const html = await fetchAdminHtml();
-    const htmlNoScripts = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+    const htmlNoScripts = withoutScripts(html);
     expect(htmlNoScripts).not.toMatch(/class="copy-btn/);
     expect(html).not.toMatch(/\.copy-btn\s*\{/);
     expect(html).not.toContain('.copy-btn:hover');
@@ -980,7 +1008,7 @@ describe('ADMIN-2 Backend: legal_clearance_tier field in admin events API', () =
 describe('FE pass: @ocr/ui header, sectioned cards and the .btn family', () => {
   const css = (html: string) =>
     [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join('\n');
-  const markup = (html: string) => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+  const markup = (html: string) => withoutScripts(html);
 
   test('the header is the shared .header: a .brand label over the one <h1>', async () => {
     const html = await fetchAdminHtml();
@@ -1041,7 +1069,7 @@ describe('FE pass: @ocr/ui header, sectioned cards and the .btn family', () => {
       '.spon-action-btn',
       '.event-status-btn',
     ]) {
-      const esc = sel.replace(/[.]/g, '\\.');
+      const esc = reEscape(sel);
       expect(sheet, `${sel} has no base rule of its own`).not.toMatch(
         new RegExp(`(^|\\n)\\s*${esc}\\s*\\{`)
       );
