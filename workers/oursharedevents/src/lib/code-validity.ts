@@ -28,6 +28,8 @@ export interface ShareLinkRow {
 export interface PosterRow {
   qr_token: unknown;
   is_active: unknown;
+  /** OSE-2140: 1 for the room's own vote code, which is not a poster. */
+  is_vote_code?: unknown;
 }
 
 /**
@@ -54,8 +56,12 @@ export function isWorkingShareLink(row: ShareLinkRow): boolean {
  * route accepts (`isValidQrTokenShape`: any other token is sent home before
  * the database is read). The product only mints tokens of that shape, so a row
  * with another is a damaged row, as with a share link above.
+ *
+ * The room's own vote code (OSE-2140) is never a working poster: it is the room
+ * screen, not a poster (owner, 2026-11-18), so it alone never takes an event live.
  */
 export function isWorkingPoster(row: PosterRow): boolean {
+  if (row.is_vote_code === 1) return false;
   if (row.is_active !== 1) return false;
   return typeof row.qr_token === 'string' && isValidQrTokenShape(row.qr_token);
 }

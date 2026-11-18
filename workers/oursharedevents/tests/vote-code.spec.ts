@@ -46,6 +46,7 @@ import { readEventScanCells, scansOf } from '../src/lib/scan-cells';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { readPosterReach } from '../src/lib/poster-reach';
 import { readPreEventActivity } from '../src/lib/pre-event-activity';
+import { collectGoLiveEvidence } from '../src/lib/go-live-evidence';
 
 interface TestEnv {
   DB: D1Database;
@@ -448,6 +449,17 @@ describe('OSE-2140 | the vote code is not a poster in any number (owner, 2026-11
     expect(ops.json.reach.poster_scans).toEqual(scansOf(cells));
     expect(ops.json.participation.anonymous.scans).toEqual(scansOf(cells));
     expect(ops.json.reach.active_posters).toBe(1);
+  });
+
+  test('OSE-2140 | the vote code is never the working code an event needs to go live (#1456)', async () => {
+    await makeCode(PREP);
+    expect((await collectGoLiveEvidence(tenv.DB, PREP)).active_deployments).toBe(0);
+    await run(
+      `INSERT INTO poster_deployments (id, event_id, qr_token, placement_label, is_active, created_at)
+       VALUES ('pd-vcode-prep-poster', ?, 'qrt_vcode_prep_0001', 'Front door', 1, datetime('now'))`,
+      PREP
+    );
+    expect((await collectGoLiveEvidence(tenv.DB, PREP)).active_deployments).toBe(1);
   });
 });
 
