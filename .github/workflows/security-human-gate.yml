@@ -30,6 +30,7 @@ on:
 
 permissions:
   pull-requests: read
+  issues: read # label events and override comments are read through the issues API
   checks: read
   statuses: read
   actions: read
