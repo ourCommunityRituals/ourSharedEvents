@@ -26,6 +26,31 @@
  *         -> "the audit step decides with the gate script"
  *   F7  CODEOWNERS without the two lines (seen on CODEOWNERS as main had it)
  *         -> "CODEOWNERS locks the exception file and the gate"
+ *
+ * BORN RED (2026-11-18, OSE-2121: the two-week exception). Same method:
+ *   F8  an exception matches on severity alone (a severity-level exception)
+ *         -> "a second, unlisted high advisory still blocks while the listed one is excepted"
+ *   F9  date checks removed ("reviewDate"/"addedDate" dropped from the required fields and
+ *       the real-date checks deleted)
+ *         -> the missing, empty and malformed date cases
+ *   F10 the ticket not checked ("ticket" dropped from the required fields, format check removed)
+ *         -> "a missing ticket fails", "a ticket that is not a tracker id fails"
+ *   F11 the excepted line printed without reason and ticket (the line as main had it)
+ *         -> "prints the excepted id, its end date, reason and ticket"
+ *   F12 every active entry counted as excepted, listed by the report or not
+ *         -> "an entry stops applying once the report no longer lists its advisory"
+ *   F1 and F3 were put in again on this date and seen failing their tests, now including
+ *   "a listed id fails again on its end date".
+ *   F13 the severity check by `in` (inherited names such as "constructor" accepted)
+ *         -> "a severity that is an inherited object name fails"
+ *   F14 the committed picomatch entry moved back to 2026-12-17 (the 30 days main had)
+ *         -> "the committed picomatch entry ends on the owner's two-week date"
+ *   F15 workflow: GATE_EXIT read from tee ($?) instead of the script (PIPESTATUS[0]);
+ *       F16 workflow: the failing branch without its exit 1
+ *         -> "the audit step decides with the gate script" (each fault alone)
+ *
+ * A critical advisory fails even when it is listed: a design choice (docs/security/SECURITY.md).
+ * The entry is refused as a file problem, and the advisory itself still blocks.
  */
 const { mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
@@ -97,6 +122,7 @@ const entry = (over = {}) => ({
   approvedBy: 'test owner',
   addedDate: '2026-11-17',
   reviewDate: '2026-12-17',
+  ticket: 'OSE-2121',
   ...over,
 });
 const file = (...entries) => ({ exceptions: entries });
@@ -191,6 +217,38 @@ describe('npm audit gate: decision', () => {
     expect(r.unused.map((e) => e.id)).toEqual(['GHSA-2222-3333-4444']);
   });
 
+  test('a second, unlisted high advisory still blocks while the listed one is excepted', () => {
+    const two = report({
+      ...REAL.vulnerabilities,
+      'some-lib': {
+        name: 'some-lib',
+        severity: 'high',
+        via: [advisory('some-lib', 'GHSA-2222-3333-4444', 'high')],
+      },
+    });
+    const r = gate.evaluate(two, file(entry()), TODAY);
+    expect(r.pass).toBe(false);
+    expect(r.blocking.map((a) => `${a.id}|${a.package}`)).toEqual(['GHSA-2222-3333-4444|some-lib']);
+    expect(r.excepted.map((a) => a.id)).toEqual([PICO]);
+  });
+
+  test('a listed id fails again on its end date', () => {
+    // reviewDate is the first day the step fails: in force through 2026-12-01, red on 2026-12-02.
+    const listed = file(entry({ reviewDate: '2026-12-02' }));
+    expect(gate.evaluate(REAL, listed, '2026-12-01').pass).toBe(true);
+    const r = gate.evaluate(REAL, listed, '2026-12-02');
+    expect(r.pass).toBe(false);
+    expect(r.problems.join('\n')).toMatch(/expired, review was due 2026-12-02/);
+  });
+
+  test('an entry stops applying once the report no longer lists its advisory', () => {
+    // The locked version left the advisory's range (a fix was taken): npm audit drops it.
+    const r = gate.evaluate(report({ glob: REAL.vulnerabilities.glob }), file(entry()), TODAY);
+    expect(r.pass).toBe(true);
+    expect(r.excepted).toEqual([]);
+    expect(r.unused.map((e) => e.id)).toEqual([PICO]);
+  });
+
   test('an exception for the advisory in another package does not cover it', () => {
     const r = gate.evaluate(REAL, file(entry({ package: 'vite' })), TODAY);
     expect(r.pass).toBe(false);
@@ -215,6 +273,26 @@ describe('npm audit gate: decision', () => {
       { reviewDate: '2026-02-31' },
       /"reviewDate" must be a real date/,
     ],
+    ['a missing review date', { reviewDate: undefined }, /"reviewDate" is missing/],
+    ['an empty review date', { reviewDate: '' }, /"reviewDate" is missing/],
+    ['a missing added date', { addedDate: undefined }, /"addedDate" is missing/],
+    [
+      'a review date not written YYYY-MM-DD',
+      { reviewDate: '12/02/2026' },
+      /"reviewDate" must be a real date/,
+    ],
+    [
+      'a review date without its leading zero',
+      { reviewDate: '2026-12-2' },
+      /"reviewDate" must be a real date/,
+    ],
+    ['a missing ticket', { ticket: undefined }, /"ticket" is missing/],
+    [
+      'a severity that is an inherited object name',
+      { severity: 'constructor', reviewDate: '2099-01-01' },
+      /"severity" must be one of/,
+    ],
+    ['a ticket that is not a tracker id', { ticket: 'see Slack' }, /"ticket" must be a tracker id/],
     [
       'a review date before the added date',
       { reviewDate: '2026-11-01' },
@@ -269,6 +347,15 @@ describe('npm audit gate: CLI', () => {
     expect(out.status).toBe(0);
   });
 
+  test('prints the excepted id, its end date, reason and ticket', () => {
+    const end = plusDays(14);
+    const out = run(REAL, file(entry({ addedDate: today, reviewDate: end })));
+    expect(out.status).toBe(0);
+    expect(out.stdout).toContain(`EXCEPTED high: ${PICO} in picomatch until ${end}`);
+    expect(out.stdout).toContain('Ticket OSE-2121');
+    expect(out.stdout).toContain('Reason: no patched release; dev tooling only');
+  });
+
   test('exits 1 with the same entry past its review date', () => {
     const out = run(REAL, file(entry({ addedDate: plusDays(-31), reviewDate: plusDays(-1) })));
     expect(out.status).toBe(1);
@@ -296,12 +383,31 @@ describe('npm audit gate: repo wiring', () => {
       /node scripts\/ci\/npm-audit-gate\.mjs \.security-reports\/npm-audit\.json \.security-exceptions\.json/
     );
     expect(step.run).not.toMatch(/BLOCKING_COUNT/);
+    // The step's exit must be the script's, not tee's, and a failure must end the step.
+    expect(step.run).toMatch(/GATE_EXIT=\$\{PIPESTATUS\[0\]\}/);
+    const open = step.run.indexOf('if [ "$GATE_EXIT" -ne 0 ]; then');
+    expect(open).toBeGreaterThan(-1);
+    const failing = step.run.slice(open, step.run.indexOf('\nfi', open));
+    expect(failing.split('\n').map((l) => l.trim())).toContain('exit 1');
   });
 
   test('the committed exception file is sound on the day each entry was added', () => {
     const committed = JSON.parse(readFileSync(join(ROOT, '.security-exceptions.json'), 'utf8'));
     expect(Array.isArray(committed.exceptions)).toBe(true);
     for (const e of committed.exceptions) expect(gate.entryProblems(e, e.addedDate)).toEqual([]);
+  });
+
+  test("the committed picomatch entry ends on the owner's two-week date", () => {
+    // Owner, 2026-11-18 (OSE-2121, option B): two weeks, so the step fails again from
+    // 2026-12-02. A later date needs a new owner decision and a change to this test.
+    const committed = JSON.parse(readFileSync(join(ROOT, '.security-exceptions.json'), 'utf8'));
+    const pico = committed.exceptions.filter((e) => e.id === PICO);
+    expect(pico.length).toBeLessThanOrEqual(1);
+    if (pico.length === 1) {
+      expect(pico[0].package).toBe('picomatch');
+      expect(pico[0].ticket).toBe('OSE-2121');
+      expect(pico[0].reviewDate <= '2026-12-02').toBe(true);
+    }
   });
 
   test('CODEOWNERS locks the exception file and the gate', () => {

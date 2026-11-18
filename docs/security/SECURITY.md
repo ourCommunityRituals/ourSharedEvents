@@ -545,13 +545,14 @@ The Dependency Vulnerability Audit enforces this file (OSE-1489): `scripts/ci/np
 
    The gate fails the run when an entry:
 
-   - is not a GHSA id, or misses any field above but `ticket`
+   - is not a GHSA id, or misses any field above (`ticket` included: a tracker id such as `OSE-123`)
+   - has a date that is not a real `YYYY-MM-DD`
    - is for a **critical** advisory (never excepted)
    - runs longer than its severity allows: **high 30 days**, moderate 90, low 180 (`reviewDate − addedDate`)
    - has reached its `reviewDate` (it expires on the day it is due)
    - gives a severity the audit report does not
 
-   An entry covers one advisory in one package. A new advisory in the same package still blocks. An entry the report no longer needs is printed as unused: remove it. A report npm could not write (an endpoint error, an empty file) fails the gate instead of reading as zero findings.
+   An entry covers one advisory in one package. A new advisory in the same package still blocks. The gate prints each excepted advisory with its end date, reason and ticket. An entry applies only while the report lists its advisory; once the locked version is outside the advisory's range, the entry is printed as unused: remove it. A report npm could not write (an endpoint error, an empty file) fails the gate instead of reading as zero findings.
 
 2. **Document it in the PR** with the advisory, the package, the justification, the mitigation and the review date.
 

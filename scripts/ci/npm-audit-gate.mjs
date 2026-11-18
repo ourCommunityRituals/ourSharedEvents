@@ -9,15 +9,20 @@
 //   - the report cannot be read as an npm audit v2 report (an endpoint error,
 //     an empty file): a gate that cannot see does not pass
 //   - a high or critical advisory has no active exception for it
-//   - an exception entry is malformed, is for a critical advisory (never
-//     excepted, docs/security/SECURITY.md), runs longer than its severity's
-//     window (high 30 days, moderate 90, low 180), or has reached its
-//     reviewDate (expired the day it is due, as security-sla-enforcement.yml
-//     reads it)
+//   - an exception entry is malformed (a missing field, a date that is not a
+//     real YYYY-MM-DD, a ticket that is not a tracker id), is for a critical
+//     advisory (never excepted, docs/security/SECURITY.md), runs longer than
+//     its severity's window (high 30 days, moderate 90, low 180), or has
+//     reached its reviewDate (expired the day it is due, as
+//     security-sla-enforcement.yml reads it)
 //
 // An exception names one advisory (its GHSA id) in one package. It never
-// names a package as a whole, so a new advisory in the same package blocks.
-// An entry the report does not need is reported as unused and does not fail.
+// names a package as a whole or a severity, so a new advisory in the same
+// package blocks. It applies only while the report lists that advisory: once
+// the locked version is outside the advisory's range, npm audit drops it and
+// the entry is printed as unused (it does not fail; remove it).
+// Each excepted advisory is printed with its end date, reason and ticket
+// (OSE-2121).
 //
 // tests/unit/ci/npm-audit-gate.test.js holds the cases and the born-red record.
 
@@ -31,6 +36,8 @@ export const WINDOW_DAYS = { critical: 0, high: 30, moderate: 90, low: 180, info
 
 const GHSA = /^GHSA-[2-9cfghjmpqrvwx]{4}-[2-9cfghjmpqrvwx]{4}-[2-9cfghjmpqrvwx]{4}$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** A tracker id such as OSE-2121: the place the exception's decision is recorded. */
+const TICKET = /^[A-Z][A-Z0-9]*-\d+$/;
 const REQUIRED = [
   'id',
   'package',
@@ -41,6 +48,7 @@ const REQUIRED = [
   'approvedBy',
   'addedDate',
   'reviewDate',
+  'ticket',
 ];
 
 const dayNumber = (iso) => {
@@ -111,7 +119,10 @@ export function entryProblems(entry, today) {
   if (problems.length) return problems;
   if (!GHSA.test(entry.id))
     problems.push(`${label}: "id" must be a GHSA advisory id (GHSA-xxxx-xxxx-xxxx)`);
-  if (!(entry.severity in WINDOW_DAYS))
+  if (!TICKET.test(entry.ticket))
+    problems.push(`${label}: "ticket" must be a tracker id such as OSE-123`);
+  // Own keys only: `in` would also accept inherited names such as "constructor".
+  if (!Object.hasOwn(WINDOW_DAYS, entry.severity))
     problems.push(`${label}: "severity" must be one of ${Object.keys(WINDOW_DAYS).join(', ')}`);
   if (entry.severity === 'critical')
     problems.push(`${label}: a critical advisory cannot be excepted (docs/security/SECURITY.md)`);
@@ -180,7 +191,12 @@ export function evaluate(report, exceptionsFile, today = todayUtc()) {
       continue;
     }
     used.add(entry);
-    excepted.push({ ...adv, reviewDate: entry.reviewDate });
+    excepted.push({
+      ...adv,
+      reviewDate: entry.reviewDate,
+      reason: entry.reason,
+      ticket: entry.ticket,
+    });
   }
   // A moderate or low advisory never blocks; its entry still counts as used.
   for (const adv of found) {
@@ -207,7 +223,8 @@ export function describe(result) {
   for (const p of result.problems) lines.push(`❌ EXCEPTION FILE: ${p}`);
   for (const a of result.excepted) {
     lines.push(
-      `⚠️  EXCEPTED ${a.severity}: ${a.id} in ${a.package} until ${a.reviewDate} (.security-exceptions.json)`
+      `⚠️  EXCEPTED ${a.severity}: ${a.id} in ${a.package} until ${a.reviewDate} (fails again from that day, UTC). Ticket ${a.ticket}. (.security-exceptions.json)`,
+      `    Reason: ${a.reason}`
     );
   }
   for (const e of result.unused)
