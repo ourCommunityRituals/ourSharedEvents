@@ -11,6 +11,8 @@
  *   - Key restricted to maps-backend.googleapis.com only
  */
 
+import { errorLabel } from './error-label';
+
 export interface MapsEnv {
   GOOGLE_MAPS_API_KEY?: string;
 }
@@ -84,7 +86,9 @@ export async function fetchStaticMapImage(
       JSON.stringify({
         type: 'MAPS_FETCH_ERROR',
         venue: trimmed,
-        error: err instanceof Error ? err.message : String(err),
+        // The class only: the address this call failed on carries the maps key,
+        // and an error is free text that can repeat it (lib/error-label.ts).
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
