@@ -719,7 +719,7 @@ describe('the street-layer switch (STREET_MAP)', () => {
 // surfaces on; the Worker reads anything else as off, which is safe and silent,
 // so these rules make the value be written, as one of the two words, in every
 // block. Production may be "on" only once staging is, and the Bruno copy
-// (votingSwitch, which picks the half of folder 24 that runs) must match
+// (votingSwitch, which picks the half of each voting Bruno folder that runs) must match
 // staging. "As it stands" pins all three off: only the owner turns voting on,
 // and that PR changes a line here.
 // @born-red voting switch | method: each rule is fed the fault that turns it red, in the cases below. Then the real files were faulted one at a time and "the real files agree" or "as it stands" seen failing on each: production set to "on" with staging "off"; staging set to "on" with the copy left at "off"; the copy set to "on"; staging mistyped "ON"; production's line removed. VOTING_ENABLED taken off INTENTIONAL_VALUE_DIFFERENCES failed "the parity check lists a staging-first difference"; VOTING_ON set to 'true' failed "the word the rules call on" | date: 2026-11-18
@@ -764,7 +764,7 @@ describe('the voting kill switch (VOTING_ENABLED)', () => {
     const copy = copyIn(envYaml);
     if (copy !== value.staging) {
       out.push(
-        `${STAGING_ENV} says votingSwitch "${copy}" and wrangler.toml says VOTING_ENABLED "${value.staging}" on staging: folder 24 would run the wrong half`
+        `${STAGING_ENV} says votingSwitch "${copy}" and wrangler.toml says VOTING_ENABLED "${value.staging}" on staging: the voting Bruno folders would run the wrong half`
       );
     }
     return out;
@@ -838,10 +838,10 @@ describe('the voting kill switch (VOTING_ENABLED)', () => {
     expect(switchProblems(allOff(), withCopy(stagingEnv(), 'off'))).toEqual([]);
     expect(switchProblems(stagingOn(), withCopy(stagingEnv(), 'on'))).toEqual([]);
     expect(switchProblems(stagingOn(), withCopy(stagingEnv(), 'off'))).toEqual([
-      `${STAGING_ENV} says votingSwitch "off" and wrangler.toml says VOTING_ENABLED "on" on staging: folder 24 would run the wrong half`,
+      `${STAGING_ENV} says votingSwitch "off" and wrangler.toml says VOTING_ENABLED "on" on staging: the voting Bruno folders would run the wrong half`,
     ]);
     expect(switchProblems(allOff(), withCopy(stagingEnv(), 'on'))).toEqual([
-      `${STAGING_ENV} says votingSwitch "on" and wrangler.toml says VOTING_ENABLED "off" on staging: folder 24 would run the wrong half`,
+      `${STAGING_ENV} says votingSwitch "on" and wrangler.toml says VOTING_ENABLED "off" on staging: the voting Bruno folders would run the wrong half`,
     ]);
   });
 
