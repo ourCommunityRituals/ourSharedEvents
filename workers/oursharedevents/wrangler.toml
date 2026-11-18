@@ -332,7 +332,9 @@ MAP_TILES_ARCHIVE = "us-20261115.pmtiles"
 STREET_MAP = "on"
 # The voting kill switch (lib/voting-switch.ts; OSE-2135, OSE ADR-040). Off:
 # the open-objects read is the router's 404, /q mints no vote pass and the vote
-# route refuses. Only the owner turns it on, in a PR of its own. votingSwitch in
+# route refuses. Only the owner turns it on, in a PR of its own, and not before
+# the voter page (S4b, OSE-2129) ships: until then a vote code's redirect has no
+# page to land on (S3b security review, F4). votingSwitch in
 # bruno/ose-api/environments/ose-staging.yml is a copy of this value, so the
 # staging cases know which half to run; tests/unit/ci/env-parity.test.js holds
 # the two equal.
@@ -507,8 +509,9 @@ MAP_TILES_ARCHIVE = "us-20261115.pmtiles"
 # only once staging is (tests/unit/ci/env-parity.test.js), in a PR of its own.
 STREET_MAP = "off"
 # The voting kill switch (see the staging block). Off: production stays inert
-# for voting. Staging goes first: this may be "on" only once staging is, and only
-# by the owner (tests/unit/ci/env-parity.test.js; OSE-2135).
+# for voting. Staging goes first: this may be "on" only once staging is, only
+# by the owner, and not before the voter page (S4b, OSE-2129) ships
+# (tests/unit/ci/env-parity.test.js; OSE-2135).
 VOTING_ENABLED = "off"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"

@@ -5,7 +5,9 @@
  * A plain value in each `vars` block of wrangler.toml, like `STREET_MAP`.
  * Exactly "on" turns the public vote surfaces on. "off", no value, a typo or
  * anything else is off. Off is the default in every block: local dev and the
- * test pool, staging and production. Only the owner turns it on, and
+ * test pool, staging and production. Only the owner turns it on, never before
+ * the voter page (S4b, OSE-2129) ships (a vote code's redirect needs a page to
+ * land on; S3b security review, F4), and
  * `scripts/ci/env-parity.mjs` lists it so that production can be "on" only once
  * staging is (tests/unit/ci/env-parity.test.js).
  *
