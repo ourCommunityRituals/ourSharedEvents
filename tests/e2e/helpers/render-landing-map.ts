@@ -130,8 +130,40 @@ function load(): Promise<Bundle> {
 
 const TOWNS = ['Blue Island', 'Calumet Park', 'Riverdale', 'Posen', 'Dixmoor', 'Midlothian'];
 
-/** A town name in the middle of every tile, as the Protomaps `places` layer has them. */
+const STREETS = ['Western Ave', 'Kedzie Ave', 'Vermont St', 'Grove St', 'Burr Oak Ave'];
+const PARKS = ['Memorial Park', 'Centennial Park', 'Kelly Park', 'Hart Park'];
+
+/**
+ * In every tile: a town name in the middle, as the Protomaps `places` layer has
+ * them; a named major street across its lower part; and a park, so street
+ * names and landmarks (lib/street-labels.ts) are drawn and measured too.
+ */
 const towns = (x: number, y: number): FixtureLayer[] => [
+  {
+    name: 'roads',
+    features: [
+      {
+        type: 2,
+        props: { kind: 'major_road', name: STREETS[(x + y * 2) % STREETS.length]! },
+        parts: [
+          [
+            [0, 3100],
+            [4096, 3100],
+          ],
+        ],
+      },
+    ],
+  },
+  {
+    name: 'pois',
+    features: [
+      {
+        type: 1,
+        props: { kind: 'park', name: PARKS[(x * 2 + y) % PARKS.length]!, min_zoom: 12 },
+        parts: [[[900, 2600]]],
+      },
+    ],
+  },
   {
     name: 'places',
     features: [

@@ -72,6 +72,16 @@ import {
 } from './pmtiles.js';
 import { decodeTile, type DecodeCounts, type MvtLayer } from './mvt.js';
 import { escapeHtml } from './html-escape.js';
+import {
+  landmarkOf,
+  longestRun,
+  overlaps,
+  placeLabels,
+  roadText,
+  type Box,
+  type Landmark,
+  type RoadRun,
+} from './street-labels.js';
 
 export const MAP_W = 600;
 export const MAP_H = 360;
@@ -337,6 +347,13 @@ export interface DecodedTile {
 }
 
 const WANTED = new Set(['water', 'roads', 'places']);
+const POI_LAYER = new Set(['pois']);
+/** What the landmarks of one frame may hold between them, decoded (see FRAME_LIMITS). */
+export const POI_LIMITS: Readonly<DecodeCounts> = Object.freeze({
+  features: 20_000,
+  points: 20_000,
+  props: 200_000,
+});
 
 /** What the layer draws its lines and shapes as, in the order the point budget pays them. */
 export type StreetKind = 'highway' | 'major' | 'minor' | 'water' | 'rivers';
@@ -501,10 +518,6 @@ interface Label {
   rank: number;
 }
 
-type Box = [number, number, number, number];
-
-const overlaps = (a: Box, b: Box) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
-
 /** The street layer's markup and what it holds. */
 export interface StreetDrawing {
   svg: string;
@@ -542,6 +555,8 @@ export function drawStreetLayer(
     rivers: [],
   };
   const labels: Label[] = [];
+  const runs: RoadRun[] = [];
+  const landmarks: Landmark[] = [];
   const margin = 12;
 
   for (const t of tiles) {
@@ -558,6 +573,13 @@ export function drawStreetLayer(
           if (typeof name !== 'string' || !name || !pt) continue;
           const rank = Number(feat.props.population_rank ?? 0);
           labels.push({ text: name, x: ox + pt[0] * k, y: oy + pt[1] * k, rank });
+          continue;
+        }
+        if (layer.name === 'pois') {
+          const pt = feat.geometry[0]?.[0];
+          if (feat.type !== 1 || !pt) continue;
+          const lm = landmarkOf(feat.props, ox + pt[0] * k, oy + pt[1] * k);
+          if (lm) landmarks.push(lm);
           continue;
         }
         let kind: StreetKind | null = null;
@@ -591,6 +613,19 @@ export function drawStreetLayer(
             continue;
           }
           if (pts.length < fewest(kind === 'water')) continue;
+          if (kind === 'highway' || kind === 'major') {
+            const text = roadText(feat.props, kind === 'highway');
+            const run = text ? longestRun(pts) : null;
+            if (run)
+              runs.push({
+                text,
+                rank: kind === 'highway' ? 0 : 1,
+                x1: run[0],
+                y1: run[1],
+                x2: run[2],
+                y2: run[3],
+              });
+          }
           found[kind].push({ pts, span: xMax - xMin + (yMax - yMin), rank: ranks[kind]++ });
         }
       }
@@ -624,11 +659,13 @@ export function drawStreetLayer(
 
   // Town names: biggest first, inside the frame, clear of each other and of the
   // hexagon numbers.
-  const taken: Box[] = cells.map((c) => {
+  const numbers = cells.map((c) => {
     const [lat, lng] = cellToLatLng(c);
     const [x, y] = project(f, lat, lng);
-    return [x - 40, y - 24, x + 40, y + 52];
+    return { box: [x - 40, y - 24, x + 40, y + 52] as Box, cx: x, cy: y };
   });
+  const taken: Box[] = numbers.map((n) => n.box);
+  const towns: { box: Box; cx: number; cy: number }[] = [];
   const placed: string[] = [];
   for (const l of labels.sort((a, b) => b.rank - a.rank || a.text.localeCompare(b.text))) {
     if (placed.length >= MAX_LABELS) break;
@@ -637,11 +674,13 @@ export function drawStreetLayer(
     if (box[0] < 0 || box[2] > f.w || box[1] < 0 || box[3] > f.h) continue;
     if (taken.some((t) => overlaps(t, box))) continue;
     taken.push(box);
+    towns.push({ box, cx: l.x, cy: l.y });
     placed.push(
       `<text class="as-t" x="${l.x.toFixed(0)}" y="${l.y.toFixed(0)}" text-anchor="middle">${escapeHtml(l.text)}</text>`
     );
   }
 
+  const names = placed.join('') + placeLabels(f.w, f.h, runs, landmarks, [...numbers, ...towns]);
   const path = (cls: string, data: string) => (data ? `<path class="${cls}" d="${data}"/>` : '');
   const svg =
     `<g class="amap-s" aria-hidden="true" data-testid="amap-streets" data-z="${z}">` +
@@ -651,9 +690,23 @@ export function drawStreetLayer(
     path('as-r as-1', d.minor) +
     path('as-r as-2', d.major) +
     path('as-r as-3', d.highway) +
-    placed.join('') +
-    `</g>`;
+    `</g>` +
+    // Names over the hexagons, not under them (lib/street-labels.ts).
+    (names ? `${LABELS_OPEN}${names}</g>` : '');
   return { svg, drawn };
+}
+
+/**
+ * The start of the names group. The map splits the layer here and draws its
+ * hexagons between the streets and the names (`splitStreetLayer`).
+ */
+export const LABELS_OPEN =
+  '<g class="amap-sl" aria-hidden="true" pointer-events="none" data-testid="amap-labels">';
+
+/** A layer as the streets (under the hexagons) and the names (over them). */
+export function splitStreetLayer(svg: string): [string, string] {
+  const at = svg.indexOf(LABELS_OPEN);
+  return at < 0 ? [svg, ''] : [svg.slice(0, at), svg.slice(at)];
 }
 
 /** Points to path data: one command a point. */
@@ -707,6 +760,14 @@ export async function readStreetDrawing(
     y: want[i]![1],
     layers: decodeTile(bytes!, WANTED, left),
   }));
+  // Landmarks are read on a budget of their own, and a frame whose landmarks
+  // are past it is drawn with none: they are never a reason the streets fail.
+  const poiLeft: DecodeCounts = { ...POI_LIMITS };
+  try {
+    tiles.forEach((t, i) => t.layers.push(...decodeTile(read[i]!, POI_LAYER, poiLeft)));
+  } catch {
+    for (const t of tiles) t.layers = t.layers.filter((l) => l.name !== 'pois');
+  }
   return drawStreetLayer(f, r.z, tiles, numbered);
 }
 
@@ -741,7 +802,7 @@ export async function buildStreetLayer(
  * (OSE ADR-036 D5, the edge store, which is the owner's to decide and is not
  * built). Raise it with any change to what `drawStreetLayer` writes.
  */
-export const DRAWER_VERSION = 1;
+export const DRAWER_VERSION = 2;
 
 /**
  * Characters of drawn layers, with their names, kept in an isolate at most. A

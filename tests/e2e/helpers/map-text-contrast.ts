@@ -29,7 +29,14 @@ export interface PaintRead {
 }
 
 export interface MapTextRead {
-  kind: 'town name' | 'dot number' | 'pale dot number' | 'area number' | 'other';
+  kind:
+    | 'town name'
+    | 'street name'
+    | 'landmark name'
+    | 'dot number'
+    | 'pale dot number'
+    | 'area number'
+    | 'other';
   text: string;
   /** Font size on screen, in CSS px. */
   px: number;
@@ -77,6 +84,7 @@ export async function readMapText(page: Page): Promise<MapTextRead[]> {
       ['amap-zone', "the area's outline"],
       ['amap-cell', 'a hexagon'],
       ['amap-dot', 'its dot'],
+      ['as-pm', "a landmark's mark"],
     ];
     const nameOf = (el: Element): string =>
       NAMES.find(([cls]) => el.classList.contains(cls))?.[1] ??
@@ -153,7 +161,11 @@ export async function readMapText(page: Page): Promise<MapTextRead[]> {
             : 'dot number'
           : el.closest('.amap-num')
             ? 'area number'
-            : 'other';
+            : el.closest('.as-n')
+              ? 'street name'
+              : el.closest('.as-p')
+                ? 'landmark name'
+                : 'other';
 
     return [...svg.querySelectorAll<SVGTextElement>('text')].map((el) => {
       const cs = getComputedStyle(el);

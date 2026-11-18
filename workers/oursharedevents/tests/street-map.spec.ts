@@ -30,6 +30,7 @@
 // @born-red every tile of the frame, the frame's decode limits, the edges of the world (street-map CCR 2026-11-15, R15, R2, R49) | method: 9 faults injected one at a time in src/lib/street-map.ts and one in src/lib/mvt.ts, each seen failing the case named for it in the PR's fault list. The first puts main's lines back (a tile that is there is drawn): the R15 case failed. With the frame limit not passed to the decoder, and with the tile limit taken out, the "one point more" archive of that case drew. The three edge cases pin what the frame already did, so their red is the injected fault alone | date: 2026-11-15
 // @born-red a river is a line (the last survivor of street-map.ts in the mutation run) | method: `feat.type === 2` turned to `true` in drawStreetLayer (src/lib/street-map.ts), the mutant that survived on main (run 43731915136) and on PR 1295; "a river is a line in the water layer" seen failing on it (rivers: 6 points drawn, 2 wanted) while the other 229 cases of the four street specs stayed green, then the line put back | date: 2026-11-15
 // @born-red the object under the key is replaced, or is not the pinned one (S12) | method: the block run on the loader and reader of 44948a04: "replaced between two requests" and "MAP_TILES_ETAG is another etag" failed, and so did "never who: the reads depend on the cells alone" once it asked for the etag on every get after the first. Then faults, one at a time, each put back: the loader's counting source not handing the version on ("replaced between two requests" and the never-who case); `env.MAP_TILES_ETAG` not handed to r2Source ("is another etag", "the pinned object replaced"); the pin not compared in src/lib/pmtiles.ts (the same two); a changed archive not forgotten ("replaced between two requests": the third request had no streets) | date: 2026-11-16
+import { LABELS_OPEN } from '../src/lib/street-map';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   cellToBoundary,
@@ -1656,7 +1657,10 @@ describe('street map | loading (fail soft)', () => {
     expect(one!.svg).toContain('>Nexto</text>');
     // Same frame, same tiles, same key either way.
     expect(one!.cellsKey).toBe(all!.cellsKey);
-    expect(one!.svg.replace(/<text[^>]*>Nexto<\/text>/, '')).toBe(all!.svg);
+    // Without its one name the names group is left empty.
+    expect(one!.svg.replace(/<text[^>]*>Nexto<\/text>/, '').replace(`${LABELS_OPEN}</g>`, '')).toBe(
+      all!.svg
+    );
 
     // And through the loader, which is what the handler calls.
     const env = { STREET_MAP: 'on', MAP_TILES: fakeBucket(DEFAULT_ARCHIVE, archive) };

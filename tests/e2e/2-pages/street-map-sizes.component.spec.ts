@@ -233,7 +233,11 @@ async function measure(page: Page): Promise<Measured> {
           ? 'dot number'
           : el.closest('.amap-num')
             ? 'area number'
-            : 'other';
+            : el.closest('.as-n')
+              ? 'street name'
+              : el.closest('.as-p')
+                ? 'landmark name'
+                : 'other';
     const texts = [...svg.querySelectorAll('text')].map((el) => {
       const r = el.getBoundingClientRect();
       const mid = [r.left + r.width / 2, r.top + r.height / 2] as const;
@@ -242,7 +246,13 @@ async function measure(page: Page): Promise<Measured> {
         text: (el.textContent ?? '').trim(),
         px: parseFloat(getComputedStyle(el).fontSize) * scale,
         // A name the frame cuts off is not read, so it is not held to the floor.
-        shown: mid[0] > box.left && mid[0] < box.right && mid[1] > box.top && mid[1] < box.bottom,
+        // A name kept for the zoom (display: none) is not shown either.
+        shown:
+          r.width > 0 &&
+          mid[0] > box.left &&
+          mid[0] < box.right &&
+          mid[1] > box.top &&
+          mid[1] < box.bottom,
       };
     });
     const dots = [...svg.querySelectorAll<SVGAElement>('[data-testid="amap-dot"]')].map((a) => {
@@ -355,8 +365,19 @@ for (const screen of PHONES) {
       }
       const numbers = m.texts.filter((t) => t.kind === 'dot number');
       expect(numbers.length, 'a number on every dot').toBe(5);
-      const names = m.texts.filter((t) => t.kind === 'town name' && t.shown);
+      const names = m.texts.filter(
+        (t) =>
+          (t.kind === 'town name' || t.kind === 'street name' || t.kind === 'landmark name') &&
+          t.shown
+      );
       expect(names.length, 'at least one town name is drawn').toBeGreaterThan(0);
+      // Street names and landmarks are drawn; one kept for the zoom is hidden
+      // until then, and is held to the floor once it is shown.
+      for (const kind of ['street name', 'landmark name']) {
+        expect(m.texts.filter((t) => t.kind === kind).length, `a ${kind} is drawn`).toBeGreaterThan(
+          0
+        );
+      }
       for (const t of [...numbers, ...names]) {
         expect(round(t.px), `${t.kind} "${t.text}"`).toBeGreaterThanOrEqual(TEXT_PX);
       }
@@ -391,8 +412,19 @@ for (const screen of PHONES) {
           `area ${a.n}: a tap at its centre or 15 px from it opens this area`
         ).toBe(true);
       }
-      const names = m.texts.filter((t) => t.kind === 'town name' && t.shown);
+      const names = m.texts.filter(
+        (t) =>
+          (t.kind === 'town name' || t.kind === 'street name' || t.kind === 'landmark name') &&
+          t.shown
+      );
       expect(names.length, 'at least one town name is drawn').toBeGreaterThan(0);
+      // Street names and landmarks are drawn; one kept for the zoom is hidden
+      // until then, and is held to the floor once it is shown.
+      for (const kind of ['street name', 'landmark name']) {
+        expect(m.texts.filter((t) => t.kind === kind).length, `a ${kind} is drawn`).toBeGreaterThan(
+          0
+        );
+      }
       for (const t of [...numbers, ...names]) {
         expect(round(t.px), `${t.kind} "${t.text}"`).toBeGreaterThanOrEqual(TEXT_PX);
       }

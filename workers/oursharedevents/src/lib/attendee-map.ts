@@ -98,8 +98,13 @@ import {
   cellsKey,
   frameForCells,
   project,
+  splitStreetLayer,
+  type MapFrame,
   type StreetLayer,
 } from './street-map.js';
+import { LABEL_STYLE } from './map-label-style.js';
+import { PAN_STYLE } from './map-pan-style.js';
+import { PAN_SCRIPT } from './map-pan-script.js';
 
 export interface AttendeeMapItem {
   id?: unknown;
@@ -513,7 +518,16 @@ function svgFor(
         : links === 0
           ? `<a href="${href}" data-testid="amap-area-link">${body}</a>`
           : `<a class="amap-w${links}" href="${href}" data-testid="amap-area-link">${body}</a><g class="amap-n${links}">${body}</g>`;
-      return `<g${areaClassAttr(a, filterClasses)} data-testid="amap-area" data-cell="${a.cell}" data-count="${k}">${inner}</g>`;
+      // With a street map, where the area's middle is and what it is called, for
+      // the distance the map's script works out on the phone
+      // (lib/map-pan-script.ts). Both come from the public cell id and the
+      // public address, as the drawing does.
+      const where = streets
+        ? ` data-ll="${cellToLatLng(a.cell)
+            .map((v) => v.toFixed(5))
+            .join(',')}" data-name="${escapeHtml(a.name || String(a.n))}"`
+        : '';
+      return `<g${areaClassAttr(a, filterClasses)} data-testid="amap-area" data-cell="${a.cell}" data-count="${k}"${where}>${inner}</g>`;
     })
     .join('');
   const cut = tall ? ' preserveAspectRatio="xMidYMid slice"' : '';
@@ -522,8 +536,10 @@ function svgFor(
   // reader would skip the hexagon links the keyboard still stops on. With no
   // link in it, the drawing is one picture.
   const role = links === null ? 'img' : 'group';
+  // The street map under the hexagons, its names over them (lib/street-labels.ts).
+  const [under, names] = splitStreetLayer(streets ?? '');
   return {
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"${cut} role="${role}" aria-labelledby="amap-caption" data-testid="amap-svg">${streets ?? ''}${shapes}</svg>`,
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"${cut} role="${role}" aria-labelledby="amap-caption" data-testid="amap-svg"${streets ? frameAttrs(frame) : ''}>${under}${shapes}${names}</svg>`,
     tall,
     links,
   };
@@ -605,12 +621,59 @@ function eventLink(
   return classes ? `<span class="${escapeHtml(classes)}">${before}${link}</span>` : link;
 }
 
+/**
+ * The drawing's frame, for the map's script (lib/map-pan-script.ts): where a
+ * position falls on it, and how many metres a map unit is at its middle, for
+ * the scale bar. The frame comes from the drawn cell ids alone.
+ */
+function frameAttrs(f: MapFrame): string {
+  const midY = f.y0 + f.h / 2 / f.scale;
+  const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * midY)));
+  const mpu = (40_075_016.686 * Math.cos(lat)) / f.scale;
+  return ` data-x0="${f.x0.toFixed(9)}" data-y0="${f.y0.toFixed(9)}" data-scale="${f.scale.toFixed(3)}" data-mpu="${mpu.toFixed(3)}"`;
+}
+
+/**
+ * The map's zoom buttons, its scale bar and the line about where the visitor
+ * is. Hidden until the map's script shows them, so a page without the script
+ * shows no button that does nothing. The words the script writes ride on the
+ * block, already in the page's language.
+ */
+function panControls(lang: Lang): string {
+  const w = (key: Parameters<typeof msg>[1]) => escapeHtml(msg(lang, key));
+  const words = [
+    ['from', 'map.fromYou'],
+    ['miles', 'map.miles'],
+    ['you', 'map.you'],
+    ['outside', 'map.youOutside'],
+    ['nearest', 'map.nearest'],
+    ['locating', 'map.locating'],
+    ['off', 'map.locationOff'],
+  ] as const;
+  const data = words.map(([k, key]) => ` data-${k}="${w(key)}"`).join('');
+  const b = (z: string, label: string, text: string) =>
+    `<button type="button" class="btn btn-secondary" data-z="${z}" data-testid="amap-${z}"${label ? ` aria-label="${label}"` : ''}>${text}</button>`;
+  return (
+    `<div class="amap-ctl" data-testid="amap-ctl" hidden${data}>` +
+    b('in', w('map.zoomIn'), '+') +
+    b('out', w('map.zoomOut'), '&minus;') +
+    b('reset', '', w('map.zoomReset')) +
+    b('me', '', w('map.showMe')) +
+    `<span class="amap-scale" role="img" aria-label="${w('map.scale')}" data-testid="amap-scale"><span class="amap-bar"></span><span data-testid="amap-scale-text"></span></span>` +
+    `<p data-testid="amap-hint">${w('map.zoomHint')}</p>` +
+    `<p aria-live="polite" data-testid="amap-you-status"></p>` +
+    `</div>`
+  );
+}
+
 function legendFor(
   areas: AttendeeMapArea[],
   lang: Lang,
   sponsorTitles?: ReadonlyMap<string, string>,
   zoomHref?: (cell: string) => string,
-  filterClasses?: FilterClasses
+  filterClasses?: FilterClasses,
+  /** The map's script is on: each row says which area it is, for its distance. */
+  pan = false
 ): string {
   const rows = areas
     .map((a) => {
@@ -636,7 +699,7 @@ function legendFor(
       const zoom = zoomHref
         ? ` <a class="amap-zoom" href="${escapeHtml(zoomHref(a.cell))}" data-testid="amap-zoom">${msg(lang, 'map.zoomIn')}</a>`
         : '';
-      return `<li value="${a.n}"${areaClassAttr(a, filterClasses)} data-testid="amap-legend-area"><strong>${place}${eventCount(k, lang)}:</strong> ${links}${zoom}</li>`;
+      return `<li value="${a.n}"${areaClassAttr(a, filterClasses)} data-testid="amap-legend-area"${pan ? ` data-area="${a.cell}"` : ''}><strong>${place}${eventCount(k, lang)}:</strong> ${links}${zoom}</li>`;
     })
     .join('');
   return `<ol class="amap-legend" data-testid="amap-legend">${rows}</ol>`;
@@ -735,7 +798,7 @@ function dotHref(d: MapDot): string {
   return `#amap-dot-${d.n}`;
 }
 
-function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets: string): string {
+function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets: string, name: string): string {
   const frame = frameForCells([cell], W, H);
   const fx = (v: number) => v.toFixed(1);
   const ring = cellToBoundary(cell)
@@ -762,9 +825,13 @@ function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets: string): str
     .join('');
   // "slice": in a box taller than the frame the drawing fills the box and its
   // sides are cut (map-narrow-style.ts). In a 5 by 3 box it changes nothing.
+  const [under, names] = splitStreetLayer(streets);
+  const ll = cellToLatLng(cell)
+    .map((v) => v.toFixed(5))
+    .join(',');
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" role="group" aria-labelledby="amap-caption" data-testid="amap-svg">` +
-    `${streets}<polygon class="amap-zone" points="${ring}" data-testid="amap-zone" data-cell="${cell}"/>${marks}</svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" role="group" aria-labelledby="amap-caption" data-testid="amap-svg"${frameAttrs(frame)}>` +
+    `${under}<polygon class="amap-zone" points="${ring}" data-testid="amap-zone" data-cell="${cell}" data-ll="${ll}" data-name="${escapeHtml(name)}"/>${names}${marks}</svg>`
   );
 }
 
@@ -818,7 +885,7 @@ function renderZoom(
     : fmt(lang, streets ? 'map.zoomCaption' : 'map.listCaption', { events, days });
   // No street map, no floating dots (OSE-1894): the event cards below are the list.
   const drawing = streets
-    ? zoomSvg(cell, dots, lang, streets)
+    ? zoomSvg(cell, dots, lang, streets, area.name || '1')
     : `<div class="map-placeholder" data-testid="amap-no-tiles" role="status"><p>${msg(lang, 'map.noTiles')}</p></div>`;
   const byId = new Map(inArea.map((e) => [str(e.id), e]));
   const places: PanelPlace[] = dots.map((d) => ({
@@ -827,13 +894,13 @@ function renderZoom(
     events: d.events.map((ev) => ({ ...(byId.get(ev.id) as PanelEvent), classes: ev.classes })),
   }));
   const panels = renderPlacePanels(places, { lang, sponsorTitles, ...panel });
-  const html = `<div class="amap-wrap" data-testid="amap-wrap"><figure class="amap" data-testid="amap" data-zoom="${cell}">
-              ${MAP_STYLE}${ZOOM_STYLE}${streets ? STREET_STYLE : ''}${NARROW_MAP_STYLE}
+  const html = `<div class="amap-wrap" data-testid="amap-wrap"><figure class="amap" data-testid="amap" data-zoom="${cell}"${streets ? ' data-pan' : ''}>
+              ${MAP_STYLE}${ZOOM_STYLE}${streets ? STREET_STYLE + LABEL_STYLE + PAN_STYLE : ''}${NARROW_MAP_STYLE}
               ${back}
-              ${drawing}
+              ${drawing}${streets ? panControls(lang) : ''}
               ${zoomLegend()}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>${credit}
-            </figure>${panels}</div>`;
+            </figure>${panels}</div>${streets ? PAN_SCRIPT : ''}`;
   return { html, state: 'map', count: inArea.length, areas: [{ ...area, n: 1 }] };
 }
 
@@ -932,11 +999,11 @@ export function renderAttendeeMap(
       : map.links === 0
         ? ` ${msg(lang, 'map.tapToZoom')}`
         : ` <span class="amap-w${map.links}" data-testid="amap-tap">${msg(lang, 'map.tapToZoom')}</span>`;
-  const html = `<figure class="amap" data-testid="amap"${map.tall ? ' data-tall' : ''}>
-              ${MAP_STYLE}${streets ? STREET_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}${NARROW_MAP_STYLE}${map.links ? LINK_STYLE : ''}
-              ${map.svg}
-              ${legendFor(drawn, lang, opts?.sponsorTitles, opts?.zoomHref, opts?.filterClasses)}
+  const html = `<figure class="amap" data-testid="amap"${map.tall ? ' data-tall' : ''}${streets ? ' data-pan' : ''}>
+              ${MAP_STYLE}${streets ? STREET_STYLE + LABEL_STYLE + PAN_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}${NARROW_MAP_STYLE}${map.links ? LINK_STYLE : ''}
+              ${map.svg}${streets ? panControls(lang) : ''}
+              ${legendFor(drawn, lang, opts?.sponsorTitles, opts?.zoomHref, opts?.filterClasses, !!streets)}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}${tap}</figcaption>${credit}
-            </figure>`;
+            </figure>${streets ? PAN_SCRIPT : ''}`;
   return { html, state: 'map', count, areas: drawn };
 }

@@ -448,14 +448,14 @@ describe('kept street layers | a null is never kept', () => {
 
 describe('kept street layers | the name a layer is kept under', () => {
   it('the drawer version, the frame size, the cells sorted, the numbered cells sorted', () => {
-    expect(DRAWER_VERSION).toBe(1);
-    expect(layerName(['b', 'a'], ['b'], 300, 200)).toBe('1|300x200|a,b|b');
-    expect(layerName(['b', 'a'], ['c', 'b'], 300, 200)).toBe('1|300x200|a,b|b,c');
+    expect(DRAWER_VERSION).toBe(2);
+    expect(layerName(['b', 'a'], ['b'], 300, 200)).toBe('2|300x200|a,b|b');
+    expect(layerName(['b', 'a'], ['c', 'b'], 300, 200)).toBe('2|300x200|a,b|b,c');
   });
 
   it('with nothing said: every cell carries a number, and the frame is the map size', () => {
     expect(layerName(['b', 'a'])).toBe(`${DRAWER_VERSION}|${MAP_W}x${MAP_H}|a,b|a,b`);
-    expect(layerName([BLUE7])).toBe(`1|600x360|${BLUE7}|${BLUE7}`);
+    expect(layerName([BLUE7])).toBe(`2|600x360|${BLUE7}|${BLUE7}`);
   });
 
   it('the object: the source key and the etag, and no two objects share a name', () => {
