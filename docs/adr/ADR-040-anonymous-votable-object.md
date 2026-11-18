@@ -78,7 +78,7 @@ A song object stands for one play. OurWKRP keeps the link from its `playback_eve
 
 The owner confirmed this on 2026-11-18 (C1), and added that it sets up voting on whatever else comes to be voted on: an art competition, community parade floats, and so on. Each of those is one more kind of object; the engine does not change.
 
-An object is a thing: a song or a stall. On a team night each song carries its team, and the team is what wins (decision 7). A person may be the object only if they opted in as a presenter (Q9; AGENTS.md invariant 1). Labels refuse email- and phone-shaped text.
+An object is a thing: a song or a stall. On a team night each song carries its team in `group_id`, set when the song is created and fixed once the set first opens, and the team is what wins (decision 7). A person may be the object only if they opted in as a presenter (Q9; AGENTS.md invariant 1). Labels refuse email- and phone-shaped text.
 
 ### 3. A song's window follows the song, not the hour
 
@@ -94,7 +94,7 @@ A person has one vote per object:
 
 - per song, for Fist of Five;
 - per stall, for a fair;
-- per event: an event has one vote set (decision 1), and the set reports one result (Q14), so the event-level vote is the set's result itself. There is no separate event-level object; a single object would have no runner-up to be compared with. A set holds objects of one kind (songs, or stalls). On a Fist of Five night the songs are the vote, and the night's winner is the result.
+- per event: an event has one vote set (decision 1), and the set reports one result (Q14), so the event-level vote is the set's result itself. There is no separate event-level object; a single object would have no runner-up to be compared with. A set holds objects of one kind (songs, or stalls), and is played by songs or by teams, fixed when it first opens (decision 7). On a Fist of Five night the songs are the vote, and the night's winner is the result.
 
 Dedup is the receipt per object. A duplicate changes nothing and answers the same as a counted vote. "To start" means the limits may be loosened later by a new decision; none is built for that now.
 
@@ -110,7 +110,7 @@ The vote write is a `POST` outside `/api/v2/events*`, handled on the `DB` side. 
 
 A vote counts only from a browser that scanned this event's vote code. Every cookie read stays inside `/q` (D3 reversed).
 
-- At `/q`, a vote-kind code, with a set open and `VOTING_ENABLED` on, derives a per-event voter key `k = HMAC(K_voter, len(cookie) ‖ cookie ‖ event_id)`. `K_voter` comes from `ANON_ID_HASH_PEPPER` by HKDF under its own label, separate from the scan key, the pass seal, the receipt key and the participant key. k differs at every event and is stored nowhere.
+- At `/q`, a vote-kind code, with a set open and `VOTING_ENABLED` on, derives a per-event voter key `k = HMAC(K_voter, len(cookie) ‖ cookie ‖ event_id)`. `K_voter` comes from `ANON_ID_HASH_PEPPER` by HKDF under its own label, separate from the scan key, the pass seal, the receipt key, the participant key and the team key. k differs at every event and is stored nowhere.
 - `/q` mints a pass only when the pepper is set and the scan was stored, or was a duplicate of one stored. The uncounted path mints none, a missing key mints none, and a failed write mints none.
 - The pass is `{event_id, expiry, pepper_epoch, k}`, sealed with a MAC under `K_pass`, which comes from `ANON_ID_HASH_PEPPER` by HKDF under its own label, so it differs in each environment. `/q` puts it in the redirect's fragment (`/events/:id/vote#t=…`), so it is never in a query string, a `Referer` or a request log.
 - The voter page reads the fragment and removes it from the address bar at once. It keeps the pass in memory only, writes nothing to storage, and posts it in the JSON body. With no pass, it says to scan the code on the screen again.
@@ -143,7 +143,7 @@ After the event, results are computed once (decision 4). Only these are publishe
 - **No per-object number.** No up or "not for me" count, for any object, is ever published. No total of them is published either: not for a team, not across objects, not across nights.
 - **A secret voter floor (Q13).** Nothing is published unless the set's distinct voters (participant markers, counted raw) reach V. V is a secret whole number drawn for the set, uniform from 10 to 14. Below V, the night reads "too close to call, the champion retains", the same words as a close result, so the reading alone does not say which rule applied.
 - **One result per set: the night's winner (Q14).** A set reports exactly one outcome: the winner of the night, or "too close to call, the champion retains". A set is played either by songs or by teams, fixed when it first opens. By songs, the winner is the song with the largest up count, against the runner-up song. By teams, the winner is the team with the largest total, against the runner-up team, where a team's total is the number of distinct voters who gave any of its songs an up vote (Q16, decision 1). Either way, one voter moves the lead by at most 2 and the voter count by at most 1, so the rates in this decision hold. No per-song result, no standings and no runner-up are published.
-- **The winner rule.** It runs on the unpublished up counts only; "not for me" counts are not used in the margin. A winner needs an up-count lead over the runner-up of at least T. T is a secret whole number drawn for the set, uniform from 5 to 9 (Q8 A).
+- **The winner rule.** It runs on the unpublished up counts only (a song's up count, or a team's total of distinct up-voters); "not for me" counts are not used in the margin. A winner needs a lead over the runner-up of at least T. T is a secret whole number drawn for the set, uniform from 5 to 9 (Q8 A).
 - **How T and V are drawn.** Each comes from `crypto.getRandomValues`, by rejection sampling, so no value is more likely. Both are drawn when the set first opens, before any vote, and are never redrawn, not even at a reopen. They are stored only on the server, in columns no route returns, and never logged. They are set to null when the set is final, and they are never published. The outcome tells only whether the hidden lead cleared T and the voters reached V, so a person who controls the votes learns a bound on that set's numbers and nothing about any other set's.
 - **No count of voters** is published, for a night or a season, and no participation figure (Q8-2).
 - Own-team voting is allowed.
@@ -174,7 +174,7 @@ The owner accepts these residual risks, and the voter page states them in plain 
 - **One vote can decide the result.** One person who casts every vote but one, and knows who the last voter is, can learn how that person voted from the night's result up to about two times in five per night, and more often over several nights against the same person. The owner accepted this knowingly (Q15). The margin varies to make this rare; it cannot make it impossible (decision 7).
 - **Remote voting.** A photo of the code lets someone vote from elsewhere while voting is open.
 - **A forwarded pass.** The pass works for whoever holds it. Someone who gets a person's vote link while it is valid can vote in their place, once per song. The person's own vote then answers like a counted one, so they cannot tell. Whoever holds the pass may also learn, from how fast a duplicate answers, which songs the person already voted on. It reveals no identity.
-- **Database history.** For 30 days, D1's history can link a scan to a vote by the order of writes, and it holds the secret margins and voter floors until then.
+- **Database history.** For 30 days, D1's history can link a scan to a vote by the order of writes, and it holds the secret margins and voter floors until then. On a team night it also shows when a voter backs a second song of a team already backed, which links votes within one set, never across teams or events. A receipt carries no side, but a team marker is written only for an up vote: until final, someone who holds the pepper and a person's cookie can work out k and test which teams that browser backed. The markers are deleted at final.
 - **Log timing.** Cloudflare's logs record when each vote arrives, to the millisecond. With one song open, that time names the song. Only the account holder can see them.
 - **Timing.** A duplicate may answer faster than a counted vote.
 - **Whether someone voted.** One person who casts every vote but one, and knows who the last possible voter is, can, about one time in five to one time in three per set, tell whether that person voted at all, and more often over several nights. The minimum number of voters varies to make this rare; it cannot make it impossible (decision 7).
@@ -222,7 +222,7 @@ This was D3 as first decided, with an amendment to AGENTS.md invariant 4 (S1g).
 
 ### Positive
 
-- One engine serves songs, stalls, teams and an event-wide vote.
+- One engine serves songs, stalls, team nights and an event-wide vote.
 - No table can say who voted, and no cookie reaches the vote route.
 - Song windows can be as short as the song.
 - No per-object number is ever published, so a small count cannot be read off.
@@ -247,11 +247,11 @@ The stories (D10 = yes; each is a Linear ticket under OSE-1193):
 - **Cancelled:** S1g (OSE-2124). D3 is reversed, so invariant 4 is not amended.
 - **After S1:**
   - S2 (OSE-2125), the tables and their gates, including the timestamp gate's scan-shaped rule learning `vote|votable|tally|ballot|receipt|participant`, with `votable_objects.closes_at` on its allowlist;
-  - S3 (OSE-2127), admin open, close, reopen, the final lock, the pepper epoch, and the secret margin and voter floor;
+  - S3 (OSE-2127), admin open, close, reopen, the final lock, the pepper epoch, the play mode (songs or teams), and the secret margin and voter floor;
   - S3c (OSE-2135), the public open-objects read and the kill switch, after S3;
   - S3b (OSE-2133), `/q` issues the pass (decision 6).
 - **After S2, S3 and S3b:** S4a (OSE-2128), the vote route. Then S4c (OSE-2134), its hardening, and S4b (OSE-2129), the voter page (also after S3c).
-- **After S4a:** S5 (OSE-2130), results after the set is final. The fun report is OSE-520, after S5.
+- **After S4a:** S5 (OSE-2130), results after the set is final, team totals as distinct up-voters included. The fun report is OSE-520, after S5.
 - **Not voting work, but in conflict:** OSE-513 and OSE-518 describe a live tally on the display. Decision 7 and invariant 5 forbid it; the owner rewrites or cancels them.
 - **Other tickets:**
   - N1 (OW-220), the OurWKRP route that opens and closes song objects, brand-bound, after S3;
