@@ -479,3 +479,45 @@ Conditions:
   - The house-rule list adds four risks: a script, zero or not, a forwarded link, and remote voting.
 - **S2 (OSE-2125).** Name the receipt and participant subkeys. No column holds k.
 - **N1 (OW-220).** The room screen shows the event's `/q` vote code, not the vote page's URL.
+
+## Addendum 2: the owner's answers to Q6 to Q12, and the Q8 check (2026-11-18, about 05:53 UTC)
+
+**Source.** The owner answered in question forms in the parent session. This session read those answers in that session's record, as the forms' own results, at 05:52:40 and 05:53:04 UTC.
+
+**The answers.**
+
+- **D3:** reversal confirmed.
+- **Q6:** the room screen shows the event's own `/q` code.
+- **Q7:** 10 distinct voters before any number.
+- **Q8:** remove the lone-voter leak by design, with no exception.
+  - Publish no per-song up or down numbers.
+  - Publish only each song's outcome (winner, or too close to call) and a rounded voter count for the night.
+  - Add no note under invariants 1 or 2.
+  - If the design does not close the gap, say so and stop.
+- **Q9:** only opted-in presenters may be voted on.
+- **Q10:** a one-way final lock.
+- **Q11:** the card says both things.
+- **Q12:** accept the forwarded-link risk, with a 30-minute pass.
+- **Apply:** yes, as a draft PR, with the tickets updated to match.
+
+**The Q8 check. It does not close the gap, so the apply step stopped here.**
+
+The winner rule still works on unpublished counts. The server can count, apply the 10-voter and margin rules, and publish only the outcome. But the outcome still gives away one vote.
+
+- One person with 9 browsers casts every vote except the target's.
+- They set the up-count margin between song X and song Y to 4, counting their own votes only.
+- If the target voted up on X, the margin becomes 5 and X is named the winner. If not, the night reads "too close to call".
+- The 10-voter rule does not stop this. It counts browsers, so 9 browsers plus the target make 10.
+- The rounded voter count for the night leaks one bit the same way: with 9 browsers, "10" means the target voted.
+
+**This holds for any fixed rule, not only this one.** Take any published result that is computed from the votes by a fixed rule. If one person can control every other vote, they can set them so the target's vote decides the result. Making the result safe would mean no single vote could ever change it, and then it says nothing. So no fixed publishing rule closes this gap while one person can cast many votes.
+
+Only three things change that:
+
+1. **Chance in the result.** For example, a hidden margin threshold, drawn at random each night from 5 to 9 and deleted after use. This narrows the leak; it does not remove it. With five equally likely thresholds, one try reveals the vote about one time in five. It is a form of the noise the owner declined in D8 (Alternative D).
+2. **One vote per person, not per browser.** That cannot be done while voters stay anonymous.
+3. **Publishing no result made from the votes.**
+
+**Severity.** G2 stays High, and stays open. It is not Security Critical today, because nothing is built.
+
+**What was not done.** No ADR edit, no ticket edit, and no new PR. The owner's answers are recorded here and on OSE-2123. The owner decides how to handle Q8 before anything is applied.
