@@ -32,6 +32,7 @@ import {
   type Surface,
   type SponsorRow,
 } from '../lib/sponsor-resolver';
+import { toPublicSponsorBundle } from '../lib/public-sponsor-projection';
 import {
   validateProxiedLogoUrl,
   validateSponsorLogoInput,
@@ -1547,8 +1548,11 @@ export async function handleGetSponsorBundle(
       }
     }
 
+    // OSE-2048: the answer is a named field list, never the resolver's row as it
+    // came. A column added to a read, or a field attached above, reaches a caller
+    // only when lib/public-sponsor-projection.ts names it.
     return Response.json(
-      { ok: true, status: 200, bundle },
+      { ok: true, status: 200, bundle: toPublicSponsorBundle(bundle) },
       {
         headers: {
           ...corsHeaders(request),
