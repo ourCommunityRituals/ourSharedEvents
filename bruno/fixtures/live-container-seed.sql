@@ -81,6 +81,12 @@ ON CONFLICT(id) DO UPDATE SET status = 'archived', is_published = 1, listed_from
   settings_json = excluded.settings_json, data_class = 'synthetic',
   venue_canonical_id = NULL, event_correlation_id = NULL;
 
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('lc-live-evt', 'lc-draft-evt', 'lc-ready-evt', 'lc-archived-evt', 'lc-recap-evt');
+
 -- ── identity (sponsor_business) ──
 INSERT INTO sponsor_business (id, brand_id, name, tier, is_active) VALUES
   ('sb_lc_live',     'root', 'Live Container Live Sponsor',     'gold', 1),

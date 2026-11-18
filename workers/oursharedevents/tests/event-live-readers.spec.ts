@@ -163,8 +163,8 @@ describe('2. every statement with the consent rule asks the live test, or is a w
     expect(
       bare,
       'a statement shows a sponsor on the consent rule without asking whether the event is live: ' +
-        'use ${PLACEMENT_ON_SHOW_SQL} / ${SPONSOR_ON_SHOW_SQL} (lib/sponsor-card.ts) or ' +
-        '${eventLiveSql(alias)} (domain/event-state.ts)'
+        `use \${PLACEMENT_ON_SHOW_SQL} / \${SPONSOR_ON_SHOW_SQL} (lib/sponsor-card.ts) or ` +
+        `\${eventLiveSql(alias)} (domain/event-state.ts)`
     ).toEqual([]);
   });
 
@@ -185,9 +185,9 @@ describe('2. every statement with the consent rule asks the live test, or is a w
 describe('3. the reads this story closed ask the shared test by name', () => {
   test('the resolver stops on a non-live event before either path, and Path 1 asks the rule', () => {
     const text = code('lib/sponsor-resolver.ts');
-    const read = text.indexOf("CASE WHEN ${eventLiveSql('')} THEN 1 ELSE 0 END AS is_live");
+    const read = text.indexOf(`CASE WHEN \${eventLiveSql('')} THEN 1 ELSE 0 END AS is_live`);
     const stop = text.indexOf('if (Number(event.is_live) !== 1) return [];');
-    const path1 = text.indexOf('WHERE sp.event_id = ? AND ${PLACEMENT_ON_SHOW_SQL}');
+    const path1 = text.indexOf(`WHERE sp.event_id = ? AND \${PLACEMENT_ON_SHOW_SQL}`);
     const path2 = text.indexOf('opts.geoMatchEnabled && event.template_id');
     expect(read).toBeGreaterThan(-1);
     expect(stop).toBeGreaterThan(read);
@@ -199,7 +199,7 @@ describe('3. the reads this story closed ask the shared test by name', () => {
     const text = code('handlers/sponsors.ts');
     const fn = text.slice(text.indexOf('async function resolvePlacementGeo('));
     expect(fn.slice(0, fn.indexOf('.bind('))).toContain(
-      'WHERE e.id = ?1 AND sb.id = ?2 AND ${PLACEMENT_ON_SHOW_SQL}'
+      `WHERE e.id = ?1 AND sb.id = ?2 AND \${PLACEMENT_ON_SHOW_SQL}`
     );
   });
 
@@ -207,18 +207,18 @@ describe('3. the reads this story closed ask the shared test by name', () => {
     const sponsors = code('handlers/sponsors.ts');
     const logo = sponsors.slice(sponsors.indexOf('export async function handleSponsorLogo('));
     expect(logo.slice(0, logo.indexOf('.bind('))).toContain(
-      'WHERE sb.id = ? AND ${SPONSOR_ON_SHOW_SQL}'
+      `WHERE sb.id = ? AND \${SPONSOR_ON_SHOW_SQL}`
     );
     const asset = code('handlers/sponsor-asset-route.ts');
     const fn = asset.slice(asset.indexOf('export async function handleSponsorAsset('));
-    expect(fn.slice(0, fn.indexOf('.bind('))).toContain('AND ${SPONSOR_ON_SHOW_SQL}');
+    expect(fn.slice(0, fn.indexOf('.bind('))).toContain(`AND \${SPONSOR_ON_SHOW_SQL}`);
   });
 
   test('/q looks a code up only on a live event', () => {
     const text = code('handlers/qr-scan.ts');
     const lookup = text.slice(text.indexOf('const lookupDeployment = () =>'));
     expect(lookup.slice(0, lookup.indexOf('.bind('))).toContain(
-      "WHERE pd.qr_token = ? AND pd.is_active = 1 AND ${eventLiveSql('e')}"
+      `WHERE pd.qr_token = ? AND pd.is_active = 1 AND \${eventLiveSql('e')}`
     );
   });
 });
