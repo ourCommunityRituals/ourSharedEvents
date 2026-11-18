@@ -55,7 +55,7 @@ See [ADR-RECONCILIATION-PROCESS.md](ADR-RECONCILIATION-PROCESS.md) for the full 
 | [ADR-037](ADR-037-what-a-migration-dry-run-may-print.md)                   | A migration dry run prints counts, and on production it obeys the under-5 floor                                           | Accepted   | 2026-11-15 |
 | [ADR-038](ADR-038-landing-read-limit.md)                                   | Limit the landing and the event list by the minute; a refused reader gets a page                                          | Proposed   | 2026-11-16 |
 | [ADR-039](ADR-039-event-place-with-no-google-call.md)                      | Stop our own systems calling Google Maps, starting with an event's place on the map (a zip finds, a tap places)           | Proposed   | 2026-11-16 |
-| [ADR-040](ADR-040-anonymous-votable-object.md)                             | An anonymous vote is a counter on an object, never a row about a voter                                                    | Proposed   | 2026-11-17 |
+| [ADR-040](ADR-040-anonymous-votable-object.md)                             | An anonymous vote is a counter on an object, never a row about a voter                                                    | Accepted   | 2026-11-17 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 
