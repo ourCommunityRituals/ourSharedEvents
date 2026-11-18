@@ -6,8 +6,8 @@ loops_run: 3
 team: base
 gate: stop
 cumulative_score: 0
-system_score: 77.5
-unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 2, medium: 0, low: 0 }
+system_score: 87.5
+unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 1, medium: 0, low: 0 }
 ---
 
 # CCR: S0 presence recommendation (OSE-2122, Voting S0)
@@ -20,14 +20,16 @@ Date 2026-11-18. Three loops, at the owner's request. Repo `main` at `66251c7`.
 
 **Update, later on 2026-11-18: the owner answered Q1 to Q3.** In the owner's words: "yes to Q1, Q2 not a blocker, poster for night one". The score moves from 0% to 77.5%. Two items are still open: the card and report wording (R4, R5), and real phones (Q4). Q5 is unanswered. Details are in "Findings register", "Risks accepted" and "Human gate". The three loops above are unchanged.
 
+**Second update, 2026-11-18: the owner answered Q4 and Q5.** The owner kept E-plus (the plan in this worksheet) and withdrew a mistaken offer of option C. They chose "Accept, with scan-again message" for Q4 and "Hold it, with triggers" for Q5. The score moves from 77.5% to **87.5%**. One item is open: the owner's wording for the house-rule card and the report (R4, R5). The ADR-040 amendment that records these decisions is in the same pull request as this update.
+
 ## Verdict
 
 | Item                  | Result                                                                                                                                                        |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Cumulative score      | **0%** (every loop scored 0)                                                                                                                                  |
-| System score          | **77.5%** after the owner's answers (Q1 to Q3, 2026-11-18). Open: U3 (card and report wording) and U5 (real phones).                                          |
+| System score          | **87.5%** after the owner's answers (Q1 to Q5, 2026-11-18). Open: U3 (card and report wording).                                                               |
 | Assessment confidence | 63 → 68 → 75 (never fell between loops)                                                                                                                       |
-| Gate                  | **Stop.** Two items are left: the owner's wording (R4, R5) and Q4. Q5 is unanswered.                                                                          |
+| Gate                  | **Stop.** One item is left: the owner's wording for the card and the report (R4, R5).                                                                         |
 | Recommendation        | **Not C. "E-plus": change nothing at `/q` now; make presence real and born red at the vote route; say the stuffing risk plainly; hold D as a flood ceiling.** |
 
 Why not C:
@@ -146,28 +148,28 @@ Score: 0%
 
 Open rows count toward the frontmatter's `unresolved`. A row closed by solutioning names the plan item that closes it.
 
-| Id                      | Severity          | Finding                                                                    | Status                                                                                               |
-| ----------------------- | ----------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| L1-1                    | Security Critical | The cookie is forgeable, so C's mint budget can be walked around           | closed: C dropped. The forgery itself is tracked in OSE-1496.                                        |
-| L1-2                    | High              | The cap is on cookies, not presence tickets                                | closed: no mint cap (R1)                                                                             |
-| L1-3                    | High              | A per-event key can't be made where the limiter runs                       | closed: no `/q` cap (R1)                                                                             |
-| L1-4                    | High              | An address-derived key kept for a day                                      | closed: no new address key (R1)                                                                      |
-| L1-6                    | High              | IPv6 /64 rotation                                                          | closed: no address cap (R1). It still applies to D, recorded in R8.                                  |
-| L1-7                    | High              | Floors and margin are not stuffing defences                                | closed: merged into U3 (disclosure)                                                                  |
-| L2-SEC-4                | High              | A cap is a lockout lever                                                   | closed: no cap (R1). Written into the R8 trigger.                                                    |
-| L2-SEC-5                | High              | A Durable Object count resets, or stores keys                              | closed: no Durable Object now (R1)                                                                   |
-| L2-BE-1                 | High              | Durable Object build cost                                                  | closed: none built now                                                                               |
-| L2-DS-3                 | High              | A fixed cap is wrong both ways                                             | closed: no cap (R1)                                                                                  |
-| L3-SEC-1                | High              | The ticket fails open without a key                                        | closed: gate in R2                                                                                   |
-| L3-QA-1                 | High              | Gate list gaps                                                             | closed: R2 list corrected                                                                            |
-| L1-10                   | Medium            | A refusal is silent                                                        | closed: R3                                                                                           |
-| L2-SRE-4                | Medium            | The burst job never fails on the limiter                                   | closed: R6                                                                                           |
-| U1 (L2-SEC-3, L3-SEC-2) | High              | One actor can add many votes and learn whether a side got zero other votes | closed: owner accepted the risk, Q1 "yes", 2026-11-18 (accepted, not fixed)                          |
-| U2 (L2-PO-1)            | High              | Decision 9 may not cover one actor with several browsers or a script       | closed: owner answered Q1 "yes", 2026-11-18 (decision 9 covers it)                                   |
-| U3 (L2-DS-1)            | High              | The stuffing error bar is not disclosed on the card or the report          | open: closes when the owner's wording is approved and live on the card and in the report (R4, R5)    |
-| U4 (L2-SEC-2)           | High              | Presence is a static poster link                                           | closed: owner chose the static poster for night one, Q3, 2026-11-18. Option F is recorded for later. |
-| U5 (L1-5, L2-SRE-2)     | High              | Real phones unmeasured                                                     | open: owner, Q4 (a real-room scan on staging, or accept the risk in writing)                         |
-| U6 (L2-BE-3)            | Medium            | Whether OSE-1496 signing still blocks S4a                                  | closed: owner ruled OSE-1496 is not a blocker for S4a, Q2, 2026-11-18                                |
+| Id                      | Severity          | Finding                                                                    | Status                                                                                                  |
+| ----------------------- | ----------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| L1-1                    | Security Critical | The cookie is forgeable, so C's mint budget can be walked around           | closed: C dropped. The forgery itself is tracked in OSE-1496.                                           |
+| L1-2                    | High              | The cap is on cookies, not presence tickets                                | closed: no mint cap (R1)                                                                                |
+| L1-3                    | High              | A per-event key can't be made where the limiter runs                       | closed: no `/q` cap (R1)                                                                                |
+| L1-4                    | High              | An address-derived key kept for a day                                      | closed: no new address key (R1)                                                                         |
+| L1-6                    | High              | IPv6 /64 rotation                                                          | closed: no address cap (R1). It still applies to D, recorded in R8.                                     |
+| L1-7                    | High              | Floors and margin are not stuffing defences                                | closed: merged into U3 (disclosure)                                                                     |
+| L2-SEC-4                | High              | A cap is a lockout lever                                                   | closed: no cap (R1). Written into the R8 trigger.                                                       |
+| L2-SEC-5                | High              | A Durable Object count resets, or stores keys                              | closed: no Durable Object now (R1)                                                                      |
+| L2-BE-1                 | High              | Durable Object build cost                                                  | closed: none built now                                                                                  |
+| L2-DS-3                 | High              | A fixed cap is wrong both ways                                             | closed: no cap (R1)                                                                                     |
+| L3-SEC-1                | High              | The ticket fails open without a key                                        | closed: gate in R2                                                                                      |
+| L3-QA-1                 | High              | Gate list gaps                                                             | closed: R2 list corrected                                                                               |
+| L1-10                   | Medium            | A refusal is silent                                                        | closed: R3                                                                                              |
+| L2-SRE-4                | Medium            | The burst job never fails on the limiter                                   | closed: R6                                                                                              |
+| U1 (L2-SEC-3, L3-SEC-2) | High              | One actor can add many votes and learn whether a side got zero other votes | closed: owner accepted the risk, Q1 "yes", 2026-11-18 (accepted, not fixed)                             |
+| U2 (L2-PO-1)            | High              | Decision 9 may not cover one actor with several browsers or a script       | closed: owner answered Q1 "yes", 2026-11-18 (decision 9 covers it)                                      |
+| U3 (L2-DS-1)            | High              | The stuffing error bar is not disclosed on the card or the report          | open: closes when the owner's wording is approved and live on the card and in the report (R4, R5)       |
+| U4 (L2-SEC-2)           | High              | Presence is a static poster link                                           | closed: owner chose the static poster for night one, Q3, 2026-11-18. Option F is recorded for later.    |
+| U5 (L1-5, L2-SRE-2)     | High              | Real phones unmeasured                                                     | closed: owner accepted the risk, with the scan-again message (R3), Q4, 2026-11-18 (accepted, not fixed) |
+| U6 (L2-BE-3)            | Medium            | Whether OSE-1496 signing still blocks S4a                                  | closed: owner ruled OSE-1496 is not a blocker for S4a, Q2, 2026-11-18                                   |
 
 Score arithmetic (production design, environment ×1.0; Loop 2 discoveries ×1.25; U1 to U3 are three correlated findings, ×2.0):
 
@@ -179,33 +181,24 @@ Score arithmetic (production design, environment ×1.0; Loop 2 discoveries ×1.2
 | U6 = 5 × 1.25                             |                       6.25 |
 | Total                                     | 103.75, so the score is 0% |
 
-After the owner's answers (2026-11-18: Q1 "yes", Q2 not a blocker, Q3 the static poster):
+After the owner's answers to Q1 to Q5 (2026-11-18):
 
 | Deduction      |                      Points |
 | -------------- | --------------------------: |
 | U3 = 10 × 1.25 |                        12.5 |
-| U5 = 10 × 1.0  |                          10 |
-| Total          | 22.5, so the score is 77.5% |
+| Total          | 12.5, so the score is 87.5% |
 
-- U1 and U2 are closed by the owner's acceptance of the risk. They are accepted, not fixed.
+- U1, U2 and U5 are closed by the owner's acceptance of the risk. They are accepted, not fixed.
 - U3 was one of three correlated findings. Alone it is not multiplied.
 - U4 and U6 are closed by the owner's answers to Q3 and Q2.
 
-Path to 95%:
-
-| What closes                                                              | Score |
-| ------------------------------------------------------------------------ | ----: |
-| U3 only: the owner's wording is approved and live (R4, R5)               |   90% |
-| U5 only: Q4 answered (a real-room scan, or the risk accepted in writing) | 87.5% |
-| Both                                                                     |  100% |
-
-Neither step alone reaches 95%.
+Path to 95%: U3 closes when the owner's wording for the card and the report is approved and live (R4, R5). The score is then 100%.
 
 ## Solutioning
 
 The plan is "E-plus, D in reserve". R1 to R9:
 
-**R1. No change to `/q` minting now.** Re-scope N2 (OSE-2126, Backlog) to "held", with the written triggers from R8. Needs the owner's Q5.
+**R1. No change to `/q` minting now.** Re-scope N2 (OSE-2126, Backlog) to "held", with the written triggers from R8. The owner answered Q5 on 2026-11-18: hold it, with those triggers.
 
 **R2. S4a (OSE-2128) gates.** Each gate is seen red on an injected fault, at both layers unless marked (workers-pool spec `tests/vote-presence.spec.ts`; a Bruno folder run in T2). These prove the ticket is genuine; they do not bound stuffing. With Q2 (no signed cookie before S4a), the vote route reads the cookie with a read-only parser that checks no signature, so gates 3 and 4 carry the vote-side proof. The gates:
 
@@ -228,14 +221,14 @@ The plan is "E-plus, D in reserve". R1 to R9:
 
 **R6. Room-burst job:** add an `assert_minted_min` input (default `min(150, requests)`). See it red first with `assert_minted_min=151`. It stays dispatch-only, a measurement and not a gate. Lands in N4 (OSE-2132) or N3.
 
-**R7. Real-phone check on staging.** Agents can't do it, because of the edge challenge. Owner's Q4.
+**R7. Real-phone check on staging.** Agents can't do it, because of the edge challenge. The owner accepted the risk on 2026-11-18 (Q4) and relies on the scan-again message (R3). No real-phone test before the first night.
 
 **R8. Triggers, written on N2:**
 
 - Refusals seen in a real room → option A: a per-event `/q` limit above 360, which skips the edge binding.
 - A flood seen → option D on a Durable Object, labelled "flood ceiling, not a stuffing bound", with its lockout risk recorded.
 
-**R9. Owner questions Q1 to Q5.** Q1 to Q3 were answered on 2026-11-18. Q4 and Q5 are open. Q1 is not a blocker on S4a any more.
+**R9. Owner questions Q1 to Q5.** All five were answered on 2026-11-18. Q1 is not a blocker on S4a.
 
 Critical path to a first bar night:
 
@@ -269,7 +262,10 @@ The owner answered on 2026-11-18:
 - **Q2, not a blocker.** OSE-1496 (cookie signing) does not hold up S4a. The ticket's HMAC does the vote-side job. OSE-1496 carries on by itself and still protects scan counts.
 - **Q3, the poster for night one.** Presence comes from the static poster. A per-song code on the room screen (option F) is recorded for later. It changes decision 6, so it needs its own CCR.
 
-Still open: real phones are unmeasured (Q4), and N2 is not yet held (Q5).
+- **Q4, accept the risk.** Real phones are untested. The vote page tells anyone whose scan did not register to scan again (R3). No real-phone test before the first night.
+- **Q5, hold N2.** OSE-2126 is held, with the two triggers in R8.
+
+Still open: the owner's wording for the house-rule card and the report (R4, R5).
 
 ## Human gate
 
@@ -279,8 +275,8 @@ Still open: real phones are unmeasured (Q4), and N2 is not yet held (Q5).
    - Closes: U1, U2, U3. Gap found: Loop 2, Conservative layer; sharpened in Loop 3, Recursive layer.
 2. **Q2. Keep "OSE-1496 cookie signing comes first" ahead of S4a? Answered 2026-11-18: not a blocker.** This review found that signing does not bound stuffing; the ticket HMAC (decision 6) does the vote-side job. Signing protects the honesty of scan counts and costs about two stories. Recommendation: not a blocker for S4a. Closes: U6.
 3. **Q3. Presence from the static poster, or from a per-song code on the room screen (option F)? Answered 2026-11-18: the poster for night one.** F narrows "anyone with a photo of the poster" to "anyone who could see the screen during this song". It does not stop a stuffer in the room, and it changes decision 6. Recommendation: the static poster for the first night, with F recorded for later. Closes: U4.
-4. **Q4. Real phones. Open.** Agents can't measure the real-phone path. Will you run one real-room scan on staging, or accept the risk with the "scan again" message? Closes: U5.
-5. **Q5. Open.** Re-scope N2 (OSE-2126) to "held, with triggers"?
+4. **Q4. Real phones. Answered 2026-11-18: accept the risk, with the scan-again message.** Agents can't measure the real-phone path. Will you run one real-room scan on staging, or accept the risk with the "scan again" message? Closes: U5.
+5. **Q5. Answered 2026-11-18: hold it, with triggers.** Re-scope N2 (OSE-2126) to "held, with triggers"?
 
 What is verified, inferred and not checked:
 
