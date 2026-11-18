@@ -124,12 +124,95 @@ runtime:
           expect(count(/<h3 data-testid="amap-card-name"/g)).to.equal(10);
         });
 
-        test('A business is named, never pinpointed; no coordinate is on the page', function () {
+        // Place, not person (AGENTS.md invariant 3; OSE-2150). With a street layer
+        // the drawing carries its frame, so the map's script can place the phone's
+        // own position on it (lib/attendee-map.ts frameAttrs, lib/map-pan-script.ts).
+        // Every one of those numbers is worked out from the area's res-7 cell id
+        // alone, which the page already shows (data-zoom). They are pinned here to
+        // the values for 872664405ffffff, and workers/oursharedevents/tests/
+        // map-georef-cell-only.spec.ts pins the same strings, so the two layers
+        // cannot drift. These, and nothing else, are the coordinate-shaped numbers
+        // the zoomed part may hold:
+        //   on amap-svg   data-x0, data-y0, data-scale, data-mpu (the cell's frame)
+        //   on amap-zone  data-ll (the cell's own centre, 5 decimals)
+        //   in the script the metres in a mile, 1609.344 (a unit, not a place)
+        // Outside them, a coordinate-shaped number is any with three or more
+        // decimals (a degree to about 110 m, near the equator or the meridian
+        // too, a radian, a fraction of the frame like data-x0) or seven or more
+        // digits in a row (micro-degrees). The area's own cell id, which has nine
+        // digits in a row, is the only such run allowed. A number of that shape
+        // anywhere else fails, and so does any change to one of the pinned values
+        // (a frame drawn around a business, say).
+        const CELL_FRAME = 'data-x0="0.255867824" data-y0="0.372606262" data-scale="3363057.841" data-mpu="8.909"';
+        const CELL_CENTRE = 'data-ll="41.61285,-87.85547"';
+        const MILE = 'MPU / unitPx() / 1609.344';
+        const drawn = has('amap-svg');
+        const svgTag = drawn ? (body.slice(at('amap-svg')).match(/^[^>]*>/) || [''])[0] : '';
+        const zoneTag = has('amap-zone') ? (body.slice(at('amap-zone')).match(/^[^>]*>/) || [''])[0] : '';
+
+        test('A business is named, never pinpointed; no coordinate is on the page but the area cell\'s own frame', function () {
           expect(body).to.include('at Zoom Check Lanes');
           // The seeded points are 41.6210,-87.8555 and so on: no number that fine.
           expect(zoomed.length).to.be.above(1000);
-          expect(zoomed).to.not.match(/\d{2}\.\d{3,}/);
+          let rest = zoomed;
+          if (drawn) {
+            expect(svgTag, 'the drawing\'s frame is the area cell\'s, to the digit').to.include(CELL_FRAME);
+            expect(zoneTag, 'the area\'s centre is the cell\'s own centre').to.include(CELL_CENTRE);
+            expect(zoomed.split(CELL_FRAME).length - 1, 'the frame is written once').to.equal(1);
+            expect(zoomed.split(CELL_CENTRE).length - 1, 'the centre is written once').to.equal(1);
+            rest = rest.replace(CELL_FRAME, '').replace(CELL_CENTRE, '').replace(MILE, '');
+          }
+          rest = rest.split('872664405ffffff').join('');
+          // URL escapes undone first: "%2060406" is a space and a ZIP, "%2E" a dot.
+          rest = rest.replace(/%2e/gi, '.').replace(/%[0-9a-f]{2}/gi, ' ');
+          expect(rest).to.not.match(/\d\.\d{3,}|\d{7,}/);
         });
+
+        if (drawn) {
+          test('Each dot, read back through the drawing\'s frame, is its res-9 block centre, never the business\'s own point', function () {
+            // Read the frame off the page, as the map's script does, and turn each
+            // dot back into latitude and longitude (Web Mercator).
+            const num = function (name) { return Number((svgTag.match(new RegExp(name + '="([^"]+)"')) || [])[1]); };
+            const x0 = num('data-x0');
+            const y0 = num('data-y0');
+            const scale = num('data-scale');
+            const back = function (cx, cy) {
+              const wy = y0 + cy / scale;
+              return [Math.atan(Math.sinh(Math.PI * (1 - 2 * wy))) * 180 / Math.PI, (x0 + cx / scale) * 360 - 180];
+            };
+            const metres = function (a, b) {
+              const k = 111195;
+              return Math.hypot((a[0] - b[0]) * k, (a[1] - b[1]) * k * Math.cos(a[0] * Math.PI / 180));
+            };
+            // h3-js cellToLatLng of the fixture's three res-9 blocks.
+            const blocks = {
+              1: [41.6209405, -87.8560261], // 892664405d7ffff, the business
+              2: [41.6115876, -87.8638519], // 89266440547ffff
+              3: [41.6060109, -87.8465295], // 89266440537ffff
+            };
+            const business = [41.6210, -87.8555]; // the seeded point of place 1
+            // Each dot is one link: its touch target, its dot and its number are
+            // all drawn at the same point, and that point is read back.
+            const re = /<a href="#amap-dot-(\d)"[^>]*data-testid="amap-dot"[^>]*>([\s\S]*?)<\/a>/g;
+            let m;
+            let seen = 0;
+            while ((m = re.exec(body))) {
+              const xs = [...m[2].matchAll(/\s(?:cx|x)="([^"]*)"/g)].map(function (v) { return v[1]; });
+              const ys = [...m[2].matchAll(/\s(?:cy|y)="([^"]*)"/g)].map(function (v) { return v[1]; });
+              expect(xs.length, 'dot ' + m[1] + ' draws three parts').to.equal(3);
+              expect(new Set(xs).size, 'dot ' + m[1] + ' is drawn at one x').to.equal(1);
+              expect(ys.length).to.equal(3);
+              expect(new Set(ys).size, 'dot ' + m[1] + ' is drawn at one y').to.equal(1);
+              const p = back(Number(xs[0]), Number(ys[0]));
+              const want = blocks[m[1]];
+              // The drawing is written to a tenth of a map unit, about 0.9 m here.
+              expect(metres(p, want), 'dot ' + m[1] + ' is its block centre').to.be.below(1);
+              if (m[1] === '1') expect(metres(p, business), 'dot 1 is not the business\'s point').to.be.above(30);
+              seen += 1;
+            }
+            expect(seen).to.equal(3);
+          });
+        }
 
         test('No panel shows a count of people (never who, only how many)', function () {
           // "2 events" counts events, which is allowed; a number of people is not.
