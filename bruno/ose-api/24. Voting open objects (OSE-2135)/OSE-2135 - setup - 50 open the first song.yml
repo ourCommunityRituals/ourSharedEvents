@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2135 | setup | open the first song"
+  type: http
+  seq: 50
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteReadNightId}}/votables/objects/{{voteReadSongOneId}}/open"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"window_seconds\": 600}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2135 setup: the first song is open now', function () { expect(res.getStatus()).to.eql(200); expect(b.object.open_now).to.eql(true); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
