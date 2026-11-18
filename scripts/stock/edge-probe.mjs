@@ -206,6 +206,78 @@ export function report(rows) {
   return `${lines.join('\n')}\n`;
 }
 
+// ── The stock run's first job (OSE-2082) ────────────────────────────────────
+// From 2026-11-07 to 2026-11-14 every "Stock data (stg)" run was challenged at the
+// edge, and each one found that out only after it had loaded a day and then purged
+// it. So the stock workflow asks first: `--preflight` makes the stock check's own
+// reads (the `check` shape) of the pages the check reads, and a run whose reads do
+// not get the Worker's answer stops before the seed, with nothing on stg touched.
+// The calendar addresses are left out: the stock check never reads them.
+export const PREFLIGHT_PATHS = PROBE_PATHS.filter((p) => !p.endsWith('.ics'));
+
+// What to do about a challenge. The challenge is Super Bot Fight Mode, which the
+// dashboard's Security Events files under "Custom rules" (OSE-1831).
+export const CHALLENGE_FIX =
+  "Fix: the stg CI skip rule must skip Super Bot Fight Mode on every path. Run scripts/ci/cf-waf-stg-ci-skip.mjs; don't edit the dashboard.";
+
+/**
+ * { ok, bad, reason } for the preflight's rows. The reason is one line, built from
+ * the probe's fixed paths, a status number and a ray-shaped Ray ID, so it is safe
+ * in a log, a job output and an issue: '' when every read got the Worker's answer.
+ */
+export function preflightVerdict(rows) {
+  const bad = rows.filter((r) => !readOk(r));
+  if (bad.length === 0) return { ok: true, bad, reason: '' };
+  const challenged = bad.filter((r) => r.challenged);
+  const other = bad.filter((r) => !r.challenged);
+  const parts = [];
+  if (challenged.length > 0) {
+    const list = challenged.map((r) => `${r.path}${r.ray ? ` ray=${r.ray}` : ''}`).join(', ');
+    parts.push(`edge-challenged: ${list}. ${CHALLENGE_FIX}`);
+  }
+  if (other.length > 0) {
+    const list = other
+      .map(
+        (r) =>
+          `${r.path} ${r.status ? `status ${r.status}` : 'no answer'}${r.ray ? ` ray=${r.ray}` : ''}`
+      )
+      .join(', ');
+    parts.push(`not the Worker's answer: ${list}.`);
+  }
+  return {
+    ok: false,
+    bad,
+    reason: `Stopped before the seed; nothing on stg was loaded or purged. ${parts.join(' ')}`,
+  };
+}
+
+/** `node scripts/stock/edge-probe.mjs --preflight`: exit 0 only when the stock run can go on. */
+export async function preflight(env = process.env, deps = {}) {
+  const out = deps.write || ((s) => process.stdout.write(s));
+  const append = deps.appendFile || appendFileSync;
+  const fetchFn = deps.fetch || globalThis.fetch;
+  if (!env.OCR_CI_EDGE_TOKEN) {
+    out('edge-probe: OCR_CI_EDGE_TOKEN is not set, so no read can carry X-OCR-CI.\n');
+    return 1;
+  }
+  maskSecrets(env, out);
+  const check = shapeFetch('check', env, withDeadline(fetchFn, deps.readTimeoutMs));
+  const rows = [];
+  for (const path of PREFLIGHT_PATHS) rows.push(await probeOne(check, 'check', path));
+  const table = report(rows);
+  const { ok, reason } = preflightVerdict(rows);
+  const line = ok
+    ? 'Every read the stock check makes got past the stg edge from this runner. The stock run goes on.'
+    : reason;
+  out(`${table}\n${line}\n`);
+  if (env.GITHUB_STEP_SUMMARY) {
+    append(env.GITHUB_STEP_SUMMARY, `## Stock data: edge check\n\n${table}\n${line}\n`);
+  }
+  // For the announce job. One line of fixed text, paths, statuses and Ray IDs.
+  if (!ok && env.GITHUB_OUTPUT) append(env.GITHUB_OUTPUT, `reason=${reason}\n`);
+  return ok ? 0 : 1;
+}
+
 export async function main(env = process.env, deps = {}) {
   const out = deps.write || ((s) => process.stdout.write(s));
   const fetchFn = deps.fetch || globalThis.fetch;
@@ -235,7 +307,9 @@ export async function main(env = process.env, deps = {}) {
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   (process.argv.includes('--calendar-app')
     ? calendarAppRead(process.env, { reportOnly: process.argv.includes('--report-only') })
-    : main()
+    : process.argv.includes('--preflight')
+      ? preflight()
+      : main()
   ).then(
     (code) => process.exit(code),
     (err) => {

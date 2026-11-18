@@ -108,6 +108,17 @@ The run summary names the first challenged read with its Ray ID. Look it up in C
 - If it is a product the copied skip set leaves out, add it to that rule in the dashboard, then run the script again. It copies the dashboard rule's skip set each time.
 - If the write fails with a plan error (for example, skipping Super Bot Fight Mode needs Pro or above), the default skip set asks for more than the plan allows. Add an X-OCR-CI skip rule in the dashboard with what the plan allows, then run the script again.
 
+## One way to change the rule (OSE-2082)
+
+Recorded after the outage of 2026-11-07 to 2026-11-14, when "Stock data (stg)" was red for seven days and every red run purged stg.
+
+- **The challenge is Super Bot Fight Mode (SBFM).** On the Pro plan it answers a "definitely automated" request, such as a GitHub runner's, with a managed challenge. Cloudflare's Security Events list it under "Custom rules", which is misleading: no custom rule issues the challenge. The skip rule has to skip SBFM, on every path CI reads.
+- **This script is the only way to change the rule.** Do not edit it in the dashboard. During the outage, eight dashboard edits targeted the wrong thing and none of them saved: the rule set stayed at version 41. The fix was found by reading the rules, not the events (rule 1 lost its `/q/` term, version 41 to 42, 2026-11-14 00:22Z, OSE-1831).
+- **After any change, two things must be true before the next stock run:**
+  1. The rule set's `version` has moved. It is the `version` field of the zone's custom rule set (the `http_request_firewall_custom` phase entry point) in Cloudflare's API. A change that leaves the version where it was did not save. The script reads its rule back after writing, but it does not print the version today.
+  2. A dispatched "stg edge probe" run is green.
+- **The stock run now checks the edge first.** Its first job, "Edge check: can CI read stg?", makes the stock check's own reads before anything is loaded. If one is challenged, the run stops there with stg untouched (no load, no purge), and the issue it opens names the path, the Ray ID and this runbook's fix.
+
 ## Roll back
 
 ```bash

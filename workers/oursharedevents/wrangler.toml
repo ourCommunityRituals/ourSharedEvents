@@ -126,6 +126,11 @@ WORKER_BUILD_VERSION = "dev-local"
 # the workers test pool read a bucket on this machine's disk, which no visitor
 # sees. Staging and production each carry their own value, below.
 STREET_MAP = "on"
+# The voting kill switch (lib/voting-switch.ts; OSE-2135, OSE ADR-040). Exactly
+# "on" turns the public vote surfaces on; anything else answers as if voting did
+# not exist. Off here too: local dev and the workers test pool run with it off,
+# and a test that needs it on says so (tests/vote-open-objects.spec.ts).
+VOTING_ENABLED = "off"
 # Draft auto-expiry (lifecycle cron): archive — never delete — drafts untouched
 # for >= N days; 0 disables. Declared explicitly so the nightly fleet-wide sweep
 # is visible config, not an invisible code default of 30 (CCR-PR567 L2).
@@ -325,6 +330,15 @@ MAP_TILES_ARCHIVE = "us-20261115.pmtiles"
 # not be "true" while this is "off". streetMapSwitch in that file is a copy of
 # this value. tests/unit/ci/env-parity.test.js holds both.
 STREET_MAP = "on"
+# The voting kill switch (lib/voting-switch.ts; OSE-2135, OSE ADR-040). Off:
+# the open-objects read is the router's 404, /q mints no vote pass and the vote
+# route refuses. Only the owner turns it on, in a PR of its own, and not before
+# the voter page (S4b, OSE-2129) ships: until then a vote code's redirect has no
+# page to land on (S3b security review, F4). votingSwitch in
+# bruno/ose-api/environments/ose-staging.yml is a copy of this value, so the
+# staging cases know which half to run; tests/unit/ci/env-parity.test.js holds
+# the two equal.
+VOTING_ENABLED = "off"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
 # Allow Bearer token fallback in staging (for local testing without CF Access)
@@ -494,6 +508,11 @@ MAP_TILES_ARCHIVE = "us-20261115.pmtiles"
 # yet: production has no MAP_TILES binding. Staging goes first: this may be "on"
 # only once staging is (tests/unit/ci/env-parity.test.js), in a PR of its own.
 STREET_MAP = "off"
+# The voting kill switch (see the staging block). Off: production stays inert
+# for voting. Staging goes first: this may be "on" only once staging is, only
+# by the owner, and not before the voter page (S4b, OSE-2129) ships
+# (tests/unit/ci/env-parity.test.js; OSE-2135).
+VOTING_ENABLED = "off"
 # L4 (OSE-1378): Turnstile mutation bot-check — DARK ("0"). Activate = "true" + secret + widget.
 TURNSTILE_ENABLED = "0"
 # ALLOW_OCR_INTERNAL is deliberately absent in production (ADR-012 gate R2,

@@ -194,3 +194,68 @@ describe('announce', () => {
     await expect(go({ ...RED, ANNOUNCE_KEY: 'Bad Key' }, api())).rejects.toThrow(/ANNOUNCE_KEY/);
   });
 });
+
+/**
+ * OSE-2082: the issue says why the run is red, in the run's own words
+ * (ANNOUNCE_DETAIL: the stock run's edge check reason, or its build error).
+ *
+ * Born red (each fault injected alone in scripts/ci/announce-run.mjs, then removed):
+ *   D1 the detail left out of the red line        -> the first two cases fail
+ *   D2 detailLine returns its input unchanged     -> the markup and length cases fail
+ */
+describe('announce: why the run is red (ANNOUNCE_DETAIL)', () => {
+  const RED = {
+    ...ENV,
+    NEEDS: needs({
+      preflight: 'failure',
+      seed: 'skipped',
+      build: 'skipped',
+      'check-swap': 'skipped',
+    }),
+  };
+  const REASON =
+    "Stopped before the seed; nothing on stg was loaded or purged. edge-challenged: /s/edge-probe ray=a5711b195919fa42-SEA. Fix: the stg CI skip rule must skip Super Bot Fight Mode on every path. Run scripts/ci/cf-waf-stg-ci-skip.mjs; don't edit the dashboard.";
+
+  test('a new issue carries the path, the Ray ID and the fix', async () => {
+    const gh = api();
+    await go({ ...RED, ANNOUNCE_DETAIL: REASON }, gh);
+    const body = gh.calls.find((c) => c.route === 'POST /issues').body.body;
+    expect(body).toContain(`**Why:** ${REASON}`);
+  });
+
+  test('a comment on the open issue carries the build error', async () => {
+    const gh = api({
+      issues: [
+        {
+          number: 7,
+          state: 'open',
+          labels: [a.labelFor('stock-data-stg')],
+          body: a.markerFor('stock-data-stg'),
+        },
+      ],
+    });
+    const error = 'POST /api/v2/admin/events/evt_1/poster-deployments failed: 503 (3 tries)';
+    await go({ ...RED, ANNOUNCE_DETAIL: error }, gh);
+    const comment = gh.calls.find((c) => c.route === 'POST /issues/7/comments').body.body;
+    expect(comment).toContain(`**Why:** ${error}`);
+  });
+
+  test('with no detail the issue reads as before', async () => {
+    const gh = api();
+    await go(RED, gh);
+    expect(gh.calls.find((c) => c.route === 'POST /issues').body.body).not.toContain('**Why:**');
+  });
+
+  test('the detail is cut to one line of plain characters: no mention, link or markup', () => {
+    expect(a.detailLine('one\ntwo\r\n three')).toBe('one two three');
+    expect(a.detailLine('@owner see #12 <img src=x> [x](http://e.vil) `code` **b**')).toBe(
+      'owner see 12 img src=x x(http://e.vil) code b'
+    );
+    expect(a.detailLine('')).toBe('');
+    expect(a.detailLine(undefined)).toBe('');
+  });
+
+  test('the detail is cut at 600 characters', () => {
+    expect(a.detailLine('x'.repeat(900))).toBe(`${'x'.repeat(600)}…`);
+  });
+});
