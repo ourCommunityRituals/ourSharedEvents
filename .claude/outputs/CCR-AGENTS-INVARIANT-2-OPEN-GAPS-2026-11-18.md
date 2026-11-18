@@ -9,7 +9,7 @@ cumulative_score: 0
 system_score: 0
 unresolved: { regulatory: 1, security_critical: 1, critical: 1, high: 6, medium: 8, low: 7 }
 pr: 1436
-subject_sha: '8f9a690dd46d4ed997f087ec82a7e72815eea91f'
+subject_sha: '8f9a690dd46d4ed997f087ec82a7e72815eea91f' # pragma: allowlist secret (a git commit id, not a secret)
 ---
 
 # CCR: the "Open gaps" sentence in AGENTS.md invariant 2 (PR #1436, OSE-2087)
