@@ -994,9 +994,11 @@ describe('the vote pass rides only in the fragment of the /q redirect', () => {
     )
       .bind(EVENT, BRAND, EVENT)
       .run();
+    // OSE-2140: only the event's own vote code mints a pass, so the room
+    // screen's placement is marked as it.
     await E.DB.prepare(
-      `INSERT OR REPLACE INTO poster_deployments (id, event_id, qr_token, placement_label, is_active, created_at)
-       VALUES (?, ?, ?, 'Room screen', 1, datetime('now'))`
+      `INSERT OR REPLACE INTO poster_deployments (id, event_id, qr_token, placement_label, is_vote_code, is_active, created_at)
+       VALUES (?, ?, ?, 'Room screen', 1, 1, datetime('now'))`
     )
       .bind(`pd-${EVENT}`, EVENT, CODE)
       .run();

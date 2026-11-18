@@ -3947,7 +3947,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, createExecutionContext, waitOnExecutionContext",
-      "testCount": 21
+      "testCount": 23
     },
     {
       "file": "workers/oursharedevents/tests/vote-open-objects.spec.ts",
