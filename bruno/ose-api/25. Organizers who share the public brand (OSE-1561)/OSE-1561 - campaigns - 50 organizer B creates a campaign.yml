@@ -1,0 +1,48 @@
+info:
+  name: "OSE-1561 | sunny | campaigns | organizer B creates a campaign in root"
+  type: http
+  seq: 50
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/campaigns"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{organizerBClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{organizerBClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+  body:
+    type: json
+    data: '{"title":"Owner wall campaign B","brand_id":"root"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1561: this folder runs as TWO organizers of the public brand `root`.
+        // Staging has no such identities yet; adding them is the owner's step.
+        // Until then this request is skipped and logs NOT RUN; it records no passing test.
+        if (
+          !bru.getEnvVar('organizerAClientId') || !bru.getEnvVar('organizerAClientSecret') ||
+          !bru.getEnvVar('organizerBClientId') || !bru.getEnvVar('organizerBClientSecret')
+        ) {
+          console.log('NOT RUN (OSE-1561 setup pending): no two organizer identities in root on this environment');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('OSE-1561 campaigns: organizer B creates a campaign: 201 with an id', function () {
+          expect(res.getStatus()).to.eql(201);
+          expect(res.getBody().id).to.be.a('string');
+        });
+        bru.setVar('ownerWallCampaignB', res.getBody().id || '');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

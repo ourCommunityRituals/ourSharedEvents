@@ -23,6 +23,7 @@
 
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
+import { ownerAndSql, resolveOwnerRule } from '../lib/admin-owner-scope';
 import {
   CAMPAIGN_CREATE_FIELDS,
   CAMPAIGN_LIST_MAX,
@@ -141,11 +142,14 @@ export async function handleAdminListCampaigns(
   if (!env.DB || scope.mode === 'deny') {
     return Response.json({ ok: true, status: 200, items: [] }, { headers: headers(request, rid) });
   }
+  // OSE-1561: in the public brand a caller held to their own rows lists only the
+  // campaigns they created. One more bound condition beside the brand predicate.
+  const own = ownerAndSql(await resolveOwnerRule(request, env, scope), 'brand_id', 'created_by');
   const where =
     scope.mode === 'scoped'
-      ? `WHERE brand_id IN (${scope.brandIds.map(() => '?').join(', ')})`
+      ? `WHERE brand_id IN (${scope.brandIds.map(() => '?').join(', ')})${own.sql}`
       : '';
-  const params = scope.mode === 'scoped' ? scope.brandIds : [];
+  const params = scope.mode === 'scoped' ? [...scope.brandIds, ...own.binds] : [];
   try {
     const res = await env.DB.prepare(
       `SELECT id, brand_id, title, status, created_at, updated_at
@@ -231,6 +235,10 @@ export async function handleAdminCreateCampaign(
     );
   }
   const brandId = requested || (scope.mode === 'scoped' ? scope.brandIds[0] : 'root');
+  // OSE-1561: who created it, from the server-verified caller and never from the
+  // body (`created_by` is not a create field). Inside the public brand this is
+  // who may reach the campaign afterwards.
+  const createdBy = extractAdminActor(request, env);
 
   const now = new Date().toISOString();
   const item: CampaignRow = {
@@ -243,10 +251,18 @@ export async function handleAdminCreateCampaign(
   };
   try {
     await env.DB.prepare(
-      `INSERT INTO campaigns (id, brand_id, title, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO campaigns (id, brand_id, title, status, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
-      .bind(item.id, item.brand_id, item.title, item.status, item.created_at, item.updated_at)
+      .bind(
+        item.id,
+        item.brand_id,
+        item.title,
+        item.status,
+        createdBy,
+        item.created_at,
+        item.updated_at
+      )
       .run();
   } catch (err) {
     logDbError('handleAdminCreateCampaign', errorLabel(err));

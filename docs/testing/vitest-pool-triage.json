@@ -2508,6 +2508,13 @@
       "testCount": 5
     },
     {
+      "file": "workers/oursharedevents/tests/public-brand-owner-wall.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 32
+    },
+    {
       "file": "workers/oursharedevents/tests/public-event-booths.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

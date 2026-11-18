@@ -62,6 +62,8 @@ import {
   type AdminEnv,
 } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
+import { ownerPredicate, resolveOwnerRule } from '../lib/admin-owner-scope';
+import { isAdminObjectInScope } from '../lib/admin-object-scope';
 // NOTE: maybeTag is imported here because sponsors.ts is an admin/creation-time
 // handler — NOT a scan-path handler. The hot-path invariant (S-6.3.1c) permits
 // this import. Do NOT add sponsors.ts to the SCAN_PATH list in h3-tagging.spec.ts.
@@ -305,6 +307,18 @@ export async function handleAdminListSponsors(
     const clause = brandScopeClause(scope.brandIds, 'sb.brand_id');
     where.push(clause.sql.replace(/^ AND /, ''));
     binds.push(...clause.params);
+  }
+  // OSE-1561: inside the public brand the sponsor's creator is the boundary. One
+  // more bound condition beside the brand cap: a caller held to their own rows
+  // there lists only the sponsors they created (lib/admin-owner-scope.ts).
+  const own = ownerPredicate(
+    await resolveOwnerRule(request, env, scope),
+    'sb.brand_id',
+    'sb.created_by'
+  );
+  if (own) {
+    where.push(own.sql);
+    binds.push(...own.binds);
   }
   const sql =
     `SELECT ${cols} FROM ${from}` +
@@ -623,6 +637,12 @@ export async function handleAdminCreateSponsor(
           scope.mode === 'all' ||
           (scope.mode === 'scoped' && scope.brandIds.includes(eventBrandId));
         if (!inScope) eventBrandId = null;
+        // OSE-1561: the same proof the router guard makes for an id in the path.
+        // Inside the public brand the event must also be one the caller created,
+        // or organizer A could put a sponsor on organizer B's event by naming it.
+        else if (!(await isAdminObjectInScope(request, env, { kind: 'event', id: eventId }))) {
+          eventBrandId = null;
+        }
       } else if (!isDevOpenAdmin(env)) {
         logNullAdminActorDenied('sponsor-create', env, rid);
         eventBrandId = null;
@@ -653,13 +673,16 @@ export async function handleAdminCreateSponsor(
   // gets its own id.
   const businessId = id;
   const placementId = eventId ? generateId('spl') : null;
+  // OSE-1561: who created it, from the server-verified caller and never from the
+  // body. Inside the public brand this is who may reach the sponsor afterwards.
+  const createdBy = extractAdminActor(request, env);
   const stmts = [
     env.DB.prepare(
       `INSERT INTO sponsor_business
          (id, brand_id, name, website_url, tier, display_name, address_line,
           contact_phone, contact_email, header_text, header_image_url,
-          lat, lon, h3_res9, h3_res7, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          lat, lon, h3_res9, h3_res7, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       businessId,
       brandId,
@@ -676,6 +699,7 @@ export async function handleAdminCreateSponsor(
       sponsorLon,
       sponsorH3Res9,
       sponsorH3Res7,
+      createdBy,
       now,
       now
     ),
@@ -943,7 +967,10 @@ export async function handleAdminUpdateSponsor(
     )
       .bind(sponsorId, attachId)
       .first<{ h3_res7: string | null }>();
-    if (!ev) {
+    // OSE-1561: and the caller must be able to reach that event. Inside the public
+    // brand that means they created it; sharing the brand is not enough. Same
+    // answer as an event that does not exist.
+    if (!ev || !(await isAdminObjectInScope(request, env, { kind: 'event', id: attachId }))) {
       return errorResponse(
         'EVENT_NOT_FOUND',
         "event_id does not resolve to an event in this sponsor's brand",
