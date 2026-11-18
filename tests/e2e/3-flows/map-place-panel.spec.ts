@@ -187,6 +187,7 @@ import {
   openPanels,
   panel,
   passStgEdge,
+  dotOf,
   openPlace,
   throwIfEdgeAnswered,
 } from '../helpers/map-zoom-area';
@@ -443,10 +444,15 @@ test.describe('Zoomed map: in and out, and the pills (OSE-1886)', () => {
     if (await filters.isVisible()) await filters.click();
     // Only map-zoom-d (place 3) is within 7 days; places 1 and 2 are 10 days out or more.
     await page.locator('label[for="win-week"]').click();
-    await openPlace(page, 1);
-    await expect(panel(page, 1)).toBeHidden();
-    await openPlace(page, 2);
-    await expect(panel(page, 2)).toBeHidden();
+    // Over a street map the filter hides the dot of a place with nothing in the
+    // window (no dots are drawn without one, and toBeHidden holds for none).
+    // A shared link to that place then opens a panel the filter keeps hidden.
+    for (const n of [1, 2]) {
+      await expect(dotOf(page, n), `the dot of place ${n} is hidden`).toBeHidden();
+      await openPlace(page, n);
+      await expect(panel(page, n), `the panel of place ${n} stays hidden`).toBeHidden();
+    }
+    if ((await dotOf(page, 3).count()) > 0) await expect(dotOf(page, 3)).toBeVisible();
 
     await openPlace(page, 3);
     await expect.poll(() => openPanels(page)).toEqual([3]);
