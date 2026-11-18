@@ -1,0 +1,58 @@
+info:
+  name: "OSE-2133 | scan | the form code keeps today's redirect, with no pass"
+  type: http
+  seq: 60
+
+# Never prints the Location header or any part of it: every check below compares
+# booleans, so a failure reads "expected false to equal true" and nothing more.
+# The pass is a bearer token for 30 minutes (OSE ADR-040 decision 6).
+
+http:
+  method: GET
+  url: "{{baseUrl}}/q/{{votePassToken}}?type=register"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+    - name: Accept
+      value: text/html
+    - name: User-Agent
+      value: ose-bruno-vote-pass
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var status = res.getStatus();
+        var edge = status === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the scan was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var loc = String(res.getHeader('location') || '');
+        var hashAt = loc.indexOf('#');
+        var beforeHash = hashAt < 0 ? loc : loc.slice(0, hashAt);
+        var frag = hashAt < 0 ? '' : loc.slice(hashAt + 1);
+        var queryAt = beforeHash.indexOf('?');
+        var query = queryAt < 0 ? '' : beforeHash.slice(queryAt + 1);
+        var pathOnly = (queryAt < 0 ? beforeHash : beforeHash.slice(0, queryAt)).replace(/^https?:\/\/[^/]+/, '');
+        var night = bru.getVar('votePassNightId');
+        var queryHasT = /(^|&)t=/.test(query);
+        loc = null;
+        if (!edge) {
+          test('OSE-2133 form code: 302 to the event page, the form type kept, no pass', function () {
+            expect(status === 302).to.eql(true);
+            expect(pathOnly === '/events/' + night).to.eql(true);
+            expect(/(^|&)type=register(&|$)/.test(query)).to.eql(true);
+            expect(queryHasT).to.eql(false);
+            expect(frag === '').to.eql(true);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

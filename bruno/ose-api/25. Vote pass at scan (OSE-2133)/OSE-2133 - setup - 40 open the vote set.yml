@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2133 | setup | open the vote set"
+  type: http
+  seq: 40
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{votePassNightId}}/votables/open"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2133 setup: the set is open', function () { expect(res.getStatus()).to.eql(200); expect(b.set && b.set.state).to.eql('open'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
