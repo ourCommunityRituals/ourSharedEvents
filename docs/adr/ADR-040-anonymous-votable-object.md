@@ -1,6 +1,6 @@
 # ADR-040: An anonymous vote is a counter on an object, never a row about a voter
 
-**Status:** Accepted. The owner accepted this ADR by merging PR #1414 on 2026-11-18. The owner answered every question on 2026-11-17 and 2026-11-18 (comments on PRs #1413 and #1414; D6 and D10 in the owner's own session on 2026-11-18; Q6 to Q12 in question forms on 2026-11-18). Amended twice on 2026-11-18: decision 6 after the S0 spike (OSE-2122) and a three-loop CCR (PR #1416, merged in #1417); then decisions 1 to 10 after the five-loop S1 CCR (PR #1418) and the owner's answers to it, including the reversal of D3, in PR #1420 (a draft until the owner merges it). Still open: Q13 (a secret random voter floor), Q14 (whether one vote may feed two results), the level of detail in the published report (OSE-520), and the owner's wording for the house-rule card and the report. Nothing here is built.
+**Status:** Accepted. The owner accepted this ADR by merging PR #1414 on 2026-11-18. The owner answered every question on 2026-11-17 and 2026-11-18 (comments on PRs #1413 and #1414; D6 and D10 in the owner's own session on 2026-11-18; Q6 to Q12 in question forms on 2026-11-18). Amended twice on 2026-11-18: decision 6 after the S0 spike (OSE-2122) and a three-loop CCR (PR #1416, merged in #1417); then decisions 1 to 10 after the five-loop S1 CCR (PR #1418) and the owner's answers to it, including the reversal of D3, in PR #1420 (a draft until the owner merges it). Still open: the level of detail in the published report (OSE-520), and the owner's wording for the house-rule card and the report. Nothing here is built.
 **Date:** 2026-11-17. Amended 2026-11-18 (decision 6 after S0; decisions 1 to 10 after the S1 CCR).
 **Deciders:** Owner (PO). Sr Architect owns the draft. Dr of Security advises on the membrane.
 **Ticket:** OSE-1193 (blocks OSE-2000 under the fairs epic OSE-1996; step 1 of OW-218, Fist of Five)
@@ -52,6 +52,8 @@ What the code already gives:
 | Q10. Should a set lock for good once results are computed?                                    | **Yes, a one-way final lock.** No date change undoes it; a final set never reopens.                                                                                                                                                                                                                                     | Decision 4           |
 | Q11. Should the card also name remote voting and log timing?                                  | **Yes, both.** A poster photo lets someone vote from elsewhere while voting is open. Cloudflare's logs record each vote's arrival time to the millisecond. The final card wording is the owner's.                                                                                                                       | Decision 9           |
 | Q12. Do you accept the forwarded-pass risk, and how long does a pass last?                    | **Accept, 30 minutes,** renewed by scanning again. It goes on the card.                                                                                                                                                                                                                                                 | Decisions 6 and 9    |
+| Q13. Make the 10-voter minimum a secret random number per set (10 to 14)?                     | **Yes, secret 10 to 14,** drawn and deleted like the margin. A reduction accepted knowingly, not a fix.                                                                                                                                                                                                                 | Decision 7           |
+| Q14. A song's up vote feeds two results. Publish only the night's winner?                     | **The night's winner only** (or "too close to call"). No per-song results.                                                                                                                                                                                                                                              | Decisions 7 and 8    |
 | Apply the review's text and ticket edits?                                                     | **Yes, as a draft PR.**                                                                                                                                                                                                                                                                                                 | This text            |
 
 ## Decision
@@ -136,22 +138,20 @@ No tally, winner or outcome appears before the set is final, and none on the dis
 After the event, results are computed once (decision 4). Only these are published, to anyone, the brand admin included (Q7, Q8):
 
 - **No per-object number.** No up or "not for me" count, for any object, is ever published. No total of them is published either: not for a team, not across objects, not across nights.
-- **10 voters first.** Nothing is published unless at least 10 distinct voters voted in the set (participant markers, counted raw).
-- **Outcomes only.** For each result the set reports, only the outcome: the winner, or "too close to call", and the champion retains. A result is either a song's result against the champion, or the winner of the night: the song (or team) with the largest up count, against the runner-up.
-- **The winner rule.** It runs on the unpublished up counts only; "not for me" counts are not used in the margin. A winner needs an up-count lead of at least T. T is a secret whole number drawn for that result, uniform from 5 to 9 (Q8 A).
-- **How T is drawn.** It comes from `crypto.getRandomValues`, by rejection sampling, so no value is more likely. It is drawn when the objects open, before any vote. It is stored only on the server, in a column no route returns, and never logged. The night's T is drawn when the set opens. It is set to null when the set is final, and it is never published. An outcome tells only whether the hidden lead cleared T, so a person who controls a result's votes learns a bound on that result's T, and nothing about any other result's T.
+- **A secret voter floor (Q13).** Nothing is published unless the set's distinct voters (participant markers, counted raw) reach V. V is a secret whole number drawn for the set, uniform from 10 to 14. Below V, the night reads "too close to call, the champion retains", the same words as a close result, so the reading alone does not say which rule applied.
+- **One result per set: the night's winner (Q14).** A set reports exactly one outcome: the winner of the night, or "too close to call, the champion retains". The winner is the song, or the team when the set is played by teams, with the largest up count, against the runner-up. No per-song result, no standings and no runner-up are published.
+- **The winner rule.** It runs on the unpublished up counts only; "not for me" counts are not used in the margin. A winner needs an up-count lead over the runner-up of at least T. T is a secret whole number drawn for the set, uniform from 5 to 9 (Q8 A).
+- **How T and V are drawn.** Each comes from `crypto.getRandomValues`, by rejection sampling, so no value is more likely. Both are drawn when the set first opens, before any vote, and are never redrawn, not even at a reopen. They are stored only on the server, in columns no route returns, and never logged. They are set to null when the set is final, and they are never published. The outcome tells only whether the hidden lead cleared T and the voters reached V, so a person who controls the votes learns a bound on that set's numbers and nothing about any other set's.
 - **No count of voters** is published, for a night or a season, and no participation figure (Q8-2).
 - Own-team voting is allowed.
 
-**What the random margin does, and does not do.** It is a reduction the owner accepted knowingly (Q8, 2026-11-18), not a fix. One person who controls every vote but one can still learn that last vote about one time in five per try; with a fixed margin, every time. No fixed publishing rule can do better while one person can vote from many browsers. T is drawn per result, not once per night, so a person who controls a few results with their own browsers cannot learn T there and use it on the target's result. The "one in five" is per result. A song's up vote feeds two results, its own result against the champion and the winner of the night, each with its own T, so that vote is exposed to two draws: about one time in three (1 − 0.8 × 0.8 = 0.36). Whether one vote may feed two results is an open owner question (Q14). The card says plainly that the margin varies (decision 9).
-
-**The 10-voter rule still shows one fact.** Whether anything is published at all shows whether at least 10 people voted. Someone with 9 browsers can therefore tell whether one other person voted, though not how. Dropping the voter count (Q8-2) did not remove this. The same random step could narrow it: a secret floor drawn per set from 10 to 14. That is an open owner question (Still open, Q13).
+**What the secret numbers do, and do not do.** They are reductions the owner accepted knowingly (Q8, Q13, 2026-11-18), not fixes. One person who controls every vote but one can still learn, about one time in five per set, either how that last person voted (through T) or whether they voted at all (through V). With fixed numbers, every time. No fixed publishing rule can do better while one person can vote from many browsers. Because a set reports one result (Q14), each vote feeds one outcome, and each set has its own T and V, so nothing learned in one set carries to another. The card says plainly that the numbers vary (decision 9).
 
 ### 8. The fun report
 
 **Transparency (owner, 2026-11-18, C2).** The reports are published with enough detail to give trust in the process. Where the line falls between too much and too little detail on the SharedReport is still to be worked out, in OSE-520, inside the rules of decision 7.
 
-Once at least 10 distinct people have voted, the event gets a **fun results report** after the event, for the people who were there and for sponsors. It shows only what decision 7 allows, which is outcomes, and says plainly that they are for fun, not hard numbers. It belongs to OSE-520, and it is a new public surface with its own gates.
+After the set is final, the event gets a **fun results report**, for the people who were there and for sponsors. It shows only what decision 7 allows: the night's winner, or "too close to call, the champion retains". It says plainly that this is for fun, not hard numbers. The belt follows the night's winner; there is no per-song belt or result. It belongs to OSE-520, and it is a new public surface with its own gates.
 
 **Participation** (D12) was kept at first, then dropped on 2026-11-18 (Q8-2). No count of voters and no rate of voters against devices is published. If it is wanted again, it needs its own decision and a fresh look at the risk in decision 7.
 
@@ -159,16 +159,16 @@ Once at least 10 distinct people have voted, the event gets a **fun results repo
 
 The owner accepts these residual risks, and the voter page states them in plain words so the room can self-police:
 
-- **Colluders.** People who know their own votes and together cast every vote but one can sometimes work out that last vote from an outcome: about one time in five per result (the same risk as "one vote can decide an outcome").
+- **Colluders.** People who know their own votes and together cast every vote but one can sometimes work out that last vote from an outcome: about one time in five per set (the same risk as "one vote can decide the result").
 - **Several browsers.** Someone who scans with several browsers can vote more than once.
 - **A script.** One person with a script can cast many votes. Signing the cookie would not stop it: a browser with no cookie gets a fresh one, and a pass, in one request.
-- **One vote can decide an outcome.** One person who casts every vote but one can, about one time in five per result, learn that last vote from the outcome; about one time in three when the vote feeds two results. The margin varies to make this rare; it cannot make it impossible (decision 7).
+- **One vote can decide the result.** One person who casts every vote but one can, about one time in five per set, learn that last vote from the night's result. The margin varies to make this rare; it cannot make it impossible (decision 7).
 - **Remote voting.** A photo of the code lets someone vote from elsewhere while voting is open.
 - **A forwarded pass.** The pass works for whoever holds it. Someone who gets a person's vote link while it is valid can vote in their place, once per song. The person's own vote then answers like a counted one, so they cannot tell. Whoever holds the pass may also learn, from how fast a duplicate answers, which songs the person already voted on. It reveals no identity.
-- **Database history.** For 30 days, D1's history can link a scan to a vote by the order of writes, and it holds the secret margins until then.
+- **Database history.** For 30 days, D1's history can link a scan to a vote by the order of writes, and it holds the secret margins and voter floors until then.
 - **Log timing.** Cloudflare's logs record when each vote arrives, to the millisecond. With one song open, that time names the song. Only the account holder can see them.
 - **Timing.** A duplicate may answer faster than a counted vote.
-- **Whether someone voted.** Whether a result is published at all shows whether at least 10 people voted, so someone with 9 browsers can tell whether one other person voted, though not how (decision 7, Q13 open).
+- **Whether someone voted.** One person with many browsers can, about one time in five per set, tell whether one other person voted at all, though not how. The minimum number of voters varies to make this rare; it cannot make it impossible (decision 7).
 
 "Zero or not" (accepted on 2026-11-18 through PR #1416) no longer applies: no per-side count is published. The card's exact wording is the owner's.
 
@@ -178,12 +178,10 @@ Voting turns on when an admin opens a vote set for the event (D6 = A). No fair s
 
 ## Still open
 
-| Id        | Question                                                                                                                                                                                               | Proposed default                                                                                        | Blocks                                     |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Q14       | A song's up vote feeds two results (its own result and the night winner), each with its own secret margin, so it is exposed about one time in three, not one in five. Publish only one result per set? | Yes: publish the winner of the night only, and no per-song result, which keeps it at about one in five. | S5 (OSE-2130), OSE-520                     |
-| Q13       | The 10-voter rule shows whether at least 10 voted, so someone with 9 browsers can tell whether one other person voted. Make the floor a secret random number per set (10 to 14)?                       | Yes: the same reduction as the margin, about 1 in 5 per try.                                            | S5 (OSE-2130)                              |
-| C2 detail | How much detail does the published report carry, so it builds trust without narrowing to a person?                                                                                                     | Work it out in OSE-520, inside decision 7.                                                              | The fun report (OSE-520)                   |
-| Wording   | The owner's words for the house-rule card and the report: the ten risks in decision 9; the margin varies; the 10-voter rule does not stop stuffing; for fun.                                           | A plain draft is on OSE-2122. The owner's words govern.                                                 | The voter page (S4b), the report (OSE-520) |
+| Id        | Question                                                                                                                                                                   | Proposed default                                        | Blocks                                     |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------ |
+| C2 detail | How much detail does the published report carry, so it builds trust without narrowing to a person?                                                                         | Work it out in OSE-520, inside decision 7.              | The fun report (OSE-520)                   |
+| Wording   | The owner's words for the house-rule card and the report: the ten risks in decision 9; the margin and the minimum vary; the 10-voter rule does not stop stuffing; for fun. | A plain draft is on OSE-2122. The owner's words govern. | The voter page (S4b), the report (OSE-520) |
 
 ## Alternatives Considered
 
@@ -203,7 +201,7 @@ This is the September 2026 design (migration "0069", never merged).
 
 ### Alternative D: noise added to counts
 
-**Rejected for counts** (D8): noise would end exact winners. On 2026-11-18 (Q8) the owner took a narrower step: no counts are published at all, and the margin a winner needs is a secret random number per result. That is a small, bounded form of noise on outcomes only.
+**Rejected for counts** (D8): noise would end exact winners. On 2026-11-18 (Q8) the owner took a narrower step: no counts are published at all, the margin a winner needs is a secret random number per set, and so is the minimum number of voters (Q13). That is a small, bounded form of noise on one outcome per set only.
 
 ### Alternative E: the vote route reads `ose_anon`
 
@@ -222,10 +220,10 @@ This was D3 as first decided, with an amendment to AGENTS.md invariant 4 (S1g).
 
 ### Negative
 
-- Five new tables, a pass from `/q`, and a secret margin per result.
+- Five new tables, a pass from `/q`, and a secret margin and voter floor per set.
 - A vote needs a pass from `/q`. The S0 spike showed that 150 browsers behind one address each get a cookie and a counted scan through the CI path. Real phones are untested, and the owner accepts that (decision 6).
 - The pass is a bearer token for 30 minutes (decision 9).
-- The residual risks are carried by a house rule, not by code. They include one person with a script, one vote deciding an outcome about one time in five per result, and a forwarded pass (decision 9).
+- The residual risks are carried by a house rule, not by code. They include one person with a script, one vote deciding the result about one time in five per set, and a forwarded pass (decision 9).
 
 ### Neutral
 
@@ -240,7 +238,7 @@ The stories (D10 = yes; each is a Linear ticket under OSE-1193):
 - **Cancelled:** S1g (OSE-2124). D3 is reversed, so invariant 4 is not amended.
 - **After S1:**
   - S2 (OSE-2125), the tables and their gates, including the timestamp gate's scan-shaped rule learning `vote|votable|tally|ballot|receipt|participant`, with `votable_objects.closes_at` on its allowlist;
-  - S3 (OSE-2127), admin open, close, reopen, the final lock, the pepper epoch and the secret margins;
+  - S3 (OSE-2127), admin open, close, reopen, the final lock, the pepper epoch, and the secret margin and voter floor;
   - S3c (OSE-2135), the public open-objects read and the kill switch, after S3;
   - S3b (OSE-2133), `/q` issues the pass (decision 6).
 - **After S2, S3 and S3b:** S4a (OSE-2128), the vote route. Then S4c (OSE-2134), its hardening, and S4b (OSE-2129), the voter page (also after S3c).
@@ -266,7 +264,7 @@ Every test is seen failing first, at the workers-pool layer and on staging (Brun
 
 - The owner settles the published report's level of detail.
 - A count is wanted during the night (invariant 5).
-- A per-object number is wanted in a published result (Q8).
+- A per-object number, or a per-song result, is wanted in a published result (Q8, Q14).
 - A vote limit beyond one per object is wanted ("to start").
 - A way to bind one vote to one person, while staying anonymous, becomes available (it would close the risk in decision 7).
 - A refusal is seen in a real room, or a flood is seen (the triggers in decision 6).
