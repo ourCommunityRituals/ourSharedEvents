@@ -1472,6 +1472,13 @@
       "testCount": 14
     },
     {
+      "file": "workers/oursharedevents/tests/floor-open-items.pinned.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
+    },
+    {
       "file": "workers/oursharedevents/tests/forbidden-join-blindness.spec.ts",
       "bucket": "node",
       "needsReview": true,
