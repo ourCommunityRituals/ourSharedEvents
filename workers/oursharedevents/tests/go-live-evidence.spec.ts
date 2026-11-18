@@ -312,6 +312,64 @@ describe('a write that does not move an event into active asks for no evidence',
   });
 });
 
+// ── Rows written before the rule (OSE-2145) ──────────────────────────────────
+
+describe('the gate reads the codes, never the qr_verified column', () => {
+  const setFlag = (id: string, v: 0 | 1) =>
+    E.DB.prepare('UPDATE events SET qr_verified = ? WHERE id = ?').bind(v, id).run();
+
+  test('an old row that is live with qr_verified = 0 and no codes stays live and editable', async () => {
+    const id = await seedEvent('active');
+    await setFlag(id, 0);
+    const edit = await putStatus(id, { title: 'Old Live Row, Renamed' });
+    expect(edit.status).toBe(200);
+    expect(await readRow(id)).toMatchObject({ status: 'active', qr_verified: 0 });
+
+    // Saved as active again: not a move, so nothing is asked. The flag follows
+    // the status, as PUT has written it since before this rule.
+    const again = await putStatus(id, { status: 'active' });
+    expect(again.status).toBe(200);
+    expect(again.body.evidence).toBeUndefined();
+    expect(await readRow(id)).toMatchObject({ status: 'active', qr_verified: 1 });
+  });
+
+  test('that row can be taken down, and is asked for a code only when it goes live again', async () => {
+    const id = await seedEvent('active');
+    await setFlag(id, 0);
+    const down = await read(
+      await SELF.fetch(`${ORIGIN}/api/v2/admin/events/${id}/unverify-qr`, {
+        method: 'POST',
+        headers: ADMIN,
+      })
+    );
+    expect(down.status).toBe(200);
+    expectRefused(await verifyQr(id), 'ready');
+    await addLink(id, mintTestCode());
+    expect((await verifyQr(id)).status).toBe(200);
+  });
+
+  test.each(DOORS)(
+    'a row that is not live with qr_verified = 1 and no codes is still refused ($door from $from)',
+    async ({ from, go }) => {
+      const id = await seedEvent(from);
+      await setFlag(id, 1);
+      const a = await go(id);
+      expect(a.status).toBe(409);
+      expect(a.body.code).toBe('NO_QR_EVIDENCE');
+      expect((await readRow(id))?.status).toBe(from);
+    }
+  );
+
+  test.each(DOORS)(
+    'a row with qr_verified = 0 and a working link goes live ($door from $from)',
+    async ({ from, go }) => {
+      const id = await seedEvent(from);
+      await addLink(id, mintTestCode());
+      expect((await go(id)).status).toBe(200);
+    }
+  );
+});
+
 // ── A refusal is logged without naming the event ─────────────────────────────
 
 describe('a refused go-live writes one line that names no event', () => {

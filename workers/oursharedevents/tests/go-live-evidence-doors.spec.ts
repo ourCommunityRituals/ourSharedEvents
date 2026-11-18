@@ -239,6 +239,12 @@ describe('one rule: the read holds no condition of its own', () => {
     expect(read).not.toMatch(/https/i);
   });
 
+  test('it never reads the qr_verified column, nor any column of the event row', () => {
+    expect(read).not.toMatch(/qr_verified/);
+    expect(read).not.toMatch(/\bFROM\s+events\b/i);
+    expect(code('lib', 'code-validity.ts')).not.toMatch(/qr_verified/);
+  });
+
   test('its two reads filter on the event and on nothing else', () => {
     const wheres = [...read.matchAll(/\bWHERE\b([^'"`]*)['"`]/g)].map((m) => m[1]!.trim());
     expect(wheres).toEqual(['event_id = ?', 'event_id = ?']);

@@ -1721,14 +1721,14 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 26
+      "testCount": 27
     },
     {
       "file": "workers/oursharedevents/tests/go-live-evidence.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 23
+      "testCount": 27
     },
     {
       "file": "workers/oursharedevents/tests/h3-tagging.spec.ts",
