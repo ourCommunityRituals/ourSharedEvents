@@ -12,6 +12,7 @@
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { giveCoreValues } from './helpers/core-values';
+import { giveGoLiveEvidence } from './helpers/go-live-evidence';
 
 // ── DB setup ──────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,8 @@ async function insertEvent(id: string, status: string): Promise<void> {
     .bind(id, id, status)
     .run();
   await giveCoreValues(db(), id);
+  // OSE-1420: going live needs a working code; the refusal is go-live-evidence.spec.ts.
+  await giveGoLiveEvidence(db(), id);
 }
 
 async function json<T = Record<string, unknown>>(res: Response): Promise<T> {

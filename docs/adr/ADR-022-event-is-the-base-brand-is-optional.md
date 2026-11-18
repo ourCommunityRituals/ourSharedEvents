@@ -47,12 +47,26 @@ default brand.
 | Time       | `events.start_date`, `start_time`, `timezone` → `starts_at` | Required to leave draft.                         |
 | Event type | `events.event_type_id`                                      | Required to leave draft.                         |
 | Map        | `events.is_published`                                       | Defaults to off. On only by the organizer's act. |
-| QR codes   | the event's codes, `qr_verified`                            | Already required: `active ⟺ qr_verified = 1`.    |
+| QR codes   | the event's codes, `qr_verified`                            | Required to go live: one working code (below).   |
 
 A draft stays as easy as today: a title is enough. The core values are checked
 when an event moves out of `draft`. Two code paths do that today (`PUT status` in
 `handlers/events.ts` and verify-qr in `handlers/qr-verify.ts`); both call one
 shared check (OSE-1560).
+
+**The QR codes value is checked when an event goes live (OSE-1420, 2026-11-18; the
+code is the record).** `active ⟺ qr_verified = 1` was already written at every
+door, but nothing read a code before writing it. Now a move into `active` by a
+person, through either door (verify-qr, or `PUT status` from `ready` or
+`archived`), first reads the event's codes (`lib/go-live-evidence.ts`). It is
+allowed when at least one works: a share link the `/s/` route accepts, or a
+placed poster that is switched on and whose token the `/q/` route accepts. One
+rule says which rows work (`lib/code-validity.ts`). With none, the answer is `409 NO_QR_EVIDENCE` and
+nothing is written; if the codes cannot be read it is `503
+EVIDENCE_UNAVAILABLE`. The answers count links and posters and carry no scan
+count. Not covered: an event that automation creates already live (its share
+link is minted after the row is written), and a save that leaves a live event
+live.
 
 **The map is never on by omission** (PO, 2026-10-03). Before OSE-1560,
 `is_published` became 1 when a request left it out. Under this ADR:
