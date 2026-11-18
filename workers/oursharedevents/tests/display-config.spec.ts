@@ -112,8 +112,9 @@ function fundraiserWordsIn(value: unknown, path = '$'): string[] {
 const VOTE_WORDS = /vot(?:e|ing|able)|tall(?:y|ies)|ballot|receipt|participant|winner/i;
 const hasVoteWord = (text: string): boolean => text.search(VOTE_WORDS) !== -1;
 
-/** Every key at any depth, and every pane name, that carries a vote word. */
+/** Every key at any depth, and every text value, that carries a vote word. A QR PNG is image bytes, not text. */
 function voteWordsIn(value: unknown, path = '$'): string[] {
+  if (typeof value === 'string') return hasVoteWord(value) ? [`text ${path}`] : [];
   if (Array.isArray(value)) {
     return value.flatMap((v, i) =>
       path === '$.panes' && typeof v === 'string'
@@ -126,7 +127,9 @@ function voteWordsIn(value: unknown, path = '$'): string[] {
   if (value === null || typeof value !== 'object') return [];
   return Object.entries(value).flatMap(([key, v]) => {
     const at = `${path}.${key}`;
-    return [...(hasVoteWord(key) ? [`key ${at}`] : []), ...voteWordsIn(v, at)];
+    const own = hasVoteWord(key) ? [`key ${at}`] : [];
+    if (key === 'qr' && typeof v === 'string' && isQrPng(v)) return own;
+    return [...own, ...voteWordsIn(v, at)];
   });
 }
 
@@ -242,7 +245,7 @@ describe('display-config: what the TV reads', () => {
   // vote word at all: no "voting open" flag, no open-objects list, no tally.
   // @born-red OSE-2125 | method: injected-fault (the handler served
   // `voting_open: true`: this case went red) | date: 2026-11-18
-  test('OSE-2125: the TV reads no vote word, in any key or pane', async () => {
+  test('OSE-2125: the TV reads no vote word, in any key, pane or text', async () => {
     const id = await createEvent();
     const body = (await (await config(id)).json()) as Config;
     expect(voteWordsIn(body)).toEqual([]);
@@ -252,6 +255,9 @@ describe('display-config: what the TV reads', () => {
       'key $.event_page.votables',
     ]);
     expect(voteWordsIn({ ...body, panes: ['event', 'tally'] })).toEqual(['pane $.panes[1]']);
+    expect(voteWordsIn({ ...body, event_page: { ...body.event_page, url: 'Vote now' } })).toEqual([
+      'text $.event_page.url',
+    ]);
   });
 
   test('the admin save round-trips: order, dwell and league links with QR codes', async () => {

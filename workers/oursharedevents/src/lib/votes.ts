@@ -53,6 +53,25 @@ export const VOTE_PLAYED_BY = ['object', 'team'] as const;
 /** The state of a set or an object. The one-way final flag is separate. */
 export const VOTE_STATES = ['draft', 'open', 'closed'] as const;
 
+/**
+ * Why a set is void. A void set publishes nothing, and nothing un-voids it.
+ * Today the one cause is a pepper rotation while the set is open (decision 6).
+ */
+export const VOTE_VOID_REASONS = ['pepper_epoch'] as const;
+
+/**
+ * A team is an opaque OSE id: `grp_` and 8 to 64 lowercase hex or `-`
+ * characters (a UUID fits). Migration 0111 refuses anything else in
+ * votable_objects.group_id and vote_team_markers.team_id, so a team or player
+ * name cannot be stored (decision 2: OSE holds no name of any kind).
+ */
+const TEAM_ID = /^grp_[0-9a-f-]{8,64}$/;
+
+/** True for a team id as the vote tables store it. */
+export function isVoteTeamId(value: unknown): value is string {
+  return typeof value === 'string' && TEAM_ID.test(value);
+}
+
 export const VOTABLE_LABEL_MAX = 80;
 
 /** HKDF `info` for each marker. Changing one makes new markers. */
@@ -184,5 +203,6 @@ export function voteTeamMarker(
   k: string,
   teamId: string
 ): Promise<string | null> {
+  if (!isVoteTeamId(teamId)) return Promise.resolve(null);
   return marker(VOTE_TEAM_CONTEXT, pepper, k, teamId);
 }

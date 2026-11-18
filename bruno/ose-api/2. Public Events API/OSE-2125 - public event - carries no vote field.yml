@@ -20,10 +20,11 @@ runtime:
         // own field list to the same words (COUNT_WORDS learned them in OSE-2125).
         //
         // Behind a Cloudflare Access challenge the answer is not JSON. That is
-        // the same case the neighbouring requests allow for, named as its own test.
+        // the same case the neighbouring requests allow for. It is named NOT RUN, so
+        // scripts/ci/bruno-not-run.mjs lists it in the job summary.
         const ct = res.getHeader('Content-Type') || '';
         if (!ct.includes('application/json')) {
-          test('not JSON: an Access challenge, nothing to check for keys', function () {
+          test('NOT RUN (Access challenge): the answer is not JSON, so no key was checked', function () {
             expect([200, 302, 403]).to.include(res.getStatus());
           });
           return;

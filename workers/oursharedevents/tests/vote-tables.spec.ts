@@ -10,10 +10,14 @@
  * tests/e2e/0-architecture/votes-never-who.invariant.spec.ts (T0).
  *
  * @born-red OSE-2125 | method: injected-fault, each removed after: the
- *   migration moved to migrations-forms/ (lives in DB only went red), a
- *   `voter_hash` column on vote_receipts (no voter column went red), a `side`
- *   column on vote_receipts (receipts carry no side went red), voteTeamMarker
- *   keyed by the song instead of the team (three up votes went red) | date: 2026-11-18
+ *   migration moved to migrations-forms/ (lives in DB only), a `voter_hash`
+ *   column on vote_receipts (no voter column), a `side` column on
+ *   vote_receipts (receipts carry no side), the team marker keyed by the song
+ *   (three up votes), T allowed to 10 (T and V ranges), the final CHECK
+ *   dropped (final set), WITHOUT ROWID dropped (write order), the receipt CHECK
+ *   dropped (marker shape), UNIQUE(event_id) dropped (one set per event), and
+ *   after the security review: the state rule, the set-and-event foreign key,
+ *   the team id shape and set_id on team markers | date: 2026-11-18
  */
 
 import { env } from 'cloudflare:test';
@@ -25,6 +29,7 @@ import {
   VOTE_TABLES,
   VOTE_TEAM_CONTEXT,
   isVoteMarker,
+  isVoteTeamId,
   parseVotableLabel,
   voteParticipantMarker,
   voteReceipt,
@@ -94,10 +99,15 @@ const VOTER_WORDS = new Set([
   'browser',
   'device',
   'agent',
+  'ua',
   'ip',
   'fingerprint',
   'user',
   'person',
+  'token',
+  'key',
+  'hash',
+  'pass',
   'k',
 ]);
 /** A column that holds a time. */
@@ -108,10 +118,12 @@ const timeShaped = (c: string) => words(c).some((w) => TIME_WORDS.has(w));
 
 let seq = 0;
 const uid = (p: string) => `${p}_${Date.now().toString(36)}_${seq++}`;
-const hex64 = () =>
-  Array.from(crypto.getRandomValues(new Uint8Array(32)))
+const hex = (bytes: number) =>
+  Array.from(crypto.getRandomValues(new Uint8Array(bytes)))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+const hex64 = () => hex(32);
+const teamId = () => `grp_${hex(8)}`;
 
 async function seedEvent(): Promise<string> {
   const id = uid('evt_vote');
@@ -144,10 +156,13 @@ async function seedSong(eventId: string, setId: string, groupId: string | null):
   return id;
 }
 
-/** One up vote, as S4a will write it: a receipt, the tally, and the team marker if new. */
-async function upVote(k: string, objectId: string, teamId: string): Promise<void> {
+/**
+ * One up vote, as S4a will write it: a receipt, the tally, and the team marker
+ * if new. The marker is made from the song's team, never from the song.
+ */
+async function upVote(k: string, setId: string, objectId: string, team: string): Promise<void> {
   const receipt = await voteReceipt(PEPPER, k, objectId);
-  const marker = await voteTeamMarker(PEPPER, k, teamId);
+  const marker = await voteTeamMarker(PEPPER, k, team);
   expect(receipt && marker).toBeTruthy();
   const res = await tenv()
     .DB.prepare('INSERT OR IGNORE INTO vote_receipts (object_id, receipt) VALUES (?, ?)')
@@ -159,15 +174,17 @@ async function upVote(k: string, objectId: string, teamId: string): Promise<void
       .DB.prepare('UPDATE vote_tallies SET up_count = up_count + 1 WHERE object_id = ?')
       .bind(objectId),
     tenv()
-      .DB.prepare('INSERT OR IGNORE INTO vote_team_markers (team_id, marker) VALUES (?, ?)')
-      .bind(teamId, marker),
+      .DB.prepare(
+        'INSERT OR IGNORE INTO vote_team_markers (set_id, team_id, marker) VALUES (?, ?, ?)'
+      )
+      .bind(setId, team, marker),
   ]);
 }
 
-async function teamTotal(teamId: string): Promise<number> {
+async function teamTotal(setId: string, team: string): Promise<number> {
   const row = await tenv()
-    .DB.prepare('SELECT COUNT(*) AS n FROM vote_team_markers WHERE team_id = ?')
-    .bind(teamId)
+    .DB.prepare('SELECT COUNT(*) AS n FROM vote_team_markers WHERE set_id = ? AND team_id = ?')
+    .bind(setId, team)
     .first<{ n: number }>();
   return row?.n ?? -1;
 }
@@ -231,11 +248,43 @@ describe('OSE-2125 | the vote tables: where they live and what they hold', () =>
     ]);
   });
 
-  test('receipts carry no side: the counter and marker tables hold exactly these columns', async () => {
+  test('receipts carry no side: every vote table holds exactly these columns', async () => {
     expect(await columns('vote_receipts')).toEqual(['object_id', 'receipt']);
-    expect(await columns('vote_participants')).toEqual(['set_id', 'receipt']);
-    expect(await columns('vote_team_markers')).toEqual(['team_id', 'marker']);
+    expect(await columns('vote_participants')).toEqual(['set_id', 'marker']);
+    expect(await columns('vote_team_markers')).toEqual(['set_id', 'team_id', 'marker']);
     expect(await columns('vote_tallies')).toEqual(['object_id', 'up_count', 'down_count']);
+    expect(await columns('vote_sets')).toEqual([
+      'id',
+      'event_id',
+      'state',
+      'played_by',
+      'pepper_epoch',
+      'is_void',
+      'void_reason',
+      'is_final',
+      'final_at',
+      'secret_margin',
+      'secret_floor',
+      'counted_votes',
+      'duplicate_votes',
+      'refused_votes',
+      'created_at',
+      'updated_at',
+    ]);
+    expect(await columns('votable_objects')).toEqual([
+      'id',
+      'event_id',
+      'set_id',
+      'kind',
+      'label',
+      'booth_id',
+      'group_id',
+      'state',
+      'closes_at',
+      'sort',
+      'created_at',
+      'updated_at',
+    ]);
   });
 
   test('the marker tables number no rows in write order (WITHOUT ROWID)', async () => {
@@ -247,21 +296,17 @@ describe('OSE-2125 | the vote tables: where they live and what they hold', () =>
   });
 
   test('the detectors see what they are for (negative controls)', () => {
-    expect(['voter_hash', 'anon_id', 'session_key', 'snk', 'ip', 'k'].filter(voterShaped)).toEqual([
-      'voter_hash',
-      'anon_id',
-      'session_key',
-      'snk',
-      'ip',
-      'k',
-    ]);
+    const voterish = ['voter_hash', 'anon_id', 'session_key', 'snk', 'ip', 'k', 'ua', 'pass_token'];
+    expect(voterish.filter(voterShaped)).toEqual(voterish);
     expect(['created_at', 'voted_time', 'hour', 'ts', 'up_count'].filter(timeShaped)).toEqual([
       'created_at',
       'voted_time',
       'hour',
       'ts',
     ]);
-    expect(['receipt', 'object_id', 'pepper_epoch', 'played_by'].filter(voterShaped)).toEqual([]);
+    expect(
+      ['receipt', 'marker', 'object_id', 'pepper_epoch', 'played_by'].filter(voterShaped)
+    ).toEqual([]);
   });
 });
 
@@ -274,22 +319,51 @@ describe('OSE-2125 | one set per event, and its secret numbers', () => {
     ).toBe(true);
   });
 
-  test('T stays in 5 to 9 and V in 10 to 14', async () => {
+  test('an object belongs to its own set and event: never another event set', async () => {
+    const e1 = await seedEvent();
+    const e2 = await seedEvent();
+    const s1 = await seedSet(e1);
+    expect(
+      await refused(
+        "INSERT INTO votable_objects (id, event_id, set_id, kind, label) VALUES (?, ?, ?, 'song', 'x')",
+        uid('vobj'),
+        e2,
+        s1
+      )
+    ).toBe(true);
+    expect(
+      await refused(
+        "INSERT INTO votable_objects (id, event_id, set_id, kind, label) VALUES (?, ?, ?, 'song', 'x')",
+        uid('vobj'),
+        e1,
+        s1
+      )
+    ).toBe(false);
+  });
+
+  test('T is a whole number from 5 to 9, and V from 10 to 14', async () => {
     const setId = await seedSet(await seedEvent());
     const set = (col: string, v: number) =>
       refused(`UPDATE vote_sets SET ${col} = ? WHERE id = ?`, v, setId);
-    for (const v of [4, 10, 0, -1]) expect(await set('secret_margin', v), `T=${v}`).toBe(true);
-    for (const v of [9, 15, 0]) expect(await set('secret_floor', v), `V=${v}`).toBe(true);
+    for (const v of [4, 10, 0, -1, 5.5]) expect(await set('secret_margin', v), `T=${v}`).toBe(true);
+    for (const v of [9, 15, 0, 12.9]) expect(await set('secret_floor', v), `V=${v}`).toBe(true);
     for (const v of [5, 7, 9]) expect(await set('secret_margin', v), `T=${v}`).toBe(false);
     for (const v of [10, 12, 14]) expect(await set('secret_floor', v), `V=${v}`).toBe(false);
   });
 
-  test('a final set holds no T or V, and names the hour it became final', async () => {
+  test('a final set is closed, holds no T or V, and names the hour it became final', async () => {
     const setId = await seedSet(await seedEvent());
     await tenv()
-      .DB.prepare('UPDATE vote_sets SET secret_margin = 6, secret_floor = 11 WHERE id = ?')
+      .DB.prepare(
+        "UPDATE vote_sets SET state = 'open', secret_margin = 6, secret_floor = 11 WHERE id = ?"
+      )
       .bind(setId)
       .run();
+    const finalSql =
+      "UPDATE vote_sets SET is_final = 1, final_at = '2026-11-18 21:00:00', secret_margin = NULL, secret_floor = NULL WHERE id = ?";
+    // Final while still open: refused.
+    expect(await refused(finalSql, setId)).toBe(true);
+    await tenv().DB.prepare("UPDATE vote_sets SET state = 'closed' WHERE id = ?").bind(setId).run();
     // Final while T and V are still there: refused.
     expect(
       await refused(
@@ -304,20 +378,26 @@ describe('OSE-2125 | one set per event, and its secret numbers', () => {
         setId
       )
     ).toBe(true);
-    // Final, with both nulled in the same write: accepted.
-    expect(
-      await refused(
-        "UPDATE vote_sets SET is_final = 1, final_at = '2026-11-18 21:00:00', secret_margin = NULL, secret_floor = NULL WHERE id = ?",
-        setId
-      )
-    ).toBe(false);
-    // And T cannot come back once final.
+    // Final, closed, with both nulled in the same write: accepted.
+    expect(await refused(finalSql, setId)).toBe(false);
+    // Nothing reopens it, and T cannot come back.
+    expect(await refused("UPDATE vote_sets SET state = 'open' WHERE id = ?", setId)).toBe(true);
+    expect(await refused("UPDATE vote_sets SET state = 'draft' WHERE id = ?", setId)).toBe(true);
     expect(await refused('UPDATE vote_sets SET secret_margin = 7 WHERE id = ?', setId)).toBe(true);
   });
 
   test('a void set names its reason, and only a void set has one', async () => {
     const setId = await seedSet(await seedEvent());
     expect(await refused('UPDATE vote_sets SET is_void = 1 WHERE id = ?', setId)).toBe(true);
+    for (const empty of ['', '   ']) {
+      expect(
+        await refused(
+          'UPDATE vote_sets SET is_void = 1, void_reason = ? WHERE id = ?',
+          empty,
+          setId
+        )
+      ).toBe(true);
+    }
     expect(
       await refused("UPDATE vote_sets SET void_reason = 'pepper_epoch' WHERE id = ?", setId)
     ).toBe(true);
@@ -366,17 +446,14 @@ describe('OSE-2125 | receipts and markers', () => {
         `receipt ${value}`
       ).toBe(true);
       expect(
-        await refused(
-          'INSERT INTO vote_participants (set_id, receipt) VALUES (?, ?)',
-          setId,
-          value
-        ),
+        await refused('INSERT INTO vote_participants (set_id, marker) VALUES (?, ?)', setId, value),
         `participant ${value}`
       ).toBe(true);
       expect(
         await refused(
-          'INSERT INTO vote_team_markers (team_id, marker) VALUES (?, ?)',
-          'grp_x',
+          'INSERT INTO vote_team_markers (set_id, team_id, marker) VALUES (?, ?, ?)',
+          setId,
+          teamId(),
           value
         ),
         `team marker ${value}`
@@ -385,6 +462,42 @@ describe('OSE-2125 | receipts and markers', () => {
     expect(
       await refused('INSERT INTO vote_receipts (object_id, receipt) VALUES (?, ?)', objId, hex64())
     ).toBe(false);
+  });
+
+  test('a team is an opaque OSE id: a name or a cookie is refused', async () => {
+    const eventId = await seedEvent();
+    const setId = await seedSet(eventId);
+    for (const bad of [
+      'The Smith Family',
+      'grp_Smiths',
+      'anon_00000000-0000-4000-8000-000000000000',
+      'grp_',
+      'grp_123',
+    ]) {
+      expect(isVoteTeamId(bad), bad).toBe(false);
+      expect(
+        await refused(
+          "INSERT INTO votable_objects (id, event_id, set_id, kind, label, group_id) VALUES (?, ?, ?, 'song', 'x', ?)",
+          uid('vobj'),
+          eventId,
+          setId,
+          bad
+        ),
+        `group_id ${bad}`
+      ).toBe(true);
+      expect(
+        await refused(
+          'INSERT INTO vote_team_markers (set_id, team_id, marker) VALUES (?, ?, ?)',
+          setId,
+          bad,
+          hex64()
+        ),
+        `team_id ${bad}`
+      ).toBe(true);
+    }
+    const good = 'grp_0b5e2c1a-7f4d-4e2b-9a61-3c8d5f0e9b27';
+    expect(isVoteTeamId(good)).toBe(true);
+    expect(await seedSong(eventId, setId, good)).toBeTruthy();
   });
 
   test('a second receipt for the same object and browser changes nothing', async () => {
@@ -404,15 +517,15 @@ describe('OSE-2125 | receipts and markers', () => {
   test("three up votes on one team's songs add one to its total", async () => {
     const eventId = await seedEvent();
     const setId = await seedSet(eventId);
-    const team = uid('grp');
+    const team = teamId();
     const songs = [
       await seedSong(eventId, setId, team),
       await seedSong(eventId, setId, team),
       await seedSong(eventId, setId, team),
     ];
     const voter = hex64();
-    for (const song of songs) await upVote(voter, song, team);
-    expect(await teamTotal(team)).toBe(1);
+    for (const song of songs) await upVote(voter, setId, song, team);
+    expect(await teamTotal(setId, team)).toBe(1);
     // Each song still counts its own up vote.
     const ups = await tenv()
       .DB.prepare('SELECT SUM(up_count) AS n FROM vote_tallies WHERE object_id IN (?, ?, ?)')
@@ -420,14 +533,27 @@ describe('OSE-2125 | receipts and markers', () => {
       .first<{ n: number }>();
     expect(ups?.n).toBe(3);
     // A second voter adds one more; a repeat of the first adds nothing.
-    await upVote(hex64(), songs[1], team);
-    await upVote(voter, songs[2], team);
-    expect(await teamTotal(team)).toBe(2);
+    await upVote(hex64(), setId, songs[1], team);
+    await upVote(voter, setId, songs[2], team);
+    expect(await teamTotal(setId, team)).toBe(2);
+  });
+
+  test('two nights never share a team total, even with the same team id', async () => {
+    const team = teamId();
+    const e1 = await seedEvent();
+    const e2 = await seedEvent();
+    const s1 = await seedSet(e1);
+    const s2 = await seedSet(e2);
+    await upVote(hex64(), s1, await seedSong(e1, s1, team), team);
+    await upVote(hex64(), s1, await seedSong(e1, s1, team), team);
+    await upVote(hex64(), s2, await seedSong(e2, s2, team), team);
+    expect(await teamTotal(s1, team)).toBe(2);
+    expect(await teamTotal(s2, team)).toBe(1);
   });
 
   test('the three markers differ for one browser, and none is the scan key', async () => {
     const k = hex64();
-    const id = 'same-id';
+    const id = 'grp_0123456789abcdef';
     const receipt = await voteReceipt(PEPPER, k, id);
     const participant = await voteParticipantMarker(PEPPER, k, id);
     const team = await voteTeamMarker(PEPPER, k, id);
@@ -447,13 +573,14 @@ describe('OSE-2125 | receipts and markers', () => {
     expect(await voteReceipt(PEPPER, k, id)).toBe(receipt);
   });
 
-  test('no pepper, no key, or no id: no marker is made', async () => {
+  test('no pepper, no key, no id or no team id: no marker is made', async () => {
     const k = hex64();
     expect(await voteReceipt(undefined, k, 'o')).toBeNull();
     expect(await voteReceipt('', k, 'o')).toBeNull();
     expect(await voteReceipt(PEPPER, 'anon_00000000-0000-4000-8000-000000000000', 'o')).toBeNull();
     expect(await voteParticipantMarker(PEPPER, k, '')).toBeNull();
-    expect(await voteTeamMarker(PEPPER, k.toUpperCase(), 't')).toBeNull();
+    expect(await voteTeamMarker(PEPPER, k.toUpperCase(), teamId())).toBeNull();
+    expect(await voteTeamMarker(PEPPER, k, 'The Smith Family')).toBeNull();
   });
 });
 
