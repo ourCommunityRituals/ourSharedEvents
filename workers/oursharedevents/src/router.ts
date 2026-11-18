@@ -1489,9 +1489,11 @@ export async function route(
   // path event bound. Each write is audited against the event, with no detail:
   // no count, no secret and no rule is ever in the row.
   // Two matchers, the root and the root with a tail, so the write-guard gate
-  // (tests/helpers/admin-write-routes.ts) can derive a sample path for each.
-  const adminVotablesRoot = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/votables$/);
-  const adminVotablesSub = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/votables\/(.+)$/);
+  // (tests/helpers/admin-write-routes.ts) can derive a sample path for each. One
+  // statement, so the tenant gate reads them as one route for its requireAdmin
+  // window (tenant-isolation.invariant.spec.ts, "within 20 lines").
+  const adminVotablesRoot = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/votables$/),
+    adminVotablesSub = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/votables\/(.+)$/);
   const adminVotablesMatch = adminVotablesRoot ?? adminVotablesSub;
   const votablesRoute = adminVotablesMatch
     ? matchVotablesRoute(method, adminVotablesSub ? `/${adminVotablesSub[2]}` : '')
