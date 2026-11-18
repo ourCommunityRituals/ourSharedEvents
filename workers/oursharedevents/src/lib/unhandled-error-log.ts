@@ -22,10 +22,17 @@
  *     replaced, the rest stays.
  *
  * The same goes for what the request carried as a credential: the value of
- * every credential header (lib/log-redact.ts lists them), the part after
- * `Bearer`, and each cookie's value. An error that repeats one has it replaced.
- * The admin key and the CI header value have no shape a pattern could know, so
- * they are removed here by value, where the request is in hand.
+ * every header lib/log-redact.ts lists, and the part after `Bearer`. An error
+ * that repeats one has it replaced. The admin key and the CI header value have
+ * no shape a pattern could know, so they are removed here by value, where the
+ * request is in hand.
+ *
+ * The cookie header is not read here. Only three files may read a request's
+ * cookie (votes-never-who.invariant.spec.ts, owner 2026-11-18: no new reader),
+ * and this is not one of them. So a cookie value an error repeats is removed
+ * only by what the console wrapper knows: its name beside it (`cookie: …`), or
+ * its shape (an Access cookie is a JWT). A bare, shapeless cookie value in an
+ * error's text stays in the line.
  *
  * Limits: an error is taken to be from the database when its message carries a
  * D1 or SQLite code, which every error the D1 client throws does. In any other
@@ -95,9 +102,9 @@ function urlPieces(rawUrl: string): string[] {
 }
 
 /**
- * Every credential the request carried, longest first: each credential
- * header's whole value, what follows its scheme word (`Bearer …`), and each
- * cookie's value.
+ * Every credential the request carried in a listed header, longest first: the
+ * header's whole value and what follows its scheme word (`Bearer …`). The list
+ * has no cookie header in it (see the top of this file).
  */
 function credentialPieces(request: Request): string[] {
   const pieces = new Set<string>();
@@ -108,12 +115,6 @@ function credentialPieces(request: Request): string[] {
     pieces.add(value.trim());
     const scheme = /^\s*[A-Za-z][A-Za-z0-9_-]*\s+(\S.*)$/.exec(value);
     if (scheme) pieces.add(scheme[1].trim());
-    if (name === 'cookie') {
-      for (const pair of value.split(';')) {
-        const eq = pair.indexOf('=');
-        if (eq !== -1) pieces.add(pair.slice(eq + 1).trim());
-      }
-    }
   }
   return [...pieces]
     .filter((p) => p.length >= MIN_PIECE_LENGTH)

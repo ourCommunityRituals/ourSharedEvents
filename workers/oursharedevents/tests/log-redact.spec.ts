@@ -21,6 +21,14 @@
  *   check other things: that redact() does not change its input, that plain
  *   values pass through, that a console never wrapped says so, and the header
  *   list | date: 2026-11-18
+ * @born-red the cases added with the vote pass | method: five faults in
+ *   src/lib/log-redact.ts, one at a time. A name ending in cookie no longer a
+ *   credential key: 4 cases failed. The cookie pattern taken out of the text
+ *   rule: 2 failed. A masked piece ending a header value again: "a header value
+ *   with a piece already masked" failed. The `eyJ…` rule taken out: 4 failed,
+ *   "a vote pass is masked" among them. The cookie header put back on the list
+ *   of headers read off a request: "the list … has no cookie header in it"
+ *   failed | date: 2026-11-18
  */
 
 import { describe, test, expect } from 'vitest';
@@ -28,6 +36,7 @@ import {
   CREDENTIAL_HEADERS,
   REDACTED,
   installLogRedaction,
+  isCredentialKey,
   isLogRedactionInstalled,
   redact,
   redactText,
@@ -215,6 +224,15 @@ describe('text logged through the wrapper', () => {
     expect((JSON.parse(out) as { after: string }).after).toBe('kept');
   });
 
+  test('a header value with a piece already masked is masked to its end', () => {
+    // The unhandled-error line removes some values first; what follows one of
+    // them inside the same header value must not be left behind.
+    const out = redactText(
+      JSON.stringify({ error: `said cookie: a=${REDACTED}; b=made-up-session-value`, n: 1 })
+    );
+    expect(JSON.parse(out)).toEqual({ error: `said cookie: ${REDACTED}`, n: 1 });
+  });
+
   test('a JWT is masked wherever it is, with no header name beside it', () => {
     const out = redactText(`token ${JWT} was refused`);
     expect(out).toBe(`token ${REDACTED} was refused`);
@@ -224,6 +242,14 @@ describe('text logged through the wrapper', () => {
     const out = redactText(`/sharedReport?eventId=e1&token=${SIGNED_LINK}`);
     expectClean(out);
     expect(out).toContain('/sharedReport?eventId=e1&token=');
+  });
+
+  test('a vote pass is masked: its body and its seal, wherever it is written', () => {
+    // src/lib/vote-pass.ts: `vp1.` + base64url(JSON) + `.` + base64url(HMAC).
+    const body = b64url({ e: 'e1', x: 4102444800, p: 'ab12', k: '5a'.repeat(32) });
+    const seal = 'made-up-seal-of-43-characters-for-this-spec';
+    const out = redactText(`redirect to /events/e1/vote#t=vp1.${body}.${seal} failed`);
+    expect(out).toBe(`redirect to /events/e1/vote#t=vp1.${REDACTED} failed`);
   });
 
   test('a bearer value is masked without its header name', () => {
@@ -306,14 +332,25 @@ describe('installing', () => {
     expect(redact({ 'Cookie-Policy': 'none' })).toEqual({ 'Cookie-Policy': 'none' });
   });
 
-  test('the header list names the headers the ticket lists', () => {
+  test('every header the ticket lists is a credential key', () => {
     for (const name of [
-      'authorization',
-      'cookie',
-      'cf-access-jwt-assertion',
-      'cf-access-client-secret',
-      'x-ocr-internal',
+      'Authorization',
+      'Cookie',
+      'Cf-Access-Jwt-Assertion',
+      'CF-Access-Client-Secret',
+      'X-OCR-Internal',
     ]) {
+      expect(isCredentialKey(name), name).toBe(true);
+    }
+  });
+
+  test('the list of headers read off a request has no cookie header in it', () => {
+    // lib/unhandled-error-log.ts reads each header on this list from the failed
+    // request. Only three files may read a request's cookie (no new reader,
+    // owner 2026-11-18; votes-never-who.invariant.spec.ts). A cookie is masked
+    // by its name, above, and is not read.
+    expect(CREDENTIAL_HEADERS.filter((h) => /cookie/i.test(h))).toEqual([]);
+    for (const name of ['authorization', 'cf-access-jwt-assertion', 'x-ocr-internal']) {
       expect(CREDENTIAL_HEADERS, name).toContain(name);
     }
   });
