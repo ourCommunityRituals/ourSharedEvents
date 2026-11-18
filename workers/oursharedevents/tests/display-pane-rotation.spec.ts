@@ -1399,3 +1399,172 @@ describe('OSE-1678 | "Also coming up" shows each event\'s picture', () => {
     expect(logo.getAttribute('src')).toBe('/sponsor-default-logo.svg');
   });
 });
+
+// ── The display shows no counts: one assertion over the whole board ──────────
+//
+// AGENTS.md invariant 5. Until OSE-2049 the rule was held pane by pane (the
+// donate screen, the per-sponsor screens), so a new pane was not covered until
+// someone remembered. Here the pane types are read out of the served template,
+// every one is put on the board at once, every answer the page reads is laced
+// with count-shaped fields, and everything the board says is read in one go:
+// each pane, the side rail, the dots, the footer, and the labels a screen
+// reader speaks.
+//
+// The fixtures carry no digit in any name, venue or link, so the only number
+// the board may say is the day of the month in an event's date line. Any other
+// digit is a count that found its way on to the screen.
+//
+// @born-red method: seven faults in src/templates/display.html, one at a
+// time, each seen failing here and put back: the featured pane prints
+// featured.registrations; the sponsors wall heading prints sponsors.length;
+// the dots' label gains the number of screens (outside any pane, spoken
+// only); the upcoming pane says "Many attendees" (the word, no number); the
+// donate pane prints donate.raised; each sponsor screen is numbered; 'scores'
+// added to PANE_TYPES and never drawn | date: 2026-11-18
+
+describe('the display shows no counts, on any pane or anywhere else on the board', () => {
+  const PANE_TYPES_ON_PAGE = JSON.parse(
+    /var PANE_TYPES = (\[[^\]]*\]);/.exec(DISPLAY_HTML)![1].replace(/'/g, '"')
+  ) as string[];
+
+  // Count-shaped fields, as a careless API change might send them.
+  const COUNTS = {
+    registrations: 4321,
+    registered_count: 4321,
+    checkins: 4321,
+    checkin_count: 4321,
+    attendees: 4321,
+    scan_count: 4321,
+    scans: 4321,
+    views: 4321,
+    impressions: 4321,
+    count: 4321,
+    total: 4321,
+    raised: 4321,
+    goal: 4321,
+  };
+  const BOARD_EVENTS = [
+    { id: 'evt-a', name: 'Bocce Night', venue: 'Eagles Hall', startDateISO: '2026-10-24' },
+    { id: 'evt-b', name: 'Trivia Tuesday', venue: 'Open OutCry', startDateISO: '2026-10-27' },
+  ].map((e) => ({ ...e, ...COUNTS }));
+  const bakery = { id: 'sp-a', name: 'Hall Bakery', tier: 'title', ...COUNTS };
+  const hardware = { id: 'sp-b', name: 'Corner Hardware', tier: 'community', ...COUNTS };
+  const BOARD_SPONSORS = {
+    ok: true,
+    ...COUNTS,
+    bundle: { ...COUNTS, surface_sponsors: { tvTop: [bakery], tvSide: [bakery, hardware] } },
+  };
+  const boardConfig = (phase: string) =>
+    ({
+      ok: true,
+      panes: PANE_TYPES_ON_PAGE,
+      dwell_seconds: 15,
+      phase,
+      league: [
+        { kind: 'schedule', label: 'Schedule', url: 'https://league.example/schedule', qr: QR },
+        { kind: 'standings', label: 'Standings', url: 'https://league.example/table', qr: null },
+      ].map((l) => ({ ...l, ...COUNTS })),
+      event_page: { url: 'https://stg.oursharedevents.com/events/bocce-night', qr: QR, ...COUNTS },
+      donate: { label: 'Donate', url: 'https://give.example/bocce-fund', qr: QR, ...COUNTS },
+      ...COUNTS,
+    }) as DisplayConfig;
+
+  /** A date line as the board writes it: "Saturday, October 24". */
+  const DATE_LINE = /[A-Z][a-z]+day, [A-Z][a-z]+ \d{1,2}(?!\d)/g;
+  /** Words a count of people or their actions would arrive under. */
+  const COUNT_WORDS =
+    /\b(?:registered|registrations?|attendees?|attending|checked[ -]in|check-?ins|viewers?|visitors?|rsvps?|raised|goal|tall(?:y|ies)|votes?|fewer than)\b/i;
+
+  /** Everything an element says: its text, and the labels a screen reader speaks. */
+  function saidBy(el: Element): string {
+    const copy = el.cloneNode(true) as Element;
+    copy.querySelectorAll('script, style').forEach((x) => x.remove());
+    const spoken = [copy, ...copy.querySelectorAll('*')].flatMap((x) =>
+      ['aria-label', 'alt', 'title'].map((a) => x.getAttribute(a) ?? '')
+    );
+    // Text node by text node, with a space between: textContent runs one
+    // element into the next ("attendeesTuesday"), which hides a word's edge.
+    const texts: string[] = [];
+    const walk = (node: Node): void => {
+      if (node.nodeType === 3) texts.push(node.nodeValue ?? '');
+      node.childNodes.forEach(walk);
+    };
+    walk(copy);
+    return [...texts, ...spoken].join(' ').replace(/\s+/g, ' ');
+  }
+
+  function countsSaid(what: string, el: Element): string[] {
+    const said = saidBy(el);
+    const found: string[] = [];
+    const digit = /\d+/.exec(said.replace(DATE_LINE, ''));
+    if (digit) found.push(`${what} says the number ${digit[0]}: "${said.trim().slice(0, 160)}"`);
+    const word = COUNT_WORDS.exec(said);
+    if (word) found.push(`${what} says "${word[0]}": "${said.trim().slice(0, 160)}"`);
+    return found;
+  }
+
+  function boardCounts(doc: Document): string[] {
+    const found: string[] = [];
+    for (const pane of doc.querySelectorAll('[data-pane]')) {
+      found.push(...countsSaid(`pane ${pane.getAttribute('data-pane')}`, pane));
+    }
+    // And the rest of the board, read whole: a count outside a pane is still
+    // a count on the display.
+    found.push(...countsSaid('the board', doc.body));
+    return found;
+  }
+
+  test.each(['pre_event', 'event'])(
+    'every pane type is on the board (%s) and none of it is a count',
+    async (phase) => {
+      const { doc } = await bootPage('', {
+        events: BOARD_EVENTS,
+        sponsors: BOARD_SPONSORS,
+        config: boardConfig(phase),
+      });
+      const drawn = [...doc.querySelectorAll('[data-pane]')].map(
+        (el) => el.getAttribute('data-pane') ?? ''
+      );
+      for (const type of PANE_TYPES_ON_PAGE) {
+        expect(
+          drawn.some((p) => p === type || p.startsWith(`${type}-`)),
+          `pane type '${type}' is in PANE_TYPES but this test did not get it drawn. ` +
+            'Give it the data it needs here, so the no-counts rule reads it.'
+        ).toBe(true);
+      }
+      // The date line is really there: the allowance below is not a blind spot.
+      expect(saidBy(doc.querySelector('[data-pane="event"]')!).replace(DATE_LINE, '')).not.toBe(
+        saidBy(doc.querySelector('[data-pane="event"]')!)
+      );
+      expect(boardCounts(doc)).toEqual([]);
+    }
+  );
+
+  test('the board with nothing to feature, and with the list refused, says no count either', async () => {
+    const empty = await bootPage('', { events: [], config: boardConfig('pre_event') });
+    expect(boardCounts(empty.doc)).toEqual([]);
+    const refused = await bootPage('', {
+      events: BOARD_EVENTS,
+      config: boardConfig('pre_event'),
+      seed: (server) => {
+        server.eventsStatus = 429;
+      },
+    });
+    expect(boardCounts(refused.doc)).toEqual([]);
+  });
+
+  test('the reader itself: a digit, a count word and a spoken label are each caught', () => {
+    const doc = new JSDOM(
+      '<body><section data-pane="x">Bocce Night Saturday, October 24</section></body>'
+    ).window.document;
+    expect(boardCounts(doc)).toEqual([]);
+    const pane = doc.querySelector('[data-pane]')!;
+    pane.textContent = 'Bocce Night Saturday, October 24 · 12 here';
+    expect(boardCounts(doc).join(' ')).toContain('pane x says the number 12');
+    pane.textContent = 'Many attendees';
+    expect(boardCounts(doc).join(' ')).toContain('says "attendees"');
+    pane.textContent = 'Bocce Night';
+    doc.body.insertAdjacentHTML('beforeend', '<ol aria-label="Screen 2 of 7"></ol>');
+    expect(boardCounts(doc).join(' ')).toContain('the board says the number 2');
+  });
+});
