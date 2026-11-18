@@ -1,7 +1,7 @@
 # ADR-040: An anonymous vote is a counter on an object, never a row about a voter
 
-**Status:** Proposed. The owner answered every question on 2026-11-17 and 2026-11-18 (comments on PRs #1413 and #1414; D6 and D10 in the owner's own session on 2026-11-18). Only the level of detail in the published report stays open (OSE-520). The owner accepts this ADR by merging it. Nothing here is built.
-**Date:** 2026-11-17
+**Status:** Accepted. The owner accepted this ADR by merging PR #1414 on 2026-11-18, as this line said they would. The owner answered every question on 2026-11-17 and 2026-11-18 (comments on PRs #1413 and #1414; D6 and D10 in the owner's own session on 2026-11-18). Decision 6 was amended on 2026-11-18, after the S0 spike (OSE-2122) and a three-loop CCR (PR #1416). Still open: the level of detail in the published report (OSE-520), and the owner's wording for the house-rule card and the report. Nothing here is built.
+**Date:** 2026-11-17. Amended 2026-11-18 (decisions 6 and 9, and the notes that follow them).
 **Deciders:** Owner (PO). Sr Architect owns the draft. Dr of Security advises on the membrane.
 **Ticket:** OSE-1193 (blocks OSE-2000 under the fairs epic OSE-1996; step 1 of OW-218, Fist of Five)
 
@@ -85,7 +85,21 @@ The voter page is `GET /events/:id/vote`, a form-page kind, on the same host tha
 
 A vote counts only from a browser that scanned this event's code. Proof is a short-lived presence ticket that `/q` adds to its redirect: an HMAC over the event id, an expiry within the event day, and a hash of the cookie value. The ticket is stored nowhere.
 
-Before the route ships, the S0 spike on staging must show that a full room behind one Wi-Fi address can still get a cookie through `/q` (`/q` mints none past its per-caller limit, `handlers/qr-scan.ts:168-181`). OSE-1496 cookie signing comes first.
+**S0 result (OSE-2122, 2026-11-18).** `/q` counts scans per address, across all events: an edge binding (60 per 10 s) and KV (360 a minute). Past either, it sends the visitor on with no cookie (`handlers/qr-scan.ts:168-181`). On staging, 150 fresh browsers from one address all got a cookie and were counted, once over 20 s and once over 5 s (Room burst (stg) runs 44227517345 and 44231501658; 150 of 150 each time). A room of 150 gets presence today. Not measured: real phones, production, carrier shared addresses, more than 360 scans a minute.
+
+**Decision (owner, 2026-11-18, after the three-loop CCR, PR #1416).**
+
+- `/q` minting does not change for the first night. No per-address cap is added at `/q`:
+  - The cookie can be forged (`lib/anonymous-id.ts` accepts any `anon_` value), so a cap on cookies would not bound votes.
+  - No cap per address can be both room-sized and small enough to stop stuffing.
+  - Every such cap gives one person a way to lock the room out.
+- Presence is the ticket above, checked by the vote route (decision 5).
+- Cookie signing (OSE-1496) no longer comes first. It does not block the vote route.
+- Presence comes from the static poster code for the first night. A per-song code on the room screen is recorded for later. It would change this decision and needs its own CCR.
+- Real phones are untested, because agents cannot get past staging's edge check. The owner accepts that risk. The vote page tells anyone whose scan did not register to scan the code again.
+- The cookie-mint cap (N2, OSE-2126) is on hold, with two triggers:
+  - Refusals seen in a real room: raise the `/q` limit for that event (a limit above 360 skips the edge binding).
+  - A flood seen: a per-song ballot cap on a Durable Object. It is a flood ceiling, not a bound on stuffing, and its lockout risk is written down.
 
 ### 7. Results after the event
 
@@ -122,8 +136,10 @@ The owner accepts these residual risks, and the voter page states them in plain 
 - **Several browsers.** Someone who scans with several browsers can vote more than once.
 - **Database history.** For 30 days, D1's history can link a scan to a vote by the order of writes.
 - **Timing.** A duplicate may answer faster than a counted vote.
+- **A script.** One person with a script can cast many votes. Signing the cookie would not stop it: a browser with no cookie gets a fresh one, and a presence ticket, in one request.
+- **Zero or not.** A side's count is floored at 5 and then rounded down. A true count of zero plus four extra votes reads "Fewer than 5". A true count of one or more reads 5 or more. So four browsers on one phone can show whether a song got no other votes.
 
-The card's exact wording is the owner's.
+The last two were added on 2026-11-18, when the owner accepted them (CCR, PR #1416). The card's exact wording is the owner's.
 
 ### 10. What turns voting on
 
@@ -131,9 +147,10 @@ Voting turns on when an admin opens a vote set for the event (D6 = A). No fair s
 
 ## Still open
 
-| Id        | Question                                                                                           | Proposed default                           | Blocks                   |
-| --------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------ |
-| C2 detail | How much detail does the published report carry, so it builds trust without narrowing to a person? | Work it out in OSE-520, inside decision 7. | The fun report (OSE-520) |
+| Id        | Question                                                                                                                                                                       | Proposed default                                        | Blocks                                     |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------ |
+| C2 detail | How much detail does the published report carry, so it builds trust without narrowing to a person?                                                                             | Work it out in OSE-520, inside decision 7.              | The fun report (OSE-520)                   |
+| Wording   | The owner's words for the house-rule card and the report: counts are devices, not people; the margin of 5 and the 10-voter rule do not stop stuffing; the numbers are for fun. | A plain draft is on OSE-2122. The owner's words govern. | The voter page (S4b), the report (OSE-520) |
 
 ## Alternatives Considered
 
@@ -166,8 +183,8 @@ This is the September 2026 design (migration "0069", never merged).
 ### Negative
 
 - Six new tables and a presence ticket on `/q`.
-- A vote needs a cookie from `/q`, so a full room behind one address depends on the S0 spike.
-- The residual risks are carried by a house rule, not by code.
+- A vote needs a presence ticket from `/q`. The S0 spike showed a room of 150 behind one address gets one today. Real phones are untested, and the owner accepts that (decision 6).
+- The residual risks are carried by a house rule, not by code. They now include one person with a script, and four browsers on one phone learning whether a song got no other votes (decision 9).
 
 ### Neutral
 
@@ -178,19 +195,19 @@ This is the September 2026 design (migration "0069", never merged).
 The stories (D10 = yes; each is a Linear ticket under OSE-1193):
 
 - **Can start now:**
-  - S0, the staging spike on room presence;
+  - S0, the staging spike on room presence (done 2026-11-18, decision 6);
   - S2, the tables and their gates, including the timestamp gate's scan-shaped rule learning `vote|tally|ballot|receipt|participant`;
   - S3, admin open and close of sets and objects.
-- **Waits on the invariant 4 amendment (S1g), OSE-1496 and S0:** S4a, the vote route, and S4b, the voter page.
+- **Waits on the invariant 4 amendment (S1g), S2 and S3:** S4a, the vote route, and S4b, the voter page. OSE-1496 (cookie signing) no longer blocks them (decision 6).
 - **Waits on decisions 7 and 8:** S5, results after the event. The fun report waits on OSE-520.
-- **Proposed new tickets:** N1 (the OurWKRP route that opens and closes song objects, scoped to a brand), N2 (a cookie-mint cap at `/q`), N3 (the CI/CD testing ticket), N4 (a staging load case for a room behind one address), N5 (widen the unrun-spec check).
+- **Proposed new tickets:** N1 (the OurWKRP route that opens and closes song objects, scoped to a brand), N2 (a cookie-mint cap at `/q`; on hold, with triggers, decision 6), N3 (the CI/CD testing ticket), N4 (a staging load case for a room behind one address), N5 (widen the unrun-spec check).
 
 Every test is seen failing first, at the workers-pool layer and on staging (Bruno, Playwright).
 
 ## References
 
-- **Tickets:** OSE-1193, OSE-1192, OSE-2000, OSE-1996, OSE-513, OSE-514, OSE-518, OSE-520, OSE-1496; OW-73, OW-218, OW-219.
-- **PRs:** #1407 (the CCR worksheet), #1413 (its revert, with the owner's answers).
+- **Tickets:** OSE-1193, OSE-1192, OSE-2000, OSE-1996, OSE-513, OSE-514, OSE-518, OSE-520, OSE-1496, OSE-2122, OSE-2126; OW-73, OW-218, OW-219.
+- **PRs:** #1407 (the CCR worksheet), #1413 (its revert, with the owner's answers), #1414 (this ADR), #1415 (the room-burst measurement), #1416 (the presence CCR).
 - **ADRs:** ADR-034 (booths, participation mode), ADR-032 (a mode as a column).
 - **Rules:** AGENTS.md invariants 1, 2, 3, 4 and 5.
 
@@ -199,3 +216,5 @@ Every test is seen failing first, at the workers-pool layer and on staging (Brun
 - The owner settles the published report's level of detail.
 - A count is wanted during the night (invariant 5).
 - A vote limit beyond one per object is wanted ("to start").
+- A refusal is seen in a real room, or a flood is seen (the triggers in decision 6).
+- A per-song code on the room screen is wanted in place of the poster code (decision 6).
