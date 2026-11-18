@@ -144,7 +144,7 @@ describe('organizer inbox | wiring in the served admin page', () => {
     const render = ADMIN_HTML.slice(at, at + 700);
     expect(render).toContain('esc(it.label)');
     expect(render).toContain('esc(it.detail)');
-    expect(render).toContain('class="copy-btn"');
+    expect(render).toContain('class="btn btn-secondary copy-btn"');
     expect(render).not.toMatch(/\+ it\.(label|detail) \+/);
   });
 });

@@ -76,7 +76,7 @@ const flush = async () => {
 describe('poster art preview shows only an image this Worker serves', () => {
   const markup = markupBetween(
     ADMIN_HTML,
-    '<div class="card poster-art-card"',
+    '<div class="card card--sectioned poster-art-card"',
     '<p class="create-msg" id="pa-msg"'
   );
   const script = scriptContaining(ADMIN_HTML, 'window.loadPosterArt = async function');
@@ -110,7 +110,7 @@ describe('poster art preview shows only an image this Worker serves', () => {
 describe('poster deployments are kept by id without touching the prototype', () => {
   const markup = markupBetween(
     ADMIN_HTML,
-    '<div class="card poster-deployments-card"',
+    '<div class="card card--sectioned poster-deployments-card"',
     '<!-- R4 (OSE-1319)'
   );
   const script = scriptContaining(ADMIN_HTML, 'window.loadPosterDeployments = async function');

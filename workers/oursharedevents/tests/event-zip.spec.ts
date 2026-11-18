@@ -323,6 +323,46 @@ describe('W1 search: an event with no cell is found under its own zip, and no ot
   });
 });
 
+// OSE-2146: the mock-layer twin of Bruno folder 21 seq 900-910. Two live events
+// share a title and a ZIP, as a stopped run's leftover and this run's event do on
+// staging. Deleting one takes its card out of every zip and town search at once;
+// the other, same title, is still listed. A check keyed on the title cannot tell
+// them apart; the card's data-event-id can.
+describe('W1 delete: a deleted event leaves its zip search at once, by its own id', () => {
+  const TITLE = 'Zip W1 Delete Same Title Night';
+  const card = (id: string) => `data-event-id="${id}"`;
+  let leftover = '';
+  let mine = '';
+  beforeAll(async () => {
+    const live = { status: 'active', ...CORE_VALUES, is_published: true };
+    const body = { ...live, title: TITLE, location: 'Zip Hall', zip_code: '59718' };
+    leftover = (await create(body)).id;
+    mine = (await create(body)).id;
+  });
+
+  test('both are listed under 59718 before the delete', async () => {
+    for (const path of ['/?zip=59718', '/events?q=59718', '/?where=Bozeman%2C%20MT']) {
+      const html = await page(path);
+      expect(html, path).toContain(card(mine));
+      expect(html, path).toContain(card(leftover));
+    }
+  });
+
+  test('after DELETE 200 its card is gone; the same-title event stays', async () => {
+    const res = await SELF.fetch(`https://t.test/api/v2/admin/events/${mine}`, {
+      method: 'DELETE',
+      headers: { Authorization: ADMIN.Authorization },
+    });
+    expect(res.status, await res.clone().text()).toBe(200);
+    for (const path of ['/?zip=59718', '/events?q=59718', '/?where=Bozeman%2C%20MT']) {
+      const html = await page(path);
+      expect(html, path).not.toContain(card(mine));
+      expect(html, path).toContain(card(leftover));
+      expect(html, path).toContain(TITLE);
+    }
+  });
+});
+
 // ── 3. Not published ─────────────────────────────────────────────────────────
 
 describe('W1 not published: the ZIP never reaches a public response', () => {

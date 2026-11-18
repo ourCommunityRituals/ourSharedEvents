@@ -22,16 +22,7 @@
         display: flex;
         flex-direction: column;
       }
-      header {
-        background: var(--surface);
-        border-bottom: 1px solid var(--border);
-        color: var(--text);
-        padding: 1rem 2rem;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-      }
+      /* Header, card, button and footer are @ocr/ui's (.header, .card, .btn, .ocr-footer). */
       .logo {
         display: inline-flex;
         align-items: center;
@@ -73,13 +64,14 @@
         padding: 3rem 1.5rem;
       }
       .signin-card {
-        background: var(--surface);
         max-width: 460px;
         width: 100%;
         border-radius: var(--radius);
         padding: 2.5rem 2rem;
-        border: 1px solid var(--border);
         overflow-wrap: anywhere;
+      }
+      .signin-card:hover {
+        background: var(--surface);
       }
       .signin-card h1 {
         font-size: 1.5rem;
@@ -92,25 +84,16 @@
         font-size: 0.95rem;
         margin-bottom: 1.75rem;
       }
+      /* Sized here too: the page's one action keeps its 48px target even when
+         /ui.css arrives after the first layout (the touch-target audit caught
+         it at 106x17 with only .btn sizing it). */
       .signin-card .cta {
         display: inline-flex;
         align-items: center;
-        background: var(--accent);
-        padding: 0.75rem 1.5rem;
-        border-radius: var(--radius-sm);
-        text-decoration: none;
-        font-weight: 600;
-        font-size: 1rem;
         min-height: var(--tap-min);
-        transition: background 0.2s;
+        padding: 0.75rem 1.5rem;
+        font-size: 1rem;
         margin-bottom: 1.5rem;
-      }
-      .signin-card .cta:hover {
-        background: var(--accent-hover);
-      }
-      .signin-card .cta:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 3px;
       }
       .signin-card .helper {
         font-size: 0.85rem;
@@ -137,27 +120,9 @@
       .signin-card .helper p + p {
         margin-top: 0.5rem;
       }
-      footer {
-        background: var(--surface);
-        border-top: 1px solid var(--border);
-        color: var(--text-muted);
-        text-align: center;
-        padding: 1.5rem;
-        font-size: 0.8rem;
-      }
-      footer a {
-        color: var(--text-muted);
-        text-decoration: none;
-      }
-      footer a:hover {
-        color: var(--text);
-      }
       .skip-link { position: absolute; inset-inline-start: -9999px; }
       .skip-link:focus { position: fixed; top: 0; inset-inline-start: 0; padding: 0.5rem 1rem; background: var(--surface); color: var(--text); font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid var(--accent); }
       @media (max-width: 480px) {
-        header {
-          padding: 0.75rem 1rem;
-        }
         nav {
           gap: 1rem;
         }
@@ -172,14 +137,14 @@
   </head>
   <body>
     <a href="#main-content" class="skip-link">Skip to content</a>
-    <header data-testid="signin-header">
+    <header class="header" data-testid="signin-header">
       <a href="/" class="logo" data-testid="signin-logo">OurSharedEvents</a>
       <nav data-testid="signin-nav">
         <a href="/events" data-testid="nav-events">Events</a>
       </nav>
     </header>
     <main id="main-content" data-testid="signin-main">
-      <section class="signin-card" data-testid="signin-card">
+      <section class="card signin-card" data-testid="signin-card">
         <h1 data-testid="signin-heading">Admin sign-in required</h1>
         <p class="lede" data-testid="signin-lede">
           This is the organizer sign-in for OurSharedEvents. This page is for event organizers: it

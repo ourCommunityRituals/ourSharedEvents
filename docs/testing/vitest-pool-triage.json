@@ -405,7 +405,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 90
+      "testCount": 94
     },
     {
       "file": "workers/oursharedevents/tests/admin-what-url-controls.spec.ts",
@@ -1378,7 +1378,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 23
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/events-5w-schema.spec.ts",

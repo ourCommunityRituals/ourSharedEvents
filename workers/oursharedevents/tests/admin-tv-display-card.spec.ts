@@ -13,7 +13,7 @@ import ADMIN_HTML from '../src/templates/admin.html';
 const EVT = 'evt_tv_card';
 
 function cardMarkup(html: string): string {
-  const start = html.indexOf('<div class="card tv-display-card"');
+  const start = html.indexOf('<div class="card card--sectioned tv-display-card"');
   const end = html.indexOf('    </main>', start);
   expect(start, 'TV card markup').toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
