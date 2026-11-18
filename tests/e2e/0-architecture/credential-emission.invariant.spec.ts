@@ -36,7 +36,9 @@
  * MINT_SITES names every call that mints a token and what its route does with
  * it. A mint call that is not in the table fails; so does a table row that
  * matches no call. The runtime side reads the answers themselves:
- * workers/oursharedevents/tests/credential-echo.derived.spec.ts.
+ * workers/oursharedevents/tests/credential-echo.derived.spec.ts. The vote pass
+ * `/q` mints is a row in the same table, and one test holds its path in the
+ * source: minted in one place, asked for by `/q` alone, used once.
  *
  * Log redaction is wired here too: src/index.ts installs it when it loads and
  * at each entry, and nothing else in src/ reassigns the console.
@@ -63,6 +65,16 @@
  *   type. It now reads a secret-named property off any receiver, and that
  *   fault fails too. The made-up cases under "the analysis can fail" keep one
  *   fault of each kind in the suite | date: 2026-11-18
+ * @born-red the vote pass, classified and held to one way out | method: on
+ *   main, where the /q vote pass had merged beside this gate, "every call that
+ *   mints a token is classified" failed on `lib/vote-pass.ts mintVotePass`.
+ *   With the row added, seven faults, one at a time: /q made to log the pass;
+ *   /q made to set it as a response header; a second handler calling
+ *   `issueVotePass`; a second file calling `mintVotePass`; the pass put after
+ *   `?t=`; the row's callee renamed; the /q row's place taken out of the
+ *   runtime table. Each failed "the vote pass has one way out", "every call
+ *   that mints a token is classified" or "the runtime gate classifies the same
+ *   products" | date: 2026-11-18
  *
  * Runs in the T0 Gate `invariants` shard — listed in the
  * "Architecture: structural invariants" step of
@@ -992,6 +1004,16 @@ const MINT_SITES: ReadonlyArray<{
     runtime: 'sponsor-bundle',
   },
   {
+    file: 'lib/vote-pass.ts',
+    callee: 'mintVotePass',
+    product:
+      'GET /q/<token>?type=vote, with voting on and the set open, answers 302 with a 30-minute ' +
+      'vote pass for that browser at that event. It sits at the end of `Location`, after ' +
+      '`/events/:id/vote#t=`, and nowhere else: no body, no other header, no query string, no ' +
+      'log line (OSE ADR-040 decision 6). The test below holds the source to that one path.',
+    runtime: '\\/vote#t=$',
+  },
+  {
     file: 'google/auth.ts',
     callee: 'mintWifJwt',
     product:
@@ -1097,6 +1119,48 @@ test.describe('Invariant: the Worker never emits a credential', () => {
   test('every call that mints a token is classified, and every classification matches a call', () => {
     expect(mintCalls(FILES)).toEqual(MINT_SITES.map((m) => `${m.file} ${m.callee}`).sort());
     for (const m of MINT_SITES) expect(m.product.length, m.callee).toBeGreaterThan(60);
+  });
+
+  test('the vote pass has one way out: issueVotePass, then votePageTarget, then Location', () => {
+    const code = (file: string): string => emptyStrings(blankComments(FILES[file]));
+    const callersOf = (fn: string): string[] =>
+      Object.keys(FILES)
+        .filter((file) => new RegExp(`(?<![\\w$.])${fn}\\s*\\(`).test(code(file)))
+        .sort();
+    // The mint is called from the library alone, by the function that checks
+    // the switch, the pepper and the open set first.
+    expect(callersOf('mintVotePass')).toEqual(['lib/vote-pass.ts']);
+    expect(code('lib/vote-pass.ts').match(/(?<![\w$.])mintVotePass\s*\(/g)).toHaveLength(2);
+    expect(code('lib/vote-pass.ts')).toMatch(
+      /export async function issueVotePass\([\s\S]*?\breturn mintVotePass\(/
+    );
+    // Only /q asks for a pass, and only /q builds the address that carries it.
+    expect(callersOf('issueVotePass')).toEqual(['handlers/qr-scan.ts', 'lib/vote-pass.ts']);
+    expect(callersOf('votePageTarget')).toEqual(['handlers/qr-scan.ts', 'lib/vote-pass.ts']);
+    expect(code('lib/vote-pass.ts').match(/(?<![\w$.])issueVotePass\s*\(/g)).toHaveLength(1);
+    expect(code('lib/vote-pass.ts').match(/(?<![\w$.])votePageTarget\s*\(/g)).toHaveLength(1);
+
+    // In /q the pass is held under one name, and that name is used three
+    // times: where it is set, where it is tested, and as the last argument of
+    // votePageTarget. Anything else that takes it fails here.
+    const scan = code('handlers/qr-scan.ts');
+    const held = /\b(\w+)\s*=\s*await issueVotePass\(/.exec(scan)?.[1];
+    expect(held, 'the name /q holds the pass under').toBeTruthy();
+    const name = String(held);
+    const uses = scan.match(new RegExp(`(?<![\\w$.])${name}(?![\\w$])`, 'g')) ?? [];
+    const declared = new RegExp(`\\blet ${name}\\b[^;=]*=\\s*null\\s*;`).test(scan);
+    expect(declared, `let ${name} … = null`).toBe(true);
+    expect(scan).toMatch(new RegExp(`\\bif \\(${name}\\)`));
+    expect(scan).toMatch(new RegExp(`votePageTarget\\([^()]*,\\s*${name}\\s*\\)`));
+    expect(uses.length, `uses of ${name} in handlers/qr-scan.ts`).toBe(4);
+    // What votePageTarget returns goes to the redirect and to nothing else.
+    const target = new RegExp(`\\b(\\w+)\\s*=\\s*votePageTarget\\(`).exec(scan)?.[1];
+    expect(target, 'the name the vote address is held under').toBeTruthy();
+    expect(scan).toMatch(new RegExp(`Location:\\s*${String(target)}\\b`));
+    // The library writes no log line and builds no answer.
+    expect(code('lib/vote-pass.ts')).not.toMatch(/\bconsole\s*\.|new Response\b|Response\.\w+\(/);
+    // And the pass is put after `#t=`, in the fragment.
+    expect(FILES['lib/vote-pass.ts']).toMatch(/\/vote#t=\$\{pass\}/);
   });
 
   test('the runtime gate classifies the same products, and is not switched off', () => {
