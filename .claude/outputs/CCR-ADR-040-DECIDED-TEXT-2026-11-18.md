@@ -4,11 +4,11 @@ class: architecture
 requested_loops: 5
 loops_run: 5
 team: base
-gate: stop
+gate: pass
 cumulative_score: 0
-system_score: 85
+system_score: 100
 pr: 1417
-unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 1, medium: 0, low: 0 }
+unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 0, medium: 0, low: 0 }
 ---
 
 # CCR: ADR-040 decided text (Voting S1, OSE-2123)
@@ -26,9 +26,9 @@ Date 2026-11-18. Five loops. Repo `main` at `0459690a`. Subject: ADR-040 as amen
 | Item                  | Result                                                                                                                                   |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Cumulative score      | **0%**. Loop 1 alone scored 0.                                                                                                           |
-| System score          | **85%** after the owner's answers, draft PR #1420 and the confirmation pass (addendum 4). It was 0% at the end of the run, then 54%.     |
+| System score          | **100%** after the owner's answers Q6 to Q16 and draft PR #1420 (addendum 7). It was 0% at the end of the run, then 54%, then 85%.       |
 | Assessment confidence | 70 → 74 → 78 → 80 → 82. It rose in every loop. Loop 5 checked the citations and merged double counts.                                    |
-| Gate                  | **Stop.** 85% is under 95%. Two owner questions are open: Q13 (a secret random voter floor) and Q14 (one vote feeding two results).      |
+| Gate                  | **Pass** on the text of draft PR #1420, which is not merged. A score is a signal, never permission: the owner merges.                    |
 | Security Critical     | **None.** Nothing is built. G2 is an accepted reduction (Q8 A), not a fix.                                                               |
 | Recommendation        | Merge #1420 if the owner agrees with its two flagged points. Close K3, H7, K8 and Q8-2, then run a confirmation loop on the merged text. |
 
@@ -216,10 +216,15 @@ Score: 90%
 | FP-4     | Medium   | 5    | The event-level object could add a second result to a set.                                                                                                                                                                        | ADR l.94, 142                                                                 | closed: one kind of object per set (PR #1420)                                                                    |
 | FP-5     | Low      | 5    | The odds add up over repeated nights.                                                                                                                                                                                             | arithmetic                                                                    | closed: stated in decisions 7 and 9 (PR #1420)                                                                   |
 | FP-6     | Low      | 5    | Stale wording ("Q6 to Q12", "the 10-voter rule").                                                                                                                                                                                 | ADR l.3, 14, 184                                                              | closed: PR #1420                                                                                                 |
-| LC-1     | High     | 5    | A team total summed over its songs lets one person add an up vote to each song, moving the lead by up to twice the number of songs, so the accepted two-in-five rate would not hold on a team night.                              | arithmetic (inferred)                                                         | open (owner, Q16)                                                                                                |
+| LC-1     | High     | 5    | A team total summed over its songs lets one person add an up vote to each song, moving the lead by up to twice the number of songs, so the accepted two-in-five rate would not hold on a team night.                              | arithmetic (inferred)                                                         | closed: owner Q16, once per team (PR #1420 `6695c6c2`); Dr of Security confirmed the rate stays 2/5              |
 | LC-2     | Medium   | 5    | An event-level object could not coexist with other objects in the one set, and alone it has no runner-up.                                                                                                                         | ADR l.38, 67, 95                                                              | closed: no separate event-level object (PR #1420); S2 `UNIQUE(event_id)`                                         |
 | LC-3     | Low      | 5    | Two residual lines left out the attacker's conditions.                                                                                                                                                                            | ADR l.169, 178                                                                | closed: PR #1420                                                                                                 |
 | LC-4     | Low      | 5    | The D5 row said every final set gets the report; void sets do not.                                                                                                                                                                | ADR l.32                                                                      | closed: PR #1420                                                                                                 |
+| TQ-1     | Medium   | 5    | A team marker is written only for an up vote, so until final someone with the pepper and a person's cookie can test which teams that browser backed; decision 9 did not say so.                                                   | ADR l.73, 177 (inferred)                                                      | closed: decision 9 database-history line (PR #1420 `82c862c7`)                                                   |
+| TQ-2     | Low      | 5    | D1 history shows a repeat up vote for a team already backed, which links votes within one set.                                                                                                                                    | ADR l.73 (inferred)                                                           | closed: stated in decision 9 (PR #1420 `82c862c7`)                                                               |
+| TQ-3     | Low      | 5    | The winner rule still said "up-count lead" only; on a team night it runs on team totals.                                                                                                                                          | ADR l.146                                                                     | closed: PR #1420 `82c862c7`                                                                                      |
+| TQ-4     | Low      | 5    | Where a song's team is stored, and whether it can change mid-set, was not stated.                                                                                                                                                 | ADR l.81                                                                      | closed: `group_id`, fixed once the set first opens (PR #1420 `82c862c7`)                                         |
+| TQ-5     | Low      | 5    | The set's kind and the S3 and S5 notes did not mention playing by teams.                                                                                                                                                          | ADR l.97, 250, 254                                                            | closed: PR #1420 `82c862c7`; S4a, S2, S5 and OSE-520 updated                                                     |
 
 Open rows: 1 Critical, 15 High, 22 Medium, 17 Low. No Security Critical. No Regulatory.
 
@@ -377,7 +382,7 @@ The gate is stop. These are the owner's questions, numbered after the presence C
 
 10. **Q15. The secret margin and floor leave up to about two in five per set, not one in five. Accept that rate, stated on the card, or widen the ranges (for example T 5 to 14 and V 10 to 19)?** Widening brings it to about one in five, but more small nights end with no winner. (FP-1, final confirmation pass.) **This is the owner's call; no recommendation either way.** Both keep "no exceptions": one states the rate honestly, the other lowers it.
 
-11. **Q16. On a night played by teams, should the winner be the top song, with its team taking the belt?** A team total summed over its songs lets one person add an up vote to each of a team's songs. With three or more songs per team, a colluding room could learn that person's vote every time, not up to two in five (LC-1, last check). **Recommendation: yes.** It keeps the rate you accepted in Q15.
+11. **Q16. On a night played by teams, should the winner be the top song, with its team taking the belt?** A team total summed over its songs lets one person add an up vote to each of a team's songs. With three or more songs per team, a colluding room could learn that person's vote every time, not up to two in five (LC-1, last check). **Recommendation: yes.** It keeps the rate you accepted in Q15. **Answered (07:01 UTC): once per team, which also keeps that rate (addendum 7).**
 
 What is verified, inferred and not checked:
 
@@ -708,8 +713,26 @@ LC-1 is not a new publishing rule; it is how a team's count is defined. The text
 
 **Re-score.** One row is still open:
 
-| Row  | Severity | Loop | Weight × position | Points |
-| ---- | -------- | ---- | ----------------- | -----: |
-| LC-1 | High     | 5    | 10 × 1.5          |   15.0 |
+| Row  | Severity | Loop | Weight × position |                                                                                              Points |
+| ---- | -------- | ---- | ----------------- | --------------------------------------------------------------------------------------------------: |
+| LC-1 | High     | 5    | 10 × 1.5          | closed: owner Q16, once per team (PR #1420 `6695c6c2`); Dr of Security confirmed the rate stays 2/5 |
 
 **System score: 85%. Gate: stop.** If the owner confirms Q16 as recommended, the text already follows, and the score is 100%.
+
+## Addendum 7: Q16 applied, and the security check (2026-11-18, about 07:20 UTC)
+
+**Source.** The owner answered Q16 at 07:01:38 UTC: **once per team.** Teams win on their total, and one voter counts once per team. This session read the answer in the parent session's record.
+
+**Applied** in draft PR #1420 (`6695c6c2`, `82c862c7`):
+
+- a team's total is the number of distinct voters who gave any of its songs an up vote;
+- one team marker per voter per team, `HMAC(K_team, k ‖ team_id)`, under its own subkey, deleted at final; a sixth table, `vote_team_markers`;
+- a set is played by songs or by teams, fixed when it first opens.
+
+**In Linear:** OSE-2125 (S2: the table, the play mode), OSE-2128 (S4a: the marker in the same write), OSE-2130 (S5: the team rule and its test) and OSE-520 (crews win on distinct voters). The tickets were updated before the check finished; the check held, so nothing was undone.
+
+**The security check** (Dr of Security, read-only, on the Q16 text). Verdict: **holds at the Q15 rate.** Voting up several songs of one team still adds only 1. So one voter moves the team lead by at most 2 and the voter count by at most 1. The worst case is A against B, at 2 in 5 per set. A against none is 0.36. No team total is published, so the total and the night's result do not combine to raise it. It found TQ-1 (Medium) and TQ-2 to TQ-5 (Low), all text, all fixed in `82c862c7`. This is inferred from the text; nothing is built.
+
+**Re-score.** No row is open.
+
+**System score: 100%. Gate: pass.** This scores the text of draft PR #1420, which is not merged. The owner decides whether to merge it. A CCR score is a signal, never permission.
