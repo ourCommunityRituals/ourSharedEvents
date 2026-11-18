@@ -1729,7 +1729,14 @@ jobs:
             --env-var "ciBrandClientId=$CF_ACCESS_CI_BRAND_CLIENT_ID" \
             --env-var "ciBrandClientSecret=$CF_ACCESS_CI_BRAND_CLIENT_SECRET" \
             --reporter-junit "$GITHUB_WORKSPACE/.test-results/${{ matrix.junit }}"
-        timeout-minutes: 5
+        # Measured 2026-11-18 over the last 30 main push runs: green api runs took
+        # 135-218 s, pages 66-116 s. On 2026-11-17 a slow but correct staging took
+        # the api run to 5:12 with no assertion failing, and the old 5-minute limit
+        # cut it off, which skipped T3 and T4. 10 minutes is ~2.75x the slowest
+        # green run and still fits inside the 15-minute job with the seed steps.
+        # The per-request response-time ceilings inside the collections are
+        # deliberate and unchanged. Pinned by tests/unit/ci/bruno-contract-step-timeout.test.js.
+        timeout-minutes: 10
 
       # OSE-1896: a map tap is never counted. The Pages run above read /?area=<cell>
       # many times; taps, share opens and scans of the seeded events must still be
