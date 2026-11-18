@@ -1,0 +1,61 @@
+info:
+  name: "OSE-1420 | go-live evidence | PUT status refuses to bring back an archived event with no code (409 NO_QR_EVIDENCE)"
+  type: http
+  seq: 32
+
+# bruno-go-live-archived-no-code is archived with no share link and no poster:
+# the archived to active edge is held to the same read.
+# The fixture bruno/fixtures/go-live-evidence-seed.sql is reset before every run.
+# The move is refused before any write, so this request changes nothing and can
+# run any number of times.
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/bruno-go-live-archived-no-code"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: '{"status":"active"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        const b = res.getBody() || {};
+        test('OSE-1420 PUT status, archived: 409 NO_QR_EVIDENCE', function () {
+          expect(res.getStatus()).to.eql(409);
+          expect(b.ok).to.eql(false);
+          expect(b.code).to.eql('NO_QR_EVIDENCE');
+        });
+        test('OSE-1420 PUT status, archived: says the move it refused', function () {
+          expect(b.from).to.eql('archived');
+          expect(b.to).to.eql('active');
+        });
+        test('OSE-1420 PUT status, archived: counts no working link and no poster', function () {
+          expect(b.evidence).to.be.an('object');
+          expect(b.evidence.shortlinks).to.eql(0);
+          expect(b.evidence.active_deployments).to.eql(0);
+        });
+        test('OSE-1420 PUT status, archived: the evidence has two keys, and no scan count', function () {
+          expect(Object.keys(b.evidence || {}).sort()).to.eql(['active_deployments', 'shortlinks']);
+          expect(JSON.stringify(b)).to.not.match(/scan/i);
+        });
+        test('OSE-1420 PUT status, archived: says what to do, and carries a request reference', function () {
+          expect(b.error).to.be.a('string');
+          expect(b.error).to.contain('no working link or poster code');
+          expect(b.requestId).to.be.a('string');
+          expect(res.getHeader('x-request-id')).to.eql(b.requestId);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

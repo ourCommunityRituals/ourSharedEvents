@@ -17,8 +17,9 @@ runtime:
   scripts:
     - type: after-response
       code: |
-        // Contract: verify-qr is the single QR-verified door to 'active'. On an
-        // unknown event it is EVENT_NOT_FOUND (404), never a silent success.
+        // Contract: verify-qr is one of two doors to 'active' (PUT status is the
+        // other), and both read the event's codes first (OSE-1420). On an unknown
+        // event it is EVENT_NOT_FOUND (404), never a silent success.
         test('404 on unknown event', function () { expect(res.getStatus()).to.eql(404); });
         test('code is EVENT_NOT_FOUND', function () { expect(res.getBody().code).to.eql('EVENT_NOT_FOUND'); });
 

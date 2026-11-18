@@ -51,6 +51,7 @@
  * h3-js here would silently break the SCAN_PATH invariant in h3-tagging.spec.ts.
  */
 
+import { isValidQrTokenShape } from '../lib/qr-token';
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
 import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-buffer';
 import { scanNodeKey } from '../lib/scan-node-key';
@@ -122,11 +123,6 @@ export function qrScanTarget(
 ): string {
   const safeType = formType && SCAN_FORM_TYPES.has(formType) ? formType : 'register';
   return `${origin}/events/${encodeURIComponent(eventId)}?type=${safeType}&deployment=${encodeURIComponent(deploymentId)}`;
-}
-
-/** qr_token must start with 'qrt_' and be <= 128 chars to be a valid poster token. */
-function isValidQrTokenShape(token: string): boolean {
-  return token.startsWith('qrt_') && token.length <= 128;
 }
 
 export async function handleQrScan(

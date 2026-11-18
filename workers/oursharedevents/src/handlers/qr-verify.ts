@@ -2,7 +2,10 @@
  * OSE-213 / BE-18 — QR verify/unverify admin handlers
  *
  * POST /api/v2/admin/events/:id/verify-qr
- *   Transitions event from 'ready' → 'active' and sets qr_verified = 1.
+ *   Transitions event from 'ready' → 'active' and sets qr_verified = 1, but
+ *   only when one of the event's codes works (lib/go-live-evidence.ts,
+ *   OSE-1420): 409 NO_QR_EVIDENCE when none does, 503 EVIDENCE_UNAVAILABLE
+ *   when the codes could not be read. The 200 carries the counts as a receipt.
  *
  * POST /api/v2/admin/events/:id/unverify-qr
  *   Transitions event from 'active' → 'ready' and sets qr_verified = 0.
@@ -23,6 +26,7 @@ import {
   logCoreValuesRefused,
 } from '../lib/core-values';
 import { isValidTransition } from '../domain/event-state';
+import { evidenceUnavailable, goLiveRefusal, requireGoLiveEvidence } from '../lib/go-live-evidence';
 import { listedFromForPublish } from '../lib/publish-grace';
 import { closeVoteSetUnlessPublished } from '../lib/vote-sets';
 
@@ -94,6 +98,14 @@ export async function handleV2AdminVerifyQr(
     }
   }
 
+  // OSE-1420: the move is legal; now read the codes. No working link and no
+  // switched-on poster is a refusal, and a read that fails is not a refusal.
+  const decision = await requireGoLiveEvidence(env.DB, eventId, 'verify_qr', row.status);
+  if (decision.outcome === 'unavailable') return refusal(evidenceUnavailable(), 503, rid);
+  if (decision.outcome === 'refused') {
+    return refusal(goLiveRefusal(row.status, decision.evidence), 409, rid);
+  }
+
   // Publish grace window (lib/publish-grace.ts): live by link now, listed later.
   const listedFrom = listedFromForPublish(env.PUBLISH_GRACE_MINUTES);
   const res = await env.DB.prepare(
@@ -105,7 +117,11 @@ export async function handleV2AdminVerifyQr(
   if ((res.meta?.changes ?? 0) === 0) return statusConflict(rid);
 
   return answer(
-    { ok: true, event: { id: eventId, status: 'active', qrVerified: true, listedFrom } },
+    {
+      ok: true,
+      event: { id: eventId, status: 'active', qrVerified: true, listedFrom },
+      evidence: decision.evidence,
+    },
     200,
     rid
   );

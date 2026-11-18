@@ -36,6 +36,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeAll, describe, test, expect, vi } from 'vitest';
 import { giveCoreValues } from './helpers/core-values';
+import { giveGoLiveEvidence } from './helpers/go-live-evidence';
 import { handleV2AdminUnverifyQr, handleV2AdminVerifyQr } from '../src/handlers/qr-verify';
 
 interface TestEnv {
@@ -85,6 +86,8 @@ beforeAll(async () => {
   await insertEvent(DRAFT, 'draft');
   await insertEvent(READY, 'ready');
   await giveCoreValues(E.DB, READY);
+  // OSE-1420: going live needs a working code; the refusal is go-live-evidence.spec.ts.
+  await giveGoLiveEvidence(E.DB, READY);
   await insertEvent(ARCHIVED, 'archived');
 });
 
@@ -172,6 +175,10 @@ describe('a status that moved while saving', () => {
       prepare: () => ({
         bind: () => ({
           first: async () => ({ id: 'evt_moved', status, starts_at: 'x', event_type_id: 'x' }),
+          // OSE-1420: the event has a working link and a switched-on poster.
+          all: async () => ({
+            results: [{ code: 'Ab3xY9', target_url: null, qr_token: 'qrt_moved', is_active: 1 }],
+          }),
           run: async () => ({ meta: { changes: 0 } }),
         }),
       }),
@@ -297,6 +304,8 @@ describe('an answer that worked carries the reference in the header only', () =>
         qrVerified: true,
         listedFrom: publishedBody.event.listedFrom,
       },
+      // OSE-1420: the receipt, the one addition to this body.
+      evidence: { shortlinks: 1, active_deployments: 0 },
     });
     expect(await auditRow('VERIFY_QR', publishRef!)).toEqual({
       outcome: 'success',

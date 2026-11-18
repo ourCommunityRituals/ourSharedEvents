@@ -87,6 +87,7 @@ seed bruno/fixtures/sponsor-thumb-seed.sql
 seed bruno/fixtures/attendance-mode-seed.sql
 seed bruno/fixtures/declared-series-seed.sql
 seed bruno/fixtures/core-values-draft-seed.sql
+seed bruno/fixtures/go-live-evidence-seed.sql
 seed bruno/fixtures/report-plan-cap-seed.sql
 seed bruno/fixtures/ci-brand-seed.sql
 seed bruno/fixtures/campaigns-seed.sql
