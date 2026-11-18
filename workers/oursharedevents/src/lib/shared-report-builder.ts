@@ -805,6 +805,9 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const sponsorClassBreakdown = summarizeSponsorClasses(classPlacements, sponsorDisplays);
   suppression.push(...classWithheldReasons(sponsorClassBreakdown));
 
+  // OSE-2140 (owner, 2026-11-18): never the room's vote code. It is the room
+  //    screen, not a poster, and its scans would publish a rough participation
+  //    figure for the vote (OSE ADR-040).
   // 6. poster_attribution — per poster_deployment_id
   //    OSE-1459: the K-floor is applied per poster-HOUR before the hours are
   //    summed. /q/ dedup is one scan per person per poster per hour, so only a
@@ -831,7 +834,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
                    WHERE event_id = ?
                    GROUP BY poster_deployment_id, substr(scan_bucket, 1, 13)) ph
          ON ph.poster_deployment_id = pd.id
-       WHERE pd.event_id = ?
+       WHERE pd.event_id = ? AND pd.is_vote_code = 0
        GROUP BY pd.id, pd.location_desc, pd.placement_label, pd.h3_res9
        HAVING scan_count > 0
        ORDER BY scan_count DESC`

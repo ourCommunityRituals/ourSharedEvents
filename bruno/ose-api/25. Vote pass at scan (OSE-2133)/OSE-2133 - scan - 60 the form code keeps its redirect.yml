@@ -9,7 +9,7 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/q/{{votePassToken}}?type=register"
+  url: "{{baseUrl}}/q/{{votePosterToken}}?type=register"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"

@@ -415,8 +415,23 @@ describe('A concurrent Undo is never reversed', () => {
   // its UPDATE: the exact interleaving a read-then-write can lose.
   function withUndoBeforeWrite(id: string): D1Database {
     let fired = false;
+    let undone = false;
+    const undo = async () => {
+      if (undone) return;
+      undone = true;
+      await E.DB.prepare("UPDATE events SET status = 'ready', listed_from = NULL WHERE id = ?")
+        .bind(id)
+        .run();
+    };
     return new Proxy(E.DB, {
       get(target, prop) {
+        // OSE-2142: a status move now lands in a batch (the event row and its
+        // vote set together), so the Undo lands before the batch, as before the run.
+        if (prop === 'batch')
+          return async (stmts: D1PreparedStatement[]) => {
+            if (fired) await undo();
+            return target.batch(stmts);
+          };
         if (prop !== 'prepare') return Reflect.get(target, prop);
         return (sql: string) => {
           if (!fired && /^\s*UPDATE events SET/i.test(sql)) {
@@ -431,12 +446,7 @@ describe('A concurrent Undo is never reversed', () => {
                     get(b, p3) {
                       if (p3 !== 'run') return Reflect.get(b, p3);
                       return async () => {
-                        await target
-                          .prepare(
-                            "UPDATE events SET status = 'ready', listed_from = NULL WHERE id = ?"
-                          )
-                          .bind(id)
-                          .run();
+                        await undo();
                         return b.run();
                       };
                     },

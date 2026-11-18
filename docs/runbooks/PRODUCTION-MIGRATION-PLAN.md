@@ -2,7 +2,7 @@
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0112, forms 0015–0018.
+Covers: main 0078–0113, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 112              | 35       |
+| Main (`ocr-db-production`)        | 77               | 113              | 36       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -128,7 +128,7 @@ its counts were not taken first. They were read on staging the next day (run 436
 events, 60 of them with no place at all, 3 of those on the public list. Its per-status breakdown was
 replaced by one count on 2026-11-15 so the file fits the strict rule.
 
-## Main database, 0078 to 0112
+## Main database, 0078 to 0113
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -169,6 +169,7 @@ replaced by one count on 2026-11-15 so the file fits the strict rule.
 | `0110_event_campaign.sql`                                 | Adds `events.campaign_id` (the one campaign an event is in, or none). Writes no row. Nothing public reads it.                     | No   |
 | `0111_vote_tables.sql`                                    | Adds the six vote tables (ADR-040): sets, objects, tallies and keyed markers. Writes no row. No route reads them yet.             | No   |
 | `0112_sponsor_and_campaign_created_by.sql`                | Adds `created_by` to `sponsor_business` and `campaigns`, and an index on each (OSE-1561). Writes no row; existing rows read NULL. | No   |
+| `0113_vote_code_and_event_status.sql`                     | Adds `poster_deployments.is_vote_code` (the room's vote code) and its index; closes sets open on unpublished events.              | Yes  |
 
 ## Forms database, 0015 to 0018
 
@@ -181,7 +182,7 @@ replaced by one count on 2026-11-15 so the file fits the strict rule.
 
 ## The migrations that write or remove rows
 
-Thirteen files. Each is listed with what it changes, why it is safe on production as it is
+Fourteen files. Each is listed with what it changes, why it is safe on production as it is
 today, and what would be different if production held data.
 
 ### `0081_sponsor_tier_and_compact_logo.sql`
@@ -303,6 +304,23 @@ today, and what would be different if production held data.
 - **Check:** `SELECT COUNT(*) FROM events WHERE json_extract(settings_json, '$.useSponsors') = 1;`
   is the number of events with a sponsor the organizer chose (0 on production today).
 
+### `0113_vote_code_and_event_status.sql`
+
+- **`UPDATE vote_sets`**: closes every vote set that is open on an event whose status is
+  not `active` (Published). It sets `state = 'closed'` and `updated_at` to the hour, and
+  nothing else: no set becomes final, and no tally, receipt or marker is touched.
+- **Why:** from this release a vote set is never more open than its event (OSE-2142,
+  OSE ADR-040). The app closes a set when its event leaves Published; this closes the
+  sets that were opened before the rule existed. On staging those are the synthetic S3
+  nights opened on draft events.
+- **Safe because** production has no vote sets (0 rows): voting has never been switched
+  on there (`VOTING_ENABLED` is off in every environment).
+- **If it did update:** a host reopens a closed set from the admin Voting card once its
+  event is Published, within the usual rules. The column and the index the file also adds
+  write no row: every existing placement reads `is_vote_code = 0`.
+- **Check:** `SELECT COUNT(*) FROM vote_sets s WHERE s.state = 'open' AND NOT EXISTS (SELECT 1 FROM events e WHERE e.id = s.event_id AND e.status = 'active');`
+  is 0.
+
 ### `0097_event_type_watch_party.sql`
 
 - **`INSERT INTO event_type_registry`**: adds one row, `SOC-WATCHPARTY-001` "Watch
@@ -365,7 +383,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0112_sponsor_and_campaign_created_by.sql` and `112`;
+2. **The level.** Expected: `0113_vote_code_and_event_status.sql` and `113`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash

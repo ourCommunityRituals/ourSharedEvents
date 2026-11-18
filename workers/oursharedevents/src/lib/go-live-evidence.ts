@@ -75,7 +75,7 @@ export async function collectGoLiveEvidence(
     ),
     readRows<PosterRow>(
       db,
-      'SELECT qr_token, is_active FROM poster_deployments WHERE event_id = ?',
+      'SELECT qr_token, is_active, is_vote_code FROM poster_deployments WHERE event_id = ?',
       eventId
     ),
   ]);

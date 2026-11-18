@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2140 OSE-2142 | draft | the song is edited on a draft event"
+  type: http
+  seq: 22
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteLiveNightId}}/votables/objects/{{voteLiveSongId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"label\": \"Track one (live mix)\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2140 OSE-2142 | draft: the edit is saved', function () { expect(res.getStatus()).to.eql(200); expect(b.object && b.object.label).to.eql('Track one (live mix)'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

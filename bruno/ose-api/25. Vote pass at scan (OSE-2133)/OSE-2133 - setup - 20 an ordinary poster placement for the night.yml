@@ -1,5 +1,5 @@
 info:
-  name: "OSE-2133 | setup | the room screen code for the night"
+  name: "OSE-2133 | setup | an ordinary poster placement for the night"
   type: http
   seq: 20
 
@@ -15,7 +15,7 @@ http:
       value: "application/json"
   body:
     type: json
-    data: "{\"placement_label\": \"Room screen\", \"placement_type\": \"venue\"}"
+    data: "{\"placement_label\": \"Front door\", \"placement_type\": \"venue\"}"
   auth: inherit
 
 runtime:
@@ -24,7 +24,7 @@ runtime:
       code: |-
         const b = res.getBody() || {};
         test('OSE-2133 setup: the placement is created with its scan token', function () { expect(res.getStatus()).to.eql(201); expect(/^qrt_/.test(String(b.qr_token || ''))).to.eql(true); });
-        bru.setVar('votePassToken', b.qr_token || 'qrt_missing');
+        bru.setVar('votePosterToken', b.qr_token || 'qrt_missing');
 
 settings:
   encodeUrl: true

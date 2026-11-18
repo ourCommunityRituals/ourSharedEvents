@@ -16,6 +16,10 @@
  *   5. A write that finishes after another event is selected leaves the new
  *      event's card alone, and the next action goes to the new event (PR #1432
  *      review).
+ *   6. OSE-2142: on a draft event Open is greyed out and the card says
+ *      "Publish the event to open voting."; once the event is Published it opens.
+ *   7. OSE-2140: the room's vote code is made from the card, which shows its
+ *      `/q` URL (asking for a pass) and its QR, and is replaced from it.
  *
  * Runs in the blocking phone audit (playwright.mobile.config.ts), against the
  * local worker that config starts with a local pepper. The event is made here.
@@ -39,6 +43,9 @@ test.describe('admin: the Voting card', () => {
         attendance_mode: 'in_person',
         title: `Vote night ${Date.now()}`,
         start_date: '2027-05-15',
+        start_time: '19:00',
+        timezone: 'America/Chicago',
+        event_type_id: 'etr-rec-bocce',
         location: 'Eagles Hall',
       },
     });
@@ -49,14 +56,20 @@ test.describe('admin: the Voting card', () => {
 
   async function makeEvent(
     request: import('@playwright/test').APIRequestContext,
-    title: string
+    title: string,
+    status: 'draft' | 'active' = 'draft'
   ): Promise<string> {
     const res = await request.post('/api/v2/admin/events', {
       headers: { ...AUTH, 'Content-Type': 'application/json' },
       data: {
         attendance_mode: 'in_person',
         title,
+        status,
+        is_published: false,
         start_date: '2027-05-15',
+        start_time: '19:00',
+        timezone: 'America/Chicago',
+        event_type_id: 'etr-rec-bocce',
         location: 'Eagles Hall',
       },
     });
@@ -69,6 +82,8 @@ test.describe('admin: the Voting card', () => {
     const back = page.getByTestId('ecb-nav-your-events');
     if (await back.isVisible()) await back.click();
     else await page.click('[data-testid="admin-path-events"]');
+    // The list opens on Drafts; a Published night (OSE-2142) is under All.
+    await page.getByTestId('events-filter-all').click();
     const row = page.locator(`[data-testid="event-row-${id}"]`);
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.click();
@@ -79,6 +94,8 @@ test.describe('admin: the Voting card', () => {
     await page.setExtraHTTPHeaders(AUTH);
     await page.goto('/admin', { waitUntil: 'domcontentloaded' });
     await page.click('[data-testid="admin-path-events"]');
+    // The list opens on Drafts; the night is Published from the second case on.
+    await page.getByTestId('events-filter-all').click();
     const row = page.locator(`[data-testid="event-row-${eventId}"]`);
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.click();
@@ -114,6 +131,62 @@ test.describe('admin: the Voting card', () => {
     await expect(page.getByTestId('vote-kind-input')).toBeDisabled();
   });
 
+  test('a draft event: Open is greyed out and the card says to publish (OSE-2142)', async ({
+    page,
+    request,
+  }) => {
+    await openCard(page);
+    await expect(page.getByTestId('votes-open')).toBeDisabled();
+    await expect(page.getByTestId('votes-publish-hint')).toHaveText(
+      'Publish the event to open voting.'
+    );
+    await expect(page.getByTestId('votes-open')).toHaveAttribute(
+      'aria-describedby',
+      'votes-publish-hint'
+    );
+    // Published (unlisted), the card offers Open.
+    for (const status of ['ready', 'active']) {
+      const put = await request.put(`/api/v2/admin/events/${eventId}`, {
+        headers: { ...AUTH, 'Content-Type': 'application/json' },
+        data: { status },
+      });
+      expect(put.ok(), await put.text()).toBe(true);
+    }
+    await page.evaluate(
+      (id) => (window as unknown as { loadVotes: (x: string) => Promise<void> }).loadVotes(id),
+      eventId
+    );
+    await expect(page.getByTestId('votes-publish-hint')).toBeHidden();
+    await expect(page.getByTestId('votes-open')).toBeEnabled();
+  });
+
+  test('make the room vote code: its /q URL and QR show on the card (OSE-2140)', async ({
+    page,
+  }) => {
+    await openCard(page);
+    await expect(page.getByTestId('votes-code')).toBeVisible();
+    await expect(page.getByTestId('votes-code-show')).toBeHidden();
+    await page.getByTestId('votes-code-make').click();
+    await expect(page.getByTestId('votes-msg')).toHaveText(
+      'The vote code is ready. Show it on the room screen.'
+    );
+    await expect(page.getByTestId('votes-code-url')).toHaveText(
+      /\/q\/qrt_[0-9a-f]{32}\?type=vote$/
+    );
+    await expect(page.getByTestId('votes-code-qr')).toBeVisible();
+    await expect(page.getByTestId('votes-code-make')).toBeHidden();
+    // A photographed code is replaced: a new token, the old one retired.
+    const first = await page.getByTestId('votes-code-url').innerText();
+    await page.getByTestId('votes-code-replace').click();
+    await expect(page.getByTestId('votes-msg')).toHaveText(
+      'The old code no longer works. Show the new one on the room screen.'
+    );
+    await expect(page.getByTestId('votes-code-url')).not.toHaveText(first);
+    await expect(page.getByTestId('votes-code-url')).toHaveText(
+      /\/q\/qrt_[0-9a-f]{32}\?type=vote$/
+    );
+  });
+
   test('open, close and reopen voting and the song; the summary follows', async ({ page }) => {
     await openCard(page);
     // The song cannot open before voting does: its only button appears once voting is open.
@@ -141,7 +214,7 @@ test.describe('admin: the Voting card', () => {
     page,
     request,
   }) => {
-    const first = await makeEvent(request, `Vote night A ${Date.now()}`);
+    const first = await makeEvent(request, `Vote night A ${Date.now()}`, 'active');
     const second = await makeEvent(request, `Vote night B ${Date.now()}`);
     const made = await request.post(`/api/v2/admin/events/${first}/votables`, {
       headers: { ...AUTH, 'Content-Type': 'application/json' },

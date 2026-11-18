@@ -28,6 +28,7 @@ import {
 import { isValidTransition } from '../domain/event-state';
 import { evidenceUnavailable, goLiveRefusal, requireGoLiveEvidence } from '../lib/go-live-evidence';
 import { listedFromForPublish } from '../lib/publish-grace';
+import { closeVoteSetUnlessPublished } from '../lib/vote-sets';
 
 export interface QrVerifyEnv {
   DB: D1Database;
@@ -148,12 +149,15 @@ export async function handleV2AdminUnverifyQr(
     );
   }
 
-  const res = await env.DB.prepare(
-    "UPDATE events SET status = 'ready', qr_verified = 0, listed_from = NULL, updated_at = datetime('now') WHERE id = ? AND status = ?"
-  )
-    .bind(eventId, row.status)
-    .run();
-  if ((res.meta?.changes ?? 0) === 0) return statusConflict(rid);
+  // OSE-2142: leaving Published closes the event's open vote set in the same
+  // batch (one transaction), so no reader sees a draft-side event voting.
+  const [res] = await env.DB.batch([
+    env.DB.prepare(
+      "UPDATE events SET status = 'ready', qr_verified = 0, listed_from = NULL, updated_at = datetime('now') WHERE id = ? AND status = ?"
+    ).bind(eventId, row.status),
+    closeVoteSetUnlessPublished(env.DB, eventId),
+  ]);
+  if ((res?.meta?.changes ?? 0) === 0) return statusConflict(rid);
 
   return answer({ ok: true, event: { id: eventId, status: 'ready', qrVerified: false } }, 200, rid);
 }

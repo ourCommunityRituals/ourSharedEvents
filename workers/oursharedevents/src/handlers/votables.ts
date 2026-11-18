@@ -3,8 +3,12 @@
  * 4 and 10): a host makes the event's vote set, adds what can be voted on, and
  * opens, closes and reopens them.
  *
- *   GET  /api/v2/admin/events/:id/votables                        the set and its objects
+ *   GET  /api/v2/admin/events/:id/votables                        the set, its objects, whether
+ *                                                                 the event is live, the vote code
  *   POST /api/v2/admin/events/:id/votables                        make the set { played_by }
+ *   POST /api/v2/admin/events/:id/votables/code                   make the room's vote code, or
+ *                                                                 return the one in use (OSE-2140)
+ *   POST /api/v2/admin/events/:id/votables/code/replace           retire it and make a new token
  *   POST /api/v2/admin/events/:id/votables/open                   first open (stamps the epoch, draws T and V)
  *   POST /api/v2/admin/events/:id/votables/reopen                 reopen a closed set
  *   POST /api/v2/admin/events/:id/votables/close                  close the set
@@ -27,9 +31,18 @@
  * closes_at, open_now, sort. Never a counter, T, V, the epoch, the void flag, a
  * receipt or a marker (lib/vote-sets.ts projects them; tests/vote-set-admin.spec.ts
  * reads every answer for a guarded key). No log line here carries any of them.
+ * The list also says `event_live` (OSE-2142: the card greys out Open on an
+ * event that is not Published) and `code`, the room's vote code: its placement
+ * id, its URL and a QR of it, or null (OSE-2140, lib/vote-code.ts). The code's
+ * URL is for the admin only: no public answer carries it.
+ *
+ * NOT SWITCHED. None of these routes reads VOTING_ENABLED: a host sets a night
+ * up while voting is off (owner, 2026-11-18), and nothing here counts or shows
+ * a vote.
  */
 
 import { corsHeaders } from '../lib/cors';
+import { makeVoteCode, readVoteCode, replaceVoteCode } from '../lib/vote-code';
 import { errorLabel } from '../lib/error-label';
 import {
   adminFinalizeVoteSet,
@@ -61,6 +74,8 @@ export interface VotablesRoute {
   op:
     | 'list'
     | 'create-set'
+    | 'create-code'
+    | 'replace-code'
     | 'open-set'
     | 'reopen-set'
     | 'close-set'
@@ -89,6 +104,8 @@ const OBJECT_OPS: Record<string, VotablesRoute['op']> = {
 const ACTIONS: Record<VotablesRoute['op'], string | null> = {
   list: null,
   'create-set': 'VOTE_SET_CREATE',
+  'create-code': 'VOTE_CODE_CREATE',
+  'replace-code': 'VOTE_CODE_REPLACE',
   'open-set': 'VOTE_SET_OPEN',
   'reopen-set': 'VOTE_SET_REOPEN',
   'close-set': 'VOTE_SET_CLOSE',
@@ -118,9 +135,12 @@ export function matchVotablesRoute(method: string, rest: string): VotablesRoute 
   }
   if (parts.length === 1 && method === 'POST') {
     if (parts[0] === 'objects') return make('create-object');
+    if (parts[0] === 'code') return make('create-code');
     const op = SET_OPS[parts[0]];
     return op ? make(op) : null;
   }
+  if (parts.length === 2 && method === 'POST' && parts[0] === 'code' && parts[1] === 'replace')
+    return make('replace-code');
   if (parts[0] !== 'objects') return null;
   if (parts.length === 2 && method === 'PUT') return make('update-object', parts[1]);
   if (parts.length === 3 && method === 'POST') {
@@ -184,9 +204,11 @@ export async function handleVotables(
       return reply(request, 404, { code: 'NOT_FOUND', error: `Event not found: ${eventId}` });
     const nowIso = new Date().toISOString();
 
+    const origin = new URL(request.url).origin;
     if (route.op === 'list') {
-      const { set, objects } = await listVotables(db, eventId);
-      return reply(request, 200, { set, objects });
+      const { set, objects, event_live } = await listVotables(db, eventId);
+      const code = await readVoteCode(db, eventId, origin);
+      return reply(request, 200, { set, objects, event_live, code });
     }
 
     const parsed = await readJson(request);
@@ -210,6 +232,12 @@ export async function handleVotables(
           });
         return answer(request, await createVoteSet(db, eventId, playedBy), 'set', 201);
       }
+      case 'create-code': {
+        const { made, code } = await makeVoteCode(db, eventId, origin);
+        return reply(request, made ? 201 : 200, { code });
+      }
+      case 'replace-code':
+        return reply(request, 201, { code: await replaceVoteCode(db, eventId, origin) });
       case 'open-set':
         return answer(
           request,

@@ -327,6 +327,9 @@ export async function handleAdminListPosterDeployments(
   const rid = requestId();
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
+  // OSE-2140: the room's vote code is not a poster placement. It lives on the
+  // Voting card (lib/vote-code.ts), so it is never printed here by mistake.
+  //
   // Poster tiers: each row carries its own scan count. Scans resolve to the
   // poster they came from, nothing else. The count is the sum of the poster's
   // poster-hours that clear the floor (OSE-1656, lib/scan-cells.ts): the same
@@ -336,7 +339,7 @@ export async function handleAdminListPosterDeployments(
             pd.placement_type, pd.latitude, pd.longitude, pd.h3_res9, pd.h3_res7, pd.booth_id,
             pd.is_active, pd.created_at, pd.updated_at
        FROM poster_deployments pd
-      WHERE pd.event_id = ?
+      WHERE pd.event_id = ? AND pd.is_vote_code = 0
       ORDER BY pd.created_at DESC`
   )
     .bind(eventId)
@@ -498,6 +501,19 @@ export async function handleAdminUpdatePosterDeployment(
     values.push(t);
   }
   if ('is_active' in body) {
+    // OSE-2140: a vote code is put in use only by the Voting card, so a retired
+    // (perhaps photographed) one is never brought back here. Retiring it here
+    // stays possible through DELETE, which only ever turns it off.
+    const kind = await env.DB.prepare('SELECT is_vote_code FROM poster_deployments WHERE id = ?')
+      .bind(deploymentId)
+      .first<{ is_vote_code: number }>();
+    if (Number(kind?.is_vote_code) === 1)
+      return errorResponse(
+        'VOTE_CODE_MANAGED',
+        "The room's vote code is managed on the Voting card",
+        409,
+        rid
+      );
     sets.push('is_active = ?');
     values.push(body.is_active ? 1 : 0);
   }

@@ -1640,6 +1640,13 @@
           'votes-set-move': function (el) {
             if (window.votesSetMove) window.votesSetMove(el);
           },
+          // OSE-2140: make the room's vote code.
+          'votes-code-make': function (el) {
+            if (window.votesCodeMake) window.votesCodeMake(el);
+          },
+          'votes-code-replace': function (el) {
+            if (window.votesCodeReplace) window.votesCodeReplace(el);
+          },
           'vote-move': function (el) {
             if (window.voteMove) window.voteMove(el);
           },
@@ -7054,7 +7061,10 @@
          existing classes (it adds no CSS). Rows are <template> skeletons filled
          with textContent. NO COUNT: the card shows states and windows only. The
          answer it reads carries no count, no secret and no epoch, and nothing
-         here would show one if it did (decision 7: no number before final). -->
+         here would show one if it did (decision 7: no number before final).
+         OSE-2142: on an event that is not Published, Open and Reopen are greyed
+         out and the card says "Publish the event to open voting." OSE-2140: the
+         room's own vote code (its URL and QR) is shown here and nowhere public. -->
     <div class="card card--sectioned votes-card" id="votes-card" data-testid="votes-card" hidden>
       <div class="card-header">
         <div>
@@ -7083,6 +7093,7 @@
             <button type="button" class="btn btn-secondary" id="votes-close" data-action="votes-set-move" data-move="close" data-testid="votes-close">Close voting</button>
             <button type="button" class="btn btn-secondary" id="votes-reopen" data-action="votes-set-move" data-move="reopen" data-testid="votes-reopen">Reopen voting</button>
           </div>
+          <p class="sub-line" id="votes-publish-hint" data-testid="votes-publish-hint" hidden>Publish the event to open voting.</p>
           <p class="sub-line" id="votes-empty" data-testid="votes-empty" hidden>Nothing to vote on yet. Add a song or a stall below.</p>
           <ul class="pc-list" id="votes-list" data-testid="votes-list" aria-label="What people can vote on"></ul>
         </div>
@@ -7103,12 +7114,26 @@
               </select>
             </div>
           </div>
-          <p class="sub-line" id="vote-label-hint" data-testid="vote-label-hint">The name of the song or stall. Never a person’s email address or phone number.</p>
+          <p class="sub-line" id="vote-label-hint" data-testid="vote-label-hint">The name of the song or stall. For a song, the track title only, never a person’s name. Never an email address or phone number.</p>
           <div class="flex-row">
             <button type="button" class="btn btn-primary" data-action="vote-add" data-testid="vote-add-btn">Add it</button>
           </div>
         </form>
         <p class="sub-line" id="votes-team-note" data-testid="votes-team-note" hidden>On a team night, OurWKRP adds each song with its team.</p>
+
+        <div class="card-body" id="votes-code" data-testid="votes-code" hidden>
+          <h3 class="card-title">The room’s vote code</h3>
+          <p class="sub-line" data-testid="votes-code-note">Show this code on the room screen. Scanning it is how a person in the room votes. A poster code does not open the vote.</p>
+          <div id="votes-code-show" data-testid="votes-code-show" hidden>
+            <img class="pc-qr" id="votes-code-qr" data-testid="votes-code-qr" alt="QR code for the room’s vote code" width="164" height="164" />
+            <div class="pd-link"><code id="votes-code-url" data-testid="votes-code-url"></code></div>
+            <p class="sub-line" id="votes-code-replace-hint" data-testid="votes-code-replace-hint">If the code was photographed or shared, replace it. The old code stops working at once.</p>
+          </div>
+          <div class="flex-row">
+            <button type="button" class="btn btn-secondary" id="votes-code-make" data-action="votes-code-make" data-testid="votes-code-make">Make the vote code</button>
+            <button type="button" class="btn btn-secondary" id="votes-code-replace" data-action="votes-code-replace" data-testid="votes-code-replace" aria-describedby="votes-code-replace-hint" hidden>Replace the vote code</button>
+          </div>
+        </div>
 
         <div class="card-body">
           <p class="create-msg" id="votes-msg" data-testid="votes-msg" role="status" aria-live="polite"></p>
@@ -7152,6 +7177,7 @@
           KIND_MISMATCH: 'A vote holds one kind: all songs, or all stalls.',
           VOTE_SET_FINAL: 'The results are final. Voting cannot open again.',
           EVENT_OVER: 'The event is over. Voting cannot open again.',
+          EVENT_NOT_PUBLISHED: 'Publish the event to open voting.',
           VOTE_SET_NOT_OPEN: 'Open voting first, then open a song or stall.',
           PEPPER_NOT_SET: 'Voting cannot open on this site yet: the anonymous key is not set up.',
           PEPPER_CHANGED: 'The anonymous key changed since voting first opened, so no vote could count. Voting stays closed.',
@@ -7204,9 +7230,12 @@
         while (list.firstChild) list.removeChild(list.firstChild);
         if (!data) {
           byId('votes-summary').textContent = 'Could not read the vote. Try again in a moment.';
-          ['votes-make', 'votes-set-actions', 'votes-add', 'votes-empty', 'votes-team-note'].forEach(function (x) { byId(x).hidden = true; });
+          ['votes-make', 'votes-set-actions', 'votes-add', 'votes-empty', 'votes-team-note', 'votes-publish-hint', 'votes-code'].forEach(function (x) { byId(x).hidden = true; });
           return;
         }
+        // OSE-2142: nothing is more live than its event. Not Published, Open and
+        // Reopen are greyed out and the card says why.
+        var live = data.event_live === true;
         var set = data.set || null;
         var objects = Array.isArray(data.objects) ? data.objects : [];
         byId('votes-summary').textContent = window.votesSummary(set);
@@ -7219,8 +7248,29 @@
             var btn = byId(pair[0]);
             btn.hidden = set.state !== pair[1];
             btn.style.display = btn.hidden ? 'none' : '';
+            var waits = pair[0] !== 'votes-close' && !live;
+            btn.disabled = waits;
+            if (waits) btn.setAttribute('aria-describedby', 'votes-publish-hint');
+            else btn.removeAttribute('aria-describedby');
           });
         }
+        byId('votes-publish-hint').hidden = !set || set.final || live || set.state === 'open';
+        // OSE-2140: the room's vote code. Only this code mints a vote pass.
+        var code = data.code && typeof data.code === 'object' ? data.code : null;
+        var codeUrl = code && typeof code.url === 'string' ? code.url : '';
+        var codeQr = code && typeof code.qr === 'string' && code.qr.indexOf('data:image/') === 0 ? code.qr : '';
+        byId('votes-code').hidden = !set || set.final;
+        byId('votes-code-show').hidden = !codeUrl;
+        byId('votes-code-url').textContent = codeUrl;
+        var qrImg = byId('votes-code-qr');
+        if (codeQr) qrImg.setAttribute('src', codeQr); else qrImg.removeAttribute('src');
+        qrImg.hidden = !codeQr;
+        var makeCode = byId('votes-code-make');
+        makeCode.hidden = !!codeUrl;
+        makeCode.style.display = makeCode.hidden ? 'none' : '';
+        var replaceCode = byId('votes-code-replace');
+        replaceCode.hidden = !codeUrl;
+        replaceCode.style.display = replaceCode.hidden ? 'none' : '';
         var team = !!set && set.played_by === 'team';
         byId('votes-add').hidden = !set || set.final || team;
         byId('votes-team-note').hidden = !team || set.final;
@@ -7268,7 +7318,7 @@
           var byId = function (x) { return document.getElementById(x); };
           var list = byId('votes-list');
           if (list) while (list.firstChild) list.removeChild(list.firstChild);
-          ['votes-make', 'votes-set-actions', 'votes-add', 'votes-empty', 'votes-team-note'].forEach(function (x) {
+          ['votes-make', 'votes-set-actions', 'votes-add', 'votes-empty', 'votes-team-note', 'votes-publish-hint', 'votes-code'].forEach(function (x) {
             var el = byId(x);
             if (el) el.hidden = true;
           });
@@ -7278,7 +7328,10 @@
         if (!id) { window.renderVotesCard(null, null); return; }
         var r = await window.votesFetch('/api/v2/admin/events/' + encodeURIComponent(String(id)) + '/votables');
         if (seq !== window._votesSeq) return;
-        window.renderVotesCard(id, r.ok ? { set: r.data.set, objects: r.data.objects } : null);
+        window.renderVotesCard(
+          id,
+          r.ok ? { set: r.data.set, objects: r.data.objects, event_live: r.data.event_live, code: r.data.code } : null
+        );
       };
       /** OSE-2127: send one write, then read the card again and say what happened. */
       window.votesWrite = async function (btn, tail, body, done) {
@@ -7297,6 +7350,14 @@
       window.votesMake = function (btn) {
         var v = document.getElementById('votes-played-by').value === 'team' ? 'team' : 'object';
         return window.votesWrite(btn, '', { played_by: v }, 'Voting is set up. Add what people can vote on, then open voting.');
+      };
+      /** OSE-2140: make the room's vote code (or show the one in use). */
+      window.votesCodeMake = function (btn) {
+        return window.votesWrite(btn, '/code', {}, 'The vote code is ready. Show it on the room screen.');
+      };
+      /** OSE-2140: retire the vote code and make a new token (a photographed code stops working). */
+      window.votesCodeReplace = function (btn) {
+        return window.votesWrite(btn, '/code/replace', {}, 'The old code no longer works. Show the new one on the room screen.');
       };
       window.votesSetMove = function (btn) {
         var move = btn.getAttribute('data-move');

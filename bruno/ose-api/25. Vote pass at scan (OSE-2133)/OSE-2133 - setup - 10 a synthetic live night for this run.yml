@@ -6,6 +6,8 @@ info:
 # OSE-2144 (owner 2026-11-18): a scan counts only on a live event; a code on a
 # draft goes home. The scan under test must stand, so the night is created live
 # (automation may, OSE-1425), synthetic and unlisted. seq 900 archives it.
+# OSE-2142 (S3e): a set opens, and /q mints a pass, only for a Published event;
+# unlisted is fine.
 
 http:
   method: POST

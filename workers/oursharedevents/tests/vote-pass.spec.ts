@@ -18,6 +18,10 @@
  *   - No log line carries the pass, k or the Location header.
  *   - Every other code kind keeps qrScanTarget's redirect.
  *
+ * Since OSE-2140 (S3d) only the event's own vote code mints a pass, so each
+ * event's placement here is marked as its vote code (is_vote_code = 1). That an
+ * ordinary poster code mints none is held in tests/vote-code.spec.ts.
+ *
  * Staging twin: bruno/ose-api/25. Vote pass at scan (OSE-2133).
  * Structural twin: tests/e2e/0-architecture/votes-never-who.invariant.spec.ts
  * (the labels and the no-Location-log rule).
@@ -105,8 +109,8 @@ async function seedEvent(id: string): Promise<void> {
     .bind(id, id)
     .run();
   await tenv.DB.prepare(
-    `INSERT OR REPLACE INTO poster_deployments (id, event_id, qr_token, placement_label, is_active, created_at)
-     VALUES (?, ?, ?, 'Room screen', 1, datetime('now'))`
+    `INSERT OR REPLACE INTO poster_deployments (id, event_id, qr_token, placement_label, is_vote_code, is_active, created_at)
+     VALUES (?, ?, ?, 'Room screen', 1, 1, datetime('now'))`
   )
     .bind(DEPLOYMENT(id), id, TOKEN[id])
     .run();

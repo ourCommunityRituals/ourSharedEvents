@@ -182,6 +182,8 @@ describe('a status that moved while saving', () => {
           run: async () => ({ meta: { changes: 0 } }),
         }),
       }),
+      // OSE-2142: the unpublish lands in a batch with its vote set's close.
+      batch: async (stmts: unknown[]) => stmts.map(() => ({ meta: { changes: 0 } })),
     }) as unknown as D1Database;
 
   test.each([

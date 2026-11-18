@@ -1,0 +1,39 @@
+info:
+  name: "OSE-2140 OSE-2142 | code | the replaced (photographed) code resolves to nothing at /q"
+  type: http
+  seq: 44
+
+# Never prints the Location header: the check compares booleans.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/q/{{voteOldCodeToken}}?type=vote"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+    - name: User-Agent
+      value: ose-bruno-vote-code
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var status = res.getStatus();
+        var edge = status === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the scan was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var home = String(res.getHeader('location') || '') === '/';
+        if (!edge) {
+          test('OSE-2140 OSE-2142 | code: the old code is sent home, no pass', function () { expect(status === 302).to.eql(true); expect(home).to.eql(true); });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

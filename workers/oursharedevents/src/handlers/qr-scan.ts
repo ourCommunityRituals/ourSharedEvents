@@ -35,10 +35,13 @@
  *
  * Vote codes (OSE-2133, OSE ADR-040 decision 6): `/q/<token>?type=vote`. When
  * the scan was stored or was a duplicate of one stored, the voting switch is
- * on (votingEnabled), the pepper is set and the event's vote set is open, the visitor goes to
+ * on (votingEnabled), the pepper is set, the token is the event's own vote code
+ * (OSE-2140), the event's vote set is open and the event is Published
+ * (OSE-2142), the visitor goes to
  * `/events/<id>/vote#t=<pass>` (lib/vote-pass.ts). The pass is only in the
- * fragment. The uncounted path, a failed write, a missing pepper, a closed set
- * or the switch off mint none, and the code keeps today's redirect. This is
+ * fragment. The uncounted path, a failed write, a missing pepper, an ordinary
+ * poster code, a closed set, an event that is not Published, or the switch off
+ * mint none, and the code keeps today's redirect. This is
  * still the only place the cookie is read on the vote path (invariant 4).
  * NO LOG LINE names the redirect's Location, the pass or the voter key
  * (tests/e2e/0-architecture/votes-never-who.invariant.spec.ts).
@@ -309,7 +312,7 @@ export async function handleQrScan(
   if (scanStored && url.searchParams.get('type') === VOTE_CODE_TYPE) {
     let pass: string | null = null;
     try {
-      pass = await issueVotePass(env, anonId, eventId, nowMs);
+      pass = await issueVotePass(env, anonId, eventId, deploymentId, nowMs);
     } catch (err) {
       console.warn(JSON.stringify({ type: 'VOTE_PASS_SKIPPED', error: errorLabel(err) }));
     }

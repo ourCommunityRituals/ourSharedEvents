@@ -219,12 +219,17 @@ export async function handleGetPosterBundle(
   // ingestion) before redirecting to the event page. This gives physical poster
   // scans an anonymous scan record and still lets the event-page CTA preserve
   // the deployment attribution when the attendee continues to the form.
+  //
+  // OSE-2140: never the room's vote code (is_vote_code = 1). This answer is
+  // public, and the deployment id travels in shared event-page links
+  // (`&deployment=`), so a vote code here would hand its token to anyone. A
+  // vote code's id answers as an unknown one: the generic bundle, no token.
   const requestedDeploymentId = requestUrl.searchParams.get('deployment');
   let deployment: { id: string; qr_token: string } | null = null;
   if (requestedDeploymentId) {
     deployment = await env.DB.prepare(
       `SELECT id, qr_token FROM poster_deployments
-       WHERE id = ? AND event_id = ? AND is_active = 1 LIMIT 1`
+       WHERE id = ? AND event_id = ? AND is_active = 1 AND is_vote_code = 0 LIMIT 1`
     )
       .bind(requestedDeploymentId, eventId)
       .first<{ id: string; qr_token: string }>();

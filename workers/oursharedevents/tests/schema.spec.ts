@@ -127,6 +127,7 @@ const EXPECTED_INDEXES = [
   'idx_votable_objects_set_group', // 0111 (OSE-2125) — a set's objects, and its teams
   'idx_sponsor_business_created_by', // 0112 (OSE-1561) — a person's own sponsors in the public brand
   'idx_campaigns_created_by', // 0112 (OSE-1561) — a person's own campaigns in the public brand
+  'idx_poster_deployments_one_vote_code', // 0113 (OSE-2140) — one vote code in use per event
   // Campaigns (migrations 0039/0040) — idx_sponsors_is_local + idx_sponsors_campaign_id
   // retired by OSE-799 A2 (0067): locality/campaign moved to sponsor_placement.
   'idx_campaigns_brand_id',
@@ -167,7 +168,8 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // + 1 (migration 0079, OSE-1357: address — the place the poster hangs) = 13.
   // + 1 (migration 0082, OSE-1357 tiers: placement_type venue|community) = 14.
   // + 1 (migration 0109, OSE-1998: booth_id — the booth a placement belongs to) = 15.
-  poster_deployments: 15,
+  // + 1 (migration 0113, OSE-2140: is_vote_code — the room's own vote code) = 16.
+  poster_deployments: 16,
   // event_booths (0109, OSE-1998): id, event_id, number, name, category, hall_x,
   //   hall_y, is_active, sort, created_at, updated_at = 11. No person field.
   event_booths: 11,
@@ -332,7 +334,7 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 85 custom indexes exist', async () => {
+  test('all 86 custom indexes exist', async () => {
     // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_return,
     // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
     // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
@@ -365,7 +367,7 @@ describe('Gate 5: Index verification', () => {
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
     // + 2 (idx_events_status_updated, idx_events_created_by — migration 0075) = 72.
-    expect(names.length).toBe(89); // +2 0112 idx_sponsor_business_created_by + idx_campaigns_created_by; +2 0111 idx_votable_objects_event_id + idx_votable_objects_set_group; +1 0110 idx_events_campaign_id; +2 0109 idx_event_booths_event_id + idx_poster_deployments_booth_id; +2 0104 idx_events_venue_canonical + idx_events_event_correlation; +1 0101 idx_snr_event_anon_bucket; +1 0092 idx_anon_id_returns_pepper_epoch; +2 0090 idx_anon_id_returns_last_seen + idx_anon_id_returns_computed_at; +1 0089 idx_snr_country_nonnull; +1 0088 idx_admin_audit_log_brand_created; +1 0087 idx_scan_cell_aggregates_event_cell; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
+    expect(names.length).toBe(90); // +1 0113 idx_poster_deployments_one_vote_code; +2 0112 idx_sponsor_business_created_by + idx_campaigns_created_by; +2 0111 idx_votable_objects_event_id + idx_votable_objects_set_group; +1 0110 idx_events_campaign_id; +2 0109 idx_event_booths_event_id + idx_poster_deployments_booth_id; +2 0104 idx_events_venue_canonical + idx_events_event_correlation; +1 0101 idx_snr_event_anon_bucket; +1 0092 idx_anon_id_returns_pepper_epoch; +2 0090 idx_anon_id_returns_last_seen + idx_anon_id_returns_computed_at; +1 0089 idx_snr_country_nonnull; +1 0088 idx_admin_audit_log_brand_created; +1 0087 idx_scan_cell_aggregates_event_cell; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

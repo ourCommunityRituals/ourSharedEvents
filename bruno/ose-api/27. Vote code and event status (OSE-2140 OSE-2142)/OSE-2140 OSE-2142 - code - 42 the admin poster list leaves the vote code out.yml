@@ -1,0 +1,31 @@
+info:
+  name: "OSE-2140 OSE-2142 | code | the admin poster list leaves the vote code out"
+  type: http
+  seq: 42
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteLiveNightId}}/poster-deployments"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var text = JSON.stringify(res.getBody() || {});
+        var listed = text.indexOf(bru.getVar('voteCodeId')) >= 0;
+        var tokenThere = text.indexOf(bru.getVar('voteCodeToken')) >= 0;
+        text = null;
+        test('OSE-2140 OSE-2142 | code: not listed, token absent', function () { expect(res.getStatus() === 200).to.eql(true); expect(listed).to.eql(false); expect(tokenThere).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

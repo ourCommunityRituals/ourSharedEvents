@@ -40,18 +40,28 @@
  *
  * WHEN A PASS IS MINTED (all must hold, else none is, and the visitor gets
  * today's redirect):
- *   - the code is a vote code (`/q/<token>?type=vote`);
+ *   - the URL asks for one (`/q/<token>?type=vote`);
  *   - the scan was stored, or was a duplicate of one stored (the caller says);
  *   - the voting switch is on (votingEnabled, lib/voting-switch.ts, S3c);
  *   - the pepper is set (no unkeyed fallback);
- *   - the event's vote set is open and not final.
+ *   - in one statement (voteCodeMayMint, lib/vote-sets.ts): the scanned
+ *     placement is the event's own vote code, in use (OSE-2140, S3d; owner,
+ *     2026-11-18), the event's vote set is open and not final, and the event
+ *     is live, Published and on its dates (OSE-2142, S3e). An ordinary poster
+ *     code of the event with `?type=vote` mints nothing: its token can be
+ *     reached from a shared event-page link, through `&deployment=` and the
+ *     public poster bundle (the S3b security review, F1). The vote code's own
+ *     token is in no public answer (lib/vote-code.ts).
  */
 
 import { pepperEpoch } from './anon-id-hash';
 import { votingEnabled, type VotingSwitchEnv } from './voting-switch';
-import { readVoteSet } from './vote-sets';
+import { voteCodeMayMint } from './vote-sets';
 
-/** The `?type=` a vote code carries on its `/q` URL (decision 6, Q6). */
+/**
+ * The `?type=` a vote code carries on its `/q` URL (decision 6, Q6). It asks
+ * for a pass; only the event's vote code can be given one (OSE-2140).
+ */
 export const VOTE_CODE_TYPE = 'vote';
 
 /** How long a pass lasts (Q12). A re-scan renews it. */
@@ -258,21 +268,22 @@ export interface VotePassEnv extends VotingSwitchEnv {
 }
 
 /**
- * The pass `/q` hands out for a vote code whose scan was stored (or was a
- * duplicate of one stored), or null. The caller decides the scan part; this
- * checks the switch, the pepper and the set, in that order, so with the switch
- * off nothing is read.
+ * The pass `/q` hands out for a scan of the event's vote code that was stored
+ * (or was a duplicate of one stored), or null. The caller decides the scan
+ * part and names the placement it scanned; this checks the switch, the pepper,
+ * then the code, the set and the event together, so with the switch off
+ * nothing is read.
  */
 export async function issueVotePass(
   env: VotePassEnv,
   cookie: string,
   eventId: string,
+  deploymentId: string,
   nowMs: number
 ): Promise<string | null> {
   if (!votingEnabled(env)) return null;
   if (!env.ANON_ID_HASH_PEPPER) return null;
-  const set = await readVoteSet(env.DB, eventId);
-  if (!set || set.state !== 'open' || set.final) return null;
+  if (!(await voteCodeMayMint(env.DB, eventId, deploymentId))) return null;
   return mintVotePass(env.ANON_ID_HASH_PEPPER, cookie, eventId, nowMs);
 }
 

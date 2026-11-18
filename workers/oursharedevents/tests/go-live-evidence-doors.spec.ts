@@ -93,6 +93,13 @@ describe('a poster works when it is switched on and the scan route accepts its t
     ['a token of 129 characters', { qr_token: `qrt_${'x'.repeat(125)}`, is_active: 1 }, false],
     ['a token that is not text', { qr_token: 42, is_active: 1 }, false],
     ['a missing token', { qr_token: null, is_active: 1 }, false],
+    // OSE-2140 (owner, 2026-11-18): the room's vote code is not a poster.
+    ["the room's vote code", { qr_token: 'qrt_abc123', is_active: 1, is_vote_code: 1 }, false],
+    [
+      'a poster read with its vote-code flag',
+      { qr_token: 'qrt_abc123', is_active: 1, is_vote_code: 0 },
+      true,
+    ],
   ])('%s', (_name, row, works) => {
     expect(isWorkingPoster(row)).toBe(works);
   });
@@ -168,7 +175,7 @@ describe('the read counts the rows that pass the rule', () => {
     await collectGoLiveEvidence(db, 'evt_this_one');
     expect(asked.sort()).toEqual([
       'SELECT code, target_url FROM shortlinks WHERE event_id = ? <- ["evt_this_one"]',
-      'SELECT qr_token, is_active FROM poster_deployments WHERE event_id = ? <- ["evt_this_one"]',
+      'SELECT qr_token, is_active, is_vote_code FROM poster_deployments WHERE event_id = ? <- ["evt_this_one"]',
     ]);
   });
 

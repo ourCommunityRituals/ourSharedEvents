@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0112; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0113; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,27 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0113: the room's own vote code, and a vote set follows its event's status
+-- (OSE-2140, OSE-2142, OSE ADR-040): poster_deployments.is_vote_code (default
+-- 0), the partial unique index idx_poster_deployments_one_vote_code (one vote
+-- code in use per event), and a one-off UPDATE that closes any vote set left
+-- open on an event that is not Published. No trigger (0025).
+-- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMN AND THE INDEX. The
+-- older Worker never reads is_vote_code, so a vote code reads to it as an
+-- ordinary placement: its scans still count, and on the older Worker any
+-- placement with ?type=vote may mint a pass again (S3b's behaviour; the
+-- voting switch is off everywhere until the voter page ships), AND its public
+-- poster bundle resolves the vote code's placement id from `&deployment=`, so
+-- it would hand out the vote code's token. Before rolling back past 0113's
+-- Worker, retire every vote code in use
+-- (POST /api/v2/admin/events/:id/votables/code/replace, or DELETE
+-- /api/v2/admin/poster-deployments/:id), and make new ones after.
+-- The one-off UPDATE is not reversed: it only closed sets; a host reopens one
+-- with POST /api/v2/admin/events/:id/votables/reopen once its event is Published.
+-- Surgical reverse, only if the index itself must go (SQLite cannot drop the
+-- column; leave it):
+DROP INDEX IF EXISTS idx_poster_deployments_one_vote_code;
+
 -- 0112: sponsor_business.created_by and campaigns.created_by (OSE-1561,
 -- OSE ADR-022 decision 2a).
 -- Additive: two nullable columns and two indexes. No row is written or
