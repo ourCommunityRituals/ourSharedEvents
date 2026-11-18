@@ -121,7 +121,8 @@ export function entryProblems(entry, today) {
     problems.push(`${label}: "id" must be a GHSA advisory id (GHSA-xxxx-xxxx-xxxx)`);
   if (!TICKET.test(entry.ticket))
     problems.push(`${label}: "ticket" must be a tracker id such as OSE-123`);
-  if (!(entry.severity in WINDOW_DAYS))
+  // Own keys only: `in` would also accept inherited names such as "constructor".
+  if (!Object.hasOwn(WINDOW_DAYS, entry.severity))
     problems.push(`${label}: "severity" must be one of ${Object.keys(WINDOW_DAYS).join(', ')}`);
   if (entry.severity === 'critical')
     problems.push(`${label}: a critical advisory cannot be excepted (docs/security/SECURITY.md)`);

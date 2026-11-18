@@ -40,7 +40,14 @@
  *   F12 every active entry counted as excepted, listed by the report or not
  *         -> "an entry stops applying once the report no longer lists its advisory"
  *   F1 and F3 were put in again on this date and seen failing their tests, now including
- *   "a listed id fails again the day after its last day".
+ *   "a listed id fails again on its end date".
+ *   F13 the severity check by `in` (inherited names such as "constructor" accepted)
+ *         -> "a severity that is an inherited object name fails"
+ *   F14 the committed picomatch entry moved back to 2026-12-17 (the 30 days main had)
+ *         -> "the committed picomatch entry ends on the owner's two-week date"
+ *   F15 workflow: GATE_EXIT read from tee ($?) instead of the script (PIPESTATUS[0]);
+ *       F16 workflow: the failing branch without its exit 1
+ *         -> "the audit step decides with the gate script" (each fault alone)
  *
  * A critical advisory fails even when it is listed: a design choice (docs/security/SECURITY.md).
  * The entry is refused as a file problem, and the advisory itself still blocks.
@@ -225,11 +232,11 @@ describe('npm audit gate: decision', () => {
     expect(r.excepted.map((a) => a.id)).toEqual([PICO]);
   });
 
-  test('a listed id fails again the day after its last day', () => {
+  test('a listed id fails again on its end date', () => {
     // reviewDate is the first day the step fails: in force through 2026-12-01, red on 2026-12-02.
     const listed = file(entry({ reviewDate: '2026-12-02' }));
     expect(gate.evaluate(REAL, listed, '2026-12-01').pass).toBe(true);
-    const r = gate.evaluate(REAL, listed, '2026-12-03');
+    const r = gate.evaluate(REAL, listed, '2026-12-02');
     expect(r.pass).toBe(false);
     expect(r.problems.join('\n')).toMatch(/expired, review was due 2026-12-02/);
   });
@@ -280,6 +287,11 @@ describe('npm audit gate: decision', () => {
       /"reviewDate" must be a real date/,
     ],
     ['a missing ticket', { ticket: undefined }, /"ticket" is missing/],
+    [
+      'a severity that is an inherited object name',
+      { severity: 'constructor', reviewDate: '2099-01-01' },
+      /"severity" must be one of/,
+    ],
     ['a ticket that is not a tracker id', { ticket: 'see Slack' }, /"ticket" must be a tracker id/],
     [
       'a review date before the added date',
@@ -371,12 +383,31 @@ describe('npm audit gate: repo wiring', () => {
       /node scripts\/ci\/npm-audit-gate\.mjs \.security-reports\/npm-audit\.json \.security-exceptions\.json/
     );
     expect(step.run).not.toMatch(/BLOCKING_COUNT/);
+    // The step's exit must be the script's, not tee's, and a failure must end the step.
+    expect(step.run).toMatch(/GATE_EXIT=\$\{PIPESTATUS\[0\]\}/);
+    const open = step.run.indexOf('if [ "$GATE_EXIT" -ne 0 ]; then');
+    expect(open).toBeGreaterThan(-1);
+    const failing = step.run.slice(open, step.run.indexOf('\nfi', open));
+    expect(failing.split('\n').map((l) => l.trim())).toContain('exit 1');
   });
 
   test('the committed exception file is sound on the day each entry was added', () => {
     const committed = JSON.parse(readFileSync(join(ROOT, '.security-exceptions.json'), 'utf8'));
     expect(Array.isArray(committed.exceptions)).toBe(true);
     for (const e of committed.exceptions) expect(gate.entryProblems(e, e.addedDate)).toEqual([]);
+  });
+
+  test("the committed picomatch entry ends on the owner's two-week date", () => {
+    // Owner, 2026-11-18 (OSE-2121, option B): two weeks, so the step fails again from
+    // 2026-12-02. A later date needs a new owner decision and a change to this test.
+    const committed = JSON.parse(readFileSync(join(ROOT, '.security-exceptions.json'), 'utf8'));
+    const pico = committed.exceptions.filter((e) => e.id === PICO);
+    expect(pico.length).toBeLessThanOrEqual(1);
+    if (pico.length === 1) {
+      expect(pico[0].package).toBe('picomatch');
+      expect(pico[0].ticket).toBe('OSE-2121');
+      expect(pico[0].reviewDate <= '2026-12-02').toBe(true);
+    }
   });
 
   test('CODEOWNERS locks the exception file and the gate', () => {
