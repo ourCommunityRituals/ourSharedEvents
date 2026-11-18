@@ -2,7 +2,7 @@
 
 Date: 2026-11-16 · Story: OSE-2087 · Class: governance file (5+ loops, human gate after every loop) · `main` at `e7d2160`
 
-**Status: loop 3 of 5 done (2026-11-18). Stopped at the human gate after loop 3. Nothing in AGENTS.md has been changed.**
+**Status: loop 4 of 5 done (2026-11-18). Stopped at the human gate after loop 4. Nothing in AGENTS.md has been changed.**
 
 **These are working notes, not the worksheet.** The repository's worksheet gate (`scripts/ci/ccr-worksheet-check.mjs`) reads `.claude/outputs` and fails a worksheet that has run fewer loops than its class needs, so a five-loop review has no valid worksheet until all five loops exist. The worksheet, with its frontmatter, is written to `.claude/outputs` when loop 5 is done. A first copy of these notes was put there and failed that gate (PR 1372, `T0 Tests (root-vitest)`).
 
@@ -12,7 +12,7 @@ Date: 2026-11-16 · Story: OSE-2087 · Class: governance file (5+ loops, human g
 
 |                                                           |                                                                                                              |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| System score (the proposed change: "the gaps are closed") | loop 1: **29%** · loop 2: **0%** · loop 3: **0%**                                                            |
+| System score (the proposed change: "the gaps are closed") | loop 1: **29%** · loop 2: **0%** · loop 3: **0%** · loop 4: **0%**                                           |
 | Assessment confidence                                     | about 70%: three findings were read in source by two readers; nothing was run; eleven handlers were not read |
 | Gate                                                      | **Fail.** Below 95%. Human gate, questions below                                                             |
 
@@ -213,6 +213,69 @@ The six earlier questions stand. Loop 3 sharpens the fifth and adds one.
 5 (sharper). Padding is now proven, not theory: an organizer who scans their own poster three times from private windows turns a withheld "2 strangers scanned" into a published 5. Do you accept that, or should a figure need 5 **different** contributors that the reader cannot supply themselves? I do not see a cheap fix: scans are anonymous by design, so the system cannot tell the organizer's scans from a stranger's. 7. OSE-2136: may the email sign-up page stop saying "You're already signed up!" so that it answers the same for everyone?
 
 Loop 4 (Compliance) runs after your answer or your leave to continue.
+
+## What happened between loop 3 and loop 4
+
+- The owner merged the loop 3 notes (PR 1427). The questions were not answered.
+- The owner then wrote "Please continue" (2026-11-18). I read that as leave to run loop 4, not as answers.
+
+## Loop 4 (Compliance lens: against the written promises and rules)
+
+Team: dr-of-security (read-only; it listed its commands), with the main session. `main` at `c3906c1`.
+
+Compliance layer: set the findings beside every written promise and rule that governs them: what the product tells the public, the owner's recorded rulings, the ADRs, the security baselines and threat ledger, the dashboard contract, and the repository's own rule for changing AGENTS.md. Where the text and the code differ, which one is wrong?
+
+### The two questions that decide the sentence
+
+- **Does any written rule exempt the audit log (F1)? No, and one says the reverse.** `docs/ops/DASHBOARD-CONTRACT-2026-10-02.md:134` records the owner's ruling of 2026-11-16: "operators' own actions are under the floor". The org rule on audit (as quoted in `docs/security/CONFORMANCE.md:396`) requires an audit trail; it does not say who may read it row by row. So today F1 is against a recorded ruling, and my recommendation to make it an exception needs a new ruling, not just a note.
+- **Does any written rule allow exact admin counts from 5 up (F11)? Two rules, and they disagree.** `lib/count-floor.ts:10-11` (decision of 2026-08-08): a count at or over the floor "shows the exact number". `lib/count-floor.ts:149-153` (PO decision of 2026-10-01): "Every published count is rounded down to a multiple of" 5, because "an exact count would show a one-person change". Invariant 2 treats an admin as a reader of published counts. The code rounds only the public event answer.
+
+### New findings (first seen in loop 4: weight × 1.5)
+
+| #   | Finding                                                                                                                                                                                                                                                                                                                                                   | Evidence                                                                                       | Weight                                                 |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| F19 | Two recorded decisions disagree on whether a count at 5 or more is exact or rounded, and neither says whether rounding reaches an admin. F11 lives in that gap.                                                                                                                                                                                           | `lib/count-floor.ts:10-11` and `:149-153`, read by me                                          | High 10 × 1.5 = 15                                     |
+| F20 | **The privacy page says email addresses are "automatically deleted after 30 days" and cites GDPR Art. 13.** The landing page's email list is kept 90 days (owner decision 2026-10-11). The per-event sign-up is 30. The page does not tell them apart. Outside invariant 2.                                                                               | `handlers/privacy.ts:69`; `lib/retention-windows.ts:56-61`, read by me                         | Regulatory 25; no partial credit; caps the score at 60 |
+| F21 | The landing sign-up stores a peppered hash of the caller's IP; the privacy page lists only the email address.                                                                                                                                                                                                                                             | sweep's reading (`handlers/pages.ts:2926-2941`, ADR-001:60); not opened by me                  | Medium 5 × 1.5 = 7.5                                   |
+| F22 | The threat ledger marks "sub-floor export without suppression" (TL-022) as `tested`. Its test only checks that the floor constant is 5 or more. It could not catch F1, F2, F10, F11 or F12. A gate that cannot fail counts as absent.                                                                                                                     | sweep's reading (`threat-ledger.yaml:252`, `anti-logging-proof.spec.ts:554`); not opened by me | High 10 × 1.5 = 15                                     |
+| F23 | **A stale line of mine.** PR 1330 updated the dashboard contract to 3.0.0 and left a line saying the organizer's lists are "not changed" and that a floor on them "protects no one". Corrected in this PR.                                                                                                                                                | `docs/ops/DASHBOARD-CONTRACT-2026-10-02.md:145`, read by me                                    | Low 2 × 1.5 = 3, closed when this PR merges            |
+| F24 | The admin briefing page calls the design "a HIPAA/COPPA asset"; ADR-018 declines those regimes. Internal page.                                                                                                                                                                                                                                            | sweep's reading (`handlers/briefing.ts:93`)                                                    | Low 2 × 1.5 = 3                                        |
+| F25 | **This review is not yet tied to a commit.** The repository's rule for a governed file (`scripts/ci/ccr-gate.mjs`) wants a worksheet whose `subject_sha` is a commit on the pull request that changes AGENTS.md: "the review saw what will merge". Loops 1 to 4 reviewed the question and three candidate wordings; no commit of the new sentence exists. | `scripts/ci/ccr-gate.mjs:8-14`, read by me                                                     | Medium 5 × 1.5 = 7.5                                   |
+| F26 | ADR-034 drops a placement under 5 from a list; the invariant says a withheld count "reads in words". The ADR notes the difference itself.                                                                                                                                                                                                                 | sweep's reading (`ADR-034:16`)                                                                 | Low 2 × 1.5 = 3                                        |
+
+Already known and listed in `docs/brain/CONSTRAINTS.md:34`, so not counted again: the privacy page says registration data is "deleted automatically when the event ends"; the code keeps it up to 90 days.
+
+### Earlier findings against the written rules
+
+| #            | What the written rules say                                                                                                                                                                                      | Weight        |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| F1 + F2      | against the owner's ruling of 2026-11-16 (see above); the dashboard contract classes the same figure once as `entity` and once as `floored`                                                                     | 30            |
+| F3           | no rule found either way; the catalog's "Event hosts and sponsors see corridors and venues, not people" is about hosts, and this list is platform only                                                          | 10            |
+| F5           | **the documented design produces it**: `docs/features/PRIVACY.md:165-175` specifies one JSON log line per form event with the event id and a millisecond time                                                   | 5             |
+| F6, F15, F16 | no written rule found                                                                                                                                                                                           | 2 + 2.5 + 2.5 |
+| F7, F8       | unchanged                                                                                                                                                                                                       | 2 + 2         |
+| F11, F12     | F11 sits in the conflict F19 names; no rule speaks to F12                                                                                                                                                       | 6.25 + 12.5   |
+| F14          | unchanged                                                                                                                                                                                                       | 2.5           |
+| F17          | strains the privacy page's "We do not … share your personal data" and the catalog's "Never who, only how many"                                                                                                  | 22.5          |
+| F18          | `docs/security/LOGGING_STANDARD.md:44` and ADR-001:60 both sanction reading the IP; `docs/brain/CONSTRAINTS.md:37` already says it is read as a rate-limit key. AGENTS.md invariant 3 is the text that is wrong | 7.5           |
+
+Not found on disk, so not read: the org's `architectural-invariants.yaml` (only the copies of its claims in `CONFORMANCE.md` were read). The threat ledger has no entry, open or accepted, for any of F1, F2, F5, F6, F11, F12, F15, F16 or F17.
+
+Score: 0%
+
+Arithmetic: carried 107.25; new 15 + 25 + 7.5 + 15 + 3 + 3 + 7.5 + 3 = 79; total 186.25, so the score reads 0%. An open Regulatory item caps it at 60 and an open Security Critical floors it at 0 in any case.
+
+## Human gate (loop 4, Compliance layer)
+
+Loop 4 changes two of my earlier recommendations and adds three questions.
+
+- **Question 1, corrected.** I recommended naming the audit log as an exception. That is against your own ruling of 2026-11-16 as the contract records it. If you want the exception, it has to be a new ruling. Which is it: the audit log is under the floor, or it is an exception by your decision?
+- **Question 5, with the rule in hand.** Your PO decision of 2026-10-01 already says every published count is rounded to a multiple of 5, for exactly the reason F11 shows. Does that decision reach what an admin reads?
+- 8. The privacy page promises 30 days for email addresses; the landing list is kept 90 by your decision of 2026-10-11. Which changes: the page or the window?
+- 9. May I commit the chosen wording to a draft pull request now, so that loop 5 reviews the exact commit, as the repository's gate requires? It would not be merged without you.
+- 10. Which wording? With loop 4 in hand I would no longer offer "(some rows an admin still reads exactly)" alone. It should also own the two gaps that are not rows: "Open gaps: OSE-2087 (rows and exact counts an admin still reads)." That is 8 bytes shorter than today's sentence.
+
+Loop 5 (Recursive: was this review itself honest?) runs after your answer or your leave to continue.
 
 ## Before shipping (not yet met)
 
