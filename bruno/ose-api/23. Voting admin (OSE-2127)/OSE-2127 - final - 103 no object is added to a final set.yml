@@ -1,0 +1,33 @@
+info:
+  name: OSE-2127 | rainy | final | no object is added to a final set
+  type: http
+  seq: 103
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteFinalId}}/votables/objects"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"kind\": \"song\", \"label\": \"Encore\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2127 rainy: 409 VOTE_SET_FINAL', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('VOTE_SET_FINAL'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

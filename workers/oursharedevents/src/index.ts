@@ -13,6 +13,7 @@ import { runSharedReportMaterialization } from './handlers/shared-report-materia
 import { runSharedReportBigQueryExport } from './handlers/shared-report-export';
 import { raiseSecurityAlert } from './lib/security-alert';
 import { runDraftExpiry } from './lib/draft-expiry';
+import { runVoteFinalJob } from './lib/vote-sets';
 import { runCorridorLatch } from './lib/corridor-latch';
 import { runScanReturnsRetention } from './lib/scan-returns-retention';
 import { runEventPlaceBackfill } from './lib/event-place';
@@ -155,6 +156,12 @@ export default {
     //   included: computing keys costs CPU, and it must not compete with the
     //   retention jobs for the invocation's allowance. If one of them never
     //   settles the check does not run that night, and logs nothing.
+    // runVoteFinalJob (lib/vote-sets.ts, OSE-2127, OSE ADR-040 decision 4) reads
+    //   DB.vote_sets and DB.events and makes final, for good, a vote set left 7
+    //   days after its event that can hold no vote (never opened, or void);
+    //   final deletes its receipts and markers and nulls T and V. It deletes
+    //   tallies 30 days after final. A set that opened waits for S5, which
+    //   computes its result in the same step. DB only; no count in any log line.
     const jobs = [
       runFormDataLifecycle(env),
       runRegistrationContactClear(env),
@@ -165,6 +172,7 @@ export default {
       runCorridorLatch(env),
       runScanReturnsRetention(env),
       runEventPlaceBackfill(env),
+      runVoteFinalJob(env),
     ];
     ctx.waitUntil(Promise.all(jobs));
     ctx.waitUntil(afterAllSettle(jobs, () => runSpineKeyCheck(env)));

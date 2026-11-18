@@ -102,6 +102,15 @@ const TENANT_TABLES = [
 //   regex, and a route pasted on the line above a guarded one each failed.
 const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
   [
+    'lib/vote-sets.ts > runVoteFinalJob: JOIN events e ON e.id = s.event_id',
+    'Nightly vote final job (runVoteFinalJob, index.ts scheduled; OSE-2127, OSE ADR-040 ' +
+      'decision 4) — no request, no caller brand. It reads each vote set with its own ' +
+      "event's dates to find the sets left 7 days after their event, and makes each " +
+      'final by its own set id and event id. Nothing is returned to a caller, no brand ' +
+      "is mixed with another's, and each audit row carries its own event's brand_id. " +
+      'The request-path reads go through guardAdminObjectScope and bind the event id.',
+  ],
+  [
     'lib/corridor-latch.ts > latchReadyCorridors: FROM events',
     'Nightly corridor latch (runCorridorLatch, index.ts scheduled — no request, ' +
       'no caller brand). `INSERT OR IGNORE … SELECT brand_id, h3_res7 FROM events … ' +

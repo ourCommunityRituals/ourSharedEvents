@@ -89,8 +89,16 @@ const bad = (code: string, error: string): { ok: false; code: string; error: str
 
 // The shapes a booth name and a series name refuse (lib/event-booths.ts,
 // lib/event-series.ts): a contact detail is a person's, and a label is a thing's.
-const EMAIL_SHAPED = /\S@\S/;
-const PHONE_SHAPED = /(?:\d[\s().-]*){7,}/;
+const EMAIL_SHAPED = /\S@\S/u;
+// Any decimal digit (\p{Nd}), so fullwidth or Arabic-Indic digits count too.
+const PHONE_SHAPED = /(?:\p{Nd}[\s().-]*){7,}/u;
+/**
+ * The text the shape checks read (OSE-2127 security review): NFKC folds a
+ * fullwidth ＠ or digit to its plain form, and format characters (\p{Cf}, such
+ * as a zero-width space) are dropped, so neither can hide an address or a
+ * number. The label is stored as typed; only the check reads this copy.
+ */
+const shapeText = (label: string) => label.normalize('NFKC').replace(/\p{Cf}/gu, '');
 const CONTROL_CHAR = /[\u0000-\u001f\u007f]/;
 
 /** Check an object's label. Returns the trimmed label, or why it is refused. */
@@ -101,7 +109,7 @@ export function parseVotableLabel(raw: unknown): Parsed<string> {
   if (!label) return bad('INVALID_LABEL', 'label is required');
   if (label.length > VOTABLE_LABEL_MAX)
     return bad('INVALID_LABEL', `label must be ${VOTABLE_LABEL_MAX} characters or fewer`);
-  if (EMAIL_SHAPED.test(label) || PHONE_SHAPED.test(label))
+  if (EMAIL_SHAPED.test(shapeText(label)) || PHONE_SHAPED.test(shapeText(label)))
     return bad(
       'INVALID_LABEL',
       'label names the thing voted on; it must not hold an email address or phone number'

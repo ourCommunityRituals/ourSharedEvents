@@ -1,0 +1,32 @@
+info:
+  name: Voting admin (OSE-2127)
+  type: folder
+request: {}
+docs: |-
+  Voting S3 (OSE-2127, part of OSE-1193; OSE ADR-040 decisions 3, 4, 6, 7 and
+  10). An admin makes the event's one vote set, adds songs or stalls, and opens,
+  closes and reopens the set and each object. The first open stamps the pepper
+  epoch and draws the secret margin and voter floor, once; no answer carries
+  them, nor any count, epoch, void flag, receipt or marker (seq 60, 70, 81, 101
+  and 110 read every key of the answer).
+
+  The final lock (seq 100 to 105): a set that never opened is made final by an
+  admin; it then does not open and takes no object, even after the event's date
+  changes. A set that opened becomes final only when S5 computes its results, so
+  an admin's finalize of it is refused (seq 90). Every write is in the audit
+  log with no detail (seq 170).
+
+  The cross-brand refusal (seq 160 and 161) uses the CI brand service token.
+  Until the owner sets it up (OSE-1800), those two requests log NOT RUN and
+  record no passing test.
+
+  No fixture. The folder makes two synthetic, unlisted draft events (seq 10 and
+  11). A vote set is never deleted (ADR-040 decision 4), so the event delete
+  refuses them (seq 900) and the run archives both (seq 905 and 906). Each run
+  therefore leaves two archived synthetic events on staging. The nightly job
+  makes the never-opened set final after 7 days; the opened one waits for S5.
+
+  The requests run in `seq` order. Open needs ANON_ID_HASH_PEPPER on staging:
+  without it seq 60 answers 409 PEPPER_NOT_SET and the run is red.
+
+  Mock-layer twin: workers/oursharedevents/tests/vote-set-admin.spec.ts.

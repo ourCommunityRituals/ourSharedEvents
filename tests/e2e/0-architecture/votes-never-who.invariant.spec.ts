@@ -28,6 +28,11 @@
  *          by plain `column = 1`, never in a tuple or an expression;
  *        - pepper_epoch and played_by are set only by a write whose WHERE says
  *          the column IS NULL (stamped once, never restamped);
+ *        - secret_margin and secret_floor are set to a value only by a write
+ *          whose WHERE says `pepper_epoch IS NULL`: drawn once, at the first
+ *          open, never at a reopen (OSE-2127); setting them to NULL is final's;
+ *        - a write that sets a vote set's state to 'open' carries an
+ *          `is_final = 0` guard, so a final set never reopens (OSE-2127);
  *        - nothing replaces, upserts, deletes or drops a vote set;
  *        - a write to votable_objects carries an `is_final = 0` guard, so no
  *          object is added to, or reopened in, a final set;
@@ -79,6 +84,7 @@ const DB_MIGRATIONS = join(WORKER_DIR, 'migrations');
 const FORMS_MIGRATIONS = join(WORKER_DIR, 'migrations-forms');
 const SRC_DIR = join(WORKER_DIR, 'src');
 const VOTES_LIB = 'src/lib/votes.ts';
+const VOTE_SETS_LIB = 'src/lib/vote-sets.ts';
 
 /**
  * Every Worker file that names a vote table, and why. A route story (S3, S4a,
@@ -86,14 +92,19 @@ const VOTES_LIB = 'src/lib/votes.ts';
  */
 const VOTE_TABLE_FILES: Record<string, string> = {
   [VOTES_LIB]: 'The table list itself (VOTE_TABLES), read by the gates. It holds no SQL.',
+  [VOTE_SETS_LIB]:
+    'S3 (OSE-2127): every write to vote_sets and votable_objects: create, open, reopen, close, the final lock and the nightly final job; it makes the tally row with its object and deletes markers at final.',
 };
 
 /**
- * Files that may name the secret margin or the secret floor. Empty: nothing
- * draws or reads them yet. S3 (draw at the first open) and S5 (read at final)
- * add their own lib file here; a handler can never be listed.
+ * Files that may name the secret margin or the secret floor. S3 draws them at
+ * the first open; S5 (read at final) adds its own lib file here. A handler can
+ * never be listed.
  */
-const SECRET_READERS: Record<string, string> = {};
+const SECRET_READERS: Record<string, string> = {
+  [VOTE_SETS_LIB]:
+    'S3 (OSE-2127) writes T and V once, at the first open, and nulls them at final. It never reads them back.',
+};
 
 /**
  * Files that may name the live counters. Empty: nothing counts yet. S4a (the
@@ -109,6 +120,10 @@ const COUNT_COLUMNS = [
   'up_count',
   'down_count',
 ];
+/** An INSERT that writes a receipt or a marker: the vote route's write (S4a). */
+const MARKER_WRITE =
+  /\b(?:INSERT|REPLACE)\b[^;]*\bINTO\s+(?:vote_receipts|vote_participants|vote_team_markers)\b/i;
+
 const MARKER_AND_COUNTER_TABLES = [
   'vote_tallies',
   'vote_receipts',
@@ -298,6 +313,22 @@ function flagProblems(raw: string, sqlComments = true): string[] {
           out.push(`is_final is not set to the literal 1: ${part}`);
         if (/\bis_void\b/i.test(part) && !/^is_void\s*=\s*1$/i.test(part))
           out.push(`is_void is not set to the literal 1: ${part}`);
+        // Any state but the literal 'closed' (a bound `state = ?` included) may
+        // open the set, so it needs the final guard (security review L6).
+        if (
+          /^state\s*=/i.test(part) &&
+          !/^state\s*=\s*'closed'$/i.test(part) &&
+          !/\bis_final\s*=\s*0\b/i.test(where)
+        )
+          out.push(`sets a vote set's state without an "is_final = 0" guard: ${part}`);
+        for (const col of ['secret_margin', 'secret_floor']) {
+          if (
+            new RegExp(`^${col}\\s*=`, 'i').test(part) &&
+            !new RegExp(`^${col}\\s*=\\s*NULL$`, 'i').test(part) &&
+            !/\bpepper_epoch\s+IS\s+NULL\b/i.test(where)
+          )
+            out.push(`${col} is drawn without a "pepper_epoch IS NULL" guard: ${part}`);
+        }
         for (const col of ['pepper_epoch', 'played_by']) {
           if (
             new RegExp(`^${col}\\s*=`, 'i').test(part) &&
@@ -450,6 +481,29 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
     ).toEqual([]);
   });
 
+  // OSE-2127 (security review M1). ADR-040 decision 1: every set reaches final,
+  // so nothing is kept without a bound. In S3, final skips a set that opened
+  // (src/lib/vote-sets.ts FINALIZABLE: results arrive with S5), which is safe
+  // only while nothing writes a receipt or a marker. The day a Worker file
+  // writes one (the vote route, S4a), the nightly job must already make every
+  // set final, with its result computed in the same step (S5).
+  test('OSE-2127 | final | no receipt or marker is written while final skips a set that opened', () => {
+    const writers = SOURCES.filter(({ code }) =>
+      sqlLiterals(code).some((sql) => MARKER_WRITE.test(normalize(sql)))
+    ).map((s) => s.file);
+    const lib = SOURCES.find((s) => s.file === VOTE_SETS_LIB);
+    expect(lib, `${VOTE_SETS_LIB} is read`).toBeTruthy();
+    const job = lib!.code.match(/\bjob:\s*\([^)]*\)\s*=>\s*`([^`]*)`/)?.[1] ?? '';
+    expect(job, 'FINALIZABLE.job is found').not.toBe('');
+    const skipsOpened = /pepper_epoch\s+IS\s+NULL/i.test(job);
+    expect(
+      skipsOpened ? writers : [],
+      'A receipt or marker writer exists, but the nightly job still makes final only the sets ' +
+        'that never opened (or are void). Widen FINALIZABLE.job to every set and compute the ' +
+        'result in the same batch (S5) before, or with, the vote route.'
+    ).toEqual([]);
+  });
+
   test('OSE-2125 | secret | no route returns T or V, and no number before final', () => {
     const naming = (cols: string[]) =>
       SOURCES.filter(({ code }) => nameRe(cols).test(code)).map((s) => s.file);
@@ -537,6 +591,11 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       'UPDATE vote_sets SET ${col} = ? WHERE id = ?',
       "INSERT INTO votable_objects (id, event_id, set_id, kind, label) VALUES (?, ?, ?, 'song', ?)",
       "UPDATE votable_objects SET state = 'open' WHERE id = ?",
+      // OSE-2127: a reopen that redraws T or V, and an open with no final guard.
+      "UPDATE vote_sets SET state = 'open', secret_margin = ?, secret_floor = ? WHERE id = ? AND is_final = 0",
+      'UPDATE vote_sets SET secret_floor = 12 WHERE id = ?',
+      "UPDATE vote_sets SET state = 'open' WHERE event_id = ? AND state = 'closed'",
+      'UPDATE vote_sets SET state = ? WHERE id = ?',
     ];
     expect(reopen.filter((sql) => flagProblems(sql).length === 0)).toEqual([]);
     // A shell line: its --command flag is not a SQL comment.
@@ -550,12 +609,22 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       "UPDATE vote_sets SET is_final = 1, final_at = ?, state = 'closed', secret_margin = NULL, secret_floor = NULL WHERE id = ?",
       "UPDATE vote_sets SET is_void = 1, void_reason = 'pepper_epoch' WHERE id = ?",
       'UPDATE vote_sets SET pepper_epoch = ? WHERE id = ? AND pepper_epoch IS NULL',
+      "UPDATE vote_sets SET state = 'open', pepper_epoch = ?, secret_margin = ?, secret_floor = ? WHERE id = ? AND is_final = 0 AND pepper_epoch IS NULL",
+      "UPDATE vote_sets SET state = 'open' WHERE event_id = ? AND state = 'closed' AND is_final = 0",
+      "UPDATE vote_sets SET state = 'closed' WHERE event_id = ? AND state = 'open'",
       "UPDATE votable_objects SET state = 'open' WHERE id = ? AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
       'INSERT INTO vote_sets (id, event_id) VALUES (?, ?)',
       'SELECT is_final FROM vote_sets WHERE id = ?',
     ];
     expect(fine.filter((sql) => flagProblems(sql).length > 0)).toEqual([]);
 
+    expect(
+      MARKER_WRITE.test('INSERT OR IGNORE INTO vote_receipts (object_id, receipt) VALUES (?, ?)')
+    ).toBe(true);
+    expect(
+      MARKER_WRITE.test('INSERT INTO vote_team_markers (set_id, team_id, marker) SELECT ?, ?, ?')
+    ).toBe(true);
+    expect(MARKER_WRITE.test('DELETE FROM vote_receipts WHERE object_id = ?')).toBe(false);
     expect(isExporter('src/handlers/bigquery.ts', '')).toBe(true);
     expect(isExporter('src/lib/x.ts', 'await bigQueryInsertRows(env, rows)')).toBe(true);
     expect(isExporter('src/lib/votes.ts', '')).toBe(false);
