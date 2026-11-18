@@ -77,7 +77,7 @@ function writesStatus(sql: string): boolean {
   const code = statements(sql).join(';\n');
   return (
     /\b(?:INSERT(?:\s+OR\s+\w+)?|REPLACE)\s+INTO\s+["`[]?events\b/i.test(code) ||
-    /\bUPDATE\s+["`[]?events["`\]]?\s+SET\b[^;]*?(?:^|,|\bSET)\s*status\s*=/i.test(code)
+    /\bUPDATE\s+["`[]?events["`\]]?\s+SET\s+(?:[^;]*?,\s*)?status\s*=/i.test(code)
   );
 }
 
