@@ -76,8 +76,9 @@ const AFTER = 6;
  * Adding a file here is a decision: say why the event's yes still comes first.
  */
 const GATED_ELSEWHERE: Record<string, string> = {
-  'lib/sponsor-resolver.ts':
-    'resolveSponsorsForEvent reads the gate with the event row and returns [] before either path runs',
+  // OSE-2144: the resolver, the logo and asset routes and the beacon gate now
+  // ask the shared rules (PLACEMENT_ON_SHOW_SQL / SPONSOR_ON_SHOW_SQL), which
+  // carry the gate; the test below holds that the rules do.
 };
 
 interface Hit {
@@ -106,15 +107,12 @@ describe('every statement that carries the consent rule carries the opt-in gate'
     const files = [...new Set(hits.map((h) => h.file))].sort();
     expect(files).toEqual([
       'handlers/pages.ts',
-      'handlers/sponsor-asset-route.ts',
-      'handlers/sponsors.ts',
       // OSE-2046: which sponsors are in a campaign on a SharedReport.
       'lib/shared-report-builder.ts',
       'lib/sponsor-card.ts',
-      'lib/sponsor-resolver.ts',
     ]);
-    // The logo route and the display/click gate are two statements in one file.
-    expect(hits.filter((h) => h.file === 'handlers/sponsors.ts')).toHaveLength(2);
+    // OSE-2144: the resolver, sponsors.ts (logo, beacon) and the asset route
+    // write no consent rule of their own any more; they ask the shared rules.
     // SPONSOR_ON_SHOW_SQL and PLACEMENT_ON_SHOW_SQL.
     expect(hits.filter((h) => h.file === 'lib/sponsor-card.ts')).toHaveLength(2);
   });

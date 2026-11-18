@@ -1,0 +1,35 @@
+info:
+  name: 'OSE-2144 | rainy | impression beacon | a ready event answers like an unknown pair'
+  type: http
+  seq: 34
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/events/lc-ready-evt/sponsors/sb_lc_ready/impression"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"surface":"public","placement":"mobileBanner"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The same 404 NOT_FOUND an unknown pair gets (request 30): no row is
+        // written, and the answer does not show that a placement exists.
+        test('OSE-2144 rainy: impression on ready: 404 NOT_FOUND', function () {
+          expect(res.getStatus()).to.eql(404);
+          expect(res.getBody().code).to.eql('NOT_FOUND');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

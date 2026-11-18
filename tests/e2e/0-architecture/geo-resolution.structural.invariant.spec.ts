@@ -42,11 +42,35 @@ const REPO_ROOT = join(__dirname, '..', '..', '..');
 const WORKER_ROOT = join(REPO_ROOT, 'workers', 'oursharedevents');
 const MIGRATIONS_DIR = join(WORKER_ROOT, 'migrations');
 const RESOLVER = join(WORKER_ROOT, 'src', 'lib', 'sponsor-resolver.ts');
-// Every public sponsor render path that carries the strict-consent gate (ADR-019).
+// OSE-2144: the shared per-placement and per-sponsor rules. The resolver's Path 1
+// and the public sponsor handlers ask them by name (`${PLACEMENT_ON_SHOW_SQL}`,
+// `${SPONSOR_ON_SHOW_SQL}`) instead of spelling the consent clauses out, so the
+// clauses below are asserted on this file, and a file that uses a rule by name
+// inherits them. The rules themselves are pinned clause by clause here.
+const SPONSOR_CARD = join(WORKER_ROOT, 'src', 'lib', 'sponsor-card.ts');
+const SHARED_RULE_USE = /\$\{\s*(PLACEMENT_ON_SHOW_SQL|SPONSOR_ON_SHOW_SQL)\s*\}/;
+/** The text of one exported SQL rule in lib/sponsor-card.ts. */
+function sharedRule(name: 'PLACEMENT_ON_SHOW_SQL' | 'SPONSOR_ON_SHOW_SQL'): string {
+  const src = readFileSync(SPONSOR_CARD, 'utf8');
+  const start = src.indexOf(`export const ${name} = \``);
+  expect(start, `lib/sponsor-card.ts must export ${name}`).toBeGreaterThan(-1);
+  return src.slice(start, src.indexOf('`;', start));
+}
+/** The file's own text, plus the text of every shared rule it asks by name. */
+function withSharedRules(path: string): string {
+  const src = readFileSync(path, 'utf8');
+  const used = [...src.matchAll(new RegExp(SHARED_RULE_USE.source, 'g'))].map(
+    (m) => m[1] as 'PLACEMENT_ON_SHOW_SQL' | 'SPONSOR_ON_SHOW_SQL'
+  );
+  return [src, ...new Set(used)].map((x) => (x === src ? x : sharedRule(x))).join('\n');
+}
+// Every public sponsor render path that carries the strict-consent gate (ADR-019),
+// itself or through the shared rules, which are on the list in their own right.
 const PUBLIC_CONSENT_PATHS = [
   RESOLVER,
   join(WORKER_ROOT, 'src', 'handlers', 'pages.ts'),
   join(WORKER_ROOT, 'src', 'handlers', 'sponsors.ts'),
+  SPONSOR_CARD,
 ];
 
 test.describe('Invariant 2: Hyper-Local Geo-Resolution — structural code-shape lock', () => {
@@ -117,7 +141,7 @@ test.describe('Invariant 2: Hyper-Local Geo-Resolution — structural code-shape
   });
 
   test('OSE-INV2 | resolver | Path 1 Direct binds sp.event_id = ? and requires both sides active', () => {
-    const src = readFileSync(RESOLVER, 'utf8');
+    const src = withSharedRules(RESOLVER);
     // Direct path: a placement whose event_id IS this event, always included.
     expect(
       src,
@@ -133,7 +157,7 @@ test.describe('Invariant 2: Hyper-Local Geo-Resolution — structural code-shape
   });
 
   test('OSE-INV2 | resolver | acceptance is ASYMMETRIC: organizer permissive, sponsor strict (ADR-019)', () => {
-    const src = readFileSync(RESOLVER, 'utf8');
+    const src = withSharedRules(RESOLVER);
     // ADR-019 "silence != consent" (CCR-PR567 M4). The ORGANIZER side stays
     // PERMISSIVE — they created the placement, so unanswered (NULL) must not
     // hide → COALESCE(...organizer_accepted,1)=1. The SPONSOR side is STRICT —
@@ -185,6 +209,25 @@ test.describe('Invariant 2: Hyper-Local Geo-Resolution — structural code-shape
     );
   });
 
+  test('OSE-INV2 | consent | the shared rules carry every consent clause, and Path 1 asks the placement rule (OSE-2144)', () => {
+    const placement = sharedRule('PLACEMENT_ON_SHOW_SQL');
+    expect(placement).toMatch(/\bsp\.is_active\s*=\s*1/);
+    expect(placement).toMatch(/\bsb\.is_active\s*=\s*1/);
+    expect(placement).toMatch(/\bsp\.sponsor_accepted\s*=\s*1/);
+    expect(placement).toMatch(
+      /COALESCE\s*\(\s*sp\.organizer_accepted\s*,\s*CASE\s+WHEN\s+sp\.source\s*=\s*'sponsor_request'\s+THEN\s+0\s+ELSE\s+1\s+END\s*\)\s*=\s*1/i
+    );
+    expect(placement).toMatch(/e\.brand_id\s*=\s*sb\.brand_id/);
+    const sponsor = sharedRule('SPONSOR_ON_SHOW_SQL');
+    expect(sponsor).toMatch(/\bsb\.is_active\s*=\s*1/);
+    expect(sponsor).toMatch(/\bsp_show\.sponsor_accepted\s*=\s*1/);
+    expect(sponsor).toMatch(/\bsp_show\.is_active\s*=\s*1/);
+    const resolver = readFileSync(RESOLVER, 'utf8');
+    expect(resolver, 'Path 1 must scope to this event and ask the shared placement rule').toMatch(
+      /WHERE\s+sp\.event_id\s*=\s*\?\s+AND\s+\$\{PLACEMENT_ON_SHOW_SQL\}/
+    );
+  });
+
   test('OSE-INV2 | consent | strict sponsor_accepted = 1 on EVERY public render path; no COALESCE regression (ADR-019)', () => {
     // Strict consent (ADR-019, CCR-PR567 M4) lives in three ungated SQL literals:
     // the resolver Path-1, the public event-page sponsor strip (pages.ts), and the
@@ -192,7 +235,7 @@ test.describe('Invariant 2: Hyper-Local Geo-Resolution — structural code-shape
     // reintroduction on ANY of them re-opens the non-consented-render leak — the
     // exact regression the CCR re-run caught. Lock all three by source shape.
     for (const path of PUBLIC_CONSENT_PATHS) {
-      const src = readFileSync(path, 'utf8');
+      const src = withSharedRules(path);
       expect(src, `${path} must gate public render on strict sp.sponsor_accepted = 1`).toMatch(
         /\bsp\.sponsor_accepted\s*=\s*1/i
       );

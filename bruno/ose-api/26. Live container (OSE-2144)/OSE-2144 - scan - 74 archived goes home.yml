@@ -1,0 +1,34 @@
+info:
+  name: 'OSE-2144 | rainy | /q | a code on a archived event counts nothing and goes home without the event id'
+  type: http
+  seq: 74
+
+http:
+  method: GET
+  url: "{{baseUrl}}/q/qrt_lc_archived"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: User-Agent
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The same answer as a code nobody issued (request 71): the scan is not
+        // looked up, so nothing is counted and no anonymous cookie is set.
+        test('OSE-2144 rainy: archived: 302 to /, no event id, no cookie', function () {
+          expect(res.getStatus()).to.eql(302);
+          expect(res.getHeader('location')).to.eql('/');
+          expect(String(res.getHeader('location') || '')).to.not.include('lc-archived-evt');
+          expect(res.getHeader('set-cookie')).to.be.oneOf([undefined, null]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

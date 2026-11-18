@@ -453,6 +453,15 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
   // has_card column in this SELECT list). Query scope unchanged.
 
   [
+    'handlers/qr-scan.ts > handleQrScan: JOIN events e ON e.id = pd.event_id',
+    'OSE-2144: the /q token lookup joins the deployment to its event only to ask ' +
+      'whether the event is live. The read is keyed by the held qr_token (`pd.qr_token = ?`, ' +
+      'a unique index on an unguessable token), so it returns at most one deployment and ' +
+      'its one event; it cannot enumerate a brand. qr_token is not a column the held-id ' +
+      'allowlist names, hence the entry.',
+  ],
+
+  [
     'lib/sponsor-resolver.ts > resolveSponsorsForEvent: COALESCE((SELECT sp2.tier FROM sponsor_placement sp2',
     'Path-2 (dark-at-launch, SPONSOR_GEO_MATCH_ENABLED off) tier subselect ' +
       '`SELECT sp2.tier FROM sponsor_placement sp2 WHERE sp2.sponsor_business_id = ' +
