@@ -213,9 +213,10 @@ export async function resolveSponsorsForEvent(
   // (the one gate, lib/sponsor-card.ts). It is asked before either path runs.
   // OSE-2144: and "is the event live?" (eventLiveSql, domain/event-state.ts):
   // nothing is more live than its container, so a draft, ready or archived
-  // event resolves no sponsor on any path. This resolver feeds only public
-  // reads (/sponsors, /sponsor-bundle, the poster bundle); the archived recap
-  // page has its own statement (handlers/pages.ts).
+  // event resolves no sponsor on any path. This resolver feeds the public
+  // reads (/sponsors, /sponsor-bundle, the poster bundle) and the admin poster
+  // preview, which therefore shows no sponsor strip for a draft or ready event.
+  // The archived recap page has its own statement (handlers/pages.ts).
   const event = await db
     .prepare(
       `SELECT brand_id, template_id, zip_code, lat, lon, h3_res7,

@@ -17,12 +17,13 @@
  * What this cannot see: a statement that shows a sponsor without writing the
  * consent rule at all, and SQL built from pieces at run time. It reads text.
  *
- * @born-red OSE-2144 | method: run against main 43a25c1, where eventLiveSql
- * does not exist and the shared rules spell `status = 'active'`: sections 1 and
- * 3 failed on import and on each read; section 2 failed naming the resolver,
- * sponsors.ts (logo, beacon) and sponsor-asset-route.ts. Then, on this branch,
- * `AND ${eventLiveSql('e')}` was removed from the /q lookup and the resolver's
- * stop was removed, and each named case failed | date: 2026-11-18
+ * @born-red OSE-2144 | method: on this branch, one fault at a time: the
+ * resolver's stop removed, the /q live test removed, the live test widened
+ * (1 failed each); impression/click, the logo or the asset back to the consent
+ * rule alone (3 failed each); the recap statement made to ask live (1 failed);
+ * a new consent statement without the live test elsewhere in pages.ts (2
+ * failed). On main the file cannot load: eventLiveSql does not exist there |
+ * date: 2026-11-18
  *
  * Pure Node (fs + src imports) → node project.
  */
@@ -71,15 +72,33 @@ const BEFORE = 6;
 const AFTER = 8;
 
 /**
- * The two written exceptions (owner, 2026-11-18). Nothing else may be added
- * here without a new owner decision recorded on the story.
+ * The two written exceptions (owner, 2026-11-18), held statement by statement,
+ * not file by file: each names the function its statements sit in and how many
+ * consent statements there may be without the live test. Any other statement
+ * in the same file must ask it. Nothing else may be added here without a new
+ * owner decision recorded on the story.
  */
-const WRITTEN_EXCEPTIONS: Record<string, string> = {
-  'handlers/pages.ts':
-    'the recap page of an archived event that was listed keeps its sponsor strip (fetchEventPageSocialData)',
-  'lib/shared-report-builder.ts':
-    'an archived event’s SharedReport opens with an unexpired signed link (campaign links read the placements)',
+const WRITTEN_EXCEPTIONS: Record<string, { fn: string; count: number; why: string }> = {
+  'handlers/pages.ts': {
+    fn: 'export async function fetchEventPageSocialData(',
+    count: 1,
+    why: 'the recap page of an archived event that was listed keeps its sponsor strip',
+  },
+  'lib/shared-report-builder.ts': {
+    fn: '',
+    count: 2,
+    why: 'an archived event’s SharedReport opens with an unexpired signed link',
+  },
 };
+
+/** The [start, end) line range of a top-level function, by its opening text. */
+function fnRange(file: string, opening: string): [number, number] {
+  const lines = codeLines(join(SRC, file));
+  const start = lines.findIndex((l) => l.startsWith(opening));
+  if (start < 0) return [-1, -1];
+  const end = lines.findIndex((l, i) => i > start && l === '}');
+  return [start + 1, end + 1];
+}
 
 interface Hit {
   file: string;
@@ -130,10 +149,17 @@ describe('2. every statement with the consent rule asks the live test, or is a w
     ]);
   });
 
+  /** A bare hit is excused only inside its exception's function, up to its count. */
+  function excused(h: Hit): boolean {
+    const ex = WRITTEN_EXCEPTIONS[h.file];
+    if (!ex) return false;
+    if (!ex.fn) return true;
+    const [start, end] = fnRange(h.file, ex.fn);
+    return h.line >= start && h.line <= end;
+  }
+
   test('none of them lacks it', () => {
-    const bare = hits
-      .filter((h) => !h.live && !(h.file in WRITTEN_EXCEPTIONS))
-      .map((h) => `${h.file}:${h.line}`);
+    const bare = hits.filter((h) => !h.live && !excused(h)).map((h) => `${h.file}:${h.line}`);
     expect(
       bare,
       'a statement shows a sponsor on the consent rule without asking whether the event is live: ' +
@@ -142,12 +168,11 @@ describe('2. every statement with the consent rule asks the live test, or is a w
     ).toEqual([]);
   });
 
-  test('each written exception is still an exception (no stale entry)', () => {
-    for (const file of Object.keys(WRITTEN_EXCEPTIONS)) {
-      expect(
-        hits.some((h) => h.file === file && !h.live),
-        `${file} is listed but asks the live test now: remove it from the list`
-      ).toBe(true);
+  test('each written exception holds exactly its own statements (no more, none stale)', () => {
+    for (const [file, ex] of Object.entries(WRITTEN_EXCEPTIONS)) {
+      const bare = hits.filter((h) => h.file === file && !h.live);
+      expect(bare.length, `${file}: ${ex.why}`).toBe(ex.count);
+      if (ex.fn) expect(fnRange(file, ex.fn)[0], `${file}: ${ex.fn}`).toBeGreaterThan(0);
     }
   });
 

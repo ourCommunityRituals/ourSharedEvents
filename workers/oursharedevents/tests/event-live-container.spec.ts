@@ -23,12 +23,15 @@
  * renders anywhere". The staging layer is bruno/ose-api
  * "26. Live container (OSE-2144)".
  *
- * @born-red OSE-2144 | method: run against main 43a25c1 (no status check in the
- * resolver, impression/click, the logo and asset statements or the /q lookup):
- * every draft/ready/archived case in sections 1–4 failed, and the live controls
- * passed. Then each fix was removed in turn and its own section failed; the
- * recap exception was removed (the page asked for live only) and section 5
- * failed | date: 2026-11-18
+ * @born-red OSE-2144 | method: (1) run against main 43a25c1 (no status check in
+ * the resolver, impression/click, the logo and asset statements or the /q
+ * lookup): 26 of 33 failed, every non-live case in sections 1-4 and the recap
+ * "no art" case; the live controls and both exceptions passed. (2) On this
+ * branch, one fault at a time: the resolver's stop removed (the 5 Path 2 cases
+ * failed); the /q live test removed (10); impression/click, the logo and the
+ * asset each back to the consent rule alone (5 each); the live test widened to
+ * ready/active/archived (16); the recap statement made to ask live (section 5
+ * failed) | date: 2026-11-18
  *
  * Runtime-bound (SELF.fetch, env.DB) → workers pool.
  */
@@ -78,6 +81,15 @@ const mk = (status: Status, listed: 0 | 1): Case => {
   };
 };
 
+/**
+ * Path 2 (template + geo, dark by default): one business subscribed to the
+ * template every event here uses, with no placement and no areas, so the match
+ * alone would show it. It shows on the live event with the switch on (the
+ * control); on any other event only the resolver's stop keeps it out.
+ */
+const TEMPLATE = 'lc-tpl';
+const PATH2 = 'lc-sp-path2';
+
 const LIVE = mk('active', 1);
 /** Every state that is not Published, listed and unlisted where it matters. */
 const NOT_LIVE: Case[] = [
@@ -112,8 +124,8 @@ async function seedCase(c: Case): Promise<void> {
   await tenv.DB.prepare(
     `INSERT OR REPLACE INTO events
        (id, brand_id, title, slug, status, start_date, location, is_published, listed_from,
-        settings_json)
-     VALUES (?, ?, ?, ?, ?, ?, 'Eagles Hall', ?, ?, '{"useSponsors":true}')`
+        settings_json, template_id)
+     VALUES (?, ?, ?, ?, ?, ?, 'Eagles Hall', ?, ?, '{"useSponsors":true}', ?)`
   )
     .bind(
       c.eventId,
@@ -123,7 +135,8 @@ async function seedCase(c: Case): Promise<void> {
       c.status,
       day(c.status === 'archived' ? -3 : 10),
       c.listed,
-      c.listed ? day(-20) : null
+      c.listed ? day(-20) : null,
+      TEMPLATE
     )
     .run();
   await seedSplitSponsor(tenv.DB, {
@@ -137,6 +150,11 @@ async function seedCase(c: Case): Promise<void> {
     clickToken: `clk_${c.sponsorId}`,
     displayToken: `dsp_${c.sponsorId}`,
   });
+  // A header image too, so the ?slot=header case has a live control that is
+  // served (422 from the refused host), not a 404 for having none.
+  await tenv.DB.prepare('UPDATE sponsor_business SET header_image_url = ? WHERE id = ?')
+    .bind('https://localhost/header.png', c.sponsorId)
+    .run();
   await tenv.DB.prepare(
     `INSERT OR REPLACE INTO poster_deployments
        (id, event_id, qr_token, placement_label, is_active, created_at)
@@ -187,7 +205,24 @@ const scanReq = (token: string) =>
 beforeAll(async () => {
   await applyMigrations(tenv.TEST_MIGRATION_STATEMENTS, tenv.DB);
   await applyMigrations(tenv.TEST_FORMS_MIGRATION_STATEMENTS, tenv.FORMS_DB);
+  await tenv.DB.prepare(
+    `INSERT OR IGNORE INTO event_templates (id, name, description, category)
+     VALUES (?, 'Container template', 'OSE-2144 fixture', 'general')`
+  )
+    .bind(TEMPLATE)
+    .run();
   for (const c of [LIVE, ...NOT_LIVE]) await seedCase(c);
+  await tenv.DB.batch([
+    tenv.DB.prepare('DELETE FROM sponsor_business WHERE id = ?').bind(PATH2),
+    tenv.DB.prepare(
+      `INSERT INTO sponsor_business (id, brand_id, name, is_active, created_at, updated_at)
+       VALUES (?, ?, 'Container Path Two', 1, datetime('now'), datetime('now'))`
+    ).bind(PATH2, BRAND),
+    tenv.DB.prepare(
+      `INSERT OR REPLACE INTO sponsor_event_types (id, sponsor_id, template_id, is_active)
+       VALUES ('lc-set-path2', ?, ?, 1)`
+    ).bind(PATH2, TEMPLATE),
+  ]);
 });
 
 const label = (c: Case) => `${c.status}${c.listed ? ', listed' : ''}`;
@@ -203,10 +238,19 @@ describe('1. the sponsor resolver answers no sponsor unless the event is live', 
     expect(JSON.stringify(bundle)).toContain(LIVE.sponsorId);
   });
 
+  test('live control: the dark Path 2 match, switched on, shows the subscribed business', async () => {
+    const ids = (
+      await resolveSponsorsForEvent(tenv.DB, LIVE.eventId, { geoMatchEnabled: true })
+    ).map((s) => s.id);
+    expect(ids).toContain(PATH2);
+  });
+
   for (const c of NOT_LIVE) {
     test(`${label(c)}: the resolver, /sponsors and /sponsor-bundle show none`, async () => {
       expect(await resolveSponsorsForEvent(tenv.DB, c.eventId)).toEqual([]);
-      // The dark Path 2 (template + geo) is behind the same stop.
+      // The dark Path 2 (template + geo) is behind the same stop: switched on,
+      // the subscribed business matches this event's template, and is kept out
+      // only because the event is not live.
       expect(await resolveSponsorsForEvent(tenv.DB, c.eventId, { geoMatchEnabled: true })).toEqual(
         []
       );
@@ -261,6 +305,7 @@ describe('3. the logo and asset proxy serve art only for a sponsor on a live eve
   test('live control: the logo is served (422 from the proxy, not 404) and so is the asset', async () => {
     expect((await logo(LIVE.sponsorId)).status).toBe(422);
     expect((await logo(LIVE.sponsorId, '?slot=sidebar')).status).toBe(422);
+    expect((await logo(LIVE.sponsorId, '?slot=header')).status).toBe(422);
     expect((await asset(LIVE.sponsorId)).status).toBe(200);
   });
 
