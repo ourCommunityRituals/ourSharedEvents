@@ -96,6 +96,12 @@ import { isEventTypeIdShape } from '../lib/event-type-catalog';
 import { readEventTypeCatalog } from '../lib/event-type-catalog-read';
 import { isValidIanaTimezone, zonedDateTimeToUtcIso, zonedTimePart } from '../lib/event-datetime';
 import { listedFromForPublish } from '../lib/publish-grace';
+import {
+  evidenceUnavailable,
+  goLiveRefusal,
+  requireGoLiveEvidence,
+  type GoLiveEvidence,
+} from '../lib/go-live-evidence';
 import { explicitMapChoice, mapState } from '../lib/map-default';
 import {
   INVALID_ATTENDANCE_MODE_MESSAGE,
@@ -1783,6 +1789,8 @@ export async function handleUpdateEvent(
   // The status this PUT read before deciding; the UPDATE only lands if the row
   // still has it, so a concurrent Undo can never be reversed (with no grace).
   let observedStatus: string | undefined;
+  // Set only when this PUT moves the event INTO active: the codes that let it.
+  let goLiveEvidence: GoLiveEvidence | undefined;
 
   try {
     // Status changes go through the state machine — the same VALID_TRANSITIONS
@@ -1842,6 +1850,26 @@ export async function handleUpdateEvent(
             headers: { ...corsHeaders(request), 'X-Request-Id': rid },
           });
         }
+      }
+      // OSE-1420: a move INTO active needs one working code, the same read
+      // verify-qr makes (lib/go-live-evidence.ts). No working link and no
+      // switched-on poster is 409; a read that fails is 503, not "no code".
+      // active → active is not a move, so it asks for nothing.
+      if (from !== to && to === 'active') {
+        const decision = await requireGoLiveEvidence(env.DB, eventId, 'put_status', from);
+        if (decision.outcome === 'unavailable') {
+          return Response.json(
+            { ...evidenceUnavailable(), status: 503, requestId: rid },
+            { status: 503, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
+          );
+        }
+        if (decision.outcome === 'refused') {
+          return Response.json(
+            { ...goLiveRefusal(from, decision.evidence), status: 409, requestId: rid },
+            { status: 409, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
+          );
+        }
+        goLiveEvidence = decision.evidence;
       }
       // Publish grace window (lib/publish-grace.ts). A move INTO active starts
       // it; a move out clears it. active → active (a no-op) leaves it alone, so
@@ -1988,6 +2016,8 @@ export async function handleUpdateEvent(
       // panel was showing an older status.
       ...(observedStatus !== undefined ? { from: observedStatus } : {}),
       ...(listedFrom !== undefined ? { listedFrom } : {}),
+      // OSE-1420: a move into active says which codes let it, as a receipt.
+      ...(goLiveEvidence !== undefined ? { evidence: goLiveEvidence } : {}),
       ...(mapChosenNow !== null ? { map: mapState(mapChosenNow, false) } : {}),
       // W1: a ZIP the table lacks (saved) or sent with an online event (not).
       ...(updateWarnings.length > 0 ? { warnings: updateWarnings } : {}),

@@ -1731,6 +1731,20 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/go-live-evidence-doors.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 27
+    },
+    {
+      "file": "workers/oursharedevents/tests/go-live-evidence.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 27
+    },
+    {
       "file": "workers/oursharedevents/tests/h3-tagging.spec.ts",
       "bucket": "node",
       "needsReview": true,

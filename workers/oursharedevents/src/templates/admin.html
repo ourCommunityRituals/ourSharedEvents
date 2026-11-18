@@ -1919,6 +1919,8 @@
         var FAILURE_REASONS = {
           CORE_VALUES_MISSING: 'It needs a start time and an event type first.',
           INVALID_TRANSITION: 'It moved since this page loaded. The panel shows where it is now.',
+          NO_QR_EVIDENCE: 'It has no working link or poster code yet. Open "Codes on the poster" or place a poster, then try again.',
+          EVIDENCE_UNAVAILABLE: 'Its links and posters could not be checked just now. Nothing was changed.',
         };
         // window._adminRequestFailed(sentence, res, body, action): a request
         // failed. The toast says the plain sentence, and its details are the
@@ -9291,7 +9293,9 @@
       // PUT status. verify-qr is NOT the single door into `active`: PUT status
       // enforces the same transition table AND couples qr_verified to the target
       // state server-side (events.ts), so `active ⟺ qr_verified=1` holds no matter
-      // which door is used.
+      // which door is used. Both doors also read the event's codes first
+      // (lib/go-live-evidence.ts): with no working link and no switched-on
+      // poster the move is refused 409 NO_QR_EVIDENCE.
       // @ose-event-view:begin
       // OSE-1360: ONE {status, phase} -> every display of the selected event
       // (list badge, status panel, checklist, Next link, dashboard lifecycle).

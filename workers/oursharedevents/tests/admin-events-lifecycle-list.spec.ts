@@ -16,6 +16,7 @@ import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { handleAdminListEvents, handleCreateEvent, type EventsEnv } from '../src/handlers/events';
 import { giveCoreValues } from './helpers/core-values';
+import { giveGoLiveEvidence } from './helpers/go-live-evidence';
 
 const BRAND = 'ose-lifecycle-list';
 const ADMIN_HEADERS = { Authorization: 'Bearer test-admin-key-e2e-2026' };
@@ -84,6 +85,8 @@ async function seed(id: string, status: string, createdBy: string | null): Promi
     .bind(id, BRAND, `Lifecycle ${id}`, `slug-${id}`, status, createdBy)
     .run();
   await giveCoreValues(env.DB, id);
+  // OSE-1420: going live needs a working code; the refusal is go-live-evidence.spec.ts.
+  await giveGoLiveEvidence(env.DB, id);
 }
 
 const ME = 'me@lifecycle.test';
