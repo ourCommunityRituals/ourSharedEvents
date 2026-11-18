@@ -1326,6 +1326,99 @@ describe('build', () => {
     expect(JSON.stringify(notes)).not.toContain(ENV.ADMIN_KEY);
     expect(code).toBe(1);
   });
+
+  // OSE-2082: the reason was only in build-notes.json, inside an artifact (run
+  // 43533830657). Born red: with the reportBuildFailure call taken out of runBuild,
+  // the three cases below fail.
+  const failing = (env, fetch) => {
+    const { w, outDir } = setup([
+      { name: 'One', address: '1 Main St', node: 'oak-lawn', anchor: true },
+    ]);
+    const logs = [];
+    return rd
+      .runBuild({
+        env,
+        fs: w.fs,
+        wrangler: w.wrangler,
+        tmpDir: '/tmp',
+        log: (l) => logs.push(l),
+        fetch,
+        now: () => new Date('2026-11-04T12:00:00Z'),
+        outDir,
+        // no real waiting between the client's tries
+        sleep: async () => {},
+      })
+      .then((code) => ({ code, logs, w }));
+  };
+  const sponsor503 = async (url) =>
+    String(url).endsWith('/event-types') ? res(200, CATALOG) : res(503, {});
+
+  test('a failed build prints the build-notes error, and writes it to the step summary and the step output', async () => {
+    const env = { ...ENV, GITHUB_STEP_SUMMARY: '/gh/summary.md', GITHUB_OUTPUT: '/gh/output' };
+    const { code, logs, w } = await failing(env, sponsor503);
+    const why = 'GET /api/v2/admin/sponsors failed: 503 (3 tries)';
+    // the create's 503, then the read that would say whether it landed, 503 three times
+    const line = `POST /api/v2/admin/sponsors failed: 503; not sent again, the read after it failed: ${why}`;
+    expect(code).toBe(1);
+    expect(JSON.parse(w.files.get(path.join('/out', 'build-notes.json'))).error).toBe(line);
+    expect(logs).toContain(`build failed: ${line}`);
+    expect(w.files.get('/gh/summary.md')).toBe(`## Stock build failed\n\n${line}\n`);
+    expect(w.files.get('/gh/output')).toBe(`error=${line}\n`);
+    for (const text of [
+      logs.join('\n'),
+      w.files.get('/gh/summary.md'),
+      w.files.get('/gh/output'),
+    ]) {
+      for (const secret of [ENV.ADMIN_KEY, ENV.CF_ACCESS_CLIENT_ID, ENV.CF_ACCESS_CLIENT_SECRET]) {
+        expect(text).not.toContain(secret);
+      }
+    }
+  }, 30_000);
+
+  test('a build that cannot register its manifest says so the same way', async () => {
+    const { w, outDir } = setup([]);
+    const logs = [];
+    const code = await rd.runBuild({
+      env: { ...ENV, GITHUB_RUN_ID: '', GITHUB_OUTPUT: '/gh/output' },
+      fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: (l) => logs.push(l),
+      fetch: sponsor503,
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir,
+    });
+    expect(code).toBe(1);
+    expect(logs).toEqual(['build failed: manifest not registered in R2: GITHUB_RUN_ID is not set']);
+    expect(w.files.get('/gh/output')).toBe(
+      'error=manifest not registered in R2: GITHUB_RUN_ID is not set\n'
+    );
+  });
+
+  test('a green build prints no failure and writes no error output', async () => {
+    const { w, outDir } = setup([]);
+    const logs = [];
+    const code = await rd.runBuild({
+      env: { ...ENV, GITHUB_STEP_SUMMARY: '/gh/summary.md', GITHUB_OUTPUT: '/gh/output' },
+      fs: w.fs,
+      wrangler: w.wrangler,
+      tmpDir: '/tmp',
+      log: (l) => logs.push(l),
+      fetch: async (url) => res(200, String(url).endsWith('/event-types') ? CATALOG : {}),
+      now: () => new Date('2026-11-04T12:00:00Z'),
+      outDir,
+    });
+    expect(code).toBe(0);
+    expect(logs.filter((l) => l.startsWith('build failed'))).toEqual([]);
+    expect(w.files.has('/gh/output')).toBe(false);
+    expect(w.files.has('/gh/summary.md')).toBe(false);
+  });
+
+  test('the failure line is one line and is cut at 500 characters', () => {
+    expect(rd.buildFailureLine('a\nb\r\n  c')).toBe('a b c');
+    expect(rd.buildFailureLine('x'.repeat(900))).toBe(`${'x'.repeat(500)}…`);
+    expect(rd.buildFailureLine(null)).toBe('no reason was recorded');
+  });
 });
 
 describe('final review', () => {

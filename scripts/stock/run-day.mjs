@@ -864,13 +864,15 @@ function need(env, name) {
   return v;
 }
 
-export function clientFrom(env, fetchFn) {
+export function clientFrom(env, fetchFn, sleep) {
   return createClient({
     baseUrl: STOCK_BASE_URL,
     adminKey: need(env, 'ADMIN_KEY'),
     accessClientId: need(env, 'CF_ACCESS_CLIENT_ID'),
     accessClientSecret: need(env, 'CF_ACCESS_CLIENT_SECRET'),
     fetch: fetchFn,
+    // the client's pacing and retry waits; a test passes its own
+    ...(sleep ? { sleep } : {}),
   });
 }
 
@@ -967,6 +969,7 @@ export async function runBuild({
   log = () => {},
   setTimer,
   clearTimer,
+  sleep,
 }) {
   // The day the seed job placed the rows on, when it says so; else today.
   const loadPath = join(outDir, 'load.json');
@@ -1000,6 +1003,7 @@ export async function runBuild({
   } catch (err) {
     notes.error = `manifest not registered in R2: ${err.message}`;
     writeNotes();
+    reportBuildFailure({ env, fs, log, error: notes.error });
     return 1;
   }
   let latest = empty;
@@ -1009,7 +1013,7 @@ export async function runBuild({
     persister.record(m);
   };
   try {
-    const client = clientFrom(env, fetchFn);
+    const client = clientFrom(env, fetchFn, sleep);
     const catalog = await fetchCatalog(client);
     // The owner's photographs in stock/art come first and need no token
     // (owner 2026-11-05); Instagram posts are added when a token is set.
@@ -1052,7 +1056,30 @@ export async function runBuild({
     notes.error = notes.error ? `${notes.error}; ${msg}` : msg;
   }
   writeNotes();
+  if (!notes.ok) reportBuildFailure({ env, fs, log, error: notes.error });
   return notes.ok ? 0 : 1;
+}
+
+/**
+ * The build says why it failed (OSE-2082): the reason was only in
+ * stock-out/build-notes.json, so finding it meant downloading the artifact (run
+ * 43533830657). It goes to the log, to the step summary and, as the step output
+ * `error`, to the announce job. One line: the admin client's errors carry a
+ * method, a path and a status and never a header (client.mjs), and the runner
+ * masks every secret this step holds.
+ */
+export function buildFailureLine(error) {
+  const text = String(error || 'no reason was recorded')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > 500 ? `${text.slice(0, 500)}…` : text;
+}
+
+function reportBuildFailure({ env, fs, log, error }) {
+  const line = buildFailureLine(error);
+  log(`build failed: ${line}`);
+  summarize(env, fs, `## Stock build failed\n\n${line}\n`);
+  if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, `error=${line}\n`);
 }
 
 /**

@@ -147,7 +147,7 @@ const CALLS = [
     handler: [`${HANDLERS}/poster-deployments.ts`, 'handleAdminCreatePosterDeployment'],
     stock: [
       BUILD,
-      /const (\w+) = await client\.post\(`\/api\/v2\/admin\/events\/\$\{ev\.id\}\/poster-deployments`/,
+      /const (\w+) = await client\.post\(\s*`\/api\/v2\/admin\/events\/\$\{ev\.id\}\/poster-deployments`/,
     ],
     fake: W.posterCreate({ id: 'pd_1', qr_token: 'qrt_1' }),
   },
@@ -196,6 +196,32 @@ const CALLS = [
       /const (\w+) = await client\.get\('\/api\/v2\/events'\)/,
     ],
     fake: W.publicEvents([]),
+  },
+  // OSE-2082: the reads that say whether a failed create landed. Appended, so the
+  // indexes used below stay put.
+  {
+    call: 'GET /api/v2/admin/sponsors?brand_id=',
+    handler: [`${HANDLERS}/sponsors.ts`, 'handleAdminListSponsors'],
+    stock: [
+      BUILD,
+      /const (\w+) = await client\.get\('\/api\/v2\/admin\/sponsors\?brand_id=root'\)/,
+    ],
+    fake: W.sponsorList([]),
+  },
+  {
+    call: 'GET /api/v2/admin/events',
+    handler: [`${HANDLERS}/events.ts`, 'handleAdminListEvents'],
+    stock: [BUILD, /const (\w+) = await client\.get\('\/api\/v2\/admin\/events\?limit=100'\)/],
+    fake: W.adminEventList([]),
+  },
+  {
+    call: 'GET /api/v2/admin/events/:id/poster-deployments',
+    handler: [`${HANDLERS}/poster-deployments.ts`, 'handleAdminListPosterDeployments'],
+    stock: [
+      BUILD,
+      /const (\w+) = await client\.get\(`\/api\/v2\/admin\/events\/\$\{ev\.id\}\/poster-deployments`\)/,
+    ],
+    fake: W.posterList([]),
   },
 ];
 
