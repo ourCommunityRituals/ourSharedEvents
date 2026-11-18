@@ -272,7 +272,8 @@ describe('street map | the landing page handler', () => {
       expect(html).not.toContain('data-testid="amap-dot"');
       expect(html).not.toContain('data-testid="amap-zone"');
       expect(html).not.toContain('data-testid="amap-streets"');
-      expect(html).toContain('href="#amap-dot-1" data-testid="amap-place-link"');
+      expect(html).not.toContain('data-testid="amap-place-link"');
+      expect(html).not.toContain('data-testid="amap-legend"');
       expect(html).toContain('<span class="amap-t" id="amap-dot-1"></span><section class="amap-p');
     }
     expect(broken.gets.length).toBeGreaterThan(0);
@@ -330,7 +331,8 @@ describe('street map | the landing page handler', () => {
     expect(zoomed).not.toContain('data-testid="amap-zone"');
     expect(zoomed).not.toContain('data-testid="amap-streets"');
     expect(zoomed).not.toContain('data-testid="amap-credit"');
-    expect(zoomed).toContain('href="#amap-dot-1" data-testid="amap-place-link"');
+    expect(zoomed).not.toContain('data-testid="amap-place-link"');
+    expect(zoomed).not.toContain('data-testid="amap-legend"');
   });
 
   // The page, class by class (owner 2026-11-10). The loader's own cases are in

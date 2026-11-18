@@ -552,10 +552,8 @@ describe('a tapped hexagon: /?area= zooms into its events (owner, 2026-11-09)', 
     const zoom = zoomOf(html);
     expect(zoom).not.toContain(String(RIPH.lat));
     expect(zoom).not.toContain(String(RIPH.lng));
-    // The list row and the panel are the same numbered place.
-    expect(zoom).toContain(
-      '<a class="amap-zoom" href="#amap-dot-' + shop!.n + '" data-testid="amap-place-link">'
-    );
+    // No text list of places: the panel is the numbered place.
+    expect(zoom).not.toContain('data-testid="amap-place-link"');
     expect(zoom).toContain('<span class="amap-t" id="amap-dot-' + shop!.n + '"></span>');
   });
 

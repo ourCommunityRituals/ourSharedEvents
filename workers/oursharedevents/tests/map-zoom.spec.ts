@@ -202,8 +202,8 @@ describe('the zoomed map', () => {
     expect(cls).toEqual(
       expect.arrayContaining(['amap-f', 'type-trivia', 'type-bingo', 'when-week', 'when-month'])
     );
-    // Each event's link in the list carries its own classes.
-    expect(html).toMatch(/<span class="amap-f type-bingo when-month"><a href="\/events\/b"/);
+    // Each event's card in the place panel carries its own classes.
+    expect(html).toMatch(/<article[^>]*class="[^"]*amap-f type-bingo when-month[^"]*"[^>]*>/);
   });
 
   test('an address dot is marked as a block; a business dot is not', () => {
@@ -237,12 +237,15 @@ describe('the zoomed map', () => {
     expect(r.areas.map((a) => a.cell)).toEqual([CELL]);
   });
 
-  test('an event without a place is listed under the map, not drawn', () => {
+  test('an event without a place is not drawn, and the map carries no text list of places', () => {
     const html = zoomed([ev('a'), ev('nowhere', { lat: null, lon: null })]).html;
-    expect(html).toContain('data-testid="amap-unplaced"');
-    expect(html).toMatch(
-      /amap-unplaced"><strong>Somewhere in this area:<\/strong>.*\/events\/nowhere/
-    );
+    // The event cards below the map are the list (owner, 2026-11-17).
+    expect(html).not.toContain('data-testid="amap-unplaced"');
+    expect(html).not.toContain('data-testid="amap-legend"');
+    expect(html).not.toContain('data-testid="amap-legend-dot"');
+    expect(html).not.toContain('data-testid="amap-place-link"');
+    expect(html).not.toContain('/events/nowhere');
+    expect(html).toContain('id="amap-places"');
   });
 
   test('names are escaped in the dot title and the list', () => {
@@ -376,27 +379,44 @@ describe('no street map: the places are a list, with their panels', () => {
     expect(zoomed([ev('a')]).html).not.toContain('amap-no-tiles');
   });
 
-  test('sunny: every place is a row that opens its panel, and the panels are all there', () => {
+  test('sunny: no text list of places is drawn, and the panels are all there', () => {
     const html = bare([ev('a'), ev('b', far)]).html;
     for (const n of [1, 2]) {
-      expect(html).toContain(
-        `<a class="amap-zoom" href="#amap-dot-${n}" data-testid="amap-place-link">Place ${n}</a>: `
-      );
       expect(html).toContain(
         `<span class="amap-t" id="amap-dot-${n}"></span><section class="amap-p`
       );
     }
-    expect(html.match(/data-testid="amap-legend-dot"/g)).toHaveLength(2);
+    expect(html).not.toContain('data-testid="amap-legend"');
+    expect(html).not.toContain('data-testid="amap-legend-dot"');
+    expect(html).not.toContain('data-testid="amap-place-link"');
     expect(html.match(/data-testid="amap-panel"/g)).toHaveLength(2);
     expect(html).toContain('data-testid="amap-open"');
     expect(html).toContain('data-testid="share-btn"');
     expect(html).toContain('data-testid="amap-back"');
   });
 
-  test('sunny: with a street map the list rows open the same panels as the dots', () => {
+  test('sunny: with a street map the dots open the panels, and no list row does', () => {
     const html = zoomed([ev('a'), ev('b', far)]).html;
-    expect(html.match(/href="#amap-dot-2" data-testid="amap-place-link"/g)).toHaveLength(1);
+    expect(html).not.toContain('data-testid="amap-place-link"');
     expect(html).toMatch(/<a href="#amap-dot-2" class="[^"]*" data-testid="amap-dot"/);
+  });
+
+  // @born-red no-tiles note still sending people to the removed place list | method: old en, es and pl text put back, seen failing at the first language (en)
+  test('edge: with no street map the note points at the event cards, not at a place list, in all four languages', () => {
+    const note = (lang: string) =>
+      /data-testid="amap-no-tiles" role="status"><p>(.*?)<\/p>/s.exec(
+        bare([ev('a')], { lang }).html
+      )![1]!;
+    const want: Record<string, [string, RegExp]> = {
+      en: ['Its events are listed below.', /Open a place|places are listed/],
+      es: ['Sus eventos aparecen abajo.', /Abre un lugar|Sus lugares/],
+      pl: ['Jego wydarzenia są wymienione poniżej.', /Otwórz miejsce|Jego miejsca/],
+      ar: ['فعالياتها مذكورة أدناه.', /افتح مكانًا|أماكنها/],
+    };
+    for (const [lang, [has, gone]] of Object.entries(want)) {
+      expect(note(lang), lang).toContain(has);
+      expect(note(lang), lang).not.toMatch(gone);
+    }
   });
 
   test('the caption speaks of places, not dots, in English and Spanish', () => {
@@ -423,15 +443,13 @@ describe('no street map: the places are a list, with their panels', () => {
     expect(ids(bare(events).html)).toEqual(['1', '2']);
   });
 
-  test('edge: an event with no coordinates is still listed, and the pills still filter the rows', () => {
+  test('edge: the pills still filter each place panel by its events', () => {
     const html = bare([
       ev('a', { classes: ['type-bingo', 'when-month'] }),
       ev('nowhere', { lat: null, lon: null }),
     ]).html;
-    expect(html).toContain('data-testid="amap-unplaced"');
-    expect(html).toMatch(
-      /<li value="1" class="amap-f type-bingo when-month" data-testid="amap-legend-dot">/
-    );
+    expect(html).not.toContain('data-testid="amap-unplaced"');
+    expect(html).toMatch(/<section class="amap-p amap-f type-bingo when-month"/);
   });
 
   test('never who: no coordinate reaches the page, and no link reaches tracking', () => {
@@ -1235,13 +1253,11 @@ describe('the zoomed area, edge by edge', () => {
     expect(html).toContain(
       '</a><a href="#amap-dot-2" class="amap-f amap-d2" data-testid="amap-dot" data-exact="1" data-count="2"><title>Spot 2: 2 events</title>'
     );
-    expect(html).toContain('<li value="1" class="amap-f" data-testid="amap-legend-dot">');
-    expect(html).toContain('</li><li value="2" class="amap-f" data-testid="amap-legend-dot">');
-    expect(html).toContain(
-      'data-testid="amap-event">Event a</a></span> <span class="amap-f"><a href="/events/b"'
+    // No text list sits between the drawing and the caption, only the anchor.
+    expect(html).not.toContain('data-testid="amap-legend-dot"');
+    expect(html).toMatch(
+      /<\/svg>\s*<span id="amap-places"[^>]*><\/span>\s*<figcaption id="amap-caption"/
     );
-    // Every event is placed, so nothing sits between the list and the caption.
-    expect(html).toMatch(/<\/li><\/ol>\s*<figcaption id="amap-caption"/);
   });
 
   test('the way back, word for word', () => {
