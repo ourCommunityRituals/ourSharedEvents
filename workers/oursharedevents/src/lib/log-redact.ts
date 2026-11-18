@@ -32,14 +32,18 @@
 export const REDACTED = '[redacted]';
 
 /**
- * Request headers whose value is a credential, lower-cased. Any header whose
- * name ends in `cookie` counts as well (see isCredentialKey), which covers the
- * response header that sets one: a line that prints it is a leak all the same.
+ * Request headers whose value is a credential, lower-cased: the ones
+ * lib/unhandled-error-log.ts reads off a failed request to take their values
+ * out of the error text.
+ *
+ * The cookie header is not in this list, on purpose. Only three files may read
+ * a request's cookie (votes-never-who.invariant.spec.ts, owner 2026-11-18: no
+ * new reader), and nothing here asks a request for it. A cookie is masked by
+ * the name it is logged under instead: see isCredentialKey.
  */
 export const CREDENTIAL_HEADERS: readonly string[] = [
   'authorization',
   'proxy-authorization',
-  'cookie',
   'cf-access-jwt-assertion',
   'cf-access-client-secret',
   'cf-authorization',
@@ -53,25 +57,35 @@ function keyForm(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+/**
+ * Any name that ends in "cookie": the request header, the response header that
+ * sets one, and a field named after either. It is matched as a name in what is
+ * being logged; no cookie is read to do it.
+ */
+const COOKIE_NAMED = /cookie$/;
+
+/** True for a name whose value is masked wherever it is logged. */
 export function isCredentialKey(name: string): boolean {
   const key = keyForm(name);
-  return CREDENTIAL_KEYS.has(key) || key.endsWith('cookie');
+  return CREDENTIAL_KEYS.has(key) || COOKIE_NAMED.test(key);
 }
 
-// One alternation per header, with `-` and `_` both accepted between its words;
-// `cookie` also stands for any longer name that ends in it.
-const HEADER_ALTERNATION = CREDENTIAL_HEADERS.map((h) =>
-  h === 'cookie' ? '[a-z0-9_-]*cookie' : h.split('-').join('[-_]?')
-).join('|');
+// One alternation per header, with `-` and `_` both accepted between its
+// words, and one more for any name that ends in "cookie".
+const HEADER_ALTERNATION = [
+  ...CREDENTIAL_HEADERS.map((h) => h.split('-').join('[-_]?')),
+  '[a-z0-9_-]*cookie',
+].join('|');
 
 /**
  * `"authorization": "…"`, `authorization=…`, `Cookie: a=b; c=d`. An unquoted
  * value runs to the end of its line, or to the quote that closes the string it
- * is written inside, so a JSON line stays JSON after masking.
+ * is written inside, so a JSON line stays JSON after masking. A piece of the
+ * value that was masked already (`a=[redacted]; b=…`) does not end it.
  */
 const HEADER_PAIR = new RegExp(
   `((?:^|[^a-z0-9_-])["']?(?:${HEADER_ALTERNATION})["']?\\s*[:=]\\s*)` +
-    `("(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|[^\\r\\n,}\\]"'\\\\]+)`,
+    `("(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|(?:\\[redacted\\]|[^\\r\\n,}\\]"'\\\\])+)`,
   'gi'
 );
 const BEARER = /\b(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi;
