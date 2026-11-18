@@ -36,6 +36,7 @@ import { pepperEpoch } from '../src/lib/anon-id-hash';
 import { matchVotablesRoute } from '../src/handlers/votables';
 import {
   drawUniform,
+  finalizeVoteSet,
   runVoteFinalJob,
   VOTE_WINDOW_DEFAULT_SECONDS,
   VOTE_WINDOW_MAX_SECONDS,
@@ -784,6 +785,29 @@ describe('7. a booth must be a stall of the same event, in use', () => {
 // ── 8: audit ─────────────────────────────────────────────────────────────────
 
 describe('8. every change is audited, with no detail', () => {
+  test('the audit row holds the reference the answer carries (PR #1432 review)', async () => {
+    const ctx = createExecutionContext();
+    const res = await route(
+      new Request(`https://ose.test${vp(A1)}`, {
+        method: 'POST',
+        headers: { ...A, 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      }),
+      routerEnv,
+      ctx
+    );
+    await waitOnExecutionContext(ctx);
+    const header = res.headers.get('X-Request-Id');
+    const body = (await res.json()) as Json;
+    expect(header).toBeTruthy();
+    expect(body.requestId).toBe(header);
+    const rows = await all(
+      `SELECT request_id FROM admin_audit_log WHERE resource_id = ? AND action = 'VOTE_SET_CREATE'`,
+      A1
+    );
+    expect(rows.map((r) => r.request_id)).toEqual([header]);
+  });
+
   test('each write writes its row; a refusal is denied; a read writes none', async () => {
     const songId = await openNight(); // create, object create, open
     await call('PUT', vp(A1, `/objects/${songId}`), A, { label: 'Song two' });
@@ -969,6 +993,29 @@ describe('10. every set reaches final: the nightly job', () => {
     );
     await runVoteFinalJob({ DB: tenv.DB });
     expect(await setRow(NODATE)).toMatchObject({ is_final: 1, state: 'closed' });
+  });
+
+  test('the final step checks again that the set is due: an event moved into the future is left alone (PR #1432 review)', async () => {
+    await call('POST', vp(A1), A, {});
+    const setId = (await setRow(A1))?.id as string;
+    // The job chose this set while its event was past; the event then moved.
+    await run(
+      `UPDATE events SET start_date = ?, end_date = ? WHERE id = ?`,
+      '2099-06-01',
+      '2099-06-01',
+      A1
+    );
+    expect(await finalizeVoteSet(tenv.DB, setId, A1, 'job', new Date().toISOString())).toBe(false);
+    expect((await setRow(A1))?.is_final).toBe(0);
+    // Still past: the same call makes it final.
+    await run(
+      `UPDATE events SET start_date = ?, end_date = ? WHERE id = ?`,
+      daysAgo(9),
+      daysAgo(9),
+      A1
+    );
+    expect(await finalizeVoteSet(tenv.DB, setId, A1, 'job', new Date().toISOString())).toBe(true);
+    expect((await setRow(A1))?.is_final).toBe(1);
   });
 
   test('tallies go 30 days after final, not before', async () => {

@@ -1508,9 +1508,12 @@ export async function route(
       return authRes;
     }
     const response = await handleVotables(request, env, votesEventId, votablesRoute);
-    if (votablesRoute.action)
-      _audit(reqId, votablesRoute.action, _auditOutcome(response), 'event', votesEventId);
-    return response;
+    if (!votablesRoute.action) return response; // a read is not audited
+    // The handler mints its own X-Request-Id; the audit row holds that same
+    // reference, so a lookup by the answer's reference finds the row.
+    const ref = _withReference(response, reqId);
+    _audit(ref.ref, votablesRoute.action, _auditOutcome(response), 'event', votesEventId);
+    return ref.res;
   }
 
   // POST /api/v2/admin/events/:id/repeat — OSE-1531 "Repeat this event": a DRAFT

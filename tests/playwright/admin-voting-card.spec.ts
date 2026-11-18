@@ -13,6 +13,9 @@
  *   3. The card never shows a count: no "vote" or "votes" next to a number.
  *   4. At 375px: no sideways scroll, every control 44px or more, every field's
  *      text 16px or more, and axe finds nothing serious, light and dark.
+ *   5. A write that finishes after another event is selected leaves the new
+ *      event's card alone, and the next action goes to the new event (PR #1432
+ *      review).
  *
  * Runs in the blocking phone audit (playwright.mobile.config.ts), against the
  * local worker that config starts with a local pepper. The event is made here.
@@ -43,6 +46,33 @@ test.describe('admin: the Voting card', () => {
     eventId = ((await res.json()) as { id?: string }).id ?? '';
     expect(eventId).not.toBe('');
   });
+
+  async function makeEvent(
+    request: import('@playwright/test').APIRequestContext,
+    title: string
+  ): Promise<string> {
+    const res = await request.post('/api/v2/admin/events', {
+      headers: { ...AUTH, 'Content-Type': 'application/json' },
+      data: {
+        attendance_mode: 'in_person',
+        title,
+        start_date: '2027-05-15',
+        location: 'Eagles Hall',
+      },
+    });
+    expect(res.ok(), await res.text()).toBe(true);
+    return ((await res.json()) as { id: string }).id;
+  }
+
+  async function selectEvent(page: Page, id: string): Promise<void> {
+    // From an event's view the way back is "Your events"; from the start, the path chip.
+    const back = page.getByTestId('ecb-nav-your-events');
+    if (await back.isVisible()) await back.click();
+    else await page.click('[data-testid="admin-path-events"]');
+    const row = page.locator(`[data-testid="event-row-${id}"]`);
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.click();
+  }
 
   async function openCard(page: Page): Promise<void> {
     await page.setViewportSize({ width: 375, height: 812 });
@@ -105,6 +135,55 @@ test.describe('admin: the Voting card', () => {
     await page.getByTestId('votes-reopen').click();
     await expect(summary(page)).toHaveText('Voting is open.');
     await expect(page.getByTestId('votes-msg')).toHaveText('Voting is open again.');
+  });
+
+  test('a write that ends after another event is selected leaves the new card alone', async ({
+    page,
+    request,
+  }) => {
+    const first = await makeEvent(request, `Vote night A ${Date.now()}`);
+    const second = await makeEvent(request, `Vote night B ${Date.now()}`);
+    const made = await request.post(`/api/v2/admin/events/${first}/votables`, {
+      headers: { ...AUTH, 'Content-Type': 'application/json' },
+      data: {},
+    });
+    expect(made.status()).toBe(201);
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.setExtraHTTPHeaders(AUTH);
+    await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+    await selectEvent(page, first);
+    await page.getByTestId('votes-toggle').click();
+    await expect(summary(page)).toHaveText('Voting is set up, not open yet.');
+
+    // Hold the open request for the first event until the second is on screen.
+    let release: () => void = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    await page.route(`**/api/v2/admin/events/${first}/votables/open`, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.getByTestId('votes-open').click();
+    await selectEvent(page, second);
+    await expect(summary(page)).toHaveText('Voting is not set up for this event.');
+
+    const answered = page.waitForResponse(`**/api/v2/admin/events/${first}/votables/open`);
+    release();
+    await answered;
+    await page.waitForTimeout(500);
+    await expect(summary(page)).toHaveText('Voting is not set up for this event.');
+    await expect(page.getByTestId('votes-msg')).toHaveText('');
+    expect(
+      await page.evaluate(() => (window as unknown as { _votesEventId: string })._votesEventId)
+    ).toBe(second);
+
+    // The next action goes to the event on screen.
+    await page.getByTestId('votes-make-btn').click();
+    await expect(summary(page)).toHaveText('Voting is set up, not open yet.');
+    const read = await request.get(`/api/v2/admin/events/${second}/votables`, { headers: AUTH });
+    expect(((await read.json()) as { set: { event_id: string } | null }).set?.event_id).toBe(
+      second
+    );
   });
 
   test('the card never shows a count', async ({ page }) => {

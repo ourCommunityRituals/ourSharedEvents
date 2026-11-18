@@ -7403,8 +7403,27 @@
         });
       };
       window._votesSeq = 0;
+      /**
+       * OSE-2127: read the selected event's vote, then fill the card. The card
+       * belongs to the new event at once (PR #1432 review): a write still in
+       * flight for the event before sees the change and does nothing more, and
+       * the card shows no button of the old event while it reads.
+       */
       window.loadVotes = async function (id) {
         var seq = ++window._votesSeq;
+        var next = id ? String(id) : '';
+        if (window._votesEventId !== next) {
+          window._votesEventId = next;
+          var byId = function (x) { return document.getElementById(x); };
+          var list = byId('votes-list');
+          if (list) while (list.firstChild) list.removeChild(list.firstChild);
+          ['votes-make', 'votes-set-actions', 'votes-add', 'votes-empty', 'votes-team-note'].forEach(function (x) {
+            var el = byId(x);
+            if (el) el.hidden = true;
+          });
+          var summary = byId('votes-summary');
+          if (summary && next) summary.textContent = 'Reading the vote…';
+        }
         if (!id) { window.renderVotesCard(null, null); return; }
         var r = await window.votesFetch('/api/v2/admin/events/' + encodeURIComponent(String(id)) + '/votables');
         if (seq !== window._votesSeq) return;
@@ -7417,6 +7436,8 @@
         if (btn) btn.disabled = true;
         var r = await window.votesFetch('/api/v2/admin/events/' + encodeURIComponent(id) + '/votables' + tail, 'POST', body);
         if (btn) btn.disabled = false;
+        // Another event was selected while this write ran: leave its card alone.
+        if (window._votesEventId !== id) return { ok: r.ok, status: r.status, data: r.data, stale: true };
         await window.loadVotes(id);
         if (r.ok) window.votesSay(done, false);
         else window.votesSay(window.votesRefusal(r.data && r.data.code), true);
@@ -7456,8 +7477,9 @@
           return null;
         }
         var r = await window.votesWrite(btn, '/objects', { kind: kind, label: label }, (kind === 'stall' ? 'Stall' : 'Song') + ' added.');
-        if (r && r.ok) input.value = '';
-        else if (r && r.data && r.data.code === 'INVALID_LABEL') {
+        if (!r || r.stale) return r;
+        if (r.ok) input.value = '';
+        else if (r.data && r.data.code === 'INVALID_LABEL') {
           error.textContent = window.votesRefusal('INVALID_LABEL');
           error.hidden = false;
           input.setAttribute('aria-invalid', 'true');

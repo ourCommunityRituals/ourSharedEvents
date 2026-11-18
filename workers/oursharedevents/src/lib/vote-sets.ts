@@ -403,6 +403,25 @@ const FINALIZABLE = {
 } as const;
 
 /**
+ * A set is due for the nightly job (decision 4): its event's last date is more
+ * than 7 days ago, or, with no date, the set has been untouched for 7 days with
+ * no object window in that time. `set` names the vote set in the statement,
+ * and `e` the event row. It takes the three bound values in DUE_BINDS.
+ */
+const DUE_WINDOW = (set: string) => `((COALESCE(e.end_date, e.start_date) IS NOT NULL
+      AND substr(COALESCE(e.end_date, e.start_date), 1, 10) < date('now', ?))
+   OR (COALESCE(e.end_date, e.start_date) IS NULL
+      AND ${set}.updated_at < datetime('now', ?)
+      AND NOT EXISTS (SELECT 1 FROM votable_objects o
+                       WHERE o.set_id = ${set}.id
+                         AND o.closes_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?))))`;
+const DUE_BINDS = [
+  `-${VOTE_FINAL_AFTER_DAYS} days`,
+  `-${VOTE_FINAL_AFTER_DAYS} days`,
+  `-${VOTE_FINAL_AFTER_DAYS} days`,
+];
+
+/**
  * Make one set final, for good, in one batch: its objects close, the set closes,
  * is_final becomes 1, T and V become null, and its receipts, participant
  * markers and team markers are deleted. Each delete runs only when the set is
@@ -417,21 +436,29 @@ export async function finalizeVoteSet(
   nowIso: string
 ): Promise<boolean> {
   const may = FINALIZABLE[mode]();
+  // The job checks again, in the same statements, that the set is still due:
+  // an event moved into the future after the job chose the set is left alone
+  // (PR #1432 review). An admin's finalize has no date rule.
+  const due =
+    mode === 'job'
+      ? `AND EXISTS (SELECT 1 FROM events e WHERE e.id = ? AND ${DUE_WINDOW('vote_sets')})`
+      : '';
+  const dueBinds = mode === 'job' ? [eventId, ...DUE_BINDS] : [];
   const results = await db.batch([
     db
       .prepare(
         `UPDATE votable_objects SET state = 'closed', closes_at = NULL, updated_at = ?
           WHERE set_id = ? AND event_id = ? AND state <> 'closed'
-            AND set_id IN (SELECT id FROM vote_sets WHERE id = ? AND is_final = 0 AND ${may})`
+            AND set_id IN (SELECT id FROM vote_sets WHERE id = ? AND is_final = 0 AND ${may} ${due})`
       )
-      .bind(hourStamp(nowIso), setId, eventId, setId),
+      .bind(hourStamp(nowIso), setId, eventId, setId, ...dueBinds),
     db
       .prepare(
         `UPDATE vote_sets
             SET is_final = 1, final_at = ?, state = 'closed', secret_margin = NULL, secret_floor = NULL, updated_at = ?
-          WHERE id = ? AND event_id = ? AND is_final = 0 AND ${may}`
+          WHERE id = ? AND event_id = ? AND is_final = 0 AND ${may} ${due}`
       )
-      .bind(hourStamp(nowIso), hourStamp(nowIso), setId, eventId),
+      .bind(hourStamp(nowIso), hourStamp(nowIso), setId, eventId, ...dueBinds),
     db
       .prepare(
         `DELETE FROM vote_receipts
@@ -873,22 +900,11 @@ export async function runVoteFinalJob(env: VoteFinalJobEnv): Promise<VoteFinalJo
         `SELECT s.id, s.event_id FROM vote_sets s
            JOIN events e ON e.id = s.event_id
           WHERE s.is_final = 0 AND ${FINALIZABLE.job('s.')}
-            AND ((COALESCE(e.end_date, e.start_date) IS NOT NULL
-                  AND substr(COALESCE(e.end_date, e.start_date), 1, 10) < date('now', ?))
-              OR (COALESCE(e.end_date, e.start_date) IS NULL
-                  AND s.updated_at < datetime('now', ?)
-                  AND NOT EXISTS (SELECT 1 FROM votable_objects o
-                                   WHERE o.set_id = s.id
-                                     AND o.closes_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?))))
+            AND ${DUE_WINDOW('s')}
           ORDER BY s.id
           LIMIT ?`
       )
-      .bind(
-        `-${VOTE_FINAL_AFTER_DAYS} days`,
-        `-${VOTE_FINAL_AFTER_DAYS} days`,
-        `-${VOTE_FINAL_AFTER_DAYS} days`,
-        JOB_BATCH
-      )
+      .bind(...DUE_BINDS, JOB_BATCH)
       .all<{ id: string; event_id: string }>();
     for (const { id, event_id } of due.results ?? []) {
       try {
