@@ -6,9 +6,9 @@ loops_run: 5
 team: base
 gate: stop
 cumulative_score: 0
-system_score: 54
+system_score: 85
 pr: 1417
-unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 1, medium: 3, low: 4 }
+unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 0, medium: 2, low: 0 }
 ---
 
 # CCR: ADR-040 decided text (Voting S1, OSE-2123)
@@ -26,9 +26,9 @@ Date 2026-11-18. Five loops. Repo `main` at `0459690a`. Subject: ADR-040 as amen
 | Item                  | Result                                                                                                                                   |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Cumulative score      | **0%**. Loop 1 alone scored 0.                                                                                                           |
-| System score          | **54%** after the owner's answers and draft PR #1420 (addendum 3). It was 0% at the end of the run. It counts text in an unmerged PR.    |
+| System score          | **85%** after the owner's answers, draft PR #1420 and the confirmation pass (addendum 4). It was 0% at the end of the run, then 54%.     |
 | Assessment confidence | 70 → 74 → 78 → 80 → 82. It rose in every loop. Loop 5 checked the citations and merged double counts.                                    |
-| Gate                  | **Stop.** 54% is under 95%. Open: K3 (split S4a and S3), H7 (fun report ticket), K8 (story format), Q8-2 (owner), G7, T9 to T11.         |
+| Gate                  | **Stop.** 85% is under 95%. Two owner questions are open: Q13 (a secret random voter floor) and Q14 (one vote feeding two results).      |
 | Security Critical     | **None.** Nothing is built. G2 is an accepted reduction (Q8 A), not a fix.                                                               |
 | Recommendation        | Merge #1420 if the owner agrees with its two flagged points. Close K3, H7, K8 and Q8-2, then run a confirmation loop on the merged text. |
 
@@ -160,16 +160,16 @@ Score: 90%
 | T6       | Medium   | 1    | N5 is not among OSE-1193's children. The D10 row says N1 to N5 were created. The Implementation Notes call them "proposed".                                                                                  | ADR l.37, 203; Linear children list                                           | closed: Implementation Notes and D10 row (PR #1420)                                                 |
 | T7       | Medium   | 1    | N4 lacks R6 (`assert_minted_min`). N3 lacks the new gate list.                                                                                                                                               | OSE-2132; OSE-2131                                                            | closed: OSE-2131 and OSE-2132 updated                                                               |
 | T8       | Medium   | 1    | The ADR index still lists ADR-040 as Proposed, and #1417 does not change it (an OSE-2123 acceptance item).                                                                                                   | `docs/adr/README.md:58`; #1417 changes 2 files                                | closed: index row Accepted (PR #1420)                                                               |
-| T9       | Low      | 1    | OSE-2123's acceptance says one open item. The ADR has two (report detail, wording).                                                                                                                          | OSE-2123; ADR l.150-153                                                       | open (ticket)                                                                                       |
-| T10      | Low      | 1    | The D11 row does not say whether "one vote set per event" was accepted.                                                                                                                                      | ADR l.38                                                                      | open (edit E11)                                                                                     |
-| T11      | Low      | 1    | D7's rewrite of OSE-513 and OSE-518 is not recorded or ticketed (inferred).                                                                                                                                  | readiness worksheet D7                                                        | open (ticket)                                                                                       |
+| T9       | Low      | 1    | OSE-2123's acceptance says one open item. The ADR has two (report detail, wording).                                                                                                                          | OSE-2123; ADR l.150-153                                                       | closed: OSE-2123 acceptance names the open items                                                    |
+| T10      | Low      | 1    | The D11 row does not say whether "one vote set per event" was accepted.                                                                                                                                      | ADR l.38                                                                      | closed: D11 row records one set per event (PR #1420)                                                |
+| T11      | Low      | 1    | D7's rewrite of OSE-513 and OSE-518 is not recorded or ticketed (inferred).                                                                                                                                  | readiness worksheet D7                                                        | closed: conflict notes on OSE-513 and OSE-518; the owner rewrites or cancels them                   |
 | G1       | High     | 2    | The set counters and admin surfaces (S3 list, live monitor, audit details) are not barred before the end. With one song open, a live counter is a live song count.                                           | OSE-2125; `live-monitor.ts:1-31`; ADR l.78                                    | closed: decision 7, no surface before final (PR #1420); S3 test                                     |
 | G2       | High     | 2    | One person with 8 browsers can learn a lone voter's side. The card states "zero or not", not this. Dissent: Dr of Security (loop 3) asked for Medium.                                                        | `count-floor.ts:38-43, 159-167`; ADR l.135-140                                | closed: accepted reduction, not fixed (Q8 A, PR #1420); about 1 in 5 per try remains                |
 | G3       | High     | 2    | N1 (OW-220) is not bound by decision 4: finality, end, kill switch, audit, no count in the reply. "A replay is a new object" can add to a final set.                                                         | OW-220; ADR l.64, 78                                                          | closed: decision 3 (PR #1420); OW-220 updated                                                       |
 | G4       | Medium   | 2    | N1 has no brand-binding mechanism. `WKRP_SERVICE_TOKEN` is one shared token (lowered in loop 5: N1 already requires the refusal).                                                                            | `shared-report-auth.ts:229-238`                                               | closed: OW-220 requires a brand-bound token                                                         |
 | G5       | Medium   | 2    | The timestamp gate's regex misses `votable_objects`, and S2 says "timestamps at the hour" next to `closes_at` for a 2:16 song.                                                                               | `timestamp-precision.invariant.spec.ts:728`; OSE-2125                         | closed: OSE-2125 updated                                                                            |
 | G6       | Low      | 2    | The open, `closes_at` and epoch check runs before the batch, so a close can land in between (lowered in loop 5, ticket-level).                                                                               | OSE-2128                                                                      | closed: OSE-2128, checks inside the batch                                                           |
-| G7       | Low      | 2    | The pepper epoch is undefined: who stamps it, how null is handled, what a rotation mid-event does (lowered in loop 5, ticket-level).                                                                         | `lib/anon-id-hash.ts`; OSE-2125                                               | open (ticket)                                                                                       |
+| G7       | Low      | 2    | The pepper epoch is undefined: who stamps it, how null is handled, what a rotation mid-event does (lowered in loop 5, ticket-level).                                                                         | `lib/anon-id-hash.ts`; OSE-2125                                               | closed: decision 6, the pepper epoch (PR #1420)                                                     |
 | G8       | Medium   | 2    | No route rate limit is named for the open-objects read or the vote POST (AGENTS.md: public reads are limited at the route).                                                                                  | OSE-2127; OSE-2128                                                            | closed: OSE-2127 and OSE-2128 name route limits                                                     |
 | G9       | Medium   | 2    | "A form-page kind" can pull a builder into `/api/v2/events/:id/forms/*`, which mints `ose_anon` and reads FORMS_DB.                                                                                          | `router.ts:2510-2512`; `forms.ts:249`                                         | closed: decision 5 (PR #1420)                                                                       |
 | G10      | Medium   | 2    | There is no rule for totals across objects or nights (replays, a season, "champion retains").                                                                                                                | `count-floor.ts:208-214`                                                      | closed: decision 7, no totals published (PR #1420)                                                  |
@@ -183,26 +183,33 @@ Score: 90%
 | H4       | Low      | 3    | No CSRF or framing control is named. Staging and production share one site (lowered in loop 5).                                                                                                              | `wrangler.toml:172-173, 391-393`; `pages.ts:237`                              | closed: decision 5 (PR #1420)                                                                       |
 | H5       | Medium   | 3    | Never-who covers voters, not the people voted on. A named team player sits beside their "not for me" count. A label can name a private person.                                                               | ADR l.58; OSE-2125 (labels refuse only email and phone shapes)                | closed: Q9, decision 2 (PR #1420)                                                                   |
 | H6       | Medium   | 3    | Remote voting from the poster link is not on the house-rule card.                                                                                                                                            | ADR l.133-140                                                                 | withdrawn: merged into the open Wording item (Q11)                                                  |
-| H7       | Medium   | 3    | The fun report is a new public surface with no ticket and no gates. Nothing attendee-facing is built.                                                                                                        | `tests/helpers/page-surfaces.ts:68`; OSE-2130 "admin only"                    | open (ticket, OSE-520)                                                                              |
+| H7       | Medium   | 3    | The fun report is a new public surface with no ticket and no gates. Nothing attendee-facing is built.                                                                                                        | `tests/helpers/page-surfaces.ts:68`; OSE-2130 "admin only"                    | closed: OSE-520 carries the ADR rules and the new-surface gates                                     |
 | H8       | Medium   | 3    | Nothing stops the OSE display (`display-config`, public and polled) from carrying a "voting open" flag or the open objects.                                                                                  | `display-config.ts:19-22`; `router.ts:2384`                                   | closed: decision 7 (PR #1420); OSE-2129                                                             |
 | H9       | Low      | 3    | The voter page's states are undefined (ended, final, none open, kill switch, "no cookie" against "no ticket") (lowered in loop 5).                                                                           | OSE-2129                                                                      | closed: OSE-2129 lists the page states                                                              |
 | H10      | Low      | 3    | `/vote` must join the page-surfaces regex and the `/es` prefix.                                                                                                                                              | `tests/helpers/page-surfaces.ts:91`; `router.ts:37-42`                        | closed: OSE-2129                                                                                    |
 | H11      | Low      | 3    | The ticket key is not named or tied to one environment.                                                                                                                                                      | `scripts/set-secrets.sh:99-118`                                               | closed: decision 6, a key per environment (PR #1420)                                                |
 | K1       | Medium   | 4    | Decision 9 accepts inference risks under invariants 1 and 2, which say "no exceptions". There is no governed pointer, and no ticket adds one (lowered in loop 5).                                            | AGENTS.md invariants 1, 2; ADR l.135-140                                      | closed: owner ruled no invariant note (Q8); residuals in decision 9 (PR #1420). Accepted, not fixed |
 | K2       | High     | 4    | "A set is final" has no born-red fault and no staging case.                                                                                                                                                  | OSE-2127; OSE-2130                                                            | withdrawn: merged into F2                                                                           |
-| K3       | High     | 4    | S4a and S3 are each too big for one session once the gaps are folded in.                                                                                                                                     | OSE-2128; OSE-2127                                                            | open (ticket)                                                                                       |
+| K3       | High     | 4    | S4a and S3 are each too big for one session once the gaps are folded in.                                                                                                                                     | OSE-2128; OSE-2127                                                            | closed: split into OSE-2134 (S4c) and OSE-2135 (S3c)                                                |
 | K4       | Low      | 4    | No threat-ledger entry for the new public write path (lowered in loop 5).                                                                                                                                    | `threat-ledger.yaml:13`                                                       | closed: OSE-2128 requires the ledger entry                                                          |
 | K5       | Low      | 4    | The vote POST is not classified under the route policy §3.2 and is not on the `guardPublicReadOnly` list (lowered in loop 5).                                                                                | `ROUTE_CLASSIFICATION_POLICY.md`; `public-readonly.ts:27-52`                  | closed: OSE-2128 requires the classification                                                        |
 | K6       | Medium   | 4    | S1 "Blocks S2, S3" and S2 "Blocks S3" disagree with the ADR's "can start now".                                                                                                                               | OSE-2123, OSE-2125; ADR l.197-200                                             | closed: Implementation Notes match the blockers (PR #1420)                                          |
 | K7       | Medium   | 4    | N3 is not linked to each story. It does not cover S1, S1g or N1, names no workflow job per test, and does not require Bruno test names to print.                                                             | OSE-2131; AGENTS.md Quality gates                                             | closed: OSE-2131 updated                                                                            |
-| K8       | Medium   | 4    | The tickets lack STORY-FORMAT parts: prerequisite, CI/CD link, pyramid checklist, SDET load target.                                                                                                          | `docs/brain/STORY-FORMAT.md`                                                  | open (ticket)                                                                                       |
+| K8       | Medium   | 4    | The tickets lack STORY-FORMAT parts: prerequisite, CI/CD link, pyramid checklist, SDET load target.                                                                                                          | `docs/brain/STORY-FORMAT.md`                                                  | closed: story-format parts on S2, S3, S3b, S3c, S4a, S4b, S4c and S5                                |
 | K9       | Medium   | 4    | "Receipts survive a reopen" is checked at the mock layer only.                                                                                                                                               | OSE-2128                                                                      | withdrawn: merged into F3                                                                           |
 | K10      | Low      | 4    | PR #1417's body names OSE-2122 and OSE-1193, not OSE-2123, though it carries the S1 status change.                                                                                                           | PR #1417 body                                                                 | closed: #1417 merged; #1420 says Part of OSE-2123                                                   |
 | L5-SEC-1 | Medium   | 5    | "A room of 150 gets presence today" claims more than S0 showed. 150 of 150 passed an edge binding of 60 per 10 s, and no one explained why. No ticket exists yet.                                            | `wrangler.toml:236-238`; `public-read-limit.ts:240-250`; ADR l.88, 186        | closed: decision 6 reworded (PR #1420)                                                              |
 | L5-SEC-2 | Medium   | 5    | Nothing says the room-screen QR must point at OSE. A short link hosted on OurWKRP would show the named side every voter's tap.                                                                               | ADR l.28, 82; OW-220                                                          | closed: decisions 5 and 6, OSE only (PR #1420)                                                      |
 | Q8-1     | Medium   | 5    | One secret margin per night could be learned from results one person controls entirely, then used on the target's result. Draw it per result.                                                                | design (inferred)                                                             | closed: decision 7 draws T per result (PR #1420); flagged to the owner                              |
-| Q8-2     | Medium   | 5    | The night's rounded voter count shows whether a lone target voted at all: 9 browsers plus the target read "10". Not how they voted.                                                                          | design (inferred)                                                             | open (owner)                                                                                        |
+| Q8-2     | Medium   | 5    | The night's rounded voter count shows whether a lone target voted at all: 9 browsers plus the target read "10". Not how they voted.                                                                          | design (inferred)                                                             | closed: owner dropped the voter count and participation (Q8-2, 06:08 UTC)                           |
 | Q8-3     | Low      | 5    | The secret margins sit in D1's 30-day history until then.                                                                                                                                                    | inferred                                                                      | closed: decision 9, database history (PR #1420)                                                     |
+| Q8-4     | Medium   | 5    | Whether anything is published shows whether at least 10 voted, so someone with 9 browsers can tell whether one other person voted. Dropping the count did not remove it.                                     | design (inferred)                                                             | open (owner, Q13)                                                                                   |
+| CF-1     | Medium   | 5    | A song's up vote feeds its own result and the night winner, each with its own margin, so that vote is exposed about one time in three, not one in five.                                                      | ADR l.140, 146 (inferred)                                                     | open (owner, Q14)                                                                                   |
+| CF-2     | Medium   | 5    | Nothing made a set reach final, so receipts could stay forever.                                                                                                                                              | ADR l.68, 96                                                                  | closed: auto-final after 7 days, tallies deleted 30 days after final (PR #1420)                     |
+| CF-3     | Low      | 5    | The colluders line still assumed published counts.                                                                                                                                                           | ADR l.162                                                                     | closed: decision 9 reworded (PR #1420)                                                              |
+| CF-4     | Low      | 5    | The epoch check named no comparison and no one to mark void.                                                                                                                                                 | `anon-id-hash.ts:55`                                                          | closed: three-way compare, route marks void (PR #1420); OSE-2128 tests                              |
+| CF-5     | Low      | 5    | No route limit, and no rule that a limit key is never stored.                                                                                                                                                | ADR (grep)                                                                    | closed: decision 5 (PR #1420)                                                                       |
+| CF-6     | Low      | 5    | Half-done: display flag, the pass key's name, the second poster code, the Status line.                                                                                                                       | ADR l.3, 110, 126, 134                                                        | closed: PR #1420                                                                                    |
 
 Open rows: 1 Critical, 15 High, 22 Medium, 17 Low. No Security Critical. No Regulatory.
 
@@ -354,6 +361,9 @@ The gate is stop. These are the owner's questions, numbered after the presence C
    - A: Accept. The ticket lasts 30 minutes and a re-scan renews it. The card names the risk.
    - B: Accept with the whole event day. That is simpler, but the window is wider.
    - **Recommendation: A.** 30 minutes covers a four-song, 20-minute set, and a re-scan is cheap when the room screen shows the `/q` code (Q6 A).
+
+8. **Q13. Should the 10-voter floor be a secret random number per set, from 10 to 14?** Whether anything is published shows whether at least 10 voted, so someone with 9 browsers can tell whether one other person voted (Q8-4, found after the run). **Recommendation: yes.** It is the same reduction you chose for the margin, about one in five per set.
+9. **Q14. A song's up vote feeds two results, its own result and the night's winner, so it is exposed about one time in three. Should only one result per set be published?** (CF-1, confirmation pass.) **Recommendation: yes, publish the night's winner only.** That keeps it at about one in five.
 
 What is verified, inferred and not checked:
 
@@ -566,3 +576,64 @@ Only three things change that:
 
 - **This counts unmerged text.** The closures rest on PR #1420, which is not merged, and on ticket text. If #1420 does not merge, they reopen.
 - **Path to 95%.** Close K3 (split S4a and S3), H7 (a ticket for the fun-report surface under OSE-520), K8 (the story-format parts) and Q8-2 (the owner's call). That leaves 8.5 points, so 91.5%. Close G7 (who stamps the pepper epoch, and what a rotation mid-event does) and T9 to T11 as well, and it reaches 100%. Then run one confirmation loop on the merged text.
+
+## Addendum 4: the voter count dropped, the rest closed, and a confirmation pass (2026-11-18, about 06:20 UTC)
+
+**Source.** The owner answered Q8-2 at 06:08:18 UTC: **drop it**. This session read the answer in the parent session's record, as the question form's own result.
+
+**Applied in draft PR #1420** (commits `785da7bc` and `c944456a`):
+
+- No count of voters and no participation figure.
+- Who stamps the pepper epoch (G7), compared three ways, with the vote route marking a set void (CF-4).
+- Every set reaches final through a scheduled job, and tallies are deleted 30 days after final (CF-2).
+- Route limits, and a limit key is never stored (CF-5).
+- No vote word on the display; the pass key named; the second poster code; the Status line (CF-6).
+- The colluders line reworded (CF-3), and the exposure stated per result (CF-1).
+
+**Applied in Linear:**
+
+- OSE-2134 (S4c, route hardening) and OSE-2135 (S3c, public read and kill switch) created, splitting S4a and S3 (K3).
+- OSE-520 updated with the ADR rules and the new-surface gates (H7).
+- Story-format parts added to S2, S3, S3b, S3c, S4a, S4b, S4c and S5 (K8).
+- OSE-2123's acceptance names the open items (T9).
+- Conflict notes added to OSE-513 and OSE-518 (T11).
+- S5, S4a, S3 and S2 updated for the above.
+
+**The voter count, checked.** Dropping the count does not fully close the gap. Whether anything is published still shows whether at least 10 voted (Q8-4). Q13 asks whether that floor should be a secret random number too (10 to 14, about one in five). Until then, S5 builds the floor behind one function.
+
+**Confirmation pass.**
+
+Team: dr-of-security. Fresh read of the final text at `785da7bc`, with the register as background.
+
+Verdict: **stable, with edits**. No Security Critical, Critical or High. These are fixed in the text:
+
+- Earlier rows fixed in the text: F1, F3 to F14, G1, G3, G5, G9 to G11, G13, H2 to H4, H6, H7, and L5-SEC-1 and L5-SEC-2.
+- Moot because no count is published: F6 to F10.
+- The five half-done items (G8, H8, H11, L5-07 and H5) are now in the text. H5 is enforced by policy only: labels refuse email and phone shapes, so the presenter-only rule rests on the admin.
+- It confirmed that only `lib/anonymous-id.ts` reads the `Cookie` header today (`anonymous-id.ts:35`, imported by `qr-scan.ts` and `forms.ts`). So the "the vote route reads no cookie" gate is a real property.
+
+It found two new things:
+
+- **CF-1.** A song vote feeds two results, so it is exposed about one time in three. This is Q14 for the owner.
+- **CF-2.** Sets had no retention bound. Now fixed.
+
+**Re-score.** These rows are still open:
+
+| Row  | Severity | Loop | Weight × position | Points |
+| ---- | -------- | ---- | ----------------- | -----: |
+| Q8-4 | Medium   | 5    | 5 × 1.5           |    7.5 |
+| CF-1 | Medium   | 5    | 5 × 1.5           |    7.5 |
+|      |          |      | Total             |   15.0 |
+
+**System score: 85%. Gate: stop.** Both open rows are owner decisions:
+
+- **Q13:** a secret random voter floor.
+- **Q14:** whether one vote may feed two results. The recommendation is to publish only the night's winner.
+
+If the owner answers both as recommended and the text follows, the score is 100%.
+
+**Still to note:**
+
+- **This score counts text that is not merged.** It rests on draft PR #1420 and on ticket text. If #1420 does not merge, those rows reopen.
+- **Two defaults are the team's proposal.** The 7 and 30 days in decisions 1 and 4 are flagged for the owner to change.
+- **Nothing is built.** Every test named in the tickets is still to be written and seen red.
