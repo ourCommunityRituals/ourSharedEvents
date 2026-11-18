@@ -1,7 +1,7 @@
 info:
   name: 'OSE-2144 | exception | SharedReport | an archived event’s report opens with a valid signed link'
   type: http
-  seq: 91
+  seq: 61
 
 http:
   method: GET
