@@ -66,6 +66,18 @@ const SCAN_TABLES = [
   'shortlink_click_daily', // day counter moved on /s
   'share_opens_daily', // day counter moved by opening a shared link
   'sponsor_displays', // one row per sponsor display or click on a public surface
+  // The vote tables (0111, OSE-2125, OSE ADR-040). A vote moves the counters,
+  // receipts and markers; the set and its objects sit beside them, so they are
+  // held to the same hour rule. Only votable_objects.closes_at may be finer: it
+  // names a song's window, never a voter (decision 3). It has no writer yet, and
+  // an entry here with no finding is stale, so S3 lists it below when it first
+  // writes the column, with that reason.
+  'vote_sets', // one per event: counters with no object and no time
+  'votable_objects', // what can be voted on; written by an admin or N1, never a voter
+  'vote_tallies', // up and "not for me" counters per object
+  'vote_receipts', // one keyed receipt per browser per object
+  'vote_participants', // one keyed marker per browser per set
+  'vote_team_markers', // one keyed marker per browser per team (Q16)
 ];
 
 /** Scan-shaped by name or column, but no visitor's act moves a row here. */
@@ -144,6 +156,29 @@ const ALLOWLIST: Record<string, AllowEntry> = {
     kinds: ['default'],
     reason:
       "Open item, collides with OSE-1766 slice 6, which may want this stamp. The default fires on every display and click row, to the second (0102). The row holds no visitor value, and the scan tables it could line up with are hourly. Listed as today's state, not as a ruling.",
+  },
+
+  // The vote set and its objects (0111, OSE-2125). The default is the hour, in
+  // hourStamp's format; nothing finer is stored, and no write sets them yet.
+  'vote_sets.created_at': {
+    kinds: ['coarse-clock'],
+    reason:
+      "The 0111 default is strftime('%Y-%m-%d %H:00:00', 'now'): the hour a set was made, by an admin, never a voter's time.",
+  },
+  'vote_sets.updated_at': {
+    kinds: ['coarse-clock'],
+    reason:
+      "The 0111 default is strftime('%Y-%m-%d %H:00:00', 'now'): the hour a set was made, by an admin, never a voter's time.",
+  },
+  'votable_objects.created_at': {
+    kinds: ['coarse-clock'],
+    reason:
+      "The 0111 default is strftime('%Y-%m-%d %H:00:00', 'now'): the hour an object was made, by an admin or N1, never a voter's time.",
+  },
+  'votable_objects.updated_at': {
+    kinds: ['coarse-clock'],
+    reason:
+      "The 0111 default is strftime('%Y-%m-%d %H:00:00', 'now'): the hour an object was made, by an admin or N1, never a voter's time.",
   },
 
   // Forms side: the owner rules on these under D4 (truncate, drop, or keep with a
@@ -726,6 +761,8 @@ test.describe('Invariant: no clock finer than the hour on a scan or identity row
   test('OSE-1778 | privacy | schema | every scan-shaped DB table is classified', () => {
     const scanShaped = (table: string, columns: Column[]): boolean =>
       /^(?:scan|anon)|(?:click|open|display|return|visit|impression)/.test(table) ||
+      // OSE-2125 (ADR-040): a vote is anonymous behaviour too.
+      /vote|votable|tally|tallies|ballot|receipt|participant/.test(table) ||
       columns.some((c) =>
         /^(?:anon|session|visitor)|user_agent|ip_hash|^scan_|_scans$|^clicks$|^opens$/.test(c.name)
       );

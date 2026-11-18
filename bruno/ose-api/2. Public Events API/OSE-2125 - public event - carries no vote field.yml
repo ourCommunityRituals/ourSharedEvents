@@ -1,0 +1,64 @@
+info:
+  name: OSE-2125 | public event | the answer carries no vote field
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // OSE ADR-040 decision 7: no tally, winner or outcome appears before a
+        // vote set is final, and no per-object number is ever published. The
+        // public event answer is not where results go (that is the fun report,
+        // OSE-520), so no key in it, at any depth, may carry a vote word.
+        // tests/count-floor-publication.derived.spec.ts holds the projection's
+        // own field list to the same words (COUNT_WORDS learned them in OSE-2125).
+        //
+        // Behind a Cloudflare Access challenge the answer is not JSON. That is
+        // the same case the neighbouring requests allow for. It is named NOT RUN, so
+        // scripts/ci/bruno-not-run.mjs lists it in the job summary.
+        const ct = res.getHeader('Content-Type') || '';
+        if (!ct.includes('application/json')) {
+          test('NOT RUN (Access challenge): the answer is not JSON, so no key was checked', function () {
+            expect([200, 302, 403]).to.include(res.getStatus());
+          });
+          return;
+        }
+        const VOTE_WORD = /vot(?:e|ing|able)|tall(?:y|ies)|ballot|receipt|participant|winner/i;
+        function voteKeys(value, path) {
+          if (Array.isArray(value)) {
+            return value.reduce(function (acc, v, i) {
+              return acc.concat(voteKeys(v, path + '[' + i + ']'));
+            }, []);
+          }
+          if (value === null || typeof value !== 'object') return [];
+          return Object.keys(value).reduce(function (acc, k) {
+            const at = path + '.' + k;
+            const own = VOTE_WORD.test(k) ? [at] : [];
+            return acc.concat(own, voteKeys(value[k], at));
+          }, []);
+        }
+        test('200 with the event', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(res.getBody().item.id).to.be.a('string');
+        });
+        test('the detector sees a vote key at any depth (negative control)', function () {
+          expect(
+            voteKeys({ title: 't', votables: [], x: { up_votes: 3, tally: 1 }, ballots: [{ id: 1 }] }, '$')
+          ).to.eql(['$.votables', '$.x.up_votes', '$.x.tally', '$.ballots']);
+        });
+        test('OSE-2125: the answer has no vote key, at any depth', function () {
+          expect(voteKeys(res.getBody(), '$')).to.eql([]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

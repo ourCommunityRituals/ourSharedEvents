@@ -88,6 +88,14 @@ describe('the detector (negative controls on synthetic input)', () => {
     expect(countShapedFields(names)).toEqual(names);
   });
 
+  // @born-red OSE-2125 | method: injected-fault (`votables` added to the public
+  // event projection's field list turned "every count-shaped field is declared"
+  // red; with the vote words removed from COUNT_WORDS it stayed green) | date: 2026-11-18
+  test('OSE-2125: finds vote-shaped names (ADR-040: no vote number is published)', () => {
+    const names = ['votables', 'vote_count', 'upVotes', 'tally', 'ballots', 'voters'];
+    expect(countShapedFields(names)).toEqual(names);
+  });
+
   test('leaves the current projection alone (no false positives)', () => {
     expect(
       countShapedFields([

@@ -81,6 +81,12 @@ const DB_TABLES = [
   'sponsor_event_types', // 0019 (0067: FK repointed to sponsor_business)
   'sponsor_placement', // 0067 (OSE-799 A2 — per-event attachment; replaces sponsors)
   'template_event_types', // 0056 (OSE-727 Sponsor Onboarding — template×registry clearance join)
+  'votable_objects', // 0111 (OSE-2125, ADR-040 — what can be voted on: a song or a stall)
+  'vote_participants', // 0111 (OSE-2125 — one keyed marker per browser per set; no voter id)
+  'vote_receipts', // 0111 (OSE-2125 — one keyed receipt per browser per object; no side, no time)
+  'vote_sets', // 0111 (OSE-2125 — one per event; one-way final flag; secret T and V)
+  'vote_tallies', // 0111 (OSE-2125 — up and "not for me" counters per object)
+  'vote_team_markers', // 0111 (OSE-2125, Q16 — one keyed marker per browser per team)
 ] as const;
 
 const FORMS_DB_TABLES = [

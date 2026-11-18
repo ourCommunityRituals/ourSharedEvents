@@ -229,6 +229,7 @@ and is wired — and let the mechanism do the scanning.
 | `timestamp-precision.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `uec-codes.invariant.spec.ts` | #3 uec_encoding |
 | `uec-poster-color.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `votes-never-who.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `worker-claude-md.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `workflow-injection.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 
