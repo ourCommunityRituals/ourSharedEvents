@@ -18,6 +18,13 @@
  * labels are, and the radios take no pointer), but at their default 13 px a
  * radio whose label is folded away read as a small touch target in the phone
  * audit (mobile-workability.spec.ts, PR checks of 2026-11-17).
+ *
+ * A control whose label is not on screen is not in the tab order either (WCAG
+ * 2.4.7 Focus Visible, 4.1.2; the map's accessibility audit of 2026-11-18): the
+ * checkbox comes before the folded groups' radios, so while the chip is not
+ * pressed those radios take no focus, and from FILTERS_FOLD_PX up, where the chip
+ * is hidden, the checkbox is too. A radio that takes no display still works the
+ * rules that read its :checked state.
  */
 
 /** Screen width, in px, from which the filters always show. */
@@ -27,4 +34,4 @@ export const FILTERS_FOLD_PX = 600;
 export const FILTERS_TOGGLE_ID = 'filters-open';
 
 export const AREA_FILTERS_STYLE =
-  '<style>@media(max-width:599.98px){.toggle-radio{width:1px;height:1px;margin:0}#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn{display:none}}</style>';
+  '<style>@media(max-width:599.98px){.toggle-radio{width:1px;height:1px;margin:0}#filters-open:not(:checked)~.toggle-radio,#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn,#filters-open{display:none}}</style>';

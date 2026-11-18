@@ -629,7 +629,16 @@ describe('the attendee-map grade: phone filters, the search on /map, filters on 
       '<div class="disc-chips area-filters-btn"><label class="disc-chip" for="filters-open"'
     );
     expect(html).toContain('#filters-open:not(:checked)~.area-filters{display:none}');
-    expect(html).toContain('.area-filters-btn{display:none}');
+    expect(html).toContain('.area-filters-btn,#filters-open{display:none}');
+    // A control whose label is off screen takes no focus (WCAG 2.4.7, 4.1.2;
+    // the map's accessibility audit of 2026-11-18): the checkbox comes right
+    // after the view radios and before every folded radio, and while it is not
+    // checked those radios are not displayed; the view radios stay before it.
+    expect(html).toContain('#filters-open:not(:checked)~.toggle-radio,');
+    const firstWin = html.indexOf('id="win-');
+    expect(box).toBeLessThan(firstWin);
+    expect(html.indexOf('id="view-map"')).toBeLessThan(box);
+    expect(html.indexOf('id="mod-all"')).toBeGreaterThan(box);
   });
 
   it('on /map the search follows the map; on the landing it stays first; the markers go', () => {

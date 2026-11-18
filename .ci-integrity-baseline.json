@@ -811,7 +811,7 @@
   "readUsesOnNewSecret": {
     "direction": "up",
     "reason": "Reads must name OCR_HUB_READ (OSE-1695): may only rise; a deleted read site needs a retired entry.",
-    "total": 34,
+    "total": 35,
     "byFile": {
       ".github/workflows/advanced-security-scan.yml": {
         "count": 2,
@@ -948,6 +948,13 @@
           "load :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
         ],
         "reason": "Both jobs install the Worker deps, which need the pinned hub @ocr/ui (ADR-008): bucket-private for the lockfile wrangler that reads the bucket's two privacy settings, load for the Worker's own reader that checks the cut archive before it is uploaded (OSE-2064)."
+      },
+      ".github/workflows/wcag-audit.yml": {
+        "count": 1,
+        "steps": [
+          "wcag :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "The on-call WCAG audit (owner 2026-11-18) runs the component specs on a local worker, whose bundle needs the pinned hub @ocr/ui (ADR-008)."
       }
     },
     "retired": [

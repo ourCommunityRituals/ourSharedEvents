@@ -333,6 +333,7 @@ export const pl: Record<MessageKey, string> = {
   'map.placesNav': 'Miejsca w tym obszarze',
   'map.allPlaces': 'Pokaż wszystkie miejsca',
   'map.openEvent': 'Otwórz wydarzenie',
+  'map.openNamed': '{label} – {name}',
   'map.goGoogle': 'Zaprowadź mnie (Mapy Google)',
   'map.goApple': 'Zaprowadź mnie (Mapy Apple)',
   'map.goLabel': '{app}: dojazd do {name}',

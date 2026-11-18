@@ -1137,6 +1137,16 @@ describe('the place panel under the map', () => {
     );
   });
 
+  // @born-red OSE-2070 | method: aria-label put back to card.open ("Open Event a public page"), this runs red, restored | date: 2026-11-18
+  test('WCAG 2.5.3: the name of Open event starts with the words on it, in each language', () => {
+    const live = /<a [^>]*data-testid="amap-open"[^>]*>[^<]*<\/a>/.exec(panelled([ev('a')]))![0];
+    expect(live).toContain('aria-label="Open event: Event a">Open event</a>');
+    const es = /<a [^>]*data-testid="amap-open"[^>]*>[^<]*<\/a>/.exec(
+      panelled([ev('a')], { lang: 'es' })
+    )![0];
+    expect(es).toContain('aria-label="Abrir el evento: Event a">Abrir el evento</a>');
+  });
+
   test('never where: Take me there carries no coordinate; none when nothing says where, or once over', () => {
     // Only a point, no address or venue: no button, as the point stays off the page.
     const pointOnly = panelled([ev('a')]);

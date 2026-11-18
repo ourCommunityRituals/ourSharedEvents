@@ -68,7 +68,7 @@
  *         -> the four axe tests fail (a color-contrast violation)
  *   F14 panelNav: the Prev chip named "Go" while it shows "Place N" (the known
  *       defect below, on another element)
- *         -> the four axe tests fail: the excused rule is excused on "Open event" only
+ *         -> the four axe tests fail (since 2026-11-18 no rule is excused)
  *   B1  renderZoom: the no-street-map note loses its test id
  *         -> "a tap on a place row opens only its panel…" fails
  *       (seen again 2026-11-15 as S6 below, through expectZoomDrawing)
@@ -573,17 +573,13 @@ test.describe('Zoomed map: Share is the event page share (OSE-1891)', () => {
 });
 
 /**
- * A defect this spec found on 2026-11-09 and does not hide. The panel's "Open
- * event" button (lib/map-place-panel.ts panelActions) shows "Open event" but is
- * named, by its aria-label, "Open <event> public page". The name a screen reader
- * or voice control hears does not contain the words on the button (WCAG 2.5.3
- * Label in Name, level A; axe `label-content-name-mismatch`, serious). It is
- * tracked as OSE-2070 and is feature code, so it is not changed here. Until then
- * the scan logs it, checks it sits on "Open event" only (born-red fault F14) and
- * fails on anything else; OSE-2070 takes the id out of this set so the scan is
- * whole again.
+ * Rules the scan excuses. Empty since 2026-11-18: the defect this spec found on
+ * 2026-11-09 ("Open event" named "Open <event> public page", WCAG 2.5.3 Label in
+ * Name, OSE-2070) is fixed, the name now starts with the words on the button,
+ * and tests/e2e/2-pages/wcag-map.component.spec.ts holds it to every WCAG 2.0 to
+ * 2.2 A/AA rule. Fault F14 is now caught as a plain violation.
  */
-const KNOWN_DEFECTS = new Set(['label-content-name-mismatch']);
+const KNOWN_DEFECTS = new Set<string>([]);
 
 type AxeIncomplete = Awaited<ReturnType<AxeBuilder['analyze']>>['incomplete'];
 
