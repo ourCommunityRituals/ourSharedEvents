@@ -2197,8 +2197,7 @@ export async function fetchEventPageSocialData(
                     -- The same pick as the logo proxy's ?slot=sidebar (compact,
                     -- else header), so the page asks only for art it will get:
                     -- none unless the event is live (the proxy's own rule).
-                    CASE WHEN EXISTS (SELECT 1 FROM events e_live
-                                       WHERE e_live.id = sp.event_id AND ${eventLiveSql('e_live')})
+                    CASE WHEN ${eventLiveSql('e_live')}
                          THEN COALESCE((SELECT a.url FROM sponsor_asset a
                                          WHERE a.sponsor_business_id = sb.id AND a.format = 'logo_compact'),
                                        (SELECT a.url FROM sponsor_asset a
@@ -2207,6 +2206,7 @@ export async function fetchEventPageSocialData(
                          ELSE 0 END AS has_logo
                FROM sponsor_placement sp
                JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
+               JOIN events e_live ON e_live.id = sp.event_id
               WHERE sp.event_id = ? AND sp.is_active = 1
                 AND sb.is_active = 1
                 AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1

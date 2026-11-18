@@ -273,6 +273,11 @@ export async function resolveSponsorsForEvent(
   // Path 1: Direct placements for this event (source organizer|corridor_covenant|
   // platform_seed). ORDER BY sb.id: stable, deterministic input for the
   // equal-share tie-break in buildShareRotation.
+  // OSE-2144: the WHERE is the shared per-placement rule (PLACEMENT_ON_SHOW_SQL,
+  // lib/sponsor-card.ts): active placement and business, both sides accepted
+  // (organizer source-aware, sponsor strict), the event opted in, in the
+  // sponsor's brand, and live. Asked here as well as by the stop above, so the
+  // statement holds on its own.
   const directResult = await db
     .prepare(
       `SELECT ${SELECT_PLACEMENT_ROW}
@@ -281,10 +286,6 @@ export async function resolveSponsorsForEvent(
        JOIN events e ON e.id = sp.event_id
        LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
        LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'
-       -- OSE-2144: the shared per-placement rule (lib/sponsor-card.ts): active
-       -- placement and business, both sides accepted, the event opted in, in
-       -- the sponsor's brand, and live. Asked here as well as by the stop
-       -- above, so the statement holds on its own.
        WHERE sp.event_id = ? AND ${PLACEMENT_ON_SHOW_SQL}
        ORDER BY sb.id`
     )

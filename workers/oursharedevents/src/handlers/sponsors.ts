@@ -1749,18 +1749,18 @@ export async function handleSponsorLogo(
   let row: Record<string, unknown> | null;
   try {
     // OSE-799 A2: the logo lives in sponsor_asset on the durable business;
-    // serve it only for a sponsor that is on show (see the gate below).
+    // serve it only for a sponsor that is on show.
+    // CCR PR #699 / OSE-1433 / OSE-1900 / OSE-2144: the gate is the public
+    // card's own rule (SPONSOR_ON_SHOW_SQL, lib/sponsor-card.ts): an active
+    // placement accepted by both sides (source-aware), on an event that chose
+    // sponsors, in the sponsor's brand, and live. A sponsor whose only accepted
+    // placement is on a draft, ready or archived event gets no art, as it gets
+    // no card.
     row = await env.DB.prepare(
       `SELECT ${header ? 'sb.header_image_url' : sidebar ? 'COALESCE(lc.url, la.url)' : 'la.url'} AS logo_url
          FROM sponsor_business sb
          LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
          LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'
-        -- CCR PR #699 / OSE-1433 / OSE-1900 / OSE-2144: the same rule as the
-        -- public card (SPONSOR_ON_SHOW_SQL, lib/sponsor-card.ts): an active
-        -- placement accepted by both sides (source-aware), on an event that
-        -- chose sponsors, in the sponsor's brand, and live. A sponsor whose
-        -- only accepted placement is on a draft, ready or archived event gets
-        -- no art, as it gets no card.
         WHERE sb.id = ? AND ${SPONSOR_ON_SHOW_SQL}`
     )
       .bind(sponsorId)
