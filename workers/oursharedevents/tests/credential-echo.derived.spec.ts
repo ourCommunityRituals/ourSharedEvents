@@ -372,7 +372,7 @@ const SIGNED_LINK_PRODUCTS: readonly SignedLinkProduct[] = [
     method: 'GET',
     path: /^\/q\/[^/]+$/,
     votePass: { header: 'location', before: /^https?:\/\/[^/?#]+\/events\/[^/?#]+\/vote#t=$/ },
-    why: "A scan of an event's vote code, with voting on and the set open, is answered 302 with a 30-minute pass for that browser at that event. It rides only in the fragment, which a browser sends to no server.",
+    why: "A scan of the event's own vote code (OSE-2140; no other placement mints), with voting on, the set open and the event Published (OSE-2142), is answered 302 with a 30-minute pass for that browser at that event. It rides only in the fragment, which a browser sends to no server.",
   },
 ];
 

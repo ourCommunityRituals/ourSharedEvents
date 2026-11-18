@@ -1007,7 +1007,8 @@ const MINT_SITES: ReadonlyArray<{
     file: 'lib/vote-pass.ts',
     callee: 'mintVotePass',
     product:
-      'GET /q/<token>?type=vote, with voting on and the set open, answers 302 with a 30-minute ' +
+      "GET /q/<token>?type=vote on the event's own vote code (OSE-2140; no other placement), " +
+      'with voting on, the set open and the event Published (OSE-2142), answers 302 with a 30-minute ' +
       'vote pass for that browser at that event. It sits at the end of `Location`, after ' +
       '`/events/:id/vote#t=`, and nowhere else: no body, no other header, no query string, no ' +
       'log line (OSE ADR-040 decision 6). The test below holds the source to that one path.',
