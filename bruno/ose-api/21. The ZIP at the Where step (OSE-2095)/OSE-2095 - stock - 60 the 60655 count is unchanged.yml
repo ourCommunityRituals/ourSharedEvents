@@ -12,7 +12,9 @@ runtime:
   scripts:
     - type: after-response
       code: |-
-        const n = (String(res.getBody()).match(/data-event-id="/g) || []).length;
+        // OSE-2137: the pages leg publishes zip-own-* fixtures in these places while this
+        // leg runs; a stock count must not see them come or go. Real events still count.
+        const n = (String(res.getBody()).match(/data-event-id="(?!zip-own-)/g) || []).length;
         test('OSE-2095 stock: the /?zip=60655 count is unchanged', function () { expect(String(n)).to.eql(bru.getVar('w1StockZipBefore')); });
 
 settings:
