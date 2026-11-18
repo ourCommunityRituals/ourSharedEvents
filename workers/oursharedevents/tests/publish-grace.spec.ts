@@ -18,7 +18,7 @@ import { handleUpdateEvent, type EventsEnv } from '../src/handlers/events';
 import { handleSitemapXml } from '../src/lib/crawl-policy';
 import { readDiscoverableEvents } from '../src/lib/sponsor-discovery';
 import { latchReadyCorridors, LATCH_SETTLE_HOURS } from '../src/lib/corridor-latch';
-import { giveCoreValues } from './helpers/core-values';
+import { CORE_TIME_AND_TYPE, giveCoreValues } from './helpers/core-values';
 import { giveGoLiveEvidence } from './helpers/go-live-evidence';
 import {
   DEFAULT_PUBLISH_GRACE_MINUTES,
@@ -231,6 +231,7 @@ describe('Publish starts the window; the event is live by link but not listed', 
         location: 'Test Hall',
         title: 'Created live',
         status: 'active',
+        ...CORE_TIME_AND_TYPE,
         start_date: inDays(3),
         is_published: true,
       }),
@@ -380,6 +381,7 @@ describe('Corridor latch counts settled events only (OSE-1508)', () => {
           location: 'Test Hall',
           title: `Live ${i}`,
           status: 'active',
+          ...CORE_TIME_AND_TYPE,
           start_date: inDays(2),
           is_published: true,
         }),

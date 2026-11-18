@@ -17,6 +17,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import { generateQrCode, parseHexRgb } from '../src/lib/qr';
 import { getCode } from '../src/lib/uec';
 import { posterUecFor } from '../src/handlers/poster-bundle';
+import { CORE_VALUES } from './helpers/core-values';
 
 interface TestEnv {
   DB: D1Database;
@@ -170,6 +171,7 @@ describe('OSE-1200 L2 | /poster-bundle prints UEC hues', () => {
         location: 'Test Hall',
         title: 'OSE-1200 hue check',
         status: 'active',
+        ...CORE_VALUES,
       }),
     });
     expect(created.status).toBe(201);

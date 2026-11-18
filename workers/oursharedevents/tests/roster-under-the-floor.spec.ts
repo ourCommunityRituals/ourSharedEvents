@@ -27,6 +27,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { encryptEmail, encryptText } from '../src/lib/pii';
+import { CORE_VALUES } from './helpers/core-values';
 
 interface TestEnv {
   DB: D1Database;
@@ -64,6 +65,7 @@ async function createEvent(title: string): Promise<string> {
       location: 'Hall',
       title,
       status: 'active',
+      ...CORE_VALUES,
     }),
   });
   expect(res.status).toBe(201);

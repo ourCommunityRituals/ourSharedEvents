@@ -13,6 +13,7 @@
 import { SELF, env } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { EVENT_NOT_OPEN_COPY } from '../src/handlers/pages';
+import { CORE_VALUES } from './helpers/core-values';
 
 const ORIGIN = 'https://t.test';
 const JSON_KEY = {
@@ -63,7 +64,8 @@ describe('the closed event page', () => {
           attendance_mode: 'in_person',
           location: 'Test Hall',
           title: 'Bears, Big Screens and Barricades',
-          ...(status ? { status } : {}),
+          // OSE-2036: a create past draft owes a start time and an event type.
+          ...(status ? { status, ...CORE_VALUES } : {}),
         }),
       });
       expect(res.status).toBe(201);

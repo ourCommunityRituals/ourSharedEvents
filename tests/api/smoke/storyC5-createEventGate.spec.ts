@@ -105,6 +105,12 @@ test.describe('Story C5: Create Event Smoke Gate', () => {
         brand_id: BRAND,
         slug: uniqueSlug,
         status: 'active',
+        // OSE-2036: an event created past draft owes a start time and an event
+        // type. The type is one the migrations seed (0024).
+        start_date: '2099-01-01',
+        start_time: '18:00',
+        timezone: 'America/Chicago',
+        event_type_id: 'etr-rec-bocce',
         // OSE-1560: a new event is off the map unless asked; the gate reads the public list.
         is_published: true,
       },

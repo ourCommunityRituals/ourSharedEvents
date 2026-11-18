@@ -130,6 +130,10 @@ async function seedEvent(request: any, brand: string, suffix: string): Promise<s
     // POST /api/v2/admin/events validates dates as YYYY-MM-DD (isValidIsoDate,
     // events.ts) — it appends 'T00:00:00Z' itself. A full ISO datetime here is
     // rejected 400 INVALID_DATE (OSE-554: this E2E never hit the live endpoint).
+    // OSE-2036: an event created past draft owes a start time and an event
+    // type. The type is one the migrations seed (0024).
+    start_time: '18:00',
+    event_type_id: 'etr-rec-bocce',
     start_date: '2099-01-01',
     end_date: '2099-01-02',
     timezone: 'America/New_York',

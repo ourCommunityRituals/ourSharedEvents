@@ -18,6 +18,7 @@
 
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
+import { CORE_VALUES } from './helpers/core-values';
 
 // ── Test env ──────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,7 @@ async function createEvent(title: string): Promise<string> {
       location: 'Test Hall',
       title,
       status: 'active',
+      ...CORE_VALUES,
     }),
   });
   expect(res.status).toBe(201);

@@ -36,10 +36,19 @@ import { summarizeUnhandledError } from './lib/unhandled-error-log';
 import { errorLabel } from './lib/error-label';
 import { injectTestSiteNotice } from './lib/test-site-notice';
 import { applyTransportHeaders } from './lib/transport-headers';
+import { installLogRedaction } from './lib/log-redact';
 export type { RouterEnv as Env };
+
+// Every console line this Worker writes, from a request, the nightly jobs or
+// the scan queue, is redacted before it reaches Workers Logs
+// (lib/log-redact.ts). Done when the module loads, and checked again at each
+// entry below in case the console object was replaced since (one lookup when it
+// was not). No handler has to remember it.
+installLogRedaction();
 
 export default {
   async fetch(request: Request, env: RouterEnv, ctx: ExecutionContext): Promise<Response> {
+    installLogRedaction();
     // COST-301 (OSE-780): aggregate-only, never-who per-operation cost metric.
     // Instrument the D1 bindings so handlers transparently accumulate rows, and
     // time the whole request at this single choke point. Emission below is
@@ -103,6 +112,7 @@ export default {
   },
 
   async scheduled(_event: ScheduledEvent, env: RouterEnv, ctx: ExecutionContext): Promise<void> {
+    installLogRedaction();
     // runFormDataLifecycle is FORMS_DB-only (PII scrub + retention) — see forms-security S4.
     // runRegistrationContactClear (owner 2026-10-11) clears a registrant's name
     //   and email the day after the event's last date: it reads event dates
@@ -187,6 +197,7 @@ export default {
     env: RouterEnv,
     _ctx: ExecutionContext
   ): Promise<void> {
+    installLogRedaction();
     await handleScanBatch(batch, env);
   },
 };

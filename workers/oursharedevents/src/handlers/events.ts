@@ -930,6 +930,22 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     );
   }
 
+  // OSE-2036 — creating an event past draft is a publish step, so it owes the
+  // same core values as PUT status and verify-qr: a start time and an event
+  // type. Only automation reaches this (a person's create is always a draft,
+  // above). Ready is held to it as well as active, because ready → active is
+  // not itself a checked step. Nothing has been written yet.
+  if (isPublishStep('draft', status)) {
+    const missing = coreValuesMissing({ starts_at: startsAt, event_type_id: eventType.id });
+    if (missing.length > 0) {
+      logCoreValuesRefused('create', 'draft', status, missing);
+      return Response.json(coreValuesRefusal(missing, rid), {
+        status: 409,
+        headers: { ...corsHeaders(request), 'X-Request-Id': rid },
+      });
+    }
+  }
+
   // OSE-869 — per-event section switches (lib/event-settings.ts). Optional; a
   // body without `settings` stores '{}' (every section on). Strict on write.
   let settingsJson = '{}';

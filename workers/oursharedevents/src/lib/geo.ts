@@ -34,6 +34,7 @@
 
 import { latLngToCell } from 'h3-js';
 import { isGoogleMapsConfigured, type MapsEnv } from './maps';
+import { errorLabel } from './error-label';
 
 export interface GeocodeResult {
   lat: number;
@@ -126,7 +127,9 @@ export async function geocodeVenue(
     console.error(
       JSON.stringify({
         type: 'GEO_FETCH_ERROR',
-        error: err instanceof Error ? err.message : String(err),
+        // The class only: the address this call failed on carries the maps key,
+        // and an error is free text that can repeat it (lib/error-label.ts).
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
@@ -226,13 +229,28 @@ export async function geocodeVenue(
  * enough to span a commercial strip, small enough to be commercially distinct
  * from adjacent neighborhoods.
  *
- * Returns null only if the h3 cell computation fails (invalid coordinates).
+ * Returns null when the coordinates are outside the globe or the h3 cell
+ * computation fails (NaN, Infinity), with one RESOLVE_CORRIDOR_ERROR line.
  */
 export async function resolveCorridorId(
   _env: MapsEnv,
   lat: number,
   lng: number
 ): Promise<string | null> {
+  // h3-js refuses NaN and Infinity, but it wraps a finite value outside the
+  // globe (a latitude of 999) into a real-looking cell somewhere else. A
+  // corrupted coordinate must end as no corridor, never as the wrong one.
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    console.log(
+      JSON.stringify({
+        type: 'RESOLVE_CORRIDOR_ERROR',
+        reason: 'coordinates_out_of_range',
+        lat,
+        lng,
+      })
+    );
+    return null;
+  }
   try {
     return latLngToCell(lat, lng, 7);
   } catch {

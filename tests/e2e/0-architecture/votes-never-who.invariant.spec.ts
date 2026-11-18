@@ -48,8 +48,11 @@
  *      answers; no guarded column is an object key; no statement on a vote
  *      table reads `*` or `alias.*`.
  *   7. SEPARATE KEYS (decision 1). Every `ose:…:vN` HKDF label in the Worker,
- *      in any quote style, appears once; the three vote labels exist and are not
- *      the scan key's.
+ *      in any quote style, appears once; the five vote labels (receipt,
+ *      participant, team marker, and OSE-2133's voter key and pass seal) exist
+ *      and are not the scan key's. lib/vote-pass.ts names no `*_CONTEXT`
+ *      constant, so it cannot borrow another file's label (the S2 review's L7
+ *      remainder).
  *   8. THE PUBLIC READ AND THE SWITCH (OSE-2135, S3c; decisions 5 and 7,
  *      AGENTS.md invariants 4 and 5):
  *        - the open-objects read (src/lib/vote-open-objects.ts) selects only
@@ -69,6 +72,16 @@
  *          code, so "on" has one spelling (S3b and S4a call votingEnabled);
  *        - the display's files (the TV page, its web copy and display-config)
  *          carry no vote word, no vote path and no vote import.
+ *   9. THE PASS STAYS OUT OF LOGS AND QUERIES (decision 6, OSE-2133). In
+ *      handlers/qr-scan.ts and lib/vote-pass.ts, no console call names the
+ *      redirect's Location, its target, the pass or the voter key; lib/vote-pass.ts
+ *      logs nothing at all. The pass is put after `#t=` and never after `?t=` or
+ *      `&t=`.
+ *  10. NO NEW COOKIE READER (D3 reversed, 2026-11-18: "Once there is a seam,
+ *      it's a way in"). Only the files on COOKIE_READERS read the `Cookie`
+ *      header, call getOrCreateAnonId or name `ose_anon`: the reader itself,
+ *      `/q` and the forms routes (AGENTS.md invariant 4). The vote route and the
+ *      voter page can never be listed.
  *
  * What it cannot see: a value carried out by a variable (a listed lib file that
  * returns `row` to a handler). S3 and S5 add workers-pool tests that their
@@ -77,7 +90,7 @@
  * Pyramid coverage:
  *   L0 STRUCTURAL (this file), in the T0 invariants step.
  *   L1 workers pool: workers/oursharedevents/tests/vote-tables.spec.ts reads the
- *      built schema and writes rows.
+ *      built schema and writes rows; tests/vote-pass.spec.ts drives /q (OSE-2133).
  *   L2 staging: bruno/ose-api/2. Public Events API, "OSE-2125 | public event |
  *      the answer carries no vote field".
  *
@@ -91,6 +104,13 @@
  *   INSERT INTO votable_objects (5 red), a handler answering `secret_margin`
  *   (6 red), `up_count` in a lib file (6 red), the team label set to the scan
  *   key's (7 red) | date: 2026-11-18
+ * @born-red OSE-2133 | method: injected-fault, each removed after: the voter
+ *   key label set to SCAN_NODE_KEY_CONTEXT imported from lib/scan-node-key.ts
+ *   (7 red: the import, and the label count), a `console.log` of the redirect
+ *   target in qr-scan.ts (9 red), a `?t=` pass target (9 red), a console call in
+ *   lib/vote-pass.ts (9 red), a getOrCreateAnonId(request) call planted in
+ *   handlers/votables.ts (10 red), forms.ts taken off COOKIE_READERS (10 red) |
+ *   date: 2026-11-18
  */
 
 import { test, expect } from '@playwright/test';
@@ -103,6 +123,8 @@ const DB_MIGRATIONS = join(WORKER_DIR, 'migrations');
 const FORMS_MIGRATIONS = join(WORKER_DIR, 'migrations-forms');
 const SRC_DIR = join(WORKER_DIR, 'src');
 const VOTES_LIB = 'src/lib/votes.ts';
+const VOTE_PASS_LIB = 'src/lib/vote-pass.ts';
+const QR_SCAN = 'src/handlers/qr-scan.ts';
 const VOTE_SETS_LIB = 'src/lib/vote-sets.ts';
 const OPEN_OBJECTS_LIB = 'src/lib/vote-open-objects.ts';
 const OPEN_OBJECTS_HANDLER = 'src/handlers/vote-objects.ts';
@@ -379,6 +401,40 @@ const LOGS_OR_ANSWERS = /\bconsole\.|\blog\w*\(|\bjson\(|new\s+Response\(|Respon
 const READS_STAR =
   /\bSELECT\s+(?:DISTINCT\s+)?(?:\w+\.)?\*|\bRETURNING\s+(?:\w+\.)?\*|,\s*\w+\.\*/i;
 
+/**
+ * The only Worker files that may read the anonymous cookie (OSE-2133; ADR-040
+ * decisions 5 and 6; AGENTS.md invariant 4). Adding a file here is the owner's
+ * decision: D3 was reversed so that no new route reads `ose_anon`.
+ */
+const COOKIE_READERS: Record<string, string> = {
+  'src/lib/anonymous-id.ts': 'The one place the Cookie header is parsed (getOrCreateAnonId).',
+  [QR_SCAN]: '/q: the scan, and the vote pass it mints (invariant 4).',
+  'src/handlers/forms.ts': 'The forms routes (invariant 4, owner ruling 2026-10-22).',
+};
+/** A read of the anonymous cookie, in any form this Worker uses. */
+const COOKIE_READ =
+  /\.get\(\s*['"`]cookie['"`]\s*\)|['"`]cookie['"`]|\bgetOrCreateAnonId\s*\(|\bose_anon\b|\bdocument\.cookie\b/i;
+
+/** Words a log line on the scan path must not name (OSE-2133). */
+const PASS_WORDS =
+  /\b(?:Location|location|redirectTarget|redirect|votePageTarget|pass|issueVotePass|mintVotePass|voterKey|k|anonId|url|href|headers)\b/;
+
+/** Every `console.<level>(…)` call in a file, to its closing parenthesis. */
+function consoleCalls(code: string): string[] {
+  const out: string[] = [];
+  const re = /\bconsole\s*\.\s*(?:log|info|warn|error|debug|trace)\s*\(/g;
+  for (let m = re.exec(code); m; m = re.exec(code)) {
+    let depth = 1;
+    let i = m.index + m[0].length;
+    for (; i < code.length && depth > 0; i++) {
+      if (code[i] === '(') depth++;
+      else if (code[i] === ')') depth--;
+    }
+    out.push(code.slice(m.index, i));
+  }
+  return out;
+}
+
 const SOURCES = walk(SRC_DIR, /\.(ts|js|mjs|html)$/).map((path) => {
   const raw = readFileSync(path, 'utf8');
   return { file: relTo(WORKER_DIR, path), raw, code: stripTs(raw) };
@@ -572,10 +628,78 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
     const vote = labels.filter((l) => l.startsWith('ose:vote:'));
     expect(vote.sort()).toEqual([
       'ose:vote:participant:v1',
+      'ose:vote:pass-seal:v1',
       'ose:vote:receipt:v1',
       'ose:vote:team-marker:v1',
+      'ose:vote:voter-key:v1',
     ]);
     expect(labels).toContain('ose:scan:node-key:v1');
+  });
+
+  test('OSE-2133 | keys | the vote pass declares its own two labels and borrows no *_CONTEXT', () => {
+    const pass = SOURCES.find((s) => s.file === VOTE_PASS_LIB);
+    expect(pass, `${VOTE_PASS_LIB} is read`).toBeTruthy();
+    const code = pass?.code ?? '';
+    expect(code).toMatch(/['"`]ose:vote:voter-key:v1['"`]/);
+    expect(code).toMatch(/['"`]ose:vote:pass-seal:v1['"`]/);
+    expect(
+      code.match(/\b[A-Z0-9_]*_CONTEXT\b/g) ?? [],
+      "lib/vote-pass.ts must not name another file's HKDF label constant"
+    ).toEqual([]);
+  });
+
+  test('OSE-2133 | log | /q never logs Location, the pass or the voter key, and the pass rides only in the fragment', () => {
+    const files = [QR_SCAN, VOTE_PASS_LIB].map((f) => {
+      const src = SOURCES.find((s) => s.file === f);
+      expect(src, `${f} is read`).toBeTruthy();
+      return { file: f, code: src?.code ?? '' };
+    });
+    const leaks = files.flatMap(({ file, code }) =>
+      consoleCalls(code)
+        .filter((call) => file === VOTE_PASS_LIB || PASS_WORDS.test(call))
+        .map((call) => `${file}: ${call.slice(0, 120)}`)
+    );
+    expect(
+      consoleCalls(files[0].code).length,
+      'the detector sees qr-scan.ts log lines'
+    ).toBeGreaterThan(3);
+    const planted = consoleCalls(
+      "x; console.log(JSON.stringify({ type: 'SCAN_REDIRECT', to: redirectTarget })); y"
+    );
+    expect(planted.length === 1 && PASS_WORDS.test(planted[0]), 'negative control').toBe(true);
+    expect(PASS_WORDS.test("console.warn(JSON.stringify({ type: 'VOTE_PASS_SKIPPED' }))")).toBe(
+      false
+    );
+    expect(leaks, 'A log line names the redirect, the pass or the voter key').toEqual([]);
+    const pass = files[1].code;
+    expect(pass).toMatch(/\/vote#t=\$\{pass\}/);
+    for (const { file, code } of files)
+      expect(/[?&]t=/.test(code), `${file} puts a pass in a query string`).toBe(false);
+  });
+
+  test('OSE-2133 | cookie | only the listed files read the anonymous cookie', () => {
+    const readers = SOURCES.filter(({ code }) => COOKIE_READ.test(code)).map((s) => s.file);
+    expect(
+      readers.filter((f) => !(f in COOKIE_READERS)),
+      'A new file reads the Cookie header or ose_anon. No new reader (D3 reversed, 2026-11-18).'
+    ).toEqual([]);
+    expect(
+      Object.keys(COOKIE_READERS).filter((f) => !readers.includes(f)),
+      'A listed reader no longer reads the cookie: take it off COOKIE_READERS.'
+    ).toEqual([]);
+    for (const f of Object.keys(COOKIE_READERS))
+      expect(/(?:^|\/)(?:votables|vote-pass|voting-switch|votes|vote-sets)\.ts$/.test(f), f).toBe(
+        false
+      );
+    // Negative controls: the shapes it must see, and one it must not.
+    for (const planted of [
+      "request.headers.get('Cookie')",
+      'req.headers.get("cookie")',
+      'getOrCreateAnonId(request)',
+      "const NAME = 'ose_anon';",
+    ])
+      expect(COOKIE_READ.test(planted), planted).toBe(true);
+    expect(COOKIE_READ.test("headers.append('Set-Cookie', value)")).toBe(false);
   });
 
   test('OSE-2125 | gate | the detectors see what they are for (negative controls)', () => {

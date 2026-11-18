@@ -37,7 +37,7 @@ Each story should include:
 - [ ] Contract: API shape + D1 schema parity
 - [ ] Unit: mock tests (Vitest)
 - [ ] Integration: Worker D1 + forms security
-- [ ] API: Newman collections pass against live staging
+- [ ] API: Bruno collections pass against live staging
 - [ ] E2E: Playwright full surface flow pass
 
 **E2E Surface Flow Coverage:**
