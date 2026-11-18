@@ -7,16 +7,25 @@ http:
   method: GET
   url: "{{baseUrl}}/q/qrt_lc_live"
   headers:
-    - name: X-Test-No-Auth
-      value: "1"
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+    - name: Accept
+      value: text/html
     - name: User-Agent
-      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+      value: ose-bruno-live-container
   auth: inherit
 
 runtime:
   scripts:
     - type: after-response
       code: |-
+        // The edge refuses a /q scan from a CI runner that does not carry the CI
+        // edge token (X-OCR-CI), the same headers folder 25 sends (OSE-939). A
+        // 403 here is the edge, not the Worker: the Worker never answers /q 403.
         test('OSE-2144 control: 302 to the event page', function () {
           expect(res.getStatus()).to.eql(302);
           expect(String(res.getHeader('location') || '')).to.include('/events/lc-live-evt');

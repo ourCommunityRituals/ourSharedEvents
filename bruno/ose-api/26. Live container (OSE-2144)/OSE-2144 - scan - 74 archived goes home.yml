@@ -7,16 +7,25 @@ http:
   method: GET
   url: "{{baseUrl}}/q/qrt_lc_archived"
   headers:
-    - name: X-Test-No-Auth
-      value: "1"
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+    - name: Accept
+      value: text/html
     - name: User-Agent
-      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+      value: ose-bruno-live-container
   auth: inherit
 
 runtime:
   scripts:
     - type: after-response
       code: |-
+        // The edge refuses a /q scan from a CI runner that does not carry the CI
+        // edge token (X-OCR-CI), the same headers folder 25 sends (OSE-939). A
+        // 403 here is the edge, not the Worker: the Worker never answers /q 403.
         // The same answer as a code nobody issued (request 71): the scan is not
         // looked up, so nothing is counted and no anonymous cookie is set.
         test('OSE-2144 rainy: archived: 302 to /, no event id, no cookie', function () {
