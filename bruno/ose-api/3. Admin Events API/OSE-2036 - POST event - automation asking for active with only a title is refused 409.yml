@@ -28,6 +28,8 @@ runtime:
         // give. It is refused before any write, so this request leaves nothing
         // behind and can run any number of times. The accepted path, with both
         // values, is the OSE-1425 request beside this one.
+        // Seen red 2026-11-18 on a local worker with the create check switched
+        // off: all three checks failed (201 where 409 was expected).
         test('409 CORE_VALUES_MISSING', function () {
           expect(res.getStatus()).to.eql(409);
           expect(res.getBody().ok).to.eql(false);
