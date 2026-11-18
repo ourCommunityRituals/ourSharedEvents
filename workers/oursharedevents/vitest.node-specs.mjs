@@ -354,6 +354,9 @@ export const NODE_SPECS = [
   // OSE-1425 every writer of events.status keeps active ⟺ qr_verified = 1.
   // Reads src/ as text with node:fs; no cloudflare:test.
   'tests/event-status-writers.spec.ts',
+  // OSE-1420 — going live needs a working code: the rule (pure lib), the read
+  // over a stand-in database, and the source of the two doors (reads src/).
+  'tests/go-live-evidence-doors.spec.ts',
   // OSE-474 pre-event countdown: pure text over lib/event-countdown.ts and its
   // browser tick run in jsdom with fake timers. No cloudflare:test.
   'tests/event-countdown.spec.ts',

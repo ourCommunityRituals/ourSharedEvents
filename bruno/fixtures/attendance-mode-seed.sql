@@ -80,3 +80,9 @@ ON CONFLICT(id) DO UPDATE SET brand_id = 'root', title = excluded.title, status 
 INSERT INTO shortlinks (code, event_id, kind, clicks, created_at)
 VALUES ('MODEsl', 'mode-online-evt', 'public', 0, datetime('now'))
 ON CONFLICT(code) DO UPDATE SET event_id = 'mode-online-evt', kind = 'public', clicks = 0;
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('mode-online-evt', 'mode-inperson-evt', 'mode-both-evt', 'mode-toggle-evt');

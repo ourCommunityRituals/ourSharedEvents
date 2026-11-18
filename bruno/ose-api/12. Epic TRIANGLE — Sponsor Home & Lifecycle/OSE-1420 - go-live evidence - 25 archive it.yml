@@ -1,0 +1,38 @@
+info:
+  name: "OSE-1420 | go-live evidence | archive the event, to go live again by PUT"
+  type: http
+  seq: 25
+
+# A move out of active asks for no evidence.
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{goLiveEvidenceEventId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: '{"status":"archived"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        const b = res.getBody() || {};
+        test('OSE-1420 archive: 200, and no receipt on a move out of active', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(b.from).to.eql('active');
+          expect(b.evidence).to.eql(undefined);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

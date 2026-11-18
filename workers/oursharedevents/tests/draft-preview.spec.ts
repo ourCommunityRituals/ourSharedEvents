@@ -27,6 +27,7 @@ import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:
 import { describe, test, expect, beforeAll } from 'vitest';
 import { route, type RouterEnv } from '../src/router';
 import { giveCoreValues } from './helpers/core-values';
+import { giveGoLiveEvidence } from './helpers/go-live-evidence';
 
 interface TestEnv {
   DB: D1Database;
@@ -76,6 +77,8 @@ async function seed(
     .bind(id, opts.brand ?? BRAND, opts.title ?? TITLE, id, status, opts.published ?? 1)
     .run();
   await giveCoreValues(env.DB, id);
+  // OSE-1420: going live needs a working code; the refusal is go-live-evidence.spec.ts.
+  await giveGoLiveEvidence(env.DB, id);
 }
 
 function b64url(obj: unknown): string {

@@ -51,6 +51,7 @@ import {
   findBannedSchemaIdentifiers,
 } from '../src/lib/schema-lexicon';
 import snapshot from '../src/api-schema-snapshots/public-events.snapshot.json';
+import { CORE_TIME_AND_TYPE } from './helpers/core-values';
 
 interface TestEnv {
   DB: D1Database;
@@ -767,7 +768,12 @@ describe('9. no meeting link is stored or published', () => {
   test('a link sent on create or update is not kept, and no answer carries it', async () => {
     const SECRET = 'https://meet.example/secret-room-91';
     const sent = { meeting_url: SECRET, join_url: SECRET, online_url: SECRET, stream_url: SECRET };
-    const made = await create({ attendance_mode: 'online', status: 'active', ...sent });
+    const made = await create({
+      attendance_mode: 'online',
+      status: 'active',
+      ...CORE_TIME_AND_TYPE,
+      ...sent,
+    });
     await E.DB.prepare(
       "UPDATE events SET is_published = 1, listed_from = '2026-01-01T00:00:00.000Z', brand_id = 'ose-mode-link' WHERE id = ?"
     )

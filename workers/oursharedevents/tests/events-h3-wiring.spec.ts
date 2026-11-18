@@ -10,6 +10,7 @@
 
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { CORE_VALUES } from './helpers/core-values';
 
 const ADMIN_HEADERS = { Authorization: 'Bearer test-admin-key-e2e-2026' };
 const BRAND = 'ose489-h3-test';
@@ -135,6 +136,7 @@ describe('OSE-489: venue H3 column wiring', () => {
       title: 'OSE-489 GET Test',
       brand_id: BRAND,
       status: 'active',
+      ...CORE_VALUES,
       lat: EAGLES.lat,
       lon: EAGLES.lon,
     });

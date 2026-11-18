@@ -33,14 +33,27 @@
  * Structured log (SCAN_RECORDED) contains only aggregated signals: no raw
  * anon_id, no exact timestamp, no lat/lng.
  *
+ * Vote codes (OSE-2133, OSE ADR-040 decision 6): `/q/<token>?type=vote`. When
+ * the scan was stored or was a duplicate of one stored, the voting switch is
+ * on (votingEnabled), the pepper is set and the event's vote set is open, the visitor goes to
+ * `/events/<id>/vote#t=<pass>` (lib/vote-pass.ts). The pass is only in the
+ * fragment. The uncounted path, a failed write, a missing pepper, a closed set
+ * or the switch off mint none, and the code keeps today's redirect. This is
+ * still the only place the cookie is read on the vote path (invariant 4).
+ * NO LOG LINE names the redirect's Location, the pass or the voter key
+ * (tests/e2e/0-architecture/votes-never-who.invariant.spec.ts).
+ *
  * Hot-path guard: this file MUST NOT import h3-js. Geo tagging is an
  * admin/creation-time operation (see handlers/poster-deployments.ts). Adding
  * h3-js here would silently break the SCAN_PATH invariant in h3-tagging.spec.ts.
  */
 
+import { isValidQrTokenShape } from '../lib/qr-token';
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
 import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-buffer';
 import { scanNodeKey } from '../lib/scan-node-key';
+import { issueVotePass, votePageTarget, VOTE_CODE_TYPE } from '../lib/vote-pass';
+import type { VotingSwitchEnv } from '../lib/voting-switch';
 
 import { errorLabel } from '../lib/error-label';
 // One warning per isolate, not one per scan: the missing secret is a config
@@ -57,7 +70,7 @@ function warnScanPepperMissing(): void {
   );
 }
 
-export interface QrScanEnv {
+export interface QrScanEnv extends VotingSwitchEnv {
   DB: D1Database;
   // OSE-1659: keys the scan id stored in scan_node_returns (lib/scan-node-key.ts).
   // Unset → the scan is stored with no id; the cookie value is never stored.
@@ -66,6 +79,8 @@ export interface QrScanEnv {
   // Optional scan write-buffer. Bound → the hot path enqueues and returns;
   // unbound → the direct D1 batch (dark-launch parity). See lib/scan-buffer.ts.
   SCAN_QUEUE?: Queue<ScanMessage>;
+  // OSE-2133: the voting switch comes from VotingSwitchEnv (lib/voting-switch.ts,
+  // S3c). Only votingEnabled reads it; on, a vote code may mint a pass.
 }
 
 /** Hour-bucketed UTC timestamp string — privacy invariant for scan_node_returns.anonymous_id. */
@@ -105,11 +120,6 @@ export function qrScanTarget(
 ): string {
   const safeType = formType && SCAN_FORM_TYPES.has(formType) ? formType : 'register';
   return `${origin}/events/${encodeURIComponent(eventId)}?type=${safeType}&deployment=${encodeURIComponent(deploymentId)}`;
-}
-
-/** qr_token must start with 'qrt_' and be <= 128 chars to be a valid poster token. */
-function isValidQrTokenShape(token: string): boolean {
-  return token.startsWith('qrt_') && token.length <= 128;
 }
 
 export async function handleQrScan(
@@ -218,6 +228,11 @@ export async function handleQrScan(
     }
   }
 
+  // OSE-2133: a vote pass needs a stored scan. A duplicate is one: its hour's
+  // marker exists only while the first scan's write stood (a failed write
+  // releases it, below).
+  let scanStored = isDuplicate;
+
   if (!isDuplicate) {
     const bucket = scanBucket(nowDate);
     // TL-078: the browser-name hash is only the fallback for a scan with no
@@ -242,6 +257,7 @@ export async function handleQrScan(
         country: null, // rollback-safe wire field; never a real country (OSE-1460)
         scan_bucket: bucket,
       });
+      scanStored = true;
 
       console.log(
         JSON.stringify({
@@ -274,12 +290,25 @@ export async function handleQrScan(
   // Also embed `?deployment=` so the event-page CTA can continue to the form
   // without losing sourcePlacementId attribution.
   const url = new URL(request.url);
-  const redirectTarget = qrScanTarget(
+  let redirectTarget = qrScanTarget(
     url.origin,
     eventId,
     deploymentId,
     url.searchParams.get('type')
   );
+
+  // OSE-2133: a vote code whose scan stands may carry a pass, in the fragment
+  // only. A failure here (a D1 blip reading the set) mints none and the
+  // visitor keeps today's redirect; the line names the failure, nothing else.
+  if (scanStored && url.searchParams.get('type') === VOTE_CODE_TYPE) {
+    let pass: string | null = null;
+    try {
+      pass = await issueVotePass(env, anonId, eventId, nowMs);
+    } catch (err) {
+      console.warn(JSON.stringify({ type: 'VOTE_PASS_SKIPPED', error: errorLabel(err) }));
+    }
+    if (pass) redirectTarget = votePageTarget(url.origin, eventId, pass);
+  }
 
   const redirectResponse = new Response(null, {
     status: 302,

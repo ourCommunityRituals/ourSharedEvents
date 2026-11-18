@@ -45,3 +45,9 @@ ON CONFLICT(id) DO UPDATE SET data_class = 'synthetic';
 -- Staging already has W8RH3K; a fresh database gets it here. OR IGNORE: an event
 -- keeps the code it has (event_id is UNIQUE), and this never changes it.
 INSERT OR IGNORE INTO event_codes (code, event_id) VALUES ('W8RH3K', 'test-event-001');
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('test-event-001');

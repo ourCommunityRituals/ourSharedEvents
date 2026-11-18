@@ -18,3 +18,9 @@ VALUES
  ('evt_smoke_post', 'ose', 'Smoke Bocce (Last Week)','smoke-post', 'active', 'Eagles Hall', '2427 Grove St',
   'Four tables, one patio', 'OSG', 'The corridor gathers',
   datetime('now','-7 days'), datetime('now','-7 days','+4 hours'));
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('evt_smoke_pre', 'evt_smoke_live', 'evt_smoke_post');

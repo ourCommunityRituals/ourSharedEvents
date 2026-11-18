@@ -34,6 +34,7 @@ import { handleCreateEvent, handleUpdateEvent, type EventsEnv } from '../src/han
 import { CORRIDOR_RES } from '../src/lib/h3-tagging';
 import { buildRepeatBody, REPEAT_SOURCE_COLUMNS } from '../src/lib/event-repeat';
 import { PUBLIC_EVENT_COLUMNS, toPublicEvent } from '../src/lib/public-event-projection';
+import { CORE_VALUES } from './helpers/core-values';
 
 interface TestEnv {
   DB: D1Database;
@@ -237,7 +238,7 @@ describe('W1 search: an event with no cell is found under its own zip, and no ot
     cellFar: 'Zip W1 Search Cell Far Zip Night',
   };
   beforeAll(async () => {
-    const live = { status: 'active', is_published: true };
+    const live = { status: 'active', ...CORE_VALUES, is_published: true };
     // The ZIP box alone, no cell (the place name finds nothing: no key here).
     await create({ ...live, title: T.box, location: 'Eagles Hall', zip_code: '60406' });
     // No box: the zip its address ends with.

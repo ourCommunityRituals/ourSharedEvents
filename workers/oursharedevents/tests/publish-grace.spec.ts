@@ -18,7 +18,8 @@ import { handleUpdateEvent, type EventsEnv } from '../src/handlers/events';
 import { handleSitemapXml } from '../src/lib/crawl-policy';
 import { readDiscoverableEvents } from '../src/lib/sponsor-discovery';
 import { latchReadyCorridors, LATCH_SETTLE_HOURS } from '../src/lib/corridor-latch';
-import { giveCoreValues } from './helpers/core-values';
+import { CORE_TIME_AND_TYPE, giveCoreValues } from './helpers/core-values';
+import { giveGoLiveEvidence } from './helpers/go-live-evidence';
 import {
   DEFAULT_PUBLISH_GRACE_MINUTES,
   listedFromForPublish,
@@ -58,6 +59,8 @@ async function insertEvent(id: string, status: string, opts: { h3_res7?: string 
     .bind(id, BRAND, `Grace ${id}`, id, status, inDays(3), opts.h3_res7 ?? null)
     .run();
   await giveCoreValues(E.DB, id);
+  // OSE-1420: going live needs a working code; the refusal is go-live-evidence.spec.ts.
+  await giveGoLiveEvidence(E.DB, id);
 }
 
 async function listedFromOf(id: string): Promise<string | null> {
@@ -228,6 +231,7 @@ describe('Publish starts the window; the event is live by link but not listed', 
         location: 'Test Hall',
         title: 'Created live',
         status: 'active',
+        ...CORE_TIME_AND_TYPE,
         start_date: inDays(3),
         is_published: true,
       }),
@@ -377,6 +381,7 @@ describe('Corridor latch counts settled events only (OSE-1508)', () => {
           location: 'Test Hall',
           title: `Live ${i}`,
           status: 'active',
+          ...CORE_TIME_AND_TYPE,
           start_date: inDays(2),
           is_published: true,
         }),

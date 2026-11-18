@@ -1,0 +1,44 @@
+info:
+  name: "OSE-1420 | go-live evidence | setup: a ready event, made through the API"
+  type: http
+  seq: 23
+
+# Going live needs a code that works (lib/go-live-evidence.ts). An event made
+# through the API gets its share link at creation, so it has one. Automation
+# (this run's internal key) may create it as ready; it is sent a start time and
+# an event type, which a create past draft is asked for. Synthetic, off the map.
+# Seq 27 archives it.
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: '{"attendance_mode":"in_person","location":"OSE-1420 Hall","title":"OSE-1420 go-live evidence (staging, synthetic)","status":"ready","is_published":false,"data_class":"synthetic","start_date":"2099-01-01","start_time":"18:00","timezone":"America/Chicago","event_type_id":"etr-rec-bocce"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        const b = res.getBody() || {};
+        test('OSE-1420 setup: the ready event is created with a share link', function () {
+          expect(res.getStatus()).to.eql(201);
+          expect(b.event_status).to.eql('ready');
+          expect(b.id).to.be.a('string');
+          expect(b.shortcode).to.be.a('string');
+        });
+        bru.setVar('goLiveEvidenceEventId', b.id || 'missing-go-live-event');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

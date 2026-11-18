@@ -1,0 +1,70 @@
+info:
+  name: GET /sponsor with a refused link - the page does not repeat it and sends no referrer
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/sponsor"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // A sponsor link the Worker refuses: the right shape, a signature that
+        // is not one. Built here so nothing token-shaped is written in the
+        // repository, and put in the address the way a real link is (?t=).
+        function b64url(text) {
+          var abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+          var out = '';
+          for (var i = 0; i < text.length; i += 3) {
+            var a = text.charCodeAt(i), b = text.charCodeAt(i + 1), c = text.charCodeAt(i + 2);
+            out += abc[a >> 2] + abc[((a & 3) << 4) | ((b || 0) >> 4)];
+            if (!isNaN(b)) out += abc[((b & 15) << 2) | ((c || 0) >> 6)];
+            if (!isNaN(c)) out += abc[c & 63];
+          }
+          return out;
+        }
+        var payload = b64url(JSON.stringify({ kind: 'sponsor-home', sponsor_id: 'no-such-sponsor', brand_id: 'none', exp: 4102444800 }));
+        var refused = payload + '.' + new Array(33).join('0b');
+        bru.setVar('ose1475RefusedSponsorLink', refused);
+        req.setUrl(bru.getEnvVar('baseUrl') + '/sponsor?t=' + refused);
+    - type: after-response
+      code: |-
+        // OSE-1475: the sponsor page opened with a link it refuses answers with
+        // a page that does not carry
+        // that link, and is sent with Referrer-Policy: no-referrer so the
+        // address never rides out in a Referer header (the recorded decision,
+        // docs/security/NO_CREDENTIAL_EMISSION.md).
+        var refused = bru.getVar('ose1475RefusedSponsorLink') || '';
+        var raw = res.getBody();
+        var body = typeof raw === 'string' ? raw : JSON.stringify(raw || '');
+        var headers = JSON.stringify(res.getHeaders() || {});
+        test('OSE-1475: the Worker answered with a refusal page (no edge challenge)', function() {
+          expect(refused.length).to.be.above(80);
+          expect(res.getHeader('cf-mitigated') || '').to.eql('');
+          expect(res.getStatus()).to.eql(401);
+        });
+        test('OSE-1475: the page does not repeat the refused link', function() {
+          expect(body.indexOf(refused)).to.eql(-1);
+          expect(body.indexOf(refused.split('.')[0])).to.eql(-1);
+        });
+        test('OSE-1475: no response header repeats the refused link', function() {
+          expect(headers.indexOf(refused.split('.')[0])).to.eql(-1);
+        });
+        test('OSE-1475: the refusal page is sent Referrer-Policy: no-referrer', function() {
+          expect(res.getHeader('Referrer-Policy') || '').to.eql('no-referrer');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
