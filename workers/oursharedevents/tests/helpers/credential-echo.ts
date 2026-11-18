@@ -156,6 +156,12 @@ export interface Leak {
 export const JWT_SHAPE = /eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{2,}/;
 /** This Worker's signed links: `base64url(JSON payload).hex(HMAC-SHA256)`. */
 export const SIGNED_LINK_SHAPE = /eyJ[A-Za-z0-9_-]{8,}\.[0-9a-f]{64}(?![0-9a-f])/g;
+/**
+ * The vote pass `/q` mints (src/lib/vote-pass.ts): `vp1.`, then
+ * base64url(JSON), a dot, and base64url(HMAC-SHA256). Neither shape above
+ * matches it, so it has its own.
+ */
+export const VOTE_PASS_SHAPE = /vp1\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/g;
 
 function htmlEscaped(v: string): string {
   return v
@@ -187,14 +193,62 @@ export interface Answer {
 }
 
 /**
- * Where a signed link this Worker minted may appear in an answer. `null` means
- * nowhere: any signed link in the answer is a leak.
+ * Where a token this Worker minted (a signed link, a vote pass) may appear in
+ * an answer. `null` means nowhere: any such token in the answer is a leak.
  */
 export interface SignedLinkRule {
   /** JSON answers: the property names a token (or a URL carrying one) may sit under. */
   jsonFields?: readonly string[];
   /** HTML answers: the text that must come right before each token. */
   htmlPrefix?: RegExp;
+  /** Where a vote pass may sit. Without this, a vote pass anywhere is a leak. */
+  votePass?: VotePassRule;
+}
+
+/**
+ * The one place a vote pass may sit: at the end of one response header, right
+ * after text that matches `before`. It is never allowed in a body.
+ */
+export interface VotePassRule {
+  /** The response header, lower-cased. */
+  header: string;
+  /** What the header's value must be up to the pass. */
+  before: RegExp;
+}
+
+function hasVotePass(text: string): boolean {
+  VOTE_PASS_SHAPE.lastIndex = 0;
+  const found = VOTE_PASS_SHAPE.test(text);
+  VOTE_PASS_SHAPE.lastIndex = 0;
+  return found;
+}
+
+function votePassLeaks(answer: Answer, rule: VotePassRule | undefined): Leak[] {
+  const leaks: Leak[] = [];
+  if (hasVotePass(answer.body)) leaks.push({ where: 'body', what: 'a vote pass' });
+  for (const [rawName, value] of answer.headers) {
+    const name = rawName.toLowerCase();
+    const found = [...value.matchAll(VOTE_PASS_SHAPE)];
+    if (found.length === 0) continue;
+    const at = found[0].index ?? 0;
+    const ok =
+      rule !== undefined &&
+      name === rule.header &&
+      found.length === 1 &&
+      // The pass ends the value, and everything before it is what the rule says.
+      at + found[0][0].length === value.length &&
+      rule.before.test(value.slice(0, at));
+    if (!ok) {
+      leaks.push({
+        where: `header ${name}`,
+        what:
+          rule !== undefined && name === rule.header
+            ? 'a vote pass outside the place its route is classified for'
+            : 'a vote pass (no route here is classified as putting one in this header)',
+      });
+    }
+  }
+  return leaks;
 }
 
 function signedLinkLeaks(body: string, rule: SignedLinkRule | null): string[] {
@@ -258,6 +312,7 @@ export function findLeaks(
   }
   if (JWT_SHAPE.test(answer.body)) leaks.push({ where: 'body', what: 'a JWT (eyJ….eyJ….sig)' });
   for (const what of signedLinkLeaks(answer.body, signedLinks)) leaks.push({ where: 'body', what });
+  leaks.push(...votePassLeaks(answer, signedLinks?.votePass));
   for (const [name, raw] of answer.headers) {
     // A value a probe is allowed to have in this header is not read again as a shape.
     let value = raw;

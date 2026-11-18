@@ -895,7 +895,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 32
+      "testCount": 36
     },
     {
       "file": "workers/oursharedevents/tests/csp-no-inline-handlers.spec.ts",
@@ -1973,7 +1973,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 22
+      "testCount": 26
     },
     {
       "file": "workers/oursharedevents/tests/map-areas-route.spec.ts",
