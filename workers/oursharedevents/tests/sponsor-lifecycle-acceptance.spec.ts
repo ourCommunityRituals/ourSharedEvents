@@ -66,8 +66,9 @@ async function seedEvent(): Promise<void> {
   await tenv()
     .DB.prepare(
       // OSE-1900: the event chose to have sponsors; the two sides are what is under test.
+      // OSE-2144: and it is live ('published' is no event state; 'active' is Published).
       `INSERT INTO events (id, brand_id, title, slug, status, settings_json, created_at, updated_at)
-       VALUES (?, 'wkrp', '0068 fixture event', 'evt-0068-fixture', 'published', '{"useSponsors":true}', ?, ?)`
+       VALUES (?, 'wkrp', '0068 fixture event', 'evt-0068-fixture', 'active', '{"useSponsors":true}', ?, ?)`
     )
     .bind(EVENT_ID, NOW, NOW)
     .run();

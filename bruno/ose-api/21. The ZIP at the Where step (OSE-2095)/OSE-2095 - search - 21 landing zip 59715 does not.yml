@@ -13,8 +13,13 @@ runtime:
     - type: after-response
       code: |-
         const body = String(res.getBody());
+        // OSE-2146: match this run's own card by its id, never the title every run
+        // shares: a stopped run's leftover has the same title (run 44338955374).
+        const runId = String(bru.getVar('w1ZipEventId') || '');
+        const ownCard = 'data-event-id="' + runId + '"';
+        test('OSE-2095 search: this run has its event id', function () { expect(runId).to.match(/^evt_[0-9a-f-]{36}$/); });
         test('OSE-2095 search: /?zip=59715 answers 200', function () { expect(res.getStatus()).to.eql(200); });
-        test('OSE-2095 search: not listed under another ZIP of the same town', function () { expect(body).to.not.include("OSE-2095 Zip Check Night (staging, synthetic)"); });
+        test('OSE-2095 search: not listed under another ZIP of the same town', function () { expect(body).to.not.include(ownCard); });
 
 settings:
   encodeUrl: true

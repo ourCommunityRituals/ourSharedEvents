@@ -1,0 +1,32 @@
+info:
+  name: 'OSE-2144 | exception | SharedReport | an archived event’s report opens with a valid signed link'
+  type: http
+  seq: 91
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/lc-recap-evt/shared-report"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: Accept
+      value: "application/json"
+    - name: Authorization
+      value: "Bearer {{lcReportToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2144 exception: 200 with the signed link', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(res.getBody().ok).to.eql(true);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

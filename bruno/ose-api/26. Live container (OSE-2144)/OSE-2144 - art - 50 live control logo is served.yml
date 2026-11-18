@@ -1,0 +1,27 @@
+info:
+  name: 'OSE-2144 | sunny | logo proxy | a sponsor on a live event is served (422 from the refused host, not 404) (control)'
+  type: http
+  seq: 50
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_lc_live/logo"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2144 control: the logo is past the gate (422, the proxy refused the host)', function () {
+          expect(res.getStatus()).to.eql(422);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

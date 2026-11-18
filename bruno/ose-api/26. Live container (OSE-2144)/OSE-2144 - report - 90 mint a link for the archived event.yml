@@ -1,0 +1,37 @@
+info:
+  name: 'OSE-2144 | exception | SharedReport | setup | mint an organizer link for the archived event'
+  type: http
+  seq: 90
+
+http:
+  method: POST
+  url: '{{baseUrl}}/api/v2/admin/events/lc-recap-evt/shared-report/mint-link'
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "role": "bar_owner",
+        "ttl_days": 1
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2144 report link: 200 with a token', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(res.getBody().ok).to.eql(true);
+          expect(res.getBody().token).to.be.a('string');
+        });
+        bru.setVar('lcReportToken', res.getBody().token || '');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

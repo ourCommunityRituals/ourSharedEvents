@@ -125,6 +125,8 @@ const EXPECTED_INDEXES = [
   'idx_events_campaign_id', // 0110 (OSE-1552) — the events of one campaign
   'idx_votable_objects_event_id', // 0111 (OSE-2125) — the objects of one event
   'idx_votable_objects_set_group', // 0111 (OSE-2125) — a set's objects, and its teams
+  'idx_sponsor_business_created_by', // 0112 (OSE-1561) — a person's own sponsors in the public brand
+  'idx_campaigns_created_by', // 0112 (OSE-1561) — a person's own campaigns in the public brand
   // Campaigns (migrations 0039/0040) — idx_sponsors_is_local + idx_sponsors_campaign_id
   // retired by OSE-799 A2 (0067): locality/campaign moved to sponsor_placement.
   'idx_campaigns_brand_id',
@@ -151,7 +153,7 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // OSE-799 A2 (0065-0067): `sponsors` (32) retired → split into three tables.
   // sponsor_business: id, brand_id, name, website_url, business_type, lat, lon,
   //   h3_res9, h3_res7, created_at, updated_at = 11.
-  sponsor_business: 19, // +is_active (0068 — lifecycle lives on the business); +tier (0081, OSE-1316); +display_name/address_line/contact_phone/contact_email (0083 — public card); +header_image_url/header_text (0105, OSE-1826)
+  sponsor_business: 20, // +created_by (0112, OSE-1561 — who created it; the boundary inside the public brand); +is_active (0068 — lifecycle lives on the business); +tier (0081, OSE-1316); +display_name/address_line/contact_phone/contact_email (0083 — public card); +header_image_url/header_text (0105, OSE-1826)
   // sponsor_asset: id, sponsor_business_id, format, url, content_type, focal_x,
   //   focal_y, crop_rect, validated_at, created_at, updated_at = 11.
   sponsor_asset: 11, // 0081 rebuilds it (CHECK += logo_compact), same 11 columns
@@ -363,7 +365,7 @@ describe('Gate 5: Index verification', () => {
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
     // + 2 (idx_events_status_updated, idx_events_created_by — migration 0075) = 72.
-    expect(names.length).toBe(87); // +2 0111 idx_votable_objects_event_id + idx_votable_objects_set_group; +1 0110 idx_events_campaign_id; +2 0109 idx_event_booths_event_id + idx_poster_deployments_booth_id; +2 0104 idx_events_venue_canonical + idx_events_event_correlation; +1 0101 idx_snr_event_anon_bucket; +1 0092 idx_anon_id_returns_pepper_epoch; +2 0090 idx_anon_id_returns_last_seen + idx_anon_id_returns_computed_at; +1 0089 idx_snr_country_nonnull; +1 0088 idx_admin_audit_log_brand_created; +1 0087 idx_scan_cell_aggregates_event_cell; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
+    expect(names.length).toBe(89); // +2 0112 idx_sponsor_business_created_by + idx_campaigns_created_by; +2 0111 idx_votable_objects_event_id + idx_votable_objects_set_group; +1 0110 idx_events_campaign_id; +2 0109 idx_event_booths_event_id + idx_poster_deployments_booth_id; +2 0104 idx_events_venue_canonical + idx_events_event_correlation; +1 0101 idx_snr_event_anon_bucket; +1 0092 idx_anon_id_returns_pepper_epoch; +2 0090 idx_anon_id_returns_last_seen + idx_anon_id_returns_computed_at; +1 0089 idx_snr_country_nonnull; +1 0088 idx_admin_audit_log_brand_created; +1 0087 idx_scan_cell_aggregates_event_cell; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

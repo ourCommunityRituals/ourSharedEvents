@@ -15,6 +15,7 @@
  */
 
 import { useSponsorsSql } from './event-settings';
+import { eventLiveSql } from '../domain/event-state';
 
 // ── Field rules ───────────────────────────────────────────────────────────────
 
@@ -134,7 +135,8 @@ export function sponsorTitle(s: { name: string; display_name?: string | null }):
  * organizer created; a sponsor_request needs organizer_accepted = 1.
  *
  * On show = an active placement, accepted by both sides, on an event whose
- * public page renders (RENDERABLE 'public' is 'active' only). A sponsor placed
+ * public page renders (eventLiveSql, domain/event-state.ts: the one "parent
+ * event is live" test, OSE-2144). A sponsor placed
  * only on a draft, ready or archived event is not on show. Deliberately NOT
  * is_published: an unlisted-but-active event page still shows its sponsors,
  * and their card links must work.
@@ -145,7 +147,7 @@ export const SPONSOR_ON_SHOW_SQL = `(sb.is_active = 1 AND EXISTS (
      AND COALESCE(sp_show.organizer_accepted, CASE WHEN sp_show.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
      AND sp_show.sponsor_accepted = 1
      AND EXISTS (SELECT 1 FROM events e_show WHERE e_show.id = sp_show.event_id
-                 AND e_show.brand_id = sb.brand_id AND e_show.status = 'active'
+                 AND e_show.brand_id = sb.brand_id AND ${eventLiveSql('e_show')}
                  AND ${eventUsesSponsorsSql('e_show')})
 ))`;
 
@@ -197,7 +199,7 @@ export const PLACEMENT_EVENT_USES_SPONSORS_SQL = `EXISTS (
 export const PLACEMENT_ON_SHOW_SQL = `(sp.is_active = 1 AND sb.is_active = 1
   AND sp.sponsor_accepted = 1
   AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
-  AND e.status = 'active' AND e.brand_id = sb.brand_id
+  AND ${eventLiveSql('e')} AND e.brand_id = sb.brand_id
   AND ${eventUsesSponsorsSql('e')})`;
 
 /** The public card for a sponsor (no website → a tap lands here). */

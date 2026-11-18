@@ -39,6 +39,7 @@ import { applyCountFloor, floorTotalOfParts, type FlooredCount } from '../lib/co
 import { COUNTED_REGISTRATION_SQL } from '../lib/registration-count';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
+import { resolveOwnerRule, wholeBrandIds } from '../lib/admin-owner-scope';
 import {
   contractBlock,
   floorBucketsThenSum,
@@ -154,7 +155,20 @@ export async function resolveDashboardBrands(
   if (brandId && !scope.brandIds.includes(brandId)) {
     return fail(request, reqId, 403, 'BRAND_FORBIDDEN', `Not entitled to brand_id "${brandId}"`);
   }
-  return { brands: brandId ? [brandId] : [...scope.brandIds] };
+  // OSE-1561: these two dashboards sum a whole brand. The public brand is shared
+  // by every organizer without a brand of their own, so a caller held to their
+  // own rows there is never given its sum: the public brand is left out, and
+  // asking for it by name is refused like a brand they are not in. Their own
+  // events are reported one at a time (/admin/events/:id/dashboard) and summed by
+  // the portfolio roll-up.
+  const whole = wholeBrandIds(await resolveOwnerRule(request, env, scope), scope.brandIds);
+  if (brandId && !whole.includes(brandId)) {
+    return fail(request, reqId, 403, 'BRAND_FORBIDDEN', `Not entitled to brand_id "${brandId}"`);
+  }
+  if (whole.length === 0) {
+    return fail(request, reqId, 403, 'BRAND_SCOPE_DENIED', 'No whole brand for this caller');
+  }
+  return { brands: brandId ? [brandId] : whole };
 }
 
 function parseDataClass(request: Request): DataClassFilter | null {

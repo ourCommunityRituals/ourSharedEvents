@@ -8,6 +8,11 @@
 > the human gate (two PO questions, listed under "Open questions"). Loop 3 has not
 > run. Worksheet: `docs/ccr-archive/CCR-ADR-022-EVENT-BASE-BRAND-OPTIONAL-2026-10-03.md`.
 > This ADR stays **Proposed** until Loop 3 passes.
+>
+> **Decision 2a is built (2026-11-18, OSE-1561).** The owner answered open
+> questions 1 and 2 and two questions the build raised, on 2026-11-18. They are
+> recorded under 2a and under "Open questions". Building 2a does not accept this
+> ADR: the status is still the owner's to change, and it needs their acceptance.
 
 ## Context
 
@@ -138,6 +143,80 @@ named form data. So:
 - **No organizer other than the founder is admitted to the platform brand until
   OSE-1561 is Done.** This extends the OSE-1456 gate.
 
+**Which brand this is.** "The platform brand" in this ADR is the public brand
+`root`. The code names it `PUBLIC_BRAND_ID`. It is not `PLATFORM_BRAND_ID`
+(`ose-platform`), the reserved brand for platform-owned data (AUD-3). The two
+constants sit side by side in `lib/admin-brand-scope.ts`.
+
+**Built (OSE-1561, 2026-11-18; the code is the record).** The owner's decisions
+of 2026-11-18 are in the first column.
+
+| Decided (owner, 2026-11-18)                                                                       | How it is built                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The `root` brand owner sees event rows for support and never named form data.                     | The five forms reads and the export under an event are the creator's alone in `root`, the brand owner included. Everything else in `root` is as it was for the brand owner.                                          |
+| Sponsors and campaigns get a creator column. Not a brand per organizer.                           | Migration 0112 adds `created_by` to `sponsor_business` and `campaigns`. The server writes it at create; no request field sets it.                                                                                    |
+| Every role in `root` except brand owner is held to its own rows, until the role matrix says more. | `organizer`, `staff`, `sponsor_manager`, an unknown role and a member with no recorded role (the interim env map carries none) all reach only rows they created. A role is read from `admin_brand_memberships` only. |
+| Build now; the staging test waits for two organizer identities.                                   | The workers-pool spec runs today. The Bruno folder is written and skips, logging NOT RUN, until staging has the identities. OSE-1561 is not Done until that layer has run.                                           |
+
+- **It only ever narrows.** The brand predicate is not rewritten. Where the
+  caller stands in `root` is resolved once (`lib/admin-owner-scope.ts`), and one
+  more bound condition goes beside the brand predicate (`ownerPredicate`). A
+  caller can lose rows to it; nobody can gain one. The router guard
+  (`guardAdminObjectScope`) applies it to an event and everything beneath it, a
+  poster deployment, a campaign and what is named beneath it, a sponsor and a
+  sponsor's request. The events, sponsors and campaigns lists and the portfolio
+  roll-up apply the same condition. The series routes, which name other events
+  and a series in the request body, carry it in each read and write.
+- **A row with no creator matches nobody** but the `root` brand owner and the
+  automation key where an environment turns it on. Migration 0112 writes no
+  creator for existing rows; it does not guess one.
+- **A placement belongs to the event it is on.** The organizer who created the
+  event answers a sponsor's request to join it. A sponsor one organizer created
+  can hold a placement on another organizer's event (the sponsor asked, that
+  organizer agreed); the sponsor's creator is not shown that placement and
+  cannot change it.
+- **The two brand dashboards** (operations, corridor) sum a whole brand, so they
+  leave `root` out for a caller held to their own rows. Their own events are
+  reported one at a time and summed by the portfolio roll-up.
+- **Not yours is the same 404 as does not exist**, on every route.
+
+**Not built, and still to decide.** These are listed so they are not read as
+done:
+
+1. Whether the `root` brand owner may still _change_ another organizer's event,
+   sponsor or campaign. The decision says "sees". Today they can, as before.
+2. Whether the `root` brand owner should still see another organizer's sponsors
+   and campaigns. A sponsor row holds a contact phone and email. Today they do,
+   as before, and that is also how a row with no creator stays reachable.
+3. A sponsor one organizer created that asks to join another organizer's event:
+   the second organizer can answer the request by its id, and does not see that
+   sponsor in their own sponsor list.
+4. How two organizer identities reach staging. A listed service token is an
+   admin of the one CI brand (OSE-1800), never a member of `root`.
+5. The admin page still shows the "Only mine" control to an organizer in `root`.
+   It has no effect for them: their list is already only theirs.
+6. A structural gate that fails when a new admin read of a `root` row carries no
+   creator condition. The route matrix catches a route that is in the route
+   list; nothing yet catches a query that is not behind a listed route.
+7. Reads that look across a brand's events without going through a list: the
+   nightly series detector groups `root` events by place and time whoever
+   created them (its suggestion is then shown only to the creator of the event
+   it is anchored on), and a campaign's event list shows every event in the
+   campaign, which can include another organizer's only if the brand owner put
+   it there.
+8. Counts for the `root` brand owner. The two count routes under an event's
+   forms (check-in count, sign-up count) are refused to them with the rest of
+   the form data, but the event's stats and the portfolio roll-up still give
+   them the floored registration and check-in counts of other organizers'
+   events. Counts name nobody; whether "never named form data" should reach
+   them is the owner's call.
+9. Event flag overrides. `GET /api/v2/admin/flags?scope=event` and
+   `GET /api/v2/admin/flags/resolve?eventId=` take an event id from the query
+   and check neither brand nor creator, so any signed-in admin reads the flag
+   state of any event. This is older than 2a and is not limited to `root`.
+   Flag writes are guarded. The flags live in the forms database and the events
+   in the main one, so closing it is its own piece of work.
+
 ### 2b. The plan belongs to the brand.
 
 Free and Mid must work side by side on one deployment. Today the plan is one
@@ -257,7 +336,9 @@ are forgiving on purpose and expire by themselves (`lib/draft-expiry.ts`).
 - Leaving draft gets stricter. Events created before this ADR may lack a time or
   an event type and will prompt for them on the next edit.
 - The platform brand needs a second isolation rule (owner) beside the brand
-  rule. Two rules are more to test and to get wrong than one.
+  rule. Two rules are more to test and to get wrong than one. It also needed a
+  migration, which this ADR first said it would not: only `events` recorded a
+  creator, so sponsors and campaigns gained the column (0112).
 - The plan moves from one global setting to one per brand: a change in
   `@ocr/flags` and a backfill.
 - Slugs for event types and categories are new data that must stay
@@ -276,10 +357,12 @@ are forgiving on purpose and expire by themselves (`lib/draft-expiry.ts`).
 
 1. **How does a free organizer get in at launch:** by invitation (a grant per
    person, as today) or self-serve? Self-serve is new product surface and a new
-   abuse surface.
+   abuse surface. _Answered (owner, 2026-11-18): by invitation, as today._
 2. **What may the platform brand's owner see** of other organizers' events and
    of their named form data? Recommended: event rows for support, never named
-   form data.
+   form data. _Answered (owner, 2026-11-18): event rows for support, never
+   named form data. Built in 2a. Whether "sees" also means "may change" is
+   listed there as still to decide._
 3. **All-day events:** is a date alone enough for "time", with an explicit
    all-day choice?
 4. **Map and sponsors, remaining details:** does removing the last sponsor turn

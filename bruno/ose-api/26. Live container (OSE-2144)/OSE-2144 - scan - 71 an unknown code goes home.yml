@@ -1,0 +1,31 @@
+info:
+  name: 'OSE-2144 | rainy | /q | a code nobody issued goes home (the reference answer)'
+  type: http
+  seq: 71
+
+http:
+  method: GET
+  url: "{{baseUrl}}/q/qrt_lc_nobody"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: User-Agent
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2144 reference: 302 to /, no cookie', function () {
+          expect(res.getStatus()).to.eql(302);
+          expect(res.getHeader('location')).to.eql('/');
+          expect(res.getHeader('set-cookie')).to.be.oneOf([undefined, null]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

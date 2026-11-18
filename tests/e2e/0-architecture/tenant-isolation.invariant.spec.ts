@@ -162,6 +162,21 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
   ],
 
   [
+    'handlers/sponsors.ts > ownPlacementSql: sql: ` AND EXISTS (SELECT 1 FROM events oe WHERE oe.id = ${placementEventCol} AND ${own.sql})`,',
+    'OSE-1561. Not a statement: a fragment added beside a sponsor placement join ' +
+      'or a placement UPDATE that already carries the brand or a held sponsor id ' +
+      '(handleAdminListSponsors, handleAdminGetSponsor, handleAdminUpdateSponsor). ' +
+      'It reads ONE event, the one the placement is on (`oe.id` equals that ' +
+      "placement's event_id), and returns nothing from it. `own.sql` is " +
+      '`(oe.brand_id <> ? OR oe.created_by = ?)` from ownerPredicate ' +
+      '(lib/admin-owner-scope.ts), bound to the public brand and the verified ' +
+      'caller, so the literal `brand_id = ?` never appears. It can only take a ' +
+      'placement away from a caller, never add one. Held by ' +
+      'tests/public-brand-owner-wall.spec.ts ("a placement on another person\'s ' +
+      'event").',
+  ],
+
+  [
     'handlers/campaigns.ts > handleAdminListCampaigns: FROM campaigns ${where}',
     'Admin list of campaigns (showcase S14). `where` is `WHERE brand_id IN (?, ?)` ' +
       'built from resolveAdminBrandScopeAsync two lines above, so the literal ' +
@@ -436,6 +451,15 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
   // placements) in the resolver header. Query unchanged.
   // 272→277 by OSE-1438 (the CardableRow type above the resolver, and the
   // has_card column in this SELECT list). Query scope unchanged.
+
+  [
+    'handlers/qr-scan.ts > handleQrScan: JOIN events e ON e.id = pd.event_id',
+    'OSE-2144: the /q token lookup joins the deployment to its event only to ask ' +
+      'whether the event is live. The read is keyed by the held qr_token (`pd.qr_token = ?`, ' +
+      'a unique index on an unguessable token), so it returns at most one deployment and ' +
+      'its one event; it cannot enumerate a brand. qr_token is not a column the held-id ' +
+      'allowlist names, hence the entry.',
+  ],
 
   [
     'lib/sponsor-resolver.ts > resolveSponsorsForEvent: COALESCE((SELECT sp2.tier FROM sponsor_placement sp2',
