@@ -891,6 +891,13 @@
       "testCount": 12
     },
     {
+      "file": "workers/oursharedevents/tests/credential-echo.derived.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 32
+    },
+    {
       "file": "workers/oursharedevents/tests/csp-no-inline-handlers.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -1472,6 +1479,13 @@
       "testCount": 14
     },
     {
+      "file": "workers/oursharedevents/tests/floor-open-items.pinned.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
+    },
+    {
       "file": "workers/oursharedevents/tests/forbidden-join-blindness.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -1939,6 +1953,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/log-redact.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 22
     },
     {
       "file": "workers/oursharedevents/tests/map-areas-route.spec.ts",

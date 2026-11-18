@@ -1,0 +1,64 @@
+info:
+  name: GET /api/v2/admin/events with the CI header - the answer does not hand it back
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: Accept
+      value: application/json
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // OSE-1475: an admin read made with the real CI header (the collection
+        // adds it). Whatever answers, the Worker or the edge, the value that
+        // was sent is in no part of the answer. The value is read from the
+        // environment to compare with; it is never printed. With no CI header
+        // configured there is nothing to compare, and the check says so by name.
+        var raw = res.getBody();
+        var body = typeof raw === 'string' ? raw : JSON.stringify(raw || '');
+        var headers = JSON.stringify(res.getHeaders() || {});
+        var held = {
+          'the CI header value': bru.getEnvVar('ocrInternalSecret') || '',
+          'the admin key': bru.getEnvVar('adminKey') || ''
+        };
+        Object.keys(held).forEach(function(name) {
+          if (held[name].length < 12) {
+            test('OSE-1475: ' + name + ' is not set in this environment (nothing to compare)', function() {
+              expect(true).to.eql(true);
+            });
+            return;
+          }
+          test('OSE-1475: the body does not carry ' + name, function() {
+            expect(body.indexOf(held[name])).to.eql(-1);
+          });
+          test('OSE-1475: no response header carries ' + name, function() {
+            expect(headers.indexOf(held[name])).to.eql(-1);
+          });
+        });
+        // Every Worker answer carries X-Monetization-Inert. Without it the edge
+        // answered (the Access sign-in page, which holds a state token of its
+        // own): that page is not the Worker's to answer for.
+        if ((res.getHeader('X-Monetization-Inert') || '') === 'true') {
+          test('OSE-1475: the Worker answered, and its answer carries no JWT (body or headers)', function() {
+            var jwt = /eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{2,}/;
+            expect(jwt.test(body)).to.eql(false);
+            expect(jwt.test(headers)).to.eql(false);
+          });
+        } else {
+          test('OSE-1475: the edge answered, not the Worker (its sign-in page is not read for a JWT)', function() {
+            expect(res.getHeader('X-Monetization-Inert') || '').to.eql('');
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
