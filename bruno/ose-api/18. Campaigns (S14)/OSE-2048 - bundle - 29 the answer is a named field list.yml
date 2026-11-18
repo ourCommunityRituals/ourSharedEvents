@@ -1,0 +1,78 @@
+info:
+  name: "OSE-2048 | field list | sponsor bundle | the public answer is a named field list"
+  type: http
+  seq: 29
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/camp-on-evt/sponsor-bundle?surface=public"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Named fields of ONE response. No whole body is compared, and no two
+        // requests are compared. A sponsor's beacon_token holds an expiry in
+        // whole seconds: it is taken out of the key list first and checked by
+        // type only, so it is never inside a compared value.
+        const body = res.getBody() || {};
+        const bundle = body.bundle || {};
+        const keys = function (o) { return Object.keys(o || {}).sort(); };
+        const sponsorKeys = function (s) {
+          return keys(s).filter(function (k) { return k !== 'beacon_token'; });
+        };
+        const LIVE = [
+          'address_line', 'card_url', 'click_token', 'created_at', 'display_name',
+          'display_token', 'event_id', 'has_header_image', 'header_text', 'id',
+          'is_active', 'is_local', 'logo_url', 'name', 'placement_formats',
+          'sidebar_logo_url', 'tier', 'title', 'updated_at', 'website_url'
+        ];
+        const WITH_CAMPAIGN = LIVE.concat(['campaign']).sort();
+        const SURFACES = ['mobileBanner', 'posterTop', 'tvSide', 'tvTop'];
+        const sponsors = bundle.sponsors || [];
+        const byId = function (id) { return sponsors.filter(function (s) { return s.id === id; })[0]; };
+
+        test('OSE-2048 field list: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-2048 field list: the answer carries ok, status and bundle only', function () {
+          expect(keys(body)).to.eql(['bundle', 'ok', 'status']);
+        });
+        test('OSE-2048 field list: the bundle carries its three named parts only', function () {
+          expect(keys(bundle)).to.eql(['rotation_config', 'sponsors', 'surface_sponsors']);
+          expect(keys(bundle.surface_sponsors)).to.eql(SURFACES);
+          expect(keys(bundle.rotation_config)).to.eql(['rotationMs', 'sponsorSlots']);
+        });
+        test('OSE-2048 field list: a sponsor with no campaign carries exactly the named fields', function () {
+          expect(byId('sb_camp_paused')).to.be.an('object');
+          expect(sponsorKeys(byId('sb_camp_paused'))).to.eql(LIVE);
+        });
+        test('OSE-2048 field list: a sponsor in a campaign carries the same fields and its campaign', function () {
+          expect(byId('sb_camp_shown')).to.be.an('object');
+          expect(sponsorKeys(byId('sb_camp_shown'))).to.eql(WITH_CAMPAIGN);
+          expect(keys(byId('sb_camp_shown').campaign)).to.eql(['id', 'title']);
+        });
+        test('OSE-2048 field list: every sponsor in every list stays inside the named fields', function () {
+          const lists = [sponsors].concat(SURFACES.map(function (n) { return bundle.surface_sponsors[n] || []; }));
+          expect(sponsors.length).to.be.above(0);
+          lists.forEach(function (list) {
+            expect(list.length).to.be.above(0);
+            list.forEach(function (s) {
+              sponsorKeys(s).forEach(function (k) { expect(WITH_CAMPAIGN).to.include(k); });
+              LIVE.forEach(function (k) { expect(s).to.have.property(k); });
+            });
+          });
+        });
+        test('OSE-2048 field list: a beacon token, where one is sent, is a string', function () {
+          sponsors.forEach(function (s) {
+            if (Object.prototype.hasOwnProperty.call(s, 'beacon_token')) {
+              expect(s.beacon_token).to.be.a('string');
+            }
+          });
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0111; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0112; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,28 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0112: sponsor_business.created_by and campaigns.created_by (OSE-1561,
+-- OSE ADR-022 decision 2a).
+-- Additive: two nullable columns and two indexes. No row is written or
+-- rewritten. THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS. The older
+-- Worker does not read them.
+--
+-- What the older Worker does NOT know: the owner rule. It scopes the admin
+-- surface by brand only, so while it runs, two organizers who share the public
+-- brand `root` can again see and change each other's events, sponsors and
+-- campaigns. Do not roll back past this Worker while any organizer other than
+-- the founder is a member of `root`; remove their membership rows first.
+-- A sponsor or campaign the older Worker creates has created_by NULL. When the
+-- newer Worker returns, such a row in `root` is reachable by the `root` brand
+-- owner only, not by the organizer who made it, until an owner sets its creator.
+--
+-- Surgical reverse, only if the columns themselves must go. This forgets who
+-- created every sponsor and campaign. Drop each index before its column:
+DROP INDEX IF EXISTS idx_campaigns_created_by;
+DROP INDEX IF EXISTS idx_sponsor_business_created_by;
+ALTER TABLE campaigns DROP COLUMN created_by;
+ALTER TABLE sponsor_business DROP COLUMN created_by;
+
 -- 0111: the six vote tables (OSE-2125, OSE ADR-040): vote_sets,
 -- votable_objects, vote_tallies, vote_receipts, vote_participants,
 -- vote_team_markers, and two indexes on votable_objects.

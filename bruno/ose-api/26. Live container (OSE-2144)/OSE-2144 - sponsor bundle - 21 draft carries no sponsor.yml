@@ -1,0 +1,31 @@
+info:
+  name: 'OSE-2144 | rainy | sponsor bundle (TV) | a draft event carries no sponsor and no beacon token'
+  type: http
+  seq: 21
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/lc-draft-evt/sponsor-bundle?surface=display"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const text = JSON.stringify(res.getBody());
+        test('OSE-2144 rainy: draft: no sponsor, no name, no beacon token', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(text).to.not.include('sb_lc_draft');
+          expect(text).to.not.include('Live Container');
+          expect(text).to.not.include('beacon_token');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

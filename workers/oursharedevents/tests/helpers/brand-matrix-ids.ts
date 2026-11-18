@@ -69,6 +69,15 @@ export function brandFx(key: BrandKey): BrandFx {
 
 export const BRANDS: readonly BrandFx[] = BRAND_KEYS.map(brandFx);
 
+/**
+ * OSE-1561: one PERSON's tree inside a brand they share with others (by default the
+ * public brand `root`). Same id shapes as a brand's tree (`bm-<key>-active`, …), so
+ * the route list addresses it unchanged and a leak is still found by its marker.
+ */
+export function personFx(key: string, brandId = 'root'): BrandFx {
+  return { ...brandFx(key as BrandKey), brandId, ownerEmail: `${key}@example.com` };
+}
+
 /** An id that exists nowhere, used to compare "not yours" against "does not exist". */
 export const UNKNOWN_ID = 'bm-nobody-unknown';
 

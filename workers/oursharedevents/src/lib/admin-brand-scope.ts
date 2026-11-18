@@ -64,6 +64,19 @@ function resolveServiceActorScope(env: AdminBrandScopeEnv): AdminBrandScope {
  */
 export const PLATFORM_BRAND_ID = 'ose-platform';
 
+/**
+ * OSE-1561 — the platform's PUBLIC brand. "No brand" is stored as this brand
+ * (OSE ADR-022, decision 2): every organizer without a brand of their own is a
+ * member of it, so inside it the brand alone isolates nobody and the row's
+ * creator is the boundary (lib/admin-owner-scope.ts).
+ *
+ * It is NOT PLATFORM_BRAND_ID. `ose-platform` holds platform-owned data and
+ * grants nothing over events; `root` is where free organizers' events live.
+ * The id is still written as a bare 'root' in other modules; naming it in one
+ * place for every caller is OSE-1555 (lib/brand.ts).
+ */
+export const PUBLIC_BRAND_ID = 'root';
+
 /** OSE-671 groundwork: the admin role vocabulary carried on a membership row. */
 export type AdminRole = 'brand_owner' | 'organizer' | 'sponsor_manager' | 'staff';
 

@@ -1549,6 +1549,22 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/opt-in-sponsors-seed.sql
 
+      # OSE-2144: nothing is more live than its container (owner, 2026-11-18). One
+      # opted-in event per status (live, draft, ready, archived, archived after
+      # being listed), each with an accepted sponsor and a QR code, for Bruno
+      # folder 26 "Live container". The upserts put every row back to its starting
+      # state. NOT continue-on-error: a missing fixture fails here by name, not as
+      # a 404 in the contract run.
+      - name: 'Seed live container fixtures (OSE-2144)'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/live-container-seed.sql
+
       # OSE-1901: one listed event with four sponsors that show (one per paid
       # level, one local) and three that never may, for Bruno folder 21 "Sponsor
       # line by covenant share". The folder reads which name the one-name line

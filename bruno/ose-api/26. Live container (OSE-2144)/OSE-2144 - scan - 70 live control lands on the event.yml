@@ -1,0 +1,30 @@
+info:
+  name: 'OSE-2144 | sunny | /q | a code on a live event lands on the event (control)'
+  type: http
+  seq: 70
+
+http:
+  method: GET
+  url: "{{baseUrl}}/q/qrt_lc_live"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: User-Agent
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2144 control: 302 to the event page', function () {
+          expect(res.getStatus()).to.eql(302);
+          expect(String(res.getHeader('location') || '')).to.include('/events/lc-live-evt');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

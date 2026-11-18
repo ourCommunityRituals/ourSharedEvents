@@ -21,6 +21,7 @@ import { validateLogoUrl } from '../lib/sponsor-logo';
 import { sponsorTitle, sponsorCardPath } from '../lib/sponsor-card';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { PLACEMENT_EVENT_USES_SPONSORS_SQL } from '../lib/sponsor-card';
+import { eventLiveSql } from '../domain/event-state';
 import { boothListPath, hasPublicBooths } from '../lib/public-booths';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 import { hashEmail, encryptText } from '../lib/pii';
@@ -2180,17 +2181,34 @@ export async function fetchEventPageSocialData(
         ? env.DB.prepare(
             // OSE-799 A2: reconstruct the public sponsor list from the split model —
             // active placements on this event, joined to their business identity.
+            //
+            // OSE-2144, THE RECAP EXCEPTION (owner, 2026-11-18). Everywhere else a
+            // public sponsor read answers only while the event is live
+            // (eventLiveSql, domain/event-state.ts). This statement does not ask
+            // it, on purpose: the page gate in handleEventPage lets an archived
+            // event that was listed (is_published = 1) render its recap, and the
+            // recap keeps its sponsor strip as a thank-you. This is the one
+            // place that exception lives. Draft and ready events never reach a
+            // public render of it (the gate 404s them; the admin preview is
+            // behind requireAdmin). The strip shows names only once the event is
+            // not live, because the logo proxy is live-only and would 404.
             `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url,
                     sb.display_name AS display_name, sb.address_line AS address_line,
                     -- The same pick as the logo proxy's ?slot=sidebar (compact,
-                    -- else header), so the page asks only for art it will get.
-                    COALESCE((SELECT a.url FROM sponsor_asset a
-                               WHERE a.sponsor_business_id = sb.id AND a.format = 'logo_compact'),
-                             (SELECT a.url FROM sponsor_asset a
-                               WHERE a.sponsor_business_id = sb.id AND a.format = 'logo'),
-                             '') <> '' AS has_logo
+                    -- else header), so the page asks only for art it will get:
+                    -- none unless the event is live (the proxy's own rule).
+                    -- eventLiveSql() takes its default alias, e, so this range
+                    -- of the file gains no string literal for Stryker to mutate.
+                    CASE WHEN ${eventLiveSql()}
+                         THEN COALESCE((SELECT a.url FROM sponsor_asset a
+                                         WHERE a.sponsor_business_id = sb.id AND a.format = 'logo_compact'),
+                                       (SELECT a.url FROM sponsor_asset a
+                                         WHERE a.sponsor_business_id = sb.id AND a.format = 'logo'),
+                                       '') <> ''
+                         ELSE 0 END AS has_logo
                FROM sponsor_placement sp
                JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
+               JOIN events e ON e.id = sp.event_id
               WHERE sp.event_id = ? AND sp.is_active = 1
                 AND sb.is_active = 1
                 AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1

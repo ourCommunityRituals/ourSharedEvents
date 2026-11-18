@@ -37,6 +37,15 @@
  * exists, handing an attacker an enumeration oracle. Out-of-scope is
  * indistinguishable from "does not exist".
  *
+ * INSIDE THE PUBLIC BRAND THE CREATOR IS THE BOUNDARY (OSE-1561, OSE ADR-022
+ * decision 2a). `root` is one brand shared by every organizer without a brand of
+ * their own, so there the same guard also proves the row's `created_by` is the
+ * caller: one more bound condition beside the brand predicate, which can only
+ * narrow it (lib/admin-owner-scope.ts). It covers the three targets below and,
+ * for a caller held to their own rows, a sponsor, a sponsor request and a second
+ * id in a campaign path. Form data under an event is the creator's alone, the
+ * `root` brand owner included. Not-yours is the same 404 as does-not-exist.
+ *
  * PUBLIC READS ARE OUT OF SCOPE BY DESIGN. `GET /api/v2/events/:id`, the public
  * event/poster/display/shared-report surfaces and DataProvider.getEvent stay
  * unscoped — they are deliberately public. Only `/api/v2/admin/**` object paths
@@ -54,6 +63,7 @@ import {
   resolveAdminBrandScopeAsync,
   type AdminBrandScopeEnv,
 } from './admin-brand-scope';
+import { ownerAndSql, resolveOwnerRule } from './admin-owner-scope';
 import { corsHeaders } from './cors';
 
 export type AdminObjectScopeEnv = AdminEnv &
@@ -118,16 +128,81 @@ export function matchAdminObjectTarget(pathname: string): AdminObjectTarget | nu
 }
 
 /**
- * Is the target object inside the caller's server-derived brand scope?
+ * OSE-1561 — is this path form data under an event (the five forms reads and the
+ * export)? In the public brand that is the creator's alone. Pure.
+ */
+export function isFormsDataPath(pathname: string): boolean {
+  return /^\/api\/v2\/admin\/events\/[^/]+\/forms(?:\/|$)/.test(pathname);
+}
+
+/**
+ * OSE-1561 — objects a path addresses that the brand wall leaves to the handler
+ * (a sponsor, a sponsor request) or to a second id (a campaign's event or
+ * placement). The handlers still prove the brand. This list exists so a caller
+ * held to their own rows in the public brand is also proved to be the creator,
+ * here, before any handler runs. Pure.
+ *
+ * A placement belongs to the event it is on: the organizer who created the event
+ * answers its requests and files it under their campaigns.
+ */
+export type AdminOwnerTarget =
+  | { kind: 'sponsor'; id: string }
+  | { kind: 'event'; id: string }
+  | { kind: 'placement'; id: string; label: 'Request' | 'Placement' };
+
+const SPONSOR_COLLECTION_SEGMENTS: ReadonlySet<string> = new Set(['promote']);
+const ADMIN_SPONSOR_OBJECT_PATH = /^\/api\/v2\/admin\/sponsors\/([^/]+)(?:\/.*)?$/;
+const ADMIN_SPONSOR_REQUEST_PATH = /^\/api\/v2\/admin\/sponsor-requests\/([^/]+)(?:\/.*)?$/;
+const ADMIN_CAMPAIGN_EVENT_PATH = /^\/api\/v2\/admin\/campaigns\/[^/]+\/events\/([^/]+)$/;
+const ADMIN_CAMPAIGN_PLACEMENT_PATH = /^\/api\/v2\/admin\/campaigns\/[^/]+\/placements\/([^/]+)$/;
+
+export function matchAdminOwnerTargets(pathname: string): AdminOwnerTarget[] {
+  const sponsor = pathname.match(ADMIN_SPONSOR_OBJECT_PATH);
+  if (sponsor) {
+    return SPONSOR_COLLECTION_SEGMENTS.has(sponsor[1]) ? [] : [{ kind: 'sponsor', id: sponsor[1] }];
+  }
+  const request = pathname.match(ADMIN_SPONSOR_REQUEST_PATH);
+  if (request) return [{ kind: 'placement', id: request[1], label: 'Request' }];
+  const campaignEvent = pathname.match(ADMIN_CAMPAIGN_EVENT_PATH);
+  if (campaignEvent) return [{ kind: 'event', id: campaignEvent[1] }];
+  const campaignPlacement = pathname.match(ADMIN_CAMPAIGN_PLACEMENT_PATH);
+  if (campaignPlacement) {
+    return [{ kind: 'placement', id: campaignPlacement[1], label: 'Placement' }];
+  }
+  return [];
+}
+
+type ScopedTarget = AdminObjectTarget | AdminOwnerTarget;
+
+export interface AdminObjectScopeOptions {
+  /** The path is form data under the event: the creator's alone in the public brand. */
+  formsData?: boolean;
+  /**
+   * Check the target only for a caller held to their own rows in the public
+   * brand, and answer true for every other scoped caller (a caller with no scope
+   * is still refused). For the targets the handlers already scope by brand, so
+   * those callers' answers stay the handlers' own.
+   */
+  ownRowsCallersOnly?: boolean;
+}
+
+/**
+ * Is the target object inside the caller's server-derived brand scope, and,
+ * inside the public brand, theirs by the owner rule (OSE-1561)?
  *
  * Poster deployments carry no brand_id column (migration 0003), so their tenancy
  * is resolved through the owning event — a bound JOIN, one hop, same predicate.
- * A campaign carries its own brand_id (migration 0039).
+ * A placement resolves through its event the same way. A campaign and a sponsor
+ * carry their own brand_id and created_by (migrations 0039, 0065, 0112).
+ *
+ * Handlers also use it for an id named in a request BODY, which the router guard
+ * cannot see.
  */
 export async function isAdminObjectInScope(
   request: Request,
   env: AdminObjectScopeEnv,
-  target: AdminObjectTarget
+  target: ScopedTarget,
+  opts: AdminObjectScopeOptions = {}
 ): Promise<boolean> {
   const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
 
@@ -137,22 +212,41 @@ export async function isAdminObjectInScope(
   // Unscopable operator → reaches nothing. Never the whole table, never one row.
   if (scope.mode === 'deny') return false;
 
+  // OSE-1561: where the caller stands in the public brand. It adds a condition
+  // beside the brand predicate below; it never replaces or widens it.
+  const rule = await resolveOwnerRule(request, env, scope);
+  if (opts.ownRowsCallersOnly && rule.standing !== 'own-rows') return true;
+
   // Fail-closed: with no DB we cannot PROVE tenancy, so we do not assume it.
   if (!env.DB) return false;
 
   const placeholders = scope.brandIds.map(() => '?').join(', ');
+  // A placement and a poster deployment have no creator of their own: they are
+  // their event's, so the condition reads the joined event (`e`).
+  const own =
+    target.kind === 'event'
+      ? ownerAndSql(rule, 'brand_id', 'created_by', { formsData: opts.formsData })
+      : target.kind === 'campaign' || target.kind === 'sponsor'
+        ? ownerAndSql(rule, 'brand_id', 'created_by')
+        : ownerAndSql(rule, 'e.brand_id', 'e.created_by');
   const sql =
     target.kind === 'event'
-      ? `SELECT 1 AS reachable FROM events WHERE id = ? AND brand_id IN (${placeholders}) LIMIT 1`
+      ? `SELECT 1 AS reachable FROM events WHERE id = ? AND brand_id IN (${placeholders})${own.sql} LIMIT 1`
       : target.kind === 'campaign'
-        ? `SELECT 1 AS reachable FROM campaigns WHERE id = ? AND brand_id IN (${placeholders}) LIMIT 1`
-        : `SELECT 1 AS reachable FROM poster_deployments pd
+        ? `SELECT 1 AS reachable FROM campaigns WHERE id = ? AND brand_id IN (${placeholders})${own.sql} LIMIT 1`
+        : target.kind === 'sponsor'
+          ? `SELECT 1 AS reachable FROM sponsor_business WHERE id = ? AND brand_id IN (${placeholders})${own.sql} LIMIT 1`
+          : target.kind === 'placement'
+            ? `SELECT 1 AS reachable FROM sponsor_placement sp
+           JOIN events e ON e.id = sp.event_id
+          WHERE sp.id = ? AND e.brand_id IN (${placeholders})${own.sql} LIMIT 1`
+            : `SELECT 1 AS reachable FROM poster_deployments pd
            JOIN events e ON e.id = pd.event_id
-          WHERE pd.id = ? AND e.brand_id IN (${placeholders}) LIMIT 1`;
+          WHERE pd.id = ? AND e.brand_id IN (${placeholders})${own.sql} LIMIT 1`;
 
   try {
     const row = await env.DB.prepare(sql)
-      .bind(target.id, ...scope.brandIds)
+      .bind(target.id, ...scope.brandIds, ...own.binds)
       .first<{ reachable: number }>();
     return !!row;
   } catch {
@@ -162,13 +256,17 @@ export async function isAdminObjectInScope(
 }
 
 /** The canonical scoped-miss body — identical to a genuine "does not exist". */
-function notFound(request: Request, target: AdminObjectTarget): Response {
+function notFound(request: Request, target: ScopedTarget): Response {
   const label =
     target.kind === 'event'
       ? 'Event'
       : target.kind === 'campaign'
         ? 'Campaign'
-        : 'Poster deployment';
+        : target.kind === 'sponsor'
+          ? 'Sponsor'
+          : target.kind === 'placement'
+            ? target.label
+            : 'Poster deployment';
   const rid = crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}`;
   return Response.json(
     {
@@ -217,11 +315,27 @@ export async function guardAdminObjectScope(
   pathname: string
 ): Promise<Response | null> {
   const target = matchAdminObjectTarget(pathname);
-  if (!target) return null;
+  const ownerTargets = matchAdminOwnerTargets(pathname);
+  if (!target && ownerTargets.length === 0) return null;
 
   if (extractAdminActor(request, env) === null) return null;
 
-  return (await isAdminObjectInScope(request, env, target)) ? null : notFound(request, target);
+  if (
+    target &&
+    !(await isAdminObjectInScope(request, env, target, { formsData: isFormsDataPath(pathname) }))
+  ) {
+    return notFound(request, target);
+  }
+  // OSE-1561: a caller held to their own rows in the public brand is proved to be
+  // the creator of every other object the path names. A caller with no scope is
+  // refused, as everywhere. Every other caller passes straight through, so their
+  // answers are still the handlers' own brand checks.
+  for (const t of ownerTargets) {
+    if (!(await isAdminObjectInScope(request, env, t, { ownRowsCallersOnly: true }))) {
+      return notFound(request, t);
+    }
+  }
+  return null;
 }
 
 /**

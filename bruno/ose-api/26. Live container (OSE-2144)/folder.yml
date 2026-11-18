@@ -1,0 +1,17 @@
+info:
+  name: Live container (OSE-2144)
+  type: folder
+request: {}
+docs: |-
+  Nothing is more live than its container (owner, 2026-11-18). A public read of
+  anything that belongs to an event answers only while the event is Published
+  (status = 'active'). Two written exceptions: an archived event that was listed
+  keeps its recap sponsor strip, and an archived event's SharedReport opens with
+  a valid signed link.
+
+  Fixture: bruno/fixtures/live-container-seed.sql, applied before this run. One
+  opted-in event per status, each with an accepted sponsor, a logo the proxy
+  refuses without fetching, and a QR code. Every "not live" request has a live
+  control on the same fixture, so a pass is never "nothing answers anywhere".
+
+  Mock-layer twin: workers/oursharedevents/tests/event-live-container.spec.ts.

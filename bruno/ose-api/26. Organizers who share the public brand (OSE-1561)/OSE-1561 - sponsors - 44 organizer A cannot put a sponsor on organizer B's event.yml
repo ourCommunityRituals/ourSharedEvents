@@ -1,0 +1,51 @@
+info:
+  name: "OSE-1561 | rainy | sponsors | organizer A names organizer B's event in a create"
+  type: http
+  seq: 44
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/sponsors"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{organizerAClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{organizerAClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+  body:
+    type: json
+    data: '{"name":"Owner wall cross sponsor","tier":"primary","event_id":"{{ownerWallEventB}}"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1561: this folder runs as TWO organizers of the public brand `root`.
+        // Staging has no such identities yet; adding them is the owner's step.
+        // Until then this request is skipped and logs NOT RUN; it records no passing test.
+        if (
+          !bru.getEnvVar('organizerAClientId') || !bru.getEnvVar('organizerAClientSecret') ||
+          !bru.getEnvVar('organizerBClientId') || !bru.getEnvVar('organizerBClientSecret')
+        ) {
+          console.log('NOT RUN (OSE-1561 setup pending): no two organizer identities in root on this environment');
+          bru.runner.skipRequest();
+        }
+        if (!bru.getVar('ownerWallEventB')) {
+          console.log('NOT RUN (OSE-1561: an earlier request in this folder did not leave ownerWallEventB)');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('OSE-1561 sponsors: a create that names organizer B\'s event is refused: 400 EVENT_NOT_FOUND', function () {
+          expect(res.getStatus()).to.eql(400);
+          expect(res.getBody().code).to.eql('EVENT_NOT_FOUND');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -40,6 +40,7 @@ import {
   type AdminBrandScope,
   type AdminBrandScopeEnv,
 } from '../lib/admin-brand-scope';
+import { ownerPredicate, resolveOwnerRule } from '../lib/admin-owner-scope';
 
 export interface PortfolioRollupEnv extends AdminEnv, AdminBrandScopeEnv {
   DB?: D1Database;
@@ -172,6 +173,18 @@ export async function handlePortfolioRollup(
     const brands = brandId ? [brandId] : scope.brandIds;
     brandFilter.push(`brand_id IN (${brands.map(() => '?').join(', ')})`);
     brandBinds.push(...brands);
+    // OSE-1561: inside the public brand a caller held to their own rows gets a
+    // sum over the events they created, not the whole shared brand. One more
+    // bound condition beside the brand predicate (lib/admin-owner-scope.ts).
+    const own = ownerPredicate(
+      await resolveOwnerRule(request, env, scope),
+      'brand_id',
+      'created_by'
+    );
+    if (own) {
+      brandFilter.push(own.sql);
+      brandBinds.push(...own.binds);
+    }
   } else if (scope.mode === 'all' && brandId) {
     // Automation/CI may narrow to one brand explicitly; absent that it sees all.
     brandFilter.push('brand_id = ?');

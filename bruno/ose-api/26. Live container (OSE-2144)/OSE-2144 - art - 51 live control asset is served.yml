@@ -1,0 +1,25 @@
+info:
+  name: 'OSE-2144 | sunny | sponsor creative | a sponsor on a live event gets its creative or monogram (control)'
+  type: http
+  seq: 51
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_lc_live/asset/square"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2144 control: 200', function () { expect(res.getStatus()).to.eql(200); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

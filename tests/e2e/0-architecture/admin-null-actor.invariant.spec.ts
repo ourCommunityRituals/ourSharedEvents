@@ -83,6 +83,11 @@ const SITES: Record<string, { kind: Kind; count: number; why: string }> = {
     count: 1,
     why: 'requireKeyActor: a null actor passes only under isDevOpenAdmin.',
   },
+  'lib/admin-owner-scope.ts: const actor = extractAdminActor(request, env);': {
+    kind: 'dev-open-retest',
+    count: 1,
+    why: 'resolveOwnerRule (OSE-1561): no null branch; the actor goes to the scope resolver unless the caller passed the scope it had already resolved for this request, and a rule other than "none" is returned only for a scoped scope.',
+  },
   'handlers/events.ts: const actor = extractAdminActor(request, env);': {
     kind: 'dev-open-retest',
     count: 2,
@@ -105,6 +110,11 @@ const SITES: Record<string, { kind: Kind; count: number; why: string }> = {
     count: 1,
     why: 'Sponsor create on an event: a null actor gets EVENT_NOT_FOUND unless isDevOpenAdmin.',
   },
+  'handlers/sponsors.ts: const createdBy = extractAdminActor(request, env);': {
+    kind: 'attribution-only',
+    count: 1,
+    why: 'created_by on the new sponsor (OSE-1561), after requireAdmin and the brand scope.',
+  },
   'handlers/sponsors.ts: actor: extractAdminActor(request, env),': {
     kind: 'attribution-only',
     count: 2,
@@ -114,6 +124,11 @@ const SITES: Record<string, { kind: Kind; count: number; why: string }> = {
     kind: 'dev-open-retest',
     count: 1,
     why: 'Draft promote: a null actor is out of scope unless isDevOpenAdmin.',
+  },
+  'handlers/sponsors-draft.ts: const createdBy = extractAdminActor(request, env);': {
+    kind: 'attribution-only',
+    count: 1,
+    why: 'created_by on the sponsor a promoted draft becomes (OSE-1561); read after the scope verdict, and used only when that verdict is in-scope.',
   },
   'handlers/sponsors-draft.ts: actor: extractAdminActor(request, env),': {
     kind: 'attribution-only',
@@ -126,6 +141,11 @@ const SITES: Record<string, { kind: Kind; count: number; why: string }> = {
       count: 6,
       why: 'Campaign list, create and placement attach or detach (showcase S14); event add or remove, the member list, and rename or status change (OSE-1552).',
     },
+  'handlers/campaigns.ts: const createdBy = extractAdminActor(request, env);': {
+    kind: 'attribution-only',
+    count: 1,
+    why: 'created_by on the new campaign (OSE-1561), after the brand scope has refused a deny scope.',
+  },
   'handlers/dashboards.ts: const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);':
     { kind: 'scope-denies-null', count: 1, why: 'Dashboard brand scope.' },
   'handlers/portfolio-rollup.ts: extractAdminActor(request, env),': {
