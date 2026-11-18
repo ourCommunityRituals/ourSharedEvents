@@ -82,6 +82,17 @@
  *      header, call getOrCreateAnonId or name `ose_anon`: the reader itself,
  *      `/q` and the forms routes (AGENTS.md invariant 4). The vote route and the
  *      voter page can never be listed.
+ *  11. THE ROOM'S OWN CODE AND THE LIVE EVENT (OSE-2140, OSE-2142; owner,
+ *      2026-11-18). voteCodeMayMint (lib/vote-sets.ts) checks, in one
+ *      statement, that the scanned placement is the event's vote code in use,
+ *      the set is open and not final, and the event is live (EVENT_LIVE);
+ *      issueVotePass asks it with the scanned placement and reads no set by
+ *      itself. Every poster-bundle read of a placement token says
+ *      `is_vote_code = 0`, so the public bundle never hands out the vote code's
+ *      token. Only lib/vote-code.ts writes `is_vote_code`. Every Worker file
+ *      that moves an event's status out of 'active' batches
+ *      closeVoteSetUnlessPublished with the move (one transaction), or is
+ *      exempt with its reason (STATUS_WRITER_EXEMPT). No D1 trigger: 0025.
  *
  * What it cannot see: a value carried out by a variable (a listed lib file that
  * returns `row` to a handler). S3 and S5 add workers-pool tests that their
@@ -110,6 +121,13 @@
  *   target in qr-scan.ts (9 red), a `?t=` pass target (9 red), a console call in
  *   lib/vote-pass.ts (9 red), a getOrCreateAnonId(request) call planted in
  *   handlers/votables.ts (10 red), forms.ts taken off COOKIE_READERS (10 red) |
+ *   date: 2026-11-18
+ * @born-red OSE-2140 OSE-2142 | method: injected-fault, each removed after:
+ *   `d.is_vote_code = 1` dropped from voteCodeMayMint (11 red), `${EVENT_LIVE}`
+ *   dropped from it (11 red), issueVotePass back on readVoteSet (11 red), the
+ *   bundle's `is_vote_code = 0` dropped (11 red), the close taken out of the
+ *   qr-verify batch (11 red), an `is_vote_code` write planted in
+ *   handlers/votables.ts (11 red) |
  *   date: 2026-11-18
  */
 
@@ -1010,5 +1028,269 @@ test.describe('Invariant: the public vote read and the switch (OSE-2135)', () =>
     ).toEqual(["the read is not returned through publicReadLimited('vote-objects', ...)"]);
     expect(DISPLAY_VOTE_WORDS.test('const panes = ["event", "voting"]')).toBe(true);
     expect(DISPLAY_VOTE_WORDS.test('const panes = ["event", "league"]')).toBe(false);
+  });
+});
+
+// ── 11. The room's own vote code and the live event (OSE-2140, OSE-2142) ────
+
+const POSTER_BUNDLE = 'src/handlers/poster-bundle.ts';
+const VOTE_CODE_LIB = 'src/lib/vote-code.ts';
+
+const fold = (s: string) => normalize(s).replace(/\s+/g, ' ');
+
+/** The body of `export async function <name>` up to its closing brace at column 0. */
+function fnBody(code: string, name: string): string | null {
+  const m = code.match(new RegExp(`export async function ${name}\\b[\\s\\S]*?\\n}\\n`));
+  return m ? m[0] : null;
+}
+
+/** voteCodeMayMint: the vote code in use, the set open and not final, the event live, in one statement. */
+function mintCheckProblems(code: string): string[] {
+  const body = fnBody(code, 'voteCodeMayMint');
+  if (!body) return ['voteCodeMayMint is not found'];
+  const flat = fold(body);
+  return [
+    'd.is_vote_code = 1',
+    'd.is_active = 1',
+    "s.state = 'open'",
+    's.is_final = 0',
+    '${EVENT_LIVE}',
+  ]
+    .filter((g) => !flat.includes(g))
+    .map((g) => `voteCodeMayMint lacks ${g}`);
+}
+
+/** issueVotePass asks voteCodeMayMint with the scanned placement, and reads no set by itself. */
+function passProblems(code: string): string[] {
+  const body = fnBody(code, 'issueVotePass');
+  if (!body) return ['issueVotePass is not found'];
+  const out: string[] = [];
+  if (!/voteCodeMayMint\(\s*env\.DB\s*,\s*eventId\s*,\s*deploymentId\s*\)/.test(body))
+    out.push('issueVotePass does not ask voteCodeMayMint for the scanned placement');
+  if (/\breadVoteSet\b/.test(body)) out.push('issueVotePass reads the set without the vote code');
+  return out;
+}
+
+/** Every poster-bundle read of a placement token refuses a vote code. */
+function bundleProblems(code: string): string[] {
+  const reads = sqlLiterals(code).filter(
+    (s) => /\bFROM\s+poster_deployments\b/i.test(s) && /\bqr_token\b/.test(s)
+  );
+  if (!reads.length) return ['the bundle reads no placement token (the detector is blind)'];
+  return reads
+    .filter((s) => !/\bis_vote_code\s*=\s*0\b/.test(s))
+    .map(() => 'a poster-bundle read of a token does not refuse a vote code (is_vote_code = 0)');
+}
+
+/**
+ * The Worker files that move an event's status, each batching
+ * closeVoteSetUnlessPublished with the move (OSE-2142): the admin edit (its SQL
+ * is built, so it is listed by name) and the QR verify undo.
+ */
+const STATUS_WRITERS = ['src/handlers/events.ts', 'src/handlers/qr-verify.ts'];
+/** Files that write events.status without the close, and why that is safe. */
+const STATUS_WRITER_EXEMPT: Record<string, string> = {
+  'src/lib/draft-expiry.ts':
+    'Moves only a draft to archived. A draft holds no open set: open needs Published, and leaving Published closes it.',
+};
+/** An UPDATE of events that assigns its status (after SET or a comma) anything but 'active'. */
+const SETS_STATUS = /\bUPDATE\s+events\s+SET\b(?:\s+|[^;]*?,\s*)status\s*=(?!\s*'active')/i;
+
+/** Every string literal in a source text. */
+const stringLiterals = (code: string): { text: string; index: number }[] =>
+  [...code.matchAll(/`(?:\\[\s\S]|[^`\\])*`|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"/g)].map(
+    (m) => ({ text: m[0], index: m.index ?? 0 })
+  );
+
+/**
+ * Every status writer batches the close; in a listed file every literal status
+ * write sits in a `.batch([` with the close; any other file that writes a
+ * status is exempt with a reason. Not seen: a status write built from a field
+ * list (the event PUT's `${field} = ?`); tests/vote-code.spec.ts holds that path
+ * at runtime.
+ */
+function statusWriterProblems(sources: { file: string; code: string }[]): string[] {
+  const out: string[] = [];
+  const byFile = new Map(sources.map((s) => [s.file, s.code]));
+  for (const f of STATUS_WRITERS) {
+    const src = byFile.get(f);
+    if (!src) {
+      out.push(`${f} is missing`);
+      continue;
+    }
+    if (!/\.batch\(\s*\[[\s\S]{0,600}?\bcloseVoteSetUnlessPublished\(/.test(src))
+      out.push(`${f} moves an event's status without batching closeVoteSetUnlessPublished`);
+    for (const lit of stringLiterals(src)) {
+      if (!SETS_STATUS.test(lit.text)) continue;
+      const before = src.slice(Math.max(0, lit.index - 300), lit.index);
+      const after = src.slice(lit.index, lit.index + 600);
+      if (!/\.batch\(\s*\[[^\]]*$/.test(before) || !/\bcloseVoteSetUnlessPublished\(/.test(after))
+        out.push(`${f} has a status write outside a batch with closeVoteSetUnlessPublished`);
+    }
+  }
+  for (const { file, code } of sources) {
+    if (STATUS_WRITERS.includes(file) || file in STATUS_WRITER_EXEMPT) continue;
+    if (sqlLiterals(code).some((l) => SETS_STATUS.test(l)))
+      out.push(`${file} writes events.status but is not a listed status writer`);
+  }
+  return out;
+}
+
+/**
+ * Only lib/vote-code.ts writes is_vote_code, so a vote code is made in one
+ * place. Every string literal is read, not only whole SQL: a built SET piece
+ * (`sets.push('is_vote_code = ?')`) counts as a write; a read filter does not.
+ */
+function voteCodeWriters(sources: { file: string; code: string }[]): string[] {
+  const writes = (l: string) =>
+    (/\b(?:INSERT|UPDATE)\b/i.test(l) && /\bis_vote_code\b/.test(l)) ||
+    /\bis_vote_code\s*=\s*(?:\?|\$\{)/.test(l);
+  return sources
+    .filter((s) => stringLiterals(s.code).some((l) => writes(l.text)))
+    .map((s) => s.file)
+    .filter((f) => f !== VOTE_CODE_LIB);
+}
+
+test.describe("Invariant: the room's own vote code and the live event (OSE-2140, OSE-2142)", () => {
+  const byFile = new Map(SOURCES.map((s) => [s.file, s]));
+  const code = (f: string) => {
+    const s = byFile.get(f);
+    expect(s, `${f} exists`).toBeTruthy();
+    return s!.code;
+  };
+
+  test('OSE-2140 | mint | only the event vote code, with the set open and the event live, mints a pass', () => {
+    expect(mintCheckProblems(code(VOTE_SETS_LIB))).toEqual([]);
+    expect(passProblems(code(VOTE_PASS_LIB))).toEqual([]);
+  });
+
+  test('OSE-2140 | public | the poster bundle never resolves a vote code', () => {
+    expect(bundleProblems(code(POSTER_BUNDLE))).toEqual([]);
+  });
+
+  test('OSE-2140 | one maker | only lib/vote-code.ts writes is_vote_code', () => {
+    expect(voteCodeWriters(SOURCES)).toEqual([]);
+  });
+
+  test('OSE-2142 | status | every status writer closes an open set in the same batch as the move', () => {
+    expect(statusWriterProblems(SOURCES)).toEqual([]);
+    for (const [f, why] of Object.entries(STATUS_WRITER_EXEMPT)) {
+      expect(byFile.has(f), `${f} exists`).toBe(true);
+      expect(why.length, f).toBeGreaterThan(40);
+    }
+  });
+
+  test('OSE-2140 OSE-2142 | gate | the rules can fail (negative controls)', () => {
+    const mint = `export async function voteCodeMayMint(db) {
+  return db.prepare(\`SELECT 1 FROM vote_sets s WHERE s.event_id = ? AND s.state = 'open' AND s.is_final = 0
+    AND EXISTS (SELECT 1 FROM poster_deployments d WHERE d.id = ? AND d.event_id = ? AND d.is_vote_code = 1 AND d.is_active = 1)
+    AND \${EVENT_LIVE}\`);
+}
+`;
+    expect(mintCheckProblems(mint)).toEqual([]);
+    expect(mintCheckProblems(mint.replace(' AND d.is_vote_code = 1', ''))).toEqual([
+      'voteCodeMayMint lacks d.is_vote_code = 1',
+    ]);
+    expect(mintCheckProblems(mint.replace('AND ${EVENT_LIVE}', ''))).toEqual([
+      'voteCodeMayMint lacks ${EVENT_LIVE}',
+    ]);
+    const pass = `export async function issueVotePass(env, cookie, eventId, deploymentId, nowMs) {
+  if (!(await voteCodeMayMint(env.DB, eventId, deploymentId))) return null;
+}
+`;
+    expect(passProblems(pass)).toEqual([]);
+    expect(
+      passProblems(
+        pass.replace(
+          'if (!(await voteCodeMayMint(env.DB, eventId, deploymentId))) return null;',
+          'const set = await readVoteSet(env.DB, eventId);'
+        )
+      )
+    ).toHaveLength(2);
+    const bundle =
+      'const r = `SELECT id, qr_token FROM poster_deployments WHERE id = ? AND is_vote_code = 0`;';
+    expect(bundleProblems(bundle)).toEqual([]);
+    expect(bundleProblems(bundle.replace(' AND is_vote_code = 0', ''))).toHaveLength(1);
+    const writer = `const [res] = await env.DB.batch([
+    env.DB.prepare("UPDATE events SET status = 'ready' WHERE id = ?").bind(id),
+    closeVoteSetUnlessPublished(env.DB, id),
+  ]);`;
+    const ok = [
+      { file: 'src/handlers/events.ts', code: writer },
+      { file: 'src/handlers/qr-verify.ts', code: writer },
+    ];
+    expect(statusWriterProblems(ok)).toEqual([]);
+    expect(
+      statusWriterProblems([
+        ok[0],
+        {
+          file: 'src/handlers/qr-verify.ts',
+          code: writer.replace('closeVoteSetUnlessPublished(env.DB, id),', ''),
+        },
+      ])
+    ).toEqual([
+      "src/handlers/qr-verify.ts moves an event's status without batching closeVoteSetUnlessPublished",
+      'src/handlers/qr-verify.ts has a status write outside a batch with closeVoteSetUnlessPublished',
+    ]);
+    expect(
+      statusWriterProblems([
+        ...ok,
+        {
+          file: 'src/lib/x.ts',
+          code: "db.prepare(`UPDATE events SET status = 'archived' WHERE id = ?`)",
+        },
+      ])
+    ).toEqual(['src/lib/x.ts writes events.status but is not a listed status writer']);
+    expect(
+      statusWriterProblems([
+        ...ok,
+        {
+          file: 'src/lib/y.ts',
+          code: "db.prepare(`UPDATE events SET status = 'active' WHERE id = ?`)",
+        },
+      ])
+    ).toEqual([]);
+    expect(
+      voteCodeWriters([
+        {
+          file: 'src/handlers/x.ts',
+          code: 'db.prepare(`UPDATE poster_deployments SET is_vote_code = 1`)',
+        },
+      ])
+    ).toEqual(['src/handlers/x.ts']);
+    // A built SET piece is a write too; a read filter is not.
+    expect(
+      voteCodeWriters([
+        { file: 'src/handlers/poster-deployments.ts', code: "sets.push('is_vote_code = ?');" },
+        {
+          file: 'src/handlers/poster-bundle.ts',
+          code: '`SELECT id FROM poster_deployments WHERE is_vote_code = 0`',
+        },
+      ])
+    ).toEqual(['src/handlers/poster-deployments.ts']);
+    // A second, unbatched status write in a listed file is caught.
+    expect(
+      statusWriterProblems([
+        ok[0],
+        {
+          file: 'src/handlers/qr-verify.ts',
+          code:
+            writer +
+            '\nawait env.DB.prepare("UPDATE events SET status = \'archived\' WHERE id = ?").run();',
+        },
+      ])
+    ).toEqual([
+      'src/handlers/qr-verify.ts has a status write outside a batch with closeVoteSetUnlessPublished',
+    ]);
+    // A read of status inside an UPDATE of another column is not a status write.
+    expect(
+      statusWriterProblems([
+        ...ok,
+        {
+          file: 'src/lib/z.ts',
+          code: "db.prepare(`UPDATE events SET listed_from = CASE WHEN status = 'ready' THEN 1 END WHERE id = ?`)",
+        },
+      ])
+    ).toEqual([]);
   });
 });

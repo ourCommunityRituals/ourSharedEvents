@@ -28,6 +28,22 @@
  *     yesterday or later, UTC, or it has no date. The one day of grace keeps an
  *     evening event west of UTC open until its night is over. The same rule
  *     decides when a registrant's contact is cleared (src/index.ts).
+ *   - Nothing is more live than its container (OSE-2142, S3e; owner,
+ *     2026-11-18). Open, reopen, opening an object, and adding an object to a
+ *     set that has opened all need the event live: Published (listed or
+ *     unlisted) and on its dates (EVENT_LIVE, lib/event-live.ts). Setting up
+ *     stays allowed on a draft or ready event: make the set, add objects while
+ *     the set is still in draft, edit them. When the event leaves Published,
+ *     its open set closes in the same D1 batch as the status change, one
+ *     transaction (closeVoteSetUnlessPublished, batched by the admin edit and
+ *     the QR verify undo), and a host reopens it once the event is Published
+ *     again. The nightly job closes any set a write outside the app left open,
+ *     and the pass and the public read refuse such a set anyway. A refusal for
+ *     an event that is on but not Published says EVENT_NOT_PUBLISHED.
+ *   - The room's vote code (OSE-2140, S3d). voteCodeMayMint is the one check
+ *     /q asks before it mints a pass: the scanned placement is the event's vote
+ *     code in use, the set is open and not final, and the event is live, in one
+ *     statement.
  *   - A song's window. `closes_at` is set by the server when an object opens:
  *     now plus a window, never more than VOTE_WINDOW_MAX_SECONDS. It names the
  *     song's window, never a voter (decision 3).
@@ -56,6 +72,7 @@
  */
 
 import { pepperEpoch } from './anon-id-hash';
+import { EVENT_LIVE, EVENT_ON_ITS_DATES, EVENT_PUBLISHED, eventIsLive } from './event-live';
 import { hourStamp } from './scan-buffer';
 import { isVotableKind, isVoteTeamId, parseVotableLabel, type VotableKind } from './votes';
 
@@ -97,6 +114,12 @@ const FINAL = fail(
   'The vote set is final; nothing reopens it or adds to it'
 );
 const EVENT_OVER = fail(409, 'EVENT_OVER', 'The event is over; voting cannot open again');
+/** OSE-2142: the event is on but not Published. The admin card says "Publish the event to open voting." */
+export const EVENT_NOT_PUBLISHED = fail(
+  409,
+  'EVENT_NOT_PUBLISHED',
+  'Publish the event to open voting'
+);
 
 /** What the admin sees of a set. No epoch value, no void flag, no counter, no T or V. */
 export interface VoteSetView {
@@ -151,11 +174,14 @@ const OBJECT_SELECT = `SELECT id, kind, label, booth_id, group_id, state, closes
  * later (UTC), or it has no date. It takes ONE bound parameter, the event id from the path, so the
  * events row is read by a held id (tests/e2e/0-architecture/
  * tenant-isolation.invariant.spec.ts), never by a column relation.
+ *
+ * Since S3e it gates only setting up (adding an object to a set still in
+ * draft) and names why a move was refused (EVENT_OVER). Every move that makes
+ * voting live needs EVENT_LIVE (lib/event-live.ts), which is this and Published.
  */
 const EVENT_ON = `EXISTS (SELECT 1 FROM events e
    WHERE e.id = ? AND e.status <> 'archived'
-     AND (COALESCE(e.end_date, e.start_date) IS NULL
-          OR substr(COALESCE(e.end_date, e.start_date), 1, 10) >= date('now', '-1 day')))`;
+     AND ${EVENT_ON_ITS_DATES})`;
 
 function projectSet(row: SetRow): VoteSetView {
   return {
@@ -207,19 +233,28 @@ export async function readVoteSet(db: D1Database, eventId: string): Promise<Vote
   return row ? projectSet(row) : null;
 }
 
-/** The event's set and its objects, for the admin list. */
+/**
+ * The event's set and its objects, for the admin list, and whether the event is
+ * live (OSE-2142): the card greys out Open and says "Publish the event to open
+ * voting." when it is not.
+ */
 export async function listVotables(
   db: D1Database,
   eventId: string
-): Promise<{ set: VoteSetView | null; objects: VotableView[] }> {
+): Promise<{ set: VoteSetView | null; objects: VotableView[]; event_live: boolean }> {
+  const event_live = await eventIsLive(db, eventId);
   const set = await readVoteSet(db, eventId);
-  if (!set) return { set: null, objects: [] };
+  if (!set) return { set: null, objects: [], event_live };
   const rows = await db
     .prepare(`${OBJECT_SELECT} WHERE set_id = ? AND event_id = ? ORDER BY sort, label, id`)
     .bind(set.id, eventId)
     .all<ObjectRow>();
   const now = Date.now();
-  return { set, objects: (rows.results ?? []).map((r) => projectObject(r, set, now)) };
+  return {
+    set,
+    objects: (rows.results ?? []).map((r) => projectObject(r, set, now)),
+    event_live,
+  };
 }
 
 async function readObject(
@@ -238,6 +273,41 @@ async function readObject(
 
 async function eventStillOn(db: D1Database, eventId: string): Promise<boolean> {
   const row = await db.prepare(`SELECT 1 AS hit WHERE ${EVENT_ON}`).bind(eventId).first();
+  return !!row;
+}
+
+/**
+ * Why the event refused a live move, or null when it is live: over (archived,
+ * or past its dates) before not Published, so an archived event keeps its
+ * EVENT_OVER answer.
+ */
+async function eventRefusal(db: D1Database, eventId: string): Promise<VoteFail | null> {
+  if (!(await eventStillOn(db, eventId))) return EVENT_OVER;
+  if (!(await eventIsLive(db, eventId))) return EVENT_NOT_PUBLISHED;
+  return null;
+}
+
+/**
+ * May `/q` mint a vote pass for this scan (OSE-2140, OSE-2142)? Only when, in
+ * one statement: the scanned placement is this event's vote code and in use,
+ * the event's set is open and not final, and the event is live. An ordinary
+ * poster code of the event never qualifies, whatever its `?type=`.
+ */
+export async function voteCodeMayMint(
+  db: D1Database,
+  eventId: string,
+  deploymentId: string
+): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT 1 AS hit FROM vote_sets s
+        WHERE s.event_id = ? AND s.state = 'open' AND s.is_final = 0
+          AND EXISTS (SELECT 1 FROM poster_deployments d
+                       WHERE d.id = ? AND d.event_id = ? AND d.is_vote_code = 1 AND d.is_active = 1)
+          AND ${EVENT_LIVE}`
+    )
+    .bind(eventId, deploymentId, eventId, eventId)
+    .first();
   return !!row;
 }
 
@@ -286,7 +356,8 @@ async function whySetRefused(
   if (!set) return NO_SET;
   if (set.final) return FINAL;
   if (!want.includes(set.state)) return fail(409, 'WRONG_STATE', `The vote set is ${set.state}`);
-  if (!(await eventStillOn(db, eventId))) return EVENT_OVER;
+  const event = await eventRefusal(db, eventId);
+  if (event) return event;
   return fail(409, 'WRONG_STATE', `The vote set is ${set.state}`);
 }
 
@@ -325,7 +396,7 @@ export async function openVoteSet(
           SET state = 'open', pepper_epoch = ?, secret_margin = ?, secret_floor = ?, updated_at = ?
         WHERE event_id = ? AND state = 'draft' AND is_final = 0
           AND pepper_epoch IS NULL AND secret_margin IS NULL AND secret_floor IS NULL
-          AND ${EVENT_ON}`
+          AND ${EVENT_LIVE}`
     )
     .bind(epoch, margin, floor, hourStamp(nowIso), eventId, eventId)
     .run();
@@ -349,7 +420,7 @@ export async function reopenVoteSet(
           SET state = 'open', updated_at = ?
         WHERE event_id = ? AND state = 'closed' AND is_final = 0
           AND pepper_epoch IS NOT NULL AND pepper_epoch = ?
-          AND ${EVENT_ON}`
+          AND ${EVENT_LIVE}`
     )
     .bind(hourStamp(nowIso), eventId, epoch, eventId)
     .run();
@@ -367,6 +438,28 @@ export async function reopenVoteSet(
       'The anonymous key changed since this set first opened, so no vote could count in it'
     );
   return why;
+}
+
+/**
+ * The statement that closes the event's open set unless the event is
+ * Published (OSE-2142). A status writer puts it in the SAME `db.batch` as its
+ * `UPDATE events SET status`, after it, so the two land in one transaction:
+ * no reader ever sees an unpublished event with an open set. It reads the
+ * status the batch just wrote, so it is a no-op for a move into Published, a
+ * refused move, or an event with no open set. It never makes a set final, and
+ * never opens one. Batched by handlers/events.ts (PUT status) and
+ * handlers/qr-verify.ts (the verify undo); the T0 gate votes-never-who rule 11
+ * holds that every status writer does.
+ */
+export function closeVoteSetUnlessPublished(db: D1Database, eventId: string): D1PreparedStatement {
+  return db
+    .prepare(
+      `UPDATE vote_sets
+          SET state = 'closed', updated_at = strftime('%Y-%m-%d %H:00:00', 'now')
+        WHERE event_id = ? AND state = 'open' AND is_final = 0
+          AND NOT ${EVENT_PUBLISHED}`
+    )
+    .bind(eventId, eventId);
 }
 
 /** Close: open → closed. Allowed after the event, so a host can always stop voting. */
@@ -623,7 +716,9 @@ export async function createVotable(
   if (input.booth_id && !(await boothOfEvent(db, input.booth_id, eventId))) return BOOTH_MISS;
   const id = newId('vobj');
   // One statement: the set is not final, the event is on, the set holds one
-  // kind, it is under the cap, and the booth is this event's. Then the object's
+  // kind, it is under the cap, and the booth is this event's. A set that has
+  // opened takes a new object only while its event is live (OSE-2142): setting
+  // up on a draft or ready event is for a set still in draft. Then the object's
   // tally row, made with it (0111), only if the object was made.
   const [made] = await db.batch([
     db
@@ -633,6 +728,7 @@ export async function createVotable(
            FROM vote_sets s
           WHERE s.id = ? AND s.event_id = ? AND s.is_final = 0
             AND ${EVENT_ON}
+            AND (s.state = 'draft' OR ${EVENT_LIVE})
             AND NOT EXISTS (SELECT 1 FROM votable_objects o WHERE o.set_id = s.id AND o.kind <> ?)
             AND (SELECT COUNT(*) FROM votable_objects o WHERE o.set_id = s.id) < ?
             AND (? IS NULL OR EXISTS (SELECT 1 FROM event_booths b
@@ -646,6 +742,7 @@ export async function createVotable(
         input.group_id,
         input.sort,
         set.id,
+        eventId,
         eventId,
         eventId,
         input.kind,
@@ -665,6 +762,7 @@ export async function createVotable(
     if (!now) return NO_SET;
     if (now.final) return FINAL;
     if (!(await eventStillOn(db, eventId))) return EVENT_OVER;
+    if (now.state !== 'draft' && !(await eventIsLive(db, eventId))) return EVENT_NOT_PUBLISHED;
     const other = await db
       .prepare(`SELECT kind FROM votable_objects WHERE set_id = ? AND kind <> ? LIMIT 1`)
       .bind(set.id, input.kind)
@@ -793,7 +891,7 @@ const MOVE_FROM: Record<ObjectMove, VotableView['state'][]> = {
 
 /**
  * Open (draft → open), reopen (closed → open) or close (open → closed) one
- * object. Opening needs the set open, not final, and the event on; it sets
+ * object. Opening needs the set open, not final, and the event live; it sets
  * `closes_at` to now plus the window. Closing needs only that the set is not
  * final.
  */
@@ -831,7 +929,7 @@ export async function moveVotable(
                  OR (state = 'open' AND ? = 'reopen' AND closes_at IS NOT NULL AND closes_at <= ?))
             AND set_id IN (SELECT s.id FROM vote_sets s
                             WHERE s.event_id = ? AND s.is_final = 0 AND s.state = 'open'
-                              AND ${EVENT_ON})`
+                              AND ${EVENT_LIVE})`
       )
       .bind(
         closesAt,
@@ -858,7 +956,8 @@ export async function moveVotable(
       return fail(409, 'WRONG_STATE', `The object is ${obj.state}`);
     if (set.state !== 'open')
       return fail(409, 'VOTE_SET_NOT_OPEN', 'Open the vote set before an object in it');
-    if (!(await eventStillOn(db, eventId))) return EVENT_OVER;
+    const event = await eventRefusal(db, eventId);
+    if (event) return event;
     return NO_OBJECT;
   }
   const view = await readObject(db, eventId, objectId);
@@ -873,6 +972,8 @@ export interface VoteFinalJobEnv {
 
 export interface VoteFinalJobResult {
   finalized: number;
+  /** Sets closed because their event is not Published (a number only, OSE-2142). */
+  closedUnpublished: number;
   errors: number;
 }
 
@@ -887,10 +988,14 @@ const JOB_BATCH = 200;
  *      VOTE_SET_FINAL against its event, with no detail: which rule decided is
  *      never written anywhere.
  *   2. Tallies of objects in sets final for more than 30 days are deleted.
+ *   3. OSE-2142: a set left open on an event that is not Published (its status
+ *      changed outside the app: a seed, a script) is closed, as the app's own
+ *      status writers close it in the same batch. Not audited per set; the
+ *      pass and the public read already refused it.
  * Logs a total of sets made final and an error flag, nothing per set.
  */
 export async function runVoteFinalJob(env: VoteFinalJobEnv): Promise<VoteFinalJobResult> {
-  const out: VoteFinalJobResult = { finalized: 0, errors: 0 };
+  const out: VoteFinalJobResult = { finalized: 0, closedUnpublished: 0, errors: 0 };
   const db = env.DB;
   if (!db) return out;
   const nowIso = new Date().toISOString();
@@ -928,10 +1033,26 @@ export async function runVoteFinalJob(env: VoteFinalJobEnv): Promise<VoteFinalJo
   } catch {
     out.errors++;
   }
+  // OSE-2142: its own step, so a failure above never skips it.
+  try {
+    const closed = await db
+      .prepare(
+        `UPDATE vote_sets
+            SET state = 'closed', updated_at = strftime('%Y-%m-%d %H:00:00', 'now')
+          WHERE state = 'open' AND is_final = 0
+            AND NOT EXISTS (SELECT 1 FROM events e
+                             WHERE e.id = vote_sets.event_id AND e.status = 'active')`
+      )
+      .run();
+    out.closedUnpublished = closed.meta?.changes ?? 0;
+  } catch {
+    out.errors++;
+  }
   console.log(
     JSON.stringify({
       type: 'VOTE_FINAL_JOB',
       finalized: out.finalized,
+      closed_unpublished: out.closedUnpublished,
       errors: out.errors,
       timestamp: nowIso,
     })

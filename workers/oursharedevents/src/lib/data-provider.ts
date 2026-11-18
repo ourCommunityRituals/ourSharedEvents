@@ -363,8 +363,10 @@ export class DataProvider {
   }
 
   private async fetchPosterDeployments(eventId: string): Promise<MockPosterDeployment[] | null> {
+    // OSE-2140: never the room's vote code; its token stays off every surface
+    // this provider feeds.
     const { results } = await this.db!.prepare(
-      'SELECT * FROM poster_deployments WHERE event_id = ?1'
+      'SELECT * FROM poster_deployments WHERE event_id = ?1 AND is_vote_code = 0'
     )
       .bind(eventId)
       .all<MockPosterDeployment>();

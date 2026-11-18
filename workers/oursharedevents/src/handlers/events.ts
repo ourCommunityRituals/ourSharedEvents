@@ -12,7 +12,7 @@
  * Data source: D1 database (DB binding)
  */
 
-import { eventHasVoteSet } from '../lib/vote-sets';
+import { closeVoteSetUnlessPublished, eventHasVoteSet } from '../lib/vote-sets';
 import {
   coreValuesMissing,
   coreValuesRefusal,
@@ -1880,9 +1880,14 @@ export async function handleUpdateEvent(
       where += ' AND start_date IS ? AND timezone IS ? AND starts_at IS ?';
       values.push(timeGuard.start_date, timeGuard.timezone, timeGuard.starts_at);
     }
-    const result = await env.DB.prepare('UPDATE events SET ' + sets.join(', ') + where)
-      .bind(...values)
-      .run();
+    const update = env.DB.prepare('UPDATE events SET ' + sets.join(', ') + where).bind(...values);
+    // OSE-2142: nothing is more live than its container. A status move closes
+    // the event's open vote set in the same batch (one transaction) unless the
+    // event is Published after it; a field-only PUT never touches the set.
+    const result =
+      observedStatus !== undefined
+        ? (await env.DB.batch([update, closeVoteSetUnlessPublished(env.DB, eventId)]))[0]
+        : await update.run();
 
     if ((result.meta?.changes ?? 0) === 0) {
       if (observedStatus !== undefined) {
