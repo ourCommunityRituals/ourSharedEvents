@@ -15,3 +15,12 @@ export async function giveCoreValues(db: D1Database, id: string): Promise<void> 
     .bind(id)
     .run();
 }
+
+/**
+ * OSE-2036 — a create past draft (ready or active) owes the same core values.
+ * Specs that create a live event through the API spread one of these into the
+ * body. The type is one migration 0024 seeds, so it is on every test database.
+ */
+export const CORE_TIME_AND_TYPE = { start_time: '18:00', event_type_id: 'etr-rec-bocce' } as const;
+/** For a body that sends no start_date of its own. */
+export const CORE_VALUES = { start_date: '2099-01-01', ...CORE_TIME_AND_TYPE } as const;

@@ -66,6 +66,7 @@ import { bigQueryInsertRows } from '../src/cloud/bigquery';
 import { gridDisk } from 'h3-js';
 import { poolSchemaViolations } from './helpers/bigquery-pool-schema';
 import { AS_PERSON } from './helpers/person-agent';
+import { CORE_TIME_AND_TYPE } from './helpers/core-values';
 
 // OSE-1416: every row a test sends must fit its pool table (bigquery/*.schema.json),
 // or the real insertAll would reject it. Checked after every test in this file.
@@ -234,6 +235,7 @@ beforeAll(async () => {
       attendance_mode: 'in_person',
       title: 'OSE-616 Trace — Eagles Hall',
       status: 'active',
+      ...CORE_TIME_AND_TYPE,
       lat: EAGLES.lat,
       lon: EAGLES.lon,
       start_date: when.day,
