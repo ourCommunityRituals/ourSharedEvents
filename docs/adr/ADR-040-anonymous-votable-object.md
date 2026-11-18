@@ -1,6 +1,6 @@
 # ADR-040: An anonymous vote is a counter on an object, never a row about a voter
 
-**Status:** Proposed. The owner answered the questions on 2026-11-17 and 2026-11-18 (comments on PRs #1413 and #1414). Two are still open: D6 (explained again below, with a proposed default) and D10. Nothing here is built.
+**Status:** Proposed. The owner answered every question on 2026-11-17 and 2026-11-18 (comments on PRs #1413 and #1414; D6 and D10 in the owner's own session on 2026-11-18). Only the level of detail in the published report stays open (OSE-520). The owner accepts this ADR by merging it. Nothing here is built.
 **Date:** 2026-11-17
 **Deciders:** Owner (PO). Sr Architect owns the draft. Dr of Security advises on the membrane.
 **Ticket:** OSE-1193 (blocks OSE-2000 under the fairs epic OSE-1996; step 1 of OW-218, Fist of Five)
@@ -30,11 +30,11 @@ What the code already gives:
 | D3. Read `ose_anon` (never set it) on one new route, through its own 5-loop CCR                                | **Yes** (2026-11-18): "this is the ose anonymous token."                                                                                                                                                                                                                                                    | Decision 5. Invariant 4 is amended first, through its own 5-loop CCR (story S1g). |
 | D4. The winner only from published counts, a margin of at least 5, "Fewer than 5" in place of "held"           | **Yes.**                                                                                                                                                                                                                                                                                                    | Decision 7.                                                                       |
 | D5. At least 10 distinct voters before any count or winner                                                     | **At least 10** for a number to be shown. That is also when a **fun version of the SharedReport** is made, so the people in attendance have faith in the voting. "This is for fun and sponsorship, but not hard numbers (yet)."                                                                             | Decisions 7 and 8.                                                                |
-| D6. Gate votes on their own vote set; ADR-034 decision 4 refuses `competition` only until the vote route ships | **Not clear** (2026-11-18): "I don't understand the question."                                                                                                                                                                                                                                              | Open. Asked again in plain words under Still open, with a proposed default.       |
+| D6. Gate votes on their own vote set; ADR-034 decision 4 refuses `competition` only until the vote route ships | **A** (2026-11-18, answered in the owner's session): voting turns on when an admin opens voting for the event, such as tonight's songs. It works for a bar night with no fair.                                                                                                                              | Decision 10.                                                                      |
 | D7. No tally, winner or count before the event's end; none on the display                                      | **"Yeah."** The owner has "rethought this into more transparency". On 2026-11-18 (C2): publish the reports with enough detail to give trust in the process.                                                                                                                                                 | Decisions 7 and 8. The level of detail is open (Still open).                      |
 | D8. Accept the residual risks in writing, or add noise                                                         | **Accepted, under a house rule.** Bocce has a "don't be a dick" rule; voting goes under a "don't be a jag-off" rule that lists the risks so the people there can self-police.                                                                                                                               | Decision 9.                                                                       |
 | D9. Own-team voting allowed; "too close to call, the champion retains"                                         | **Yes.**                                                                                                                                                                                                                                                                                                    | Decision 7.                                                                       |
-| D10. Move OSE-1193 out from under OSE-1192; take the refreshed text; split S0 to S5                            | **Not answered.**                                                                                                                                                                                                                                                                                           | Open.                                                                             |
+| D10. Move OSE-1193 out from under OSE-1192; take the refreshed text; split S0 to S5                            | **Yes, move and split** (2026-11-18, answered in the owner's session). OSE-1193 leaves the post-launch epic, takes the refreshed story text, and becomes S0 to S5, one session each. N1 to N5 are created.                                                                                                  | Implementation Notes. Done in Linear.                                             |
 | D11. One vote set per event, never reopened                                                                    | **"One vote an event, one vote a stall, one vote a song to start."** On 2026-11-18 (C3): a closed vote set may reopen, "to be flexible in case there is time screw up".                                                                                                                                     | Decision 4, with the reopen rule.                                                 |
 | D12. Drop the participation rate against the logged headcount                                                  | **"Add it if you think it will find value to our overall goal."**                                                                                                                                                                                                                                           | Decision 8: kept, against a denominator that is nested by construction.           |
 
@@ -125,13 +125,15 @@ The owner accepts these residual risks, and the voter page states them in plain 
 
 The card's exact wording is the owner's.
 
+### 10. What turns voting on
+
+Voting turns on when an admin opens a vote set for the event (D6 = A). No fair setting is needed, so a Fist of Five night at a bar works by itself. ADR-034 decision 4 refuses `competition` mode until voting exists; that refusal ends when the vote route ships, and a fair's competition mode then uses this same voting.
+
 ## Still open
 
-| Id        | Question, in plain words                                                                                                     | Proposed default                                                                                                                                                                                                                                                                                                                                                                                                   | Blocks                   |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
-| D6        | What switches voting on for an event?                                                                                        | Voting is on when an admin opens a vote set for that event. No fair setting is needed, so a Fist of Five night at a bar works by itself. ADR-034 says a fair cannot use "competition" mode until voting exists; with this default, that wait ends when the vote route ships. The other choice is to require the fair's "competition" mode first, which makes Fist of Five nights wait on the fair work (OSE-2000). | The vote route (S4a)     |
-| D10       | Does OSE-1193 move out from under the post-launch container epic OSE-1192, take the refreshed text, and split into S0 to S5? | Yes, as booths did under ADR-034 decision 7.                                                                                                                                                                                                                                                                                                                                                                       | Linear only              |
-| C2 detail | How much detail does the published report carry, so it builds trust without narrowing to a person?                           | Work it out in OSE-520, inside decision 7.                                                                                                                                                                                                                                                                                                                                                                         | The fun report (OSE-520) |
+| Id        | Question                                                                                           | Proposed default                           | Blocks                   |
+| --------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------ |
+| C2 detail | How much detail does the published report carry, so it builds trust without narrowing to a person? | Work it out in OSE-520, inside decision 7. | The fun report (OSE-520) |
 
 ## Alternatives Considered
 
@@ -173,13 +175,13 @@ This is the September 2026 design (migration "0069", never merged).
 
 ## Implementation Notes
 
-The planned stories (proposed in the OSE-1193 comment; D10 is open):
+The stories (D10 = yes; each is a Linear ticket under OSE-1193):
 
 - **Can start now:**
   - S0, the staging spike on room presence;
   - S2, the tables and their gates, including the timestamp gate's scan-shaped rule learning `vote|tally|ballot|receipt|participant`;
   - S3, admin open and close of sets and objects.
-- **Waits on D6, the invariant 4 amendment (S1g), OSE-1496 and S0:** S4a, the vote route, and S4b, the voter page.
+- **Waits on the invariant 4 amendment (S1g), OSE-1496 and S0:** S4a, the vote route, and S4b, the voter page.
 - **Waits on decisions 7 and 8:** S5, results after the event. The fun report waits on OSE-520.
 - **Proposed new tickets:** N1 (the OurWKRP route that opens and closes song objects, scoped to a brand), N2 (a cookie-mint cap at `/q`), N3 (the CI/CD testing ticket), N4 (a staging load case for a room behind one address), N5 (widen the unrun-spec check).
 
@@ -194,6 +196,6 @@ Every test is seen failing first, at the workers-pool layer and on staging (Brun
 
 ## Revisit Criteria
 
-- The owner answers D6 or D10, or settles the report's level of detail.
+- The owner settles the published report's level of detail.
 - A count is wanted during the night (invariant 5).
 - A vote limit beyond one per object is wanted ("to start").
