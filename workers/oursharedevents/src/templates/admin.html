@@ -20,24 +20,23 @@
         background: var(--bg);
         color: var(--text);
       }
-      header {
-        background: var(--surface);
-        color: var(--text);
-        padding: 1.25rem 2rem;
+      /* The shared .header, kept in the page flow: the selected-event bar below it is the sticky one.
+         header.admin-header outranks /ui.css .header, which loads after this block. */
+      header.admin-header {
+        position: static;
+        gap: 12px;
+      }
+      .admin-title {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .admin-nav {
         display: flex;
         flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-      }
-      header h1 {
-        overflow-wrap: anywhere;
-        font-size: 1.4rem;
-        font-weight: 600;
-      }
-      header span {
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+        gap: 4px;
       }
       .tier-badge {
         display: inline-block;
@@ -209,26 +208,6 @@
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
-      }
-      .event-status-btn {
-        min-height: 44px;
-        padding: 0.5rem 1rem;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        background: var(--surface);
-        color: var(--text);
-        font-size: 0.9rem;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .event-status-btn.primary {
-        background: var(--success);
-        border-color: var(--success);
-        color: var(--bg);
-      }
-      .event-status-btn:disabled {
-        opacity: 0.6;
-        cursor: wait;
       }
       /* Event timeline — six steps, phone-first (vertical), big glanceable state. */
       .timeline {
@@ -415,8 +394,8 @@
       }
       h2 {
         font-size: 1.1rem;
-        font-weight: 600;
-        color: var(--text-muted);
+        font-weight: 700;
+        color: var(--text);
         margin-bottom: 1rem;
       }
       table {
@@ -425,11 +404,10 @@
         background: var(--surface);
         border-radius: 8px;
         overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
       }
       th {
         background: var(--surface);
-        color: #fff;
+        color: var(--text-muted);
         padding: 0.75rem 1rem;
         text-align: left;
         font-size: 0.8rem;
@@ -477,27 +455,14 @@
         padding: 2rem;
         color: var(--error);
       }
-      /* OSE-1328: /ui.css .card; .mcard-* head and body own the spacing. */
-      .forms-card {
+      /* Sectioned cards (.card--sectioned, from /ui.css) stack with one gap. A
+         heading in a card header sits on the header's line, not above a gap. */
+      .card--sectioned {
         margin-top: 1rem;
-        padding: 0;
       }
-      .mcard-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 12px 16px;
-        min-height: 56px;
-        border-bottom: 1px solid var(--border);
-      }
-      .mcard-title {
-        font-size: 1rem;
-        font-weight: 700;
+      .card-header .card-title {
         margin: 0;
-      }
-      .mcard-body {
-        padding: 16px;
+        color: var(--text);
       }
       .forms-grid {
         display: grid;
@@ -569,25 +534,6 @@
         color: var(--text-muted);
         margin-top: 0.25rem;
       }
-      .copy-btn {
-        display: inline-flex;
-        align-items: center;
-        min-height: 44px; /* WCAG 2.5.5 — rendered 73x22 (OSE-1236) */
-        padding: 0.2rem 0.5rem;
-        background: var(--surface-hover);
-        border: 1px solid var(--border-strong);
-        border-radius: 4px;
-        font-size: 0.75rem;
-        cursor: pointer;
-        color: var(--text);
-        margin-left: 0.5rem;
-        transition:
-          background 0.2s,
-          color 0.2s;
-      }
-      .copy-btn:hover {
-        border-color: var(--accent);
-      }
       .copy-btn.copied {
         color: var(--success);
         border-color: var(--success);
@@ -628,7 +574,7 @@
         }
       }
       .skeleton {
-        background: linear-gradient(90deg, #f1f3f5 25%, #e9ecef 50%, #f1f3f5 75%);
+        background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
         background-size: 400px 100%;
         animation: shimmer 1.5s ease-in-out infinite;
         border-radius: 4px;
@@ -644,7 +590,7 @@
         padding: 1.5rem;
         background: var(--surface);
         border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        border: 1px solid var(--border);
       }
       .skeleton-table .skeleton-row {
         height: 2.5rem;
@@ -670,18 +616,7 @@
         font-size: 0.85rem;
       }
       .card-error .retry-btn {
-        display: inline-block;
         margin-top: 0.75rem;
-        padding: 0.4rem 1rem;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-size: 0.8rem;
-        cursor: pointer;
-        color: var(--text-muted);
-      }
-      .card-error .retry-btn:hover {
-        background: var(--surface-hover);
       }
       .create-card {
         background: var(--surface);
@@ -706,9 +641,6 @@
       .type-picker-msg { margin: 0; font-size: 0.9375rem; color: var(--text-muted); }
       .create-form input[type='date'], .create-form input[type='time'] { -webkit-appearance: none; appearance: none; min-width: 0; text-align: left; }
       .create-form input:focus, .create-form select:focus, .create-form textarea:focus { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 0; }
-      .create-btn { min-height: 44px; /* WCAG 2.5.5 — 0.6rem padding rendered 35px (OSE-1236) */ padding: 0.6rem 1.5rem; background: var(--success); color: var(--bg); border: none; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-      .create-btn:hover { background: color-mix(in srgb, var(--success) 85%, var(--text)); }
-      .create-btn:disabled { background: var(--surface-hover); color: var(--text-muted); cursor: not-allowed; }
       .create-msg { font-size: 0.85rem; margin-top: 0.5rem; min-height: 1.25rem; }
       .create-msg.success { color: var(--success); }
       .create-msg.error { color: var(--error); }
@@ -1000,46 +932,6 @@
           padding-top: 0.75rem;
         }
       }
-      /* OSE-1328: .mcard-* header/body own the spacing. */
-      .sponsors-card,
-      .poster-deployments-card,
-      .tv-display-card,
-      .poster-art-card {
-        margin-top: 1rem;
-        padding: 0;
-      }
-      .add-spon-btn {
-        min-height: 44px; /* WCAG 2.5.5 — rendered 43px, one pixel short (OSE-1236) */
-        padding: 0.4rem 1rem;
-        background: var(--accent);
-        color: var(--on-accent);
-        border: none;
-        border-radius: 6px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
-      }
-      .add-spon-btn:hover {
-        background: var(--accent-hover);
-      }
-      .add-spon-btn:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
-      }
-      .cancel-btn {
-        min-height: 44px;
-        padding: 0.6rem 1rem;
-        background: var(--surface);
-        color: var(--text-muted);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        font-size: 0.9rem;
-        cursor: pointer;
-      }
-      .cancel-btn:hover {
-        background: var(--surface-hover);
-      }
       .spon-form-wrap {
         background: var(--surface-hover);
         border-radius: 6px;
@@ -1098,16 +990,6 @@
         background: var(--accent);
         color: var(--on-accent);
       }
-      .spon-action-btn {
-        padding: 0.25rem 0.6rem;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        font-size: 0.75rem;
-        cursor: pointer;
-        background: var(--surface);
-        color: var(--text-muted);
-        transition: all 0.15s;
-      }
       .spon-home-link-box {
         display: flex;
         flex-wrap: wrap;
@@ -1124,13 +1006,6 @@
         border-radius: 4px;
         padding: 0.2rem 0.4rem;
         flex: 1 1 200px;
-      }
-      .spon-action-btn:hover {
-        background: var(--surface-hover);
-      }
-      .spon-action-btn:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
       }
       .spon-action-btn.deactivate {
         border-color: var(--error);
@@ -1202,8 +1077,8 @@
          baseline /ui.css tokens (var(--token, #fallback), same convention the
          rest of this file uses). Hidden until ose:event-selected (OSE-667/673). */
       /* OSE-1328 card 4: dashboard-card adopts the uniform token-driven .card +
-         .mcard-* anatomy (padding:0; the header row + body own their spacing).
-         The bespoke .dashboard-card__title styling is retired onto .mcard-title. */
+         sectioned-card anatomy (padding:0; .card-header and .card-body own their spacing).
+         The bespoke .dashboard-card__title styling is retired onto .card-title. */
       .dashboard-card {
         margin: 0 0 1rem;
         padding: 0;
@@ -1328,17 +1203,6 @@
         background: var(--bg);
         color: var(--text);
       }
-      header {
-        background: var(--surface);
-        border-bottom: 1px solid var(--border);
-        color: var(--text);
-      }
-      header h1 {
-        color: var(--text);
-      }
-      header span {
-        color: var(--text-muted);
-      }
       main,
       .main-content,
       .admin-main {
@@ -1382,23 +1246,6 @@
       textarea:focus-visible {
         border-color: var(--accent);
         outline: 2px solid var(--accent);
-      }
-      .btn-primary,
-      button.primary {
-        background: var(--accent);
-        color: var(--on-accent);
-        border-color: var(--accent);
-      }
-      .btn-primary:hover,
-      button.primary:hover {
-        background: var(--accent-hover);
-      }
-      .btn-secondary,
-      button.secondary,
-      .btn-outline {
-        background: var(--surface);
-        color: var(--text);
-        border-color: var(--border);
       }
       .btn:focus-visible,
       button:focus-visible {
@@ -1591,9 +1438,11 @@
   </head>
   <body class="chooser-active">
     <a href="#main-content" class="skip-link" data-testid="admin-skip-link">Skip to content</a>
-    <header data-testid="admin-header" aria-label="OurSharedEvents Admin">
+    <header class="header admin-header" data-testid="admin-header" aria-label="OurSharedEvents Admin">
+      <div class="admin-title">
+      <span class="brand" data-testid="admin-brand">ourSharedEvents</span>
       <h1>
-        OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span
+        Admin<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span
         ><span
           class="phase-badge phase-1"
           id="phaseBadge"
@@ -1603,8 +1452,8 @@
           >Community events</span
         >
       </h1>
-      <span>Admin</span>
-      <nav aria-label="More admin pages">
+      </div>
+      <nav class="admin-nav" aria-label="More admin pages">
         <button type="button" class="btn btn-link" data-action="go-your-events" data-testid="admin-nav-your-events" hidden>Your events</button>
         <a class="btn btn-link" href="/api/v2/admin/screens/logs" data-testid="admin-nav-logs">Logs</a>
         <a class="btn btn-link" href="/api/v2/admin/screens/settings" data-testid="admin-nav-settings">Settings</a>
@@ -2451,7 +2300,7 @@
             </p>
             <button
               type="button"
-              class="create-btn"
+              class="btn btn-primary create-btn"
               id="wizard-go-live-btn"
               data-testid="wizard-go-live-btn"
             >
@@ -2489,7 +2338,7 @@
           </button>
           <button
             type="button"
-            class="create-btn"
+            class="btn btn-primary create-btn"
             id="wizard-next-btn"
             data-testid="wizard-next-btn"
           >
@@ -2497,14 +2346,14 @@
           </button>
           <button
             type="button"
-            class="create-btn"
+            class="btn btn-primary create-btn"
             id="wizard-finish-btn"
             data-testid="wizard-finish-btn"
             hidden
           >
             Done
           </button>
-          <button type="button" class="create-btn" id="wizard-save-edit-btn" data-testid="wizard-save-edit-btn" hidden>Save and back to review</button>
+          <button type="button" class="btn btn-primary create-btn" id="wizard-save-edit-btn" data-testid="wizard-save-edit-btn" hidden>Save and back to review</button>
           <button type="button" class="wizard-back-btn" id="wizard-cancel-edit-btn" data-testid="wizard-cancel-edit-btn" hidden>Back to review</button>
         </div>
         </div>
@@ -4289,7 +4138,7 @@
                The toast that announces a change is OSE-1564; this is the part
                that has to stay true after any toast is gone. -->
           <p class="event-status-explain" id="event-map-state" data-testid="event-map-state"></p>
-          <div class="event-status-actions"><button type="button" class="event-status-btn" id="event-map-toggle" data-action="event-map" data-testid="event-map-toggle" hidden></button></div>
+          <div class="event-status-actions"><button type="button" class="btn btn-secondary event-status-btn" id="event-map-toggle" data-action="event-map" data-testid="event-map-toggle" hidden></button></div>
           <p class="create-msg" id="event-status-msg" data-testid="event-status-msg" role="status" aria-live="polite"></p>
         </div>
       </div>
@@ -4302,11 +4151,11 @@
            is the thing to do now, so the organizer never has to work out where
            in the flow they are. -->
       <div class="card card--sectioned" id="event-timeline-card" data-testid="event-timeline-card" hidden>
-        <div class="mcard-head">
-          <h3 class="mcard-title">Event checklist</h3>
-          <a class="copy-btn" id="event-timeline-next" data-testid="event-timeline-next" href="#events-section" hidden></a>
+        <div class="card-header">
+          <h3 class="card-title">Event checklist</h3>
+          <a class="btn btn-secondary copy-btn card-action" id="event-timeline-next" data-testid="event-timeline-next" href="#events-section" hidden></a>
         </div>
-        <div class="mcard-body">
+        <div class="card-body">
           <ol class="timeline" id="event-timeline" data-testid="event-timeline"></ol>
           <!-- Organizer inbox: sponsors still to answer, and ones who declined,
                surfaced here instead of only as badges in the sponsors table. -->
@@ -4322,11 +4171,11 @@
            posters out, places covered, scans per day. Counts only, never who.
            Hidden outside the pre-event phase. -->
       <div class="card card--sectioned" id="pre-event-card" data-testid="pre-event-card" hidden>
-        <div class="mcard-head">
-          <h3 class="mcard-title">Before the event</h3>
-          <span class="badge ready" id="pre-event-countdown" data-testid="pre-event-countdown"></span>
+        <div class="card-header">
+          <h3 class="card-title">Before the event</h3>
+          <span class="badge ready card-action" id="pre-event-countdown" data-testid="pre-event-countdown"></span>
         </div>
-        <div class="mcard-body">
+        <div class="card-body">
           <p class="tl-detail" id="pre-event-lede" data-testid="pre-event-lede"></p>
           <div class="event-status-actions" id="pre-event-actions" data-testid="pre-event-actions"></div>
           <div class="wizard-link-card" id="pre-event-link-card" data-testid="pre-event-link-card" hidden>
@@ -4383,7 +4232,7 @@
         </p>
         <button
           type="button"
-          class="add-spon-btn"
+          class="btn btn-outline add-spon-btn"
           id="create-event-toggle"
           data-testid="create-event-toggle"
           aria-expanded="true"
@@ -4706,7 +4555,7 @@
               <button
                 type="submit"
                 id="create-submit-btn"
-                class="create-btn"
+                class="btn btn-primary create-btn"
                 data-testid="create-submit"
               >
                 Create Event
@@ -4801,16 +4650,16 @@
            (OSE-896). No fabricated metrics. -->
       <section
         id="dashboard-card"
-        class="card dashboard-card"
+        class="card card--sectioned dashboard-card"
         data-testid="admin-dashboard-card"
         aria-label="Event dashboard for the selected event"
         hidden
       >
-        <div class="mcard-head">
-          <h2 class="mcard-title dashboard-card__title" data-testid="admin-dashboard-title">Event Dashboard</h2>
+        <div class="card-header">
+          <h2 class="card-title dashboard-card__title" data-testid="admin-dashboard-title">Event Dashboard</h2>
         </div>
 
-        <div class="mcard-body">
+        <div class="card-body">
         <div class="dashboard-stats" role="group" aria-label="Event statistics">
           <div class="dash-stat scans" data-testid="admin-stat-scans">
             <span class="dash-stat__num" data-testid="admin-stat-scans-num">—</span>
@@ -5007,28 +4856,28 @@
       <div class="card surface-card poster" data-surface="poster" data-scoped="0" data-testid="card-poster">
         <h3>Poster Page</h3>
         <a href="/poster" target="_blank" data-testid="link-poster">Open Poster</a>
-        <button class="copy-btn" data-testid="copy-poster" data-action="copy-url" data-url="/poster">
+        <button class="btn btn-secondary copy-btn" data-testid="copy-poster" data-action="copy-url" data-url="/poster">
           Copy URL
         </button>
       </div>
       <div class="card surface-card display" data-surface="display" data-scoped="0" data-testid="card-display">
         <h3>TV Display</h3>
         <a href="/display" target="_blank" data-testid="link-display">Open Display</a>
-        <button class="copy-btn" data-testid="copy-display" data-action="copy-url" data-url="/display">
+        <button class="btn btn-secondary copy-btn" data-testid="copy-display" data-action="copy-url" data-url="/display">
           Copy URL
         </button>
       </div>
       <div class="card surface-card public" data-surface="public" data-scoped="0" data-testid="card-public">
         <h3>Public Page</h3>
         <a href="/" target="_blank" data-testid="link-public">Open Public Page</a>
-        <button class="copy-btn" data-testid="copy-public" data-action="copy-url" data-url="/">
+        <button class="btn btn-secondary copy-btn" data-testid="copy-public" data-action="copy-url" data-url="/">
           Copy URL
         </button>
       </div>
       <div class="card surface-card report" data-surface="report" data-scoped="0" data-testid="card-report">
         <h3>Shared Report</h3>
         <a href="/sharedReport" target="_blank" data-testid="link-report">Open Report</a>
-        <button class="copy-btn" data-testid="copy-report" data-action="copy-url" data-url="/sharedReport">
+        <button class="btn btn-secondary copy-btn" data-testid="copy-report" data-action="copy-url" data-url="/sharedReport">
           Copy URL
         </button>
       </div>
@@ -5142,11 +4991,11 @@
            tests/e2e/1-smoke/admin-seven-cards.spec.js, which numbers Sponsors 2
            and Forms 3. Two numbering schemes disagreeing is worse than none, so
            the numbers are gone and the order carries the meaning (OSE-1238). -->
-    <div class="card forms-card" id="report-card" data-testid="forms-card">
-      <div class="mcard-head">
-        <h2 class="mcard-title">Reg &amp; Forms</h2>
+    <div class="card card--sectioned forms-card" id="report-card" data-testid="forms-card">
+      <div class="card-header">
+        <h2 class="card-title">Reg &amp; Forms</h2>
       </div>
-      <div class="mcard-body">
+      <div class="card-body">
         <div id="forms-panel" data-testid="forms-panel">
           <p class="loading" data-testid="forms-loading-initial">Select an event to manage forms&hellip;</p>
         </div>
@@ -5259,11 +5108,11 @@
                 '</select>' +
               '</div>' +
             '</div>' +
-            '<button class="copy-btn" data-testid="mint-link-btn" style="margin-top:8px" data-action="mint-link" data-event-id="' + String(window._mintEventId == null ? '' : window._mintEventId).replace(/"/g, '&quot;') + '">Generate Link</button>' +
+            '<button class="btn btn-secondary copy-btn" data-testid="mint-link-btn" style="margin-top:8px" data-action="mint-link" data-event-id="' + String(window._mintEventId == null ? '' : window._mintEventId).replace(/"/g, '&quot;') + '">Generate Link</button>' +
             '<div id="mint-result" class="mint-result" data-testid="mint-result" style="margin-top:10px"></div>' +
           '</div>';
         } catch (err) {
-          panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" data-action="forms-reload" data-event-id="' + eventId + '" data-event-name="' + String(eventName == null ? '' : eventName).replace(/"/g, '&quot;') + '">Retry</button></div>';
+          panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="btn btn-secondary retry-btn" data-testid="forms-retry" data-action="forms-reload" data-event-id="' + eventId + '" data-event-name="' + String(eventName == null ? '' : eventName).replace(/"/g, '&quot;') + '">Retry</button></div>';
         }
       };
 
@@ -5409,7 +5258,7 @@
             '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Bearer token · expires ' + expires + '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
               '<code data-testid="mint-token" style="font-size:11px;word-break:break-all;flex:1;background:var(--surface-hover);padding:4px 6px;border-radius:4px">' + esc(data.token) + '</code>' +
-              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-url="' + esc(reportUrl) + '" aria-label="Copy report link">Copy link</button>' +
+              '<button class="btn btn-secondary copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-url="' + esc(reportUrl) + '" aria-label="Copy report link">Copy link</button>' +
             '</div>' +
             '<a data-testid="mint-report-url" href="' + esc(reportUrl) + '" target="_blank" rel="noopener" style="display:block;margin-top:8px;font-size:12px;word-break:break-all">' + esc(reportUrl) + '</a>' +
             '<div class="sub-line">Copy this now; it isn&#39;t stored and can&#39;t be shown again.</div>' +
@@ -5464,22 +5313,22 @@
          job. Hidden until an event is selected. Built from classes that already
          exist (@ocr/ui's btn, card-title and sub-line, this page's create-form):
          it adds no CSS. It holds a name and a schedule, never a count. -->
-    <div class="card" id="series-card" data-testid="series-card" hidden>
-      <div class="mcard-head">
+    <div class="card card--sectioned" id="series-card" data-testid="series-card" hidden>
+      <div class="card-header">
         <div>
-          <h2 class="mcard-title">Series</h2>
+          <h2 class="card-title">Series</h2>
           <p class="sub-line" id="series-summary" data-testid="series-summary" aria-live="polite"></p>
         </div>
       </div>
 
-      <div class="mcard-body form-field" id="series-on" data-testid="series-on" hidden>
+      <div class="card-body form-field" id="series-on" data-testid="series-on" hidden>
         <div class="flex-row">
           <button type="button" class="btn btn-secondary" id="series-detach" data-action="series-detach" data-testid="series-detach">Take this event off the series</button>
         </div>
         <p class="sub-line">The series and its other dates stay as they are.</p>
       </div>
 
-      <form class="mcard-body" id="series-declare" data-testid="series-declare" novalidate hidden>
+      <form class="card-body" id="series-declare" data-testid="series-declare" novalidate hidden>
         <h3 class="card-title" id="series-declare-label">Start a series from this event</h3>
         <div class="create-form">
           <div class="full-width">
@@ -5519,13 +5368,13 @@
         </div>
       </form>
 
-      <div class="mcard-body" id="series-suggestions" data-testid="series-suggestions" hidden>
+      <div class="card-body" id="series-suggestions" data-testid="series-suggestions" hidden>
         <h3 class="card-title">Is this a series?</h3>
         <p class="sub-line">Three or more of your events share a place, a day and a time.</p>
         <ul id="series-suggestion-list" data-testid="series-suggestion-list"></ul>
       </div>
 
-      <div class="mcard-body">
+      <div class="card-body">
         <div class="flex-row">
           <button type="button" class="btn btn-secondary" id="series-reattach" data-action="series-attach" data-testid="series-reattach" hidden>Put it back</button>
         </div>
@@ -5534,16 +5383,16 @@
     </div>
 
     <!-- Sponsors — step 2, optional. (SPON-6) -->
-    <div class="card sponsors-card" id="sponsors-card" data-testid="sponsors-card">
+    <div class="card card--sectioned sponsors-card" id="sponsors-card" data-testid="sponsors-card">
       <!-- Folded to one line until opened (owner 2026-10-10): the summary says
            whether there are sponsors; Show opens the list, and + Add Sponsor,
            the jump bar and the sponsor door open it too. -->
-      <div class="mcard-head">
+      <div class="card-header">
         <div>
-          <h2 class="mcard-title">Sponsors</h2>
+          <h2 class="card-title">Sponsors</h2>
           <p class="sub-line" id="spon-summary" data-testid="sponsors-summary" aria-live="polite">Select an event to see its sponsors.</p>
         </div>
-        <div class="flex-row">
+        <div class="flex-row card-action">
           <button
             type="button"
             class="btn btn-secondary"
@@ -5555,7 +5404,7 @@
             Show
           </button>
           <button
-            class="add-spon-btn"
+            class="btn btn-outline add-spon-btn"
             id="add-spon-toggle"
             data-testid="add-sponsor-toggle"
             aria-expanded="false"
@@ -5571,7 +5420,7 @@
            without opening anything. Hidden until an event is selected.
            Styled by classes that already exist (@ocr/ui's form-field,
            card-title, btn and sub-line): this page adds no CSS for it. -->
-      <div class="mcard-body form-field" id="spon-switch" data-testid="sponsors-switch" role="group" aria-labelledby="spon-switch-label" hidden>
+      <div class="card-body form-field" id="spon-switch" data-testid="sponsors-switch" role="group" aria-labelledby="spon-switch-label" hidden>
         <h3 class="card-title" id="spon-switch-label">Sponsors (you choose)</h3>
         <p id="spon-switch-state" data-testid="sponsors-switch-state"></p>
         <div class="flex-row">
@@ -5581,7 +5430,7 @@
         <p class="create-msg" id="spon-switch-msg" data-testid="sponsors-switch-msg" role="status" aria-live="polite"></p>
       </div>
 
-      <div class="mcard-body" id="spon-card-body" data-testid="sponsors-card-body" hidden>
+      <div class="card-body" id="spon-card-body" data-testid="sponsors-card-body" hidden>
       <div id="spon-form-wrap" class="spon-form-wrap" hidden data-testid="sponsor-form-wrap">
         <form id="spon-create-form" data-testid="sponsor-create-form" novalidate>
           <input type="hidden" id="spon-edit-id" data-testid="spon-edit-id" value="" />
@@ -5856,14 +5705,14 @@
               <button
                 type="submit"
                 id="spon-submit-btn"
-                class="create-btn"
+                class="btn btn-primary create-btn"
                 data-testid="sponsor-submit"
               >
                 Save Sponsor
               </button>
               <button
                 type="button"
-                class="cancel-btn"
+                class="btn btn-secondary cancel-btn"
                 id="spon-cancel-btn"
                 data-testid="sponsor-cancel"
               >
@@ -6039,12 +5888,12 @@
                 : isRequest
                 ? '<span class="muted-sm">Sponsor deactivated</span>'
                 : s.is_active
-                ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" data-action="sponsor-edit" data-id="' + esc(s.id) + '" aria-label="Edit sponsor ' + escAttr(s.name || s.id) + '">Edit</button> ' +
+                ? '<button class="btn btn-secondary spon-action-btn" data-testid="edit-' + esc(s.id) + '" data-action="sponsor-edit" data-id="' + esc(s.id) + '" aria-label="Edit sponsor ' + escAttr(s.name || s.id) + '">Edit</button> ' +
                   // Sponsor corner of the triangle: mint the sponsor's own page
                   // link (their placements, accept/decline, their report). The
                   // organizer hands it over; it expires in 30 days.
-                  '<button class="spon-action-btn" data-testid="sponsor-home-link-' + esc(s.id) + '" data-action="sponsor-home-link" data-id="' + esc(s.id) + '" aria-label="Get sponsor page link for ' + escAttr(s.name || s.id) + '">Sponsor link</button> ' +
-                  '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" data-action="sponsor-deactivate" data-id="' + esc(s.id) + '" aria-label="Deactivate sponsor ' + escAttr(s.name || s.id) + '">Deactivate</button>'
+                  '<button class="btn btn-secondary spon-action-btn" data-testid="sponsor-home-link-' + esc(s.id) + '" data-action="sponsor-home-link" data-id="' + esc(s.id) + '" aria-label="Get sponsor page link for ' + escAttr(s.name || s.id) + '">Sponsor link</button> ' +
+                  '<button class="btn btn-secondary spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" data-action="sponsor-deactivate" data-id="' + esc(s.id) + '" aria-label="Deactivate sponsor ' + escAttr(s.name || s.id) + '">Deactivate</button>'
                 : '<span class="muted-sm">Deactivated</span>';
               const eventName = _eventNameById[String(s.event_id)] || s.event_id;
               return '<tr data-testid="sponsor-row-' + esc(s.id) + '"' + dimStyle + '>' +
@@ -6061,7 +5910,7 @@
               '<tbody data-testid="sponsors-tbody">' + rows + '</tbody></table>';
           } catch (err) {
             window.oseSponsorsCard.summary('Could not load sponsors.');
-            wrap.innerHTML = '<div class="card-error" data-testid="sponsors-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load sponsors.</div><button class="retry-btn" data-testid="sponsors-retry" data-action="sponsors-reload">Retry</button></div>';
+            wrap.innerHTML = '<div class="card-error" data-testid="sponsors-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load sponsors.</div><button class="btn btn-secondary retry-btn" data-testid="sponsors-retry" data-action="sponsors-reload">Retry</button></div>';
           }
         }
         // Retry/cancel/post-mutation reloads keep the current scope (no arg).
@@ -6152,8 +6001,8 @@
             const msg = document.getElementById('spon-form-msg');
             msg.className = 'create-msg error';
             msg.innerHTML = 'Discard unsaved changes? ' +
-              '<button class="spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="confirm-discard" aria-label="Yes, discard changes">Yes, discard</button>' +
-              ' <button class="spon-action-btn" data-action="sponsor-keep-editing" data-testid="keep-editing" aria-label="Keep editing">Keep editing</button>';
+              '<button class="btn btn-secondary spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="confirm-discard" aria-label="Yes, discard changes">Yes, discard</button>' +
+              ' <button class="btn btn-secondary spon-action-btn" data-action="sponsor-keep-editing" data-testid="keep-editing" aria-label="Keep editing">Keep editing</button>';
             const yesBtn = msg.querySelector("[data-testid='confirm-discard']");
             if (yesBtn) yesBtn.focus();
             return;
@@ -6241,7 +6090,7 @@
             box.innerHTML =
               '<span class="muted-sm">Sponsor page link · expires ' + esc(expires) + '</span> ' +
               '<code class="spon-home-link-url" data-testid="sponsor-home-link-url">' + esc(data.url) + '</code> ' +
-              '<button type="button" class="copy-btn" data-action="mint-copy" data-token="' + esc(data.url) + '" data-testid="sponsor-home-link-copy" aria-label="Copy sponsor page link">Copy</button>';
+              '<button type="button" class="btn btn-secondary copy-btn" data-action="mint-copy" data-token="' + esc(data.url) + '" data-testid="sponsor-home-link-copy" aria-label="Copy sponsor page link">Copy</button>';
             if (typeof window._adminAnnounce === 'function') window._adminAnnounce('Sponsor page link ready. Send it to ' + (row.querySelector('[data-testid="spon-name-' + id + '"]') || {}).textContent + '.', 'ok');
           } catch (err) {
             if (typeof window._adminRequestFailed === 'function') window._adminRequestFailed('Could not create the sponsor link.', res, data, 'Creating a sponsor page link');
@@ -6302,8 +6151,8 @@
           const cell = btn.parentElement;
           cell.innerHTML =
             '<span class="muted-sm deact-confirm-lbl">Deactivate?</span> ' +
-            '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" data-action="sponsor-confirm-deactivate" data-id="' + esc(id) + '" aria-label="Confirm deactivate sponsor">Yes</button>' +
-            ' <button class="spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" data-action="sponsors-reload" aria-label="Cancel deactivate">No</button>';
+            '<button class="btn btn-secondary spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" data-action="sponsor-confirm-deactivate" data-id="' + esc(id) + '" aria-label="Confirm deactivate sponsor">Yes</button>' +
+            ' <button class="btn btn-secondary spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" data-action="sponsors-reload" aria-label="Cancel deactivate">No</button>';
           const yesBtn = cell.querySelector("[data-testid='confirm-deactivate-" + esc(id) + "']");
           if (yesBtn) yesBtn.focus();
         };
@@ -6404,7 +6253,7 @@
             const mapFlipNote = data.map && data.map.changed && data.map.note ? ' ' + esc(data.map.note) : '';
             if (data.map && data.map.changed && window.oseMapFlipped) window.oseMapFlipped(body.event_id || event_id);
             msg.innerHTML = (editId ? 'Sponsor updated.' : event_id ? 'Sponsor created — ' + esc(data.id) : 'Sponsor saved to your pool — attach events later. ' + esc(data.id)) + mapFlipNote +
-              ' <button class="spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="close-after-save">Close</button>';
+              ' <button class="btn btn-secondary spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="close-after-save">Close</button>';
             loadSponsors();
           } catch (err) {
             msg.textContent = err.message || 'Could not save sponsor.';
@@ -6424,24 +6273,24 @@
          one, and read each stall's scans. Hidden until an event is selected,
          and folded to its title and a one-line summary until opened, as the
          Sponsors card is. Built from classes that already exist (@ocr/ui's btn,
-         card-title, sub-line and detail-card; this page's mcard-*, create-form,
+         card-title, sub-line and detail-card; this page's create-form,
          create-msg, create-field-error, pc-list and pd-link): it adds no CSS. Rows are <template>
          skeletons, cloned and filled with textContent, so their test ids stay
          literal for the registry and nothing from the server reaches innerHTML.
          A stall never holds a person (ADR-034 item 5). Its scans read through
          oseFewerThan when withheld, and the list keeps the organizer's order,
          never a count's (ADR-034 item 6). -->
-    <div class="card stalls-card" id="stalls-card" data-testid="stalls-card" hidden>
-      <div class="mcard-head">
+    <div class="card card--sectioned stalls-card" id="stalls-card" data-testid="stalls-card" hidden>
+      <div class="card-header">
         <div>
-          <h2 class="mcard-title">Stalls</h2>
+          <h2 class="card-title">Stalls</h2>
           <p class="sub-line" id="stalls-summary" data-testid="stalls-summary" aria-live="polite"></p>
         </div>
-        <button type="button" class="btn btn-secondary" id="stalls-toggle" data-action="stalls-toggle" data-testid="stalls-toggle" aria-expanded="false" aria-controls="stalls-body">Show</button>
+        <button type="button" class="btn btn-secondary card-action" id="stalls-toggle" data-action="stalls-toggle" data-testid="stalls-toggle" aria-expanded="false" aria-controls="stalls-body">Show</button>
       </div>
 
       <div id="stalls-body" data-testid="stalls-body" hidden>
-        <div class="mcard-body">
+        <div class="card-body">
           <p class="sub-line" id="stalls-total" data-testid="stalls-total" hidden></p>
           <p class="sub-line" id="stalls-no-stall" data-testid="stalls-no-stall" hidden></p>
           <p class="sub-line" id="stalls-public-note" data-testid="stalls-public-note" hidden>Each stall in use gets its own public page once the fair is live.</p>
@@ -6449,7 +6298,7 @@
           <ul class="pc-list" id="stalls-list" data-testid="stalls-list" aria-label="Stalls"></ul>
         </div>
 
-        <form class="mcard-body" id="stalls-add" data-testid="stalls-add" novalidate>
+        <form class="card-body" id="stalls-add" data-testid="stalls-add" novalidate>
           <h3 class="card-title">Add a stall</h3>
           <div class="create-form">
             <div>
@@ -6474,7 +6323,7 @@
           </div>
         </form>
 
-        <form class="mcard-body" id="stalls-bulk" data-testid="stalls-bulk" novalidate>
+        <form class="card-body" id="stalls-bulk" data-testid="stalls-bulk" novalidate>
           <h3 class="card-title">Add many stalls</h3>
           <div class="create-form">
             <div class="full-width">
@@ -6495,7 +6344,7 @@
           </div>
         </form>
 
-        <div class="mcard-body">
+        <div class="card-body">
           <p class="create-msg" id="stalls-msg" data-testid="stalls-msg" role="status" aria-live="polite"></p>
         </div>
       </div>
@@ -7216,17 +7065,17 @@
          OSE-2142: on an event that is not Published, Open and Reopen are greyed
          out and the card says "Publish the event to open voting." OSE-2140: the
          room's own vote code (its URL and QR) is shown here and nowhere public. -->
-    <div class="card votes-card" id="votes-card" data-testid="votes-card" hidden>
-      <div class="mcard-head">
+    <div class="card card--sectioned votes-card" id="votes-card" data-testid="votes-card" hidden>
+      <div class="card-header">
         <div>
-          <h2 class="mcard-title">Voting</h2>
+          <h2 class="card-title">Voting</h2>
           <p class="sub-line" id="votes-summary" data-testid="votes-summary" aria-live="polite"></p>
         </div>
-        <button type="button" class="btn btn-secondary" id="votes-toggle" data-action="votes-toggle" data-testid="votes-toggle" aria-expanded="false" aria-controls="votes-body">Show</button>
+        <button type="button" class="btn btn-secondary card-action" id="votes-toggle" data-action="votes-toggle" data-testid="votes-toggle" aria-expanded="false" aria-controls="votes-body">Show</button>
       </div>
 
       <div id="votes-body" data-testid="votes-body" hidden>
-        <div class="mcard-body">
+        <div class="card-body">
           <p class="sub-line" data-testid="votes-note">Votes are anonymous. No count shows here, or anywhere, until the results are final.</p>
           <div id="votes-make" data-testid="votes-make" hidden>
             <label for="votes-played-by">Who wins</label>
@@ -7249,7 +7098,7 @@
           <ul class="pc-list" id="votes-list" data-testid="votes-list" aria-label="What people can vote on"></ul>
         </div>
 
-        <form class="mcard-body" id="votes-add" data-testid="votes-add" novalidate hidden>
+        <form class="card-body" id="votes-add" data-testid="votes-add" novalidate hidden>
           <h3 class="card-title">Add something to vote on</h3>
           <div class="create-form">
             <div>
@@ -7272,7 +7121,7 @@
         </form>
         <p class="sub-line" id="votes-team-note" data-testid="votes-team-note" hidden>On a team night, OurWKRP adds each song with its team.</p>
 
-        <div class="mcard-body" id="votes-code" data-testid="votes-code" hidden>
+        <div class="card-body" id="votes-code" data-testid="votes-code" hidden>
           <h3 class="card-title">The room’s vote code</h3>
           <p class="sub-line" data-testid="votes-code-note">Show this code on the room screen. Scanning it is how a person in the room votes. A poster code does not open the vote.</p>
           <div id="votes-code-show" data-testid="votes-code-show" hidden>
@@ -7286,7 +7135,7 @@
           </div>
         </div>
 
-        <div class="mcard-body">
+        <div class="card-body">
           <p class="create-msg" id="votes-msg" data-testid="votes-msg" role="status" aria-live="polite"></p>
         </div>
       </div>
@@ -7560,11 +7409,11 @@
     <!-- Posters — step 4. Each deployment is one physical placement and mints its
            own unique qr_token (migrations/0003), so "how many posters" is "how
            many deployments", and the QR is complete once a deployment exists. -->
-    <div class="card poster-deployments-card" id="poster-deployments-card" data-testid="poster-deployments-card">
-      <div class="mcard-head">
-        <h2 class="mcard-title">Posters</h2>
+    <div class="card card--sectioned poster-deployments-card" id="poster-deployments-card" data-testid="poster-deployments-card">
+      <div class="card-header">
+        <h2 class="card-title">Posters</h2>
         <button
-          class="add-spon-btn"
+          class="btn btn-outline add-spon-btn card-action"
           id="add-pd-toggle"
           data-testid="add-poster-deployment-toggle"
           aria-expanded="false"
@@ -7573,7 +7422,7 @@
         >+ Add Deployment</button>
       </div>
 
-      <div class="mcard-body">
+      <div class="card-body">
       <!-- OSE-1357 part 2: the codes printed on the poster, in order. Each is its
            own /s/ short link (Copy first, then its QR); the event page is always
            first. Filled by loadPosterCodes() on ose:event-selected. -->
@@ -7592,10 +7441,10 @@
         <ol class="pc-list" id="pc-list" data-testid="poster-codes-list"></ol>
         <p class="pd-target" id="pc-upsell" data-testid="poster-codes-upsell" hidden></p>
         <div class="form-actions">
-          <button type="button" class="copy-btn" id="pc-add" data-testid="poster-codes-add">+ Add a code</button>
-          <button type="button" class="copy-btn" id="pc-save" data-testid="poster-codes-save">Save codes</button>
+          <button type="button" class="btn btn-secondary copy-btn" id="pc-add" data-testid="poster-codes-add">+ Add a code</button>
+          <button type="button" class="btn btn-secondary copy-btn" id="pc-save" data-testid="poster-codes-save">Save codes</button>
           <span class="create-msg" id="pc-msg" data-testid="poster-codes-msg" role="status"></span>
-          <button type="button" class="copy-btn" id="pc-undo" data-testid="poster-codes-undo" hidden>Undo</button>
+          <button type="button" class="btn btn-secondary copy-btn" id="pc-undo" data-testid="poster-codes-undo" hidden>Undo</button>
         </div>
       </section>
       <div id="pd-form-wrap" class="spon-form-wrap" hidden data-testid="poster-deployment-form-wrap">
@@ -7661,7 +7510,7 @@
           </details>
           <p class="create-msg" id="pd-geo-msg" data-testid="pd-geo-msg" role="status"></p>
           <div class="form-actions">
-            <button type="submit" data-testid="pd-create-btn" class="copy-btn">Create Deployment</button>
+            <button type="submit" data-testid="pd-create-btn" class="btn btn-secondary copy-btn">Create Deployment</button>
             <span class="create-msg" id="pd-create-msg" data-testid="pd-create-msg"></span>
           </div>
         </form>
@@ -7678,11 +7527,11 @@
          is how an organizer PUTS an image there. Same-origin ONLY: the poster CSP
          is img-src 'self' data:, so art must be R2-served via the existing
          event-scoped upload endpoint — never a pasted external URL. -->
-    <div class="card poster-art-card" data-testid="poster-art-card">
-      <div class="mcard-head">
-        <h2 class="mcard-title">Poster art</h2>
+    <div class="card card--sectioned poster-art-card" data-testid="poster-art-card">
+      <div class="card-header">
+        <h2 class="card-title">Poster art</h2>
       </div>
-      <div class="mcard-body">
+      <div class="card-body">
       <div id="pa-panel" data-testid="poster-art-panel">
         <p class="loading" data-testid="poster-art-loading-initial">Select an event to manage its poster art&hellip;</p>
       </div>
@@ -8009,7 +7858,7 @@
             '<div class="qr-card-body">' +
               '<div class="pd-link" data-testid="pd-short-link-block">' +
                 '<code data-testid="pd-short-link"></code>' +
-                '<button type="button" class="copy-btn" data-testid="pd-copy-link">Copy</button>' +
+                '<button type="button" class="btn btn-secondary copy-btn" data-testid="pd-copy-link">Copy</button>' +
               '</div>' +
               '<img class="qr-img" data-testid="pd-qr-img" width="160" height="160" alt="" />' +
               '<code data-testid="pd-qr-fallback"></code>' +
@@ -8022,9 +7871,9 @@
               '<div class="pd-slot-list" data-testid="pd-shortlink-slots"></div>' +
             '</div>' +
             '<div class="qr-card-footer">' +
-              '<button type="button" class="copy-btn" data-testid="pd-download-btn" data-action="pd-download" aria-label="Download poster QR">Download</button>' +
-              '<button type="button" class="copy-btn" data-testid="pd-print-btn" data-action="pd-print" aria-label="Print poster QR">Print</button>' +
-              '<button type="button" class="copy-btn" data-testid="pd-delete-btn" data-action="pd-delete" aria-label="Delete poster QR">Delete</button>' +
+              '<button type="button" class="btn btn-secondary copy-btn" data-testid="pd-download-btn" data-action="pd-download" aria-label="Download poster QR">Download</button>' +
+              '<button type="button" class="btn btn-secondary copy-btn" data-testid="pd-print-btn" data-action="pd-print" aria-label="Print poster QR">Print</button>' +
+              '<button type="button" class="btn btn-secondary copy-btn" data-testid="pd-delete-btn" data-action="pd-delete" aria-label="Delete poster QR">Delete</button>' +
             '</div>' +
           '</div>';
         const PD_SLOT =
@@ -8188,9 +8037,9 @@
             // Desktop is unaffected: the grid still shows every card.
             const nav = items.length > 1
               ? '<div class="pd-mobile-nav" data-testid="pd-mobile-nav">' +
-                  '<button type="button" class="copy-btn" data-action="pd-mobile-prev" data-testid="pd-mobile-prev" aria-label="Previous poster deployment">&larr; Prev</button>' +
+                  '<button type="button" class="btn btn-secondary copy-btn" data-action="pd-mobile-prev" data-testid="pd-mobile-prev" aria-label="Previous poster deployment">&larr; Prev</button>' +
                   '<span class="pd-mobile-counter" data-testid="pd-mobile-counter" aria-live="polite"></span>' +
-                  '<button type="button" class="copy-btn" data-action="pd-mobile-next" data-testid="pd-mobile-next" aria-label="Next poster deployment">Next &rarr;</button>' +
+                  '<button type="button" class="btn btn-secondary copy-btn" data-action="pd-mobile-next" data-testid="pd-mobile-next" aria-label="Next poster deployment">Next &rarr;</button>' +
                 '</div>'
               : '';
             panel.textContent = '';
@@ -8244,8 +8093,8 @@
           const cell = btn.parentElement;
           cell.innerHTML =
             '<span class="muted-sm">Deactivate?</span> ' +
-            '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="confirm-delete-pd-' + esc(pdId) + '" data-action="pd-confirm-delete" data-pd-id="' + esc(pdId) + '" aria-label="Confirm deactivate poster deployment">Yes</button> ' +
-            '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="cancel-delete-pd-' + esc(pdId) + '" data-action="pd-cancel-delete" aria-label="Cancel">No</button>';
+            '<button class="btn btn-secondary copy-btn" style="font-size:12px;padding:4px 10px" data-testid="confirm-delete-pd-' + esc(pdId) + '" data-action="pd-confirm-delete" data-pd-id="' + esc(pdId) + '" aria-label="Confirm deactivate poster deployment">Yes</button> ' +
+            '<button class="btn btn-secondary copy-btn" style="font-size:12px;padding:4px 10px" data-testid="cancel-delete-pd-' + esc(pdId) + '" data-action="pd-cancel-delete" aria-label="Cancel">No</button>';
           const yes = cell.querySelector('[data-testid="confirm-delete-pd-' + esc(pdId) + '"]');
           if (yes) yes.focus();
         };
@@ -8420,7 +8269,7 @@
             '<span class="pd-target" data-testid="poster-code-points-to"></span>' +
             '<div class="pd-link" data-testid="poster-code-link-block">' +
               '<code data-testid="poster-code-link"></code>' +
-              '<button type="button" class="copy-btn" data-act="copy" data-testid="poster-code-copy">Copy</button>' +
+              '<button type="button" class="btn btn-secondary copy-btn" data-act="copy" data-testid="poster-code-copy">Copy</button>' +
             '</div>' +
             '<img class="pc-qr" data-testid="poster-code-qr" width="96" height="96" alt="" />' +
             '<div class="create-form" data-role="fields">' +
@@ -8429,9 +8278,9 @@
             '</div>' +
             '<p class="create-msg error" data-testid="poster-code-error" role="alert" hidden></p>' +
             '<div class="form-actions" data-role="actions">' +
-              '<button type="button" class="copy-btn" data-act="up" data-testid="poster-code-up">Move up</button>' +
-              '<button type="button" class="copy-btn" data-act="down" data-testid="poster-code-down">Move down</button>' +
-              '<button type="button" class="copy-btn" data-act="remove" data-testid="poster-code-remove">Remove</button>' +
+              '<button type="button" class="btn btn-secondary copy-btn" data-act="up" data-testid="poster-code-up">Move up</button>' +
+              '<button type="button" class="btn btn-secondary copy-btn" data-act="down" data-testid="poster-code-down">Move down</button>' +
+              '<button type="button" class="btn btn-secondary copy-btn" data-act="remove" data-testid="poster-code-remove">Remove</button>' +
             '</div>' +
           '</li>';
         // A null-prototype map: a response kind can never reach Object.prototype.
@@ -8750,11 +8599,11 @@
          GET /api/v2/events/:id/display-config with that response's ETag).
          League links point at wherever the league already keeps them — a Google
          Sheet, an Excel link, any https page; the TV shows each as a QR. -->
-    <div class="card tv-display-card" id="tv-display-card" data-testid="tv-display-card">
-      <div class="mcard-head">
-        <h2 class="mcard-title">TV display</h2>
+    <div class="card card--sectioned tv-display-card" id="tv-display-card" data-testid="tv-display-card">
+      <div class="card-header">
+        <h2 class="card-title">TV display</h2>
       </div>
-      <div class="mcard-body">
+      <div class="card-body">
         <h3 class="pd-card-title" id="tv-screens-title">Screens, in order</h3>
         <ol class="pc-list" id="tv-screens" data-testid="tv-screens" aria-labelledby="tv-screens-title"></ol>
         <div class="create-form">
@@ -8785,8 +8634,8 @@
           </div>
         </div>
         <div class="form-actions">
-          <button type="button" class="copy-btn" id="tv-save" data-testid="tv-save" disabled>Save TV display</button>
-          <a class="copy-btn" id="tv-open" data-testid="tv-open" href="/display" target="_blank" rel="noopener">Open the TV</a>
+          <button type="button" class="btn btn-secondary copy-btn" id="tv-save" data-testid="tv-save" disabled>Save TV display</button>
+          <a class="btn btn-secondary copy-btn" id="tv-open" data-testid="tv-open" href="/display" target="_blank" rel="noopener">Open the TV</a>
         </div>
         <p class="pd-target" data-testid="tv-open-hint">The TV shows this event once it is live.</p>
         <p class="pd-target" id="tv-code" data-testid="tv-code" hidden>On the TV's browser, type <strong id="tv-code-address" data-testid="tv-code-address"></strong></p>
@@ -8840,7 +8689,7 @@
             [['up', 'Move up', i === 0], ['down', 'Move down', i === tv.rows.length - 1]].forEach(function (m) {
               var b = document.createElement('button');
               b.type = 'button';
-              b.className = 'copy-btn';
+              b.className = 'btn btn-secondary copy-btn';
               b.textContent = m[1];
               b.setAttribute('aria-label', m[1] + ': ' + LABELS[r.pane]);
               b.setAttribute('data-act', m[0]);
@@ -9284,7 +9133,7 @@
             '<thead><tr><th class="col-internal-id" data-testid="events-col-id">ID</th><th data-testid="events-col-name">Name</th><th data-testid="events-col-date">Date</th><th data-testid="events-col-venue">Venue</th><th data-testid="events-col-status">Status</th><th data-testid="events-col-type">Event type</th><th data-testid="events-col-preview">Preview</th></tr></thead>' +
             '<tbody data-testid="events-tbody">' + rows + '</tbody>' +
           '</table>' +
-          (hasMore ? '<button type="button" class="copy-btn events-load-more" data-action="events-load-more" data-testid="events-load-more">Show more</button>' : '');
+          (hasMore ? '<button type="button" class="btn btn-secondary copy-btn events-load-more" data-action="events-load-more" data-testid="events-load-more">Show more</button>' : '');
           var toggle = document.getElementById('show-internal-ids');
           var tbl = container.querySelector('table.events-table');
           if (toggle && tbl) {
@@ -9337,7 +9186,7 @@
           } catch (e) {}
         } catch (err) {
           container.innerHTML =
-            '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" data-action="reload-page">Retry</button></div>';
+            '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="btn btn-secondary retry-btn" data-testid="events-retry" data-action="reload-page">Retry</button></div>';
         } finally {
           L.loading = false;
           if (L.pendingReset) {
@@ -9502,7 +9351,7 @@
         badge.textContent = window.friendlyStatus(st);
         document.getElementById('event-status-explain').textContent = STATUS_EXPLAIN[st] || '';
         document.getElementById('event-status-actions').innerHTML = (STATUS_ACTIONS[st] || []).map(function (a) {
-          return '<button type="button" class="event-status-btn' + (a.primary ? ' primary' : '') + '" data-action="event-status" data-event-id="' + esc(e.id) + '" data-to="' + a.to + '" data-testid="event-status-' + a.to + '">' + esc(a.label) + '</button>';
+          return '<button type="button" class="btn ' + (a.primary ? 'btn-primary' : 'btn-secondary') + ' event-status-btn' + (a.primary ? ' primary' : '') + '" data-action="event-status" data-event-id="' + esc(e.id) + '" data-to="' + a.to + '" data-testid="event-status-' + a.to + '">' + esc(a.label) + '</button>';
         }).join('');
         var mapView = window.mapSettingView(e);
         var mapState = document.getElementById('event-map-state');
@@ -9902,7 +9751,7 @@
         if (!live) {
           btn = document.createElement('button');
           btn.type = 'button';
-          btn.className = 'event-status-btn primary';
+          btn.className = 'btn btn-primary event-status-btn primary';
           btn.setAttribute('data-action', 'event-status');
           btn.setAttribute('data-event-id', String(id));
           btn.setAttribute('data-to', 'active');
@@ -10110,7 +9959,7 @@
             return '<li class="tl-step now" data-testid="inbox-' + it.key + '">' +
               '<span class="tl-dot" aria-hidden="true">!</span>' +
               '<div><div class="tl-label">' + esc(it.label) + '</div><p class="tl-detail">' + esc(it.detail) + '</p>' +
-              '<a class="copy-btn" href="' + it.href + '" data-testid="inbox-' + it.key + '-action">' + esc(it.action) + '</a></div></li>';
+              '<a class="btn btn-secondary copy-btn" href="' + it.href + '" data-testid="inbox-' + it.key + '-action">' + esc(it.action) + '</a></div></li>';
           }).join('');
           inboxEl.hidden = view.inbox.length === 0;
         }
@@ -10259,7 +10108,7 @@
             // Live; Ready -> Archived undoes to Ready via draft).
             var undo = document.createElement('button');
             undo.type = 'button';
-            undo.className = 'event-status-btn';
+            undo.className = 'btn btn-secondary event-status-btn';
             undo.setAttribute('data-action', 'event-status');
             undo.setAttribute('data-event-id', String(id));
             undo.setAttribute('data-to', from);

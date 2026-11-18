@@ -19,6 +19,13 @@ docs: |-
   The requests run in `seq` order. The attach and detach requests change
   spl_camp_toggle and nothing else.
 
+  Request 29 (OSE-2048) reads the same public bundle for its shape: the answer,
+  the bundle and each sponsor carry exactly their named fields (the list is
+  workers/oursharedevents/src/lib/public-sponsor-projection.ts). It runs after
+  the detach, so the fixture is in its starting state. It compares key names of
+  one response; a sponsor's beacon_token is left out of the compared list.
+  Mock-layer twin: workers/oursharedevents/tests/sponsor-bundle-field-list.spec.ts.
+
   Requests 30 to 52 (OSE-1552 scope 1): an event can be in one campaign of its
   own brand. They put camp-on-evt in camp_fx_toggle, move it to camp_fx_shown and
   take it out, and change no placement. While the event is in a campaign, every

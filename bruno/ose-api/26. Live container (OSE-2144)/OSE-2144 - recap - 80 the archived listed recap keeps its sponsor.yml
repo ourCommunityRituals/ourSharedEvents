@@ -1,0 +1,32 @@
+info:
+  name: 'OSE-2144 | exception | recap page | an archived event that was listed still names its sponsor'
+  type: http
+  seq: 80
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/lc-recap-evt"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const html = String(res.getBody() || '');
+        test('OSE-2144 exception: the recap renders and names its sponsor', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(html).to.include('Live Container Recap Sponsor');
+        });
+        test('OSE-2144 exception: the recap asks for no logo it would not get', function () {
+          expect(html).to.not.include('/api/v2/sponsors/sb_lc_recap/logo');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

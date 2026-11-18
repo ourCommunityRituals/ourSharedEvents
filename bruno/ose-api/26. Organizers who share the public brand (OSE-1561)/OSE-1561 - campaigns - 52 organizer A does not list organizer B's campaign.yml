@@ -1,0 +1,49 @@
+info:
+  name: "OSE-1561 | rainy | campaigns | organizer A's campaign list"
+  type: http
+  seq: 52
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/campaigns"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{organizerAClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{organizerAClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1561: this folder runs as TWO organizers of the public brand `root`.
+        // Staging has no such identities yet; adding them is the owner's step.
+        // Until then this request is skipped and logs NOT RUN; it records no passing test.
+        if (
+          !bru.getEnvVar('organizerAClientId') || !bru.getEnvVar('organizerAClientSecret') ||
+          !bru.getEnvVar('organizerBClientId') || !bru.getEnvVar('organizerBClientSecret')
+        ) {
+          console.log('NOT RUN (OSE-1561 setup pending): no two organizer identities in root on this environment');
+          bru.runner.skipRequest();
+        }
+        if (!bru.getVar('ownerWallCampaignB')) {
+          console.log('NOT RUN (OSE-1561: an earlier request in this folder did not leave ownerWallCampaignB)');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        const ids = (res.getBody().items || []).map(function (i) { return i.id; });
+        test('OSE-1561 campaigns: list 200', function () { expect(res.getStatus()).to.eql(200); });
+        test("OSE-1561 campaigns: organizer A's list does not hold organizer B's campaign", function () {
+          expect(ids).to.not.include(bru.getVar('ownerWallCampaignB'));
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

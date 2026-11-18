@@ -69,59 +69,97 @@ async function seedEvent(
 }
 
 /**
- * Seed the whole tree (idempotent: INSERT OR REPLACE / delete-then-insert by fixed id)
- * and install the matrix membership map on the router env.
- * Per brand: one live event, one draft, one sponsor with an accepted placement on the
- * live event, one campaign, one poster deployment. All `data_class = 'synthetic'`.
+ * Seed ONE tree (idempotent: INSERT OR REPLACE / INSERT OR IGNORE by fixed id): one
+ * live event, one draft, one sponsor with an accepted placement on the live event,
+ * one campaign, one poster deployment, one booth, one draft vote set with a song.
+ * All `data_class = 'synthetic'`.
+ *
+ * `createdBy` is who the events, the sponsor and the campaign record as their
+ * creator (OSE-1561). Inside the public brand `root` that is the boundary, so a
+ * brand's tree is created by its own owner. Pass `null` for rows nobody created.
+ */
+export async function seedBrandTree(
+  b: BrandFx,
+  createdBy: string | null = b.ownerEmail
+): Promise<void> {
+  await seedEvent(b, b.activeEventId, 'active', true);
+  await seedEvent(b, b.draftEventId, 'draft', false);
+  // A person's tree (personFx) is not a brand key and has no extra events.
+  const extra = (EXTRA_ACTIVE_EVENTS as Record<string, number | undefined>)[b.key] ?? 0;
+  for (let i = 1; i <= extra; i++) {
+    await seedEvent(b, `${b.marker}extra-${i}`, 'active', false);
+  }
+  await env.DB.prepare(`INSERT OR REPLACE INTO campaigns (id, brand_id, title) VALUES (?, ?, ?)`)
+    .bind(b.campaignId, b.brandId, `${b.marker}campaign`)
+    .run();
+  // OSE-1552: the live event is in the brand's campaign, so a cross-brand
+  // remove that got through would change a row the snapshot holds.
+  await env.DB.prepare(`UPDATE events SET campaign_id = ? WHERE id = ?`)
+    .bind(b.campaignId, b.activeEventId)
+    .run();
+  await seedSplitSponsor(env.DB, {
+    id: b.sponsorId,
+    eventId: b.activeEventId,
+    brandId: b.brandId,
+    name: `${b.marker}sponsor`,
+    campaignId: b.campaignId,
+    placementId: b.placementId,
+    sponsorAccepted: 1,
+    organizerAccepted: 1,
+  });
+  await env.DB.prepare(
+    `INSERT OR REPLACE INTO poster_deployments (id, event_id, qr_token) VALUES (?, ?, ?)`
+  )
+    .bind(b.posterDeploymentId, b.activeEventId, `qrt_${b.posterDeploymentId}`)
+    .run();
+  // OSE-1998: one booth on the live event, for the booth by-id routes.
+  await env.DB.prepare(
+    `INSERT OR REPLACE INTO event_booths (id, event_id, number, name) VALUES (?, ?, 'M0', ?)`
+  )
+    .bind(`${b.marker}booth`, b.activeEventId, `${b.marker}booth`)
+    .run();
+  // OSE-2127: a draft vote set with one song on the live event, so a refused
+  // cross-brand vote write has a row it would have changed (the snapshot).
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO vote_sets (id, event_id, played_by) VALUES (?, ?, 'object')`
+  )
+    .bind(`${b.marker}vset`, b.activeEventId)
+    .run();
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO votable_objects (id, event_id, set_id, kind, label) VALUES (?, ?, ?, 'song', ?)`
+  )
+    .bind(`${b.marker}vobj`, b.activeEventId, `${b.marker}vset`, `${b.marker}vote`)
+    .run();
+  // OSE-1561: who created the tree. Three statements, each keyed by the tree's marker.
+  await env.DB.prepare(`UPDATE events SET created_by = ? WHERE id LIKE ?`)
+    .bind(createdBy, `${b.marker}%`)
+    .run();
+  await env.DB.prepare(`UPDATE sponsor_business SET created_by = ? WHERE id = ?`)
+    .bind(createdBy, b.sponsorId)
+    .run();
+  await env.DB.prepare(`UPDATE campaigns SET created_by = ? WHERE id = ?`)
+    .bind(createdBy, b.campaignId)
+    .run();
+}
+
+/**
+ * Seed the whole fixture: one tree per brand, each created by that brand's owner,
+ * a `brand_owner` membership row for each owner, and the matrix membership map
+ * on the router env (the platform member has no row and is scoped by the map).
  */
 export async function seedBrandFixture(): Promise<void> {
   await applyMigrations();
   for (const b of BRANDS) {
-    await seedEvent(b, b.activeEventId, 'active', true);
-    await seedEvent(b, b.draftEventId, 'draft', false);
-    for (let i = 1; i <= EXTRA_ACTIVE_EVENTS[b.key]; i++) {
-      await seedEvent(b, `${b.marker}extra-${i}`, 'active', false);
-    }
-    await env.DB.prepare(`INSERT OR REPLACE INTO campaigns (id, brand_id, title) VALUES (?, ?, ?)`)
-      .bind(b.campaignId, b.brandId, `${b.marker}campaign`)
-      .run();
-    // OSE-1552: the live event is in the brand's campaign, so a cross-brand
-    // remove that got through would change a row the snapshot holds.
-    await env.DB.prepare(`UPDATE events SET campaign_id = ? WHERE id = ?`)
-      .bind(b.campaignId, b.activeEventId)
-      .run();
-    await seedSplitSponsor(env.DB, {
-      id: b.sponsorId,
-      eventId: b.activeEventId,
-      brandId: b.brandId,
-      name: `${b.marker}sponsor`,
-      campaignId: b.campaignId,
-      placementId: b.placementId,
-      sponsorAccepted: 1,
-      organizerAccepted: 1,
-    });
+    await seedBrandTree(b);
+    // OSE-1561: the matrix "owner" of a brand is its brand owner, by a membership
+    // row, which is the only place a role is read from. In the public brand a
+    // member with no recorded role is held to their own rows; that caller is
+    // covered in public-brand-owner-wall.spec.ts, not here.
     await env.DB.prepare(
-      `INSERT OR REPLACE INTO poster_deployments (id, event_id, qr_token) VALUES (?, ?, ?)`
+      `INSERT OR REPLACE INTO admin_brand_memberships (email, brand_id, role)
+       VALUES (?, ?, 'brand_owner')`
     )
-      .bind(b.posterDeploymentId, b.activeEventId, `qrt_${b.posterDeploymentId}`)
-      .run();
-    // OSE-1998: one booth on the live event, for the booth by-id routes.
-    await env.DB.prepare(
-      `INSERT OR REPLACE INTO event_booths (id, event_id, number, name) VALUES (?, ?, 'M0', ?)`
-    )
-      .bind(`${b.marker}booth`, b.activeEventId, `${b.marker}booth`)
-      .run();
-    // OSE-2127: a draft vote set with one song on the live event, so a refused
-    // cross-brand vote write has a row it would have changed (the snapshot).
-    await env.DB.prepare(
-      `INSERT OR IGNORE INTO vote_sets (id, event_id, played_by) VALUES (?, ?, 'object')`
-    )
-      .bind(`${b.marker}vset`, b.activeEventId)
-      .run();
-    await env.DB.prepare(
-      `INSERT OR IGNORE INTO votable_objects (id, event_id, set_id, kind, label) VALUES (?, ?, ?, 'song', ?)`
-    )
-      .bind(`${b.marker}vobj`, b.activeEventId, `${b.marker}vset`, `${b.marker}vote`)
+      .bind(b.ownerEmail, b.brandId)
       .run();
   }
   (routerEnv as { ADMIN_BRAND_MEMBERSHIP?: string }).ADMIN_BRAND_MEMBERSHIP = membershipJson();

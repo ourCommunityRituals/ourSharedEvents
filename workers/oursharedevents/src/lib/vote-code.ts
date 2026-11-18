@@ -9,7 +9,7 @@
  * public poster bundle. So the room screen gets a code of its own.
  *
  * THE SHAPE. A vote code is a `poster_deployments` row marked `is_vote_code = 1`
- * (migration 0112), with a token of its own, made here and nowhere else. It is
+ * (migration 0113), with a token of its own, made here and nowhere else. It is
  * a placement like any other, so `/q` records its scan and counts it once per
  * hour exactly as it does a poster's, and the vote pass keeps needing a stored
  * scan (decision 6). That is the smaller safe shape: a token kept on the vote

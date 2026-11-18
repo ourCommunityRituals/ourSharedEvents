@@ -1,0 +1,45 @@
+info:
+  name: "OSE-1561 | sunny | teardown | organizer A deletes their own draft event"
+  type: http
+  seq: 92
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/api/v2/admin/events/{{ownerWallEventA}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{organizerAClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{organizerAClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1561: this folder runs as TWO organizers of the public brand `root`.
+        // Staging has no such identities yet; adding them is the owner's step.
+        // Until then this request is skipped and logs NOT RUN; it records no passing test.
+        if (
+          !bru.getEnvVar('organizerAClientId') || !bru.getEnvVar('organizerAClientSecret') ||
+          !bru.getEnvVar('organizerBClientId') || !bru.getEnvVar('organizerBClientSecret')
+        ) {
+          console.log('NOT RUN (OSE-1561 setup pending): no two organizer identities in root on this environment');
+          bru.runner.skipRequest();
+        }
+        if (!bru.getVar('ownerWallEventA')) {
+          console.log('NOT RUN (OSE-1561: an earlier request in this folder did not leave ownerWallEventA)');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('OSE-1561 teardown: the creator deletes their own draft event', function () { expect(res.getStatus()).to.be.oneOf([200, 204]); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

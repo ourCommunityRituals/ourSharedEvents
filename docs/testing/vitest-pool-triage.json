@@ -405,7 +405,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 90
+      "testCount": 94
     },
     {
       "file": "workers/oursharedevents/tests/admin-what-url-controls.spec.ts",
@@ -748,7 +748,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 10
+      "testCount": 11
     },
     {
       "file": "workers/oursharedevents/tests/codeql-src-findings.spec.ts",
@@ -1220,6 +1220,20 @@
       "testCount": 3
     },
     {
+      "file": "workers/oursharedevents/tests/event-live-container.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-live-readers.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
       "file": "workers/oursharedevents/tests/event-manager-audit.spec.ts",
       "bucket": "node",
       "needsReview": true,
@@ -1364,7 +1378,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 23
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/events-5w-schema.spec.ts",
@@ -2522,6 +2536,13 @@
       "testCount": 5
     },
     {
+      "file": "workers/oursharedevents/tests/public-brand-owner-wall.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 35
+    },
+    {
       "file": "workers/oursharedevents/tests/public-event-booths.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -3437,6 +3458,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-bundle-field-list.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, env.DB",
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/sponsor-card-link-gate.spec.ts",

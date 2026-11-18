@@ -24,8 +24,12 @@ import { usePaidReportPlan } from './helpers/paid-report-plan';
 const DOMAIN = 'test.cloudflareaccess.com';
 const AUD = 'aud-staging-admin-app';
 const CN = 'ci-brand-admin.access';
-const A = BRANDS[0]!;
-const B = BRANDS[1]!;
+// A brand of its own, as on staging (`ci-brand`). Not the public brand `root`:
+// there a caller with no recorded role is held to the rows it created
+// (OSE-1561), and the last test in this file pins that for this actor.
+const ROOT = BRANDS[0]!;
+const A = BRANDS[1]!;
+const B = BRANDS[2]!;
 
 function b64url(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes))
@@ -59,18 +63,23 @@ async function svcToken(): Promise<string> {
   return `${header}.${payload}.${b64url(new Uint8Array(sig))}`;
 }
 
-/** The test env, shaped like staging with the CI service actor configured for brand A. */
-function stagingEnv(): RouterEnv {
+/** The test env, shaped like staging with the CI service actor configured for one brand (A). */
+function stagingEnv(brandId: string = A.brandId): RouterEnv {
   return Object.assign(Object.create(Object.getPrototypeOf(routerEnv)), routerEnv, {
     WORKER_ENV: 'staging',
     CF_ACCESS_TEAM_DOMAIN: DOMAIN,
     CF_ACCESS_AUD: AUD,
     CI_SERVICE_ACTORS: CN,
-    CI_SERVICE_ACTOR_BRAND: A.brandId,
+    CI_SERVICE_ACTOR_BRAND: brandId,
   }) as RouterEnv;
 }
 
-async function callAsSvc(method: string, path: string, body?: unknown): Promise<Response> {
+async function callAsSvc(
+  method: string,
+  path: string,
+  body?: unknown,
+  brandId?: string
+): Promise<Response> {
   const headers: Record<string, string> = { 'Cf-Access-Jwt-Assertion': await svcToken() };
   const init: RequestInit = { method, headers };
   if (body !== undefined) {
@@ -78,7 +87,7 @@ async function callAsSvc(method: string, path: string, body?: unknown): Promise<
     init.body = JSON.stringify(body);
   }
   const ctx = createExecutionContext();
-  const res = await route(new Request(`https://ose.test${path}`, init), stagingEnv(), ctx);
+  const res = await route(new Request(`https://ose.test${path}`, init), stagingEnv(brandId), ctx);
   await waitOnExecutionContext(ctx);
   return res;
 }
@@ -165,6 +174,20 @@ describe('OSE-1800 | the CI service actor is a brand admin through the router', 
     armJwks();
     const res = await callAsSvc('GET', `/api/v2/admin/events/${B.activeEventId}/dashboard`);
     expect(res.status).toBe(404);
+  });
+
+  test('pointed at the public brand it is held to the rows it created, like any member with no role (OSE-1561)', async () => {
+    await setFree();
+    armJwks();
+    // The public brand's fixture event was created by its owner, not by this actor.
+    const path = `/api/v2/admin/events/${ROOT.activeEventId}/dashboard`;
+    const res = await callAsSvc('GET', path, undefined, ROOT.brandId);
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code: string }).code).toBe('NOT_FOUND');
+    // Its list in the public brand holds nothing of anyone else's.
+    const list = await callAsSvc('GET', '/api/v2/admin/events?limit=100', undefined, ROOT.brandId);
+    expect(list.status).toBe(200);
+    expect(await list.text()).not.toContain(ROOT.marker);
   });
 
   test('a key-only route refuses it', async () => {

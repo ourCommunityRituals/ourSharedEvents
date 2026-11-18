@@ -83,6 +83,7 @@ import {
   type AdminEnv,
 } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
+import { ownerPredicate, resolveOwnerRule } from '../lib/admin-owner-scope';
 import { validateLogoUrl, validateHttpsUrl } from '../lib/sponsor-logo';
 import { isUploadedArtworkPath } from '../lib/event-thumb';
 import { errorLabel } from '../lib/error-label';
@@ -481,6 +482,18 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       const placeholders = scope.brandIds.map(() => '?').join(', ');
       whereParts.push(`e.brand_id IN (${placeholders})`);
       bindings.push(...scope.brandIds);
+    }
+    // OSE-1561: inside the public brand the creator is the boundary. One more
+    // bound condition beside the brand predicate: a caller held to their own
+    // rows there is handed only the events they created (lib/admin-owner-scope.ts).
+    const own = ownerPredicate(
+      await resolveOwnerRule(request, env, scope),
+      'e.brand_id',
+      'e.created_by'
+    );
+    if (own) {
+      whereParts.push(own.sql);
+      bindings.push(...own.binds);
     }
     if (statusFilter) {
       whereParts.push('e.status = ?');

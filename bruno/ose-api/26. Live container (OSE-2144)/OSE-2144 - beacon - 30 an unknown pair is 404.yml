@@ -1,0 +1,33 @@
+info:
+  name: 'OSE-2144 | rainy | impression beacon | a pair that was never placed is 404 NOT_FOUND (the reference answer)'
+  type: http
+  seq: 30
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/events/lc-draft-evt/sponsors/sb_lc_nobody/impression"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"surface":"public","placement":"mobileBanner"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2144 reference: an unknown pair is 404 NOT_FOUND', function () {
+          expect(res.getStatus()).to.eql(404);
+          expect(res.getBody().code).to.eql('NOT_FOUND');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

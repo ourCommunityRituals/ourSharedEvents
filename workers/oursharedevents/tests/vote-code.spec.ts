@@ -29,7 +29,7 @@
  *   - a set that has opened takes no new object while its event is not
  *     Published; a host reopens it once the event is Published again.
  *
- * Staging twin: bruno/ose-api/26. Vote code and event status (OSE-2140 OSE-2142).
+ * Staging twin: bruno/ose-api/27. Vote code and event status (OSE-2140 OSE-2142).
  *
  * @born-red OSE-2140 OSE-2142 | method: injected-fault, each removed after;
  *   listed with counts in the PR body | date: 2026-11-18
@@ -612,7 +612,7 @@ describe('OSE-2142 | a vote set follows its event status', () => {
     expect(over.json.code).toBe('EVENT_OVER');
   });
 
-  test('OSE-2142 | migration 0112 closes a set already open on an event that is not Published', async () => {
+  test('OSE-2142 | migration 0113 closes a set already open on an event that is not Published', async () => {
     const statements = JSON.parse(tenv.TEST_MIGRATION_STATEMENTS) as string[];
     const oneOff = statements.find(
       (s) =>

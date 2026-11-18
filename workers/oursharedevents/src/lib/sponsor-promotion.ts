@@ -86,7 +86,7 @@ function genId(prefix: string): string {
 export async function promoteSponsorDraft(
   env: PromotionEnv,
   draftToken: string,
-  opts: { compClaimValid?: boolean; compInviteToken?: string } = {}
+  opts: { compClaimValid?: boolean; compInviteToken?: string; createdBy?: string | null } = {}
 ): Promise<PromotionResult> {
   if (!env.DB) return { ok: false, code: 'DB_NOT_CONFIGURED', status: 503 };
 
@@ -254,8 +254,9 @@ export async function promoteSponsorDraft(
   statements.push(
     env.DB.prepare(
       `INSERT INTO sponsor_business
-         (id, brand_id, name, website_url, lat, lon, h3_res9, h3_res7, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (id, brand_id, name, website_url, lat, lon, h3_res9, h3_res7, created_by,
+          created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       sponsorId,
       draft.brand_id,
@@ -265,6 +266,8 @@ export async function promoteSponsorDraft(
       draft.lon,
       draft.h3_res9,
       draft.h3_res7,
+      // OSE-1561: the admin who promoted the draft is the sponsor's creator.
+      opts.createdBy ?? null,
       now,
       now
     )

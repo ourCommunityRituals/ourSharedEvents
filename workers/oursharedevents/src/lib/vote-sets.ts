@@ -73,6 +73,7 @@
 
 import { pepperEpoch } from './anon-id-hash';
 import { EVENT_LIVE, EVENT_ON_ITS_DATES, EVENT_PUBLISHED, eventIsLive } from './event-live';
+import { eventLiveSql } from '../domain/event-state';
 import { hourStamp } from './scan-buffer';
 import { isVotableKind, isVoteTeamId, parseVotableLabel, type VotableKind } from './votes';
 
@@ -1041,7 +1042,7 @@ export async function runVoteFinalJob(env: VoteFinalJobEnv): Promise<VoteFinalJo
             SET state = 'closed', updated_at = strftime('%Y-%m-%d %H:00:00', 'now')
           WHERE state = 'open' AND is_final = 0
             AND NOT EXISTS (SELECT 1 FROM events e
-                             WHERE e.id = vote_sets.event_id AND e.status = 'active')`
+                             WHERE e.id = vote_sets.event_id AND ${eventLiveSql('e')})`
       )
       .run();
     out.closedUnpublished = closed.meta?.changes ?? 0;

@@ -26,7 +26,13 @@
  * A status change that takes an event out of Published closes its open set in
  * the same D1 batch (closeVoteSetUnlessPublished, lib/vote-sets.ts, which reads
  * EVENT_PUBLISHED).
+ *
+ * The status part is not written here: it is eventLiveSql in
+ * domain/event-state.ts (OSE-2144), the one test of "the parent event is live",
+ * derived from the state machine. These fragments add the held event id and,
+ * for EVENT_LIVE, the dates.
  */
+import { eventLiveSql } from '../domain/event-state';
 
 /** The status of a Published event, listed or unlisted. */
 export const EVENT_PUBLISHED_STATUS = 'active';
@@ -37,11 +43,11 @@ export const EVENT_ON_ITS_DATES = `(COALESCE(e.end_date, e.start_date) IS NULL
 
 /** The event is Published, listed or unlisted. One bound parameter: the event id. */
 export const EVENT_PUBLISHED = `EXISTS (SELECT 1 FROM events e
-   WHERE e.id = ? AND e.status = '${EVENT_PUBLISHED_STATUS}')`;
+   WHERE e.id = ? AND ${eventLiveSql('e')})`;
 
 /** The event is Published and on its dates. One bound parameter: the event id. */
 export const EVENT_LIVE = `EXISTS (SELECT 1 FROM events e
-   WHERE e.id = ? AND e.status = '${EVENT_PUBLISHED_STATUS}'
+   WHERE e.id = ? AND ${eventLiveSql('e')}
      AND ${EVENT_ON_ITS_DATES})`;
 
 /** Is the event live now (EVENT_LIVE)? */

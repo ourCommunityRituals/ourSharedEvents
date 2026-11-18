@@ -1,0 +1,63 @@
+info:
+  name: "OSE-1561 | rainy | list | organizer A is handed their own event and not organizer B's"
+  type: http
+  seq: 20
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events?limit=100"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{organizerAClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{organizerAClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1561: this folder runs as TWO organizers of the public brand `root`.
+        // Staging has no such identities yet; adding them is the owner's step.
+        // Until then this request is skipped and logs NOT RUN; it records no passing test.
+        if (
+          !bru.getEnvVar('organizerAClientId') || !bru.getEnvVar('organizerAClientSecret') ||
+          !bru.getEnvVar('organizerBClientId') || !bru.getEnvVar('organizerBClientSecret')
+        ) {
+          console.log('NOT RUN (OSE-1561 setup pending): no two organizer identities in root on this environment');
+          bru.runner.skipRequest();
+        }
+        if (!bru.getVar('ownerWallEventA')) {
+          console.log('NOT RUN (OSE-1561: an earlier request in this folder did not leave ownerWallEventA)');
+          bru.runner.skipRequest();
+        }
+        if (!bru.getVar('ownerWallEventB')) {
+          console.log('NOT RUN (OSE-1561: an earlier request in this folder did not leave ownerWallEventB)');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        const ids = (res.getBody().items || []).map(function (i) { return i.id; });
+        test('OSE-1561 list: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-1561 list: organizer A sees their own event', function () {
+          expect(ids).to.include(bru.getVar('ownerWallEventA'));
+        });
+        test("OSE-1561 list: organizer A does not see organizer B's event", function () {
+          expect(ids).to.not.include(bru.getVar('ownerWallEventB'));
+        });
+        test('OSE-1561 list: every root event organizer A is handed has one creator', function () {
+          const creators = {};
+          (res.getBody().items || []).forEach(function (i) {
+            if (i.brand_id === 'root') creators[String(i.created_by)] = true;
+          });
+          expect(Object.keys(creators).length).to.eql(1);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -111,7 +111,7 @@ The vote write is a `POST` outside `/api/v2/events*`, handled on the `DB` side. 
 
 A vote counts only from a browser that scanned this event's vote code. Every cookie read stays inside `/q` (D3 reversed).
 
-**The room's own vote code (owner, 2026-11-18; S3d, OSE-2140).** The vote code is a placement of its own: a `poster_deployments` row marked `is_vote_code = 1` (migration 0112), with a token of its own (128 random bits), made only by `POST /api/v2/admin/events/:id/votables/code` (`lib/vote-code.ts`). One is in use per event (a partial unique index). A host who fears it was photographed replaces it from the Voting card (`POST .../votables/code/replace`): the old one is retired and a new token made in one batch, and the old code then resolves to nothing at `/q`. A retired code is never brought back: the placement edit refuses `is_active` on a vote code. Its URL is `/q/<token>?type=vote`.
+**The room's own vote code (owner, 2026-11-18; S3d, OSE-2140).** The vote code is a placement of its own: a `poster_deployments` row marked `is_vote_code = 1` (migration 0113), with a token of its own (128 random bits), made only by `POST /api/v2/admin/events/:id/votables/code` (`lib/vote-code.ts`). One is in use per event (a partial unique index). A host who fears it was photographed replaces it from the Voting card (`POST .../votables/code/replace`): the old one is retired and a new token made in one batch, and the old code then resolves to nothing at `/q`. A retired code is never brought back: the placement edit refuses `is_active` on a vote code. Its URL is `/q/<token>?type=vote`.
 
 - `/q` mints a pass only for that placement. `?type=vote` on an ordinary poster code of the event mints nothing and keeps today's redirect. The S3b security review (F1) found the old rule, any code of the event with `?type=vote`, wider than the accepted risk, because a poster code's token can be reached from a shared event-page link, through `&deployment=` and the public poster bundle.
 - The vote code's token is in no public answer. The public poster bundle never resolves a vote code from `&deployment=` (it answers as for no placement), the admin poster list leaves it out, and the event page reads no token. The admin Voting card shows its URL and QR; the host puts it on the room screen.
@@ -200,13 +200,21 @@ Voting turns on when an admin opens a vote set for the event (D6 = A). No fair s
 
 An event's status (Draft, Ready, Published, Archived; Published may be listed or unlisted) is the master switch for everything inside it: a vote set and its objects today, and any later container that can be voted on. A child's own state (a set's draft, open or closed) works only inside what its event allows. No child gets a status column for this; each reads its event's.
 
-- **Live** means Published (`status = 'active'`), listed or unlisted, and on its dates (its last date is yesterday or later, UTC, or it has none). It is one SQL fragment, `EVENT_LIVE` in `lib/event-live.ts`.
+- **Live** means Published (`status = 'active'`), listed or unlisted, and on its dates (its last date is yesterday or later, UTC, or it has none). It is one SQL fragment, `EVENT_LIVE` in `lib/event-live.ts`. Its status part is `eventLiveSql` in `domain/event-state.ts` (OSE-2144), the one test of "the parent event is live"; `EVENT_LIVE` adds the held event id and the dates.
 - **Needs live:** opening and reopening a set, opening or reopening an object, adding an object to a set that has opened, and the `/q` pass mint. The vote route (S4a) uses the same fragment.
 - **Setting up stays allowed on a draft or ready event:** making the set, adding objects while the set is still in draft, and editing objects. A host prepares the night before publishing it, and admin set-up keeps working while `VOTING_ENABLED` is off (owner, 2026-11-18). The admin card greys out Open and says "Publish the event to open voting."
 - **Leaving Published closes the set, in the same transaction.** Every app path that moves an event's status batches `closeVoteSetUnlessPublished` with the move (the admin edit and the QR verify undo). Closing was chosen over "read as closed everywhere" because a closed set is simply closed: the admin card, the pass, the public read and the coming vote route need no second rule, and a host reopens it on purpose once the event is Published again. Nothing here makes a set final. A D1 trigger was not used: migration 0025 keeps D1 free of triggers, because remote migration apply once split their bodies. A status written outside the app (a seed, a script) is caught by the nightly vote job, which closes the set; until then the pass and the public read refuse it.
 - **A reopen.** A reopen after the event comes back to Published follows the usual rules: the same epoch, T and V, and never after final.
 
 **Not in this decision:** stalls, sponsors and other children of an event. A sweep of every public read that shows a child of an event is follow-up work under the same rule (OSE-2144 covers sponsors and scans).
+
+## Relation to campaigns
+
+**Owner, 2026-11-18:** voting does not replace campaigns.
+
+- **Voting is the OSE and OurWKRP hybrid.** On OSE it is anonymous, as this ADR builds it: a person in the room scans the room's vote code and backs a song, a stall or a team, and no one is named. On the OurWKRP side, voting is tokenized and represented: a team or a player plants their flag with an authorization token. The two sides together are the vote.
+- **Campaigns stay as they are.** The OSE campaigns (`lib/campaigns.ts`, the `campaigns` table, sponsor campaigns, `sponsor_placement.campaign_id` and `events.campaign_id`) are not changed by voting. They serve a larger piece of the whole: a brand's named group of sponsor placements across its events.
+- **Side by side, not folded in.** A vote set is not a campaign, and a campaign is not a vote set. No vote table reads or writes `campaign_id`, and `campaign_id` is not reused to group vote sets. An event may be in a campaign and have a vote set; each keeps its own rules.
 
 ## Still open
 

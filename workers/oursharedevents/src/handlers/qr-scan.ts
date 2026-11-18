@@ -51,6 +51,7 @@
  * h3-js here would silently break the SCAN_PATH invariant in h3-tagging.spec.ts.
  */
 
+import { eventLiveSql } from '../domain/event-state';
 import { isValidQrTokenShape } from '../lib/qr-token';
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
 import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-buffer';
@@ -151,9 +152,14 @@ export async function handleQrScan(
   // from this row, so if both tries fail the visitor gets the same answer as
   // "infrastructure not ready" above: home, not a 500. No anon id is minted and
   // no cookie set on that path, and the log names the failure, not the token.
+  // OSE-2144: a code on an event that is not live (draft, ready, archived) is
+  // not found here, so it is answered as an unknown code below: home, no count,
+  // no cookie, and no event id in the Location (eventLiveSql, the shared test).
   const lookupDeployment = () =>
     env.DB.prepare(
-      `SELECT id, event_id FROM poster_deployments WHERE qr_token = ? AND is_active = 1 LIMIT 1`
+      `SELECT pd.id AS id, pd.event_id AS event_id FROM poster_deployments pd
+         JOIN events e ON e.id = pd.event_id
+        WHERE pd.qr_token = ? AND pd.is_active = 1 AND ${eventLiveSql('e')} LIMIT 1`
     )
       .bind(qrToken)
       .first<{ id: string; event_id: string }>();

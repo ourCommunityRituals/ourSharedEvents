@@ -21,9 +21,10 @@ docs: |-
   checks the pass is in the fragment only.
 
   No fixture. The folder makes one synthetic, unlisted Published event (seq 10;
-  OSE-2142: a set opens only on a Published event), an ordinary poster placement
-  (seq 20), the room vote code (seq 25), and opens its vote set (seq 30, 40). At
-  the end it retires the vote code (seq 910). A vote
+  a scan on a draft counts nothing and goes home, OSE-2144, and a set opens only
+  on a Published event, OSE-2142), an ordinary poster placement (seq 20), the
+  room vote code (seq 25), and opens its vote set (seq 30, 40). At the end it
+  retires the vote code (seq 910). A vote
   set is never deleted (ADR-040 decision 4), so the run archives the event (seq
   900). Each run leaves one archived synthetic event on staging.
 

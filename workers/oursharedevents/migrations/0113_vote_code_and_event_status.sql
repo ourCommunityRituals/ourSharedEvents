@@ -1,4 +1,4 @@
--- Migration 0112: the room's own vote code, and a vote set follows its event's
+-- Migration 0113: the room's own vote code, and a vote set follows its event's
 -- status (OSE-2140 and OSE-2142, S3d and S3e of OSE-1193; OSE ADR-040
 -- decision 6 and the amendment "nothing is more live than its container",
 -- owner decisions of 2026-11-18).
@@ -31,10 +31,10 @@
 -- Gates: tests/e2e/0-architecture/votes-never-who.invariant.spec.ts (T0),
 -- workers/oursharedevents/tests/vote-code.spec.ts and
 -- tests/vote-set-admin.spec.ts (workers pool), and on staging
--- bruno/ose-api/26. Vote code and event status (OSE-2140 OSE-2142).
+-- bruno/ose-api/27. Vote code and event status (OSE-2140 OSE-2142).
 --
 -- Rollback: revert the Worker and leave the column and the index. See
--- ROLLBACK_PLAN.md, 0112.
+-- ROLLBACK_PLAN.md, 0113.
 
 ALTER TABLE poster_deployments ADD COLUMN is_vote_code INTEGER NOT NULL DEFAULT 0
   CHECK (is_vote_code IN (0, 1));

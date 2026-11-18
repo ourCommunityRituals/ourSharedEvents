@@ -34,7 +34,13 @@ import {
   logNullAdminActorDenied,
   type AdminEnv,
 } from '../auth/admin';
-import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
+import {
+  PUBLIC_BRAND_ID,
+  resolveAdminBrandScopeAsync,
+  type AdminBrandScopeEnv,
+} from '../lib/admin-brand-scope';
+import { resolveOwnerRule } from '../lib/admin-owner-scope';
+import { isAdminObjectInScope } from '../lib/admin-object-scope';
 
 export type SponsorDraftEnv = { DB: D1Database } & SponsorInviteEnv & MapsEnv;
 
@@ -271,11 +277,13 @@ export async function handlePromoteSponsorDraft(
   // takes the lib's own not-found result, so the response and the audit row are
   // identical to a missing draft (no existence oracle).
   const scopeVerdict = await draftScopeVerdict(request, env, draftToken);
+  // OSE-1561: the admin who promotes the draft is the sponsor's creator.
+  const createdBy = extractAdminActor(request, env);
   if (scopeVerdict === 'no-actor') logNullAdminActorDenied('sponsor-draft-promote', env, reqId);
   const result: PromotionResult =
     scopeVerdict !== 'in-scope'
       ? { ok: false, code: 'DRAFT_NOT_FOUND', status: 404 }
-      : await promoteSponsorDraft(env, draftToken, { compInviteToken });
+      : await promoteSponsorDraft(env, draftToken, { compInviteToken, createdBy });
 
   // Eligibility-decision audit (#24 auditability). PII-FREE: brand_id is a tenant
   // id, and the details carry only the decision + granting source — no email, ip,
@@ -321,10 +329,20 @@ async function draftScopeVerdict(
   const scope = await resolveAdminBrandScopeAsync(actor, env);
   if (scope.mode === 'all') return 'in-scope';
   const row = await env.DB.prepare(
-    'SELECT brand_id FROM sponsor_business_draft WHERE draft_token = ?'
+    'SELECT brand_id, event_id FROM sponsor_business_draft WHERE draft_token = ?'
   )
     .bind(draftToken)
-    .first<{ brand_id: string }>();
+    .first<{ brand_id: string; event_id: string | null }>();
   if (!row) return 'in-scope'; // a missing draft: the lib reports it as not found
-  return scope.mode === 'deny' || !scope.brandIds.includes(row.brand_id) ? 'outside' : 'in-scope';
+  if (scope.mode === 'deny' || !scope.brandIds.includes(row.brand_id)) return 'outside';
+  // OSE-1561: a draft records no creator. Inside the public brand, a caller held
+  // to their own rows may promote it only when it is for an event they created;
+  // a draft with no event is nobody's, so it is not theirs.
+  const rule = await resolveOwnerRule(request, env, scope);
+  if (row.brand_id === PUBLIC_BRAND_ID && rule.standing === 'own-rows') {
+    if (!row.event_id) return 'outside';
+    const mine = await isAdminObjectInScope(request, env, { kind: 'event', id: row.event_id });
+    return mine ? 'in-scope' : 'outside';
+  }
+  return 'in-scope';
 }

@@ -1,0 +1,25 @@
+info:
+  name: 'OSE-2144 | rainy | sponsor creative | a sponsor whose only placement is archived listed gets no creative and no monogram'
+  type: http
+  seq: 59
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sponsors/sb_lc_recap/asset/square"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2144 rainy: archived listed: 404, so not even the monogram names the sponsor', function () { expect(res.getStatus()).to.eql(404); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

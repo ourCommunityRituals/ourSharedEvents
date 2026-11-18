@@ -1,0 +1,40 @@
+info:
+  name: "OSE-2133 | setup | a synthetic live night, off the map, for this run"
+  type: http
+  seq: 10
+
+# OSE-2144 (owner 2026-11-18): a scan counts only on a live event; a code on a
+# draft goes home. The scan under test must stand, so the night is created live
+# (automation may, OSE-1425), synthetic and unlisted. seq 900 archives it.
+# OSE-2142 (S3e): a set opens, and /q mints a pass, only for a Published event;
+# unlisted is fine.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"attendance_mode\": \"in_person\", \"location\": \"OSE-2133 Hall\", \"title\": \"OSE-2133 vote pass night (staging, synthetic)\", \"status\": \"active\", \"is_published\": false, \"data_class\": \"synthetic\", \"start_date\": \"2099-01-01\", \"start_time\": \"18:00\", \"timezone\": \"America/Chicago\", \"event_type_id\": \"etr-rec-bocce\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2133 setup: the live night is created', function () { expect(res.getStatus()).to.eql(201); expect(b.event_status).to.eql('active'); expect(b.id).to.be.a('string'); });
+        bru.setVar('votePassNightId', b.id || 'missing-night');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

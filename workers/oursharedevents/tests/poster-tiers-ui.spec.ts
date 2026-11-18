@@ -68,7 +68,7 @@ function scriptContaining(html: string, needle: string): string {
 }
 
 function posterCardMarkup(): string {
-  const start = ADMIN_HTML.indexOf('<div class="card poster-deployments-card"');
+  const start = ADMIN_HTML.indexOf('<div class="card card--sectioned poster-deployments-card"');
   const end = ADMIN_HTML.indexOf('<!-- R4 (OSE-1319)', start);
   expect(start).toBeGreaterThan(-1);
   return ADMIN_HTML.slice(start, end);
