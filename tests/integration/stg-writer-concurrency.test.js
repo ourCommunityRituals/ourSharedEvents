@@ -1,8 +1,9 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- reads the repo's own workflows */
 /**
- * stg has one database (CCR 2026-11-07 R-07). Four jobs write to it outside a
+ * stg has one database (CCR 2026-11-07 R-07). These jobs write to it outside a
  * deploy: the daily stock load, the T2 pages leg (it publishes and unpublishes
- * the landing zip fixture), the nightly event lifecycle and the rollback drill.
+ * the landing zip fixture), the nightly event lifecycle, the rollback drill and
+ * the example fair (stg-example-fair.yml, by hand, OSE-2009).
  * They share one concurrency group, `stg-writer`, so no two of them write at
  * the same time; a second one waits and is never cancelled out from under a run.
  *
@@ -26,7 +27,13 @@ const load = (file) => yaml.load(readFileSync(join(WF, file), 'utf8'));
 const STG_WRITER = { group: 'stg-writer', 'cancel-in-progress': false, queue: 'max' };
 
 describe('one writer on stg at a time', () => {
-  test.each(['stock-data-full.yml', 'staging-event-lifecycle.yml', 'staging-rollback-drill.yml'])(
+  test.each([
+    'stock-data-full.yml',
+    'staging-event-lifecycle.yml',
+    'staging-rollback-drill.yml',
+    // OSE-2009: the example fair, loaded or removed by hand.
+    'stg-example-fair.yml',
+  ])(
     '%s is in the stg-writer group, queued first in first out, never cancelled by the next',
     (file) => {
       expect(load(file).concurrency).toEqual(STG_WRITER);
