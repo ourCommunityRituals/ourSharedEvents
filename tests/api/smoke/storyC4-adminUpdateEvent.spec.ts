@@ -32,6 +32,15 @@ const authHeaders = (): Record<string, string> => {
 };
 
 /** Create a disposable test event, return its ID */
+// OSE-2036: an event created past draft owes a start time and an event type.
+// The type is one the migrations seed (0024), so it is on every database.
+const CORE_VALUES = {
+  start_date: '2099-01-01',
+  start_time: '18:00',
+  timezone: 'America/Chicago',
+  event_type_id: 'etr-rec-bocce',
+};
+
 async function seedEvent(request: any, overrides: Record<string, unknown> = {}): Promise<string> {
   const res = await request.post('/api/v2/admin/events', {
     timeout: TIMEOUT,
@@ -537,7 +546,7 @@ test.describe('Update Event — Round-Trip Verification', () => {
   test.skip(!hasAuth(), 'No auth credentials');
 
   test('updated title reflected in GET /api/v2/events/:id', async ({ request }) => {
-    const id = await seedEvent(request, { status: 'active' });
+    const id = await seedEvent(request, { status: 'active', ...CORE_VALUES });
     const newTitle = `Verified Update ${Date.now()}`;
 
     await request.put(`/api/v2/admin/events/${id}`, {
@@ -556,6 +565,7 @@ test.describe('Update Event — Round-Trip Verification', () => {
   test('status change from active to archived removes from public list', async ({ request }) => {
     const id = await seedEvent(request, {
       status: 'active',
+      ...CORE_VALUES,
       brand_id: 'root',
       // OSE-1560: a new event is off the map unless asked.
       is_published: true,

@@ -67,3 +67,9 @@ INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_buck
   ('series-ci-scan-5', 'series-ci-try1-evt', 'series-ci-pd-1', '2026-09-07T19:00'),
   ('series-ci-scan-6', 'series-ci-try1-evt', 'series-ci-pd-1', '2026-09-07T19:00')
 ON CONFLICT(id) DO NOTHING;
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('series-ci-anchor-evt', 'series-ci-try1-evt', 'series-ci-try2-evt', 'series-ci-sugg-evt', 'series-ci-other-evt');

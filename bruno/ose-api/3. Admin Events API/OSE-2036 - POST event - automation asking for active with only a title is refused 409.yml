@@ -1,0 +1,49 @@
+info:
+  name: OSE-2036 | admin events | POST create past draft with no start time or type is refused (active)
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: '{"attendance_mode":"in_person","location":"OSE-2036 Hall","title":"OSE-2036 create active with no core values (staging, synthetic)","status":"active","is_published":false,"data_class":"synthetic"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        // OSE-2036: creating an event past draft is a publish step. Automation
+        // (this run's internal key) that asks for "active" with no start time
+        // and no event type gets the same refusal PUT status and verify-qr
+        // give. It is refused before any write, so this request leaves nothing
+        // behind and can run any number of times. The accepted path, with both
+        // values, is the OSE-1425 request beside this one.
+        test('409 CORE_VALUES_MISSING', function () {
+          expect(res.getStatus()).to.eql(409);
+          expect(res.getBody().ok).to.eql(false);
+          expect(res.getBody().code).to.eql('CORE_VALUES_MISSING');
+        });
+        test('names both missing values, time first', function () {
+          expect(res.getBody().missing).to.eql(['time', 'event_type']);
+        });
+        test('no event was created', function () {
+          expect(res.getBody().id).to.eql(undefined);
+          expect(res.getBody().event_status).to.eql(undefined);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -198,6 +198,10 @@ test.describe('online or in person', () => {
           // window to be empty (it went red at 00:00 Monday, Chicago, 2026-11-16).
           // 45 days is inside the next 90 only, like that spec's own probe.
           start_date: new Date(Date.now() + 45 * 86_400_000).toISOString().slice(0, 10),
+          // OSE-2036: an event created past draft owes a start time and an event
+          // type. The type is one the migrations seed (0024).
+          start_time: '18:00',
+          event_type_id: 'etr-rec-bocce',
           ...place,
         },
       });
