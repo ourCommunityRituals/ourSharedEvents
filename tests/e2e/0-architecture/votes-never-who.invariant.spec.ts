@@ -259,18 +259,21 @@ function sqlLiterals(code: string): string[] {
     .filter((l) => /\b(?:UPDATE|INSERT|REPLACE|DELETE|DROP|SELECT|RETURNING)\b/i.test(l));
 }
 
-/** One SQL text with identifier quotes and a `main.` schema removed, spaces folded. */
-const normalize = (sql: string) =>
-  stripSql(sql)
+/**
+ * One SQL text with identifier quotes and a `main.` schema removed, spaces
+ * folded. A shell or YAML line is not SQL, so its `--flag` is not a comment.
+ */
+const normalize = (sql: string, sqlComments = true) =>
+  (sqlComments ? stripSql(sql) : sql)
     .replace(/["`[\]]/g, '')
     .replace(/\b(?:main|temp)\./gi, '')
     .replace(/\s+/g, ' ')
     .trim();
 
 /** Why a statement could reopen, revive or restamp a vote set. Empty when it cannot. */
-function flagProblems(raw: string): string[] {
+function flagProblems(raw: string, sqlComments = true): string[] {
   const out: string[] = [];
-  for (const sql of normalize(raw)
+  for (const sql of normalize(raw, sqlComments)
     .split(';')
     .map((s) => s.trim())
     .filter(Boolean)) {
@@ -438,7 +441,7 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
     for (const { file, text } of OPS_FILES) {
       if (!/\bvote_sets\b|\bvotable_objects\b/.test(text)) continue;
       for (const line of text.split('\n'))
-        for (const p of flagProblems(line)) bad.push(`${file}: ${p}`);
+        for (const p of flagProblems(line, false)) bad.push(`${file}: ${p}`);
     }
     expect(
       bad,
@@ -536,6 +539,13 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       "UPDATE votable_objects SET state = 'open' WHERE id = ?",
     ];
     expect(reopen.filter((sql) => flagProblems(sql).length === 0)).toEqual([]);
+    // A shell line: its --command flag is not a SQL comment.
+    expect(
+      flagProblems(
+        `npx wrangler d1 execute DB --remote --command "UPDATE vote_sets SET is_final = 0 WHERE id = 'x'"`,
+        false
+      )
+    ).not.toEqual([]);
     const fine = [
       "UPDATE vote_sets SET is_final = 1, final_at = ?, state = 'closed', secret_margin = NULL, secret_floor = NULL WHERE id = ?",
       "UPDATE vote_sets SET is_void = 1, void_reason = 'pepper_epoch' WHERE id = ?",
