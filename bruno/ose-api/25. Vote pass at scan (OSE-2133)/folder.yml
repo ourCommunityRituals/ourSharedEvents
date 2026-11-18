@@ -1,0 +1,26 @@
+info:
+  name: Vote pass at scan (OSE-2133)
+  type: folder
+request: {}
+docs: |-
+  Voting S3b (OSE-2133, part of OSE-1193; OSE ADR-040 decision 6). A vote code
+  is the event's /q code with ?type=vote. When the scan stands, the event's vote
+  set is open, VOTING_ENABLED is "on" and the pepper is set, /q sends the
+  visitor to /events/<id>/vote#t=<pass>: the pass is only in the fragment.
+
+  The requests never print the Location header (seq 50 and 60 compare
+  booleans only). The pass is a bearer token for 30 minutes.
+
+  VOTING_ENABLED is "off" on staging (wrangler.toml; the owner turns it on).
+  The environment's votingSwitch is a copy of that value, held equal by
+  tests/unit/ci/env-parity.test.js. With it "off", seq 50 checks that the vote
+  code mints no pass and keeps today's redirect, and logs NOT RUN for the pass
+  in the fragment, recording no passing test for it. With it "on", seq 50
+  checks the pass is in the fragment only.
+
+  No fixture. The folder makes one synthetic, unlisted draft event (seq 10), a
+  room-screen placement (seq 20), and opens its vote set (seq 30, 40). A vote
+  set is never deleted (ADR-040 decision 4), so the run archives the event (seq
+  900). Each run leaves one archived synthetic event on staging.
+
+  Mock-layer twin: workers/oursharedevents/tests/vote-pass.spec.ts.
