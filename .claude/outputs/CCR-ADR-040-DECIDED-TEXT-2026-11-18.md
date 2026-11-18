@@ -8,7 +8,6 @@ gate: stop
 cumulative_score: 0
 system_score: 0
 pr: 1417
-subject_sha: 'f64c61c5be5a84f1fb17f90a9257d230d6f42fc3'
 unresolved: { regulatory: 0, security_critical: 0, critical: 1, high: 15, medium: 22, low: 17 }
 ---
 
