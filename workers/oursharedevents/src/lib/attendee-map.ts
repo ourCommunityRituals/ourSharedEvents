@@ -72,8 +72,11 @@
 // map (lib/map-place-panel.ts). Dots carry the same type, window and modality
 // classes as the cards, so the landing's pills filter them too, still with no
 // JS. This is the one place this module reads an event's lat/lon, and only to
-// find the event's own block; no coordinate is written to the page and no
-// viewer location is read.
+// find the event's own block; no event's coordinate is written to the page and
+// no viewer location is read on the server. With a street map, the drawing
+// carries its frame and each area its centre (frameAttrs, `data-ll`), for the
+// map's script; both come from the cell ids alone (OSE-2150,
+// tests/map-georef-cell-only.spec.ts).
 //
 // NO STREET MAP, NO FLOATING DOTS (owner, 2026-11-09; OSE-1894). Dots on a bare
 // hexagon tell nobody where anything is. Where the street map is missing (no

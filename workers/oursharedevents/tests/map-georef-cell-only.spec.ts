@@ -22,11 +22,13 @@
  *
  * Node project: pure rendering.
  *
- * @born-red georeference is cell-only (OSE-2150) | method: 5 faults injected
- *   into src one at a time, each put back (a dot drawn at the event's own
- *   point, the area centre taken from the first dot, the frame fitted around the
- *   dots' blocks, x0 written to 12 decimals, a dot carrying its point as a data
- *   attribute); each turned this file red | date: 2026-11-18
+ * @born-red georeference is cell-only (OSE-2150) | method: 8 faults injected
+ *   into src/lib/attendee-map.ts one at a time, each put back (a dot drawn at
+ *   the event's own point, the area centre taken from the first dot, the frame
+ *   fitted around the dots' blocks, x0 written to 12 decimals, a dot carrying
+ *   its point as a data attribute, the touch target drawn off its dot, a point
+ *   in micro-degrees, an area-map centre that is not its cell's); each turned
+ *   this file red | date: 2026-11-18
  */
 import { describe, expect, test } from 'vitest';
 import { cellToBoundary, cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
@@ -48,7 +50,11 @@ const FIXTURE_FRAME =
   'data-x0="0.255867824" data-y0="0.372606262" data-scale="3363057.841" data-mpu="8.909"';
 const FIXTURE_CENTRE = 'data-ll="41.61285,-87.85547"';
 const MILE = 'MPU / unitPx() / 1609.344';
-const COORD = /\d{2}\.\d{3,}/;
+// Coordinate-shaped: three or more decimals (a degree to about 110 m anywhere, a
+// radian, a fraction of the frame) or seven or more digits in a row (micro-degrees).
+const COORD = /\d\.\d{3,}|\d{7,}/;
+/** Undo URL escapes first, so "%2060406" (a space and a ZIP) is not a run of seven digits, and "%2E" is a dot. */
+const unescaped = (t: string) => t.replace(/%2e/gi, '.').replace(/%[0-9a-f]{2}/gi, ' ');
 
 // Areas on both sides of the equator and the meridian: the rules hold anywhere.
 const CELLS = [
@@ -74,6 +80,10 @@ function ev(i: number, cell: string, lat: number, lon: number, kind = 'address')
     lon,
     place_kind: kind,
     classes: [],
+    // What an organizer types: the names and the street address the event page shows.
+    venue: `Hall ${i}`,
+    location: `Hall ${i}`,
+    where_address: `${1200 + i} S Main St, Blue Island, IL 60406`,
   };
 }
 
@@ -128,13 +138,20 @@ function readBack(html: string): { n: number; at: [number, number] }[] {
   const num = (name: string) =>
     Number(tagOf(html, 'amap-svg').match(new RegExp(`${name}="([^"]+)"`))![1]);
   const [x0, y0, scale] = [num('data-x0'), num('data-y0'), num('data-scale')];
-  const re =
-    /<a href="#amap-dot-(\d+)"[^>]*data-testid="amap-dot"[^>]*>[\s\S]*?<circle class="amap-dot" cx="([\d.]+)" cy="([\d.]+)"/g;
+  // Each dot is one link: its touch target, dot and number. All three are drawn
+  // at one point, and that point is read back.
+  const re = /<a href="#amap-dot-(\d+)"[^>]*data-testid="amap-dot"[^>]*>([\s\S]*?)<\/a>/g;
   const out: { n: number; at: [number, number] }[] = [];
   for (const m of html.matchAll(re)) {
-    const wy = y0 + Number(m[3]) / scale;
+    const xs = [...m[2]!.matchAll(/\s(?:cx|x)="([^"]*)"/g)].map((v) => v[1]);
+    const ys = [...m[2]!.matchAll(/\s(?:cy|y)="([^"]*)"/g)].map((v) => v[1]);
+    expect(xs.length).toBe(3);
+    expect(ys.length).toBe(3);
+    expect(new Set(xs).size).toBe(1);
+    expect(new Set(ys).size).toBe(1);
+    const wy = y0 + Number(ys[0]) / scale;
     const lat = (Math.atan(Math.sinh(Math.PI * (1 - 2 * wy))) * 180) / Math.PI;
-    const lng = (x0 + Number(m[2]) / scale) * 360 - 180;
+    const lng = (x0 + Number(xs[0]) / scale) * 360 - 180;
     out.push({ n: Number(m[1]), at: [lat, lng] });
   }
   return out;
@@ -236,15 +253,39 @@ describe("the georeference on the zoomed map is the area cell's (OSE-2150)", () 
       const centre = centreOf(html);
       expect(part.split(frame).length - 1).toBe(1);
       expect(part.split(centre).length - 1).toBe(1);
-      const rest = part.replace(frame, '').replace(centre, '').replace(MILE, '');
-      expect(rest.match(COORD)?.[0] ?? null).toBe(null);
+      // The area's own cell id is the one run of seven digits allowed.
+      const rest = part
+        .replace(frame, '')
+        .replace(centre, '')
+        .replace(MILE, '')
+        .split(cell)
+        .join('');
+      expect(unescaped(rest).match(COORD)?.[0] ?? null).toBe(null);
     }
   );
+
+  test("two blocks near enough to merge are one dot, drawn at the first block's centre", () => {
+    const [first] = blocksIn(FIXTURE_CELL, 1);
+    const next = gridDisk(first!, 1).find(
+      (b) => b !== first && latLngToCell(...cellToLatLng(b), 7) === FIXTURE_CELL
+    )!;
+    const html = zoomPage(FIXTURE_CELL, [
+      ev(0, FIXTURE_CELL, ...inside(first!, 0, 0.8), 'business'),
+      ev(1, FIXTURE_CELL, ...inside(next, 3, 0.8)),
+    ]);
+    const back = readBack(html);
+    expect(back.length).toBe(1);
+    const block = latLngToCell(back[0]!.at[0], back[0]!.at[1], 9);
+    expect([first, next]).toContain(block);
+    expect(metres(back[0]!.at, cellToLatLng(block) as [number, number])).toBeLessThan(1);
+  });
 });
 
 describe("the georeference on the area map is the drawn cells' (OSE-2150)", () => {
-  // The area map draws hexagons from each event's res-7 cell
-  // (AttendeeMapItem has no point at all). Even handed one, it shows nothing finer.
+  // The area map draws hexagons from each event's res-7 cell; AttendeeMapItem
+  // has no point at all, so today these tests hold by construction. They are a
+  // guard: a later change that reads a point here (the landing hands it whole
+  // public events) turns them red.
   const A = FIXTURE_CELL;
   const B = gridDisk(A, 1).find((c) => c !== A)!;
   const items = (t: number) =>
@@ -278,5 +319,19 @@ describe("the georeference on the area map is the drawn cells' (OSE-2150)", () =
           .join(',')}"`
       );
     }
+    let rest = base.replace(frameOf(base), '').replace(MILE, '');
+    for (const cell of [A, B]) {
+      rest = rest
+        .replace(
+          `data-ll="${cellToLatLng(cell)
+            .map((v) => v.toFixed(5))
+            .join(',')}"`,
+          ''
+        )
+        .split(cell)
+        .join('');
+    }
+    expect(frameOf(base)).not.toBe('');
+    expect(unescaped(rest).match(COORD)?.[0] ?? null).toBe(null);
   });
 });

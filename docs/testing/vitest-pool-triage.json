@@ -2015,7 +2015,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 6
+      "testCount": 7
     },
     {
       "file": "workers/oursharedevents/tests/map-limits.spec.ts",

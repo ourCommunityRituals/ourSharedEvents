@@ -136,8 +136,13 @@ runtime:
         //   on amap-svg   data-x0, data-y0, data-scale, data-mpu (the cell's frame)
         //   on amap-zone  data-ll (the cell's own centre, 5 decimals)
         //   in the script the metres in a mile, 1609.344 (a unit, not a place)
-        // A number of that shape anywhere else fails, and so does any change to
-        // one of the pinned values (a frame drawn around a business, say).
+        // Outside them, a coordinate-shaped number is any with three or more
+        // decimals (a degree to about 110 m, near the equator or the meridian
+        // too, a radian, a fraction of the frame like data-x0) or seven or more
+        // digits in a row (micro-degrees). The area's own cell id, which has nine
+        // digits in a row, is the only such run allowed. A number of that shape
+        // anywhere else fails, and so does any change to one of the pinned values
+        // (a frame drawn around a business, say).
         const CELL_FRAME = 'data-x0="0.255867824" data-y0="0.372606262" data-scale="3363057.841" data-mpu="8.909"';
         const CELL_CENTRE = 'data-ll="41.61285,-87.85547"';
         const MILE = 'MPU / unitPx() / 1609.344';
@@ -157,7 +162,10 @@ runtime:
             expect(zoomed.split(CELL_CENTRE).length - 1, 'the centre is written once').to.equal(1);
             rest = rest.replace(CELL_FRAME, '').replace(CELL_CENTRE, '').replace(MILE, '');
           }
-          expect(rest).to.not.match(/\d{2}\.\d{3,}/);
+          rest = rest.split('872664405ffffff').join('');
+          // URL escapes undone first: "%2060406" is a space and a ZIP, "%2E" a dot.
+          rest = rest.replace(/%2e/gi, '.').replace(/%[0-9a-f]{2}/gi, ' ');
+          expect(rest).to.not.match(/\d\.\d{3,}|\d{7,}/);
         });
 
         if (drawn) {
@@ -183,11 +191,19 @@ runtime:
               3: [41.6060109, -87.8465295], // 89266440537ffff
             };
             const business = [41.6210, -87.8555]; // the seeded point of place 1
-            const re = /<a href="#amap-dot-(\d)"[^>]*data-testid="amap-dot"[^>]*>[\s\S]*?<circle class="amap-dot" cx="([\d.]+)" cy="([\d.]+)"/g;
+            // Each dot is one link: its touch target, its dot and its number are
+            // all drawn at the same point, and that point is read back.
+            const re = /<a href="#amap-dot-(\d)"[^>]*data-testid="amap-dot"[^>]*>([\s\S]*?)<\/a>/g;
             let m;
             let seen = 0;
             while ((m = re.exec(body))) {
-              const p = back(Number(m[2]), Number(m[3]));
+              const xs = [...m[2].matchAll(/\s(?:cx|x)="([^"]*)"/g)].map(function (v) { return v[1]; });
+              const ys = [...m[2].matchAll(/\s(?:cy|y)="([^"]*)"/g)].map(function (v) { return v[1]; });
+              expect(xs.length, 'dot ' + m[1] + ' draws three parts').to.equal(3);
+              expect(new Set(xs).size, 'dot ' + m[1] + ' is drawn at one x').to.equal(1);
+              expect(ys.length).to.equal(3);
+              expect(new Set(ys).size, 'dot ' + m[1] + ' is drawn at one y').to.equal(1);
+              const p = back(Number(xs[0]), Number(ys[0]));
               const want = blocks[m[1]];
               // The drawing is written to a tenth of a map unit, about 0.9 m here.
               expect(metres(p, want), 'dot ' + m[1] + ' is its block centre').to.be.below(1);
