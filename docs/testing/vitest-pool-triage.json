@@ -3439,6 +3439,13 @@
       "testCount": 14
     },
     {
+      "file": "workers/oursharedevents/tests/sponsor-bundle-field-list.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, env.DB",
+      "testCount": 9
+    },
+    {
       "file": "workers/oursharedevents/tests/sponsor-card-link-gate.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
