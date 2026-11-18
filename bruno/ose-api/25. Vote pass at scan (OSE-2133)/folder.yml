@@ -18,7 +18,8 @@ docs: |-
   in the fragment, recording no passing test for it. With it "on", seq 50
   checks the pass is in the fragment only.
 
-  No fixture. The folder makes one synthetic, unlisted draft event (seq 10), a
+  No fixture. The folder makes one synthetic, unlisted live event (seq 10; a
+  scan on a draft counts nothing and goes home, OSE-2144), a
   room-screen placement (seq 20), and opens its vote set (seq 30, 40). A vote
   set is never deleted (ADR-040 decision 4), so the run archives the event (seq
   900). Each run leaves one archived synthetic event on staging.
