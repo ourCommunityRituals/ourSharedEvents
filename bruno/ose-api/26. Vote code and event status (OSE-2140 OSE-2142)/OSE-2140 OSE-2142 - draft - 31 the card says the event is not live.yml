@@ -1,0 +1,28 @@
+info:
+  name: "OSE-2140 OSE-2142 | draft | the admin list says the event is not live, the set is in draft, no vote code yet"
+  type: http
+  seq: 31
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteLiveNightId}}/votables"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2140 OSE-2142 | draft: event_live false, set draft, code null', function () { expect(res.getStatus()).to.eql(200); expect(b.event_live).to.eql(false); expect(b.set && b.set.state).to.eql('draft'); expect(b.code).to.eql(null); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

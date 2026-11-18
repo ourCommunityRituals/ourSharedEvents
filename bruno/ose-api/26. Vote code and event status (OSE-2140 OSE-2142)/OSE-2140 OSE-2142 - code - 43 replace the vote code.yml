@@ -1,0 +1,43 @@
+info:
+  name: "OSE-2140 OSE-2142 | code | replacing the vote code gives a new placement and token"
+  type: http
+  seq: 43
+
+# Never prints either token: the checks compare booleans.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteLiveNightId}}/votables/code/replace"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        var code = b.code || {};
+        var m = /\/q\/(qrt_[0-9a-f]{32})\?type=vote$/.exec(String(code.url || ''));
+        var newToken = !!m && m[1] !== bru.getVar('voteCodeToken');
+        var newId = !!code.id && code.id !== bru.getVar('voteCodeId');
+        bru.setVar('voteOldCodeToken', bru.getVar('voteCodeToken'));
+        bru.setVar('voteCodeToken', m ? m[1] : 'qrt_missing');
+        bru.setVar('voteCodeId', String(code.id || 'missing-code'));
+        m = null;
+        test('OSE-2140 OSE-2142 | code: 201, a new placement and a new token', function () { expect(res.getStatus() === 201).to.eql(true); expect(newToken).to.eql(true); expect(newId).to.eql(true); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -1,0 +1,32 @@
+info:
+  name: "OSE-2140 OSE-2142 | publish | the night moves to Ready"
+  type: http
+  seq: 50
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteLiveNightId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"status\": \"ready\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2140 OSE-2142 | publish: Ready', function () { expect(res.getStatus()).to.eql(200); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

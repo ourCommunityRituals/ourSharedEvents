@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2140 OSE-2142 | unpublish | a set that has opened takes no object while the event is not Published"
+  type: http
+  seq: 83
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteLiveNightId}}/votables/objects"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"kind\": \"song\", \"label\": \"Track two\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2140 OSE-2142 | unpublish: 409 EVENT_NOT_PUBLISHED', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('EVENT_NOT_PUBLISHED'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

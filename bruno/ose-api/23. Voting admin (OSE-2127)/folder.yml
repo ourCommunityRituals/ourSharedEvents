@@ -20,8 +20,9 @@ docs: |-
   Until the owner sets it up (OSE-1800), those two requests log NOT RUN and
   record no passing test.
 
-  No fixture. The folder makes two synthetic, unlisted draft events (seq 10 and
-  11). A vote set is never deleted (ADR-040 decision 4), so the event delete
+  No fixture. The folder makes two synthetic, unlisted events (seq 10 and 11):
+  the night is Published (unlisted), because a set opens only on a Published
+  event (OSE-2142); the final-lock event stays a draft, which needs no open. A vote set is never deleted (ADR-040 decision 4), so the event delete
   refuses them (seq 900) and the run archives both (seq 905 and 906). Each run
   therefore leaves two archived synthetic events on staging. The nightly job
   makes the never-opened set final after 7 days; the opened one waits for S5.

@@ -1,0 +1,28 @@
+info:
+  name: "OSE-2140 OSE-2142 | public | the public poster bundle asked for the vote code answers as for no placement"
+  type: http
+  seq: 60
+
+# Never prints the answer: the checks compare booleans.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{voteLiveNightId}}/poster-bundle?deployment={{voteCodeId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var text = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody() || {});
+        var tokenThere = text.indexOf(bru.getVar('voteCodeToken')) >= 0;
+        var scanLink = text.indexOf('/q/') >= 0;
+        text = null;
+        test('OSE-2140 OSE-2142 | public: 200, the vote code token is absent, no /q link', function () { expect(res.getStatus() === 200).to.eql(true); expect(tokenThere).to.eql(false); expect(scanLink).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

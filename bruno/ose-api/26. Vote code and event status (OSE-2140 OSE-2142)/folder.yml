@@ -1,0 +1,32 @@
+info:
+  name: Vote code and event status (OSE-2140 OSE-2142)
+  type: folder
+request: {}
+docs: |-
+  Voting S3d (OSE-2140) and S3e (OSE-2142), part of OSE-1193; OSE ADR-040
+  decisions 6 and 11 (owner decisions, 2026-11-18).
+
+  S3d: the room has its own vote code, made from the admin Voting card
+  (POST .../votables/code). Its token is in no public answer: the public poster
+  bundle asked for its placement answers as for none (seq 60), the event page and
+  the public event answer never carry it (seq 61, 62), and the admin poster list
+  leaves it out (seq 42). Replacing the code gives a new token, and the old one,
+  if photographed, resolves to nothing at /q (seq 43, 44). No request prints the token or a URL that holds it:
+  every check compares booleans. That an ordinary poster code with ?type=vote
+  mints no pass is in folder 25 (seq 55).
+
+  S3e: nothing is more live than its container. On a draft event the set is
+  made and given a song, and the song is edited (seq 20 to 22), but the set does
+  not open: 409 EVENT_NOT_PUBLISHED (seq 30). Published (unlisted), it opens
+  (seq 52). Taken back to Ready, the admin card reads the set closed and Reopen
+  is refused (seq 80 to 83); Published again it stays closed until the host
+  reopens it (seq 84 to 86). Archiving closes it too (seq 900, 901).
+
+  VOTING_ENABLED is off on staging; none of these admin routes reads it (owner,
+  2026-11-18: set-up works while voting is off).
+
+  No fixture. The folder makes one synthetic, unlisted event and archives it at
+  the end. A vote set is never deleted (ADR-040 decision 4), so each run leaves
+  one archived synthetic event on staging.
+
+  Mock-layer twin: workers/oursharedevents/tests/vote-code.spec.ts.

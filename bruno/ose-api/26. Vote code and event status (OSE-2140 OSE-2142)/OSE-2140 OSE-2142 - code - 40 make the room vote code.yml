@@ -1,0 +1,43 @@
+info:
+  name: "OSE-2140 OSE-2142 | code | the room vote code is made, with a token of its own"
+  type: http
+  seq: 40
+
+# Never prints the code's URL or token: every check compares booleans.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteLiveNightId}}/votables/code"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        var code = b.code || {};
+        var url = String(code.url || '');
+        var m = /\/q\/(qrt_[0-9a-f]{32})\?type=vote$/.exec(url);
+        var shaped = !!m;
+        var hasQr = String(code.qr || '').indexOf('data:image/') === 0;
+        bru.setVar('voteCodeToken', m ? m[1] : 'qrt_missing');
+        bru.setVar('voteCodeId', String(code.id || 'missing-code'));
+        url = null; m = null;
+        test('OSE-2140 OSE-2142 | code: 201, a /q URL asking for a pass, a QR', function () { expect(res.getStatus() === 201).to.eql(true); expect(shaped).to.eql(true); expect(hasQr).to.eql(true); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

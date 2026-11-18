@@ -1,0 +1,37 @@
+info:
+  name: OSE-2127 | setup | a synthetic live night for this run, unlisted
+  type: http
+  seq: 10
+
+# OSE-2142 (S3e): a set opens only on a Published event, listed or unlisted.
+# Automation may create an event live (OSE-1425); this one is unlisted.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"attendance_mode\": \"in_person\", \"is_published\": false, \"data_class\": \"synthetic\", \"status\": \"active\", \"start_date\": \"2099-01-01\", \"start_time\": \"18:00\", \"timezone\": \"America/Chicago\", \"event_type_id\": \"etr-rec-bocce\", \"location\": \"OSE-2127 Hall\", \"title\": \"OSE-2127 vote night (staging, synthetic)\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2127 setup: the night is created, Published and unlisted', function () { expect(res.getStatus()).to.eql(201); expect(b.event_status).to.eql('active'); expect(b.id).to.be.a('string'); });
+        bru.setVar('voteNightId', b.id || 'missing-night');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

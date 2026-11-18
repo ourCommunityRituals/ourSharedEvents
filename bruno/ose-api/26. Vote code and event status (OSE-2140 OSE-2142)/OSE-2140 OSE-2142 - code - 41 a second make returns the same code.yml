@@ -1,0 +1,34 @@
+info:
+  name: "OSE-2140 OSE-2142 | code | a second make returns the code in use"
+  type: http
+  seq: 41
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteLiveNightId}}/votables/code"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        var same = !!(b.code && b.code.id === bru.getVar('voteCodeId'));
+        test('OSE-2140 OSE-2142 | code: 200 and the same placement', function () { expect(res.getStatus() === 200).to.eql(true); expect(same).to.eql(true); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

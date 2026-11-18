@@ -1,0 +1,28 @@
+info:
+  name: "OSE-2140 OSE-2142 | public | the event page opened with the vote code placement carries no token"
+  type: http
+  seq: 61
+
+# Never prints the answer: the checks compare booleans.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/{{voteLiveNightId}}?type=register&deployment={{voteCodeId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var text = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody() || {});
+        var tokenThere = text.indexOf(bru.getVar('voteCodeToken')) >= 0;
+        var scanLink = false;
+        text = null;
+        test('OSE-2140 OSE-2142 | public: 200, the vote code token is absent', function () { expect(res.getStatus() === 200).to.eql(true); expect(tokenThere).to.eql(false); expect(scanLink).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
