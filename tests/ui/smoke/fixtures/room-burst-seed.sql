@@ -48,3 +48,9 @@ INSERT INTO poster_deployments (
   1
 )
 ON CONFLICT(id) DO UPDATE SET is_active = 1, updated_at = datetime('now');
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('room-burst-event');

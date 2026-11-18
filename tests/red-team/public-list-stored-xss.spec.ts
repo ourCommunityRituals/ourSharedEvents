@@ -60,6 +60,10 @@ async function plantEvent(request: APIRequestContext, title: string): Promise<st
       // into BOTH an href query param and an aria-label.
       start_date: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
       status: 'active',
+      // OSE-2036: an event created past draft owes a start time and an event
+      // type. The type is one the migrations seed (0024).
+      start_time: '18:00',
+      event_type_id: 'etr-rec-bocce',
       // OSE-1560: off the map by default; the payload has to be on the public list to be tested.
       is_published: true,
       location: title,

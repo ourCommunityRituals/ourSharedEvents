@@ -255,3 +255,9 @@ INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at
   ('camp-rpt-few-person-2', 'camp-rpt-few-evt', '2026-11-01 18:00:00', '2026-11-01 18:00:00'),
   ('camp-rpt-few-person-3', 'camp-rpt-few-evt', '2026-11-01 18:00:00', '2026-11-01 18:00:00'),
   ('camp-rpt-few-person-4', 'camp-rpt-few-evt', '2026-11-01 18:00:00', '2026-11-01 18:00:00');
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('camp-on-evt', 'camp-off-evt', 'camp-ci-evt', 'camp-rpt-evt', 'camp-rpt-none-evt', 'camp-rpt-few-evt');

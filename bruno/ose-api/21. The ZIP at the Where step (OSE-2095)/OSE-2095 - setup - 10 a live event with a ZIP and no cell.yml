@@ -15,7 +15,7 @@ http:
       value: "application/json"
   body:
     type: json
-    data: "{\"attendance_mode\":\"in_person\",\"location\":\"OSE-2095 Zip Check Hall\",\"zip_code\":\"59718-0001\",\"title\":\"OSE-2095 Zip Check Night (staging, synthetic)\",\"status\":\"active\",\"is_published\":true,\"data_class\":\"synthetic\"}"
+    data: "{\"attendance_mode\":\"in_person\",\"location\":\"OSE-2095 Zip Check Hall\",\"zip_code\":\"59718-0001\",\"title\":\"OSE-2095 Zip Check Night (staging, synthetic)\",\"status\":\"active\",\"is_published\":true,\"data_class\":\"synthetic\",\"start_date\":\"2099-01-01\",\"start_time\":\"18:00\",\"timezone\":\"America/Chicago\",\"event_type_id\":\"etr-rec-bocce\"}"
   auth: inherit
 
 runtime:

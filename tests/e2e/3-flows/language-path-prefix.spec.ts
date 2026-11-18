@@ -174,6 +174,10 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
       is_published: true,
       description: 'Temporary language-prefix smoke event.',
       location: 'Language Prefix Hall',
+      // OSE-2036: an event created past draft owes a start time and an event
+      // type. The type is one the migrations seed (0024).
+      start_time: '18:00',
+      event_type_id: 'etr-rec-bocce',
       start_date: '2099-02-01',
       end_date: '2099-02-02',
       timezone: 'America/Chicago',
@@ -722,6 +726,10 @@ test.describe('Polish and Arabic on staging, pairwise rows (OSE-1972)', () => {
       is_published: true,
       description: 'Temporary pairwise language event.',
       location: 'Pairwise Hall',
+      // OSE-2036: an event created past draft owes a start time and an event
+      // type. The type is one the migrations seed (0024).
+      start_time: '18:00',
+      event_type_id: 'etr-rec-bocce',
       start_date: '2099-03-01',
       end_date: '2099-03-01',
       timezone: 'America/Chicago',
@@ -863,6 +871,10 @@ test.describe('Form pages in every language on staging (OSE-1850)', () => {
       is_published: true,
       description: 'Temporary language form event.',
       location: 'Language Forms Hall',
+      // OSE-2036: an event created past draft owes a start time and an event
+      // type. The type is one the migrations seed (0024).
+      start_time: '18:00',
+      event_type_id: 'etr-rec-bocce',
       start_date: '2099-04-01',
       end_date: '2099-04-01',
       timezone: 'America/Chicago',

@@ -105,7 +105,7 @@ Resolution
 5. **Exceptions require compensating controls.** You cannot except a finding without documenting what mitigates the risk.
 6. **Exceptions expire.** If not renewed by the review date, the finding reverts to its original priority.
 7. **Critical findings cannot be excepted.** They must be fixed within 4 hours or the affected code is reverted.
-8. **Human gate is enforced.** Automated agents (bots, CI, Claude Code) **cannot** merge code with security violations. Only a human reviewer can override by: (a) applying the `security:human-override` label, (b) approving the PR via GitHub review, and (c) posting a justification comment. The `security-human-gate.yml` workflow enforces this as a required status check.
+8. **Human gate (a rule; not yet a required check).** Automated agents (bots, CI, Claude Code) **must not** merge code with security violations. Only a human reviewer can override by: (a) applying the `security:human-override` label, (b) approving the PR via GitHub review, and (c) posting a justification comment. The `security-human-gate.yml` workflow checks this on every pull request. Its check, `🛑 Security Human Gate`, is advisory today: it is not among the required checks in `tools/ci/main-branch-protection.json` (read 2026-11-18), so a red gate does not block a merge by itself. Corrected 2026-11-18: this line said the workflow enforced it as a required status check.
 9. **Bot-authored PRs with security failures require human approval.** If a PR is authored by a bot or agent and has security scan failures, a human must submit an approving review — the label alone is not sufficient.
 
 ---
@@ -214,15 +214,15 @@ Detection (scan failure)
 
 ### Human Gate Enforcement
 
-The `security-human-gate.yml` workflow runs on every PR and enforces:
+The `security-human-gate.yml` workflow runs on every PR and reports:
 
-- If security scans **pass** → gate is open, merge is allowed
-- If security scans **fail** → gate blocks merge until:
+- If security scans **pass** → the gate is green
+- If security scans **fail** → the gate is red until:
   1. A **human** (not bot/agent) applies the `security:human-override` label
   2. A **human** approves the PR via GitHub review (required for bot-authored PRs)
   3. A **human** posts a comment with override justification (recommended)
 
-**Configure as required status check:** Settings > Branches > main > Require status checks > add "Security Human Gate"
+**Not a required status check today** (read 2026-11-18): `tools/ci/main-branch-protection.json`, the source of truth for `main`'s protection, does not list `🛑 Security Human Gate`, so a red gate is a signal and does not block a merge. To see the current list, read `required_status_checks.checks` in that file. Making it required is the owner's step (a repository control): add the context to that file and apply it with `scripts/apply-branch-protection.mjs`.
 
 ### Labels Used
 

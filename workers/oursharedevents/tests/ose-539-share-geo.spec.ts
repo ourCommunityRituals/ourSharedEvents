@@ -6,6 +6,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
+import { CORE_TIME_AND_TYPE } from './helpers/core-values';
 
 interface TestEnv {
   DB: D1Database;
@@ -71,6 +72,7 @@ async function createEventWithGeo(
       attendance_mode: lat == null && lon == null && !location ? 'online' : 'in_person',
       title,
       status: 'active',
+      ...CORE_TIME_AND_TYPE,
       // OSE-1560: a new event is off the map unless asked.
       is_published: true,
       start_date: futureStart,

@@ -895,7 +895,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 32
+      "testCount": 36
     },
     {
       "file": "workers/oursharedevents/tests/csp-no-inline-handlers.spec.ts",
@@ -1028,7 +1028,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 91
+      "testCount": 94
     },
     {
       "file": "workers/oursharedevents/tests/display-phase-parity.spec.ts",
@@ -1175,7 +1175,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): env.DB",
-      "testCount": 7
+      "testCount": 14
     },
     {
       "file": "workers/oursharedevents/tests/event-date-line.spec.ts",
@@ -1693,7 +1693,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 17
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/geocode-handler.spec.ts",
@@ -1959,7 +1959,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 22
+      "testCount": 26
     },
     {
       "file": "workers/oursharedevents/tests/map-areas-route.spec.ts",
@@ -3110,6 +3110,13 @@
       "testCount": 39
     },
     {
+      "file": "workers/oursharedevents/tests/seed-live-rows-verified.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 6
+    },
+    {
       "file": "workers/oursharedevents/tests/seo-canonical-schema.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -3233,7 +3240,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 35
+      "testCount": 42
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-mobile-workability.spec.ts",

@@ -33,6 +33,15 @@ const authHeaders = (): Record<string, string> => {
 };
 
 /** POST helper with correct Content-Type */
+// OSE-2036: an event created past draft owes a start time and an event type.
+// The type is one the migrations seed (0024), so it is on every database.
+const CORE_VALUES = {
+  start_date: '2099-01-01',
+  start_time: '18:00',
+  timezone: 'America/Chicago',
+  event_type_id: 'etr-rec-bocce',
+};
+
 async function createEvent(request: any, data: Record<string, unknown>) {
   return request.post('/api/v2/admin/events', {
     timeout: TIMEOUT,
@@ -455,7 +464,11 @@ test.describe('Create Event — Status Validation', () => {
   });
 
   test('accepts status: active', async ({ request }) => {
-    const res = await createEvent(request, { title: `Active ${Date.now()}`, status: 'active' });
+    const res = await createEvent(request, {
+      title: `Active ${Date.now()}`,
+      status: 'active',
+      ...CORE_VALUES,
+    });
     expect(res.status()).toBe(201);
   });
 
@@ -541,6 +554,8 @@ test.describe('Create Event — Success Paths', () => {
       location: 'Test Venue, Chicago IL',
       start_date: '2026-12-31',
       end_date: '2026-12-31',
+      start_time: CORE_VALUES.start_time,
+      event_type_id: CORE_VALUES.event_type_id,
       timezone: 'America/Chicago',
       // Artwork is an uploaded file under /api/v2/uploads/ (OSE-1658).
       cover_image_url: '/api/v2/uploads/poster-art/example.png',
@@ -674,7 +689,7 @@ test.describe('Create Event — Round-Trip Verification', () => {
 
   test('created event appears in admin list', async ({ request }) => {
     const title = `RoundTrip ${Date.now()}`;
-    const createRes = await createEvent(request, { title, status: 'active' });
+    const createRes = await createEvent(request, { title, status: 'active', ...CORE_VALUES });
     expect(createRes.status()).toBe(201);
     const { id } = await createRes.json();
 
@@ -690,6 +705,7 @@ test.describe('Create Event — Round-Trip Verification', () => {
     const createRes = await createEvent(request, {
       title,
       status: 'active',
+      ...CORE_VALUES,
       brand_id: 'root',
       // OSE-1560: a new event is off the map unless asked.
       is_published: true,

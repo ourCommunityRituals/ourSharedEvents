@@ -23,6 +23,7 @@
 
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { CORE_TIME_AND_TYPE } from './helpers/core-values';
 
 const ADMIN_HEADERS = { Authorization: 'Bearer test-admin-key-e2e-2026' };
 const BRAND = 'ose243a-test';
@@ -636,6 +637,7 @@ describe('OSE-243a + OSE-263: anonymity-principle source gate (L1 static)', () =
         title: 'OSE-243a chain test',
         brand_id: BRAND,
         status: 'active',
+        ...CORE_TIME_AND_TYPE,
         // OSE-1560: a new event is off the map unless asked.
         is_published: true,
         start_date: startDate,
