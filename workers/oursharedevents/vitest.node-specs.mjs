@@ -202,6 +202,8 @@ export const NODE_SPECS = [
   // (scripts/street-map-archive/check.ts), over in-memory archives.
   'tests/street-map-archive-check.spec.ts',
   'tests/map-zoom.spec.ts',
+  // OSE-2150: the map's frame and centres are the cells', nothing finer.
+  'tests/map-georef-cell-only.spec.ts',
   // The map's rules at the exact sizes where they change (hexagon links, the
   // taller box, the dot merge): stands in for the projection only (vi.mock of
   // lib/street-map's `project`).
