@@ -63,8 +63,10 @@ import {
   sponsorTitle,
   sponsorCardPath,
   SPONSOR_ON_SHOW_SQL,
+  PLACEMENT_ON_SHOW_SQL,
   eventUsesSponsorsSql,
 } from './sponsor-card';
+import { eventLiveSql } from '../domain/event-state';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -209,10 +211,16 @@ export async function resolveSponsorsForEvent(
   // geo, and corridor cell (h3_res7) for the OSE-799 locality_band derivation.
   // OSE-1900: the same read answers "did this event choose to have sponsors?"
   // (the one gate, lib/sponsor-card.ts). It is asked before either path runs.
+  // OSE-2144: and "is the event live?" (eventLiveSql, domain/event-state.ts):
+  // nothing is more live than its container, so a draft, ready or archived
+  // event resolves no sponsor on any path. This resolver feeds only public
+  // reads (/sponsors, /sponsor-bundle, the poster bundle); the archived recap
+  // page has its own statement (handlers/pages.ts).
   const event = await db
     .prepare(
       `SELECT brand_id, template_id, zip_code, lat, lon, h3_res7,
-              ${eventUsesSponsorsSql('')} AS uses_sponsors
+              ${eventUsesSponsorsSql('')} AS uses_sponsors,
+              CASE WHEN ${eventLiveSql('')} THEN 1 ELSE 0 END AS is_live
          FROM events WHERE id = ?`
     )
     .bind(eventId)
@@ -224,9 +232,11 @@ export async function resolveSponsorsForEvent(
       lon: number | null;
       h3_res7: string | null;
       uses_sponsors: number | null;
+      is_live: number | null;
     }>();
 
   if (!event) return [];
+  if (Number(event.is_live) !== 1) return [];
   // The event's own yes comes first. Without it there is nothing to resolve:
   // not a direct placement (Path 1), and not a template match (Path 2, dark).
   if (Number(event.uses_sponsors) !== 1) return [];
@@ -267,12 +277,14 @@ export async function resolveSponsorsForEvent(
       `SELECT ${SELECT_PLACEMENT_ROW}
        FROM sponsor_placement sp
        JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
+       JOIN events e ON e.id = sp.event_id
        LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
        LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'
-       WHERE sp.event_id = ? AND sp.is_active = 1
-         AND sb.is_active = 1
-         AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
-         AND sp.sponsor_accepted = 1
+       -- OSE-2144: the shared per-placement rule (lib/sponsor-card.ts): active
+       -- placement and business, both sides accepted, the event opted in, in
+       -- the sponsor's brand, and live. Asked here as well as by the stop
+       -- above, so the statement holds on its own.
+       WHERE sp.event_id = ? AND ${PLACEMENT_ON_SHOW_SQL}
        ORDER BY sb.id`
     )
     .bind(eventId)

@@ -44,8 +44,8 @@ import { isUploadedArtworkPath } from '../lib/event-thumb';
 import {
   CARD_FIELDS,
   checkCardField,
-  eventUsesSponsorsSql,
-  PLACEMENT_EVENT_USES_SPONSORS_SQL,
+  PLACEMENT_ON_SHOW_SQL,
+  SPONSOR_ON_SHOW_SQL,
   type CardField,
 } from '../lib/sponsor-card';
 import { isPublicReadLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
@@ -1575,7 +1575,8 @@ export async function handleGetSponsorBundle(
 /**
  * D3 (CCR 2026-09-14): an impression/click may be logged ONLY for a sponsor that
  * is actually placed on this event, brand-matched, and renderable (which since
- * OSE-1900 includes the event having opted in to sponsors). Returns the
+ * OSE-1900 includes the event having opted in to sponsors, and since OSE-2144
+ * the event being live: PLACEMENT_ON_SHOW_SQL). Returns the
  * event's h3_res7 when the (event, sponsor) pair is a resolved active placement,
  * or `{ ok:false }` when it is not — the caller then rejects with 404 and writes
  * nothing, so a fabricated (event, sponsor) pair can't pollute the proof layer
@@ -1594,12 +1595,10 @@ async function resolvePlacementGeo(
        FROM events e
        JOIN sponsor_placement sp ON sp.event_id = e.id
        JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
-       WHERE e.id = ?1 AND sb.id = ?2
-         AND sp.is_active = 1 AND sb.is_active = 1
-         AND sb.brand_id = e.brand_id
-         AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
-         AND sp.sponsor_accepted = 1
-         AND ${eventUsesSponsorsSql('e')}
+       -- OSE-2144: the shared per-placement rule, which includes "the event
+       -- is live": a beacon for a draft, ready or archived event is the same
+       -- 404 as a pair that was never placed, and writes nothing.
+       WHERE e.id = ?1 AND sb.id = ?2 AND ${PLACEMENT_ON_SHOW_SQL}
        LIMIT 1`
     )
     .bind(eventId, sponsorId)
@@ -1756,24 +1755,15 @@ export async function handleSponsorLogo(
          FROM sponsor_business sb
          LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
          LEFT JOIN sponsor_asset lc ON lc.sponsor_business_id = sb.id AND lc.format = 'logo_compact'
-        WHERE sb.id = ? AND sb.is_active = 1
-          AND EXISTS (
-            SELECT 1 FROM sponsor_placement sp
-             WHERE sp.sponsor_business_id = ?
-               AND sp.sponsor_business_id = sb.id
-               AND sp.is_active = 1
-               -- CCR PR #699: the same consent gate as the card, the bundle and
-               -- the public page — a logo is not served for a sponsor that has
-               -- not accepted, or that the organizer has not accepted. OSE-1433:
-               -- source-aware like the card and resolver (ADR-019 amendment), so
-               -- an unanswered sponsor_request is not served.
-               AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
-               AND sp.sponsor_accepted = 1
-               -- OSE-1900: and on an event that chose to have sponsors.
-               AND ${PLACEMENT_EVENT_USES_SPONSORS_SQL}
-          )`
+        -- CCR PR #699 / OSE-1433 / OSE-1900 / OSE-2144: the same rule as the
+        -- public card (SPONSOR_ON_SHOW_SQL, lib/sponsor-card.ts): an active
+        -- placement accepted by both sides (source-aware), on an event that
+        -- chose sponsors, in the sponsor's brand, and live. A sponsor whose
+        -- only accepted placement is on a draft, ready or archived event gets
+        -- no art, as it gets no card.
+        WHERE sb.id = ? AND ${SPONSOR_ON_SHOW_SQL}`
     )
-      .bind(sponsorId, sponsorId)
+      .bind(sponsorId)
       .first<Record<string, unknown>>();
   } catch {
     return new Response(null, { status: 503, headers: { 'X-Request-Id': rid } });

@@ -141,6 +141,32 @@ export function canRender(state: EventState, surface: RenderSurface): boolean {
   return assertRenderable(state, surface).allowed;
 }
 
+/**
+ * "The parent event is live" as SQL: the one test every public read of
+ * something that belongs to an event uses (OSE-2144, owner 2026-11-18:
+ * nothing is more live than its container). It is canRender(state, 'public')
+ * written over an `events` row, so the state machine above stays the single
+ * source: the states it allows are the ones that render on 'public' (today
+ * `active` alone, which the admin calls Published).
+ *
+ * The shared sponsor rules (SPONSOR_ON_SHOW_SQL, PLACEMENT_ON_SHOW_SQL in
+ * lib/sponsor-card.ts) are built on it, and the scan route (/q) asks it in its
+ * token lookup. `alias` is the `events` alias in scope; '' is a bare column.
+ *
+ * Two written exceptions, both owner decisions of 2026-11-18, and nowhere else:
+ *   1. the recap page of an archived event that was listed keeps its sponsor
+ *      strip (handlers/pages.ts fetchEventPageSocialData);
+ *   2. an archived event's SharedReport opens with an unexpired signed link
+ *      (lib/shared-report-builder.ts).
+ */
+export function eventLiveSql(alias = 'e'): string {
+  const col = alias ? `${alias}.status` : 'status';
+  const live = VALID_EVENT_STATES.filter((s) => canRender(s, 'public'));
+  return live.length === 1
+    ? `${col} = '${live[0]}'`
+    : `${col} IN (${live.map((s) => `'${s}'`).join(', ')})`;
+}
+
 // ── Transitions ───────────────────────────────────────────────────────────────
 
 export function isValidTransition(from: EventState, to: EventState): boolean {

@@ -39,6 +39,9 @@ export const NODE_SPECS = [
   // OSE-1900 — derived gate: every statement in src/ that carries the sponsor
   // consent rule also carries the event's opt-in gate (reads src/; no runtime).
   'tests/sponsor-opt-in-readers.spec.ts',
+  // OSE-2144 — derived gate: every statement in src/ that carries the sponsor
+  // consent rule asks whether the event is live, or is a written exception.
+  'tests/event-live-readers.spec.ts',
   // Showcase S14 — derived gate: no query parameter is named for a campaign and
   // no statement on `campaigns` selects or orders by a title (reads src/).
   'tests/campaign-never-a-filter.spec.ts',

@@ -631,6 +631,8 @@ describe('6. an online event’s /q and /s codes still count', () => {
     expect(res.status).toBe(201);
     const dep = (await res.json()) as { id: string; qr_token: string; placement_type: string };
     expect(dep.placement_type).toBe('community');
+    // OSE-2144: a scan counts only on a live event (a new event is a draft).
+    await E.DB.prepare(`UPDATE events SET status = 'active' WHERE id = ?`).bind(made.id).run();
 
     const scan = await SELF.fetch(`${ORIGIN}/q/${dep.qr_token}`, {
       redirect: 'manual',

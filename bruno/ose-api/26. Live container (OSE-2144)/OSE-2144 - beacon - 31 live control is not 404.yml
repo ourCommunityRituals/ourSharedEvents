@@ -1,0 +1,35 @@
+info:
+  name: 'OSE-2144 | sunny | impression beacon | the live pair is a placement (202 or 201, never 404) (control)'
+  type: http
+  seq: 31
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/events/lc-live-evt/sponsors/sb_lc_live/impression"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"surface":"public","placement":"mobileBanner"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // No beacon token is sent, so a live pair is accepted and not counted (202).
+        // What matters here is that it is a placement at all: not 404.
+        test('OSE-2144 control: the live pair is not 404', function () {
+          expect(res.getStatus()).to.not.eql(404);
+          expect([201, 202]).to.include(res.getStatus());
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

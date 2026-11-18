@@ -30,7 +30,7 @@ import {
 } from '../lib/sponsor-asset';
 import { fetchAndProxyLogo, serveUploadedLogo } from '../lib/sponsor-logo';
 import { isUploadedArtworkPath } from '../lib/event-thumb';
-import { PLACEMENT_EVENT_USES_SPONSORS_SQL } from '../lib/sponsor-card';
+import { SPONSOR_ON_SHOW_SQL } from '../lib/sponsor-card';
 
 export interface SponsorAssetRouteEnv {
   DB: D1Database;
@@ -118,18 +118,13 @@ export async function handleSponsorAsset(
         -- OSE-1301: this public unauthenticated route serves creative or a
         -- name-bearing monogram fallback, so it is a consent-traced render
         -- surface just like the event page, resolver Path 1, and reports.
-        AND EXISTS (
-          SELECT 1 FROM sponsor_placement sp
-           WHERE sp.sponsor_business_id = ?
-             AND sp.is_active = 1
-             AND COALESCE(sp.organizer_accepted, CASE WHEN sp.source = 'sponsor_request' THEN 0 ELSE 1 END) = 1
-             AND sp.sponsor_accepted = 1
-             -- OSE-1900: and on an event that chose to have sponsors.
-             AND ${PLACEMENT_EVENT_USES_SPONSORS_SQL}
-        )
+        -- OSE-2144: it asks the public card's own rule (SPONSOR_ON_SHOW_SQL:
+        -- both sides accepted, the event chose sponsors, same brand, and the
+        -- event is live), so the asset and the card never disagree.
+        AND ${SPONSOR_ON_SHOW_SQL}
       GROUP BY sb.id, sb.name`
   )
-    .bind(sponsorId, sponsorId)
+    .bind(sponsorId)
     .first<SponsorAssetRow>();
   if (!sponsor) return jsonErr('NOT_FOUND', 404);
 
