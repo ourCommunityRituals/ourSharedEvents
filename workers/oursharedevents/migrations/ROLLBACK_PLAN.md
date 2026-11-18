@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0110; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0111; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,37 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0111: the six vote tables (OSE-2125, OSE ADR-040): vote_sets,
+-- votable_objects, vote_tallies, vote_receipts, vote_participants,
+-- vote_team_markers, and two indexes on votable_objects.
+-- Additive: six new tables and two indexes. No row is written or rewritten, and
+-- no existing table changes. THE ROLLBACK IS: revert the Worker and LEAVE THE
+-- TABLES. No route reads or writes them in the Worker that adds them, and the
+-- older Worker does not know them.
+--
+-- What the older Worker does NOT know: nothing that breaks, while the tables are
+-- empty. Once a later Worker has written a vote set, the older Worker's event
+-- hard-delete (DELETE /api/v2/admin/events/:id) does not clear vote_sets or
+-- votable_objects, so deleting such an event answers 503 (the foreign key holds)
+-- until the newer Worker returns. Archive such an event instead.
+--
+-- Anonymity on rollback: the marker tables hold keyed values only (no voter id,
+-- no cookie, no time). Leaving them is safe. If they hold rows from a set that
+-- never became final, they are deleted by the newer Worker's final step when it
+-- returns, not by hand.
+--
+-- Surgical reverse, only if the tables themselves must go. This forgets every
+-- vote set, object, tally and marker. Drop the tables that point at others
+-- first, then the indexes, then the rest:
+DROP TABLE IF EXISTS vote_team_markers;
+DROP TABLE IF EXISTS vote_participants;
+DROP TABLE IF EXISTS vote_receipts;
+DROP TABLE IF EXISTS vote_tallies;
+DROP INDEX IF EXISTS idx_votable_objects_set_group;
+DROP INDEX IF EXISTS idx_votable_objects_event_id;
+DROP TABLE IF EXISTS votable_objects;
+DROP TABLE IF EXISTS vote_sets;
+
 -- 0110: events.campaign_id (OSE-1552 scope 1, OSE ADR-030).
 -- Additive: one nullable column and one index. No row is written or rewritten.
 -- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMN. The older Worker does

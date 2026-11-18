@@ -108,6 +108,28 @@ function fundraiserWordsIn(value: unknown, path = '$'): string[] {
   });
 }
 
+// OSE-2125: the words a vote would arrive under (OSE ADR-040 decision 7).
+const VOTE_WORDS = /vot(?:e|ing|able)|tall(?:y|ies)|ballot|receipt|participant|winner/i;
+const hasVoteWord = (text: string): boolean => text.search(VOTE_WORDS) !== -1;
+
+/** Every key at any depth, and every pane name, that carries a vote word. */
+function voteWordsIn(value: unknown, path = '$'): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((v, i) =>
+      path === '$.panes' && typeof v === 'string'
+        ? hasVoteWord(v)
+          ? [`pane ${path}[${i}]`]
+          : []
+        : voteWordsIn(v, `${path}[${i}]`)
+    );
+  }
+  if (value === null || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([key, v]) => {
+    const at = `${path}.${key}`;
+    return [...(hasVoteWord(key) ? [`key ${at}`] : []), ...voteWordsIn(v, at)];
+  });
+}
+
 describe('display-config: what the TV reads', () => {
   test('an event with nothing saved gets the default order and 15 s, no league', async () => {
     const id = await createEvent();
@@ -214,6 +236,22 @@ describe('display-config: what the TV reads', () => {
       fundraiserWordsIn({ ...clean, event_page: { ...clean.event_page, qr: { goal: 5000 } } })
     ).toEqual(['key $.event_page.qr.goal']);
     expect(fundraiserWordsIn({ ...clean, note: qr })).toEqual(['text $.note']);
+  });
+
+  // OSE-2125 (OSE ADR-040 decision 7): the display and display-config carry no
+  // vote word at all: no "voting open" flag, no open-objects list, no tally.
+  // @born-red OSE-2125 | method: injected-fault (the handler served
+  // `voting_open: true`: this case went red) | date: 2026-11-18
+  test('OSE-2125: the TV reads no vote word, in any key or pane', async () => {
+    const id = await createEvent();
+    const body = (await (await config(id)).json()) as Config;
+    expect(voteWordsIn(body)).toEqual([]);
+    // Negative controls: the check sees a flag, a list and a pane.
+    expect(voteWordsIn({ ...body, voting_open: true })).toEqual(['key $.voting_open']);
+    expect(voteWordsIn({ ...body, event_page: { ...body.event_page, votables: [] } })).toEqual([
+      'key $.event_page.votables',
+    ]);
+    expect(voteWordsIn({ ...body, panes: ['event', 'tally'] })).toEqual(['pane $.panes[1]']);
   });
 
   test('the admin save round-trips: order, dwell and league links with QR codes', async () => {

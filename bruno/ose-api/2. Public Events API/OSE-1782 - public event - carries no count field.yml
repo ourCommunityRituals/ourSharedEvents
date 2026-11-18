@@ -41,6 +41,9 @@ runtime:
           'attendee', 'attendees', 'rsvp', 'rsvps', 'registration', 'registrations',
           'registered', 'checkin', 'checkins', 'scan', 'scans', 'visitor', 'visitors',
           'walkin', 'walkins', 'capacity', 'headcount', 'returned',
+          // OSE-2125: vote words, the same list as count-shaped-fields.ts.
+          'vote', 'votes', 'voter', 'voters', 'votable', 'votables', 'tally', 'tallies',
+          'ballot', 'ballots',
         ];
         const ALLOWED = [];
         const WORD_FIELDS = { attendance_mode: ['in_person', 'online', 'both'] };

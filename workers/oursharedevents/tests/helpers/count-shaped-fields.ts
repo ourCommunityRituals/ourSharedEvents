@@ -30,6 +30,18 @@ const COUNT_WORDS: ReadonlySet<string> = new Set([
   'capacity',
   'headcount',
   'returned',
+  // OSE-2125 (OSE ADR-040): a vote count is a count of people too, and no
+  // per-object vote number is ever published (decision 7).
+  'vote',
+  'votes',
+  'voter',
+  'voters',
+  'votable',
+  'votables',
+  'tally',
+  'tallies',
+  'ballot',
+  'ballots',
 ]);
 
 /** Count-shaped compounds, matched on a field name's words run together. */

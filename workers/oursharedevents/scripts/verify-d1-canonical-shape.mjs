@@ -155,9 +155,11 @@ export function sqliteAffinity(declaredType) {
   return 'NUMERIC';
 }
 
+// A table option after the closing parenthesis (0111's marker tables are
+// WITHOUT ROWID, OSE-2125) is not part of the column list.
 function createTableColumns(statement) {
   const match = statement.match(
-    /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*\(([\s\S]*)\)$/i
+    /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*\(([\s\S]*)\)(?:\s*WITHOUT\s+ROWID)?$/i
   );
   if (!match) return null;
   const table = unquoteIdentifier(match[1]);
@@ -239,7 +241,7 @@ function applyStatement(schema, statement) {
 
 function createTableColumnDefinitions(statement) {
   const match = statement.match(
-    /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*\(([\s\S]*)\)$/i
+    /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*\(([\s\S]*)\)(?:\s*WITHOUT\s+ROWID)?$/i
   );
   if (!match) return null;
   const table = unquoteIdentifier(match[1]);

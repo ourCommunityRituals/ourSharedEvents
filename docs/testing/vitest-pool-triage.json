@@ -867,7 +867,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 15
+      "testCount": 16
     },
     {
       "file": "workers/oursharedevents/tests/count-floor.spec.ts",
@@ -1014,7 +1014,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 17
+      "testCount": 18
     },
     {
       "file": "workers/oursharedevents/tests/display-pane-rotation.spec.ts",
@@ -3913,6 +3913,13 @@
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
       "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/vote-tables.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 18
     },
     {
       "file": "workers/oursharedevents/tests/what-external-link.spec.ts",

@@ -786,6 +786,7 @@ jobs:
             tests/e2e/0-architecture/workflow-injection.invariant.spec.ts \
             tests/e2e/0-architecture/cookie-setters.invariant.spec.ts \
             tests/e2e/0-architecture/timestamp-precision.invariant.spec.ts \
+            tests/e2e/0-architecture/votes-never-who.invariant.spec.ts \
             tests/e2e/0-architecture/lexicon-allowance.invariant.spec.ts
 
       # ── Shard: component ───────────────────────────────────────────────────
@@ -1297,6 +1298,12 @@ jobs:
             echo "Refusing to deploy a Worker ahead of its database."
             exit 1
           fi
+          # OSE-2125: name the level reached, so a T1 log shows which migration
+          # staging is at. Zero unapplied above means every file here is applied.
+          for DIR in migrations migrations-forms; do
+            LEVEL="$(ls "$DIR" | grep -E '^[0-9]{4}_.*[.]sql$' | sort | tail -1)"
+            echo "level $DIR (staging): $LEVEL"
+          done
 
       - name: Stamp build version
         working-directory: ${{ env.WORKER_DIR }}
