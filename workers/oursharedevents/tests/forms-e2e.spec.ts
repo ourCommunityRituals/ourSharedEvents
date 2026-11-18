@@ -30,6 +30,7 @@ import {
   handleAdminEmailSignupCount,
   type FormsEnv,
 } from '../src/handlers/forms';
+import { CORE_VALUES } from './helpers/core-values';
 
 // ── Test env ─────────────────────────────────────────────────────────────────
 
@@ -732,6 +733,7 @@ describe('Scenario 10: Full organizer flow (QA-4 — admin→configure→QR→su
         location: 'Test Hall',
         title: 'QA Flow Event',
         status: 'active',
+        ...CORE_VALUES,
       }),
     });
     expect(createRes.status).toBe(201);

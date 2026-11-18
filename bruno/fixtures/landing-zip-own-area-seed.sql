@@ -40,3 +40,9 @@ ON CONFLICT(id) DO UPDATE SET
   h3_res9 = excluded.h3_res9, h3_res7 = excluded.h3_res7,
   -- A spine-key input may have changed, so both keys are cleared (OSE-1615).
   venue_canonical_id = NULL, event_correlation_id = NULL;
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('zip-own-mount-greenwood', 'zip-own-oak-lawn', 'zip-own-evergreen-park');

@@ -99,3 +99,9 @@ INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, tier, source, 
   ('spl_optin_hidden',   'sb_optin_hidden',   'optin-off-evt',    'gold', 'organizer', 1, 1,    1),
   ('spl_optin_absent',   'sb_optin_absent',   'optin-absent-evt', 'gold', 'organizer', 1, 1,    1),
   ('spl_optin_toggle',   'sb_optin_toggle',   'optin-toggle-evt', 'gold', 'organizer', 1, 1,    1);
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('optin-on-evt', 'optin-off-evt', 'optin-absent-evt', 'optin-toggle-evt');

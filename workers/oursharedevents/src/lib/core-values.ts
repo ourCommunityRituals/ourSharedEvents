@@ -6,8 +6,9 @@
  * going live (`active ⟺ qr_verified`), and the map never blocks, so neither is
  * checked here.
  *
- * One function, two doors: `PUT /admin/events/:id` with `status`, and
- * verify-qr. Both call `coreValuesMissing` so the rule cannot drift.
+ * One function, three doors: `PUT /admin/events/:id` with `status`, verify-qr,
+ * and `POST /admin/events` when automation creates an event already past draft
+ * (OSE-2036). All call `coreValuesMissing` so the rule cannot drift.
  */
 
 export type CoreValue = 'time' | 'event_type';
@@ -60,8 +61,11 @@ export function coreValuesMissing(
   return missing;
 }
 
-/** Which door refused: `PUT /admin/events/:id` with `status`, or verify-qr. */
-export type CoreValuesDoor = 'put_status' | 'verify_qr';
+/**
+ * Which door refused: `PUT /admin/events/:id` with `status`, verify-qr, or
+ * `POST /admin/events` when automation creates an event past draft (OSE-2036).
+ */
+export type CoreValuesDoor = 'put_status' | 'verify_qr' | 'create';
 
 /**
  * One structured line per refused publish step (OSE-1644), so refusals can be
