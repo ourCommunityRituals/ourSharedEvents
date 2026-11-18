@@ -1,0 +1,129 @@
+# Room burst on staging: can a full room behind one address get a cookie at /q?
+#
+# At a bar everyone shares one Wi-Fi address. A vote will count only from a
+# browser that scanned the event's code at /q (ADR-040 decision 6), and /q mints
+# no ose_anon cookie past its per-caller limit (lib/public-read-limit.ts,
+# publicCountLimited: the edge binding's 60 per 10 s, then 360 a minute in KV,
+# both keyed on the address). This job sends fresh browsers (no cookie) at one
+# staging poster from one GitHub runner, which is one address, and reports how
+# many got a cookie, how many were counted, the 429s and the edge answers.
+#
+# WHY DISPATCH ONLY: it is a measurement, not a gate. It adds a burst of scans
+# and a few minutes; on every main run that would slow the chain and load
+# staging's /q for nothing. Run it by hand when the /q limits, the edge binding
+# or the presence design change (the voting stories that follow S0).
+#
+# Staging only (scripts/ci/room-burst.mjs refuses every other host). Writes to
+# staging D1 only, through the seed and reset fixtures (--command, never --file):
+# one synthetic event and poster, created before and deleted after, even when a
+# step fails. Prints counts only, never a cookie or a header value.
+#
+# Secrets (the ones the T4 scan trace already uses): CLOUDFLARE_API_TOKEN_OSE,
+# CLOUDFLARE_ACCOUNT_ID, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET,
+# OCR_CI_EDGE_TOKEN (the stg skip rule's header, RUNBOOK-STG-CI-SKIP-RULE.md),
+# and OCR_HUB_READ to stage @ocr/ui for the locked wrangler install.
+
+name: Room burst (stg)
+
+on:
+  workflow_dispatch:
+    inputs:
+      requests:
+        description: 'Fresh browsers in the burst (1-300)'
+        required: false
+        default: '150'
+      seconds:
+        description: 'Spread over this many seconds (1-120)'
+        required: false
+        default: '20'
+      retry_after:
+        description: 'A browser with no cookie scans once more after this many seconds (0 = no)'
+        required: false
+        default: '11'
+
+permissions:
+  contents: read
+
+# One writer on stg at a time, as the lifecycle and stock jobs. A run waits;
+# it is never cancelled out from under another.
+concurrency:
+  group: stg-writer
+  cancel-in-progress: false
+  queue: max
+
+env:
+  WORKER_DIR: 'workers/oursharedevents'
+
+jobs:
+  room-burst:
+    name: 'Room burst: fresh browsers from one address at /q'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
+
+      - name: Stage pinned hub packages (@ocr/ui) @ .ocr-hub-ref
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install root dependencies
+        timeout-minutes: 5
+        run: npm ci --prefer-offline || npm ci
+
+      # The locked wrangler for the D1 steps (they run with the Cloudflare token).
+      - name: Install worker dependencies
+        timeout-minutes: 5
+        run: npm ci --prefer-offline || npm ci
+        working-directory: ${{ env.WORKER_DIR }}
+
+      - name: 'Reset: remove anything an earlier run left'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/room-burst-reset.sql
+
+      - name: 'Seed the burst event and poster'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/room-burst-seed.sql
+
+      - name: 'Burst: fresh browsers from one address, then count'
+        timeout-minutes: 10
+        env:
+          BURST_REQUESTS: ${{ inputs.requests }}
+          BURST_SECONDS: ${{ inputs.seconds }}
+          BURST_RETRY_AFTER_SECONDS: ${{ inputs.retry_after }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+        run: node scripts/ci/room-burst.mjs
+
+      # Always, so a red or cancelled run leaves no burst event or scans on stg.
+      - name: 'Clean up: delete the burst event, poster and scans'
+        if: always()
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/room-burst-reset.sql
