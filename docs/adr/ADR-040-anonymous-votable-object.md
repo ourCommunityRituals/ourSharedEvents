@@ -1,7 +1,7 @@
 # ADR-040: An anonymous vote is a counter on an object, never a row about a voter
 
-**Status:** Accepted. The owner accepted this ADR by merging PR #1414 on 2026-11-18. The owner answered every question on 2026-11-17 and 2026-11-18 (comments on PRs #1413 and #1414; D6 and D10 in the owner's own session on 2026-11-18; Q6 to Q16 in question forms on 2026-11-18, Q17 in the owner's own words). Amended twice on 2026-11-18: decision 6 after the S0 spike (OSE-2122) and a three-loop CCR (PR #1416, merged in #1417); then decisions 1 to 10 after the five-loop S1 CCR (PR #1418) and the owner's answers to it, including the reversal of D3, in PR #1420 (a draft until the owner merges it). Still open: the level of detail in the published report (OSE-520), and the owner's wording for the house-rule card and the report. Nothing here is built.
-**Date:** 2026-11-17. Amended 2026-11-18 (decision 6 after S0; decisions 1 to 10 after the S1 CCR).
+**Status:** Accepted. The owner accepted this ADR by merging PR #1414 on 2026-11-18. The owner answered every question on 2026-11-17 and 2026-11-18 (comments on PRs #1413 and #1414; D6 and D10 in the owner's own session on 2026-11-18; Q6 to Q16 in question forms on 2026-11-18, Q17 in the owner's own words). Amended twice on 2026-11-18: decision 6 after the S0 spike (OSE-2122) and a three-loop CCR (PR #1416, merged in #1417); then decisions 1 to 10 after the five-loop S1 CCR (PR #1418) and the owner's answers to it, including the reversal of D3, in PR #1420 (a draft until the owner merges it). Amended a third time on 2026-11-18, after the owner's decisions on S3d and S3e: the room's own vote code (decision 6) and decision 11, "nothing is more live than its container" (OSE-2140, OSE-2142). Still open: the level of detail in the published report (OSE-520), and the owner's wording for the house-rule card and the report. Built so far: the tables (S2), the admin set-up (S3), the pass at `/q` (S3b), the public open-objects read and the switch (S3c), and the vote code and the container rule (S3d, S3e). Not built: the vote route, the voter page and the results.
+**Date:** 2026-11-17. Amended 2026-11-18 (decision 6 after S0; decisions 1 to 10 after the S1 CCR; decisions 6 and 11 after S3d and S3e).
 **Deciders:** Owner (PO). Sr Architect owns the draft. Dr of Security advises on the membrane.
 **Ticket:** OSE-1193 (blocks OSE-2000 under the fairs epic OSE-1996; step 1 of OW-218, Fist of Five)
 
@@ -99,7 +99,7 @@ A person has one vote per object:
 
 Dedup is the receipt per object. A duplicate changes nothing and answers the same as a counted vote. "To start" means the limits may be loosened later by a new decision; none is built for that now.
 
-**Reopening (owner, 2026-11-18, C3) and the final lock (Q10).** A host may reopen a closed object or vote set while the event is still on, to recover from a timing mistake. This is safe only because no count is read before the set is final (decision 7), so nobody can compare a count before and after the reopen. Results are computed once. Computing them sets a one-way `final` flag on the set. After it, nothing reopens the set or adds an object to it: not a host, not N1, and not a change to the event's dates or status. If nobody computes results within 7 days of the event's end date (or of the set's last close, when the event has no end date), a scheduled job computes them, which sets final. A void set is finalized the same way and publishes nothing. These two numbers, 7 and 30 days, are proposed defaults the owner may change. Every close, reopen and finalization is written to the audit log. No audit entry, log line or response says which rule decided the result (the margin, the voter floor, or none); it records only that the set became final. A receipt survives a reopen, so a person who already voted on an object still cannot vote on it twice.
+**Reopening (owner, 2026-11-18, C3) and the final lock (Q10).** A host may reopen a closed object or vote set while the event is still on and Published (decision 11), to recover from a timing mistake. This is safe only because no count is read before the set is final (decision 7), so nobody can compare a count before and after the reopen. Results are computed once. Computing them sets a one-way `final` flag on the set. After it, nothing reopens the set or adds an object to it: not a host, not N1, and not a change to the event's dates or status. If nobody computes results within 7 days of the event's end date (or of the set's last close, when the event has no end date), a scheduled job computes them, which sets final. A void set is finalized the same way and publishes nothing. These two numbers, 7 and 30 days, are proposed defaults the owner may change. Every close, reopen and finalization is written to the audit log. No audit entry, log line or response says which rule decided the result (the margin, the voter floor, or none); it records only that the set became final. A receipt survives a reopen, so a person who already voted on an object still cannot vote on it twice.
 
 ### 5. The voter page is on OSE
 
@@ -111,7 +111,15 @@ The vote write is a `POST` outside `/api/v2/events*`, handled on the `DB` side. 
 
 A vote counts only from a browser that scanned this event's vote code. Every cookie read stays inside `/q` (D3 reversed).
 
-- At `/q`, a vote-kind code, with a set open and `VOTING_ENABLED` on, derives a per-event voter key `k = HMAC(K_voter, len(cookie) ‖ cookie ‖ event_id)`. `K_voter` comes from `ANON_ID_HASH_PEPPER` by HKDF under its own label, separate from the scan key, the pass seal, the receipt key, the participant key and the team key. k differs at every event and is stored nowhere.
+**The room's own vote code (owner, 2026-11-18; S3d, OSE-2140).** The vote code is a placement of its own: a `poster_deployments` row marked `is_vote_code = 1` (migration 0112), with a token of its own (128 random bits), made only by `POST /api/v2/admin/events/:id/votables/code` (`lib/vote-code.ts`). One is in use per event (a partial unique index). A host who fears it was photographed replaces it from the Voting card (`POST .../votables/code/replace`): the old one is retired and a new token made in one batch, and the old code then resolves to nothing at `/q`. A retired code is never brought back: the placement edit refuses `is_active` on a vote code. Its URL is `/q/<token>?type=vote`.
+
+- `/q` mints a pass only for that placement. `?type=vote` on an ordinary poster code of the event mints nothing and keeps today's redirect. The S3b security review (F1) found the old rule, any code of the event with `?type=vote`, wider than the accepted risk, because a poster code's token can be reached from a shared event-page link, through `&deployment=` and the public poster bundle.
+- The vote code's token is in no public answer. The public poster bundle never resolves a vote code from `&deployment=` (it answers as for no placement), the admin poster list leaves it out, and the event page reads no token. The admin Voting card shows its URL and QR; the host puts it on the room screen.
+- The OSE display (the TV page and `display-config`) does not show it: decision 7 keeps every vote word off the display. The room screen that shows it is OurWKRP's.
+- Why a marked placement, not a token kept on the vote set: `/q` stores the scan the pass stands on against a placement, so a placement is the smaller safe shape. A token on the set would need a second scan path.
+- A scan of the vote code is stored and counted like any placement's scan, once per browser per hour; the scan counts never say which scans led to a vote.
+
+- At `/q`, the event's vote code, with a set open, the event live (decision 11) and `VOTING_ENABLED` on, derives a per-event voter key `k = HMAC(K_voter, len(cookie) ‖ cookie ‖ event_id)`. `K_voter` comes from `ANON_ID_HASH_PEPPER` by HKDF under its own label, separate from the scan key, the pass seal, the receipt key, the participant key and the team key. k differs at every event and is stored nowhere.
 - `/q` mints a pass only when the pepper is set and the scan was stored, or was a duplicate of one stored. The uncounted path mints none, a missing key mints none, and a failed write mints none.
 - The pass is `{event_id, expiry, pepper_epoch, k}`, sealed with a MAC under `K_pass`, which comes from `ANON_ID_HASH_PEPPER` by HKDF under its own label, so it differs in each environment. `/q` puts it in the redirect's fragment (`/events/:id/vote#t=…`), so it is never in a query string, a `Referer` or a request log.
 - The voter page reads the fragment and removes it from the address bar at once. It keeps the pass in memory only, writes nothing to storage, and posts it in the JSON body. With no pass, it says to scan the code on the screen again.
@@ -129,7 +137,7 @@ A vote counts only from a browser that scanned this event's vote code. Every coo
   - Every such cap gives one person a way to lock the room out.
 - Presence is the pass above, checked by the vote route (decision 5).
 - Cookie signing (OSE-1496) no longer comes first. It does not block the vote route.
-- Presence comes from the event's vote code, on the poster and on the room screen (Q6). The vote code is a second `/q` code beside the poster's form code; the form code keeps today's redirect to the event page. A per-song code is not used; it would change this decision and need its own CCR.
+- Presence comes from the event's vote code, on the room screen (Q6). The vote code is its own placement beside the poster's codes (S3d, above); every poster code keeps today's redirect to the event page, whatever its `?type=`. A per-song code is not used; it would change this decision and need its own CCR.
 - Real phones are untested, because agents cannot get past staging's edge check. The owner accepts that risk. The vote page tells anyone whose scan did not register to scan the code again.
 - The cookie-mint cap (N2, OSE-2126) is on hold, with two triggers:
   - Refusals seen in a real room: raise the `/q` limit for that event (a limit above 360 skips the edge binding).
@@ -185,6 +193,20 @@ The owner accepts these residual risks, and the voter page states them in plain 
 ### 10. What turns voting on
 
 Voting turns on when an admin opens a vote set for the event (D6 = A). No fair setting is needed, so a Fist of Five night at a bar works by itself. ADR-034 decision 4 refuses `competition` mode until voting exists; that refusal ends when the vote route ships, and ADR-034 is amended in the same change. A fair's competition mode then uses this same voting.
+
+### 11. Nothing is more live than its container
+
+**Owner, 2026-11-18 (S3e, OSE-2142):** "Just like events there is draft and live designation, take advantage of status markers across containers where applicable."
+
+An event's status (Draft, Ready, Published, Archived; Published may be listed or unlisted) is the master switch for everything inside it: a vote set and its objects today, and any later container that can be voted on. A child's own state (a set's draft, open or closed) works only inside what its event allows. No child gets a status column for this; each reads its event's.
+
+- **Live** means Published (`status = 'active'`), listed or unlisted, and on its dates (its last date is yesterday or later, UTC, or it has none). It is one SQL fragment, `EVENT_LIVE` in `lib/event-live.ts`.
+- **Needs live:** opening and reopening a set, opening or reopening an object, adding an object to a set that has opened, and the `/q` pass mint. The vote route (S4a) uses the same fragment.
+- **Setting up stays allowed on a draft or ready event:** making the set, adding objects while the set is still in draft, and editing objects. A host prepares the night before publishing it, and admin set-up keeps working while `VOTING_ENABLED` is off (owner, 2026-11-18). The admin card greys out Open and says "Publish the event to open voting."
+- **Leaving Published closes the set, in the same transaction.** Every app path that moves an event's status batches `closeVoteSetUnlessPublished` with the move (the admin edit and the QR verify undo). Closing was chosen over "read as closed everywhere" because a closed set is simply closed: the admin card, the pass, the public read and the coming vote route need no second rule, and a host reopens it on purpose once the event is Published again. Nothing here makes a set final. A D1 trigger was not used: migration 0025 keeps D1 free of triggers, because remote migration apply once split their bodies. A status written outside the app (a seed, a script) is caught by the nightly vote job, which closes the set; until then the pass and the public read refuse it.
+- **A reopen.** A reopen after the event comes back to Published follows the usual rules: the same epoch, T and V, and never after final.
+
+**Not in this decision:** stalls, sponsors and other children of an event. A sweep of every public read that shows a child of an event is follow-up work under the same rule (OSE-2144 covers sponsors and scans).
 
 ## Still open
 
@@ -250,7 +272,8 @@ The stories (D10 = yes; each is a Linear ticket under OSE-1193):
   - S2 (OSE-2125), the tables and their gates, including the timestamp gate's scan-shaped rule learning `vote|votable|tally|ballot|receipt|participant`, with `votable_objects.closes_at` on its allowlist;
   - S3 (OSE-2127), admin open, close, reopen, the final lock, the pepper epoch, the play mode (songs or teams), and the secret margin and voter floor;
   - S3c (OSE-2135), the public open-objects read and the kill switch, after S3;
-  - S3b (OSE-2133), `/q` issues the pass (decision 6).
+  - S3b (OSE-2133), `/q` issues the pass (decision 6);
+  - S3d (OSE-2140), the room's own vote code (decision 6), and S3e (OSE-2142), a vote set follows its event's status (decision 11). Both before S4a and S4b.
 - **After S2, S3 and S3b:** S4a (OSE-2128), the vote route. Then S4c (OSE-2134), its hardening, and S4b (OSE-2129), the voter page (also after S3c).
 - **After S4a:** S5 (OSE-2130), results after the set is final, team totals as distinct up-voters included. The fun report is OSE-520, after S5.
 - **Not voting work, but in conflict:** OSE-513 and OSE-518 describe a live tally on the display. Decision 7 and invariant 5 forbid it; the owner rewrites or cancels them.
@@ -265,8 +288,8 @@ Every test is seen failing first, at the workers-pool layer and on staging (Brun
 
 ## References
 
-- **Tickets:** OSE-1193, OSE-1192, OSE-2000, OSE-1996, OSE-513, OSE-514, OSE-518, OSE-520, OSE-1496, OSE-2122 to OSE-2135; OW-73, OW-218, OW-219, OW-220.
-- **PRs:** #1407 (the readiness CCR), #1413 (its revert, with the owner's answers), #1414 (this ADR), #1415 (the room-burst measurement), #1416 (the presence CCR), #1417 (the presence amendment), #1418 (the S1 CCR on the decided text), #1420 (this amendment).
+- **Tickets:** OSE-1193, OSE-1192, OSE-2000, OSE-1996, OSE-513, OSE-514, OSE-518, OSE-520, OSE-1496, OSE-2122 to OSE-2135, OSE-2140, OSE-2142, OSE-2144; OW-73, OW-218, OW-219, OW-220.
+- **PRs:** #1407 (the readiness CCR), #1413 (its revert, with the owner's answers), #1414 (this ADR), #1415 (the room-burst measurement), #1416 (the presence CCR), #1417 (the presence amendment), #1418 (the S1 CCR on the decided text), #1420 (this amendment), #1439 (S3b), and the S3d and S3e PR (the vote-code and container amendment).
 - **ADRs:** ADR-034 (booths, participation mode), ADR-032 (a mode as a column).
 - **Rules:** AGENTS.md invariants 1, 2, 3, 4 and 5.
 
