@@ -1,0 +1,34 @@
+info:
+  name: "OSE-2133 | setup | the room screen code for the night"
+  type: http
+  seq: 20
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{votePassNightId}}/poster-deployments"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"placement_label\": \"Room screen\", \"placement_type\": \"venue\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2133 setup: the placement is created with its scan token', function () { expect(res.getStatus()).to.eql(201); expect(/^qrt_/.test(String(b.qr_token || ''))).to.eql(true); });
+        bru.setVar('votePassToken', b.qr_token || 'qrt_missing');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

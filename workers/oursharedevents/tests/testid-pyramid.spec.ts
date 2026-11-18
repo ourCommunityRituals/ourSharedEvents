@@ -42,6 +42,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { eventAnonKey } from '../src/lib/event-anon-key';
+import { CORE_TIME_AND_TYPE } from './helpers/core-values';
 
 // ── Test env ────────────────────────────────────────────────────────────────
 
@@ -618,6 +619,7 @@ describe('L4 E2E: Admin create → update → forms → export → flags → sur
         attendance_mode: 'in_person',
         title: 'E2E Pyramid Test Event',
         status: 'active',
+        ...CORE_TIME_AND_TYPE,
         // OSE-1560: a new event is off the map unless asked.
         is_published: true,
         location: 'Beverly Arts Center',

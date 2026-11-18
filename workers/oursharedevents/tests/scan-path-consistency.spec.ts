@@ -12,6 +12,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
+import { CORE_VALUES } from './helpers/core-values';
 
 interface TestEnv {
   DB: D1Database;
@@ -50,6 +51,7 @@ describe('scan-path consistency | walkthrough 2026-09-03', () => {
         location: 'Test Hall',
         title: 'Scan path floor check',
         status: 'active',
+        ...CORE_VALUES,
       }),
     });
     expect(created.status).toBe(201);

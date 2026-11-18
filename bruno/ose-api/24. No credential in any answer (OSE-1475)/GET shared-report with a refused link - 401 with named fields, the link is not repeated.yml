@@ -1,0 +1,73 @@
+info:
+  name: GET shared-report with a refused link - 401 with named fields, the link is not repeated
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}/shared-report"
+  headers:
+    - name: Accept
+      value: application/json
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // A signed link the Worker refuses: the right shape (base64url JSON, a
+        // dot, 64 hex characters) with a signature that is not one. Built here
+        // so that nothing token-shaped is written in the repository.
+        function b64url(text) {
+          var abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+          var out = '';
+          for (var i = 0; i < text.length; i += 3) {
+            var a = text.charCodeAt(i), b = text.charCodeAt(i + 1), c = text.charCodeAt(i + 2);
+            out += abc[a >> 2] + abc[((a & 3) << 4) | ((b || 0) >> 4)];
+            if (!isNaN(b)) out += abc[((b & 15) << 2) | ((c || 0) >> 6)];
+            if (!isNaN(c)) out += abc[c & 63];
+          }
+          return out;
+        }
+        var payload = b64url(JSON.stringify({ event_id: 'no-such-event', role: 'sponsor', exp: 4102444800 }));
+        var refused = payload + '.' + new Array(33).join('0a');
+        bru.setVar('ose1475RefusedLink', refused);
+        req.setHeader('Authorization', 'Bearer ' + refused);
+    - type: after-response
+      code: |-
+        // OSE-1475: the refusal says that it refused and why, in named fields,
+        // and does not hand the refused link back.
+        var refused = bru.getVar('ose1475RefusedLink') || '';
+        var json = res.getBody() || {};
+        var body = typeof json === 'string' ? json : JSON.stringify(json);
+        var headers = JSON.stringify(res.getHeaders() || {});
+        test('OSE-1475: a refused link is a 401', function() {
+          expect(refused.length).to.be.above(80);
+          expect(res.getStatus()).to.eql(401);
+        });
+        test('OSE-1475: the refusal has a code and only fields from the known list', function() {
+          expect(json.code).to.eql('UNAUTHORIZED');
+          var known = ['ok', 'status', 'code', 'error', 'message', 'requestId'];
+          var extra = Object.keys(json).filter(function(k) { return known.indexOf(k) === -1; });
+          expect(extra).to.eql([]);
+        });
+        test('OSE-1475: the body does not repeat the refused link', function() {
+          expect(body.indexOf(refused)).to.eql(-1);
+          expect(body.indexOf(refused.split('.')[0])).to.eql(-1);
+        });
+        test('OSE-1475: no response header repeats the refused link', function() {
+          expect(headers.indexOf(refused)).to.eql(-1);
+          expect(headers.indexOf(refused.split('.')[0])).to.eql(-1);
+        });
+        test('OSE-1475: the refusal carries no signed link of its own', function() {
+          expect(/eyJ[A-Za-z0-9_-]{8,}\.[0-9a-f]{64}/.test(body)).to.eql(false);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -15,9 +15,9 @@
  * shapes: a SET list held in a variable or built with a template, a column name
  * that is itself a variable, SQL split across concatenated strings, a
  * schema-qualified table. The one SET list built in code (PUT) is pinned by
- * text below. Seed files and migrations are not read: they are test data and
- * history, not a door a caller can use (the seeds that write live rows without
- * qr_verified are listed on OSE-2036, the follow-up to OSE-1425).
+ * text below. Seed files and migrations are not read here: they are test data
+ * and history, not a door a caller can use. The seed files are held to the same
+ * rule by running them (seed-live-rows-verified.spec.ts, OSE-2036).
  *
  * @born-red event status writers | method: injected fault | date: 2026-11-13 |
  *   verified: each rule below went red on a planted fault: qr_verified dropped

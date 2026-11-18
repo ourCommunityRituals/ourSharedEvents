@@ -47,7 +47,7 @@ export function samplePathFor(regexBody: string): string | null {
 }
 
 /** Bodies of every `/^...$/` regex literal in a piece of source. */
-function regexBodiesIn(text: string): string[] {
+export function regexBodiesIn(text: string): string[] {
   const out: string[] = [];
   let from = 0;
   for (;;) {
@@ -62,7 +62,7 @@ function regexBodiesIn(text: string): string[] {
 }
 
 /** `pathname === '/x'` literals in a piece of source. */
-function literalPathsIn(text: string): string[] {
+export function literalPathsIn(text: string): string[] {
   return [...text.matchAll(/pathname === '(\/[^']*)'/g)].map((m) => m[1]);
 }
 

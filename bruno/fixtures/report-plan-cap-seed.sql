@@ -22,3 +22,9 @@ ON CONFLICT(id) DO UPDATE SET status = 'active', is_published = 0, data_class = 
 INSERT INTO scan_aggregates (id, event_id, bucket_date, bucket_hour, total_scans, distinct_agent_hashes, computed_at)
 VALUES ('sa-plancap-evt', 'plancap-evt', '2026-05-07', NULL, 60, 20, datetime('now'))
 ON CONFLICT(id) DO UPDATE SET total_scans = 60, distinct_agent_hashes = 20, computed_at = datetime('now');
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('plancap-evt');

@@ -362,6 +362,10 @@ export async function refreshCorridorBaselines(
   const nowMs = Date.now();
   const floor30dIso = new Date(nowMs - 30 * 86400 * 1000).toISOString();
   const floor90dIso = new Date(nowMs - 90 * 86400 * 1000).toISOString();
+  // How many distinct keys this run read, by kind: a res7 cell, or a legacy
+  // corridor id. Counts of places only; the keys never reach the log line.
+  const h3Keys = new Set<string>();
+  const legacyKeys = new Set<string>();
 
   // For each (corridor_id, dow, hour), compute window distinct-hash counts.
   // The corridor key is the res7 cell, lowercased (ADR-011 / OSE-616): H3 is
@@ -419,6 +423,7 @@ export async function refreshCorridorBaselines(
     }
 
     for (const c of cells.results ?? []) {
+      (isH3Cell(c.corridor_id) ? h3Keys : legacyKeys).add(c.corridor_id);
       if ((c.window_30d_count ?? 0) === 0 && (c.window_90d_count ?? 0) === 0) {
         // ADR-026 rule B: a bucket whose events are all withheld counts no one.
         // A row an earlier run stored here would keep counting them, and the
@@ -519,6 +524,8 @@ export async function refreshCorridorBaselines(
       rows_upserted: result.rowsUpserted,
       rows_skipped: result.rowsSkipped,
       errors: result.errors,
+      h3_key_count: h3Keys.size,
+      legacy_key_count: legacyKeys.size,
       duration_ms: result.durationMs,
     })
   );

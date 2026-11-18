@@ -20,6 +20,7 @@ import {
   showQRSection,
   validateSettingsPatch,
 } from '../src/lib/event-settings';
+import { CORE_VALUES } from './helpers/core-values';
 
 interface TestEnv {
   DB: D1Database;
@@ -60,6 +61,7 @@ async function createEvent(extra: Record<string, unknown> = {}): Promise<string>
       location: 'Test Hall',
       title: `QR switch ${crypto.randomUUID()}`,
       status: 'active',
+      ...CORE_VALUES,
       ...extra,
     }),
   });

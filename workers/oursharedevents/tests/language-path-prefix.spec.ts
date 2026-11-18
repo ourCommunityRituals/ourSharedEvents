@@ -24,6 +24,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { msg } from '../src/lib/i18n/catalog';
 import { injectTestSiteNotice } from '../src/lib/test-site-notice';
+import { CORE_TIME_AND_TYPE } from './helpers/core-values';
 
 const ORIGIN = 'https://t.test';
 const KEY = { Authorization: 'Bearer test-admin-key-e2e-2026' };
@@ -69,6 +70,7 @@ async function publicEvent(title: string): Promise<{ id: string; slug: string; c
       location: 'Test Hall',
       title,
       status: 'active',
+      ...CORE_TIME_AND_TYPE,
       is_published: true,
       start_date: day(7),
       end_date: day(8),

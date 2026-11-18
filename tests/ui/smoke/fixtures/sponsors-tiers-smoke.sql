@@ -87,3 +87,9 @@ UPDATE events
          CASE WHEN json_valid(settings_json) THEN settings_json ELSE '{}' END,
          '$.useSponsors', json('true'))
  WHERE id IN ('evt_smoke_tiers');
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('evt_smoke_tiers');
