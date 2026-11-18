@@ -20,7 +20,8 @@
  *
  *   Each phase is wrapped so a failure in one does NOT abort the others
  *   (same discipline as runFormDataLifecycle). All results are emitted
- *   as a structured log line for SRE observability.
+ *   as one structured log line, SHARED_REPORT_MATERIALIZE_COMPLETE: the
+ *   run's summary for SRE observability.
  */
 
 import {
@@ -33,7 +34,9 @@ import {
   type MaterializationResult,
 } from '../lib/shared-report';
 
+import { applyCountFloor } from '../lib/count-floor';
 import { errorLabel } from '../lib/error-label';
+import { CORRIDOR_MAP_MIN_COUNT } from '../lib/shared-report';
 export interface SharedReportMaterializeRunResult {
   ok: boolean;
   phases: MaterializationResult[];
@@ -101,22 +104,27 @@ export async function runSharedReportMaterialization(
 
   const totalDurationMs = Date.now() - start;
 
-  // Structured log line for SRE observability — mirrors the lifecycle
-  // log shape from runFormDataLifecycle so existing log dashboards can
-  // index this consistently.
+  // The materialization summary (OSE-634): one line a run, written whatever
+  // the phases found, so a quiet healthy run (ok, zero events, zero errors)
+  // reads differently from a broken one. It mirrors the lifecycle log shape
+  // from runFormDataLifecycle so existing log dashboards index it the same way.
+  // Aggregate-only: no event, cell or person is named in it.
   console.log(
     JSON.stringify({
       type: 'SHARED_REPORT_MATERIALIZE_COMPLETE',
+      ok: totalErrors === 0,
       total_duration_ms: totalDurationMs,
       total_errors: totalErrors,
+      count_floor: CORRIDOR_MAP_MIN_COUNT,
       phases: phases.map((p) => ({
         phase: p.phase,
         events_processed: p.eventsProcessed,
-        rows_upserted: p.rowsUpserted,
-        rows_skipped: p.rowsSkipped,
+        rows_upserted: summaryRowCount(p.phase, 'upserted', p.rowsUpserted),
+        rows_skipped: summaryRowCount(p.phase, 'skipped', p.rowsSkipped),
         errors: p.errors,
         duration_ms: p.durationMs,
       })),
+      timestamp: new Date().toISOString(),
     })
   );
 
@@ -126,6 +134,27 @@ export async function runSharedReportMaterialization(
     totalDurationMs,
     totalErrors,
   };
+}
+
+/**
+ * The row counters that count places, time buckets or events, and so are
+ * written to the summary line as they are. Every other counter counts people
+ * or their scans (anon_id_returns rows are one person at one event; the scan
+ * roll-up's skipped rows are scans), and the line gives those only from the
+ * floor up (AGENTS.md invariant 2): below it the value is null, never 0.
+ * A phase or counter not listed here is withheld the same way, so a new phase
+ * has to be read against the floor before its row counts reach a log.
+ */
+const EXACT_ROW_COUNTS: Record<string, readonly ('upserted' | 'skipped')[]> = {
+  scan_aggregation: ['upserted'],
+  h3_cell_backfill: ['upserted', 'skipped'],
+  corridor_density_baseline: ['upserted', 'skipped'],
+  event_series_detector: ['upserted', 'skipped'],
+};
+
+function summaryRowCount(phase: string, counter: 'upserted' | 'skipped', n: number): number | null {
+  if (Object.hasOwn(EXACT_ROW_COUNTS, phase) && EXACT_ROW_COUNTS[phase].includes(counter)) return n;
+  return applyCountFloor(n).count;
 }
 
 function makeErrorResult(phase: string, error: string): MaterializationResult {
