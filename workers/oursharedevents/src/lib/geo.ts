@@ -34,6 +34,7 @@
 
 import { latLngToCell } from 'h3-js';
 import { isGoogleMapsConfigured, type MapsEnv } from './maps';
+import { errorLabel } from './error-label';
 
 export interface GeocodeResult {
   lat: number;
@@ -126,7 +127,9 @@ export async function geocodeVenue(
     console.error(
       JSON.stringify({
         type: 'GEO_FETCH_ERROR',
-        error: err instanceof Error ? err.message : String(err),
+        // The class only: the address this call failed on carries the maps key,
+        // and an error is free text that can repeat it (lib/error-label.ts).
+        error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })
     );
