@@ -27,9 +27,10 @@
  * test); a drag that does nothing (the drag test); `find()` not called where
  * location is granted (the you-are-here test); a fetch() of the position added
  * to `located` (the no-request test); the pinch's zoom left out (the pinch
- * test). Not born red: removing the two-finger `preventDefault` leaves the
- * pinch test green, because Chromium's headless touch does not scroll the page
- * either way; that guard is checked on a phone, not here.
+ * test). Not born red: removing the two-finger `preventDefault` on touch
+ * events leaves the pinch test green, because the test sends pointer events
+ * and a headless browser does not scroll the page either way; that guard is
+ * checked on a phone, not here.
  *
  * It runs in the T0 `component` shard (playwright.component.config.ts). Every
  * request goes to ORIGIN and is answered by the routes; anything else is
@@ -292,10 +293,7 @@ test.describe('where location is allowed', () => {
 
   test('on a phone, a two-finger pinch zooms the map and never scrolls the page', async ({
     browser,
-    browserName,
   }) => {
-    // Touches are sent through the Chrome DevTools protocol, as a phone sends them.
-    test.skip(browserName !== 'chromium', 'touch is sent through the Chromium protocol');
     context = await browser.newContext({
       viewport: { width: 375, height: 812 },
       isMobile: true,
@@ -307,21 +305,35 @@ test.describe('where location is allowed', () => {
     const x = box.x + box.width / 2;
     const y = box.y + box.height / 2;
     const scrolled = await page.evaluate(() => window.scrollY);
-    const cdp = await context.newCDPSession(page);
-    const touch = (type: string, d: number) =>
-      cdp.send('Input.dispatchTouchEvent', {
-        type,
-        touchPoints:
-          type === 'touchEnd'
-            ? []
-            : [
-                { x: x - d, y, id: 1 },
-                { x: x + d, y, id: 2 },
-              ],
-      });
-    await touch('touchStart', 20);
-    for (let d = 30; d <= 80; d += 10) await touch('touchMove', d);
-    await touch('touchEnd', 0);
+    // Two touch pointers, as a phone's two fingers reach the page: down
+    // together, apart in steps, then up. Sent as pointer events so the same
+    // pinch runs in Chromium and WebKit.
+    await page.evaluate(
+      ([cx, cy]) => {
+        const svg = document.querySelector('[data-testid="amap-svg"]')!;
+        const send = (type: string, id: number, px: number) =>
+          svg.dispatchEvent(
+            new PointerEvent(type, {
+              pointerId: id,
+              pointerType: 'touch',
+              isPrimary: id === 1,
+              clientX: px,
+              clientY: cy,
+              bubbles: true,
+              cancelable: true,
+            })
+          );
+        send('pointerdown', 1, cx - 20);
+        send('pointerdown', 2, cx + 20);
+        for (let d = 30; d <= 80; d += 10) {
+          send('pointermove', 1, cx - d);
+          send('pointermove', 2, cx + d);
+        }
+        send('pointerup', 1, cx - 80);
+        send('pointerup', 2, cx + 80);
+      },
+      [x, y]
+    );
     await settled(page);
     const [, , w] = await viewBox(page);
     expect(w, 'the fingers moved four times apart: the map is at most four times').toBeLessThan(
