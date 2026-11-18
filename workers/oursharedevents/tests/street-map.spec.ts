@@ -43,6 +43,7 @@ import {
 import {
   DEFAULT_ARCHIVE,
   FRAME_LIMITS,
+  POI_LIMITS,
   MAX_LABELS,
   MAX_POINTS,
   MAX_TILES,
@@ -2752,5 +2753,47 @@ describe('street map | on the attendee map', () => {
     const second = renderLandingArea(many, { now: NOW, streets });
     expect(second.html).toContain('data-testid="amap-streets"');
     expect(second.html).toContain('data-testid="amap-credit"');
+  });
+});
+
+// The landmarks' own budget (lib/street-map.ts, POI_LIMITS; 2026-11-18): a frame
+// whose places are past it is drawn with its streets and no landmark, never
+// refused for them.
+// @born-red landmark budget | method: the catch in readStreetDrawing made to rethrow, this test run (red), restored | date: 2026-11-18
+describe('street map | the landmarks budget', () => {
+  const withPois = (points: number) =>
+    tilesForCells([BLUE7], () => [
+      {
+        name: 'pois',
+        features: [
+          { type: 1, props: { kind: 'park', name: 'Kelly Park' }, parts: [[[2048, 1800]]] },
+          ...(points
+            ? [
+                {
+                  type: 1 as const,
+                  props: { kind: 'bench' },
+                  parts: [
+                    Array.from({ length: points }, (_, j) => [j % 4096, 100] as [number, number]),
+                  ],
+                },
+              ]
+            : []),
+        ],
+      },
+    ]).tiles;
+
+  it('under the budget the landmarks are drawn; past it the streets are, with none', async () => {
+    expect(POI_LIMITS).toEqual({ features: 20_000, points: 20_000, props: 200_000 });
+    const under = await buildStreetLayer(memSource(await pmtilesArchive(withPois(0))), [BLUE7]);
+    expect(under!.svg).toContain('>Kelly Park</text>');
+    // Each tile alone is under the budget; the frame together is past it, so
+    // the landmarks of the tiles read before the one that passed it go too.
+    const tiles = withPois(0).length;
+    expect(tiles).toBeGreaterThanOrEqual(2);
+    const each = Math.ceil(POI_LIMITS.points / tiles) + 1;
+    expect(each).toBeLessThan(POI_LIMITS.points);
+    const over = await buildStreetLayer(memSource(await pmtilesArchive(withPois(each))), [BLUE7]);
+    expect(over!.svg).toContain('class="as-r as-3"');
+    expect(over!.svg).not.toContain('Kelly Park');
   });
 });

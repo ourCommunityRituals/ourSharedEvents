@@ -134,6 +134,49 @@ describe('the map script | what the page carries', () => {
   });
 });
 
+describe('the map script | exact markup (mutation run of 2026-11-18)', () => {
+  it('the control block, word for word: the words the script writes, the buttons, the scale, the hint', () => {
+    const ctl = /<div class="amap-ctl".*?<\/div>/s.exec(withStreets())![0];
+    expect(ctl).toBe(
+      '<div class="amap-ctl" data-testid="amap-ctl" hidden data-from="{d} mi from you" data-miles="{d} mi" data-you="You are here: the ringed dot." data-outside="You are outside this map." data-nearest="The nearest area, {name}, is about {d} mi away." data-locating="Finding you on the map…" data-off="Location is off, so the map cannot show where you are.">' +
+        '<button type="button" class="btn btn-secondary" data-z="in" data-testid="amap-in" aria-label="Zoom in">+</button>' +
+        '<button type="button" class="btn btn-secondary" data-z="out" data-testid="amap-out" aria-label="Zoom out">&minus;</button>' +
+        '<button type="button" class="btn btn-secondary" data-z="reset" data-testid="amap-reset">Show the whole map</button>' +
+        '<button type="button" class="btn btn-secondary" data-z="me" data-testid="amap-me">Show where I am</button>' +
+        '<span class="amap-scale" role="img" aria-label="Map scale" data-testid="amap-scale"><span class="amap-bar"></span><span data-testid="amap-scale-text"></span></span>' +
+        '<p data-testid="amap-hint">Pinch, or tap + and −, to zoom. Once zoomed in, drag with one finger to move the map.</p>' +
+        '<p aria-live="polite" data-testid="amap-you-status"></p></div>'
+    );
+  });
+
+  it('the frame, to the digit: the scale bar is worked out from the middle of the drawing', () => {
+    expect(withStreets()).toContain(
+      'data-x0="0.256292904" data-y0="0.372367587" data-scale="2021540.288" data-mpu="14.809"'
+    );
+  });
+
+  it('the zoomed area: the figure carries data-pan only with a street map, and nothing follows the panels without one', () => {
+    const one = [{ ...ev(1, A7), lat: 41.6565, lon: -87.681, classes: [] }] as never;
+    const bare = renderAttendeeMap([], {
+      now: NOW,
+      zoom: { cell: A7, backHref: '/', events: one },
+    }).html;
+    expect(bare).toContain(`<figure class="amap" data-testid="amap" data-zoom="${A7}">`);
+    expect(bare).toMatch(
+      /data-testid="amap-no-tiles" role="status"><p>.*?<\/p><\/div>\s*<span id="amap-places"/
+    );
+    expect(bare.endsWith('</section></div>')).toBe(true);
+    const drawn = renderAttendeeMap([], {
+      now: NOW,
+      streets: layer([A7]) as never,
+      zoom: { cell: A7, backHref: '/', events: one },
+    }).html;
+    expect(drawn).toContain(`<figure class="amap" data-testid="amap" data-zoom="${A7}" data-pan>`);
+    expect(drawn).toMatch(/<\/svg><div class="amap-ctl"/);
+    expect(drawn.endsWith(PAN_SCRIPT)).toBe(true);
+  });
+});
+
 describe('the map script | never who, never where', () => {
   it('asks for nothing: no request of any kind', () => {
     for (const bad of [

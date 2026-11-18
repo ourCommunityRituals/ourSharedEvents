@@ -108,9 +108,17 @@ export function panelActions(e: PanelEvent, opts: PanelOptions = {}): string {
       `<a class="cta cta-secondary" href="${escapeHtml(withLangPrefix(lang, eventFormPath(id, 'register')))}" data-testid="amap-register">${msg(lang, 'cta.register')}</a>`
     );
   }
+  const links = opts.placeLinks?.get(id);
+  for (const l of links?.links ?? []) {
+    const label = linkLabel(l.kind, lang);
+    out.push(
+      `<a class="cta cta-secondary" href="${escapeHtml(l.href)}" target="_blank" rel="noopener noreferrer nofollow" data-testid="amap-link" data-kind="${escapeHtml(l.kind)}" aria-label="${fmt(lang, 'map.external', { label: escapeHtml(label) })}">${label}</a>`
+    );
+  }
   // "Take me there" (owner, 2026-11-18, for attendees aged 55 to 75): the
   // event page's two Directions choices (owner 2026-10-11, Google Maps and
-  // Apple Maps), as two buttons in the grid. They search the text the event
+  // Apple Maps), as two buttons in the grid, after the organizer's
+  // own links so Register keeps its place beside them. They search the text the event
   // page shows, its street address else its venue, as the poster does. Never
   // its point: no coordinate reaches the map's page (lib/attendee-map). Link-out
   // only: nothing leaves the page until the visitor taps one.
@@ -123,16 +131,9 @@ export function panelActions(e: PanelEvent, opts: PanelOptions = {}): string {
       ['apple', go.apple, 'map.goApple'],
     ] as const) {
       out.push(
-        `<a class="cta cta-secondary" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" data-testid="amap-go-${which}" aria-label="${fmt(lang, 'map.goLabel', { name: safeName, app: msg(lang, key) })}">${msg(lang, key)}</a>`
+        `<a class="cta cta-secondary" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" data-testid="amap-go-${which}" aria-label="${fmt(lang, 'map.external', { label: fmt(lang, 'map.goLabel', { name: safeName, app: msg(lang, key) }) })}">${msg(lang, key)}</a>`
       );
     }
-  }
-  const links = opts.placeLinks?.get(id);
-  for (const l of links?.links ?? []) {
-    const label = linkLabel(l.kind, lang);
-    out.push(
-      `<a class="cta cta-secondary" href="${escapeHtml(l.href)}" target="_blank" rel="noopener noreferrer nofollow" data-testid="amap-link" data-kind="${escapeHtml(l.kind)}" aria-label="${fmt(lang, 'map.external', { label: escapeHtml(label) })}">${label}</a>`
-    );
   }
   if (opts.origin) {
     const url = eventShareUrl(opts.origin, lang, { shareCode: links?.shareCode, pagePath: page });

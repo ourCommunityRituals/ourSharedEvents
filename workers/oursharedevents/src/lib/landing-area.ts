@@ -200,21 +200,20 @@ function modalityOf(item: LandingAreaItem): 'online' | 'inperson' {
 }
 
 /**
+ * Where the sun is reckoned for an event: its own point, else the middle of its
+ * area. The place of the event, never the visitor (invariant 3).
+ */
+function sunPlace(e: LandingAreaItem): [number, number] | null {
+  if (isFiniteNum(e.lat) && isFiniteNum(e.lon)) return [Number(e.lat), Number(e.lon)];
+  const cell = str(e.h3_res7);
+  return isValidCell(cell) ? cellToLatLng(cell) : null;
+}
+
+/**
  * Window classes (`when-<value>`), one per LANDING_WINDOWS value the event falls
  * in — decided by the shared inWhenWindow, never by a landing-local rule. An
  * event outside every window carries none and is hidden until it comes into range.
  */
-/**
- * Where the sun is reckoned for an event: its own point, else the middle of its
- * area. The place of the event, never the visitor (invariant 3).
- */
-function sunPlace(e: LandingAreaItem): [number | null, number | null] {
-  if (isFiniteNum(e.lat) && isFiniteNum(e.lon)) return [Number(e.lat), Number(e.lon)];
-  const cell = str(e.h3_res7);
-  if (cell && isValidCell(cell)) return cellToLatLng(cell);
-  return [null, null];
-}
-
 function windowClasses(e: LandingAreaItem, now: Date): string[] {
   return LANDING_WINDOWS.filter((w) => inWhenWindow(e, w, now)).map((w) => `when-${w}`);
 }
@@ -389,7 +388,8 @@ export function renderLandingArea(
       modalities.add(modality);
       const classes = [...windows, category.slug, 'product-ose', `modality-${modality}`];
       // Home before dark: in person and over before sunset where it is held.
-      if (modality === 'inperson' && endsBeforeDark(e, ...sunPlace(e))) {
+      const sun = modality === 'inperson' ? sunPlace(e) : null;
+      if (sun && endsBeforeDark(e, ...sun)) {
         classes.push(DAYLIGHT_CLASS);
         daylightCount += 1;
       }

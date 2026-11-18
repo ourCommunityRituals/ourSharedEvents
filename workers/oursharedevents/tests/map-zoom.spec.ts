@@ -1124,10 +1124,11 @@ describe('the place panel under the map', () => {
     const order = [
       ...acts.matchAll(/data-testid="(amap-register|amap-go-google|amap-go-apple|amap-link)"/g),
     ].map((m) => m[1]);
-    expect(order).toEqual(['amap-register', 'amap-go-google', 'amap-go-apple', 'amap-link']);
+    // After the organizer's links, so Register keeps its place beside them.
+    expect(order).toEqual(['amap-register', 'amap-link', 'amap-go-google', 'amap-go-apple']);
     const q = encodeURIComponent('13501 S Western Ave, Blue Island');
     expect(acts).toContain(
-      `href="https://www.google.com/maps/search/?api=1&amp;query=${q}" target="_blank" rel="noopener noreferrer" data-testid="amap-go-google" aria-label="Take me there (Google Maps): directions to Event a">Take me there (Google Maps)</a>`
+      `href="https://www.google.com/maps/search/?api=1&amp;query=${q}" target="_blank" rel="noopener noreferrer" data-testid="amap-go-google" aria-label="Take me there (Google Maps): directions to Event a (opens another site)">Take me there (Google Maps)</a>`
     );
     expect(acts).toContain(`href="https://maps.apple.com/?q=${q}" target="_blank"`);
     // The venue name when there is no street address.

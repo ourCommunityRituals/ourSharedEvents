@@ -20,9 +20,12 @@ import {
   roadText,
   type RoadRun,
 } from '../src/lib/street-labels';
+import { cellToLatLng } from 'h3-js';
 import {
   LABELS_OPEN,
   drawStreetLayer,
+  frameForCells,
+  project,
   splitStreetLayer,
   type DecodedTile,
   type MapFrame,
@@ -286,6 +289,147 @@ describe('the street layer | names over the hexagons', () => {
     expect(texts(names)).toEqual(expect.arrayContaining(['Western Ave', 'I-57', 'Kelly Park']));
     expect(LABELS_OPEN).toContain('pointer-events="none"');
     expect(LABELS_OPEN).toContain('aria-hidden="true"');
+  });
+
+  it('only highways and major roads are named, highways first; a named minor road, path or river is not', () => {
+    const line = (y: number, x2 = 4000): [number, number][] => [
+      [0, y],
+      [x2, y],
+    ];
+    const named = (layers: DecodedTile['layers']) =>
+      [
+        ...drawStreetLayer(f, 0, tile(layers)).svg.matchAll(/<text class="as-n"[^>]*>([^<]+)</g),
+      ].map((m) => m[1]);
+    expect(
+      named([
+        {
+          name: 'roads',
+          extent: 4096,
+          features: [
+            road('major_road', { name: 'Archer Ave' }, 800),
+            { type: 2, props: { kind: 'highway', ref: 'I 57' }, geometry: [line(1600, 3600)] },
+          ],
+        },
+      ])
+    ).toEqual(['I-57', 'Archer Ave']);
+    // One at a time, each across the middle of the map, where a name would fit.
+    for (const layer of [
+      { name: 'roads', features: [road('minor_road', { name: 'Quiet Ln' }, 1200)] },
+      { name: 'roads', features: [road('path', { name: 'Trail Way' }, 1200)] },
+      {
+        name: 'roads',
+        features: [
+          { type: 3, props: { kind: 'major_road', name: 'Not A Line' }, geometry: [line(1200)] },
+        ],
+      },
+      { name: 'water', features: [road('river', { name: 'Cal Sag' }, 1200)] },
+    ]) {
+      expect(named([{ ...layer, extent: 4096 }]), layer.features[0]!.props.name as string).toEqual(
+        []
+      );
+    }
+    // A highway with only a name (no number) is named by its name; a major road's ref is not used.
+    expect(
+      named([
+        { name: 'roads', extent: 4096, features: [road('major_road', { ref: 'US 6' }, 1200)] },
+      ])
+    ).toEqual([]);
+  });
+
+  it('a landmark is a point: a line, or a point with no position, is not one', () => {
+    const { svg } = drawStreetLayer(
+      f,
+      0,
+      tile([
+        {
+          name: 'pois',
+          extent: 4096,
+          features: [
+            {
+              type: 2,
+              props: { kind: 'park', name: 'Line Park' },
+              geometry: [
+                [
+                  [1000, 1000],
+                  [3000, 1000],
+                ],
+              ],
+            },
+            // Not a kind the map draws: nothing is kept for it.
+            { type: 1, props: { kind: 'bench', name: 'A Bench' }, geometry: [[[1000, 2000]]] },
+            { type: 1, props: { kind: 'park', name: 'Empty Park' }, geometry: [[]] },
+            { type: 1, props: { kind: 'park', name: 'No Parts Park' }, geometry: [] },
+            { type: 1, props: { kind: 'park', name: 'Kelly Park' }, geometry: [[[2000, 1500]]] },
+          ],
+        },
+      ])
+    );
+    expect(texts(svg)).toEqual(['Kelly Park']);
+  });
+
+  it('a name never sits on a hexagon number: the numbered cells are kept clear', () => {
+    // The one cell's number sits in the middle of the frame; a park right there gives way.
+    const cell = '872664544ffffff';
+    const fr: MapFrame = frameForCells([cell], W, H);
+    const [cx, cy] = project(fr, ...cellToLatLng(cell));
+    const pt = (x: number, y: number) => [[[x, y]]] as [number, number][][];
+    // Tile 0/0/0 spans the world: a point at (x, y) on the map is here in it.
+    const onNumber = drawStreetLayer(
+      fr,
+      0,
+      [
+        {
+          x: 0,
+          y: 0,
+          layers: [
+            {
+              name: 'pois',
+              extent: 4096,
+              features: [
+                {
+                  type: 1,
+                  props: { kind: 'park', name: 'Hidden Park' },
+                  geometry: pt((fr.x0 + cx / fr.scale) * 4096, (fr.y0 + cy / fr.scale) * 4096),
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      [cell]
+    ).svg;
+    expect(onNumber).not.toContain('Hidden Park');
+    // With no cell numbered, the same park is named.
+    const free = drawStreetLayer(
+      fr,
+      0,
+      [
+        {
+          x: 0,
+          y: 0,
+          layers: [
+            {
+              name: 'pois',
+              extent: 4096,
+              features: [
+                {
+                  type: 1,
+                  props: { kind: 'park', name: 'Hidden Park' },
+                  geometry: pt((fr.x0 + cx / fr.scale) * 4096, (fr.y0 + cy / fr.scale) * 4096),
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      []
+    ).svg;
+    expect(free).toContain('>Hidden Park</text>');
+  });
+
+  it('a layer that starts with the names group splits there: nothing under, all of it over', () => {
+    const only = `${LABELS_OPEN}<text>x</text></g>`;
+    expect(splitStreetLayer(only)).toEqual(['', only]);
   });
 
   it('a layer with no name has no names group', () => {

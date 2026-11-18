@@ -165,8 +165,9 @@ test.describe('Place panel layout on this device profile (OSE-1891)', () => {
       }
       measured += boxes.length;
     });
-    // 5 + 4 + 3 x 8: a run that measured fewer buttons did not see every card.
-    expect(measured).toBe(33);
+    // 5 + 4 + 3 x 8, and "Take me there" twice on each of the 10 cards (owner,
+    // 2026-11-18): a run that measured fewer buttons did not see every card.
+    expect(measured).toBe(33 + 2 * 10);
   });
 
   test('no sideways scroll, with the list and with each panel open', async ({ page }) => {

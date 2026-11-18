@@ -673,7 +673,7 @@ function legendFor(
   zoomHref?: (cell: string) => string,
   filterClasses?: FilterClasses,
   /** The map's script is on: each row says which area it is, for its distance. */
-  pan = false
+  pan?: boolean
 ): string {
   const rows = areas
     .map((a) => {
