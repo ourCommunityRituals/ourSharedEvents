@@ -79,7 +79,7 @@ const flush = async () => {
 // ── Admin card ──────────────────────────────────────────────────────────────
 
 function cardMarkup(html: string): string {
-  const start = html.indexOf('<div class="card poster-deployments-card"');
+  const start = html.indexOf('<div class="card card--sectioned poster-deployments-card"');
   const end = html.indexOf('<!-- R4 (OSE-1319)', start);
   expect(start).toBeGreaterThan(-1);
   return html.slice(start, end);

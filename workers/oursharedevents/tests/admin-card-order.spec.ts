@@ -227,7 +227,7 @@ describe('admin page order', () => {
 
   test('the bar and the card both say "Reg & Forms"', () => {
     expect(byTestId('ecb-nav-forms').textContent?.trim()).toBe('Reg & Forms');
-    expect(byTestId('forms-card').querySelector('.mcard-title')?.textContent?.trim()).toBe(
+    expect(byTestId('forms-card').querySelector('.card-title')?.textContent?.trim()).toBe(
       'Reg & Forms'
     );
   });

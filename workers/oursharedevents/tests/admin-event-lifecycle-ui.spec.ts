@@ -187,7 +187,7 @@ describe('event timeline — the chain at a glance', () => {
     expect(html).toMatch(
       /id="event-timeline-card"[^>]*data-testid="event-timeline-card"[^>]*hidden/
     );
-    expect(html).toContain('<h3 class="mcard-title">Event checklist</h3>');
+    expect(html).toContain('<h3 class="card-title">Event checklist</h3>');
     expect(html).toContain('window.renderEventTimeline(d.id)');
   });
 
