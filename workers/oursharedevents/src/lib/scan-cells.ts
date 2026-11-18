@@ -48,7 +48,7 @@ export interface ScanCell {
  * Never the room's vote code (OSE-2140; owner, 2026-11-18): it is the room
  * screen, not a poster, and its scans would publish a rough participation
  * figure for the vote, which OSE ADR-040 rules out. So no poster figure built
- * on these cells counts it: per-poster scans, reach, booths, the scans gauge.
+ * on these cells counts it: per-poster scans, reach, the stall counts, the scans gauge.
  */
 export async function readEventScanCells(db: D1Database, eventId: string): Promise<ScanCell[]> {
   const res = await db
