@@ -150,6 +150,9 @@ const SWITCH_LIB = 'src/lib/voting-switch.ts';
 const RESULTS_LIB = 'src/lib/vote-results.ts';
 const CAST_LIB = 'src/lib/vote-cast.ts';
 const VOTE_HANDLER = 'src/handlers/vote.ts';
+const PUBLIC_RESULT_LIB = 'src/lib/vote-public-result.ts';
+const VOTE_PAGE_HANDLER = 'src/handlers/vote-page.ts';
+const VOTE_PAGE_RENDER = 'src/lib/vote-page-render.ts';
 
 /**
  * Every Worker file that names a vote table, and why. A route story (S3, S4a,
@@ -165,6 +168,8 @@ const VOTE_TABLE_FILES: Record<string, string> = {
     'S4a (OSE-2128): one vote. One D1 batch inserts the receipt (open checks inside the insert), raises one side counter only when the receipt was new, and inserts the team and participant markers. It answers counted, duplicate or closed, never a number.',
   [RESULTS_LIB]:
     "S5 (OSE-2130): the night's result. Two UPDATEs, run in finalizeVoteSet's batch, that reads the tallies, the team and participant markers, T and V inside SQL and writes only the outcome and the winner's id.",
+  [PUBLIC_RESULT_LIB]:
+    "S4b (OSE-2129): the voter page's result. Reads outcome and the winner's id from a final, non-void vote_sets row, and labels from votable_objects. No write, no counter, no secret.",
 };
 
 /**
@@ -470,6 +475,12 @@ function consoleCalls(code: string): string[] {
   }
   return out;
 }
+
+/** A browser storage API or the cookie, as code names it (OSE-2129). */
+const STORAGE_OR_COOKIE =
+  /\b(localStorage|sessionStorage|indexedDB|caches\.open)\b|document\.cookie/;
+/** A fetch whose address is built with the pass (OSE-2129). */
+const PASS_IN_URL = /fetch\([^,]*\bpass\b/;
 
 const SOURCES = walk(SRC_DIR, /\.(ts|js|mjs|html)$/).map((path) => {
   const raw = readFileSync(path, 'utf8');
@@ -1350,5 +1361,62 @@ test.describe("Invariant: the room's own vote code and the live event (OSE-2140,
         },
       ])
     ).toEqual([]);
+  });
+});
+
+test.describe('Invariant: the voter page (OSE-2129)', () => {
+  const byFile = new Map(SOURCES.map((s) => [s.file, s]));
+  const code = (file: string) => byFile.get(file)?.code ?? '';
+
+  test('OSE-2129 | result | the page reads a result only from a final, non-void set, and names no number', () => {
+    const sqls = sqlLiterals(code(PUBLIC_RESULT_LIB));
+    expect(sqls.length, `${PUBLIC_RESULT_LIB} holds its two reads`).toBe(2);
+    const setRead = sqls.find((q) => /FROM vote_sets/.test(q)) ?? '';
+    expect(setRead).toMatch(/s\.is_final = 1/);
+    expect(setRead).toMatch(/s\.is_void = 0/);
+    for (const q of sqls) {
+      expect(READS_STAR.test(q), 'no SELECT *').toBe(false);
+      expect(/\b(INSERT|UPDATE|DELETE)\b/i.test(q), 'the result read writes nothing').toBe(false);
+      expect(/COUNT\s*\(|SUM\s*\(/i.test(q), 'the result read counts nothing').toBe(false);
+    }
+  });
+
+  test('OSE-2129 | result | only the voter page imports the result read, and only the router imports the page', () => {
+    const importers = (mod: string) =>
+      SOURCES.filter(({ code }) =>
+        new RegExp(`from\\s+['"][./]*[\\w/]*${mod}(?:\\.js)?['"]`).test(code)
+      )
+        .map((s) => s.file)
+        .sort();
+    expect(importers('lib/vote-public-result')).toEqual([VOTE_PAGE_HANDLER]);
+    expect(importers('handlers/vote-page')).toEqual(['src/router.ts']);
+  });
+
+  test('OSE-2129 | page | the voter page keeps the pass in memory: no storage, no cookie, no pass in a URL', () => {
+    for (const file of [VOTE_PAGE_HANDLER, VOTE_PAGE_RENDER]) {
+      expect(STORAGE_OR_COOKIE.test(code(file)), `${file} names a storage API or a cookie`).toBe(
+        false
+      );
+      expect(file in COOKIE_READERS, `${file} can never be a cookie reader`).toBe(false);
+    }
+    const page = code(VOTE_PAGE_RENDER);
+    expect(page, 'the fragment leaves the address bar first').toMatch(/history\.replaceState\(/);
+    expect(page, 'the pass is sent only in a POST body').toMatch(
+      /body: JSON\.stringify\(\{ object_id: objectId, side: side, pass: pass \}\)/
+    );
+    expect(PASS_IN_URL.test(page), 'no fetch URL is built with the pass').toBe(false);
+    expect(page.match(/credentials: 'omit'/g)?.length, 'both requests send no cookie').toBe(2);
+  });
+
+  test('OSE-2129 | gate | the page rules can fail (negative controls)', () => {
+    expect(STORAGE_OR_COOKIE.test("localStorage.setItem('p', pass)")).toBe(true);
+    expect(STORAGE_OR_COOKIE.test('sessionStorage.p = pass')).toBe(true);
+    expect(STORAGE_OR_COOKIE.test("indexedDB.open('v')")).toBe(true);
+    expect(STORAGE_OR_COOKIE.test("document.cookie = 'p=' + pass")).toBe(true);
+    expect(STORAGE_OR_COOKIE.test("fetch('/api/v2/vote/' + id, { credentials: 'omit' })")).toBe(
+      false
+    );
+    expect(PASS_IN_URL.test("fetch('/api/v2/vote/' + eventId + '?pass=' + pass)")).toBe(true);
+    expect(PASS_IN_URL.test("fetch('/api/v2/vote/' + encodeURIComponent(eventId), {")).toBe(false);
   });
 });

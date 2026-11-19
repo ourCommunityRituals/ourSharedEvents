@@ -70,6 +70,13 @@
  *                                  fair's stall list and one to the fair.
  *                                  The number is read in any case. An unknown or closed event,
  *                                  number or stall is one 404. No count, no cookie; rate-limited.
+ *   GET /events/:id/vote         → the voter page (OSE-2129, OSE ADR-040): the event's title and
+ *                                  date, its sponsor strip, one <h1> "Vote", the night's result
+ *                                  once final, the songs open now (filled by its script from the
+ *                                  open-objects read), and the house rule. The pass rides in the
+ *                                  fragment and stays in memory. no-store, no referrer, never
+ *                                  framed; no count, no cookie; rate-limited. An unknown or
+ *                                  closed event is one 404.
  *   GET /brands/:brand/calendar.ics → a brand's public events as one calendar feed (OSE-2013):
  *                                  the rows GET /api/v2/events?brand= lists, through the public
  *                                  projection; rate-limited; 404 for an unknown or invalid brand
@@ -314,6 +321,7 @@ import {
 import { handleVotables, matchVotablesRoute } from './handlers/votables';
 import { handleVoteObjects } from './handlers/vote-objects';
 import { handleVote } from './handlers/vote';
+import { handleVotePage } from './handlers/vote-page';
 import { votingEnabled, type VotingSwitchEnv } from './lib/voting-switch';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
@@ -2830,6 +2838,20 @@ export async function route(
     return limitedPage('form-page', pathname, undefined, (req, e: typeof env) =>
       handleFormPage(req, e, eventFormMatch[1], 1, eventFormMatch[2] as EventFormScreen)
     )(request, env);
+  }
+
+  // ── The voter page (OSE-2129, OSE ADR-040) — /events/<id>/vote ────────────
+  // The room's vote code lands here through /q with the pass in the fragment.
+  // Matched before the event page's /events/<id>/<name>, which would otherwise
+  // take "vote" as a name (canonical.ts keeps "vote" out of event names).
+  // Rate-limited like the stall pages; past the limit, the house page. Not on
+  // the language layer yet: under /es/ it is the ordinary 404.
+  const votePageMatch = pathname.match(/^\/events\/([^/]{1,200})\/vote$/);
+  if (votePageMatch && method === 'GET') {
+    if (await isPublicReadLimited(request, env, 'vote-page')) {
+      return renderErrorPage(429, 'Too many requests', 'Give it a minute and try again.');
+    }
+    return handleVotePage(request, env, votePageMatch[1]);
   }
 
   // ── A stall at a fair (OSE-1998, OSE ADR-034) — /events/<id>/booths/<number>

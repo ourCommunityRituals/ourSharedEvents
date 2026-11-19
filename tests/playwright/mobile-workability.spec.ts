@@ -224,6 +224,15 @@ const SURFACES: Surface[] = [
       '[data-testid="event-rsvp"], [data-testid="event-checkin"], [data-testid="error-cta"], main a, main button',
   },
   {
+    // OSE-2129: the voter page. With no pass in the address it shows the
+    // scan-again words and the house rule; an unknown event is its 404 page.
+    // Either is a phone surface: big buttons, no sideways scroll.
+    path: '/events/evt_test_2026/vote',
+    name: 'voter page',
+    primaryCtaSelector:
+      '[data-testid="vote-house-rule"] summary, [data-testid="vote-event-link"], [data-testid="error-cta"]',
+  },
+  {
     path: `/events/${AUDIT_EVENT.pre || 'unseeded-pre'}`,
     name: 'event page, before the event',
     // No primaryCtaSelector, on purpose. The page's order is the facts first and

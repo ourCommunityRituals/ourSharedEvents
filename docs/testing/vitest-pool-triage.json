@@ -4034,6 +4034,13 @@
       "testCount": 25
     },
     {
+      "file": "workers/oursharedevents/tests/vote-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 20
+    },
+    {
       "file": "workers/oursharedevents/tests/vote-pass.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
