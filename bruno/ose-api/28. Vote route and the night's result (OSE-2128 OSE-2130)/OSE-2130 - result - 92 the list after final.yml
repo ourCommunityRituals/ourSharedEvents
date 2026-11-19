@@ -1,0 +1,37 @@
+info:
+  name: "OSE-2130 | result | the admin list after final carries the one result and no count"
+  type: http
+  seq: 92
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteRouteNightId}}/votables"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        function keys(v, out) {
+          out = out || [];
+          if (Array.isArray(v)) v.forEach(function (x) { keys(x, out); });
+          else if (v && typeof v === 'object') Object.keys(v).forEach(function (k) { out.push(k); keys(v[k], out); });
+          return out;
+        }
+        var banned = keys(b).filter(function (k) { return /count|tally|tallies|voter|participa|turnout|total|percent|share|score|net|sum|runner|rank|standing|margin|floor|secret|reason|rule|outcome_of|won|belt/i.test(k) && k !== 'outcome'; });
+        test('OSE-2130 list: 200, final, with its one result', function () { expect(res.getStatus()).to.eql(200); expect(b.set.final).to.eql(true); expect(['winner', 'too_close']).to.include(b.set.result.outcome); });
+        test('OSE-2130 list: no song carries a result or a number of its own', function () { (b.objects || []).forEach(function (o) { expect(Object.keys(o).sort()).to.eql(['booth_id', 'closes_at', 'group_id', 'id', 'kind', 'label', 'open_now', 'sort', 'state']); }); });
+        test('OSE-2130 list: no count, voter count, runner-up, margin, floor or reason anywhere', function () { expect(banned).to.eql([]); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

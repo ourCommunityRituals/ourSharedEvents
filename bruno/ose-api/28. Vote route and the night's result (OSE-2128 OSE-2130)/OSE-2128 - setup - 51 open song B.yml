@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2128 | setup | open song B for 15 minutes"
+  type: http
+  seq: 51
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteRouteNightId}}/votables/objects/{{voteRouteSongB}}/open"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"window_seconds\": 900}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2128 setup: song B is open now', function () { expect(res.getStatus()).to.eql(200); expect(b.object && b.object.open_now).to.eql(true); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

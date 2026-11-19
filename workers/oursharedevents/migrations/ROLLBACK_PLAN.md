@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0113; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0114; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,24 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0114: the night's result on its vote set (OSE-2130, S5; OSE ADR-040
+-- decisions 7 and 8): vote_sets.winner_id and vote_sets.outcome (null until
+-- final, null on a void set; a CHECK holds the pairing), and a one-off fill
+-- that gives each set already final and not void the result 'too_close'.
+-- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS. The older Worker
+-- reads neither. Two things to know before rolling back past 0114's Worker:
+--   1. The older Worker (S3) makes a set that opened final only if it is
+--      void, so a set with receipts waits for the nightly job of a Worker
+--      that computes results; receipts and markers are kept until then (the
+--      bound of ADR-040 decision 1 slips by the time the rollback lasts).
+--   2. The older Worker has no vote route, so a rollback also ends voting.
+--      VOTING_ENABLED is off everywhere today, so nothing is lost now.
+-- The one-off fill is not reversed: it only wrote 'too_close' on sets that
+-- were final, held no vote, and read no result.
+-- There is no surgical reverse. winner_id is named by outcome's CHECK, so it
+-- cannot be dropped while outcome stands, and vote_sets is not rebuilt to
+-- drop either (a vote set is never deleted, decision 4). Leave the columns.
+
 -- 0113: the room's own vote code, and a vote set follows its event's status
 -- (OSE-2140, OSE-2142, OSE ADR-040): poster_deployments.is_vote_code (default
 -- 0), the partial unique index idx_poster_deployments_one_vote_code (one vote

@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2128 | close | close the vote set"
+  type: http
+  seq: 80
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteRouteNightId}}/votables/close"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2128 close: closed', function () { expect(res.getStatus()).to.eql(200); expect(b.set && b.set.state).to.eql('closed'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

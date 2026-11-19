@@ -1,0 +1,94 @@
+info:
+  name: "OSE-2128 | reopen | after a reopen, a re-scan and a second vote count once (switch on)"
+  type: http
+  seq: 83
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteRouteNightId}}/votables"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2128 reopen: the admin list reads 200', function () { expect(res.getStatus()).to.eql(200); });
+
+        // Helpers for the switch-on half (OSE-2128). They never print a Location, a
+        // pass, a cookie or a voter: every check compares booleans or fixed text.
+        var base = bru.getEnvVar('baseUrl');
+        var access = { 'CF-Access-Client-Id': bru.getEnvVar('cfAccessClientId') || '', 'CF-Access-Client-Secret': bru.getEnvVar('cfAccessClientSecret') || '' };
+        var edgeToken = bru.getEnvVar('ocrCiEdgeToken') || '';
+        function send(cfg) {
+          return new Promise(function (resolve) {
+            bru.sendRequest(Object.assign({ timeout: 20000, maxRedirects: 0, validateStatus: null }, cfg), function (err, r) {
+              var x = r || (err && err.response) || null;
+              if (!x) { resolve({ status: (err && err.status) || 0, headers: {}, data: null }); return; }
+              resolve({ status: x.status, headers: x.headers || {}, data: x.data });
+            });
+          });
+        }
+        function header(r, name) {
+          var h = r.headers || {};
+          var key = Object.keys(h).filter(function (k) { return k.toLowerCase() === name; })[0];
+          var v = key ? h[key] : undefined;
+          return Array.isArray(v) ? v.join(', ') : v;
+        }
+        function text(r) { return typeof r.data === 'string' ? r.data : JSON.stringify(r.data); }
+        function browser() {
+          var hex = '';
+          for (var i = 0; i < 32; i++) hex += Math.floor(Math.random() * 16).toString(16);
+          return 'anon_' + hex;
+        }
+        // One scan of the room's vote code by one browser: its pass, or '' when none.
+        async function scan(token, cookie) {
+          var headers = Object.assign({ Cookie: 'ose_anon=' + cookie, Accept: 'text/html', 'User-Agent': 'ose-bruno-vote-route' }, access);
+          if (edgeToken) headers['X-OCR-CI'] = edgeToken;
+          var r = await send({ method: 'GET', url: base + '/q/' + token + '?type=vote', headers: headers });
+          var loc = String(header(r, 'location') || '');
+          var at = loc.indexOf('#t=');
+          var pass = at < 0 ? '' : loc.slice(at + 3);
+          loc = null;
+          return pass;
+        }
+        async function vote(nightId, objectId, side, pass) {
+          var r = await send({
+            method: 'POST',
+            url: base + '/api/v2/vote/' + nightId,
+            headers: { 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'same-origin' },
+            data: JSON.stringify({ object_id: objectId, side: side, pass: pass })
+          });
+          return { status: r.status, body: text(r), cookie: header(r, 'set-cookie') };
+        }
+        var on = bru.getEnvVar('votingSwitch') === 'on';
+
+        if (!on) {
+          console.log('NOT RUN (VOTING_ENABLED off on staging): after a reopen, a re-scan and a second vote count once');
+        } else {
+          var browsersB = JSON.parse(bru.getVar('voteRouteBrowsersB') || '[]');
+          var night = bru.getVar('voteRouteNightId');
+          var B = bru.getVar('voteRouteSongB');
+          var again = [];
+          for (var i = 0; i < browsersB.length; i++) {
+            var p = await scan(bru.getVar('voteRouteToken'), browsersB[i]);
+            again.push(await vote(night, B, 'up', p));
+            again.push(await vote(night, B, 'up', p));
+          }
+          test('OSE-2128 on: after a reopen, the same browsers vote again and get the same answer', function () {
+            expect(again.length).to.eql(6);
+            again.forEach(function (a) { expect(a.status).to.eql(200); expect(a.body).to.eql('{"ok":true}'); });
+          });
+          console.log('OSE-2128: whether these counted once is read from the result at seq 90');
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

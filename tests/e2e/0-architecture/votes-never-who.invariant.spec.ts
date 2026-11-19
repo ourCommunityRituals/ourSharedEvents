@@ -93,10 +93,23 @@
  *      that moves an event's status out of 'active' batches
  *      closeVoteSetUnlessPublished with the move (one transaction), or is
  *      exempt with its reason (STATUS_WRITER_EXEMPT). No D1 trigger: 0025.
+ *  12. THE VOTE ROUTE (OSE-2128, S4a; decisions 5 and 6). handlers/vote.ts and
+ *      lib/vote-cast.ts name no cookie, ose_anon or its reader, and read no
+ *      request header but Content-Type, Sec-Fetch-Site and Content-Length.
+ *      lib/vote-cast.ts logs nothing; the handler's one log line names no
+ *      detail of a vote. The router serves the vote only for a POST under
+ *      /api/v2/vote/ and only when votingEnabled(env); only the router imports
+ *      the handler and only the handler imports the write. The handler answers
+ *      fixed bodies: no spread, no counter, no serialised row.
+ *  And, since S4a writes receipts and markers (rule 5's M1 note): the only
+ *  writer is lib/vote-cast.ts, the nightly job leaves out no set that opened,
+ *  and finalizeVoteSet makes a set final with its result, nulls T and V and
+ *  deletes the markers in one batch with no write outside it (OSE-2130, S5).
  *
  * What it cannot see: a value carried out by a variable (a listed lib file that
- * returns `row` to a handler). S3 and S5 add workers-pool tests that their
- * responses carry no guarded key.
+ * returns `row` to a handler). The workers pool holds that no answer carries a
+ * guarded key: tests/vote-set-admin.spec.ts (S3), tests/vote-cast.spec.ts (S4a)
+ * and tests/vote-result.spec.ts (S5).
  *
  * Pyramid coverage:
  *   L0 STRUCTURAL (this file), in the T0 invariants step.
@@ -129,6 +142,13 @@
  *   qr-verify batch (11 red), an `is_vote_code` write planted in
  *   handlers/votables.ts (11 red) |
  *   date: 2026-11-18
+ * @born-red OSE-2128 OSE-2130 | method: injected-fault, each removed after: a
+ *   `request.headers.get('Cookie')` read in handlers/vote.ts (10 and 12 red), a
+ *   console.log of the object id in lib/vote-cast.ts (12 red), votingEnabled
+ *   dropped from the router's vote block (12 red), `AND s.pepper_epoch IS NULL`
+ *   added to the nightly job's selection (the final rule red), an INSERT INTO
+ *   vote_receipts planted in lib/vote-code.ts (4 and the final rule red),
+ *   `up_count` named in handlers/vote.ts (6 and 12 red) | date: 2026-11-19
  */
 
 import { test, expect } from '@playwright/test';
@@ -147,6 +167,8 @@ const VOTE_SETS_LIB = 'src/lib/vote-sets.ts';
 const OPEN_OBJECTS_LIB = 'src/lib/vote-open-objects.ts';
 const OPEN_OBJECTS_HANDLER = 'src/handlers/vote-objects.ts';
 const SWITCH_LIB = 'src/lib/voting-switch.ts';
+const VOTE_CAST_LIB = 'src/lib/vote-cast.ts';
+const VOTE_HANDLER = 'src/handlers/vote.ts';
 
 /**
  * Every Worker file that names a vote table, and why. A route story (S3, S4a,
@@ -158,6 +180,8 @@ const VOTE_TABLE_FILES: Record<string, string> = {
     'S3 (OSE-2127): every write to vote_sets and votable_objects: create, open, reopen, close, the final lock and the nightly final job; it makes the tally row with its object and deletes markers at final.',
   [OPEN_OBJECTS_LIB]:
     'S3c (OSE-2135): the public open-objects read. One SELECT of id, kind, label and closes_at from votable_objects, joined to vote_sets for its state, final and void flags only. No write, no counter, no secret (rule 8).',
+  [VOTE_CAST_LIB]:
+    "S4a (OSE-2128): the vote write. One batch raises a tally and writes the receipt, the participant marker and on a team night the team marker, each only for a new receipt; it marks a set void on a pepper-epoch mismatch. It reads the object's set id, play mode, epoch and team, never a counter or a secret, and returns no count (rule 12).",
 };
 
 /**
@@ -167,14 +191,20 @@ const VOTE_TABLE_FILES: Record<string, string> = {
  */
 const SECRET_READERS: Record<string, string> = {
   [VOTE_SETS_LIB]:
-    'S3 (OSE-2127) writes T and V once, at the first open, and nulls them at final. It never reads them back.',
+    'S3 (OSE-2127) writes T and V once, at the first open, and nulls them at final. S5 (OSE-2130) reads them only in SQL, inside the UPDATE that makes the set final and nulls them in the same statement (VOTE_RESULT_CTE); they never reach the Worker.',
 };
 
 /**
- * Files that may name the live counters. Empty: nothing counts yet. S4a (the
- * vote write) and S5 (results at final) add their own lib file here.
+ * Files that may name the live counters. S4a (the vote write) raises them; S5
+ * (results at final) reads up_count in SQL, inside the final UPDATE, and
+ * returns only the outcome. A handler can never be listed.
  */
-const COUNT_READERS: Record<string, string> = {};
+const COUNT_READERS: Record<string, string> = {
+  [VOTE_CAST_LIB]:
+    'S4a (OSE-2128): raises up_count or down_count by one, inside the vote batch, only for a new receipt. It never reads a counter back.',
+  [VOTE_SETS_LIB]:
+    "S5 (OSE-2130): the result reads up_count in SQL, inside the UPDATE that makes the set final; only the outcome and the winner's id are written, and no counter is returned.",
+};
 
 const SECRET_COLUMNS = ['secret_margin', 'secret_floor'];
 const COUNT_COLUMNS = [
@@ -412,6 +442,46 @@ function flagProblems(raw: string, sqlComments = true): string[] {
   return out;
 }
 
+/** The body of a function `name` (export or not) up to its closing brace at column 0. */
+function anyFnBody(code: string, name: string): string {
+  const m = code.match(new RegExp(`(?:export )?async function ${name}\\b[\\s\\S]*?\\n}\\n`));
+  return m ? m[0] : '';
+}
+
+/**
+ * What would let a set that opened skip final (OSE-2130). The nightly job's
+ * selection names no rule that leaves an opened set out; finalizeVoteSet makes
+ * the set final, writes its result and deletes its receipts and markers in one
+ * db.batch, and runs no write outside it.
+ */
+function finalJobProblems(code: string): string[] {
+  const out: string[] = [];
+  const job = anyFnBody(code, 'runVoteFinalJob');
+  const fin = anyFnBody(code, 'finalizeVoteSet');
+  if (!job) return ['runVoteFinalJob is not found'];
+  if (!fin) return ['finalizeVoteSet is not found'];
+  const select = job.match(/SELECT s\.id, s\.event_id FROM vote_sets s[\s\S]*?LIMIT \?/)?.[0] ?? '';
+  if (!select) out.push("the job's selection of due sets is not found");
+  if (/pepper_epoch\s+IS\s+NULL|is_void\s*=\s*1|FINALIZABLE/i.test(select))
+    out.push('the nightly job leaves out a set that opened');
+  if (!/\bfinalizeVoteSet\(db, id, event_id, 'job'/.test(job))
+    out.push('the nightly job does not finalize through finalizeVoteSet');
+  const batches = fin.match(/\.batch\(\[/g) ?? [];
+  if (batches.length !== 1) out.push(`finalizeVoteSet runs ${batches.length} batches, not one`);
+  if (/\.(?:run|first|all)\(\)/.test(fin)) out.push('finalizeVoteSet writes outside its batch');
+  const flat = fin.replace(/\s+/g, ' ');
+  for (const part of [
+    'outcome = (SELECT v_outcome FROM verdict)',
+    'is_final = 1',
+    'secret_margin = NULL, secret_floor = NULL',
+    'DELETE FROM vote_receipts',
+    'DELETE FROM vote_participants',
+    'DELETE FROM vote_team_markers',
+  ])
+    if (!flat.includes(part)) out.push(`finalizeVoteSet's batch lacks ${part}`);
+  return out;
+}
+
 /** A line that logs or answers. */
 const LOGS_OR_ANSWERS = /\bconsole\.|\blog\w*\(|\bjson\(|new\s+Response\(|Response\.json\(/;
 
@@ -579,27 +649,23 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
     ).toEqual([]);
   });
 
-  // OSE-2127 (security review M1). ADR-040 decision 1: every set reaches final,
-  // so nothing is kept without a bound. In S3, final skips a set that opened
-  // (src/lib/vote-sets.ts FINALIZABLE: results arrive with S5), which is safe
-  // only while nothing writes a receipt or a marker. The day a Worker file
-  // writes one (the vote route, S4a), the nightly job must already make every
-  // set final, with its result computed in the same step (S5).
-  test('OSE-2127 | final | no receipt or marker is written while final skips a set that opened', () => {
+  // OSE-2127 (security review M1), then OSE-2128 and OSE-2130. ADR-040 decision
+  // 1: every set reaches final, so nothing is kept without a bound. In S3 the
+  // final skipped a set that opened, which was safe only while nothing wrote a
+  // receipt or a marker. S4a writes them, so the nightly job must make every
+  // due set final, opened or not, and compute its result in the same batch as
+  // the deletes (S5). This holds both halves.
+  test('OSE-2127 OSE-2130 | final | a receipt or marker writer exists only while the job makes every due set final with its result', () => {
     const writers = SOURCES.filter(({ code }) =>
       sqlLiterals(code).some((sql) => MARKER_WRITE.test(normalize(sql)))
     ).map((s) => s.file);
     const lib = SOURCES.find((s) => s.file === VOTE_SETS_LIB);
     expect(lib, `${VOTE_SETS_LIB} is read`).toBeTruthy();
-    const job = lib!.code.match(/\bjob:\s*\([^)]*\)\s*=>\s*`([^`]*)`/)?.[1] ?? '';
-    expect(job, 'FINALIZABLE.job is found').not.toBe('');
-    const skipsOpened = /pepper_epoch\s+IS\s+NULL/i.test(job);
+    expect(finalJobProblems(lib!.code)).toEqual([]);
     expect(
-      skipsOpened ? writers : [],
-      'A receipt or marker writer exists, but the nightly job still makes final only the sets ' +
-        'that never opened (or are void). Widen FINALIZABLE.job to every set and compute the ' +
-        'result in the same batch (S5) before, or with, the vote route.'
-    ).toEqual([]);
+      writers,
+      'Only the vote write (S4a) writes a receipt or a marker; a new writer needs its own review.'
+    ).toEqual([VOTE_CAST_LIB]);
   });
 
   test('OSE-2125 | secret | no route returns T or V, and no number before final', () => {
@@ -614,6 +680,12 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
         (f) => /(?:^|\/)handlers\//.test(f) || f.endsWith('router.ts')
       ),
       'A route handler can never read T or V.'
+    ).toEqual([]);
+    expect(
+      Object.keys(COUNT_READERS).filter(
+        (f) => /(?:^|\/)handlers\//.test(f) || f.endsWith('router.ts')
+      ),
+      'A route handler can never name a vote counter.'
     ).toEqual([]);
     expect(
       naming(COUNT_COLUMNS).filter((f) => !(f in COUNT_READERS)),
@@ -706,9 +778,10 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       'A listed reader no longer reads the cookie: take it off COOKIE_READERS.'
     ).toEqual([]);
     for (const f of Object.keys(COOKIE_READERS))
-      expect(/(?:^|\/)(?:votables|vote-pass|voting-switch|votes|vote-sets)\.ts$/.test(f), f).toBe(
-        false
-      );
+      expect(
+        /(?:^|\/)(?:votables|vote-pass|voting-switch|votes|vote-sets|vote|vote-cast)\.ts$/.test(f),
+        f
+      ).toBe(false);
     // Negative controls: the shapes it must see, and one it must not.
     for (const planted of [
       "request.headers.get('Cookie')",
@@ -1292,5 +1365,171 @@ test.describe("Invariant: the room's own vote code and the live event (OSE-2140,
         },
       ])
     ).toEqual([]);
+  });
+});
+
+// ── 12. The vote route (OSE-2128, S4a) ──────────────────────────────────────
+
+/** The only request headers the vote route may read. Never the Cookie header. */
+const VOTE_HEADERS_READ = ['Content-Type', 'Sec-Fetch-Site', 'Content-Length'];
+
+/** What is wrong with a vote file's reads of the request. Empty when it holds. */
+function voteReadProblems(file: string, code: string): string[] {
+  const out: string[] = [];
+  if (/cookie|ose_anon|getOrCreateAnonId|anonymous-id|setAnonCookie/i.test(code))
+    out.push(`${file} names the browser id (a cookie, ose_anon or its reader)`);
+  if (COOKIE_READ.test(code)) out.push(`${file} reads the anonymous cookie`);
+  for (const m of code.matchAll(/headers\.get\(\s*([^)]*)\)/g)) {
+    const arg = m[1].trim().replace(/^['"`]|['"`]$/g, '');
+    if (!VOTE_HEADERS_READ.includes(arg))
+      out.push(`${file} reads the request header ${m[1].trim()}`);
+  }
+  if (/request\.headers\.(?:entries|forEach|keys|values)\b|\[\.\.\.\s*request\.headers/.test(code))
+    out.push(`${file} reads every request header`);
+  return out;
+}
+
+/** Words a vote file's log line must not name (OSE-2128). */
+const VOTE_LOG_WORDS =
+  /\b(?:object_id|objectId|object|side|eventId|event_id|event|pass|claims|k|receipt|participant|teamMarker|marker|body|input|row|set_id|setId|request|url)\b/;
+
+/** What is wrong with a vote file's log lines. Empty when it holds. */
+function voteLogProblems(file: string, code: string): string[] {
+  const calls = consoleCalls(code);
+  if (file === VOTE_CAST_LIB) return calls.map((c) => `${file} logs: ${c.slice(0, 100)}`);
+  return calls
+    .filter((c) => VOTE_LOG_WORDS.test(c.replace(/\btype:\s*'[A-Z_]+'/, '')))
+    .map((c) => `${file} logs a vote's detail: ${c.slice(0, 100)}`);
+}
+
+/** The router block that serves the vote, from its match to its return. */
+function routerVotePostBlock(code: string): string {
+  const from = code.indexOf('const voteMatch');
+  if (from < 0) return '';
+  const to = code.indexOf('}', code.indexOf('handleVote(', from));
+  return to < 0 ? '' : code.slice(from, to + 1);
+}
+
+/** What is wrong with the router's vote block. Empty when it holds. */
+function routerVotePostProblems(block: string): string[] {
+  if (!block) return ['router.ts has no voteMatch block'];
+  const out: string[] = [];
+  const path = /pathname\.match\(\/\^((?:\\\/|[^/])+?)\(/.exec(block)?.[1] ?? '';
+  if (!path.startsWith('\\/api\\/v2\\/vote\\/'))
+    out.push(`the vote's path ${path || '(unreadable)'} is not under /api/v2/vote/`);
+  const cond = /if\s*\(([^{]*)\)\s*\{/.exec(block)?.[1] ?? '';
+  if (!/\bvotingEnabled\(env\)/.test(cond))
+    out.push('the vote is routed without votingEnabled(env) in its condition');
+  if (!/method\s*===\s*'POST'/.test(cond))
+    out.push('the vote is routed for a method other than POST');
+  return out;
+}
+
+test.describe('Invariant: the vote route (OSE-2128)', () => {
+  const byFile = new Map(SOURCES.map((s) => [s.file, s]));
+  const code = (f: string) => {
+    const s = byFile.get(f);
+    expect(s, `${f} exists`).toBeTruthy();
+    return s!.code;
+  };
+
+  test('OSE-2128 | cookie | the vote route never reads the Cookie header or ose_anon', () => {
+    const bad = [VOTE_HANDLER, VOTE_CAST_LIB].flatMap((f) => voteReadProblems(f, code(f)));
+    expect(
+      bad,
+      'ADR-040 decision 5 (D3 reversed): the vote route reads no cookie and sets none; presence is the /q pass in the body.'
+    ).toEqual([]);
+    // The handler does read the two headers it checks: the detector is not blind.
+    expect([...code(VOTE_HANDLER).matchAll(/headers\.get\(/g)].length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('OSE-2128 | log | the vote write logs nothing, and the route logs no detail of a vote', () => {
+    const bad = [VOTE_HANDLER, VOTE_CAST_LIB].flatMap((f) => voteLogProblems(f, code(f)));
+    expect(
+      bad,
+      'No log line carries the object, the side, the event, the pass, k or a receipt.'
+    ).toEqual([]);
+    expect(consoleCalls(code(VOTE_HANDLER)).length, "the detector sees the handler's line").toBe(1);
+  });
+
+  test('OSE-2128 | route | a POST under /api/v2/vote/, routed only when the switch is on; one importer each', () => {
+    const router = code('src/router.ts');
+    expect(routerVotePostProblems(routerVotePostBlock(router))).toEqual([]);
+    expect((router.match(/\bhandleVote\(/g) ?? []).length, 'handleVote is called once').toBe(1);
+    const importers = (mod: string) =>
+      SOURCES.filter(({ code: c }) =>
+        new RegExp(`from\\s+['"][./]*[\\w/]*${mod}(?:\\.js)?['"]`).test(c)
+      )
+        .map((s) => s.file)
+        .sort();
+    expect(importers('handlers/vote')).toEqual(['src/router.ts']);
+    expect(importers('lib/vote-cast')).toEqual([VOTE_HANDLER]);
+  });
+
+  test('OSE-2128 | answer | the handler answers fixed bodies: no spread, no row, no counter', () => {
+    const h = code(VOTE_HANDLER);
+    expect(/\.\.\.\s*[A-Za-z_$]/.test(h), 'the handler spreads a value').toBe(false);
+    expect(h).toMatch(/const ACCEPTED_BODY = '\{"ok":true\}';/);
+    expect(nameRe([...COUNT_COLUMNS, ...SECRET_COLUMNS]).test(h)).toBe(false);
+    expect(
+      /Response\.json\(|JSON\.stringify\(/.test(h.replace(/console\.error\(JSON\.stringify\(/, '')),
+      'the handler serialises a value into an answer'
+    ).toBe(false);
+  });
+
+  test('OSE-2128 OSE-2130 | gate | the rules can fail (negative controls)', () => {
+    expect(voteReadProblems('x.ts', "const c = request.headers.get('Cookie');")).toHaveLength(3);
+    expect(voteReadProblems('x.ts', "const ip = request.headers.get('CF-Connecting-IP');")).toEqual(
+      ["x.ts reads the request header 'CF-Connecting-IP'"]
+    );
+    expect(voteReadProblems('x.ts', "const t = request.headers.get('Content-Type');")).toEqual([]);
+    expect(
+      voteReadProblems('x.ts', 'const id = await getOrCreateAnonId(request);').length
+    ).toBeGreaterThan(0);
+    expect(
+      voteLogProblems(VOTE_CAST_LIB, "console.warn(JSON.stringify({ type: 'X' }));")
+    ).toHaveLength(1);
+    expect(
+      voteLogProblems(
+        VOTE_HANDLER,
+        "console.log(JSON.stringify({ type: 'VOTE', object: input.objectId }));"
+      )
+    ).toHaveLength(1);
+    expect(
+      voteLogProblems(
+        VOTE_HANDLER,
+        "console.error(JSON.stringify({ type: 'VOTE_WRITE_ERROR', error: errorLabel(err) }));"
+      )
+    ).toEqual([]);
+    const block = `const voteMatch = pathname.match(/^\\/api\\/v2\\/vote\\/([^/]+)$/);
+  if (voteMatch && method === 'POST' && votingEnabled(env)) {
+    return handleVote(request, env, voteMatch[1]);
+  }`;
+    expect(routerVotePostProblems(routerVotePostBlock(block))).toEqual([]);
+    expect(
+      routerVotePostProblems(routerVotePostBlock(block.replace(' && votingEnabled(env)', '')))
+    ).toEqual(['the vote is routed without votingEnabled(env) in its condition']);
+    expect(
+      routerVotePostProblems(routerVotePostBlock(block.replace("method === 'POST' && ", '')))
+    ).toEqual(['the vote is routed for a method other than POST']);
+    // The final rule: a job that skips an opened set, or a second batch, is caught.
+    const lib = SOURCES.find((s) => s.file === VOTE_SETS_LIB)!.code;
+    expect(finalJobProblems(lib)).toEqual([]);
+    expect(
+      finalJobProblems(
+        lib.replace('WHERE s.is_final = 0\n', 'WHERE s.is_final = 0 AND s.pepper_epoch IS NULL\n')
+      )
+    ).toContain('the nightly job leaves out a set that opened');
+    expect(
+      finalJobProblems(
+        lib.replace(
+          '  return (results[1]?.meta?.changes ?? 0) > 0;',
+          "  await db.prepare('UPDATE vote_sets SET secret_margin = NULL WHERE id = ?').bind(setId).run();\n  return (results[1]?.meta?.changes ?? 0) > 0;"
+        )
+      )
+    ).toContain('finalizeVoteSet writes outside its batch');
+    expect(
+      finalJobProblems(lib.replace('outcome = (SELECT v_outcome FROM verdict), ', ''))
+    ).toContain("finalizeVoteSet's batch lacks outcome = (SELECT v_outcome FROM verdict)");
   });
 });

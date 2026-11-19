@@ -1,0 +1,22 @@
+info:
+  name: "OSE-2128 | route | a GET never votes"
+  type: http
+  seq: 63
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/vote/{{voteRouteNightId}}?object_id={{voteRouteSongA}}&side=up"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2128 route: a GET is the router 404, in either half', function () { expect(res.getStatus()).to.eql(404); expect(JSON.stringify(res.getBody())).to.eql("{\"ok\":false,\"status\":404,\"error\":\"Not found\"}"); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

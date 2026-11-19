@@ -1,0 +1,28 @@
+info:
+  name: "OSE-2130 | before | the set is not final and has no result"
+  type: http
+  seq: 55
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteRouteNightId}}/votables"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2130 before: 200, not final, no result', function () { expect(res.getStatus()).to.eql(200); expect(b.set.final).to.eql(false); expect(b.set.result).to.eql(null); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -7210,10 +7210,23 @@
         if (o.state === 'draft') return 'Not opened yet';
         return 'Closed';
       };
-      /** OSE-2127: the summary line under the title. */
-      window.votesSummary = function (set) {
+      /**
+       * OSE-2127: the summary line under the title. OSE-2130 (S5): once final, it
+       * names the night's one result, the winner or "too close to call, the
+       * champion retains", and nothing else: no count, no runner-up, no reason.
+       */
+      window.votesSummary = function (set, objects) {
         if (!set) return 'Voting is not set up for this event.';
-        if (set.final) return 'Voting is over and the results are final.';
+        if (set.final) {
+          var result = set.result || null;
+          if (result && result.outcome === 'winner' && result.winner_id) {
+            var won = (objects || []).filter(function (o) { return o && o.id === result.winner_id; })[0];
+            var name = won ? won.label : set.played_by === 'team' ? 'team ' + result.winner_id : '';
+            return name ? 'Voting is over. The night\u2019s winner: ' + name + '.' : 'Voting is over and the results are final.';
+          }
+          if (result && result.outcome === 'too_close') return 'Voting is over. Too close to call, the champion retains.';
+          return 'Voting is over and the results are final.';
+        }
         if (set.state === 'open') return 'Voting is open.';
         if (set.state === 'closed') return 'Voting is closed. You can reopen it while the event is on.';
         return 'Voting is set up, not open yet.';
@@ -7238,7 +7251,7 @@
         var live = data.event_live === true;
         var set = data.set || null;
         var objects = Array.isArray(data.objects) ? data.objects : [];
-        byId('votes-summary').textContent = window.votesSummary(set);
+        byId('votes-summary').textContent = window.votesSummary(set, objects);
         byId('votes-make').hidden = !!set;
         var actions = byId('votes-set-actions');
         actions.hidden = !set || set.final;

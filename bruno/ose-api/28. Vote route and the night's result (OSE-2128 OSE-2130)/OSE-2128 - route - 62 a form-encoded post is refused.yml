@@ -1,0 +1,40 @@
+info:
+  name: "OSE-2128 | route | a form-encoded POST is refused"
+  type: http
+  seq: 62
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/vote/{{voteRouteNightId}}"
+  headers:
+    - name: Content-Type
+      value: "application/x-www-form-urlencoded"
+    - name: Sec-Fetch-Site
+      value: "same-origin"
+  body:
+    type: json
+    data: "{\"object_id\": \"{{voteRouteSongA}}\", \"side\": \"up\", \"pass\": \"vp1.not.apass\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var on = bru.getEnvVar('votingSwitch') === 'on';
+        var status = res.getStatus();
+        var body = JSON.stringify(res.getBody());
+        var cookie = res.getHeader('set-cookie');
+        test('OSE-2128 route: no cookie in the answer', function () { expect(cookie === undefined || cookie === null).to.eql(true); });
+        if (on) {
+          test('OSE-2128 on: a form-encoded POST: 415 JSON_ONLY', function () { expect(status).to.eql(415); expect(body).to.eql("{\"ok\":false,\"code\":\"JSON_ONLY\"}"); });
+        } else {
+          console.log('NOT RUN (VOTING_ENABLED off on staging): a form-encoded POST: 415 JSON_ONLY');
+          test('OSE-2128 off: the vote route answers as if voting did not exist (the router 404)', function () { expect(status).to.eql(404); expect(body).to.eql("{\"ok\":false,\"status\":404,\"error\":\"Not found\"}"); });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

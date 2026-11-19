@@ -1,0 +1,48 @@
+info:
+  name: Vote route and the night's result (OSE-2128 OSE-2130)
+  type: folder
+request: {}
+docs: |-
+  Voting S4a (OSE-2128) and S5 (OSE-2130), part of OSE-1193; OSE ADR-040
+  decisions 4 to 8. One folder because they ship in one PR: the T0 gate
+  votes-never-who refuses a receipt writer (S4a) until the nightly job makes
+  every set final with its result (S5).
+
+  The vote route is POST /api/v2/vote/<event>, JSON only, Sec-Fetch-Site
+  same-origin, with the /q pass in the body. It reads no cookie and sets none.
+  A counted vote and a duplicate answer the same bytes, {"ok":true}, with no
+  count. S5: computing the results makes the set final, and the answer carries
+  one result, the winner or too close to call, and nothing else.
+
+  VOTING_ENABLED is "off" on staging (wrangler.toml; only the owner turns it
+  on). The environment's votingSwitch is a copy of it, held equal by
+  tests/unit/ci/env-parity.test.js. With it "off", the route answers the
+  router's own 404 (seq 60 to 63), no vote is cast, and the night computes to
+  too close to call (seq 90). Every switch-on check logs NOT RUN and records no
+  passing test. With it "on" (seq 60 to 63, 70, 81, 83, 90, 91):
+    - refusal with no pass, cross-site, form-encoded; GET never votes;
+    - 15 browsers scan the room's vote code at /q, each pass read from the
+      Location fragment and never printed, then vote: 12 back song A, 3 song B;
+    - every answer is {"ok":true} with no cookie; a duplicate is the same bytes;
+    - draft song, another night's song, another night's pass: refused;
+    - the set closed: refused; after a reopen, the 3 B voters scan again (the
+      same browser, so the same voter key) and vote B again twice: counted once;
+    - the result: song A, by a lead of 9 over 15 voters, which clears every
+      possible margin (5 to 9) and floor (10 to 14). Had any duplicate counted,
+      B would have 9 and the night would read too close to call;
+    - after final: refused; no count, no runner-up, no voter count anywhere.
+
+  "Cross-brand" on staging is another night in the same brand: the vote route
+  holds no brand, only the event in its path, and a second staging brand with a
+  vote set would need a fixture the owner has not approved (ci-brand is the CI
+  actor's, and a vote set is never deleted). The workers pool votes across two
+  brands (tests/vote-cast.spec.ts).
+
+  No fixture. Two synthetic, unlisted Published nights (seq 10, 11; a set opens
+  only on a Published event, OSE-2142) and their room vote codes. A vote set is
+  never deleted (decision 4), so the run archives both nights (seq 900, 901)
+  and retires both codes (seq 910, 911). Each run leaves two archived
+  synthetic events on staging.
+
+  Mock-layer twins: workers/oursharedevents/tests/vote-cast.spec.ts and
+  tests/vote-result.spec.ts.

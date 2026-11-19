@@ -1,6 +1,7 @@
 /**
- * The vote set and its objects: open, close, reopen and the final lock
- * (OSE-2127, S3 of OSE-1193; OSE ADR-040 decisions 3, 4, 6, 7 and 10).
+ * The vote set and its objects: open, close, reopen, the final lock, and the
+ * night's result (OSE-2127, S3, and OSE-2130, S5, of OSE-1193; OSE ADR-040
+ * decisions 3, 4, 6, 7, 8 and 10).
  *
  * Every SQL statement that writes `vote_sets` or `votable_objects` lives in this
  * file, so the gates read one place (tests/e2e/0-architecture/
@@ -51,20 +52,34 @@
  *     while `pepper_epoch IS NULL` (Q16).
  *   - A booth must be a booth of the same event, in use (S2 review, "Booths").
  *
- * FINAL, IN THIS STORY. Decision 4 says computing the results sets final, and
- * computing results is S5 (OSE-2130). Final also deletes T, V and the markers,
- * so a set that could hold a vote must not be made final until S5 computes its
- * result in the same step. So this file makes final only a set that can hold no
- * vote: one that never opened (no epoch, so no pass can match it), and, for the
- * nightly job only, a void set (which publishes nothing). An admin's finalize
- * answers the same for a void set as for any other set that opened. Once the
- * nightly job has made a void set final, though, the list shows it final while
- * a set that opened and is not void is not, so an admin can then tell that the
- * set is void: that a pass was refused after a pepper rotation. No count and no
- * identity follow from it, and decision 8 makes a void set visible after S5
- * anyway (it gets no report). S5 widens finalizeVoteSet to every set and
- * computes the result in the same batch; until then the T0 gate
- * (votes-never-who) refuses any writer of a receipt or a marker.
+ * FINAL, AND THE NIGHT'S RESULT (S5, OSE-2130). Computing the results is what
+ * makes a set final (decision 4, Q10), and it happens once. One D1 batch, one
+ * transaction (finalizeVoteSet): the objects close; one UPDATE computes the
+ * result, sets is_final, closes the set and nulls T and V; then the receipts,
+ * participant markers and team markers are deleted. The result is computed in
+ * SQL inside that UPDATE (VOTE_RESULT_CTE), from the values the row holds
+ * before it is written, so T and V are read by the database only: they never
+ * reach the Worker, a response or a log line.
+ *
+ *   - Only the night's winner, or "too close to call, the champion retains"
+ *     (Q14). Played by objects: the song with the most up votes against the
+ *     runner-up song. Played by teams: the team with the most distinct
+ *     up-voters (its team markers, one per voter per team, Q16) against the
+ *     runner-up team; never a sum of its songs' up counts.
+ *   - A winner needs the set's distinct voters (its participant markers, raw)
+ *     to reach V, and a lead over the runner-up of at least T. Anything else,
+ *     a tie, or fewer than two in the running, is too_close. There is no
+ *     tiebreak (Q17). "Not for me" counts are not used.
+ *   - A void set gets no result (it publishes nothing). Every other final set
+ *     gets one, whichever rule decided it, and nothing records which rule did:
+ *     not the row, the audit entry, a log line or an answer.
+ *   - Nothing reads the result before final (a CHECK in 0114, and projectSet).
+ *
+ * An admin computes the results (POST .../votables/finalize); the nightly job
+ * computes them for a set left 7 days after its event (decision 4). Both make
+ * every kind of set final. The vote route (S4a) writes receipts and markers, so
+ * every set must reach final for them to be deleted (decision 1); the T0 gate
+ * (votes-never-who) holds that the job skips no set that opened.
  *
  * NO NUMBER, NO SECRET. Nothing here reads a counter, reads T or V, or returns
  * them. T and V are written once, by the first open, and set to null by final.
@@ -122,7 +137,21 @@ export const EVENT_NOT_PUBLISHED = fail(
   'Publish the event to open voting'
 );
 
-/** What the admin sees of a set. No epoch value, no void flag, no counter, no T or V. */
+/**
+ * The night's result (S5): the winner, or "too close to call, the champion
+ * retains". Nothing else: no count, no runner-up, no margin, no voter total,
+ * and no word on which rule decided.
+ */
+export type VoteSetResult =
+  { outcome: 'winner'; winner_id: string } | { outcome: 'too_close'; winner_id: null };
+
+/** The words for a set with no winner, the same whichever rule decided (Q13, Q17). */
+export const VOTE_TOO_CLOSE_WORDS = 'Too close to call, the champion retains';
+
+/**
+ * What the admin sees of a set. No epoch value, no void flag, no counter, no T
+ * or V. `result` is null until the set is final, and null for a void set.
+ */
 export interface VoteSetView {
   id: string;
   event_id: string;
@@ -130,6 +159,7 @@ export interface VoteSetView {
   played_by: 'object' | 'team';
   opened: boolean;
   final: boolean;
+  result: VoteSetResult | null;
 }
 
 /** What the admin sees of an object. */
@@ -152,6 +182,8 @@ interface SetRow {
   played_by: VoteSetView['played_by'] | null;
   opened: number;
   is_final: number;
+  outcome: string | null;
+  winner_id: string | null;
 }
 
 interface ObjectRow {
@@ -165,7 +197,8 @@ interface ObjectRow {
   sort: number;
 }
 
-const SET_SELECT = `SELECT id, event_id, state, played_by, (pepper_epoch IS NOT NULL) AS opened, is_final
+const SET_SELECT = `SELECT id, event_id, state, played_by, (pepper_epoch IS NOT NULL) AS opened, is_final,
+       outcome, winner_id
   FROM vote_sets`;
 const OBJECT_SELECT = `SELECT id, kind, label, booth_id, group_id, state, closes_at, sort
   FROM votable_objects`;
@@ -184,6 +217,15 @@ const EVENT_ON = `EXISTS (SELECT 1 FROM events e
    WHERE e.id = ? AND e.status <> 'archived'
      AND ${EVENT_ON_ITS_DATES})`;
 
+/** The result, built field by field, only for a final set. */
+function projectResult(row: SetRow): VoteSetResult | null {
+  if (Number(row.is_final) !== 1) return null;
+  if (row.outcome === 'winner' && typeof row.winner_id === 'string' && row.winner_id)
+    return { outcome: 'winner', winner_id: row.winner_id };
+  if (row.outcome === 'too_close') return { outcome: 'too_close', winner_id: null };
+  return null;
+}
+
 function projectSet(row: SetRow): VoteSetView {
   return {
     id: row.id,
@@ -192,6 +234,7 @@ function projectSet(row: SetRow): VoteSetView {
     played_by: row.played_by === 'team' ? 'team' : 'object',
     opened: Number(row.opened) === 1,
     final: Number(row.is_final) === 1,
+    result: projectResult(row),
   };
 }
 
@@ -486,98 +529,138 @@ export async function closeVoteSet(
   return set ? { ok: true, value: set } : NO_SET;
 }
 
-/**
- * Which sets this story may make final. `admin`: a set that never opened.
- * `job`: also a void set. A set that opened and is not void waits for S5,
- * which computes its result in the same step (see the header).
- */
-const FINALIZABLE = {
-  admin: (t = '') => `${t}pepper_epoch IS NULL`,
-  job: (t = '') => `(${t}pepper_epoch IS NULL OR ${t}is_void = 1)`,
-} as const;
+/** How long ago, as a SQLite date modifier, a set's event must have ended for the job. */
+const DUE_AGO = `'-${VOTE_FINAL_AFTER_DAYS} days'`;
 
 /**
  * A set is due for the nightly job (decision 4): its event's last date is more
  * than 7 days ago, or, with no date, the set has been untouched for 7 days with
  * no object window in that time. `set` names the vote set in the statement,
- * and `e` the event row. It takes the three bound values in DUE_BINDS.
+ * and `e` the event row. It binds nothing.
  */
 const DUE_WINDOW = (set: string) => `((COALESCE(e.end_date, e.start_date) IS NOT NULL
-      AND substr(COALESCE(e.end_date, e.start_date), 1, 10) < date('now', ?))
+      AND substr(COALESCE(e.end_date, e.start_date), 1, 10) < date('now', ${DUE_AGO}))
    OR (COALESCE(e.end_date, e.start_date) IS NULL
-      AND ${set}.updated_at < datetime('now', ?)
+      AND ${set}.updated_at < datetime('now', ${DUE_AGO})
       AND NOT EXISTS (SELECT 1 FROM votable_objects o
                        WHERE o.set_id = ${set}.id
-                         AND o.closes_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?))))`;
-const DUE_BINDS = [
-  `-${VOTE_FINAL_AFTER_DAYS} days`,
-  `-${VOTE_FINAL_AFTER_DAYS} days`,
-  `-${VOTE_FINAL_AFTER_DAYS} days`,
-];
+                         AND o.closes_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ${DUE_AGO}))))`;
 
 /**
- * Make one set final, for good, in one batch: its objects close, the set closes,
- * is_final becomes 1, T and V become null, and its receipts, participant
- * markers and team markers are deleted. Each delete runs only when the set is
- * final by then, so a refused finalize deletes nothing. Returns whether the set
- * became final in this call.
+ * The night's result for set ?1, as a WITH clause in front of the UPDATE that
+ * makes the set final (S5, decision 7). It reads the row as it is before that
+ * UPDATE writes it, so T and V are still there, and the same statement then
+ * nulls them.
+ *
+ *   cand     the candidates and their unpublished numbers. Played by objects:
+ *            each object and its up count. Played by teams: each team and the
+ *            count of its team markers (distinct up-voters, Q16).
+ *   top2     the two highest; ties keep a fixed order, which never decides
+ *            anything, since a tie is a lead of 0 and 0 is under every T.
+ *   judged   whether there is a winner: T and V present (the set opened),
+ *            distinct voters at least V, two in the running, a lead of at
+ *            least T. One yes or no, with no reason kept.
+ *   verdict  the outcome and the winner's id, or nothing for a void set.
+ */
+const VOTE_RESULT_CTE = `WITH
+  cand(cid, n) AS (
+    SELECT o.id, COALESCE((SELECT t.up_count FROM vote_tallies t WHERE t.object_id = o.id), 0)
+      FROM votable_objects o
+      JOIN vote_sets s ON s.id = o.set_id
+     WHERE s.id = ?1 AND COALESCE(s.played_by, 'object') = 'object'
+    UNION ALL
+    SELECT g.team, (SELECT COUNT(*) FROM vote_team_markers m WHERE m.set_id = ?1 AND m.team_id = g.team)
+      FROM (SELECT DISTINCT o.group_id AS team
+              FROM votable_objects o
+              JOIN vote_sets s ON s.id = o.set_id
+             WHERE s.id = ?1 AND s.played_by = 'team' AND o.group_id IS NOT NULL) g
+  ),
+  top2(cid, n) AS (SELECT cid, n FROM cand ORDER BY n DESC, cid LIMIT 2),
+  judged(gone, wins) AS (
+    SELECT s.is_void,
+           (s.secret_margin IS NOT NULL AND s.secret_floor IS NOT NULL
+            AND (SELECT COUNT(*) FROM vote_participants p WHERE p.set_id = s.id) >= s.secret_floor
+            AND (SELECT COUNT(*) FROM top2) = 2
+            AND (SELECT MAX(n) - MIN(n) FROM top2) >= s.secret_margin)
+      FROM vote_sets s
+     WHERE s.id = ?1
+  ),
+  verdict(v_outcome, v_winner) AS (
+    SELECT CASE WHEN gone = 1 THEN NULL WHEN wins = 1 THEN 'winner' ELSE 'too_close' END,
+           CASE WHEN gone = 0 AND wins = 1 THEN (SELECT cid FROM top2 ORDER BY n DESC, cid LIMIT 1) END
+      FROM judged
+  )`;
+
+/**
+ * Make one set final, for good, with its result, in one batch (decision 4,
+ * S5): its objects close; one UPDATE computes the result (VOTE_RESULT_CTE),
+ * sets is_final, closes the set and nulls T and V; then its receipts,
+ * participant markers and team markers are deleted. Each delete runs only when
+ * the set is final by then, so a refused finalize deletes nothing. `job` also
+ * checks, in the same statements, that the set is still due. Returns whether
+ * the set became final in this call. It returns nothing of the result.
  */
 export async function finalizeVoteSet(
   db: D1Database,
   setId: string,
   eventId: string,
-  mode: keyof typeof FINALIZABLE,
+  mode: 'admin' | 'job',
   nowIso: string
 ): Promise<boolean> {
-  const may = FINALIZABLE[mode]();
   // The job checks again, in the same statements, that the set is still due:
   // an event moved into the future after the job chose the set is left alone
   // (PR #1432 review). An admin's finalize has no date rule.
   const due =
     mode === 'job'
-      ? `AND EXISTS (SELECT 1 FROM events e WHERE e.id = ? AND ${DUE_WINDOW('vote_sets')})`
+      ? `AND EXISTS (SELECT 1 FROM events e WHERE e.id = ?2 AND ${DUE_WINDOW('vote_sets')})`
       : '';
-  const dueBinds = mode === 'job' ? [eventId, ...DUE_BINDS] : [];
+  const stamp = hourStamp(nowIso);
   const results = await db.batch([
     db
       .prepare(
-        `UPDATE votable_objects SET state = 'closed', closes_at = NULL, updated_at = ?
-          WHERE set_id = ? AND event_id = ? AND state <> 'closed'
-            AND set_id IN (SELECT id FROM vote_sets WHERE id = ? AND is_final = 0 AND ${may} ${due})`
+        `UPDATE votable_objects SET state = 'closed', closes_at = NULL, updated_at = ?3
+          WHERE set_id = ?1 AND event_id = ?2 AND state <> 'closed'
+            AND set_id IN (SELECT id FROM vote_sets WHERE id = ?1 AND event_id = ?2 AND is_final = 0 ${due})`
       )
-      .bind(hourStamp(nowIso), setId, eventId, setId, ...dueBinds),
+      .bind(setId, eventId, stamp),
     db
       .prepare(
-        `UPDATE vote_sets
-            SET is_final = 1, final_at = ?, state = 'closed', secret_margin = NULL, secret_floor = NULL, updated_at = ?
-          WHERE id = ? AND event_id = ? AND is_final = 0 AND ${may} ${due}`
+        `${VOTE_RESULT_CTE}
+         UPDATE vote_sets
+            SET outcome = (SELECT v_outcome FROM verdict), winner_id = (SELECT v_winner FROM verdict),
+                is_final = 1, final_at = ?3, state = 'closed', secret_margin = NULL, secret_floor = NULL, updated_at = ?3
+          WHERE id = ?1 AND event_id = ?2 AND is_final = 0 ${due}`
       )
-      .bind(hourStamp(nowIso), hourStamp(nowIso), setId, eventId, ...dueBinds),
+      .bind(setId, eventId, stamp),
     db
       .prepare(
         `DELETE FROM vote_receipts
           WHERE object_id IN (SELECT o.id FROM votable_objects o
                                 JOIN vote_sets s ON s.id = o.set_id
-                               WHERE s.id = ? AND s.is_final = 1)`
+                               WHERE s.id = ?1 AND s.is_final = 1)`
       )
       .bind(setId),
     db
       .prepare(
         `DELETE FROM vote_participants
-          WHERE set_id = ? AND set_id IN (SELECT id FROM vote_sets WHERE id = ? AND is_final = 1)`
+          WHERE set_id = ?1 AND set_id IN (SELECT id FROM vote_sets WHERE id = ?1 AND is_final = 1)`
       )
-      .bind(setId, setId),
+      .bind(setId),
     db
       .prepare(
         `DELETE FROM vote_team_markers
-          WHERE set_id = ? AND set_id IN (SELECT id FROM vote_sets WHERE id = ? AND is_final = 1)`
+          WHERE set_id = ?1 AND set_id IN (SELECT id FROM vote_sets WHERE id = ?1 AND is_final = 1)`
       )
-      .bind(setId, setId),
+      .bind(setId),
   ]);
   return (results[1]?.meta?.changes ?? 0) > 0;
 }
 
-/** An admin's finalize. Only a set that never opened, in this story (see the header). */
+/**
+ * An admin computes the night's results: the set becomes final, for good,
+ * with its result (S5). The answer is the set, its result included, and
+ * nothing that says which rule decided it.
+ */
 export async function adminFinalizeVoteSet(
   db: D1Database,
   eventId: string,
@@ -586,17 +669,12 @@ export async function adminFinalizeVoteSet(
   const set = await readVoteSet(db, eventId);
   if (!set) return NO_SET;
   if (set.final) return FINAL;
-  if (await finalizeVoteSet(db, set.id, eventId, 'admin', nowIso)) {
-    const after = await readVoteSet(db, eventId);
-    return after ? { ok: true, value: after } : NO_SET;
-  }
-  const now = await readVoteSet(db, eventId);
-  if (now?.final) return FINAL;
-  return fail(
-    409,
-    'RESULTS_NOT_BUILT',
-    'A set that has opened becomes final when its results are computed, which a later release adds'
-  );
+  await finalizeVoteSet(db, set.id, eventId, 'admin', nowIso);
+  // Final now, by this call or by one that landed first (the job, or a second
+  // click): either way the set answers final, with the one result it has.
+  const after = await readVoteSet(db, eventId);
+  if (!after) return NO_SET;
+  return after.final ? { ok: true, value: after } : FINAL;
 }
 
 // ── The objects ──────────────────────────────────────────────────────────────
@@ -983,11 +1061,10 @@ const JOB_BATCH = 200;
 /**
  * Every set reaches final (ADR-040 decisions 1 and 4). Nightly:
  *   1. A set whose event's last date is more than 7 days ago (or, with no date,
- *      untouched for 7 days with no object window in them, open or closed) and
- *      that this story may make final
- *      (never opened, or void) becomes final. Each is audited as
- *      VOTE_SET_FINAL against its event, with no detail: which rule decided is
- *      never written anywhere.
+ *      untouched for 7 days with no object window in them, open or closed)
+ *      becomes final with its result (finalizeVoteSet, S5): every kind of set,
+ *      opened or not, void or not. Each is audited as VOTE_SET_FINAL against
+ *      its event, with no detail: which rule decided is never written anywhere.
  *   2. Tallies of objects in sets final for more than 30 days are deleted.
  *   3. OSE-2142: a set left open on an event that is not Published (its status
  *      changed outside the app: a seed, a script) is closed, as the app's own
@@ -1005,12 +1082,12 @@ export async function runVoteFinalJob(env: VoteFinalJobEnv): Promise<VoteFinalJo
       .prepare(
         `SELECT s.id, s.event_id FROM vote_sets s
            JOIN events e ON e.id = s.event_id
-          WHERE s.is_final = 0 AND ${FINALIZABLE.job('s.')}
+          WHERE s.is_final = 0
             AND ${DUE_WINDOW('s')}
           ORDER BY s.id
           LIMIT ?`
       )
-      .bind(...DUE_BINDS, JOB_BATCH)
+      .bind(JOB_BATCH)
       .all<{ id: string; event_id: string }>();
     for (const { id, event_id } of due.results ?? []) {
       try {

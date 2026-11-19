@@ -1,11 +1,11 @@
 info:
-  name: OSE-2127 | final | a set that opened is not made final by an admin (results arrive in S5)
+  name: "OSE-2128 | setup | add Song B"
   type: http
-  seq: 90
+  seq: 31
 
 http:
   method: POST
-  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/finalize"
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteRouteNightId}}/votables/objects"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"
@@ -15,7 +15,7 @@ http:
       value: "application/json"
   body:
     type: json
-    data: "{}"
+    data: "{\"kind\": \"song\", \"label\": \"Song B\", \"sort\": 1}"
   auth: inherit
 
 runtime:
@@ -23,11 +23,12 @@ runtime:
     - type: after-response
       code: |-
         const b = res.getBody() || {};
-        test('OSE-2127 final: 409 RESULTS_NOT_BUILT, still not final', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('RESULTS_NOT_BUILT'); });
+        test('OSE-2128 setup: Song B is added', function () { expect(res.getStatus()).to.eql(201); });
+        bru.setVar('voteRouteSongB', (b.object && b.object.id) || 'missing-song');
 
 settings:
   encodeUrl: true
   timeout: 0
-  followRedirects: true
-  maxRedirects: 5
+  followRedirects: false
+  maxRedirects: 0
   forwardAuthorizationHeader: false

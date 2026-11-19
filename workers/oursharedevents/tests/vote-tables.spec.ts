@@ -270,6 +270,9 @@ describe('OSE-2125 | the vote tables: where they live and what they hold', () =>
       'refused_votes',
       'created_at',
       'updated_at',
+      // 0114 (OSE-2130, S5): the night's one result, null until final.
+      'winner_id',
+      'outcome',
     ]);
     expect(await columns('votable_objects')).toEqual([
       'id',

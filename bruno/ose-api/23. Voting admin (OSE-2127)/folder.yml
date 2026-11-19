@@ -12,8 +12,10 @@ docs: |-
 
   The final lock (seq 100 to 105): a set that never opened is made final by an
   admin; it then does not open and takes no object, even after the event's date
-  changes. A set that opened becomes final only when S5 computes its results, so
-  an admin's finalize of it is refused (seq 90). Every write is in the audit
+  changes. Since S5 (OSE-2130), computing the results is what makes a set that
+  opened final (seq 90): the answer carries the night's one result, here too
+  close to call (no vote is cast while VOTING_ENABLED is off), and nothing that
+  says why. A second compute is refused (seq 91). Every write is in the audit
   log with no detail (seq 170).
 
   The cross-brand refusal (seq 160 and 161) uses the CI brand service token.
@@ -25,7 +27,8 @@ docs: |-
   event (OSE-2142); the final-lock event stays a draft, which needs no open. A vote set is never deleted (ADR-040 decision 4), so the event delete
   refuses them (seq 900) and the run archives both (seq 905 and 906). Each run
   therefore leaves two archived synthetic events on staging. The nightly job
-  makes the never-opened set final after 7 days; the opened one waits for S5.
+  makes the never-opened set final after 7 days; the opened one is made final
+  by seq 90.
 
   The requests run in `seq` order. Open needs ANON_ID_HASH_PEPPER on staging:
   without it seq 60 answers 409 PEPPER_NOT_SET and the run is red.

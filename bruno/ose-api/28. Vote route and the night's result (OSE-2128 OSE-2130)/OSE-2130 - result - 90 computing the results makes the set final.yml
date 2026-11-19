@@ -1,0 +1,50 @@
+info:
+  name: "OSE-2130 | result | computing the results makes the set final, with one result"
+  type: http
+  seq: 90
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteRouteNightId}}/votables/finalize"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        const set = b.set || {};
+        var on = bru.getEnvVar('votingSwitch') === 'on';
+        function keys(v, out) {
+          out = out || [];
+          if (Array.isArray(v)) v.forEach(function (x) { keys(x, out); });
+          else if (v && typeof v === 'object') Object.keys(v).forEach(function (k) { out.push(k); keys(v[k], out); });
+          return out;
+        }
+        var banned = keys(b).filter(function (k) { return /count|tally|tallies|voter|participa|turnout|total|percent|share|score|net|sum|runner|rank|standing|margin|floor|secret|reason|rule/i.test(k); });
+        test('OSE-2130 result: 200, final and closed', function () { expect(res.getStatus()).to.eql(200); expect(set.final).to.eql(true); expect(set.state).to.eql('closed'); });
+        test('OSE-2130 result: the set carries one result and no other new field', function () { expect(Object.keys(set).sort()).to.eql(['event_id', 'final', 'id', 'opened', 'played_by', 'result', 'state']); expect(Object.keys(set.result || {}).sort()).to.eql(['outcome', 'winner_id']); });
+        test('OSE-2130 result: no count, voter count, runner-up, margin, floor or reason anywhere', function () { expect(banned).to.eql([]); expect(/:\s*\d/.test(JSON.stringify(set))).to.eql(false); });
+        if (on) {
+          test('OSE-2130 on: song A wins (12 of 15 voters against 3: a lead of 9 clears every margin and floor; a counted duplicate would make it too close)', function () { expect(set.result).to.eql({ outcome: 'winner', winner_id: bru.getVar('voteRouteSongA') }); });
+        } else {
+          console.log('NOT RUN (VOTING_ENABLED off on staging): the night of 15 voters names its winner');
+          test('OSE-2130 off: no vote was cast, so the night reads too close to call', function () { expect(set.result).to.eql({ outcome: 'too_close', winner_id: null }); });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

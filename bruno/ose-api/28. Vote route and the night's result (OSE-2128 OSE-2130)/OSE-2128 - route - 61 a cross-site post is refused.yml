@@ -1,0 +1,40 @@
+info:
+  name: "OSE-2128 | route | a cross-site POST is refused"
+  type: http
+  seq: 61
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/vote/{{voteRouteNightId}}"
+  headers:
+    - name: Content-Type
+      value: "application/json"
+    - name: Sec-Fetch-Site
+      value: "cross-site"
+  body:
+    type: json
+    data: "{\"object_id\": \"{{voteRouteSongA}}\", \"side\": \"up\", \"pass\": \"vp1.not.apass\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var on = bru.getEnvVar('votingSwitch') === 'on';
+        var status = res.getStatus();
+        var body = JSON.stringify(res.getBody());
+        var cookie = res.getHeader('set-cookie');
+        test('OSE-2128 route: no cookie in the answer', function () { expect(cookie === undefined || cookie === null).to.eql(true); });
+        if (on) {
+          test('OSE-2128 on: a cross-site POST: 403 SAME_ORIGIN_ONLY', function () { expect(status).to.eql(403); expect(body).to.eql("{\"ok\":false,\"code\":\"SAME_ORIGIN_ONLY\"}"); });
+        } else {
+          console.log('NOT RUN (VOTING_ENABLED off on staging): a cross-site POST: 403 SAME_ORIGIN_ONLY');
+          test('OSE-2128 off: the vote route answers as if voting did not exist (the router 404)', function () { expect(status).to.eql(404); expect(body).to.eql("{\"ok\":false,\"status\":404,\"error\":\"Not found\"}"); });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

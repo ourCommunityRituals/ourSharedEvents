@@ -1,0 +1,40 @@
+info:
+  name: "OSE-2128 | setup | the room vote code of the second night"
+  type: http
+  seq: 36
+
+# Only the room's own vote code mints a pass (OSE-2140). Never prints its URL.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteRouteOtherId}}/votables/code"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        var m = /\/q\/(qrt_[0-9a-f]{32})\?type=vote$/.exec(String((b.code && b.code.url) || ''));
+        var shaped = !!m;
+        bru.setVar('voteRouteOtherToken', m ? m[1] : 'qrt_missing');
+        bru.setVar('voteRouteOtherCodeId', String((b.code && b.code.id) || 'missing-code'));
+        m = null;
+        test('OSE-2128 setup: the room vote code of the second night is made', function () { expect(res.getStatus() === 201).to.eql(true); expect(shaped).to.eql(true); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

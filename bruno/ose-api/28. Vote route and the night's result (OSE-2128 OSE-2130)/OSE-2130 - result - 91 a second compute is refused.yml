@@ -1,0 +1,89 @@
+info:
+  name: "OSE-2130 | result | a second compute is refused, and a vote after final too (switch on)"
+  type: http
+  seq: 91
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteRouteNightId}}/votables/finalize"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2130 result: a second compute is 409 VOTE_SET_FINAL', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('VOTE_SET_FINAL'); });
+
+        // Helpers for the switch-on half (OSE-2128). They never print a Location, a
+        // pass, a cookie or a voter: every check compares booleans or fixed text.
+        var base = bru.getEnvVar('baseUrl');
+        var access = { 'CF-Access-Client-Id': bru.getEnvVar('cfAccessClientId') || '', 'CF-Access-Client-Secret': bru.getEnvVar('cfAccessClientSecret') || '' };
+        var edgeToken = bru.getEnvVar('ocrCiEdgeToken') || '';
+        function send(cfg) {
+          return new Promise(function (resolve) {
+            bru.sendRequest(Object.assign({ timeout: 20000, maxRedirects: 0, validateStatus: null }, cfg), function (err, r) {
+              var x = r || (err && err.response) || null;
+              if (!x) { resolve({ status: (err && err.status) || 0, headers: {}, data: null }); return; }
+              resolve({ status: x.status, headers: x.headers || {}, data: x.data });
+            });
+          });
+        }
+        function header(r, name) {
+          var h = r.headers || {};
+          var key = Object.keys(h).filter(function (k) { return k.toLowerCase() === name; })[0];
+          var v = key ? h[key] : undefined;
+          return Array.isArray(v) ? v.join(', ') : v;
+        }
+        function text(r) { return typeof r.data === 'string' ? r.data : JSON.stringify(r.data); }
+        function browser() {
+          var hex = '';
+          for (var i = 0; i < 32; i++) hex += Math.floor(Math.random() * 16).toString(16);
+          return 'anon_' + hex;
+        }
+        // One scan of the room's vote code by one browser: its pass, or '' when none.
+        async function scan(token, cookie) {
+          var headers = Object.assign({ Cookie: 'ose_anon=' + cookie, Accept: 'text/html', 'User-Agent': 'ose-bruno-vote-route' }, access);
+          if (edgeToken) headers['X-OCR-CI'] = edgeToken;
+          var r = await send({ method: 'GET', url: base + '/q/' + token + '?type=vote', headers: headers });
+          var loc = String(header(r, 'location') || '');
+          var at = loc.indexOf('#t=');
+          var pass = at < 0 ? '' : loc.slice(at + 3);
+          loc = null;
+          return pass;
+        }
+        async function vote(nightId, objectId, side, pass) {
+          var r = await send({
+            method: 'POST',
+            url: base + '/api/v2/vote/' + nightId,
+            headers: { 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'same-origin' },
+            data: JSON.stringify({ object_id: objectId, side: side, pass: pass })
+          });
+          return { status: r.status, body: text(r), cookie: header(r, 'set-cookie') };
+        }
+        var on = bru.getEnvVar('votingSwitch') === 'on';
+
+        if (!on) {
+          console.log('NOT RUN (VOTING_ENABLED off on staging): a vote after final is refused');
+        } else {
+          var passesB = JSON.parse(bru.getVar('voteRoutePassesB') || '[]');
+          var late = await vote(bru.getVar('voteRouteNightId'), bru.getVar('voteRouteSongA'), 'up', passesB[0]);
+          test('OSE-2130 on: a vote after final is refused', function () { expect(late.status).to.eql(409); expect(late.body).to.eql('{"ok":false,"code":"NOT_OPEN"}'); });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
