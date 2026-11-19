@@ -233,10 +233,14 @@ describe('the map script | never who, never where', () => {
     ]) {
       expect(PAN_SCRIPT, bad).not.toContain(bad);
     }
-    // The position is read once, only on a tap or where it is already allowed.
+    // The position is read in one place, and only on the tap, even where
+    // location is already allowed (owner 2026-11-19, OSE-2198 Part C): `find`
+    // is defined once and handed to the click listener, and named nowhere else.
     expect(PAN_SCRIPT.match(/getCurrentPosition/g)).toHaveLength(1);
-    expect(PAN_SCRIPT).toContain("if (s.state === 'granted') find();");
+    expect(PAN_SCRIPT.match(/\bfind\b/g)).toHaveLength(2);
+    expect(PAN_SCRIPT).toContain('function find() {');
     expect(PAN_SCRIPT).toContain("me.addEventListener('click', find);");
+    expect(PAN_SCRIPT).not.toContain('granted');
   });
 
   it('writes words into the page as text, never as markup', () => {

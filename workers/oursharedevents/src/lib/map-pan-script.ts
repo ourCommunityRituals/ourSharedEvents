@@ -26,7 +26,9 @@
  *     slowly than the map. From twice the size the second tier of street names
  *     and landmarks shows (`data-k`, lib/street-labels.ts).
  *   - A scale bar in miles, worked out from the drawing's real size on screen.
- *   - Where the visitor already allowed location, or taps "Show where I am": a
+ *   - When the visitor taps "Show where I am", and only then, even where
+ *     location is already allowed (owner, 2026-11-19: "the user need to tap and
+ *     save purposely by choice"; OSE-2198 Part C): a
  *     ringed dot where they are, the distance to each area in the list under
  *     the map with the nearest put first, and a line read out by a screen
  *     reader naming the nearest area.
@@ -46,7 +48,9 @@
  * is never sent, stored, logged or put in the address, and no cell is made
  * from it (owner ruling 2026-11-16, "zip finds, tap places"): it goes into the
  * distance sum and the you-are-here mark, and nowhere else. The script asks for
- * it only when location is already allowed or on a tap, never on its own.
+ * it only on the tap, never on its own; it keeps nothing (no storage, no
+ * cookie) and makes no request (tests/e2e/0-architecture/
+ * location-on-tap.invariant.spec.ts).
  *
  * On a phone a one-finger drag scrolls the page while the map is whole
  * (`touch-action: pan-y`), and moves the map once it is zoomed in. A tap that
@@ -329,13 +333,15 @@ const SCRIPT = String.raw`(function () {
       { enableHighAccuracy: false, maximumAge: 600000, timeout: 15000 }
     );
   }
+  // Read only on the tap, even where location is already allowed (owner,
+  // 2026-11-19: "the user need to tap and save purposely by choice"). The
+  // permission state only hides a button that could never work.
   if (!geo) me.hidden = true;
   else {
     me.addEventListener('click', find);
     if (navigator.permissions && navigator.permissions.query) {
       navigator.permissions.query({ name: 'geolocation' }).then(function (s) {
-        if (s.state === 'granted') find();
-        else if (s.state === 'denied') me.hidden = true;
+        if (s.state === 'denied') me.hidden = true;
       }, function () {});
     }
   }
