@@ -24,7 +24,26 @@ import type { Page } from '@playwright/test';
 export const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
 
 /** axe-core with every WCAG A/AA rule: one line per violation, any impact. */
+/**
+ * Waits for running CSS transitions to end. `.btn` fades its opacity over
+ * 0.2 s when a button turns from disabled to enabled (the zoom Reset button
+ * after +), and axe measures colour mid-fade: WebKit failed color-contrast on
+ * `button[data-z="reset"]` on main run 44423687790 for that reason alone.
+ * Only transitions are awaited; a looping animation never finishes.
+ */
+export async function settleTransitions(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => typeof CSSTransition !== 'undefined' && a instanceof CSSTransition)
+        .map((a) => a.finished.catch(() => undefined))
+    )
+  );
+}
+
 export async function axeWcag(page: Page, include?: string): Promise<string[]> {
+  await settleTransitions(page);
   let b = new AxeBuilder({ page }).withTags(WCAG_TAGS);
   if (include) b = b.include(include);
   const r = await b.analyze();
