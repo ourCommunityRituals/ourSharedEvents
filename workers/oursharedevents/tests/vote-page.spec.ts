@@ -220,7 +220,7 @@ describe('headers: never stored, no referrer, never framed, the script talks onl
     expect(csp).toContain("connect-src 'self'");
     const nonce = /'nonce-([^']+)'/.exec(csp)?.[1];
     expect(nonce).toBeTruthy();
-    const scripts = res.text.match(/<script[^>]*>/g) ?? [];
+    const scripts = res.text.match(/<script\b[^>]*>/gi) ?? [];
     expect(scripts.length).toBeGreaterThan(0);
     for (const s of scripts) expect(s).toContain(`nonce="${nonce}"`);
   });

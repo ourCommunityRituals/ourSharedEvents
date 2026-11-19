@@ -15,7 +15,8 @@
  * (lib/vote-public-result.ts). The rate limit is applied at the route.
  */
 
-import { html, renderErrorPage, formatEventWhen } from './pages';
+import { renderErrorPage, formatEventWhen } from './pages';
+import { HARDENING_HEADERS } from '../lib/security-headers';
 import { canRender, parseEventState } from '../domain/event-state';
 import { fetchFairSponsors, type FairRow } from './booth-page';
 import { renderVotePage } from '../lib/vote-page-render';
@@ -53,17 +54,27 @@ function votePageUnavailable(): Response {
  * no referrer, never framed, and the script may reach only this site.
  */
 export function votePageResponse(body: string): Response {
-  const res = html(body);
-  res.headers.set('Cache-Control', 'no-store');
-  res.headers.set('Referrer-Policy', 'no-referrer');
-  res.headers.set('X-Frame-Options', 'DENY');
-  res.headers.set('X-Robots-Tag', 'noindex');
-  const csp = res.headers.get('Content-Security-Policy') ?? '';
-  res.headers.set(
-    'Content-Security-Policy',
-    csp.replace(/frame-ancestors [^;]+/, "frame-ancestors 'none'")
-  );
-  return res;
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  const nonce = btoa(binary);
+  // Nonce every <script>, as the house html() helper does.
+  const nonced = body.replace(/<script(?=[\s>])/g, `<script nonce="${nonce}"`); // nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag
+  return new Response(nonced, {
+    status: 200,
+    headers: {
+      ...HARDENING_HEADERS,
+      'Content-Type': 'text/html; charset=utf-8',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'X-Robots-Tag': 'noindex',
+      'Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer',
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+      'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
+    },
+  });
 }
 
 export async function handleVotePage(
