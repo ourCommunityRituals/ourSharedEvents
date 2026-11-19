@@ -31,41 +31,45 @@
 -- (stock/totals.json is the owner's). routable-reset.sql takes them off the
 -- list after the run.
 --
+-- Every row is active, so every row is verified (qr_verified = 1): the rule
+-- active <=> verified holds for seeds too (tests/seed-live-rows-verified.spec.ts).
+--
 -- Dates are relative, so the rows never age. The upserts put every row back to
 -- this state on each pass. data_class = 'synthetic' marks them as CI test data.
 -- Idempotent. Never apply to production.
 
 INSERT INTO events (id, brand_id, title, slug, status, is_published, listed_from,
                     location, where_address, lat, lon, h3_res9, h3_res7,
-                    start_date, end_date, timezone, data_class)
+                    start_date, end_date, timezone, data_class, qr_verified)
 VALUES
   ('rt-offmap-pre', 'root', 'Routable Check (off map, upcoming)', 'rt-offmap-pre',
    'active', 0, NULL, 'Routable Check Hall', '2196 West Unlisted Rd, Blue Island IL 60406',
    41.615273, -87.860418, '8926644051bffff', '872664405ffffff',
-   date('now', '+21 days'), date('now', '+21 days'), 'America/Chicago', 'synthetic'),
+   date('now', '+21 days'), date('now', '+21 days'), 'America/Chicago', 'synthetic', 1),
   ('rt-offmap-live', 'root', 'Routable Check (off map, today)', 'rt-offmap-live',
    'active', 0, NULL, 'Routable Check Hall', '2196 West Unlisted Rd, Blue Island IL 60406',
    41.615273, -87.860418, '8926644051bffff', '872664405ffffff',
-   date('now', '-1 day'), date('now', '+1 day'), 'America/Chicago', 'synthetic'),
+   date('now', '-1 day'), date('now', '+1 day'), 'America/Chicago', 'synthetic', 1),
   ('rt-grace-pre', 'root', 'Routable Check (grace, upcoming)', 'rt-grace-pre',
    'active', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+30 days'),
    'Routable Check Lanes', '2196 East Listed Ave',
    38.512345, -116.512345, '89298e593bbffff', NULL,
-   date('now', '+21 days'), date('now', '+21 days'), 'America/Chicago', 'synthetic'),
+   date('now', '+21 days'), date('now', '+21 days'), 'America/Chicago', 'synthetic', 1),
   ('rt-listed-pre', 'root', 'Routable Check (listed, upcoming)', 'rt-listed-pre',
    'active', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days'),
    'Routable Check Lanes', '2196 East Listed Ave',
    38.512345, -116.512345, '89298e593bbffff', NULL,
-   date('now', '+21 days'), date('now', '+21 days'), 'America/Chicago', 'synthetic'),
+   date('now', '+21 days'), date('now', '+21 days'), 'America/Chicago', 'synthetic', 1),
   ('rt-listed-live', 'root', 'Routable Check (listed, today)', 'rt-listed-live',
    'active', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days'),
    'Routable Check Lanes', '2196 East Listed Ave',
    38.512345, -116.512345, '89298e593bbffff', NULL,
-   date('now', '-1 day'), date('now', '+1 day'), 'America/Chicago', 'synthetic')
+   date('now', '-1 day'), date('now', '+1 day'), 'America/Chicago', 'synthetic', 1)
 ON CONFLICT(id) DO UPDATE SET
   status = 'active', is_published = excluded.is_published, listed_from = excluded.listed_from,
   location = excluded.location, where_address = excluded.where_address,
   lat = excluded.lat, lon = excluded.lon, h3_res9 = excluded.h3_res9, h3_res7 = excluded.h3_res7,
   start_date = excluded.start_date, end_date = excluded.end_date, starts_at = NULL,
   timezone = excluded.timezone, data_class = 'synthetic', attendance_mode = 'in_person',
-  zip_code = NULL, venue_canonical_id = NULL, event_correlation_id = NULL;
+  zip_code = NULL, venue_canonical_id = NULL, event_correlation_id = NULL,
+  qr_verified = 1;
