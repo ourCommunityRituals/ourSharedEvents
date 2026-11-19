@@ -6,20 +6,25 @@ const file = path.join(__dirname, '../../../stock/nodes.json');
 const { nodes } = JSON.parse(readFileSync(file, 'utf8'));
 
 describe('stock/nodes.json', () => {
-  // Owner, 2026-11-05: Beverly is dropped; Mount Greenwood stays, deliberately empty.
-  test('has exactly the five nodes', () => {
+  // Owner, 2026-11-05: Mount Greenwood stays, deliberately empty. Owner, 2026-11-19:
+  // Beverly and Morgan Park (its own place) are nodes, and `area` holds every row whose
+  // address is in no boundary (it has cells and no polygon).
+  test('has exactly the five nodes, Beverly, Morgan Park and the wider area', () => {
     expect(nodes.map((n) => n.id).sort()).toEqual([
+      'area',
       'auburn-gresham',
+      'beverly',
       'blue-island',
       'evergreen-park',
+      'morgan-park',
       'mount-greenwood',
       'oak-lawn',
     ]);
   });
 
-  test('every node has a zip, a cell and a source', () => {
+  test('every node but the wider area has a zip; every node has a cell and a source', () => {
     for (const n of nodes) {
-      expect(n.zips.length, `${n.id} zips`).toBeGreaterThanOrEqual(1);
+      if (n.id !== 'area') expect(n.zips.length, `${n.id} zips`).toBeGreaterThanOrEqual(1);
       expect(n.cells.length, `${n.id} cells`).toBeGreaterThanOrEqual(1);
       expect(n.source, `${n.id} source`).toMatch(/^https:\/\//);
     }
@@ -34,15 +39,16 @@ describe('stock/nodes.json', () => {
     }
   });
 
-  test('every node has a polygon boundary', () => {
-    for (const n of nodes) {
+  test('every node but the wider area has a polygon boundary', () => {
+    expect(nodes.find((n) => n.id === 'area').polygon).toBeUndefined();
+    for (const n of nodes.filter((x) => x.id !== 'area')) {
       expect(['Polygon', 'MultiPolygon'], n.id).toContain(n.polygon.type);
       expect(n.polygon.coordinates.length, n.id).toBeGreaterThanOrEqual(1);
     }
   });
 
   test('cells are exactly the res 7 cells overlapping the polygon', () => {
-    for (const n of nodes) {
+    for (const n of nodes.filter((x) => x.polygon)) {
       const polys = n.polygon.type === 'Polygon' ? [n.polygon.coordinates] : n.polygon.coordinates;
       const regenerated = new Set();
       for (const p of polys) {
@@ -61,5 +67,19 @@ describe('stock/nodes.json', () => {
 
   test('the file stays under 200 KB', () => {
     expect(statSync(file).size).toBeLessThan(200 * 1024);
+  });
+
+  // The wider area's cells are the res 7 cells its rows sit in.
+  test('every cell of the wider area holds a row of the seed, and no row of it sits elsewhere', () => {
+    const seed = JSON.parse(
+      readFileSync(path.join(__dirname, '../../../stock/seed/seed.json'), 'utf8')
+    );
+    const area = nodes.find((n) => n.id === 'area');
+    const rowCells = new Set(
+      [...seed.events, ...seed.businesses]
+        .filter((r) => r.node === 'area')
+        .map((r) => h3.latLngToCell(r.lat, r.lng, 7))
+    );
+    for (const c of rowCells) expect(area.cells, c).toContain(c);
   });
 });

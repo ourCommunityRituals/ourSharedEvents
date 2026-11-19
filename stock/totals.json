@@ -1,23 +1,27 @@
 {
-  "note": "Owner, 2026-11-06: the permanent testing totals per place (stock events). Owner, 2026-11-07: Auburn Gresham holds 8 stock events, so its town search reads 9 with CI's permanent test-event-001 (Beverly Arts Center, zip 60643, which the owner's Auburn Gresham and Beverly towns both include). make-seed trims the seed to exactly these; every test and check reads them through the seed. Change them only on the owner's word.",
+  "note": "Owner, 2026-11-06: the permanent testing totals per place (stock events). Owner, 2026-11-07: Auburn Gresham holds 8 stock events, so its town search reads 9 with CI's permanent test-event-001 (Beverly Arts Center, zip 60643, which the owner's Auburn Gresham and Beverly towns both include). make-seed trims the seed to exactly these; every test and check reads them through the seed. Change them only on the owner's word. Owner, 2026-11-19 (yes to appending the survey rows): the totals follow the appended rows. Beverly holds no events because its one known venue, the Beverly Arts Center, has an address inside the Morgan Park boundary and the address decides. The `area` node holds every row whose address is in no node's boundary.",
   "totals": {
-    "blue-island": 10,
-    "auburn-gresham": 8,
-    "evergreen-park": 11,
-    "oak-lawn": 17,
-    "mount-greenwood": 0
+    "blue-island": 32,
+    "auburn-gresham": 16,
+    "evergreen-park": 26,
+    "oak-lawn": 31,
+    "mount-greenwood": 0,
+    "beverly": 0,
+    "morgan-park": 6,
+    "area": 242
   },
   "searches": {
-    "60406": 10,
-    "60453": 17,
-    "60620": 8,
+    "60406": 32,
+    "60453": 31,
+    "60620": 16,
+    "60643": 6,
     "60655": 0,
-    "60805": 11,
-    "Blue Island": 10,
-    "Auburn Gresham": 9,
-    "Beverly": 9,
-    "Evergreen Park": 11,
-    "Oak Lawn": 17,
+    "60805": 26,
+    "Blue Island": 33,
+    "Auburn Gresham": 24,
+    "Beverly": 23,
+    "Evergreen Park": 26,
+    "Oak Lawn": 31,
     "Mount Greenwood": 0
   },
   "fixtures": {

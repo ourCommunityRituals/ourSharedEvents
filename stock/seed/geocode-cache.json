@@ -1,4 +1,176 @@
 {
+  "1 Liechty Dr, Williams Bay, WI 53191": {
+    "lat": 42.573329035932,
+    "lng": -88.539668098503,
+    "matched": "1 LIECHTY DR, WILLIAMS BAY, WI, 53191",
+    "variant": "as written"
+  },
+  "1 Village Circle, Willow Springs, IL 60480": {
+    "lat": 41.7342561,
+    "lng": -87.8771669,
+    "matched": "Willow Springs Village Hall, 1, Village Circle, Willow Springs, Lyons Township, Cook County, Illinois, 60480, United Sta",
+    "variant": "OpenStreetMap Nominatim (approximate)"
+  },
+  "100 E Michigan Blvd, Michigan City, IN 46360": {
+    "lat": 41.719592875257,
+    "lng": -86.902905386765,
+    "matched": "100 E MICHIGAN BLVD, MICHIGAN CITY, IN, 46360",
+    "variant": "as written"
+  },
+  "10001 S Pulaski Rd, Chicago, IL 60655": {
+    "lat": 41.711293013214,
+    "lng": -87.721011557429
+  },
+  "10324 S Western Ave, Chicago, IL 60643": {
+    "lat": 41.705899283173,
+    "lng": -87.681681377274
+  },
+  "10331 Interlochen Dr, Palos Hills, IL 60465": {
+    "lat": 41.702761008041,
+    "lng": -87.832924125545,
+    "matched": "10331 INTERLOCHEN DR, PALOS HILLS, IL, 60465",
+    "variant": "as written"
+  },
+  "104 N Main St, Wanatah, IN 46390": {
+    "lat": 41.430029843427,
+    "lng": -86.897668112757,
+    "matched": "104 N MAIN ST, WANATAH, IN, 46390",
+    "variant": "as written"
+  },
+  "10444 S Central Ave, Oak Lawn, IL 60453": {
+    "lat": 41.702136858064,
+    "lng": -87.759746140576
+  },
+  "10614 S Western Ave, Chicago, IL 60643": {
+    "lat": 41.700471023232,
+    "lng": -87.681509505007
+  },
+  "10618 S Western Ave, Chicago, IL 60643": {
+    "lat": 41.700363506806,
+    "lng": -87.681506010037
+  },
+  "10621 S Seeley Ave, Chicago, IL 60643": {
+    "lat": 41.700616578897,
+    "lng": -87.672765020473
+  },
+  "107 Generations Dr, Three Oaks, MI 49128": {
+    "lat": 41.801883724198,
+    "lng": -86.611464813529,
+    "matched": "107 GENERATIONS DR, THREE OAKS, MI, 49128",
+    "variant": "as written"
+  },
+  "107 N Main St, Hebron, IN 46341": {
+    "lat": 41.318922088745,
+    "lng": -87.199897526106,
+    "matched": "107 N MAIN ST, HEBRON, IN, 46341",
+    "variant": "as written"
+  },
+  "10730 S Western Ave, Chicago, IL 60643": {
+    "lat": 41.69835147939,
+    "lng": -87.68144094548
+  },
+  "109 E North St, Peotone, IL 60468": {
+    "lat": 41.334437024779,
+    "lng": -87.790700600514,
+    "matched": "109 E NORTH ST, PEOTONE, IL, 60468",
+    "variant": "as written"
+  },
+  "109 Generations Dr, Three Oaks, MI 49128": {
+    "lat": 41.801896143229,
+    "lng": -86.611464448647,
+    "matched": "109 GENERATIONS DR, THREE OAKS, MI, 49128",
+    "variant": "as written"
+  },
+  "1100 E 8th St, Michigan City, IN 46360": {
+    "lat": 41.716780985994,
+    "lng": -86.884843654132,
+    "matched": "1100 E 8TH ST, MICHIGAN CITY, IN, 46360",
+    "variant": "as written"
+  },
+  "11010 S Kedzie Ave, Chicago, IL 60655": {
+    "lat": 41.693207111494,
+    "lng": -87.700961093383,
+    "matched": "11010 S KEDZIE AVE, CHICAGO, IL, 60655",
+    "variant": "as written"
+  },
+  "111 E Mississippi Ave, Elwood, IL 60421": {
+    "lat": 41.404123481138,
+    "lng": -88.110901064666,
+    "matched": "111 E MISSISSIPPI AVE, ELWOOD, IL, 60421",
+    "variant": "as written"
+  },
+  "11111 Wilson Rd, New Buffalo, MI 49117": {
+    "lat": 41.770076948251,
+    "lng": -86.72209140215,
+    "matched": "11111 WILSON RD, NEW BUFFALO, MI, 49117",
+    "variant": "as written"
+  },
+  "112 N. Cass St, Berrien Springs, MI 49103": {
+    "lat": 41.946589923218,
+    "lng": -86.338703486466,
+    "matched": "112 N CASS ST, BERRIEN SPRINGS, MI, 49103",
+    "variant": "as written"
+  },
+  "114 S Main St, Wanatah, IN 46390": {
+    "lat": 41.429184834325,
+    "lng": -86.89803884184,
+    "matched": "114 S MAIN ST, WANATAH, IN, 46390",
+    "variant": "as written"
+  },
+  "115 N 2nd St, Peotone, IL 60468": {
+    "lat": 41.333461360704,
+    "lng": -87.790754378372,
+    "matched": "115 N 2ND ST, PEOTONE, IL, 60468",
+    "variant": "as written"
+  },
+  "115 S Pulaski Rd, Chicago, IL 60624": {
+    "lat": 41.879048653986,
+    "lng": -87.725535076322,
+    "matched": "115 S PULASKI RD, CHICAGO, IL, 60624",
+    "variant": "as written"
+  },
+  "11601 S Pulaski Rd, Alsip, IL 60803": {
+    "lat": 41.682089584387,
+    "lng": -87.719884831447,
+    "matched": "11601 S PULASKI RD, ALSIP, IL, 60803",
+    "variant": "as written"
+  },
+  "118 N Clark St, Chicago, IL 60602": {
+    "lat": 41.883479209068,
+    "lng": -87.630991146863,
+    "matched": "118 N CLARK ST, CHICAGO, IL, 60602",
+    "variant": "as written"
+  },
+  "11830 N Sollitt Rd, Beecher, IL 60401": {
+    "lat": 41.293846055704,
+    "lng": -87.635128412888,
+    "matched": "11830 N SOLLITT RD, BEECHER, IL, 60401",
+    "variant": "as written"
+  },
+  "11945 Red Arrow Hwy, Sawyer, MI 49125": {
+    "lat": 41.903503664772,
+    "lng": -86.592587035558,
+    "matched": "11945 RED ARROW HWY, SAWYER, MI, 49125",
+    "variant": "as written"
+  },
+  "12 W Moore St, Hanna, IN 46340": {
+    "lat": 41.411513142818,
+    "lng": -86.781492579032,
+    "matched": "12 W MOORE ST, HANNA, IN, 46340",
+    "variant": "as written"
+  },
+  "12007 Prairie Ave, Hebron, IL 60034": {
+    "lat": 42.47132568496,
+    "lng": -88.431466349231,
+    "matched": "12007 PRAIRIE AVE, HEBRON, IL, 60034",
+    "variant": "as written"
+  },
+  "121 N LaSalle St, Chicago, IL 60602": {
+    "lat": 41.883377755162,
+    "lng": -87.632335272385,
+    "matched": "121 N LA SALLE ST, CHICAGO, IL, 60602",
+    "variant": "as written"
+  },
   "1210 W 78th Pl, Chicago, IL 60620": {
     "lat": 41.751449,
     "lng": -87.654504
@@ -7,41 +179,123 @@
     "lat": 41.671021,
     "lng": -87.680423
   },
+  "12291 Red Arrow Hwy, Sawyer, MI 49125": {
+    "lat": 41.896427993643,
+    "lng": -86.599793541525,
+    "matched": "12291 RED ARROW HWY, SAWYER, MI, 49125",
+    "variant": "as written"
+  },
+  "124 E Michigan St, New Carlisle, IN 46552": {
+    "lat": 41.706117563421,
+    "lng": -86.509932571817,
+    "matched": "124 W MICHIGAN ST, NEW CARLISLE, IN, 46552",
+    "variant": "as written"
+  },
+  "1246 W 92nd St, Chicago, IL 60620": {
+    "lat": 41.726846308919,
+    "lng": -87.655196513646
+  },
+  "125 Plain St, Sharon, WI 53585": {
+    "lat": 42.502886845288,
+    "lng": -88.729893422061,
+    "matched": "125 PLAIN ST, SHARON, WI, 53585",
+    "variant": "as written"
+  },
   "12725 S Western Ave, Blue Island, IL 60406": {
     "lat": 41.66222,
     "lng": -87.680037
+  },
+  "128 East Front Street, Buchanan, MI 49107": {
+    "lat": 41.827299718004,
+    "lng": -86.360129345336,
+    "matched": "128 E FRONT ST, BUCHANAN, MI, 49107",
+    "variant": "as written"
+  },
+  "12804 Highland Ave, Blue Island, IL 60406": {
+    "lat": 41.659769671324,
+    "lng": -87.687464289418
+  },
+  "12856 Red Arrow Highway, Sawyer, MI 49125": {
+    "lat": 41.88635791516,
+    "lng": -86.609820824776,
+    "matched": "12856 RED ARROW HWY, SAWYER, MI, 49125",
+    "variant": "as written"
+  },
+  "12857 Red Arrow Hwy, Sawyer, MI 49125": {
+    "lat": 41.886676537929,
+    "lng": -86.609431988969,
+    "matched": "12857 RED ARROW HWY, SAWYER, MI, 49125",
+    "variant": "as written"
+  },
+  "12915 Maple Ave, Blue Island, IL 60406": {
+    "lat": 41.658427206171,
+    "lng": -87.684860354969
   },
   "12924 Western Ave, Blue Island, IL 60406": {
     "lat": 41.658391,
     "lng": -87.680162
   },
   "12952 Western Ave, Blue Island, IL 60406": {
-    "lat": 41.657795,
-    "lng": -87.68016
+    "lat": 41.657794849036,
+    "lng": -87.680160446283
   },
   "13011 S Western Ave, Blue Island, IL 60406": {
     "lat": 41.656818,
     "lng": -87.680003
   },
   "13018 Maple Ave, Blue Island, IL 60406": {
-    "lat": 41.656312,
-    "lng": -87.684929
+    "lat": 41.656311814472,
+    "lng": -87.684929393249
   },
   "13031 Western Ave, Blue Island, IL 60406": {
     "lat": 41.656244,
     "lng": -87.680001
   },
+  "13051 Greenwood Ave, Blue Island, IL 60406": {
+    "lat": 41.655844222253,
+    "lng": -87.682491080573
+  },
+  "13083 Red Arrow Hwy, Sawyer, MI 49125": {
+    "lat": 41.880972931762,
+    "lng": -86.612458046868,
+    "matched": "13083 RED ARROW HWY, SAWYER, MI, 49125",
+    "variant": "as written"
+  },
   "13115 S Western Ave, Blue Island, IL 60406": {
     "lat": 41.655175,
     "lng": -87.679982
+  },
+  "1312 S Racine Ave, Chicago, IL 60608": {
+    "lat": 41.865076003382,
+    "lng": -87.65670200699,
+    "matched": "1312 S RACINE AVE, CHICAGO, IL, 60608",
+    "variant": "as written"
+  },
+  "13323 S Green Bay Ave, Chicago, IL 60633": {
+    "lat": 41.653322730871,
+    "lng": -87.541028412926,
+    "matched": "13323 S GREEN BAY AVE, CHICAGO, IL, 60633",
+    "variant": "as written"
   },
   "13328 Olde Western Ave, Blue Island, IL 60406": {
     "lat": 41.651337,
     "lng": -87.681243
   },
+  "1335 119th St, Whiting, IN 46394": {
+    "lat": 41.679412042192,
+    "lng": -87.496429088588,
+    "matched": "1335 119TH ST, WHITING, IN, 46394",
+    "variant": "as written"
+  },
   "13357 Olde Western Ave, Blue Island, IL 60406": {
     "lat": 41.650142,
     "lng": -87.680906
+  },
+  "13372 California Road, New Troy, MI 49119": {
+    "lat": 41.876468878625,
+    "lng": -86.550160419449,
+    "matched": "13372 CALIFORNIA RD, NEW TROY, MI, 49119",
+    "variant": "as written"
   },
   "13404 Olde Western Ave, Blue Island, IL 60406": {
     "lat": 41.649072,
@@ -51,78 +305,896 @@
     "lat": 41.648875,
     "lng": -87.680859
   },
+  "13461 Red Arrow Highway, Harbert, MI 49115": {
+    "lat": 41.872716904366,
+    "lng": -86.626836418128,
+    "matched": "13461 RED ARROW HWY, HARBERT, MI, 49115",
+    "variant": "as written"
+  },
   "1350 W 89th St, Chicago, IL 60620": {
-    "lat": 41.732406,
-    "lng": -87.656964
+    "lat": 41.732405680747,
+    "lng": -87.656963849357,
+    "matched": "1350 W 89TH ST, CHICAGO, IL, 60620",
+    "variant": "as written"
+  },
+  "13535 Red Arrow Highway, Harbert, MI 49115": {
+    "lat": 41.872517409386,
+    "lng": -86.627427387371,
+    "matched": "13535 RED ARROW HWY, HARBERT, MI, 49115",
+    "variant": "as written"
+  },
+  "1357 N California Ave, Chicago, IL 60622": {
+    "lat": 41.906027964065,
+    "lng": -87.696878346093,
+    "matched": "1357 N CALIFORNIA AVE, CHICAGO, IL, 60622",
+    "variant": "as written"
+  },
+  "1440 W 84th St, Chicago, IL 60620": {
+    "lat": 41.742397112691,
+    "lng": -87.588684666586,
+    "variant": "without ZIP"
+  },
+  "1443 119th St, Whiting, IN 46394": {
+    "lat": 41.679445164684,
+    "lng": -87.494107307475,
+    "matched": "1443 119TH ST, WHITING, IN, 46394",
+    "variant": "as written"
+  },
+  "145 W Main St, Barrington, IL 60010": {
+    "lat": 42.154161958501,
+    "lng": -88.137278327094,
+    "matched": "145 W MAIN ST, BARRINGTON, IL, 60010",
+    "variant": "as written"
+  },
+  "150 W Main St, Barrington, IL 60010": {
+    "lat": 42.154276835416,
+    "lng": -88.137429555497,
+    "matched": "150 W MAIN ST, BARRINGTON, IL, 60010",
+    "variant": "as written"
+  },
+  "1510 N Wells St, Chicago, IL 60610": {
+    "lat": 41.909568412023,
+    "lng": -87.634736676257,
+    "matched": "1510 N WELLS ST, CHICAGO, IL, 60610",
+    "variant": "as written"
+  },
+  "15311 Three Oaks Rd, Three Oaks, MI 49128": {
+    "lat": 41.841970669487,
+    "lng": -86.609811955141,
+    "matched": "15311 THREE OAKS RD, THREE OAKS, MI, 49128",
+    "variant": "as written"
+  },
+  "16 E Main St, La Crosse, IN 46348": {
+    "lat": 41.317256554099,
+    "lng": -86.890683990879,
+    "matched": "16 E MAIN ST, LA CROSSE, IN, 46348",
+    "variant": "as written"
+  },
+  "1701 N Milwaukee Ave, Chicago, IL 60647": {
+    "lat": 41.912328809023,
+    "lng": -87.680365624554,
+    "matched": "1701 N MILWAUKEE AVE, CHICAGO, IL, 60647",
+    "variant": "as written"
+  },
+  "1717 W 31st St, Oak Brook, IL 60523": {
+    "lat": 41.83194998432,
+    "lng": -87.960629887709,
+    "matched": "1717 31ST ST, OAK BROOK, IL, 60523",
+    "variant": "as written"
+  },
+  "1735 Oliver St, Whiting, IN 46394": {
+    "lat": 41.681848461973,
+    "lng": -87.494293658128,
+    "matched": "1735 OLIVER ST, WHITING, IN, 46394",
+    "variant": "as written"
+  },
+  "175 Water St, Burlington, IL 60109": {
+    "lat": 42.051407943524,
+    "lng": -88.548159488605,
+    "matched": "175 WATER ST, BURLINGTON, IL, 60109",
+    "variant": "as written"
+  },
+  "1754 W 79th St, Chicago, IL 60620": {
+    "lat": 41.750359431655,
+    "lng": -87.667602811664
+  },
+  "1811 S Lawrence Ave, Lockport, IL 60441": {
+    "lat": 41.578000239178,
+    "lng": -88.054483575932,
+    "matched": "1811 LAWRENCE AVE, LOCKPORT, IL, 60441",
+    "variant": "as written"
+  },
+  "1817 W 96th St, Chicago, IL 60643": {
+    "lat": 41.720536490933,
+    "lng": -87.578628721267,
+    "variant": "without ZIP"
+  },
+  "18385 W Commercial, Wilmington, IL 60481": {
+    "lat": 41.3283743698,
+    "lng": -88.054999080061,
+    "matched": "18385 W COMMERCIAL ST, WILMINGTON, IL, 60481",
+    "variant": "as written"
+  },
+  "1926 S Halsted St, Chicago, IL 60608": {
+    "lat": 41.856169502126,
+    "lng": -87.646671717944,
+    "matched": "1926 S HALSTED ST, CHICAGO, IL, 60608",
+    "variant": "as written"
+  },
+  "1938 Clark St, Whiting, IN 46394": {
+    "lat": 41.6782345223,
+    "lng": -87.496107274276,
+    "matched": "1938 CLARK ST, WHITING, IN, 46394",
+    "variant": "as written"
+  },
+  "19433 Renwick Rd, Crest Hill, IL 60403": {
+    "lat": 41.5927602,
+    "lng": -88.0887637,
+    "matched": "Prairie Bluff Public Golf Club, 19433, Renwick Road, Crest Hill, Will County, Illinois, 60446, United States",
+    "variant": "OpenStreetMap Nominatim (approximate)"
+  },
+  "1949 N Hoyne Ave, Chicago, IL 60647": {
+    "lat": 41.917187254078,
+    "lng": -87.680000995312,
+    "matched": "1949 N HOYNE AVE, CHICAGO, IL, 60647",
+    "variant": "as written"
+  },
+  "1955 E 75th St, Chicago, IL 60649": {
+    "lat": 41.758812301707,
+    "lng": -87.576696902189,
+    "matched": "1955 E 75TH ST, CHICAGO, IL, 60649",
+    "variant": "as written"
+  },
+  "1962 W 95th St, Chicago, IL 60643": {
+    "lat": 41.72118127845,
+    "lng": -87.672195272992
+  },
+  "201 W Sigler St, Hebron, IN 46341": {
+    "lat": 41.318759277901,
+    "lng": -87.201530315765,
+    "matched": "201 W SIGLER ST, HEBRON, IN, 46341",
+    "variant": "as written"
+  },
+  "2017 W 110th Pl, Chicago, IL 60643": {
+    "lat": 41.693047004148,
+    "lng": -87.672044207325
+  },
+  "2021 S Lawrence Ave, Lockport, IL 60441": {
+    "lat": 41.576570121842,
+    "lng": -88.054461406445,
+    "matched": "2021 LAWRENCE AVE, LOCKPORT, IL, 60441",
+    "variant": "as written"
+  },
+  "203 Main St, Maple Park, IL 60151": {
+    "lat": 41.90775945239,
+    "lng": -88.600437014461,
+    "matched": "203 MAIN ST, MAPLE PARK, IL, 60151",
+    "variant": "as written"
+  },
+  "203 S Washington St, Wanatah, IN 46390": {
+    "lat": 41.429690723168,
+    "lng": -86.902275387675,
+    "matched": "203 S WASHINGTON ST, WANATAH, IN, 46390",
+    "variant": "as written"
+  },
+  "208 E Main St, Peotone, IL 60468": {
+    "lat": 41.333226587574,
+    "lng": -87.789576097658,
+    "matched": "208 E MAIN ST, PEOTONE, IL, 60468",
+    "variant": "as written"
+  },
+  "209 Rainbow Trail, Trail Creek, IN 46360": {
+    "lat": 41.70277492848,
+    "lng": -86.863479824001,
+    "matched": "209 RAINBOW TRL, TRAIL CREEK, IN, 46360",
+    "variant": "as written"
+  },
+  "2099 W. John Beers Rd, Stevensville, MI 49127": {
+    "lat": 42.01447993039,
+    "lng": -86.504503365792,
+    "matched": "2099 W JOHN BEERS RD, STEVENSVILLE, MI, 49127",
+    "variant": "as written"
+  },
+  "211 Rainbow Trail, Trail Creek, IN 46360": {
+    "lat": 41.702759920803,
+    "lng": -86.863479387388,
+    "matched": "211 RAINBOW TRL, TRAIL CREEK, IN, 46360",
+    "variant": "as written"
+  },
+  "2111 W 47th St, Chicago, IL 60609": {
+    "lat": 41.808438358384,
+    "lng": -87.677420407973,
+    "matched": "2111 W 47TH ST, CHICAGO, IL, 60609",
+    "variant": "as written"
+  },
+  "2153 W 111th St, Chicago, IL 60643": {
+    "lat": 41.691809601202,
+    "lng": -87.675411723825
+  },
+  "2155 Broadway St, Blue Island, IL 60406": {
+    "lat": 41.650550350809,
+    "lng": -87.674527581457
+  },
+  "218 Madison St, Oak Park, IL 60302": {
+    "lat": 41.880109518957,
+    "lng": -87.780718734756,
+    "matched": "218 MADISON ST, OAK PARK, IL, 60302",
+    "variant": "as written"
+  },
+  "220 E Pittsburgh Ave, Milwaukee, WI 53204": {
+    "lat": 43.029482826493,
+    "lng": -87.909351777159,
+    "matched": "220 E PITTSBURGH AVE, MILWAUKEE, WI, 53204",
+    "variant": "as written"
+  },
+  "2255 76th St, Franksville, WI 53126": {
+    "lat": 42.811240469639,
+    "lng": -88.012273731556,
+    "matched": "2255 76TH ST, FRANKSVILLE, WI, 53126",
+    "variant": "as written"
+  },
+  "231 E 9th St, Lockport, IL 60441": {
+    "lat": 41.588827122847,
+    "lng": -88.055586485126,
+    "matched": "231 E 9TH ST, LOCKPORT, IL, 60441",
+    "variant": "as written"
+  },
+  "231 N Wolf Rd, Northlake, IL 60164": {
+    "lat": 41.910998286402,
+    "lng": -87.903262561343,
+    "matched": "231 N WOLF RD, NORTHLAKE, IL, 60164",
+    "variant": "as written"
+  },
+  "23323 Shelby Rd, Shelby, IN 46377": {
+    "lat": 41.193929011283,
+    "lng": -87.347800186209,
+    "matched": "23323 SHELBY RD, SHELBY, IN, 46377",
+    "variant": "as written"
+  },
+  "23860 Old Barrington Rd, Lake Barrington, IL 60010": {
+    "lat": 42.205821304478,
+    "lng": -88.168590009431,
+    "matched": "23860 N OLD BARRINGTON RD, LAKE BARRINGTON, IL, 60010",
+    "variant": "as written"
+  },
+  "2400 Oriole Trail, Long Beach, IN 46360": {
+    "lat": 41.745668052341,
+    "lng": -86.851206915465,
+    "matched": "2400 ORIOLE TRL, LONG BEACH, IN, 46360",
+    "variant": "as written"
+  },
+  "24002 Parrish Ave, Schneider, IN 46376": {
+    "lat": 41.182937767039,
+    "lng": -87.448134069755,
+    "matched": "24002 PARRISH AVE, SCHNEIDER, IN, 46376",
+    "variant": "as written"
+  },
+  "2407 W 111th St, Chicago, IL 60643": {
+    "lat": 41.691722120221,
+    "lng": -87.681263910301,
+    "matched": "2407 W 111TH ST, CHICAGO, IL, 60655",
+    "variant": "as written"
+  },
+  "2407 W 111th St, Chicago, IL 60655": {
+    "lat": 41.691722120221,
+    "lng": -87.681263910301
+  },
+  "2433 York St, Blue Island, IL 60406": {
+    "lat": 41.657088526132,
+    "lng": -87.681684558498
+  },
+  "2434 Vermont St, Blue Island, IL 60406": {
+    "lat": 41.65548144069,
+    "lng": -87.681489301345
+  },
+  "2460 W 102nd St, Chicago, IL 60655": {
+    "lat": 41.708255296955,
+    "lng": -87.68347997855
+  },
+  "250 Williams St, Williams Bay, WI 53191": {
+    "lat": 42.581911447612,
+    "lng": -88.544209020317,
+    "matched": "250 WILLIAMS ST, WILLIAMS BAY, WI, 53191",
+    "variant": "as written"
+  },
+  "2500 Lake Ave, Lakewood, IL 60014": {
+    "lat": 42.233473979225,
+    "lng": -88.364360512328,
+    "matched": "2500 LAKE AVE, VILLAGE OF LAKEWOOD, IL, 60014",
+    "variant": "as written"
   },
   "2519 Grove St, Blue Island, IL 60406": {
     "lat": 41.65439,
     "lng": -87.683358
   },
+  "2519 Northwestern Ave, Racine, WI 53404": {
+    "lat": 42.742273023347,
+    "lng": -87.812560112358,
+    "matched": "2519 NORTHWESTERN AVE, RACINE, WI, 53404",
+    "variant": "as written"
+  },
+  "25225 N Ivanhoe Rd, Wauconda, IL 60084": {
+    "lat": 42.248346119331,
+    "lng": -88.123666039671,
+    "matched": "25225 IVANHOE RD, WAUCONDA, IL, 60084",
+    "variant": "as written"
+  },
+  "25448 W Seil Rd, Shorewood, IL 60404": {
+    "lat": 41.506744870355,
+    "lng": -88.232726408747,
+    "matched": "25448 W SEIL RD, SHOREWOOD, IL, 60404",
+    "variant": "as written"
+  },
+  "269 Fontana Blvd, Fontana-on-Geneva Lake, WI 53125": {
+    "lat": 42.549003710755,
+    "lng": -88.575675333963,
+    "matched": "269 FONTANA BLVD, FONTANA, WI, 53125",
+    "variant": "as written"
+  },
+  "27064 Dutton Rd, Beecher, IL 60401": {
+    "lat": 41.396431492016,
+    "lng": -87.603631764471,
+    "matched": "27064 DUTTON RD, BEECHER, IL, 60401",
+    "variant": "as written"
+  },
   "2800 W 95th St, Evergreen Park, IL 60805": {
     "lat": 41.720897,
     "lng": -87.692044
   },
+  "2855 W 95th St, Evergreen Park, IL 60805": {
+    "lat": 41.7207656691,
+    "lng": -87.693689886547
+  },
+  "3000 W Jefferson St, Joliet, IL 60435": {
+    "lat": 41.521981911808,
+    "lng": -88.151838770017,
+    "matched": "3000 W JEFFERSON ST, JOLIET, IL, 60435",
+    "variant": "as written"
+  },
+  "301 E. 8th St., Michigan City, IN 46360": {
+    "lat": 41.714703748345,
+    "lng": -86.897198664636,
+    "matched": "301 E 8TH ST, MICHIGAN CITY, IN, 46360",
+    "variant": "as written"
+  },
+  "302 Willow St, Maple Park, IL 60151": {
+    "lat": 41.906137058956,
+    "lng": -88.600085227917,
+    "matched": "302 WILLOW ST, MAPLE PARK, IL, 60151",
+    "variant": "as written"
+  },
+  "305 E North St, Capron, IL 61012": {
+    "lat": 42.400566899437,
+    "lng": -88.738362362045,
+    "matched": "305 E NORTH ST, CAPRON, IL, 61012",
+    "variant": "as written"
+  },
+  "309 S 5th St, Kirkland, IL 60146": {
+    "lat": 42.090645417169,
+    "lng": -88.849438626555,
+    "matched": "309 S 5TH ST, KIRKLAND, IL, 60146",
+    "variant": "as written"
+  },
+  "309 W Mississippi Ave, Elwood, IL 60421": {
+    "lat": 41.404206530544,
+    "lng": -88.118221479103,
+    "matched": "309 MISSISSIPPI AVE, ELWOOD, IL, 60421",
+    "variant": "as written"
+  },
+  "310 N Division St, Chicago, IL 60610": {
+    "lat": 41.903889904656,
+    "lng": -87.635881017968,
+    "matched": "310 W DIVISION ST, CHICAGO, IL, 60610",
+    "variant": "as written"
+  },
   "3146 W 95th St, Evergreen Park, IL 60805": {
-    "lat": 41.720798,
-    "lng": -87.701035
+    "lat": 41.720797753941,
+    "lng": -87.7010346933
+  },
+  "3243 W 111th St, Chicago, IL 60655": {
+    "lat": 41.691489459154,
+    "lng": -87.702283816991
+  },
+  "3300 W 111th St, Chicago, IL 60655": {
+    "lat": 41.691585982953,
+    "lng": -87.703401431152
   },
   "3422 W 95th St, Evergreen Park, IL 60805": {
     "lat": 41.72071,
     "lng": -87.708013
   },
   "3450 W 97th St, Evergreen Park, IL 60805": {
-    "lat": 41.717057,
-    "lng": -87.708524
+    "lat": 41.717056699803,
+    "lng": -87.708523901454,
+    "matched": "3450 W 97TH ST, EVERGREEN PARK, IL, 60805",
+    "variant": "as written"
+  },
+  "3500 S Morgan St, Chicago, IL 60609": {
+    "lat": 41.830626466036,
+    "lng": -87.651043227592,
+    "matched": "3500 S MORGAN ST, CHICAGO, IL, 60609",
+    "variant": "as written"
+  },
+  "3509 W 111th St, Chicago, IL 60655": {
+    "lat": 41.691387341285,
+    "lng": -87.708498038433
   },
   "3541 W 99th St, Evergreen Park, IL 60805": {
     "lat": 41.713268,
     "lng": -87.710624
   },
+  "3658 S Wentworth Ave, Chicago, IL 60609": {
+    "lat": 41.827912716454,
+    "lng": -87.631512540088,
+    "matched": "3658 S WENTWORTH AVE, CHICAGO, IL, 60609",
+    "variant": "as written"
+  },
+  "36630 N Hutchins Rd, Gurnee, IL 60031": {
+    "lat": 42.394761240487,
+    "lng": -87.98580996892,
+    "matched": "36630 N HUTCHINS RD, GURNEE, IL, 60031",
+    "variant": "as written"
+  },
+  "3721 W 111th St, Chicago, IL 60655": {
+    "lat": 41.691314726266,
+    "lng": -87.713253355078
+  },
+  "373 W Geneva St, Williams Bay, WI 53191": {
+    "lat": 42.574692607352,
+    "lng": -88.556925968274,
+    "matched": "373 W GENEVA ST, WILLIAMS BAY, WI, 53191",
+    "variant": "as written"
+  },
+  "3737 W 99th St, Chicago, IL 60655": {
+    "lat": 41.713231346842,
+    "lng": -87.713046462427
+  },
+  "400 S State St, Chicago, IL 60605": {
+    "lat": 41.876871558922,
+    "lng": -87.627727352366,
+    "matched": "400 S STATE ST, CHICAGO, IL, 60605",
+    "variant": "as written"
+  },
+  "4000 Cherokee Drive, Michiana, MI 49117": {
+    "lat": 41.7636237,
+    "lng": -86.8077193,
+    "matched": "Cherokee Drive, New Buffalo Township, Berrien County, Michigan, 49117, United States",
+    "variant": "OpenStreetMap Nominatim (approximate)"
+  },
+  "401 Devils Ln, Walworth, WI 53184": {
+    "lat": 42.527421924859,
+    "lng": -88.593886918253,
+    "matched": "401 DEVILS LN, WALWORTH, WI, 53184",
+    "variant": "as written"
+  },
+  "401 E Mississippi Ave, Elwood, IL 60421": {
+    "lat": 41.404229688388,
+    "lng": -88.106366278197,
+    "matched": "401 MISSISSIPPI AVE, ELWOOD, IL, 60421",
+    "variant": "as written"
+  },
+  "4019 W 167th St, Country Club Hills, IL 60478": {
+    "lat": 41.586137325335,
+    "lng": -87.713931134217,
+    "matched": "4019 W 167TH ST, COUNTRY CLUB HILLS, IL, 60478",
+    "variant": "as written"
+  },
+  "402 N Cleveland Ave, Galien, MI 49113": {
+    "lat": 41.80643414642,
+    "lng": -86.49870218379,
+    "matched": "402 N CLEVELAND AVE, GALIEN, MI, 49113",
+    "variant": "as written"
+  },
+  "4024 N Elston Ave, Chicago, IL 60618": {
+    "lat": 41.954130565573,
+    "lng": -87.719899148562,
+    "matched": "4024 N ELSTON AVE, CHICAGO, IL, 60618",
+    "variant": "as written"
+  },
   "406 W Winneconna Pkwy, Chicago, IL 60620": {
     "lat": 41.753903,
     "lng": -87.634705
   },
+  "408 S Bray St, New Carlisle, IN 46552": {
+    "lat": 41.702772964535,
+    "lng": -86.512306047266,
+    "matched": "408 S BRAY ST, NEW CARLISLE, IN, 46552",
+    "variant": "as written"
+  },
+  "410 N 1st St, Cary, IL 60013": {
+    "lat": 42.212894451218,
+    "lng": -88.238324454177,
+    "matched": "410 N 1ST ST, CARY, IL, 60013",
+    "variant": "as written"
+  },
+  "441 Main St, Racine, WI 53403": {
+    "lat": 42.728803747864,
+    "lng": -87.783076360305,
+    "matched": "441 MAIN ST, RACINE, WI, 53403",
+    "variant": "as written"
+  },
+  "4460 Lake St, Bridgman, MI 49106": {
+    "lat": 41.942880311474,
+    "lng": -86.561895469044,
+    "matched": "4460 LAKE ST, BRIDGMAN, MI, 49106",
+    "variant": "as written"
+  },
+  "4545 Midlothian Tpke, Crestwood, IL 60418": {
+    "lat": 41.639548037505,
+    "lng": -87.730232725584,
+    "matched": "4545 MIDLOTHIAN TPKE, CRESTWOOD, IL, 60418",
+    "variant": "as written"
+  },
   "4625 W 110th St, Oak Lawn, IL 60453": {
-    "lat": 41.692769,
-    "lng": -87.735291
+    "lat": 41.692769414091,
+    "lng": -87.73529051667
+  },
+  "4660 W 94th St, Oak Lawn, IL 60453": {
+    "lat": 41.721987331173,
+    "lng": -87.73867526911
+  },
+  "4740 N Western Ave, Chicago, IL 60625": {
+    "lat": 41.967873409605,
+    "lng": -87.688958746271,
+    "matched": "4740 N WESTERN AVE, CHICAGO, IL, 60625",
+    "variant": "as written"
+  },
+  "48200 Perkins Blvd, Grand Beach, MI 49117": {
+    "lat": 41.772678241684,
+    "lng": -86.794249256102,
+    "matched": "48200 PERKINS BLVD, GRAND BEACH, MI, 49117",
+    "variant": "as written"
+  },
+  "486 E Michigan St, New Carlisle, IN 46552": {
+    "lat": 41.707522691416,
+    "lng": -86.497990553055,
+    "matched": "486 E MICHIGAN ST, NEW CARLISLE, IN, 46552",
+    "variant": "as written"
+  },
+  "500 S Broadway, Beverly Shores, IN 46301": {
+    "lat": 41.674076902977,
+    "lng": -86.986592296137,
+    "matched": "500 BROADWAY, BEVERLY SHORES, IN, 46301",
+    "variant": "as written"
+  },
+  "5100 Museum Dr, Oak Lawn, IL 60453": {
+    "lat": 41.719400538618,
+    "lng": -87.747451569401
+  },
+  "511 W Main St, Kirkland, IL 60146": {
+    "lat": 42.092751506994,
+    "lng": -88.849762856993,
+    "matched": "511 W MAIN ST, KIRKLAND, IL, 60146",
+    "variant": "as written"
+  },
+  "5120 Museum Dr, Oak Lawn, IL 60453": {
+    "lat": 41.719387670159,
+    "lng": -87.74783940049
+  },
+  "513 W 72nd St, Chicago, IL 60621": {
+    "lat": 41.763429833771,
+    "lng": -87.63743798287,
+    "matched": "513 W 72ND ST, CHICAGO, IL, 60621",
+    "variant": "as written"
+  },
+  "513 W Main St, Kirkland, IL 60146": {
+    "lat": 42.092751808951,
+    "lng": -88.849795585653,
+    "matched": "513 W MAIN ST, KIRKLAND, IL, 60146",
+    "variant": "as written"
+  },
+  "515 N First St, Peotone, IL 60468": {
+    "lat": 41.337775319579,
+    "lng": -87.792294488359,
+    "matched": "515 N 1ST ST, PEOTONE, IL, 60468",
+    "variant": "as written"
+  },
+  "525 Barry Ave, Lockport, IL 60441": {
+    "lat": 41.557939463681,
+    "lng": -88.060739792445,
+    "matched": "525 BARRY AVE, LOCKPORT, IL, 60441",
+    "variant": "as written"
+  },
+  "525 Kenosha St, Walworth, WI 53184": {
+    "lat": 42.531102881069,
+    "lng": -88.590856923239,
+    "matched": "525 KENOSHA ST, WALWORTH, WI, 53184",
+    "variant": "as written"
+  },
+  "532 Gould St, Beecher, IL 60401": {
+    "lat": 41.34126394241,
+    "lng": -87.631689692798,
+    "matched": "532 GOULD ST, BEECHER, IL, 60401",
+    "variant": "as written"
   },
   "5420 W 95th St, Oak Lawn, IL 60453": {
     "lat": 41.719858,
     "lng": -87.756455
   },
+  "5615 W Race Ave, Chicago, IL 60644": {
+    "lat": 41.889218843714,
+    "lng": -87.766697131379,
+    "matched": "5615 W RACE AVE, CHICAGO, IL, 60644",
+    "variant": "as written"
+  },
+  "5768 Saint Joseph Ave, Stevensville, MI 49127": {
+    "lat": 42.013079264594,
+    "lng": -86.519820835668,
+    "matched": "5768 SAINT JOSEPH AVE, STEVENSVILLE, MI, 49127",
+    "variant": "as written"
+  },
   "5850 W 103rd St, Oak Lawn, IL 60453": {
-    "lat": 41.705227,
-    "lng": -87.765414
+    "lat": 41.705227240197,
+    "lng": -87.765414472203
+  },
+  "5870 Sawyer Road, Sawyer, MI 49125": {
+    "lat": 41.885435802645,
+    "lng": -86.594147223347,
+    "matched": "5870 SAWYER RD, SAWYER, MI, 49125",
+    "variant": "as written"
+  },
+  "5N430 Railroad St, Wayne, IL 60184": {
+    "lat": 41.951008853283,
+    "lng": -88.248923121002,
+    "matched": "5N430 RAILROAD ST, WAYNE, IL, 60184",
+    "variant": "as written"
+  },
+  "5N939 Meredith Rd, Virgil, IL 60151": {
+    "lat": 41.954350332613,
+    "lng": -88.537186739653,
+    "matched": "5N939 MEREDITH RD, VIRGIL, IL, 60151",
+    "variant": "as written"
+  },
+  "6 S Hoyne Ave, Chicago, IL 60612": {
+    "lat": 41.881132339362,
+    "lng": -87.679160705524,
+    "matched": "6 S HOYNE AVE, CHICAGO, IL, 60612",
+    "variant": "as written"
+  },
+  "6119 W 147th St, Oak Forest, IL 60452": {
+    "lat": 41.6225866,
+    "lng": -87.7689263,
+    "matched": "Chicago Gaelic Park, 6119, Goeselville, Oak Forest, Bremen Township, Cook County, Illinois, 60452, United States",
+    "variant": "OpenStreetMap Nominatim by place name (approximate)"
+  },
+  "621 E Michigan Blvd, Michigan City, IN 46360": {
+    "lat": 41.71748663039,
+    "lng": -86.895409853615,
+    "matched": "621 E MICHIGAN BLVD, MICHIGAN CITY, IN, 46360",
+    "variant": "as written"
+  },
+  "625 Dixie Hwy, Beecher, IL 60401": {
+    "lat": 41.342939512822,
+    "lng": -87.621294645735,
+    "matched": "625 DIXIE HWY, BEECHER, IL, 60401",
+    "variant": "as written"
+  },
+  "6401 S Richard Dr, Chicago, IL 60649": {
+    "lat": 41.779187174712,
+    "lng": -87.579751820948,
+    "matched": "6401 S RICHARD DR, CHICAGO, IL, 60649",
+    "variant": "as written"
+  },
+  "6401 S Stony Island Ave, Chicago, IL 60637": {
+    "lat": 41.779686338825,
+    "lng": -87.586368308799,
+    "matched": "6401 S STONY ISLAND AVE, CHICAGO, IL, 60637",
+    "variant": "as written"
+  },
+  "642 W 43rd St, Chicago, IL 60609": {
+    "lat": 41.816295885617,
+    "lng": -87.642348709894,
+    "matched": "642 W 43RD ST, CHICAGO, IL, 60609",
+    "variant": "as written"
+  },
+  "6423 W 63rd Pl, Chicago, IL 60638": {
+    "lat": 41.776703281056,
+    "lng": -87.782297478253,
+    "matched": "6423 W 63RD PL, CHICAGO, IL, 60638",
+    "variant": "as written"
+  },
+  "65 W Geneva St, Williams Bay, WI 53191": {
+    "lat": 42.577563761686,
+    "lng": -88.543162765262,
+    "matched": "65 W GENEVA ST, WILLIAMS BAY, WI, 53191",
+    "variant": "as written"
+  },
+  "650 Deerwood Dr, Shorewood, IL 60404": {
+    "lat": 41.523851258881,
+    "lng": -88.205180925933,
+    "matched": "650 DEERWOOD DR, SHOREWOOD, IL, 60404",
+    "variant": "as written"
+  },
+  "6500 Oakton Ave, Morton Grove, IL 60053": {
+    "lat": 42.026503112612,
+    "lng": -87.789470362124,
+    "matched": "6500 OAKTON ST, MORTON GROVE, IL, 60053",
+    "variant": "as written"
+  },
+  "660 Penfield St, Beecher, IL 60401": {
+    "lat": 41.342450288827,
+    "lng": -87.626686792379,
+    "matched": "660 PENFIELD ST, BEECHER, IL, 60401",
+    "variant": "as written"
+  },
+  "6600 W Harts Rd, Niles, IL 60714": {
+    "lat": 42.011336496178,
+    "lng": -87.792916446126,
+    "matched": "6600 W HARTS RD, NILES, IL, 60714",
+    "variant": "as written"
   },
   "6605 W 95th St, Oak Lawn, IL 60453": null,
+  "6625 E. Main Street, Eau Claire, MI 49111": {
+    "lat": 41.985382232585,
+    "lng": -86.297222076515,
+    "matched": "6625 E MAIN ST, EAU CLAIRE, MI, 49111",
+    "variant": "as written"
+  },
+  "6633 W Harts Rd, Niles, IL 60714": {
+    "lat": 42.010978664812,
+    "lng": -87.793384625694,
+    "matched": "6633 W HARTS RD, NILES, IL, 60714",
+    "variant": "as written"
+  },
+  "673 Penfield St, Beecher, IL 60401": {
+    "lat": 41.342564877326,
+    "lng": -87.626687874193,
+    "matched": "673 PENFIELD ST, BEECHER, IL, 60401",
+    "variant": "as written"
+  },
+  "675 Penfield St, Beecher, IL 60401": {
+    "lat": 41.342564551754,
+    "lng": -87.626749055183,
+    "matched": "675 PENFIELD ST, BEECHER, IL, 60401",
+    "variant": "as written"
+  },
+  "69 W Washington St, Chicago, IL 60602": {
+    "lat": 41.883153632889,
+    "lng": -87.630038502105,
+    "matched": "69 W WASHINGTON ST, CHICAGO, IL, 60602",
+    "variant": "as written"
+  },
+  "700 N Art Museum Dr, Milwaukee, WI 53202": {
+    "lat": 43.039888308756,
+    "lng": -87.897629454245,
+    "matched": "700 ART MUSEUM DR, MILWAUKEE, WI, 53202",
+    "variant": "as written"
+  },
+  "7038 N Chicago Rd, New Carlisle, IN 46552": {
+    "lat": 41.709631543355,
+    "lng": -86.537550986587,
+    "matched": "7038 N CHICAGO RD, NEW CARLISLE, IN, 46552",
+    "variant": "as written"
+  },
+  "707 Lake Blvd, St. Joseph, MI 49085": {
+    "lat": 42.106741534114,
+    "lng": -86.485459694304,
+    "matched": "707 LAKE BLVD, SAINT JOSEPH, MI, 49085",
+    "variant": "as written"
+  },
+  "710 S West St, Peotone, IL 60468": {
+    "lat": 41.325929721421,
+    "lng": -87.794638361833,
+    "matched": "710 S WEST ST, PEOTONE, IL, 60468",
+    "variant": "as written"
+  },
+  "720 Dundee Ave, Barrington, IL 60010": {
+    "lat": 42.145363767772,
+    "lng": -88.141010625361,
+    "matched": "720 DUNDEE AVE, BARRINGTON, IL, 60010",
+    "variant": "as written"
+  },
+  "720 S Michigan Ave, Chicago, IL 60605": {
+    "lat": 41.8728643806,
+    "lng": -87.624346333362,
+    "matched": "720 S MICHIGAN AVE, CHICAGO, IL, 60605",
+    "variant": "as written"
+  },
+  "740 E 56th Pl, Chicago, IL 60637": {
+    "lat": 41.7905285,
+    "lng": -87.7207408,
+    "matched": "West 56th Place, Elsdon, West Elsdon, Chicago, Lake Township, Cook County, Illinois, 60629, United States",
+    "variant": "OpenStreetMap Nominatim (approximate)"
+  },
   "7506 S Racine Ave, Chicago, IL 60620": {
     "lat": 41.757446,
     "lng": -87.653997
+  },
+  "7511 12th St, Somers, WI 53144": {
+    "lat": 42.639926646812,
+    "lng": -87.900117828059,
+    "matched": "7511 12TH ST, KENOSHA, WI, 53144",
+    "variant": "as written"
+  },
+  "755 E State St, Cherry Valley, IL 61016": {
+    "lat": 42.234790143883,
+    "lng": -88.946889652711,
+    "matched": "755 E STATE ST, CHERRY VALLEY, IL, 61016",
+    "variant": "as written"
   },
   "7811 S Racine Ave, Chicago, IL 60620": {
     "lat": 41.751954,
     "lng": -87.653699
   },
+  "7901 S Sangamon St, Chicago, IL 60620": {
+    "lat": 41.750273556146,
+    "lng": -87.64759582861
+  },
+  "800 W Buena Ave, Chicago, IL 60613": {
+    "lat": 41.958544278731,
+    "lng": -87.649894389035,
+    "matched": "800 W BUENA AVE, CHICAGO, IL, 60613",
+    "variant": "as written"
+  },
+  "801 E Clarke St, Milwaukee, WI 53212": {
+    "lat": 43.065579062222,
+    "lng": -87.901522412886,
+    "matched": "801 E CLARKE ST, MILWAUKEE, WI, 53212",
+    "variant": "as written"
+  },
+  "801 N Chicago St, Elwood, IL 60421": {
+    "lat": 41.4035254,
+    "lng": -88.1116443,
+    "matched": "South Chicago Street, Elwood, Will County, Illinois, 60421, United States",
+    "variant": "OpenStreetMap Nominatim (approximate)"
+  },
+  "806 E State St, Cherry Valley, IL 61016": {
+    "lat": 42.272784,
+    "lng": -88.950585,
+    "matched": "East State Street, Rockford, Rockford Township, Winnebago County, Illinois, 61009, United States",
+    "variant": "OpenStreetMap Nominatim (approximate)"
+  },
+  "822 S Water St, Milwaukee, WI 53204": {
+    "lat": 43.022655643315,
+    "lng": -87.906728314734,
+    "matched": "822 S WATER ST, MILWAUKEE, WI, 53204",
+    "variant": "as written"
+  },
   "839 W 79th St, Chicago, IL 60620": {
     "lat": 41.75056,
     "lng": -87.645741
   },
+  "8800 E Riverside Blvd, Loves Park, IL 61111": {
+    "lat": 42.319399644319,
+    "lng": -88.944865468677,
+    "matched": "8800 E RIVERSIDE BLVD, LOVES PARK, IL, 61111",
+    "variant": "as written"
+  },
+  "911 El Portal Dr, Michiana Shores, IN 46360": {
+    "lat": 41.751450755999,
+    "lng": -86.816020807021,
+    "matched": "911 EL PORTAL DR, MICHIANA SHORES, IN, 46360",
+    "variant": "as written"
+  },
+  "9247 S Cicero Ave, Oak Lawn, IL 60453": {
+    "lat": 41.724697182223,
+    "lng": -87.740886635439
+  },
   "9320 S Kenton Ave, Oak Lawn, IL 60453": {
-    "lat": 41.723416,
-    "lng": -87.736134
+    "lat": 41.723416121558,
+    "lng": -87.73613421671
   },
   "9333 S Cicero Ave, Oak Lawn, IL 60453": {
     "lat": 41.722645,
     "lng": -87.740796
   },
+  "935 Skidmore Dr, Antioch, IL 60002": {
+    "lat": 42.47768965392,
+    "lng": -88.094392545841,
+    "matched": "935 SKIDMORE DR, ANTIOCH, IL, 60002",
+    "variant": "as written"
+  },
+  "9400 S Kenton Ave, Oak Lawn, IL 60453": {
+    "lat": 41.721944093433,
+    "lng": -87.736080567808
+  },
   "9400 S Troy Ave, Evergreen Park, IL 60805": {
-    "lat": 41.722521,
-    "lng": -87.700734
+    "lat": 41.722520509892,
+    "lng": -87.700734173235
   },
   "9401 S Oak Park Ave, Oak Lawn, IL 60453": {
-    "lat": 41.721222,
-    "lng": -87.789646
+    "lat": 41.721221749112,
+    "lng": -87.789645730515
   },
   "9411 S 51st Ave, Oak Lawn, IL 60453": {
     "lat": 41.72155,
@@ -132,6 +1204,10 @@
     "lat": 41.721096,
     "lng": -87.752742
   },
+  "9446 S Raymond Ave, Oak Lawn, IL 60453": {
+    "lat": 41.721634617208,
+    "lng": -87.752835943302
+  },
   "9500 S Western Ave, Evergreen Park, IL 60805": {
     "lat": 41.720881,
     "lng": -87.682142
@@ -140,11 +1216,57 @@
     "lat": 41.719336,
     "lng": -87.750614
   },
+  "9525 S Halsted St, Chicago, IL 60628": {
+    "lat": 41.720947779683,
+    "lng": -87.643120697522,
+    "matched": "9525 S HALSTED ST, CHICAGO, IL, 60628",
+    "variant": "as written"
+  },
+  "9525 S Lawndale Ave, Evergreen Park, IL 60805": {
+    "lat": 41.719711418077,
+    "lng": -87.713933432353
+  },
+  "955 E 131st St, Chicago, IL 60827": {
+    "lat": 41.657199477545,
+    "lng": -87.600090903761,
+    "matched": "955 E 131ST ST, CHICAGO, IL, 60827",
+    "variant": "as written"
+  },
+  "9604 Illinois St, Hebron, IL 60034": {
+    "lat": 42.466269470386,
+    "lng": -88.431506083456,
+    "matched": "9604 ILLINOIS ST, HEBRON, IL, 60034",
+    "variant": "as written"
+  },
+  "9630 S Pulaski Rd, Oak Lawn, IL 60453": {
+    "lat": 41.718058567427,
+    "lng": -87.721358052487
+  },
+  "9701 S Kedzie Ave, Evergreen Park, IL 60805": {
+    "lat": 41.717048355331,
+    "lng": -87.701653077421
+  },
+  "9765 Maple Street, Bridgman, MI 49106": {
+    "lat": 41.94195117851,
+    "lng": -86.556354331408,
+    "matched": "9765 MAPLE ST, BRIDGMAN, MI, 49106",
+    "variant": "as written"
+  },
+  "9805 IL Route 173, Hebron, IL 60034": {
+    "lat": 42.468855554115,
+    "lng": -88.431641449125,
+    "matched": "9805 ILLINOIS ST, HEBRON, IL, 60034",
+    "variant": "as written"
+  },
   "Blue Island, IL 60406": null,
   "Chicago, IL (address not listed)": null,
   "High St & Western Ave, Blue Island, IL 60406": {
     "lat": 41.658,
     "lng": -87.680085
+  },
+  "S Racine Ave & W 79th St, Chicago, IL 60620": {
+    "lat": 41.75049701526,
+    "lng": -87.653736989978
   },
   "Western Ave & High St, Blue Island, IL 60406": {
     "lat": 41.658,

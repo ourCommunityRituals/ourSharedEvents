@@ -88,12 +88,24 @@ function inPolygon(lng, lat, rings) {
 // The first node, in file order, whose boundary polygon holds the point; else undefined.
 export function nodeAt(nodes, lat, lng) {
   return nodes.find((n) => {
+    // a node with no boundary (the wider area) never claims a point
+    if (!n.polygon) return false;
     const polys = n.polygon.type === 'Polygon' ? [n.polygon.coordinates] : n.polygon.coordinates;
     return polys.some((p) => inPolygon(lng, lat, p));
   })?.id;
 }
 
-export async function validateFinds({ finds, eventTypeIds, nodes, today, geocode }) {
+// Owner, 2026-11-19: the address decides where a row goes on the map; the node is a
+// label. `fallbackNode` is the node a row joins when its address is in no node's
+// boundary; without it such a row is refused as `not-in-node`, as before.
+export async function validateFinds({
+  finds,
+  eventTypeIds,
+  nodes,
+  today,
+  geocode,
+  fallbackNode = null,
+}) {
   if (!DAY_RE.test(today)) throw new Error('today must be YYYY-MM-DD');
 
   const first = dayNumber(today);
@@ -135,7 +147,7 @@ export async function validateFinds({ finds, eventTypeIds, nodes, today, geocode
       continue;
     }
     // membership is by boundary polygon, never by cell
-    const node = nodeAt(nodes, point.lat, point.lng);
+    const node = nodeAt(nodes, point.lat, point.lng) ?? fallbackNode;
     if (!node) {
       refuse(row, 'not-in-node');
       continue;
@@ -174,9 +186,10 @@ const normalized = (s) =>
  * search's own node claim is replaced). A business outside every node, or one
  * whose address does not geocode, is refused. Duplicates by name and address go;
  * the first one stays. `anchor` stays the search's claim. Each accepted
- * business keeps the `lat`/`lng` its address geocoded to.
+ * business keeps the `lat`/`lng` its address geocoded to. With `fallbackNode`, a
+ * business outside every boundary joins that node instead of being refused.
  */
-export async function validateBusinesses({ businesses, nodes, geocode }) {
+export async function validateBusinesses({ businesses, nodes, geocode, fallbackNode = null }) {
   if (!Array.isArray(businesses)) throw new Error('businesses must be a list');
   const accepted = [];
   const refused = [];
@@ -198,7 +211,7 @@ export async function validateBusinesses({ businesses, nodes, geocode }) {
       refuse(b, 'geocode-failed');
       continue;
     }
-    const node = nodeAt(nodes, point.lat, point.lng);
+    const node = nodeAt(nodes, point.lat, point.lng) ?? fallbackNode;
     if (!node) {
       refuse(b, 'not-in-node');
       continue;

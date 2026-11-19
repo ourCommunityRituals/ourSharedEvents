@@ -144,28 +144,43 @@ describe('the committed seed', () => {
   });
 
   test('stock/totals.json holds the owner’s permanent testing totals', () => {
+    // Owner, 2026-11-19: the survey rows are appended, so the totals follow them. Beverly
+    // holds none (its Arts Center's address is inside Morgan Park) and Mount Greenwood
+    // stays empty, by zip as well as by boundary.
     expect(TOTALS).toEqual({
-      'blue-island': 10,
-      'auburn-gresham': 8,
-      'evergreen-park': 11,
-      'oak-lawn': 17,
+      'blue-island': 32,
+      'auburn-gresham': 16,
+      'evergreen-park': 26,
+      'oak-lawn': 31,
       'mount-greenwood': 0,
+      beverly: 0,
+      'morgan-park': 6,
+      area: 242,
     });
   });
 
-  test('each place holds exactly its total; Mount Greenwood is 0; Beverly is absent', () => {
+  test('each place holds exactly its total; Mount Greenwood and Beverly are 0', () => {
     const expected = S.expectedByNode(SEED, ids);
     expect(Object.keys(expected).sort()).toEqual([...ids].sort());
-    expect(ids).not.toContain('beverly');
     expect(expected).toEqual(TOTALS);
     expect(expected[EMPTY]).toBe(0);
+    expect(expected.beverly).toBe(0);
     expect(SEED.events.some((e) => e.node === 'beverly')).toBe(false);
-    expect(SEED.businesses.some((b) => b.node === 'beverly' || b.node === EMPTY)).toBe(false);
+    expect(SEED.businesses.some((b) => b.node === EMPTY)).toBe(false);
+    // by zip too: nothing in the empty place's zips
+    const emptyZips = new Set(nodes.find((n) => n.id === EMPTY).zips);
+    const zipOf = (a) => (/\b(\d{5})(?:-\d{4})?\s*$/.exec(a) || [])[1];
+    expect(SEED.events.filter((e) => emptyZips.has(zipOf(e.address)))).toEqual([]);
+    expect(SEED.businesses.filter((b) => emptyZips.has(zipOf(b.address)))).toEqual([]);
   });
 
   test('every event and business sits in the node its point falls in', () => {
-    for (const e of SEED.events) expect(nodeAt(nodes, e.lat, e.lng), e.title).toBe(e.node);
-    for (const b of SEED.businesses) expect(nodeAt(nodes, b.lat, b.lng), b.name).toBe(b.node);
+    // a point in no boundary belongs to the wider area (owner 2026-11-19: the address decides)
+    for (const e of SEED.events)
+      expect(nodeAt(nodes, e.lat, e.lng) ?? 'area', e.title).toBe(e.node);
+    for (const b of SEED.businesses) {
+      expect(nodeAt(nodes, b.lat, b.lng) ?? 'area', b.name).toBe(b.node);
+    }
   });
 
   test('every populated place has an anchor business', () => {
@@ -270,6 +285,65 @@ describe('make-seed (the one-time step)', () => {
     expect(report.ok).toBe(true);
     expect(seed.events.filter((e) => e.node === 'left')).toHaveLength(MAP_GATE);
     expect(report.trimmed).toHaveLength(1);
+  });
+
+  // Owner, 2026-11-19: the address decides; a row in no boundary joins the `area` node.
+  test('a row in no boundary joins the area node, events and businesses', async () => {
+    const withArea = [...NODES, { id: 'area', zips: [], cells: [] }];
+    const geo = async (a) => (a.startsWith('far') ? { lat: 20, lng: 20 } : geocode(a));
+    const { seed, report } = await MS.makeSeed({
+      finds: [...enough('left'), ...enough('right'), find('far', 0, { zip: undefined })],
+      businesses: [
+        { name: 'L', address: 'left 0', anchor: true },
+        { name: 'R', address: 'right 0', anchor: true },
+        { name: 'F', address: 'far 0', anchor: true },
+      ],
+      eventTypeIds: new Set(['etr-art-music']),
+      nodes: withArea,
+      geocode: geo,
+      emptyNodes: ['quiet'],
+      totals: { left: MAP_GATE, right: MAP_GATE, quiet: 0, area: 1 },
+    });
+    expect(report.ok).toBe(true);
+    expect(seed.events.filter((e) => e.node === 'area')).toHaveLength(1);
+    expect(seed.businesses.find((b) => b.name === 'F').node).toBe('area');
+  });
+
+  test('without an area node a row in no boundary is still refused', async () => {
+    const geo = async (a) => (a.startsWith('far') ? { lat: 20, lng: 20 } : geocode(a));
+    const { report } = await MS.makeSeed({
+      finds: [...enough('left'), ...enough('right'), find('far', 0)],
+      businesses: [
+        { name: 'L', address: 'left 0', anchor: true },
+        { name: 'R', address: 'right 0', anchor: true },
+      ],
+      eventTypeIds: new Set(['etr-art-music']),
+      nodes: NODES,
+      geocode: geo,
+      emptyNodes: ['quiet'],
+      totals: { left: MAP_GATE, right: MAP_GATE, quiet: 0 },
+    });
+    expect(report.refused.map((r) => r.reason)).toContain('not-in-node');
+  });
+
+  test('a row whose address ends in the empty place’s zip is left out, wherever it falls', async () => {
+    const inZip = find('left', 50, { address: 'left 50, Town, IL 60655' });
+    const { seed, report } = await MS.makeSeed({
+      finds: [...enough('left'), ...enough('right'), inZip],
+      businesses: [
+        { name: 'L', address: 'left 0', anchor: true },
+        { name: 'R', address: 'right 0', anchor: true },
+        { name: 'Z', address: 'left 0, Town, IL 60655', anchor: false },
+      ],
+      eventTypeIds: new Set(['etr-art-music']),
+      nodes: NODES.map((n) => (n.id === 'quiet' ? { ...n, zips: ['60655'] } : n)),
+      geocode: async (a) => geocode(a.replace(/, Town, IL 60655$/, '')),
+      emptyNodes: ['quiet'],
+      totals: { left: MAP_GATE, right: MAP_GATE, quiet: 0 },
+    });
+    expect(report.refused.map((r) => r.reason)).toEqual(['in-empty-zip']);
+    expect(report.businessRefused.map((r) => r.reason)).toEqual(['in-empty-zip']);
+    expect(seed.events.some((e) => e.title === 'left 50')).toBe(false);
   });
 
   test('refuses anything that lands in the empty place, events and businesses alike', async () => {
