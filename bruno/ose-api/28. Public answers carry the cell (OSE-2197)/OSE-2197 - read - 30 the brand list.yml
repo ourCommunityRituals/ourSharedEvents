@@ -1,0 +1,55 @@
+info:
+  name: "OSE-2197 | sunny | the brand list gives every event's cell and no event's point"
+  type: http
+  seq: 30
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events?brand=root"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const { coordinateFindings, finerCells } = require('./lib/coordinate-findings.js');
+        const body = res.getBody() || {};
+        const text = JSON.stringify(body);
+        test('OSE-2197: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-2197 place, not person: no coordinate anywhere in the answer', function () {
+          expect(coordinateFindings(body)).to.eql([]);
+        });
+        test('OSE-2197: no cell finer than res 7 (the precision the API had)', function () {
+          expect(finerCells(body)).to.eql([]);
+        });
+        const items = body.items || [];
+        const RES7 = /^87[0-9a-f]{13}$/;
+        const placed = items.filter(function (i) { return RES7.test(String(i.h3_res7 || '')); });
+        test('OSE-2197: the list holds events with a res-7 cell, so the check is not empty', function () {
+          expect(placed.length).to.be.above(0);
+        });
+        test('OSE-2197: no listed event carries lat or lon', function () {
+          const withPoint = items.filter(function (i) { return 'lat' in i || 'lon' in i; }).map(function (i) { return i.id; });
+          expect(withPoint).to.eql([]);
+        });
+        // The next reads use one listed event with a cell, in the map's forward
+        // window where there is one (the map lists only those), else any.
+        const now = Date.now();
+        const inWindow = placed.filter(function (i) {
+          const t = Date.parse(String(i.startDateISO || i.start_date || ''));
+          return (i.phase === 'pre_event' || i.phase === 'live') && t >= now - 86400000 && t <= now + 85 * 86400000;
+        });
+        const pick = inWindow[0] || placed[0] || {};
+        bru.setVar('cellOnlyListedId', pick.id || 'missing-listed-event');
+        bru.setVar('cellOnlyCell', pick.h3_res7 || 'missing-cell');
+        bru.setVar('cellOnlyInWindow', inWindow[0] ? '1' : '0');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

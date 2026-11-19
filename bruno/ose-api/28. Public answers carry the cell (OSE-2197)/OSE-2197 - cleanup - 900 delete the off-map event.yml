@@ -1,0 +1,27 @@
+info:
+  name: "OSE-2197 | cleanup | the off-map event is deleted (no scans)"
+  type: http
+  seq: 900
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/api/v2/admin/events/{{cellOnlyOffMapId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2197 cleanup: 200, the synthetic event is gone', function () { expect(res.getStatus()).to.eql(200); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

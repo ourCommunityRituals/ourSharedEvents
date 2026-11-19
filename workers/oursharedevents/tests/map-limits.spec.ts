@@ -342,10 +342,14 @@ describe('two places on a zoomed area are one when their touch targets overlap',
   // places. Any nearer and one lies over the other, so they are one place.
   const AREA = CELLS[0]!;
   const [BLOCK_A, BLOCK_B] = cellToChildren(AREA, 9) as [string, string];
-  const at = (id: string, block: string): ZoomEvent => {
-    const [lat, lon] = cellToLatLng(block);
-    return { id, name: `Event ${id}`, startDateISO: SOON, phase: 'pre_event', lat, lon };
-  };
+  // OSE-2197: an event reaches the zoomed map with its res-9 cell, never a point.
+  const at = (id: string, block: string): ZoomEvent => ({
+    id,
+    name: `Event ${id}`,
+    startDateISO: SOON,
+    phase: 'pre_event',
+    h3_res9: block,
+  });
   /** The places of two events, one on each block, the blocks drawn `apart` units apart. */
   const places = (apart: number) => {
     placed.clear();

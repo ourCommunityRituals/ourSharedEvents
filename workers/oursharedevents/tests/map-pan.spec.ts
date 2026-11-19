@@ -80,7 +80,9 @@ describe('the map script | what the page carries', () => {
       zoom: {
         cell: A7,
         backHref: '/',
-        events: [{ ...ev(1, A7), lat: 41.6565, lon: -87.681, classes: [] }] as never,
+        events: [
+          { ...ev(1, A7), h3_res9: latLngToCell(41.6565, -87.681, 9), classes: [] },
+        ] as never,
       },
     }).html;
     expect(zoomed).toContain('data-testid="amap-no-tiles"');
@@ -124,7 +126,9 @@ describe('the map script | what the page carries', () => {
       zoom: {
         cell: A7,
         backHref: '/',
-        events: [{ ...ev(1, A7), lat: 41.6565, lon: -87.681, classes: [] }] as never,
+        events: [
+          { ...ev(1, A7), h3_res9: latLngToCell(41.6565, -87.681, 9), classes: [] },
+        ] as never,
       },
     }).html;
     expect(html.split(PAN_SCRIPT).length - 1).toBe(1);
@@ -156,7 +160,9 @@ describe('the map script | exact markup (mutation run of 2026-11-18)', () => {
   });
 
   it('the zoomed area: the figure carries data-pan only with a street map, and nothing follows the panels without one', () => {
-    const one = [{ ...ev(1, A7), lat: 41.6565, lon: -87.681, classes: [] }] as never;
+    const one = [
+      { ...ev(1, A7), h3_res9: latLngToCell(41.6565, -87.681, 9), classes: [] },
+    ] as never;
     const bare = renderAttendeeMap([], {
       now: NOW,
       zoom: { cell: A7, backHref: '/', events: one },

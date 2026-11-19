@@ -8,9 +8,9 @@
 // holds at least one attendable event in the forward window, shaded by how
 // many, numbered, with a legend listing each area's events as links. That is
 // the same precision `GET /api/v2/events/map` serves and no finer: the map is
-// drawn from `h3_res7` alone. The hexagon view never reads an event's
-// `lat`/`lon` (only the zoomed area does, below), and no reader's position is
-// read anywhere. The hex
+// drawn from `h3_res7` alone. No view here reads an event's `lat`/`lon` (the
+// zoomed area reads its res-9 cell, below; OSE-2197), and no reader's position
+// is read anywhere. The hex
 // outline comes from the cell id (`cellToBoundary`), which says "somewhere in
 // this tile" and nothing more.
 //
@@ -71,8 +71,10 @@
 // place, so every dot can be tapped. Every dot opens its place panel under the
 // map (lib/map-place-panel.ts). Dots carry the same type, window and modality
 // classes as the cards, so the landing's pills filter them too, still with no
-// JS. This is the one place this module reads an event's lat/lon, and only to
-// find the event's own block; no event's coordinate is written to the page and
+// JS. The dot's place is the event's own stored res-9 cell (`h3_res9`, passed
+// in by the landing beside the projected event, never in the public JSON); this
+// module reads no event coordinate at all (OSE-2197, owner 2026-11-19: "It
+// should resolve to the H3"). No event's coordinate is written to the page and
 // no viewer location is read on the server. With a street map, the drawing
 // carries its frame and each area its centre (frameAttrs, `data-ll`), for the
 // map's script; both come from the cell ids alone (OSE-2150,
@@ -83,7 +85,7 @@
 // `MAP_TILES` binding, or a failed read), the zoomed area is the list of its
 // places and their panels, and no dot map is drawn.
 
-import { cellToBoundary, cellToLatLng, getResolution, isValidCell, latLngToCell } from 'h3-js';
+import { cellToBoundary, cellToLatLng, getResolution, isValidCell } from 'h3-js';
 import { CORRIDOR_RES, NODE_RES } from './h3-tagging.js';
 import {
   CORRIDOR_READY_MIN_EVENTS,
@@ -710,10 +712,16 @@ function legendFor(
 
 // ── zoomed in on one area ────────────────────────────────────────────────────
 
-/** An event as the zoomed map needs it: its place and the landing's filter classes. */
+/**
+ * An event as the zoomed map needs it: its place and the landing's filter classes.
+ *
+ * Its place is its res-9 cell, the block the dot is drawn at (OSE-2197). It
+ * carries no point: the public projection gives none, and the dot never needed
+ * one, only the block the point was in.
+ */
 export interface ZoomEvent extends AttendeeMapItem {
-  lat?: unknown;
-  lon?: unknown;
+  /** The event's stored res-9 cell (the server's own, never from the projection). */
+  h3_res9?: unknown;
   /** 'business' is marked (solid, named); every kind sits at its block centre. */
   place_kind?: unknown;
   /** The card's filter classes (type, window, modality), so the pills filter the dot. */
@@ -730,15 +738,16 @@ export interface MapDot {
   events: { id: string; name: string; classes: string[] }[];
 }
 
-function finite(v: unknown): number | null {
-  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+/** The event's res-9 cell, or null when it has none (or anything else). */
+function blockOf(v: unknown): string | null {
+  return typeof v === 'string' && isValidCell(v) && getResolution(v) === NODE_RES ? v : null;
 }
 
 /**
  * Where each event of one area sits (owner, 2026-11-09): at its res-9 block's
  * centre, a business too. Events on one block share a dot, and so do blocks
  * nearer than two touch targets (DOT_MERGE), at the centre of the first of them
- * in reading order. Events with no coordinates are returned as `unplaced`.
+ * in reading order. Events with no res-9 cell are returned as `unplaced`.
  */
 export function mapDots(
   cell: string,
@@ -754,17 +763,16 @@ export function mapDots(
       name: str(e.name) || msg(lang, 'card.untitled'),
       classes: [...(e.classes ?? [])],
     };
-    const lat = finite(e.lat);
-    const lon = finite(e.lon);
-    if (lat === null || lon === null || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    // Place, not person (AGENTS.md invariant 3; owner 2026-11-09, epic OSE-1880):
+    // every place sits at its res-9 block centre, a business too. A business is
+    // marked (solid dot, named in its panel), never pinpointed. The block is the
+    // event's stored cell (OSE-2197), so no point is read here at all.
+    const block = blockOf(e.h3_res9);
+    if (block === null) {
       unplaced.push(ev);
       continue;
     }
-    // Place, not person (AGENTS.md invariant 3; owner 2026-11-09, epic OSE-1880):
-    // every place sits at its res-9 block centre, a business too. A business is
-    // marked (solid dot, named in its panel), never pinpointed.
     const business = e.place_kind === 'business';
-    const block = latLngToCell(lat, lon, NODE_RES);
     const at = cellToLatLng(block);
     const key = `b:${block}`;
     const dot = byKey.get(key) ?? { lat: at[0], lng: at[1], exact: true, events: [] };

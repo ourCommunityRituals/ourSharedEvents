@@ -27,10 +27,24 @@
 // Nothing reads it. The two surfaces that render an `h3_res9` do so from poster
 // DEPLOYMENT objects, not from event list items.
 //
-// Everything else is left exactly as it was. Narrowing further — `lat`/`lon`,
-// `where_address`, `brand_id` — is a real contract change with consumers to
-// audit, and OSE-1245 has to decide the location-precision policy first. Doing
-// it here would be guessing at that decision rather than implementing it.
+// THEN `lat` AND `lon` CAME OUT (OSE-2197). The location-precision policy
+// OSE-1245 was waiting on is decided (owner, 2026-11-19): "It should resolve to
+// the H3", and "the entire data set should be resolving to the H3 layer and the
+// map item, and then use the address as a secondary source." A place in a
+// public answer is its cell — `h3_res7` and `corridor_id`, resolution 7, as
+// before — never the event's stored point. (The address in that ruling is a
+// tie-break for WHICH cell an event belongs to when its point sits near a cell
+// edge, decided when the event is saved: OSE-2199, owner's clarification of the
+// same day. It is not a second source for a public answer; `where_address`, the
+// host's own text, is published as it always was.) Nothing here gives a
+// coordinate in place of the point: no consumer
+// in this repo needs one, and one that does takes the cell's centre from the
+// cell (`cellToLatLng(h3_res7)`), at this answer's own resolution and no finer.
+// The stored point stays in the database for admin, tagging and geocoding;
+// tests/e2e/0-architecture/public-event-coordinates.invariant.spec.ts fails a
+// coordinate named here, and Bruno checks the answers on staging.
+//
+// Still left as they were: `where_address` and `brand_id`.
 
 import { applyCountFloor, roundForPublish } from './count-floor';
 import { attendanceModeOf } from './attendance-mode';
@@ -59,8 +73,8 @@ const PUBLIC_EVENT_COLUMNS = [
   'why_purpose',
   'how_details',
   'where_address',
-  'lat',
-  'lon',
+  // NOT lat, lon (OSE-2197, owner 2026-11-19): a public answer resolves to the
+  // cell below, never the stored point.
   'corridor_id',
   'h3_res7',
   // OSE-2012 (owner, 2026-11-12) — 'in_person', 'online' or 'both'. The ONLY

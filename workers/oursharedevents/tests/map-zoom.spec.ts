@@ -75,18 +75,34 @@ const OTHER = latLngToCell(41.88, -87.63, 7);
 // The area next to CELL: near enough that both hexagons are drawn large.
 const NEAR = gridDisk(CELL, 1).find((c) => c !== CELL)!;
 
-function ev(id: string, over: Partial<ZoomEvent> = {}): ZoomEvent {
+/** The res-9 cell the server stores for a point (lib/h3-tagging), or none. */
+function storedRes9(lat: unknown, lon: unknown): string | null {
+  const ok = (v: unknown, max: number): v is number =>
+    typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= max;
+  return ok(lat, 90) && ok(lon, 180) ? latLngToCell(lat, lon, 9) : null;
+}
+
+/**
+ * An event as the zoomed map gets it. A test says where the event is as a
+ * point, as a place is given; the map is handed only what the server stores
+ * from it, the res-9 cell (OSE-2197: the map reads no point). `h3_res9` in
+ * `over` is passed as it is.
+ */
+function ev(
+  id: string,
+  over: Partial<ZoomEvent> & { lat?: unknown; lon?: unknown } = {}
+): ZoomEvent {
+  const { lat = RIPH.lat, lon = RIPH.lon, ...rest } = over;
   return {
     id,
     name: `Event ${id}`,
     startDateISO: SOON,
     phase: 'pre_event',
     h3_res7: CELL,
-    lat: RIPH.lat,
-    lon: RIPH.lon,
+    h3_res9: storedRes9(lat, lon),
     place_kind: 'business',
     classes: ['type-trivia', 'when-week'],
-    ...over,
+    ...rest,
   };
 }
 
@@ -112,6 +128,74 @@ const frame = () => frameForCells([CELL], MAP_W, MAP_H);
 const xyOf = (lat: number, lon: number) =>
   project(frame(), ...cellToLatLng(latLngToCell(lat, lon, 9)));
 const apart = (a: number[], b: number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!);
+
+// OSE-2197: the public projection carries no point any more, and the zoomed
+// landing used to find each dot's block from the point the projection carried.
+// The landing now hands the drawing each event's res-9 cell from the server's
+// own row (lib/landing-area.ts blockOf): the stored h3_res9, else the cell the
+// server derives from its stored point. Rows here are shaped as the list read
+// returns them (lib/data-provider.ts fetchEvents): the point and both cells.
+// @born-red OSE-2197 landing zoom | method: `h3_res9: blockOf(e)` taken out of renderLandingArea's zoom events (lat and lon gone from the projection with no cell passed instead); the four cases below ran red, restored | date: 2026-11-19
+describe('the zoomed landing still draws its dots with the point out of the public answer', () => {
+  const far = { lat: RIPH.lat + 0.01, lon: RIPH.lon };
+  const row = (
+    id: string,
+    at: { lat: number; lon: number },
+    extra: Record<string, unknown> = {}
+  ) => ({
+    id,
+    name: `Event ${id}`,
+    startDateISO: SOON,
+    phase: 'pre_event',
+    h3_res7: CELL,
+    place_kind: 'address',
+    lat: at.lat,
+    lon: at.lon,
+    ...extra,
+  });
+  const res9 = (at: { lat: number; lon: number }) => latLngToCell(at.lat, at.lon, 9);
+  const zoomedLanding = (rows: Record<string, unknown>[]) =>
+    renderLandingArea(rows, { now: NOW, zoom: { cell: CELL, backHref: '/' }, streets: streets() })
+      .html;
+  /** Each dot's drawn centre, as the page writes it. */
+  const dotsDrawn = (html: string) =>
+    [...html.matchAll(/<circle class="amap-dot" cx="([\d.-]+)" cy="([\d.-]+)"/g)].map(
+      (m) => `${m[1]},${m[2]}`
+    );
+  const at = (p: { lat: number; lon: number }) =>
+    xyOf(p.lat, p.lon)
+      .map((v) => v.toFixed(1))
+      .join(',');
+
+  test('rows as the list read returns them: one dot per place, each at its block', () => {
+    const html = zoomedLanding([
+      row('a', RIPH, { h3_res9: res9(RIPH) }),
+      row('b', far, { h3_res9: res9(far) }),
+    ]);
+    expect(dotsDrawn(html).sort()).toEqual([at(RIPH), at(far)].sort());
+    expect(html).not.toContain(String(RIPH.lat));
+    expect(html).not.toContain(String(RIPH.lon));
+  });
+
+  test('a row from before its cells were written: the server derives its block from the stored point', () => {
+    const html = zoomedLanding([row('a', RIPH), row('b', far)]);
+    expect(dotsDrawn(html).sort()).toEqual([at(RIPH), at(far)].sort());
+  });
+
+  test("the stored cell wins over the point: the dot is at the event's own block", () => {
+    const html = zoomedLanding([row('a', far, { h3_res9: res9(RIPH) })]);
+    expect(dotsDrawn(html)).toEqual([at(RIPH)]);
+  });
+
+  test('with neither a cell nor a point, the event is listed and not drawn', () => {
+    const html = zoomedLanding([
+      row('a', RIPH, { h3_res9: res9(RIPH) }),
+      { ...row('b', RIPH), lat: null, lon: null },
+    ]);
+    expect(dotsDrawn(html)).toEqual([at(RIPH)]);
+    expect(html).toContain('/events/b');
+  });
+});
 
 describe('where a dot sits', () => {
   // Place, not person (AGENTS.md invariant 3; owner 2026-11-09, epic OSE-1880):
@@ -154,14 +238,26 @@ describe('where a dot sits', () => {
     expect(allBusiness[0]!.exact).toBe(true);
   });
 
-  test('an event with no coordinates is listed, not drawn', () => {
+  test('an event with no res-9 cell is listed, not drawn', () => {
     const { dots, unplaced } = mapDots(CELL, [
-      ev('a', { lat: null, lon: null }),
-      ev('b', { lat: 'x' as unknown as number }),
-      ev('c', { lat: 200 }),
+      ev('a', { h3_res9: null }),
+      ev('b', { h3_res9: 'x' }),
+      ev('c', { h3_res9: undefined }),
     ]);
     expect(dots).toHaveLength(0);
     expect(unplaced.map((e) => e.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  // OSE-2197: a dot is placed from the event's cell; the map reads no point.
+  // @born-red OSE-2197 zoom | method: mapDots given a fallback to the event's lat/lon when it has no res-9 cell; this ran red, restored | date: 2026-11-19
+  test('a point beside the cell is never read: the dot sits at the cell, and with no cell it is listed', () => {
+    const block = latLngToCell(RIPH.lat, RIPH.lon, 9);
+    const elsewhere = { lat: RIPH.lat + 0.01, lon: RIPH.lon };
+    const withCell = mapDots(CELL, [{ ...ev('a', { h3_res9: block }), ...elsewhere }]);
+    expect([withCell.dots[0]!.lat, withCell.dots[0]!.lng]).toEqual(cellToLatLng(block));
+    const pointOnly = mapDots(CELL, [{ ...ev('b', { h3_res9: null }), ...elsewhere }]);
+    expect(pointOnly.dots).toEqual([]);
+    expect(pointOnly.unplaced.map((e) => e.id)).toEqual(['b']);
   });
 
   test('dots are numbered top to bottom, then left to right', () => {
@@ -1232,20 +1328,20 @@ describe('the zoomed area, edge by edge', () => {
     ]);
   });
 
-  test('only real numbers on the globe are placed: a numeric string, NaN, Infinity, a missing or out-of-range longitude are not', () => {
+  test('only a res-9 cell is placed: a res-7 or res-10 cell, text, a number or nothing are not', () => {
+    const block = latLngToCell(RIPH.lat, RIPH.lon, 9);
     const { dots, unplaced } = mapDots(CELL, [
-      ev('text', { lat: String(RIPH.lat) as unknown as number }),
-      ev('nan', { lat: Number.NaN }),
-      ev('inf', { lon: Number.POSITIVE_INFINITY }),
-      ev('nolon', { lon: null }),
-      ev('lon', { lon: 180.5 }),
-      ev('lat', { lat: -90.5 }),
+      ev('res7', { h3_res9: CELL }),
+      ev('res10', { h3_res9: cellToChildren(block, 10)[0] }),
+      ev('text', { h3_res9: 'not-a-cell' }),
+      ev('number', { h3_res9: 617700169958293500 }),
+      ev('none', { h3_res9: null }),
     ]);
     expect(dots).toEqual([]);
-    expect(unplaced.map((e) => e.id)).toEqual(['text', 'nan', 'inf', 'nolon', 'lon', 'lat']);
+    expect(unplaced.map((e) => e.id)).toEqual(['res7', 'res10', 'text', 'number', 'none']);
   });
 
-  test('latitude 90 and longitude 180 are still on the globe, so they are placed', () => {
+  test('a block at the pole or on the date line is still a block, so it is placed', () => {
     const { dots, unplaced } = mapDots(CELL, [
       ev('pole', { lat: 90, lon: 0 }),
       ev('dateline', { lat: 0, lon: 180 }),

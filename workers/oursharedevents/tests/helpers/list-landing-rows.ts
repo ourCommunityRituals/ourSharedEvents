@@ -32,6 +32,8 @@ function ev(n: number, o: Row): Row {
     where_address: '13328 Olde Western Ave, Blue Island, IL 60406',
     lat: 41.6573,
     lon: -87.6806,
+    // As the list read returns them: the server writes both cells with the point.
+    h3_res9: latLngToCell(41.6573, -87.6806, 9),
     h3_res7: BLUE_ISLAND,
     template_id: 'bar_night',
     // Real registry ids (0024): the landing's Type row is their categories.
@@ -50,6 +52,7 @@ const beverly = {
   where_address: '11612 S Western Ave, Chicago, IL 60643',
   lat: 41.7135,
   lon: -87.6812,
+  h3_res9: latLngToCell(41.7135, -87.6812, 9),
   h3_res7: BEVERLY,
   template_id: 'record_swap',
   event_type_id: 'etr-mkt-swap',
@@ -72,6 +75,7 @@ export const MANY: Row[] = [
     where_address: null,
     lat: null,
     lon: null,
+    h3_res9: null,
     h3_res7: null,
     template_id: 'webinar',
     event_type_id: 'etr-lit-bookclub',

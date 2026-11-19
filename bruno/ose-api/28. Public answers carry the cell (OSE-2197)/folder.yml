@@ -1,0 +1,33 @@
+info:
+  name: Public answers carry the cell (OSE-2197)
+  type: folder
+request: {}
+docs: |-
+  Owner, 2026-11-19: "It should resolve to the H3." A public event answer says
+  where an event is by its res-7 cell (h3_res7), never by the event's stored
+  point. Each read below is made as the public makes it (X-Test-No-Auth) and its
+  whole body is passed to lib/coordinate-findings.js: no coordinate-named field
+  (lat, lon, lng, latitude, longitude, geo, coords, position, venue_lat and the
+  like), no number shaped like a coordinate (three or more decimal places, at
+  most 180 either way; a booth's hall_x and hall_y are on a hall plan and are
+  not counted), no coordinate pair in text (a maps link), and no H3 cell finer
+  than res 7.
+
+  The reads: a live event off the map, reached by its link (seq 20); the brand
+  list (seq 30), which also picks a listed event with a cell for seq 40 to 70;
+  that event's read (seq 40); the map of its area (seq 50); its poster bundle
+  (seq 60) and its TV display config (seq 70).
+
+  Setup and cleanup: seq 10 makes one synthetic live event off the map, with a
+  known point, through the admin API (automation may create an event live,
+  OSE-1425); seq 900 deletes it. It has no scans, so it hard-deletes. A
+  leftover from a run that stopped half way is synthetic and unlisted, and the
+  daily staging rebuild clears it.
+
+  Not here: the event page and the poster page (their Directions links are
+  OSE-2196). Admin answers keep lat and lon.
+
+  Mock-layer twin: workers/oursharedevents/tests/public-event-no-coordinates.spec.ts.
+  The checks themselves are proven to fail on injected coordinates at T0:
+  tests/integration/bruno-coordinate-findings.test.js. The structural gate is
+  tests/e2e/0-architecture/public-event-coordinates.invariant.spec.ts.

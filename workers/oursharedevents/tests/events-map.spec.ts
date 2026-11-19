@@ -15,6 +15,7 @@ import { handleEventsMap } from '../src/handlers/events-map';
 import { CORRIDOR_READY_MIN_EVENTS, CORRIDOR_WINDOW_DAYS } from '../src/lib/corridor-readiness';
 import { latLngToCell } from 'h3-js';
 import { NODE_RES, CORRIDOR_RES } from '../src/lib/h3-tagging';
+import { coordinateFindings } from './helpers/coordinate-findings';
 
 // Blue Island / Western Ave — the founding corridor, so the fixture cells are
 // real places rather than arbitrary hex strings.
@@ -156,8 +157,24 @@ describe('SEC | the response carries no identity and no attendee data', () => {
     const res = await handleEventsMap(req(`?cell=${CORRIDOR_CELL}`), db([row(3, 'e1')]));
     const items = (await json(res)).items as Record<string, unknown>[];
     expect(Object.keys(items[0]).sort()).toEqual(
-      ['id', 'lat', 'lon', 'name', 'phase', 'startDateISO', 'venue'].sort()
+      ['h3_res7', 'id', 'name', 'phase', 'startDateISO', 'venue'].sort()
     );
+  });
+
+  // OSE-2197 (owner, 2026-11-19: "It should resolve to the H3"). The stub row
+  // carries the stored point; the answer carries the asked-for cell instead.
+  // @born-red OSE-2197 map item | method: `lat`/`lon` put back on MapEvent from the row; this and the key list above ran red, restored | date: 2026-11-19
+  test('an item says where it is by its res-7 cell, never by the stored point', async () => {
+    const res = await handleEventsMap(req(`?cell=${CORRIDOR_CELL}`), db([row(3, 'e1')]));
+    const body = await json(res);
+    const item = (body.items as Record<string, unknown>[])[0]!;
+    expect(item.h3_res7).toBe(CORRIDOR_CELL);
+    expect(item).not.toHaveProperty('lat');
+    expect(item).not.toHaveProperty('lon');
+    const text = JSON.stringify(body);
+    expect(text).not.toContain(String(LAT));
+    expect(text).not.toContain(String(LON));
+    expect(coordinateFindings(body)).toEqual([]);
   });
 
   test('no anon, scan, email or attendee field can appear in the response', async () => {

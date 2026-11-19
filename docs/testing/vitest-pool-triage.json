@@ -1434,7 +1434,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 24
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/events-place-search.spec.ts",
@@ -2064,7 +2064,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 81
+      "testCount": 86
     },
     {
       "file": "workers/oursharedevents/tests/maps.spec.ts",
@@ -2592,6 +2592,13 @@
       "testCount": 6
     },
     {
+      "file": "workers/oursharedevents/tests/public-event-no-coordinates.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 8
+    },
+    {
       "file": "workers/oursharedevents/tests/public-event-og-card.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -2610,7 +2617,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 8
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/public-event-series.spec.ts",

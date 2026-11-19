@@ -132,6 +132,11 @@ point as its own (`handlers/poster-deployments.ts`); the repeat-event copy (`lib
 and the public event columns, which list `lat` and `lon` (`lib/public-event-projection.ts`,
 `handlers/events-map.ts`). Any option that stops storing a point changes each of these.
 
+_Update, OSE-2197 (owner, 2026-11-19: "It should resolve to the H3"):_ the last two no longer read
+it. The public event columns and the map read carry the event's res-7 cell and no point, and the
+zoomed area's dots are placed from the stored `h3_res9`. The Directions links, the venue poster
+and the repeat copy still read the point; whether to stop storing it is still open.
+
 **What we already host.** `lib/zip-areas-data.ts` holds the centres of 33,791 US Census ZIP Code
 Tabulation Areas (public domain data, packaged by `us-zips` 2022.9.1, MIT). The landing search
 already turns a typed zip into a res-7 cell with it (`lib/zip-areas.ts`), and `addressZip` already

@@ -78,9 +78,9 @@ import {
 import { renderEventCard } from './event-list.js';
 import { AREA_LIST_ID, renderAttendeeMap, type ZoomEvent } from './attendee-map.js';
 import type { PlaceLinks } from './map-place-links.js';
-import { cellToLatLng, getResolution, isValidCell } from 'h3-js';
+import { cellToLatLng, getResolution, isValidCell, latLngToCell } from 'h3-js';
 import { endsBeforeDark } from './sunset.js';
-import { CORRIDOR_RES } from './h3-tagging.js';
+import { CORRIDOR_RES, NODE_RES } from './h3-tagging.js';
 import type { StreetLayer } from './street-map.js';
 import { toPublicEvent } from './public-event-projection.js';
 import { fmt, msg } from './i18n/catalog.js';
@@ -103,6 +103,8 @@ export interface LandingAreaItem {
   template_id?: unknown;
   event_type_id?: unknown;
   h3_res7?: unknown;
+  /** The block a zoomed map draws the event's dot at (lib/attendee-map mapDots). */
+  h3_res9?: unknown;
   endDateISO?: unknown;
   /** Migration 0106: how the zoomed map marks the dot (lib/attendee-map). */
   place_kind?: unknown;
@@ -215,6 +217,23 @@ function sunPlace(e: LandingAreaItem): [number, number] | null {
   if (isFiniteNum(e.lat) && isFiniteNum(e.lon)) return [Number(e.lat), Number(e.lon)];
   const cell = str(e.h3_res7);
   return isValidCell(cell) ? cellToLatLng(cell) : null;
+}
+
+/**
+ * The res-9 block a zoomed map draws the event's dot at (owner, 2026-11-09), from
+ * the server's own row: its stored `h3_res9`, else the cell the server derives
+ * from its stored point, as tagging does on write (a row from before its cells
+ * were written). Only this cell goes to the drawing, never the point, and never
+ * the public JSON (OSE-2197).
+ */
+function blockOf(e: LandingAreaItem): string | null {
+  const stored = str(e.h3_res9);
+  if (isValidCell(stored) && getResolution(stored) === NODE_RES) return stored;
+  const lat = Number(e.lat);
+  const lon = Number(e.lon);
+  const onGlobe =
+    isFiniteNum(e.lat) && isFiniteNum(e.lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+  return onGlobe ? latLngToCell(lat, lon, NODE_RES) : null;
 }
 
 /**
@@ -448,12 +467,17 @@ export function renderLandingArea(
       origin: opts?.origin,
       // The pills narrow the hexagons as they narrow the cards (grade, 2026-11-17).
       filterClasses: new Map(live.map((e) => [str(e.id), classesOf.get(e)!])),
-      // Zoomed in: each event's place and filter classes, for its dot.
+      // Zoomed in: each event's place and filter classes, for its dot. The
+      // place is the event's res-9 cell (blockOf), beside the projection rather
+      // than through it: the public answer stays at res 7 and carries no point
+      // (OSE-2197), and this page draws a block centre, never a cell id or a
+      // coordinate (owner, 2026-11-09).
       zoom: zoom && {
         cell: zoom.cell,
         backHref: zoom.backHref,
         events: live.map((e) => ({
           ...toPublicEvent(e as Record<string, unknown>),
+          h3_res9: blockOf(e),
           place_kind: e.place_kind,
           classes: classesOf.get(e)!, // set for every card above
         })),

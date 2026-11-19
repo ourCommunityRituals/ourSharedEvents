@@ -21,7 +21,9 @@ runtime:
           expect(item.attendance_mode).to.eql('online');
         });
         test('OSE-2012 place, not person: no place, coordinates or cell', function () {
-          expect([item.location, item.where_address, item.lat, item.lon, item.h3_res7]).to.eql([null, null, null, null, null]);
+          expect([item.location, item.where_address, item.h3_res7]).to.eql([null, null, null]);
+          // OSE-2197: no public event answer carries lat or lon, online or not.
+          expect(item).to.not.have.any.keys('lat', 'lon');
         });
 
 settings:
