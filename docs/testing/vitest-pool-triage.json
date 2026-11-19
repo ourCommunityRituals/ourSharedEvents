@@ -4041,6 +4041,20 @@
       "testCount": 19
     },
     {
+      "file": "workers/oursharedevents/tests/vote-results.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 19
+    },
+    {
+      "file": "workers/oursharedevents/tests/vote-route.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 30
+    },
+    {
       "file": "workers/oursharedevents/tests/vote-set-admin.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

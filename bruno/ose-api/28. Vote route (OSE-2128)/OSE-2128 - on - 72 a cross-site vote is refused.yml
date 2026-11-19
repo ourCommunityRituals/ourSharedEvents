@@ -1,0 +1,36 @@
+info:
+  name: "OSE-2128 | on | 72 a cross-site vote is refused"
+  type: http
+  seq: 72
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/vote/{{voteRouteNightId}}"
+  headers:
+    - name: Content-Type
+      value: "application/json"
+    - name: Sec-Fetch-Site
+      value: cross-site
+  body:
+    type: json
+    data: "{\"object_id\": \"{{voteRouteSongId}}\", \"side\": \"up\", \"pass\": \"vp1.not-a-pass.x\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') !== 'on') {
+          console.log('NOT RUN (VOTING_ENABLED off on this environment): the switch-on half of the vote route');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('OSE-2128 on: 403 SAME_ORIGIN_ONLY', function () { expect(res.getStatus()).to.eql(403); expect((res.getBody() || {}).code).to.eql('SAME_ORIGIN_ONLY'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

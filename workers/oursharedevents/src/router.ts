@@ -109,7 +109,7 @@
  *   POST   /api/v2/admin/events/:id/votables/code → make the room's vote code, or return the one in use; its token is in no public answer (auth, audited, OSE-2140)
  *   POST   /api/v2/admin/events/:id/votables/code/replace → retire the vote code and make a new token, in one batch (auth, audited, OSE-2140)
  *   POST   /api/v2/admin/events/:id/votables/open|reopen|close → open (stamps the epoch, draws T and V once), reopen, close the set; refused when final; open and reopen need the event Published (auth, audited, OSE-2142)
- *   POST   /api/v2/admin/events/:id/votables/finalize → make a set that never opened final, for good (auth, audited)
+ *   POST   /api/v2/admin/events/:id/votables/finalize → compute the night's result and make a closed set final, for good; the answer's set.result is the outcome and the winner only (auth, audited, OSE-2130)
  *   POST   /api/v2/admin/events/:id/votables/objects → add a song or stall to the set (auth, audited)
  *   PUT    /api/v2/admin/events/:id/votables/objects/:oid → change an object of this event (auth, audited)
  *   POST   /api/v2/admin/events/:id/votables/objects/:oid/open|reopen|close → an object's window; closes_at set by the server (auth, audited)
@@ -188,6 +188,7 @@
  *   GET    /api/v2/maps/venue-image?event=<id> → venue map image, proxied so the key stays server-side; rate-limited, edge-cached (OSE-217)
  *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
  *   GET    /api/v2/events/:id/display-config   → TV order + dwell + league/donate links + event QR (ETag, 304)
+ *   POST   /api/v2/vote/:eventId                → one vote {object_id, side: up|down, pass}: 200 {ok:true} for counted and already counted alike, no count, no cookie read or set (OSE-2128, OSE ADR-040). Routed only while VOTING_ENABLED is "on"
  *   GET    /api/v2/vote/:eventId/objects        → what a voter can vote on now: {objects:[{id,kind,label}]}; no count, no time (OSE-2135, OSE ADR-040). Routed only while VOTING_ENABLED is "on" (lib/voting-switch.ts); off, it is the router's own 404. Limited per caller: 600 a minute
  *
  *   Poster Deployments Admin (auth required):
@@ -312,6 +313,7 @@ import {
 } from './handlers/event-booths';
 import { handleVotables, matchVotablesRoute } from './handlers/votables';
 import { handleVoteObjects } from './handlers/vote-objects';
+import { handleVote } from './handlers/vote';
 import { votingEnabled, type VotingSwitchEnv } from './lib/voting-switch';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
@@ -2344,6 +2346,17 @@ export async function route(
     const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleAdminGeocode(request, env);
+  }
+
+  // POST /api/v2/vote/:eventId — one vote (OSE-2128, S4a of OSE-1193; OSE
+  // ADR-040). Outside /api/v2/events*. The same kill switch as the read below:
+  // with VOTING_ENABLED anything but "on", this block is skipped and the path
+  // is the router's own 404. Only POST votes; GET and HEAD fall through to the
+  // 404. The handler reads the pass from the body and no browser state; its
+  // route limit is S4c's (OSE-2134).
+  const voteMatch = pathname.match(/^\/api\/v2\/vote\/([^/]+)$/);
+  if (voteMatch && method === 'POST' && votingEnabled(env)) {
+    return handleVote(request, env, voteMatch[1]);
   }
 
   // GET /api/v2/vote/:eventId/objects — what a voter can vote on now (OSE-2135,
