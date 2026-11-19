@@ -203,11 +203,13 @@ const SURFACES: Surface[] = [
     // OSE-1990: the attendee map's own address. It is the landing page opened on
     // its map view, so it is held to the landing's contract. The town-or-zip box
     // follows the map here (landing-area.ts placeWhere), so the action this page
-    // leads with is the map. A local worker with few events draws the map's note
-    // and example in the same place (landing-map-first.spec.ts seeds the full map).
+    // leads with is the map, or, on a worker with no listed event (the desktop and
+    // tablet jobs run this spec alone, and a new event waits out the publish grace
+    // window), the empty state's own create link. Both are the area's content, never
+    // the header (landing-map-first.spec.ts seeds the full map).
     path: '/map',
     name: 'attendee map',
-    primaryCtaSelector: '[data-testid="area-map"]',
+    primaryCtaSelector: '[data-testid="area-map"], [data-testid="area-empty-create"]',
   },
   {
     path: '/events',

@@ -96,9 +96,11 @@ test.describe('fold gate meta: the surfaces name the real action', () => {
     return m![1];
   }
 
-  test('the landing gates on where-submit only, the map on area-map only', () => {
+  test('the landing gates on where-submit only, the map on its own area only', () => {
     expect(selectorOf('landing')).toBe('[data-testid="where-submit"]');
-    expect(selectorOf('attendee map')).toBe('[data-testid="area-map"]');
+    expect(selectorOf('attendee map')).toBe(
+      '[data-testid="area-map"], [data-testid="area-empty-create"]'
+    );
   });
 
   test('no surface falls back to a header link or the hero', () => {

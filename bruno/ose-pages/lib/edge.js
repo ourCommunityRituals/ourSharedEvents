@@ -24,10 +24,13 @@
 // contracts, calendar files have their own strict switch, OSE-2022), see
 // EDGE_EXPECTED. Those requests say so in their own names ("blocked at edge OR 401").
 //
-// A phone user agent goes on every request (PHONE_USER_AGENT, set by the
-// collection's before-request script): the edge challenges a script client's
-// agent string, not a phone's. It is not a way round the edge: the CI header
-// the skip rule matches (X-OCR-CI) is unchanged and goes on the base URL only.
+// Two headers go on a request to the base URL (the collection's before-request
+// script): X-OCR-CI, the token the stg skip rule matches, and, in strict mode only,
+// a phone user agent (PHONE_USER_AGENT), because the edge challenges a script
+// client's agent string. Lenient mode keeps the client's own agent: a phone agent
+// from the CI runner made the edge challenge /map?area= on 2026-11-19, which the
+// default agent did not. Neither header is a way round the edge: the skip rule is
+// the owner's, and the Worker reads neither.
 //
 // One copy: only the pages collection reads this. Bruno loads a module from
 // inside the running collection. tests/integration/bruno-edge-hook.test.js runs

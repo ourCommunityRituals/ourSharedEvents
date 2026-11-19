@@ -14,7 +14,8 @@
  *     the hook names it in the log;
  *   - a plain Worker answer passes in both, and a Worker 403 (no header) is
  *     still told apart from the edge's;
- *   - every request goes out with a phone user agent;
+ *   - the phone user agent goes out in strict mode only, and X-OCR-CI goes out
+ *     whenever the token is set;
  *   - no request under bruno/ose-pages accepts `[200, 403]` by itself: they all
  *     go through lib/edge.js, which is where the strict switch lives.
  *
@@ -153,12 +154,18 @@ describe('born red: a real bru run of the pages collection against answers that 
   let server;
   let port;
   let mode = 'worker';
-  const userAgents = [];
+  const seen = []; // { mode, strict, ua, ci } per request the server got
+  let strictNow = false;
 
   beforeAll(async () => {
     server = http.createServer((req, res) => {
       req.resume();
-      userAgents.push(req.headers['user-agent'] ?? '');
+      seen.push({
+        mode,
+        strict: strictNow,
+        ua: req.headers['user-agent'] ?? '',
+        ci: req.headers['x-ocr-ci'],
+      });
       if (mode === 'challenge') {
         // What Cloudflare serves: a 403 HTML challenge, with cf-mitigated.
         res.writeHead(403, { 'Content-Type': 'text/html', 'cf-mitigated': 'challenge' });
@@ -179,8 +186,9 @@ describe('born red: a real bru run of the pages collection against answers that 
   afterAll(() => server?.close());
 
   /** Run the one request; return the exit code and what each test said. */
-  async function bruRun(runMode, strict) {
+  async function bruRun(runMode, strict, ciToken) {
     mode = runMode;
+    strictNow = !!strict;
     const dir = mkdtempSync(join(tmpdir(), 'bruno-edge-'));
     const out = join(dir, 'report.json');
     try {
@@ -193,6 +201,7 @@ describe('born red: a real bru run of the pages collection against answers that 
         '--env-var',
         `baseUrl=http://127.0.0.1:${port}`,
         ...(strict ? ['--env-var', 'pagesEdgeStrict=1'] : []),
+        ...(ciToken ? ['--env-var', `ocrCiEdgeToken=${ciToken}`] : []),
         '--reporter-json',
         out,
       ];
@@ -247,9 +256,26 @@ describe('born red: a real bru run of the pages collection against answers that 
     expect(f.some((d) => d.startsWith('EDGE (strict'))).toBe(false);
   }, 120_000);
 
-  test('every request carries the phone user agent', () => {
-    expect(userAgents.length).toBeGreaterThan(0);
-    for (const ua of userAgents) expect(ua).toBe(edge.PHONE_USER_AGENT);
+  test('the phone user agent goes out in strict mode only', () => {
+    const strict = seen.filter((r) => r.strict);
+    const lenient = seen.filter((r) => !r.strict);
+    expect(strict.length).toBeGreaterThan(0);
+    expect(lenient.length).toBeGreaterThan(0);
+    for (const r of strict) expect(r.ua).toBe(edge.PHONE_USER_AGENT);
+    // Lenient keeps the client's own agent: a phone agent from the CI runner made the
+    // edge challenge a page the default agent was not challenged on (2026-11-19).
+    for (const r of lenient) expect(r.ua).not.toMatch(/iPhone/);
     expect(edge.PHONE_USER_AGENT).toMatch(/iPhone.*Mobile/);
   });
+
+  test('X-OCR-CI goes to the base URL when the token is set, and not otherwise', async () => {
+    const before = seen.length;
+    await bruRun('worker', false, 'test-token-not-a-secret');
+    const withToken = seen.slice(before);
+    expect(withToken.length).toBeGreaterThan(0);
+    for (const r of withToken) expect(r.ci).toBe('test-token-not-a-secret');
+    const mark = seen.length;
+    await bruRun('worker', false, '');
+    for (const r of seen.slice(mark)) expect(r.ci).toBeUndefined();
+  }, 120_000);
 });

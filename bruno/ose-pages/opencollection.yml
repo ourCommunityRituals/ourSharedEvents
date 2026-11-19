@@ -31,14 +31,30 @@ request:
           }
         })();
 
-        // OSE-2160: a phone's user agent on every request. The staging edge challenges a
-        // script client's agent string (curl, axios), not a phone's. A request that sets
-        // its own agent keeps it. The string is lib/edge.js PHONE_USER_AGENT (this script has no
-        // require in the production-read-only test, so it is written out; the edge hook test
-        // checks the two are equal).
-        if (!req.getHeader('User-Agent') || /^(axios|bruno-runtime)/i.test(String(req.getHeader('User-Agent')))) {
-          req.setHeader('User-Agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1');
-        }
+        // OSE-2160 (F-51), the edge. Two headers, both aimed at the staging edge:
+        //  - X-OCR-CI, the token the stg skip rule matches (scripts/ci/cf-waf-stg-ci-skip.mjs),
+        //    on requests to the base URL only, never to another host. The Worker does not read it.
+        //  - In strict mode (PAGES_EDGE_STRICT=1) a phone's user agent, so the edge does not
+        //    read the client as a script. Lenient mode keeps the client's own agent: on 2026-11-19
+        //    a phone agent from the CI runner made the edge challenge /map?area= (run 44627418989,
+        //    green on main with the default agent), so it is part of the strict pattern, not
+        //    sent where nothing has been widened for it. A request that sets its own agent keeps it.
+        // The agent string is lib/edge.js PHONE_USER_AGENT; this script has no require (the
+        // production-read-only test runs it bare), so it is written out and the edge hook test
+        // checks the two are equal.
+        (function () {
+          var base = String(bru.getEnvVar('baseUrl') || '');
+          var url = String(req.getUrl() || '');
+          var toBase = url.indexOf('{{baseUrl}}') === 0 || (base !== '' && url.indexOf(base) === 0);
+          var token = bru.getEnvVar('ocrCiEdgeToken');
+          if (toBase && token && !req.getHeader('X-OCR-CI')) req.setHeader('X-OCR-CI', token);
+          if (String(bru.getEnvVar('pagesEdgeStrict')) === '1') {
+            var ua = req.getHeader('User-Agent');
+            if (!ua || /^(axios|bruno-runtime)/i.test(String(ua))) {
+              req.setHeader('User-Agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1');
+            }
+          }
+        })();
 
         bru.setVar('requestStartTime', Date.now());
     - type: after-response
