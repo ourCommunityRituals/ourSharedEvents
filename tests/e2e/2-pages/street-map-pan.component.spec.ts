@@ -18,6 +18,9 @@
  *   - on a phone, a two-finger pinch zooms the map;
  *   - where location is allowed, a mark is drawn where the visitor is, each
  *     area in the list says how far it is, and a polite line names the nearest;
+ *   - zoomed in on one area (OSE-2198), the distance is to each place's res-9
+ *     cell, not the area: on its panel and its events' cards, the cards nearest
+ *     first, the nearest place named, and an event with no place says "about";
  *   - and the page asks for nothing but itself and its stylesheet, before and
  *     after all of that (invariant 3: the position never leaves the phone).
  *
@@ -27,7 +30,9 @@
  * test); a drag that does nothing (the drag test); `find()` not called where
  * location is granted (the you-are-here test); a fetch() of the position added
  * to `located` (the no-request test); the pinch's zoom left out (the pinch
- * test). Not born red: removing the two-finger `preventDefault` on touch
+ * test). For the zoomed area (2026-11-19, OSE-2198, Chromium): the dots
+ * measured to the area's point, the "about" fallback removed, and the cards'
+ * nearest-first sort left out, each turned the zoomed test red. Not born red: removing the two-finger `preventDefault` on touch
  * events leaves the pinch test green, because the test sends pointer events
  * and a headless browser does not scroll the page either way; that guard is
  * checked on a phone, not here.
@@ -84,9 +89,9 @@ function rows(): Row[] {
  * `secure` serves it over https, as a browser gives the position only to a
  * secure page.
  */
-async function open(page: Page, path = '/', secure = false): Promise<string[]> {
+async function open(page: Page, path = '/', secure = false, data = rows()): Promise<string[]> {
   const origin = secure ? ORIGIN.replace(/^http:/, 'https:') : ORIGIN;
-  const html = await renderLanding(path, rows());
+  const html = await renderLanding(path, data);
   const css = await uiCss();
   const asked: string[] = [];
   await page.route('**/*', async (route) => {
@@ -382,6 +387,90 @@ test.describe('where location is allowed', () => {
     for (const z of ['in', 'out']) {
       const b = (await page.getByTestId(`amap-${z}`).boundingBox())!;
       expect(Math.round(Math.min(b.width, b.height)), z).toBeGreaterThanOrEqual(48);
+    }
+  });
+
+  // OSE-2198 (owner, 2026-11-19): zoomed in, "where am I" is measured to each
+  // place's res-9 cell, not the area. The area and places are the staging
+  // fixture's (bruno/fixtures/map-zoom-area-seed.sql), plus one event in the
+  // area with no point, which has a card and no place.
+  test('zoomed in: each place says how far its block is, the cards go nearest first, and an event with no place says "about"', async ({
+    browser,
+  }) => {
+    const AREA = '872664405ffffff';
+    const places: [number, number][] = [
+      [41.621, -87.8555],
+      [41.6119, -87.8657],
+      [41.6061, -87.8483],
+    ];
+    const zoomRows = [
+      ...places.map(([lat, lon], i) =>
+        ev(20 + i, { lat, lon, h3_res7: AREA, place_kind: i ? 'address' : 'business' })
+      ),
+      ev(30, { lat: null, lon: null, h3_res7: AREA, location: 'Somewhere nearby' }),
+    ];
+    const stand: [number, number] = [41.6145, -87.868];
+    context = await browser.newContext({
+      viewport: { width: 375, height: 812 },
+      geolocation: { latitude: stand[0], longitude: stand[1] },
+      permissions: ['geolocation'],
+    });
+    const page = await context.newPage();
+    const asked = await open(page, `/?area=${AREA}`, true, zoomRows);
+    const mi = (a: [number, number], b: [number, number]) => {
+      const r = Math.PI / 180;
+      const x = Math.sin(((b[0] - a[0]) * r) / 2);
+      const y = Math.sin(((b[1] - a[1]) * r) / 2);
+      const h = x * x + Math.cos(a[0] * r) * Math.cos(b[0] * r) * y * y;
+      return 2 * 3958.8 * Math.asin(Math.min(1, Math.sqrt(h)));
+    };
+    const to = (p: [number, number]) =>
+      mi(stand, cellToLatLng(latLngToCell(p[0], p[1], 9)) as [number, number]).toFixed(1);
+    const area = mi(stand, cellToLatLng(AREA) as [number, number]).toFixed(1);
+    // Each place is its own distance; the area's would be another number.
+    for (const p of places) expect(to(p)).not.toBe(area);
+
+    const status = page.getByTestId('amap-you-status');
+    await expect(status).toContainText(`Nearest: Place 2`);
+    await expect(status).toContainText(`${to(places[1]!)} mi away.`);
+    // Tapping place 2 opens its panel, which says how far its block is.
+    await page.locator('a[href="#amap-dot-2"][data-testid="amap-dot"]').click();
+    const panel = page.locator('section[data-n="2"]');
+    await expect(panel).toBeVisible();
+    await expect(panel.getByTestId('amap-place-dist')).toHaveText(
+      ` · ${to(places[1]!)} mi from you`
+    );
+    // The cards below the map: each says how far its place is, nearest first;
+    // the one with no place is measured to the area and says "about".
+    const cards = page.locator('.view-list article.event-card');
+    const seen = await cards.evaluateAll((cs) =>
+      cs.map((c) => ({
+        id: c.getAttribute('data-event-id'),
+        d: Number(c.getAttribute('data-pd')),
+        text: c.querySelector('[data-testid="amap-card-dist"]')?.textContent ?? '',
+      }))
+    );
+    expect(seen).toHaveLength(4);
+    expect(seen.map((c) => c.d)).toEqual([...seen.map((c) => c.d)].sort((a, b) => a - b));
+    const byId = new Map(seen.map((c) => [c.id, c.text]));
+    expect(byId.get('evt_p20')).toBe(` · ${to(places[0]!)} mi from you`);
+    expect(byId.get('evt_p21')).toBe(` · ${to(places[1]!)} mi from you`);
+    expect(byId.get('evt_p22')).toBe(` · ${to(places[2]!)} mi from you`);
+    expect(byId.get('evt_p30')).toBe(` · about ${area} mi from you`);
+    expect(seen[0]!.id).toBe('evt_p21');
+
+    // Nothing was asked for but the page, its stylesheet and its pictures, with
+    // no query: the position never left the browser.
+    const pictures = await page.evaluate(() =>
+      [...document.querySelectorAll('img[src]')].map(
+        (i) => new URL((i as HTMLImageElement).src).pathname
+      )
+    );
+    for (const u of asked) {
+      const url = new URL(u);
+      expect(url.search, u).toBe(url.pathname === '/' ? `?area=${AREA}` : '');
+      expect(url.hash, u).toBe('');
+      expect(['/', '/ui.css', ...pictures], u).toContain(url.pathname);
     }
   });
 

@@ -327,6 +327,8 @@ export const ar: Record<MessageKey, string> = {
   'map.youOutside': 'أنت خارج هذه الخريطة.',
   'map.nearest': 'أقرب منطقة، {name}، على بعد نحو {d} ميل.',
   'map.fromYou': 'على بعد {d} ميل منك',
+  'map.fromYouAbout': 'على بعد نحو {d} ميل منك',
+  'map.nearestPlace': 'الأقرب: {name}، على بعد {d} ميل.',
   'map.miles': '{d} ميل',
   'map.scale': 'مقياس الخريطة',
   'map.allAreas': 'العودة إلى كل المناطق',

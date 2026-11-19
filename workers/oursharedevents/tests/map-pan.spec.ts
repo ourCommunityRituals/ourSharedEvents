@@ -12,6 +12,7 @@
  * vitest.node-specs.mjs.
  */
 // @born-red the map's zoom script | method: faults put in one at a time, this file run, the source restored; each turned it red: the script sent with no street map; the buttons not hidden; a fetch() added to the script; navigator.sendBeacon added; localStorage.setItem added; the position put in location.hash; the Spanish words left in English; the frame attributes dropped; a second copy of the script on the zoomed area; the distance rows' data-area left off | date: 2026-11-18
+// @born-red the zoomed words (OSE-2198) | method: the zoomed control block sent without its two words (panControls called without zoomed), this file run (red), restored | date: 2026-11-19
 import { describe, expect, it } from 'vitest';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { renderAttendeeMap } from '../src/lib/attendee-map';
@@ -147,6 +148,27 @@ describe('the map script | exact markup (mutation run of 2026-11-18)', () => {
         '<p data-testid="amap-hint">Pinch, or tap + and −, to zoom. Once zoomed in, drag with one finger to move the map.</p>' +
         '<p aria-live="polite" data-testid="amap-you-status"></p></div>'
     );
+  });
+
+  it('zoomed in, the control block also carries the words for a place and for "about" (OSE-2198); the landing map does not', () => {
+    const one = [{ ...ev(1, A7), lat: 41.6565, lon: -87.681, classes: [] }] as never;
+    const zoomedCtl = (lang: 'en' | 'es') =>
+      /<div class="amap-ctl"[^>]*>/.exec(
+        renderAttendeeMap([], {
+          now: NOW,
+          lang,
+          streets: layer([A7]) as never,
+          zoom: { cell: A7, backHref: '/', events: one },
+        }).html
+      )![0];
+    expect(zoomedCtl('en')).toContain(
+      ' data-off="Location is off, so the map cannot show where you are." data-near-place="Nearest: {name}, {d} mi away." data-from-about="about {d} mi from you">'
+    );
+    expect(zoomedCtl('es')).toContain(
+      ' data-near-place="Lo más cercano: {name}, a {d} mi." data-from-about="a unas {d} mi de ti">'
+    );
+    expect(withStreets()).not.toContain('data-near-place');
+    expect(withStreets()).not.toContain('data-from-about');
   });
 
   it('the frame, to the digit: the scale bar is worked out from the middle of the drawing', () => {
