@@ -31,6 +31,15 @@ request:
           }
         })();
 
+        // OSE-2160: a phone's user agent on every request. The staging edge challenges a
+        // script client's agent string (curl, axios), not a phone's. A request that sets
+        // its own agent keeps it. The string is lib/edge.js PHONE_USER_AGENT (this script has no
+        // require in the production-read-only test, so it is written out; the edge hook test
+        // checks the two are equal).
+        if (!req.getHeader('User-Agent') || /^(axios|bruno-runtime)/i.test(String(req.getHeader('User-Agent')))) {
+          req.setHeader('User-Agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1');
+        }
+
         bru.setVar('requestStartTime', Date.now());
     - type: after-response
       code: |-
@@ -55,6 +64,12 @@ request:
             console.log('[5xx] diagnostics failed: ' + (e && /^[A-Za-z]{1,40}$/.test(e.name) ? e.name : 'Error'));
           }
         })();
+
+        // OSE-2160 (F-51): an answer from the Cloudflare edge (`cf-mitigated`) is not an
+        // answer from the Worker. Strict (PAGES_EDGE_STRICT=1) fails it; lenient names it
+        // in the log. Admin, /api/, /brands/ and calendar files are not judged here:
+        // lib/edge.js says why.
+        require('./lib/edge.js').enforce({ bru: bru, req: req, res: res, test: test, expect: expect, console: console });
 
         // Collection-level test: a latency budget on every request (OSE-2091).
         // One slow sample is retried or allowed, never the gate on its own; a slow

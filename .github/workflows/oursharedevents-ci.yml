@@ -1415,10 +1415,18 @@ jobs:
             label: 'T2: Bruno API contract'
             collection: bruno/ose-api
             junit: bru-api-junit.xml
+            # OSE-2160: floor and ceiling for scripts/ci/bruno-min-cases.mjs. Main's
+            # green runs of 2026-11-19 counted 2418 cases and 53 skipped requests
+            # for api, 563 and 0 for pages; the floor sits about 9% under that.
+            # Raising it is routine; lowering it is a reviewed change.
+            min_cases: 2200
+            max_skipped: 70
           - section: pages
             label: 'T2: Bruno Pages contract'
             collection: bruno/ose-pages
             junit: bru-pages-junit.xml
+            min_cases: 510
+            max_skipped: 10
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2
@@ -1779,10 +1787,17 @@ jobs:
           # rule covers /brands/) turns a challenged calendar read into a failure.
           OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
           CALENDAR_EDGE_STRICT: ${{ vars.CALENDAR_EDGE_STRICT }}
+          # OSE-2160: the strict switch for the pages collection. Unset (lenient), a
+          # page the Cloudflare edge answered is named in the log and the `[200, 403]`
+          # requests still pass. `1` (the owner sets it once the stg skip rule covers
+          # /forms /sponsor /map /display) makes the collection hook fail any answer
+          # that carries `cf-mitigated`, and the requests accept 200 only.
+          PAGES_EDGE_STRICT: ${{ vars.PAGES_EDGE_STRICT }}
         run: |
           npx bru run . -r --env ose-staging \
             --env-var "ocrCiEdgeToken=$OCR_CI_EDGE_TOKEN" \
             --env-var "edgeStrict=$CALENDAR_EDGE_STRICT" \
+            --env-var "pagesEdgeStrict=$PAGES_EDGE_STRICT" \
             --env-var "adminKey=$ADMIN_KEY" \
             --env-var "ocrInternalSecret=$X_OCR_INTERNAL" \
             --env-var "cfAccessClientId=$CF_ACCESS_CLIENT_ID" \
@@ -1838,6 +1853,22 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/landing-zip-own-area-reset.sql
+
+      # OSE-2160 (F-46): a Bruno run that checked nothing exits 0. An empty
+      # collection, a wrong working directory or a run whose requests were all
+      # skipped is green to `bru`. This reads the JUnit report and fails when the
+      # cases that proved something are fewer than the matrix's min_cases, or the
+      # skipped requests are more than max_skipped (zero cases is the extreme).
+      # Sits after the map-count check and the two resets (tests/unit/ci/map-counts-check.test.js
+      # pins those straight after the Bruno step), and runs only while every step before it
+      # passed. Not continue-on-error: a run
+      # that proved too little is red. Pinned by tests/unit/ci/bruno-min-cases.test.js.
+      - name: Bruno ran enough cases (OSE-2160)
+        timeout-minutes: 2
+        run: |
+          node scripts/ci/bruno-min-cases.mjs ".test-results/${{ matrix.junit }}" \
+            --min "${{ matrix.min_cases }}" --max-skipped "${{ matrix.max_skipped }}" \
+            --label "${{ matrix.label }}"
 
       # OSE-1470: Bruno ran with the admin key + CF Access token; refuse to
       # upload a report that recorded one. Upload runs only if this passes.
@@ -2373,8 +2404,13 @@ jobs:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # OSE-2160 (F-51): under pw-guarded.sh like T4a/T4b/T4d-k, so a run that
+          # discovers nothing, skips everything, or skips more than the ceiling is
+          # red. Measured on main 2026-11-19: 37 passed, 0 skipped.
+          PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
         run: |
-          npx playwright test --config=playwright.e2e-smoke.config.ts \
+          PW_LABEL='T4c: Form E2E (register/checkin + validation)' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
             --grep-invert "Survey Form|Email Signup" \
             tests/e2e/2-pages/form-registration.spec.ts \
             tests/e2e/2-pages/form-checkin.spec.ts \
@@ -2406,8 +2442,11 @@ jobs:
           # Synthetic tier-1 (flag ON) event — the gate-exercise proof asserts it
           # still returns PHASE_REQUIRED, independent of staging's global flag state.
           PHASE1_EVENT_ID: evt_forms_phase1
+          # OSE-2160 (F-51): guarded, as T4c above. Main 2026-11-19: 38 passed, 0 skipped.
+          PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
         run: |
-          npx playwright test --config=playwright.e2e-smoke.config.ts \
+          PW_LABEL='T4c-phase2: Survey/Email E2E (synthetic Phase-2)' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
             --grep "Survey Form|Email Signup" \
             tests/e2e/2-pages/form-email-signup.spec.ts \
             tests/e2e/2-pages/form-survey.spec.ts \
@@ -2493,6 +2532,9 @@ jobs:
           SMOKE_EVENT_POST: evt_smoke_post
           # OSE-834: skipped-ratio ceiling (repo var T4_MAX_SKIP_RATIO, unset = none).
           PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
+          # OSE-2160: the updates-form test skips when the edge challenges it. The skip is
+          # now counted (a warning and a summary line), and 1 here turns it into a failure.
+          CALENDAR_EDGE_STRICT: ${{ vars.CALENDAR_EDGE_STRICT }}
         run: |
           PW_LABEL='T4e: Attendee Arc Journey' scripts/pw-guarded.sh \
             --config=playwright.ui-smoke.config.ts \

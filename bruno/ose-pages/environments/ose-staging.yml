@@ -34,3 +34,5 @@ variables:
     name: ocrCiEdgeToken
   - name: edgeStrict
     value: ""
+  - name: pagesEdgeStrict
+    value: ""
