@@ -25,6 +25,7 @@
  */
 
 import { test, expect, type Page, type Locator } from '@playwright/test';
+import { assertActionAboveFold } from './helpers/fold-gate';
 
 // TARGET RESOLUTION — via Playwright's baseURL, NOT an absolute URL (OSE-1236).
 //
@@ -190,23 +191,25 @@ const SURFACES: Surface[] = [
   {
     path: '/',
     name: 'landing',
-    // `header a` skips the Language menu's own links (owner 2026-11-10). They
-    // sit first in the header but show only once the menu is open: on a phone
-    // they have no box, and on a laptop a closed menu still gives them one, so
-    // the check passed on a link nobody could see.
-    primaryCtaSelector:
-      '[data-testid="subscribe-submit"], [data-testid="cta-primary"], header a:not(.ose-langmenu-item), .hero a, .hero button',
+    // The real action, and nothing after it (OSE-2160, F-45). The list used to end
+    // in `header a` and `.hero a`: none of the named test ids matched on staging,
+    // so the gate fell through to the brand link in the header, which is always
+    // above the fold, and could not fail. `where-submit` is "Find events" in the
+    // town-or-zip box, the first thing the page asks. Born red: a 600 px spacer
+    // above it (fold-gate-meta.spec.ts).
+    primaryCtaSelector: '[data-testid="where-submit"]',
   },
   {
     // OSE-1990: the attendee map's own address. It is the landing page opened on
-    // its map view, so it is held to the landing's contract. A local worker has
-    // fewer events than the landing's rule asks for, so what is measured here
-    // is the map view's note and example, which the landing surface above never
-    // shows on entry.
+    // its map view, so it is held to the landing's contract. The town-or-zip box
+    // follows the map here (landing-area.ts placeWhere), so the action this page
+    // leads with is the map, or, on a worker with no listed event (the desktop and
+    // tablet jobs run this spec alone, and a new event waits out the publish grace
+    // window), the empty state's own create link. Both are the area's content, never
+    // the header (landing-map-first.spec.ts seeds the full map).
     path: '/map',
     name: 'attendee map',
-    primaryCtaSelector:
-      '[data-testid="subscribe-submit"], [data-testid="cta-primary"], header a:not(.ose-langmenu-item), .hero a, .hero button',
+    primaryCtaSelector: '[data-testid="area-map"], [data-testid="area-empty-create"]',
   },
   {
     path: '/events',
@@ -605,60 +608,16 @@ for (const surface of SURFACES) {
         `${surface.name}: no primaryCtaSelector declared — surface either has no clear CTA OR the contract isn't applicable`
       );
       await loadSurface(page, surface);
-      // Selector-priority resolution (OSE-1236).
-      //
-      // This was `page.locator(surface.primaryCtaSelector!).first()`. A
-      // comma-separated CSS list is ONE selector, and `.first()` returns the
-      // first match in DOCUMENT ORDER — not the first list entry that matches.
-      // Every surface here declares its selector as a priority list
-      // ("the real CTA, then progressively looser fallbacks"), and that
-      // intent was silently inverted: on /admin the entry-view chooser sits
-      // AFTER the create wizard in the DOM, so `.first()` always resolved to
-      // create-submit — an element behind [hidden] — and the contract failed
-      // with "no bounding box" no matter which CTA was named first.
-      //
-      // Resolving entry-by-entry restores the declared intent, and prefers a
-      // RENDERED candidate: a selector that matches only hidden elements falls
-      // through to the next, which is what a fallback list is for.
-      const candidates = surface
-        .primaryCtaSelector!.split(',')
-        .map((x) => x.trim())
-        .filter(Boolean);
-      let cta = page.locator(candidates[0]).first();
-      let exists = 0;
-      for (const sel of candidates) {
-        const loc = page.locator(sel).first();
-        const n = await loc.count();
-        if (n === 0) continue;
-        if (exists === 0) {
-          // Remember the first selector that matches ANYTHING, so a surface
-          // whose CTA exists but is hidden still reports the honest
-          // "no bounding box" rather than "matched 0 elements".
-          cta = loc;
-          exists = n;
-        }
-        if (await loc.boundingBox().catch(() => null)) {
-          cta = loc;
-          exists = n;
-          break;
-        }
-      }
-      if (exists === 0) {
-        // No primary CTA element found on the page at all. That's a
-        // different failure class — surface a clear message rather than
-        // a confusing "above the fold" assertion error.
-        throw new Error(
-          `${surface.name}: primary CTA selector '${surface.primaryCtaSelector}' matched 0 elements. Either the selector needs updating for this surface, or the surface is genuinely missing its primary CTA.`
-        );
-      }
-      const box = await cta.boundingBox();
-      expect(box, `${surface.name}: primary CTA has no bounding box`).not.toBeNull();
-      // "Above the fold" at 375×812 means cta.y < 812 — the customer
-      // sees the CTA without scrolling on initial load.
-      expect(
-        box!.y,
-        `${surface.name}: primary CTA top = ${Math.round(box!.y)}px > viewport height ${auditViewport().height}px — CTA below the fold, requires scroll-then-tap`
-      ).toBeLessThan(auditViewport().height);
+      // Selector-priority resolution (OSE-1236) and the failure messages live in
+      // helpers/fold-gate.ts, so the meta-test can call the same gate (OSE-2160).
+      // "Above the fold" at 375×812 means the action's top < 812: the customer
+      // sees it without scrolling on initial load.
+      await assertActionAboveFold(
+        page,
+        surface.name,
+        surface.primaryCtaSelector!,
+        auditViewport().height
+      );
     });
 
     test(`OSE-292 | FE | GET ${shown} (375×812 viewport) | no pinch-zoom required for form submit`, async ({
