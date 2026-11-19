@@ -89,15 +89,25 @@ describe('OSE-2196 | no exact stored point reaches a public page', () => {
       fc.asyncProperty(
         fc.record({
           // Six decimals, as a stored point is; lands are wide enough.
-          lat: fc.integer({ min: -55_000_000, max: 70_000_000 }).map((v) => v / 1e6),
-          lon: fc.integer({ min: -179_000_000, max: 179_000_000 }).map((v) => v / 1e6),
+          // Six decimals with a non-zero sixth, as a stored point is: it can
+          // never equal a five-decimal cell point by chance.
+          lat: fc
+            .tuple(fc.integer({ min: -5_500_000, max: 7_000_000 }), fc.integer({ min: 1, max: 9 }))
+            .map(([v, d]) => (v * 10 + (v < 0 ? -d : d)) / 1e6),
+          lon: fc
+            .tuple(
+              fc.integer({ min: -17_900_000, max: 17_900_000 }),
+              fc.integer({ min: 1, max: 9 })
+            )
+            .map(([v, d]) => (v * 10 + (v < 0 ? -d : d)) / 1e6),
           live: fc.boolean(),
           address: fc.boolean(),
         }),
         async ({ lat, lon, live, address }) => {
           const id = `nsp-${++n}`;
           const { h3_res9, h3_res7 } = tagCoordinates(lat, lon);
-          const [cLat, cLon] = cellToLatLng(h3_res9);
+          // The point as cellPoint writes it: the cell centre, five decimals.
+          const [cLat, cLon] = cellToLatLng(h3_res9).map((v) => v.toFixed(5));
           await E.DB.prepare(
             `INSERT INTO events (id, brand_id, title, slug, status, is_published, listed_from,
                                  location, where_address, lat, lon, h3_res9, h3_res7,
@@ -141,7 +151,10 @@ describe('OSE-2196 | no exact stored point reaches a public page', () => {
             expect(nums, `${name}: the stored longitude ${lon}`).not.toContain(lon);
             for (const link of links) {
               for (const [a, b] of pairs(link)) {
-                expect([a, b], `${name}: a coordinate in ${link}`).toEqual([cLat, cLon]);
+                expect([a, b], `${name}: a coordinate in ${link}`).toEqual([
+                  Number(cLat),
+                  Number(cLon),
+                ]);
               }
             }
           }

@@ -149,7 +149,8 @@ describe('OSE-539 L2: pre-event phase', () => {
     const id = await createEventWithGeo('Geo Event', 40.7128, -74.006, 'Eagles Hall');
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
-    const [cLat, cLon] = cellToLatLng(latLngToCell(40.7128, -74.006, 9));
+    // The res-9 cell's point as cellPoint writes it (five decimals).
+    const [cLat, cLon] = cellToLatLng(latLngToCell(40.7128, -74.006, 9)).map((v) => v.toFixed(5));
     expect(html).toContain('data-testid="geo-link"');
     expect(html).toContain(
       `https://www.google.com/maps/search/?api=1&amp;query=${cLat}%2C${cLon}"`

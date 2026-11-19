@@ -180,8 +180,8 @@
            <details class="ose-calendar-menu ose-directions-menu" data-testid="geo-link-live">
     <summary class="ose-calendar-link ose-calendar-summary" data-testid="geo-link-live-summary">Cómo llegar</summary>
     <div class="ose-calendar-options" role="group" aria-label="Cómo llegar">
-      <a class="ose-calendar-option" data-testid="geo-link-live-google" href="https://www.google.com/maps/search/?api=1&amp;query=41.70146830299315%2C-87.70031497081224" target="_blank" rel="noopener noreferrer">Google Maps</a>
-      <a class="ose-calendar-option" data-testid="geo-link-live-apple" href="https://maps.apple.com/?ll=41.70146830299315,-87.70031497081224&amp;q=St.%20Barnabas%20Hall" target="_blank" rel="noopener noreferrer">Apple Maps</a>
+      <a class="ose-calendar-option" data-testid="geo-link-live-google" href="https://www.google.com/maps/search/?api=1&amp;query=41.70147%2C-87.70031" target="_blank" rel="noopener noreferrer">Google Maps</a>
+      <a class="ose-calendar-option" data-testid="geo-link-live-apple" href="https://maps.apple.com/?ll=41.70147,-87.70031&amp;q=St.%20Barnabas%20Hall" target="_blank" rel="noopener noreferrer">Apple Maps</a>
     </div>
   </details>
          </section>

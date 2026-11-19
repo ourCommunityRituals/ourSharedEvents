@@ -48,19 +48,28 @@ export interface EventPlace extends EventCells {
  */
 export function eventDirectionsQuery(e: EventPlace): string | null {
   const p = eventCellPoint(e);
-  if (p) return `${p.lat},${p.lon}`;
+  if (p) return p.point;
   const text = (e.where_address || e.location || '').trim();
   return text || null;
 }
 
 export function eventDirections(e: EventPlace): { google: string; apple: string } | null {
   const p = eventCellPoint(e);
-  return directionsUrls(
-    p?.lat ?? null,
-    p?.lon ?? null,
-    e.location ?? null,
-    e.where_address ?? null
-  );
+  if (p) return pointUrls(p.point, e.location ?? null, e.where_address ?? null);
+  return directionsUrls(null, null, e.location ?? null, e.where_address ?? null);
+}
+
+/** Both links at one point written "lat,lng" (as given, digit for digit). */
+function pointUrls(
+  point: string,
+  venueName: string | null,
+  addr: string | null
+): { google: string; apple: string } {
+  const label = encodeURIComponent(venueName || addr || '');
+  return {
+    google: `https://www.google.com/maps/search/?api=1&query=${point.replace(',', '%2C')}`,
+    apple: `https://maps.apple.com/?ll=${point}${label ? `&q=${label}` : ''}`,
+  };
 }
 
 export function directionsUrls(
@@ -70,11 +79,7 @@ export function directionsUrls(
   addr: string | null
 ): { google: string; apple: string } | null {
   if (lat !== null && lon !== null && Number.isFinite(lat) && Number.isFinite(lon)) {
-    const label = encodeURIComponent(venueName || addr || '');
-    return {
-      google: `https://www.google.com/maps/search/?api=1&query=${lat}%2C${lon}`,
-      apple: `https://maps.apple.com/?ll=${lat},${lon}${label ? `&q=${label}` : ''}`,
-    };
+    return pointUrls(`${lat},${lon}`, venueName, addr);
   }
   const text = (addr || venueName || '').trim();
   if (!text) return null;

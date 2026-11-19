@@ -48,7 +48,6 @@
  */
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
-import { cellToLatLng } from 'h3-js';
 import { eventRoutableSql, isRoutable } from '../src/domain/event-state';
 
 interface TestEnv {
@@ -74,8 +73,10 @@ const RES7 = '872664544ffffff';
 // 2026-11-19, "it should resolve to the H3"): Directions go to the res-9 cell's
 // point, never the stored one.
 const RES9 = '89266454447ffff';
-const [C9_LAT, C9_LON] = cellToLatLng(RES9);
-const [C7_LAT, C7_LON] = cellToLatLng(RES7);
+// Their points as lib/cell-point.ts cellPoint writes them (five decimals,
+// shared with the map, OSE-2198), worked out from the cell ids with h3-js.
+const [C9_LAT, C9_LON] = ['41.65826', '-87.67911'];
+const [C7_LAT, C7_LON] = ['41.65950', '-87.67071'];
 const ADDRESS = '2196 South Routable Ave, Blue Island IL 60406';
 const OFFMAP_ADDRESS = '9999 West Unlisted Rd, Blue Island IL 60406';
 

@@ -25,7 +25,7 @@ runtime:
           expect(b.routable).to.equal(true);
         });
         test('the poster maps search the res-9 cell point, never the stored point', function () {
-          expect(b.directions).to.eql({ query: '38.51279512310676,-116.51087534380703' });
+          expect(b.directions).to.eql({ query: '38.51280,-116.51088' });
         });
 
 settings:
