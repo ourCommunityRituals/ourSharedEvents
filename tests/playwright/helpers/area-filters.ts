@@ -11,3 +11,13 @@ export async function openAreaFilters(page: Page): Promise<void> {
   const chip = page.getByTestId('area-filters-btn');
   if (await chip.isVisible()) await chip.click();
 }
+
+/**
+ * The groups are tabs now (lib/area-tabs-script.ts, OSE-2156): When shows first,
+ * and Type and Near me sit behind their tab. Open filters, then a tab by name
+ * ('when', 'type' or 'near').
+ */
+export async function openAreaTab(page: Page, name: 'when' | 'type' | 'near'): Promise<void> {
+  await openAreaFilters(page);
+  await page.getByTestId(`tab-${name}`).click();
+}
