@@ -265,8 +265,8 @@
         >
       </div>
       <nav data-testid="landing-nav" aria-label="Primary">
-        <a href="/events" data-testid="nav-events">Events</a>
-        <a href="/map" data-testid="nav-map">Map</a>
+        <a href="/events?where=Blue%20Island%2C%20IL" data-testid="nav-events">Events</a>
+        <a href="/map?where=Blue%20Island%2C%20IL" data-testid="nav-map">Map</a>
       </nav>
     </header>
 
