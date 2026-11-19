@@ -15,9 +15,7 @@ runtime:
   scripts:
     - type: after-response
       code: |-
-        test('Returns 200 or 403 (edge challenge)', function () {
-          expect([200, 403]).to.include(res.getStatus());
-        });
+        require('./lib/edge.js').pageStatus({ bru: bru, res: res, test: test, expect: expect, name: 'Returns 200 or 403 (edge challenge)' });
         if (res.getStatus() === 200) {
           const body = String(res.getBody());
           const has = function (id) { return body.includes('data-testid="' + id + '"'); };
