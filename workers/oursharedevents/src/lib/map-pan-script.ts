@@ -5,10 +5,14 @@
  * rule 10). On 2026-11-18 the owner chose "a small script on the map only" so
  * the map can be pinched, scrolled and dragged. This is that script, and the
  * only one the map carries. It keeps the other half of rule 10: it makes no
- * request of any kind (no fetch, no image, no tile). It changes only the
- * drawing the server already sent: its `viewBox`, the size its text and lines
- * are set at, and one mark it adds. Without it (an old browser, or scripts
- * off) the map is exactly what it was, and its buttons stay hidden.
+ * request of any kind (no fetch, no image, no tile). It changes the drawing the
+ * server already sent: its `viewBox`, the size its text and lines are set at,
+ * and one mark it adds. Once the visitor asks where they are, it also writes
+ * distances, as text, into the list under the map and (zoomed in, OSE-2198)
+ * into the place panels and the event cards below the map, and puts those
+ * cards nearest first: the one change it makes outside the map's figure.
+ * Without it (an old browser, or scripts off) the map is exactly what it was,
+ * and its buttons stay hidden.
  *
  * WHAT IT DOES
  *   - Phone first (owner, 2026-11-18: "phone is the primary interface"): a
@@ -29,12 +33,13 @@
  *   - Zoomed in on one area (OSE-2198; owner, 2026-11-19: "this is how you get
  *     accurate measurements and distance from current location to event
  *     distance"): the distance is to each PLACE, not the area. Each dot carries
- *     its res-9 cell's centre (`data-ll`, the point it is drawn at) and its
- *     events; the place's panel says how far it is, the event cards below the
- *     map (the zoomed area's list, owner 2026-11-17) say how far their place
- *     is and are put nearest first, and the line names the nearest place. An
- *     event with no place on the map is measured to the area's centre and
- *     says "about".
+ *     its res-9 cell's centre (`data-ll`, the point it is drawn at); the
+ *     place's panel says how far it is, the event cards below the map (the
+ *     zoomed area's list, owner 2026-11-17) say how far their place is and are
+ *     put nearest first, and the line names the nearest place. A place's
+ *     events are the ones its panel names. An event with no place on the map,
+ *     or one its place's panel does not name, is measured to the area's centre
+ *     and says "about".
  *
  * NEVER WHO, NEVER WHERE (invariant 3: geolocation picks what to show and is
  * never stored). The position is read by the phone and used by the phone: it
@@ -281,16 +286,17 @@ const SCRIPT = String.raw`(function () {
   // map is measured to the area's centre and says "about".
   function places(lat, lng, zone) {
     var best = null, near = Object.create(null), a = pointOf(zone), far = miles(lat, lng, a[0], a[1]);
-    // A dot is the one link that carries its events; its panel is the section
-    // its title (amap-ph-N) heads, and the panel's first line says what is there.
-    [].forEach.call(fig.querySelectorAll('a[data-events][data-ll]'), function (dot) {
+    // A dot is a link to its panel (#amap-dot-N); the panel is the section its
+    // title (amap-ph-N) heads, its first line says what is there, and its cards
+    // are the place's events.
+    [].forEach.call(fig.querySelectorAll('a[href^="#amap-dot-"][data-ll]'), function (dot) {
       var p = pointOf(dot), d = miles(lat, lng, p[0], p[1]);
       var n = (dot.getAttribute('href') || '').replace('#amap-dot-', '');
       var title = document.getElementById('amap-ph-' + n);
       var panel = title && title.parentNode;
       var meta = panel && panel.querySelector('p.amap-pm');
       if (meta) note(meta, 'amap-place-dist', say('from', fmt(d)));
-      (dot.getAttribute('data-events') || '').split(' ').forEach(function (id) { if (id) near[id] = d; });
+      if (panel) [].forEach.call(panel.querySelectorAll('[data-event-id]'), function (c) { near[c.getAttribute('data-event-id')] = d; });
       if (!best || d < best.d) best = { d: d, key: 'near-place', name: title ? title.textContent : n };
     });
     var cards = [].slice.call(document.querySelectorAll('.view-list article.event-card[data-event-id]'));

@@ -81,12 +81,13 @@
 // DISTANCE TO THE PLACE, NOT THE AREA (owner, 2026-11-19: "this is how you get
 // accurate measurements and distance from current location to event
 // distance"; OSE-2198). Zoomed in, each dot also carries its own res-9 cell's
-// centre (`data-ll`, cellPoint) and the ids of the events it holds, so the
-// map's script measures "where am I" to the place (a block, about 0.35 km
-// across) rather than to the area (about 2.4 km). That point is the same one
-// the dot is drawn at, written from the cell id alone: no event's own point.
-// It says nothing the drawing does not already say (the dot read back through
-// the frame is the same block; the same spec pins both).
+// centre (`data-ll`, lib/cell-point.ts), so the map's script measures "where
+// am I" to the place (a block, about 0.35 km across) rather than to the area
+// (about 2.4 km). That point is the same one the dot is drawn at, written from
+// the cell id alone: no event's own point. It says nothing the drawing does not
+// already say (the dot read back through the frame is the same block; the same
+// spec pins both). Which events are at a place is read from the place's own
+// panel, so no event is tied to a place the panel does not name.
 //
 // NO STREET MAP, NO FLOATING DOTS (owner, 2026-11-09; OSE-1894). Dots on a bare
 // hexagon tell nobody where anything is. Where the street map is missing (no
@@ -95,6 +96,7 @@
 
 import { cellToBoundary, cellToLatLng, getResolution, isValidCell, latLngToCell } from 'h3-js';
 import { CORRIDOR_RES, NODE_RES } from './h3-tagging.js';
+import { cellPoint } from './cell-point.js';
 import {
   CORRIDOR_READY_MIN_EVENTS,
   CORRIDOR_WINDOW_DAYS,
@@ -645,19 +647,6 @@ function frameAttrs(f: MapFrame): string {
 }
 
 /**
- * A cell's own centre, as the map's script reads it (`data-ll`): five decimals
- * of the cell id's centre, and nothing else. The only point a page writes for a
- * place: an area's res-7 cell, or (zoomed in) a dot's res-9 cell. A pure
- * function of the cell id, so moving an event anywhere inside its cell changes
- * no byte (tests/map-georef-cell-only.spec.ts pins it per cell).
- */
-export function cellPoint(cell: string): string {
-  return cellToLatLng(cell)
-    .map((v) => v.toFixed(5))
-    .join(',');
-}
-
-/**
  * The map's zoom buttons, its scale bar and the line about where the visitor
  * is. Hidden until the map's script shows them, so a page without the script
  * shows no button that does nothing. The words the script writes ride on the
@@ -843,11 +832,10 @@ function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets: string, name
           ? d.events[0]!.name
           : fmt(lang, 'map.dotTitle', { n: d.n, count: eventCount(d.events.length, lang) });
       const cls = `amap-f amap-d${d.n}${d.exact ? '' : ' amap-blk'} ${dotClasses(d.events)}`.trim();
-      // The place's own point (its res-9 cell's centre, the point it is drawn at)
-      // and its events, for the distance the map's script works out on the phone.
-      const ids = escapeHtml(d.events.map((e) => e.id).join(' '));
+      // The place's own point (its res-9 cell's centre, the point it is drawn at),
+      // for the distance the map's script works out on the phone.
       return (
-        `<a href="${dotHref(d)}" class="${escapeHtml(cls)}" data-testid="amap-dot" data-exact="${d.exact ? 1 : 0}" data-count="${d.events.length}" data-ll="${cellPoint(d.cell)}" data-events="${ids}">` +
+        `<a href="${dotHref(d)}" class="${escapeHtml(cls)}" data-testid="amap-dot" data-exact="${d.exact ? 1 : 0}" data-count="${d.events.length}" data-ll="${cellPoint(d.cell)}">` +
         `<title>${escapeHtml(title)}</title>` +
         `<circle class="amap-hit" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_HIT_R}" fill-opacity="0"/>` +
         `<circle class="amap-dot" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_R}"/>` +

@@ -36,6 +36,9 @@
  *   into the page as an attribute; a cell id made from the position and written
  *   into the page. And the name replaced as a string, so "$&" in a venue was
  *   rewritten | date: 2026-11-19
+ * @born-red a place's events are its panel's (Dr of Security finding, OSE-2198) |
+ *   method: each dot given back a data-events list of all its events, which the
+ *   script read; the past-twelve test went red | date: 2026-11-19
  */
 import { describe, expect, it } from 'vitest';
 import { JSDOM } from 'jsdom';
@@ -258,6 +261,30 @@ describe('zoomed in, the distance is to each place, not the area (OSE-2198)', ()
     expect(Number(card(doc, 'e-none').getAttribute('data-pd'))).toBeCloseTo(area, 3);
     // Every placed card says it plainly, without "about".
     for (const id of ['e1', 'e2a', 'e2b', 'e3']) expect(cardDist(doc, id)).not.toContain('about');
+  });
+
+  it('an event its place\'s panel does not name (past the first 12) is tied to no place and says "about"', () => {
+    // Thirteen events on place 2's block: its panel shows twelve and says one more.
+    const many = [
+      ...rows(),
+      ...Array.from({ length: 11 }, (_, i) => row(`e2x${i}`, P2, 'A hall', 8 + i)),
+    ];
+    const html = renderLandingArea(many, {
+      now: NOW,
+      streets: layer,
+      zoom: { cell: AREA, backHref: '/' },
+    }).html;
+    const last = 'e2x10'; // the latest of the thirteen, so the one the panel leaves out
+    const map = html.slice(
+      html.indexOf('data-testid="amap-wrap"'),
+      html.indexOf('data-testid="area-list"')
+    );
+    expect(map).toContain('data-event-id="e2x9"');
+    expect(map).not.toContain(last);
+    const { doc, locate } = open(html, STAND);
+    locate();
+    expect(cardDist(doc, 'e2x9')).toBe(` · ${fmt(miles(STAND, centre(block(P2))))} mi from you`);
+    expect(cardDist(doc, last)).toBe(` · about ${fmt(miles(STAND, centre(AREA)))} mi from you`);
   });
 
   it('the words are in the page language', () => {

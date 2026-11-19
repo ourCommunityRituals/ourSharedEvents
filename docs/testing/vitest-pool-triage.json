@@ -2022,7 +2022,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 9
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/map-limits.spec.ts",
@@ -2050,7 +2050,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 10
+      "testCount": 11
     },
     {
       "file": "workers/oursharedevents/tests/map-place-links.spec.ts",

@@ -1274,7 +1274,7 @@ describe('the zoomed area, edge by edge', () => {
       .map((v) => v.toFixed(5))
       .join(',');
     expect(html).toContain(
-      `<a href="#amap-dot-1" class="amap-f amap-d1 type-trivia when-week" data-testid="amap-dot" data-exact="1" data-count="1" data-ll="${ll}" data-events="solo">` +
+      `<a href="#amap-dot-1" class="amap-f amap-d1 type-trivia when-week" data-testid="amap-dot" data-exact="1" data-count="1" data-ll="${ll}">` +
         '<title>Event solo</title>' +
         `<circle class="amap-hit" cx="${x}" cy="${y}" r="39" fill-opacity="0"/>` +
         `<circle class="amap-dot" cx="${x}" cy="${y}" r="17"/>` +
@@ -1308,10 +1308,10 @@ describe('the zoomed area, edge by edge', () => {
         .map((v) => v.toFixed(5))
         .join(',');
     expect(html).toContain(
-      `<a href="#amap-dot-1" class="amap-f amap-d1 amap-blk" data-testid="amap-dot" data-exact="0" data-count="1" data-ll="${ll(far.lat, far.lon)}" data-events="n"><title>Event n</title>`
+      `<a href="#amap-dot-1" class="amap-f amap-d1 amap-blk" data-testid="amap-dot" data-exact="0" data-count="1" data-ll="${ll(far.lat, far.lon)}"><title>Event n</title>`
     );
     expect(html).toContain(
-      `</a><a href="#amap-dot-2" class="amap-f amap-d2" data-testid="amap-dot" data-exact="1" data-count="2" data-ll="${ll(RIPH.lat, RIPH.lon)}" data-events="a b"><title>Spot 2: 2 events</title>`
+      `</a><a href="#amap-dot-2" class="amap-f amap-d2" data-testid="amap-dot" data-exact="1" data-count="2" data-ll="${ll(RIPH.lat, RIPH.lon)}"><title>Spot 2: 2 events</title>`
     );
     // No text list sits between the drawing and the caption, only the anchor.
     expect(html).not.toContain('data-testid="amap-legend-dot"');

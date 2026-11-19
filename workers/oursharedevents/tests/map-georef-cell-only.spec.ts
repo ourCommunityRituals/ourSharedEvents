@@ -43,7 +43,8 @@
  *   neighbouring block's centre; to six decimals; the event's own point added
  *   as a second attribute; a merged dot's point taken from the block merged
  *   into it; the dot's point written on the dot's touch target too); each
- *   turned this file red | date: 2026-11-19
+ *   turned this file red. After the security review, each dot given back a
+ *   list of its event ids: red too | date: 2026-11-19
  */
 import { describe, expect, test } from 'vitest';
 import { cellToBoundary, cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
@@ -360,6 +361,23 @@ describe("the georeference on the zoomed map is the area cell's (OSE-2150)", () 
     }
   );
 
+  test('a dot carries its point and no event id: which events are at a place is its panel, as before', () => {
+    const blocks = blocksIn(FIXTURE_CELL, 3);
+    const html = zoomPage(
+      FIXTURE_CELL,
+      blocks.map((b, i) => ev(i, FIXTURE_CELL, ...inside(b, i, 0.5), i ? 'address' : 'business'))
+    );
+    for (const [, tag] of dotTags(html)) {
+      expect(tag.match(/\sdata-[a-z-]+=/g)).toEqual([
+        ' data-testid=',
+        ' data-exact=',
+        ' data-count=',
+        ' data-ll=',
+      ]);
+      expect(tag).not.toMatch(/\be\d\b/);
+    }
+  });
+
   test("two blocks near enough to merge are one dot, drawn at the first block's centre", () => {
     const [first] = blocksIn(FIXTURE_CELL, 1);
     const next = gridDisk(first!, 1).find(
@@ -379,12 +397,7 @@ describe("the georeference on the zoomed map is the area cell's (OSE-2150)", () 
     const other = block === first ? next : first!;
     const tag = dotTags(html).get(1)!;
     expect(tag.match(/data-ll="[^"]+"/g)).toEqual([pointOf(block)]);
-    expect(
-      tag
-        .match(/data-events="([^"]*)"/)![1]!
-        .split(' ')
-        .sort()
-    ).toEqual(['e0', 'e1']);
+    expect(tag).toContain('data-count="2"');
     // (The area's centre child shares the area's centre, which its outline carries.)
     const asArea = pointOf(other) === pointOf(FIXTURE_CELL) ? 1 : 0;
     expect(html.split(pointOf(other).slice(9, -1)).length - 1).toBe(asArea);
