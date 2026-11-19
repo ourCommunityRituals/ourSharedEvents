@@ -279,7 +279,7 @@ export const ar: Record<MessageKey, string> = {
   'area.tabs': 'تصفية الفعاليات',
   'area.tabsOn': 'المرشّح مفعّل',
   'area.near': 'بالقرب مني',
-  'area.nearLabel': 'المسافة من مكانك',
+  'area.nearLabel': 'المسافة من مكانك، بالأميال',
   'area.nearAny': 'أي مسافة',
   'area.nearWithin': 'ضمن {d} ميل',
   'area.nearPrivacy': 'يُستخدم موقعك على هذا الجهاز فقط، ولا يُرسل ولا يُخزَّن أبدًا.',

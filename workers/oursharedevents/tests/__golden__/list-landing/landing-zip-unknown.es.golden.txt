@@ -310,6 +310,12 @@
 #view-list:checked ~ .toggles label[for='view-list']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-list:checked ~ .toggles label[for='view-list']::before{content:'\2713';margin-inline-end:.35rem}#view-list:focus-visible ~ .toggles label[for='view-list']{outline:3px solid var(--accent);outline-offset:2px}
 #view-map:checked ~ .toggles label[for='view-map']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#view-map:checked ~ .toggles label[for='view-map']::before{content:'\2713';margin-inline-end:.35rem}#view-map:focus-visible ~ .toggles label[for='view-map']{outline:3px solid var(--accent);outline-offset:2px}
 #filters-open:checked ~ .toggles label[for='filters-open']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#filters-open:checked ~ .toggles label[for='filters-open']::before{content:'\2713';margin-inline-end:.35rem}#filters-open:focus-visible ~ .toggles label[for='filters-open']{outline:3px solid var(--accent);outline-offset:2px}
+#near-0:checked + label{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#near-0:checked + label::before{content:'\2713';margin-inline-end:.35rem}#near-0:focus-visible + label{outline:3px solid var(--accent);outline-offset:2px}
+#near-2:checked + label{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#near-2:checked + label::before{content:'\2713';margin-inline-end:.35rem}#near-2:focus-visible + label{outline:3px solid var(--accent);outline-offset:2px}
+#near-5:checked + label{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#near-5:checked + label::before{content:'\2713';margin-inline-end:.35rem}#near-5:focus-visible + label{outline:3px solid var(--accent);outline-offset:2px}
+#near-10:checked + label{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#near-10:checked + label::before{content:'\2713';margin-inline-end:.35rem}#near-10:focus-visible + label{outline:3px solid var(--accent);outline-offset:2px}
+#near-25:checked + label{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#near-25:checked + label::before{content:'\2713';margin-inline-end:.35rem}#near-25:focus-visible + label{outline:3px solid var(--accent);outline-offset:2px}
+#near-50:checked + label{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#near-50:checked + label::before{content:'\2713';margin-inline-end:.35rem}#near-50:focus-visible + label{outline:3px solid var(--accent);outline-offset:2px}
 #win-weekend:checked ~ .toggles label[for='win-weekend']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-weekend:checked ~ .toggles label[for='win-weekend']::before{content:'\2713';margin-inline-end:.35rem}#win-weekend:focus-visible ~ .toggles label[for='win-weekend']{outline:3px solid var(--accent);outline-offset:2px}#win-weekend:checked ~ .area .event-card:not(.when-weekend),#win-weekend:checked ~ .area .amap-f:not(.when-weekend){display:none}
 #win-week:checked ~ .toggles label[for='win-week']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-week:checked ~ .toggles label[for='win-week']::before{content:'\2713';margin-inline-end:.35rem}#win-week:focus-visible ~ .toggles label[for='win-week']{outline:3px solid var(--accent);outline-offset:2px}#win-week:checked ~ .area .event-card:not(.when-week),#win-week:checked ~ .area .amap-f:not(.when-week){display:none}
 #win-month:checked ~ .toggles label[for='win-month']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-month:checked ~ .toggles label[for='win-month']::before{content:'\2713';margin-inline-end:.35rem}#win-month:focus-visible ~ .toggles label[for='win-month']{outline:3px solid var(--accent);outline-offset:2px}#win-month:checked ~ .area .event-card:not(.when-month),#win-month:checked ~ .area .amap-f:not(.when-month){display:none}
@@ -323,7 +329,7 @@
 #cat-ent:checked ~ .toggles label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .toggles label[for='cat-ent']::before{content:'\2713';margin-inline-end:.35rem}#cat-ent:focus-visible ~ .toggles label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent),#cat-ent:checked ~ .area .amap-f:not(.cat-ent){display:none}
 #cat-mkt:checked ~ .toggles label[for='cat-mkt']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-mkt:checked ~ .toggles label[for='cat-mkt']::before{content:'\2713';margin-inline-end:.35rem}#cat-mkt:focus-visible ~ .toggles label[for='cat-mkt']{outline:3px solid var(--accent);outline-offset:2px}#cat-mkt:checked ~ .area .event-card:not(.cat-mkt),#cat-mkt:checked ~ .area .amap-f:not(.cat-mkt){display:none}
 #cat-lit:checked ~ .toggles label[for='cat-lit']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-lit:checked ~ .toggles label[for='cat-lit']::before{content:'\2713';margin-inline-end:.35rem}#cat-lit:focus-visible ~ .toggles label[for='cat-lit']{outline:3px solid var(--accent);outline-offset:2px}#cat-lit:checked ~ .area .event-card:not(.cat-lit),#cat-lit:checked ~ .area .amap-f:not(.cat-lit){display:none}
-</style><style>@media(max-width:599.98px){.toggle-radio{width:1px;height:1px;margin:0}#filters-open:not(:checked)~.toggle-radio,#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn,#filters-open{display:none}}</style><style>button.disc-chip{font-family:inherit}button.disc-chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.area-tabs .disc-chip.active{background:var(--surface);border:2px solid var(--accent);color:var(--text)}.area-tabs .disc-chip.active::before{content:none}.area-tab{flex:1 1 100%;margin:.25rem 0}.near-sel{width:auto;min-width:min(12rem,100%)}.near-d{white-space:nowrap}</style>
+</style><style>@media(max-width:599.98px){.toggle-radio{width:1px;height:1px;margin:0}#filters-open:not(:checked)~.toggle-radio,#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn,#filters-open{display:none}}</style><style>button.disc-chip{font-family:inherit}button.disc-chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.area-tabs .disc-chip.active{background:var(--surface);border:2px solid var(--accent);color:var(--text)}.area-tabs .disc-chip.active::before{content:none}.area-tab{flex:1 1 100%;margin:.25rem 0}.near-d{white-space:nowrap}</style>
         <div class="toggles" data-testid="area-toggles">
           <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">Vista</legend><label class="disc-chip" for="view-list">Lista</label><label class="disc-chip" for="view-map">Mapa</label></fieldset>
           <div class="disc-chips area-filters-btn"><label class="disc-chip" for="filters-open" data-testid="area-filters-btn">Filtros</label></div>
@@ -333,8 +339,7 @@
           <div class="area-tab" data-tab="type" data-tab-label="Tipo"><fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">Tipo</legend><label class="disc-chip" for="type-all">Todos los tipos</label><label class="disc-chip" for="cat-rec">Sports &amp; Recreation</label><label class="disc-chip" for="cat-ent">Entertainment &amp; Trivia</label><label class="disc-chip" for="cat-mkt">Neighborhood Markets</label><label class="disc-chip" for="cat-lit">Literary &amp; Book Clubs</label></fieldset></div>
           <div class="area-tab" data-tab="where" data-tab-label="Dónde"><fieldset class="disc-chips" data-testid="toggle-modality"><legend class="disc-label">Dónde</legend><label class="disc-chip" for="mod-all">Todos</label><label class="disc-chip" for="mod-online">En línea</label><label class="disc-chip" for="mod-inperson">En persona</label></fieldset></div>
           <div class="area-tab" data-tab="near" data-tab-label="Cerca de mí" data-testid="near-panel" hidden data-locating="Buscando tu ubicación..." data-off="La ubicación está desactivada, así que no se puede usar la distancia." data-shown="Mostrando eventos a menos de %d mi, del más cercano al más lejano. Se omiten los eventos sin lugar en el mapa." data-none="No hay eventos con lugar en el mapa a menos de %d mi. Prueba una distancia mayor." data-away="a unas %d mi">
-            <label class="disc-label" for="near-radius">Distancia desde donde estás</label>
-            <select id="near-radius" class="input near-sel" data-testid="near-radius"><option value="0">Cualquier distancia</option><option value="5">A menos de 5 mi</option><option value="10">A menos de 10 mi</option><option value="25">A menos de 25 mi</option><option value="50">A menos de 50 mi</option></select>
+            <fieldset id="near-radius" class="disc-chips near-chips" data-testid="near-radius"><legend class="disc-label">Distancia desde donde estás, en millas</legend><input type="radio" name="near" id="near-0" value="0" class="toggle-radio" checked /><label class="disc-chip" for="near-0">Cualquier distancia</label><input type="radio" name="near" id="near-2" value="2" class="toggle-radio" /><label class="disc-chip" for="near-2">A menos de 2 mi</label><input type="radio" name="near" id="near-5" value="5" class="toggle-radio" /><label class="disc-chip" for="near-5">A menos de 5 mi</label><input type="radio" name="near" id="near-10" value="10" class="toggle-radio" /><label class="disc-chip" for="near-10">A menos de 10 mi</label><input type="radio" name="near" id="near-25" value="25" class="toggle-radio" /><label class="disc-chip" for="near-25">A menos de 25 mi</label><input type="radio" name="near" id="near-50" value="50" class="toggle-radio" /><label class="disc-chip" for="near-50">A menos de 50 mi</label></fieldset>
             <p class="near-note" data-testid="near-privacy">Tu ubicación se usa solo en este dispositivo. Nunca se envía ni se guarda.</p>
             <p class="near-note" role="status" aria-live="polite" data-testid="near-status"></p>
           </div>
@@ -529,7 +534,6 @@
     if (focus) tabs[i].focus();
   }
   function changed(p) {
-    if (p === near && sel && sel.value !== '0') return true;
     return radiosOf(p).some(function (r) { return r.checked !== r.defaultChecked; });
   }
   function marks() {
@@ -566,7 +570,12 @@
   });
 
   // ── distance ─────────────────────────────────────────────────────────────
-  var sel = canNear ? near.querySelector('select') : null;
+  var chips = canNear ? [].slice.call(near.querySelectorAll('input[name="near"]')) : [];
+  function radius() {
+    var c = chips.filter(function (r) { return r.checked; })[0];
+    return c ? +c.value : 0;
+  }
+  function lock(on) { chips.forEach(function (r) { r.disabled = on; }); }
   var status = canNear ? near.querySelector('.near-note[role="status"]') : null;
   var here = null;
   function say(key, d) { return (near.getAttribute('data-' + key) || '').replace('%d', d); }
@@ -595,7 +604,7 @@
     cards.forEach(function (c, i) { c.setAttribute('data-i', String(i)); });
   }
   function apply() {
-    var r = +sel.value, live = r > 0 && !!here, dist = {}, shown = 0;
+    var r = radius(), live = r > 0 && !!here, dist = {}, shown = 0;
     areas.forEach(function (a) {
       var c = a.getAttribute('data-cell'), p = centre[c];
       dist[c] = live ? miles(here[0], here[1], p[0], p[1]) : 0;
@@ -635,17 +644,19 @@
     marks();
   }
   function locate() {
-    sel.disabled = true;
+    lock(true);
     status.textContent = say('locating', '');
     geo.getCurrentPosition(
-      function (p) { here = [p.coords.latitude, p.coords.longitude]; sel.disabled = false; apply(); },
-      function () { sel.disabled = false; sel.value = '0'; apply(); status.textContent = say('off', ''); },
+      function (p) { here = [p.coords.latitude, p.coords.longitude]; lock(false); apply(); },
+      function () { lock(false); chips[0].checked = true; apply(); status.textContent = say('off', ''); },
       { enableHighAccuracy: false, maximumAge: 600000, timeout: 15000 }
     );
   }
   if (canNear) {
-    sel.addEventListener('change', function () {
-      if (+sel.value > 0 && !here) locate(); else apply();
+    chips.forEach(function (r) {
+      r.addEventListener('change', function () {
+        if (radius() > 0 && !here) locate(); else apply();
+      });
     });
   }
 

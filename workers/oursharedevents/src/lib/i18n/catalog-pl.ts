@@ -270,7 +270,7 @@ export const pl: Record<MessageKey, string> = {
   'area.tabs': 'Filtruj wydarzenia',
   'area.tabsOn': 'filtr włączony',
   'area.near': 'Blisko mnie',
-  'area.nearLabel': 'Odległość od miejsca, w którym jesteś',
+  'area.nearLabel': 'Odległość od miejsca, w którym jesteś, w milach',
   'area.nearAny': 'Dowolna odległość',
   'area.nearWithin': 'W promieniu {d} mil',
   'area.nearPrivacy':

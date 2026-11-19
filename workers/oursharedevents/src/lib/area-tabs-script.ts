@@ -20,7 +20,8 @@
  * group holds a chosen value other than the page's default carries a dot, and
  * says so to a screen reader, so a filter set on a tab that is closed is not forgotten.
  *
- * DISTANCE (the "Near me" tab). The page's map already carries each area's centre
+ * DISTANCE (the "Near me" tab). The choices are chips on radios (name=near): "Any
+ * distance" (0) and "Within N mi" for the owner's 2, 5, 10, 25 and 50 (2026-11-19). The page's map already carries each area's centre
  * (`data-ll`, taken from the public res-7 cell id alone, lib/attendee-map.ts), on
  * the pages that draw the street map, and the map's list names each area and links
  * its events, which is how a card finds its area (a card carries no cell and no
@@ -99,7 +100,6 @@ const SCRIPT = String.raw`(function () {
     if (focus) tabs[i].focus();
   }
   function changed(p) {
-    if (p === near && sel && sel.value !== '0') return true;
     return radiosOf(p).some(function (r) { return r.checked !== r.defaultChecked; });
   }
   function marks() {
@@ -136,7 +136,12 @@ const SCRIPT = String.raw`(function () {
   });
 
   // ── distance ─────────────────────────────────────────────────────────────
-  var sel = canNear ? near.querySelector('select') : null;
+  var chips = canNear ? [].slice.call(near.querySelectorAll('input[name="near"]')) : [];
+  function radius() {
+    var c = chips.filter(function (r) { return r.checked; })[0];
+    return c ? +c.value : 0;
+  }
+  function lock(on) { chips.forEach(function (r) { r.disabled = on; }); }
   var status = canNear ? near.querySelector('.near-note[role="status"]') : null;
   var here = null;
   function say(key, d) { return (near.getAttribute('data-' + key) || '').replace('%d', d); }
@@ -165,7 +170,7 @@ const SCRIPT = String.raw`(function () {
     cards.forEach(function (c, i) { c.setAttribute('data-i', String(i)); });
   }
   function apply() {
-    var r = +sel.value, live = r > 0 && !!here, dist = {}, shown = 0;
+    var r = radius(), live = r > 0 && !!here, dist = {}, shown = 0;
     areas.forEach(function (a) {
       var c = a.getAttribute('data-cell'), p = centre[c];
       dist[c] = live ? miles(here[0], here[1], p[0], p[1]) : 0;
@@ -205,17 +210,19 @@ const SCRIPT = String.raw`(function () {
     marks();
   }
   function locate() {
-    sel.disabled = true;
+    lock(true);
     status.textContent = say('locating', '');
     geo.getCurrentPosition(
-      function (p) { here = [p.coords.latitude, p.coords.longitude]; sel.disabled = false; apply(); },
-      function () { sel.disabled = false; sel.value = '0'; apply(); status.textContent = say('off', ''); },
+      function (p) { here = [p.coords.latitude, p.coords.longitude]; lock(false); apply(); },
+      function () { lock(false); chips[0].checked = true; apply(); status.textContent = say('off', ''); },
       { enableHighAccuracy: false, maximumAge: 600000, timeout: 15000 }
     );
   }
   if (canNear) {
-    sel.addEventListener('change', function () {
-      if (+sel.value > 0 && !here) locate(); else apply();
+    chips.forEach(function (r) {
+      r.addEventListener('change', function () {
+        if (radius() > 0 && !here) locate(); else apply();
+      });
     });
   }
 
