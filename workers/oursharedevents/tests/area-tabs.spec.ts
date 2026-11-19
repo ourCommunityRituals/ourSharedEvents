@@ -107,10 +107,14 @@ const fake = (over: Partial<Fake> = {}): Fake => ({
 });
 const key = (win: Window, el: Element, k: string) =>
   el.dispatchEvent(new win.KeyboardEvent('keydown', { key: k, bubbles: true }));
-const choose = (win: Window, sel: HTMLSelectElement, v: string) => {
-  sel.value = v;
-  sel.dispatchEvent(new win.Event('change', { bubbles: true }));
+/** Press a distance chip: the chip's radio becomes the chosen one and says so. */
+const choose = (win: Window, v: string) => {
+  const r = win.document.getElementById('near-' + v) as HTMLInputElement;
+  r.checked = true;
+  r.dispatchEvent(new win.Event('change', { bubbles: true }));
 };
+const chosen = (doc: Document) =>
+  doc.querySelector<HTMLInputElement>('input[name="near"]:checked')!.value;
 const visibleCards = (qa: (s: string) => HTMLElement[]) =>
   qa('.view-list article.event-card').filter((c) => c.style.display !== 'none');
 
@@ -126,9 +130,25 @@ describe('the filter tabs | what the page carries', () => {
     expect(dom.querySelector('[data-tab="when"]')!.getAttribute('data-tab-label')).toBe('When');
     const near = dom.querySelector('[data-tab="near"]')!;
     expect(near.hasAttribute('hidden')).toBe(true);
-    const select = near.querySelector('select')!;
-    expect([...select.options].map((o) => o.value)).toEqual(['0', ...NEAR_MILES.map(String)]);
-    expect(select.options[1]!.textContent).toBe('Within 5 mi');
+    // The owner's five distances (2026-11-19: "<2, 5, 10, 25, 50"), as chips on radios:
+    // "Any distance" first and checked, then "Within N mi"; the label names the unit.
+    expect([...NEAR_MILES]).toEqual([2, 5, 10, 25, 50]);
+    const radios = [...near.querySelectorAll<HTMLInputElement>('input[type="radio"][name="near"]')];
+    expect(radios.map((r) => r.value)).toEqual(['0', '2', '5', '10', '25', '50']);
+    expect(radios.map((r) => r.checked)).toEqual([true, false, false, false, false, false]);
+    expect(near.querySelector('select')).toBeNull();
+    expect(radios.map((r) => near.querySelector(`label[for="${r.id}"]`)!.textContent)).toEqual([
+      'Any distance',
+      'Within 2 mi',
+      'Within 5 mi',
+      'Within 10 mi',
+      'Within 25 mi',
+      'Within 50 mi',
+    ]);
+    for (const l of near.querySelectorAll('label[for^="near-"]')) {
+      expect(l.classList.contains('disc-chip'), 'the shared chip class').toBe(true);
+    }
+    expect(near.querySelector('legend')!.textContent).toBe('Distance from where you are, in miles');
     // The words the script says, in the page's language, with the slot it fills.
     // (`%d`, never a `{slot}`: the Spanish page test holds the page to no slot left unfilled.)
     expect(near.getAttribute('data-shown')).toContain('%d');
@@ -156,11 +176,23 @@ describe('the filter tabs | what the page carries', () => {
     expect(AREA_TABS_STYLE).not.toMatch(/#[0-9a-f]{3,8}\b/i);
   });
 
+  it('each distance chip has its chosen look and focus ring from tokens, never a hex', () => {
+    const html = area();
+    for (const d of [0, ...NEAR_MILES]) {
+      expect(html).toContain(`#near-${d}:checked + label{background:var(--accent)`);
+      expect(html).toContain(`#near-${d}:focus-visible + label{outline:3px solid var(--accent)`);
+    }
+    expect(html.match(/#near-[0-9]+:[^}]*}/g)!.join('')).not.toMatch(/#[0-9a-fA-F]{3,8}(?!:)/);
+  });
+
   it('the words are in the page language', () => {
     const dom = new JSDOM(area({ streets: true, lang: 'es' })).window.document;
     const near = dom.querySelector('[data-tab="near"]')!;
     expect(near.getAttribute('data-tab-label')).toBe('Cerca de mí');
-    expect(near.querySelector('select')!.options[1]!.textContent).toBe('A menos de 5 mi');
+    expect(near.querySelector('label[for="near-2"]')!.textContent).toBe('A menos de 2 mi');
+    expect(near.querySelector('legend')!.textContent).toBe(
+      'Distancia desde donde estás, en millas'
+    );
     expect(dom.querySelector('.area-filters')!.getAttribute('data-tabs')).toBe('Filtrar eventos');
   });
 
@@ -319,8 +351,7 @@ describe('the distance choice | what the phone does with its own position', () =
   it('a distance keeps the events within it, nearest first, and says how far', () => {
     const geo = fake(); // standing in Chicago's area
     const { q, qa, win } = open(area(), geo);
-    const sel = q<HTMLSelectElement>('#near-radius');
-    choose(win as unknown as Window, sel, '10');
+    choose(win as unknown as Window, '10');
     expect(geo.calls).toBe(1);
     const kept = visibleCards(qa);
     expect(kept).toHaveLength(7);
@@ -355,13 +386,13 @@ describe('the distance choice | what the phone does with its own position', () =
   it('keeps the events near wherever the person stands, not near a fixed place', () => {
     const geo = fake({ at: cellToLatLng(MILWAUKEE) });
     const { q, qa, win } = open(area(), geo);
-    choose(win as unknown as Window, q<HTMLSelectElement>('#near-radius'), '50');
+    choose(win as unknown as Window, '50');
     const kept = visibleCards(qa);
     expect(kept).toHaveLength(4);
     expect(kept.map((c) => c.getAttribute('data-event-id'))).toEqual(['e7', 'e8', 'e9', 'e10']);
-    choose(win as unknown as Window, q<HTMLSelectElement>('#near-radius'), '0');
+    choose(win as unknown as Window, '0');
     expect(geo.calls).toBe(1); // the position is kept in the page for the next choice
-    choose(win as unknown as Window, q<HTMLSelectElement>('#near-radius'), '50');
+    choose(win as unknown as Window, '50');
     expect(geo.calls).toBe(1);
   });
 
@@ -371,7 +402,7 @@ describe('the distance choice | what the phone does with its own position', () =
     // and must come first in the list.
     const geo = fake({ at: [42.5, -87.8] });
     const { q, qa, win } = open(area(), geo);
-    choose(win as unknown as Window, q<HTMLSelectElement>('#near-radius'), '50');
+    choose(win as unknown as Window, '50');
     const kept = visibleCards(qa);
     expect(kept).toHaveLength(11);
     const dists = kept.map((c) => Number(c.getAttribute('data-d')));
@@ -389,7 +420,7 @@ describe('the distance choice | what the phone does with its own position', () =
       zoomHref: (c) => `/?area=${c}`,
     }).html;
     const { q, qa, win } = open(html, fake());
-    choose(win as unknown as Window, q<HTMLSelectElement>('#near-radius'), '10');
+    choose(win as unknown as Window, '10');
     const kept = visibleCards(qa).map((c) => c.getAttribute('data-event-id'));
     expect(kept).toContain('e0');
     expect(kept).toHaveLength(7);
@@ -399,8 +430,8 @@ describe('the distance choice | what the phone does with its own position', () =
     const geo = fake();
     const { q, qa, win } = open(area(), geo);
     const before = qa('.view-list article.event-card').map((c) => c.getAttribute('data-event-id'));
-    choose(win as unknown as Window, q<HTMLSelectElement>('#near-radius'), '10');
-    choose(win as unknown as Window, q<HTMLSelectElement>('#near-radius'), '0');
+    choose(win as unknown as Window, '10');
+    choose(win as unknown as Window, '0');
     const after = qa('.view-list article.event-card');
     expect(after.map((c) => c.getAttribute('data-event-id'))).toEqual(before);
     expect(after.every((c) => c.style.display !== 'none')).toBe(true);
@@ -411,10 +442,10 @@ describe('the distance choice | what the phone does with its own position', () =
 
   it('a refused position puts the choice back to Any distance and says why', () => {
     const geo = fake({ reply: 'denied' });
-    const { q, qa, win } = open(area(), geo);
-    choose(win as unknown as Window, q<HTMLSelectElement>('#near-radius'), '10');
-    expect(q<HTMLSelectElement>('#near-radius').value).toBe('0');
-    expect(q<HTMLSelectElement>('#near-radius').disabled).toBe(false);
+    const { q, qa, win, doc } = open(area(), geo);
+    choose(win as unknown as Window, '10');
+    expect(chosen(doc)).toBe('0');
+    expect(qa('input[name="near"]').some((r) => (r as HTMLInputElement).disabled)).toBe(false);
     expect(
       q('#near-radius').closest('.area-tab')!.querySelector('[role="status"]')!.textContent
     ).toBe('Location is off, so distance cannot be used.');
@@ -424,7 +455,7 @@ describe('the distance choice | what the phone does with its own position', () =
   it('a distance beyond every event says so, in the page language', () => {
     const geo = fake({ at: [35, -100] }); // nowhere near either area
     const { q, win } = open(area({ streets: true, lang: 'es' }), geo);
-    choose(win as unknown as Window, q<HTMLSelectElement>('#near-radius'), '5');
+    choose(win as unknown as Window, '5');
     expect(
       q('#near-radius').closest('.area-tab')!.querySelector('[role="status"]')!.textContent
     ).toBe('No hay eventos con lugar en el mapa a menos de 5 mi. Prueba una distancia mayor.');
@@ -472,13 +503,13 @@ describe('the script | what it may never do (invariants 3 and 4)', () => {
     expect(src.match(/getCurrentPosition\(/g)).toHaveLength(1);
     const locate = src.slice(
       src.indexOf('function locate()'),
-      src.indexOf('if (canNear) {\n    sel.addEventListener')
+      src.indexOf('if (canNear) {\n    chips.forEach')
     );
     expect(locate).toContain('getCurrentPosition(');
     // `locate()` is called from the change handler and nowhere else, so never on load.
     expect(src.match(/\blocate\(\)/g)).toHaveLength(2); // the definition and the one call
     expect(src).toMatch(
-      /addEventListener\('change', function \(\) \{\s*if \(\+sel\.value > 0 && !here\) locate\(\)/
+      /addEventListener\('change', function \(\) \{\s*if \(radius\(\) > 0 && !here\) locate\(\)/
     );
     // A coarse, cached position is enough: no high accuracy asked.
     expect(src).toContain('enableHighAccuracy: false');

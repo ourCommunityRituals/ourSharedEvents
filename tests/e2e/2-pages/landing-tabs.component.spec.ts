@@ -44,8 +44,6 @@ import { axeWcag, settleTransitions } from '../helpers/wcag';
 
 /** Touch target floor, in CSS px (AGENTS.md invariant 8). */
 const TARGET_PX = 44;
-/** Input text floor, in CSS px (AGENTS.md invariant 8). */
-const INPUT_TEXT_PX = 16;
 
 const BLUE_ISLAND = latLngToCell(41.6573, -87.6806, 7);
 const JOLIET = latLngToCell(41.525, -88.0817, 7); // about 23 miles from Blue Island
@@ -372,18 +370,34 @@ test.describe('distance from where the person is', () => {
     await openFilters(page);
     await tab(page, 'near').click();
 
-    const list = page.getByTestId('near-radius');
-    await expect(list).toBeVisible();
-    const box = (await list.boundingBox())!;
-    expect(Math.round(box.height), 'distance list height').toBeGreaterThanOrEqual(TARGET_PX);
-    expect(
-      await list.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
-    ).toBeGreaterThanOrEqual(INPUT_TEXT_PX);
+    // The owner's five distances as chips (2026-11-19: "<2, 5, 10, 25, 50"; miles, to
+    // be confirmed), "Any distance" first; each is a 44 px target (the shared chip's own text size, as on the When and Type chips).
+    await expect(page.getByTestId('near-radius')).toBeVisible();
+    await expect(page.getByTestId('near-radius').locator('legend')).toHaveText(
+      'Distance from where you are, in miles'
+    );
+    const chips = page.getByTestId('near-radius').locator('label');
+    await expect(chips).toHaveText([
+      'Any distance',
+      'Within 2 mi',
+      'Within 5 mi',
+      'Within 10 mi',
+      'Within 25 mi',
+      'Within 50 mi',
+    ]);
+    for (const c of await chips.all()) {
+      const b = (await c.boundingBox())!;
+      expect(Math.round(b.height), 'chip height').toBeGreaterThanOrEqual(TARGET_PX);
+      expect(Math.round(b.width), 'chip width').toBeGreaterThanOrEqual(TARGET_PX);
+    }
+    await expect(page.locator('#near-0')).toBeChecked();
+    const within = (d: number) => page.locator(`label[for="near-${d}"]`);
     await expect(page.getByTestId('near-privacy')).toContainText('never sent or stored');
 
     const cards = page.getByTestId('area-card');
     await expect(cards).toHaveCount(12);
-    await list.selectOption('10');
+    await within(10).click();
+    await expect(page.locator('#near-10')).toBeChecked();
     await expect(page.locator('article.event-card:visible')).toHaveCount(6);
     await expect(page.getByTestId('card-distance').first()).toHaveText(
       /^ · about \d+(\.\d)? mi away$/
@@ -391,14 +405,18 @@ test.describe('distance from where the person is', () => {
     await expect(page.getByTestId('near-status')).toContainText('within 10 mi, nearest first');
     await expect(tab(page, 'near')).toHaveAttribute('data-changed', '');
 
-    await list.selectOption('25');
+    // The smallest choice reaches the six events in the area the phone stands in.
+    await within(2).click();
+    await expect(page.locator('article.event-card:visible')).toHaveCount(6);
+    await within(25).click();
     await expect(page.locator('article.event-card:visible')).toHaveCount(12);
     const dists = await page
       .locator('article.event-card:visible')
       .evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-d'))));
     expect(dists).toEqual([...dists].sort((a, b) => a - b));
 
-    await list.selectOption('0');
+    await within(0).click();
+    await expect(page.locator('#near-0')).toBeChecked();
     await expect(page.locator('article.event-card:visible')).toHaveCount(12);
     await expect(page.getByTestId('card-distance')).toHaveCount(0);
     await expect(page.getByTestId('near-status')).toHaveText('');
@@ -443,8 +461,8 @@ test.describe('distance from where the person is', () => {
     await open(page);
     await openFilters(page);
     await tab(page, 'near').click();
-    await page.getByTestId('near-radius').selectOption('10');
-    await expect(page.getByTestId('near-radius')).toHaveValue('0');
+    await page.locator('label[for="near-10"]').click();
+    await expect(page.locator('#near-0')).toBeChecked();
     await expect(page.getByTestId('near-status')).toHaveText(
       'Location is off, so distance cannot be used.'
     );

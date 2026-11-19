@@ -517,6 +517,18 @@ function chipRules(id: string): string {
 }
 
 /**
+ * The chosen look and the focus ring of a "Near me" chip. Its radio is the label's
+ * immediate previous sibling, so the rules are adjacent-sibling ones; tokens only.
+ */
+function nearChipRules(id: string): string {
+  return (
+    `#${id}:checked + label{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}` +
+    `#${id}:checked + label::before{content:'\\2713';margin-inline-end:.35rem}` +
+    `#${id}:focus-visible + label{outline:3px solid var(--accent);outline-offset:2px}`
+  );
+}
+
+/**
  * A filter pill's hide rule: the cards, and the zoomed map's dots and list rows
  * (`.amap-f`, lib/attendee-map), that lack the chosen class.
  */
@@ -572,6 +584,7 @@ function buildAreaMarkup(args: {
   // ── generated rules: selected look + focus ring + (for filters) the hide rule ──
   const rules: string[] = [];
   for (const id of ['view-list', 'view-map', FILTERS_TOGGLE_ID]) rules.push(chipRules(id));
+  for (const d of [0, ...NEAR_MILES]) rules.push(nearChipRules(`near-${d}`));
   for (const w of LANDING_WINDOWS) {
     rules.push(chipRules(`win-${w}`) + hide(`win-${w}`, `when-${w}`));
   }
@@ -667,25 +680,34 @@ function tab(name: string, label: string, inner: string): string {
   return `<div class="area-tab" data-tab="${name}" data-tab-label="${escapeHtml(label)}">${inner}</div>`;
 }
 
-/** The distances the "Near me" tab offers, in miles (the map's scale bar is in miles too). */
-export const NEAR_MILES = [5, 10, 25, 50] as const;
+/**
+ * The distances the "Near me" tab offers, in miles (the map's scale bar is in
+ * miles too). Owner, 2026-11-19: "<2, 5, 10, 25, 50", no unit given; read as
+ * "within N miles" (a US product), to be confirmed by the owner, and the label
+ * says "in miles" so the unit is never a guess on the screen.
+ */
+export const NEAR_MILES = [2, 5, 10, 25, 50] as const;
 
 /**
  * The "Near me" tab's panel: a distance list and the words the script says. It
  * is hidden and only the script shows it, and only where the page carries the map's
- * area centres and the browser can give a position. The list is a `<select>`: a
- * native 16 px control with a 44 px target, one row on a phone.
+ * area centres and the browser can give a position. The choices are the shared
+ * filter chips (`.disc-chip`, 44 px targets) on radios: "Any distance", then
+ * "Within 2 mi" and so on. Each radio sits just before its label, so its chosen
+ * look and focus ring are sibling rules (`nearChipRules`).
  */
 function nearPanel(lang: Lang): string {
   const say = (key: Parameters<typeof msg>[1]) => escapeHtml(msg(lang, key));
   // The script fills the distance in; `%d` so the page holds no `{slot}` left unfilled.
   const sayD = (key: Parameters<typeof msg>[1]) => say(key).replace('{d}', '%d');
-  const options = NEAR_MILES.map(
-    (d) => `<option value="${d}">${escapeHtml(fmt(lang, 'area.nearWithin', { d }))}</option>`
-  ).join('');
+  const chip = (d: number, text: string) =>
+    `<input type="radio" name="near" id="near-${d}" value="${d}" class="toggle-radio"${d === 0 ? ' checked' : ''} /><label class="disc-chip" for="near-${d}">${text}</label>`;
+  const chips = [
+    chip(0, say('area.nearAny')),
+    ...NEAR_MILES.map((d) => chip(d, escapeHtml(fmt(lang, 'area.nearWithin', { d })))),
+  ].join('');
   return `<div class="area-tab" data-tab="near" data-tab-label="${say('area.near')}" data-testid="near-panel" hidden data-locating="${say('area.nearLocating')}" data-off="${say('area.nearOff')}" data-shown="${sayD('area.nearShown')}" data-none="${sayD('area.nearNone')}" data-away="${sayD('area.nearAway')}">
-            <label class="disc-label" for="near-radius">${say('area.nearLabel')}</label>
-            <select id="near-radius" class="input near-sel" data-testid="near-radius"><option value="0">${say('area.nearAny')}</option>${options}</select>
+            <fieldset id="near-radius" class="disc-chips near-chips" data-testid="near-radius"><legend class="disc-label">${say('area.nearLabel')}</legend>${chips}</fieldset>
             <p class="near-note" data-testid="near-privacy">${say('area.nearPrivacy')}</p>
             <p class="near-note" role="status" aria-live="polite" data-testid="near-status"></p>
           </div>`;
