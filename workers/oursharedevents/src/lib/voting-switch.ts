@@ -15,8 +15,10 @@
  *   - the open-objects read (`GET /api/v2/vote/:eventId/objects`) is not routed,
  *     so it gets the router's own 404, byte for byte the answer to a path that
  *     was never there (router.ts);
- *   - `/q` mints no vote pass (S3b, OSE-2133), and the vote `POST` refuses
- *     (S4a, OSE-2128), each by calling `votingEnabled` below.
+ *   - the vote `POST /api/v2/vote/:eventId` (S4a, OSE-2128) is not routed
+ *     either: the router's own 404, and the handler refuses by itself too;
+ *   - `/q` mints no vote pass (S3b, OSE-2133).
+ *   Each calls `votingEnabled` below.
  * The admin votables routes (S3) are not switched: a host may set a night up
  * while voting is off, and nothing they do there can count a vote or show one.
  *

@@ -1,0 +1,39 @@
+info:
+  name: OSE-2127 OSE-2130 | final | computing the results makes a set that opened final
+  type: http
+  seq: 90
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/finalize"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // OSE-2130 (S5) replaced S3's refusal: computing the results is what makes
+        // a set that opened final. No vote is cast on staging while VOTING_ENABLED
+        // is off, so the night has no voter and reads too close to call.
+        const b = res.getBody() || {};
+        const set = b.set || {};
+        test('OSE-2130 final: 200, final and closed', function () { expect(res.getStatus()).to.eql(200); expect(set.final).to.eql(true); expect(set.state).to.eql('closed'); });
+        test('OSE-2130 final: the one result, too close to call, and nothing else', function () { expect(set.result).to.eql({ outcome: 'too_close', winner_id: null }); expect(Object.keys(set).sort()).to.eql(['event_id', 'final', 'id', 'opened', 'played_by', 'result', 'state']); });
+        test('OSE-2130 final: no reason, count, margin or floor anywhere in the answer', function () { expect(/reason|rule|floor|margin|count|voter|tally|below|lead/i.test(JSON.stringify(b))).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

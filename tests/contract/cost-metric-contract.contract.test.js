@@ -48,7 +48,9 @@ function docFields() {
   const doc = read(DOC_REL);
   const keys = new Set();
   for (const line of doc.split('\n')) {
-    const m = line.match(/^\|\s*`([A-Za-z_][A-Za-z0-9_]*)`\s*\|\s*(string|number|boolean)\s*\|/);
+    const m = line.match(
+      /^\|\s*`([A-Za-z_][A-Za-z0-9_]*)`\s*\|\s*(string|number|boolean)(?: or null)?\s*\|/
+    );
     if (m) keys.add(m[1]);
   }
   return [...keys].sort();

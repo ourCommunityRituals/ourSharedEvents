@@ -15,8 +15,8 @@
  * only ever contain:
  *   - `op`            a keyword-masked route label (NEVER a raw path segment)
  *   - `wallMs`        wall-clock ms for the request
- *   - `d1RowsRead`    summed D1 rows_read
- *   - `d1RowsWritten` summed D1 rows_written
+ *   - `d1RowsRead`    summed D1 rows_read (null for a vote, ROWS_WITHHELD_OPS)
+ *   - `d1RowsWritten` summed D1 rows_written (null for a vote, ROWS_WITHHELD_OPS)
  *   - `d1Queries`     count of D1 statement executions
  *   - `status`        HTTP status code
  * There is no field, and no code path, that can place a user identifier, IP,
@@ -99,6 +99,9 @@ const STATIC_SEGMENTS: ReadonlySet<string> = new Set([
   'maps',
   'venue-image',
   'uec',
+  // the vote (OSE-2128): a POST to /api/v2/vote/:x, and the open-objects read
+  'vote',
+  'objects',
   // short prefixes
   'q',
   's',
@@ -286,11 +289,23 @@ export interface OperationCostMetric {
   type: 'OPERATION_COST';
   op: string;
   wallMs: number;
-  d1RowsRead: number;
-  d1RowsWritten: number;
+  /** Null on an operation in ROWS_WITHHELD_OPS. */
+  d1RowsRead: number | null;
+  /** Null on an operation in ROWS_WITHHELD_OPS. */
+  d1RowsWritten: number | null;
   d1Queries: number;
   status: number;
 }
+
+/**
+ * Operations whose row counts are not emitted (OSE-2128, OSE ADR-040 decision
+ * 1). A vote writes rows when it is counted and none when it is a duplicate,
+ * so its row counts would say, line by line, whether that voter had voted
+ * before on that object; on a team night they would also say the side. The
+ * route's answer is the same for both (handlers/vote.ts), and so is this line:
+ * the op, the time, the number of statements (the same five) and the status.
+ */
+export const ROWS_WITHHELD_OPS: ReadonlySet<string> = new Set(['POST /api/v2/vote/:x']);
 
 /** The inputs an emitter is allowed to supply. No request/user object here. */
 export interface OperationCostInput {
@@ -310,12 +325,15 @@ export interface OperationCostInput {
  */
 export function emitOperationCost(input: OperationCostInput): void {
   try {
+    const withheld = ROWS_WITHHELD_OPS.has(String(input.op));
+    const rowsRead = withheld ? null : input.acc.d1RowsRead;
+    const rowsWritten = withheld ? null : input.acc.d1RowsWritten;
     const payload: OperationCostMetric = {
       type: 'OPERATION_COST',
       op: String(input.op),
       wallMs: Math.max(0, Math.round(input.wallMs)),
-      d1RowsRead: input.acc.d1RowsRead,
-      d1RowsWritten: input.acc.d1RowsWritten,
+      d1RowsRead: rowsRead,
+      d1RowsWritten: rowsWritten,
       d1Queries: input.acc.d1Queries,
       status: input.status,
     };

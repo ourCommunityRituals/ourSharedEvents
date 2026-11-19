@@ -37,15 +37,21 @@ Exactly one line is emitted per request, at the `index.ts` fetch seam:
 }
 ```
 
-| Field           | Type   | Meaning                                                               |
-| --------------- | ------ | --------------------------------------------------------------------- |
-| `type`          | string | Always the literal `"OPERATION_COST"` (log-routing discriminator).    |
-| `op`            | string | Method + **keyword-masked** route label. See "Operation label" below. |
-| `wallMs`        | number | Wall-clock milliseconds for the whole request (rounded, ≥ 0).         |
-| `d1RowsRead`    | number | Sum of D1 `rows_read` across the request.                             |
-| `d1RowsWritten` | number | Sum of D1 `rows_written` across the request.                          |
-| `d1Queries`     | number | Count of D1 statement executions in the request.                      |
-| `status`        | number | HTTP status code of the response.                                     |
+| Field           | Type           | Meaning                                                                 |
+| --------------- | -------------- | ----------------------------------------------------------------------- |
+| `type`          | string         | Always the literal `"OPERATION_COST"` (log-routing discriminator).      |
+| `op`            | string         | Method + **keyword-masked** route label. See "Operation label" below.   |
+| `wallMs`        | number         | Wall-clock milliseconds for the whole request (rounded, ≥ 0).           |
+| `d1RowsRead`    | number or null | Sum of D1 `rows_read` across the request. `null` for a vote (below).    |
+| `d1RowsWritten` | number or null | Sum of D1 `rows_written` across the request. `null` for a vote (below). |
+| `d1Queries`     | number         | Count of D1 statement executions in the request.                        |
+| `status`        | number         | HTTP status code of the response.                                       |
+
+**A vote carries no row counts (OSE-2128, OSE ADR-040).** On
+`POST /api/v2/vote/:x` both row fields are `null` (`ROWS_WITHHELD_OPS` in
+`cost-metric.ts`). A counted vote writes rows and a duplicate writes none, so
+the counts would tell, for each line, whether that voter had already voted on
+that object. The route answers both the same, and this line does too.
 
 This is the **complete** set. The payload is a sealed literal built
 field-by-field in `emitOperationCost()`; there is no code path that can add a

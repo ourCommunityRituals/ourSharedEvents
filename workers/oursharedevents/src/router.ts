@@ -189,6 +189,7 @@
  *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
  *   GET    /api/v2/events/:id/display-config   → TV order + dwell + league/donate links + event QR (ETag, 304)
  *   GET    /api/v2/vote/:eventId/objects        → what a voter can vote on now: {objects:[{id,kind,label}]}; no count, no time (OSE-2135, OSE ADR-040). Routed only while VOTING_ENABLED is "on" (lib/voting-switch.ts); off, it is the router's own 404. Limited per caller: 600 a minute
+ *   POST   /api/v2/vote/:eventId               → one vote {object_id, side, pass}: JSON only, Sec-Fetch-Site same-origin, the /q pass in the body; reads no browser id and sets none; {"ok":true} for a counted vote and a duplicate alike, no count (OSE-2128, OSE ADR-040). Routed only while VOTING_ENABLED is "on"; off, it is the router's own 404. The route limit is S4c (OSE-2134)
  *
  *   Poster Deployments Admin (auth required):
  *   POST   /api/v2/admin/events/:id/poster-deployments  → create deployment (with H3 tagging; optional booth_id, an active booth of the same event)
@@ -312,6 +313,7 @@ import {
 } from './handlers/event-booths';
 import { handleVotables, matchVotablesRoute } from './handlers/votables';
 import { handleVoteObjects } from './handlers/vote-objects';
+import { handleVote } from './handlers/vote';
 import { votingEnabled, type VotingSwitchEnv } from './lib/voting-switch';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
@@ -2362,6 +2364,18 @@ export async function route(
       (req, e: typeof env) => handleVoteObjects(req, e, id),
       PUBLIC_PAGE_MAX
     )(request, env);
+  }
+
+  // POST /api/v2/vote/:eventId — one vote (OSE-2128, S4a of OSE-1193; OSE
+  // ADR-040 decisions 4, 5 and 6). Outside /api/v2/events*, on the DB side.
+  // THE KILL SWITCH: with VOTING_ENABLED anything but "on" this block is
+  // skipped and the request falls to the router's own 404, as for the read
+  // above. GET and HEAD are never routed here: a vote is a POST or nothing.
+  // The handler reads no browser id; the pass from /q rides in the JSON body.
+  // S4c (OSE-2134) adds the route limit here, around handleVote.
+  const voteMatch = pathname.match(/^\/api\/v2\/vote\/([^/]+)$/);
+  if (voteMatch && method === 'POST' && votingEnabled(env)) {
+    return handleVote(request, env, voteMatch[1]);
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────

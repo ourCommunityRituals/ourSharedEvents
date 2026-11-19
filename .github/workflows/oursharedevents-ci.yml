@@ -1214,12 +1214,16 @@ jobs:
           done
           echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on staging (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
           # OSE-1659: ANON_ID_HASH_PEPPER keys scan_node_returns.anonymous_id and
-          # hashes anon_id_returns. Without it scans are stored with no id and
-          # returns are not counted, but nothing breaks and nothing leaks, so a
-          # missing value is a warning until it has been provisioned once.
+          # hashes anon_id_returns. OSE-2128 (S4a, OSE ADR-040 decision 6): it
+          # also derives the vote pass seal, the voter key and the receipt and
+          # marker keys, and the vote route refuses every vote without it. So a
+          # missing value is an error on staging too, as on production: the
+          # staging chain must exercise the vote route as it would run.
           if ! echo "$OUT" | grep -q "ANON_ID_HASH_PEPPER"; then
-            echo "::warning title=ANON_ID_HASH_PEPPER missing::ANON_ID_HASH_PEPPER is not set on the staging worker: scans are stored with no id and returning visitors are not counted (OSE-1659). Provision it: bash scripts/set-secrets.sh staging"
+            echo "::error title=ANON_ID_HASH_PEPPER missing::ANON_ID_HASH_PEPPER is not set on the staging worker: the vote route (OSE-2128) refuses every vote, /q mints no vote pass, and scans are stored with no id (OSE-1659). Refusing to migrate remote D1. Provision it: bash scripts/set-secrets.sh staging"
+            exit 1
           fi
+          echo "ANON_ID_HASH_PEPPER present on staging (name only).
 
       # ────────────────────────────────────────────────────────────────────
       # OSE-2016: the dry run a migration's author wrote, taken on staging data

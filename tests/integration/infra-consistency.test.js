@@ -273,11 +273,12 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
   });
 
   // OSE-1659: the scan id is keyed with ANON_ID_HASH_PEPPER. It was never in the
-  // provisioning list, so nothing prompted for it. Staging warns when it is
-  // missing (scans keep counting, with no id). Production refuses to deploy
+  // provisioning list, so nothing prompted for it. Production refuses to deploy
   // without it (TL-078, 2026-10-10): with no keyed id the visitor count falls
-  // back to the browser-name hash, which production must not keep.
-  test('staging warns and production refuses when ANON_ID_HASH_PEPPER is missing (OSE-1659, TL-078)', () => {
+  // back to the browser-name hash, which production must not keep. Staging
+  // warned until OSE-2128 (S4a): the vote route refuses every vote without the
+  // pepper, so staging now refuses too.
+  test('staging and production both refuse when ANON_ID_HASH_PEPPER is missing (OSE-1659, TL-078, OSE-2128)', () => {
     const yaml = require('js-yaml');
     const workflow = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
     const gate = (job) =>
@@ -287,8 +288,10 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
           'Gate: required secrets present (pre-migrate, fail-closed corner) (OSE-1343)'
       );
     const staging = gate('deploy-staging')?.run;
-    expect(staging).toMatch(/grep -q "ANON_ID_HASH_PEPPER"/);
-    expect(staging).toMatch(/::warning title=ANON_ID_HASH_PEPPER missing::/);
+    expect(staging).toMatch(
+      /if ! echo "\$OUT" \| grep -q "ANON_ID_HASH_PEPPER"; then\s*\n\s*echo "::error title=ANON_ID_HASH_PEPPER missing::[^\n]*\n\s*exit 1\s*\n\s*fi/
+    );
+    expect(staging).not.toMatch(/::warning title=ANON_ID_HASH_PEPPER missing::/);
 
     const production = gate('deploy-production')?.run;
     expect(production).toMatch(
