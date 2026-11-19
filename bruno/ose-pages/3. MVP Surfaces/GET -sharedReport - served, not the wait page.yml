@@ -22,9 +22,7 @@ runtime:
         const body = String(res.getBody());
 
         // 403 is the page's feature flag turned off, as in the folder's first case.
-        test('Returns the page (or its feature-flag 403), not the 429 wait page', function () {
-          expect([200, 403]).to.include(res.getStatus());
-        });
+        require('./lib/edge.js').pageStatus({ bru: bru, res: res, test: test, expect: expect, name: 'Returns the page (or its feature-flag 403), not the 429 wait page' });
         test('It is not the wait page', function () {
           expect(body).to.not.include('data-surface="ose-error"');
           expect(body).to.not.include('Too many visits at once');
