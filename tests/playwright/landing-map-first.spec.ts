@@ -27,7 +27,7 @@ import { assertActionAboveFold } from './helpers/fold-gate';
 import { createLiveEvent, waitUntilListed } from './helpers/sponsor-home-seed';
 
 /** LIST_MAX in workers/oursharedevents/src/lib/landing-area.ts: the map leads at this many. */
-const SEED_TOTAL = 10;
+const SEED_TOTAL = 9;
 const PHONE = { width: 375, height: 812 };
 /** The landing's default window (DEFAULT_WINDOW) puts a card in this class. */
 const IN_WINDOW = '[data-testid="area-card"].when-next-90';
