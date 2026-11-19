@@ -71,10 +71,11 @@
 // place, so every dot can be tapped. Every dot opens its place panel under the
 // map (lib/map-place-panel.ts). Dots carry the same type, window and modality
 // classes as the cards, so the landing's pills filter them too, still with no
-// JS. The dot's place is the event's own stored res-9 cell (`h3_res9`, passed
-// in by the landing beside the projected event, never in the public JSON); this
-// module reads no event coordinate at all (OSE-2197, owner 2026-11-19: "It
-// should resolve to the H3"). No event's coordinate is written to the page and
+// JS. The dot's place is the event's res-9 cell (`h3_res9`: the stored cell,
+// else the one the server derives from the stored point; lib/landing-area.ts
+// blockOf), passed in by the landing beside the projected event, never in the
+// public JSON; this module reads no event coordinate at all (OSE-2197, owner
+// 2026-11-19: "It should resolve to the H3"). No event's coordinate is written to the page and
 // no viewer location is read on the server. With a street map, the drawing
 // carries its frame and each area its centre (frameAttrs, `data-ll`), for the
 // map's script; both come from the cell ids alone (OSE-2150,
@@ -720,7 +721,7 @@ function legendFor(
  * one, only the block the point was in.
  */
 export interface ZoomEvent extends AttendeeMapItem {
-  /** The event's stored res-9 cell (the server's own, never from the projection). */
+  /** The event's res-9 cell from the server's own row (stored, else derived from its stored point); never from the projection. */
   h3_res9?: unknown;
   /** 'business' is marked (solid, named); every kind sits at its block centre. */
   place_kind?: unknown;
