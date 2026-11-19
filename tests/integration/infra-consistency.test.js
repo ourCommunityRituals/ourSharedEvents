@@ -292,6 +292,15 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
       /if ! echo "\$OUT" \| grep -q "ANON_ID_HASH_PEPPER"; then\s*\n\s*echo "::error title=ANON_ID_HASH_PEPPER missing::[^\n]*\n\s*exit 1\s*\n\s*fi/
     );
     expect(staging).not.toMatch(/::warning title=ANON_ID_HASH_PEPPER missing::/);
+    // The step must parse as shell: a text match alone passed an unclosed quote
+    // that would fail T1 on every push (OSE-2128 security review, F1).
+    for (const [name, run] of [
+      ['staging', staging],
+      ['production', gate('deploy-production')?.run],
+    ]) {
+      const parsed = require('child_process').spawnSync('bash', ['-n'], { input: run });
+      expect(parsed.status, `${name}: ${String(parsed.stderr).trim()}`).toBe(0);
+    }
 
     const production = gate('deploy-production')?.run;
     expect(production).toMatch(

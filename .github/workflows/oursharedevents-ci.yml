@@ -1223,7 +1223,7 @@ jobs:
             echo "::error title=ANON_ID_HASH_PEPPER missing::ANON_ID_HASH_PEPPER is not set on the staging worker: the vote route (OSE-2128) refuses every vote, /q mints no vote pass, and scans are stored with no id (OSE-1659). Refusing to migrate remote D1. Provision it: bash scripts/set-secrets.sh staging"
             exit 1
           fi
-          echo "ANON_ID_HASH_PEPPER present on staging (name only).
+          echo "ANON_ID_HASH_PEPPER present on staging (name only)."
 
       # ────────────────────────────────────────────────────────────────────
       # OSE-2016: the dry run a migration's author wrote, taken on staging data
