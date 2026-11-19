@@ -1,7 +1,7 @@
 info:
   name: "OSE-2196 | GET /api/v2/events/rt-offmap-pre/poster-bundle | routable false (off map)"
   type: http
-  seq: 4
+  seq: 6
 
 # The poster draws its Google Maps / Apple Maps buttons only when the bundle says
 # `routable: true` (src/templates/poster.html; the server's rule is
@@ -25,8 +25,9 @@ runtime:
           expect(res.getStatus()).to.equal(200);
         });
         const b = res.getBody() || {};
-        test('routable is false', function () {
+        test('routable is false, and there are no directions', function () {
           expect(b.routable).to.equal(false);
+          expect(b.directions).to.equal(null);
         });
         test('the event projection carries no listing column', function () {
           const keys = Object.keys(b.event || {});

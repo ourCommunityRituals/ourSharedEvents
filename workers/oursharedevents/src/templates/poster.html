@@ -1048,10 +1048,28 @@ body {
         return '';
       }
 
-      // OSE-2196 (owner 2026-11-19): `routable` is whether this event may be
-      // routed to (listed and live, decided by the server). Only `true` draws
-      // the Google Maps / Apple Maps buttons; anything else draws none.
-      function renderPoster(event, routable) {
+      // OSE-2196 (owner 2026-11-19): the bundle's `directions` decides the map
+      // buttons. null (the event is private or off the map): no buttons at all.
+      // Else `query` is what both maps search: the event's res-9 cell point as
+      // "lat,lon" (never its stored point), or its address when it has no cell.
+      // Anything else draws no buttons.
+      function directionsBlock(d, digital, staticBtn) {
+        const where = d && typeof d.query === 'string' ? d.query.trim() : '';
+        if (!where) return '';
+        return digital
+          ? '<div class="detail-card-actions" role="group" aria-label="Directions" data-testid="poster-directions">' +
+              '<a class="btn btn-outline" href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">Google Maps</a>' +
+              '<a class="btn btn-outline" href="https://maps.apple.com/?q=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map-apple">Apple Maps</a>' +
+              '</div>'
+          : '<div class="detail-card-actions" aria-hidden="true" data-testid="poster-directions">' +
+              staticBtn('Google Maps', 'poster-open-map') + staticBtn('Apple Maps', 'poster-open-map-apple') +
+              '</div>';
+      }
+      // Fixed words and test ids only: nothing typed goes through here.
+      function posterStaticBtn(label, testid) {
+        return '<span class="btn btn-outline btn-static" data-testid="' + esc(testid) + '">' + esc(label) + '</span>';
+      }
+      function renderPoster(event, directions) {
         // OSE-844 (X-10): the API item now carries name/startDateISO/venue
         // directly (mapped in enrichWithPhase). The old `const data = event.data
         // || {}` first branch was permanently dead — no SELECT ever exposed a
@@ -1078,15 +1096,12 @@ body {
         // is digital only (on paper the event's own code shares it).
         const digital = KIND === 'digital';
         // Fixed words and test ids only: nothing typed goes through here.
-        const staticBtn = function (label, testid) {
-          return '<span class="btn btn-outline btn-static" data-testid="' + esc(testid) + '">' + esc(label) + '</span>';
-        };
+        const staticBtn = posterStaticBtn;
         // The venue's street address (events.where_address, in the public
         // projection): shown under the name when it adds something.
         const address = String(event.where_address || '').trim();
         const showAddress = address !== '' && address.toLowerCase() !== venue.trim().toLowerCase();
-        // Directions search the street address, else the venue name: text the
-        // organizer typed, never the visitor's location (invariant 3).
+        // The Where card shows the place's name and address text.
         const where = address || venue;
         // Share: the public event page, nothing added to it (no tracking
         // parameters). The words are what the poster already shows.
@@ -1115,17 +1130,8 @@ body {
               '<span class="detail-card-main" data-testid="poster-venue-name">' + esc(venue || address) + '</span>' +
               (showAddress && venue ? '<span class="detail-card-sub" data-testid="poster-venue-address">' + esc(address) + '</span>' : '') +
               '</div>' +
-              // Owner 2026-10-11: two choices, Google Maps and Apple Maps.
-              (routable !== true
-                ? ''
-                : digital
-                ? '<div class="detail-card-actions" role="group" aria-label="Directions" data-testid="poster-directions">' +
-                  '<a class="btn btn-outline" href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">Google Maps</a>' +
-                  '<a class="btn btn-outline" href="https://maps.apple.com/?q=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map-apple">Apple Maps</a>' +
-                  '</div>'
-                : '<div class="detail-card-actions" aria-hidden="true" data-testid="poster-directions">' +
-                  staticBtn('Google Maps', 'poster-open-map') + staticBtn('Apple Maps', 'poster-open-map-apple') +
-                  '</div>') +
+              // OSE-2196: the server's directions, or none.
+              directionsBlock(directions, digital, staticBtn) +
               '</div>'
             : '') +
           // OSE-1825 / OSE-1371: Web Share first; without it, plain share
@@ -1227,10 +1233,9 @@ body {
             '<option value="' + esc(i) + '">' + esc(e.name || e.id || '') + '</option>'
           ).join('');
           const show = (item) => {
-            // The picker list is GET /api/v2/events, which lists only routable
-            // events (the same rule, as SQL: lib/data-provider.ts). The bundle
-            // below takes the buttons away again if that has changed.
-            area.innerHTML = renderPoster(item, true);
+            // No map buttons from the list: the bundle below brings them, from
+            // the server's rule (OSE-2196).
+            area.innerHTML = renderPoster(item, null);
             syncChrome(item);
             loadPosterBundle(item.id, false);
           };
@@ -1638,14 +1643,15 @@ body {
           if (!current() || !data.ok) return false;
           if (renderEvent) {
             if (!data.event || !data.event.id) return false;
-            document.getElementById('poster-area').innerHTML = renderPoster(data.event, data.routable === true);
+            document.getElementById('poster-area').innerHTML = renderPoster(data.event, data.directions);
             syncChrome(data.event);
           }
-          // A card drawn from the picker list (renderEvent false) loses its
-          // directions if the bundle says the event is no longer routable.
-          if (!renderEvent && data.routable !== true) {
-            const dirs = document.querySelector('[data-testid="poster-directions"]');
-            if (dirs) dirs.remove();
+          // A card drawn from the picker list (renderEvent false) has no map
+          // buttons until its bundle says what they are (OSE-2196).
+          if (!renderEvent) {
+            const card = document.querySelector('[data-testid="poster-meta-venue"]');
+            const block = directionsBlock(data.directions, KIND === 'digital', posterStaticBtn);
+            if (card && block) card.insertAdjacentHTML('beforeend', block);
           }
           renderPosterSponsors(data.sponsors, data.sponsor_rotation);
           // OSE-869: the organiser turned the QR grid off (a walk-up event has

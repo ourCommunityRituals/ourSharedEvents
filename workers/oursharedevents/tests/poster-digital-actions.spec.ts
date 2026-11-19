@@ -26,6 +26,11 @@
  * removal skipped (the picker case red); a missing flag read as routable
  * (fail-closed red); a picker card drawn as not routable (the picker control
  * red) | date: 2026-11-19
+ * @born-red OSE-2196 res-9 | method: after the directions moved to the
+ * server, the buttons drawn from the event's own text instead of the bundle's
+ * `directions` (both off-map cases, fail-closed, the res-9 case and the
+ * non-text case red); the picker card drawn with buttons before its bundle
+ * (the failed-bundle picker case red) | date: 2026-11-19
  */
 import { describe, test, expect } from 'vitest';
 import { JSDOM } from 'jsdom';
@@ -43,22 +48,26 @@ const json = (status: number, body: unknown): Response =>
   });
 
 function bundle(event: Record<string, unknown> = {}): Record<string, unknown> {
+  const ev: Record<string, unknown> = {
+    id: EVT,
+    name: 'Uptown Blue Island',
+    venue: 'Uptown Blue Island',
+    where_address: '13001 S Western Ave, Blue Island, IL 60406',
+    startDateISO: '2026-11-11',
+    starts_at: '2026-11-11T23:00:00.000Z',
+    timezone: 'America/Chicago',
+    ...event,
+  };
+  // A listed event with no cell (OSE-2196): the server sends what the maps
+  // search, its address, else its venue name (lib/geo-link.ts eventDirectionsQuery).
+  const query = String(ev.where_address || ev.venue || '').trim();
   return {
     ok: true,
     status: 200,
     eventId: EVT,
-    event: {
-      id: EVT,
-      name: 'Uptown Blue Island',
-      venue: 'Uptown Blue Island',
-      where_address: '13001 S Western Ave, Blue Island, IL 60406',
-      startDateISO: '2026-11-11',
-      starts_at: '2026-11-11T23:00:00.000Z',
-      timezone: 'America/Chicago',
-      ...event,
-    },
-    // A listed event's bundle (OSE-2196: the server says it may be routed to).
+    event: ev,
     routable: true,
+    directions: query ? { query } : null,
     sponsors: [],
     slots: [],
     settings: { showQRSection: true },
@@ -360,7 +369,7 @@ describe('digital: Share', () => {
 describe('OSE-2196: no directions on the poster of an event that is not listed', () => {
   for (const kind of ['digital', 'print'] as const) {
     test(`${kind}: an off-map event (routable false) has no map buttons, and keeps its place`, async () => {
-      const { doc } = await openPoster(kind, { ...bundle(), routable: false });
+      const { doc } = await openPoster(kind, { ...bundle(), routable: false, directions: null });
       expect(q(doc, 'poster-venue-name')!.textContent).toBe('Uptown Blue Island');
       expect(q(doc, 'poster-directions')).toBeNull();
       expect(q(doc, 'poster-open-map')).toBeNull();
@@ -372,27 +381,57 @@ describe('OSE-2196: no directions on the poster of an event that is not listed',
     });
   }
 
-  test('a bundle that does not say routable draws none (fail closed)', async () => {
+  test('a bundle without directions draws none (fail closed)', async () => {
     const b = bundle();
-    delete b.routable;
+    delete b.directions;
     const { doc } = await openPoster('digital', b);
     expect(q(doc, 'poster-directions')).toBeNull();
   });
 
-  test('control: a listed event (routable true) keeps both buttons', async () => {
+  test('a res-9 cell point: both maps search that point, never another', async () => {
+    const point = '41.65770411822154,-87.68064312371866';
+    const { doc } = await openPoster('digital', { ...bundle(), directions: { query: point } });
+    const q1 = encodeURIComponent(point);
+    expect(q(doc, 'poster-open-map')!.getAttribute('href')).toBe(
+      `https://www.google.com/maps/search/?api=1&query=${q1}`
+    );
+    expect(q(doc, 'poster-open-map-apple')!.getAttribute('href')).toBe(
+      `https://maps.apple.com/?q=${q1}`
+    );
+  });
+
+  test('directions that are not a search text draw none', async () => {
+    for (const directions of [{ query: '' }, { query: 42 }, { google: 'https://evil.example/' }]) {
+      const { doc } = await openPoster('digital', { ...bundle(), directions });
+      expect(q(doc, 'poster-directions'), JSON.stringify(directions)).toBeNull();
+    }
+  });
+
+  test('control: a listed event (directions sent) keeps both buttons', async () => {
     const { doc } = await openPoster('digital', bundle());
     expect(q(doc, 'poster-open-map')!.tagName).toBe('A');
     expect(q(doc, 'poster-open-map-apple')!.tagName).toBe('A');
   });
 
-  test('picker: a card drawn from the list loses its buttons when the bundle says not routable', async () => {
+  test('picker: a card drawn from the list gets no buttons when the bundle sends none', async () => {
     const item = bundle().event as Record<string, unknown>;
-    const { doc } = await openPoster('digital', { ...bundle(), routable: false }, { list: [item] });
+    const { doc } = await openPoster(
+      'digital',
+      { ...bundle(), routable: false, directions: null },
+      { list: [item] }
+    );
     expect(q(doc, 'poster-venue-name')!.textContent).toBe('Uptown Blue Island');
     expect(q(doc, 'poster-directions')).toBeNull();
   });
 
-  test('picker control: a listed event from the list keeps its buttons', async () => {
+  test('picker: a card drawn from the list has no buttons when its bundle fails', async () => {
+    const item = bundle().event as Record<string, unknown>;
+    const { doc } = await openPoster('digital', { ok: false }, { list: [item] });
+    expect(q(doc, 'poster-venue-name')!.textContent).toBe('Uptown Blue Island');
+    expect(q(doc, 'poster-directions')).toBeNull();
+  });
+
+  test('picker control: a listed event from the list gets its buttons from the bundle', async () => {
     const item = bundle().event as Record<string, unknown>;
     const { doc } = await openPoster('digital', bundle(), { list: [item] });
     expect(q(doc, 'poster-open-map')!.tagName).toBe('A');

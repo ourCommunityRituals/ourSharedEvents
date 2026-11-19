@@ -1,0 +1,53 @@
+info:
+  name: "OSE-2196 | GET /events/rt-listed-live | listed, on today: Directions at the res-9 cell point (control)"
+  type: http
+  seq: 4
+
+# The control for the off-map pages: rt-listed-live is LISTED (is_published = 1, past its
+# publish grace). Its Directions menu stays (owner, 2026-11-19: directions are
+# for listed places), and goes to the point of its res-9 cell 89298e593bbffff
+# (38.51279512310676, -116.51087534380703), never its stored point
+# (38.512345, -116.512345): "it should resolve to the H3". A maps link needs a
+# point, so it is the cell's own point (lib/cell-point.ts).
+# Fixture: bruno/fixtures/routable-seed.sql.
+http:
+  method: GET
+  url: "{{baseUrl}}/events/rt-listed-live"
+  headers:
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const status = res.getStatus();
+        const edge = status === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        test('Returns 200 (or an edge challenge)', function () {
+          expect(status === 200 || edge).to.equal(true);
+        });
+        if (edge && String(bru.getEnvVar('edgeStrict')) === '1') {
+          test('EDGE (strict, OSE-2022): the read reached the Worker, not an edge challenge', function () { expect('edge challenge').to.eql('the Worker'); });
+        }
+        if (status === 200) {
+          const body = String(res.getBody());
+          test('The Directions menu is there', function () {
+            expect(body).to.include('data-testid="geo-link-live"');
+          });
+          test('Google Maps and Apple Maps, at the res-9 cell point', function () {
+            expect(body).to.include('href="https://www.google.com/maps/search/?api=1&amp;query=38.51279512310676%2C-116.51087534380703"');
+            expect(body).to.include('href="https://maps.apple.com/?ll=38.51279512310676,-116.51087534380703&amp;q=Routable%20Check%20Lanes"');
+          });
+          test('The stored point is nowhere on the page', function () {
+            expect(body).to.not.include('38.512345');
+            expect(body).to.not.include('-116.512345');
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

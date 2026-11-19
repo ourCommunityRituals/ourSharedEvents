@@ -1744,12 +1744,13 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/map-zoom-area-seed.sql
 
-      # OSE-2196 (owner 2026-11-19): no route to a place that is off the map. Two
-      # active off-map events (one upcoming, one on today) and two listed
-      # controls, all with exact coordinates, for Bruno Pages folder
-      # "17. Routable (OSE-2196)". The off-map pair sits in the zoomed map
-      # fixture's area, so it runs after that seed. Upserts by id. NOT
-      # continue-on-error: a missing fixture fails here by name.
+      # OSE-2196 (owner 2026-11-19): no route to a place that is off the map, and
+      # a listed place's route goes to its res-9 cell, never its stored point.
+      # Two active off-map events, a grace event and two listed controls, for
+      # Bruno Pages folder "17. Routable (OSE-2196)". The off-map pair sits in
+      # the zoomed map fixture's area, so it runs after that seed. Upserts by
+      # id; "Unpublish routable fixture" takes the listed ones off after the run.
+      # NOT continue-on-error: a missing fixture fails here by name.
       - name: 'Seed routable fixtures (OSE-2196)'
         if: matrix.section == 'pages'
         timeout-minutes: 5
@@ -1854,6 +1855,20 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/landing-zip-own-area-reset.sql
+
+      # OSE-2196: the routable fixture's listed events (far from every stock
+      # place, in no search) are listed only for the run above. Take them off
+      # again, pass or fail, so staging's own totals never carry them. A failed
+      # reset fails the job by name.
+      - name: 'Unpublish routable fixture (OSE-2196)'
+        if: always() && matrix.section == 'pages'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/routable-reset.sql
 
       # OSE-1470: Bruno ran with the admin key + CF Access token; refuse to
       # upload a report that recorded one. Upload runs only if this passes.

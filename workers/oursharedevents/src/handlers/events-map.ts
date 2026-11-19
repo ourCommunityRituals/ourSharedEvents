@@ -43,7 +43,7 @@ import {
   CORRIDOR_READY_MIN_EVENTS,
 } from '../lib/corridor-readiness.js';
 import { corsHeaders } from '../lib/cors';
-import { listedSql } from '../lib/publish-grace';
+import { eventRoutableSql } from '../domain/event-state';
 import { notLinkOnlySql } from '../lib/attendance-mode';
 
 export interface EventsMapEnv {
@@ -152,7 +152,8 @@ export async function handleEventsMap(request: Request, env: EventsMapEnv): Prom
     // first cut shipped without it.
     const brand = url.searchParams.get('brand') || 'root';
 
-    // `is_published = 1` FIRST, because it is the strongest filter and the one
+    // `is_published = 1` FIRST (it leads eventRoutableSql, the listed-and-live
+    // rule of OSE-2196, domain/event-state.ts), because it is the strongest filter and the one
     // whose absence is a harm rather than a bug. A host who has not published
     // is not a row to be filtered late — they are not on this surface at all
     // (OSE-1245, owner: "they control whether they appear on the map").
@@ -180,8 +181,8 @@ export async function handleEventsMap(request: Request, env: EventsMapEnv): Prom
       `SELECT id, title, slug, status, location, start_date, end_date, timezone,
               lat, lon, h3_res7
          FROM events
-        WHERE is_published = 1
-          AND brand_id = ? AND h3_res7 = ? AND status = 'active' AND ${listedSql()}
+        WHERE ${eventRoutableSql()}
+          AND brand_id = ? AND h3_res7 = ?
           AND ${notLinkOnlySql()}
           AND start_date >= ? AND start_date <= ?
         ORDER BY start_date ASC

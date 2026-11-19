@@ -54,8 +54,10 @@ function row(overrides: Partial<PublicEventRow> = {}): PublicEventRow {
     what_url: null,
     what_url_enabled: 0,
     what_url_type: null,
-    lat: 41.7,
-    lon: -87.7,
+    // OSE-2196: the cells the app stores for the point 41.7,-87.7. The page
+    // reads these, never the point; Directions go to the res-9 cell's point.
+    h3_res9: '8926645742fffff',
+    h3_res7: '872664574ffffff',
     price_cents: null,
     price_model: null,
     price_note: null,

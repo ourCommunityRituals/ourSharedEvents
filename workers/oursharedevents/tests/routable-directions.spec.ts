@@ -2,7 +2,10 @@
  * OSE-2196 — no route to an event that is private or off the map.
  *
  * Owner ruling, 2026-11-19: "Anything that is listed as private or off map
- * cannot be routed to." Directions are for LISTED places only. One rule decides
+ * cannot be routed to." Directions are for LISTED places only. And (the same
+ * day) "it should resolve to the H3": a listed event's Directions go to its
+ * res-9 cell's point (lib/cell-point.ts), else its res-7 area's, and search
+ * its address only when it has no cell; never its stored lat and lon. One rule decides
  * it, isRoutable / eventRoutableSql in src/domain/event-state.ts: live
  * (status renders on 'public'), on the map (is_published = 1) and past its
  * publish grace (listed_from). Every surface that offers a route asks it:
@@ -36,11 +39,16 @@
  *   (e)  eventRoutableSql letting is_published 0 through → the map panel and
  *        the SQL-rule cases red;
  *   (j)  isRoutable always false → both listed controls, the poster control,
- *        the preview and the TS rule red.
+ *        the preview and the TS rule red;
+ *   (c2) the grace test dropped again after it became a text comparison (as
+ *        listedSql writes it) → both grace cases and the TS rule red;
+ *   (r7) the res-7 point preferred to the res-9 one in lib/cell-point.ts →
+ *        both listed controls, the no-address case and the poster control red.
  *   date: 2026-11-19
  */
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { cellToLatLng } from 'h3-js';
 import { eventRoutableSql, isRoutable } from '../src/domain/event-state';
 
 interface TestEnv {
@@ -62,6 +70,12 @@ const AS_PERSON = {
 const LAT = 41.657317;
 const LON = -87.680643;
 const RES7 = '872664544ffffff';
+// The cells lib/h3-tagging.ts stores for that point. OSE-2196 (owner
+// 2026-11-19, "it should resolve to the H3"): Directions go to the res-9 cell's
+// point, never the stored one.
+const RES9 = '89266454447ffff';
+const [C9_LAT, C9_LON] = cellToLatLng(RES9);
+const [C7_LAT, C7_LON] = cellToLatLng(RES7);
 const ADDRESS = '2196 South Routable Ave, Blue Island IL 60406';
 const OFFMAP_ADDRESS = '9999 West Unlisted Rd, Blue Island IL 60406';
 
@@ -91,8 +105,10 @@ interface Seed {
   listedFromSql?: string;
   /** 'pre' starts three days out; 'live' runs from yesterday to tomorrow. */
   phase?: 'pre' | 'live';
-  address?: string;
-  cell?: boolean;
+  /** The street address; null for none. */
+  address?: string | null;
+  /** Which cells are stored: both (as the app writes them), res-7 only, or none. */
+  cells?: 'both' | 'res7' | 'none';
 }
 
 async function seed(s: Seed): Promise<void> {
@@ -100,10 +116,10 @@ async function seed(s: Seed): Promise<void> {
   await E.DB.prepare('DELETE FROM events WHERE id = ?').bind(s.id).run();
   await E.DB.prepare(
     `INSERT INTO events (id, brand_id, title, slug, status, is_published, listed_from,
-                         location, where_address, lat, lon, h3_res7, start_date, end_date,
+                         location, where_address, lat, lon, h3_res9, h3_res7, start_date, end_date,
                          timezone, created_at, updated_at)
      VALUES (?, 'root', ?, ?, ?, ?, ${s.listedFromSql ?? 'NULL'},
-             'Eagles Hall', ?, ?, ?, ?,
+             'Eagles Hall', ?, ?, ?, ?, ?,
              ${live ? "date('now', '-1 day')" : "date('now', '+3 day')"},
              ${live ? "date('now', '+1 day')" : "date('now', '+3 day')"},
              'America/Chicago', datetime('now'), datetime('now'))`
@@ -114,10 +130,11 @@ async function seed(s: Seed): Promise<void> {
       s.id,
       s.status ?? 'active',
       s.isPublished ?? 1,
-      s.address ?? ADDRESS,
+      s.address === undefined ? ADDRESS : s.address,
       LAT,
       LON,
-      s.cell ? RES7 : null
+      (s.cells ?? 'both') === 'both' ? RES9 : null,
+      (s.cells ?? 'both') === 'none' ? null : RES7
     )
     .run();
 }
@@ -196,19 +213,53 @@ describe('1. the event page offers no route to an off-map event', () => {
     expectNoRoute(await page('rt-grace-live'), 'grace live page');
   });
 
-  test('control: a listed event keeps its Directions menu, at its coordinates, pre-event', async () => {
+  test('control: a listed event keeps its Directions menu, at its res-9 cell point, pre-event', async () => {
     const html = await page('rt-listed-pre');
     expect(html).toContain('data-testid="geo-link"');
     expect(html).toContain(
-      `href="https://www.google.com/maps/search/?api=1&amp;query=${LAT}%2C${LON}"`
+      `href="https://www.google.com/maps/search/?api=1&amp;query=${C9_LAT}%2C${C9_LON}"`
     );
-    expect(html).toContain(`href="https://maps.apple.com/?ll=${LAT},${LON}&amp;q=Eagles%20Hall"`);
+    expect(html).toContain(
+      `href="https://maps.apple.com/?ll=${C9_LAT},${C9_LON}&amp;q=Eagles%20Hall"`
+    );
+    expectNoCoordinate(html, 'listed pre-event page');
   });
 
   test('control: a listed event keeps its Directions menu, live', async () => {
     const html = await page('rt-listed-live');
     expect(html).toContain('data-testid="geo-link-live"');
-    expect(html).toContain(`query=${LAT}%2C${LON}`);
+    expect(html).toContain(`query=${C9_LAT}%2C${C9_LON}"`);
+    expectNoCoordinate(html, 'listed live page');
+  });
+});
+
+// ─── 1b. Where a listed event's directions go ─────────────────────────────────
+
+describe('1b. a listed event: its res-9 cell point, never its stored point', () => {
+  beforeAll(async () => {
+    await seed({ id: 'rt-src-noaddr', address: null });
+    await seed({ id: 'rt-src-res7', cells: 'res7' });
+    await seed({ id: 'rt-src-nocell', cells: 'none' });
+  });
+
+  test('a stored point and no address: the link is at the res-9 cell point', async () => {
+    const html = await page('rt-src-noaddr');
+    expect(html).toContain(`query=${C9_LAT}%2C${C9_LON}"`);
+    expectNoCoordinate(html, 'no-address page');
+  });
+
+  test('no res-9 cell: the res-7 area point, never the stored point', async () => {
+    const html = await page('rt-src-res7');
+    expect(html).toContain(`query=${C7_LAT}%2C${C7_LON}"`);
+    expectNoCoordinate(html, 'res-7-only page');
+  });
+
+  test('no cell at all: both maps search the address (the last resort)', async () => {
+    const html = await page('rt-src-nocell');
+    const q = encodeURIComponent(ADDRESS);
+    expect(html).toContain(`href="https://www.google.com/maps/search/?api=1&amp;query=${q}"`);
+    expect(html).toContain(`href="https://maps.apple.com/?q=${q}"`);
+    expectNoCoordinate(html, 'no-cell page');
   });
 });
 
@@ -220,22 +271,31 @@ describe('2. the poster offers no route to an off-map event', () => {
     expect(res.status, `${id} poster bundle`).toBe(200);
     return (await res.json()) as {
       routable: unknown;
+      directions: unknown;
       event: Record<string, unknown>;
     };
   };
 
-  test('an off-map event: the bundle says routable false', async () => {
-    expect((await bundle('rt-offmap-pre')).routable).toBe(false);
-    expect((await bundle('rt-offmap-live')).routable).toBe(false);
+  test('an off-map event: routable false, and no directions', async () => {
+    for (const id of ['rt-offmap-pre', 'rt-offmap-live']) {
+      const b = await bundle(id);
+      expect(b.routable, id).toBe(false);
+      expect(b.directions, id).toBeNull();
+    }
   });
 
-  test('inside the publish grace: routable false', async () => {
-    expect((await bundle('rt-grace-pre')).routable).toBe(false);
+  test('inside the publish grace: routable false, and no directions', async () => {
+    const b = await bundle('rt-grace-pre');
+    expect(b.routable).toBe(false);
+    expect(b.directions).toBeNull();
   });
 
-  test('control: a listed event: routable true', async () => {
-    expect((await bundle('rt-listed-pre')).routable).toBe(true);
-    expect((await bundle('rt-listed-live')).routable).toBe(true);
+  test('control: a listed event: routable, and its maps search its res-9 cell point', async () => {
+    for (const id of ['rt-listed-pre', 'rt-listed-live']) {
+      const b = await bundle(id);
+      expect(b.routable, id).toBe(true);
+      expect(b.directions, id).toEqual({ query: `${C9_LAT},${C9_LON}` });
+    }
   });
 
   test('the listing columns read for it never leave the handler', async () => {
@@ -249,11 +309,10 @@ describe('2. the poster offers no route to an off-map event', () => {
 
 describe('3. the map panel offers "Take me there" to listed events only', () => {
   beforeAll(async () => {
-    await seed({ id: 'rt-map-listed', cell: true });
-    await seed({ id: 'rt-map-offmap', isPublished: 0, cell: true, address: OFFMAP_ADDRESS });
+    await seed({ id: 'rt-map-listed' });
+    await seed({ id: 'rt-map-offmap', isPublished: 0, address: OFFMAP_ADDRESS });
     await seed({
       id: 'rt-map-grace',
-      cell: true,
       address: OFFMAP_ADDRESS,
       listedFromSql: "strftime('%Y-%m-%dT%H:%M:%fZ','now','+10 minutes')",
     });
@@ -293,10 +352,21 @@ describe('4. one rule: isRoutable and eventRoutableSql agree on every marker', (
   const future = '2999-01-01T00:00:00.000Z';
   for (const status of ['draft', 'ready', 'active', 'archived', 'ACTIVE', '']) {
     for (const pub of [0, 1]) {
-      for (const listedFrom of [null, past, future, 'not-a-date']) {
+      for (const listedFrom of [
+        null,
+        past,
+        future,
+        'not-a-date',
+        '2026-13-99',
+        '2026-01-01 00:00:00',
+        '',
+      ]) {
         // The stored state exactly: a stray 'ACTIVE' is not a state.
-        const want =
-          status === 'active' && pub === 1 && (listedFrom === null || listedFrom === past);
+        // Listed: no listed_from, or one at or before now compared as text, as
+        // listedSql compares it ('2026-13-99' sorts after today; the space form
+        // and '' sort before it).
+        const listed = [null, past, '2026-01-01 00:00:00', ''].includes(listedFrom);
+        const want = status === 'active' && pub === 1 && listed;
         cases.push({ id: `rtp-${cases.length}`, status, pub, listedFrom, want });
       }
     }

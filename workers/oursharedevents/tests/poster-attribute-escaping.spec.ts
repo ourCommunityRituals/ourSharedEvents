@@ -205,6 +205,9 @@ function bundle(typed: Fill, opts: BundleOptions = {}): Record<string, unknown> 
       timezone: 'America/Chicago',
       ...(art === null ? {} : { cover_image_url: art }),
     },
+    // OSE-2196: what the map buttons search, decided by the server (here, for
+    // an event with no cell, its typed address).
+    directions: { query: typed('ADDRESS') },
     sponsors: [
       // A display name, a logo of its own.
       {
@@ -757,6 +760,8 @@ describe("a code's link and picture (made by the server; checked on the page all
           delete ev.where_address;
           ev.venue = where;
         }
+        // OSE-2196: the server sends what the maps search (the same text here).
+        body.directions = { query: where };
         const { doc } = await openPoster('digital', body);
         const map = doc.querySelector('[data-testid="poster-open-map"]')!;
         expect(names(map)).toEqual(['class', 'data-testid', 'href', 'rel', 'target']);

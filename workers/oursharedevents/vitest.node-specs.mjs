@@ -84,6 +84,7 @@ export const NODE_SPECS = [
   'tests/form-submit-once.spec.ts',
   'tests/forms-pepper-preflight.spec.ts',
   'tests/geo-link-maps-not-h3.spec.ts',
+  'tests/route-offer-gate.spec.ts',
   'tests/geo.spec.ts',
   'tests/ncr-pipeline.spec.ts',
   'tests/ops/payment-links-guard.spec.ts',

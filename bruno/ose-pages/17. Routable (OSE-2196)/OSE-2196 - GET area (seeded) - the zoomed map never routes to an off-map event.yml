@@ -1,7 +1,7 @@
 info:
   name: "OSE-2196 | GET /?area=872664405ffffff | the zoomed map never names or routes to an off-map event"
   type: http
-  seq: 6
+  seq: 8
 
 # The map panel's "Take me there" (lib/map-place-panel.ts) is built from the list
 # query (lib/data-provider.ts), which lists only routable events

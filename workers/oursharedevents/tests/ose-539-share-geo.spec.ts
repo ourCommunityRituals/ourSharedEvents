@@ -4,6 +4,7 @@
  * L1 Static: source file checks (share-btn, geo-link, dark mode CSS present)
  * L2 Integration: SELF.fetch — share button and geo link rendered correctly
  */
+import { cellToLatLng, latLngToCell } from 'h3-js';
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { CORE_TIME_AND_TYPE } from './helpers/core-values';
@@ -142,13 +143,20 @@ describe('OSE-539 L2: pre-event phase', () => {
     expect(html).toContain('Share this event');
   });
 
-  test('directions offer Google Maps and Apple Maps at the coordinates when lat/lon present', async () => {
+  // OSE-2196 (owner 2026-11-19, "it should resolve to the H3"): with a stored
+  // point, both maps go to the point of its res-9 cell, never the point itself.
+  test('directions offer Google Maps and Apple Maps at the res-9 cell point, never the stored point', async () => {
     const id = await createEventWithGeo('Geo Event', 40.7128, -74.006, 'Eagles Hall');
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
+    const [cLat, cLon] = cellToLatLng(latLngToCell(40.7128, -74.006, 9));
     expect(html).toContain('data-testid="geo-link"');
-    expect(html).toContain('https://www.google.com/maps/search/?api=1&amp;query=40.7128%2C-74.006');
-    expect(html).toContain('https://maps.apple.com/?ll=40.7128,-74.006');
+    expect(html).toContain(
+      `https://www.google.com/maps/search/?api=1&amp;query=${cLat}%2C${cLon}"`
+    );
+    expect(html).toContain(`https://maps.apple.com/?ll=${cLat},${cLon}&amp;q=Eagles%20Hall`);
+    expect(html).not.toContain('40.7128');
+    expect(html).not.toContain('-74.006');
   });
 
   test('directions search the address on both maps when no lat/lon', async () => {

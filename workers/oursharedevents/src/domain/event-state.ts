@@ -213,11 +213,10 @@ export function isRoutable(
   // not routable on either side).
   const status = e.status ?? '';
   if (!isValidEventState(status) || !canRender(status, 'public')) return false;
-  if (e.listed_from) {
-    const listedFrom = new Date(e.listed_from).getTime();
-    const now = (opts.now ?? new Date()).getTime();
-    if (Number.isNaN(listedFrom) || listedFrom > now) return false;
-  }
+  // The grace test as listedSql writes it: the stored text against now in the
+  // same toISOString shape, compared as text. Written the same way so the two
+  // forms agree on every value, a malformed one included.
+  if (e.listed_from && !(e.listed_from <= (opts.now ?? new Date()).toISOString())) return false;
   return true;
 }
 
