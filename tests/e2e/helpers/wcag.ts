@@ -23,8 +23,40 @@ import type { Page } from '@playwright/test';
 /** Every WCAG A and AA tag axe-core 4.x carries, 2.0 to 2.2. */
 export const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
 
-/** axe-core with every WCAG A/AA rule: one line per violation, any impact. */
+/**
+ * Wait until every finite CSS transition and animation on the page has
+ * finished (OSE-2153). Contrast is measured on the pixels as they are painted,
+ * so a control caught mid-fade is measured blended with what is behind it: the
+ * map's "show the whole map" button is disabled until the map is zoomed, then
+ * fades from .4 to 1 opacity over .2 s (`.btn{transition:opacity .2s}` in
+ * @ocr/ui), and axe sampled it at about .65 in WebKit (main run 44423687790).
+ * That is a flake in the measurement, not a defect in the page, and a fixed
+ * sleep would only hide it. Endless animations (a pulse that never ends) are
+ * left alone: they never finish, and waiting on them would never return.
+ */
+export async function settled(page: Page, timeout = 5_000): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      document.getAnimations().every((a) => {
+        const end = a.effect?.getComputedTiming().endTime;
+        return end === undefined || end === Infinity || a.playState !== 'running';
+      }),
+    undefined,
+    { timeout }
+  );
+  // The frame after the last one: the final style is painted before it is read.
+  await page.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+  );
+}
+
+/**
+ * axe-core with every WCAG A/AA rule: one line per violation, any impact. It
+ * waits for transitions to finish first (see `settled`), so a control that is
+ * fading in is judged at the colour it settles on.
+ */
 export async function axeWcag(page: Page, include?: string): Promise<string[]> {
+  await settled(page);
   let b = new AxeBuilder({ page }).withTags(WCAG_TAGS);
   if (include) b = b.include(include);
   const r = await b.analyze();

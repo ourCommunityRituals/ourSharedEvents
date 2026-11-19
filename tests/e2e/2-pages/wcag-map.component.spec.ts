@@ -277,6 +277,50 @@ test.describe('mutation: every WCAG check fails on a fault', () => {
     });
   }
 
+  // OSE-2153: "show the whole map" is disabled until the map is zoomed, then
+  // fades in. axe sampled it mid-fade in WebKit (main run 44423687790). The
+  // helper waits for the fade; these two keep that wait honest.
+  test('axe waits out a fade: a slow fade-in on the reset button is not a contrast failure', async ({
+    browser,
+  }) => {
+    const { ctx, page } = await fresh(browser, '/', 320);
+    // A fade of 1.5 s, linear, so axe would sample it at a faint opacity if it
+    // did not wait (without the wait this reads .4 to .7 for a full second).
+    await page.addStyleTag({ content: '.btn{transition:opacity 1.5s linear!important}' });
+    await page.getByTestId('amap-in').click();
+    await page.getByTestId('amap-in').click();
+    const faint = await page.evaluate(
+      () => +getComputedStyle(document.querySelector('[data-z="reset"]')!).opacity
+    );
+    expect(faint, 'the button is still fading when axe is asked').toBeLessThan(0.9);
+    expect(await axeWcag(page), 'axe judges it at the colour it settles on').toEqual([]);
+    expect(
+      await page.evaluate(
+        () => +getComputedStyle(document.querySelector('[data-z="reset"]')!).opacity
+      ),
+      'and the fade did finish before it did'
+    ).toBe(1);
+    await ctx.close();
+  });
+
+  test('axe still catches a real contrast fault on the reset button once it has settled', async ({
+    browser,
+  }) => {
+    const { ctx, page } = await fresh(browser, '/', 320);
+    await page.getByTestId('amap-in').click();
+    await page.getByTestId('amap-in').click();
+    await page.addStyleTag({
+      content:
+        '[data-z="reset"]{color:rgb(190,190,190)!important;background:rgb(255,255,255)!important}',
+    });
+    const found = await axeWcag(page);
+    expect(
+      found.some((l) => l.startsWith('color-contrast') && l.includes('data-z="reset"')),
+      found.join('\n')
+    ).toBe(true);
+    await ctx.close();
+  });
+
   test('2.5.8 catches a 16 px button touching another', async ({ browser }) => {
     const { ctx, page } = await fresh(browser, AREA);
     // With the bar's 8 px gap a 16 px button would pass by the spacing
