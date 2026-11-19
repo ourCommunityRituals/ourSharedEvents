@@ -32,6 +32,9 @@ export const SEEDED_ON = '2026-11-05';
 // Owner, 2026-11-05: Mount Greenwood stays empty, so the under-10 experience can
 // be shown by zip.
 export const EMPTY_NODES = ['mount-greenwood'];
+// Owner, 2026-11-19: the address decides; a row in no boundary joins this node, which
+// has no polygon (stock/nodes.json), only the cells its rows sit in.
+export const AREA_NODE = 'area';
 const CENSUS =
   'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?benchmark=Public_AR_Current&format=json&address=';
 const PACE_MS = 1100;
@@ -147,7 +150,22 @@ export async function makeSeed({
   const zipNode = new Map();
   for (const n of nodes) for (const z of n.zips || []) zipNode.set(z, n.id);
 
-  const ev = await validateFinds({ finds, eventTypeIds, nodes, today: seededOn, geocode });
+  const fallbackNode = nodes.some((n) => n.id === AREA_NODE) ? AREA_NODE : null;
+  // Owner, 2026-11-05: a deliberately empty place is empty by zip too, so its zip search
+  // reads zero. A row whose address ends in one of its zips is left out, wherever the
+  // address falls on the map.
+  const emptyZips = new Set(
+    nodes.filter((n) => emptyNodes.includes(n.id)).flatMap((n) => n.zips || [])
+  );
+  const zipOfAddress = (a) => (/\b(\d{5})(?:-\d{4})?\s*$/.exec(String(a)) || [])[1];
+  const ev = await validateFinds({
+    finds,
+    eventTypeIds,
+    nodes,
+    today: seededOn,
+    geocode,
+    fallbackNode,
+  });
   const refused = ev.refused.map(({ row, reason }) => ({ row, reason }));
   const disagreements = [];
   const noDuration = [];
@@ -159,6 +177,10 @@ export async function makeSeed({
     }
     if (emptyNodes.includes(row.node)) {
       refused.push({ row, reason: 'in-empty-node' });
+      continue;
+    }
+    if (emptyZips.has(zipOfAddress(row.address))) {
+      refused.push({ row, reason: 'in-empty-zip' });
       continue;
     }
     const seedEvent = toSeedEvent(row, seededOn);
@@ -179,12 +201,16 @@ export async function makeSeed({
       a.title.localeCompare(b.title)
   );
 
-  const biz = await validateBusinesses({ businesses, nodes, geocode });
+  const biz = await validateBusinesses({ businesses, nodes, geocode, fallbackNode });
   const businessRefused = [...biz.refused];
   const seedBusinesses = [];
   for (const b of biz.accepted) {
     if (emptyNodes.includes(b.node)) {
       businessRefused.push({ row: b, reason: 'in-empty-node' });
+      continue;
+    }
+    if (emptyZips.has(zipOfAddress(b.address))) {
+      businessRefused.push({ row: b, reason: 'in-empty-zip' });
       continue;
     }
     seedBusinesses.push({

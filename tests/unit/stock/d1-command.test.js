@@ -213,7 +213,10 @@ describe('purge SQL sizes', () => {
 
   test("today's seed: the largest node's purge is one SQL text, and stays one at the longest ids", () => {
     const perNode = {};
-    for (const e of SEED.events) perNode[e.node] = (perNode[e.node] || 0) + 1;
+    // The wider area (owner 2026-11-19) holds most rows and is packed into several
+    // texts below; the one-text rule is for the places with a boundary.
+    for (const e of SEED.events)
+      if (e.node !== 'area') perNode[e.node] = (perNode[e.node] || 0) + 1;
     const [node, events] = Object.entries(perNode).sort((a, b) => b[1] - a[1])[0];
     // ids as the API makes them (evt_<uuid>, 40 characters)
     const real = pf.buildPurgeStatements(bigManifest(events, 40, node), [node]);
@@ -223,6 +226,13 @@ describe('purge SQL sizes', () => {
     for (const t of pf.packStatements(longest)) {
       expect(bytes(t)).toBeLessThanOrEqual(pf.MAX_SQL_BYTES);
     }
+    // the wider area: more than one text, each under the limit
+    const areaEvents = SEED.events.filter((e) => e.node === 'area').length;
+    const area = pf.packStatements(
+      pf.buildPurgeStatements(bigManifest(areaEvents, 40, 'area'), ['area'])
+    );
+    expect(area.length).toBeGreaterThan(1);
+    for (const t of area) expect(bytes(t)).toBeLessThanOrEqual(pf.MAX_SQL_BYTES);
   });
 
   test('buildPurgeSql is the statements, each ended by ;\\n', () => {

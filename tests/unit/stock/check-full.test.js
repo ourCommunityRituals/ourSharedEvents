@@ -283,6 +283,38 @@ describe('checkNodes: the count', () => {
   });
 });
 
+// Owner, 2026-11-19: the wider area has cells and no polygon or zip. Its count and
+// cells are checked for every event; its pages only for the first AREA_SAMPLE.
+describe('checkNodes: the wider area (no zip, no polygon)', () => {
+  const AREA = 'area';
+  const onlyArea = [node('area')];
+  test('passes with its count, no zip page read, and only a sample of event pages read', async () => {
+    const { AREA_SAMPLE } = await import('../../../scripts/stock/check-full.mjs');
+    const n = AREA_SAMPLE + 4;
+    const { manifest, listed } = day({ [AREA]: n });
+    const s = site({ listed });
+    const r = await run(s, manifest, {
+      nodes: onlyArea,
+      expected: { [AREA]: n },
+    });
+    expect(r[AREA]).toMatchObject({ pass: true, count: n, expected: n, reasons: [] });
+    expect(s.calls.some((c) => String(c.url || '').includes('/?zip='))).toBe(false);
+    const pages = s.calls.filter((c) => /\/events\/evt_area_\d+$/.test(String(c.url || '')));
+    expect(pages.length).toBe(AREA_SAMPLE);
+  });
+
+  test('every event is still held to the area’s cells', async () => {
+    const { manifest, listed } = day({ [AREA]: 3 });
+    listed[2].h3_res7 = node('oak-lawn').cells.find((c) => !node(AREA).cells.includes(c));
+    const r = await run(site({ listed }), manifest, {
+      nodes: onlyArea,
+      expected: { [AREA]: 3 },
+    });
+    expect(r[AREA].pass).toBe(false);
+    expect(r[AREA].reasons).toContain(`cell-mismatch:${listed[2].id}`);
+  });
+});
+
 describe('checkNodes: a node expected to hold 0 (owner, 2026-11-05)', () => {
   // Every populated node with exactly its seed count, as on a good load.
   const fullDay = () => day(Object.fromEntries(Object.entries(EXPECTED).filter(([, n]) => n > 0)));
@@ -312,10 +344,14 @@ describe('checkNodes: a node expected to hold 0 (owner, 2026-11-05)', () => {
 
   test('fails when a stock event is listed in a cell that is its own alone', async () => {
     const { manifest, listed } = fullDay();
-    const own = node(EMPTY).cells.find((c) => !populatedCells().has(c));
-    expect(own).toBeDefined();
+    // Since the wider area and Morgan Park joined (owner 2026-11-19) every cell of the
+    // empty place is shared with a populated one, so a cell of its own is added.
+    const OWN = '8726645a0ffffff';
+    expect(populatedCells().has(OWN)).toBe(false);
+    const withOwn = nodes.map((n) => (n.id === EMPTY ? { ...n, cells: [...n.cells, OWN] } : n));
+    const own = OWN;
     listed[0].h3_res7 = own;
-    const r = await run(site({ listed }), manifest);
+    const r = await run(site({ listed }), manifest, { nodes: withOwn });
     expect(r[EMPTY].pass).toBe(false);
     expect(r[EMPTY].count).toBe(1);
     expect(r[EMPTY].reasons).toContain(`stock-in-empty-node:${listed[0].id}`);

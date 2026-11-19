@@ -949,10 +949,10 @@ describe('fix round 1: re-runs, interrupted builds, unknown nodes', () => {
     expect(report.exitCode).toBe(0);
   });
 
-  test('the repo nodes.json retires Beverly', () => {
+  test('the repo nodes.json brings Beverly back (owner 2026-11-19) and retires no node', () => {
     const repoNodes = require('../../../stock/nodes.json');
-    expect(repoNodes.retired).toContain('beverly');
-    expect(repoNodes.nodes.map((n) => n.id)).not.toContain('beverly');
+    expect(repoNodes.retired ?? []).toEqual([]);
+    expect(repoNodes.nodes.map((n) => n.id)).toContain('beverly');
   });
 
   test('a purge that fails after the manifest could not be saved names the artifact as the only record', async () => {

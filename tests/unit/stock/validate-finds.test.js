@@ -166,6 +166,38 @@ describe('validateFinds', () => {
     expect(await reason(find({ address: 'faraway' }))).toBe('not-in-node');
   });
 
+  // Owner, 2026-11-19: the address decides where a row sits; a row in no boundary may
+  // join a named fallback node instead of being refused.
+  test('with a fallback node, a point in no polygon joins it and keeps its cell', async () => {
+    const r = await validateFinds({
+      finds: [find({ address: 'faraway' })],
+      eventTypeIds,
+      nodes: [...nodes, { id: 'area', name: 'Wider area', zips: [], cells: [] }],
+      today: TODAY,
+      geocode,
+      fallbackNode: 'area',
+    });
+    expect(r.refused).toEqual([]);
+    expect(r.accepted[0].node).toBe('area');
+    expect(r.accepted[0].cell).toBe(h3.latLngToCell(41.95, -87.65, 7));
+  });
+
+  test('a fallback node never wins over a polygon that holds the point', async () => {
+    const r = await validateFinds({
+      finds: [find()],
+      eventTypeIds,
+      nodes: [...nodes, { id: 'area', name: 'Wider area', zips: [], cells: [] }],
+      today: TODAY,
+      geocode,
+      fallbackNode: 'area',
+    });
+    expect(r.accepted[0].node).toBe('evergreen-park');
+  });
+
+  test('a node with no polygon claims no point', () => {
+    expect(nodeAt([{ id: 'area', zips: [], cells: [] }], 41.95, -87.65)).toBeUndefined();
+  });
+
   test('a point outside the boundary but inside a border cell is not-in-node', async () => {
     const p = borderPoint();
     const cells = new Set(nodes.flatMap((n) => n.cells));

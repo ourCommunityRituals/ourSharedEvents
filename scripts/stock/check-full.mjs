@@ -103,6 +103,10 @@ function inWindow(startDate, today) {
  * @returns {Promise<Record<string, { pass: boolean, count: number, expected: number,
  *   totalListed: number, reasons: string[] }>>}
  */
+// How many of the wider area's events get the page-by-page check (QR, shortcode,
+// sponsor strip, art); every one of them is still counted and held to its cells.
+export const AREA_SAMPLE = 5;
+
 export async function checkNodes({
   client,
   manifest,
@@ -292,9 +296,13 @@ export async function checkNodes({
 
     // the zip view leads with the area, the doors under it (a place under the
     // map gate does not lead with the map, so the check is skipped there)
-    const underGate = want < MAP_GATE;
+    // The wider area (no boundary, no zip; owner 2026-11-19) has no zip page and no
+    // landing map of its own: its rows are placed by address, so its count and cells
+    // are checked, and its pages on a sample (AREA_SAMPLE) so a load stays one run.
+    const isArea = !node.polygon;
+    const underGate = want < MAP_GATE || isArea;
     const zip = Array.isArray(node.zips) ? node.zips[0] : undefined;
-    if (!zip) {
+    if (!zip && !isArea) {
       reasons.push('no-zip');
     } else if (!underGate) {
       const zipPath = `/?zip=${encodeURIComponent(zip)}`;
@@ -308,7 +316,7 @@ export async function checkNodes({
         reasons.push(`zip-not-map-first:${zip}`);
     }
 
-    for (const id of eventIds) {
+    for (const id of isArea ? eventIds.slice(0, AREA_SAMPLE) : eventIds) {
       // the poster QR and the shortcode both land on this event's page
       const qr = qrs.find((q) => q.eventId === id);
       if (!qr || !qr.qPath) {
