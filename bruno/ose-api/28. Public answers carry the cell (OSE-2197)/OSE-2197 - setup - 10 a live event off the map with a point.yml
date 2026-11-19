@@ -4,7 +4,8 @@ info:
   seq: 10
 
 # Automation may create an event live (OSE-1425). It is synthetic and unlisted;
-# the folder deletes it at seq 900, and the daily staging rebuild clears a leftover.
+# the folder deletes it at seq 900. A run that stops before then leaves it, and
+# nothing clears it on its own (folder.yml says how to remove it).
 # The point is sent, so the server stores it and derives both cells from it
 # (res 7 872664544ffffff, res 9 89266454447ffff) with no place lookup.
 

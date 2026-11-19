@@ -14,15 +14,19 @@ docs: |-
   than res 7.
 
   The reads: a live event off the map, reached by its link (seq 20); the brand
-  list (seq 30), which also picks a listed event with a cell for seq 40 to 70;
+  list (seq 30), which also picks a listed event with a cell in the map's
+  forward window for seq 40 to 70 (and fails, by name, if there is none, so the
+  map read never passes on an empty map);
   that event's read (seq 40); the map of its area (seq 50); its poster bundle
   (seq 60) and its TV display config (seq 70).
 
   Setup and cleanup: seq 10 makes one synthetic live event off the map, with a
   known point, through the admin API (automation may create an event live,
-  OSE-1425); seq 900 deletes it. It has no scans, so it hard-deletes. A
-  leftover from a run that stopped half way is synthetic and unlisted, and the
-  daily staging rebuild clears it.
+  OSE-1425); seq 900 deletes it. It has no scans, so it hard-deletes. A run
+  that stops between seq 10 and seq 900 leaves it behind: synthetic, unlisted,
+  dated 2099-01-01, titled "OSE-2197 off-map point check (staging, synthetic)".
+  Nothing clears it on its own (the daily stock rebuild deletes only rows its
+  manifest names), so delete such a leftover by its title in the admin.
 
   Not here: the event page and the poster page (their Directions links are
   OSE-2196). Admin answers keep lat and lon.

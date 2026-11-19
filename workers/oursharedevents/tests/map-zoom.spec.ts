@@ -135,7 +135,7 @@ const apart = (a: number[], b: number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[
 // own row (lib/landing-area.ts blockOf): the stored h3_res9, else the cell the
 // server derives from its stored point. Rows here are shaped as the list read
 // returns them (lib/data-provider.ts fetchEvents): the point and both cells.
-// @born-red OSE-2197 landing zoom | method: `h3_res9: blockOf(e)` taken out of renderLandingArea's zoom events (lat and lon gone from the projection with no cell passed instead); the four cases below ran red, restored | date: 2026-11-19
+// @born-red OSE-2197 landing zoom | method: `h3_res9: blockOf(e)` taken out of renderLandingArea's zoom events (lat and lon gone from the projection with no cell passed instead), the four cases below ran red; each event's h3_res9 written into the zoomed page as a data attribute, the first case ran red; each restored | date: 2026-11-19
 describe('the zoomed landing still draws its dots with the point out of the public answer', () => {
   const far = { lat: RIPH.lat + 0.01, lon: RIPH.lon };
   const row = (
@@ -175,6 +175,10 @@ describe('the zoomed landing still draws its dots with the point out of the publ
     expect(dotsDrawn(html).sort()).toEqual([at(RIPH), at(far)].sort());
     expect(html).not.toContain(String(RIPH.lat));
     expect(html).not.toContain(String(RIPH.lon));
+    // The res-9 cell the landing hands the drawing places the dot; its id is
+    // never written to the page (only the area's res-7 cell is).
+    expect(html).not.toContain(res9(RIPH));
+    expect(html).not.toContain(res9(far));
   });
 
   test('a row from before its cells were written: the server derives its block from the stored point', () => {

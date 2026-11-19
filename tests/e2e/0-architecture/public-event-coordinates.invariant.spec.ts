@@ -18,7 +18,8 @@
  *   2. THE MAP READ. In handlers/events-map.ts the MapEvent shape, the item each
  *      row becomes and every SELECT name no coordinate. (Its COORDINATE_PARAMS
  *      list is the refusal of a coordinate coming IN, which stays.)
- *   3. THE PUBLIC RESPONSE BUILDERS name no coordinate at all: the list and the
+ *   3. THE PUBLIC RESPONSE BUILDERS name no coordinate at all, select no `*`
+ *      and spread no row (which would pass the point through unnamed): the list and the
  *      read (handleListEvents, handleGetEvent), the poster bundle, the TV's
  *      display-config, the brand calendar feed, sponsor discovery's event
  *      (toDiscoverable), the public sponsor and booth projections, the
@@ -44,10 +45,12 @@
  * A coordinate name: lat, lon, lng, latitude, longitude, or a name built on one
  * (`venue_lat`, `lat_lng`), or geo, coords, coordinates, position, latlng, ll.
  *
- * NOT HELD HERE, named so the gap is visible: the event page's and the
- * poster's Directions links (handlers/pages.ts, lib/geo-link.ts) still write the
- * stored point into the page. They are OSE-2196's (the directions order: cell,
- * then address, then venue). When that lands, those files belong on this gate.
+ * NOT HELD HERE, named so the gap is visible: the event page's Directions links
+ * (handlers/pages.ts through lib/geo-link.ts directionsUrls) still write the
+ * stored point into the page (`query=lat,lon`, `ll=lat,lon`). They are
+ * OSE-2196's (the directions order). When that lands, those files belong on
+ * this gate. (The poster's Directions search the address text, else the venue
+ * name, and never the point: templates/poster.html is scanned by rule 5.)
  * Admin routes keep reading and writing lat and lon (out of scope).
  *
  * The runtime layer is the workers-pool spec
@@ -184,10 +187,19 @@ function mapReadFindings(src: string): string[] {
   return out;
 }
 
+/**
+ * A builder names no coordinate, and cannot pass one through unnamed: no
+ * `SELECT *` (or `alias.*`) and no spread of a row (`...row`, `...e`), which
+ * would carry every stored column, the point included, into the answer.
+ */
 function builderFindings(code: string, where: string): string[] {
   const body = stripComments(code);
+  const out: string[] = [];
   const m = COORDINATE_WORD.exec(body);
-  return m ? [`${where} names ${m[0]}`] : [];
+  if (m) out.push(`${where} names ${m[0]}`);
+  if (/SELECT\s+(?:\w+\.)?\*/i.test(body)) out.push(`${where} selects every column`);
+  if (/\.\.\.\s*(?:row|rows|r|e|ev|event|item)\b/.test(body)) out.push(`${where} spreads a row`);
+  return out;
 }
 
 function zoomFindings(src: string): string[] {
@@ -203,6 +215,9 @@ function zoomFindings(src: string): string[] {
   if (/\blatLngToCell\s*\(/.test(dots)) out.push('mapDots derives a cell from a point');
   const reads = new RegExp(`\\be\\.${COORD}\\b|\\be\\[\\s*['"]${COORD}['"]\\s*\\]`, 'i');
   if (reads.test(dots)) out.push("mapDots reads an event's coordinate");
+  // Destructured from the event (`const { lat, lon } = e`), or taken whole.
+  const taken = new RegExp(`\\{[^{}]*\\b${COORD}\\b[^{}]*\\}\\s*=\\s*(?:e|ev|event)\\b`, 'i');
+  if (taken.test(dots)) out.push("mapDots destructures an event's coordinate");
   return out;
 }
 
@@ -318,6 +333,16 @@ test.describe('OSE-2197 | the gate fails on an injected coordinate', () => {
     expect(injected).not.toBe(body);
     expect(builderFindings(injected, 'read')).not.toEqual([]);
     expect(builderFindings('const x = { coordinates: [1, 2] };', 'any')).not.toEqual([]);
+    // Unnamed: a row spread into the answer, or every column selected.
+    const spread = body.replace('series,\n', 'series,\n        ...row,\n');
+    expect(spread).not.toBe(body);
+    expect(builderFindings(spread, 'read')).toEqual(['read spreads a row']);
+    expect(builderFindings('db.prepare(`SELECT * FROM events WHERE id = ?`)', 'any')).toEqual([
+      'any selects every column',
+    ]);
+    expect(builderFindings('db.prepare(`SELECT e.* FROM events e`)', 'any')).toEqual([
+      'any selects every column',
+    ]);
   });
 
   test('6d. a zoomed dot placed from a point is reported', () => {
@@ -326,6 +351,14 @@ test.describe('OSE-2197 | the gate fails on an injected coordinate', () => {
     expect(src.includes(at), 'the injection point moved').toBe(true);
     const fromPoint = src.replace(at, '    const block = latLngToCell(e.lat as number, 0, 9);\n');
     expect(zoomFindings(fromPoint)).not.toEqual([]);
+    // Each sub-rule on its own: a read of the point, a destructured point, a
+    // cell derived from a point that was not read from the event.
+    const readOnly = src.replace(at, `${at}    void e.lon;\n`);
+    expect(zoomFindings(readOnly)).toEqual(["mapDots reads an event's coordinate"]);
+    const destructured = src.replace(at, `${at}    const { lat } = e as { lat?: number };\n`);
+    expect(zoomFindings(destructured)).toEqual(["mapDots destructures an event's coordinate"]);
+    const derived = src.replace(at, '    const block = latLngToCell(41.6, -87.6, 9);\n');
+    expect(zoomFindings(derived)).toEqual(['mapDots derives a cell from a point']);
     const shapeAt = 'export interface ZoomEvent extends AttendeeMapItem {\n';
     expect(src.includes(shapeAt), 'the injection point moved').toBe(true);
     expect(zoomFindings(src.replace(shapeAt, `${shapeAt}  lat?: unknown;\n`))).not.toEqual([]);

@@ -36,16 +36,20 @@ runtime:
           expect(withPoint).to.eql([]);
         });
         // The next reads use one listed event with a cell, in the map's forward
-        // window where there is one (the map lists only those), else any.
+        // window (the map lists only those).
         const now = Date.now();
         const inWindow = placed.filter(function (i) {
           const t = Date.parse(String(i.startDateISO || i.start_date || ''));
           return (i.phase === 'pre_event' || i.phase === 'live') && t >= now - 86400000 && t <= now + 85 * 86400000;
         });
-        const pick = inWindow[0] || placed[0] || {};
+        // The map read (seq 50) must check real pins, so a run with no such
+        // event fails here, by name, instead of passing on an empty map.
+        test('OSE-2197: a listed event with a cell is in the map\'s forward window', function () {
+          expect(inWindow.length).to.be.above(0);
+        });
+        const pick = inWindow[0] || {};
         bru.setVar('cellOnlyListedId', pick.id || 'missing-listed-event');
         bru.setVar('cellOnlyCell', pick.h3_res7 || 'missing-cell');
-        bru.setVar('cellOnlyInWindow', inWindow[0] ? '1' : '0');
 
 settings:
   encodeUrl: true

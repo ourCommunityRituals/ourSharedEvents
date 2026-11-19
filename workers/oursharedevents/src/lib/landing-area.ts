@@ -204,17 +204,21 @@ function categoryOf(
 }
 
 function modalityOf(item: LandingAreaItem): 'online' | 'inperson' {
-  const hasGeo = isFiniteNum(item.lat) && isFiniteNum(item.lon);
+  // A place is its cell (OSE-2197): the event's res-9 block, stored or derived.
+  const hasGeo = blockOf(item) !== null;
   const hasPlace = str(item.venue).trim() !== '' || str(item.location).trim() !== '';
   return hasGeo || hasPlace ? 'inperson' : 'online';
 }
 
 /**
- * Where the sun is reckoned for an event: its own point, else the middle of its
- * area. The place of the event, never the visitor (invariant 3).
+ * Where the sun is reckoned for an event: the centre of its res-9 block (blockOf),
+ * else the middle of its area. The place of the event as a cell, never its stored
+ * point (OSE-2197, owner 2026-11-19: "it should go to the Res9 if possible"), and
+ * never the visitor (invariant 3).
  */
 function sunPlace(e: LandingAreaItem): [number, number] | null {
-  if (isFiniteNum(e.lat) && isFiniteNum(e.lon)) return [Number(e.lat), Number(e.lon)];
+  const block = blockOf(e);
+  if (block !== null) return cellToLatLng(block);
   const cell = str(e.h3_res7);
   return isValidCell(cell) ? cellToLatLng(cell) : null;
 }

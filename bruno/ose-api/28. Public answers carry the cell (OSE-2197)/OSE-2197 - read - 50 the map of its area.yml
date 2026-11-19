@@ -33,8 +33,8 @@ runtime:
             expect(i, String(i.id)).to.not.have.any.keys('lat', 'lon');
           });
         });
-        test('OSE-2197: the listed event in the forward window is on its map', function () {
-          if (bru.getVar('cellOnlyInWindow') !== '1') return;
+        test('OSE-2197: the map has pins, and the listed event in the forward window is one of them', function () {
+          expect(items.length).to.be.above(0);
           const ids = items.map(function (i) { return i.id; });
           expect(ids).to.include(bru.getVar('cellOnlyListedId'));
         });
