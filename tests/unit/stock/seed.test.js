@@ -155,7 +155,8 @@ describe('the committed seed', () => {
       'mount-greenwood': 0,
       beverly: 0,
       'morgan-park': 6,
-      area: 242,
+      sawyer: 5,
+      area: 281,
     });
   });
 

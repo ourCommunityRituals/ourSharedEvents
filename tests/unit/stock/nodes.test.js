@@ -9,7 +9,7 @@ describe('stock/nodes.json', () => {
   // Owner, 2026-11-05: Mount Greenwood stays, deliberately empty. Owner, 2026-11-19:
   // Beverly and Morgan Park (its own place) are nodes, and `area` holds every row whose
   // address is in no boundary (it has cells and no polygon).
-  test('has exactly the five nodes, Beverly, Morgan Park and the wider area', () => {
+  test('has exactly the five nodes, Beverly, Morgan Park, Sawyer and the wider area', () => {
     expect(nodes.map((n) => n.id).sort()).toEqual([
       'area',
       'auburn-gresham',
@@ -19,6 +19,7 @@ describe('stock/nodes.json', () => {
       'morgan-park',
       'mount-greenwood',
       'oak-lawn',
+      'sawyer',
     ]);
   });
 

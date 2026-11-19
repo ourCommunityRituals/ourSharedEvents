@@ -1,5 +1,5 @@
 {
-  "note": "Owner, 2026-11-06: the permanent testing totals per place (stock events). Owner, 2026-11-07: Auburn Gresham holds 8 stock events, so its town search reads 9 with CI's permanent test-event-001 (Beverly Arts Center, zip 60643, which the owner's Auburn Gresham and Beverly towns both include). make-seed trims the seed to exactly these; every test and check reads them through the seed. Change them only on the owner's word. Owner, 2026-11-19 (yes to appending the survey rows): the totals follow the appended rows. Beverly holds no events because its one known venue, the Beverly Arts Center, has an address inside the Morgan Park boundary and the address decides. The `area` node holds every row whose address is in no node's boundary.",
+  "note": "Owner, 2026-11-06: the permanent testing totals per place (stock events). Owner, 2026-11-07: Auburn Gresham holds 8 stock events, so its town search reads 9 with CI's permanent test-event-001 (Beverly Arts Center, zip 60643, which the owner's Auburn Gresham and Beverly towns both include). make-seed trims the seed to exactly these; every test and check reads them through the seed. Change them only on the owner's word. Owner, 2026-11-19 (yes to appending the survey rows): the totals follow the appended rows. Beverly holds no events because its one known venue, the Beverly Arts Center, has an address inside the Morgan Park boundary and the address decides. The `area` node holds every row whose address is in no node's boundary. Owner, 2026-11-19 (yes to a second round and a Sawyer node): 44 events and 88 businesses from the second small-places round are appended and Sawyer (ZIP 49125, a 4 km circle round the village centre) is a node.",
   "totals": {
     "blue-island": 32,
     "auburn-gresham": 16,
@@ -8,7 +8,8 @@
     "mount-greenwood": 0,
     "beverly": 0,
     "morgan-park": 6,
-    "area": 242
+    "area": 281,
+    "sawyer": 5
   },
   "searches": {
     "60406": 32,
@@ -22,7 +23,8 @@
     "Beverly": 23,
     "Evergreen Park": 26,
     "Oak Lawn": 31,
-    "Mount Greenwood": 0
+    "Mount Greenwood": 0,
+    "49125": 5
   },
   "fixtures": {
     "note": "Events on stg that are not stock but fall in a search, so the search reads stock + these. test-event-001 (CI fixture, Community Game Night, Beverly Arts Center) is placed in zip 60643 on stg.",

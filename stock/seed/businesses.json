@@ -1650,5 +1650,621 @@
     "zip": "49113",
     "place": "Galien",
     "anchor": false
+  },
+  {
+    "name": "Village of Barrington Hills Village Hall",
+    "address": "112 Algonquin Rd, Barrington Hills, IL 60010",
+    "zip": "60010",
+    "place": "Barrington Hills",
+    "anchor": true
+  },
+  {
+    "name": "Village of Hainesville Village Hall",
+    "address": "100 N Hainesville Rd, Hainesville, IL 60030",
+    "zip": "60030",
+    "place": "Hainesville",
+    "anchor": true
+  },
+  {
+    "name": "Port Barrington Village Hall",
+    "address": "69 S Circle Ave, Port Barrington, IL 60010",
+    "zip": "60010",
+    "place": "Port Barrington",
+    "anchor": true
+  },
+  {
+    "name": "Hermann Park (Port Barrington)",
+    "address": "69 S Circle Ave, Port Barrington, IL 60010",
+    "zip": "60010",
+    "place": "Port Barrington",
+    "anchor": false
+  },
+  {
+    "name": "Ogden Dunes Town Hall and Community Room",
+    "address": "115 Hillcrest Rd, Ogden Dunes, IN 46368",
+    "zip": "46368",
+    "place": "Ogden Dunes",
+    "anchor": true
+  },
+  {
+    "name": "Ogden Dunes Community Church",
+    "address": "116 Hillcrest Rd, Ogden Dunes, IN 46368",
+    "zip": "46368",
+    "place": "Ogden Dunes",
+    "anchor": false
+  },
+  {
+    "name": "Palos Park Public Library",
+    "address": "12330 Forest Glen Blvd, Palos Park, IL 60464",
+    "zip": "60464",
+    "place": "Palos Park",
+    "anchor": true
+  },
+  {
+    "name": "Palos Park Recreation Center",
+    "address": "8901 W 123rd St, Palos Park, IL 60464",
+    "zip": "60464",
+    "place": "Palos Park",
+    "anchor": true
+  },
+  {
+    "name": "Brushwood Center at Ryerson Woods",
+    "address": "21850 Riverwoods Rd, Riverwoods, IL 60015",
+    "zip": "60015",
+    "place": "Riverwoods",
+    "anchor": true
+  },
+  {
+    "name": "Dundee Township Park District: Sleepy Hollow Center",
+    "address": "875 Winmoor Dr, Sleepy Hollow, IL 60118",
+    "zip": "60118",
+    "place": "Sleepy Hollow",
+    "anchor": true
+  },
+  {
+    "name": "Kaneville Public Library",
+    "address": "2S101 Harter Rd, Kaneville, IL 60144",
+    "zip": "60144",
+    "place": "Kaneville",
+    "anchor": true
+  },
+  {
+    "name": "Big Rock Park District Building (village board meets here)",
+    "address": "7S405 Madison St, Big Rock, IL 60511",
+    "zip": "60511",
+    "place": "Big Rock",
+    "anchor": true
+  },
+  {
+    "name": "Village of Kildeer Village Hall",
+    "address": "21911 N Quentin Rd, Kildeer, IL 60047",
+    "zip": "60047",
+    "place": "Kildeer",
+    "anchor": true
+  },
+  {
+    "name": "Village of Indian Head Park Village Hall",
+    "address": "201 Acacia Dr, Indian Head Park, IL 60525",
+    "zip": "60525",
+    "place": "Indian Head Park",
+    "anchor": true
+  },
+  {
+    "name": "Village of Rochester Village Offices",
+    "address": "300 W Spring St, Rochester, WI 53167",
+    "zip": "53167",
+    "place": "Rochester",
+    "anchor": true
+  },
+  {
+    "name": "Village of Wadsworth Village Hall",
+    "address": "14155 W Wadsworth Rd, Wadsworth, IL 60083",
+    "zip": "60083",
+    "place": "Wadsworth",
+    "anchor": true
+  },
+  {
+    "name": "Newport Township Fire Protection District",
+    "address": "39010 N Caroline Ave, Wadsworth, IL 60083",
+    "zip": "60083",
+    "place": "Wadsworth",
+    "anchor": false
+  },
+  {
+    "name": "Eastside Cafe",
+    "address": "311 Barrington Ave, Unit A, East Dundee, IL 60118",
+    "zip": "60118",
+    "place": "East Dundee",
+    "anchor": false
+  },
+  {
+    "name": "West Dundee Village Hall",
+    "address": "102 S Second St, West Dundee, IL 60118",
+    "zip": "60118",
+    "place": "West Dundee",
+    "anchor": false
+  },
+  {
+    "name": "RocHaus",
+    "address": "96 W Main St, West Dundee, IL 60118",
+    "zip": "60118",
+    "place": "West Dundee",
+    "anchor": false
+  },
+  {
+    "name": "Drury Lane Theatre",
+    "address": "100 Drury Ln, Oakbrook Terrace, IL 60181",
+    "zip": "60181",
+    "place": "Oakbrook Terrace",
+    "anchor": true
+  },
+  {
+    "name": "Oakbrook Terrace Park District Fitness Center",
+    "address": "1 Parkview Plaza, Oakbrook Terrace, IL 60181",
+    "zip": "60181",
+    "place": "Oakbrook Terrace",
+    "anchor": true
+  },
+  {
+    "name": "Oakbrook Terrace Park District Heritage Center",
+    "address": "1S325 Ardmore Ave, Oakbrook Terrace, IL 60181",
+    "zip": "60181",
+    "place": "Oakbrook Terrace",
+    "anchor": false
+  },
+  {
+    "name": "Lake View Nature Center (Oakbrook Terrace Park District)",
+    "address": "17W063 Hodges Rd, Oakbrook Terrace, IL 60181",
+    "zip": "60181",
+    "place": "Oakbrook Terrace",
+    "anchor": false
+  },
+  {
+    "name": "Town of Geneva Town Hall",
+    "address": "N3496 Como Rd, Lake Geneva, WI 53147",
+    "zip": "53147",
+    "place": "Como",
+    "anchor": true
+  },
+  {
+    "name": "Village of Oakwood Hills Village Hall",
+    "address": "3020 North Park Dr, Oakwood Hills, IL 60013",
+    "zip": "60013",
+    "place": "Oakwood Hills",
+    "anchor": true
+  },
+  {
+    "name": "Village of Prairie Grove Village Hall",
+    "address": "3125 Barreville Rd, Prairie Grove, IL 60012",
+    "zip": "60012",
+    "place": "Prairie Grove",
+    "anchor": true
+  },
+  {
+    "name": "Village of Ford Heights Municipal Building",
+    "address": "1343 Ellis Ave, Ford Heights, IL 60411",
+    "zip": "60411",
+    "place": "Ford Heights",
+    "anchor": true
+  },
+  {
+    "name": "Village of Hodgkins Administration Center",
+    "address": "8990 Lyons St, Hodgkins, IL 60525",
+    "zip": "60525",
+    "place": "Hodgkins",
+    "anchor": true
+  },
+  {
+    "name": "Hodgkins Public Library",
+    "address": "6500 Wenz Ave, Hodgkins, IL 60525",
+    "zip": "60525",
+    "place": "Hodgkins",
+    "anchor": false
+  },
+  {
+    "name": "Antioch Chamber of Commerce",
+    "address": "485 Lake St, Antioch, IL 60002",
+    "zip": "60002",
+    "place": "Antioch",
+    "anchor": false
+  },
+  {
+    "name": "Kringle's (Christmas at Kringle's host)",
+    "address": "510 Orchard St, Antioch, IL 60002",
+    "zip": "60002",
+    "place": "Antioch",
+    "anchor": false
+  },
+  {
+    "name": "Lakes Community High School",
+    "address": "1600 Eagle Way Dr, Lake Villa, IL 60046",
+    "zip": "60046",
+    "place": "Antioch",
+    "anchor": false
+  },
+  {
+    "name": "Village of Bull Valley Village Hall and Police Department",
+    "address": "1904 S Cherry Valley Rd, Bull Valley, IL 60098",
+    "zip": "60098",
+    "place": "Bull Valley",
+    "anchor": true
+  },
+  {
+    "name": "Village of Lily Lake Village Office",
+    "address": "43W955 Twilight Ln, Ste A, St Charles, IL 60175",
+    "zip": "60175",
+    "place": "Lily Lake",
+    "anchor": true
+  },
+  {
+    "name": "Elburn & Countryside Fire Protection District Station 1",
+    "address": "200 E Route 38, Elburn, IL 60119",
+    "zip": "60119",
+    "place": "Elburn",
+    "anchor": false
+  },
+  {
+    "name": "Village of Ringwood Village Hall",
+    "address": "6000 Barnard Mill Rd, Ringwood, IL 60072",
+    "zip": "60072",
+    "place": "Ringwood",
+    "anchor": true
+  },
+  {
+    "name": "Village of Holiday Hills Village Hall",
+    "address": "1304 Sunset Dr, Holiday Hills, IL 60051",
+    "zip": "60051",
+    "place": "Holiday Hills",
+    "anchor": true
+  },
+  {
+    "name": "Village of Fox River Grove Village Hall",
+    "address": "305 Illinois St, Fox River Grove, IL 60021",
+    "zip": "60021",
+    "place": "Fox River Grove",
+    "anchor": true
+  },
+  {
+    "name": "Village of Stone Park Village Hall",
+    "address": "1825 N 32nd Ave, Stone Park, IL 60165",
+    "zip": "60165",
+    "place": "Stone Park",
+    "anchor": true
+  },
+  {
+    "name": "Burnham Village Community Center",
+    "address": "14020 S Torrence Ave, Burnham, IL 60633",
+    "zip": "60633",
+    "place": "Burnham",
+    "anchor": true
+  },
+  {
+    "name": "Union Grove Municipal Center (Village of Yorkville offices)",
+    "address": "925 15th Ave, Union Grove, WI 53182",
+    "zip": "53182",
+    "place": "Yorkville",
+    "anchor": true
+  },
+  {
+    "name": "Union Grove-Yorkville Fire Department station",
+    "address": "700 Main St, Union Grove, WI 53182",
+    "zip": "53182",
+    "place": "Yorkville",
+    "anchor": false
+  },
+  {
+    "name": "Paddock Lake Village Hall",
+    "address": "6969 236th Ave, Paddock Lake, WI 53168",
+    "zip": "53168",
+    "place": "Paddock Lake",
+    "anchor": true
+  },
+  {
+    "name": "Thornton Public Library",
+    "address": "115 E. Margaret St, Thornton, IL 60476",
+    "zip": "60476",
+    "place": "Thornton",
+    "anchor": true
+  },
+  {
+    "name": "Porter County Public Library - Kouts Branch",
+    "address": "101 E Daumer Rd, Kouts, IN 46347",
+    "zip": "46347",
+    "place": "Kouts",
+    "anchor": true
+  },
+  {
+    "name": "Kankakee Valley Historical Society - Collier Lodge",
+    "address": "1097 Baum's Bridge Rd, Kouts, IN 46347",
+    "zip": "46347",
+    "place": "Kouts",
+    "anchor": false
+  },
+  {
+    "name": "Merrionette Park Village Hall",
+    "address": "11720 S Kedzie Ave, Merrionette Park, IL 60803",
+    "zip": "60803",
+    "place": "Merrionette Park",
+    "anchor": true
+  },
+  {
+    "name": "East Hazel Crest Municipal Building",
+    "address": "1904 W 174th St, East Hazel Crest, IL 60429",
+    "zip": "60429",
+    "place": "East Hazel Crest",
+    "anchor": true
+  },
+  {
+    "name": "Dellwood Park (Lockport Township Park District)",
+    "address": "199 E Woods Dr, Lockport, IL 60441",
+    "zip": "60441",
+    "place": "Lockport",
+    "anchor": true
+  },
+  {
+    "name": "Lockport Township Park District DPCC",
+    "address": "1811 S Lawrence Ave, Lockport, IL 60441",
+    "zip": "60441",
+    "place": "Lockport",
+    "anchor": false
+  },
+  {
+    "name": "Prairie Bluff Public Golf Club",
+    "address": "19433 Renwick Rd, Crest Hill, IL 60403",
+    "zip": "60403",
+    "place": "Crest Hill",
+    "anchor": false
+  },
+  {
+    "name": "McCullom Lake Village Hall",
+    "address": "4811 W Orchard Dr, McCullom Lake, IL 60050",
+    "zip": "60050",
+    "place": "McCullom Lake",
+    "anchor": true
+  },
+  {
+    "name": "Bedford Park Village Hall",
+    "address": "6701 S Archer Rd, Bedford Park, IL 60501",
+    "zip": "60501",
+    "place": "Bedford Park",
+    "anchor": true
+  },
+  {
+    "name": "Village of Golf Village Hall",
+    "address": "1 Briar Rd, Golf, IL 60029",
+    "zip": "60029",
+    "place": "Golf",
+    "anchor": true
+  },
+  {
+    "name": "Dune Acres Municipal Building",
+    "address": "1 East Rd, Dune Acres, IN 46304",
+    "zip": "46304",
+    "place": "Dune Acres",
+    "anchor": true
+  },
+  {
+    "name": "Plum Creek Nature Center (Forest Preserve District of Will County)",
+    "address": "27064 S Dutton Rd, Beecher, IL 60401",
+    "zip": "60401",
+    "place": "Beecher",
+    "anchor": true
+  },
+  {
+    "name": "Riley Town Hall",
+    "address": "9312 Riley Rd, Marengo, IL 60152",
+    "zip": "60152",
+    "place": "Riley",
+    "anchor": true
+  },
+  {
+    "name": "Dellwood Park Community Center (Lockport Township Park District)",
+    "address": "1811 S Lawrence Ave, Lockport, IL 60441",
+    "zip": "60441",
+    "place": "Lockport",
+    "anchor": true
+  },
+  {
+    "name": "Fairmont Community Center (Lockport Township Park District)",
+    "address": "525 Barry Ave, Lockport, IL 60441",
+    "zip": "60441",
+    "place": "Lockport",
+    "anchor": false
+  },
+  {
+    "name": "Prairie Bluff Public Golf Club (banquet room)",
+    "address": "19433 Renwick Rd, Crest Hill, IL 60403",
+    "zip": "60403",
+    "place": "Lockport",
+    "anchor": false
+  },
+  {
+    "name": "Village of Bannockburn Village Hall",
+    "address": "2275 Telegraph Rd, Bannockburn, IL 60015",
+    "zip": "60015",
+    "place": "Bannockburn",
+    "anchor": true
+  },
+  {
+    "name": "Robert W. Rolek Community Center (Round Lake Area Park District)",
+    "address": "814 Hart Rd, Round Lake, IL 60073",
+    "zip": "60073",
+    "place": "Round Lake Heights",
+    "anchor": true
+  },
+  {
+    "name": "Burns Harbor Town Hall",
+    "address": "1240 North Boo Rd, Burns Harbor, IN 46304",
+    "zip": "46304",
+    "place": "Burns Harbor",
+    "anchor": true
+  },
+  {
+    "name": "Lakeland Park (Burns Harbor Park Department)",
+    "address": "1200 Lakeland Park Dr, Burns Harbor, IN 46304",
+    "zip": "46304",
+    "place": "Burns Harbor",
+    "anchor": true
+  },
+  {
+    "name": "Village of Rockdale Village Hall",
+    "address": "79 Moen Ave, Rockdale, IL 60436",
+    "zip": "60436",
+    "place": "Rockdale",
+    "anchor": true
+  },
+  {
+    "name": "Grayslake Heritage Center and Museum (Grayslake Historical Society)",
+    "address": "164 Hawley St, Grayslake, IL 60030",
+    "zip": "60030",
+    "place": "Third Lake",
+    "anchor": false
+  },
+  {
+    "name": "Grant Township Center",
+    "address": "26725 W Molidor Rd, Ingleside, IL 60041",
+    "zip": "60041",
+    "place": "Long Lake",
+    "anchor": false
+  },
+  {
+    "name": "Irons Oaks Environmental Learning Center (Homewood-Flossmoor Park District)",
+    "address": "20000 Western Ave, Olympia Fields, IL 60461",
+    "zip": "60461",
+    "place": "Olympia Fields",
+    "anchor": false
+  },
+  {
+    "name": "Greenwood Township Office",
+    "address": "5211 Miller Rd, Wonder Lake, IL 60097",
+    "zip": "60097",
+    "place": "Greenwood",
+    "anchor": true
+  },
+  {
+    "name": "Taylor Complex (Village of Elmwood Park, WI)",
+    "address": "3131 Taylor Ave, Racine, WI 53405",
+    "zip": "53405",
+    "place": "Elmwood Park",
+    "anchor": true
+  },
+  {
+    "name": "Richmond Village Hall (Village of Richmond)",
+    "address": "5600 Hunter Drive, Richmond, IL 60071",
+    "zip": "60071",
+    "place": "Richmond",
+    "anchor": true
+  },
+  {
+    "name": "Village of North Barrington (tree lighting site)",
+    "address": "111 Old Barrington Road, North Barrington, IL 60010",
+    "zip": "60010",
+    "place": "North Barrington",
+    "anchor": true
+  },
+  {
+    "name": "Rosemont Village Hall and History Museum",
+    "address": "9501 Technology Blvd, Suite 4000, Rosemont, IL 60018",
+    "zip": "60018",
+    "place": "Rosemont",
+    "anchor": true
+  },
+  {
+    "name": "Rosemont Theatre",
+    "address": "5400 N River Rd, Rosemont, IL 60018",
+    "zip": "60018",
+    "place": "Rosemont",
+    "anchor": true
+  },
+  {
+    "name": "Parkway Bank Park",
+    "address": "5501 Park Place, Rosemont, IL 60018",
+    "zip": "60018",
+    "place": "Rosemont",
+    "anchor": true
+  },
+  {
+    "name": "Bub City Rosemont",
+    "address": "5441 Park Pl, Rosemont, IL 60018",
+    "zip": "60018",
+    "place": "Rosemont",
+    "anchor": false
+  },
+  {
+    "name": "Kenilworth Historical Society (Stuart Memorial Building)",
+    "address": "415 Kenilworth Ave, Kenilworth, IL 60043",
+    "zip": "60043",
+    "place": "Kenilworth",
+    "anchor": true
+  },
+  {
+    "name": "Kenilworth Assembly Hall",
+    "address": "410 Kenilworth Avenue, Kenilworth, IL 60043",
+    "zip": "60043",
+    "place": "Kenilworth",
+    "anchor": false
+  },
+  {
+    "name": "Illinois Railway Museum",
+    "address": "7000 Olson Road, Union, IL 60180",
+    "zip": "60180",
+    "place": "Union",
+    "anchor": true
+  },
+  {
+    "name": "McHenry County Historical Society and Museum",
+    "address": "6422 Main St, Union, IL 60180",
+    "zip": "60180",
+    "place": "Union",
+    "anchor": true
+  },
+  {
+    "name": "Cortland Community Library",
+    "address": "63 S Somonauk Road, Cortland, IL 60112",
+    "zip": "60112",
+    "place": "Cortland",
+    "anchor": true
+  },
+  {
+    "name": "Fox Lake Lakefront Park",
+    "address": "10 Riverview Ave, Fox Lake, IL 60020",
+    "zip": "60020",
+    "place": "Fox Lake",
+    "anchor": false
+  },
+  {
+    "name": "Antioch Village Hall",
+    "address": "935 Skidmore Drive, Antioch, IL 60002",
+    "zip": "60002",
+    "place": "Antioch",
+    "anchor": true
+  },
+  {
+    "name": "Sequoit Creek Park (Antioch)",
+    "address": "845 Main Street, Antioch, IL 60002",
+    "zip": "60002",
+    "place": "Antioch",
+    "anchor": false
+  },
+  {
+    "name": "Farm of Lights, Genoa City",
+    "address": "40700 119th St, Genoa City, WI 53128",
+    "zip": "53128",
+    "place": "Genoa City",
+    "anchor": false
+  },
+  {
+    "name": "Gladys Fox Museum (Lockport Township Park District)",
+    "address": "231 E 9th St, Lockport, IL 60441",
+    "zip": "60441",
+    "place": "Lockport",
+    "anchor": false
+  },
+  {
+    "name": "Challenge Fitness (Lockport Township Park District)",
+    "address": "2021 Lawrence Ave, Lockport, IL 60441",
+    "zip": "60441",
+    "place": "Lockport",
+    "anchor": false
   }
 ]

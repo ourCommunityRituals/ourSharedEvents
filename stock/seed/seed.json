@@ -1667,6 +1667,81 @@
       "source_url": "https://thebeverlyartscenter.com/event/dancing-queen-an-abba-salute/"
     },
     {
+      "offsetDays": 14,
+      "localStart": "16:30",
+      "durationMinutes": 120,
+      "venue": "The Historian Lounge",
+      "address": "12856 Red Arrow Highway, Sawyer, MI 49125",
+      "lat": 41.88635791516,
+      "lng": -86.609820824776,
+      "node": "sawyer",
+      "sector": "private",
+      "event_type_id": "etr-biz-workshop",
+      "title": "Holiday cocktail and mocktail making class",
+      "summary": "Hands-on class where guests learn to mix three holiday drinks and take the recipes home; paid, limited seating.",
+      "source_url": "https://business.harborcountry.org/events/details/tequila-for-the-holidays-22497"
+    },
+    {
+      "offsetDays": 27,
+      "localStart": "17:00",
+      "durationMinutes": 60,
+      "venue": "Local Pour",
+      "address": "12857 Red Arrow Hwy, Sawyer, MI 49125",
+      "lat": 41.886676537929,
+      "lng": -86.609431988969,
+      "node": "sawyer",
+      "sector": "private",
+      "event_type_id": "etr-biz-workshop",
+      "title": "Wine Education Wednesday tasting class",
+      "summary": "Monthly third-Wednesday class on how to taste wine and tell varietals apart, with five tastes included.",
+      "source_url": "https://www.localpourmi.com/wineeducationwed"
+    },
+    {
+      "offsetDays": 29,
+      "localStart": "17:30",
+      "durationMinutes": 120,
+      "venue": "Local Pour",
+      "address": "12857 Red Arrow Hwy, Sawyer, MI 49125",
+      "lat": 41.886676537929,
+      "lng": -86.609431988969,
+      "node": "sawyer",
+      "sector": "private",
+      "event_type_id": "etr-ent-karaoke",
+      "title": "Free monthly karaoke night at the tasting room",
+      "summary": "Third-Friday karaoke session at a Michigan-made wine, beer and spirits tasting room; free to enter.",
+      "source_url": "https://swmichigan.org/events/karaoke-at-local-pour/"
+    },
+    {
+      "offsetDays": 62,
+      "localStart": "17:00",
+      "durationMinutes": 60,
+      "venue": "Local Pour",
+      "address": "12857 Red Arrow Hwy, Sawyer, MI 49125",
+      "lat": 41.886676537929,
+      "lng": -86.609431988969,
+      "node": "sawyer",
+      "sector": "private",
+      "event_type_id": "etr-biz-workshop",
+      "title": "Wine Education Wednesday tasting class",
+      "summary": "Monthly third-Wednesday class on how to taste wine and tell varietals apart, with five tastes included.",
+      "source_url": "https://www.localpourmi.com/wineeducationwed"
+    },
+    {
+      "offsetDays": 90,
+      "localStart": "17:00",
+      "durationMinutes": 60,
+      "venue": "Local Pour",
+      "address": "12857 Red Arrow Hwy, Sawyer, MI 49125",
+      "lat": 41.886676537929,
+      "lng": -86.609431988969,
+      "node": "sawyer",
+      "sector": "private",
+      "event_type_id": "etr-biz-workshop",
+      "title": "Wine Education Wednesday tasting class",
+      "summary": "Monthly third-Wednesday class on how to taste wine and tell varietals apart, with five tastes included.",
+      "source_url": "https://www.localpourmi.com/wineeducationwed"
+    },
+    {
       "offsetDays": 0,
       "localStart": "09:00",
       "durationMinutes": null,
@@ -1725,6 +1800,21 @@
       "title": "Weekday drop-in softball at an indoor field",
       "summary": "Open indoor softball session for adults on the dome field.",
       "source_url": "https://rockfordparkdistrict.org/sports"
+    },
+    {
+      "offsetDays": 0,
+      "localStart": "16:00",
+      "durationMinutes": 165,
+      "venue": "Prairie Bluff Public Golf Club",
+      "address": "19433 Renwick Rd, Crest Hill, IL 60403",
+      "lat": 41.5927602,
+      "lng": -88.0887637,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-art-music",
+      "title": "Dinner and tribute concert matinee at golf club",
+      "summary": "Park district seniors programme: plated dinner followed by a tribute-act concert in the banquet room; registration and fee.",
+      "source_url": "https://lockportpark.org/app/programs-news-events/"
     },
     {
       "offsetDays": 0,
@@ -1848,6 +1938,21 @@
     },
     {
       "offsetDays": 0,
+      "localStart": "18:30",
+      "durationMinutes": 90,
+      "venue": "Thornton Public Library",
+      "address": "115 E. Margaret St, Thornton, IL 60476",
+      "lat": 41.568344118076,
+      "lng": -87.611914929041,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Public library trustee board meeting",
+      "summary": "Regular open meeting of the library's board of trustees at the library.",
+      "source_url": "https://www.thorntonlibrary.org/mc-events/library-trustee-board-meeting/"
+    },
+    {
+      "offsetDays": 0,
       "localStart": "19:00",
       "durationMinutes": 120,
       "venue": "Radio Milwaukee",
@@ -1860,6 +1965,21 @@
       "title": "Live personal storytelling evening",
       "summary": "Neighbours tell true stories on a theme before a live audience.",
       "source_url": "https://www.exfabula.org/product/afterdark-for-the-culture-11-19/"
+    },
+    {
+      "offsetDays": 0,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Richmond Village Hall",
+      "address": "5600 Hunter Drive, Richmond, IL 60071",
+      "lat": 42.466455452336,
+      "lng": -88.306711914811,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Village Board regular meeting",
+      "summary": "Regular public meeting of the village board, held on alternate Thursdays at village hall.",
+      "source_url": "https://richmond-il.com/events/"
     },
     {
       "offsetDays": 0,
@@ -2000,6 +2120,21 @@
       "offsetDays": 1,
       "localStart": "18:00",
       "durationMinutes": 120,
+      "venue": "Plum Creek Nature Center",
+      "address": "27064 S Dutton Rd, Beecher, IL 60401",
+      "lat": 41.396431492016,
+      "lng": -87.603631764471,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-ent-trivia",
+      "title": "Nature trivia night for adults 21 and over",
+      "summary": "Free evening of nature trivia at the forest preserve nature center; registration required.",
+      "source_url": "https://www.reconnectwithnature.org/news-events/event-calendar"
+    },
+    {
+      "offsetDays": 1,
+      "localStart": "18:00",
+      "durationMinutes": 120,
       "venue": "Krasl Art Center",
       "address": "707 Lake Blvd, St. Joseph, MI 49085",
       "lat": 42.106741534114,
@@ -2010,6 +2145,21 @@
       "title": "Opening night for a community and members exhibition",
       "summary": "Evening opening of a juried show of work by local and member artists.",
       "source_url": "https://krasl.org/event/2026-community-%e2%87%84-members-show/"
+    },
+    {
+      "offsetDays": 1,
+      "localStart": "18:00",
+      "durationMinutes": 60,
+      "venue": "Thornton Public Library",
+      "address": "115 E. Margaret St, Thornton, IL 60476",
+      "lat": 41.568344118076,
+      "lng": -87.611914929041,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-lit-bookclub",
+      "title": "Silent Book Club evening at the library",
+      "summary": "Adults bring their own reading and read quietly together in the library's comfy chairs; no registration needed.",
+      "source_url": "https://www.thorntonlibrary.org/mc-events/silent-book-club-5/"
     },
     {
       "offsetDays": 1,
@@ -2928,6 +3078,21 @@
     },
     {
       "offsetDays": 12,
+      "localStart": "18:30",
+      "durationMinutes": null,
+      "venue": "Barrington Hills Village Hall",
+      "address": "112 Algonquin Rd, Barrington Hills, IL 60010",
+      "lat": 42.143285700324,
+      "lng": -88.245769563632,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Equestrian Commission public meeting",
+      "summary": "Village advisory commission meets in open session at Village Hall; agenda posted by the village.",
+      "source_url": "https://barringtonhills-il.gov/event/equestrian-commission-17/"
+    },
+    {
+      "offsetDays": 12,
       "localStart": "19:30",
       "durationMinutes": 90,
       "venue": "Chicago Gaelic Park",
@@ -3063,21 +3228,6 @@
     },
     {
       "offsetDays": 14,
-      "localStart": "16:30",
-      "durationMinutes": 120,
-      "venue": "The Historian Lounge",
-      "address": "12856 Red Arrow Highway, Sawyer, MI 49125",
-      "lat": 41.88635791516,
-      "lng": -86.609820824776,
-      "node": "area",
-      "sector": "private",
-      "event_type_id": "etr-biz-workshop",
-      "title": "Holiday cocktail and mocktail making class",
-      "summary": "Hands-on class where guests learn to mix three holiday drinks and take the recipes home; paid, limited seating.",
-      "source_url": "https://business.harborcountry.org/events/details/tequila-for-the-holidays-22497"
-    },
-    {
-      "offsetDays": 14,
       "localStart": "17:00",
       "durationMinutes": 90,
       "venue": "SS Peter & Paul Catholic Church",
@@ -3138,6 +3288,36 @@
     },
     {
       "offsetDays": 14,
+      "localStart": "18:30",
+      "durationMinutes": null,
+      "venue": "Village of Bull Valley",
+      "address": "1904 S Cherry Valley Rd, Bull Valley, IL 60098",
+      "lat": 42.300954558083,
+      "lng": -88.352555291463,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Bull Valley Planning and Zoning Commission public meeting",
+      "summary": "Monthly planning and zoning commission meeting open to the public on the first Thursday evening; the village asks callers to confirm the date.",
+      "source_url": "https://www.thevillageofbullvalley.com/"
+    },
+    {
+      "offsetDays": 14,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Richmond Village Hall",
+      "address": "5600 Hunter Drive, Richmond, IL 60071",
+      "lat": 42.466455452336,
+      "lng": -88.306711914811,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Village Board regular meeting",
+      "summary": "Regular public meeting of the village board, held on alternate Thursdays at village hall.",
+      "source_url": "https://richmond-il.com/events/"
+    },
+    {
+      "offsetDays": 14,
       "localStart": "19:15",
       "durationMinutes": 75,
       "venue": "Milwaukee Art Museum",
@@ -3168,6 +3348,21 @@
     },
     {
       "offsetDays": 15,
+      "localStart": "18:00",
+      "durationMinutes": 120,
+      "venue": "RocHaus",
+      "address": "96 W Main St, West Dundee, IL 60118",
+      "lat": 42.098144703968,
+      "lng": -88.277148033715,
+      "node": "area",
+      "sector": "private",
+      "event_type_id": "etr-art-music",
+      "title": "Fezziwig's Ball: live music and mini holiday market",
+      "summary": "Free holiday evening at a downtown venue after the tree lighting: live student and band music, a small market, cocoa, photos and games.",
+      "source_url": "https://dickensindundee.org/"
+    },
+    {
+      "offsetDays": 15,
       "localStart": "19:00",
       "durationMinutes": null,
       "venue": "The Acorn",
@@ -3183,6 +3378,21 @@
     },
     {
       "offsetDays": 15,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "West Dundee Village Hall",
+      "address": "102 S Second St, West Dundee, IL 60118",
+      "lat": 42.098028954016,
+      "lng": -88.278664449354,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-fnd-auction",
+      "title": "Shop With a Cop holiday raffle drawing",
+      "summary": "Drawing for a raffle of cash, electronics and other prizes; tickets $5 each or five for $20, proceeds fund a children's holiday shopping event.",
+      "source_url": "https://dickensindundee.org/"
+    },
+    {
+      "offsetDays": 15,
       "localStart": "19:30",
       "durationMinutes": 180,
       "venue": "The Abbey Resort",
@@ -3195,6 +3405,51 @@
       "title": "Friday night live music at Bar West",
       "summary": "Weekly Friday evening live music set in the resort's Bar West lounge.",
       "source_url": "https://www.theabbeyresort.com/events"
+    },
+    {
+      "offsetDays": 15,
+      "localStart": "21:00",
+      "durationMinutes": null,
+      "venue": "RocHaus",
+      "address": "96 W Main St, West Dundee, IL 60118",
+      "lat": 42.098144703968,
+      "lng": -88.277148033715,
+      "node": "area",
+      "sector": "private",
+      "event_type_id": "etr-art-music",
+      "title": "Pop-punk tribute band night (21+, ticketed)",
+      "summary": "Late show by a tribute band as part of the Dundees' holiday kick-off weekend; ticketed, ages 21 and up.",
+      "source_url": "https://dickensindundee.org/"
+    },
+    {
+      "offsetDays": 16,
+      "localStart": "09:00",
+      "durationMinutes": 360,
+      "venue": "Bethlehem Lutheran Church",
+      "address": "410 W Main St, West Dundee, IL 60118",
+      "lat": 42.098160426528,
+      "lng": -88.281438688879,
+      "node": "area",
+      "sector": "private",
+      "event_type_id": "etr-mkt-craft",
+      "title": "Dickens weekend bake sale, craft bazaar and vintage Christmas sale",
+      "summary": "Handmade items, vintage jewelry, baked goods, and a historical society sale of new and used Christmas items, with soup and sandwich lunch on site.",
+      "source_url": "https://dickensindundee.org/"
+    },
+    {
+      "offsetDays": 16,
+      "localStart": "10:00",
+      "durationMinutes": 1860,
+      "venue": "Brushwood Center at Ryerson Woods",
+      "address": "21850 Riverwoods Rd, Riverwoods, IL 60015",
+      "lat": 42.200778589752,
+      "lng": -87.906215607536,
+      "node": "area",
+      "sector": "private",
+      "event_type_id": "etr-mkt-craft",
+      "title": "Nature-inspired holiday art market, in-person weekend",
+      "summary": "Two-day in-person sale of handmade, nature-themed work from local makers at the nature center's historic house.",
+      "source_url": "https://brushwoodcenter.org/event/the-10th-annual-nature-inspired-holiday-art-market/"
     },
     {
       "offsetDays": 16,
@@ -3225,6 +3480,21 @@
       "title": "Police district council public meeting (Saturday morning)",
       "summary": "Open public meeting where residents can raise policing and safety concerns with their district council.",
       "source_url": "https://ccpsa.chicago.gov/public-meeting-calendar/event/3rd-district-council-december-12-2026/"
+    },
+    {
+      "offsetDays": 16,
+      "localStart": "10:30",
+      "durationMinutes": 180,
+      "venue": "Bethlehem Lutheran Church",
+      "address": "410 W Main St, West Dundee, IL 60118",
+      "lat": 42.098160426528,
+      "lng": -88.281438688879,
+      "node": "area",
+      "sector": "private",
+      "event_type_id": "etr-soc-dinner",
+      "title": "Soup and sandwich luncheon benefiting a local food pantry",
+      "summary": "Hot soup and sandwiches in the church hall during Dickens weekend; all money collected goes to the area food pantry.",
+      "source_url": "https://dickensindundee.org/"
     },
     {
       "offsetDays": 16,
@@ -3288,6 +3558,21 @@
     },
     {
       "offsetDays": 16,
+      "localStart": "14:30",
+      "durationMinutes": 60,
+      "venue": "The Mansion Bed & Breakfast",
+      "address": "305 Oregon Ave, West Dundee, IL 60118",
+      "lat": 42.097028520858,
+      "lng": -88.280030249536,
+      "node": "area",
+      "sector": "private",
+      "event_type_id": "etr-per-story",
+      "title": "Dickens weekend: reading of a shortened A Christmas Carol",
+      "summary": "A Victorian-parlor reading of a shortened version of the classic holiday story at a historic bed and breakfast during Dickens in Dundee.",
+      "source_url": "https://dickensindundee.org/"
+    },
+    {
+      "offsetDays": 16,
       "localStart": "16:30",
       "durationMinutes": 90,
       "venue": "Dellwood Park Performing Arts Center Bandshell",
@@ -3303,6 +3588,36 @@
     },
     {
       "offsetDays": 16,
+      "localStart": "16:30",
+      "durationMinutes": 90,
+      "venue": "Dellwood Park Bandshell",
+      "address": "199 E Woods Dr, Lockport, IL 60441",
+      "lat": 41.574898483263,
+      "lng": -88.062208459259,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-art-music",
+      "title": "Holiday concert at the park bandshell",
+      "summary": "Park district kicks off the season with a family-friendly Christmas concert at the decorated bandshell.",
+      "source_url": "https://lockportpark.org/app/programs-news-events/"
+    },
+    {
+      "offsetDays": 16,
+      "localStart": "17:30",
+      "durationMinutes": 90,
+      "venue": "Eastside Cafe",
+      "address": "311 Barrington Ave, Unit A, East Dundee, IL 60118",
+      "lat": 42.101890449813,
+      "lng": -88.275169082901,
+      "node": "area",
+      "sector": "private",
+      "event_type_id": "etr-art-cultural",
+      "title": "Scrooge Revisited: a theatrical discussion with live music",
+      "summary": "Two ethics and literature teachers discuss a classic Christmas story through role play and film, with live music, at a cafe in East Dundee.",
+      "source_url": "https://dickensindundee.org/"
+    },
+    {
+      "offsetDays": 16,
       "localStart": "19:00",
       "durationMinutes": null,
       "venue": "The Acorn",
@@ -3315,6 +3630,21 @@
       "title": "Americana and rock band concert at The Acorn",
       "summary": "Evening concert by a touring rock and Americana band.",
       "source_url": "https://www.acornlive.org/events/"
+    },
+    {
+      "offsetDays": 16,
+      "localStart": "19:00",
+      "durationMinutes": 150,
+      "venue": "Lakes Community High School",
+      "address": "1600 Eagle Way Dr, Lake Villa, IL 60046",
+      "lat": 42.444526680506,
+      "lng": -88.058980932386,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-art-music",
+      "title": "Free community Christmas concert by a community band and a military band",
+      "summary": "Free admission concert, doors at 6 pm, with a reception afterward; listed on the Antioch chamber calendar.",
+      "source_url": "https://cm.antiochchamber.org/events/details/lakes-area-community-band-navy-band-great-lakes-community-christmas-concert-8847"
     },
     {
       "offsetDays": 16,
@@ -3540,6 +3870,36 @@
       "title": "Police district council public meeting (northwest side)",
       "summary": "Open public meeting where residents can raise policing and safety concerns with their district council.",
       "source_url": "https://ccpsa.chicago.gov/public-meeting-calendar/event/17th-district-council-december-8-2026/"
+    },
+    {
+      "offsetDays": 19,
+      "localStart": "18:30",
+      "durationMinutes": null,
+      "venue": "Riley Town Hall",
+      "address": "9312 Riley Rd, Marengo, IL 60152",
+      "lat": 42.193574019062,
+      "lng": -88.632585739515,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Township board of trustees monthly meeting",
+      "summary": "Open monthly meeting of the township trustees at the historic town hall.",
+      "source_url": "https://rileytwp.com/meetings/"
+    },
+    {
+      "offsetDays": 19,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Port Barrington Village Hall",
+      "address": "69 S Circle Ave, Port Barrington, IL 60010",
+      "lat": 42.242115793023,
+      "lng": -88.207433545141,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Planning Commission meeting",
+      "summary": "Monthly open planning commission meeting (second Tuesday) at Village Hall.",
+      "source_url": "https://www.portbarrington.net/event/santa-parade-party-3/"
     },
     {
       "offsetDays": 20,
@@ -3828,6 +4188,21 @@
     },
     {
       "offsetDays": 23,
+      "localStart": "16:30",
+      "durationMinutes": 90,
+      "venue": "Plum Creek Nature Center",
+      "address": "27064 S Dutton Rd, Beecher, IL 60401",
+      "lat": 41.396431492016,
+      "lng": -87.603631764471,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-art-music",
+      "title": "Caroling campfire at the nature center",
+      "summary": "Sing holiday songs around a campfire at the nature center; free, check the calendar for registration.",
+      "source_url": "https://www.reconnectwithnature.org/news-events/event-calendar"
+    },
+    {
+      "offsetDays": 23,
       "localStart": "17:00",
       "durationMinutes": 90,
       "venue": "Barrington's White House",
@@ -4007,6 +4382,21 @@
       "source_url": "https://villageofhebron.org/calendar"
     },
     {
+      "offsetDays": 25,
+      "localStart": "18:30",
+      "durationMinutes": null,
+      "venue": "Barrington Hills Village Hall",
+      "address": "112 Algonquin Rd, Barrington Hills, IL 60010",
+      "lat": 42.143285700324,
+      "lng": -88.245769563632,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Village Board of Trustees meeting",
+      "summary": "Regular open meeting of the village board at Village Hall.",
+      "source_url": "https://barringtonhills-il.gov/event/board-of-trustees-50/"
+    },
+    {
       "offsetDays": 26,
       "localStart": "09:00",
       "durationMinutes": 90,
@@ -4113,21 +4503,6 @@
     },
     {
       "offsetDays": 27,
-      "localStart": "17:00",
-      "durationMinutes": 60,
-      "venue": "Local Pour",
-      "address": "12857 Red Arrow Hwy, Sawyer, MI 49125",
-      "lat": 41.886676537929,
-      "lng": -86.609431988969,
-      "node": "area",
-      "sector": "private",
-      "event_type_id": "etr-biz-workshop",
-      "title": "Wine Education Wednesday tasting class",
-      "summary": "Monthly third-Wednesday class on how to taste wine and tell varietals apart, with five tastes included.",
-      "source_url": "https://www.localpourmi.com/wineeducationwed"
-    },
-    {
-      "offsetDays": 27,
       "localStart": "17:30",
       "durationMinutes": 120,
       "venue": "Milwaukee Art Museum",
@@ -4200,6 +4575,21 @@
       "title": "Singing circle at the club pub",
       "summary": "Informal circle where people take turns singing traditional songs.",
       "source_url": "https://chicagogaelicpark.com/event/singing-circle-at-the-carraig/2026-12-16/"
+    },
+    {
+      "offsetDays": 27,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Port Barrington Village Hall",
+      "address": "69 S Circle Ave, Port Barrington, IL 60010",
+      "lat": 42.242115793023,
+      "lng": -88.207433545141,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Village Board of Trustees meeting",
+      "summary": "Monthly open board meeting (third Wednesday) at Village Hall.",
+      "source_url": "https://www.portbarrington.net/event/santa-parade-party-3/"
     },
     {
       "offsetDays": 28,
@@ -4307,6 +4697,21 @@
       "source_url": "https://www.northlakelibrary.org/event/cookbook-club-26/"
     },
     {
+      "offsetDays": 28,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Richmond Village Hall",
+      "address": "5600 Hunter Drive, Richmond, IL 60071",
+      "lat": 42.466455452336,
+      "lng": -88.306711914811,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Village Board regular meeting",
+      "summary": "Regular public meeting of the village board, held on alternate Thursdays at village hall.",
+      "source_url": "https://richmond-il.com/events/"
+    },
+    {
       "offsetDays": 29,
       "localStart": "17:00",
       "durationMinutes": 90,
@@ -4335,21 +4740,6 @@
       "title": "Opening night for a traveling history exhibit",
       "summary": "Opening reception for a statewide humanities exhibit on Anishinaabe history, shown in the library.",
       "source_url": "https://lincolntownship.librarycalendar.com/events/upcoming"
-    },
-    {
-      "offsetDays": 29,
-      "localStart": "17:30",
-      "durationMinutes": 120,
-      "venue": "Local Pour",
-      "address": "12857 Red Arrow Hwy, Sawyer, MI 49125",
-      "lat": 41.886676537929,
-      "lng": -86.609431988969,
-      "node": "area",
-      "sector": "private",
-      "event_type_id": "etr-ent-karaoke",
-      "title": "Free monthly karaoke night at the tasting room",
-      "summary": "Third-Friday karaoke session at a Michigan-made wine, beer and spirits tasting room; free to enter.",
-      "source_url": "https://swmichigan.org/events/karaoke-at-local-pour/"
     },
     {
       "offsetDays": 29,
@@ -4413,6 +4803,21 @@
     },
     {
       "offsetDays": 30,
+      "localStart": "14:00",
+      "durationMinutes": 60,
+      "venue": "Brushwood Center at Ryerson Woods",
+      "address": "21850 Riverwoods Rd, Riverwoods, IL 60015",
+      "lat": 42.200778589752,
+      "lng": -87.906215607536,
+      "node": "area",
+      "sector": "private",
+      "event_type_id": "etr-art-music",
+      "title": "Community carol sing-along",
+      "summary": "Hour-long group carol singing at the nature center.",
+      "source_url": "https://brushwoodcenter.org/event/carol-sing-a-long-at-brushwood/"
+    },
+    {
+      "offsetDays": 30,
       "localStart": "15:00",
       "durationMinutes": 120,
       "venue": "Barrington's White House",
@@ -4455,6 +4860,21 @@
       "title": "Sunday coin show at the fairgrounds",
       "summary": "Coin collectors' show and trade day listed on the fairgrounds weekly events calendar, 9 am to 3 pm.",
       "source_url": "https://willcountyfair.org/weekly-events?year=2026&month=december"
+    },
+    {
+      "offsetDays": 32,
+      "localStart": "15:30",
+      "durationMinutes": 60,
+      "venue": "Porter County Public Library - Kouts Branch",
+      "address": "101 E Daumer Rd, Kouts, IN 46347",
+      "lat": 41.309286294574,
+      "lng": -87.025718762408,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-lit-bookclub",
+      "title": "Monthly adult book club at the library branch",
+      "summary": "Monday afternoon book discussion at the Kouts library branch; registration required.",
+      "source_url": "https://www.pcpls.org/branches-hours/kouts"
     },
     {
       "offsetDays": 32,
@@ -4532,6 +4952,21 @@
       "source_url": "https://ccpsa.chicago.gov/public-meeting-calendar/event/11th-district-council-december-21-2026/"
     },
     {
+      "offsetDays": 32,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Ringwood Village Hall",
+      "address": "6000 Barnard Mill Rd, Ringwood, IL 60072",
+      "lat": 42.39530940813,
+      "lng": -88.311420760484,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Ringwood Village Board regular public meeting",
+      "summary": "Regular monthly village board meeting open to the public, held on the third Monday of each month at 7 pm.",
+      "source_url": "https://ringwood-il.us/"
+    },
+    {
       "offsetDays": 36,
       "localStart": "19:30",
       "durationMinutes": 180,
@@ -4545,6 +4980,21 @@
       "title": "Friday night live music at Bar West",
       "summary": "Weekly Friday evening live music set in the resort's Bar West lounge.",
       "source_url": "https://www.theabbeyresort.com/events"
+    },
+    {
+      "offsetDays": 39,
+      "localStart": "10:00",
+      "durationMinutes": null,
+      "venue": "Village of Bull Valley",
+      "address": "1904 S Cherry Valley Rd, Bull Valley, IL 60098",
+      "lat": 42.300954558083,
+      "lng": -88.352555291463,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Bull Valley Village Board public meeting",
+      "summary": "Monthly village board meeting open to the public on the fourth Monday at 10 am; the village asks callers to confirm the date.",
+      "source_url": "https://www.thevillageofbullvalley.com/"
     },
     {
       "offsetDays": 39,
@@ -4620,6 +5070,21 @@
       "title": "Tabletop role-playing adventures at the library",
       "summary": "Sunday afternoon tabletop role-playing session for adults.",
       "source_url": "https://cherryvalleylib.librarymarket.com/events/day/2027/01/03"
+    },
+    {
+      "offsetDays": 46,
+      "localStart": "18:30",
+      "durationMinutes": null,
+      "venue": "Barrington Hills Village Hall",
+      "address": "112 Algonquin Rd, Barrington Hills, IL 60010",
+      "lat": 42.143285700324,
+      "lng": -88.245769563632,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Plan Commission public meeting",
+      "summary": "Open meeting of the village plan commission at Village Hall.",
+      "source_url": "https://barringtonhills-il.gov/event/plan-commission-meeting-4/"
     },
     {
       "offsetDays": 47,
@@ -4727,6 +5192,36 @@
       "source_url": "https://www.pcpls.org/event/game-night-66738"
     },
     {
+      "offsetDays": 49,
+      "localStart": "18:30",
+      "durationMinutes": null,
+      "venue": "Village of Bull Valley",
+      "address": "1904 S Cherry Valley Rd, Bull Valley, IL 60098",
+      "lat": 42.300954558083,
+      "lng": -88.352555291463,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Bull Valley Planning and Zoning Commission public meeting",
+      "summary": "Monthly planning and zoning commission meeting open to the public on the first Thursday evening; the village asks callers to confirm the date.",
+      "source_url": "https://www.thevillageofbullvalley.com/"
+    },
+    {
+      "offsetDays": 49,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Richmond Village Hall",
+      "address": "5600 Hunter Drive, Richmond, IL 60071",
+      "lat": 42.466455452336,
+      "lng": -88.306711914811,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Village Board regular meeting",
+      "summary": "Regular public meeting of the village board, held on alternate Thursdays at village hall.",
+      "source_url": "https://richmond-il.com/events/"
+    },
+    {
       "offsetDays": 51,
       "localStart": "09:00",
       "durationMinutes": 240,
@@ -4802,6 +5297,21 @@
       "source_url": "https://villageofhebron.org/calendar"
     },
     {
+      "offsetDays": 53,
+      "localStart": "18:30",
+      "durationMinutes": null,
+      "venue": "Barrington Hills Village Hall",
+      "address": "112 Algonquin Rd, Barrington Hills, IL 60010",
+      "lat": 42.143285700324,
+      "lng": -88.245769563632,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Zoning Board of Appeals meeting",
+      "summary": "Open meeting of the village zoning board of appeals at Village Hall.",
+      "source_url": "https://barringtonhills-il.gov/event/zoning-board-of-appeals-47/"
+    },
+    {
       "offsetDays": 54,
       "localStart": "17:30",
       "durationMinutes": 60,
@@ -4830,6 +5340,21 @@
       "title": "Board of Zoning Appeals meeting",
       "summary": "Open public meeting of a city board; agenda and public comment as posted by the city.",
       "source_url": "https://michigancityin.gov/city-event/board-of-zoning-appeals-meeting/2027-01-12/"
+    },
+    {
+      "offsetDays": 54,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Port Barrington Village Hall",
+      "address": "69 S Circle Ave, Port Barrington, IL 60010",
+      "lat": 42.242115793023,
+      "lng": -88.207433545141,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Planning Commission meeting",
+      "summary": "Monthly open planning commission meeting (second Tuesday) at Village Hall.",
+      "source_url": "https://www.portbarrington.net/event/santa-parade-party-3/"
     },
     {
       "offsetDays": 55,
@@ -4923,6 +5448,21 @@
     },
     {
       "offsetDays": 60,
+      "localStart": "15:30",
+      "durationMinutes": 60,
+      "venue": "Porter County Public Library - Kouts Branch",
+      "address": "101 E Daumer Rd, Kouts, IN 46347",
+      "lat": 41.309286294574,
+      "lng": -87.025718762408,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-lit-bookclub",
+      "title": "Monthly adult book club at the library branch",
+      "summary": "Monday afternoon book discussion at the Kouts library branch; registration required.",
+      "source_url": "https://www.pcpls.org/branches-hours/kouts"
+    },
+    {
+      "offsetDays": 60,
       "localStart": "17:30",
       "durationMinutes": 120,
       "venue": "Cherry Valley Public Library District",
@@ -4935,6 +5475,21 @@
       "title": "Teen Dungeons & Dragons night",
       "summary": "Monday evening tabletop game session for teens.",
       "source_url": "https://cherryvalleylib.librarymarket.com/events/day/2027/01/18"
+    },
+    {
+      "offsetDays": 60,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Ringwood Village Hall",
+      "address": "6000 Barnard Mill Rd, Ringwood, IL 60072",
+      "lat": 42.39530940813,
+      "lng": -88.311420760484,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Ringwood Village Board regular public meeting",
+      "summary": "Regular monthly village board meeting open to the public, held on the third Monday of each month at 7 pm.",
+      "source_url": "https://ringwood-il.us/"
     },
     {
       "offsetDays": 61,
@@ -4998,18 +5553,18 @@
     },
     {
       "offsetDays": 62,
-      "localStart": "17:00",
-      "durationMinutes": 60,
-      "venue": "Local Pour",
-      "address": "12857 Red Arrow Hwy, Sawyer, MI 49125",
-      "lat": 41.886676537929,
-      "lng": -86.609431988969,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Port Barrington Village Hall",
+      "address": "69 S Circle Ave, Port Barrington, IL 60010",
+      "lat": 42.242115793023,
+      "lng": -88.207433545141,
       "node": "area",
-      "sector": "private",
-      "event_type_id": "etr-biz-workshop",
-      "title": "Wine Education Wednesday tasting class",
-      "summary": "Monthly third-Wednesday class on how to taste wine and tell varietals apart, with five tastes included.",
-      "source_url": "https://www.localpourmi.com/wineeducationwed"
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Village Board of Trustees meeting",
+      "summary": "Monthly open board meeting (third Wednesday) at Village Hall.",
+      "source_url": "https://www.portbarrington.net/event/santa-parade-party-3/"
     },
     {
       "offsetDays": 63,
@@ -5042,6 +5597,21 @@
       "source_url": "https://mam.org/events/event/gallery-talk-dutch-still-life/"
     },
     {
+      "offsetDays": 63,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Richmond Village Hall",
+      "address": "5600 Hunter Drive, Richmond, IL 60071",
+      "lat": 42.466455452336,
+      "lng": -88.306711914811,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Village Board regular meeting",
+      "summary": "Regular public meeting of the village board, held on alternate Thursdays at village hall.",
+      "source_url": "https://richmond-il.com/events/"
+    },
+    {
       "offsetDays": 66,
       "localStart": "10:00",
       "durationMinutes": 180,
@@ -5055,6 +5625,21 @@
       "title": "Winter stewardship workday in a preserve",
       "summary": "Winter volunteer session for habitat care in a forest preserve.",
       "source_url": "https://fotfp.org/event/st-paul-woods-volunteer-workday-25/"
+    },
+    {
+      "offsetDays": 67,
+      "localStart": "10:00",
+      "durationMinutes": null,
+      "venue": "Village of Bull Valley",
+      "address": "1904 S Cherry Valley Rd, Bull Valley, IL 60098",
+      "lat": 42.300954558083,
+      "lng": -88.352555291463,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Bull Valley Village Board public meeting",
+      "summary": "Monthly village board meeting open to the public on the fourth Monday at 10 am; the village asks callers to confirm the date.",
+      "source_url": "https://www.thevillageofbullvalley.com/"
     },
     {
       "offsetDays": 67,
@@ -5177,6 +5762,36 @@
       "source_url": "https://togetherchicago.com/event/monthly-meeting-feb-2027/"
     },
     {
+      "offsetDays": 77,
+      "localStart": "18:30",
+      "durationMinutes": null,
+      "venue": "Village of Bull Valley",
+      "address": "1904 S Cherry Valley Rd, Bull Valley, IL 60098",
+      "lat": 42.300954558083,
+      "lng": -88.352555291463,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Bull Valley Planning and Zoning Commission public meeting",
+      "summary": "Monthly planning and zoning commission meeting open to the public on the first Thursday evening; the village asks callers to confirm the date.",
+      "source_url": "https://www.thevillageofbullvalley.com/"
+    },
+    {
+      "offsetDays": 77,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Richmond Village Hall",
+      "address": "5600 Hunter Drive, Richmond, IL 60071",
+      "lat": 42.466455452336,
+      "lng": -88.306711914811,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Village Board regular meeting",
+      "summary": "Regular public meeting of the village board, held on alternate Thursdays at village hall.",
+      "source_url": "https://richmond-il.com/events/"
+    },
+    {
       "offsetDays": 80,
       "localStart": "17:00",
       "durationMinutes": 120,
@@ -5205,6 +5820,21 @@
       "title": "Village board of trustees meeting",
       "summary": "Regular second or fourth Monday public meeting per the village calendar; may be cancelled if no business.",
       "source_url": "https://villageofhebron.org/calendar"
+    },
+    {
+      "offsetDays": 82,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Port Barrington Village Hall",
+      "address": "69 S Circle Ave, Port Barrington, IL 60010",
+      "lat": 42.242115793023,
+      "lng": -88.207433545141,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Planning Commission meeting",
+      "summary": "Monthly open planning commission meeting (second Tuesday) at Village Hall.",
+      "source_url": "https://www.portbarrington.net/event/santa-parade-party-3/"
     },
     {
       "offsetDays": 85,
@@ -5267,6 +5897,36 @@
       "source_url": "https://chicagogaelicpark.com/event/4733/"
     },
     {
+      "offsetDays": 88,
+      "localStart": "15:30",
+      "durationMinutes": 60,
+      "venue": "Porter County Public Library - Kouts Branch",
+      "address": "101 E Daumer Rd, Kouts, IN 46347",
+      "lat": 41.309286294574,
+      "lng": -87.025718762408,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-lit-bookclub",
+      "title": "Monthly adult book club at the library branch",
+      "summary": "Monday afternoon book discussion at the Kouts library branch; registration required.",
+      "source_url": "https://www.pcpls.org/branches-hours/kouts"
+    },
+    {
+      "offsetDays": 88,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Ringwood Village Hall",
+      "address": "6000 Barnard Mill Rd, Ringwood, IL 60072",
+      "lat": 42.39530940813,
+      "lng": -88.311420760484,
+      "node": "area",
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Ringwood Village Board regular public meeting",
+      "summary": "Regular monthly village board meeting open to the public, held on the third Monday of each month at 7 pm.",
+      "source_url": "https://ringwood-il.us/"
+    },
+    {
       "offsetDays": 89,
       "localStart": "19:00",
       "durationMinutes": null,
@@ -5283,18 +5943,18 @@
     },
     {
       "offsetDays": 90,
-      "localStart": "17:00",
-      "durationMinutes": 60,
-      "venue": "Local Pour",
-      "address": "12857 Red Arrow Hwy, Sawyer, MI 49125",
-      "lat": 41.886676537929,
-      "lng": -86.609431988969,
+      "localStart": "19:00",
+      "durationMinutes": null,
+      "venue": "Port Barrington Village Hall",
+      "address": "69 S Circle Ave, Port Barrington, IL 60010",
+      "lat": 42.242115793023,
+      "lng": -88.207433545141,
       "node": "area",
-      "sector": "private",
-      "event_type_id": "etr-biz-workshop",
-      "title": "Wine Education Wednesday tasting class",
-      "summary": "Monthly third-Wednesday class on how to taste wine and tell varietals apart, with five tastes included.",
-      "source_url": "https://www.localpourmi.com/wineeducationwed"
+      "sector": "public",
+      "event_type_id": "etr-civ-meeting",
+      "title": "Village Board of Trustees meeting",
+      "summary": "Monthly open board meeting (third Wednesday) at Village Hall.",
+      "source_url": "https://www.portbarrington.net/event/santa-parade-party-3/"
     }
   ],
   "businesses": [
@@ -6935,7 +7595,7 @@
       "address": "12291 Red Arrow Hwy, Sawyer, MI 49125",
       "lat": 41.896427993643,
       "lng": -86.599793541525,
-      "node": "area",
+      "node": "sawyer",
       "anchor": true
     },
     {
@@ -6943,7 +7603,7 @@
       "address": "12857 Red Arrow Hwy, Sawyer, MI 49125",
       "lat": 41.886676537929,
       "lng": -86.609431988969,
-      "node": "area",
+      "node": "sawyer",
       "anchor": false
     },
     {
@@ -6951,7 +7611,7 @@
       "address": "12856 Red Arrow Highway, Sawyer, MI 49125",
       "lat": 41.88635791516,
       "lng": -86.609820824776,
-      "node": "area",
+      "node": "sawyer",
       "anchor": false
     },
     {
@@ -6959,7 +7619,7 @@
       "address": "11945 Red Arrow Hwy, Sawyer, MI 49125",
       "lat": 41.903503664772,
       "lng": -86.592587035558,
-      "node": "area",
+      "node": "sawyer",
       "anchor": false
     },
     {
@@ -6967,7 +7627,7 @@
       "address": "5870 Sawyer Road, Sawyer, MI 49125",
       "lat": 41.885435802645,
       "lng": -86.594147223347,
-      "node": "area",
+      "node": "sawyer",
       "anchor": false
     },
     {
@@ -6975,7 +7635,7 @@
       "address": "13083 Red Arrow Hwy, Sawyer, MI 49125",
       "lat": 41.880972931762,
       "lng": -86.612458046868,
-      "node": "area",
+      "node": "sawyer",
       "anchor": false
     },
     {
@@ -6983,7 +7643,7 @@
       "address": "13535 Red Arrow Highway, Harbert, MI 49115",
       "lat": 41.872517409386,
       "lng": -86.627427387371,
-      "node": "area",
+      "node": "sawyer",
       "anchor": true
     },
     {
@@ -6991,7 +7651,7 @@
       "address": "13461 Red Arrow Highway, Harbert, MI 49115",
       "lat": 41.872716904366,
       "lng": -86.626836418128,
-      "node": "area",
+      "node": "sawyer",
       "anchor": true
     },
     {
@@ -7103,6 +7763,710 @@
       "address": "402 N Cleveland Ave, Galien, MI 49113",
       "lat": 41.80643414642,
       "lng": -86.49870218379,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Village of Barrington Hills Village Hall",
+      "address": "112 Algonquin Rd, Barrington Hills, IL 60010",
+      "lat": 42.143285700324,
+      "lng": -88.245769563632,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Hainesville Village Hall",
+      "address": "100 N Hainesville Rd, Hainesville, IL 60030",
+      "lat": 42.345953395526,
+      "lng": -88.067648592121,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Port Barrington Village Hall",
+      "address": "69 S Circle Ave, Port Barrington, IL 60010",
+      "lat": 42.242115793023,
+      "lng": -88.207433545141,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Hermann Park (Port Barrington)",
+      "address": "69 S Circle Ave, Port Barrington, IL 60010",
+      "lat": 42.242115793023,
+      "lng": -88.207433545141,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Ogden Dunes Town Hall and Community Room",
+      "address": "115 Hillcrest Rd, Ogden Dunes, IN 46368",
+      "lat": 41.619998368882,
+      "lng": -87.18989420827,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Ogden Dunes Community Church",
+      "address": "116 Hillcrest Rd, Ogden Dunes, IN 46368",
+      "lat": 41.619202703862,
+      "lng": -87.189936904588,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Palos Park Public Library",
+      "address": "12330 Forest Glen Blvd, Palos Park, IL 60464",
+      "lat": 41.664821383459,
+      "lng": -87.839712006637,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Palos Park Recreation Center",
+      "address": "8901 W 123rd St, Palos Park, IL 60464",
+      "lat": 41.667113217899,
+      "lng": -87.83774405894,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Brushwood Center at Ryerson Woods",
+      "address": "21850 Riverwoods Rd, Riverwoods, IL 60015",
+      "lat": 42.200778589752,
+      "lng": -87.906215607536,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Dundee Township Park District: Sleepy Hollow Center",
+      "address": "875 Winmoor Dr, Sleepy Hollow, IL 60118",
+      "lat": 42.09076943436,
+      "lng": -88.307285151484,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Kaneville Public Library",
+      "address": "2S101 Harter Rd, Kaneville, IL 60144",
+      "lat": 41.835355255261,
+      "lng": -88.522138157914,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Big Rock Park District Building (village board meets here)",
+      "address": "7S405 Madison St, Big Rock, IL 60511",
+      "lat": 41.758797984397,
+      "lng": -88.544209418927,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Kildeer Village Hall",
+      "address": "21911 N Quentin Rd, Kildeer, IL 60047",
+      "lat": 42.17418346576,
+      "lng": -88.058149676371,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Indian Head Park Village Hall",
+      "address": "201 Acacia Dr, Indian Head Park, IL 60525",
+      "lat": 41.771725962076,
+      "lng": -87.89474986988,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Rochester Village Offices",
+      "address": "300 W Spring St, Rochester, WI 53167",
+      "lat": 42.742403111625,
+      "lng": -88.226039260619,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Wadsworth Village Hall",
+      "address": "14155 W Wadsworth Rd, Wadsworth, IL 60083",
+      "lat": 42.428623467628,
+      "lng": -87.906968309324,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Newport Township Fire Protection District",
+      "address": "39010 N Caroline Ave, Wadsworth, IL 60083",
+      "lat": 42.42893325475,
+      "lng": -87.927402845653,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Eastside Cafe",
+      "address": "311 Barrington Ave, Unit A, East Dundee, IL 60118",
+      "lat": 42.101890449813,
+      "lng": -88.275169082901,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "West Dundee Village Hall",
+      "address": "102 S Second St, West Dundee, IL 60118",
+      "lat": 42.098028954016,
+      "lng": -88.278664449354,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "RocHaus",
+      "address": "96 W Main St, West Dundee, IL 60118",
+      "lat": 42.098144703968,
+      "lng": -88.277148033715,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Drury Lane Theatre",
+      "address": "100 Drury Ln, Oakbrook Terrace, IL 60181",
+      "lat": 41.860382578111,
+      "lng": -87.952720133402,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Oakbrook Terrace Park District Fitness Center",
+      "address": "1 Parkview Plaza, Oakbrook Terrace, IL 60181",
+      "lat": 41.846664425763,
+      "lng": -87.958849806466,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Oakbrook Terrace Park District Heritage Center",
+      "address": "1S325 Ardmore Ave, Oakbrook Terrace, IL 60181",
+      "lat": 41.855134679985,
+      "lng": -87.97757793678,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Lake View Nature Center (Oakbrook Terrace Park District)",
+      "address": "17W063 Hodges Rd, Oakbrook Terrace, IL 60181",
+      "lat": 41.850050443128,
+      "lng": -87.95919400999,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Town of Geneva Town Hall",
+      "address": "N3496 Como Rd, Lake Geneva, WI 53147",
+      "lat": 42.618105605971,
+      "lng": -88.48711124105,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Oakwood Hills Village Hall",
+      "address": "3020 North Park Dr, Oakwood Hills, IL 60013",
+      "lat": 42.252513305487,
+      "lng": -88.256003057046,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Prairie Grove Village Hall",
+      "address": "3125 Barreville Rd, Prairie Grove, IL 60012",
+      "lat": 42.284017604828,
+      "lng": -88.26117632993,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Ford Heights Municipal Building",
+      "address": "1343 Ellis Ave, Ford Heights, IL 60411",
+      "lat": 41.507646914506,
+      "lng": -87.592030817501,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Hodgkins Administration Center",
+      "address": "8990 Lyons St, Hodgkins, IL 60525",
+      "lat": 41.771896063327,
+      "lng": -87.855515353103,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Hodgkins Public Library",
+      "address": "6500 Wenz Ave, Hodgkins, IL 60525",
+      "lat": 41.771891166873,
+      "lng": -87.855756742295,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Antioch Chamber of Commerce",
+      "address": "485 Lake St, Antioch, IL 60002",
+      "lat": 42.477272613174,
+      "lng": -88.100323469304,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Kringle's (Christmas at Kringle's host)",
+      "address": "510 Orchard St, Antioch, IL 60002",
+      "lat": 42.479097412057,
+      "lng": -88.100570305058,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Lakes Community High School",
+      "address": "1600 Eagle Way Dr, Lake Villa, IL 60046",
+      "lat": 42.444526680506,
+      "lng": -88.058980932386,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Village of Bull Valley Village Hall and Police Department",
+      "address": "1904 S Cherry Valley Rd, Bull Valley, IL 60098",
+      "lat": 42.300954558083,
+      "lng": -88.352555291463,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Lily Lake Village Office",
+      "address": "43W955 Twilight Ln, Ste A, St Charles, IL 60175",
+      "lat": 41.950231361034,
+      "lng": -88.472097075473,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Elburn & Countryside Fire Protection District Station 1",
+      "address": "200 E Route 38, Elburn, IL 60119",
+      "lat": 41.90323976559,
+      "lng": -88.469854785732,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Village of Ringwood Village Hall",
+      "address": "6000 Barnard Mill Rd, Ringwood, IL 60072",
+      "lat": 42.39530940813,
+      "lng": -88.311420760484,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Holiday Hills Village Hall",
+      "address": "1304 Sunset Dr, Holiday Hills, IL 60051",
+      "lat": 42.295144311144,
+      "lng": -88.222522476438,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Fox River Grove Village Hall",
+      "address": "305 Illinois St, Fox River Grove, IL 60021",
+      "lat": 42.199108950867,
+      "lng": -88.218096807657,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Stone Park Village Hall",
+      "address": "1825 N 32nd Ave, Stone Park, IL 60165",
+      "lat": 41.906062018624,
+      "lng": -87.872707001128,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Burnham Village Community Center",
+      "address": "14020 S Torrence Ave, Burnham, IL 60633",
+      "lat": 41.640442912813,
+      "lng": -87.559358699569,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Union Grove Municipal Center (Village of Yorkville offices)",
+      "address": "925 15th Ave, Union Grove, WI 53182",
+      "lat": 42.680853692654,
+      "lng": -88.05092688836,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Union Grove-Yorkville Fire Department station",
+      "address": "700 Main St, Union Grove, WI 53182",
+      "lat": 42.691468398213,
+      "lng": -88.051981557337,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Paddock Lake Village Hall",
+      "address": "6969 236th Ave, Paddock Lake, WI 53168",
+      "lat": 42.572073875493,
+      "lng": -88.095330765785,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Thornton Public Library",
+      "address": "115 E. Margaret St, Thornton, IL 60476",
+      "lat": 41.568344118076,
+      "lng": -87.611914929041,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Porter County Public Library - Kouts Branch",
+      "address": "101 E Daumer Rd, Kouts, IN 46347",
+      "lat": 41.309286294574,
+      "lng": -87.025718762408,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Kankakee Valley Historical Society - Collier Lodge",
+      "address": "1097 Baum's Bridge Rd, Kouts, IN 46347",
+      "lat": 41.275520487823,
+      "lng": -87.072230748579,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Merrionette Park Village Hall",
+      "address": "11720 S Kedzie Ave, Merrionette Park, IL 60803",
+      "lat": 41.679736962187,
+      "lng": -87.700459476734,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "East Hazel Crest Municipal Building",
+      "address": "1904 W 174th St, East Hazel Crest, IL 60429",
+      "lat": 41.574616983035,
+      "lng": -87.663068842176,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Dellwood Park (Lockport Township Park District)",
+      "address": "199 E Woods Dr, Lockport, IL 60441",
+      "lat": 41.574898483263,
+      "lng": -88.062208459259,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Lockport Township Park District DPCC",
+      "address": "1811 S Lawrence Ave, Lockport, IL 60441",
+      "lat": 41.578000239178,
+      "lng": -88.054483575932,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Prairie Bluff Public Golf Club",
+      "address": "19433 Renwick Rd, Crest Hill, IL 60403",
+      "lat": 41.5927602,
+      "lng": -88.0887637,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "McCullom Lake Village Hall",
+      "address": "4811 W Orchard Dr, McCullom Lake, IL 60050",
+      "lat": 42.366309378023,
+      "lng": -88.290444337081,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Bedford Park Village Hall",
+      "address": "6701 S Archer Rd, Bedford Park, IL 60501",
+      "lat": 41.775440768122,
+      "lng": -87.814997116772,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Golf Village Hall",
+      "address": "1 Briar Rd, Golf, IL 60029",
+      "lat": 42.058838328265,
+      "lng": -87.797009349625,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Dune Acres Municipal Building",
+      "address": "1 East Rd, Dune Acres, IN 46304",
+      "lat": 41.651867091513,
+      "lng": -87.082857173366,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Plum Creek Nature Center (Forest Preserve District of Will County)",
+      "address": "27064 S Dutton Rd, Beecher, IL 60401",
+      "lat": 41.396431492016,
+      "lng": -87.603631764471,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Riley Town Hall",
+      "address": "9312 Riley Rd, Marengo, IL 60152",
+      "lat": 42.193574019062,
+      "lng": -88.632585739515,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Dellwood Park Community Center (Lockport Township Park District)",
+      "address": "1811 S Lawrence Ave, Lockport, IL 60441",
+      "lat": 41.578000239178,
+      "lng": -88.054483575932,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Fairmont Community Center (Lockport Township Park District)",
+      "address": "525 Barry Ave, Lockport, IL 60441",
+      "lat": 41.557939463681,
+      "lng": -88.060739792445,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Prairie Bluff Public Golf Club (banquet room)",
+      "address": "19433 Renwick Rd, Crest Hill, IL 60403",
+      "lat": 41.5927602,
+      "lng": -88.0887637,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Village of Bannockburn Village Hall",
+      "address": "2275 Telegraph Rd, Bannockburn, IL 60015",
+      "lat": 42.19690722348,
+      "lng": -87.869677765622,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Robert W. Rolek Community Center (Round Lake Area Park District)",
+      "address": "814 Hart Rd, Round Lake, IL 60073",
+      "lat": 42.357341640604,
+      "lng": -88.101077622485,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Burns Harbor Town Hall",
+      "address": "1240 North Boo Rd, Burns Harbor, IN 46304",
+      "lat": 41.611354855388,
+      "lng": -87.12616701556,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Lakeland Park (Burns Harbor Park Department)",
+      "address": "1200 Lakeland Park Dr, Burns Harbor, IN 46304",
+      "lat": 41.60770682083,
+      "lng": -87.111949916533,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of Rockdale Village Hall",
+      "address": "79 Moen Ave, Rockdale, IL 60436",
+      "lat": 41.505714295202,
+      "lng": -88.107860725716,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Grayslake Heritage Center and Museum (Grayslake Historical Society)",
+      "address": "164 Hawley St, Grayslake, IL 60030",
+      "lat": 42.345451112483,
+      "lng": -88.041838106966,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Grant Township Center",
+      "address": "26725 W Molidor Rd, Ingleside, IL 60041",
+      "lat": 42.34677454413,
+      "lng": -88.154919468829,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Irons Oaks Environmental Learning Center (Homewood-Flossmoor Park District)",
+      "address": "20000 Western Ave, Olympia Fields, IL 60461",
+      "lat": 41.527834336514,
+      "lng": -87.67461002718,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Greenwood Township Office",
+      "address": "5211 Miller Rd, Wonder Lake, IL 60097",
+      "lat": 42.402440405929,
+      "lng": -88.394616131723,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Taylor Complex (Village of Elmwood Park, WI)",
+      "address": "3131 Taylor Ave, Racine, WI 53405",
+      "lat": 42.695495116404,
+      "lng": -87.818937573525,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Richmond Village Hall (Village of Richmond)",
+      "address": "5600 Hunter Drive, Richmond, IL 60071",
+      "lat": 42.466455452336,
+      "lng": -88.306711914811,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Village of North Barrington (tree lighting site)",
+      "address": "111 Old Barrington Road, North Barrington, IL 60010",
+      "lat": 42.193305758944,
+      "lng": -88.150120380252,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Rosemont Village Hall and History Museum",
+      "address": "9501 Technology Blvd, Suite 4000, Rosemont, IL 60018",
+      "lat": 41.975016267769,
+      "lng": -87.865378520293,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Rosemont Theatre",
+      "address": "5400 N River Rd, Rosemont, IL 60018",
+      "lat": 41.975368594026,
+      "lng": -87.862815219314,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Parkway Bank Park",
+      "address": "5501 Park Place, Rosemont, IL 60018",
+      "lat": 41.977891617593,
+      "lng": -87.86662167784,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Bub City Rosemont",
+      "address": "5441 Park Pl, Rosemont, IL 60018",
+      "lat": 41.977840623651,
+      "lng": -87.867171578364,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Kenilworth Historical Society (Stuart Memorial Building)",
+      "address": "415 Kenilworth Ave, Kenilworth, IL 60043",
+      "lat": 42.08710123742,
+      "lng": -87.715593003625,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Kenilworth Assembly Hall",
+      "address": "410 Kenilworth Avenue, Kenilworth, IL 60043",
+      "lat": 42.08705994864,
+      "lng": -87.715438941482,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Illinois Railway Museum",
+      "address": "7000 Olson Road, Union, IL 60180",
+      "lat": 42.22713952422,
+      "lng": -88.530604451829,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "McHenry County Historical Society and Museum",
+      "address": "6422 Main St, Union, IL 60180",
+      "lat": 42.235534236536,
+      "lng": -88.542879277265,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Cortland Community Library",
+      "address": "63 S Somonauk Road, Cortland, IL 60112",
+      "lat": 41.920352835338,
+      "lng": -88.688844783618,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Fox Lake Lakefront Park",
+      "address": "10 Riverview Ave, Fox Lake, IL 60020",
+      "lat": 42.402314902425,
+      "lng": -88.182629422447,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Antioch Village Hall",
+      "address": "935 Skidmore Drive, Antioch, IL 60002",
+      "lat": 42.47768965392,
+      "lng": -88.094392545841,
+      "node": "area",
+      "anchor": true
+    },
+    {
+      "name": "Sequoit Creek Park (Antioch)",
+      "address": "845 Main Street, Antioch, IL 60002",
+      "lat": 42.478681512923,
+      "lng": -88.096197104849,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Farm of Lights, Genoa City",
+      "address": "40700 119th St, Genoa City, WI 53128",
+      "lat": 42.505672207604,
+      "lng": -88.302305118615,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Gladys Fox Museum (Lockport Township Park District)",
+      "address": "231 E 9th St, Lockport, IL 60441",
+      "lat": 41.588827122847,
+      "lng": -88.055586485126,
+      "node": "area",
+      "anchor": false
+    },
+    {
+      "name": "Challenge Fitness (Lockport Township Park District)",
+      "address": "2021 Lawrence Ave, Lockport, IL 60441",
+      "lat": 41.576570121842,
+      "lng": -88.054461406445,
       "node": "area",
       "anchor": false
     }
