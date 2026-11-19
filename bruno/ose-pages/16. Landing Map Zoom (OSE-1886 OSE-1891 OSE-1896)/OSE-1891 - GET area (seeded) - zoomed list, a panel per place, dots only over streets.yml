@@ -72,7 +72,7 @@ runtime:
               expect(has('amap-streets'), 'the environment file says the street-map archive is loaded, and the zoomed area drew no street layer').to.equal(true);
             });
           } else {
-            test('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): the area and a dot per place over the street layer', function () {
+            test('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): the area and a dot per place over the street layer, each at the centre of its own res-9 cell (OSE-2198)', function () {
               expect(flag, 'a NOT RUN test passes only while the environment file sets streetMapArchiveLoaded to "false"').to.equal('false');
             });
           }
@@ -199,10 +199,6 @@ runtime:
                 expect(zoomed).to.not.include(p[0].toFixed(dp) + ',' + p[1].toFixed(dp));
               }
             }
-          });
-        } else if (!loaded) {
-          test('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): each place carries its res-9 cell\'s centre (OSE-2198)', function () {
-            expect(flag, 'a NOT RUN test passes only while the environment file sets streetMapArchiveLoaded to "false"').to.equal('false');
           });
         }
 
