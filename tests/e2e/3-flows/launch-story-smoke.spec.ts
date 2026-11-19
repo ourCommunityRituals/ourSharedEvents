@@ -9,6 +9,7 @@
 
 import { test, expect } from '@playwright/test';
 import { edgeChallenged, edgeHeaders, noteEdgeChallenge } from '../../../scripts/ci/edge-read.mjs';
+import { launchEventBody } from '../helpers/launch-event-body';
 import { noteIfEdgeAnswered, passStgEdge, throwIfEdgeAnswered } from '../helpers/stg-edge';
 
 const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
@@ -65,20 +66,31 @@ async function createEvent(
   isPublished: boolean,
   suffix: string
 ): Promise<string> {
-  const resp = await adminFetch(request, 'POST', '/api/v2/admin/events', {
-    brand_id: 'root',
-    attendance_mode: 'in_person',
-    title: `Launch Smoke ${suffix} ${RUN_ID}`,
-    slug: `launch-smoke-${suffix}-${RUN_ID}`,
-    status,
-    is_published: isPublished,
-    description: `Temporary launch-story smoke event ${suffix}.`,
-    location: 'Launch Smoke Hall',
-    start_date: '2099-02-01',
-    end_date: '2099-02-02',
-    timezone: 'America/Chicago',
-  });
-  expect(resp.status(), `create ${suffix} event`).toBe(201);
+  // OSE-2152: a create past draft owes an event type and a start time
+  // (OSE-2036). A draft owes neither, so it skips the catalog read.
+  const eventTypeId = status === 'draft' ? undefined : await anyEventTypeId(request);
+  const resp = await adminFetch(
+    request,
+    'POST',
+    '/api/v2/admin/events',
+    launchEventBody({ status, isPublished, suffix, runId: RUN_ID, eventTypeId })
+  );
+  if (resp.status() !== 201) {
+    // Say what the Worker refused, so a recurrence names the missing value.
+    const text = await resp.text().catch(() => '');
+    let code = '';
+    let missing = '';
+    try {
+      const j = JSON.parse(text);
+      code = j.code ?? '';
+      missing = Array.isArray(j.missing) ? j.missing.join(',') : '';
+    } catch {
+      // Not JSON (an edge page); the status alone is reported.
+    }
+    throw new Error(
+      `create ${suffix} event: expected 201, got ${resp.status()} code=${code || 'n/a'} missing=${missing || 'n/a'}`
+    );
+  }
   const json = await resp.json();
   expect(json.id).toBeTruthy();
   return json.id;
