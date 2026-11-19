@@ -32,9 +32,15 @@
  * spec uses SELF.fetch + the same fetcher seam through env binding.
  */
 
-import { latLngToCell } from 'h3-js';
 import { isGoogleMapsConfigured, type MapsEnv } from './maps';
 import { errorLabel } from './error-label';
+import { isPointPrecision, tagCoordinates, type PointPrecision } from './h3-tagging';
+
+/** A box on the map, as Google gives it. */
+export interface GeoBox {
+  northeast: { lat: number; lng: number };
+  southwest: { lat: number; lng: number };
+}
 
 export interface GeocodeResult {
   lat: number;
@@ -44,6 +50,35 @@ export interface GeocodeResult {
   types?: string[];
   /** True when Google matched only part of the query. */
   partial_match?: boolean;
+  /**
+   * OSE-2199: how exact the point is (`geometry.location_type`): ROOFTOP,
+   * RANGE_INTERPOLATED, GEOMETRIC_CENTER or APPROXIMATE. Null when Google gave
+   * none or a value outside those four. It sets the seam margin (h3-tagging.ts).
+   */
+  location_type: PointPrecision | null;
+  /** Google's recommended view of the result (`geometry.viewport`), or null. */
+  viewport: GeoBox | null;
+  /** The box that holds the whole result (`geometry.bounds`), or null; only
+   *  results with an extent (a building outline, a street) have one. */
+  bounds: GeoBox | null;
+}
+
+const corner = (v: unknown): { lat: number; lng: number } | null => {
+  if (!v || typeof v !== 'object') return null;
+  const { lat, lng } = v as { lat?: unknown; lng?: unknown };
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+};
+
+/** A Google box kept only when both corners are numbers on the globe. */
+export function readGeoBox(v: unknown): GeoBox | null {
+  if (!v || typeof v !== 'object') return null;
+  const { northeast, southwest } = v as { northeast?: unknown; southwest?: unknown };
+  const ne = corner(northeast);
+  const sw = corner(southwest);
+  return ne && sw ? { northeast: ne, southwest: sw } : null;
 }
 
 /**
@@ -213,6 +248,11 @@ export async function geocodeVenue(
       formatted_address: first.formatted_address ?? trimmed,
       types: Array.isArray(first.types) ? first.types : [],
       partial_match: first.partial_match === true,
+      location_type: isPointPrecision(first.geometry.location_type)
+        ? first.geometry.location_type
+        : null,
+      viewport: readGeoBox(first.geometry.viewport),
+      bounds: readGeoBox(first.geometry.bounds),
     },
   };
 }
@@ -228,6 +268,10 @@ export async function geocodeVenue(
  * Resolution choice: res7 (~5km²) maps to the NCR "corridor" concept — large
  * enough to span a commercial strip, small enough to be commercially distinct
  * from adjacent neighborhoods.
+ *
+ * OSE-2199: the corridor is the parent of the point's res-9 cell, as an
+ * event's stored h3_res7 is (h3-tagging.ts), never the point's own res-7 cell,
+ * which can differ near a res-7 edge.
  *
  * Returns null when the coordinates are outside the globe or the h3 cell
  * computation fails (NaN, Infinity), with one RESOLVE_CORRIDOR_ERROR line.
@@ -252,7 +296,7 @@ export async function resolveCorridorId(
     return null;
   }
   try {
-    return latLngToCell(lat, lng, 7);
+    return tagCoordinates(lat, lng).h3_res7;
   } catch {
     console.log(
       JSON.stringify({
@@ -271,7 +315,12 @@ export async function resolveCorridorId(
 interface GoogleGeocodeResponse {
   status: string;
   results?: Array<{
-    geometry?: { location?: { lat: number; lng: number } };
+    geometry?: {
+      location?: { lat: number; lng: number };
+      location_type?: unknown;
+      viewport?: unknown;
+      bounds?: unknown;
+    };
     formatted_address?: string;
     types?: string[];
     partial_match?: boolean;

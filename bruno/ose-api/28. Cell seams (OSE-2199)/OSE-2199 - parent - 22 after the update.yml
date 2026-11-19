@@ -1,0 +1,43 @@
+info:
+  name: "OSE-2199 | parent | res 7 is the parent of res 9 after the update"
+  type: http
+  seq: 22
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events?limit=100"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The res-7 parent of a res-9 cell id, by its bits: resolution 9 -> 7 and
+        // digits 8 and 9 unused (all ones). Checked against h3-js cellToParent on
+        // 50,012 cells, pentagons included (OSE-2199).
+        function parentAt7(h) {
+          if (typeof h !== 'string' || !/^89[0-9a-f]{13}$/.test(h)) return null;
+          var c10 = (parseInt(h[10], 16) | 0xc).toString(16);
+          return h[0] + '7' + h.slice(2, 9) + 'f' + c10 + h.slice(11);
+        }
+        const id = bru.getVar('seamUpdateId');
+        const items = (res.getBody() || {}).items || [];
+        const ev = items.filter(function (e) { return e && e.id === id; })[0] || null;
+        // Every check needs the draft first: none of them passes on an empty match.
+        function found() { expect(ev, 'event ' + id + ' in the newest 100').to.be.an('object'); expect(ev).to.not.eql(null); }
+        test('OSE-2199 update: the draft is in the newest 100', function () { expect(res.getStatus()).to.eql(200); found(); });
+        test('OSE-2199 update: the res-9 cell is the point\'s cell', function () { found(); expect(ev.h3_res9).to.eql('89289230e27ffff'); });
+        test('OSE-2199 update: the res-7 cell is the parent of the res-9 cell', function () { found(); expect(ev.h3_res7).to.eql(parentAt7(ev.h3_res9)); expect(ev.h3_res7).to.eql('87289230effffff'); });
+        test('OSE-2199 update: never the point\'s own res-7 cell', function () { found(); expect(ev.h3_res7).to.not.eql('872892308ffffff'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
