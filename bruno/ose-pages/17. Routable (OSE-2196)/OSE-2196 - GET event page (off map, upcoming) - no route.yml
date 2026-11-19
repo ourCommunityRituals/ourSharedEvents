@@ -8,28 +8,25 @@ info:
 # THE MAP (is_published = 0), with exact coordinates (41.615273, -87.860418) and
 # a street address. Its page still opens at its link (PO 2026-10-07), but it
 # offers no route: no Directions menu, no maps link, no coordinate.
-# 403 is accepted only as an edge challenge (cf-mitigated), and fails under
-# edgeStrict (OSE-2022); every check below runs on a real 200.
+# A 403 passes only as an edge challenge (cf-mitigated), and not at all under
+# PAGES_EDGE_STRICT=1 (lib/edge.js); every check below runs on a real 200.
 http:
   method: GET
   url: "{{baseUrl}}/events/rt-offmap-pre"
-  headers:
-    - name: X-OCR-CI
-      value: "{{ocrCiEdgeToken}}"
   auth: inherit
 
 runtime:
   scripts:
     - type: after-response
       code: |-
+        // OSE-2160: the edge rules live in lib/edge.js (strict under PAGES_EDGE_STRICT=1).
+        require('./lib/edge.js').pageStatus({ bru: bru, res: res, test: test, expect: expect, name: 'Returns 200 or 403 (edge challenge)' });
         const status = res.getStatus();
-        const edge = status === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
-        test('Returns 200 (or an edge challenge)', function () {
-          expect(status === 200 || edge).to.equal(true);
+        // Stricter than the lenient rule: a 403 here must be the edge's
+        // (cf-mitigated), never a Worker 403, which would hide a broken page.
+        test('A 403 is only ever the edge, never the Worker', function () {
+          expect(status !== 403 || (res.getHeader('cf-mitigated') || '').length > 0).to.equal(true);
         });
-        if (edge && String(bru.getEnvVar('edgeStrict')) === '1') {
-          test('EDGE (strict, OSE-2022): the read reached the Worker, not an edge challenge', function () { expect('edge challenge').to.eql('the Worker'); });
-        }
         if (status === 200) {
           const body = String(res.getBody());
           test('The page opened: it is this event, with its Where card', function () {

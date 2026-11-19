@@ -11,9 +11,6 @@ info:
 http:
   method: GET
   url: "{{baseUrl}}/api/v2/events/rt-listed-pre/poster-bundle"
-  headers:
-    - name: X-OCR-CI
-      value: "{{ocrCiEdgeToken}}"
   auth: inherit
 
 runtime:
