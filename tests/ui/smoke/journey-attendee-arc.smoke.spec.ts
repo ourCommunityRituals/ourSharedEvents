@@ -17,6 +17,7 @@
  * File: tests/ui/smoke/journey-attendee-arc.smoke.spec.ts
  */
 import { test, expect } from '@playwright/test';
+import { noteIfEdgeAnswered } from '../../e2e/helpers/stg-edge';
 
 const PRE = process.env.SMOKE_EVENT_PRE;
 const LIVE = process.env.SMOKE_EVENT_LIVE;
@@ -140,7 +141,11 @@ test.describe('attendee arc — /events/:id across phases', () => {
     // worker's event-form-addresses.spec.ts (/updates shows form-email), and
     // live Chrome coverage returns with the CI-scoped WAF skip (OSE-1162).
     // Only a challenge skips; a block or any other answer still fails below.
+    // The skip is counted where a person looks (OSE-2160, F-51): a GitHub warning and
+    // a step-summary line, and a failure once the owner sets CALENDAR_EDGE_STRICT=1
+    // (stg-edge.ts, scripts/ci/edge-read.mjs). It used to be a bare skip nobody saw.
     if (mitigated === 'challenge') {
+      await noteIfEdgeAnswered(res, `/events/${POST}/updates`);
       test.info().annotations.push({ type: 'edge challenge', description: got });
       test.skip(true, `Cloudflare challenged the updates form (${got}); OSE-1162`);
     }
