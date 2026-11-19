@@ -19,7 +19,7 @@
  * local worker that config starts. Relative URLs only: the config owns the host.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { openAreaFilters } from './helpers/area-filters';
+import { openAreaFilters, openAreaTab } from './helpers/area-filters';
 import {
   createLiveEvent,
   seedSponsorCard,
@@ -270,7 +270,7 @@ test.describe('landing: the Type row is the event categories', () => {
 
   test('a category chip shows every type under it, and only those', async ({ page }) => {
     await loadAndRecord(page);
-    await openAreaFilters(page);
+    await openAreaTab(page, 'type');
     const row = page.getByTestId('toggle-type');
     await expect(row).toBeVisible();
     // Real category names, never a type id made readable ("Etr Art Music").

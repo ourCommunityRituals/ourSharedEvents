@@ -289,6 +289,20 @@ const en = {
   'area.list': 'List',
   'area.map': 'Map',
   'area.filters': 'Filters',
+  // The filter tabs and the distance choice (OSE-2156; lib/area-tabs-script.ts).
+  'area.tabs': 'Filter events',
+  'area.tabsOn': 'filter on',
+  'area.near': 'Near me',
+  'area.nearLabel': 'Distance from where you are',
+  'area.nearAny': 'Any distance',
+  'area.nearWithin': 'Within {d} mi',
+  'area.nearPrivacy': 'Your location is used on this device only. It is never sent or stored.',
+  'area.nearLocating': 'Finding your location...',
+  'area.nearOff': 'Location is off, so distance cannot be used.',
+  'area.nearShown':
+    'Showing events within {d} mi, nearest first. Events with no place on the map are left out.',
+  'area.nearNone': 'No events with a place on the map within {d} mi. Try a wider distance.',
+  'area.nearAway': 'about {d} mi away',
   // The neighborhood map (lib/attendee-map.ts).
   'map.near': 'near {venue}',
   'map.exampleLabel':
@@ -703,6 +717,20 @@ const es: Record<MessageKey, string> = {
   'area.list': 'Lista',
   'area.map': 'Mapa',
   'area.filters': 'Filtros',
+  'area.tabs': 'Filtrar eventos',
+  'area.tabsOn': 'filtro activo',
+  'area.near': 'Cerca de mí',
+  'area.nearLabel': 'Distancia desde donde estás',
+  'area.nearAny': 'Cualquier distancia',
+  'area.nearWithin': 'A menos de {d} mi',
+  'area.nearPrivacy': 'Tu ubicación se usa solo en este dispositivo. Nunca se envía ni se guarda.',
+  'area.nearLocating': 'Buscando tu ubicación...',
+  'area.nearOff': 'La ubicación está desactivada, así que no se puede usar la distancia.',
+  'area.nearShown':
+    'Mostrando eventos a menos de {d} mi, del más cercano al más lejano. Se omiten los eventos sin lugar en el mapa.',
+  'area.nearNone':
+    'No hay eventos con lugar en el mapa a menos de {d} mi. Prueba una distancia mayor.',
+  'area.nearAway': 'a unas {d} mi',
   'map.near': 'cerca de {venue}',
   'map.exampleLabel':
     'Mapa de ejemplo: tres barrios dibujados como hexágonos numerados; el de más actividad, con el tono más oscuro',

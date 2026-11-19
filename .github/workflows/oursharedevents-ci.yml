@@ -865,6 +865,17 @@ jobs:
       # or beside it and never over it, nothing scrolls sideways, each link is a
       # 44 px target, and on /map the Map link is the heavier one. The worker has
       # no events, which the header does not need.
+      #
+      # landing-tabs.component.spec.ts (owner 2026-11-18, OSE-2156: "a responsive
+      # tabbed filter design approach ... to condense space", and "search by
+      # distance from current location") drives the landing's filter tabs and its
+      # distance choice at 320 px (200% text) to 1280 px, on Chromium and WebKit:
+      # real tab semantics and arrow keys (mirrored right to left), 44 px targets, a
+      # 3 px ring, 16 px list text, axe light and dark, the open filters shorter
+      # than the same groups stacked, and a distance that keeps the events within it
+      # nearest first while the page asks for nothing but itself and keeps the
+      # position out of the address, the cookies and the storage. Scripts off: the
+      # page is what it was.
       - name: 'Component: viewport specs vs local worker'
         if: matrix.shard == 'component'
         run: |
@@ -880,7 +891,8 @@ jobs:
             tests/e2e/2-pages/street-map-contrast.component.spec.ts \
             tests/e2e/2-pages/street-map-pan.component.spec.ts \
             tests/e2e/2-pages/wcag-map.component.spec.ts \
-            tests/e2e/2-pages/landing-menu.component.spec.ts
+            tests/e2e/2-pages/landing-menu.component.spec.ts \
+            tests/e2e/2-pages/landing-tabs.component.spec.ts
 
   # T0 test sub-gates: keep the existing required context `T0 Gate (tests)` as
   # an aggregate below, but split the former 9+ minute long-pole job into

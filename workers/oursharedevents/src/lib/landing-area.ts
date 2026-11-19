@@ -23,6 +23,12 @@
 // the cards (`product-ose`) for the day an event can be hybrid; the control
 // returns with that backing, not before.
 //
+// TABS AND DISTANCE (OSE-2156). The window, type and Where groups are tab panels
+// (`.area-tab`); lib/area-tabs-script.ts turns them into one row of real tabs, one
+// group showing at a time, and adds a "Near me" panel (a distance list worked out
+// on the phone from the map's own area centres). Without the script the page is
+// what it was: the same chips, the same CSS-only radios, the phone's Filters fold.
+
 // WHY A RENDERER, NOT A TEMPLATE EDIT (same reasoning as event-list.ts): the
 // filtering is CSS-only — hidden radios + `:checked ~` sibling rules — precisely
 // so the page keeps the promise it prints: NO cookies, NO analytics, NO JS that
@@ -77,8 +83,10 @@ import { endsBeforeDark } from './sunset.js';
 import { CORRIDOR_RES } from './h3-tagging.js';
 import type { StreetLayer } from './street-map.js';
 import { toPublicEvent } from './public-event-projection.js';
-import { msg } from './i18n/catalog.js';
+import { fmt, msg } from './i18n/catalog.js';
 import { AREA_FILTERS_STYLE, FILTERS_TOGGLE_ID } from './area-filters-style.js';
+import { AREA_TABS_STYLE } from './area-tabs-style.js';
+import { AREA_TABS_SCRIPT } from './area-tabs-script.js';
 import { DEFAULT_LANG, type Lang } from './i18n/languages.js';
 import { OTHER_CATEGORY_CODE, type TypeCategory } from './event-type-catalog.js';
 
@@ -617,10 +625,11 @@ function buildAreaMarkup(args: {
           <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">${msg(lang, 'area.view')}</legend>${pill('view-list', msg(lang, 'area.list'))}${pill('view-map', msg(lang, 'area.map'))}</fieldset>
           ${filtersChip}
         </div>
-        <div class="toggles area-filters" data-testid="area-filters">
-          <fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">${msg(lang, 'disc.when')}</legend>${LANDING_WINDOWS.map((w) => pill(`win-${w}`, discoveryChipLabel(w, lang))).join('')}</fieldset>
-          ${typePills}
-          ${modPills}${dayPills}
+        <div class="toggles area-filters" data-testid="area-filters" data-tabs="${escapeHtml(msg(lang, 'area.tabs'))}" data-tabs-on="${escapeHtml(msg(lang, 'area.tabsOn'))}">
+          ${tab('when', msg(lang, 'disc.when'), `<fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">${msg(lang, 'disc.when')}</legend>${LANDING_WINDOWS.map((w) => pill(`win-${w}`, discoveryChipLabel(w, lang))).join('')}</fieldset>`)}
+          ${showTypes ? tab('type', msg(lang, 'area.type'), typePills) : ''}
+          ${modPills || dayPills ? tab('where', msg(lang, 'area.where'), `${modPills}${dayPills}`) : ''}
+          ${nearPanel(lang)}
         </div>`;
 
   // OSE-1354: the map view never hides the cards. The map (lib/attendee-map) sits
@@ -644,9 +653,42 @@ function buildAreaMarkup(args: {
 
   const filtersToggle = `<input type="checkbox" id="${FILTERS_TOGGLE_ID}" class="toggle-radio" />`;
   return `${viewRadios}${filtersToggle}${winRadios}${typeRadios}${modRadios}${dayRadios}
-        ${winStyle}${typeStyle}${AREA_FILTERS_STYLE}
+        ${winStyle}${typeStyle}${AREA_FILTERS_STYLE}${AREA_TABS_STYLE}
         ${toggles}
-        ${area}`;
+        ${area}${AREA_TABS_SCRIPT}`;
+}
+
+/**
+ * One filter group as a tab panel (OSE-2156). Without the script it is a plain
+ * block around the group's chips; the script (lib/area-tabs-script.ts) makes the
+ * tab row from `data-tab-label` and gives the panel its tab roles.
+ */
+function tab(name: string, label: string, inner: string): string {
+  return `<div class="area-tab" data-tab="${name}" data-tab-label="${escapeHtml(label)}">${inner}</div>`;
+}
+
+/** The distances the "Near me" tab offers, in miles (the map's scale bar is in miles too). */
+export const NEAR_MILES = [5, 10, 25, 50] as const;
+
+/**
+ * The "Near me" tab's panel: a distance list and the words the script says. It
+ * is hidden and only the script shows it, and only where the page carries the map's
+ * area centres and the browser can give a position. The list is a `<select>`: a
+ * native 16 px control with a 44 px target, one row on a phone.
+ */
+function nearPanel(lang: Lang): string {
+  const say = (key: Parameters<typeof msg>[1]) => escapeHtml(msg(lang, key));
+  // The script fills the distance in; `%d` so the page holds no `{slot}` left unfilled.
+  const sayD = (key: Parameters<typeof msg>[1]) => say(key).replace('{d}', '%d');
+  const options = NEAR_MILES.map(
+    (d) => `<option value="${d}">${escapeHtml(fmt(lang, 'area.nearWithin', { d }))}</option>`
+  ).join('');
+  return `<div class="area-tab" data-tab="near" data-tab-label="${say('area.near')}" data-testid="near-panel" hidden data-locating="${say('area.nearLocating')}" data-off="${say('area.nearOff')}" data-shown="${sayD('area.nearShown')}" data-none="${sayD('area.nearNone')}" data-away="${sayD('area.nearAway')}">
+            <label class="disc-label" for="near-radius">${say('area.nearLabel')}</label>
+            <select id="near-radius" class="input near-sel" data-testid="near-radius"><option value="0">${say('area.nearAny')}</option>${options}</select>
+            <p class="near-note" data-testid="near-privacy">${say('area.nearPrivacy')}</p>
+            <p class="near-note" role="status" aria-live="polite" data-testid="near-status"></p>
+          </div>`;
 }
 
 // ── injection ────────────────────────────────────────────────────────────────

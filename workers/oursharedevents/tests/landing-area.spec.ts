@@ -619,7 +619,9 @@ describe('the attendee-map grade: phone filters, the search on /map, filters on 
     expect(html.indexOf('data-testid="area-filters-btn"')).toBeLessThan(fold);
     expect(html.indexOf('data-testid="toggle-window"')).toBeGreaterThan(fold);
     expect(html.indexOf('data-testid="toggle-modality"')).toBeGreaterThan(fold);
-    expect(html).toContain('<div class="toggles area-filters" data-testid="area-filters">');
+    expect(html).toContain(
+      '<div class="toggles area-filters" data-testid="area-filters" data-tabs="Filter events" data-tabs-on="filter on">'
+    );
     // The chip labels a checkbox that sits with the radios, before both rows,
     // so the fold's rule (~) reaches it and nothing is stored.
     const box = html.indexOf('<input type="checkbox" id="filters-open" class="toggle-radio" />');
