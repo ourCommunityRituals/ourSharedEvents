@@ -52,7 +52,7 @@ export type WhereState =
  * choose from), then a zip. Coordinates and other text are an unknown place:
  * findPlaces never reads text with a digit, and only a 5-digit zip is a zip.
  */
-function readTyped(raw: string): WhereState {
+export function readTyped(raw: string): WhereState {
   // The whole value is looked up, so a long one never becomes a place by losing
   // its tail. Only the echo is cut to fit the box; it is escaped where shown.
   const full = raw.trim();
@@ -64,6 +64,30 @@ function readTyped(raw: string): WhereState {
   if (area) return { kind: 'zip', area };
   if (normalizeZip(full)) return { kind: 'unknown-zip', typed };
   return { kind: 'unknown-place', typed };
+}
+
+/**
+ * What a header link carries to the next page so the search survives the move
+ * between List, Map and Events (OSE-2165): the zip a search found, or the
+ * town's label. Only what the resolver found is carried, never the text typed:
+ * a name that is many places carries the town name from the table, and text that
+ * is no place, or a zip that is none, carries nothing. Every address goes to the
+ * edge logs, so the less it holds the better. Already encoded; starts with `?`,
+ * or is empty.
+ */
+export function carriedPlaceQuery(state: WhereState): string {
+  switch (state.kind) {
+    case 'zip':
+      return `?zip=${encodeURIComponent(state.area.zip)}`;
+    case 'place':
+      return `?where=${encodeURIComponent(state.place.label)}`;
+    case 'choose':
+      // Every match is one name in a different state, so the first one's name is
+      // the table's own spelling of what was typed.
+      return `?where=${encodeURIComponent(state.matches[0].name)}`;
+    default:
+      return '';
+  }
 }
 
 /** Read `?where=`, else `?zip=` (and `?nozip=1`, set by /near), from a landing URL. */
