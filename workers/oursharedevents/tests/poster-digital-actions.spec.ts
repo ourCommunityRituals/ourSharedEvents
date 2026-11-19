@@ -21,6 +21,11 @@
  * @born-red styles moved to @ocr/ui | method: the inline OSE-1825 CSS put back,
  * a class renamed in the markup, .share-chip dropped from @ocr/ui, its
  * min-height dropped. Each turned the styles block red | date: 2026-11-09
+ * @born-red OSE-2196 | method: in poster.html, the routable check on the map
+ * buttons removed (both off-map cases and fail-closed red); the picker's
+ * removal skipped (the picker case red); a missing flag read as routable
+ * (fail-closed red); a picker card drawn as not routable (the picker control
+ * red) | date: 2026-11-19
  */
 import { describe, test, expect } from 'vitest';
 import { JSDOM } from 'jsdom';

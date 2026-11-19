@@ -1,0 +1,43 @@
+info:
+  name: "OSE-2196 | GET /?area=872664405ffffff | the zoomed map never names or routes to an off-map event"
+  type: http
+  seq: 6
+
+# The map panel's "Take me there" (lib/map-place-panel.ts) is built from the list
+# query (lib/data-provider.ts), which lists only routable events
+# (eventRoutableSql). rt-offmap-pre and rt-offmap-live are active, off the map and
+# in this area (bruno/fixtures/routable-seed.sql); the ten listed map-zoom events
+# are here too (map-zoom-area-seed.sql), so the panel has buttons to compare.
+http:
+  method: GET
+  url: "{{baseUrl}}/?area=872664405ffffff"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const body = String(res.getBody());
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+        test('The listed events are here, with their Take me there buttons (control)', function () {
+          expect(body).to.include('Map Zoom Check');
+          expect(body).to.match(/data-testid="amap-go-google"/);
+        });
+        test('Neither off-map event is named or linked', function () {
+          expect(body).to.not.include('Routable Check');
+          expect(body).to.not.include('rt-offmap-pre');
+          expect(body).to.not.include('rt-offmap-live');
+        });
+        test('No route to the off-map address', function () {
+          expect(body).to.not.include('2196%20West%20Unlisted');
+          expect(body).to.not.include('2196 West Unlisted');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

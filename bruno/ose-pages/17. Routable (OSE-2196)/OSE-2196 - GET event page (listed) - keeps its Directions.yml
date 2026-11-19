@@ -1,0 +1,47 @@
+info:
+  name: "OSE-2196 | GET /events/rt-listed-pre | listed: keeps its Directions (control)"
+  type: http
+  seq: 3
+
+# The control for the two off-map pages: rt-listed-pre is the same kind of event
+# but LISTED (is_published = 1, past its publish grace), with exact coordinates
+# (41.638751, -87.684203). Its Directions menu is exactly as before OSE-2196:
+# Google Maps and Apple Maps at its coordinates (lib/geo-link.ts).
+# Fixture: bruno/fixtures/routable-seed.sql.
+http:
+  method: GET
+  url: "{{baseUrl}}/events/rt-listed-pre"
+  headers:
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const status = res.getStatus();
+        const edge = status === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        test('Returns 200 (or an edge challenge)', function () {
+          expect(status === 200 || edge).to.equal(true);
+        });
+        if (edge && String(bru.getEnvVar('edgeStrict')) === '1') {
+          test('EDGE (strict, OSE-2022): the read reached the Worker, not an edge challenge', function () { expect('edge challenge').to.eql('the Worker'); });
+        }
+        if (status === 200) {
+          const body = String(res.getBody());
+          test('The Directions menu is there', function () {
+            expect(body).to.include('data-testid="geo-link"');
+          });
+          test('Google Maps and Apple Maps, at its coordinates', function () {
+            expect(body).to.include('href="https://www.google.com/maps/search/?api=1&amp;query=41.638751%2C-87.684203"');
+            expect(body).to.include('href="https://maps.apple.com/?ll=41.638751,-87.684203&amp;q=Routable%20Check%20Lanes"');
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

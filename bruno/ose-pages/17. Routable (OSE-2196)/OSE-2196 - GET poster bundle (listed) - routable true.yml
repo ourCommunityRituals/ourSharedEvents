@@ -1,0 +1,32 @@
+info:
+  name: "OSE-2196 | GET /api/v2/events/rt-listed-pre/poster-bundle | routable true (listed, control)"
+  type: http
+  seq: 5
+
+# The control: a listed event's poster keeps its map buttons, so its bundle says
+# `routable: true`. Fixture: bruno/fixtures/routable-seed.sql.
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/rt-listed-pre/poster-bundle"
+  headers:
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+        test('routable is true', function () {
+          expect((res.getBody() || {}).routable).to.equal(true);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

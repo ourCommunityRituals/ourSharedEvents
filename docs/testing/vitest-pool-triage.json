@@ -2372,7 +2372,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 19
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/poster-family-foundation.spec.ts",
@@ -3038,6 +3038,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 17
+    },
+    {
+      "file": "workers/oursharedevents/tests/routable-directions.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 14
     },
     {
       "file": "workers/oursharedevents/tests/scan-buffer.spec.ts",

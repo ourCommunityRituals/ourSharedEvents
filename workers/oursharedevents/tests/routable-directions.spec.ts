@@ -24,15 +24,19 @@
  *
  * @born-red OSE-2196 | method: each fault applied alone to the source, this
  * file run, the named tests watched red, the fault reverted:
- *   (a) the isRoutable check removed from the pre-event page → "pre-event:
- *       off-map" red; from the live page → "live: off-map" red;
- *   (b) `is_published !== 1` dropped from isRoutable → page, poster, parity red;
- *   (c) the listed_from test dropped from isRoutable → the grace cases red;
- *   (d) `routable` hard-coded true in the poster bundle → the poster case red;
- *   (e) data-provider back to a list query without is_published → the map
- *       panel case red;
- *   (f) coordinates put back in the off-map page's link (the gate removed) →
- *       "no coordinate reaches" red.
+ *   (a1) the pre-event page's isRoutable gate replaced by `true` → "pre-event:
+ *        off-map", "no coordinate reaches", the grace case red;
+ *   (a2) the live page's gate replaced by `true` → "live: off-map", "no
+ *        coordinate reaches", the grace case red;
+ *   (b)  the is_published test dropped from isRoutable → the page, poster,
+ *        preview and TS-rule cases red;
+ *   (c)  the listed_from test dropped from isRoutable → the grace cases and
+ *        the TS rule red;
+ *   (d)  the bundle's `routable` hard-coded true → both poster cases red;
+ *   (e)  eventRoutableSql letting is_published 0 through → the map panel and
+ *        the SQL-rule cases red;
+ *   (j)  isRoutable always false → both listed controls, the poster control,
+ *        the preview and the TS rule red.
  *   date: 2026-11-19
  */
 import { describe, test, expect, beforeAll } from 'vitest';

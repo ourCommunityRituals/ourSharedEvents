@@ -1744,6 +1744,22 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/map-zoom-area-seed.sql
 
+      # OSE-2196 (owner 2026-11-19): no route to a place that is off the map. Two
+      # active off-map events (one upcoming, one on today) and two listed
+      # controls, all with exact coordinates, for Bruno Pages folder
+      # "17. Routable (OSE-2196)". The off-map pair sits in the zoomed map
+      # fixture's area, so it runs after that seed. Upserts by id. NOT
+      # continue-on-error: a missing fixture fails here by name.
+      - name: 'Seed routable fixtures (OSE-2196)'
+        if: matrix.section == 'pages'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/routable-seed.sql
+
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
       # from the collection root, so each step sets working-directory. Secrets are
