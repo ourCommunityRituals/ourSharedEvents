@@ -1,3 +1,15 @@
+---
+ccr: 1
+class: architecture
+requested_loops: 5
+loops_run: 5
+team: base
+gate: stop
+cumulative_score: 0
+system_score: 0
+unresolved: { regulatory: 0, security_critical: 2, critical: 2, high: 25, medium: 32, low: 15 }
+---
+
 # CCR: OurSharedEvents user experience, flow, clutter and repetition
 
 **Frozen subject:** `main` at `8dbc0a08b6552ff4b2adf03620b31e138fb61cdd` (2026-11-19, "Landing distance: five Within N mi chips (#1480)"). Not moved during the run. Nothing in the product was changed.
@@ -92,6 +104,10 @@ Out of scope: product code changes (fixes are separate stories), production, the
 | Link kept or forwarded               | (nothing)                         | still valid 30 days                                 | cannot be cancelled alone (F-40)                                          |
 
 ## Loop 1: Critical (surface pass, seven lenses)
+
+Team: dr-of-security, role-design-fe, role-frontend-integration, role-product-owner, role-qa-automation, role-data-scientist
+Critical layer: what is true versus assumed, read from templates, handlers, tests and the live staging site.
+Score: 0% (raw −260, clamped; see "Loop 1 score")
 
 **Critical question:** what is the most dangerous assumption? That a screen exists in `main` because a canvas board or a story says so. Several promised steps were never built (survey link, the second door, the 3-step wizard, sponsors in the wizard), and several checks that look like coverage run nowhere (F-43, F-45).
 
@@ -203,7 +219,11 @@ Human gate (loop 1): not a stop. Under the owner's run model all five loops run 
 
 ## Loop 2: Conservative (verify, refute, assume the worst)
 
-**Team:** five agents with a brief to refute, not to agree: FE Integration (visitor and sponsor), FE Integration (organizer), Sr Data Scientist (ran the real logic), Dr of Security, Sr Automation QA (re-derived the test coverage). The lead added browser checks on staging, which passes the Cloudflare challenge that `curl` does not.
+Team: role-frontend-integration, role-data-scientist, dr-of-security, role-qa-automation
+Conservative layer: assume the worst and try to refute each loop 1 finding, then re-run the real logic.
+Score: 0% (raw −365.75, clamped; see "Loop 2 score")
+
+**Lenses:** five agents with a brief to refute, not to agree: FE Integration (visitor and sponsor), FE Integration (organizer), Sr Data Scientist (ran the real logic), Dr of Security, Sr Automation QA (re-derived the test coverage). The lead added browser checks on staging, which passes the Cloudflare challenge that `curl` does not.
 
 **Conservative question:** does the floor still hold? It does not, in three places (F-32, F-34, new N-S1). Those are the findings that matter most and none of them is a layout problem.
 
@@ -362,7 +382,11 @@ Rule for every story: one screen or one cluster, one change small enough to test
 
 ## Loop 3: Adversarial (attack the solutions)
 
-**Team:** Sr Design FE (screen stories against the README, the canvas and recorded rulings), Product Owner (rulings, duplicates, order, cost), Sr Automation QA (can each born-red test fail, what must change, what a workflow reaches). Each was told to break the draft backlog, not to improve it.
+Team: role-design-fe, role-product-owner, role-qa-automation
+Adversarial layer: attack the draft backlog, not the subject.
+Score: 0% (raw −381.25, clamped; see "Loop 3 score")
+
+**Lenses:** Sr Design FE (screen stories against the README, the canvas and recorded rulings), Product Owner (rulings, duplicates, order, cost), Sr Automation QA (can each born-red test fail, what must change, what a workflow reaches). Each was told to break the draft backlog, not to improve it.
 
 **Result: the draft was wrong in most places.** The design lens returned CHANGE on 15 of 16 screen stories and KEEP on one. The PO lens returned SPLIT on 4, MERGE on 4, DROP on 1, DEFER on 2, and KEEP or amend on the rest. The sharpest hits:
 
@@ -455,7 +479,11 @@ Order follows the PO batches and the QA dependency list. Where the lenses disagr
 
 ## Loop 4: Compliance (do the amended stories keep the invariants)
 
-**Team:** Dr of Security (every v2 story against invariants 1, 3, 4, 6, 7, 9, the two-database rule and the cookie rule) and Sr Data Scientist (the number stories against invariants 2 and 5 and OSE-2151, with a brute-force run over every small case). Nothing was changed; no staging request was made by either.
+Team: dr-of-security, role-data-scientist
+Compliance layer: check every amended story against the invariants and the design rules.
+Score: 0% (raw −452.25, clamped; see "Loop 4 score")
+
+**Lenses:** Dr of Security (every v2 story against invariants 1, 3, 4, 6, 7, 9, the two-database rule and the cookie rule) and Sr Data Scientist (the number stories against invariants 2 and 5 and OSE-2151, with a brute-force run over every small case). Nothing was changed; no staging request was made by either.
 
 **Result: 3 stories break as worded, 11 are safe with a condition, 7 are safe.**
 
@@ -498,6 +526,12 @@ Raw score 100 − 552.25 = **−452.25**, reported **0%**. Findings: 69 + 7 = **
 
 ## Loop 5: Recursive (compare, check for rationalizing, final)
 
+Team: dr-of-security, role-data-scientist, role-qa-automation, role-product-owner, role-design-fe, role-frontend-integration
+Recursive layer: was the assessment itself honest; compare the four scores and the discovery rate.
+Score: 0% (raw −452.25, clamped; unchanged from loop 4)
+
+**Lenses:** the session lead ran this loop alone and spawned no agent. The Team line above names the six lenses whose loop 1 to 4 reports this loop re-read, because the worksheet gate needs agent ids on every loop and the lead is not an agent file.
+
 **Scores:** loop 1 −260 (0%), loop 2 −365.75 (0%), loop 3 −381.25 (0%), loop 4 −452.25 (0%). The score fell every loop. That is the protocol working, not a failure.
 
 **Discovery rate (new subject findings per loop):** 49, then 17, then 3, then 7. It is not converging: loop 4 found more than loop 3. The cause is the lens, not luck. Loops 1 to 3 asked "is this screen clear"; loop 4 asked "what does a hostile or careless input do". Each new lens opened new ground (a hostile tap count, an image's hidden location, a link that outlives its step). Per the owner's note on fix rounds, a flat or rising rate means **the list is not known to be complete**, and a fix round will add its own findings. This run cannot claim to have found them all.
@@ -510,6 +544,89 @@ Raw score 100 − 552.25 = **−452.25**, reported **0%**. Findings: 69 + 7 = **
 - The assessment found its sharpest items (F-32, F-34, N4-S1, N4-S4) by running or tracing the real code. The layout findings are largely observational and some will be narrowed when an organizer or a sponsor session is seen live.
 - The correction in loop 3 (F12 mismatch) was caught by checking a claim against the file. Other agent claims were checked the same way where cheap; not all.
 - The two owner-ruling collisions (labels, facts-first order) were caught only in loop 3. A fix round that skipped loop 3 would have undone them.
+
+## Findings register
+
+One row per finding, at its final severity after every raise and lower in loops 2 to 4. All 76 are open on the frozen SHA. The loop tables above hold the evidence; the backlog below maps each finding to a story.
+
+| ID    | Severity          | Status | Finding                                                    |
+| ----- | ----------------- | ------ | ---------------------------------------------------------- |
+| F-32  | Security Critical | Open   | Checked in counts taps, not people                         |
+| N-S1  | Security Critical | Open   | Email sign-up answers duplicate with the row id (OSE-2136) |
+| F-24  | Critical          | Open   | No simple way to get the report                            |
+| F-34  | Critical          | Open   | Distinct Scanners sums hourly buckets                      |
+| F-02  | High              | Open   | Poster check-in scan takes three screens                   |
+| F-03  | High              | Open   | Two lists, two searches, no map link on /events            |
+| F-04  | High              | Open   | One location question asked three ways                     |
+| F-05  | High              | Open   | A search is lost between header views                      |
+| F-07  | High              | Open   | Same control twice on three pages                          |
+| F-09  | High              | Open   | Survey has no way in and fails at the end                  |
+| F-10  | High              | Open   | Form for an event that does not exist stores data          |
+| F-14  | High              | Open   | The one h1 is the brand, not the page                      |
+| F-18  | High              | Open   | Every tap away from sponsor home breaks Back               |
+| F-19  | High              | Open   | Sponsor home says "on" when the name does not show         |
+| F-23  | High              | Open   | Links before they work; two primaries in the wizard        |
+| F-25  | High              | Open   | Cockpit has about 12 cards that repeat facts               |
+| F-27  | High              | Open   | Front-door sponsor saved to a pool no screen lists         |
+| F-31  | High              | Open   | Rates skip the rate floor and can pass 100%                |
+| F-33  | High              | Open   | Sponsors means four things                                 |
+| F-38  | High              | Open   | Published counts are exact, not rounded to 5               |
+| F-40  | High              | Open   | A forwarded sponsor link cannot be cancelled alone         |
+| F-43  | High              | Open   | 146 specs are reached by no workflow                       |
+| F-45  | High              | Open   | The one-primary fold gate cannot fail                      |
+| F-51  | High              | Open   | Staging Bruno accepts a challenge page                     |
+| N-V3  | High              | Open   | Event page drops the cover art                             |
+| N-O-1 | High              | Open   | Deactivate erases sponsor details without saying so        |
+| N4-S1 | High              | Open   | Uploaded art keeps EXIF location data                      |
+| N4-S4 | High              | Open   | A local report link is read as premium                     |
+| N4-S5 | High              | Open   | checkin_counts links the last check-in to a registration   |
+| F-01  | Medium            | Open   | Live cards say Register                                    |
+| F-06  | Medium            | Open   | Register sits below the fold on a phone                    |
+| F-08  | Medium            | Open   | Form headings repeat the button; check-in has two controls |
+| F-11  | Medium            | Open   | Dead links give no words                                   |
+| F-12  | Medium            | Open   | Landing lists every event twice                            |
+| F-13  | Medium            | Open   | Visitor dead end stacks organizer prompts                  |
+| F-17  | Medium            | Open   | Design rule breaches: small text, raw colour, shadow       |
+| F-20  | Medium            | Open   | Sponsor home: the one job is not first                     |
+| F-21  | Medium            | Open   | Wizard has five steps where the mockup has three           |
+| F-22  | Medium            | Open   | Wizard asks nine inputs before the type                    |
+| F-26  | Medium            | Open   | Front door chooser repeats each session                    |
+| F-28  | Medium            | Open   | Status buttons overlap                                     |
+| F-29  | Medium            | Open   | Posters card wording and small confirm                     |
+| F-35  | Medium            | Open   | Portfolio "Fewer than 5" can be false                      |
+| F-36  | Medium            | Open   | Withheld wording is not one voice                          |
+| F-37  | Medium            | Open   | Report clutter                                             |
+| F-41  | Medium            | Open   | Bearer tokens in the URL reach request logs                |
+| F-44  | Medium            | Open   | Organizer and sponsor hops have no staging layer           |
+| F-47  | Medium            | Open   | Tap size and text floor measured once at first paint       |
+| F-48  | Medium            | Open   | Front-door tests read source with regexes                  |
+| F-50  | Medium            | Open   | The second door is not in OSE                              |
+| F-52  | Medium            | Open   | Local PR gates seed too few events                         |
+| F-54  | Medium            | Open   | Landing privacy sentence is half true                      |
+| N-V2  | Medium            | Open   | /es error pages and sponsor card flip to English           |
+| N-V5  | Medium            | Open   | ?type= sets the primary action whatever the phase          |
+| N-O-4 | Medium            | Open   | Publish means two things in the wizard                     |
+| N-O-5 | Medium            | Open   | Wizard answers lost when Access ends                       |
+| N-D3  | Medium            | Open   | A failed read prints "Fewer than 5" or 0                   |
+| N-D4  | Medium            | Open   | Recap says "Fewer than 5 Walked in" for 8                  |
+| N-D5  | Medium            | Open   | People-scanning step may never tick                        |
+| N-S5  | Medium            | Open   | Turnstile is off in all environments                       |
+| N4-D4 | Medium            | Open   | Sponsor home prints exact scan counts from 5               |
+| F-15  | Low               | Open   | After register: duplicate Back, calendar, sponsors         |
+| F-16  | Low               | Open   | Use my location can re-fire after Back                     |
+| F-30  | Low               | Open   | Sign-in, Logs and Settings small issues                    |
+| F-42  | Low               | Open   | Edge challenge replaces no-referrer                        |
+| F-46  | Low               | Open   | Staging Bruno has no vacuous-run gate                      |
+| F-49  | Low               | Open   | Test id registry omits visitor surfaces                    |
+| F-53  | Low               | Open   | Card focus outline 2 px, README says 3 px                  |
+| N-O-2 | Low               | Open   | Replace vote code has no confirm                           |
+| N-O-6 | Low               | Open   | Preview Back to admin loses the selected event             |
+| N-D6  | Low               | Open   | lat and lon listed as public columns                       |
+| N-S6  | Low               | Open   | Check-in skips the rate backstop                           |
+| N-S7  | Low               | Open   | AGENTS.md invariant 3 wording versus CF-Connecting-IP      |
+| N-Q5  | Low               | Open   | T4 skip ceiling may be unset                               |
+| N4-D2 | Low               | Open   | Recap survey and sign-up counts lack a pair guard          |
+| N4-D3 | Low               | Open   | Check-in log line holds exact running totals               |
 
 ## Final score
 
@@ -537,25 +654,25 @@ Raw score 100 − 552.25 = **−452.25**, reported **0%**. Findings: 69 + 7 = **
 
 So even if all 22 stories land clean with no new finding, the score is 100 − 88.25 = **11.75%**. To pass: the 22 stories, plus OSE-2151, OSE-2136 and OSE-1244 landing, plus the owner either deciding or accepting in writing the five decision items (F-03, F-06, F-50, N-S7, F-37), plus a fresh CCR on the result, because the fix rounds will add findings (loop 4 shows the rate is not zero). Order of effect on the score: the 37 points of B-23a and the 41.75 of B-01a come first and also unblock the rest.
 
-### What must be true before any of this ships
+## What must be true before shipping
 
 - The owner rules on padding (round per OSE-2151 and freeze the recap after the event) and on Turnstile (off in all three environments today). B-01a cannot promise more than "one device-session once" without them.
 - The token model (query, fragment or one-time code) is ruled before B-06a, B-14's Back and B-15a.
 - B-23a lands first, so every later story has a gate that can fail.
 
-### Commit sequence
+## Commit sequence
 
 Docs only in this run (one commit: this worksheet). Then batches 0 to 3 above, one story per PR, admin stories one at a time (all edit `admin.html`), visitor stories in the order B-10, B-12, B-13, B-05 (small, no decision), then B-09a, B-09b, B-08, B-07, B-11.
 
-### Verification after shipping
+## Verification after shipping
 
 Per story: its born-red test seen red on an injected fault, then green; the staging chain (T1 to T4) green on the merge SHA; for HTML stories a strict Bruno request (phone user agent, no 403 accepted); a re-run of this CCR on the then-current `main`.
 
-### Risks accepted
+## Risks accepted
 
 None accepted by this run. Every open item is either a story or a named owner decision.
 
-### Human gate: the questions only the owner can close
+## Human gate: the questions only the owner can close
 
 1. **Padding.** Do published check-in and registration counts round to 5 and freeze after the event, and is Turnstile turned on? (Loop 1 to 4; B-01a, OSE-2151.) Until then a visitor can read a true count under 5.
 2. **Token model.** Query, fragment or one-time code for sponsor and report links? (SEC-2, SEC-3; B-06a, B-14, B-15a.)
@@ -564,6 +681,8 @@ None accepted by this run. Every open item is either a story or a named owner de
 5. **Nameless registration.** Is it a covenant matter (High, the lead's rating) or a legal one (Regulatory 25, the security lens)? (F-10.)
 6. **Sponsors in the wizard and walk-in split, Phase 2, Deactivate, one filled button on the landing.** Short decisions listed above (3, 4, 10, 11, 12).
 7. **AGENTS.md invariant 3** (the `CF-Connecting-IP` exception): edit the sentence by the 5-loop process, or stop reading the header.
+
+Which of these seven do you rule on first?
 
 ## Ranked refinement backlog (Linear, parent OSE-2159)
 
