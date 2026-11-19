@@ -27,8 +27,10 @@
  *      SELECTs read no point.
  *   4. THE ZOOMED MAP. ZoomEvent (lib/attendee-map.ts) declares no coordinate,
  *      and mapDots reads none and derives no cell from one: a dot is placed
- *      from the event's stored res-9 cell, which the landing passes beside the
- *      projected event (owner, 2026-11-09: a dot at its block's centre).
+ *      from the event's res-9 cell, which the landing passes beside the
+ *      projected event: the stored h3_res9, else the cell the server derives
+ *      from the stored point (lib/landing-area.ts blockOf; owner, 2026-11-09: a
+ *      dot at its block's centre). The landing's own row stays on the server.
  *   5. THE PUBLIC TEMPLATES. No public page template (src/templates/*.html but
  *      the admin ones) and no script a public page carries (lib/map-pan-script.ts,
  *      lib/area-tabs-script.ts) reads a coordinate field: no `.lat`, `.lon`,
@@ -95,7 +97,16 @@ const FINER_CELL = /^h3_res(?:[89]|1[0-5])$/;
 
 // ── Source reading ───────────────────────────────────────────────────────────
 
-/** Code without its comments: block comments, and `//` comments outside a string. */
+/**
+ * Code without its comments: block comments, and `//` comments outside a string.
+ *
+ * LIMIT, by design: this and `braced` read text, not a syntax tree. A `/*`, `}`
+ * or `{` inside a string can cut a body short or run it long, so a rule can
+ * look at less (or more) than the function. Each scoped body is checked to hold
+ * a `return` (functionBody), and the runtime spec
+ * (workers/oursharedevents/tests/public-event-no-coordinates.spec.ts) reads the
+ * real answers, so a mis-read here is a narrower gate, not a missing one.
+ */
 function stripComments(src: string): string {
   const noBlocks = src.replace(/\/\*[\s\S]*?\*\//g, '');
   return noBlocks

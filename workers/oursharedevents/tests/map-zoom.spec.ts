@@ -42,6 +42,7 @@ import {
   cellToLatLng,
   cellToParent,
   gridDisk,
+  h3IndexToSplitLong,
   latLngToCell,
 } from 'h3-js';
 import {
@@ -189,6 +190,30 @@ describe('the zoomed landing still draws its dots with the point out of the publ
   test("the stored cell wins over the point: the dot is at the event's own block", () => {
     const html = zoomedLanding([row('a', far, { h3_res9: res9(RIPH) })]);
     expect(dotsDrawn(html)).toEqual([at(RIPH)]);
+  });
+
+  test('a stored value that is no res-9 cell is not used: the block comes from the point', () => {
+    for (const bad of [CELL, 'not-a-cell']) {
+      const html = zoomedLanding([row('a', RIPH, { h3_res9: bad })]);
+      expect(dotsDrawn(html), bad).toEqual([at(RIPH)]);
+    }
+  });
+
+  // The bounds a point must keep to give a block (StrykerJS on blockOf): just
+  // off the globe gives none; on its edge is still a place.
+  test('a point off the globe gives no block; a point on its edge does', () => {
+    const off = zoomedLanding([
+      row('n', { lat: 90.5, lon: RIPH.lon }),
+      row('e', { lat: RIPH.lat, lon: 180.5 }),
+    ]);
+    expect(dotsDrawn(off)).toEqual([]);
+    expect(off).toContain('/events/n');
+    expect(off).toContain('/events/e');
+    const edge = zoomedLanding([
+      row('pole', { lat: 90, lon: 0 }),
+      row('line', { lat: 0, lon: 180 }),
+    ]);
+    expect(dotsDrawn(edge)).toHaveLength(2);
   });
 
   test('with neither a cell nor a point, the event is listed and not drawn', () => {
@@ -1332,17 +1357,27 @@ describe('the zoomed area, edge by edge', () => {
     ]);
   });
 
-  test('only a res-9 cell is placed: a res-7 or res-10 cell, text, a number or nothing are not', () => {
+  test('only a res-9 cell id is placed: a res-7 or res-10 cell, text, a number, the cell as two halves or nothing are not', () => {
     const block = latLngToCell(RIPH.lat, RIPH.lon, 9);
     const { dots, unplaced } = mapDots(CELL, [
       ev('res7', { h3_res9: CELL }),
       ev('res10', { h3_res9: cellToChildren(block, 10)[0] }),
       ev('text', { h3_res9: 'not-a-cell' }),
       ev('number', { h3_res9: 617700169958293500 }),
+      // A valid res-9 cell in h3-js's other form, two 32-bit halves: not the
+      // cell id the server stores, so not a place (StrykerJS on blockOf).
+      ev('halves', { h3_res9: h3IndexToSplitLong(block) }),
       ev('none', { h3_res9: null }),
     ]);
     expect(dots).toEqual([]);
-    expect(unplaced.map((e) => e.id)).toEqual(['res7', 'res10', 'text', 'number', 'none']);
+    expect(unplaced.map((e) => e.id)).toEqual([
+      'res7',
+      'res10',
+      'text',
+      'number',
+      'halves',
+      'none',
+    ]);
   });
 
   test('a block at the pole or on the date line is still a block, so it is placed', () => {
