@@ -1,0 +1,50 @@
+info:
+  name: GET /?where=Chicago (the top menu carries the place)
+  type: http
+  seq: 35
+
+# OSE-2165 (CCR 2026-11-19 F-05): a search carries between List, Map and Events.
+# Before: the header served Events and Map with no query, so a person who typed
+# a town and tapped Map got the unfiltered map. Strict: 200 only, a phone user
+# agent, no 403 accepted (the pattern of OSE-2160). The link carries the town's
+# own label ("Chicago, IL"), never the text typed. The workers-pool twin is
+# workers/oursharedevents/tests/search-carries.spec.ts.
+http:
+  method: GET
+  url: "{{baseUrl}}/?where=Chicago"
+  headers:
+    - name: User-Agent
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const body = String(res.getBody());
+        const nav = (body.match(/<nav data-testid="landing-nav"[\s\S]*?<\/nav>/) || [""])[0];
+        const hrefOf = function (id) {
+          const tags = nav.match(/<a [^>]*>/g) || [];
+          const tag = tags.filter(function (t) { return t.includes('data-testid="' + id + '"'); })[0] || '';
+          return (tag.match(/href="([^"]*)"/) || [])[1] || '';
+        };
+
+        test("Returns 200 (strict: a 403 is not accepted)", function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+        test("It is the landing", function () {
+          expect(body).to.include("data-surface=\"ose-landing\"");
+        });
+        test("Map carries the resolved place: /map?where=Chicago, IL", function () {
+          expect(hrefOf("nav-map")).to.equal("/map?where=Chicago%2C%20IL");
+        });
+        test("Events carries it too", function () {
+          expect(hrefOf("nav-events")).to.equal("/events?where=Chicago%2C%20IL");
+        });
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

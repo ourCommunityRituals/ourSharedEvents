@@ -10,9 +10,13 @@
  * CAPPED before they touch anything:
  *   - `when` ∈ WHEN_OPTIONS (default 'all'). Anything else → default.
  *   - `q`    free text, trimmed, capped at Q_MAX_LEN, matched case-insensitively
- *            against the card's name and venue ONLY. A whole place name or a
- *            zip ("Oak Lawn", "60453") is a place instead, and lists that
- *            place's events (lib/place-names.ts, owner 2026-11-05). Never reaches SQL: the
+ *            against the card's name and venue ONLY. A town or a zip ("Oak Lawn",
+ *            "Chicago", "60453") is a place instead, and lists that place's
+ *            events. The place is read by the landing's own resolver
+ *            (readTyped, lib/landing-where.ts), so a name gives the same events
+ *            here as on the landing (OSE-2165; owner 2026-11-05, 2026-11-06).
+ *            `?where=` and `?zip=`, which the header's Events link carries, are
+ *            read as `q` when `q` is empty. Never reaches SQL: the
  *            list is already the brand-scoped, active, published projection the
  *            DataProvider returns, and the filter runs over that in the Worker.
  *            It is reflected into the page exactly once, HTML-escaped, inside a
@@ -32,8 +36,9 @@ import { escapeHtml } from './html-escape';
 import { injectMarker } from './inject-marker';
 import { zonedDatePart } from './event-datetime';
 import type { EventListItem } from './event-list';
-import { findSearchPlace, inSearchPlace } from './place-names';
-import type { PlacedEvent } from './zip-areas';
+import { carriedPlaceQuery, readTyped, type WhereState } from './landing-where';
+import { inPlaceMatches, type PlaceMatch } from './place-search';
+import { normalizeZip, type PlacedEvent } from './zip-areas';
 import { fmt, fmtCount, msg, type MessageKey } from './i18n/catalog';
 import { DEFAULT_LANG, INTL_LOCALE, type Lang } from './i18n/languages';
 import { withLangPrefix } from './i18n/path-prefix';
@@ -62,6 +67,51 @@ const HOME_TZ = 'America/Chicago';
 export interface DiscoveryFilters {
   when: WhenOption;
   q: string;
+}
+
+/** What a search box value resolved to: how the page names it, and its places. */
+export interface SearchPlace {
+  /** The page's words for it: the town's label, the zip, or the name typed for a name that is many places. */
+  label: string;
+  /** The places it means, for the events test. */
+  matches: readonly PlaceMatch[];
+  /** The landing's reading of it, for what the header carries on. */
+  where: WhereState;
+}
+
+/**
+ * The place a search means, or null when it is ordinary text. The landing's own
+ * resolver decides (readTyped): a town name, one place or many, then a 5-digit
+ * zip. A zip outside the Census table (a PO box zip) is a place that matches only
+ * an event that gives it. "Oak" alone, and any other text, is a name search.
+ */
+export function resolveSearchPlace(q: string): SearchPlace | null {
+  if (!q) return null;
+  const where = readTyped(q);
+  switch (where.kind) {
+    case 'place':
+      return { label: where.place.label, matches: [where.place], where };
+    case 'choose':
+      return { label: where.typed, matches: where.matches, where };
+    case 'zip':
+      return { label: where.area.zip, matches: [zipMatch(where.area.zip)], where };
+    case 'unknown-zip': {
+      const zip = normalizeZip(where.typed);
+      return zip ? { label: zip, matches: [zipMatch(zip)], where } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+function zipMatch(zip: string): PlaceMatch {
+  return { name: zip, state: '', label: zip, zips: [zip] };
+}
+
+/** What the header's Events and Map links carry from this search: the place found, or nothing. */
+export function carriedSearchQuery(f: DiscoveryFilters): string {
+  const place = resolveSearchPlace(f.q);
+  return place ? carriedPlaceQuery(place.where) : '';
 }
 
 /**
@@ -96,7 +146,7 @@ function eventsHref(lang: Lang, when: WhenOption | null): string {
 
 /** The page heading follows the filter (OSE-1520). Plain text; the caller escapes. */
 export function discoveryHeading(f: DiscoveryFilters, lang: Lang = DEFAULT_LANG): string {
-  const place = findSearchPlace(f.q);
+  const place = resolveSearchPlace(f.q);
   if (place) return fmt(lang, 'disc.headingPlace', { place: place.label });
   return f.q ? fmt(lang, 'disc.headingQuery', { q: f.q }) : whenText(lang, f.when, 'heading');
 }
@@ -113,7 +163,7 @@ export function discoverySummaryText(
   wrapped = 0,
   lang: Lang = DEFAULT_LANG
 ): string {
-  const place = findSearchPlace(f.q);
+  const place = resolveSearchPlace(f.q);
   if (place) {
     return fmtCount(
       lang,
@@ -213,7 +263,10 @@ export function parseDiscoveryFilters(url: URL): DiscoveryFilters {
   const when = (WHEN_OPTIONS as readonly string[]).includes(rawWhen)
     ? (rawWhen as WhenOption)
     : 'all';
-  const rawQ = url.searchParams.get('q') ?? '';
+  // `?where=` and `?zip=` are what the header's Events link carries (OSE-2165);
+  // the search box shows them as its text.
+  const rawQ =
+    url.searchParams.get('q') || url.searchParams.get('where') || url.searchParams.get('zip') || '';
   // Collapse whitespace, strip control chars, cap length. The cap counts code
   // points, never UTF-16 units: a cut through an emoji left half a surrogate
   // pair, and encodeURIComponent threw on it, a 500 (CCR 2026-11-07 L3-03). A
@@ -380,8 +433,8 @@ export function applyDiscoveryFilters(
   now: Date = new Date(),
   lang: Lang = DEFAULT_LANG
 ): EventListItem[] {
-  const place = findSearchPlace(f.q);
-  const inPlace = place ? inSearchPlace(place) : null;
+  const place = resolveSearchPlace(f.q);
+  const inPlace = place ? inPlaceMatches(place.matches) : null;
   const needle = f.q.toLowerCase();
   return items.filter((e) => {
     if (!inWhenWindow(e, f.when, now)) return false;
@@ -448,7 +501,7 @@ export function renderDiscoveryFilters(
 
 /** Empty-state copy that names the question that had no answer. */
 export function discoveryEmptyCopy(f: DiscoveryFilters, lang: Lang = DEFAULT_LANG): string {
-  const place = findSearchPlace(f.q);
+  const place = resolveSearchPlace(f.q);
   if (place) {
     // "See all events" means all of them: no place, no date window.
     const nothing = fmt(lang, 'disc.emptyPlace', { place: escapeHtml(place.label) });
