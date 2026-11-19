@@ -536,7 +536,17 @@ describe('8b–8e. attribution rule gate — physical res9, digital res7, no dev
   // my location"): the map's script, which a person presses too. It draws the
   // dot and the distances on the phone and sends nothing: no fetch, beacon,
   // storage or address change, asserted in tests/map-pan.spec.ts.
-  const POSITION_READERS = ['src/templates/landing.html', 'src/lib/map-pan-script.ts'];
+  // The third (owner 2026-11-18, "tabbed filters and a distance-from-current-
+  // location search"): the landing filter tabs' script, whose Near me list a
+  // person opens and chooses. It works the distance out on the phone from the
+  // map's area centres and sends nothing: no fetch, beacon, storage, cookie or
+  // address change, and no coordinate or cell written on a card, asserted in
+  // tests/area-tabs.spec.ts.
+  const POSITION_READERS = [
+    'src/templates/landing.html',
+    'src/lib/map-pan-script.ts',
+    'src/lib/area-tabs-script.ts',
+  ];
 
   test('8b. nothing the Worker serves asks the browser for its position (admin included)', () => {
     const served = sourcesMatching(
