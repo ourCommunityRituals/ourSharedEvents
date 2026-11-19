@@ -59,6 +59,8 @@ function row(overrides: Partial<PublicEventRow> = {}): PublicEventRow {
     price_cents: null,
     price_model: null,
     price_note: null,
+    // A listed event (OSE-2196): its Directions menu is part of the golden.
+    is_published: 1,
     ...overrides,
   };
 }

@@ -56,7 +56,7 @@ import {
 } from './mock-data.js';
 
 import { resolveSponsorsForEvent, type SponsorRow } from './sponsor-resolver.js';
-import { listedSql } from './publish-grace';
+import { eventRoutableSql } from '../domain/event-state';
 
 // ── Re-export shared types so callers only need one import ─────────────────────
 
@@ -286,13 +286,16 @@ export class DataProvider {
       // zip_code (W1, owner 2026-11-16) is read for zip and town search only
       // (lib/zip-areas.ts eventZip). It is NOT published: the public projection
       // is an allowlist without it.
+      // OSE-2196: who is on the list and the map is the routable rule (listed
+      // and live, domain/event-state.ts), so the map panel's "Take me there"
+      // never reaches an off-map or private event.
       `SELECT id, brand_id, title, slug, status, description, location,
               start_date, end_date, timezone, starts_at, cover_image_url, created_at, updated_at,
               legal_clearance_tier, template_id, event_type_id,
               what_short, who_host, why_purpose, how_details, where_address, zip_code,
               lat, lon, corridor_id, h3_res9, h3_res7, place_kind, attendance_mode
        FROM events
-       WHERE is_published = 1 AND brand_id = ? AND status = 'active' AND ${listedSql()}
+       WHERE ${eventRoutableSql()} AND brand_id = ?
        ORDER BY start_date ASC, starts_at ASC
        LIMIT 1000`
     )

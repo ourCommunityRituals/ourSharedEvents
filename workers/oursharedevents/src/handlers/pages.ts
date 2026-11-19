@@ -21,7 +21,7 @@ import { validateLogoUrl } from '../lib/sponsor-logo';
 import { sponsorTitle, sponsorCardPath } from '../lib/sponsor-card';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { PLACEMENT_EVENT_USES_SPONSORS_SQL } from '../lib/sponsor-card';
-import { eventLiveSql } from '../domain/event-state';
+import { eventLiveSql, isRoutable } from '../domain/event-state';
 import { boothListPath, hasPublicBooths } from '../lib/public-booths';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 import { hashEmail, encryptText } from '../lib/pii';
@@ -899,11 +899,8 @@ export function renderSubscribeMenu(
   lang: Lang,
   now: Date = new Date()
 ): string {
-  if (row.is_published !== 1 || (row.status || '').toLowerCase() !== 'active') return '';
-  if (row.listed_from) {
-    const listedFrom = new Date(row.listed_from).getTime();
-    if (Number.isNaN(listedFrom) || listedFrom > now.getTime()) return '';
-  }
+  // In the feed exactly when listed: the routable rule (domain/event-state.ts).
+  if (!isRoutable(row, { now })) return '';
   const links = buildBrandSubscribeLinks(origin, row.brand_id);
   if (!links) return '';
   const label = msg(lang, 'calendar.subscribe');
@@ -1448,13 +1445,12 @@ export function renderPreEventHtml(
   // OSE-474: "Starts in 5 hours" under the labelled when line, pre-event only.
   const countdown = renderEventCountdown(row, nonce, undefined, lang);
   const mapImg = preview ? '' : venueMapImg(row, 'venue-map', lang);
-  const geoLink = renderGeoLink(
-    row.lat,
-    row.lon,
-    row.location,
-    row.where_address,
-    msg(lang, 'directions.pre')
-  );
+  // OSE-2196 (owner 2026-11-19): no route to an event that is off the map or
+  // private. Directions only when the event is routable (listed and live); a
+  // draft preview answers for the event once published.
+  const geoLink = isRoutable(row, { asPublished: preview })
+    ? renderGeoLink(row.lat, row.lon, row.location, row.where_address, msg(lang, 'directions.pre'))
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="${lang}" dir="${DIRECTION[lang]}" data-surface="ose-public">
@@ -1657,14 +1653,17 @@ export function renderEventLiveHtml(
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
   const mapImg = venueMapImg(row, 'venue-map-live', lang);
-  const geoLink = renderGeoLink(
-    row.lat,
-    row.lon,
-    row.location,
-    row.where_address,
-    msg(lang, 'directions.live'),
-    'geo-link-live'
-  );
+  // OSE-2196: the same routable rule as the pre-event page.
+  const geoLink = isRoutable(row)
+    ? renderGeoLink(
+        row.lat,
+        row.lon,
+        row.location,
+        row.where_address,
+        msg(lang, 'directions.live'),
+        'geo-link-live'
+      )
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="${lang}" dir="${DIRECTION[lang]}" data-surface="ose-public">

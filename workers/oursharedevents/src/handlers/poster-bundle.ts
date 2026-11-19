@@ -29,7 +29,7 @@
 import { generateQrCode, generateSvgQrCode } from '../lib/qr';
 import { ensureSlotShortlinks, previewSlotShortlinks } from '../lib/shortlinks';
 import { listSavedPosterCodes, posterCodeKind, posterCodeUec } from '../lib/poster-codes';
-import { assertRenderable, parseEventState } from '../domain/event-state';
+import { assertRenderable, isRoutable, parseEventState } from '../domain/event-state';
 import { getCode } from '../lib/uec';
 import { enrichWithPhase } from '../lib/event-enrich.js';
 import { PUBLIC_EVENT_COLUMNS, toPublicEvent } from '../lib/public-event-projection';
@@ -51,10 +51,13 @@ export interface PosterBundleEnv extends DataProviderEnv {
 // OSE-867: the event columns the poster needs are exactly the public ones —
 // select the allowlist (plus the routing-slot columns, which never leave this
 // handler) so the bundle can never publish a field GET /events/:id does not.
+// OSE-2196: is_published and listed_from are read only to decide `routable`;
+// they never leave this handler either (toPublicEvent is an allowlist).
 const POSTER_EVENT_SELECT =
   'SELECT ' +
   PUBLIC_EVENT_COLUMNS.join(', ') +
-  ', what_url, what_url_type, what_url_enabled, settings_json FROM events WHERE id = ?';
+  ', what_url, what_url_type, what_url_enabled, settings_json, is_published, listed_from' +
+  ' FROM events WHERE id = ?';
 
 // UEC ENTER (01) scan_hex — WCAG AA on white (6.59:1). Sourced via getCode() per OSE-322.
 const UEC_ENTER_HEX = getCode('ENTER')!.scan_hex;
@@ -194,6 +197,8 @@ export async function handleGetPosterBundle(
       what_url_type: string | null;
       what_url_enabled: number | null;
       settings_json: string | null;
+      is_published: number | null;
+      listed_from: string | null;
     }
   >();
 
@@ -352,6 +357,11 @@ export async function handleGetPosterBundle(
     // `event.name` is retired). Same projection as GET /api/v2/events/:id.
     event: toPublicEvent(enrichWithPhase(row)),
     eventStatus: row.status,
+    // OSE-2196 (owner 2026-11-19): may the poster offer directions? Only for a
+    // routable event, listed and live (domain/event-state.ts). An off-map or
+    // private event's poster has no Google Maps / Apple Maps buttons. A draft
+    // preview answers for the event once published.
+    routable: isRoutable(row, { asPublished: previewable && !allowed }),
     deploymentId: deployment?.id ?? null,
     qr,
     links,

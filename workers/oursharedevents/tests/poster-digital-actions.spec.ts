@@ -52,6 +52,8 @@ function bundle(event: Record<string, unknown> = {}): Record<string, unknown> {
       timezone: 'America/Chicago',
       ...event,
     },
+    // A listed event's bundle (OSE-2196: the server says it may be routed to).
+    routable: true,
     sponsors: [],
     slots: [],
     settings: { showQRSection: true },
@@ -71,22 +73,32 @@ type Nav = {
 async function openPoster(
   kind: 'print' | 'digital',
   body: Record<string, unknown>,
-  opts: { preview?: boolean; nav?: Nav; template?: string } = {}
+  opts: { preview?: boolean; nav?: Nav; template?: string; list?: unknown[] } = {}
 ): Promise<Opened> {
   const template = opts.template ?? POSTER_HTML;
   const served = opts.preview
     ? template.replace('<body>', `<body data-preview-event="${EVT}">`)
     : template;
-  const url = opts.preview
-    ? `${ORIGIN}/api/v2/admin/events/${EVT}/poster-preview?kind=${kind}`
-    : `${ORIGIN}/events/${EVT}/poster?kind=${kind}`;
+  // `list`: the poster with no event named, so it offers the picker over
+  // GET /api/v2/events (OSE-2196 checks that path too).
+  const url = opts.list
+    ? `${ORIGIN}/poster?kind=${kind}`
+    : opts.preview
+      ? `${ORIGIN}/api/v2/admin/events/${EVT}/poster-preview?kind=${kind}`
+      : `${ORIGIN}/events/${EVT}/poster?kind=${kind}`;
   const dom = new JSDOM(served, {
     url,
     runScripts: 'dangerously',
     pretendToBeVisual: true,
     beforeParse(w) {
-      (w as unknown as { fetch: unknown }).fetch = async (input: string) =>
-        String(input).includes('/poster-bundle') ? json(200, body) : json(404, { ok: false });
+      (w as unknown as { fetch: unknown }).fetch = async (input: string) => {
+        const u = String(input);
+        if (u.includes('/poster-bundle')) return json(200, body);
+        if (opts.list && /\/api\/v2\/events$/.test(u)) {
+          return json(200, { ok: true, items: opts.list });
+        }
+        return json(404, { ok: false });
+      };
       const nav = w.navigator as unknown as Record<string, unknown>;
       // jsdom has neither; a test opts in to each.
       if (opts.nav?.share) Object.defineProperty(nav, 'share', { value: opts.nav.share });
@@ -336,6 +348,52 @@ describe('digital: Share', () => {
 // The block's look comes from @ocr/ui (.detail-card, .share-row, .share-chip),
 // not from CSS in this spoke: the spoke-styles ratchet refuses a poster that
 // grows its own stylesheet (owner 2026-11-09, "Move to @ocr/ui").
+// OSE-2196 (owner 2026-11-19): "Anything that is listed as private or off map
+// cannot be routed to." The bundle's `routable` (the server's listed-and-live
+// rule, domain/event-state.ts) decides the Google Maps / Apple Maps buttons.
+// The place itself (name, address) still shows: the owner decides that part.
+describe('OSE-2196: no directions on the poster of an event that is not listed', () => {
+  for (const kind of ['digital', 'print'] as const) {
+    test(`${kind}: an off-map event (routable false) has no map buttons, and keeps its place`, async () => {
+      const { doc } = await openPoster(kind, { ...bundle(), routable: false });
+      expect(q(doc, 'poster-venue-name')!.textContent).toBe('Uptown Blue Island');
+      expect(q(doc, 'poster-directions')).toBeNull();
+      expect(q(doc, 'poster-open-map')).toBeNull();
+      expect(q(doc, 'poster-open-map-apple')).toBeNull();
+      // The drawn poster, not the page's own script source.
+      const html = doc.getElementById('poster-area')!.innerHTML;
+      expect(html).not.toContain('google.com/maps');
+      expect(html).not.toContain('maps.apple.com');
+    });
+  }
+
+  test('a bundle that does not say routable draws none (fail closed)', async () => {
+    const b = bundle();
+    delete b.routable;
+    const { doc } = await openPoster('digital', b);
+    expect(q(doc, 'poster-directions')).toBeNull();
+  });
+
+  test('control: a listed event (routable true) keeps both buttons', async () => {
+    const { doc } = await openPoster('digital', bundle());
+    expect(q(doc, 'poster-open-map')!.tagName).toBe('A');
+    expect(q(doc, 'poster-open-map-apple')!.tagName).toBe('A');
+  });
+
+  test('picker: a card drawn from the list loses its buttons when the bundle says not routable', async () => {
+    const item = bundle().event as Record<string, unknown>;
+    const { doc } = await openPoster('digital', { ...bundle(), routable: false }, { list: [item] });
+    expect(q(doc, 'poster-venue-name')!.textContent).toBe('Uptown Blue Island');
+    expect(q(doc, 'poster-directions')).toBeNull();
+  });
+
+  test('picker control: a listed event from the list keeps its buttons', async () => {
+    const item = bundle().event as Record<string, unknown>;
+    const { doc } = await openPoster('digital', bundle(), { list: [item] });
+    expect(q(doc, 'poster-open-map')!.tagName).toBe('A');
+  });
+});
+
 describe('the block’s styles come from @ocr/ui: 44px targets, tokens only', () => {
   const posterCss = [...POSTER_HTML.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)]
     .map((m) => m[1])

@@ -217,6 +217,15 @@
       <a class="ose-calendar-option" data-testid="add-to-calendar-ics" href="/events/evt_golden/calendar.ics" download>Apple u Outlook</a>
     </div>
   </details>
+  <details class="ose-calendar-menu" data-testid="subscribe-calendar">
+    <summary class="ose-calendar-link ose-calendar-summary" data-testid="subscribe-calendar-summary">Suscribirse al calendario</summary>
+    <div class="ose-calendar-options" role="group" aria-label="Suscribirse al calendario">
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-google" href="https://calendar.google.com/calendar/r?cid=webcal%3A%2F%2Foursharedevents.com%2Fbrands%2Froot%2Fcalendar.ics" target="_blank" rel="noopener noreferrer">Google Calendar</a>
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-outlook" href="https://outlook.live.com/calendar/0/addfromweb?url=https%3A%2F%2Foursharedevents.com%2Fbrands%2Froot%2Fcalendar.ics&amp;name=OurSharedEvents%3A%20root" target="_blank" rel="noopener noreferrer">Outlook.com</a>
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-apple" href="webcal://oursharedevents.com/brands/root/calendar.ics">Calendario de Apple</a>
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-ics" href="https://oursharedevents.com/brands/root/calendar.ics">Dirección del calendario (.ics)</a>
+    </div>
+  </details>
 </div>
 
     

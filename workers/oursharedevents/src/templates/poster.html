@@ -1048,7 +1048,10 @@ body {
         return '';
       }
 
-      function renderPoster(event) {
+      // OSE-2196 (owner 2026-11-19): `routable` is whether this event may be
+      // routed to (listed and live, decided by the server). Only `true` draws
+      // the Google Maps / Apple Maps buttons; anything else draws none.
+      function renderPoster(event, routable) {
         // OSE-844 (X-10): the API item now carries name/startDateISO/venue
         // directly (mapped in enrichWithPhase). The old `const data = event.data
         // || {}` first branch was permanently dead — no SELECT ever exposed a
@@ -1113,7 +1116,9 @@ body {
               (showAddress && venue ? '<span class="detail-card-sub" data-testid="poster-venue-address">' + esc(address) + '</span>' : '') +
               '</div>' +
               // Owner 2026-10-11: two choices, Google Maps and Apple Maps.
-              (digital
+              (routable !== true
+                ? ''
+                : digital
                 ? '<div class="detail-card-actions" role="group" aria-label="Directions" data-testid="poster-directions">' +
                   '<a class="btn btn-outline" href="https://www.google.com/maps/search/?api=1&amp;query=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map">Google Maps</a>' +
                   '<a class="btn btn-outline" href="https://maps.apple.com/?q=' + encodeURIComponent(where) + '" target="_blank" rel="noopener noreferrer" data-testid="poster-open-map-apple">Apple Maps</a>' +
@@ -1222,7 +1227,10 @@ body {
             '<option value="' + esc(i) + '">' + esc(e.name || e.id || '') + '</option>'
           ).join('');
           const show = (item) => {
-            area.innerHTML = renderPoster(item);
+            // The picker list is GET /api/v2/events, which lists only routable
+            // events (the same rule, as SQL: lib/data-provider.ts). The bundle
+            // below takes the buttons away again if that has changed.
+            area.innerHTML = renderPoster(item, true);
             syncChrome(item);
             loadPosterBundle(item.id, false);
           };
@@ -1630,8 +1638,14 @@ body {
           if (!current() || !data.ok) return false;
           if (renderEvent) {
             if (!data.event || !data.event.id) return false;
-            document.getElementById('poster-area').innerHTML = renderPoster(data.event);
+            document.getElementById('poster-area').innerHTML = renderPoster(data.event, data.routable === true);
             syncChrome(data.event);
+          }
+          // A card drawn from the picker list (renderEvent false) loses its
+          // directions if the bundle says the event is no longer routable.
+          if (!renderEvent && data.routable !== true) {
+            const dirs = document.querySelector('[data-testid="poster-directions"]');
+            if (dirs) dirs.remove();
           }
           renderPosterSponsors(data.sponsors, data.sponsor_rotation);
           // OSE-869: the organiser turned the QR grid off (a walk-up event has
