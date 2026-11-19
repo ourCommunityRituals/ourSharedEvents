@@ -636,6 +636,15 @@ async function holdsMapText(page: Page, selectors: string[]): Promise<boolean[]>
  *                   `<text>`, or holds one, is handed over: the judge reads
  *                   text and nothing else.
  *
+ *   a symbol label  The zoom buttons show "+" and "−" and are named "Zoom in"
+ *                   and "Zoom out". axe leaves label-content-name-mismatch
+ *                   undecided on a label with no words in it. WCAG 2.5.3 asks
+ *                   that a name contain the label's text; a lone symbol is
+ *                   not text a person reads out, so there is nothing to
+ *                   contain. This decides it by measurement: the node's shown
+ *                   text has no letter or digit, at most two characters, and
+ *                   it has a name of its own. Anything else stays undecided.
+ *
  * Any other rule, a node this cannot place, or a node in the drawing with no
  * text in it, stays undecided, so it fails.
  */
@@ -643,7 +652,7 @@ async function sortUndecided(
   page: Page,
   incomplete: AxeIncomplete
 ): Promise<{ undecided: string[]; onTheMap: string[] }> {
-  const nodes = incomplete.flatMap((v) =>
+  const all = incomplete.flatMap((v) =>
     v.nodes.map((n) => ({
       rule: v.id,
       name: `${v.id}: ${n.target.join(' ')}`,
@@ -651,6 +660,20 @@ async function sortUndecided(
       selector: n.target.length === 1 && typeof n.target[0] === 'string' ? n.target[0] : null,
     }))
   );
+  const symbolLabel = await page.evaluate(
+    (sels) =>
+      sels.map((sel) => {
+        const el = sel ? document.querySelector(sel) : null;
+        if (!el) return false;
+        const shown = (el.textContent ?? '').trim();
+        const named = (el.getAttribute('aria-label') ?? '').trim();
+        return (
+          shown.length > 0 && shown.length <= 2 && !/[\p{L}\p{N}]/u.test(shown) && named !== ''
+        );
+      }),
+    all.map((n) => (n.rule === 'label-content-name-mismatch' ? n.selector : null))
+  );
+  const nodes = all.filter((_, i) => !symbolLabel[i]);
   const streets = (await page.getByTestId('amap-streets').count()) > 0;
   if (!streets || nodes.length === 0) return { undecided: nodes.map((n) => n.name), onTheMap: [] };
 
