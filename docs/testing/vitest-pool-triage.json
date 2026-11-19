@@ -513,6 +513,13 @@
       "testCount": 9
     },
     {
+      "file": "workers/oursharedevents/tests/area-tabs.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 28
+    },
+    {
       "file": "workers/oursharedevents/tests/as-display-public-admin.spec.ts",
       "bucket": "node",
       "needsReview": false,

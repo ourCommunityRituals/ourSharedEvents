@@ -267,6 +267,21 @@ export const pl: Record<MessageKey, string> = {
   'area.list': 'Lista',
   'area.map': 'Mapa',
   'area.filters': 'Filtry',
+  'area.tabs': 'Filtruj wydarzenia',
+  'area.tabsOn': 'filtr włączony',
+  'area.near': 'Blisko mnie',
+  'area.nearLabel': 'Odległość od miejsca, w którym jesteś',
+  'area.nearAny': 'Dowolna odległość',
+  'area.nearWithin': 'W promieniu {d} mil',
+  'area.nearPrivacy':
+    'Twoja lokalizacja jest używana tylko na tym urządzeniu. Nigdy nie jest wysyłana ani zapisywana.',
+  'area.nearLocating': 'Szukam Twojej lokalizacji...',
+  'area.nearOff': 'Lokalizacja jest wyłączona, więc nie można użyć odległości.',
+  'area.nearShown':
+    'Wydarzenia w promieniu {d} mil, od najbliższego. Wydarzenia bez miejsca na mapie są pominięte.',
+  'area.nearNone':
+    'Brak wydarzeń z miejscem na mapie w promieniu {d} mil. Spróbuj większej odległości.',
+  'area.nearAway': 'ok. {d} mil stąd',
   'map.near': 'w pobliżu: {venue}',
   'map.exampleLabel':
     'Przykładowa mapa: trzy okolice narysowane jako ponumerowane sześciokąty, najbardziej ruchliwa w najciemniejszym odcieniu',

@@ -195,12 +195,13 @@ async function page(b: Bundle, path: string, env: Record<string, unknown>): Prom
 export async function renderLanding(
   path: string,
   rows: Row[],
-  opts: { streets: boolean } = { streets: true }
+  opts: { streets: boolean; env?: Record<string, unknown> } = { streets: true }
 ): Promise<string> {
   const b = await load();
   (globalThis as Record<string, unknown>)[ROWS_KEY] = rows;
   try {
-    const plain = await page(b, path, {});
+    const extra = opts.env ?? {};
+    const plain = await page(b, path, { ...extra });
     if (!opts.streets) return plain;
     const zoom = /data-zoom="([0-9a-f]{15})"/.exec(plain)?.[1];
     const cells = zoom
@@ -212,7 +213,7 @@ export async function renderLanding(
     const bucket = b.fakeBucket(b.DEFAULT_ARCHIVE, await b.pmtilesArchive(tiles, { gzip: true }));
     // The street layer is behind a switch the Worker reads (STREET_MAP, off
     // unless it is exactly 'on'): the page draws no street without it.
-    const html = await page(b, path, { MAP_TILES: bucket, STREET_MAP: 'on' });
+    const html = await page(b, path, { ...extra, MAP_TILES: bucket, STREET_MAP: 'on' });
     if (!html.includes('data-testid="amap-streets"')) {
       throw new Error(`landing ${path} drew no street layer over its synthetic archive`);
     }
@@ -220,6 +221,34 @@ export async function renderLanding(
   } finally {
     delete (globalThis as Record<string, unknown>)[ROWS_KEY];
   }
+}
+
+/**
+ * A stand-in for the `DB` binding that answers the event-type catalog's two reads
+ * (lib/event-type-catalog-read.ts) and nothing else, so the landing draws its Type
+ * row. Pass it as `env: { DB: fakeCatalogDb(...) }`. Every other read comes back empty.
+ */
+export function fakeCatalogDb(
+  categories: { category_code: string; display_name: string; display_order: number }[],
+  types: { id: string; uec_code: string; name: string; category_code: string }[]
+): unknown {
+  const answer = (sql: string) =>
+    /event_type_category_registry/.test(sql)
+      ? categories.map((c) => ({ ...c, is_active: 1 }))
+      : /event_type_registry/.test(sql)
+        ? types.map((t) => ({ ...t, description: null, is_active: 1 }))
+        : [];
+  return {
+    prepare(sql: string) {
+      const stmt = {
+        bind: () => stmt,
+        all: async () => ({ results: answer(sql) }),
+        first: async () => null,
+        run: async () => ({ success: true, meta: {} }),
+      };
+      return stmt;
+    },
+  };
 }
 
 /** The stylesheet the Worker serves at /ui.css (@ocr/ui: tokens and base rules). */

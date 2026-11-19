@@ -313,6 +313,11 @@ test.describe('mutation: every WCAG check fails on a fault', () => {
       content:
         '[data-z="reset"]{color:rgb(190,190,190)!important;background:rgb(255,255,255)!important}',
     });
+    // Mid-screen, as a person reading it would have it: axe cannot resolve the
+    // background of a button that sits on the very edge of the viewport ("overlapped
+    // by another element", an incomplete, not a failure), and where the page puts
+    // the button on a phone moves with the layout above it (OSE-2156).
+    await page.getByTestId('amap-reset').evaluate((el) => el.scrollIntoView({ block: 'center' }));
     const found = await axeWcag(page);
     expect(
       found.some((l) => l.startsWith('color-contrast') && l.includes('data-z="reset"')),
