@@ -19,6 +19,7 @@ import {
   floorPublishedChain,
   floorRows,
   floorTotalOfParts,
+  publishCount,
   roundForPublish,
 } from '../src/lib/count-floor';
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
@@ -66,6 +67,57 @@ describe('applyCountFloor — uniform K-anon floor', () => {
   });
 });
 
+describe('publishCount — a published count is withheld under the floor, rounded from it (OSE-2151)', () => {
+  // Owner ruling 2026-11-18: "rounding applies to the OW / OSE". Seen failing
+  // with publishCount returning applyCountFloor unchanged (exact from 5 up).
+  test.each([
+    [0, null],
+    [4, null],
+    [5, 5],
+    [9, 5],
+    [10, 10],
+    [12, 10],
+    [14, 10],
+    [15, 15],
+    [101, 100],
+  ])('%i publishes as %s', (raw, out) => {
+    expect(publishCount(raw)).toEqual({
+      count: out,
+      suppressed: out === null,
+      floor: CORRIDOR_MAP_MIN_COUNT,
+    });
+  });
+
+  test('the gate is the exact count: 5 to 9 publish as 5, never as withheld', () => {
+    for (const n of [5, 6, 7, 8, 9]) expect(publishCount(n).suppressed).toBe(false);
+  });
+
+  test('applyCountFloor stays exact: it is the gate, and is also used on counts of things', () => {
+    expect(applyCountFloor(12).count).toBe(12);
+  });
+
+  test('neighbours: two reads one person apart inside a step of 5 publish the same; a control crossing a step moves', () => {
+    for (const n of [5, 6, 7, 8, 10, 11, 12, 13, 20, 21, 22, 23]) {
+      expect(publishCount(n + 1)).toEqual(publishCount(n));
+      expect(floorRows(Array(n + 1).fill('x')).count).toBe(floorRows(Array(n).fill('x')).count);
+      expect(floorTotalOfParts([n + 1, 7]).count).toBe(floorTotalOfParts([n, 7]).count);
+    }
+    expect(publishCount(10).count).not.toBe(publishCount(9).count);
+    expect(floorTotalOfParts([10, 7]).count).not.toBe(floorTotalOfParts([9, 7]).count);
+  });
+
+  test('every published value is a multiple of 5', () => {
+    for (let n = 0; n < 200; n++) {
+      const c = publishCount(n).count;
+      if (c !== null) expect(c % 5).toBe(0);
+      const t = floorTotalOfParts([n, n + 3, 7]).count;
+      if (t !== null) expect(t % 5).toBe(0);
+      const rows = floorRows(Array(n).fill(0)).count;
+      if (rows !== null) expect(rows % 5).toBe(0);
+    }
+  });
+});
+
 describe('floorRows — a list of people under the floor returns no row (OSE-2087)', () => {
   // Owner ruling, 2026-11-16: the floor reaches the organizer's own lists. Rows
   // are a count, so under the floor none is handed back. Seen failing with the
@@ -81,7 +133,7 @@ describe('floorRows — a list of people under the floor returns no row (OSE-208
     });
   });
 
-  test('5 rows: every row, in order, with the exact count', () => {
+  test('5 rows: every row, in order, with the count', () => {
     const rows = people.slice(0, 5);
     const out = floorRows(rows);
     expect(out).toEqual({ items: rows, count: 5, suppressed: false, floor: 5 });
@@ -91,9 +143,10 @@ describe('floorRows — a list of people under the floor returns no row (OSE-208
 
   test('one page of a longer list is judged by the size of the whole list', () => {
     // Two rows of a list of 12 are shown; six rows of a list said to hold 4 are not.
+    // The published count is rounded (OSE-2151); the gate is the exact 12.
     expect(floorRows(people.slice(0, 2), 12)).toEqual({
       items: ['Ada', 'Ben'],
-      count: 12,
+      count: 10,
       suppressed: false,
       floor: 5,
     });
@@ -152,8 +205,8 @@ describe('floorNestedCounts — a chain of nested counts never subtracts to a sm
 });
 
 describe('floorTotalOfParts — a total beside its parts is the sum of the published parts', () => {
-  test('a part under the floor never joins the sum (6 + 3 is 6, not 9)', () => {
-    expect(floorTotalOfParts([6, 3])).toEqual({ count: 6, suppressed: false, floor: 5 });
+  test('a part under the floor never joins the sum (6 + 3 is 5, not 9)', () => {
+    expect(floorTotalOfParts([6, 3])).toEqual({ count: 5, suppressed: false, floor: 5 });
   });
 
   test('the total minus the published parts is always zero', () => {
@@ -162,7 +215,9 @@ describe('floorTotalOfParts — a total beside its parts is the sum of the publi
       [5, 5, 4, 0],
       [7, 1, 9, 2, 12],
     ]) {
-      const published = parts.filter((n) => applyCountFloor(n).count !== null);
+      const published = parts
+        .map((n) => publishCount(n).count)
+        .filter((n): n is number => n !== null);
       const total = floorTotalOfParts(parts).count ?? 0;
       expect(total - published.reduce((a, b) => a + b, 0)).toBe(0);
     }
@@ -177,7 +232,7 @@ describe('floorTotalOfParts — a total beside its parts is the sum of the publi
   });
 
   test('a part already withheld (null) or missing counts for nothing', () => {
-    expect(floorTotalOfParts([8, null, undefined, 7]).count).toBe(15);
+    expect(floorTotalOfParts([8, null, undefined, 7]).count).toBe(10);
     expect(floorTotalOfParts([null, undefined]).count).toBeNull();
   });
 
@@ -188,12 +243,13 @@ describe('floorTotalOfParts — a total beside its parts is the sum of the publi
   });
 
   test('non-finite and fractional parts are treated like applyCountFloor treats them', () => {
-    expect(floorTotalOfParts([5.9, 6.2]).count).toBe(11);
-    expect(floorTotalOfParts([Number.NaN, Infinity, -9, 6]).count).toBe(6);
+    expect(floorTotalOfParts([5.9, 6.2]).count).toBe(10);
+    expect(floorTotalOfParts([10.9, 6.2]).count).toBe(15);
+    expect(floorTotalOfParts([Number.NaN, Infinity, -9, 6]).count).toBe(5);
   });
 
   test('a custom floor applies to each part, and is echoed', () => {
-    expect(floorTotalOfParts([12, 7], 10)).toEqual({ count: 12, suppressed: false, floor: 10 });
+    expect(floorTotalOfParts([12, 7], 10)).toEqual({ count: 10, suppressed: false, floor: 10 });
     expect(floorTotalOfParts([9, 9], 10)).toEqual({ count: null, suppressed: true, floor: 10 });
   });
 });
@@ -219,11 +275,23 @@ describe('flooredRatePct — a rate is never a head count under the floor', () =
     }
   });
 
-  test('a rest under the floor is withheld (19 of 20 leaves one person)', () => {
+  test('the rate is worked out from the rounded counts (OSE-2151): 24 of 30 reads as 20 of 30', () => {
+    // The exact rest (6) clears the floor, so the rate publishes, from the
+    // counts rounded down to a multiple of 5: 20 of 30, never 24 of 30.
+    expect(flooredRatePct(24, 30)).toBeCloseTo(66.667, 2);
+    expect(flooredRatePct(20, 30)).toBeCloseTo(66.667, 2);
+    expect(flooredRatePct(15, 24)).toBe(75); // 15 of 20
+  });
+
+  test('an exact rest of 1 to 4 is withheld, though the rounded counts would hide it (OSE-2151)', () => {
+    // Rounded, 19 of 20 reads 15 of 20 (75%), while 20 of 20 is everyone. A
+    // rate that appeared between them would say one person did not. So the
+    // nested-count rule runs on the exact counts first.
     for (const rest of [1, 2, 3, 4]) {
       expect(flooredRatePct(20 - rest, 20)).toBeNull();
     }
-    expect(flooredRatePct(15, 20)).not.toBeNull(); // a rest of exactly the floor
+    expect(flooredRatePct(15, 20)).toBe(75);
+    expect(flooredRatePct(12, 14)).toBeNull();
   });
 
   test('everyone (a rest of none) is published, as the nested-count rule has it', () => {
@@ -238,6 +306,10 @@ describe('flooredRatePct — a rate is never a head count under the floor', () =
     for (const n of [1, 2, 3]) {
       expect(flooredRatePct(20 - n, 20)).toBe(flooredRatePct(20 - n - 1, 20));
     }
+    // One more person inside a step of 5 on either side changes nothing.
+    for (const n of [10, 11, 12, 13]) {
+      expect(flooredRatePct(n, 22)).toBe(flooredRatePct(n + 1, 23));
+    }
   });
 
   test('a part larger than its whole fails closed', () => {
@@ -248,11 +320,13 @@ describe('flooredRatePct — a rate is never a head count under the floor', () =
     expect(flooredRatePct(10, 20, 10)).toBe(50);
     expect(flooredRatePct(9, 20, 10)).toBeNull(); // part under 10
     expect(flooredRatePct(15, 20, 10)).toBeNull(); // rest of 5 is under 10
+    expect(flooredRatePct(19, 20, 10)).toBeNull(); // 15 of 20 after rounding: rest of 5
     expect(flooredRatePct(9, 9, 10)).toBeNull(); // whole under 10
   });
 
   test('non-finite and fractional counts are floored first', () => {
     expect(flooredRatePct(5.9, 10.7)).toBe(50);
+    expect(flooredRatePct(9.9, 14.7)).toBe(50); // 9 of 14 exactly, 5 of 10 once rounded
     expect(flooredRatePct(Number.NaN, 20)).toBeNull();
     expect(flooredRatePct(10, Infinity)).toBeNull();
   });

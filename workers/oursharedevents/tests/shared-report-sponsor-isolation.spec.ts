@@ -205,9 +205,10 @@ describe('OSE-1172 — sponsor-slice isolation on the SharedReport read path (TL
   const CAMPAIGN = 'camp-iso-shared';
   const SP_A = 'sp-iso-a';
   const SP_B = 'sp-iso-b';
-  const A_POSTER = 7; // clears K=5
-  const B_POSTER = 9; // higher volume than A → isolation must not be size/order dependent
-  const COMBINED = A_POSTER + B_POSTER; // 16 — the number a leak would surface
+  // Multiples of 5, so each reads as itself once rounded for publishing (OSE-2151).
+  const A_POSTER = 10; // clears K=5
+  const B_POSTER = 15; // higher volume than A → isolation must not be size/order dependent
+  const COMBINED = A_POSTER + B_POSTER; // 25 — the number a leak would surface
 
   beforeEach(async () => {
     await applyMigrations();
@@ -246,7 +247,7 @@ describe('OSE-1172 — sponsor-slice isolation on the SharedReport read path (TL
     const report = await readReport(EVT, SP_A);
     const row = (report.campaign_summary ?? []).find((c) => c.campaign_id === CAMPAIGN);
     expect(row).toBeDefined();
-    // A alone = 7. Combined with B (9) = 16 would be a peer leak.
+    // A alone = 10. Combined with B (15) = 25 would be a peer leak.
     expect(row!.total_displays).toBe(A_POSTER);
     expect(row!.total_displays).not.toBe(COMBINED);
     // The aggregate must never reveal that a co-sponsor shares the campaign.

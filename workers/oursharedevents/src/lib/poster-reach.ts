@@ -33,7 +33,7 @@
 // withheld code gains a tap and none can be subtracted to get one back.
 // The sponsor surface does not read this module.
 
-import { applyCountFloor, floorTotalOfParts, type FlooredCount } from './count-floor';
+import { applyCountFloor, floorTotalOfParts, publishCount, type FlooredCount } from './count-floor';
 import { posterCodeKind } from './poster-codes';
 import { TAP_CODE_SQL } from './pre-event-activity';
 import {
@@ -113,12 +113,20 @@ export interface PosterReach {
  * never one code. The two sums (`other.taps`, `total`) drop every code under
  * the floor before adding (floorTotalOfParts): each is a sum of counts that
  * could be published on their own, and neither moves with a withheld code.
+ * Every figure is rounded down to a multiple of 5 (OSE-2151).
  * Pure; exported for tests.
  */
 export function floorTaps(raw: { kind: string; taps: number }[]): FlooredTaps {
   const rows = raw
     .map((r) => ({ kind: String(r.kind), taps: Number(r.taps) || 0 }))
-    .sort((a, b) => b.taps - a.taps || a.kind.localeCompare(b.kind));
+    // Ordered by the published (rounded) count, then by kind (OSE-2151): an
+    // order by the exact count would say which of two codes that both read 10
+    // had more taps, and which code is folded into "other links".
+    .sort(
+      (a, b) =>
+        (publishCount(b.taps).count ?? 0) - (publishCount(a.taps).count ?? 0) ||
+        a.kind.localeCompare(b.kind)
+    );
   const listed = rows.filter((r) => !applyCountFloor(r.taps).suppressed);
   const hidden = rows.filter((r) => applyCountFloor(r.taps).suppressed);
   if (hidden.length === 1 && listed.length > 0) hidden.push(listed.pop()!);
@@ -127,7 +135,7 @@ export function floorTaps(raw: { kind: string; taps: number }[]): FlooredTaps {
     codes: listed.map((r) => ({
       kind: r.kind,
       word: posterCodeKind(r.kind).word,
-      taps: applyCountFloor(r.taps),
+      taps: publishCount(r.taps),
     })),
     other: hidden.length ? { codes: hidden.length, taps: floorTotalOfParts(taps(hidden)) } : null,
     total: floorTotalOfParts(taps(rows)),

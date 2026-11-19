@@ -212,13 +212,15 @@ describe('the public event projection publishes no count except through count-fl
         expect(publish(n), `${name}(${String(n)})`).toBeNull();
       }
       expect(publish(5), name).toBe(5);
-      expect(publish(12), name).toBe(name === 'roundForPublish' ? 10 : 12);
+      // OSE-2151: every permitted publisher rounds down to a multiple of 5.
+      expect(publish(9), name).toBe(5);
+      expect(publish(12), name).toBe(10);
     }
   });
 
   test('planted fault: a declared field that bypasses its helper is caught, and the real projector is not', () => {
     const fields = new Set(['title', 'attendee_count']);
-    const sources = { attendee_count: 'applyCountFloor' } as const;
+    const sources = { attendee_count: 'publishCount' } as const;
     const bypassing = (project: (row: Record<string, unknown>) => Record<string, unknown>) =>
       Object.keys(sources).filter((f) => project({ [f]: 3 })[f] === 3);
     // A projector that copies the value unchanged (what toPublicEvent did before it consulted the declarations).
@@ -226,7 +228,7 @@ describe('the public event projection publishes no count except through count-fl
       Object.fromEntries(Object.entries(row).filter(([k]) => fields.has(k)));
     expect(bypassing(copying)).toEqual(['attendee_count']);
     expect(bypassing((row) => projectEvent(row, fields, sources))).toEqual([]);
-    expect(projectEvent({ attendee_count: 12 }, fields, sources).attendee_count).toBe(12);
+    expect(projectEvent({ attendee_count: 12 }, fields, sources).attendee_count).toBe(10);
   });
 
   test('every declaration names a real field and a real count-floor function', () => {
@@ -249,6 +251,7 @@ describe('no privacy primitive lives in a consumer module', () => {
         'floorCumulativeSeries',
         'floorCumulativeOfParts',
         'roundForPublish',
+        'publishCount',
       ])
     );
     expect(sourceFiles(SRC).length).toBeGreaterThan(50);

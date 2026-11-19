@@ -19,6 +19,9 @@
  *      stall of another event or brand never joins the list;
  *   4. the plan cap (OSE-682) and the platform read's audit.
  *
+ * A published count is rounded down to a multiple of 5 (OSE-2151): A2's 7
+ * reads 5, and "no stall" is 6 + 5 read as 5 + 5.
+ *
  * @born-red OSE-2004 | method: run with the route switched off in router.ts
  *   (8 of 10 red; the 2 that pass are 404s the router's object-scope guard
  *   answers with or without this route); then one
@@ -223,7 +226,7 @@ describe('the wire shape, and what a stall of 4 + 3 and a stall of 7 read', () =
         name: 'Stall A2',
         category: 'craft',
         is_active: true,
-        scans: shown(7),
+        scans: shown(5),
       },
       {
         id: 'bcr-a3',
@@ -236,10 +239,10 @@ describe('the wire shape, and what a stall of 4 + 3 and a stall of 7 read', () =
     ]);
     expect(json.categories).toEqual([
       { category: 'food', booths: 2, scans: WITHHELD },
-      { category: 'craft', booths: 1, scans: shown(7) },
+      { category: 'craft', booths: 1, scans: shown(5) },
     ]);
-    expect(json.no_stall).toEqual({ placements: 2, scans: shown(11) });
-    expect(json.total).toEqual(shown(18));
+    expect(json.no_stall).toEqual({ placements: 2, scans: shown(10) });
+    expect(json.total).toEqual(shown(15));
     expect(json.any_withheld).toBe(true);
   });
 
@@ -287,7 +290,7 @@ describe('the wire shape, and what a stall of 4 + 3 and a stall of 7 read', () =
     const byId = new Map<string, Json>((posters.items as Json[]).map((p) => [p.id, p.scans]));
     // A1: both its posters are withheld; the stall is withheld, not 7.
     expect([byId.get('bcr-p1'), byId.get('bcr-p2')]).toEqual([WITHHELD, WITHHELD]);
-    expect(byId.get('bcr-p3')).toEqual(shown(7));
+    expect(byId.get('bcr-p3')).toEqual(shown(5));
     // Each stall is the sum of its posters' published counts, exactly.
     for (const b of mine.booths as Json[]) {
       const own = (posters.items as Json[]).filter((p) => p.booth_id === b.id);
@@ -349,7 +352,7 @@ describe('the plan (OSE-682) and the platform read', () => {
     ]);
     expect(json.categories).toEqual([{ category: 'art', booths: 1 }]);
     expect(json.no_stall).toEqual({ placements: 0 });
-    expect(json.total).toEqual(shown(9));
+    expect(json.total).toEqual(shown(5));
     expect('any_withheld' in json).toBe(false);
     expect(json.plan).toEqual({
       paid_report: false,
@@ -363,7 +366,7 @@ describe('the plan (OSE-682) and the platform read', () => {
   test('a platform admin reads the Free fair whole, and that read is audited', async () => {
     const { status, json } = await get(counts(FREE_FAIR), KEY);
     expect(status).toBe(200);
-    expect(json.booths[0].scans).toEqual(shown(9));
+    expect(json.booths[0].scans).toEqual(shown(5));
     const row = await tenv.DB.prepare(
       `SELECT action, outcome FROM admin_audit_log WHERE action = 'READ_PAST_PLAN' AND resource_id = ? ORDER BY rowid DESC LIMIT 1`
     )

@@ -62,10 +62,10 @@ describe('SharedReport corridor map is rebuilt, never assigned as HTML', () => {
     expect(root.getAttribute('viewBox')).toBeTruthy();
     const cells = slot.querySelectorAll('polygon');
     expect(cells.length).toBeGreaterThan(0);
-    expect(slot.querySelector('[data-testid="hex-cell"]')?.getAttribute('data-count')).toBe('12');
+    expect(slot.querySelector('[data-testid="hex-cell"]')?.getAttribute('data-count')).toBe('10'); // 12, rounded (OSE-2151)
     // escXml'd label comes back as text, decoded once, never as markup.
     const titles = [...slot.querySelectorAll('title')].map((t) => t.textContent);
-    expect(titles).toContain('Eagles <Hall> & Bar — 12 scans');
+    expect(titles).toContain('Eagles <Hall> & Bar — 10 scans');
     expect(slot.querySelector('Hall')).toBeNull();
   });
 
