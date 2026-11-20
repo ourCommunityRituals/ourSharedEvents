@@ -24,12 +24,14 @@ runtime:
         if (res.getStatus() === 200) {
           // Kept for the export request after this one: the export is withheld
           // whenever this list is (OSE-2087).
-          test('rows are the counted rows: a full list is never longer than its count', function() {
-            // OSE-2087: rows beside a smaller count give the uncounted group back.
+          test('rows are the counted rows: the count is the full list rounded down to a multiple of 5', function() {
+            // OSE-2087: the rows and the count describe the same list. OSE-2151:
+            // the count beside them is published rounded down to a multiple of 5
+            // (68 rows read 65), so the list is at most 4 rows longer than it.
             if (!json.suppressed && json.next_cursor === null) {
-              expect(json.items.length).to.eql(json.count);
+              expect(json.count).to.eql(json.items.length - (json.items.length % 5));
             } else if (!json.suppressed) {
-              expect(json.items.length).to.be.at.most(json.count);
+              expect(json.items.length).to.be.at.most(json.count + 4);
             }
           });
           bru.setVar('registrationsListWithheld', json.suppressed === true ? 'yes' : 'no');
