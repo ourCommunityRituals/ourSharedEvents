@@ -19,7 +19,11 @@
  *   returning 'duplicate' (one-shape case red), the unknown-field check removed
  *   (field case red), a console.log of the drawn margin in openVoteSet (T-or-V
  *   log case red), the team marker made for a down vote (the existing "not for
- *   me adds no team marker" case red) | date: 2026-11-20
+ *   me adds no team marker" case red), two per-side counter texts (same-SQL
+ *   case red), the team HMAC skipped for "not for me" (same-SQL case red), the
+ *   team statement spliced in after the list for up (cost-line and same-SQL
+ *   cases red), T logged as a `note` number and as an `error` string (T-or-V
+ *   log case red) | date: 2026-11-20
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
@@ -30,6 +34,7 @@ import { voteReceipt } from '../src/lib/votes';
 import { VOTING_ON } from '../src/lib/voting-switch';
 import { emitOperationCost, createCostAccumulator } from '../src/lib/cost-metric';
 import { castVote } from '../src/lib/vote-cast';
+import { runVoteFinalJob } from '../src/lib/vote-sets';
 import { pepperEpoch } from '../src/lib/anon-id-hash';
 import worker from '../src/index';
 
@@ -605,8 +610,11 @@ describe('the logs cannot tell a side, or counted from duplicate', () => {
       vi.spyOn(console, level).mockImplementation(
         (...a: unknown[]) => void lines.push(a.map(String).join(' '))
       );
-    await fn();
-    vi.restoreAllMocks();
+    try {
+      await fn();
+    } finally {
+      vi.restoreAllMocks();
+    }
     return lines;
   }
 
@@ -674,6 +682,47 @@ describe('the logs cannot tell a side, or counted from duplicate', () => {
     expect(first).not.toBeNull();
   });
 
+  test('castVote sends the same SQL and makes the same HMACs for up and "not for me" on a team night [HMAC skipped for not for me]', async () => {
+    const [a] = await openNight(N1, ['One'], 'team');
+    const epoch = (await pepperEpoch(PEPPER)) as string;
+    /** The SQL texts castVote prepares and batches, and its HMAC count, for one vote. */
+    async function workOf(cookie: string, side: 'up' | 'down') {
+      const k = (await voterKey(PEPPER, cookie, N1)) as string;
+      const prepared: string[] = [];
+      let batched = -1;
+      const db = new Proxy(tenv.DB, {
+        get(target, prop) {
+          const orig = Reflect.get(target, prop) as (...a: unknown[]) => unknown;
+          if (prop === 'prepare')
+            return (sql: string) => (prepared.push(sql), orig.call(target, sql));
+          if (prop === 'batch')
+            return (list: unknown[]) => ((batched = list.length), orig.call(target, list));
+          return typeof orig === 'function' ? orig.bind(target) : orig;
+        },
+      });
+      const sign = vi.spyOn(crypto.subtle, 'sign');
+      const outcome = await castVote(db, PEPPER, {
+        eventId: N1,
+        objectId: a,
+        side,
+        k,
+        epoch,
+        nowMs: Date.now(),
+      });
+      const hmacs = sign.mock.calls.length;
+      sign.mockRestore();
+      return { outcome, prepared, batched, hmacs };
+    }
+    const up = await workOf(COOKIE_1, 'up');
+    const down = await workOf(COOKIE_2, 'down');
+    expect(up.outcome).toBe('accepted');
+    expect(await tallyOf(a), 'both counted').toEqual({ up_count: 1, down_count: 1 });
+    expect(down.prepared, 'the same SQL texts, in the same order').toEqual(up.prepared);
+    expect(down.batched).toBe(up.batched);
+    expect(down.hmacs, 'the same number of HMACs').toBe(up.hmacs);
+    expect(up.hmacs, 'receipt, participant and team markers were made').toBeGreaterThanOrEqual(3);
+  });
+
   test('a body with a field beyond object_id, side and pass is refused, and writes nothing [unknown fields accepted]', async () => {
     const [a] = await openNight(N1);
     const p = await pass(N1);
@@ -681,6 +730,20 @@ describe('the logs cannot tell a side, or counted from duplicate', () => {
       const res = await fetched(voteReq(N1, { object_id: a, side: 'up', pass: p, ...extra }));
       expect(res.status).toBe(400);
     }
+    // Raw bodies: a real "__proto__" key (JSON.parse makes it an own key), and a
+    // repeated key, which JSON.parse keeps once (the last wins): both refused or
+    // read as the three fields only.
+    const raw = (text: string) =>
+      fetched(
+        new Request(`${ORIGIN}/api/v2/vote/${N1}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'same-origin' },
+          body: text,
+        })
+      );
+    const head = `"object_id":${JSON.stringify(a)},"pass":${JSON.stringify(p)}`;
+    expect((await raw(`{${head},"side":"up","__proto__":{"side":"down"}}`)).status).toBe(400);
+    expect((await raw(`{${head},"side":"up","side":"sideways"}`)).status).toBe(400);
     expect(await tallyOf(a)).toEqual({ up_count: 0, down_count: 0 });
     expect(await countRows('vote_receipts', 'object_id', a)).toBe(0);
     // The page's own body still votes.
@@ -705,6 +768,16 @@ describe('the logs cannot tell a side, or counted from duplicate', () => {
       'closed_unpublished',
       'errors',
       'note', // RATE_LIMIT_PEPPER_MISSING: a fixed sentence, set by this test rig's env
+    ]);
+    const NUMBER_KEYS = new Set([
+      'wallMs',
+      'd1RowsRead',
+      'd1RowsWritten',
+      'd1Queries',
+      'status',
+      'finalized',
+      'closed_unpublished',
+      'errors',
     ]);
     const adminReq = (method: string, path: string, body?: unknown) =>
       new Request(`${ORIGIN}${path}`, {
@@ -735,6 +808,9 @@ describe('the logs cannot tell a side, or counted from duplicate', () => {
       await fetched(adminReq('POST', vp(N1, '/finalize')));
       await fetched(adminReq('GET', vp(N1)));
       await fetched(new Request(`${ORIGIN}/events/${N1}/vote`));
+      // The scheduled final job's own line (it finalizes nothing here: the
+      // event's end is in 2099; its log shape is what is checked).
+      await runVoteFinalJob(routerEnv as unknown as Parameters<typeof runVoteFinalJob>[0]);
     });
     expect(tv, 'T and V were drawn (the positive control)').toMatchObject({
       t: expect.any(Number),
@@ -746,6 +822,16 @@ describe('the logs cannot tell a side, or counted from duplicate', () => {
       expect(Object.keys(parsed).length, `not a JSON line: ${line}`).toBeGreaterThan(0);
       for (const key of Object.keys(parsed)) expect(KEYS.has(key), `${key} in ${line}`).toBe(true);
       expect(line).not.toMatch(/margin|floor/i);
+      // Values, not only words: a free-text key holds only its fixed sentence,
+      // a number sits only under a key that is a count of work, and no string
+      // value is T or V.
+      if ('note' in parsed) expect(parsed.type, line).toBe('RATE_LIMIT_PEPPER_MISSING');
+      for (const [key, value] of Object.entries(parsed)) {
+        if (typeof value === 'number') expect(NUMBER_KEYS.has(key), `${key} in ${line}`).toBe(true);
+        if (typeof value === 'string')
+          expect([String(tv!.t), String(tv!.v)], `${key} in ${line}`).not.toContain(value.trim());
+      }
     }
+    expect(lines.some((l) => safeJson(l).type === 'VOTE_FINAL_JOB')).toBe(true);
   });
 });

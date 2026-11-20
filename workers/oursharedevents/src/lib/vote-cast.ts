@@ -15,7 +15,8 @@
  *      one running now, and the event is live (EVENT_LIVE). These checks are
  *      inside the insert, so a close cannot land between a check and the write;
  *   2. the side's counter rises only when step 1 inserted a row
- *      (`changes() = 1`: the receipt was new);
+ *      (`changes() = 1`: the receipt was new). One statement for both sides,
+ *      with the side bound, so the SQL text never names it;
  *   3. the team statement: on a team night, for an up vote, the team marker
  *      HMAC(K_team, k ‖ team_id) is inserted if step 2 counted (Q16): a voter
  *      who backs three of a team's songs adds one to its total. The statement
@@ -72,9 +73,16 @@ const RECEIPT_INSERT = `INSERT INTO vote_receipts (object_id, receipt)
     WHERE ${OPEN_NOW}
    ON CONFLICT DO NOTHING`;
 
-/** Step 2, one literal per side, so no column name is ever built from input. */
-const COUNT_UP = `UPDATE vote_tallies SET up_count = up_count + 1 WHERE object_id = ? AND changes() = 1`;
-const COUNT_DOWN = `UPDATE vote_tallies SET down_count = down_count + 1 WHERE object_id = ? AND changes() = 1`;
+/**
+ * Step 2. One statement for both sides, the side bound as a value (twice, then
+ * the object id): the SQL text is the same whichever side, so neither the
+ * Worker's log nor the database's own query analytics, which group by the
+ * text, can tell an up vote from a "not for me". No column name is built from
+ * input: `(? = 'up')` is 1 or 0.
+ */
+const COUNT = `UPDATE vote_tallies
+    SET up_count = up_count + (? = 'up'), down_count = down_count + (? = 'down')
+  WHERE object_id = ? AND changes() = 1`;
 
 /**
  * Step 3. Binds set id, team id, marker, then the marker again: a null marker
@@ -142,7 +150,7 @@ export async function castVote(
   const open = [objectId, eventId, nowIso, epoch, eventId];
   const statements = [
     db.prepare(RECEIPT_INSERT).bind(receipt, ...open),
-    db.prepare(side === 'up' ? COUNT_UP : COUNT_DOWN).bind(objectId),
+    db.prepare(COUNT).bind(side, side, objectId),
     db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, obj.group_id ?? null, team, team),
     db.prepare(PARTICIPANT_INSERT).bind(obj.set_id, participant, objectId, receipt),
     db.prepare(AFTER).bind(objectId, receipt, ...open),

@@ -94,11 +94,12 @@
  *      closeVoteSetUnlessPublished with the move (one transaction), or is
  *      exempt with its reason (STATUS_WRITER_EXEMPT). No D1 trigger: 0025.
  *  12. NO SIDE, NO DUPLICATE AND NO T OR V IN A LOG (OSE-2128 follow-up, H1,
- *      L7, L9). castVote (lib/vote-cast.ts) builds one batch for both sides: its
- *      statement list has no spread and no ternary but the counter's
- *      `side === 'up' ? COUNT_UP : COUNT_DOWN`, and whether a team marker is
- *      made depends on the night, never the side, so OPERATION_COST's
- *      d1Queries cannot carry the side. CastOutcome has no `counted` or
+ *      L7, L9). castVote (lib/vote-cast.ts) builds one batch for both sides:
+ *      the side appears only where the input is read, where the team marker
+ *      to bind is chosen, and in the counter's binds (one SQL text for both
+ *      sides); the statement list has no spread, no ternary and is never
+ *      changed after it is built, so OPERATION_COST's d1Queries, and the
+ *      database's per-query analytics, cannot carry the side. CastOutcome has no `counted` or
  *      `duplicate`, and the vote handler names neither, so the route cannot
  *      tell them apart. On the vote and result path (the vote route and its
  *      lib, the set and result libs, the admin votables and open-objects
@@ -144,7 +145,9 @@
  *   date: 2026-11-18
  * @born-red OSE-2128 | method: injected-fault, each removed after: the team
  *   statement spread in only for an up vote (12 red), teamNight conditioned on
- *   `side === 'up'` (12 red), `'duplicate'` put back in CastOutcome (12 red),
+ *   `side === 'up'` (12 red), the team HMAC skipped for "not for me" (12 red),
+ *   the two per-side counter texts put back (12 red), `'duplicate'` put back
+ *   in CastOutcome (12 red),
  *   a `console.log` of `margin` in openVoteSet (12 red) | date: 2026-11-20
  */
 
@@ -482,23 +485,36 @@ const TV_WORDS =
   /\b(?:secret_margin|secret_floor|secretMargin|secretFloor|margin|floor|SECRET_MARGIN_RANGE|SECRET_FLOOR_RANGE|drawUniform)\b/;
 
 /**
- * Why castVote's batch could depend on the side (OSE-2128, H1): a spread or a
- * ternary in its statement list (but the counter's own choice and a `?? null`),
- * or a team-night test that names the side. Empty when the batch is one shape.
+ * Why castVote's batch, or the work before it, could depend on the side
+ * (OSE-2128, H1). The side may appear in castVote in three places only: the
+ * destructuring of the input, the choice of the team marker to bind (made, or
+ * null for "not for me"), and the counter's binds. Any other `side` (an alias,
+ * `input.side`, a condition on a statement or on the HMAC) is a problem. The
+ * statement list has no spread but `...open` and no ternary, and is never
+ * changed after it is built (no push, splice or filter). Empty when the batch
+ * and the work are one shape for both sides; it fails closed when castVote is
+ * not found.
  */
 function sideFreeBatchProblems(code: string): string[] {
   const out: string[] = [];
-  const at = code.indexOf('const statements = [');
-  if (at < 0) return ['no `const statements = [` in castVote'];
-  const block = code.slice(at, code.indexOf('];', at));
-  const rest = block
-    .replace("side === 'up' ? COUNT_UP : COUNT_DOWN", '')
-    .replace(/\?\?\s*null/g, '');
+  const fn = code.indexOf('export async function castVote');
+  if (fn < 0) return ['no castVote'];
+  const next = code.indexOf('\nexport ', fn + 1);
+  const body = code.slice(fn, next < 0 ? code.length : next);
+  const stray = body
+    .replace(/const\s*\{\s*eventId,\s*objectId,\s*side,\s*k,\s*epoch\s*\}\s*=\s*input;/, '')
+    .replace(/const\s+team\s*=\s*side\s*===\s*'up'\s*\?\s*made\s*:\s*null;/, '')
+    .replace(/\.bind\(\s*side\s*,\s*side\s*,\s*objectId\s*\)/, '')
+    .replace(/side:\s*VoteSide/, '');
+  if (/\bside\b/.test(stray)) out.push('castVote uses the side beyond its three places');
+  const at = body.indexOf('const statements = [');
+  if (at < 0) return [...out, 'no `const statements = [` in castVote'];
+  const block = body.slice(at, body.indexOf('];', at));
+  const rest = block.replace(/\?\?\s*null/g, '');
   if (/\.\.\.(?!open\b)/.test(rest)) out.push('a spread in the statement list');
   if (/\?/.test(rest.replace(/'[^']*'/g, ''))) out.push('a ternary in the statement list');
-  const night = /const\s+teamNight\s*=([^;]*);/.exec(code);
-  if (!night) out.push('no `const teamNight =` in castVote');
-  else if (/\bside\b/.test(night[1])) out.push('teamNight names the side');
+  if (/\bstatements\s*\.\s*(?!length\b)\w+/.test(body))
+    out.push('the statement list is changed after it is built');
   return out;
 }
 
@@ -830,25 +846,40 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
     expect(handler, `${VOTE_HANDLER} names counted or duplicate`).not.toMatch(
       /['"](?:counted|duplicate)['"]/
     );
-    // Negative controls: the shapes H1 and its first draft took are caught.
-    const today = `const teamNight = obj.played_by === 'team' && !!obj.group_id;
+    // Negative controls: today's shape passes; H1, and the review's bypasses
+    // (a splice after the list, a filtered conditional, the HMAC skipped for
+    // "not for me", an alias), are caught.
+    const today = `export async function castVote(db, pepper, input) {
+      const { eventId, objectId, side, k, epoch } = input;
+      const teamNight = obj.played_by === 'team' && !!obj.group_id;
+      const made = teamNight ? await voteTeamMarker(pepper, k, obj.group_id) : null;
+      const team = side === 'up' ? made : null;
       const statements = [
         db.prepare(RECEIPT_INSERT).bind(receipt, ...open),
-        db.prepare(side === 'up' ? COUNT_UP : COUNT_DOWN).bind(objectId),
+        db.prepare(COUNT).bind(side, side, objectId),
         db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, obj.group_id ?? null, team, team),
-      ];`;
+      ];
+      const results = await db.batch(statements);
+    }`;
     expect(sideFreeBatchProblems(today)).toEqual([]);
-    expect(
-      sideFreeBatchProblems(
-        today.replace(
-          'db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, obj.group_id ?? null, team, team),',
-          '...(teamNight ? [db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, team)] : []),'
-        )
-      )
-    ).not.toEqual([]);
-    expect(
-      sideFreeBatchProblems(today.replace("=== 'team' &&", "=== 'team' && side === 'up' &&"))
-    ).not.toEqual([]);
+    const TEAM_LINE =
+      'db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, obj.group_id ?? null, team, team),';
+    for (const bad of [
+      today.replace(TEAM_LINE, '...(teamNight ? [db.prepare(TEAM_MARKER_INSERT)] : []),'),
+      today.replace("=== 'team' &&", "=== 'team' && side === 'up' &&"),
+      today.replace(
+        'const results',
+        'if (team) statements.splice(2, 0, db.prepare(TEAM_MARKER_INSERT));\n const results'
+      ),
+      today.replace(TEAM_LINE, "input.side === 'up' && db.prepare(TEAM_MARKER_INSERT),"),
+      today.replace('const made = teamNight ?', "const made = teamNight && side === 'up' ?"),
+      today.replace(
+        'db.prepare(COUNT).bind(side, side, objectId),',
+        "db.prepare(side === 'up' ? COUNT_UP : COUNT_DOWN).bind(objectId),"
+      ),
+      today.replace('const team = side', 'const s = side;\n const team = s'),
+    ])
+      expect(sideFreeBatchProblems(bad), bad).not.toEqual([]);
   });
 
   test('OSE-2128 | log | no console call on the vote or result path names T or V', () => {
