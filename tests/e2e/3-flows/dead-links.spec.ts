@@ -67,14 +67,31 @@ async function seen(
  * (bruno/ose-pages folder 17; tests/integration/bruno-dead-link-same-page.test.js),
  * and the Worker's own /s/ page never names __CF$cv$params
  * (workers/oursharedevents/tests/dead-link-words.spec.ts).
+ *
+ * This only shapes two copies for a comparison in a test; nothing it returns
+ * is served or rendered. Each edge script is cut out by position: from the
+ * `<script` that opens it to the `</script>` that closes it. A marker with no
+ * script around it is left in place, so the comparison still sees it.
  */
-const workerPage = (h: string) =>
-  h
-    .replace(
-      /<script\b[^>]*>(?:(?!<\/script>)[\s\S])*?window\.__CF\$cv\$params(?:(?!<\/script>)[\s\S])*?<\/script>/g,
-      ''
-    )
-    .replace(/nonce="[^"]*"/g, '');
+const EDGE_MARK = 'window.__CF$cv$params';
+const workerPage = (h: string): string => {
+  let page = h;
+  let from = 0;
+  for (;;) {
+    const mark = page.indexOf(EDGE_MARK, from);
+    if (mark < 0) break;
+    const open = page.lastIndexOf('<script', mark);
+    const close = page.indexOf('</script>', mark);
+    // Not inside a script (or the script never closes): keep it, look further on.
+    if (open < 0 || close < 0 || page.lastIndexOf('</script>', mark) > open) {
+      from = mark + EDGE_MARK.length;
+      continue;
+    }
+    page = page.slice(0, open) + page.slice(close + '</script>'.length);
+    from = open;
+  }
+  return page.split(/nonce="[^"]*"/).join('');
+};
 
 const lang = (html: string) => /<html lang="([a-z]+)"/.exec(html)?.[1];
 const button = (html: string) => /data-testid="error-cta" href="([^"]*)">([^<]*)</.exec(html);
