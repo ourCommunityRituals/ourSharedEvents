@@ -342,6 +342,9 @@ describe('roundForPublish — a published count is a multiple of five', () => {
 
   test('non-finite, negative and fractional inputs are handled like applyCountFloor does', () => {
     expect([Number.NaN, -3, 7.9, Infinity].map(roundForPublish)).toEqual([0, 0, 5, 0]);
+    // A negative count past a step reads 0, not -5: -3 would round to 0 either
+    // way, so only a value under -5 shows that negatives are clamped first.
+    expect([-7, -12].map(roundForPublish)).toEqual([0, 0]);
   });
 
   test('is the same function the export path re-exports (one home, no copy)', () => {

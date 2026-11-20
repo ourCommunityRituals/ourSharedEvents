@@ -140,6 +140,7 @@ export function flooredRatePct(
   const [w, p] = floorPublishedChain([whole, part], floor, floor);
   // Stryker disable next-line ConditionalExpression: equivalent mutant — skipping this check changes nothing, because the part is null whenever the whole is (a part no larger than a sub-floor whole is itself under the floor, and a part larger than its whole fails closed). Kept for type narrowing and defence in depth.
   if (typeof w !== 'number') return null;
+  // Stryker disable next-line ConditionalExpression: equivalent mutant — once the exact pair has passed the rule above, the rounded part is published too: rounding keeps a part of 5 or more at 5 or more, keeps it no larger than the rounded whole, and leaves a rest that is a multiple of 5 (0 or at least 5). Kept for type narrowing.
   return typeof p === 'number' ? (p / w) * 100 : null;
 }
 
@@ -200,6 +201,7 @@ export function roundForPublish(n: number): number {
 // One argument on purpose: callers pass roundForPublish straight to `.map`, which
 // would hand a second argument (the index) to a step parameter.
 function roundDownTo(n: number, step: number): number {
+  // Stryker disable next-line EqualityOperator: equivalent mutant — `n >= 0` differs only at 0, and Math.floor(0) is 0 too.
   const v = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
   return v - (v % step);
 }
