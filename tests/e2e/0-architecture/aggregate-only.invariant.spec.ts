@@ -384,11 +384,15 @@ test.describe('Invariant 7: digital tap counts are floored through applyCountFlo
     expect(LOCAL_THRESHOLD.test('if (n < 5) return')).toBe(true);
     expect(LOCAL_THRESHOLD.test('if (n < 50) return')).toBe(false);
     // floorTotalOfParts counts as the shared floor only while it floors every
-    // part (and the sum) through applyCountFloor.
+    // part (and the sum) through publishCount, and publishCount floors through
+    // applyCountFloor before it rounds (OSE-2151).
     const floorSrc = readFileSync(join(WORKER_SRC, 'lib', 'count-floor.ts'), 'utf8');
     const body = floorSrc.match(/export function floorTotalOfParts\([\s\S]*?\n\}/)?.[0] ?? '';
     expect(body, 'floorTotalOfParts not found in lib/count-floor.ts').not.toBe('');
-    expect(body.match(/applyCountFloor\s*\(/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(body.match(/publishCount\s*\(/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    const publish = floorSrc.match(/export function publishCount\([\s\S]*?\n\}/)?.[0] ?? '';
+    expect(publish, 'publishCount not found in lib/count-floor.ts').not.toBe('');
+    expect(publish).toMatch(/applyCountFloor\s*\(/);
   });
 
   test('OSE-INV7 | privacy | taps | every module that sums taps floors them (derived subjects)', () => {
@@ -408,9 +412,9 @@ test.describe('Invariant 7: digital tap counts are floored through applyCountFlo
         .join('/');
       expect(
         src,
-        `${rel} aggregates short-link taps but never calls applyCountFloor or floorTotalOfParts — ` +
+        `${rel} aggregates short-link taps but never calls applyCountFloor, publishCount or floorTotalOfParts — ` +
           'a digital count must pass the shared K=5 floor before it leaves the module'
-      ).toMatch(/\b(?:applyCountFloor|floorTotalOfParts)\s*\(/);
+      ).toMatch(/\b(?:applyCountFloor|publishCount|floorTotalOfParts)\s*\(/);
       expect(
         src.match(LOCAL_THRESHOLD)?.[0] ?? null,
         `${rel} carries its own numeric floor — use applyCountFloor (one K, one place)`
