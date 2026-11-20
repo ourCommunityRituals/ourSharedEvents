@@ -83,4 +83,23 @@ describe('stock/nodes.json', () => {
     );
     for (const c of rowCells) expect(area.cells, c).toContain(c);
   });
+
+  // OSE-2199: the Worker stores an event's res-7 cell as the parent of its res-9
+  // cell, which near a res-7 edge is not the point's own res-7 cell (12 of the
+  // wider area's cells). Rows stored either way sit in the area's cells, so a
+  // check of rows a load made before the change and after it both pass.
+  test('every res-7 cell the Worker stores for a row of the wider area is one of its cells', async () => {
+    const { tagCoordinates } =
+      await import('../../../workers/oursharedevents/src/lib/h3-tagging.ts');
+    const seed = JSON.parse(
+      readFileSync(path.join(__dirname, '../../../stock/seed/seed.json'), 'utf8')
+    );
+    const area = nodes.find((n) => n.id === 'area');
+    const stored = new Set(
+      [...seed.events, ...seed.businesses]
+        .filter((r) => r.node === 'area')
+        .map((r) => tagCoordinates(r.lat, r.lng).h3_res7)
+    );
+    for (const c of stored) expect(area.cells, c).toContain(c);
+  });
 });

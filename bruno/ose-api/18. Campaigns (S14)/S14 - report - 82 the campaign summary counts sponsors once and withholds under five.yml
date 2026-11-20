@@ -38,13 +38,14 @@ runtime:
           expect(by('camp_fx_rpt_many').sponsor_count).to.eql(2);
         });
         test('S14 report: the total is the sum of the published parts, and the part under 5 is in none', function () {
-          expect(by('camp_fx_rpt_many').displays_by_surface).to.eql({ poster: 6, display: 7, public: 8 });
-          expect(by('camp_fx_rpt_many').total_displays).to.eql(21);
+          // OSE-2151: 6, 7 and 8 are each published rounded down to a multiple of 5.
+          expect(by('camp_fx_rpt_many').displays_by_surface).to.eql({ poster: 5, display: 5, public: 5 });
+          expect(by('camp_fx_rpt_many').total_displays).to.eql(15);
         });
         test('S14 report: the total equals the sponsor rows published beside it', function () {
           const rows = (report.sponsor_displays || []).filter(function (r) { return r.campaign_id === 'camp_fx_rpt_many'; });
           expect(rows.length).to.eql(3);
-          expect(rows.reduce(function (n, r) { return n + r.count; }, 0)).to.eql(21);
+          expect(rows.reduce(function (n, r) { return n + r.count; }, 0)).to.eql(15);
           expect(rows.every(function (r) { return r.sponsor_id === 'sb_camp_rpt_a'; })).to.eql(true);
         });
         test('S14 report: a campaign with 0, 1 or 4 displays is listed, by its own title', function () {

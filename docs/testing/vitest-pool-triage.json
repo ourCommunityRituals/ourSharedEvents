@@ -881,7 +881,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 69
+      "testCount": 77
     },
     {
       "file": "workers/oursharedevents/tests/crawl-policy.spec.ts",
@@ -1714,7 +1714,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 20
+      "testCount": 23
     },
     {
       "file": "workers/oursharedevents/tests/geocode-handler.spec.ts",
@@ -1750,6 +1750,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 27
+    },
+    {
+      "file": "workers/oursharedevents/tests/h3-seam.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 21
     },
     {
       "file": "workers/oursharedevents/tests/h3-tagging.spec.ts",
@@ -2806,14 +2813,14 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 23
+      "testCount": 24
     },
     {
       "file": "workers/oursharedevents/tests/recap-stat-lines.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 12
+      "testCount": 14
     },
     {
       "file": "workers/oursharedevents/tests/recap-walk-in.spec.ts",
@@ -3226,14 +3233,14 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 23
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-class-floor.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 21
+      "testCount": 22
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-date-utc.spec.ts",
@@ -4136,7 +4143,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 13
+      "testCount": 14
     }
   ]
 }

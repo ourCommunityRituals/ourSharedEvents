@@ -18,7 +18,7 @@ runtime:
     - type: after-response
       code: |-
         const a = (res.getBody() || {}).activity || {};
-        test('OSE-2014 sunny: promote: the first try has a count to protect (6 scans, above the floor)', function () { expect(res.getStatus()).to.eql(200); expect(a.posters).to.eql(1); expect(a.scans.count).to.eql(6); });
+        test('OSE-2014 sunny: promote: the first try has a count to protect (6 scans, above the floor, published as 5)', function () { expect(res.getStatus()).to.eql(200); expect(a.posters).to.eql(1); expect(a.scans.count).to.eql(5); });
         bru.setVar('seriesTry1CountsBefore', JSON.stringify([a.posters, a.places, a.scans, a.clicks]));
 
 settings:

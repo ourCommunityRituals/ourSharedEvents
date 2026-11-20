@@ -369,7 +369,8 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
       const r = await buildSharedReport(tenv().DB, id);
       expect(r.ok).toBe(true);
       if (!r.ok) return;
-      expect(r.report.return_rate.sample_size, `run ${run}`).toBe(6);
+      // Six people, published rounded down to a multiple of 5 (OSE-2151).
+      expect(r.report.return_rate.sample_size, `run ${run}`).toBe(5);
       // Nobody came back: 0 of 6 is withheld like 1 to 4, never 100%.
       expect(r.report.return_rate.venue_pct, `run ${run}`).toBeNull();
       expect(
@@ -1200,8 +1201,9 @@ describe('OSE-634: runSharedReportMaterialization — the summary line', () => {
     expect(types[types.length - 1]).toBe('SHARED_REPORT_MATERIALIZE_COMPLETE');
     const returns = phaseOf(summary!, 'anon_id_returns');
     expect(returns.events_processed).toBe(1);
-    // Six people is at the floor or above: the number is given.
-    expect(returns.rows_upserted).toBe(6);
+    // Six people is at the floor or above: the number is given, rounded down
+    // to a multiple of 5 (OSE-2151).
+    expect(returns.rows_upserted).toBe(5);
   });
 
   test('OSE-634 | SRE-OBS-01 | never who | a people counter under the floor is withheld, not zero and not exact', async () => {

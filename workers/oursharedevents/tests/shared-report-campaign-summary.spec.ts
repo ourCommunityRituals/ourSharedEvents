@@ -239,8 +239,9 @@ describe('campaign_summary.sponsor_count counts each sponsor once', () => {
 
     const row = campaign(await built(), 'camp-cs-a')!;
     expect(row.sponsor_count).toBe(1);
-    expect(row.total_displays).toBe(21);
-    expect(row.displays_by_surface).toEqual({ poster: 6, display: 7, public: 8 });
+    // Each part is rounded down to a multiple of 5 (OSE-2151), then added.
+    expect(row.total_displays).toBe(15);
+    expect(row.displays_by_surface).toEqual({ poster: 5, display: 5, public: 5 });
   });
 
   test('two sponsors on four surfaces count as two, the same as the class breakdown', async () => {
@@ -258,8 +259,8 @@ describe('campaign_summary.sponsor_count counts each sponsor once', () => {
     const classes = Object.values(r.sponsor_class_breakdown);
     expect(classes.reduce((n, c) => n + c.sponsor_count, 0)).toBe(2);
     // Two sponsors on one surface add up on that surface.
-    expect(row.displays_by_surface.poster).toBe(15);
-    expect(row.total_displays).toBe(30);
+    expect(row.displays_by_surface.poster).toBe(10);
+    expect(row.total_displays).toBe(20);
   });
 
   test('it is a count of placements: it does not move with displays', async () => {
@@ -318,20 +319,20 @@ describe('campaign display counts at 0, 1, 4, 5 and 6', () => {
   }
 
   for (const n of [K, K + 1]) {
-    test(`${n} displays: published exactly, with no withheld note`, async () => {
+    test(`${n} displays: published as 5 (rounded down to a multiple of 5), with no withheld note`, async () => {
       await seedCampaign('camp-cs-a', 'Campaign A');
       await seedSponsor('sp-cs-a', 'camp-cs-a');
       await setDisplays('sp-cs-a', 'poster', n);
 
       const r = await built();
       const row = campaign(r, 'camp-cs-a')!;
-      expect(row.total_displays).toBe(n);
-      expect(row.displays_by_surface).toEqual({ poster: n });
+      expect(row.total_displays).toBe(K);
+      expect(row.displays_by_surface).toEqual({ poster: K });
       expect(withheldNotes(r)).toEqual([]);
     });
   }
 
-  test('the total is the sum of the parts published beside it (7 + 3 is 7, 6 + 4 is 6)', async () => {
+  test('the total is the sum of the parts published beside it (7 + 3 is 5, 6 + 4 is 5)', async () => {
     await seedCampaign('camp-cs-a', 'Campaign A');
     await seedSponsor('sp-cs-a', 'camp-cs-a');
     await seedSponsor('sp-cs-b', 'camp-cs-a');
@@ -342,8 +343,8 @@ describe('campaign display counts at 0, 1, 4, 5 and 6', () => {
 
     const r = await built();
     const row = campaign(r, 'camp-cs-a')!;
-    expect(row.displays_by_surface).toEqual({ poster: 7, public: 6 });
-    expect(row.total_displays).toBe(13);
+    expect(row.displays_by_surface).toEqual({ poster: 5, public: 5 });
+    expect(row.total_displays).toBe(10);
     const rows = r.sponsor_displays.filter((d) => d.campaign_id === 'camp-cs-a');
     expect(rows.reduce((n, d) => n + d.count, 0)).toBe(row.total_displays);
     expect(Object.values(row.displays_by_surface).reduce((a, b) => a + b, 0)).toBe(
@@ -373,10 +374,20 @@ describe('campaign display counts at 0, 1, 4, 5 and 6', () => {
     await seedSponsor('sp-cs-d', 'camp-cs-d');
     await setDisplays('sp-cs-a', 'poster', 2);
     await setDisplays('sp-cs-b', 'poster', 6);
-    await setDisplays('sp-cs-c', 'poster', 9);
+    await setDisplays('sp-cs-c', 'poster', 10);
     await setDisplays('sp-cs-d', 'poster', 4);
     const order = (await built()).campaign_summary!.map((c) => c.campaign_id);
     expect(order).toEqual(['camp-cs-c', 'camp-cs-b', 'camp-cs-a', 'camp-cs-d']);
+  });
+
+  test('two campaigns that read the same are ordered by id, not by the exact count (OSE-2151)', async () => {
+    for (const c of ['camp-cs-a', 'camp-cs-b']) await seedCampaign(c, c);
+    await seedSponsor('sp-cs-a', 'camp-cs-a');
+    await seedSponsor('sp-cs-b', 'camp-cs-b');
+    await setDisplays('sp-cs-a', 'poster', 5);
+    await setDisplays('sp-cs-b', 'poster', 9);
+    const order = (await built()).campaign_summary!.map((c) => c.campaign_id);
+    expect(order).toEqual(['camp-cs-a', 'camp-cs-b']);
   });
 });
 
@@ -441,12 +452,12 @@ describe('a campaign is listed for a placement, never for a display', () => {
     // Under the floor it is as if it had none: one sponsor, one row.
     await setDisplays('sp-cs-b', 'poster', K - 1);
     const under = campaign(await built(), 'camp-cs-a')!;
-    expect([under.sponsor_count, under.total_displays]).toEqual([1, 6]);
+    expect([under.sponsor_count, under.total_displays]).toEqual([1, 5]);
     // Its row is published from 5 up, so the total and the count hold it too.
     await setDisplays('sp-cs-b', 'poster', K);
     const r = await built();
     const row = campaign(r, 'camp-cs-a')!;
-    expect([row.sponsor_count, row.total_displays]).toEqual([2, 6 + K]);
+    expect([row.sponsor_count, row.total_displays]).toEqual([2, 5 + K]);
     const rows = r.sponsor_displays.filter((d) => d.campaign_id === 'camp-cs-a');
     expect(rows.reduce((n, d) => n + d.count, 0)).toBe(row.total_displays);
   });
@@ -464,7 +475,7 @@ describe('a campaign is listed for a placement, never for a display', () => {
     const r = await built();
     expect(r.campaign_summary!.map((c) => c.campaign_id)).toEqual(['camp-cs-e']);
     expect(campaign(r, 'camp-cs-e')!.sponsor_count).toBe(2);
-    expect(campaign(r, 'camp-cs-e')!.total_displays).toBe(6);
+    expect(campaign(r, 'camp-cs-e')!.total_displays).toBe(5);
   });
 });
 
@@ -490,7 +501,7 @@ describe("a sponsor's own link reads its own campaign only", () => {
     const row = campaign(report, 'camp-cs-a')!;
     // One: itself. Never the co-sponsor, and never one per surface.
     expect(row.sponsor_count).toBe(1);
-    expect(row.total_displays).toBe(21);
+    expect(row.total_displays).toBe(15);
     expect(withheldNotes(report)).toEqual([]);
   });
 
@@ -562,15 +573,23 @@ describe('one display more, inside a group under the floor, changes nothing', ()
         });
       }
 
-      test(`control: ${lever}, ${K} -> ${K + 1} displays, ${reader}: the campaign total moves by one`, async () => {
-        const id = sponsor === 'sp-cs-c' ? 'camp-cs-b' : 'camp-cs-a';
+      test(`${lever}, ${K} -> ${K + 1} displays, ${reader}: one more inside a step of 5 changes nothing (OSE-2151)`, async () => {
         await setDisplays(sponsor, surface, K);
         const before = await read(role, who);
         await setDisplays(sponsor, surface, K + 1);
         const after = await read(role, who);
+        expect(after.text).toBe(before.text);
+      });
+
+      test(`control: ${lever}, ${2 * K - 1} -> ${2 * K} displays, ${reader}: the campaign total moves by 5`, async () => {
+        const id = sponsor === 'sp-cs-c' ? 'camp-cs-b' : 'camp-cs-a';
+        await setDisplays(sponsor, surface, 2 * K - 1);
+        const before = await read(role, who);
+        await setDisplays(sponsor, surface, 2 * K);
+        const after = await read(role, who);
         expect(after.text).not.toBe(before.text);
         expect(campaign(after.report, id)!.total_displays).toBe(
-          (campaign(before.report, id)!.total_displays as number) + 1
+          (campaign(before.report, id)!.total_displays as number) + K
         );
       });
     }

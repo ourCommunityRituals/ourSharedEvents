@@ -48,10 +48,10 @@ runtime:
           expect(scb.mid.sponsor_count).to.eql(0);
           expect(scb.premium.sponsor_count).to.eql(6);
         });
-        test('S14 class report: control, the published class is the sum of its published rows (26)', function () {
-          expect(scb.premium.total_displays).to.eql(26);
+        test('S14 class report: control, the published class is the sum of its published rows (6+7+8+5, published as 5 each: 20)', function () {
+          expect(scb.premium.total_displays).to.eql(20);
           const rows = report.sponsor_displays || [];
-          expect(rows.reduce(function (n, r) { return n + r.count; }, 0)).to.eql(26);
+          expect(rows.reduce(function (n, r) { return n + r.count; }, 0)).to.eql(20);
         });
         test('S14 class report: the local sponsor under 5 is in no published row', function () {
           const rows = report.sponsor_displays || [];

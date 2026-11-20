@@ -7,9 +7,19 @@
  * so no surface becomes a side-channel that leaks an exact small count another
  * surface hides. This reuses CORRIDOR_MAP_MIN_COUNT (the SharedReport /
  * corridor-map suppression floor, K=5) and applies the SAME rule the corridor
- * map uses: `count < floor` is suppressed (0..K-1), `count >= floor` shows the
- * exact number. Enforced SERVER-SIDE so the exact sub-K value never reaches any
- * client.
+ * map uses: `count < floor` is suppressed (0..K-1). Enforced SERVER-SIDE so the
+ * exact sub-K value never reaches any client.
+ *
+ * ROUNDING (owner ruling 2026-11-18, OSE-2151: "rounding applies to the OW /
+ * OSE"): from the floor up, a published count of people or of their actions is
+ * rounded DOWN to a multiple of 5 (`publishCount`), on every surface, not only
+ * in the export. An exact count would show one person's action between two
+ * reads a moment apart (12 then 13). `applyCountFloor` stays EXACT: it is the
+ * gate (is this shown at all, is a part under the floor) and is also used on
+ * counts of things. A surface that publishes a count of people calls
+ * `publishCount`, `floorTotalOfParts`, `flooredRatePct` or `floorRows`, which
+ * all round. This replaces the decision of 2026-08-08 that a count at or above
+ * the floor "shows the exact number".
  *
  * NOTE ON SCOPE: until 2026-11-16 this floored the aggregate COUNT only, and
  * the organizer's own LIST views (registration rows, survey rows, the export,
@@ -42,6 +52,19 @@ export function applyCountFloor(raw: number, floor: number = CORRIDOR_MAP_MIN_CO
   return { count: n, suppressed: false, floor };
 }
 
+/**
+ * The published form of a count of people or of their actions (OSE-2151): under
+ * the floor it is withheld exactly as `applyCountFloor` withholds it; from the
+ * floor up it is rounded down to a multiple of PUBLISH_ROUNDING (12 → 10). The
+ * gate is decided on the exact value, so 5 to 9 publish as 5, never as
+ * withheld.
+ */
+export function publishCount(raw: number, floor: number = CORRIDOR_MAP_MIN_COUNT): FlooredCount {
+  const floored = applyCountFloor(raw, floor);
+  if (floored.count === null) return floored;
+  return { ...floored, count: roundForPublish(floored.count) };
+}
+
 /** A list of rows about people, floored: the rows, or none of them. */
 export interface FlooredRows<T> extends FlooredCount {
   items: T[];
@@ -53,7 +76,8 @@ export interface FlooredRows<T> extends FlooredCount {
  * and names them. So under the floor no row is returned at all, and the answer
  * carries the same `{ count: null, suppressed: true }` a withheld count does.
  * From the floor up the rows are returned as they are (OSE-2087, owner ruling
- * 2026-11-16).
+ * 2026-11-16). Whether the list is shown is decided on the exact size; the
+ * `count` published beside it is rounded like every other count (OSE-2151).
  *
  * `total` is the size of the whole list when `rows` is one page of it.
  */
@@ -62,7 +86,7 @@ export function floorRows<T>(
   total: number = rows.length,
   floor: number = CORRIDOR_MAP_MIN_COUNT
 ): FlooredRows<T> {
-  const floored = applyCountFloor(total, floor);
+  const floored = publishCount(total, floor);
   return { ...floored, items: floored.suppressed ? [] : [...rows] };
 }
 
@@ -75,14 +99,18 @@ export function floorRows<T>(
  * so it can only be differenced against them down to zero. With no surviving
  * part it is withheld, however large the small parts are together (3 + 3 is
  * not 6).
+ *
+ * Each surviving part is rounded before it joins the sum (OSE-2151), so the
+ * total is the sum of the parts as they are published, a multiple of 5, and it
+ * agrees with them: parts 7 and 8 publish as 5 and 5 and their total as 10.
  */
 export function floorTotalOfParts(
   parts: readonly (number | null | undefined)[],
   floor: number = CORRIDOR_MAP_MIN_COUNT
 ): FlooredCount {
   let sum = 0;
-  for (const part of parts) sum += applyCountFloor(part ?? 0, floor).count ?? 0;
-  return applyCountFloor(sum, floor);
+  for (const part of parts) sum += publishCount(part ?? 0, floor).count ?? 0;
+  return publishCount(sum, floor);
 }
 
 /**
@@ -94,15 +122,25 @@ export function floorTotalOfParts(
  * below, the one the returns export uses for the same pair: the whole and the
  * part must each clear the floor, and the people left over must be none or at
  * least the floor. Otherwise the rate is null.
+ *
+ * The rule is applied to the exact counts, and the rate is then worked out
+ * from the counts rounded down to a multiple of 5 (`floorPublishedChain`,
+ * OSE-2151), so it is the one a reader works out from the counts published
+ * beside it. Both must publish: rounded, 19 of 20 reads 15 of 20, which hides
+ * the one person left over; the exact rule still withholds it, so the rate
+ * does not move between 20 of 20 (withheld as everyone) and 19 of 20.
  */
 export function flooredRatePct(
   part: number,
   whole: number,
   floor: number = CORRIDOR_MAP_MIN_COUNT
 ): number | null {
-  const [w, p] = floorNestedCounts([whole, part], floor, floor);
+  const [, exactPart] = floorNestedCounts([whole, part], floor, floor);
+  if (exactPart === null) return null;
+  const [w, p] = floorPublishedChain([whole, part], floor, floor);
   // Stryker disable next-line ConditionalExpression: equivalent mutant — skipping this check changes nothing, because the part is null whenever the whole is (a part no larger than a sub-floor whole is itself under the floor, and a part larger than its whole fails closed). Kept for type narrowing and defence in depth.
   if (typeof w !== 'number') return null;
+  // Stryker disable next-line ConditionalExpression: equivalent mutant — once the exact pair has passed the rule above, the rounded part is published too: rounding keeps a part of 5 or more at 5 or more, keeps it no larger than the rounded whole, and leaves a rest that is a multiple of 5 (0 or at least 5). Kept for type narrowing.
   return typeof p === 'number' ? (p / w) * 100 : null;
 }
 
@@ -163,6 +201,7 @@ export function roundForPublish(n: number): number {
 // One argument on purpose: callers pass roundForPublish straight to `.map`, which
 // would hand a second argument (the index) to a step parameter.
 function roundDownTo(n: number, step: number): number {
+  // Stryker disable next-line EqualityOperator: equivalent mutant — `n >= 0` differs only at 0, and Math.floor(0) is 0 too.
   const v = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
   return v - (v % step);
 }
