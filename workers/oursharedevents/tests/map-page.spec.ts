@@ -415,21 +415,22 @@ describe('the top menu: the way to the map, and which page this is', () => {
     }
   });
 
-  test('a zoom or a search at /map keeps the mark, and the link stays the bare /map', async () => {
-    for (const path of [
-      `/map?area=${BLUE_ISLAND}`,
-      '/map?zip=60406',
-      '/map?where=Springfield',
-      '/map?nozip=1',
-      '/map?change=1',
+  test('a zoom or a search at /map keeps the mark; a zoom carries nothing, a search carries its place (OSE-2165)', async () => {
+    for (const [path, query] of [
+      [`/map?area=${BLUE_ISLAND}`, ''],
+      ['/map?zip=60406', '?zip=60406'],
+      ['/map?where=Springfield', '?where=Springfield'],
+      ['/map?nozip=1', ''],
+      ['/map?change=1', ''],
     ]) {
       const html = await page(path);
       expect(menu(html)[1], path).toEqual({
         id: 'nav-map',
-        href: '/map',
+        href: `/map${query}`,
         words: 'Map',
         current: 'page',
       });
+      expect(menu(html)[0].href, path).toBe(`/events${query}`);
       expect(pageMarks(html), path).toHaveLength(1);
     }
   });

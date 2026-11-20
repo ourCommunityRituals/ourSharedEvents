@@ -66,6 +66,7 @@ import {
   discoveryEmptyCopy,
   injectDiscoveryHeading,
   discoverySummaryText,
+  carriedSearchQuery,
 } from '../lib/event-discovery';
 import {
   renderEventList,
@@ -95,6 +96,7 @@ import {
   renderNearEmpty,
   renderPlaceEmpty,
   renderAnyPlaceEmpty,
+  carriedPlaceQuery,
   type WhereState,
 } from '../lib/landing-where';
 import { markLandingNav } from '../lib/landing-nav';
@@ -465,7 +467,17 @@ export async function handlePublicPage(
       injectNeverWho(
         withLanguageSwitch(
           injectLegalFooter(
-            await withProvenanceBanner(fillTemplate(PUBLIC_HTML, lang), env, 'public'),
+            await withProvenanceBanner(
+              // The header's Events and Map links carry the place the search
+              // resolved, never the text typed (OSE-2165).
+              markLandingNav(
+                fillTemplate(PUBLIC_HTML, lang),
+                '/events',
+                carriedSearchQuery(filters)
+              ),
+              env,
+              'public'
+            ),
             'public',
             undefined,
             lang
@@ -3152,7 +3164,7 @@ export async function handleLandingPage(
       withLanguageSwitch(
         injectLegalFooter(
           injectNearLang(
-            markLandingNav(fillTemplate(LANDING_HTML, lang), pagePath),
+            markLandingNav(fillTemplate(LANDING_HTML, lang), pagePath, carriedPlaceQuery(where)),
             lang,
             pagePath
           ),

@@ -1,0 +1,55 @@
+info:
+  name: GET /events?q=Chicago (the top menu, with a Map link that carries the place)
+  type: http
+  seq: 37
+
+# OSE-2165 (F-05, F-03 in part): /events had no link to the map, and read q as
+# text, so "Chicago" gave 9 cards here and 8 on the landing. It now has the same
+# Events | Map header, and reads a town or zip with the landing's resolver. The two
+# lists stay two lists (owner decision F-03). Strict: 200 only, a phone user agent.
+# The same count on both pages is proved in the workers pool (search-carries.spec.ts);
+# one request cannot read two pages.
+http:
+  method: GET
+  url: "{{baseUrl}}/events?q=Chicago"
+  headers:
+    - name: User-Agent
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const body = String(res.getBody());
+        const nav = (body.match(/<nav[^>]*data-testid="public-nav"[\s\S]*?<\/nav>/) || [""])[0];
+        const hrefOf = function (id) {
+          const tags = nav.match(/<a [^>]*>/g) || [];
+          const tag = tags.filter(function (t) { return t.includes('data-testid="' + id + '"'); })[0] || '';
+          return (tag.match(/href="([^"]*)"/) || [])[1] || '';
+        };
+
+        test("Returns 200 (strict: a 403 is not accepted)", function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+        test("It has a header menu with Events and a Map link", function () {
+          expect(nav).to.not.equal("");
+          expect(hrefOf("nav-map")).to.not.equal("");
+        });
+        test("Map carries the place the page resolved", function () {
+          expect(hrefOf("nav-map")).to.equal("/map?where=Chicago%2C%20IL");
+        });
+        test("Events is this page, and says so once", function () {
+          expect(hrefOf("nav-events")).to.equal("/events?where=Chicago%2C%20IL");
+          expect((body.match(/aria-current="page"/g) || []).length).to.equal(1);
+        });
+        test("The heading names the place as the landing does", function () {
+          expect(body).to.include("Events in Chicago, IL");
+        });
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
