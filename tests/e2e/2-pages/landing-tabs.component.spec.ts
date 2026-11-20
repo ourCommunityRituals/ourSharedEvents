@@ -39,7 +39,13 @@
  */
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { cellToLatLng, latLngToCell } from 'h3-js';
-import { ORIGIN, fakeCatalogDb, renderLanding, uiCss } from '../helpers/render-landing-map';
+import {
+  ORIGIN,
+  fakeCatalogDb,
+  renderLanding,
+  uiCss,
+  withClock,
+} from '../helpers/render-landing-map';
 import { axeWcag, settleTransitions } from '../helpers/wcag';
 
 /** Touch target floor, in CSS px (AGENTS.md invariant 8). */
@@ -64,8 +70,8 @@ const DB = fakeCatalogDb(
   ]
 );
 
-function ev(n: number, over: Row): Row {
-  const d = new Date(Date.now() + (2 + n) * 86_400_000).toISOString().slice(0, 10);
+function ev(n: number, over: Row, base = Date.now()): Row {
+  const d = new Date(base + (2 + n) * 86_400_000).toISOString().slice(0, 10);
   return {
     id: `evt_t${String(n).padStart(2, '0')}`,
     slug: `tabs-${n}`,
@@ -86,11 +92,11 @@ function ev(n: number, over: Row): Row {
 }
 
 /** Six events in each of two areas about 23 miles apart: a map of two areas. */
-function rows(): Row[] {
+function rows(base = Date.now()): Row[] {
   return [BLUE_ISLAND, JOLIET].flatMap((cell, a) => {
     const [lat, lon] = cellToLatLng(cell);
     return [1, 2, 3, 4, 5, 6].map((n) =>
-      ev(a * 6 + n, { lat, lon, h3_res7: cell, place_kind: 'business' })
+      ev(a * 6 + n, { lat, lon, h3_res7: cell, place_kind: 'business' }, base)
     );
   });
 }
@@ -99,9 +105,15 @@ function rows(): Row[] {
  * Serve the page and /ui.css from ORIGIN, over https (a browser gives the
  * position only to a secure page); abort and count everything else.
  */
-async function open(page: Page, path = '/'): Promise<string[]> {
+async function open(page: Page, path = '/', now?: string): Promise<string[]> {
   const origin = ORIGIN.replace(/^http:/, 'https:');
-  const html = await renderLanding(path, rows(), { streets: true, env: { DB } });
+  // `now` holds the clock the page is rendered on (and the events are dated from),
+  // so a case can name its day. Left out, it is the real clock.
+  const html = now
+    ? await withClock(now, () =>
+        renderLanding(path, rows(Date.parse(now)), { streets: true, env: { DB } })
+      )
+    : await renderLanding(path, rows(), { streets: true, env: { DB } });
   const css = await uiCss();
   const asked: string[] = [];
   await page.route('**/*', async (route) => {
@@ -283,30 +295,53 @@ test.describe('375 px: the space the tabs save', () => {
   });
 });
 
+/**
+ * The days the page is rendered on for the scripts-off case: noon UTC on each day
+ * of one week (2026-11-16 is a Monday), and 00:15 UTC on Friday 2026-11-20, the
+ * instant this failed on staging's chain. "This weekend" (lib/event-discovery.ts)
+ * is the coming Friday to Sunday, so from Friday to Sunday no event seeded 3 or
+ * more days out is in it, and the page prints "Nothing this weekend yet." beside
+ * the chip: the empty-window message has to stay out of the chip's way.
+ */
+const SCRIPTS_OFF_DAYS = [
+  ['Monday', '2026-11-16T12:00:00Z'],
+  ['Tuesday', '2026-11-17T12:00:00Z'],
+  ['Wednesday', '2026-11-18T12:00:00Z'],
+  ['Thursday', '2026-11-19T12:00:00Z'],
+  ['Friday', '2026-11-20T12:00:00Z'],
+  ['Friday just after midnight UTC', '2026-11-20T00:15:00Z'],
+  ['Saturday', '2026-11-21T12:00:00Z'],
+  ['Sunday', '2026-11-22T12:00:00Z'],
+] as const;
+
 test.describe('scripts off', () => {
-  test('the page is what it was: chips, the Filters fold, no tabs and no distance list', async ({
-    browser,
-  }) => {
-    const context = await browser.newContext({
-      viewport: { width: 375, height: 812 },
-      javaScriptEnabled: false,
+  for (const [day, now] of SCRIPTS_OFF_DAYS) {
+    test(`the page is what it was: chips, the Filters fold, no tabs and no distance list, on a ${day}`, async ({
+      browser,
+    }) => {
+      const context = await browser.newContext({
+        viewport: { width: 375, height: 812 },
+        javaScriptEnabled: false,
+      });
+      try {
+        const page = await context.newPage();
+        await open(page, '/', now);
+        await expect(page.getByTestId('area-filters')).toBeHidden(); // folded on a phone
+        await page.getByTestId('area-filters-btn').click();
+        await expect(page.getByTestId('toggle-window')).toBeVisible();
+        await expect(page.getByTestId('toggle-type')).toBeVisible();
+        await expect(page.getByRole('tablist')).toHaveCount(0);
+        await expect(page.getByTestId('near-panel')).toBeHidden();
+        // A chip still filters, by the CSS-only radios. It is found inside the chip
+        // row: an empty window's own sentence ("Nothing this weekend yet.") holds
+        // the same words, and is on the page on the days that window is empty.
+        await page.getByTestId('toggle-window').getByText('This weekend', { exact: true }).click();
+        await expect(page.locator('#win-weekend')).toBeChecked();
+      } finally {
+        await context.close();
+      }
     });
-    try {
-      const page = await context.newPage();
-      await open(page);
-      await expect(page.getByTestId('area-filters')).toBeHidden(); // folded on a phone
-      await page.getByTestId('area-filters-btn').click();
-      await expect(page.getByTestId('toggle-window')).toBeVisible();
-      await expect(page.getByTestId('toggle-type')).toBeVisible();
-      await expect(page.getByRole('tablist')).toHaveCount(0);
-      await expect(page.getByTestId('near-panel')).toBeHidden();
-      // A chip still filters, by the CSS-only radios.
-      await page.getByText('This weekend').click();
-      await expect(page.locator('#win-weekend')).toBeChecked();
-    } finally {
-      await context.close();
-    }
-  });
+  }
 });
 
 test.describe('right to left', () => {

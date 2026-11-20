@@ -224,6 +224,33 @@ export async function renderLanding(
 }
 
 /**
+ * Run `fn` with the clock this process reads (`new Date()` and `Date.now()`) held
+ * at `now`, then put the real one back. The landing is rendered in this process
+ * (the Worker's "today", "this weekend" and "next 7 days" windows read it), so a
+ * spec that seeds events relative to the day can be run on any weekday. Keep
+ * only the render inside `fn`: nothing else may wait on the real clock meanwhile.
+ */
+export async function withClock<T>(now: string | number | Date, fn: () => Promise<T>): Promise<T> {
+  const RealDate = Date;
+  const t = new RealDate(now).getTime();
+  class FakeDate extends RealDate {
+    constructor(...args: unknown[]) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      super(...((args.length === 0 ? [t] : args) as [any]));
+    }
+    static override now() {
+      return t;
+    }
+  }
+  globalThis.Date = FakeDate as DateConstructor;
+  try {
+    return await fn();
+  } finally {
+    globalThis.Date = RealDate;
+  }
+}
+
+/**
  * A stand-in for the `DB` binding that answers the event-type catalog's two reads
  * (lib/event-type-catalog-read.ts) and nothing else, so the landing draws its Type
  * row. Pass it as `env: { DB: fakeCatalogDb(...) }`. Every other read comes back empty.
