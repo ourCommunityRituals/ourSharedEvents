@@ -1,5 +1,5 @@
 info:
-  name: "OSE-2197 | sunny | the poster bundle's event gives its cell and not its point"
+  name: "OSE-2197 | sunny | the poster bundle's event gives its cell and not its point (directions: its res-9 cell point only)"
   type: http
   seq: 60
 
@@ -19,9 +19,26 @@ runtime:
         const body = res.getBody() || {};
         const text = JSON.stringify(body);
         test('OSE-2197: 200', function () { expect(res.getStatus()).to.eql(200); });
-        test('OSE-2197 place, not person: no coordinate anywhere in the answer', function () {
-          expect(coordinateFindings(body)).to.eql([]);
+        // OSE-2196 (owner 2026-11-19: "it should go to the Res9 if possible"): the
+        // one exception. directions.query is what the poster's map buttons search;
+        // for a routable event with a cell it is the point of its own res-9 cell,
+        // written by lib/cell-point.ts cellPoint (five decimals, "lat,lng"). That
+        // path, that shape, only when routable; any other coordinate still fails.
+        // The exact value per cell is pinned by the workers-pool spec
+        // (public-event-no-coordinates.spec.ts) and, on staging, by ose-pages
+        // folder 17's listed fixture.
+        const DIRECTIONS_FINDING = '$.directions.query: text holds a coordinate pair';
+        const query = body.directions && body.directions.query;
+        const findings = coordinateFindings(body);
+        test('OSE-2197 place, not person: no coordinate anywhere in the answer but directions.query', function () {
+          expect(findings.filter(function (f) { return f !== DIRECTIONS_FINDING; })).to.eql([]);
         });
+        if (findings.indexOf(DIRECTIONS_FINDING) !== -1) {
+          test('OSE-2196: a point in directions.query only for a routable event, and only as a cell point (five decimals)', function () {
+            expect(body.routable).to.eql(true);
+            expect(String(query)).to.match(/^-?\d{1,3}\.\d{5},-?\d{1,3}\.\d{5}$/);
+          });
+        }
         test('OSE-2197: no cell finer than res 7 (the precision the API had)', function () {
           expect(finerCells(body)).to.eql([]);
         });

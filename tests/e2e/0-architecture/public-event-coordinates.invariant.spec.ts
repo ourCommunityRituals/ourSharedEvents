@@ -47,12 +47,16 @@
  * A coordinate name: lat, lon, lng, latitude, longitude, or a name built on one
  * (`venue_lat`, `lat_lng`), or geo, coords, coordinates, position, latlng, ll.
  *
- * NOT HELD HERE, named so the gap is visible: the event page's Directions links
- * (handlers/pages.ts through lib/geo-link.ts directionsUrls) still write the
- * stored point into the page (`query=lat,lon`, `ll=lat,lon`). They are
- * OSE-2196's (the directions order). When that lands, those files belong on
- * this gate. (The poster's Directions search the address text, else the venue
- * name, and never the point: templates/poster.html is scanned by rule 5.)
+ * NOT HELD HERE, named so the gap is visible: the Directions links. Since
+ * OSE-2196 (#1494) the event page reads no stored point at all, and its links
+ * and the poster's go to the event's res-9 cell point (lib/cell-point.ts,
+ * lib/geo-link.ts eventDirections / eventDirectionsQuery), else its res-7
+ * area's, else a search for the address. That point reaches the public poster
+ * bundle as `directions.query`, the one narrow exception the runtime gate
+ * allows (workers/oursharedevents/tests/public-event-no-coordinates.spec.ts);
+ * the source side is held by workers/oursharedevents/tests/route-offer-gate.spec.ts
+ * (no directions builder is handed a stored lat or lon).
+ * (templates/poster.html is scanned by rule 5.)
  * Admin routes keep reading and writing lat and lon (out of scope).
  *
  * The runtime layer is the workers-pool spec

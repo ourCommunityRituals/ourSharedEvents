@@ -18,9 +18,20 @@
  *   3. no cell finer than res 7 anywhere: the API keeps the precision it had
  *      and gains none (the stored res-9 cell stays on the server).
  *
- * Not here: the event page and the poster (their Directions links are OSE-2196,
- * another story), and the SharedReport, which needs a signed link and reads
- * cells only (lib/shared-report-builder.ts selects no point). The T0 gate is
+ * ONE NARROW EXCEPTION (OSE-2196, owner 2026-11-19: "it should go to the Res9 if
+ * possible"; a maps link cannot take a hexagon): the poster bundle's
+ * `directions.query` is what the poster's Google / Apple Maps buttons search,
+ * and for a routable event it is the point of the event's OWN res-9 cell
+ * (lib/cell-point.ts cellPoint, else its res-7 area's when it has no res-9
+ * cell). That one path may hold that one value, worked out here from the
+ * seeded cell alone, never from the stored point. Any other coordinate, any
+ * other path, any other value (the stored point, the res-7 point when a res-9
+ * cell exists) still fails, and an event that is not routable carries no
+ * directions at all. The event page's Directions are OSE-2196's
+ * (tests/routable-directions.spec.ts, tests/no-stored-point.property.spec.ts).
+ *
+ * Not here: the SharedReport, which needs a signed link and reads cells only
+ * (lib/shared-report-builder.ts selects no point). The T0 gate is
  * tests/e2e/0-architecture/public-event-coordinates.invariant.spec.ts; on
  * staging, Bruno reads the same answers (bruno/ose-api/…/OSE-2197 …).
  *
@@ -35,10 +46,18 @@
  *   "no cell finer than res 7"). The calendar case stayed green under the first
  *   fault: the feed writes its own fields from the projected event and never
  *   had a GEO line, so it is a guard, not a regression test | date: 2026-11-19
+ * @born-red OSE-2196 poster-bundle exception | method: each fault alone, this
+ *   file run, put back. main at f3492f4a (the allowance absent) failed the
+ *   listed poster-bundle case on `$.directions.query`. Then: the res-7 point
+ *   preferred to the res-9 one (lib/cell-point.ts), the listed case red;
+ *   directions sent for an off-map event, the off-map case red; a second field
+ *   carrying the point, the listed case red; the filter widened to drop every
+ *   pair, and the exact-value check removed, the "one path and one value" case
+ *   red each time | date: 2026-11-20
  */
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
-import { getResolution, isValidCell, latLngToCell } from 'h3-js';
+import { cellToLatLng, getResolution, isValidCell, latLngToCell } from 'h3-js';
 import { coordinateFindings } from './helpers/coordinate-findings';
 
 interface TestEnv {
@@ -57,6 +76,15 @@ const LON = -87.680647;
 const RES9 = latLngToCell(LAT, LON, 9);
 const RES7 = latLngToCell(LAT, LON, 7);
 const LISTED = 'evt-ose2197-listed';
+/**
+ * The one value the poster bundle's directions.query may hold for these events:
+ * the res-9 cell's point as cellPoint writes it (five decimals), from the cell
+ * id alone (OSE-2196).
+ */
+const RES9_POINT = cellToLatLng(RES9)
+  .map((v) => v.toFixed(5))
+  .join(',');
+const DIRECTIONS_FINDING = '$.directions.query: text holds a coordinate pair';
 const OFF_MAP = 'evt-ose2197-offmap';
 
 async function applyAll(db: D1Database, statementsJson: string): Promise<void> {
@@ -126,9 +154,23 @@ function cellsIn(value: unknown, out: { cell: string; res: number }[] = []) {
   return out;
 }
 
-/** The three assertions every public JSON answer is held to. */
-function expectNoPoint(path: string, answer: { text: string; json: unknown }): void {
-  expect(coordinateFindings(answer.json), path).toEqual([]);
+/**
+ * The three assertions every public JSON answer is held to. `allowRes9Point`
+ * is passed for the poster bundle of a routable event only: then, and only
+ * then, `$.directions.query` may hold exactly RES9_POINT (OSE-2196).
+ */
+function expectNoPoint(
+  path: string,
+  answer: { text: string; json: unknown },
+  opts: { allowRes9Point?: boolean } = {}
+): void {
+  let findings = coordinateFindings(answer.json);
+  if (opts.allowRes9Point) {
+    const query = (answer.json as { directions?: { query?: unknown } } | null)?.directions?.query;
+    expect(query, `${path}: directions.query is the res-9 cell's own point`).toBe(RES9_POINT);
+    findings = findings.filter((f) => f !== DIRECTIONS_FINDING);
+  }
+  expect(findings, path).toEqual([]);
   expect(answer.text, `${path} carries the stored latitude`).not.toContain(String(LAT));
   expect(answer.text, `${path} carries the stored longitude`).not.toContain(String(LON));
   const finer = cellsIn(answer.json).filter((c) => c.res > 7);
@@ -176,11 +218,41 @@ describe('OSE-2197 | the public event answers carry the cell, never the point', 
     expectNoPoint('map', r);
   });
 
-  test('GET /api/v2/events/:id/poster-bundle: the event it prints carries no point', async () => {
+  test('GET /api/v2/events/:id/poster-bundle: the event it prints carries no point; its directions only the res-9 cell point', async () => {
     const r = await read(`/api/v2/events/${LISTED}/poster-bundle`);
     expect(r.status).toBe(200);
     expect((r.json as { event: { h3_res7: string } }).event.h3_res7).toBe(RES7);
-    expectNoPoint('poster-bundle', r);
+    expectNoPoint('poster-bundle', r, { allowRes9Point: true });
+  });
+
+  test('GET /api/v2/events/:id/poster-bundle: an event off the map carries no point and no directions', async () => {
+    const r = await read(`/api/v2/events/${OFF_MAP}/poster-bundle`);
+    expect(r.status).toBe(200);
+    const body = r.json as { routable: unknown; directions: unknown };
+    expect(body.routable).toBe(false);
+    expect(body.directions).toBeNull();
+    expectNoPoint('off-map poster-bundle', r);
+  });
+
+  test('the poster-bundle exception is that one path and that one value', () => {
+    const answer = (json: unknown) => ({ text: JSON.stringify(json), json });
+    const ok = { event: { h3_res7: RES7 }, directions: { query: RES9_POINT } };
+    // The allowed shape passes.
+    expectNoPoint('allowed', answer(ok), { allowRes9Point: true });
+    const res7Point = cellToLatLng(RES7)
+      .map((v) => v.toFixed(5))
+      .join(',');
+    const refused: Array<[string, unknown]> = [
+      ['the stored point', { ...ok, directions: { query: `${LAT},${LON}` } }],
+      ['the res-7 point although a res-9 cell exists', { ...ok, directions: { query: res7Point } }],
+      ['the point in another field', { ...ok, event: { h3_res7: RES7, note: RES9_POINT } }],
+      ['a second pair beside it', { ...ok, directions: { query: RES9_POINT, other: RES9_POINT } }],
+      ['the point without the allowance', ok],
+    ];
+    for (const [why, json] of refused) {
+      const allow = why !== 'the point without the allowance';
+      expect(() => expectNoPoint(why, answer(json), { allowRes9Point: allow }), why).toThrow();
+    }
   });
 
   test('GET /api/v2/events/:id/display-config: no point', async () => {
