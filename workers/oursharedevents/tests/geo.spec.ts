@@ -288,3 +288,73 @@ describe('resolveCorridorId (BE-24b: H3 res7 cell as corridor identifier)', () =
     }
   });
 });
+
+// ── OSE-2199: how exact the point is, and the corridor as the res-9 parent ──
+// @born-red OSE-2199 geocoder precision | method: run with the three fields
+//   dropped from geocodeVenue's result, and with resolveCorridorId reading res 7
+//   from the point; both failed | date: 2026-11-19
+describe('OSE-2199 | the geocoder keeps how exact its point is', () => {
+  const okWith = (geometry: Record<string, unknown>) =>
+    new Response(
+      JSON.stringify({
+        status: 'OK',
+        results: [
+          {
+            geometry: { location: { lat: 41.6565, lng: -87.681 }, ...geometry },
+            formatted_address: '13328 Olde Western Ave, Blue Island, IL 60406, USA',
+            types: ['street_address'],
+          },
+        ],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  const box = {
+    northeast: { lat: 41.6578, lng: -87.6796 },
+    southwest: { lat: 41.6551, lng: -87.6823 },
+  };
+
+  test('location_type, viewport and bounds are kept [dropped]', async () => {
+    for (const location_type of [
+      'ROOFTOP',
+      'RANGE_INTERPOLATED',
+      'GEOMETRIC_CENTER',
+      'APPROXIMATE',
+    ]) {
+      const outcome = await geocodeVenue(CONFIGURED, 'x', async () =>
+        okWith({ location_type, viewport: box, bounds: box })
+      );
+      expect(outcome.ok).toBe(true);
+      if (outcome.ok) {
+        expect(outcome.result.location_type).toBe(location_type);
+        expect(outcome.result.viewport).toEqual(box);
+        expect(outcome.result.bounds).toEqual(box);
+      }
+    }
+  });
+
+  test('an unknown location_type or a malformed box is kept as null, never guessed', async () => {
+    for (const geometry of [
+      {},
+      { location_type: 'rooftop', viewport: 'x', bounds: { northeast: box.northeast } },
+      {
+        location_type: 7,
+        viewport: { northeast: { lat: 'a', lng: 1 }, southwest: box.southwest },
+        bounds: { northeast: { lat: 91, lng: 0 }, southwest: box.southwest },
+      },
+    ]) {
+      const outcome = await geocodeVenue(CONFIGURED, 'x', async () => okWith(geometry));
+      expect(outcome.ok).toBe(true);
+      if (outcome.ok) {
+        expect(outcome.result.location_type).toBeNull();
+        expect(outcome.result.viewport).toBeNull();
+        expect(outcome.result.bounds).toBeNull();
+      }
+    }
+  });
+
+  test('the corridor is the parent of the point’s res-9 cell, where the point’s own res-7 cell differs [res 7 from the point]', async () => {
+    // A synthetic point (Blue Island) whose own res-7 cell is 872664546ffffff
+    // and whose res-9 cell 892664540dbffff has parent 872664540ffffff.
+    expect(await resolveCorridorId({}, 41.65, -87.6884)).toBe('872664540ffffff');
+  });
+});

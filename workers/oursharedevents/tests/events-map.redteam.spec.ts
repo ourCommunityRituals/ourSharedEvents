@@ -214,7 +214,7 @@ describe('RT-MAP-004 | attendee-derived data cannot be pulled through the map', 
       }
     ).items;
     expect(Object.keys(items[0]).sort()).toEqual(
-      ['id', 'lat', 'lon', 'name', 'phase', 'startDateISO', 'venue'].sort()
+      ['h3_res7', 'id', 'name', 'phase', 'startDateISO', 'venue'].sort()
     );
   });
 });

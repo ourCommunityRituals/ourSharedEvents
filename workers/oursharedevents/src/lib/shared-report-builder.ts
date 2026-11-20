@@ -43,6 +43,9 @@ import {
   flooredRatePct,
   floorCorridorBaseline,
   floorTotalOfParts,
+  publishCount,
+  PUBLISH_ROUNDING,
+  roundForPublish,
 } from './count-floor';
 import { eventUsesSponsorsSql, sponsorTitle } from './sponsor-card';
 import {
@@ -132,7 +135,11 @@ const RATE_WITHHELD_DETAIL = `one side of this rate is a group of fewer than ${C
  * measure against differencing (2026-10-01).
  */
 function reportRatePct(part: number, whole: number): number | null {
-  return part >= whole ? null : flooredRatePct(part, whole);
+  // The rate is worked out from the rounded counts (OSE-2151), so it can read
+  // 100% while the exact part is still short of the whole (12 of 14 → 10 of
+  // 10). Withheld at 100% on the published numbers as on the exact ones.
+  const pct = flooredRatePct(part, whole);
+  return pct === null || pct >= 100 ? null : pct;
 }
 
 export type SuppressionReasonCode =
@@ -507,8 +514,8 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const materializedAt = saMeta?.computed_at ?? null;
   const hasAnyBucket = (saMeta?.bucket_count ?? 0) > 0;
   // Sum survivors (>= K) per the ratified per-bucket rule, then pass the sum
-  // through the shared OSE-665 renderer. floored.count is exact when the
-  // survivor sum clears K, else null (suppressed).
+  // through the shared OSE-665 renderer. floored.count is the survivor sum
+  // rounded down to a multiple of 5 (OSE-2151) when it clears K, else null.
   const flooredGatherings = floorTotalOfParts((saBuckets.results ?? []).map((r) => r.count));
   const distinctScanners = hasAnyBucket ? flooredGatherings.count : null;
 
@@ -527,7 +534,8 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // the denominator is so small that the percentage is identifying (50% over 2
   // narrows a returner to one of two specific people). Suppressed per S5-Q5.
   if (distinctAnonsHere >= CORRIDOR_MAP_MIN_COUNT) {
-    sampleSize = distinctAnonsHere;
+    // OSE-2151: published rounded down to a multiple of 5.
+    sampleSize = roundForPublish(distinctAnonsHere);
     // venue_pct — of the people at THIS event, how many came to another event
     // of its confirmed series: the same place, again (OSE-1652). A venue is
     // not a row of its own; a confirmed series is how the schema says "this
@@ -676,7 +684,8 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     // re-exposed that exact numerator even had the count itself been hidden. Apply the
     // SAME uniform floor: sub-K → null (suppressed), >= K → exact. Below the floor the
     // ratios are NOT computed, so they cannot leak the raw numerator by division.
-    const flooredThisEvent = applyCountFloor(distinctAnonsHere);
+    // OSE-2151: and rounded down to a multiple of 5 from the floor up.
+    const flooredThisEvent = publishCount(distinctAnonsHere);
     thisEventCount = flooredThisEvent.count;
     // Said at 0 as at 1 to 4 (OSE-1649 item 2).
     if (flooredThisEvent.suppressed) {
@@ -788,7 +797,8 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       sponsor_tier: r.sponsor_tier ?? null,
       is_local: r.is_local === 1,
       surface: r.surface,
-      count: r.count,
+      // OSE-2151: rounded down to a multiple of 5 (the row cleared the floor).
+      count: roundForPublish(r.count),
     }));
 
   // campaign_summary (OSE-2046): the campaigns come from the event's placements,
@@ -816,13 +826,17 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   //    hour adds nothing, including to first/last scan times. Those times
   //    come from scan_bucket (the hour /q/ recorded), not created_at, which a
   //    queued scan gets when the consumer writes it, possibly an hour later.
+  //    OSE-2151: each hour that clears the floor is rounded down to a multiple
+  //    of 5 before the hours are added (the floorTotalOfParts rule), so the
+  //    figure is the one the organizer's reach card shows for the same poster
+  //    (lib/scan-cells.ts), and neither can be subtracted from the other.
   const posters = await db
     .prepare(
       `SELECT
          pd.id                  AS poster_deployment_id,
          COALESCE(pd.location_desc, pd.placement_label, '(no label)') AS location,
          pd.h3_res9             AS h3_res9,
-         COALESCE(SUM(CASE WHEN ph.n >= ? THEN ph.n ELSE 0 END), 0) AS scan_count,
+         COALESCE(SUM(CASE WHEN ph.n >= ? THEN ph.n - (ph.n % ?) ELSE 0 END), 0) AS scan_count,
          MIN(CASE WHEN ph.n >= ? THEN ph.first_at END) AS first_scan_at,
          MAX(CASE WHEN ph.n >= ? THEN ph.last_at END)  AS last_scan_at
        FROM poster_deployments pd
@@ -839,7 +853,14 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
        HAVING scan_count > 0
        ORDER BY scan_count DESC`
     )
-    .bind(CORRIDOR_MAP_MIN_COUNT, CORRIDOR_MAP_MIN_COUNT, CORRIDOR_MAP_MIN_COUNT, eventId, eventId)
+    .bind(
+      CORRIDOR_MAP_MIN_COUNT,
+      PUBLISH_ROUNDING,
+      CORRIDOR_MAP_MIN_COUNT,
+      CORRIDOR_MAP_MIN_COUNT,
+      eventId,
+      eventId
+    )
     .all<{
       poster_deployment_id: string;
       location: string;
@@ -856,9 +877,10 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // not. Apply the same uniform floor and DROP any deployment below it: a
   // suppressed-but-present row still discloses "a poster at this hex drew a
   // small crowd," which is exactly the leak, so sub-K deployments must not
-  // appear at all. Deployments at or above the floor keep their exact count.
+  // appear at all. Deployments at or above the floor publish their count rounded
+  // down to a multiple of 5 (OSE-2151).
   const posterAttribution = (posters.results ?? [])
-    .map((r) => ({ r, floored: applyCountFloor(r.scan_count) }))
+    .map((r) => ({ r, floored: publishCount(r.scan_count) }))
     .filter((x) => !x.floored.suppressed)
     .map(({ r, floored }) => {
       const firstBucket = bucketToHour(r.first_scan_at);
@@ -934,7 +956,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const cellRows = await db
     .prepare(
       `SELECT h3_res9 AS cell,
-              SUM(CASE WHEN scan_count >= ? THEN scan_count ELSE 0 END) AS count
+              SUM(CASE WHEN scan_count >= ? THEN scan_count - (scan_count % ?) ELSE 0 END) AS count
          FROM scan_cell_aggregates
          WHERE event_id = ?
          GROUP BY h3_res9`
@@ -943,7 +965,9 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     // sum, so sub-K hours can't add up to a published count (3 + 3 is not 6).
     // A cell made only of sub-K hours stays as a 0 row, so it is dropped below
     // and an all-sub-K event still reads as 'suppressed', not 'no scans'.
-    .bind(CORRIDOR_MAP_MIN_COUNT, eventId)
+    // OSE-2151: each hour is rounded down to a multiple of 5 before it joins
+    // the sum, as floorTotalOfParts does.
+    .bind(CORRIDOR_MAP_MIN_COUNT, PUBLISH_ROUNDING, eventId)
     .all<{ cell: string; count: number }>();
 
   const cellData = cellRows.results ?? [];
@@ -1095,7 +1119,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     const byKind: Record<string, number | null> = {};
     for (const r of clickData) {
       const raw = Number.isFinite(Number(r.clicks)) ? Number(r.clicks) : 0;
-      byKind[r.kind] = applyCountFloor(raw).count;
+      byKind[r.kind] = publishCount(raw).count;
     }
     clickOuts = { by_kind: byKind, total: floorTotalOfParts(Object.values(byKind)).count };
   }

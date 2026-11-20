@@ -304,21 +304,23 @@ describe('the harness can see', () => {
     expect(K).toBe(5);
   });
 
-  test('a dataset above the floor publishes its tap numbers on every read', async () => {
+  test('a dataset above the floor publishes its tap numbers on every read, rounded down to a multiple of 5', async () => {
+    // OSE-2151: 20, 11, 7 and 6 publish as 20, 10, 5 and 5; the total is their sum.
     const w = world(20, 11, 7, 6);
     const c = await card(w);
     expect(c.reach.taps.codes.map((x) => [x.kind, x.taps.count])).toEqual([
       ['public', 20],
-      ['donation', 11],
-      ['register', 7],
-      ['checkin', 6],
+      ['donation', 10],
+      // Codes that read the same are ordered by kind, never by the exact count.
+      ['checkin', 5],
+      ['register', 5],
     ]);
     expect(c.reach.taps.other).toBeNull();
-    expect(c.reach.taps.total.count).toBe(44);
-    expect(c.reach.totals.taps.count).toBe(44);
-    expect(c.activity.clicks.count).toBe(44);
-    expect((await live(w)).reach.clicks.count).toBe(44);
-    expect((await ops(w)).reach.link_taps.count).toBe(44);
+    expect(c.reach.taps.total.count).toBe(40);
+    expect(c.reach.totals.taps.count).toBe(40);
+    expect(c.activity.clicks.count).toBe(40);
+    expect((await live(w)).reach.clicks.count).toBe(40);
+    expect((await ops(w)).reach.link_taps.count).toBe(40);
   });
 
   test('the same dataset read twice differs in nothing', async () => {
@@ -329,15 +331,28 @@ describe('the harness can see', () => {
   });
 
   test.each(BASES.flatMap((b) => KINDS.filter((k) => b.w[k] !== null).map((k) => ({ ...b, k }))))(
-    'control: one more tap on $k, above the floor, shows on every read ($label)',
+    'control: one more tap on $k, above the floor and crossing a multiple of 5, shows on every read ($label)',
     async ({ w, k }) => {
-      const lines = await neighbours({ ...w, [k]: 11 }, { ...w, [k]: 12 });
+      // The code's published count must cross a multiple of 5. Two links can be
+      // one code, so the step is chosen on the code's total, not the link's.
+      const rest = codeTaps({ ...w, [k]: 0 }, k);
+      const n = 14 - (rest % 5);
+      const lines = await neighbours({ ...w, [k]: n }, { ...w, [k]: n + 1 });
       for (const r of READS) {
         expect(
           lines.some((l) => l.startsWith(`${r.name} | `)),
           `${r.name} did not move for a tap above the floor: ${JSON.stringify(lines)}`
         ).toBe(true);
       }
+    }
+  );
+});
+
+describe('OSE-2151: one more tap above the floor, inside a step of 5, changes nothing', () => {
+  test.each(BASES.flatMap((b) => KINDS.filter((k) => b.w[k] !== null).map((k) => ({ ...b, k }))))(
+    '$k from 11 to 12 ($label)',
+    async ({ w, k }) => {
+      expect(await neighbours({ ...w, [k]: 11 }, { ...w, [k]: 12 })).toEqual([]);
     }
   );
 });
@@ -401,10 +416,11 @@ describe('the tap total is the sum of the counts published beside it', () => {
   test('two links to the event page are one code: listed, and totalled, as their sum', async () => {
     // The list and the totals are read by different queries. If they grouped
     // links differently, a total would stop being the sum of what is listed.
-    const six = { count: 6, suppressed: false, floor: 5 };
+    // 3 + 3 is 6, published rounded down to 5 (OSE-2151).
+    const six = { count: 5, suppressed: false, floor: 5 };
     const both = world(3, null, null, null, 3);
     const c = await card(both);
-    expect(c.reach.taps.codes.map((x) => [x.kind, x.taps.count])).toEqual([['public', 6]]);
+    expect(c.reach.taps.codes.map((x) => [x.kind, x.taps.count])).toEqual([['public', 5]]);
     expect(c.reach.taps.other).toBeNull();
     expect(c.reach.taps.total).toEqual(six);
     expect(c.reach.totals.taps).toEqual(six);
@@ -546,17 +562,17 @@ describe('the operations dashboard adds up a brand: only links that clear the fl
     await seedWorld(world(50, null, null, null));
   });
 
-  test('two events, one with two withheld links: 18, the listed links only (10 + 8)', async () => {
+  test('two events, one with two withheld links: 15, the listed links only (10 + 8, read as 10 + 5)', async () => {
     await publishBrand({
       'reach-ops-a': world(10, null, 2, 1),
       'reach-ops-b': world(8, null, null, null),
     });
     const t = brandTaps();
     // Each event's own reads: 10 (2 and 1 withheld), 8, and an event with no links.
-    expect(t.live).toEqual([shown(10), shown(8), withheld]);
+    expect(t.live).toEqual([shown(10), shown(5), withheld]);
     expect(t.card).toEqual(t.live);
     // 13 + 8 = 21 would hand back the 3 taps the first event's card withholds.
-    expect(t.ops).toEqual(shown(18));
+    expect(t.ops).toEqual(shown(15));
   });
 
   test('one more tap on a withheld link of one event moves nothing, the brand figure included', async () => {
@@ -570,10 +586,14 @@ describe('the operations dashboard adds up a brand: only links that clear the fl
     const a = world(10, null, 2, 1);
     const b = world(8, null, null, null);
     const base = await publishBrand({ 'reach-ops-a': a, 'reach-ops-b': b });
-    const moreA = await publishBrand({ 'reach-ops-a': { ...a, public: 11 }, 'reach-ops-b': b });
-    expect(opsLine(differences(base, moreA))).toEqual(['ops | reach.link_taps.count: 18 -> 19']);
-    const moreB = await publishBrand({ 'reach-ops-a': a, 'reach-ops-b': { ...b, public: 9 } });
-    expect(opsLine(differences(base, moreB))).toEqual(['ops | reach.link_taps.count: 18 -> 19']);
+    // Rounded (OSE-2151), a listed link shows once it crosses a multiple of 5.
+    const moreA = await publishBrand({ 'reach-ops-a': { ...a, public: 15 }, 'reach-ops-b': b });
+    expect(opsLine(differences(base, moreA))).toEqual(['ops | reach.link_taps.count: 15 -> 20']);
+    const moreB = await publishBrand({ 'reach-ops-a': a, 'reach-ops-b': { ...b, public: 10 } });
+    expect(opsLine(differences(base, moreB))).toEqual(['ops | reach.link_taps.count: 15 -> 20']);
+    // One more inside a step of 5 moves nothing.
+    const inStep = await publishBrand({ 'reach-ops-a': { ...a, public: 11 }, 'reach-ops-b': b });
+    expect(opsLine(differences(base, inStep))).toEqual([]);
   });
 
   test('an event with no link at 5 adds nothing, however many taps its links have together', async () => {
@@ -599,13 +619,13 @@ describe('the operations dashboard adds up a brand: only links that clear the fl
   test('the brand figure is the sum of what each event shows on its own', async () => {
     const worlds: { bw: BrandWorld; total: number }[] = [
       {
-        // 20 + 11 listed; two links that are one code of 6; nothing listed.
+        // 20 + 11 listed (20 + 10); two links that are one code of 6 (5); nothing listed.
         bw: {
           'reach-ops-a': world(20, 11, 2, 1),
           'reach-ops-b': world(3, null, null, null, 3),
           'reach-ops-c': world(4, 4, 3, 4),
         },
-        total: 37,
+        total: 35,
       },
       {
         bw: {
@@ -613,9 +633,9 @@ describe('the operations dashboard adds up a brand: only links that clear the fl
           'reach-ops-b': world(6, 7, null, null),
           'reach-ops-c': world(1, null, null, null, 3),
         },
-        total: 18,
+        total: 15,
       },
-      { bw: { 'reach-ops-c': world(9, 5, 5, 4) }, total: 19 },
+      { bw: { 'reach-ops-c': world(9, 5, 5, 4) }, total: 15 },
     ];
     for (const { bw, total } of worlds) {
       await publishBrand(bw);
@@ -695,10 +715,10 @@ describe("the sponsor's line: only links that clear the floor on their own", () 
     }
   }
 
-  test('a tap on a code above the floor shows: 10 / 2 / 1 reads 10, 11 / 2 / 1 reads 11', async () => {
-    const before = await sponsorTaps(world(10, null, 2, 1));
-    const after = await sponsorTaps(world(11, null, 2, 1));
-    expect([before.count, after.count]).toEqual([10, 11]);
+  test('taps on a code above the floor show once they cross a multiple of 5: 14 reads 10, 15 reads 15', async () => {
+    const before = await sponsorTaps(world(14, null, 2, 1));
+    const after = await sponsorTaps(world(15, null, 2, 1));
+    expect([before.count, after.count]).toEqual([10, 15]);
   });
 
   test('the figure is the one the organizer is shown for the same event', async () => {

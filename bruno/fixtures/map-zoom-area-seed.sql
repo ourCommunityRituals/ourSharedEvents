@@ -28,9 +28,11 @@
 --
 -- Counts, set to known numbers on every run so "unchanged" can be read exactly.
 -- Every code holds 5 taps or more, so the organizer's floored read
--- (GET /api/v2/admin/events/:id/pre-event-activity) shows the exact total:
---   map-zoom-a  taps 42 (9+5+5+7+6+5+5)   share opens 5
---   map-zoom-b  taps 8                    share opens 5
+-- (GET /api/v2/admin/events/:id/pre-event-activity) shows a total. A published
+-- count is rounded down to a multiple of 5 (OSE-2151), so each code holds 9:
+-- one more tap on any code crosses a step and moves the published total.
+--   map-zoom-a  taps 63 (7 codes of 9), published as 35 (7 x 5)   share opens 5
+--   map-zoom-b  taps 9, published as 5                            share opens 5
 -- scripts/ci/map-counts-check.mjs reads the same numbers straight from D1.
 --
 -- Read by bruno/ose-pages/14. Landing map zoom (OSE-1886 OSE-1891 OSE-1896) and
@@ -98,13 +100,13 @@ ON CONFLICT(id) DO UPDATE SET
 INSERT INTO shortlinks (code, event_id, kind, target_url, poster_position, clicks)
 VALUES
   ('mzPub1', 'map-zoom-a', 'public',   NULL,                                       1,    9),
-  ('mzReg1', 'map-zoom-a', 'register', NULL,                                       2,    5),
-  ('mzChk1', 'map-zoom-a', 'checkin',  NULL,                                       3,    5),
-  ('mzTix1', 'map-zoom-a', 'tickets',  'https://tickets.map-zoom.example/a',       4,    7),
-  ('mzDon1', 'map-zoom-a', 'donation', 'https://give.map-zoom.example/a',          5,    6),
-  ('mzHtp1', 'map-zoom-a', 'menu',     'http://not-https.map-zoom.example/a',      6,    5),
-  ('mzOff1', 'map-zoom-a', 'website',  'https://off-poster.map-zoom.example/a',    NULL, 5),
-  ('mzTix2', 'map-zoom-b', 'tickets',  'https://tickets.map-zoom.example/b',       1,    8)
+  ('mzReg1', 'map-zoom-a', 'register', NULL,                                       2,    9),
+  ('mzChk1', 'map-zoom-a', 'checkin',  NULL,                                       3,    9),
+  ('mzTix1', 'map-zoom-a', 'tickets',  'https://tickets.map-zoom.example/a',       4,    9),
+  ('mzDon1', 'map-zoom-a', 'donation', 'https://give.map-zoom.example/a',          5,    9),
+  ('mzHtp1', 'map-zoom-a', 'menu',     'http://not-https.map-zoom.example/a',      6,    9),
+  ('mzOff1', 'map-zoom-a', 'website',  'https://off-poster.map-zoom.example/a',    NULL, 9),
+  ('mzTix2', 'map-zoom-b', 'tickets',  'https://tickets.map-zoom.example/b',       1,    9)
 ON CONFLICT(code) DO UPDATE SET
   event_id = excluded.event_id, kind = excluded.kind, target_url = excluded.target_url,
   poster_position = excluded.poster_position, clicks = excluded.clicks, last_clicked_at = NULL;

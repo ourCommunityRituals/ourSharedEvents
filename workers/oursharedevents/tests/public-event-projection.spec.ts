@@ -42,6 +42,35 @@ describe('the node cell is no longer published', () => {
   });
 });
 
+// OSE-2197 (owner, 2026-11-19: "It should resolve to the H3"). The mock fixture
+// behind these reads carries a stored point, as a real row does.
+describe('the stored point is no longer published', () => {
+  test('the list and the read carry the cell and no lat or lon', async () => {
+    const listed = await listItem();
+    const res = await handleGetEvent(
+      new Request(`https://t.test/api/v2/events/${String(listed.id)}`),
+      {} as never,
+      String(listed.id)
+    );
+    const read = ((await res.json()) as { item: Record<string, unknown> }).item;
+    for (const item of [listed, read]) {
+      expect(item).not.toHaveProperty('lat');
+      expect(item).not.toHaveProperty('lon');
+      expect(item).toHaveProperty('h3_res7');
+    }
+  });
+
+  test('lat and lon cannot come back through the projection', () => {
+    for (const name of ['lat', 'lon', 'lng', 'latitude', 'longitude']) {
+      expect(PUBLIC_EVENT_FIELDS.has(name), name).toBe(false);
+    }
+    expect(toPublicEvent({ id: 'e', lat: 41.6573, lon: -87.6806, h3_res7: 'c' })).toEqual({
+      id: 'e',
+      h3_res7: 'c',
+    });
+  });
+});
+
 describe('the projection is an allowlist, so new columns stay internal', () => {
   test('an unlisted field is dropped', () => {
     const out = toPublicEvent({

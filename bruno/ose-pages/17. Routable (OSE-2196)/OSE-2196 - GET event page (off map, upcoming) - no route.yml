@@ -1,0 +1,56 @@
+info:
+  name: "OSE-2196 | GET /events/rt-offmap-pre | off map, upcoming: no route"
+  type: http
+  seq: 1
+
+# Owner, 2026-11-19: "Anything that is listed as private or off map cannot be
+# routed to." Fixture: bruno/fixtures/routable-seed.sql. rt-offmap-pre is active and OFF
+# THE MAP (is_published = 0), with exact coordinates (41.615273, -87.860418) and
+# a street address. Its page still opens at its link (PO 2026-10-07), but it
+# offers no route: no Directions menu, no maps link, no coordinate.
+# A 403 passes only as an edge challenge (cf-mitigated), and not at all under
+# PAGES_EDGE_STRICT=1 (lib/edge.js); every check below runs on a real 200.
+http:
+  method: GET
+  url: "{{baseUrl}}/events/rt-offmap-pre"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // OSE-2160: the edge rules live in lib/edge.js (strict under PAGES_EDGE_STRICT=1).
+        require('./lib/edge.js').pageStatus({ bru: bru, res: res, test: test, expect: expect, name: 'Returns 200 or 403 (edge challenge)' });
+        const status = res.getStatus();
+        // Stricter than the lenient rule: a 403 here must be the edge's
+        // (cf-mitigated), never a Worker 403, which would hide a broken page.
+        test('A 403 is only ever the edge, never the Worker', function () {
+          expect(status !== 403 || (res.getHeader('cf-mitigated') || '').length > 0).to.equal(true);
+        });
+        if (status === 200) {
+          const body = String(res.getBody());
+          test('The page opened: it is this event, with its Where card', function () {
+            expect(body).to.include('Routable Check');
+            expect(body).to.include('data-testid="event-where"');
+          });
+          test('No Directions menu', function () {
+            expect(body).to.not.match(/data-testid="geo-link/);
+            expect(body).to.not.include('ose-directions-menu');
+          });
+          test('No maps link of any kind', function () {
+            const maps = body.match(/href="(?:https?:\/\/(?:www\.)?google\.[a-z.]+\/maps|https?:\/\/maps\.google|https?:\/\/maps\.apple\.com|geo:|maps:)[^"]*"/gi) || [];
+            expect(maps).to.eql([]);
+          });
+          test('No coordinate of the event anywhere on the page', function () {
+            expect(body).to.not.include('41.615273');
+            expect(body).to.not.include('-87.860418');
+            expect(body).to.not.match(/41\.6152\d*(?:%2C|,)\s*-87\.8604/);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

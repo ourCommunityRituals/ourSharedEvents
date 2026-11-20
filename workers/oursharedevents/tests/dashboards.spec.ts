@@ -290,7 +290,9 @@ describe('contract', () => {
   });
 
   test('floorBucketsThenSum drops sub-K buckets before the sum', () => {
-    expect(floorBucketsThenSum([9, 2])).toEqual({ count: 9, suppressed: false, floor: 5 });
+    // 9 is published rounded down to a multiple of 5 (OSE-2151).
+    expect(floorBucketsThenSum([9, 2])).toEqual({ count: 5, suppressed: false, floor: 5 });
+    expect(floorBucketsThenSum([9, 7])).toEqual({ count: 10, suppressed: false, floor: 5 });
     expect(floorBucketsThenSum([4, 4])).toEqual({ count: null, suppressed: true, floor: 5 });
     expect(floorBucketsThenSum([])).toEqual({ count: null, suppressed: true, floor: 5 });
   });
@@ -308,7 +310,7 @@ describe('founder / operations cockpit', () => {
     // OSE-1656: scans are the poster-hours with 5 or more. Every poster's scans
     // are in one hour: bocce's 7 count; its 3 and 2, and the workshop's 3, do
     // not (15 used to give them back). The demo's 40 and dash-b's 50 are not here.
-    expect(body.reach.poster_scans).toEqual({ count: 7, suppressed: false, floor: 5 });
+    expect(body.reach.poster_scans).toEqual({ count: 5, suppressed: false, floor: 5 });
     expect(body.reach.active_posters).toBe(4);
     expect(body.reach.poster_places).toBe(2);
     expect(body.sponsors).toEqual({ on_show: 2, pending_requests: 1 });
@@ -321,14 +323,14 @@ describe('founder / operations cockpit', () => {
     // Taps are floored per poster code, the grain the event's own card lists.
     // Bocce's event link has 9 and survives; its donation link has 3 and is
     // dropped; so is the workshop's only link, with 2 (9, not 12 or 14).
-    expect(body.reach.link_taps).toEqual({ count: 9, suppressed: false, floor: 5 });
+    expect(body.reach.link_taps).toEqual({ count: 5, suppressed: false, floor: 5 });
     // registrations: bocce 7 survives, workshop 3 dropped → 7, not 10.
     expect(body.participation.explicit.registrations).toEqual({
-      count: 7,
+      count: 5,
       suppressed: false,
       floor: 5,
     });
-    expect(body.participation.explicit.checkins.count).toBe(6);
+    expect(body.participation.explicit.checkins.count).toBe(5);
     // 2 email signups: under K, suppressed.
     expect(body.participation.explicit.email_signups).toEqual({
       count: null,
@@ -342,9 +344,9 @@ describe('founder / operations cockpit', () => {
     const { body } = await call(handleOperationsDashboard, reqAs(A, `${OPS}?data_class=all`));
     expect(body.events.total).toBe(4);
     // + the demo poster's 40 in one hour; the other demo poster's 3 never joins.
-    expect(body.reach.poster_scans.count).toBe(47);
+    expect(body.reach.poster_scans.count).toBe(45);
     // The demo event's link (40 taps) joins bocce's 9; by default it does not.
-    expect(body.reach.link_taps.count).toBe(49);
+    expect(body.reach.link_taps.count).toBe(45); // 40 + 9 published as 5
     expect(body.scope.data_class).toBe('all');
     const bad = await call(handleOperationsDashboard, reqAs(A, `${OPS}?data_class=nope`));
     expect(bad.status).toBe(400);
@@ -399,8 +401,8 @@ describe('#9 tenant isolation', () => {
     // dash-b holds 50 scans, 99 taps, 20 registrations, 30 check-ins.
     expect(body.reach.poster_scans.count).toBeLessThan(50);
     expect(body.reach.link_taps.count).not.toBe(108);
-    expect(body.participation.explicit.registrations.count).toBe(7);
-    expect(body.participation.explicit.checkins.count).toBe(6);
+    expect(body.participation.explicit.registrations.count).toBe(5);
+    expect(body.participation.explicit.checkins.count).toBe(5);
   });
 
   test('a forged brand_id is 403; an unmapped admin is 403', async () => {
@@ -420,15 +422,16 @@ describe('#9 tenant isolation', () => {
   test('a member of two brands can narrow to one', async () => {
     const both = await call(handleOperationsDashboard, reqAs(AB, OPS));
     expect(both.body.scope.brands).toEqual([DASH.brandA, DASH.brandB]);
-    expect(both.body.reach.poster_scans.count).toBe(57);
+    expect(both.body.reach.poster_scans.count).toBe(55);
     const one = await call(handleOperationsDashboard, reqAs(AB, `${OPS}?brand_id=${DASH.brandB}`));
     expect(one.body.scope.brands).toEqual([DASH.brandB]);
     expect(one.body.reach.poster_scans.count).toBe(50);
-    // Taps across brands: dash-a's 9 (its 3 and its 2 never join) + dash-b's 99.
-    // Every scope a caller can pick is a sum of codes that each cleared K, so
-    // both minus one is 9, a number dash-a's own dashboard already shows.
-    expect(both.body.reach.link_taps).toEqual({ count: 108, suppressed: false, floor: 5 });
-    expect(one.body.reach.link_taps).toEqual({ count: 99, suppressed: false, floor: 5 });
+    // Taps across brands: dash-a's 9 (its 3 and its 2 never join) + dash-b's 99,
+    // each published rounded down to a multiple of 5 (5 + 95). Every scope a
+    // caller can pick is a sum of codes that each cleared K, so both minus one
+    // is 5, a number dash-a's own dashboard already shows.
+    expect(both.body.reach.link_taps).toEqual({ count: 100, suppressed: false, floor: 5 });
+    expect(one.body.reach.link_taps).toEqual({ count: 95, suppressed: false, floor: 5 });
   });
 
   test('the routes are behind requireAdmin', async () => {
@@ -468,7 +471,7 @@ describe('corridor / community intelligence', () => {
     expect(src[CELL_SRC_1]).toEqual({
       cell: CELL_SRC_1,
       posters: 2,
-      scans: { count: 7, suppressed: false, floor: 5 },
+      scans: { count: 5, suppressed: false, floor: 5 },
       // Every event in the fixture has a cell, so nothing lacks a destination.
       scans_no_destination: none,
     });
@@ -485,7 +488,7 @@ describe('corridor / community intelligence', () => {
       {
         source: CELL_SRC_1,
         destination: CELL_EVENT,
-        scans: { count: 7, suppressed: false, floor: 5 },
+        scans: { count: 5, suppressed: false, floor: 5 },
       },
     ]);
   });
@@ -508,10 +511,10 @@ describe('corridor / community intelligence', () => {
     const both = await call(handleCorridorDashboard, reqAs(AB, COR));
     const onlyB = await call(handleCorridorDashboard, reqAs(AB, `${COR}?brand_id=${DASH.brandB}`));
     const cell1 = (b: Body) => b.source_cells.find((c: Body) => c.cell === CELL_SRC_1)?.scans;
-    // 57 (dash-a's listed 7 + dash-b's 50) minus 50: the 7 dash-a's own view
-    // shows, not 10 (which would carry the workshop's withheld 3).
-    expect(cell1(both.body).count).toBe(57);
-    expect(cell1(both.body).count - (cell1(onlyB.body)?.count ?? 0)).toBe(7);
+    // 55 (dash-a's listed 7, published as 5, + dash-b's 50) minus 50: the 5
+    // dash-a's own view shows, not 10 (which would carry the workshop's 3).
+    expect(cell1(both.body).count).toBe(55);
+    expect(cell1(both.body).count - (cell1(onlyB.body)?.count ?? 0)).toBe(5);
   });
 
   test('#1: no coordinates or res-9 cells in the response', async () => {
@@ -553,11 +556,11 @@ describe('organizer / partner report — one event', () => {
     expect(body.reach.posters).toBe(3);
     expect(body.reach.places).toBe(2);
     // OSE-1656: the poster-hours with 5 or more (bocce's 7; its 3 and 2 never join).
-    expect(body.reach.scans).toEqual({ count: 7, suppressed: false, floor: 5 });
+    expect(body.reach.scans).toEqual({ count: 5, suppressed: false, floor: 5 });
     // 9 on the event link; the donation link's 3 is under K and never joins.
-    expect(body.reach.clicks).toEqual({ count: 9, suppressed: false, floor: 5 });
+    expect(body.reach.clicks).toEqual({ count: 5, suppressed: false, floor: 5 });
     expect(body.participation.anonymous.scans).toEqual(body.reach.scans);
-    expect(body.participation.explicit.registrations.count).toBe(7);
+    expect(body.participation.explicit.registrations.count).toBe(5);
     expect(body.participation.explicit.email_signups.suppressed).toBe(true);
     // on show, waiting and declined never overlap: the declined placement is
     // still is_active = 1 and must not count as on show.

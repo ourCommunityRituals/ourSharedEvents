@@ -6,7 +6,12 @@
  * is built in ONE place.
  */
 
-import { applyCountFloor, floorNestedCounts } from './count-floor';
+import {
+  applyCountFloor,
+  floorNestedCounts,
+  floorPublishedChain,
+  publishCount,
+} from './count-floor';
 import { fmt, msg } from './i18n/catalog';
 import { DEFAULT_LANG, type Lang } from './i18n/languages';
 
@@ -18,7 +23,8 @@ import { DEFAULT_LANG, type Lang } from './i18n/languages';
  * (applyCountFloor, K=5): a sub-K cohort renders "Fewer than 5", never the exact
  * number. A 3-of-5 or "50% of 2" line back-derives an individual — the exact
  * never-who break OSE-665 exists to close. Server-side, so the raw value never
- * reaches the client.
+ * reaches the client. From the floor up the number is rounded down to a
+ * multiple of 5 (OSE-2151, owner ruling 2026-11-18): 12 check-ins read "10".
  *
  * `null` is a count the caller has already withheld (a nested floor said no). It reads
  * as every other withheld count does, "Fewer than 5", so the page has one form for it.
@@ -31,14 +37,14 @@ export function statLine(
   testid: string,
   lang: Lang = DEFAULT_LANG
 ): string {
-  const f = applyCountFloor(raw ?? 0);
+  const f = publishCount(raw ?? 0);
   const inner = f.suppressed
     ? fmt(lang, 'stats.fewerThan', { floor: f.floor, label })
     : `<strong>${f.count}</strong> ${label}`;
   return `<p data-testid="${testid}">${inner}</p>`;
 }
 
-/** True when a count clears the uniform floor (safe to publish exactly / use in a ratio). */
+/** True when a count clears the uniform floor (decided on the exact count). */
 export function clearsFloor(raw: number): boolean {
   return !applyCountFloor(raw).suppressed;
 }
@@ -48,6 +54,11 @@ export function clearsFloor(raw: number): boolean {
  * 8 check-ins and 6 walk-ins would both print and give back the 2 who came
  * through registration. Floored as a nested pair, a walk-in count prints only
  * when what is left is 0 or at least 5.
+ *
+ * The gap is judged twice (OSE-2151): on the exact pair, so a rest of 1 to 4
+ * is withheld even where rounding would hide it (19 of 20 reads 15 of 20), and
+ * on the pair rounded down to multiples of 5 (`floorPublishedChain`), the two
+ * numbers a reader sees.
  *
  * A withheld walk-in count has two causes: it is under 5, or it is 5 or more and
  * what is left of the check-ins would be 1 to 4. Both read "Fewer than 5" (OSE-1752).
@@ -60,6 +71,8 @@ export function walkInStatLine(
   lang: Lang = DEFAULT_LANG
 ): string {
   if (!clearsFloor(checkinCount)) return '';
-  const [, walkInShown] = floorNestedCounts([checkinCount, walkInCount]);
+  const [, exact] = floorNestedCounts([checkinCount, walkInCount]);
+  const [, rounded] = floorPublishedChain([checkinCount, walkInCount]);
+  const walkInShown = exact === null ? null : rounded;
   return statLine(walkInShown, msg(lang, 'stats.walkedIn'), 'stat-walk-ins', lang);
 }
