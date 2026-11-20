@@ -300,8 +300,11 @@ test.describe('scripts off', () => {
       await expect(page.getByTestId('toggle-type')).toBeVisible();
       await expect(page.getByRole('tablist')).toHaveCount(0);
       await expect(page.getByTestId('near-panel')).toBeHidden();
-      // A chip still filters, by the CSS-only radios.
-      await page.getByText('This weekend').click();
+      // A chip still filters, by the CSS-only radios. The chip itself, inside
+      // the window filter: from a Friday (UTC) the fixture's first event is the
+      // next Monday, so the weekend's empty-state line ("... this weekend")
+      // is on the page too, and a page-wide text match finds two.
+      await page.getByTestId('toggle-window').getByText('This weekend').click();
       await expect(page.locator('#win-weekend')).toBeChecked();
     } finally {
       await context.close();
