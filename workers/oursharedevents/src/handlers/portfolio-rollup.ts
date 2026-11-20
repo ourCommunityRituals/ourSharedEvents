@@ -31,7 +31,7 @@
  */
 
 import { corsHeaders } from '../lib/cors';
-import { applyCountFloor, type FlooredCount } from '../lib/count-floor';
+import { applyCountFloor, publishCount, type FlooredCount } from '../lib/count-floor';
 import { COUNTED_REGISTRATION_SQL } from '../lib/registration-count';
 import { CORRIDOR_MAP_MIN_COUNT } from '../lib/shared-report';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
@@ -244,8 +244,9 @@ export async function handlePortfolioRollup(
     registrationsQ,
     checkinsQ,
   ]);
-  const registrations = applyCountFloor(regRows ? sumContributingBuckets(regRows) : 0);
-  const checkins = applyCountFloor(chkRows ? sumContributingBuckets(chkRows) : 0);
+  // OSE-2151: published rounded down to a multiple of 5.
+  const registrations = publishCount(regRows ? sumContributingBuckets(regRows) : 0);
+  const checkins = publishCount(chkRows ? sumContributingBuckets(chkRows) : 0);
 
   return jsonBody(
     {

@@ -140,10 +140,12 @@ describe('OSE-1373 | acceptance: N registrations, M registered-path + W walk-in 
     const card = statsCard(await recap(id));
 
     expect(card).toContain('<strong>20</strong> Registered');
-    expect(card).toContain('<strong>14</strong> Checked in'); // M + W
-    expect(card).toContain('<strong>6</strong> Walked in');
-    expect(card).toContain('43% of check-ins were walk-ins'); // 6 / 14
-    expect(card).toContain('70% of those registered showed up'); // 14 / 20
+    // Each count is published rounded down to a multiple of 5 (OSE-2151), and
+    // each share is worked out from the rounded counts printed beside it.
+    expect(card).toContain('<strong>10</strong> Checked in'); // M + W = 14
+    expect(card).toContain('<strong>5</strong> Walked in'); // 6
+    expect(card).toContain('50% of check-ins were walk-ins'); // 5 / 10
+    expect(card).toContain('50% of those registered showed up'); // 10 / 20
 
     const order = [
       'stat-registrations',
@@ -168,7 +170,7 @@ describe('OSE-1373 | acceptance: N registrations, M registered-path + W walk-in 
     const id = 'evt_walkin_subk_one';
     await seed(id, 12, 1, 2);
     const card = statsCard(await recap(id));
-    expect(card).toContain('<strong>12</strong> Registered');
+    expect(card).toContain('<strong>10</strong> Registered'); // 12, rounded down
     expect(card).toContain('Fewer than 5 Checked in');
     expect(card).not.toMatch(/<strong>[1-4]<\/strong>/);
     expect(card).not.toContain('data-testid="stat-walk-in-share"');

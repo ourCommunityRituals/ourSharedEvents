@@ -227,7 +227,7 @@ describe('OSE-683 — distinct_scanners applies the per-bucket K-anon floor befo
   // Same per-kind K-anon floor as distinct_scanners, and the same drop-before-sum:
   // the total is the sum of the kinds that are published. (This test used to pin
   // total = 9, which hands back the withheld kind: 9 − 6 = 3.)
-  test('click_outs: public 6 shows, donate 3 suppressed, total is the published 6 (not 9)', async () => {
+  test('click_outs: public 6 shows, donate 3 suppressed, total is the published 5 (not 9)', async () => {
     await seedEvent('test-evt-kanon-cko');
     const db = tenv().DB;
     await db
@@ -251,9 +251,9 @@ describe('OSE-683 — distinct_scanners applies the per-bucket K-anon floor befo
     const co = r.report.click_outs;
     expect(co).toBeDefined();
     expect(co).not.toBeNull();
-    expect(co!.by_kind.public).toBe(6); // clears K → exact
+    expect(co!.by_kind.public).toBe(5); // clears K → rounded down to a multiple of 5 (OSE-2151)
     expect(co!.by_kind.donate).toBeNull(); // sub-K → suppressed
-    expect(co!.total).toBe(6); // the sub-K kind never joins the sum
+    expect(co!.total).toBe(5); // the sub-K kind never joins the sum
     // Nothing a reader can subtract: total minus the published kinds is zero.
     const publishedKinds = Object.values(co!.by_kind).reduce<number>((a, b) => a + (b ?? 0), 0);
     expect(co!.total! - publishedKinds).toBe(0);
@@ -314,7 +314,7 @@ describe('OSE-683 — distinct_scanners applies the per-bucket K-anon floor befo
     expect(r.report.distinct_scanners === null || r.report.distinct_scanners === 0).toBe(true);
   });
 
-  test('buckets that individually clear K are preserved and summed exactly (5 + 7 => 12)', async () => {
+  test('buckets that individually clear K are preserved and summed, each rounded down to a multiple of 5 (5 + 7 => 10)', async () => {
     await seedEvent('test-evt-kanon-keep');
     await seedBucket('test-evt-kanon-keep', '5', 5);
     await seedBucket('test-evt-kanon-keep', '7', 7);
@@ -322,17 +322,17 @@ describe('OSE-683 — distinct_scanners applies the per-bucket K-anon floor befo
     const r = await buildSharedReport(tenv().DB, 'test-evt-kanon-keep');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.distinct_scanners).toBe(12);
+    expect(r.report.distinct_scanners).toBe(10);
   });
 
-  test('a single >=K bucket is unchanged (behavior preserved for compliant buckets)', async () => {
+  test('a single >=K bucket is published rounded down to a multiple of 5 (42 => 40)', async () => {
     await seedEvent('test-evt-kanon-single');
     await seedBucket('test-evt-kanon-single', '1', 42);
 
     const r = await buildSharedReport(tenv().DB, 'test-evt-kanon-single');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.distinct_scanners).toBe(42);
+    expect(r.report.distinct_scanners).toBe(40);
   });
 });
 
@@ -363,11 +363,11 @@ describe('OSE-683 — campaign_summary floors each sponsor bucket before summati
     expect(cs).not.toBeNull();
     const row = cs!.find((c) => c.campaign_id === 'camp-kanon-1');
     expect(row).toBeDefined();
-    // Raw sum would be 10; per-bucket floored keeps only the >=5 bucket → 7.
-    expect(row!.total_displays).toBe(7);
+    // Raw sum would be 10; per-bucket floored keeps only the >=5 bucket, 7, published as 5.
+    expect(row!.total_displays).toBe(5);
     expect(row!.total_displays).not.toBe(10);
     // The sub-K surface must not appear in the per-surface breakdown at all.
-    expect(row!.displays_by_surface.poster).toBe(7);
+    expect(row!.displays_by_surface.poster).toBe(5);
     expect(row!.displays_by_surface.qr).toBeUndefined();
   });
 
@@ -397,7 +397,7 @@ describe('OSE-683 — campaign_summary floors each sponsor bucket before summati
     }
   });
 
-  test('a bucket that clears K is summed exactly (6 published)', async () => {
+  test('a bucket that clears K is summed (6 published as 5)', async () => {
     const evt = 'test-evt-kanon-camp-keep';
     await seedEvent(evt);
     await seedCampaign('camp-kanon-3', 'Healthy Campaign');
@@ -413,7 +413,7 @@ describe('OSE-683 — campaign_summary floors each sponsor bucket before summati
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const row = r.report.campaign_summary!.find((c) => c.campaign_id === 'camp-kanon-3');
-    expect(row!.total_displays).toBe(6);
+    expect(row!.total_displays).toBe(5);
   });
 });
 
@@ -435,8 +435,8 @@ describe('OSE-683 — sponsor_class_breakdown floors each sponsor bucket before 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const b = r.report.sponsor_class_breakdown;
-    // Raw sum would be 10; per-bucket floored keeps only the >=5 bucket → 8.
-    expect(b.premium.total_displays).toBe(8);
+    // Raw sum would be 10; per-bucket floored keeps only the >=5 bucket, 8, published as 5.
+    expect(b.premium.total_displays).toBe(5);
     expect(b.premium.total_displays).not.toBe(10);
     expect(b.premium.sponsor_count).toBe(1);
   });
@@ -460,7 +460,7 @@ describe('OSE-683 — sponsor_class_breakdown floors each sponsor bucket before 
     expect(b.premium.total_displays).toBeNull();
   });
 
-  test('classes with surviving buckets sum exactly (mid=5, premium=6)', async () => {
+  test('classes with surviving buckets sum their rounded rows (mid=5, premium 6 reads 5)', async () => {
     const evt = 'test-evt-kanon-class-keep';
     await seedEvent(evt);
     await seedSponsor({ id: 'sp-kanon-m', event_id: evt, tier: 'silver', is_local: 0 }); // mid
@@ -474,7 +474,7 @@ describe('OSE-683 — sponsor_class_breakdown floors each sponsor bucket before 
     const b = r.report.sponsor_class_breakdown;
     expect(b.mid.total_displays).toBe(5);
     expect(b.mid.sponsor_count).toBe(1);
-    expect(b.premium.total_displays).toBe(6);
+    expect(b.premium.total_displays).toBe(5);
     expect(b.premium.sponsor_count).toBe(1);
   });
 });
@@ -510,7 +510,7 @@ describe('OSE-683 — headcount_trend applies the per-bucket K-anon floor per in
     // Raw SUM would be 13; per-bucket floored keeps only the >=5 bucket → 10.
     expect(a!.distinct_scanners).toBe(10);
     expect(a!.distinct_scanners).not.toBe(13);
-    expect(b!.distinct_scanners).toBe(7);
+    expect(b!.distinct_scanners).toBe(5);
   });
 
   test('a trend instance whose buckets are all sub-K is suppressed (not the raw sum 3+4)', async () => {

@@ -137,7 +137,7 @@ describe('OSE-1442 admin registrations paging', () => {
     const { body } = await call('?limit=2');
     // 7 rows >= K=5 so it is not suppressed; a page of 2 would have been.
     expect(body.suppressed).toBe(false);
-    expect(body.count).toBe(7);
+    expect(body.count).toBe(5); // 7, rounded down to a multiple of 5 (OSE-2151)
   });
 
   test('a cursor never reaches rows of another event (event scope is in the WHERE)', async () => {

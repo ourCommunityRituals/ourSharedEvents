@@ -848,8 +848,9 @@ test.describe('Zoomed map: using it moves no count (OSE-1896)', () => {
       a: await readTaps(request, 'map-zoom-a'),
       b: await readTaps(request, 'map-zoom-b'),
     };
-    // The seed's numbers (bruno/fixtures/map-zoom-area-seed.sql).
-    expect(before).toEqual({ a: 42, b: 8 });
+    // The seed's numbers (bruno/fixtures/map-zoom-area-seed.sql), as published:
+    // each code rounded down to a multiple of 5 (OSE-2151).
+    expect(before).toEqual({ a: 35, b: 5 });
 
     // The organizer's outside links are example hosts: answer them here, so the
     // walk follows them without leaving for a site that does not exist.
