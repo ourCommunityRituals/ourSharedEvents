@@ -27,7 +27,10 @@
  * seeded cell alone, never from the stored point. Any other coordinate, any
  * other path, any other value (the stored point, the res-7 point when a res-9
  * cell exists) still fails, and an event that is not routable carries no
- * directions at all. The event page's Directions are OSE-2196's
+ * directions at all. Plainly: this puts a res-9 cell centre (about one block)
+ * into an open JSON answer, for routable events only (listed and live), the
+ * same point the event page's Directions link already carries. Narrowing this
+ * invariant-3 check needs the owner's sign-off. The event page's Directions are OSE-2196's
  * (tests/routable-directions.spec.ts, tests/no-stored-point.property.spec.ts).
  *
  * Not here: the SharedReport, which needs a signed link and reads cells only

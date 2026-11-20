@@ -29,6 +29,14 @@ runtime:
         test('OSE-2197 place, not person: no coordinate anywhere in the answer', function () {
           expect(coordinateFindings(body)).to.eql([]);
         });
+        // Its stored point (setup 10: 41.657312, -87.680647) is nowhere, not even
+        // cut or rounded to the five decimals a cell point has.
+        test('OSE-2196: the stored point is nowhere in the answer, whole or rounded', function () {
+          const text = JSON.stringify(body);
+          ['41.65731', '-87.68064', '-87.68065'].forEach(function (d) {
+            expect(text, d).to.not.include(d);
+          });
+        });
         test('OSE-2197: no cell finer than res 7', function () {
           expect(finerCells(body)).to.eql([]);
         });
