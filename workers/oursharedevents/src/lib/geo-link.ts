@@ -67,7 +67,7 @@ function pointUrls(
 ): { google: string; apple: string } {
   const label = encodeURIComponent(venueName || addr || '');
   return {
-    google: `https://www.google.com/maps/search/?api=1&query=${point.replace(',', '%2C')}`,
+    google: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(point)}`,
     apple: `https://maps.apple.com/?ll=${point}${label ? `&q=${label}` : ''}`,
   };
 }
