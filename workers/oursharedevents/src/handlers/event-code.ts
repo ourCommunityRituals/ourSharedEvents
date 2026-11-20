@@ -39,6 +39,7 @@ import { eventPhaseOf } from '../lib/event-enrich';
 import { eventFormPath, eventPagePath } from '../lib/canonical';
 import { DEFAULT_LANG, type Lang } from '../lib/i18n/languages';
 import { withLangPrefix } from '../lib/i18n/path-prefix';
+import { fmt, msg } from '../lib/i18n/catalog';
 import { renderErrorPage } from './pages';
 import { corsHeaders } from '../lib/cors';
 import { countGuess, isGuessLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
@@ -88,38 +89,40 @@ export function isPublicEvent(row: {
   return status === 'active' || row.is_published === 1;
 }
 
-function notFoundPage(): Response {
+/**
+ * OSE-2164: the three dead-end pages, in the language the short link was opened
+ * under (`/es/e/<code>`); the button goes to the list in that language. English
+ * is the bare address.
+ */
+function codePage(
+  lang: Lang,
+  status: 404 | 429 | 503,
+  kind: 'code' | 'codeLimit' | 'codeDown'
+): Response {
   return renderErrorPage(
-    404,
-    "That code didn't match an event",
-    'Check the six characters you were given and type them again.',
-    '/events',
-    'Browse upcoming events'
+    status,
+    msg(lang, `err.${kind}.title`),
+    msg(lang, `err.${kind}.body`),
+    withLangPrefix(lang, '/events'),
+    msg(lang, 'err.cta.browse'),
+    { label: fmt(lang, 'err.status', { n: status }), lang }
   );
 }
 
-function tooManyGuessesPage(): Response {
-  const page = renderErrorPage(
-    429,
-    'Too many codes tried',
-    'Wait a minute, then type the code again.',
-    '/events',
-    'Browse upcoming events'
-  );
+function notFoundPage(lang: Lang): Response {
+  return codePage(lang, 404, 'code');
+}
+
+function tooManyGuessesPage(lang: Lang): Response {
+  const page = codePage(lang, 429, 'codeLimit');
   const headers = new Headers(page.headers);
   headers.set('Retry-After', '60');
   headers.set('Cache-Control', 'no-store');
   return new Response(page.body, { status: 429, headers });
 }
 
-function unavailablePage(): Response {
-  return renderErrorPage(
-    503,
-    "We're having trouble opening this event",
-    'Try again in a minute.',
-    '/events',
-    'Browse upcoming events'
-  );
+function unavailablePage(lang: Lang): Response {
+  return codePage(lang, 503, 'codeDown');
 }
 
 function targetFor(
@@ -159,11 +162,11 @@ export async function handleEventCodeResolve(
   lang: Lang = DEFAULT_LANG
 ): Promise<Response> {
   const code = normalizeEventCode(raw);
-  if (!code) return notFoundPage();
-  if (!env.DB) return unavailablePage();
+  if (!code) return notFoundPage(lang);
+  if (!env.DB) return unavailablePage(lang);
   // Checked before the lookup, so past the limit a right code and a wrong one
   // look the same.
-  if (await isGuessLimited(request, env, GUESS_SCOPE)) return tooManyGuessesPage();
+  if (await isGuessLimited(request, env, GUESS_SCOPE)) return tooManyGuessesPage(lang);
   let row: CodeEventRow | null = null;
   try {
     const eventId = await resolveEventCode(env.DB, code);
@@ -176,13 +179,13 @@ export async function handleEventCodeResolve(
         .first<CodeEventRow>();
     }
   } catch {
-    return unavailablePage();
+    return unavailablePage(lang);
   }
   if (!row) {
     if (await countGuess(request, env, GUESS_SCOPE, EVENT_CODE_GUESS_MAX)) {
-      return tooManyGuessesPage();
+      return tooManyGuessesPage(lang);
     }
-    return notFoundPage();
+    return notFoundPage(lang);
   }
 
   const isPublic = isPublicEvent(row);

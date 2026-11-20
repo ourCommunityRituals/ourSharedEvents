@@ -193,6 +193,34 @@ const en = {
   'limit.body':
     'This connection has opened this page many times in the last minute. Please wait a minute, then try again.',
   'limit.again': 'Try again',
+  // OSE-2164: the dead-end pages (handlers/pages.ts, event-code.ts, shortlink-resolve.ts).
+  // `err.notFound.body` is EVENT_NOT_OPEN_COPY: one message for a missing, draft, ready
+  // or taken-down event, so a probe cannot tell them apart. `{title}` and `{n}` are slots.
+  'err.status': 'Error {n}',
+  'err.cta.browse': 'Browse upcoming events',
+  'err.notFound.title': "We couldn't find that event",
+  'err.notFound.body':
+    "This event isn't open to the public. It may not be published yet, or it may have been taken down. See what's coming up next.",
+  'err.unavailable.title': "We're having trouble loading this event",
+  'err.unavailable.body':
+    'Our event service is briefly unavailable. Try again in a minute, or browse what else is coming up.',
+  'err.ended.title': '{title} has ended',
+  'err.ended.next': 'Here is what is on next at this venue.',
+  'err.ended.soon': 'See what is coming up next.',
+  'err.code.title': "That code didn't match an event",
+  'err.code.body': 'Check the six characters you were given and type them again.',
+  'err.codeLimit.title': 'Too many codes tried',
+  'err.codeLimit.body': 'Wait a minute, then type the code again.',
+  'err.codeDown.title': "We're having trouble opening this event",
+  'err.codeDown.body': 'Try again in a minute.',
+  'err.link.title': "That link doesn't open an event",
+  'err.link.body':
+    'It may have been typed wrong, or the event may have been taken down. See what is on near you.',
+  'err.link.cta': 'See events near you',
+  'err.linkLimit.title': 'Too many links tried',
+  'err.linkLimit.body': 'Wait a minute, then open the link again.',
+  'err.linkDown.title': "We're having trouble opening this link",
+  'err.linkDown.body': 'Try again in a minute.',
   // The /events filter bar, heading, count and empty states (lib/event-discovery.ts).
   // One set per `when` window. `{n}` is a number; `One` is the form for exactly one.
   'when.all.chip': 'Everything',
@@ -626,6 +654,31 @@ const es: Record<MessageKey, string> = {
   'limit.body':
     'Esta conexión ha abierto esta página muchas veces en el último minuto. Espera un minuto y vuelve a intentarlo.',
   'limit.again': 'Volver a intentarlo',
+  'err.status': 'Error {n}',
+  'err.cta.browse': 'Ver próximos eventos',
+  'err.notFound.title': 'No encontramos ese evento',
+  'err.notFound.body':
+    'Este evento no está abierto al público. Puede que aún no se haya publicado o que se haya retirado. Mira lo que viene.',
+  'err.unavailable.title': 'Tenemos problemas para cargar este evento',
+  'err.unavailable.body':
+    'Nuestro servicio de eventos no está disponible por un momento. Vuelve a intentarlo en un minuto o mira qué más viene.',
+  'err.ended.title': '{title} ha terminado',
+  'err.ended.next': 'Esto es lo que sigue en este lugar.',
+  'err.ended.soon': 'Mira lo que viene.',
+  'err.code.title': 'Ese código no coincide con ningún evento',
+  'err.code.body': 'Revisa los seis caracteres que te dieron y escríbelos de nuevo.',
+  'err.codeLimit.title': 'Demasiados códigos probados',
+  'err.codeLimit.body': 'Espera un minuto y vuelve a escribir el código.',
+  'err.codeDown.title': 'Tenemos problemas para abrir este evento',
+  'err.codeDown.body': 'Vuelve a intentarlo en un minuto.',
+  'err.link.title': 'Ese enlace no abre ningún evento',
+  'err.link.body':
+    'Puede que esté mal escrito o que el evento se haya retirado. Mira lo que hay cerca de ti.',
+  'err.link.cta': 'Ver eventos cerca de ti',
+  'err.linkLimit.title': 'Demasiados enlaces probados',
+  'err.linkLimit.body': 'Espera un minuto y vuelve a abrir el enlace.',
+  'err.linkDown.title': 'Tenemos problemas para abrir este enlace',
+  'err.linkDown.body': 'Vuelve a intentarlo en un minuto.',
   'when.all.chip': 'Todo',
   'when.all.heading': 'Próximos eventos',
   'when.all.empty': 'No hay nada programado por ahora. Vuelve pronto.',

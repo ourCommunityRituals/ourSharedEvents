@@ -473,11 +473,30 @@ describe('OSE-240: GET /s/:code redirect + click counter', () => {
   test('malformed code -> 404 (probing reveals nothing)', async () => {
     const res = await SELF.fetch('https://t.test/s/<<<malformed>>>', { redirect: 'manual' });
     expect(res.status).toBe(404);
+    // OSE-2164: a caller that sent no Accept keeps the JSON, and the answer says it varies by it.
+    expect(res.headers.get('Content-Type')).toContain('application/json');
+    expect(res.headers.get('Vary') ?? '').toMatch(/accept/i);
+    expect(await res.json()).toEqual({ ok: false, code: 'NOT_FOUND', error: 'Link not found' });
   });
 
   test('unknown valid-shape code -> 404 (same 404 as malformed)', async () => {
     const res = await SELF.fetch('https://t.test/s/ZzZzZz', { redirect: 'manual' });
     expect(res.status).toBe(404);
+    const malformed = await SELF.fetch('https://t.test/s/<<<malformed>>>', { redirect: 'manual' });
+    expect(await res.text()).toBe(await malformed.text());
+  });
+
+  // OSE-2164: a person who opened a printed QR in a browser reads a page, not JSON.
+  // The cases that pin the page, the no-oracle rule and the 429 are in
+  // dead-link-words.spec.ts.
+  test('a browser that opens a dead code reads HTML with a way on', async () => {
+    const res = await SELF.fetch('https://t.test/s/ZzZzZz', {
+      redirect: 'manual',
+      headers: { Accept: 'text/html', 'User-Agent': PERSON_UA },
+    });
+    expect(res.status).toBe(404);
+    expect(res.headers.get('Content-Type')).toContain('text/html');
+    expect(await res.text()).toContain('href="/events"');
   });
 });
 

@@ -2714,6 +2714,26 @@ jobs:
             tests/e2e/3-flows/sponsor-thumbnails.spec.ts
         timeout-minutes: 6
 
+      # OSE-2164: a dead link says something. HTTP only, no fixture: /s/<bad> answers
+      # a browser a branded 404 (one button to /events) and a script the JSON, a
+      # malformed and an unknown code are byte-identical, and the /es event 404 reads
+      # Spanish. Replaces tests/playwright/flow-shortlink-resolver.spec.ts, which no
+      # workflow ran. The handlers are proved in the workers pool (dead-link-words.spec.ts).
+      - name: 'T4l: Dead Links Say Something'
+        if: matrix.section == 'surfaces'
+        id: dead-links
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          # The stg edge challenges a script client unless the read carries X-OCR-CI
+          # (the stg skip rule), and a phone agent. Sent to the stg origin only.
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+          PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
+        run: |
+          PW_LABEL='T4l: Dead Links Say Something' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/3-flows/dead-links.spec.ts
+        timeout-minutes: 4
+
       # Epic OSE-1880 (hyperlocal map), the staging layer of OSE-1886, OSE-1891 and
       # OSE-1896. The fixture is applied HERE, right before the specs that read it,
       # and unpublished right after them (staging is one site with stock data, owner
@@ -2843,6 +2863,7 @@ jobs:
           echo "| T4i Language Path Prefix | \`${{ steps.language-path-prefix.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4j Sponsor Thumbnails | \`${{ steps.sponsor-thumbnails.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4k Map Zoom, Place Panel and Map Links | \`${{ steps.map-place-panel.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4l Dead Links Say Something | \`${{ steps.dead-links.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
       # ── OSE-1171: per-gate NAMED CHECKS ──────────────────────────────────────────
       # Each leg publishes a check-run for the gates IT ran, so a red names its own
@@ -2891,6 +2912,7 @@ jobs:
               post "T4i: Language Path Prefix"                        "${{ steps.language-path-prefix.outcome }}"
               post "T4j: Sponsor Thumbnails"                          "${{ steps.sponsor-thumbnails.outcome }}"
               post "T4k: Map Zoom, Place Panel and Map Links"         "${{ steps.map-place-panel.outcome }}"
+              post "T4l: Dead Links Say Something"                    "${{ steps.dead-links.outcome }}"
               ;;
           esac
       # ── S2 Post-execution integrity — the tamper tripwire, IN THE SAME VM that ran

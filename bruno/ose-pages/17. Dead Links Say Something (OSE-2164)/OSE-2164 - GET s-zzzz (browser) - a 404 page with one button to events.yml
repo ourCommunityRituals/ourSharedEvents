@@ -1,0 +1,50 @@
+info:
+  name: "OSE-2164 | GET /s/zzzz (Accept: text/html) | a 404 page with one button to /events"
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/s/zzzz"
+  headers:
+    - name: Accept
+      value: text/html
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var strict = require('./lib/edge.js').isStrict(bru);
+        var status = res.getStatus();
+        var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        function lang(h) { var m = /<html lang="([a-z]+)"/.exec(h); return m ? m[1] : ''; }
+        function cta(h) { var m = /data-testid="error-cta" href="([^"]*)">([^<]*)</.exec(h); return m ? [m[1], m[2]] : []; }
+        // Strict (PAGES_EDGE_STRICT=1): 404 only, a 403 is a page that did not load. Lenient: the
+        // edge may still answer a script client, so 404 or 403, as every pages request has done.
+        if (strict) {
+          test('Returns 404 from the Worker (strict, OSE-2160: a 403 is not accepted)', function () { expect(status).to.equal(404); });
+        } else {
+          test('Returns 404 (or 403 from the edge until PAGES_EDGE_STRICT=1)', function () { expect([404, 403]).to.include(status); });
+        }
+
+        if (status === 404) {
+          test('Is HTML, not JSON', function () { expect(res.getHeader('Content-Type')).to.include('text/html'); });
+          test('One primary button to /events: "See events near you"', function () {
+            expect(cta(body)).to.eql(['/events', 'See events near you']);
+            expect(body.split('data-testid="error-cta"').length - 1).to.equal(1);
+          });
+          test('Says what happened, in the page (English by default)', function () { expect(lang(body)).to.equal('en'); expect(body).to.include("That link doesn&#39;t open an event"); });
+          test('Vary: Accept, no-store, no cookie', function () {
+            expect(String(res.getHeader('Vary'))).to.match(/accept/i);
+            expect(res.getHeader('Cache-Control')).to.equal('no-store');
+            expect(res.getHeader('Set-Cookie')).to.equal(undefined);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
