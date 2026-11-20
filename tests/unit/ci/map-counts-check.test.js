@@ -206,12 +206,25 @@ describe('map-counts-check: the numbers are the fixture’s', () => {
       .readdirSync(path.join(ROOT, folder))
       .filter((n) => /taps (before|after)/.test(n))) {
       expect(read(`${folder}/${name}`)).toContain(
-        `expect(clicks.count).to.equal(${m.EXPECTED.taps_a});`
+        `expect(clicks.count).to.equal(${m.PUBLISHED_TAPS.a});`
       );
     }
     expect(read(SPECS[0])).toContain(
-      `expect(before).toEqual({ a: ${m.EXPECTED.taps_a}, b: ${m.EXPECTED.taps_b} });`
+      `expect(before).toEqual({ a: ${m.PUBLISHED_TAPS.a}, b: ${m.PUBLISHED_TAPS.b} });`
     );
+  });
+
+  test('the published tap totals are the seeded codes, each rounded down to a multiple of 5', () => {
+    const published = (event) =>
+      sum(
+        links.filter((l) => l.event === event),
+        (l) => l.clicks - (l.clicks % 5)
+      );
+    expect(published('map-zoom-a')).toBe(m.PUBLISHED_TAPS.a);
+    expect(published('map-zoom-b')).toBe(m.PUBLISHED_TAPS.b);
+    // Every code sits one tap short of a step, so one more tap on any of them
+    // moves the published total, and "unchanged" still means no tap at all.
+    for (const l of links) expect(l.clicks % 5, l.code).toBe(4);
   });
 
   test('the reset only unpublishes the ten fixture events', () => {

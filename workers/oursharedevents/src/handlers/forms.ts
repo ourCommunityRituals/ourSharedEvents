@@ -36,7 +36,7 @@ import {
   generateId,
 } from '../lib/forms-db';
 import { corsHeaders } from '../lib/cors';
-import { applyCountFloor, floorRows } from '../lib/count-floor';
+import { floorRows, publishCount } from '../lib/count-floor';
 import { fewerThan } from '../lib/withheld-words';
 import {
   COUNT_EVENT_REGISTRATIONS_SQL,
@@ -665,7 +665,8 @@ export async function handleAdminRegistrations(
     // OSE-2087 (owner, 2026-11-16): the rows follow the count. While the count
     // is withheld no row is returned, no name is decrypted and there is no
     // next page: three rows would say "three", and name them.
-    const floored = applyCountFloor(total);
+    // OSE-2151: the published count is rounded down to a multiple of 5.
+    const floored = publishCount(total);
     const items = floored.suppressed ? [] : await decryptAttendeeNames(pageRows, env, eventId);
 
     logFormEvent('register', eventId, 'admin_read', {
@@ -800,8 +801,9 @@ export async function handleAdminCheckinCount(
 
     const count = result?.total_count ?? 0;
     logFormEvent('checkin', eventId, 'admin_read', { count });
-    // OSE-665: uniform count floor (count-only endpoint — a true suppression).
-    const floored = applyCountFloor(count);
+    // OSE-665: uniform count floor (count-only endpoint — a true suppression);
+    // OSE-2151: rounded down to a multiple of 5 from the floor up.
+    const floored = publishCount(count);
     return jsonResponse(
       { ok: true, count: floored.count, suppressed: floored.suppressed, floor: floored.floor },
       request
@@ -860,8 +862,9 @@ export async function handleAdminEmailSignupCount(
 
     const count = result?.cnt ?? 0;
     logFormEvent('email-signup', eventId, 'admin_read', { count });
-    // OSE-665: uniform count floor (count-only endpoint — a true suppression).
-    const floored = applyCountFloor(count);
+    // OSE-665: uniform count floor (count-only endpoint — a true suppression);
+    // OSE-2151: rounded down to a multiple of 5 from the floor up.
+    const floored = publishCount(count);
     return jsonResponse(
       { ok: true, count: floored.count, suppressed: floored.suppressed, floor: floored.floor },
       request
@@ -1021,7 +1024,7 @@ export async function handleAdminExport(
     }
 
     return jsonResponse(
-      { ok: true, items: rows, count: rows.length, suppressed: false, floor: floored.floor },
+      { ok: true, items: rows, count: floored.count, suppressed: false, floor: floored.floor },
       request
     );
   } catch (err) {

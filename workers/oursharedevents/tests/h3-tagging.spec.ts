@@ -82,8 +82,9 @@ describe('B. corridor-map — honesty at any density', () => {
     expect(rendered).toBe(1);
     expect(suppressed.length).toBe(0);
     expect(svg).toMatch(/data-testid="hex-cell"/);
-    expect(svg).toMatch(/data-count="42"/);
-    expect(svg).toMatch(/Eagles Hall — 42 scans/);
+    // Published rounded down to a multiple of 5 (OSE-2151).
+    expect(svg).toMatch(/data-count="40"/);
+    expect(svg).toMatch(/Eagles Hall — 40 scans/);
     expect(svg).not.toMatch(/NaN/);
   });
 

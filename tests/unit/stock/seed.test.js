@@ -177,8 +177,9 @@ describe('the committed seed', () => {
 
   test('every event and business sits in the node its point falls in', () => {
     // a point in no boundary belongs to the wider area (owner 2026-11-19: the address decides)
-    for (const e of SEED.events)
+    for (const e of SEED.events) {
       expect(nodeAt(nodes, e.lat, e.lng) ?? 'area', e.title).toBe(e.node);
+    }
     for (const b of SEED.businesses) {
       expect(nodeAt(nodes, b.lat, b.lng) ?? 'area', b.name).toBe(b.node);
     }
@@ -462,18 +463,17 @@ describe('the real /events place search over the committed seed', () => {
   let inSearchPlace;
   let PLACES;
   let findZipArea;
+  let tagCoordinates;
   beforeAll(async () => {
     ({ findSearchPlace, inSearchPlace, PLACES } =
       await import('../../../workers/oursharedevents/src/lib/place-names.ts'));
     ({ findZipArea } = await import('../../../workers/oursharedevents/src/lib/zip-areas.ts'));
+    ({ tagCoordinates } = await import('../../../workers/oursharedevents/src/lib/h3-tagging.ts'));
   });
   const T = readJson('stock/totals.json');
-  // As the build places it: the cells from the point, the address as given.
-  const placed = (e) => ({
-    where_address: e.address,
-    h3_res7: h3.latLngToCell(e.lat, e.lng, 7),
-    h3_res9: h3.latLngToCell(e.lat, e.lng, 9),
-  });
+  // As the build places it: the Worker's cells for the point (OSE-2199: res 7
+  // is the res-9 cell's parent), the address as given.
+  const placed = (e) => ({ where_address: e.address, ...tagCoordinates(e.lat, e.lng) });
 
   test.each(Object.keys(T.searches))('%s: the Worker’s search finds stock + fixtures', (q) => {
     const place = findSearchPlace(q);

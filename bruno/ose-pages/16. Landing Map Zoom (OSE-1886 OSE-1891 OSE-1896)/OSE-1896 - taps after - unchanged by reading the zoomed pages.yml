@@ -44,8 +44,8 @@ runtime:
           expect(clicks.count).to.equal(before);
         });
 
-        test('Taps on map-zoom-a are still the seeded 42', function () {
-          expect(clicks.count).to.equal(42);
+        test('Taps on map-zoom-a are still the seeded 63, published as 35', function () {
+          expect(clicks.count).to.equal(35);
         });
 
 settings:

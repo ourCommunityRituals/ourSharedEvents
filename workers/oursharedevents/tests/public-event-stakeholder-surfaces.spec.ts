@@ -597,7 +597,7 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
     expect(html).not.toMatch(/% of those registered showed up/);
   });
 
-  test('event-stats-card renders EXACT counts + ratio once every operand clears the floor', async () => {
+  test('event-stats-card renders counts rounded down to a multiple of 5, and the ratio, once every operand clears the floor', async () => {
     const id = 'evt_ssp1_post_stats_abovefloor';
     await seedEvent(id, { startOffsetDays: -7, endOffsetDays: -6 });
     for (let i = 0; i < 10; i++) await seedRegistration(id, { id: `reg_af_${i}`, expiresAt: null });
@@ -607,11 +607,13 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
 
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
-    expect(html).toContain('<strong>7</strong> Checked in');
+    // OSE-2151: 7 reads 5, 6 reads 5, and the ratio is worked out from the
+    // rounded counts printed beside it (5 of 10).
+    expect(html).toContain('<strong>5</strong> Checked in');
     expect(html).toContain('<strong>10</strong> Registered');
     expect(html).toContain('data-testid="stat-showed-up-share"');
-    expect(html).toContain('70% of those registered showed up'); // 7/10
-    expect(html).toContain('<strong>6</strong> Surveys submitted');
+    expect(html).toContain('50% of those registered showed up'); // 5/10
+    expect(html).toContain('<strong>5</strong> Surveys submitted');
     expect(html).toContain('<strong>5</strong> Email signups');
     // OSE-1201: the ratio never wears the banned word.
     expect(html).not.toMatch(/attendance/i);

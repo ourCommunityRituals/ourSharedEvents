@@ -321,6 +321,8 @@ export const pl: Record<MessageKey, string> = {
   'map.youOutside': 'Jesteś poza tą mapą.',
   'map.nearest': 'Najbliższy obszar, {name}, jest około {d} mil stąd.',
   'map.fromYou': '{d} mil od Ciebie',
+  'map.fromYouAbout': 'około {d} mil od Ciebie',
+  'map.nearestPlace': 'Najbliżej: {name}, {d} mil stąd.',
   'map.miles': '{d} mil',
   'map.scale': 'Skala mapy',
   'map.allAreas': 'Wróć do wszystkich obszarów',

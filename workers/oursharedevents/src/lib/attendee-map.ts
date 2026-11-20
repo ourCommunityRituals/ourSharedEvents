@@ -78,6 +78,17 @@
 // map's script; both come from the cell ids alone (OSE-2150,
 // tests/map-georef-cell-only.spec.ts).
 //
+// DISTANCE TO THE PLACE, NOT THE AREA (owner, 2026-11-19: "this is how you get
+// accurate measurements and distance from current location to event
+// distance"; OSE-2198). Zoomed in, each dot also carries its own res-9 cell's
+// centre (`data-ll`, lib/cell-point.ts), so the map's script measures "where
+// am I" to the place (a block, about 0.35 km across) rather than to the area
+// (about 2.4 km). That point is the same one the dot is drawn at, written from
+// the cell id alone: no event's own point. It says nothing the drawing does not
+// already say (the dot read back through the frame is the same block; the same
+// spec pins both). Which events are at a place is read from the place's own
+// panel, so no event is tied to a place the panel does not name.
+//
 // NO STREET MAP, NO FLOATING DOTS (owner, 2026-11-09; OSE-1894). Dots on a bare
 // hexagon tell nobody where anything is. Where the street map is missing (no
 // `MAP_TILES` binding, or a failed read), the zoomed area is the list of its
@@ -85,6 +96,7 @@
 
 import { cellToBoundary, cellToLatLng, getResolution, isValidCell, latLngToCell } from 'h3-js';
 import { CORRIDOR_RES, NODE_RES } from './h3-tagging.js';
+import { cellPoint } from './cell-point.js';
 import {
   CORRIDOR_READY_MIN_EVENTS,
   CORRIDOR_WINDOW_DAYS,
@@ -526,9 +538,7 @@ function svgFor(
       // (lib/map-pan-script.ts). Both come from the public cell id and the
       // public address, as the drawing does.
       const where = streets
-        ? ` data-ll="${cellToLatLng(a.cell)
-            .map((v) => v.toFixed(5))
-            .join(',')}" data-name="${escapeHtml(a.name || String(a.n))}"`
+        ? ` data-ll="${cellPoint(a.cell)}" data-name="${escapeHtml(a.name || String(a.n))}"`
         : '';
       return `<g${areaClassAttr(a, filterClasses)} data-testid="amap-area" data-cell="${a.cell}" data-count="${k}"${where}>${inner}</g>`;
     })
@@ -642,9 +652,9 @@ function frameAttrs(f: MapFrame): string {
  * shows no button that does nothing. The words the script writes ride on the
  * block, already in the page's language.
  */
-function panControls(lang: Lang): string {
+function panControls(lang: Lang, zoomed = false): string {
   const w = (key: Parameters<typeof msg>[1]) => escapeHtml(msg(lang, key));
-  const words = [
+  const words: (readonly [string, Parameters<typeof msg>[1]])[] = [
     ['from', 'map.fromYou'],
     ['miles', 'map.miles'],
     ['you', 'map.you'],
@@ -652,7 +662,10 @@ function panControls(lang: Lang): string {
     ['nearest', 'map.nearest'],
     ['locating', 'map.locating'],
     ['off', 'map.locationOff'],
-  ] as const;
+  ];
+  // Zoomed in, the distance is to each place (OSE-2198); an event with no place
+  // on the map is measured to the area and says "about".
+  if (zoomed) words.push(['near-place', 'map.nearestPlace'], ['from-about', 'map.fromYouAbout']);
   const data = words.map(([k, key]) => ` data-${k}="${w(key)}"`).join('');
   const b = (z: string, label: string, text: string) =>
     `<button type="button" class="btn btn-secondary" data-z="${z}" data-testid="amap-${z}"${label ? ` aria-label="${label}"` : ''}>${text}</button>`;
@@ -723,6 +736,9 @@ export interface ZoomEvent extends AttendeeMapItem {
 export interface MapDot {
   /** 1-based, top to bottom then left to right; printed in the dot and the list. */
   n: number;
+  /** The res-9 cell the dot is drawn at (the first block, when nearby blocks merged). */
+  cell: string;
+  /** That cell's centre: `cellToLatLng(cell)`, never an event's own point. */
   lat: number;
   lng: number;
   /** True when every event here is at a business (drawn solid, named). Always a block centre. */
@@ -767,7 +783,7 @@ export function mapDots(
     const block = latLngToCell(lat, lon, NODE_RES);
     const at = cellToLatLng(block);
     const key = `b:${block}`;
-    const dot = byKey.get(key) ?? { lat: at[0], lng: at[1], exact: true, events: [] };
+    const dot = byKey.get(key) ?? { cell: block, lat: at[0], lng: at[1], exact: true, events: [] };
     dot.exact = dot.exact && business;
     dot.events.push(ev);
     byKey.set(key, dot);
@@ -816,8 +832,10 @@ function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets: string, name
           ? d.events[0]!.name
           : fmt(lang, 'map.dotTitle', { n: d.n, count: eventCount(d.events.length, lang) });
       const cls = `amap-f amap-d${d.n}${d.exact ? '' : ' amap-blk'} ${dotClasses(d.events)}`.trim();
+      // The place's own point (its res-9 cell's centre, the point it is drawn at),
+      // for the distance the map's script works out on the phone.
       return (
-        `<a href="${dotHref(d)}" class="${escapeHtml(cls)}" data-testid="amap-dot" data-exact="${d.exact ? 1 : 0}" data-count="${d.events.length}">` +
+        `<a href="${dotHref(d)}" class="${escapeHtml(cls)}" data-testid="amap-dot" data-exact="${d.exact ? 1 : 0}" data-count="${d.events.length}" data-ll="${cellPoint(d.cell)}">` +
         `<title>${escapeHtml(title)}</title>` +
         `<circle class="amap-hit" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_HIT_R}" fill-opacity="0"/>` +
         `<circle class="amap-dot" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_R}"/>` +
@@ -829,9 +847,7 @@ function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets: string, name
   // "slice": in a box taller than the frame the drawing fills the box and its
   // sides are cut (map-narrow-style.ts). In a 5 by 3 box it changes nothing.
   const [under, names] = splitStreetLayer(streets);
-  const ll = cellToLatLng(cell)
-    .map((v) => v.toFixed(5))
-    .join(',');
+  const ll = cellPoint(cell);
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" role="group" aria-labelledby="amap-caption" data-testid="amap-svg"${frameAttrs(frame)}>` +
     `${under}<polygon class="amap-zone" points="${ring}" data-testid="amap-zone" data-cell="${cell}" data-ll="${ll}" data-name="${escapeHtml(name)}"/>${names}${marks}</svg>`
@@ -900,7 +916,7 @@ function renderZoom(
   const html = `<div class="amap-wrap" data-testid="amap-wrap"><figure class="amap" data-testid="amap" data-zoom="${cell}"${streets ? ' data-pan' : ''}>
               ${MAP_STYLE}${ZOOM_STYLE}${streets ? STREET_STYLE + LABEL_STYLE + PAN_STYLE : ''}${NARROW_MAP_STYLE}
               ${back}
-              ${drawing}${streets ? panControls(lang) : ''}
+              ${drawing}${streets ? panControls(lang, true) : ''}
               ${zoomLegend()}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>${credit}
             </figure>${panels}</div>${streets ? PAN_SCRIPT : ''}`;

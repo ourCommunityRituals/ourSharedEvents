@@ -89,9 +89,10 @@ describe('OSE-495: corridor-map module', () => {
     // Both cells appear in the SVG
     expect(result.svg).toContain(`data-cell="${EAGLES_RES9}"`);
     expect(result.svg).toContain(`data-cell="${RIPH_RES9}"`);
-    // Both counts present
-    expect(result.svg).toContain('data-count="12"');
-    expect(result.svg).toContain('data-count="8"');
+    // Both counts present, rounded down to a multiple of 5 (OSE-2151)
+    expect(result.svg).toContain('data-count="10"');
+    expect(result.svg).toContain('data-count="5"');
+    expect(result.svg).not.toContain('data-count="12"');
   });
 
   test('7. XSS protection — label with HTML special chars is escaped in SVG output', () => {
