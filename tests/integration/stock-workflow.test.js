@@ -379,8 +379,8 @@ describe('build and check-swap', () => {
 
   test('a slow build fails its step, not the job: the result is failure, so check-swap runs', () => {
     const build = stepsOf('build').find((s) => /run-day\.mjs build/.test(s.run || ''));
-    expect(build['timeout-minutes']).toBe(25);
-    expect(jobs.build['timeout-minutes']).toBe(30);
+    expect(build['timeout-minutes']).toBe(75);
+    expect(jobs.build['timeout-minutes']).toBe(90);
     expect(build['timeout-minutes']).toBeLessThan(jobs.build['timeout-minutes']);
   });
 
