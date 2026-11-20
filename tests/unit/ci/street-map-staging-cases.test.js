@@ -210,7 +210,9 @@ const NOT_RUN = {
     'NOT RUN (the landing draws no map: fewer than 10 events on this environment): street layer under the hexagons',
   area: NOT_LOADED + 'dots over the street layer, OpenStreetMap credit',
   api: NOT_LOADED + 'street layer paths, CSS, OpenStreetMap credit, no third-party host',
-  zoom16: NOT_LOADED + 'the area and a dot per place over the street layer',
+  zoom16:
+    NOT_LOADED +
+    'the area and a dot per place over the street layer, each at the centre of its own res-9 cell (OSE-2198)',
 };
 
 /**

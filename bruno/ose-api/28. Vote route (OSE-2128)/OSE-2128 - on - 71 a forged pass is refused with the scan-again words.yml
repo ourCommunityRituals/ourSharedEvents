@@ -1,0 +1,38 @@
+info:
+  name: "OSE-2128 | on | 71 a forged pass is refused with the scan-again words"
+  type: http
+  seq: 71
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/vote/{{voteRouteNightId}}"
+  headers:
+    - name: Content-Type
+      value: "application/json"
+    - name: Sec-Fetch-Site
+      value: same-origin
+  body:
+    type: json
+    data: "{\"object_id\": \"{{voteRouteSongId}}\", \"side\": \"up\", \"pass\": \"vp1.not-a-pass.x\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') !== 'on') {
+          console.log('NOT RUN (VOTING_ENABLED off on this environment): the switch-on half of the vote route');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2128 on: 403 VOTE_PASS_INVALID, scan again', function () { expect(res.getStatus()).to.eql(403); expect(b.code).to.eql('VOTE_PASS_INVALID'); expect(b.error).to.eql('Scan the code on the screen again.'); });
+        test('OSE-2128 on: no cookie set', function () { expect(res.getHeader('set-cookie')).to.be.undefined; });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

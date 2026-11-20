@@ -77,6 +77,8 @@ const STATIC_SEGMENTS: ReadonlySet<string> = new Set([
   'security',
   'rate-limit-stats',
   'poster-deployments',
+  // voting (OSE-2128): the vote route's own label, so its row counts can be withheld
+  'vote',
   'backfill-h3',
   // flags
   'flags',
@@ -286,10 +288,25 @@ export interface OperationCostMetric {
   type: 'OPERATION_COST';
   op: string;
   wallMs: number;
-  d1RowsRead: number;
-  d1RowsWritten: number;
+  /** Null on a vote (VOTE_OPS): see withholdsRows. */
+  d1RowsRead: number | null;
+  /** Null on a vote (VOTE_OPS): see withholdsRows. */
+  d1RowsWritten: number | null;
   d1Queries: number;
   status: number;
+}
+
+/**
+ * Operations whose row counts are withheld (OSE-2128, OSE ADR-040 decision 1).
+ * A vote that counts writes rows; a duplicate writes none. The rows of one
+ * vote line would say which, so the vote route's line carries null for both.
+ * Its query count is the same either way.
+ */
+const VOTE_OPS: ReadonlySet<string> = new Set(['POST /api/v2/vote/:x']);
+
+/** True when this operation's row counts are withheld from its cost line. */
+export function withholdsRows(op: string): boolean {
+  return VOTE_OPS.has(op);
 }
 
 /** The inputs an emitter is allowed to supply. No request/user object here. */
@@ -310,12 +327,15 @@ export interface OperationCostInput {
  */
 export function emitOperationCost(input: OperationCostInput): void {
   try {
+    const withhold = withholdsRows(String(input.op));
+    const rowsRead = withhold ? null : input.acc.d1RowsRead;
+    const rowsWritten = withhold ? null : input.acc.d1RowsWritten;
     const payload: OperationCostMetric = {
       type: 'OPERATION_COST',
       op: String(input.op),
       wallMs: Math.max(0, Math.round(input.wallMs)),
-      d1RowsRead: input.acc.d1RowsRead,
-      d1RowsWritten: input.acc.d1RowsWritten,
+      d1RowsRead: rowsRead,
+      d1RowsWritten: rowsWritten,
       d1Queries: input.acc.d1Queries,
       status: input.status,
     };

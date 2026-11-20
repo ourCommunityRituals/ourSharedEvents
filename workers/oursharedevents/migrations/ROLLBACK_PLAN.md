@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0113; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0114; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,15 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0114: the night's result on vote_sets (OSE-2130, OSE ADR-040 decision 7):
+-- outcome, winner_object_id and winner_team_id, all null until a set is final.
+-- Additive: three nullable columns. No row is written or rewritten.
+-- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS. The older Worker
+-- reads none of them; its nightly job makes final only sets that never opened
+-- or are void, so a set that opened waits, open or closed, until this Worker
+-- returns. A result already written stays in its row and shows again then.
+-- SQLite cannot drop a column with a CHECK; leave them.
+
 -- 0113: the room's own vote code, and a vote set follows its event's status
 -- (OSE-2140, OSE-2142, OSE ADR-040): poster_deployments.is_vote_code (default
 -- 0), the partial unique index idx_poster_deployments_one_vote_code (one vote

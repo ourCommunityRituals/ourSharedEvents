@@ -1,0 +1,22 @@
+info:
+  name: "OSE-2128 | both | 75 a GET to the vote path never votes"
+  type: http
+  seq: 75
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/vote/{{voteRouteNightId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2128 both: GET is the router 404', function () { expect(res.getStatus()).to.eql(404); expect(res.getHeader('set-cookie')).to.be.undefined; });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

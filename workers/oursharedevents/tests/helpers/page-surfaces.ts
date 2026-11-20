@@ -103,6 +103,10 @@ export const PAGE_SURFACES: Readonly<Record<string, PageSurface>> = {
     'One stall at a fair (OSE-1998): the stall page, or the 404 page when unknown.',
     '/events/no-such-event/booths/A12'
   ),
+  '/events/:param/vote': page(
+    'The voter page (OSE-2129): the vote page of a live event, or its 404 when unknown.',
+    '/events/no-such-event/vote'
+  ),
   '/events/:param/calendar.ics': notPage(
     'Calendar download.',
     '/events/no-such-event/calendar.ics'
