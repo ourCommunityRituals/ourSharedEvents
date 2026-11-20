@@ -17,7 +17,6 @@ runtime:
       code: |-
         const { coordinateFindings, finerCells } = require('./lib/coordinate-findings.js');
         const body = res.getBody() || {};
-        const text = JSON.stringify(body);
         test('OSE-2197: 200', function () { expect(res.getStatus()).to.eql(200); });
         // OSE-2196 (owner 2026-11-19: "it should go to the Res9 if possible"): the
         // one exception. directions.query is what the poster's map buttons search;

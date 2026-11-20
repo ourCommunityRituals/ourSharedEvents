@@ -16,7 +16,9 @@
  *      point's digits nowhere in the text;
  *   2. the event's place is its res-7 cell, where the answer gives one;
  *   3. no cell finer than res 7 anywhere: the API keeps the precision it had
- *      and gains none (the stored res-9 cell stays on the server).
+ *      and gains none (the stored res-9 cell stays on the server), save the
+ *      one exception below, whose five-decimal point names the res-9 cell as
+ *      surely as its id would (latLngToCell of it gives that cell back).
  *
  * ONE NARROW EXCEPTION (OSE-2196, owner 2026-11-19: "it should go to the Res9 if
  * possible"; a maps link cannot take a hexagon): the poster bundle's
@@ -247,6 +249,15 @@ describe('OSE-2197 | the public event answers carry the cell, never the point', 
       .join(',');
     const refused: Array<[string, unknown]> = [
       ['the stored point', { ...ok, directions: { query: `${LAT},${LON}` } }],
+      // Five decimals, the shape of a cell point: only the exact pin refuses it.
+      [
+        'the stored point rounded to five decimals',
+        { ...ok, directions: { query: `${LAT.toFixed(5)},${LON.toFixed(5)}` } },
+      ],
+      [
+        'a second pair in the query',
+        { ...ok, directions: { query: `${RES9_POINT} ${res7Point}` } },
+      ],
       ['the res-7 point although a res-9 cell exists', { ...ok, directions: { query: res7Point } }],
       ['the point in another field', { ...ok, event: { h3_res7: RES7, note: RES9_POINT } }],
       ['a second pair beside it', { ...ok, directions: { query: RES9_POINT, other: RES9_POINT } }],
