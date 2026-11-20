@@ -301,7 +301,9 @@ test.describe('scripts off', () => {
       await expect(page.getByRole('tablist')).toHaveCount(0);
       await expect(page.getByTestId('near-panel')).toBeHidden();
       // A chip still filters, by the CSS-only radios.
-      await page.getByText('This weekend').click();
+      // Scoped to the chip row: when the weekend has no events the page also
+      // carries a hidden empty-state line whose words include "This weekend".
+      await page.getByTestId('toggle-window').getByText('This weekend').click();
       await expect(page.locator('#win-weekend')).toBeChecked();
     } finally {
       await context.close();
