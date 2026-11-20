@@ -97,7 +97,8 @@ describe('OSE-1081 — poster.html honours ?event=', () => {
 
   test('renders the poster from the bundle event, not from a list index', () => {
     const poster = sourceFile('templates/poster.html');
-    expect(poster).toContain('renderPoster(data.event)');
+    // OSE-2196: the bundle's own directions go with it (null when not routable).
+    expect(poster).toContain('renderPoster(data.event, data.directions)');
   });
 
   test('the SERVED poster page carries the param read (not just the file on disk)', async () => {

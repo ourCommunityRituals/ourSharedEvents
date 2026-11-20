@@ -197,6 +197,15 @@
   <button class="ose-share-btn" data-testid="share-btn" type="button" data-share-url="https://oursharedevents.com/events/evt_golden" data-share-title="Parish Spring Fundraiser">Share this event</button>
 <script nonce="goldennonce">(function(){var btn=document.querySelector('.ose-share-btn');if(!btn)return;var orig=btn.textContent;btn.addEventListener('click',function(){var u=btn.dataset.shareUrl,t=btn.dataset.shareTitle;if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){btn.textContent='Link copied!';setTimeout(function(){btn.textContent=orig;},2000);}).catch(function(){});}});})();</script>
   
+  <details class="ose-calendar-menu" data-testid="subscribe-calendar">
+    <summary class="ose-calendar-link ose-calendar-summary" data-testid="subscribe-calendar-summary">Subscribe to calendar</summary>
+    <div class="ose-calendar-options" role="group" aria-label="Subscribe to calendar">
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-google" href="https://calendar.google.com/calendar/r?cid=webcal%3A%2F%2Foursharedevents.com%2Fbrands%2Froot%2Fcalendar.ics" target="_blank" rel="noopener noreferrer">Google Calendar</a>
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-outlook" href="https://outlook.live.com/calendar/0/addfromweb?url=https%3A%2F%2Foursharedevents.com%2Fbrands%2Froot%2Fcalendar.ics&amp;name=OurSharedEvents%3A%20root" target="_blank" rel="noopener noreferrer">Outlook.com</a>
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-apple" href="webcal://oursharedevents.com/brands/root/calendar.ics">Apple Calendar</a>
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-ics" href="https://oursharedevents.com/brands/root/calendar.ics">Calendar address (.ics)</a>
+    </div>
+  </details>
 </div>
       <h2 id="next-heading" class="ose-suggestions-heading" data-testid="next-event-fallback">The corridor keeps going</h2>
         <p class="ose-suggestions-note">More gatherings are always coming together nearby.</p>
