@@ -6,7 +6,8 @@
  * surface lists the same events by the same rules:
  *   - the same brand only (OSE-1242, Invariant #9);
  *   - live and listed only: `status = 'active'`, `is_published = 1` and past
- *     the publish grace window (`listedSql()`), so a draft, a ready event, an
+ *     the publish grace window (eventRoutableSql, domain/event-state.ts, the
+ *     one listed-and-live rule of OSE-2196), so a draft, a ready event, an
  *     event off the map or one still inside its grace window never appears;
  *   - future only, soonest first, never the event the visitor is on;
  *   - at most MAX_NEXT_AT_VENUE rows (a curated few, never an exhaustive list).
@@ -14,7 +15,7 @@
  * Reads only public event fields from DB. No counts, no FORMS_DB.
  */
 
-import { listedSql } from './publish-grace';
+import { eventRoutableSql } from '../domain/event-state';
 
 export interface NextEventRow {
   id: string;
@@ -42,8 +43,8 @@ export async function fetchNextEventsAtVenue(
     const rs = await db
       .prepare(
         `SELECT id, title, start_date, location FROM events
-       WHERE brand_id = ?1 AND status = 'active' AND location = ?2 AND id != ?3
-         AND is_published = 1 AND ${listedSql()}
+       WHERE brand_id = ?1 AND location = ?2 AND id != ?3
+         AND ${eventRoutableSql()}
          AND start_date IS NOT NULL AND datetime(start_date) > datetime('now')
        ORDER BY datetime(start_date) ASC LIMIT ?4`
       )

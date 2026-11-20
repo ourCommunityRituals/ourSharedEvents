@@ -34,7 +34,7 @@ import {
   type MaterializationResult,
 } from '../lib/shared-report';
 
-import { applyCountFloor } from '../lib/count-floor';
+import { publishCount } from '../lib/count-floor';
 import { errorLabel } from '../lib/error-label';
 import { CORRIDOR_MAP_MIN_COUNT } from '../lib/shared-report';
 export interface SharedReportMaterializeRunResult {
@@ -154,7 +154,7 @@ const EXACT_ROW_COUNTS: Record<string, readonly ('upserted' | 'skipped')[]> = {
 
 function summaryRowCount(phase: string, counter: 'upserted' | 'skipped', n: number): number | null {
   if (Object.hasOwn(EXACT_ROW_COUNTS, phase) && EXACT_ROW_COUNTS[phase].includes(counter)) return n;
-  return applyCountFloor(n).count;
+  return publishCount(n).count;
 }
 
 function makeErrorResult(phase: string, error: string): MaterializationResult {

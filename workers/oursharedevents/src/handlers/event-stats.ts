@@ -31,7 +31,7 @@
 // Two-DB isolation: scans + sponsors come from DB, registrations + checkins from
 // FORMS_DB. No cross-DB join. No runtime LLM. No banned lexicon on the wire.
 
-import { applyCountFloor, type FlooredCount } from '../lib/count-floor';
+import { applyCountFloor, publishCount, type FlooredCount } from '../lib/count-floor';
 import { COUNT_EVENT_REGISTRATIONS_SQL } from '../lib/registration-count';
 import { readEventScanCells, scansOf } from '../lib/scan-cells';
 
@@ -86,10 +86,11 @@ export async function handleAdminEventStats(
   let registrations: FlooredCount = applyCountFloor(0);
   let checkins: FlooredCount = applyCountFloor(0);
   if (env.FORMS_DB) {
-    registrations = applyCountFloor(
+    // OSE-2151: published rounded down to a multiple of 5.
+    registrations = publishCount(
       await countExact(env.FORMS_DB, COUNT_EVENT_REGISTRATIONS_SQL, eventId)
     );
-    checkins = applyCountFloor(
+    checkins = publishCount(
       await countExact(
         env.FORMS_DB,
         'SELECT total_count AS cnt FROM checkin_counts WHERE event_id = ?',

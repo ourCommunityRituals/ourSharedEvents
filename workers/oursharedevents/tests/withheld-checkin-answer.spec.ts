@@ -99,7 +99,7 @@ describe('OSE-1657 item 2 | the public check-in answer', () => {
       headers: { Authorization: `Bearer ${(env as unknown as { ADMIN_KEY: string }).ADMIN_KEY}` },
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ok: true, count: 6, suppressed: false, floor: 5 });
+    expect(await res.json()).toMatchObject({ ok: true, count: 5, suppressed: false, floor: 5 });
   });
 
   test('the door page confirms the check-in and reads no count from the answer', async () => {

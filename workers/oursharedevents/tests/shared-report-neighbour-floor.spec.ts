@@ -534,7 +534,9 @@ const plain = (key: keyof World, name: string, unit: string): Lever => ({
   name,
   unit,
   at: (n) => set({ [key]: n }),
-  control: [set({ [key]: 11 }), set({ [key]: 12 })],
+  // Published counts are rounded down to a multiple of 5 (OSE-2151), so the
+  // control crosses a step: 14 -> 15 shows, where 11 -> 12 would not.
+  control: [set({ [key]: 14 }), set({ [key]: 15 })],
 });
 
 const LEVERS: Lever[] = [
@@ -545,8 +547,8 @@ const LEVERS: Lever[] = [
     unit: 'one person',
     at: (n) => set({ attendees: n, cameTwice: 0, seenElsewhere: 0 }),
     control: [
-      set({ attendees: 20, cameTwice: 10, seenElsewhere: 10 }),
-      set({ attendees: 21, cameTwice: 10, seenElsewhere: 10 }),
+      set({ attendees: 24, cameTwice: 10, seenElsewhere: 10 }),
+      set({ attendees: 25, cameTwice: 10, seenElsewhere: 10 }),
     ],
   },
   plain('cameTwice', 'people who came more than once', 'one returning visitor'),
@@ -575,8 +577,8 @@ const LEVERS: Lever[] = [
     unit: 'one click-out',
     at: (n) => set({ clicksPublic: 3, clicksDonate: n }),
     control: [
-      set({ clicksPublic: 3, clicksDonate: 11 }),
-      set({ clicksPublic: 3, clicksDonate: 12 }),
+      set({ clicksPublic: 3, clicksDonate: 14 }),
+      set({ clicksPublic: 3, clicksDonate: 15 }),
     ],
   },
 ];

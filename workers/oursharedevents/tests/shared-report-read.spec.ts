@@ -213,7 +213,7 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.report.event_id).toBe('test-evt-read-full');
-    expect(r.report.distinct_scanners).toBe(42);
+    expect(r.report.distinct_scanners).toBe(40); // 42, rounded down to a multiple of 5
     // 5 distinct anons → meets the K = CORRIDOR_MAP_MIN_COUNT floor (OSE-1421: it
     // was a private 3), so the sample size is published. The venue rate counts
     // people seen at another event of a confirmed series (OSE-1652); this event
@@ -590,8 +590,8 @@ describe('OSE-272 Session 5 — POST /api/v2/events/shared-reports/batch', () =>
       errors: Record<string, { code: string }>;
     };
     expect(body.ok).toBe(true);
-    expect(body.reports['test-evt-read-batch-1'].distinct_scanners).toBe(12);
-    expect(body.reports['test-evt-read-batch-2'].distinct_scanners).toBe(7);
+    expect(body.reports['test-evt-read-batch-1'].distinct_scanners).toBe(10);
+    expect(body.reports['test-evt-read-batch-2'].distinct_scanners).toBe(5);
     expect(body.errors['evt-does-not-exist'].code).toBe('NOT_FOUND');
   });
 
@@ -983,7 +983,8 @@ describe('H3 corridor map + open-question resolutions', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.report.corridor_map?.cell_count).toBe(1);
-    expect(r.report.corridor_map?.svg).toContain(`data-cell="${mixed}" data-count="6"`);
+    // The 6 is published rounded down to a multiple of 5 (OSE-2151).
+    expect(r.report.corridor_map?.svg).toContain(`data-cell="${mixed}" data-count="5"`);
     expect(JSON.stringify(r.report)).not.toContain(sumOnly);
   });
 

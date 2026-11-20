@@ -1,0 +1,34 @@
+info:
+  name: Cell seams (OSE-2199)
+  type: folder
+request: {}
+docs: |-
+  The staging layer of OSE-2199: an event's res-7 cell is always the parent of
+  its res-9 cell, never the res-7 cell of the point itself.
+
+  H3 does not draw a child cell exactly inside its parent, so near a res-7 edge
+  the point's own res-7 cell can differ from the parent of its res-9 cell (21 of
+  the 397 stock events). Before OSE-2199 the Worker stored the point's res-7
+  cell there, which split one block between two areas and failed the stored-tag
+  check (tagsConsistent), so the SharedReport withheld the corridor map.
+
+  - create (seq 10, 11): a draft placed by coordinates at a synthetic point near
+    Bozeman, MT (45.66, -111.041), in res-9 cell 89289230e27ffff, whose own
+    res-7 cell is 872892308ffffff. It must be stored with res 7
+    87289230effffff, the parent.
+  - update (seq 20-22): a second draft moved by coordinates to (45.66, -111.0405),
+    in the same res-9 cell, must be stored with the same parent.
+
+  Coordinates sent with an event are taken as placed: no address lookup and no
+  seam rule (that needs the geocoder's precision), so this folder never calls
+  Google. The seam rule itself (the address picks the cell near a res-9 edge)
+  runs only on a lookup, which staging cannot drive to a known seam; it is
+  proven at the mock layer with Google stubbed.
+
+  No fixture. The folder makes two synthetic, unlisted drafts and deletes them
+  at the end (seq 900, 901). A leftover from a stopped run is synthetic and the
+  daily staging rebuild clears it. The reads find each draft by its id in the
+  admin list's newest 100, never by title.
+
+  Mock-layer twins: workers/oursharedevents/tests/h3-seam.spec.ts and
+  tests/geo.spec.ts (OSE-2199 block).

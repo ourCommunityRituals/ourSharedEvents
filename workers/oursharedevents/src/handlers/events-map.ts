@@ -43,7 +43,7 @@ import {
   CORRIDOR_READY_MIN_EVENTS,
 } from '../lib/corridor-readiness.js';
 import { corsHeaders } from '../lib/cors';
-import { listedSql } from '../lib/publish-grace';
+import { eventRoutableSql } from '../domain/event-state';
 import { notLinkOnlySql } from '../lib/attendance-mode';
 
 export interface EventsMapEnv {
@@ -74,15 +74,23 @@ export const COORDINATE_PARAMS = [
   'geo',
 ];
 
-/** Fields the pop-out needs. Deliberately narrow — this is a public response. */
+/**
+ * Fields the pop-out needs. Deliberately narrow — this is a public response.
+ *
+ * Where an item is: its cell, `h3_res7`, the cell the query asked for (OSE-2197,
+ * owner 2026-11-19: "It should resolve to the H3"). Never the event's stored
+ * point. The items used to carry `lat`/`lon`, so the endpoint refused a
+ * coordinate in and handed one out. A client that draws a pin draws it at the
+ * cell's centre (`cellToLatLng(h3_res7)`), the precision this endpoint has
+ * always served and no finer.
+ */
 interface MapEvent {
   id: string;
   name: string | null;
   startDateISO: string | null;
   venue: string | null;
   phase: string;
-  lat: number | null;
-  lon: number | null;
+  h3_res7: string;
 }
 
 function errorResponse(request: Request, code: string, message: string, status: number): Response {
@@ -152,7 +160,8 @@ export async function handleEventsMap(request: Request, env: EventsMapEnv): Prom
     // first cut shipped without it.
     const brand = url.searchParams.get('brand') || 'root';
 
-    // `is_published = 1` FIRST, because it is the strongest filter and the one
+    // `is_published = 1` FIRST (it leads eventRoutableSql, the listed-and-live
+    // rule of OSE-2196, domain/event-state.ts), because it is the strongest filter and the one
     // whose absence is a harm rather than a bug. A host who has not published
     // is not a row to be filtered late — they are not on this surface at all
     // (OSE-1245, owner: "they control whether they appear on the map").
@@ -178,10 +187,10 @@ export async function handleEventsMap(request: Request, env: EventsMapEnv): Prom
 
     const { results } = await env.DB.prepare(
       `SELECT id, title, slug, status, location, start_date, end_date, timezone,
-              lat, lon, h3_res7
+              h3_res7
          FROM events
-        WHERE is_published = 1
-          AND brand_id = ? AND h3_res7 = ? AND status = 'active' AND ${listedSql()}
+        WHERE ${eventRoutableSql()}
+          AND brand_id = ? AND h3_res7 = ?
           AND ${notLinkOnlySql()}
           AND start_date >= ? AND start_date <= ?
         ORDER BY start_date ASC
@@ -199,8 +208,10 @@ export async function handleEventsMap(request: Request, env: EventsMapEnv): Prom
       startDateISO: (e.startDateISO as string) ?? null,
       venue: (e.venue as string) ?? null,
       phase: String(e.phase),
-      lat: typeof e.lat === 'number' ? e.lat : null,
-      lon: typeof e.lon === 'number' ? e.lon : null,
+      // The row matched `h3_res7 = ?` on the validated res-7 `cell`, so this is
+      // that cell; it is written from the query rather than the row so no
+      // other value can reach the answer.
+      h3_res7: cell,
     }));
 
     return Response.json(

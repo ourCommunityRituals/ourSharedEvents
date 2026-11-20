@@ -216,8 +216,9 @@ describe('OSE-1376 — same scans, different event zones → different labels, i
     expect(pb.first_scan_at).toBe(pc.first_scan_at);
     expect(pb.last_scan_at).toBe(pc.last_scan_at);
     // 7 + 9 survive; the 3-bucket is dropped exactly as before, in both zones.
-    expect(chi.distinct_scanners).toBe(16);
-    expect(ber.distinct_scanners).toBe(16);
+    // Each published rounded down to a multiple of 5 (OSE-2151): 5 + 5.
+    expect(chi.distinct_scanners).toBe(10);
+    expect(ber.distinct_scanners).toBe(10);
   });
 });
 

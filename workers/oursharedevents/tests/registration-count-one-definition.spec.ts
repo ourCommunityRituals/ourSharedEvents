@@ -110,12 +110,13 @@ async function figures(eventId: string): Promise<Record<string, Floored>> {
 const PAST = '2020-01-01 00:00:00';
 
 describe('OSE-1656 | the list total and the stats figure cannot be subtracted', () => {
-  test('6 counted and 2 past their retention date: both read 6, never 8 beside 6', async () => {
+  test('6 counted and 2 past their retention date: both read 6 (published as 5), never 8 beside 6', async () => {
     const id = await createEvent('One count: expired rows');
     await seed(id, 6);
     await seed(id, 2, 'confirmed', PAST);
     const f = await figures(id);
-    expect(f.stats).toEqual({ count: 6, suppressed: false, floor: 5 });
+    // Published rounded down to a multiple of 5 (OSE-2151).
+    expect(f.stats).toEqual({ count: 5, suppressed: false, floor: 5 });
     expect(f.list).toEqual(f.stats);
   });
 
@@ -126,7 +127,7 @@ describe('OSE-1656 | the list total and the stats figure cannot be subtracted', 
     await seed(id, 1, 'cancelled');
     const f = await figures(id);
     expect(f.list).toEqual(f.stats);
-    expect(f.list.count).toBe(6);
+    expect(f.list.count).toBe(5);
   });
 
   test('3 counted and 4 expired: both withheld, the list never reads 7', async () => {
@@ -138,11 +139,11 @@ describe('OSE-1656 | the list total and the stats figure cannot be subtracted', 
     expect(f.list).toEqual(f.stats);
   });
 
-  test('guard: 7 counted and nothing else, both read 7', async () => {
+  test('guard: 7 counted and nothing else, both read 7 as 5', async () => {
     const id = await createEvent('One count: all counted');
     await seed(id, 7);
     const f = await figures(id);
-    expect(f.list).toEqual({ count: 7, suppressed: false, floor: 5 });
+    expect(f.list).toEqual({ count: 5, suppressed: false, floor: 5 });
     expect(f.stats).toEqual(f.list);
   });
 });

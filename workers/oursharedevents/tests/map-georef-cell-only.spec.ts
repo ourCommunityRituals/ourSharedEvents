@@ -92,13 +92,22 @@ const streetsFor = (cells: string[]) => ({
   svg: '<g data-testid="amap-streets"></g>',
 });
 
-function ev(i: number, cell: string, lat: number, lon: number, kind = 'address'): ZoomEvent {
+// The event carries its point beside its stored res-9 cell, so a map that read
+// the point instead of the cell (OSE-2197) would draw it off its block centre.
+function ev(
+  i: number,
+  cell: string,
+  lat: number,
+  lon: number,
+  kind = 'address'
+): ZoomEvent & { lat: number; lon: number } {
   return {
     id: `e${i}`,
     name: `Event ${i}`,
     startDateISO: '2026-11-25',
     phase: 'pre_event',
     h3_res7: cell,
+    h3_res9: latLngToCell(lat, lon, 9),
     lat,
     lon,
     place_kind: kind,

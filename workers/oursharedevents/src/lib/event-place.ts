@@ -20,11 +20,16 @@
  * `events.place_checked_at` (migration 0099) records that a lookup was
  * answered, found or not, so the nightly job (`runEventPlaceBackfill`) does not
  * pay for the same unfindable place every night. Editing the place clears it.
+ *
+ * OSE-2199: a found place keeps how exact Google says its point is and Google's
+ * address for it. Near a res-9 edge, within that precision's margin, the
+ * address chooses the cell (`tagPlace` in h3-tagging.ts), so one address keeps
+ * one cell however the point moves between lookups. Neither is stored.
  */
 
-import { geocodeVenue } from './geo';
+import { geocodeVenue, type GeoBox } from './geo';
 import { type MapsEnv } from './maps';
-import { maybeTag } from './h3-tagging';
+import { tagPlace, type PointPrecision } from './h3-tagging';
 import { errorLabel } from './error-label';
 import { refreshSpineKeys } from './spine-keys-store';
 
@@ -66,7 +71,21 @@ export function eventPlaceText(whereAddress: unknown, location: unknown): string
 }
 
 export type PlaceLookup =
-  | { found: true; lat: number; lon: number; kind: PlaceKind }
+  | {
+      found: true;
+      lat: number;
+      lon: number;
+      kind: PlaceKind;
+      /** How exact the point is (Google's location_type); null when not given. */
+      precision: PointPrecision | null;
+      /**
+       * Google's address for the place, else the text looked up. Chooses the
+       * cell at a seam; held in memory only, never stored or logged.
+       */
+      address: string;
+      viewport: GeoBox | null;
+      bounds: GeoBox | null;
+    }
   | {
       found: false;
       /**
@@ -116,11 +135,21 @@ export async function lookUpEventPlace(
   const isSpot = (types ?? []).some((t) => SPOT_TYPES.has(t));
   if (!isSpot || partial_match === true) return { found: false, reason: 'NOT_A_SPOT' };
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { found: false, reason: 'NOT_FOUND' };
-  return { found: true, lat, lon: lng, kind: placeKindOf(types) };
+  return {
+    found: true,
+    lat,
+    lon: lng,
+    kind: placeKindOf(types),
+    precision: outcome.result.location_type,
+    address: outcome.result.formatted_address || text,
+    viewport: outcome.result.viewport,
+    bounds: outcome.result.bounds,
+  };
 }
 
 /**
- * Store a lookup's answer on the event. Found: the coordinates and both cells.
+ * Store a lookup's answer on the event. Found: the coordinates and both cells,
+ * the res-9 cell chosen by the address when the point is at a seam (OSE-2199).
  * Answered but not found: no coordinates (the old ones, if any, described a
  * place the event no longer names). Not asked: nothing changes.
  */
@@ -131,12 +160,23 @@ export async function savePlaceLookup(
   now: string = new Date().toISOString()
 ): Promise<void> {
   if (r.found) {
-    const tags = maybeTag(r.lat, r.lon);
+    const tags = tagPlace(r.lat, r.lon, { precision: r.precision, address: r.address });
+    // How the cell was chosen, for counting seams. No event, place, point or
+    // address: only the rule's answer.
+    console.log(
+      JSON.stringify({
+        type: 'EVENT_CELL_CHOICE',
+        seam: tags.seam,
+        precision: r.precision,
+        candidates: tags.candidates,
+        timestamp: now,
+      })
+    );
     await db
       .prepare(
         'UPDATE events SET lat = ?, lon = ?, h3_res9 = ?, h3_res7 = ?, place_kind = ?, place_checked_at = ?, venue_canonical_id = NULL, event_correlation_id = NULL WHERE id = ?'
       )
-      .bind(r.lat, r.lon, tags?.h3_res9 ?? null, tags?.h3_res7 ?? null, r.kind, now, eventId)
+      .bind(r.lat, r.lon, tags.h3_res9, tags.h3_res7, r.kind, now, eventId)
       .run();
     return;
   }

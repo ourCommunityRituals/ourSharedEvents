@@ -194,7 +194,7 @@ describe('OSE-1172 — the SharedReport section set is event-STATUS-blind (state
     expect(draft.body.report?.distinct_scanners).toBe(active.body.report?.distinct_scanners);
     expect(archived.body.report?.distinct_scanners).toBe(active.body.report?.distinct_scanners);
     // Sanity: the shared value is the real floored count, not null.
-    expect(active.body.report?.distinct_scanners).toBe(7);
+    expect(active.body.report?.distinct_scanners).toBe(5); // 7, rounded down (OSE-2151)
   });
 });
 

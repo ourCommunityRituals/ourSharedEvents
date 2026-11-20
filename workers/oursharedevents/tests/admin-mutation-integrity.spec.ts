@@ -203,6 +203,6 @@ describe('4 — portfolio rollup is correct past the 100-parameter cap', () => {
     expect(body.rollup.events).toBe(120);
     expect(body.rollup.activeSponsors).toBe(1);
     expect(body.rollup.registrations.suppressed).toBe(false);
-    expect(body.rollup.registrations.count).toBe(6);
+    expect(body.rollup.registrations.count).toBe(5); // 6, rounded down to a multiple of 5
   });
 });

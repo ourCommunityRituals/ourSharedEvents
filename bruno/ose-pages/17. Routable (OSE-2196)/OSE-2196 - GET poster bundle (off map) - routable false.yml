@@ -1,0 +1,41 @@
+info:
+  name: "OSE-2196 | GET /api/v2/events/rt-offmap-pre/poster-bundle | routable false (off map)"
+  type: http
+  seq: 6
+
+# The poster draws its Google Maps / Apple Maps buttons only when the bundle says
+# `routable: true` (src/templates/poster.html; the server's rule is
+# domain/event-state.ts isRoutable). rt-offmap-pre is active and off the map:
+# its poster still renders, and it says false. The listing columns read to
+# decide it (is_published, listed_from) never leave the handler.
+# Fixture: bruno/fixtures/routable-seed.sql.
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/rt-offmap-pre/poster-bundle"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('Returns 200: the off-map event still has its poster', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+        const b = res.getBody() || {};
+        test('routable is false, and there are no directions', function () {
+          expect(b.routable).to.equal(false);
+          expect(b.directions).to.equal(null);
+        });
+        test('the event projection carries no listing column', function () {
+          const keys = Object.keys(b.event || {});
+          expect(keys.length).to.be.above(0);
+          expect(keys).to.not.include('is_published');
+          expect(keys).to.not.include('listed_from');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
