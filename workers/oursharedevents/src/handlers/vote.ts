@@ -2,7 +2,8 @@
  * POST /api/v2/vote/:eventId: one vote (OSE-2128, S4a of OSE-1193; OSE
  * ADR-040 decisions 1 to 6 and 9).
  *
- *   body   {"object_id": "vob_…", "side": "up" | "down", "pass": "vp1.…"}
+ *   body   {"object_id": "vob_…", "side": "up" | "down", "pass": "vp1.…"}, and
+ *          nothing else: a body with another field is refused (400)
  *   200    {"ok": true}                       counted, or already counted
  *   4xx    {"ok": false, "code": "…", "error": "…"}
  *
@@ -28,7 +29,8 @@
  * A refused vote writes nothing. When the refusal is the set's own epoch, the
  * set is marked void (decision 6).
  *
- * THE ANSWER CARRIES NO COUNT. Counted and duplicate get the same bytes. No
+ * THE ANSWER CARRIES NO COUNT. Counted and duplicate get the same bytes, and
+ * this file cannot tell them apart: castVote returns `accepted` for both. No
  * answer says how many, which side, or whether this voter voted before. No log
  * line carries the object, the side, the event, the pass, k or a receipt; a
  * failure logs its type and an error label only.
@@ -49,6 +51,8 @@ export interface VoteEnv {
 const MAX_BODY = 2048;
 const EVENT_ID = /^[A-Za-z0-9_-]{1,128}$/;
 const OBJECT_ID = /^[A-Za-z0-9_-]{1,128}$/;
+/** The body's only fields. Another field is refused, never ignored. */
+const BODY_FIELDS: ReadonlySet<string> = new Set(['object_id', 'side', 'pass']);
 
 const HEADERS = {
   'Cache-Control': 'no-store',
@@ -108,6 +112,8 @@ async function readBody(request: Request): Promise<VoteBody | null> {
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const b = raw as Record<string, unknown>;
+  // Exactly the three fields the voter page sends; anything more is not a vote.
+  if (Object.keys(b).some((key) => !BODY_FIELDS.has(key))) return null;
   if (typeof b.object_id !== 'string' || !OBJECT_ID.test(b.object_id)) return null;
   if (typeof b.side !== 'string' || !(VOTE_SIDES as readonly string[]).includes(b.side))
     return null;

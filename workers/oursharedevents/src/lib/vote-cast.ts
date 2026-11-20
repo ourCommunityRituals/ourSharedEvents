@@ -16,16 +16,22 @@
  *      inside the insert, so a close cannot land between a check and the write;
  *   2. the side's counter rises only when step 1 inserted a row
  *      (`changes() = 1`: the receipt was new);
- *   3. on a team night, for an up vote, the team marker HMAC(K_team, k ‖
- *      team_id) is inserted if step 2 counted (Q16): a voter who backs three of
- *      a team's songs adds one to its total;
+ *   3. the team statement: on a team night, for an up vote, the team marker
+ *      HMAC(K_team, k ‖ team_id) is inserted if step 2 counted (Q16): a voter
+ *      who backs three of a team's songs adds one to its total. The statement
+ *      is in every batch, whatever the side and whatever the night, with a
+ *      null marker when it does not apply (it then writes nothing), and on a
+ *      team night the marker is computed for both sides. So the batch, its
+ *      statement count and the work done never depend on the side: the
+ *      OPERATION_COST line (d1Queries) cannot carry it;
  *   4. the participant marker HMAC(K_participant, k ‖ set_id) is inserted if
  *      new, while this voter's receipt for the object exists;
  *   5. one read: does the receipt exist, and is the object still open?
  *
- * The outcome is `counted`, `duplicate` (the receipt was already there: the
- * same pass, or a re-scan, on the same object, whichever side) or `closed`.
- * The route answers counted and duplicate with the same bytes. A receipt has
+ * The outcome is `accepted` or `closed`. `accepted` covers both a vote that
+ * counted now and one whose receipt was already there (the same pass, or a
+ * re-scan, on the same object, whichever side): the route is never handed the
+ * difference, so no edit there can answer or log it. A receipt has
  * no side and no time, and a receipt survives a reopen, so a voter who already
  * voted on an object never votes on it again.
  *
@@ -42,7 +48,11 @@ import { voteParticipantMarker, voteReceipt, voteTeamMarker } from './votes';
 export const VOTE_SIDES = ['up', 'down'] as const;
 export type VoteSide = (typeof VOTE_SIDES)[number];
 
-export type CastOutcome = 'counted' | 'duplicate' | 'closed';
+/**
+ * What the route may know: the vote stands (`accepted`, counted now or
+ * before: one shape on purpose) or the object is closed.
+ */
+export type CastOutcome = 'accepted' | 'closed';
 
 /**
  * The object may take a vote now. Binds, in order: object id, event id, the
@@ -66,8 +76,13 @@ const RECEIPT_INSERT = `INSERT INTO vote_receipts (object_id, receipt)
 const COUNT_UP = `UPDATE vote_tallies SET up_count = up_count + 1 WHERE object_id = ? AND changes() = 1`;
 const COUNT_DOWN = `UPDATE vote_tallies SET down_count = down_count + 1 WHERE object_id = ? AND changes() = 1`;
 
+/**
+ * Step 3. Binds set id, team id, marker, then the marker again: a null marker
+ * (not a team night, or not an up vote) writes nothing, so the statement can
+ * sit in every batch.
+ */
 const TEAM_MARKER_INSERT = `INSERT INTO vote_team_markers (set_id, team_id, marker)
-   SELECT ?, ?, ? WHERE changes() = 1
+   SELECT ?, ?, ? WHERE changes() = 1 AND ? IS NOT NULL
    ON CONFLICT DO NOTHING`;
 
 const PARTICIPANT_INSERT = `INSERT INTO vote_participants (set_id, marker)
@@ -116,25 +131,29 @@ export async function castVote(
   const receipt = await voteReceipt(pepper, k, objectId);
   const participant = await voteParticipantMarker(pepper, k, obj.set_id);
   if (!receipt || !participant) return null;
-  const teamNight = obj.played_by === 'team' && side === 'up' && !!obj.group_id;
-  const team = teamNight ? await voteTeamMarker(pepper, k, obj.group_id as string) : null;
-  if (teamNight && !team) return null;
+  // The night, never the side, decides whether a team marker is made: on a
+  // team night it is made for both sides, so the work is the same.
+  const teamNight = obj.played_by === 'team' && !!obj.group_id;
+  const made = teamNight ? await voteTeamMarker(pepper, k, obj.group_id as string) : null;
+  if (teamNight && !made) return null;
+  const team = side === 'up' ? made : null;
 
   const nowIso = new Date(input.nowMs).toISOString();
   const open = [objectId, eventId, nowIso, epoch, eventId];
   const statements = [
     db.prepare(RECEIPT_INSERT).bind(receipt, ...open),
     db.prepare(side === 'up' ? COUNT_UP : COUNT_DOWN).bind(objectId),
-    ...(teamNight ? [db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, obj.group_id, team)] : []),
+    db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, obj.group_id ?? null, team, team),
     db.prepare(PARTICIPANT_INSERT).bind(obj.set_id, participant, objectId, receipt),
     db.prepare(AFTER).bind(objectId, receipt, ...open),
   ];
   const results = await db.batch(statements);
-  const counted = (results[1]?.meta?.changes ?? 0) === 1;
-  if (counted) return 'counted';
+  // Counted now: the receipt was new, so the object was open when it landed.
+  if ((results[1]?.meta?.changes ?? 0) === 1) return 'accepted';
   const after = (results[results.length - 1]?.results?.[0] ?? {}) as {
     held?: number;
     open_now?: number;
   };
-  return Number(after.held) === 1 && Number(after.open_now) === 1 ? 'duplicate' : 'closed';
+  // Counted before, and still open: the same answer as counted now.
+  return Number(after.held) === 1 && Number(after.open_now) === 1 ? 'accepted' : 'closed';
 }

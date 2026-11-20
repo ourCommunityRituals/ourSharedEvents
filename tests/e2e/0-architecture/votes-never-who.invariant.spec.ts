@@ -93,6 +93,19 @@
  *      that moves an event's status out of 'active' batches
  *      closeVoteSetUnlessPublished with the move (one transaction), or is
  *      exempt with its reason (STATUS_WRITER_EXEMPT). No D1 trigger: 0025.
+ *  12. NO SIDE, NO DUPLICATE AND NO T OR V IN A LOG (OSE-2128 follow-up, H1,
+ *      L7, L9). castVote (lib/vote-cast.ts) builds one batch for both sides: its
+ *      statement list has no spread and no ternary but the counter's
+ *      `side === 'up' ? COUNT_UP : COUNT_DOWN`, and whether a team marker is
+ *      made depends on the night, never the side, so OPERATION_COST's
+ *      d1Queries cannot carry the side. CastOutcome has no `counted` or
+ *      `duplicate`, and the vote handler names neither, so the route cannot
+ *      tell them apart. On the vote and result path (the vote route and its
+ *      lib, the set and result libs, the admin votables and open-objects
+ *      handlers, the voter page and its render, and the cost emitter), no
+ *      console call names T or V (secret_margin, secret_floor, margin, floor,
+ *      their ranges or the draw). The workers pool holds the same through the
+ *      Worker's fetch (tests/vote-route.spec.ts, "the logs cannot tell a side").
  *
  * What it cannot see: a value carried out by a variable (a listed lib file that
  * returns `row` to a handler). S3 and S5 add workers-pool tests that their
@@ -129,6 +142,10 @@
  *   qr-verify batch (11 red), an `is_vote_code` write planted in
  *   handlers/votables.ts (11 red) |
  *   date: 2026-11-18
+ * @born-red OSE-2128 | method: injected-fault, each removed after: the team
+ *   statement spread in only for an up vote (12 red), teamNight conditioned on
+ *   `side === 'up'` (12 red), `'duplicate'` put back in CastOutcome (12 red),
+ *   a `console.log` of `margin` in openVoteSet (12 red) | date: 2026-11-20
  */
 
 import { test, expect } from '@playwright/test';
@@ -460,6 +477,31 @@ const VOTE_WORDS_CONTROL =
 const PASS_WORDS =
   /\b(?:Location|location|redirectTarget|redirect|votePageTarget|pass|issueVotePass|mintVotePass|voterKey|k|anonId|url|href|headers)\b/;
 
+/** A word for T or V (decision 7): the columns, their names in code, their ranges and the draw. */
+const TV_WORDS =
+  /\b(?:secret_margin|secret_floor|secretMargin|secretFloor|margin|floor|SECRET_MARGIN_RANGE|SECRET_FLOOR_RANGE|drawUniform)\b/;
+
+/**
+ * Why castVote's batch could depend on the side (OSE-2128, H1): a spread or a
+ * ternary in its statement list (but the counter's own choice and a `?? null`),
+ * or a team-night test that names the side. Empty when the batch is one shape.
+ */
+function sideFreeBatchProblems(code: string): string[] {
+  const out: string[] = [];
+  const at = code.indexOf('const statements = [');
+  if (at < 0) return ['no `const statements = [` in castVote'];
+  const block = code.slice(at, code.indexOf('];', at));
+  const rest = block
+    .replace("side === 'up' ? COUNT_UP : COUNT_DOWN", '')
+    .replace(/\?\?\s*null/g, '');
+  if (/\.\.\.(?!open\b)/.test(rest)) out.push('a spread in the statement list');
+  if (/\?/.test(rest.replace(/'[^']*'/g, ''))) out.push('a ternary in the statement list');
+  const night = /const\s+teamNight\s*=([^;]*);/.exec(code);
+  if (!night) out.push('no `const teamNight =` in castVote');
+  else if (/\bside\b/.test(night[1])) out.push('teamNight names the side');
+  return out;
+}
+
 /** Every `console.<level>(…)` call in a file, to its closing parenthesis. */
 function consoleCalls(code: string): string[] {
   const out: string[] = [];
@@ -774,6 +816,76 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
     expect(VOTE_WORDS_CONTROL.test('console.error(JSON.stringify({ side: body.side }))')).toBe(
       true
     );
+  });
+
+  test('OSE-2128 | log | one batch for both sides, and the route cannot tell counted from duplicate', () => {
+    const cast = SOURCES.find((s) => s.file === CAST_LIB)!.code;
+    const handler = SOURCES.find((s) => s.file === VOTE_HANDLER)!.code;
+    expect(sideFreeBatchProblems(cast), `${CAST_LIB}: the batch depends on the side`).toEqual([]);
+    const outcome = /export\s+type\s+CastOutcome\s*=([^;]*);/.exec(cast);
+    expect(outcome, 'CastOutcome is declared').toBeTruthy();
+    expect(outcome![1], 'CastOutcome names counted or duplicate').not.toMatch(
+      /['"](?:counted|duplicate)['"]/
+    );
+    expect(handler, `${VOTE_HANDLER} names counted or duplicate`).not.toMatch(
+      /['"](?:counted|duplicate)['"]/
+    );
+    // Negative controls: the shapes H1 and its first draft took are caught.
+    const today = `const teamNight = obj.played_by === 'team' && !!obj.group_id;
+      const statements = [
+        db.prepare(RECEIPT_INSERT).bind(receipt, ...open),
+        db.prepare(side === 'up' ? COUNT_UP : COUNT_DOWN).bind(objectId),
+        db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, obj.group_id ?? null, team, team),
+      ];`;
+    expect(sideFreeBatchProblems(today)).toEqual([]);
+    expect(
+      sideFreeBatchProblems(
+        today.replace(
+          'db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, obj.group_id ?? null, team, team),',
+          '...(teamNight ? [db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, team)] : []),'
+        )
+      )
+    ).not.toEqual([]);
+    expect(
+      sideFreeBatchProblems(today.replace("=== 'team' &&", "=== 'team' && side === 'up' &&"))
+    ).not.toEqual([]);
+  });
+
+  test('OSE-2128 | log | no console call on the vote or result path names T or V', () => {
+    const files = [
+      VOTE_HANDLER,
+      CAST_LIB,
+      VOTE_SETS_LIB,
+      RESULTS_LIB,
+      OPEN_OBJECTS_HANDLER,
+      'src/lib/vote-public-result.ts',
+      'src/handlers/votables.ts',
+      'src/handlers/vote-page.ts',
+      'src/lib/vote-page-render.ts',
+      'src/lib/cost-metric.ts',
+    ];
+    for (const file of files) {
+      const src = SOURCES.find((s) => s.file === file);
+      expect(src, `${file} is read`).toBeTruthy();
+      const named = consoleCalls(src!.code).filter((call) => TV_WORDS.test(call));
+      expect(named, `${file} logs T or V`).toEqual([]);
+    }
+    const costLib = SOURCES.find((s) => s.file === 'src/lib/cost-metric.ts')!.code;
+    const emitter = costLib.slice(costLib.indexOf('export function emitOperationCost'));
+    expect(emitter.length, 'the OPERATION_COST emitter is found').toBeGreaterThan(100);
+    expect(TV_WORDS.test(emitter), 'the OPERATION_COST emitter names T or V').toBe(false);
+    for (const planted of [
+      "console.log(JSON.stringify({ type: 'VOTE_SET_OPEN', margin }))",
+      'console.info(set.secret_floor)',
+      'console.warn(`T=${secretMargin}`)',
+    ])
+      expect(
+        consoleCalls(planted).some((c) => TV_WORDS.test(c)),
+        planted
+      ).toBe(true);
+    expect(
+      TV_WORDS.test("console.log(JSON.stringify({ type: 'VOTE_FINAL_JOB', finalized }))")
+    ).toBe(false);
   });
 
   test('OSE-2128 | route | only the router imports the vote handler; it is routed for POST only, behind the switch', () => {
