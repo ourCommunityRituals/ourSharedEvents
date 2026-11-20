@@ -1,0 +1,32 @@
+info:
+  name: "OSE-2199 | update | its coordinates moved to the res-7 seam"
+  type: http
+  seq: 21
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{seamUpdateId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"lat\":45.66,\"lon\":-111.0405}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2199 update: 200', function () { expect(res.getStatus()).to.eql(200); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -246,29 +246,31 @@ describe('OSE-1656 | one scan in a poster-hour under the floor moves nothing any
     });
   }
 
-  test('control: one more scan in the poster-hour of 7 moves every route', async () => {
-    const before = await readAll(BASE);
-    const after = await readAll({ ...BASE, 'p1@H1': 8 });
+  // Published counts are rounded down to a multiple of 5 (OSE-2151), so the
+  // control crosses a step: 9 -> 10 moves every route, where 7 -> 8 would not.
+  test('control: one more scan in the poster-hour, from 9 to 10, moves every route', async () => {
+    const before = await readAll({ ...BASE, 'p1@H1': 9 });
+    const after = await readAll({ ...BASE, 'p1@H1': 10 });
     expect(moved(before, after).sort()).toEqual(ROUTES.map((r) => r.name).sort());
   });
 
-  test('the base dataset publishes the poster-hour of 7 everywhere, and only it', async () => {
+  test('the base dataset publishes the poster-hour of 7 everywhere (as 5), and only it', async () => {
     const all = await readAll(BASE);
     const stats = JSON.parse(all['events/:id/stats']) as { stats: { scans: unknown } };
-    expect(stats.stats.scans).toEqual({ count: 7, suppressed: false, floor: 5 });
+    expect(stats.stats.scans).toEqual({ count: 5, suppressed: false, floor: 5 });
     const ops = JSON.parse(all[`dashboards/operations?brand_id=${BRAND}`]) as {
       reach: { poster_scans: unknown };
     };
-    expect(ops.reach.poster_scans).toEqual({ count: 7, suppressed: false, floor: 5 });
-    expect(all['sponsor page reach line']).toContain('7 poster scans');
+    expect(ops.reach.poster_scans).toEqual({ count: 5, suppressed: false, floor: 5 });
+    expect(all['sponsor page reach line']).toContain('5 poster scans'); // 7, rounded down
     const stalls = JSON.parse(all['events/:id/booths/counts']) as {
       booths: { number: string; scans: unknown }[];
       total: unknown;
     };
     expect(stalls.booths.map((b) => [b.number, b.scans])).toEqual([
-      ['S1', { count: 7, suppressed: false, floor: 5 }],
+      ['S1', { count: 5, suppressed: false, floor: 5 }],
       ['S2', { count: null, suppressed: true, floor: 5 }],
     ]);
-    expect(stalls.total).toEqual({ count: 7, suppressed: false, floor: 5 });
+    expect(stalls.total).toEqual({ count: 5, suppressed: false, floor: 5 });
   });
 });

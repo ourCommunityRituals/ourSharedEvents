@@ -152,7 +152,8 @@ describe('scansByLocalDay — the event’s own days, every day present, each fl
       now,
       PRE_EVENT_DAYS
     );
-    expect(days.find((d) => d.day === '2026-09-28')?.count).toEqual(fl(6));
+    // Published rounded down to a multiple of 5 (OSE-2151): 6 reads 5.
+    expect(days.find((d) => d.day === '2026-09-28')?.count).toEqual(fl(5));
     expect(days.find((d) => d.day === '2026-09-29')?.count).toEqual(HELD);
   });
 
@@ -164,7 +165,7 @@ describe('scansByLocalDay — the event’s own days, every day present, each fl
     expect(days.every((d) => d.count.suppressed)).toBe(true);
   });
 
-  test('a day is its poster-hours with 5 or more: 6 + 4 + 4 in one day reads 6, never 14', () => {
+  test('a day is its poster-hours with 5 or more: 6 + 4 + 4 in one day reads 5, never 14', () => {
     const days = scansByLocalDay(
       [
         { poster: 'a', hour: '2026-09-29T14', n: 6 },
@@ -175,7 +176,7 @@ describe('scansByLocalDay — the event’s own days, every day present, each fl
       now,
       PRE_EVENT_DAYS
     );
-    expect(days[days.length - 1].count).toEqual(fl(6));
+    expect(days[days.length - 1].count).toEqual(fl(5));
   });
 
   test('hours outside the window and junk hours are dropped', () => {
@@ -211,7 +212,8 @@ describe('floorPreEventActivity — nobody sees a sub-5 number', () => {
     expect(f.posters).toBe(1);
     expect(f.places).toBe(1);
     expect(f.scans).toEqual(HELD);
-    expect(f.clicks).toEqual({ count: 12, suppressed: false, floor: 5 });
+    // Rounded down to a multiple of 5 (OSE-2151).
+    expect(f.clicks).toEqual({ count: 10, suppressed: false, floor: 5 });
     expect(f.scansByDay[0].count.suppressed).toBe(true);
     expect(f.scansByDay[0].count.count).toBeNull();
     expect(f.scansByDay[1].count.count).toBe(6);
@@ -241,8 +243,8 @@ describe('organizerPreEventActivity — the tap total is the sum of the codes th
     expect(organizerPreEventActivity(activity([])).clicks).toEqual(none);
   });
 
-  test('every code at or above the floor: the total is all of them', () => {
-    expect(organizerPreEventActivity(activity([5, 6, 20])).clicks.count).toBe(31);
+  test('every code at or above the floor: the total is all of them, each rounded down to a multiple of 5', () => {
+    expect(organizerPreEventActivity(activity([5, 6, 20])).clicks.count).toBe(30);
   });
 
   // OSE-1656: the organizer reads the same numbers as the sponsor.
@@ -263,10 +265,10 @@ describe('readPreEventActivity — counts from D1', () => {
     const a = await readPreEventActivity(tenv.DB, 'pe-busy', 'America/Chicago');
     expect(a.posters).toBe(3);
     expect(a.places).toBe(2);
-    expect(a.scans).toEqual(fl(7));
+    expect(a.scans).toEqual(fl(5)); // 7, rounded down to a multiple of 5
     // The taps per code (event link 9, donation link 2), read side only.
     expect([...a.clicksByCode].sort((x, y) => x - y)).toEqual([2, 9]);
-    expect(a.scansByDay.reduce((t, d) => t + (d.count.count ?? 0), 0)).toBe(7);
+    expect(a.scansByDay.reduce((t, d) => t + (d.count.count ?? 0), 0)).toBe(5);
     expect(a.scansByDay.filter((d) => !d.count.suppressed)).toHaveLength(1);
   });
 
@@ -293,7 +295,7 @@ describe('readPreEventActivity — counts from D1', () => {
   test('a failed tap read: the card still gets its scans (taps read as none), a strict caller gets the error', async () => {
     const broken = tapReadFails(tenv.DB);
     const a = await readPreEventActivity(broken, 'pe-busy', 'America/Chicago');
-    expect(a).toMatchObject({ posters: 3, places: 2, scans: fl(7), clicksByCode: [] });
+    expect(a).toMatchObject({ posters: 3, places: 2, scans: fl(5), clicksByCode: [] });
     // Strict (the event dashboard): never a total that was not read.
     await expect(
       readPreEventActivity(broken, 'pe-busy', 'America/Chicago', new Date(), true)
@@ -320,14 +322,16 @@ describe('GET /api/v2/admin/events/:id/pre-event-activity (organizer)', () => {
       poster_url: string;
     };
     expect(body.ok).toBe(true);
-    // OSE-1656: scans arrive floored for the organizer too: poster 1's hour of 7.
-    expect(body.activity).toMatchObject({ posters: 3, places: 2, scans: fl(7) });
+    // OSE-1656: scans arrive floored for the organizer too: poster 1's hour of 7,
+    // published as 5 (OSE-2151).
+    expect(body.activity).toMatchObject({ posters: 3, places: 2, scans: fl(5) });
     // Poster tiers (PO 2026-09-30): digital taps are K=5-floored for the
     // organizer too — the tap total arrives as a FlooredCount.
     // The total counts the codes that clear the floor on their own: the event
     // link's 9. The donation link's 2 is withheld and never joins it (as 11,
-    // the total moved to 12 when the donation link gained a tap).
-    expect(body.activity.clicks).toEqual({ count: 9, suppressed: false, floor: 5 });
+    // the total moved to 12 when the donation link gained a tap). The 9 is
+    // published rounded down to a multiple of 5 (OSE-2151).
+    expect(body.activity.clicks).toEqual({ count: 5, suppressed: false, floor: 5 });
     expect(body.activity).not.toHaveProperty('clicksByCode');
     expect(body.link?.url).toBe('https://t.test/s/peBUS1'); // public before donation
     expect(body.link?.qr.startsWith('data:image/')).toBe(true);
@@ -499,9 +503,11 @@ describe('/sponsor — pre-event reach, floored', () => {
     expect(busy).toContain('data-testid="placement-reach"');
     expect(busy).toContain('Your name is on 3 posters in 2 places');
     // OSE-1656: poster 1's hour of 7 is the only poster-hour with 5 or more.
-    expect(busy).toContain('7 poster scans');
+    // Published rounded down to a multiple of 5 (OSE-2151): 7 reads 5, 9 reads 5.
+    expect(busy).toContain('5 poster scans');
+    expect(busy).not.toContain('7 poster scans');
     expect(busy).not.toContain('12 poster scans');
-    expect(busy).toContain('So far: 9 link taps');
+    expect(busy).toContain('So far: 5 link taps');
     expect(busy).not.toContain('11 link taps');
     // Not yet accepted: their name isn't on the poster, so no reach claim.
     expect(quiet).not.toContain('data-testid="placement-reach"');
@@ -532,7 +538,7 @@ describe('/sponsor — pre-event reach, floored', () => {
     await setTaps('peBUS1', 9);
 
     expect(hidden).toBe(before);
-    expect(before).toContain('So far: 9 link taps');
+    expect(before).toContain('So far: 5 link taps');
     expect(shown).toContain('So far: 10 link taps');
   });
 });

@@ -217,12 +217,12 @@ describe('a class total at 0, 1, 4, 5 and 6 displays', () => {
     }
 
     for (const n of [K, K + 1]) {
-      test(`${cls}, ${n} displays: published exactly`, async () => {
+      test(`${cls}, ${n} displays: published as 5 (rounded down to a multiple of 5)`, async () => {
         await seedSponsor('sp-cf-a', cls);
         await setDisplays('sp-cf-a', 'poster', n);
 
         const row = (await built()).sponsor_class_breakdown[cls];
-        expect(row).toEqual({ sponsor_count: 1, total_displays: n });
+        expect(row).toEqual({ sponsor_count: 1, total_displays: K });
       });
     }
   }
@@ -241,19 +241,19 @@ describe('a class total at 0, 1, 4, 5 and 6 displays', () => {
     expect(scb.premium.sponsor_count).toBe(0);
   });
 
-  test('the total is the sum of the rows published for the class (7 + 3 is 7, 6 + 5 is 11)', async () => {
+  test('the total is the sum of the rows published for the class (7 + 3 is 5, 6 + 5 is 10)', async () => {
     await seedSponsor('sp-cf-a', 'premium');
     await seedSponsor('sp-cf-b', 'premium');
     await setDisplays('sp-cf-a', 'poster', 7);
     await setDisplays('sp-cf-b', 'poster', 3);
     let r = await built();
-    expect(r.sponsor_class_breakdown.premium).toEqual({ sponsor_count: 2, total_displays: 7 });
+    expect(r.sponsor_class_breakdown.premium).toEqual({ sponsor_count: 2, total_displays: 5 });
 
     await setDisplays('sp-cf-a', 'poster', 6);
     await setDisplays('sp-cf-b', 'poster', 5);
     r = await built();
-    expect(r.sponsor_class_breakdown.premium).toEqual({ sponsor_count: 2, total_displays: 11 });
-    expect(r.sponsor_displays.reduce((n, row) => n + row.count, 0)).toBe(11);
+    expect(r.sponsor_class_breakdown.premium).toEqual({ sponsor_count: 2, total_displays: 10 });
+    expect(r.sponsor_displays.reduce((n, row) => n + row.count, 0)).toBe(10);
   });
 
   test('many small parts never add up to a published total (4 + 4 + 4 is withheld)', async () => {
@@ -302,13 +302,13 @@ describe('a withheld class total is said in words, once', () => {
 
   test('the read route carries the note to an organizer link and to a sponsor link', async () => {
     await seedSponsor('sp-cf-a', 'premium');
-    await setDisplays('sp-cf-a', 'poster', K + 2);
+    await setDisplays('sp-cf-a', 'poster', 2 * K);
     for (const [role, who] of [
       ['bar_owner', undefined],
       ['sponsor', 'sp-cf-a'],
     ] as Array<[SignedLinkRole, string | undefined]>) {
       const { report } = await read(role, who);
-      expect(report.sponsor_class_breakdown.premium.total_displays, role).toBe(K + 2);
+      expect(report.sponsor_class_breakdown.premium.total_displays, role).toBe(2 * K);
       expect(report.sponsor_class_breakdown.local.total_displays, role).toBeNull();
       expect(report.sponsor_class_breakdown.mid.total_displays, role).toBeNull();
       expect(withheldNotes(report), role).toHaveLength(1);
@@ -325,8 +325,8 @@ describe("a sponsor's own link reads the whole-event class breakdown (owner ruli
   test('the class totals are the same on a sponsor link as on the organizer link', async () => {
     await seedSponsor('sp-cf-a', 'premium');
     await seedSponsor('sp-cf-b', 'premium');
-    await setDisplays('sp-cf-a', 'poster', K + 2);
-    await setDisplays('sp-cf-b', 'poster', K + 1);
+    await setDisplays('sp-cf-a', 'poster', 2 * K);
+    await setDisplays('sp-cf-b', 'poster', K);
     const organizer = await read('bar_owner');
     const sponsor = await read('sponsor', 'sp-cf-a');
     expect(sponsor.report.sponsor_class_breakdown).toEqual(
@@ -334,7 +334,7 @@ describe("a sponsor's own link reads the whole-event class breakdown (owner ruli
     );
     expect(sponsor.report.sponsor_class_breakdown.premium).toEqual({
       sponsor_count: 2,
-      total_displays: 2 * K + 3,
+      total_displays: 3 * K,
     });
     // Its own rows only: the peer's row is not on the link.
     expect(sponsor.report.sponsor_displays.map((r) => r.sponsor_id)).toEqual(['sp-cf-a']);
@@ -343,12 +343,12 @@ describe("a sponsor's own link reads the whole-event class breakdown (owner ruli
   test("a peer under the floor stays withheld on a sponsor's link", async () => {
     await seedSponsor('sp-cf-a', 'premium');
     await seedSponsor('sp-cf-b', 'premium');
-    await setDisplays('sp-cf-a', 'poster', K + 2);
+    await setDisplays('sp-cf-a', 'poster', 2 * K);
     await setDisplays('sp-cf-b', 'poster', K - 1);
     const { report } = await read('sponsor', 'sp-cf-a');
     expect(report.sponsor_class_breakdown.premium).toEqual({
       sponsor_count: 2,
-      total_displays: K + 2,
+      total_displays: 2 * K,
     });
   });
 });
@@ -360,7 +360,7 @@ describe('the batch route carries the same class breakdown', () => {
   test('a published class is its number and a withheld class is null', async () => {
     await seedSponsor('sp-cf-a', 'premium');
     await seedSponsor('sp-cf-b', 'local');
-    await setDisplays('sp-cf-a', 'poster', K + 3);
+    await setDisplays('sp-cf-a', 'poster', 2 * K);
     await setDisplays('sp-cf-b', 'poster', K - 1);
     const res = await SELF.fetch('https://test.local/api/v2/events/shared-reports/batch', {
       method: 'POST',
@@ -372,7 +372,7 @@ describe('the batch route carries the same class breakdown', () => {
     expect(body.reports[EVT]!.sponsor_class_breakdown).toEqual({
       local: { sponsor_count: 1, total_displays: null },
       mid: { sponsor_count: 0, total_displays: null },
-      premium: { sponsor_count: 1, total_displays: K + 3 },
+      premium: { sponsor_count: 1, total_displays: 2 * K },
     });
     expect(body.reports[EVT]!.sponsor_class_breakdown).toEqual(
       (await built()).sponsor_class_breakdown
@@ -403,7 +403,7 @@ describe('sponsor_count counts the sponsors taking part in the event', () => {
       [1, null, 0],
       [1, null, 0],
       [1, K, 1],
-      [1, K + 1, 1],
+      [1, K, 1],
     ]);
   });
 
@@ -413,7 +413,7 @@ describe('sponsor_count counts the sponsors taking part in the event', () => {
     await setDisplays('sp-cf-a', 'display', 7);
     await setDisplays('sp-cf-a', 'public', 8);
     const scb = (await built()).sponsor_class_breakdown;
-    expect(scb.local).toEqual({ sponsor_count: 1, total_displays: 21 });
+    expect(scb.local).toEqual({ sponsor_count: 1, total_displays: 15 });
     // An entity count is a number in every class, beside a withheld total too.
     expect(scb.mid).toEqual({ sponsor_count: 0, total_displays: null });
     expect(scb.premium).toEqual({ sponsor_count: 0, total_displays: null });
@@ -466,14 +466,14 @@ describe('sponsor_count counts the sponsors taking part in the event', () => {
 
   test('a sponsor no longer placed still counts while its row is published', async () => {
     await seedSponsor('sp-cf-a', 'premium');
-    await setDisplays('sp-cf-a', 'poster', K + 1);
+    await setDisplays('sp-cf-a', 'poster', 2 * K);
     await tenv()
       .DB.prepare(`UPDATE sponsor_placement SET is_active = 0 WHERE sponsor_business_id = ?`)
       .bind('sp-cf-a')
       .run();
     expect((await built()).sponsor_class_breakdown.premium).toEqual({
       sponsor_count: 1,
-      total_displays: K + 1,
+      total_displays: 2 * K,
     });
   });
 });
@@ -514,14 +514,22 @@ describe('one display more, inside a group under the floor, changes nothing', ()
         });
       }
 
-      test(`control: ${lever}, ${K} -> ${K + 1} displays, ${reader}: the class total moves by one`, async () => {
+      test(`${lever}, ${K} -> ${K + 1} displays, ${reader}: one more inside a step of 5 changes nothing (OSE-2151)`, async () => {
         await setDisplays(sponsor, surface, K);
         const before = await read(role, who);
         await setDisplays(sponsor, surface, K + 1);
         const after = await read(role, who);
+        expect(after.text).toBe(before.text);
+      });
+
+      test(`control: ${lever}, ${2 * K - 1} -> ${2 * K} displays, ${reader}: the class total moves by 5`, async () => {
+        await setDisplays(sponsor, surface, 2 * K - 1);
+        const before = await read(role, who);
+        await setDisplays(sponsor, surface, 2 * K);
+        const after = await read(role, who);
         expect(after.text).not.toBe(before.text);
         expect(after.report.sponsor_class_breakdown[cls].total_displays).toBe(
-          (before.report.sponsor_class_breakdown[cls].total_displays as number) + 1
+          (before.report.sponsor_class_breakdown[cls].total_displays as number) + K
         );
       });
     }

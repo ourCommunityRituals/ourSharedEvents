@@ -881,7 +881,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 69
+      "testCount": 77
     },
     {
       "file": "workers/oursharedevents/tests/crawl-policy.spec.ts",
@@ -1441,7 +1441,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 24
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/events-place-search.spec.ts",
@@ -1721,7 +1721,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 20
+      "testCount": 23
     },
     {
       "file": "workers/oursharedevents/tests/geocode-handler.spec.ts",
@@ -1757,6 +1757,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 27
+    },
+    {
+      "file": "workers/oursharedevents/tests/h3-seam.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 21
     },
     {
       "file": "workers/oursharedevents/tests/h3-tagging.spec.ts",
@@ -2085,7 +2092,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 81
+      "testCount": 88
     },
     {
       "file": "workers/oursharedevents/tests/maps.spec.ts",
@@ -2149,6 +2156,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): env.DB",
       "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/no-stored-point.property.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 1
     },
     {
       "file": "workers/oursharedevents/tests/observability-cf-analytics.spec.ts",
@@ -2393,7 +2407,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 19
+      "testCount": 28
     },
     {
       "file": "workers/oursharedevents/tests/poster-family-foundation.spec.ts",
@@ -2613,6 +2627,13 @@
       "testCount": 6
     },
     {
+      "file": "workers/oursharedevents/tests/public-event-no-coordinates.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 8
+    },
+    {
       "file": "workers/oursharedevents/tests/public-event-og-card.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -2631,7 +2652,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 8
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/public-event-series.spec.ts",
@@ -2806,14 +2827,14 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 23
+      "testCount": 24
     },
     {
       "file": "workers/oursharedevents/tests/recap-stat-lines.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 12
+      "testCount": 14
     },
     {
       "file": "workers/oursharedevents/tests/recap-walk-in.spec.ts",
@@ -3061,6 +3082,20 @@
       "testCount": 17
     },
     {
+      "file": "workers/oursharedevents/tests/routable-directions.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 17
+    },
+    {
+      "file": "workers/oursharedevents/tests/route-offer-gate.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
       "file": "workers/oursharedevents/tests/scan-buffer.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -3226,14 +3261,14 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 23
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-class-floor.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 21
+      "testCount": 22
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-date-utc.spec.ts",
@@ -4136,7 +4171,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 13
+      "testCount": 14
     }
   ]
 }

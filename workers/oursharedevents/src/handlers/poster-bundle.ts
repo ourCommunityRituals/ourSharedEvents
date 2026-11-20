@@ -29,7 +29,7 @@
 import { generateQrCode, generateSvgQrCode } from '../lib/qr';
 import { ensureSlotShortlinks, previewSlotShortlinks } from '../lib/shortlinks';
 import { listSavedPosterCodes, posterCodeKind, posterCodeUec } from '../lib/poster-codes';
-import { assertRenderable, parseEventState } from '../domain/event-state';
+import { assertRenderable, isRoutable, parseEventState } from '../domain/event-state';
 import { getCode } from '../lib/uec';
 import { enrichWithPhase } from '../lib/event-enrich.js';
 import { PUBLIC_EVENT_COLUMNS, toPublicEvent } from '../lib/public-event-projection';
@@ -41,6 +41,7 @@ import {
 } from '../lib/sponsor-resolver';
 import { parseEventSettings, resolveEventSettings } from '../lib/event-settings';
 import { eventFormPath } from '../lib/canonical';
+import { eventDirectionsQuery } from '../lib/geo-link';
 
 import { errorLabel } from '../lib/error-label';
 export interface PosterBundleEnv extends DataProviderEnv {
@@ -51,10 +52,14 @@ export interface PosterBundleEnv extends DataProviderEnv {
 // OSE-867: the event columns the poster needs are exactly the public ones —
 // select the allowlist (plus the routing-slot columns, which never leave this
 // handler) so the bundle can never publish a field GET /events/:id does not.
+// OSE-2196: is_published and listed_from are read only to decide `routable`,
+// and h3_res9 only to build `directions`; none of them leaves this handler
+// (toPublicEvent is an allowlist).
 const POSTER_EVENT_SELECT =
   'SELECT ' +
   PUBLIC_EVENT_COLUMNS.join(', ') +
-  ', what_url, what_url_type, what_url_enabled, settings_json FROM events WHERE id = ?';
+  ', what_url, what_url_type, what_url_enabled, settings_json, is_published, listed_from, h3_res9' +
+  ' FROM events WHERE id = ?';
 
 // UEC ENTER (01) scan_hex — WCAG AA on white (6.59:1). Sourced via getCode() per OSE-322.
 const UEC_ENTER_HEX = getCode('ENTER')!.scan_hex;
@@ -176,6 +181,11 @@ export function posterSlotLabel(kind: string): string {
   return POSTER_SLOT_LABELS[kind] ?? 'More';
 }
 
+function directionsFor(row: Parameters<typeof eventDirectionsQuery>[0]): { query: string } | null {
+  const query = eventDirectionsQuery(row);
+  return query ? { query } : null;
+}
+
 export async function handleGetPosterBundle(
   request: Request,
   env: PosterBundleEnv,
@@ -194,6 +204,12 @@ export async function handleGetPosterBundle(
       what_url_type: string | null;
       what_url_enabled: number | null;
       settings_json: string | null;
+      is_published: number | null;
+      listed_from: string | null;
+      h3_res9: string | null;
+      h3_res7?: string | null;
+      location?: string | null;
+      where_address?: string | null;
     }
   >();
 
@@ -339,6 +355,7 @@ export async function handleGetPosterBundle(
     );
   }
 
+  const routable = isRoutable(row, { asPublished: previewable && !allowed });
   return Response.json({
     ok: true,
     // OSE-842: `status` is reserved for the numeric HTTP status on every path
@@ -352,6 +369,17 @@ export async function handleGetPosterBundle(
     // `event.name` is retired). Same projection as GET /api/v2/events/:id.
     event: toPublicEvent(enrichWithPhase(row)),
     eventStatus: row.status,
+    // OSE-2196 (owner 2026-11-19): may the poster offer directions? Only for a
+    // routable event, listed and live (domain/event-state.ts). An off-map or
+    // private event's poster has no Google Maps / Apple Maps buttons. A draft
+    // preview answers for the event once published.
+    routable,
+    // OSE-2196 (owner 2026-11-19, "it should resolve to the H3"): what the
+    // poster's Google Maps / Apple Maps buttons search, decided here: the
+    // event's res-9 cell point as "lat,lon" (else its res-7 area), never its
+    // stored lat and lon; with no cell, its address, else its venue name. null
+    // when the event is not routable: then the poster has no map buttons.
+    directions: routable ? directionsFor(row) : null,
     deploymentId: deployment?.id ?? null,
     qr,
     links,

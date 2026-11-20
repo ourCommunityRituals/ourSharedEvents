@@ -21,6 +21,7 @@ import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
+import { roundForPublish } from '../src/lib/count-floor';
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 
 interface TestEnv {
@@ -270,18 +271,23 @@ describe('a published return rate never multiplies back to a group under the flo
         expect(r.ok).toBe(true);
         if (!r.ok) return;
         const { venue_pct, sample_size } = r.report.return_rate;
-        expect(sample_size).toBe(sample);
+        // Published rounded down to a multiple of 5 (OSE-2151).
+        expect(sample_size).toBe(roundForPublish(sample));
         // Both sides at least K; "everyone came twice" (the rest is 0) is
         // withheld like 1 to 4 (OSE-1649 item 3).
         const safe = twice >= K && sample - twice >= K;
         if (safe) {
-          expect(venue_pct, `${twice} of ${sample}`).toBeCloseTo((twice / sample) * 100, 6);
+          // Worked out from the rounded counts, the ones published beside it.
+          expect(venue_pct, `${twice} of ${sample}`).toBeCloseTo(
+            (roundForPublish(twice) / roundForPublish(sample)) * 100,
+            6
+          );
           publishedSomewhere = true;
         } else {
           expect(venue_pct, `${twice} of ${sample} must be withheld`).toBeNull();
         }
         if (venue_pct !== null) {
-          const g = groups(venue_pct, sample);
+          const g = groups(venue_pct, sample_size as number);
           expect(g.counted).toBeGreaterThanOrEqual(K);
           expect(g.rest >= K, `rest of ${g.rest}`).toBe(true);
         }
@@ -332,7 +338,7 @@ describe('a published return rate never multiplies back to a group under the flo
       const safe = elsewhere >= K && sample - elsewhere >= K;
       if (safe) {
         expect(corridor_pct, `${elsewhere} of ${sample}`).toBeCloseTo(
-          (elsewhere / sample) * 100,
+          (roundForPublish(elsewhere) / roundForPublish(sample)) * 100,
           6
         );
         published++;
@@ -481,7 +487,7 @@ describe('sponsor_displays[].count passes the same floor as its rollups', () => 
     });
   }
 
-  test('a sub-K (sponsor x surface) row is not published; a row at K is, exactly', async () => {
+  test('a sub-K (sponsor x surface) row is not published; a row at K is, rounded down to a multiple of 5', async () => {
     const ev = 'test-evt-rrf-imp';
     await seedEvent(ev);
     await seedSponsor('sp-rrf-a', ev);
@@ -494,7 +500,7 @@ describe('sponsor_displays[].count passes the same floor as its rollups', () => 
 
     const rows = r.report.sponsor_displays;
     expect(rows.map((x) => x.surface)).toEqual(['poster']);
-    expect(rows[0]!.count).toBe(CORRIDOR_MAP_MIN_COUNT + 2);
+    expect(rows[0]!.count).toBe(CORRIDOR_MAP_MIN_COUNT);
     // Every published count clears the floor, the same rule the rollups apply.
     expect(rows.every((x) => x.count >= CORRIDOR_MAP_MIN_COUNT)).toBe(true);
     // The sub-K row's count appears nowhere in the payload.
@@ -529,7 +535,7 @@ describe('sponsor_displays[].count passes the same floor as its rollups', () => 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const published = r.report.sponsor_displays.reduce((n, x) => n + x.count, 0);
-    expect(published).toBe(6);
+    expect(published).toBe(5);
     expect(r.report.sponsor_class_breakdown.mid.total_displays).toBe(published);
     expect(bannedKeysIn(r.report)).toEqual([]);
   });

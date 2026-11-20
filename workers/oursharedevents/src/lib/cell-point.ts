@@ -16,10 +16,44 @@
  * A new place on a page that writes this value needs that gate widened for it,
  * with a security review and the owner's sign-off.
  */
-import { cellToLatLng } from 'h3-js';
+import { cellToLatLng, getResolution, isValidCell } from 'h3-js';
 
 export function cellPoint(cell: string): string {
   return cellToLatLng(cell)
     .map((v) => v.toFixed(5))
     .join(',');
+}
+
+// ── An event's point (OSE-2196) ───────────────────────────────────────────────
+//
+// Owner rulings, 2026-11-19: "It should resolve to the H3", and "it should not
+// go to the center of the cell, it should go to the Res9 if possible." A public
+// page never carries an event's stored lat and lon. Where a coordinate is
+// needed at all (a maps link cannot take a hexagon), it is cellPoint of the
+// event's res-9 cell, about a block; of its res-7 area only when it has no
+// res-9 cell. Reads the stored cell ids only, never lat or lon, so the stored
+// point cannot reach a caller through it. Shared with OSE-2198 (#1491): the
+// same cellPoint, so the map and the directions write one value per cell.
+
+/** The cell columns of an `events` row. */
+export interface EventCells {
+  h3_res9?: unknown;
+  h3_res7?: unknown;
+}
+
+export interface EventCellPoint {
+  /** cellPoint of the cell: "lat,lng", five decimals. */
+  point: string;
+  /** Which cell: 9 (a block), or 7 (the area) when there is no res-9 cell. */
+  res: 9 | 7;
+}
+
+function pointOf(cell: unknown, res: 9 | 7): EventCellPoint | null {
+  if (typeof cell !== 'string' || !isValidCell(cell) || getResolution(cell) !== res) return null;
+  return { point: cellPoint(cell), res };
+}
+
+/** The event's res-9 cell point, else its res-7 area point, else null. */
+export function eventCellPoint(e: EventCells): EventCellPoint | null {
+  return pointOf(e.h3_res9, 9) ?? pointOf(e.h3_res7, 7);
 }

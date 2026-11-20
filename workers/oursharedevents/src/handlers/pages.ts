@@ -14,14 +14,14 @@ import { HARDENING_HEADERS, LANDING_PERMISSIONS_POLICY } from '../lib/security-h
 import { jsonForScript } from '../lib/html-escape';
 import { isValidDeploymentId } from '../lib/form-validation';
 import { publicEventCacheControl } from '../lib/phase-cache';
-import { renderGeoLink } from '../lib/geo-link';
+import { renderEventGeoLink } from '../lib/geo-link';
 import { renderEventNav } from '../lib/event-nav';
 import { formatEventPrice } from '../lib/event-price';
 import { validateLogoUrl } from '../lib/sponsor-logo';
 import { sponsorTitle, sponsorCardPath } from '../lib/sponsor-card';
 import { fetchSponsorTitles } from '../lib/sponsor-titles';
 import { PLACEMENT_EVENT_USES_SPONSORS_SQL } from '../lib/sponsor-card';
-import { eventLiveSql } from '../domain/event-state';
+import { eventLiveSql, isRoutable } from '../domain/event-state';
 import { boothListPath, hasPublicBooths } from '../lib/public-booths';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 import { hashEmail, encryptText } from '../lib/pii';
@@ -109,7 +109,7 @@ import {
 import { enrichWithPhase, eventPhaseOf } from '../lib/event-enrich.js';
 import { attendanceModeLabel, attendanceModeOf, withoutLinkOnly } from '../lib/attendance-mode';
 import { archivedBeforeStart } from '../lib/archived-before-start.js';
-import { flooredRatePct } from '../lib/count-floor.js';
+import { flooredRatePct, roundForPublish } from '../lib/count-floor.js';
 import { COUNT_EVENT_REGISTRATIONS_SQL } from '../lib/registration-count.js';
 import { clearsFloor, statLine, walkInStatLine } from '../lib/recap-stat-lines';
 import {
@@ -646,8 +646,11 @@ export interface PublicEventRow {
   what_url: string | null;
   what_url_enabled: number | null;
   what_url_type: string | null;
-  lat: number | null;
-  lon: number | null;
+  // OSE-2196 (owner 2026-11-19, "it should resolve to the H3"): the page reads
+  // the event's cells, never its stored lat and lon. Directions go to the
+  // res-9 cell's point (lib/cell-point.ts, lib/geo-link.ts eventDirections).
+  h3_res9?: string | null;
+  h3_res7?: string | null;
   price_cents: number | null;
   price_model: string | null;
   price_note: string | null;
@@ -899,11 +902,8 @@ export function renderSubscribeMenu(
   lang: Lang,
   now: Date = new Date()
 ): string {
-  if (row.is_published !== 1 || (row.status || '').toLowerCase() !== 'active') return '';
-  if (row.listed_from) {
-    const listedFrom = new Date(row.listed_from).getTime();
-    if (Number.isNaN(listedFrom) || listedFrom > now.getTime()) return '';
-  }
+  // In the feed exactly when listed: the routable rule (domain/event-state.ts).
+  if (!isRoutable(row, { now })) return '';
   const links = buildBrandSubscribeLinks(origin, row.brand_id);
   if (!links) return '';
   const label = msg(lang, 'calendar.subscribe');
@@ -1448,13 +1448,12 @@ export function renderPreEventHtml(
   // OSE-474: "Starts in 5 hours" under the labelled when line, pre-event only.
   const countdown = renderEventCountdown(row, nonce, undefined, lang);
   const mapImg = preview ? '' : venueMapImg(row, 'venue-map', lang);
-  const geoLink = renderGeoLink(
-    row.lat,
-    row.lon,
-    row.location,
-    row.where_address,
-    msg(lang, 'directions.pre')
-  );
+  // OSE-2196 (owner 2026-11-19): no route to an event that is off the map or
+  // private. Directions only when the event is routable (listed and live); a
+  // draft preview answers for the event once published.
+  const geoLink = isRoutable(row, { asPublished: preview })
+    ? renderEventGeoLink(row, msg(lang, 'directions.pre'))
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="${lang}" dir="${DIRECTION[lang]}" data-surface="ose-public">
@@ -1657,14 +1656,10 @@ export function renderEventLiveHtml(
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
   const mapImg = venueMapImg(row, 'venue-map-live', lang);
-  const geoLink = renderGeoLink(
-    row.lat,
-    row.lon,
-    row.location,
-    row.where_address,
-    msg(lang, 'directions.live'),
-    'geo-link-live'
-  );
+  // OSE-2196: the same routable rule as the pre-event page.
+  const geoLink = isRoutable(row)
+    ? renderEventGeoLink(row, msg(lang, 'directions.live'), 'geo-link-live')
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="${lang}" dir="${DIRECTION[lang]}" data-surface="ose-public">
@@ -2116,8 +2111,9 @@ ${SPONSOR_LIST_CSS}
               ${
                 // Ratio only when BOTH operands clear the floor — a "% showed up"
                 // over a sub-K denominator (e.g. 50% of 2) back-derives a person.
+                // OSE-2151: worked out from the rounded counts printed above it.
                 clearsFloor(checkinCount) && clearsFloor(regCount)
-                  ? `<p data-testid="stat-showed-up-share">${fmt(lang, 'stats.showedUpShare', { pct: Math.round((checkinCount / regCount) * 100) })}</p>`
+                  ? `<p data-testid="stat-showed-up-share">${fmt(lang, 'stats.showedUpShare', { pct: Math.round((roundForPublish(checkinCount) / roundForPublish(regCount)) * 100) })}</p>`
                   : ''
               }
               ${statLine(surveyCount, msg(lang, 'stats.surveys'), 'stat-surveys', lang)}
@@ -2377,7 +2373,7 @@ export async function handlePublicEventPage(
               what_short, who_host, why_purpose, how_details, where_address,
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
-              lat, lon, price_cents, price_model, price_note, is_published,
+              e.h3_res9, e.h3_res7, price_cents, price_model, price_note, is_published,
               e.attendance_mode,
               e.event_type_id, etr.name AS event_type_name, e.listed_from,
               ec.code AS share_code
@@ -2631,7 +2627,7 @@ export async function handleAdminEventPreviewPage(
               what_short, who_host, why_purpose, how_details, where_address,
               who_story, who_image_url, what_video_url, what_url,
               what_url_enabled, what_url_type,
-              lat, lon, price_cents, price_model, price_note, is_published,
+              e.h3_res9, e.h3_res7, price_cents, price_model, price_note, is_published,
               e.attendance_mode,
               e.event_type_id, etr.name AS event_type_name
        FROM events e

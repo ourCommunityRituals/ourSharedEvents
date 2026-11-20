@@ -38,7 +38,7 @@
 // Bump DASHBOARD_CONTRACT_VERSION on any change to a response shape: a new
 // metric is a minor bump, a removed or retyped one a major bump.
 
-import { applyCountFloor, type FlooredCount } from './count-floor';
+import { floorTotalOfParts, type FlooredCount } from './count-floor';
 import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 
 // 1.1.0 (2026-10-08): new metric corridor.source_cells.scans_no_destination.
@@ -48,7 +48,9 @@ import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 // 3.0.0 (2026-11-16, OSE-2087): admin_activity_30d retyped from one `entity`
 // object to six `floored` metrics, one per action (owner ruling: operators'
 // own actions are under the floor).
-export const DASHBOARD_CONTRACT_VERSION = '3.0.0';
+// 4.0.0 (2026-11-19, OSE-2151): every `floored` value is rounded down to a
+// multiple of 5 from the floor up (owner ruling 2026-11-18); no longer exact.
+export const DASHBOARD_CONTRACT_VERSION = '4.0.0';
 
 export type DashboardId = 'operations' | 'event' | 'corridor';
 export type PrivacyClass = 'entity' | 'floored';
@@ -520,10 +522,7 @@ export function contractBlock(dashboard: DashboardId) {
  * differenced against another view to recover it.
  */
 export function floorBucketsThenSum(counts: Iterable<number>): FlooredCount {
-  let sum = 0;
-  for (const raw of counts) {
-    const n = Number.isFinite(raw) ? Math.floor(raw) : 0;
-    if (n >= CORRIDOR_MAP_MIN_COUNT) sum += n;
-  }
-  return applyCountFloor(sum);
+  // Each surviving bucket is rounded down to a multiple of 5 before it joins
+  // the sum (OSE-2151), so the total is a multiple of 5 too.
+  return floorTotalOfParts([...counts]);
 }

@@ -776,6 +776,7 @@ jobs:
             tests/e2e/0-architecture/sponsor-share-covenant.invariant.spec.ts \
             tests/e2e/0-architecture/scan-path-split.invariant.spec.ts \
             tests/e2e/0-architecture/geo-resolution.structural.invariant.spec.ts \
+            tests/e2e/0-architecture/public-event-coordinates.invariant.spec.ts \
             tests/e2e/0-architecture/place-name-search.invariant.spec.ts \
             tests/e2e/0-architecture/ncr-accumulation.structural.invariant.spec.ts \
             tests/e2e/0-architecture/sponsor-identity-split.invariant.spec.ts \
@@ -1754,6 +1755,23 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/map-zoom-area-seed.sql
 
+      # OSE-2196 (owner 2026-11-19): no route to a place that is off the map, and
+      # a listed place's route goes to its res-9 cell, never its stored point.
+      # Two active off-map events, a grace event and two listed controls, for
+      # Bruno Pages folder "17. Routable (OSE-2196)". The off-map pair sits in
+      # the zoomed map fixture's area, so it runs after that seed. Upserts by
+      # id; "Unpublish routable fixture" takes the listed ones off after the run.
+      # NOT continue-on-error: a missing fixture fails here by name.
+      - name: 'Seed routable fixtures (OSE-2196)'
+        if: matrix.section == 'pages'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/routable-seed.sql
+
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
       # from the collection root, so each step sets working-directory. Secrets are
@@ -1856,12 +1874,26 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/landing-zip-own-area-reset.sql
 
+      # OSE-2196: the routable fixture's listed events (far from every stock
+      # place, in no search) are listed only for the run above. Take them off
+      # again, pass or fail, so staging's own totals never carry them. A failed
+      # reset fails the job by name.
+      - name: 'Unpublish routable fixture (OSE-2196)'
+        if: always() && matrix.section == 'pages'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/routable-reset.sql
+
       # OSE-2160 (F-46): a Bruno run that checked nothing exits 0. An empty
       # collection, a wrong working directory or a run whose requests were all
       # skipped is green to `bru`. This reads the JUnit report and fails when the
       # cases that proved something are fewer than the matrix's min_cases, or the
       # skipped requests are more than max_skipped (zero cases is the extreme).
-      # Sits after the map-count check and the two resets (tests/unit/ci/map-counts-check.test.js
+      # Sits after the map-count check and the resets (tests/unit/ci/map-counts-check.test.js
       # pins those straight after the Bruno step), and runs only while every step before it
       # passed. Not continue-on-error: a run
       # that proved too little is red. Pinned by tests/unit/ci/bruno-min-cases.test.js.

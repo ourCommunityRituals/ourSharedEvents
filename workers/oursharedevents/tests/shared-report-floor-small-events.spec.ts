@@ -50,7 +50,7 @@ const SHAPES: Shape[] = [
     name: 'quiet start, busy middle, quiet end (30 people, 3 h)',
     people: 30,
     hours: [4, 22, 4],
-    published: 22,
+    published: 20,
   },
   {
     name: 'steady trickle (30 people, 6 h of 5)',
@@ -68,10 +68,10 @@ const SHAPES: Shape[] = [
     name: 'league night curve (25 people, 5 h)',
     people: 25,
     hours: [3, 8, 12, 5, 2],
-    published: 25,
+    published: 20,
   },
-  { name: 'small gathering (12 people, 2 h, even)', people: 12, hours: [6, 6], published: 12 },
-  { name: 'small gathering (12 people, 2 h, lopsided)', people: 12, hours: [8, 4], published: 8 },
+  { name: 'small gathering (12 people, 2 h, even)', people: 12, hours: [6, 6], published: 10 },
+  { name: 'small gathering (12 people, 2 h, lopsided)', people: 12, hours: [8, 4], published: 5 },
   { name: 'a good night (60 people, 4 h)', people: 60, hours: [15, 25, 15, 5], published: 60 },
   { name: 'tiny (4 people, 1 h)', people: 4, hours: [4], published: null },
   // The other direction (B1): the same 20 people scanned in two hours.

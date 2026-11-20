@@ -293,7 +293,15 @@ describe('street map | the landing page handler', () => {
   it('areas spread wider than a street map can show: plain hexagons, no credit, and the bucket is never asked', async () => {
     state.rows = sentinel(
       MANY.map((row, i) =>
-        i % 2 ? { ...row, lat: 34.05, lon: -118.25, h3_res7: LOS_ANGELES } : row
+        i % 2
+          ? {
+              ...row,
+              lat: 34.05,
+              lon: -118.25,
+              h3_res9: latLngToCell(34.05, -118.25, 9),
+              h3_res7: LOS_ANGELES,
+            }
+          : row
       )
     );
     const plain = await landing({});

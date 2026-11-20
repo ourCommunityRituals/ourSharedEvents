@@ -223,6 +223,10 @@ distribution is invented:
 - The random source is fixed (mulberry32, seed 2004), so the numbers are the same
   on every run.
 
+Each cell that clears the floor is rounded down to a multiple of 5 before it
+joins any sum (owner ruling 2026-11-18, OSE-2151), so every figure below is a
+multiple of 5 and the sums above still hold between the published figures.
+
 The numbers come from the real code, and the test fails if this table and the
 code disagree:
 
@@ -239,13 +243,13 @@ npx vitest run --config vitest.node.config.mts tests/fair-reporting-example.spec
 | Placement-hour cells                                      | 3234       |
 | Cells with 5 or more scans                                | 537        |
 | Scans made (raw, never published)                         | 7828       |
-| Scans published (fair total)                              | 3608       |
-| Share of scans published                                  | 46%        |
+| Scans published (fair total)                              | 2950       |
+| Share of scans published                                  | 38%        |
 | Fair total equals /stats                                  | true       |
 | Stalls reading "Fewer than 5"                             | 38 of 120  |
 | Days reading "Fewer than 5"                               | 0 of 3     |
 | Categories reading "Fewer than 5"                         | 0 of 8     |
-| "No stall" (4 entrance posters)                           | 201        |
+| "No stall" (4 entrance posters)                           | 165        |
 | Stall-days that would read "Fewer than 5" (not published) | 193 of 360 |
 
 <!-- fair-example:end -->

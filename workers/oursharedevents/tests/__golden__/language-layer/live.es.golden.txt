@@ -180,8 +180,8 @@
            <details class="ose-calendar-menu ose-directions-menu" data-testid="geo-link-live">
     <summary class="ose-calendar-link ose-calendar-summary" data-testid="geo-link-live-summary">Cómo llegar</summary>
     <div class="ose-calendar-options" role="group" aria-label="Cómo llegar">
-      <a class="ose-calendar-option" data-testid="geo-link-live-google" href="https://www.google.com/maps/search/?api=1&amp;query=41.7%2C-87.7" target="_blank" rel="noopener noreferrer">Google Maps</a>
-      <a class="ose-calendar-option" data-testid="geo-link-live-apple" href="https://maps.apple.com/?ll=41.7,-87.7&amp;q=St.%20Barnabas%20Hall" target="_blank" rel="noopener noreferrer">Apple Maps</a>
+      <a class="ose-calendar-option" data-testid="geo-link-live-google" href="https://www.google.com/maps/search/?api=1&amp;query=41.70147%2C-87.70031" target="_blank" rel="noopener noreferrer">Google Maps</a>
+      <a class="ose-calendar-option" data-testid="geo-link-live-apple" href="https://maps.apple.com/?ll=41.70147,-87.70031&amp;q=St.%20Barnabas%20Hall" target="_blank" rel="noopener noreferrer">Apple Maps</a>
     </div>
   </details>
          </section>
@@ -212,6 +212,15 @@
     <div class="ose-calendar-options" role="group" aria-label="Agregar al calendario">
       <a class="ose-calendar-option" data-testid="add-to-calendar-google" href="https://calendar.google.com/calendar/render?action=TEMPLATE&amp;text=Parish%20Spring%20Fundraiser&amp;dates=20261024T230000Z/20261025T000000Z&amp;details=A%20neighborhood%20fundraiser.%0A%0Ahttps%3A%2F%2Foursharedevents.com%2Fevents%2Fevt_golden&amp;location=St.%20Barnabas%20Hall%2C%20123%20Main%20St" target="_blank" rel="noopener noreferrer">Google Calendar</a>
       <a class="ose-calendar-option" data-testid="add-to-calendar-ics" href="/events/evt_golden/calendar.ics" download>Apple u Outlook</a>
+    </div>
+  </details>
+  <details class="ose-calendar-menu" data-testid="subscribe-calendar">
+    <summary class="ose-calendar-link ose-calendar-summary" data-testid="subscribe-calendar-summary">Suscribirse al calendario</summary>
+    <div class="ose-calendar-options" role="group" aria-label="Suscribirse al calendario">
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-google" href="https://calendar.google.com/calendar/r?cid=webcal%3A%2F%2Foursharedevents.com%2Fbrands%2Froot%2Fcalendar.ics" target="_blank" rel="noopener noreferrer">Google Calendar</a>
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-outlook" href="https://outlook.live.com/calendar/0/addfromweb?url=https%3A%2F%2Foursharedevents.com%2Fbrands%2Froot%2Fcalendar.ics&amp;name=OurSharedEvents%3A%20root" target="_blank" rel="noopener noreferrer">Outlook.com</a>
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-apple" href="webcal://oursharedevents.com/brands/root/calendar.ics">Calendario de Apple</a>
+      <a class="ose-calendar-option" data-testid="subscribe-calendar-ics" href="https://oursharedevents.com/brands/root/calendar.ics">Dirección del calendario (.ics)</a>
     </div>
   </details>
 </div>

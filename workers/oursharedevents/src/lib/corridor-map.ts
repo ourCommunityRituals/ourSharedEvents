@@ -33,6 +33,7 @@
  * (OSE-817). Do NOT add a depth check here or in the client: two gates drift.
  */
 import { cellToBoundary, isValidCell } from 'h3-js';
+import { roundForPublish } from './count-floor';
 import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 
 export interface CellDensity {
@@ -93,7 +94,9 @@ export function renderCorridorMap(
   const py = (lat: number) =>
     height - ((lat - latMin) * scale + height * pad + (height * (1 - 2 * pad) - spanY * scale) / 2);
 
-  const maxCount = Math.max(...valid.map((c) => c.count), 1);
+  // OSE-2151: a cell's count is published rounded down to a multiple of 5, in
+  // its label, its data attribute and its shade alike.
+  const maxCount = Math.max(...valid.map((c) => roundForPublish(c.count)), 1);
   const suppressed: string[] = [];
   const polys: string[] = [];
 
@@ -106,10 +109,11 @@ export function renderCorridorMap(
         `<polygon points="${points}" fill="none" stroke="#b9b4ab" stroke-width="1.5" stroke-dasharray="4 3" data-testid="hex-suppressed" data-cell="${b.cell}"><title>Activity below reporting floor</title></polygon>`
       );
     } else {
-      const opacity = (0.25 + 0.65 * (b.count / maxCount)).toFixed(2);
-      const label = b.label ? `${escXml(b.label)} — ${b.count} scans` : `${b.count} scans`;
+      const shown = roundForPublish(b.count);
+      const opacity = (0.25 + 0.65 * (shown / maxCount)).toFixed(2);
+      const label = b.label ? `${escXml(b.label)} — ${shown} scans` : `${shown} scans`;
       polys.push(
-        `<polygon points="${points}" fill="${accent}" fill-opacity="${opacity}" stroke="${accent}" stroke-width="1" data-testid="hex-cell" data-cell="${b.cell}" data-count="${b.count}"><title>${label}</title></polygon>`
+        `<polygon points="${points}" fill="${accent}" fill-opacity="${opacity}" stroke="${accent}" stroke-width="1" data-testid="hex-cell" data-cell="${b.cell}" data-count="${shown}"><title>${label}</title></polygon>`
       );
     }
   }

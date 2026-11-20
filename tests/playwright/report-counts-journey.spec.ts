@@ -25,6 +25,8 @@ const PHONE = { width: 375, height: 812 };
 const TV_UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const FLOOR = 5;
+/** A published count is rounded down to a multiple of 5 (OSE-2151). */
+const published = (n: number): number => n - (n % 5);
 
 test.describe.configure({ mode: 'serial' });
 
@@ -258,7 +260,7 @@ test('the same screen reloading is not counted again', async ({ browser }) => {
   expect(await oneScreen(browser, 1)).toBe(0);
 });
 
-test('past the floor: one premium sponsor, and exactly the displays the server counted', async ({
+test('past the floor: one premium sponsor, and the displays the server counted, rounded down to a multiple of 5', async ({
   page,
   browser,
 }) => {
@@ -266,10 +268,10 @@ test('past the floor: one premium sponsor, and exactly the displays the server c
 
   await openReport(page);
   await expect(page.getByTestId('premium-sponsor-count')).toHaveText('1');
-  await expect(page.getByTestId('premium-displays')).toHaveText(String(counted));
+  await expect(page.getByTestId('premium-displays')).toHaveText(String(published(counted)));
   await expect(page.getByTestId('local-sponsor-count')).toHaveText('0');
   await expect(page.getByTestId('mid-sponsor-count')).toHaveText('0');
-  await expect(page.getByTestId('paid-displays-total')).toContainText(String(counted));
+  await expect(page.getByTestId('paid-displays-total')).toContainText(String(published(counted)));
 });
 
 test("the organizer's report names the sponsor beside the same count", async ({ page }) => {
@@ -279,7 +281,7 @@ test("the organizer's report names the sponsor beside the same count", async ({ 
   // Only the premium class is published here, so Paid is a part and says so
   // (owner ruling 2026-11-16).
   await expect(page.getByTestId('local-vs-paid-delta')).toContainText(
-    `Paid (classes shown): ${counted} displays`
+    `Paid (classes shown): ${published(counted)} displays`
   );
 });
 
