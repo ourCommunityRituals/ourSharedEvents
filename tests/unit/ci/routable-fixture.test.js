@@ -70,4 +70,12 @@ describe('routable fixture (OSE-2196): listed only for the run', () => {
     expect(steps[reset].run).toContain(`d1-seed-staging.mjs DB ../../${RESET}`);
     for (const i of [seed, reset]) expect(steps[i]['continue-on-error']).toBeUndefined();
   });
+
+  test('local vetting seeds it too, after the map zoom fixture (its off-map pair is in that area)', () => {
+    const sh = read('scripts/ci/run-local-vetting.sh');
+    const zoom = sh.indexOf('seed bruno/fixtures/map-zoom-area-seed.sql');
+    const mine = sh.indexOf(`seed ${SEED}`);
+    expect(zoom).toBeGreaterThan(-1);
+    expect(mine).toBeGreaterThan(zoom);
+  });
 });
