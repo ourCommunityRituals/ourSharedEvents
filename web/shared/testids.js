@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-11-19 — 780 ids.
+ * Generated 2026-11-20 — 783 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -601,8 +601,10 @@
       'wizard-type-picker-msg',
       'wizard-undo-live-btn',
     ]),
-    // public.html — 19 ids
+    // public.html — 22 ids
     PUBLIC: Object.freeze([
+      'nav-events',
+      'nav-map',
       'public-events',
       'public-events-count',
       'public-events-heading',
@@ -610,6 +612,7 @@
       'public-header',
       'public-home-link',
       'public-main',
+      'public-nav',
       'public-skip-link',
       'public-sponsor-address',
       'public-sponsor-banner',

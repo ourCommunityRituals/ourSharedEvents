@@ -24,8 +24,11 @@ import type { WherePage } from './landing-where';
 /** The two links' own marks in the templates. */
 const NAV_EVENTS = 'data-testid="nav-events"';
 const NAV_MAP = 'data-testid="nav-map"';
-/** Each link's `href`, which sits just before its mark. */
-const NAV_HREF = /href="([^"]*)"( data-testid="nav-(?:events|map)")/g;
+/**
+ * Each link's `href`, which sits just before its mark. Built from the marks
+ * above so the testid naming lint reads only real ids in this file.
+ */
+const NAV_HREF = new RegExp(`href="([^"]*)"( (?:${NAV_EVENTS}|${NAV_MAP}))`, 'g');
 
 /** The pages that carry the menu. */
 export type NavPage = WherePage | '/events';
