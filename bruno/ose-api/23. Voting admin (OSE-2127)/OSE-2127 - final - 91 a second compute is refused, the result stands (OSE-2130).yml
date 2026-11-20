@@ -1,7 +1,7 @@
 info:
-  name: OSE-2127 | final | a set that opened is not made final by an admin (results arrive in S5)
+  name: OSE-2127 | final | a second compute is refused, the result stands (OSE-2130)
   type: http
-  seq: 90
+  seq: 91
 
 http:
   method: POST
@@ -23,7 +23,7 @@ runtime:
     - type: after-response
       code: |-
         const b = res.getBody() || {};
-        test('OSE-2127 final: 409 RESULTS_NOT_BUILT, still not final', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('RESULTS_NOT_BUILT'); });
+        test('OSE-2130 final: 409 VOTE_SET_FINAL, nothing changes', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('VOTE_SET_FINAL'); });
 
 settings:
   encodeUrl: true

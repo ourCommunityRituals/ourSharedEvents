@@ -42,10 +42,15 @@ Exactly one line is emitted per request, at the `index.ts` fetch seam:
 | `type`          | string | Always the literal `"OPERATION_COST"` (log-routing discriminator).    |
 | `op`            | string | Method + **keyword-masked** route label. See "Operation label" below. |
 | `wallMs`        | number | Wall-clock milliseconds for the whole request (rounded, ≥ 0).         |
-| `d1RowsRead`    | number | Sum of D1 `rows_read` across the request.                             |
-| `d1RowsWritten` | number | Sum of D1 `rows_written` across the request.                          |
+| `d1RowsRead`    | number | Sum of D1 `rows_read` across the request. `null` on a vote (below).   |
+| `d1RowsWritten` | number | Sum of D1 `rows_written` across the request. `null` on a vote.        |
 | `d1Queries`     | number | Count of D1 statement executions in the request.                      |
 | `status`        | number | HTTP status code of the response.                                     |
+
+**A vote's rows are withheld (OSE-2128).** On `POST /api/v2/vote/:x` both row
+fields are `null`. A vote that counts writes rows and a repeat vote writes none, so
+the row counts of one vote line would say which (OSE ADR-040 decision 1). This is a
+stated gap, not a silent one: votes are still counted in `d1Queries` and `wallMs`.
 
 This is the **complete** set. The payload is a sealed literal built
 field-by-field in `emitOperationCost()`; there is no code path that can add a

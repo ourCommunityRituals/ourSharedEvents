@@ -21,8 +21,9 @@
  *   9. no admin answer carries a guarded key: no counter, T, V, epoch, void
  *      flag, receipt or marker (S2 review, M4 remainder);
  *  10. the nightly job makes final a set left 7 days after its event that can
- *      hold no vote, and deletes its receipts and markers [job skipped]; a set
- *      that opened and is not void waits for S5; tallies go 30 days after final;
+ *      hold no vote, and deletes its receipts and markers [job skipped]; since
+ *      S5 (OSE-2130) a set that opened is made final too, with its result;
+ *      tallies go 30 days after final;
  *  11. an event with a vote set is archived, never deleted.
  *
  * @born-red OSE-2127 | method: injected-fault, each removed after; the list and
@@ -148,7 +149,8 @@ const run = async (sql: string, ...binds: unknown[]) =>
 
 const setRow = (eventId: string) =>
   one(
-    `SELECT id, state, played_by, pepper_epoch, secret_margin, secret_floor, is_final, final_at, is_void
+    `SELECT id, state, played_by, pepper_epoch, secret_margin, secret_floor, is_final, final_at, is_void,
+            outcome, winner_object_id, winner_team_id
        FROM vote_sets WHERE event_id = ?`,
     eventId
   );
@@ -373,6 +375,7 @@ describe('one vote set per event', () => {
       played_by: 'object',
       opened: false,
       final: false,
+      result: null,
     });
     const again = await call('POST', vp(A1), A, { played_by: 'team' });
     expect(again.status).toBe(409);
@@ -610,7 +613,7 @@ describe('4. reopen is allowed before final, refused after final, even after a d
     expect((await call('POST', vp(A1, '/finalize'), A, {})).json.code).toBe('VOTE_SET_FINAL');
   });
 
-  test('an admin finalize of a set that opened is refused, the same for a void set', async () => {
+  test('an admin finalize of a set still open is refused, the same for a void set (OSE-2130)', async () => {
     await openNight(A1);
     await openNight(A2);
     await run(
@@ -620,7 +623,7 @@ describe('4. reopen is allowed before final, refused after final, even after a d
     const plain = await call('POST', vp(A1, '/finalize'), A, {});
     const voided = await call('POST', vp(A2, '/finalize'), A, {});
     expect(plain.status).toBe(409);
-    expect(plain.json.code).toBe('RESULTS_NOT_BUILT');
+    expect(plain.json.code).toBe('VOTE_SET_OPEN');
     expect(same(voided.json)).toEqual(same(plain.json));
     expect((await setRow(A1))?.is_final).toBe(0);
     expect((await setRow(A2))?.is_final).toBe(0);
@@ -816,7 +819,7 @@ describe('8. every change is audited, with no detail', () => {
     await call('POST', vp(A1, `/objects/${songId}/reopen`), A, {});
     await call('POST', vp(A1, '/close'), A, {});
     await call('POST', vp(A1, '/reopen'), A, {});
-    await call('POST', vp(A1, '/finalize'), A, {}); // refused: RESULTS_NOT_BUILT
+    await call('POST', vp(A1, '/finalize'), A, {}); // refused: VOTE_SET_OPEN
     await call('GET', vp(A1), A);
     const rows = await all(
       `SELECT action, outcome, details, brand_id FROM admin_audit_log
@@ -930,7 +933,7 @@ describe('10. every set reaches final: the nightly job', () => {
     expect((await setRow(OLD))?.is_final).toBe(1);
   });
 
-  test('a set that opened and is not void waits for S5: the job leaves it and its markers', async () => {
+  test('a set that opened and is not void is made final with its result, its markers deleted (OSE-2130)', async () => {
     await run(
       `UPDATE events SET start_date = ?, end_date = ? WHERE id = ?`,
       '2099-06-01',
@@ -945,10 +948,15 @@ describe('10. every set reaches final: the nightly job', () => {
       OLD
     );
     const { setId, objectId } = await seedMarkers(OLD);
-    const before = await setRow(OLD);
     await runVoteFinalJob({ DB: tenv.DB });
-    expect(await setRow(OLD)).toEqual(before);
-    expect(await markers(setId, objectId)).toEqual({ receipts: 1, participants: 1, teams: 1 });
+    expect(await setRow(OLD)).toMatchObject({
+      is_final: 1,
+      state: 'closed',
+      secret_margin: null,
+      secret_floor: null,
+      outcome: 'too_close',
+    });
+    expect(await markers(setId, objectId)).toEqual({ receipts: 0, participants: 0, teams: 0 });
   });
 
   test('inside the 7 days, nothing is made final', async () => {
@@ -1126,7 +1134,7 @@ describe('9. no admin answer carries a guarded key', () => {
     // The set answer is exactly these fields, and an object exactly these.
     const list = await call('GET', vp(A1), A);
     expect(Object.keys(list.json.set).sort()).toEqual(
-      ['event_id', 'final', 'id', 'opened', 'played_by', 'state'].sort()
+      ['event_id', 'final', 'id', 'opened', 'played_by', 'result', 'state'].sort()
     );
     expect(Object.keys(list.json.objects[0]).sort()).toEqual(
       [
