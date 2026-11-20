@@ -3,7 +3,8 @@
  *
  *   GET /events?q=Oak%20Lawn   every event in any of the owner's Oak Lawn zips
  *   GET /events?q=60453        the events in that zip's own area
- *   GET /events?q=Oak          still a name/venue search: only a whole name is a place
+ *   GET /events?q=Oak%20L      still a name/venue search: only a whole town name is a place
+ *   GET /events?q=Oak          the town Oak, NE, as on the landing (OSE-2165: one resolver)
  *
  * An event's zip is the landing page's rule (lib/zip-areas.ts inZipOwnArea): the
  * zip its address ends with, else the nearest zip center. A place is the owner's
@@ -177,9 +178,17 @@ describe('GET /events?q=<place>', () => {
   });
 
   test('part of a name is still a name/venue search', async () => {
-    const { body, titles } = await listed('Oak');
+    const { body, titles } = await listed('Oak L');
     expect(titles).toEqual([T.oakLawn]);
-    expect(body).toContain('Matches for “Oak”');
+    expect(body).toContain('Matches for “Oak L”');
+  });
+
+  test('a whole town name from the table the landing reads is that town, as on the landing (OSE-2165)', async () => {
+    // "Oak" is Oak, NE in the table the landing reads. /events reads it the same
+    // way now, so the two lists agree: no Oak Lawn event under "Oak".
+    const { body, titles } = await listed('Oak');
+    expect(titles).toEqual([]);
+    expect(body).toContain('Oak, NE');
   });
 
   test('the box says it takes a town or a zip', async () => {
