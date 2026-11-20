@@ -18,9 +18,10 @@
  *   3. no cell finer than res 7 anywhere: the API keeps the precision it had
  *      and gains none (the stored res-9 cell stays on the server).
  *
- * Not here: the event page and the poster (their Directions links are OSE-2196,
- * another story), and the SharedReport, which needs a signed link and reads
- * cells only (lib/shared-report-builder.ts selects no point). The T0 gate is
+ * Not here: the event page and the poster's Directions (OSE-2196, another
+ * story; the poster bundle's `directions.query` is pinned below to the res-9
+ * cell's own point and the rest of that answer is held to these rules), and
+ * the SharedReport, which needs a signed link and reads cells only (lib/shared-report-builder.ts selects no point). The T0 gate is
  * tests/e2e/0-architecture/public-event-coordinates.invariant.spec.ts; on
  * staging, Bruno reads the same answers (bruno/ose-api/…/OSE-2197 …).
  *
@@ -40,6 +41,7 @@ import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { getResolution, isValidCell, latLngToCell } from 'h3-js';
 import { coordinateFindings } from './helpers/coordinate-findings';
+import { cellPoint } from '../src/lib/cell-point';
 
 interface TestEnv {
   DB: D1Database;
@@ -179,8 +181,19 @@ describe('OSE-2197 | the public event answers carry the cell, never the point', 
   test('GET /api/v2/events/:id/poster-bundle: the event it prints carries no point', async () => {
     const r = await read(`/api/v2/events/${LISTED}/poster-bundle`);
     expect(r.status).toBe(200);
-    expect((r.json as { event: { h3_res7: string } }).event.h3_res7).toBe(RES7);
-    expectNoPoint('poster-bundle', r);
+    const body = r.json as { event: { h3_res7: string }; directions: { query: string } | null };
+    expect(body.event.h3_res7).toBe(RES7);
+    // The poster's Directions are OSE-2196's (owner 2026-11-19: "it should go to
+    // the Res9 if possible"): a maps link needs a point, so `directions.query`
+    // is the res-9 cell's own point (lib/cell-point.ts), never the stored one.
+    // It is pinned to exactly that value here, and the rest of the answer is
+    // held to the full no-point rule.
+    expect(body.directions?.query).toBe(cellPoint(RES9));
+    const { directions: _directions, ...rest } = body;
+    expectNoPoint('poster-bundle', { text: JSON.stringify(rest), json: rest });
+    expect(r.text, 'poster-bundle carries the stored latitude').not.toContain(String(LAT));
+    expect(r.text, 'poster-bundle carries the stored longitude').not.toContain(String(LON));
+    expect(r.text, 'poster-bundle carries the stored res-9 cell').not.toContain(RES9);
   });
 
   test('GET /api/v2/events/:id/display-config: no point', async () => {
