@@ -1,0 +1,48 @@
+info:
+  name: "OSE-2197 | rainy | a live event off the map, read by its link, carries its cell and not its point"
+  type: http
+  seq: 20
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{cellOnlyOffMapId}}"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const { coordinateFindings, finerCells } = require('./lib/coordinate-findings.js');
+        const body = res.getBody() || {};
+        const text = JSON.stringify(body);
+        test('OSE-2197: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-2197 place, not person: no coordinate anywhere in the answer', function () {
+          expect(coordinateFindings(body)).to.eql([]);
+        });
+        test('OSE-2197: no cell finer than res 7 (the precision the API had)', function () {
+          expect(finerCells(body)).to.eql([]);
+        });
+        const item = body.item || {};
+        test('OSE-2197: the off-map event is read by its link, and says where it is by its res-7 cell', function () {
+          expect(item.id).to.eql(bru.getVar('cellOnlyOffMapId'));
+          expect(item.h3_res7).to.eql('872664544ffffff');
+          expect(item).to.not.have.any.keys('lat', 'lon', 'h3_res9');
+        });
+        test('OSE-2197: the stored point and its res-9 cell are nowhere in the answer', function () {
+          expect(text).to.not.include('41.657312');
+          expect(text).to.not.include('-87.680647');
+          expect(text).to.not.include('89266454447ffff');
+        });
+        test('OSE-2197: the host\'s address text is published as before (only the point is gone)', function () {
+          expect(item.where_address).to.eql('13328 Olde Western Ave, Blue Island, IL 60406');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

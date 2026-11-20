@@ -1,0 +1,39 @@
+info:
+  name: "OSE-2197 | sunny | the poster bundle's event gives its cell and not its point"
+  type: http
+  seq: 60
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{cellOnlyListedId}}/poster-bundle"
+  headers:
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const { coordinateFindings, finerCells } = require('./lib/coordinate-findings.js');
+        const body = res.getBody() || {};
+        const text = JSON.stringify(body);
+        test('OSE-2197: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-2197 place, not person: no coordinate anywhere in the answer', function () {
+          expect(coordinateFindings(body)).to.eql([]);
+        });
+        test('OSE-2197: no cell finer than res 7 (the precision the API had)', function () {
+          expect(finerCells(body)).to.eql([]);
+        });
+        const ev = body.event || {};
+        test('OSE-2197: the event the poster prints is the projected one: its cell, no point', function () {
+          expect(ev.h3_res7).to.eql(bru.getVar('cellOnlyCell'));
+          expect(ev).to.not.have.any.keys('lat', 'lon', 'h3_res9');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

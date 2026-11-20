@@ -1,0 +1,40 @@
+info:
+  name: "OSE-2197 | setup | a synthetic live event, off the map, with a stored point"
+  type: http
+  seq: 10
+
+# Automation may create an event live (OSE-1425). It is synthetic and unlisted;
+# the folder deletes it at seq 900. A run that stops before then leaves it, and
+# nothing clears it on its own (folder.yml says how to remove it).
+# The point is sent, so the server stores it and derives both cells from it
+# (res 7 872664544ffffff, res 9 89266454447ffff) with no place lookup.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"attendance_mode\":\"in_person\",\"location\":\"OSE-2197 Hall\",\"where_address\":\"13328 Olde Western Ave, Blue Island, IL 60406\",\"lat\":41.657312,\"lon\":-87.680647,\"title\":\"OSE-2197 off-map point check (staging, synthetic)\",\"status\":\"active\",\"is_published\":false,\"data_class\":\"synthetic\",\"start_date\":\"2099-01-01\",\"start_time\":\"18:00\",\"timezone\":\"America/Chicago\",\"event_type_id\":\"etr-rec-bocce\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2197 setup: the off-map live event is created', function () { expect(res.getStatus()).to.eql(201); expect(b.event_status).to.eql('active'); expect(b.id).to.be.a('string'); });
+        bru.setVar('cellOnlyOffMapId', b.id || 'missing-off-map-event');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
