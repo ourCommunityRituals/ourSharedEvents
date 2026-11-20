@@ -58,7 +58,9 @@
  *   directions sent for an off-map event, the off-map case red; a second field
  *   carrying the point, the listed case red; the filter widened to drop every
  *   pair, and the exact-value check removed, the "one path and one value" case
- *   red each time | date: 2026-11-20
+ *   red each time; the exact pin removed and the res-7 cases taken out, the
+ *   stored point rounded to five decimals alone turned it red (security
+ *   review F3) | date: 2026-11-20
  */
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
