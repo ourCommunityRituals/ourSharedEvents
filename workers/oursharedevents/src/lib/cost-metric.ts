@@ -300,7 +300,9 @@ export interface OperationCostMetric {
  * Operations whose row counts are withheld (OSE-2128, OSE ADR-040 decision 1).
  * A vote that counts writes rows; a duplicate writes none. The rows of one
  * vote line would say which, so the vote route's line carries null for both.
- * Its query count is the same either way.
+ * Its query count is the same either way, and for either side: castVote
+ * (lib/vote-cast.ts) sends the same batch of statements for up and "not for
+ * me" (tests/vote-route.spec.ts, through the Worker's fetch).
  */
 const VOTE_OPS: ReadonlySet<string> = new Set(['POST /api/v2/vote/:x']);
 
