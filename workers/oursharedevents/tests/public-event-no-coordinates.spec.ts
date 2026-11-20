@@ -35,6 +35,11 @@
  * invariant-3 check needs the owner's sign-off. The event page's Directions are OSE-2196's
  * (tests/routable-directions.spec.ts, tests/no-stored-point.property.spec.ts).
  *
+ * History: #1505 (merged first) pinned `directions.query` to cellPoint(RES9)
+ * imported from src and exempted the whole `directions` object. This file
+ * keeps the exemption to the one finding at `$.directions.query`, and works
+ * the expected value out from the cell id here, apart from src.
+ *
  * Not here: the SharedReport, which needs a signed link and reads cells only
  * (lib/shared-report-builder.ts selects no point). The T0 gate is
  * tests/e2e/0-architecture/public-event-coordinates.invariant.spec.ts; on
@@ -61,6 +66,16 @@
  *   red each time; the exact pin removed and the res-7 cases taken out, the
  *   stored point rounded to five decimals alone turned it red (security
  *   review F3) | date: 2026-11-20
+ * @born-red OSE-2196 after #1505, re-run on the merge of main (ac0d7a4) into
+ *   this branch | method: each fault alone, this file run, put back; all ten
+ *   cases green before and after. The res-7 point preferred, red (listed case);
+ *   directions for an off-map event, red (off-map case); a second field inside
+ *   `directions` (`near`) carrying the stored point rounded to five decimals,
+ *   red (listed case; #1505's version stayed green under it); cellPoint at six
+ *   decimals in src, red (listed case: the expected value is worked out here,
+ *   not imported; #1505's version stayed green under it); the filter widened to
+ *   every pair, red; the exact pin removed, red; the exact pin and the res-7
+ *   cases removed, red on the rounded stored point alone | date: 2026-11-20
  */
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
