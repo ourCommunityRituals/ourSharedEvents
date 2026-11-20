@@ -56,6 +56,8 @@ export const EVENT_SCREEN_SEGMENTS: readonly string[] = [
   'calendar',
   // OSE-1998: /events/<id>/booths is the fair's stall list.
   'booths',
+  // OSE-2129: /events/<id>/vote is the voter page.
+  'vote',
 ];
 
 const READABLE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

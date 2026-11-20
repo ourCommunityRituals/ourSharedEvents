@@ -72,7 +72,7 @@ runtime:
               expect(has('amap-streets'), 'the environment file says the street-map archive is loaded, and the zoomed area drew no street layer').to.equal(true);
             });
           } else {
-            test('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): the area and a dot per place over the street layer', function () {
+            test('NOT RUN (street-map archive not loaded on this environment: streetMapArchiveLoaded is not true): the area and a dot per place over the street layer, each at the centre of its own res-9 cell (OSE-2198)', function () {
               expect(flag, 'a NOT RUN test passes only while the environment file sets streetMapArchiveLoaded to "false"').to.equal('false');
             });
           }
@@ -135,6 +135,10 @@ runtime:
         // the zoomed part may hold:
         //   on amap-svg   data-x0, data-y0, data-scale, data-mpu (the cell's frame)
         //   on amap-zone  data-ll (the cell's own centre, 5 decimals)
+        //   on each dot   data-ll (OSE-2198: the centre of the res-9 cell the dot
+        //                 is drawn at, 5 decimals, so the map's script measures
+        //                 "where am I" to the place and not the area; pinned per
+        //                 place below, from the fixture's res-9 cells)
         //   in the script the metres in a mile, 1609.344 (a unit, not a place)
         // Outside them, a coordinate-shaped number is any with three or more
         // decimals (a degree to about 110 m, near the equator or the meridian
@@ -145,10 +149,20 @@ runtime:
         // (a frame drawn around a business, say).
         const CELL_FRAME = 'data-x0="0.255867824" data-y0="0.372606262" data-scale="3363057.841" data-mpu="8.909"';
         const CELL_CENTRE = 'data-ll="41.61285,-87.85547"';
+        // h3-js cellToLatLng of each place's res-9 cell, to 5 decimals, by the
+        // number on its dot. The worker spec pins the same strings (FIXTURE_PLACES).
+        const PLACE_POINTS = {
+          1: 'data-ll="41.62094,-87.85603"', // 892664405d7ffff, the business
+          2: 'data-ll="41.61159,-87.86385"', // 89266440547ffff
+          3: 'data-ll="41.60601,-87.84653"', // 89266440537ffff
+        };
+        // The seeded points themselves, which no number on the page may be.
+        const SEEDED = [[41.6210, -87.8555], [41.6119, -87.8657], [41.6061, -87.8483]];
         const MILE = 'MPU / unitPx() / 1609.344';
         const drawn = has('amap-svg');
         const svgTag = drawn ? (body.slice(at('amap-svg')).match(/^[^>]*>/) || [''])[0] : '';
         const zoneTag = has('amap-zone') ? (body.slice(at('amap-zone')).match(/^[^>]*>/) || [''])[0] : '';
+        const dotTag = function (n) { return (body.match(new RegExp('<a href="#amap-dot-' + n + '"[^>]*data-testid="amap-dot"[^>]*>')) || [''])[0]; };
 
         test('A business is named, never pinpointed; no coordinate is on the page but the area cell\'s own frame', function () {
           expect(body).to.include('at Zoom Check Lanes');
@@ -161,12 +175,32 @@ runtime:
             expect(zoomed.split(CELL_FRAME).length - 1, 'the frame is written once').to.equal(1);
             expect(zoomed.split(CELL_CENTRE).length - 1, 'the centre is written once').to.equal(1);
             rest = rest.replace(CELL_FRAME, '').replace(CELL_CENTRE, '').replace(MILE, '');
+            for (const n of [1, 2, 3]) {
+              expect(dotTag(n), 'place ' + n + ' carries its own res-9 cell\'s centre').to.include(PLACE_POINTS[n]);
+              rest = rest.replace(PLACE_POINTS[n], '');
+            }
           }
           rest = rest.split('872664405ffffff').join('');
           // URL escapes undone first: "%2060406" is a space and a ZIP, "%2E" a dot.
           rest = rest.replace(/%2e/gi, '.').replace(/%[0-9a-f]{2}/gi, ' ');
           expect(rest).to.not.match(/\d\.\d{3,}|\d{7,}/);
         });
+
+        if (drawn) {
+          test('Each place carries one point, its res-9 cell\'s centre (pinned per place), never its seeded point (OSE-2198)', function () {
+            for (const n of [1, 2, 3]) {
+              const tag = dotTag(n);
+              expect(tag.match(/data-ll="[^"]+"/g), 'place ' + n + ' carries one point').to.deep.equal([PLACE_POINTS[n]]);
+              expect(zoomed.split(PLACE_POINTS[n]).length - 1, 'place ' + n + '\'s point is written once').to.equal(1);
+            }
+            // At any precision the page could write it, no seeded point is on it.
+            for (const p of SEEDED) {
+              for (const dp of [3, 4, 5, 6]) {
+                expect(zoomed).to.not.include(p[0].toFixed(dp) + ',' + p[1].toFixed(dp));
+              }
+            }
+          });
+        }
 
         if (drawn) {
           test('Each dot, read back through the drawing\'s frame, is its res-9 block centre, never the business\'s own point', function () {

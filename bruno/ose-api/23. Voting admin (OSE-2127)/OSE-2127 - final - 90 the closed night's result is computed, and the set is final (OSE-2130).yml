@@ -1,0 +1,34 @@
+info:
+  name: OSE-2127 | final | the closed night's result is computed, and the set is final (OSE-2130)
+  type: http
+  seq: 90
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/finalize"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2130 final: 200, final, closed', function () { expect(res.getStatus()).to.eql(200); expect(b.set.final).to.eql(true); expect(b.set.state).to.eql('closed'); });
+        test('OSE-2130 final: the result is the outcome and the winner only; no vote was cast, so too close to call', function () { expect(Object.keys(b.set.result).sort()).to.eql(['outcome', 'winner_object', 'winner_team_id']); expect(b.set.result.outcome).to.eql('too_close'); expect(b.set.result.winner_object).to.eql(null); expect(b.set.result.winner_team_id).to.eql(null); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

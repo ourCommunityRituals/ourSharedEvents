@@ -1983,6 +1983,13 @@
       "testCount": 18
     },
     {
+      "file": "workers/oursharedevents/tests/location-on-tap.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 5
+    },
+    {
       "file": "workers/oursharedevents/tests/log-never-who.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -2022,7 +2029,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 7
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/map-limits.spec.ts",
@@ -2043,7 +2050,14 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 12
+      "testCount": 13
+    },
+    {
+      "file": "workers/oursharedevents/tests/map-place-distance.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 11
     },
     {
       "file": "workers/oursharedevents/tests/map-place-links.spec.ts",
@@ -4041,11 +4055,32 @@
       "testCount": 25
     },
     {
+      "file": "workers/oursharedevents/tests/vote-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 20
+    },
+    {
       "file": "workers/oursharedevents/tests/vote-pass.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
       "testCount": 19
+    },
+    {
+      "file": "workers/oursharedevents/tests/vote-results.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 19
+    },
+    {
+      "file": "workers/oursharedevents/tests/vote-route.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 30
     },
     {
       "file": "workers/oursharedevents/tests/vote-set-admin.spec.ts",

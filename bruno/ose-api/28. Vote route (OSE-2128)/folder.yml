@@ -1,0 +1,23 @@
+info:
+  name: Vote route (OSE-2128)
+  type: folder
+request: {}
+docs: |-
+  Voting S4a (OSE-2128, part of OSE-1193; OSE ADR-040 decisions 1 to 6).
+  The vote route, POST /api/v2/vote/:eventId, on staging.
+
+  Two halves, chosen by votingSwitch in the environment file (a copy of
+  VOTING_ENABLED in [env.staging.vars]):
+
+  - off (staging today): a vote is the router's own 404, byte for byte the
+    answer to a path that never existed, and sets no cookie (seq 59, 60).
+  - on: a vote with no pass is refused with no number and no cookie (70), a
+    forged pass gets the scan-again words (71), a cross-site vote is refused
+    (72). The counted-vote cases need a pass from /q, which needs the room's
+    vote code and the voter page: they join this folder with the voter page
+    (S4b, OSE-2129).
+
+  Both halves: a GET to the vote path is the router 404 (75).
+
+  No fixture. Seq 10 makes one synthetic, unlisted live event; seq 905 archives
+  it. Mock-layer twin: workers/oursharedevents/tests/vote-route.spec.ts.

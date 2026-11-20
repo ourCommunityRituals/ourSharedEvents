@@ -109,7 +109,11 @@ async function reach(page: Page, step: Step): Promise<void> {
     await page.getByTestId('amap-in').click();
     await page.getByTestId('amap-in').click();
   }
-  if (step === 'located') await expect(page.getByTestId('amap-you')).toHaveCount(1);
+  // The position is read only on the tap (owner 2026-11-19, OSE-2198 Part C).
+  if (step === 'located') {
+    await page.getByTestId('amap-me').click();
+    await expect(page.getByTestId('amap-you')).toHaveCount(1);
+  }
   await page.evaluate(
     () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
   );
