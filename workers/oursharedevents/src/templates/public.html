@@ -6,9 +6,8 @@
     <title>{{t:list.title}}</title>
     <link rel="stylesheet" href="/ui.css" />
     <style>
-      header { background: var(--surface); border-bottom: 1px solid var(--border); color: var(--text); padding: 1.25rem 2rem; display: flex; align-items: center; gap: 1rem; }
+      header { background: var(--surface); border-bottom: 1px solid var(--border); color: var(--text); padding: 1.25rem 2rem; display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
       header h1 { overflow-wrap: anywhere; font-size: 1.4rem; font-weight: 600; letter-spacing: -0.01em; }
-      header { flex-wrap: wrap; }
       header nav { margin-inline-start: auto; display: flex; flex-wrap: wrap; }
       header nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.75rem; color: var(--text-muted); text-decoration: none; }
       header nav [aria-current='page'] { font-weight: 700; color: var(--text); }
@@ -64,20 +63,6 @@
       }
       .skip-link { position: absolute; inset-inline-start: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
       .skip-link:focus { position: fixed; top: 0; inset-inline-start: 0; width: auto; height: auto; padding: 0.5rem 1rem; background: var(--surface); color: var(--text); font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid var(--accent); }
-      footer {
-        text-align: center;
-        padding: 1.5rem;
-        font-size: 0.8rem;
-        color: var(--text-muted);
-        border-top: 1px solid var(--border);
-      }
-      footer a {
-        color: var(--accent);
-        text-decoration: none;
-      }
-      footer a:hover {
-        text-decoration: underline;
-      }
       /*OCR_NEVER_WHO_CSS*/
     </style>
   </head>
