@@ -968,6 +968,13 @@
       "testCount": 16
     },
     {
+      "file": "workers/oursharedevents/tests/dead-link-words.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 12
+    },
+    {
       "file": "workers/oursharedevents/tests/demo-banner.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -3394,7 +3401,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 37
+      "testCount": 38
     },
     {
       "file": "workers/oursharedevents/tests/signed-link-page-headers.spec.ts",

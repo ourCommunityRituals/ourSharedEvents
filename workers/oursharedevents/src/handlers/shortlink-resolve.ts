@@ -33,6 +33,15 @@
  *     never per-attendee.
  *   - 404 on bad/unknown code so probing reveals no information.
  *
+ * A dead link says something (OSE-2164): /s/ is what a printed QR encodes, so a
+ * person holding a wrong or taken-down code is a reader, not an API client. A
+ * request that accepts text/html (a browser) gets the branded page with one
+ * button to the events list; anything else keeps the JSON. Both carry
+ * `Vary: Accept`. The page, like the JSON, is the same for a malformed and an
+ * unknown code (one function builds both), and the 429 is the same for a right
+ * and a wrong code. Every one is `no-store`, none sets a cookie, and the page's
+ * language is the browser's Accept-Language (a bare address has no prefix).
+ *
  * Failure modes:
  *   - Malformed code (wrong length / non-base62 char) → 404, not counted
  *   - Unknown code → 404, counted as a wrong guess
@@ -51,23 +60,73 @@ import {
 import { internalTarget } from '../lib/poster-codes';
 import { isLinkPreviewRequest } from '../lib/share-count';
 import { countGuess, isGuessLimited, type PublicReadLimitEnv } from '../lib/public-read-limit';
+import { renderErrorPage } from './pages';
+import { fmt, msg } from '../lib/i18n/catalog';
+import { resolveLanguage } from '../lib/i18n/resolve-language';
+import { withLangPrefix } from '../lib/i18n/path-prefix';
 
 /** Wrong /s/ codes one caller may try in a minute (same as the event short codes). */
 export const SHORTLINK_GUESS_MAX = 30;
 const GUESS_SCOPE = 'shortlink-guess';
 
-function tooManyGuesses(): Response {
-  return new Response(
-    JSON.stringify({ ok: false, code: 'TOO_MANY_GUESSES', error: 'Too many links tried' }),
-    {
-      status: 429,
-      headers: {
-        'Content-Type': 'application/json',
-        'Retry-After': '60',
-        'Cache-Control': 'no-store',
-      },
-    }
+type DeadEnd = {
+  status: 404 | 429 | 503;
+  /** The catalog key stem: err.<kind>.title and err.<kind>.body. */
+  kind: 'link' | 'linkLimit' | 'linkDown';
+  json: { ok: false; code: string; error: string };
+};
+
+const NOT_FOUND: DeadEnd = {
+  status: 404,
+  kind: 'link',
+  json: { ok: false, code: 'NOT_FOUND', error: 'Link not found' },
+};
+const TOO_MANY: DeadEnd = {
+  status: 429,
+  kind: 'linkLimit',
+  json: { ok: false, code: 'TOO_MANY_GUESSES', error: 'Too many links tried' },
+};
+const UNAVAILABLE: DeadEnd = {
+  status: 503,
+  kind: 'linkDown',
+  json: { ok: false, code: 'DB_NOT_CONFIGURED', error: 'Service unavailable' },
+};
+
+/** A browser says it wants a page; a script or a curl says `*` or nothing. */
+function wantsPage(request: Request): boolean {
+  return /text\/html/i.test(request.headers.get('Accept') ?? '');
+}
+
+/**
+ * The one place a dead /s/ link is answered. A browser gets the branded page,
+ * anyone else the JSON; the choice depends on the request's Accept header and
+ * on nothing about the code, so a malformed and an unknown code answer the same
+ * page. Past the limit every well-formed code, right or wrong, answers the same
+ * 429 (a malformed one still answers 404 before the limit is read: the code's
+ * shape is public). No cookie is set.
+ */
+function deadEnd(request: Request, d: DeadEnd): Response {
+  const extra: Record<string, string> = { 'Cache-Control': 'no-store', Vary: 'Accept' };
+  if (d.status === 429) extra['Retry-After'] = '60';
+  if (!wantsPage(request)) {
+    return new Response(JSON.stringify(d.json), {
+      status: d.status,
+      headers: { 'Content-Type': 'application/json', ...extra },
+    });
+  }
+  const lang = resolveLanguage(request.headers.get('Accept-Language'));
+  const page = renderErrorPage(
+    d.status,
+    msg(lang, `err.${d.kind}.title`),
+    msg(lang, `err.${d.kind}.body`),
+    withLangPrefix(lang, '/events'),
+    msg(lang, 'err.link.cta'),
+    { label: fmt(lang, 'err.status', { n: d.status }), lang }
   );
+  const headers = new Headers(page.headers);
+  for (const [k, v] of Object.entries(extra)) headers.set(k, v);
+  headers.set('Vary', 'Accept, Accept-Language');
+  return new Response(page.body, { status: d.status, headers });
 }
 
 export type ShortlinkResolveEnv = ShortlinksEnv & PublicReadLimitEnv;
@@ -78,32 +137,22 @@ export async function handleShortlinkResolve(
   code: string,
   countable: boolean = true
 ): Promise<Response> {
-  if (!env.DB) {
-    return new Response(
-      JSON.stringify({ ok: false, code: 'DB_NOT_CONFIGURED', error: 'Service unavailable' }),
-      { status: 503, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
+  if (!env.DB) return deadEnd(request, UNAVAILABLE);
 
-  if (!isValidCodeShape(code)) {
-    return new Response(JSON.stringify({ ok: false, code: 'NOT_FOUND', error: 'Link not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  if (!isValidCodeShape(code)) return deadEnd(request, NOT_FOUND);
 
   // Checked before the lookup, so past the limit a right code and a wrong one
   // look the same.
-  if (await isGuessLimited(request, env, GUESS_SCOPE)) return tooManyGuesses();
+  if (await isGuessLimited(request, env, GUESS_SCOPE)) return deadEnd(request, TOO_MANY);
 
   const row = await resolveCode(env, code);
   if (!row) {
-    if (await countGuess(request, env, GUESS_SCOPE, SHORTLINK_GUESS_MAX)) return tooManyGuesses();
-    // Same 404 shape for unknown vs malformed so probing reveals nothing.
-    return new Response(JSON.stringify({ ok: false, code: 'NOT_FOUND', error: 'Link not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    if (await countGuess(request, env, GUESS_SCOPE, SHORTLINK_GUESS_MAX)) {
+      return deadEnd(request, TOO_MANY);
+    }
+    // Same 404 for unknown vs malformed (one function builds both) so probing
+    // reveals nothing.
+    return deadEnd(request, NOT_FOUND);
   }
 
   // Anonymous click logging: counter + timestamp only. No IP, no anon_id.

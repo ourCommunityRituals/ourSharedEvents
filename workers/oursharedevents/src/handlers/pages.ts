@@ -2275,27 +2275,57 @@ function nextEventsAtVenue(env: PublicEventEnv, row: PublicEventRow): Promise<Ne
   return fetchNextEventsAtVenue(env.DB, row);
 }
 
+/**
+ * OSE-2164: the page for a closed or unavailable event, in the page's language:
+ * the path's prefix when there is one, else Accept-Language (the rule the open
+ * page uses). The button goes to the list in that language. A draft, a ready
+ * event and an id with no row all come through here, so they stay identical.
+ */
+function eventClosedPage(
+  request: Request,
+  pathLang: Lang | undefined,
+  kind: 'notFound' | 'unavailable'
+): Response {
+  const lang = pathLang ?? preferredLang(request);
+  const status = kind === 'notFound' ? 404 : 503;
+  const res = renderErrorPage(
+    status,
+    msg(lang, `err.${kind}.title`),
+    msg(lang, `err.${kind}.body`),
+    withLangPrefix(lang, '/events'),
+    msg(lang, 'err.cta.browse'),
+    { label: fmt(lang, 'err.status', { n: status }), lang }
+  );
+  return languageVaried(res, pathLang);
+}
+
 /** OSE-1519: the named page for an event that was live and has been archived. */
-async function renderEndedEventPage(env: PublicEventEnv, row: PublicEventRow): Promise<Response> {
+async function renderEndedEventPage(
+  request: Request,
+  env: PublicEventEnv,
+  row: PublicEventRow,
+  pathLang: Lang | undefined
+): Promise<Response> {
+  const lang = pathLang ?? preferredLang(request);
   const next = await nextEventsAtVenue(env, row);
   const list = next.length
     ? `<ul class="ose-suggestions" data-testid="ended-next-events">${next
         .map(
           (ev) =>
-            `<li><a href="/events/${esc(ev.id)}" data-testid="ended-next-event-link">${esc(ev.title)}</a></li>`
+            `<li><a href="${withLangPrefix(lang, `/events/${esc(ev.id)}`)}" data-testid="ended-next-event-link">${esc(ev.title)}</a></li>`
         )
         .join('')}</ul>`
     : '';
   const res = renderErrorPage(
     410,
-    `${row.title} has ended`,
-    next.length ? 'Here is what is on next at this venue.' : 'See what is coming up next.',
-    '/events',
-    'Browse upcoming events',
-    { label: null, extraHtml: list }
+    fmt(lang, 'err.ended.title', { title: row.title }),
+    msg(lang, next.length ? 'err.ended.next' : 'err.ended.soon'),
+    withLangPrefix(lang, '/events'),
+    msg(lang, 'err.cta.browse'),
+    { label: null, extraHtml: list, lang }
   );
   res.headers.set('Cache-Control', 'public, max-age=60');
-  return res;
+  return languageVaried(res, pathLang);
 }
 
 /**
@@ -2330,25 +2360,13 @@ export async function handlePublicEventPage(
   pathLang?: Lang
 ): Promise<Response> {
   if (!env.DB) {
-    return renderErrorPage(
-      503,
-      "We're having trouble loading this event",
-      'Our event service is briefly unavailable. Try again in a minute, or browse what else is coming up.',
-      '/events',
-      'Browse upcoming events'
-    );
+    return eventClosedPage(request, pathLang, 'unavailable');
   }
 
   // Cheap input validation. Event IDs are URL-safe alnum/_-, max 128 chars
   // (same shape as the form-validation lib enforces).
   if (!eventId || eventId.length > 128 || !/^[a-zA-Z0-9_\-]+$/.test(eventId)) {
-    return renderErrorPage(
-      404,
-      "We couldn't find that event",
-      EVENT_NOT_OPEN_COPY,
-      '/events',
-      'Browse upcoming events'
-    );
+    return eventClosedPage(request, pathLang, 'notFound');
   }
 
   let row: PublicEventRow | null;
@@ -2371,23 +2389,11 @@ export async function handlePublicEventPage(
       .bind(eventId)
       .first<PublicEventRow>();
   } catch {
-    return renderErrorPage(
-      503,
-      "We're having trouble loading this event",
-      'Our event service is briefly unavailable. Try again in a minute, or browse what else is coming up.',
-      '/events',
-      'Browse upcoming events'
-    );
+    return eventClosedPage(request, pathLang, 'unavailable');
   }
 
   if (!row) {
-    return renderErrorPage(
-      404,
-      "We couldn't find that event",
-      EVENT_NOT_OPEN_COPY,
-      '/events',
-      'Browse upcoming events'
-    );
+    return eventClosedPage(request, pathLang, 'notFound');
   }
 
   // State-machine gate: a draft or ready event is NOT renderable to public.
@@ -2406,17 +2412,11 @@ export async function handlePublicEventPage(
   // never public, so naming it would leak a draft's title; it stays the generic
   // 404 below. (A published archived event still renders its recap, below.)
   if (status === 'archived' && row.is_published !== 1 && row.listed_from) {
-    return renderEndedEventPage(env, row);
+    return renderEndedEventPage(request, env, row, pathLang);
   }
   const offMap = row.is_published !== 1;
   if (status === 'draft' || status === 'ready' || (offMap && status !== 'active')) {
-    return renderErrorPage(
-      404,
-      "We couldn't find that event",
-      EVENT_NOT_OPEN_COPY,
-      '/events',
-      'Browse upcoming events'
-    );
+    return eventClosedPage(request, pathLang, 'notFound');
   }
 
   // /events/<id>/<name>: the id has decided the event; a name that is not this

@@ -133,7 +133,10 @@ export const PAGE_SURFACES: Readonly<Record<string, PageSurface>> = {
     '/c/abc123'
   ),
   '/q/*': notPage('Poster QR scan: always a forward.', '/q/abc'),
-  '/s/*': notPage('Short link: a forward, or a JSON 404.', '/s/abc'),
+  '/s/*': page(
+    'Short link: a forward, or (OSE-2164) the 404 page for a browser; a script gets JSON.',
+    '/s/abc'
+  ),
 
   // ── Forms at their older address ─────────────────────────────────────────
   '/forms/:param/?': page('Form page, older address.', '/forms/no-such-event?type=register'),
