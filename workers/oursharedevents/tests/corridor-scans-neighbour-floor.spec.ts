@@ -411,14 +411,20 @@ beforeAll(async () => {
   await db.batch(stmts);
 });
 
-/** Six parts, each at or above the floor, across both brands and both classes. */
+/**
+ * Six parts, each at or above the floor, across both brands and both classes.
+ * A published count is rounded down to a multiple of 5 (OSE-2151), so each part
+ * sits one short of a step (9, 14, 34): one more scan crosses it, and the
+ * controls below can see it. The gaps keep the order of the flows the same
+ * after any one control.
+ */
 const BIG: World = {
-  'a|production|s1|d1': 7,
-  'a|production|s1|d2': 6,
-  'a|production|s1|none': 8,
-  'a|demo|s1|d1': 5,
+  'a|production|s1|d1': 14,
+  'a|production|s1|d2': 9,
+  'a|production|s1|none': 9,
+  'a|demo|s1|d1': 9,
   'b|production|s1|d1': 9,
-  'b|production|s2|d2': 11,
+  'b|production|s2|d2': 34,
 };
 
 describe('the harness can see', () => {
@@ -438,16 +444,17 @@ describe('the harness can see', () => {
 
   test('a dataset above the floor publishes its numbers on every read', async () => {
     const a = await bodyOf(BIG, 'a');
-    // 7 + 6 to the two event cells, 8 for the event with no place: 21.
+    // 14 and 9 to the two event cells, 9 for the event with no place: each
+    // rounded down to a multiple of 5 and then added, 10 + 5 + 5 = 20.
     expect(cell(a, 's1')).toEqual({
       cell: SOURCE.s1,
       posters: 3,
-      scans: shown(21),
-      scans_no_destination: shown(8),
+      scans: shown(20),
+      scans_no_destination: shown(5),
     });
     expect(flowList(a)).toEqual([
-      ['s1>d1', 7],
-      ['s1>d2', 6],
+      ['s1>d1', 10],
+      ['s1>d2', 5],
     ]);
     // Posters hang in the second cell too; it has no scans to show.
     expect(cell(a, 's2')).toEqual({
@@ -457,25 +464,25 @@ describe('the harness can see', () => {
       scans_no_destination: withheld,
     });
 
-    // The demo event's 5 join only when demo data is asked for.
+    // The demo event's 9 (published as 5) join only when demo data is asked for.
     const aAll = await bodyOf(BIG, 'a+demo');
-    expect(cell(aAll, 's1')?.scans).toEqual(shown(26));
-    expect(flow(aAll, 's1', 'd1')).toEqual(shown(12));
+    expect(cell(aAll, 's1')?.scans).toEqual(shown(25));
+    expect(flow(aAll, 's1', 'd1')).toEqual(shown(15));
 
     const b = await bodyOf(BIG, 'b');
-    expect(cell(b, 's1')?.scans).toEqual(shown(9));
-    expect(cell(b, 's2')?.scans).toEqual(shown(11));
+    expect(cell(b, 's1')?.scans).toEqual(shown(5));
+    expect(cell(b, 's2')?.scans).toEqual(shown(30));
     expect(cell(b, 's1')?.scans_no_destination).toEqual(withheld);
 
     const both = await bodyOf(BIG, 'both');
-    expect(cell(both, 's1')?.scans).toEqual(shown(30));
-    expect(cell(both, 's1')?.scans_no_destination).toEqual(shown(8));
+    expect(cell(both, 's1')?.scans).toEqual(shown(25));
+    expect(cell(both, 's1')?.scans_no_destination).toEqual(shown(5));
     expect(flowList(both)).toEqual([
-      ['s1>d1', 16],
-      ['s2>d2', 11],
-      ['s1>d2', 6],
+      ['s2>d2', 30],
+      ['s1>d1', 15],
+      ['s1>d2', 5],
     ]);
-    expect(cell(await bodyOf(BIG, 'both+demo'), 's1')?.scans).toEqual(shown(35));
+    expect(cell(await bodyOf(BIG, 'both+demo'), 's1')?.scans).toEqual(shown(30));
   });
 
   test('no read counts the third brand: its 60 scans in the same cells are in none of them', async () => {
@@ -515,10 +522,10 @@ describe('the harness can see', () => {
           continue;
         }
         // The part it was added to, and the cell that part belongs to: both
-        // by one, and nothing else.
+        // by one step of 5 (the part crossed a multiple of 5), and nothing else.
         expect(mine.map((m) => m.path).sort(), r.name).toEqual([part, total].sort());
         for (const m of mine) {
-          expect((m.after as number) - (m.before as number), line(m)).toBe(1);
+          expect((m.after as number) - (m.before as number), line(m)).toBe(K);
         }
       }
     }
@@ -527,7 +534,7 @@ describe('the harness can see', () => {
   test('control: the fifth scan on a part shows (the floor is 5, not more)', async () => {
     const at = (n: number): World => ({ 'a|production|s1|d1': 7, 'a|production|s1|d2': n });
     const moved = (await neighbours(at(4), at(5))).filter((m) => m.reader === 'a').map(line);
-    expect(moved).toContain('a | source_cells.s1.scans.count: 7 -> 12');
+    expect(moved).toContain('a | source_cells.s1.scans.count: 5 -> 10');
     expect(moved).toContain('a | flows.s1>d2.scans.count: (absent) -> 5');
   });
 });
@@ -614,11 +621,12 @@ describe('one more scan on a part that is withheld changes nothing any reader is
     const before: World = { 'a|production|s1|d1': 7, 'a|production|s1|d2': 3 };
     const after: World = { 'a|production|s1|d1': 7, 'a|production|s1|d2': 4 };
     expect((await neighbours(before, after)).map(line)).toEqual([]);
-    // What it reads: the cell is the flow that is listed, not 10 and then 11.
+    // What it reads: the cell is the flow that is listed (7, published as 5),
+    // not 10 and then 11.
     for (const w of [before, after]) {
       const a = await bodyOf(w, 'a');
-      expect(cell(a, 's1')?.scans).toEqual(shown(7));
-      expect(flowList(a)).toEqual([['s1>d1', 7]]);
+      expect(cell(a, 's1')?.scans).toEqual(shown(5));
+      expect(flowList(a)).toEqual([['s1>d1', 5]]);
     }
   });
 
@@ -680,22 +688,24 @@ describe('small parts never add up to a published number', () => {
     };
     const both = await bodyOf(w, 'both');
     expect(cell(both, 's1')?.scans_no_destination).toEqual(withheld);
-    // 7, the one listed flow: not 15, and not 11.
-    expect(cell(both, 's1')?.scans).toEqual(shown(7));
+    // 7, the one listed flow (published as 5): not 15, and not 11.
+    expect(cell(both, 's1')?.scans).toEqual(shown(5));
   });
 
-  test('a withheld part beside listed ones is dropped, not rounded: 6 + 4 + 9 reads 15', async () => {
+  test('a withheld part beside listed ones is dropped: 6 + 4 + 9 reads 5 + 5', async () => {
     const w: World = {
       'a|production|s1|d1': 6,
       'a|production|s1|d2': 4,
       'b|production|s1|d2': 9,
     };
-    expect(cell(await bodyOf(w, 'a'), 's1')?.scans).toEqual(shown(6));
+    expect(cell(await bodyOf(w, 'a'), 's1')?.scans).toEqual(shown(5));
     const both = await bodyOf(w, 'both');
-    expect(cell(both, 's1')?.scans).toEqual(shown(15));
+    expect(cell(both, 's1')?.scans).toEqual(shown(10));
+    // Both flows read 5, so they are listed by destination, never by the
+    // exact counts behind them.
     expect(flowList(both)).toEqual([
-      ['s1>d2', 9],
-      ['s1>d1', 6],
+      ['s1>d1', 5],
+      ['s1>d2', 5],
     ]);
   });
 });
@@ -716,8 +726,8 @@ describe('which rows are listed', () => {
     ).toEqual({
       cell: SOURCE.off,
       posters: 0,
-      scans: shown(6),
-      scans_no_destination: shown(6),
+      scans: shown(5),
+      scans_no_destination: shown(5),
     });
     const listed = await bodyOf(at(5), 'a');
     expect(cell(listed, 'off')).toEqual({
@@ -735,10 +745,10 @@ describe('which rows are listed', () => {
     expect((await neighbours(at(9), at(10))).map(line)).toEqual([]);
     const a = await bodyOf(at(10), 'a');
     expect(a.source_cells.map((c) => [cellName(c.cell), c.scans.count])).toEqual([
-      ['s1', 7],
+      ['s1', 5],
       ['s2', null],
     ]);
-    expect(flowList(a)).toEqual([['s1>d1', 7]]);
+    expect(flowList(a)).toEqual([['s1>d1', 5]]);
   });
 
   test('flows that tie are listed in a fixed order, by source and then destination', async () => {
@@ -749,10 +759,10 @@ describe('which rows are listed', () => {
       'b|production|s1|d1': 7,
     };
     expect(flowList(await bodyOf(w, 'both'))).toEqual([
-      ['s1>d1', 7],
-      ['s1>d2', 7],
-      ['s2>d1', 7],
-      ['s2>d2', 7],
+      ['s1>d1', 5],
+      ['s1>d2', 5],
+      ['s2>d1', 5],
+      ['s2>d2', 5],
     ]);
   });
 });
@@ -815,7 +825,7 @@ describe('the totals the same admin reads elsewhere are sums of the same parts',
         'a|production|s2|d1': 5,
       };
       const cor = await bodyOf(w, 'a');
-      expect(cell(cor, 's1')?.scans).toEqual(shown(7));
+      expect(cell(cor, 's1')?.scans).toEqual(shown(5));
       expect(cell(cor, 's2')?.scans).toEqual(shown(5));
       const ops = (await fetchJson(
         `/api/v2/admin/dashboards/operations?brand_id=${BRANDS.a}`,
@@ -831,7 +841,7 @@ describe('the totals the same admin reads elsewhere are sums of the same parts',
     const four = await at(4);
     expect(three).toEqual(four);
     // The operations total is the corridor's listed parts and nothing else.
-    expect(three.ops).toEqual(shown(12));
+    expect(three.ops).toEqual(shown(10));
     expect(three.event).toEqual({ count: null, suppressed: true, floor: K });
   });
 });

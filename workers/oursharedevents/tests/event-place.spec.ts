@@ -140,7 +140,18 @@ describe('the lookup keeps a spot and nothing wider', () => {
       const r = await lookUpEventPlace(KEYED, null, 'Rock Island Public House', async () =>
         spot([...types])
       );
-      expect(r, types.join()).toEqual({ found: true, lat: RIPH.lat, lon: RIPH.lng, kind });
+      // OSE-2199: the lookup also keeps how exact the point is and Google's
+      // address for it (this stub gives no location_type, viewport or bounds).
+      expect(r, types.join()).toEqual({
+        found: true,
+        lat: RIPH.lat,
+        lon: RIPH.lng,
+        kind,
+        precision: null,
+        address: '13328 Olde Western Ave, Blue Island, IL 60406, USA',
+        viewport: null,
+        bounds: null,
+      });
     }
   });
 

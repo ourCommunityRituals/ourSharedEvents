@@ -312,20 +312,25 @@ describe('OSE-1657 item 4 | the recap cannot tell 0 from fewer than 5', () => {
 
   test('a card that is drawn says "Fewer than 5" for each small count, never a bare absence', () => {
     const card = statsCard({ regCount: 12, checkinCount: 0, surveyCount: 2 });
-    expect(card).toContain('<strong>12</strong> Registered');
+    expect(card).toContain('<strong>10</strong> Registered'); // 12, rounded (OSE-2151)
     expect(card).toContain('Fewer than 5 Checked in');
     expect(card).toContain('Fewer than 5 Surveys submitted');
     expect(card).toContain('Fewer than 5 Email signups');
   });
 
-  test('walk-ins are a subset of check-ins: 8 check-ins and 6 walk-ins never both print', () => {
+  test('walk-ins are a subset of check-ins: 8 check-ins and 6 walk-ins never both print exactly', () => {
+    // Both are over the floor alone; exact together they give back 8 - 6 = 2.
+    // Rounded (OSE-2151) they would read 5 and 5, which hides the 2, but the
+    // exact rest is still judged: the walk-ins are withheld (OSE-1752).
     const card = statsCard({ regCount: 20, checkinCount: 8, walkInCount: 6 });
-    // Both would be over the floor alone; together they give back 8 - 6 = 2.
-    const both =
-      card.includes('<strong>8</strong> Checked in') &&
-      card.includes('<strong>6</strong> Walked in');
-    expect(both, 'check-ins and walk-ins both exact').toBe(false);
+    expect(card).not.toContain('<strong>8</strong>');
     expect(card).not.toContain('<strong>6</strong>');
+    expect(card).toContain('<strong>5</strong> Checked in');
+    expect(card).toContain('<p data-testid="stat-walk-ins">Fewer than 5 Walked in</p>');
+  });
+
+  test('walk-ins under 5 beside a published check-in count: no share, and withheld in words', () => {
+    const card = statsCard({ regCount: 20, checkinCount: 20, walkInCount: 3 });
     expect(card).not.toContain('data-testid="stat-walk-in-share"');
     // Withheld in words, and in the SAME words as walk-ins under 5 (OSE-1752): the
     // card does not say which of the two reasons applied. It used to print a
@@ -342,11 +347,11 @@ describe('OSE-1657 item 4 | the recap cannot tell 0 from fewer than 5', () => {
     expect([...seen][0]).toContain('Fewer than 5 Walked in');
   });
 
-  test('guard: 14 check-ins and 6 walk-ins (8 through registration) all print, with the share', () => {
+  test('guard: 14 check-ins and 6 walk-ins all print, rounded (10 and 5), with shares from the rounded counts', () => {
     const card = statsCard({ regCount: 20, checkinCount: 14, walkInCount: 6 });
-    expect(card).toContain('<strong>14</strong> Checked in');
-    expect(card).toContain('<strong>6</strong> Walked in');
-    expect(card).toContain('43% of check-ins were walk-ins');
-    expect(card).toContain('70% of those registered showed up');
+    expect(card).toContain('<strong>10</strong> Checked in');
+    expect(card).toContain('<strong>5</strong> Walked in');
+    expect(card).toContain('50% of check-ins were walk-ins');
+    expect(card).toContain('50% of those registered showed up');
   });
 });

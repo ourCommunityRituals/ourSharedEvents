@@ -37,13 +37,21 @@ const list = (xs) => xs.map((x) => `'${x}'`).join(', ');
 
 /** What bruno/fixtures/map-zoom-area-seed.sql sets. tests/unit/ci/map-counts-check.test.js keeps the two in step. */
 export const EXPECTED = Object.freeze({
-  taps_a: 42,
-  taps_b: 8,
+  taps_a: 63,
+  taps_b: 9,
   tap_days: 0,
   share_opens: 10,
   share_open_rows: 2,
   scans: 0,
 });
+
+/**
+ * What the organizer's read publishes for the same taps: each code rounded down
+ * to a multiple of 5, then added (OSE-2151, floorTotalOfParts). The Bruno folder
+ * and the browser spec read these; tests/unit/ci/map-counts-check.test.js keeps
+ * them in step with the seed.
+ */
+export const PUBLISHED_TAPS = Object.freeze({ a: 35, b: 5 });
 
 /** One row, one column per number. A single statement, so `--command` can run it remotely. */
 export const SQL = [

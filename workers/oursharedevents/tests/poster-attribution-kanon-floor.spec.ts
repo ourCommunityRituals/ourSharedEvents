@@ -141,7 +141,7 @@ describe('OSE-711 — poster_attribution applies the uniform K-anon floor', () =
     expect(rows.find((p) => p.poster_deployment_id === 'pd-711-sub')).toBeUndefined();
   });
 
-  test('a deployment at/above K keeps its EXACT count (7 published)', async () => {
+  test('a deployment at/above K keeps its count, rounded down to a multiple of 5 (7 published as 5)', async () => {
     const evt = 'test-evt-711-keep';
     await seedEvent(evt);
     await seedDeployment('pd-711-ok', evt, 'Library entrance');
@@ -152,7 +152,7 @@ describe('OSE-711 — poster_attribution applies the uniform K-anon floor', () =
     if (!r.ok) return;
     const row = r.report.poster_attribution.find((p) => p.poster_deployment_id === 'pd-711-ok');
     expect(row).toBeDefined();
-    expect(row!.scan_count).toBe(7);
+    expect(row!.scan_count).toBe(5); // rounded down to a multiple of 5 (OSE-2151)
   });
 
   test('mixed deployments: sub-K dropped, >=K kept, in the same report', async () => {
@@ -170,7 +170,7 @@ describe('OSE-711 — poster_attribution applies the uniform K-anon floor', () =
     const big = rows.find((p) => p.poster_deployment_id === 'pd-711-big');
     const small = rows.find((p) => p.poster_deployment_id === 'pd-711-small');
     expect(big).toBeDefined();
-    expect(big!.scan_count).toBe(9);
+    expect(big!.scan_count).toBe(5);
     expect(small).toBeUndefined();
     // Invariant: NO published poster row may carry a sub-K scan_count.
     for (const p of rows) {
@@ -252,7 +252,7 @@ describe('OSE-1459 — the poster floor is applied per poster-hour', () => {
     if (!r.ok) return;
     const row = r.report.poster_attribution.find((p) => p.poster_deployment_id === 'pd-711-mixed');
     expect(row).toBeDefined();
-    expect(row!.scan_count).toBe(6);
+    expect(row!.scan_count).toBe(5);
     expect(row!.first_scan_at).not.toContain('2026-05-07T10');
   });
 });
@@ -370,11 +370,11 @@ describe('OSE-711 — aggregate-only invariant (static guard)', () => {
     return files[key!]!;
   }
 
-  test('poster_attribution routes scan_count through applyCountFloor', () => {
+  test('poster_attribution routes scan_count through publishCount (the floor, then rounding)', () => {
     const s = builderSrc();
     // The poster mapping must apply the uniform floor and filter suppressed rows,
     // and must NOT map `scan_count: r.scan_count` raw anywhere in the builder.
-    expect(s).toContain('applyCountFloor(r.scan_count)');
+    expect(s).toContain('publishCount(r.scan_count)');
     expect(s).toMatch(/\.filter\(\s*\(?x\)?\s*=>\s*!x\.floored\.suppressed\s*\)/);
     expect(s).not.toContain('scan_count: r.scan_count');
   });

@@ -32,7 +32,7 @@
 // audit, and OSE-1245 has to decide the location-precision policy first. Doing
 // it here would be guessing at that decision rather than implementing it.
 
-import { applyCountFloor, roundForPublish } from './count-floor';
+import { publishCount } from './count-floor';
 import { attendanceModeOf } from './attendance-mode';
 
 /** Columns of `events` that a public response may carry. Additions are decisions. */
@@ -101,13 +101,12 @@ export function toPublicEvent(row: Record<string, unknown>): Record<string, unkn
  *
  * Every publisher withholds (null) a count under the floor: rounding alone would
  * turn 0..4 into a published 0, which reads as "none" and not "fewer than 5".
+ * From the floor up every count is rounded down to a multiple of 5 (OSE-2151,
+ * owner ruling 2026-11-18), so the one publisher is `publishCount`; an exact
+ * publisher is no longer permitted.
  */
 const COUNT_PUBLISHERS = {
-  applyCountFloor: (v: unknown) => applyCountFloor(Number(v)).count,
-  roundForPublish: (v: unknown) => {
-    const floored = applyCountFloor(Number(v)).count;
-    return floored === null ? null : roundForPublish(floored);
-  },
+  publishCount: (v: unknown) => publishCount(Number(v)).count,
 } as const;
 
 type CountPublisher = keyof typeof COUNT_PUBLISHERS;

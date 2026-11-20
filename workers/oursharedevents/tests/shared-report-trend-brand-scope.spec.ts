@@ -206,7 +206,7 @@ describe('headcount_trend reads only the reporting event’s own brand', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.report.headcount_trend.series_id).toBe('srs-trend-own');
-    expect(r.report.headcount_trend.instances.map((i) => i.distinct_scanners)).toEqual([6, 8, 10]);
+    expect(r.report.headcount_trend.instances.map((i) => i.distinct_scanners)).toEqual([5, 5, 10]);
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
 });

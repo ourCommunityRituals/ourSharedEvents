@@ -109,7 +109,7 @@ import {
 import { enrichWithPhase, eventPhaseOf } from '../lib/event-enrich.js';
 import { attendanceModeLabel, attendanceModeOf, withoutLinkOnly } from '../lib/attendance-mode';
 import { archivedBeforeStart } from '../lib/archived-before-start.js';
-import { flooredRatePct } from '../lib/count-floor.js';
+import { flooredRatePct, roundForPublish } from '../lib/count-floor.js';
 import { COUNT_EVENT_REGISTRATIONS_SQL } from '../lib/registration-count.js';
 import { clearsFloor, statLine, walkInStatLine } from '../lib/recap-stat-lines';
 import {
@@ -2111,8 +2111,9 @@ ${SPONSOR_LIST_CSS}
               ${
                 // Ratio only when BOTH operands clear the floor — a "% showed up"
                 // over a sub-K denominator (e.g. 50% of 2) back-derives a person.
+                // OSE-2151: worked out from the rounded counts printed above it.
                 clearsFloor(checkinCount) && clearsFloor(regCount)
-                  ? `<p data-testid="stat-showed-up-share">${fmt(lang, 'stats.showedUpShare', { pct: Math.round((checkinCount / regCount) * 100) })}</p>`
+                  ? `<p data-testid="stat-showed-up-share">${fmt(lang, 'stats.showedUpShare', { pct: Math.round((roundForPublish(checkinCount) / roundForPublish(regCount)) * 100) })}</p>`
                   : ''
               }
               ${statLine(surveyCount, msg(lang, 'stats.surveys'), 'stat-surveys', lang)}
