@@ -18,6 +18,17 @@ runtime:
         var strict = require('./lib/edge.js').isStrict(bru);
         var status = res.getStatus();
         var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        // The page as the Worker sent it. On staging the edge adds a script for its JavaScript
+        // check to every HTML page a script client reads (it names window.__CF$cv$params and holds
+        // this request's Ray ID, the time and the nonce), so no two reads are equal byte for byte.
+        // That script and each nonce value are taken out; everything else is compared. The same
+        // function is in the malformed and the unknown request, and in Bruno folder 19 (OSE-1998).
+        // tests/integration/bruno-dead-link-same-page.test.js runs both scripts against edge pages.
+        var workerPage = function (h) {
+          return h
+            .replace(/<script\b[^>]*>(?:(?!<\/script>)[\s\S])*?window\.__CF\$cv\$params(?:(?!<\/script>)[\s\S])*?<\/script>/g, '')
+            .replace(/nonce="[^"]*"/g, '');
+        };
         function lang(h) { var m = /<html lang="([a-z]+)"/.exec(h); return m ? m[1] : ''; }
         function cta(h) { var m = /data-testid="error-cta" href="([^"]*)">([^<]*)</.exec(h); return m ? [m[1], m[2]] : []; }
         // Strict (PAGES_EDGE_STRICT=1): 404 only, a 403 is a page that did not load. Lenient: the
@@ -28,26 +39,11 @@ runtime:
           test('Returns 404 (or 403 from the edge until PAGES_EDGE_STRICT=1)', function () { expect([404, 403]).to.include(status); });
         }
 
-        // The page as the Worker sent it. On staging the edge adds a script for its JavaScript check
-        // (it names window.__CF$cv$params and holds this request's Ray ID, the time and a nonce), and
-        // every nonce attribute is new per read, so those two are taken out; everything else is
-        // compared. Same function as the stall pages (OSE-1998, folder 19 of ose-api). Requests 2 and
-        // 3 carry it; tests/integration/bruno-dead-link-same-page.test.js runs both against edge-served
-        // pages. The Worker's own /s/ page never names __CF$cv$params (tests/dead-link-words.spec.ts).
-        var workerPage = function (h) {
-          return h
-            .replace(/<script\b[^>]*>(?:(?!<\/script>)[\s\S])*?window\.__CF\$cv\$params(?:(?!<\/script>)[\s\S])*?<\/script>/g, '')
-            .replace(/nonce="[^"]*"/g, '');
-        };
         if (status === 404) {
-          test('A malformed and an unknown code answer the same page (no oracle)', function () {
+          test('A malformed and an unknown code answer the same bytes (no oracle)', function () {
             var before = bru.getVar('ose2164_malformed_body');
             expect(typeof before).to.equal('string');
-            var mine = workerPage(body);
-            if (mine === before) return;
-            var i = 0;
-            while (i < mine.length && i < before.length && mine.charAt(i) === before.charAt(i)) i++;
-            throw new Error('the pages part at character ' + i + ' (of ' + mine.length + ' and ' + before.length + '). This page: ' + JSON.stringify(mine.slice(Math.max(0, i - 40), i + 80)) + '. The malformed code: ' + JSON.stringify(before.slice(Math.max(0, i - 40), i + 80)));
+            expect(workerPage(body)).to.equal(before);
           });
         }
 
