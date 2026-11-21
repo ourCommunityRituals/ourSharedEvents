@@ -303,7 +303,7 @@ SPONSOR_GEO_MATCH_ENABLED = "0"
 # an archive's directories for the life of an isolate, keyed by this name. (An
 # isolate does notice an object changed under the key, at its next read: that
 # request draws hexagons only and the next opens the new object.)
-MAP_TILES_ARCHIVE = "us-20261115.pmtiles"
+MAP_TILES_ARCHIVE = "us-20261120.pmtiles"
 # MAP_TILES_ETAG exists and is NOT SET, here or in any other block. The Worker
 # reads it (lib/street-map.ts, StreetMapEnv): the etag of the one object streets
 # may be drawn from, as R2 gives it, without quotes. Set, an object under
@@ -503,7 +503,7 @@ SPONSOR_GEO_MATCH_ENABLED = "0"
 # MAP_TILES binding, so lib/street-map.ts returns before it reads this name.
 # When production is bound it binds the bucket staging binds (owner 2026-11-14:
 # one bucket, read by both), so this key is then the object staging drew from.
-MAP_TILES_ARCHIVE = "us-20261115.pmtiles"
+MAP_TILES_ARCHIVE = "us-20261120.pmtiles"
 # The street-layer switch (see the staging block). Off, and it does nothing here
 # yet: production has no MAP_TILES binding. Staging goes first: this may be "on"
 # only once staging is (tests/unit/ci/env-parity.test.js), in a PR of its own.

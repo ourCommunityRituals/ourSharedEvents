@@ -84,8 +84,8 @@ env:
   WORKER_DIR: workers/oursharedevents
   # The three names. The same values are in wrangler.toml (MAP_TILES_ARCHIVE in
   # both environment blocks, the staging MAP_TILES bucket) and in the runbook.
-  PROTOMAPS_BUILD: '20261115'
-  ARCHIVE_KEY: us-20261115.pmtiles
+  PROTOMAPS_BUILD: '20261120'
+  ARCHIVE_KEY: us-20261120.pmtiles
   BUCKET: ose-map-tiles
   # The environment the load job names, typed again here for the job that reads
   # it (a job's `environment:` cannot take this value from `env`). A test holds
