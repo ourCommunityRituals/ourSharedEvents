@@ -18,6 +18,17 @@ runtime:
         var strict = require('./lib/edge.js').isStrict(bru);
         var status = res.getStatus();
         var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        // The page as the Worker sent it. On staging the edge adds a script for its JavaScript
+        // check to every HTML page a script client reads (it names window.__CF$cv$params and holds
+        // this request's Ray ID, the time and the nonce), so no two reads are equal byte for byte.
+        // That script and each nonce value are taken out; everything else is compared. The same
+        // function is in the malformed and the unknown request, and in Bruno folder 19 (OSE-1998).
+        // tests/integration/bruno-dead-link-same-page.test.js runs both scripts against edge pages.
+        var workerPage = function (h) {
+          return h
+            .replace(/<script\b[^>]*>(?:(?!<\/script>)[\s\S])*?window\.__CF\$cv\$params(?:(?!<\/script>)[\s\S])*?<\/script>/g, '')
+            .replace(/nonce="[^"]*"/g, '');
+        };
         function lang(h) { var m = /<html lang="([a-z]+)"/.exec(h); return m ? m[1] : ''; }
         function cta(h) { var m = /data-testid="error-cta" href="([^"]*)">([^<]*)</.exec(h); return m ? [m[1], m[2]] : []; }
         // Strict (PAGES_EDGE_STRICT=1): 404 only, a 403 is a page that did not load. Lenient: the
@@ -28,7 +39,7 @@ runtime:
           test('Returns 404 (or 403 from the edge until PAGES_EDGE_STRICT=1)', function () { expect([404, 403]).to.include(status); });
         }
 
-        if (status === 404) { bru.setVar('ose2164_malformed_body', body); }
+        if (status === 404) { bru.setVar('ose2164_malformed_body', workerPage(body)); }
 
 settings:
   encodeUrl: true
