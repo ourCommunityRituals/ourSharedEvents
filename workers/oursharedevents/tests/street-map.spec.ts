@@ -2214,7 +2214,7 @@ describe('street map | the edges of the world', () => {
 // changed object costs one request its streets and no more, and MAP_TILES_ETAG
 // reaches the read.
 describe('street map | the object under the key is replaced, or is not the pinned one', () => {
-  const NAME = 'us-20261115.pmtiles';
+  const NAME = 'us-20261120.pmtiles';
   const line = (at: (t: number) => [number, number]) =>
     Array.from({ length: 65 }, (_, i) => at(i * 64));
   /** The build every other case draws: a highway and a minor road in each tile. */
@@ -2315,7 +2315,7 @@ describe('street map | the object under the key is replaced, or is not the pinne
 
 describe('street map | the archive read: fat fingers, security, network', () => {
   // The name wrangler.toml sets: the United States subset (owner 2026-11-10).
-  const CONFIGURED = 'us-20261115.pmtiles';
+  const CONFIGURED = 'us-20261120.pmtiles';
   const sound = async (opts: { gzip?: boolean; leaf?: boolean } = { gzip: true, leaf: true }) =>
     pmtilesArchive(tilesForCells([BLUE7]).tiles, opts);
   const drawn = (layer: Awaited<ReturnType<typeof loadStreetLayer>>) =>
@@ -2339,23 +2339,23 @@ describe('street map | the archive read: fat fingers, security, network', () => 
   // The bucket holds a sound archive under the mistyped name itself, so a
   // reader that skipped the name rule would draw it.
   it.each([
-    ['a capital letter', 'Us-20261115.pmtiles'],
-    ['the extension in capitals', 'us-20261115.PMTILES'],
-    ['a space in front', ' us-20261115.pmtiles'],
-    ['a space after', 'us-20261115.pmtiles '],
-    ['a line break after', 'us-20261115.pmtiles\n'],
-    ['a tab after', 'us-20261115.pmtiles\t'],
-    ['a space inside', 'us 20261115.pmtiles'],
-    ['a comma for the full stop', 'us-20261115,pmtiles'],
-    ['no extension', 'us-20261115'],
-    ['the extension cut short', 'us-20261115.pmtile'],
-    ['a second extension', 'us-20261115.pmtiles.bak'],
+    ['a capital letter', 'Us-20261120.pmtiles'],
+    ['the extension in capitals', 'us-20261120.PMTILES'],
+    ['a space in front', ' us-20261120.pmtiles'],
+    ['a space after', 'us-20261120.pmtiles '],
+    ['a line break after', 'us-20261120.pmtiles\n'],
+    ['a tab after', 'us-20261120.pmtiles\t'],
+    ['a space inside', 'us 20261120.pmtiles'],
+    ['a comma for the full stop', 'us-20261120,pmtiles'],
+    ['no extension', 'us-20261120'],
+    ['the extension cut short', 'us-20261120.pmtile'],
+    ['a second extension', 'us-20261120.pmtiles.bak'],
     ['only the extension', '.pmtiles'],
-    ['a hyphen first', '-us-20261115.pmtiles'],
-    ['the quotes kept', '"us-20261115.pmtiles"'],
-    ['the bucket pasted in front', 'ose-map-tiles/us-20261115.pmtiles'],
-    ['the rclone target pasted whole', 'r2:ose-map-tiles/us-20261115.pmtiles'],
-    ['the download address pasted', 'https://build.protomaps.com/20261115.pmtiles'],
+    ['a hyphen first', '-us-20261120.pmtiles'],
+    ['the quotes kept', '"us-20261120.pmtiles"'],
+    ['the bucket pasted in front', 'ose-map-tiles/us-20261120.pmtiles'],
+    ['the rclone target pasted whole', 'r2:ose-map-tiles/us-20261120.pmtiles'],
+    ['the download address pasted', 'https://build.protomaps.com/20261120.pmtiles'],
     ['spaces only', '   '],
   ])(
     'fat finger: %s is not an archive name: no layer, and the bucket is never asked',

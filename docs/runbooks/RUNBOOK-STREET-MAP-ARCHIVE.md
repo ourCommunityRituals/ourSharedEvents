@@ -82,7 +82,10 @@ first. Production reads the same object once it is bound ("Production, later").
 | Setting for the key | `MAP_TILES_ARCHIVE`   | `MAP_TILES_ARCHIVE`            |
 
 `YYYYMMDD` is the date of the Protomaps build the file was cut from.
-`wrangler.toml` carries `us-20261115.pmtiles`: build `20261115`, named on
+`wrangler.toml` carries `us-20261120.pmtiles`: build `20261120`, named on
+2026-11-21 after build `20261115` was not loaded inside its window (the load
+run of 2026-11-21 stopped at the bucket's sign-in, 401 Unauthorized, and the
+owner could not run it again that day). Build `20261115` had been named on
 2026-11-16 after build `20261109` aged out at Protomaps with nothing loaded
 ("The build's window", below). The same three names are written
 in three places, and they change together, in one PR:
@@ -110,7 +113,10 @@ if they differ. The key must match
 `20261109` was still offered on 2026-11-15 at 19:38 UTC (`measure` run
 43753563640), and answered 404 on 2026-11-16 at 00:13 UTC (run 43779110535),
 between six and seven days after its date. By that one observation build
-`20261115` is offered through **2026-11-21 (UTC)** and is gone on 2026-11-22.
+`20261115` was offered through 2026-11-21 (UTC). Build `20261120` (uploaded
+2026-11-20 23:04 UTC, 139,666,835,436 bytes, tileset version 4.15.2, read from
+the builds list on 2026-11-21) is, by the same observation, offered through
+**2026-11-26 (UTC)** and gone on 2026-11-27.
 The `measure` run, the owner's zoom decision ("Before the load", item 3) and
 the `load` all have to land inside that window. The `measure` run did, on
 2026-11-16 (run 43792020396), and so did the zoom decision, the same day (a
@@ -323,7 +329,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
    run is on. Then the cut's own command, with `--dry-run`:
 
    ```bash
-   pmtiles extract https://build.protomaps.com/20261115.pmtiles us-20261115.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14 --dry-run
+   pmtiles extract https://build.protomaps.com/20261120.pmtiles us-20261120.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14 --dry-run
    ```
 
    It works out the tiles and prints the archive size without fetching them. The
@@ -348,7 +354,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
 5. **Cut the United States file:**
 
    ```bash
-   pmtiles extract https://build.protomaps.com/20261115.pmtiles us-20261115.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14
+   pmtiles extract https://build.protomaps.com/20261120.pmtiles us-20261120.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14
    ```
 
    The command reads the build at Protomaps by byte range and writes only the
@@ -363,7 +369,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
 6. **Check the file before it goes anywhere:**
 
    ```bash
-   node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261115.pmtiles
+   node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261120.pmtiles
    ```
 
    It reads the file with the Worker's own reader and drawing code
@@ -392,7 +398,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
      nothing for London and Mexico City, which the region leaves out;
    - the file's name is the key `wrangler.toml` reads, on the commit of the run.
 
-   It writes `us-20261115.pmtiles.check.json` beside the file: the byte size,
+   It writes `us-20261120.pmtiles.check.json` beside the file: the byte size,
    the SHA-256, the header, the directory layout and each draw. The workflow
    keeps that record as the run artifact `street-map-archive-check-record` (90
    days, and for a file that failed too) and prints the byte size and the
@@ -402,7 +408,7 @@ the deploy credential is never on a machine with `pmtiles` or `rclone`.
 7. **Upload** under the dated key:
 
    ```bash
-   rclone copyto us-20261115.pmtiles r2:ose-map-tiles/us-20261115.pmtiles --immutable --s3-chunk-size=256M --stats=1m --stats-one-line -v
+   rclone copyto us-20261120.pmtiles r2:ose-map-tiles/us-20261120.pmtiles --immutable --s3-chunk-size=256M --stats=1m --stats-one-line -v
    ```
 
    The key pair reaches rclone as environment variables of this step and the two
@@ -673,7 +679,7 @@ writes nothing and can run at any time.
      terminal.
 
 4. **Owner: load.** The same dispatch with `mode` = `load`. Green means the
-   bucket lists `us-20261115.pmtiles` at the checked size. Any red is explained
+   bucket lists `us-20261120.pmtiles` at the checked size. Any red is explained
    in "What stops a run". **This is the first public street.** The switch is
    already on for staging (step 8, done 2026-11-15 before any load). A Worker
    instance that asked and found no object remembers that for one minute and
@@ -691,7 +697,7 @@ writes nothing and can run at any time.
 6. **Owner: lock the object.** Only after the load is green. In the Cloudflare
    dashboard: R2 object storage, the bucket `ose-map-tiles`, the **Settings**
    tab, the **Bucket lock rules** card, **Add rule**. Name it after the build
-   (`us-20261115`), give it the whole key as its prefix (`us-20261115.pmtiles`),
+   (`us-20261120`), give it the whole key as its prefix (`us-20261120.pmtiles`),
    choose to keep objects locked indefinitely, and **Save changes**. From then
    on Cloudflare refuses to overwrite or delete that object, for the load token
    and for every other credential, until the rule is removed. New keys can

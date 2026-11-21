@@ -30,7 +30,7 @@ public street**, not the production binding.
 | What                                   | Whose                                                                                   | Licence                                                                                               |
 | -------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Roads, water (zoom 6 and finer), names | OpenStreetMap contributors                                                              | Open Database License 1.0 (ODbL): <https://opendatacommons.org/licenses/odbl/1-0/>                    |
-| The tileset the data arrives in        | Protomaps (the `basemaps` project), daily build `20261115`, tileset version 4.15.2      | Protomaps: its tilesets are ODbL, given out as an ODbL "Produced Work", OpenStreetMap credit required |
+| The tileset the data arrives in        | Protomaps (the `basemaps` project), daily build `20261120`, tileset version 4.15.2      | Protomaps: its tilesets are ODbL, given out as an ODbL "Produced Work", OpenStreetMap credit required |
 | Water and land at zoom 0 to 5          | Natural Earth                                                                           | Public domain; no credit needed (Protomaps `LICENSE_DATA.md`)                                         |
 | Coastline polygons at zoom 6 and finer | osmdata.openstreetmap.de, made from OpenStreetMap                                       | ODbL (Protomaps `LICENSE_DATA.md`)                                                                    |
 | Land cover at zoom 0 to 7              | Daylight, made from ESA WorldCover                                                      | CC BY 4.0 (Protomaps `LICENSE_DATA.md`). **In the file, never drawn and never served by us**          |
@@ -67,8 +67,8 @@ names as links:
 This section is the statement of method for ODbL section 4.6(b), in case that section
 applies (duty L10).
 
-1. **Source:** `https://build.protomaps.com/20261115.pmtiles`, the Protomaps daily build of
-   2026-11-15 (139,532,869,447 bytes; listed with its checksums at
+1. **Source:** `https://build.protomaps.com/20261120.pmtiles`, the Protomaps daily build of
+   2026-11-20 (139,666,835,436 bytes; listed with its checksums at
    <https://build-metadata.protomaps.dev/builds.json>). The build name is `PROTOMAPS_BUILD`
    in `.github/workflows/street-map-archive-load.yml`, which is the source of truth; a
    refresh changes it there and here in one pull request.
@@ -79,7 +79,7 @@ applies (duty L10).
    v1.31.2:
 
    ```bash
-   pmtiles extract https://build.protomaps.com/20261115.pmtiles us-20261115.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14
+   pmtiles extract https://build.protomaps.com/20261120.pmtiles us-20261120.pmtiles --region=docs/runbooks/street-map-us-region.geojson --maxzoom=14
    ```
 
 4. **What the command changes:** it keeps the tiles that touch the region, down to zoom 14
@@ -87,7 +87,7 @@ applies (duty L10).
    tile of a kept tile, and writes new directories for them. Tiles are copied as they are.
    Nothing is added, corrected or joined to other data (runbook, "What the docs say",
    read from the tool's source at `v1.31.2`).
-5. **Where it goes:** the object `us-20261115.pmtiles` in the private R2 bucket
+5. **Where it goes:** the object `us-20261120.pmtiles` in the private R2 bucket
    `ose-map-tiles` (OSE ADR-035). Only the Worker reads it.
 6. **The same data, from the source:** OpenStreetMap's own files are at
    <https://planet.openstreetmap.org/>; Protomaps' builds are listed at

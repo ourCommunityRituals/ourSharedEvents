@@ -38,8 +38,8 @@ Rules already in force that the decision must keep:
 bucket, no second load and no second copy.
 
 **D2. One key per build, never overwritten.** An object is named `us-YYYYMMDD.pmtiles` after the
-Protomaps build it was cut from (`us-20261115.pmtiles` since 2026-11-16; `us-20261109.pmtiles` when
-this was accepted, a build that aged out at Protomaps before any load). Each environment reads the key in
+Protomaps build it was cut from (`us-20261120.pmtiles` since 2026-11-21; `us-20261115.pmtiles` from 2026-11-16 and
+`us-20261109.pmtiles` when this was accepted, both builds that aged out at Protomaps before any load). Each environment reads the key in
 its own `MAP_TILES_ARCHIVE` setting, and both blocks of `wrangler.toml` carry the same key. A
 refresh is a new key and a pull request, never a write over an object: a running Worker keeps an
 archive's directories in memory by key.
