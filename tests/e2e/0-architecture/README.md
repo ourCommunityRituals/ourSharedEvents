@@ -209,6 +209,7 @@ and is wired — and let the mechanism do the scanning.
 | `geo-resolution.structural.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `i18n-catalog-only.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `lexicon-allowance.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `location-on-tap.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `log-redaction.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `migration-monotonicity.invariant.spec.ts` | #19 migration_monotonicity |
 | `monetization-inert.invariant.spec.ts` | #6 inert_monetization_hooks |
@@ -217,6 +218,7 @@ and is wired — and let the mechanism do the scanning.
 | `oer-emission-boundary.invariant.spec.ts` | #17 oer_emission_boundary |
 | `pii-retention.invariant.spec.ts` | #8 bounded_pii_retention |
 | `place-name-search.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
+| `public-event-coordinates.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `qr-decode-matrix.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `rendered-surface-lexicon.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |
 | `router-route-list.invariant.spec.ts` | — (OSE-local or derived gate, not the named test of a brain invariant) |

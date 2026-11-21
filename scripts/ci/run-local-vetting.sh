@@ -98,6 +98,11 @@ seed bruno/fixtures/landing-zip-own-area-seed.sql
 # The zoomed landing map (epic OSE-1880): read by the Pages folder "16. Landing Map
 # Zoom" and by the T4k map specs below. Sets known tap and share-open counts.
 seed bruno/fixtures/map-zoom-area-seed.sql
+# OSE-2196: off-map, grace and listed events read by the Pages folder
+# "17. Routable (OSE-2196)". After the map-zoom seed: its off-map pair sits in
+# that area. On staging a later step unpublishes the listed ones; this local D1
+# is thrown away.
+seed bruno/fixtures/routable-seed.sql
 echo "::endgroup::"
 
 # ── T3: Playwright smoke ─────────────────────────────────────────────────────

@@ -70,6 +70,13 @@
  *                                  fair's stall list and one to the fair.
  *                                  The number is read in any case. An unknown or closed event,
  *                                  number or stall is one 404. No count, no cookie; rate-limited.
+ *   GET /events/:id/vote         → the voter page (OSE-2129, OSE ADR-040): the event's title and
+ *                                  date, its sponsor strip, one <h1> "Vote", the night's result
+ *                                  once final, the songs open now (filled by its script from the
+ *                                  open-objects read), and the house rule. The pass rides in the
+ *                                  fragment and stays in memory. no-store, no referrer, never
+ *                                  framed; no count, no cookie; rate-limited. An unknown or
+ *                                  closed event is one 404.
  *   GET /brands/:brand/calendar.ics → a brand's public events as one calendar feed (OSE-2013):
  *                                  the rows GET /api/v2/events?brand= lists, through the public
  *                                  projection; rate-limited; 404 for an unknown or invalid brand
@@ -109,7 +116,7 @@
  *   POST   /api/v2/admin/events/:id/votables/code → make the room's vote code, or return the one in use; its token is in no public answer (auth, audited, OSE-2140)
  *   POST   /api/v2/admin/events/:id/votables/code/replace → retire the vote code and make a new token, in one batch (auth, audited, OSE-2140)
  *   POST   /api/v2/admin/events/:id/votables/open|reopen|close → open (stamps the epoch, draws T and V once), reopen, close the set; refused when final; open and reopen need the event Published (auth, audited, OSE-2142)
- *   POST   /api/v2/admin/events/:id/votables/finalize → make a set that never opened final, for good (auth, audited)
+ *   POST   /api/v2/admin/events/:id/votables/finalize → compute the night's result and make a closed set final, for good; the answer's set.result is the outcome and the winner only (auth, audited, OSE-2130)
  *   POST   /api/v2/admin/events/:id/votables/objects → add a song or stall to the set (auth, audited)
  *   PUT    /api/v2/admin/events/:id/votables/objects/:oid → change an object of this event (auth, audited)
  *   POST   /api/v2/admin/events/:id/votables/objects/:oid/open|reopen|close → an object's window; closes_at set by the server (auth, audited)
@@ -188,6 +195,7 @@
  *   GET    /api/v2/maps/venue-image?event=<id> → venue map image, proxied so the key stays server-side; rate-limited, edge-cached (OSE-217)
  *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
  *   GET    /api/v2/events/:id/display-config   → TV order + dwell + league/donate links + event QR (ETag, 304)
+ *   POST   /api/v2/vote/:eventId                → one vote {object_id, side: up|down, pass}: 200 {ok:true} for counted and already counted alike, no count, no cookie read or set (OSE-2128, OSE ADR-040). Routed only while VOTING_ENABLED is "on"
  *   GET    /api/v2/vote/:eventId/objects        → what a voter can vote on now: {objects:[{id,kind,label}]}; no count, no time (OSE-2135, OSE ADR-040). Routed only while VOTING_ENABLED is "on" (lib/voting-switch.ts); off, it is the router's own 404. Limited per caller: 600 a minute
  *
  *   Poster Deployments Admin (auth required):
@@ -312,6 +320,8 @@ import {
 } from './handlers/event-booths';
 import { handleVotables, matchVotablesRoute } from './handlers/votables';
 import { handleVoteObjects } from './handlers/vote-objects';
+import { handleVote } from './handlers/vote';
+import { handleVotePage } from './handlers/vote-page';
 import { votingEnabled, type VotingSwitchEnv } from './lib/voting-switch';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
@@ -2346,6 +2356,17 @@ export async function route(
     return handleAdminGeocode(request, env);
   }
 
+  // POST /api/v2/vote/:eventId — one vote (OSE-2128, S4a of OSE-1193; OSE
+  // ADR-040). Outside /api/v2/events*. The same kill switch as the read below:
+  // with VOTING_ENABLED anything but "on", this block is skipped and the path
+  // is the router's own 404. Only POST votes; GET and HEAD fall through to the
+  // 404. The handler reads the pass from the body and no browser state; its
+  // route limit is S4c's (OSE-2134).
+  const voteMatch = pathname.match(/^\/api\/v2\/vote\/([^/]+)$/);
+  if (voteMatch && method === 'POST' && votingEnabled(env)) {
+    return handleVote(request, env, voteMatch[1]);
+  }
+
   // GET /api/v2/vote/:eventId/objects — what a voter can vote on now (OSE-2135,
   // S3c of OSE-1193; OSE ADR-040 decisions 5 and 7). Outside /api/v2/events*.
   // THE KILL SWITCH: with VOTING_ENABLED anything but "on", this block is
@@ -2817,6 +2838,20 @@ export async function route(
     return limitedPage('form-page', pathname, undefined, (req, e: typeof env) =>
       handleFormPage(req, e, eventFormMatch[1], 1, eventFormMatch[2] as EventFormScreen)
     )(request, env);
+  }
+
+  // ── The voter page (OSE-2129, OSE ADR-040) — /events/<id>/vote ────────────
+  // The room's vote code lands here through /q with the pass in the fragment.
+  // Matched before the event page's /events/<id>/<name>, which would otherwise
+  // take "vote" as a name (canonical.ts keeps "vote" out of event names).
+  // Rate-limited like the stall pages; past the limit, the house page. Not on
+  // the language layer yet: under /es/ it is the ordinary 404.
+  const votePageMatch = pathname.match(/^\/events\/([^/]{1,200})\/vote$/);
+  if (votePageMatch && method === 'GET') {
+    if (await isPublicReadLimited(request, env, 'vote-page')) {
+      return renderErrorPage(429, 'Too many requests', 'Give it a minute and try again.');
+    }
+    return handleVotePage(request, env, votePageMatch[1]);
   }
 
   // ── A stall at a fair (OSE-1998, OSE ADR-034) — /events/<id>/booths/<number>

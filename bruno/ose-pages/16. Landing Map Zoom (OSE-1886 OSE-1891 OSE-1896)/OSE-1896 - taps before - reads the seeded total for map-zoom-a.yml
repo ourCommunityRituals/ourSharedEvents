@@ -22,8 +22,9 @@ runtime:
         // Map taps are not counted (epic OSE-1880, decision 4). This is the "before"
         // read; "taps after" (the last request of this folder) must show the same
         // number once every /?area= page below has been read.
-        // Fixture: bruno/fixtures/map-zoom-area-seed.sql sets 42 taps on map-zoom-a,
-        // 5 or more on every code, so the organizer's floored read is exact.
+        // Fixture: bruno/fixtures/map-zoom-area-seed.sql sets 63 taps on map-zoom-a,
+        // 9 on every code, so the organizer's floored read shows a total, each
+        // code rounded down to a multiple of 5 (OSE-2151).
         // Share opens have no HTTP read; CI reads them, and the taps again, from D1
         // right after this collection (scripts/ci/map-counts-check.mjs).
         // No "blocked by CF Access" branch: a read that does not reach the Worker
@@ -42,8 +43,10 @@ runtime:
           expect(clicks.suppressed).to.equal(false);
         });
 
-        test('Taps on map-zoom-a are the seeded 42', function () {
-          expect(clicks.count).to.equal(42);
+        // OSE-2151: each code is rounded down to a multiple of 5 before the sum:
+        // 7 codes of 9 = 63 seeded, each published as 5: 5 x 7 = 35.
+        test('Taps on map-zoom-a are the seeded 63, published as 35', function () {
+          expect(clicks.count).to.equal(35);
         });
 
         bru.setVar('mapZoomTapsBefore', clicks ? clicks.count : 'unread');

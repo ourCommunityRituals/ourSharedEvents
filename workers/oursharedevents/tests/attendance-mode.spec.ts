@@ -670,13 +670,10 @@ describe('7. the brand API returns online events, with the mode', () => {
       'evt-mode-api-both': 'both',
     });
     const online = items.find((i) => i.id === 'evt-mode-api-online')!;
-    expect([online.location, online.lat, online.lon, online.h3_res7, online.venue]).toEqual([
-      null,
-      null,
-      null,
-      null,
-      null,
-    ]);
+    expect([online.location, online.h3_res7, online.venue]).toEqual([null, null, null]);
+    // OSE-2197: no event answer carries a point, online or not.
+    expect(online).not.toHaveProperty('lat');
+    expect(online).not.toHaveProperty('lon');
   });
 
   test('GET /api/v2/events/:id carries the mode too', async () => {
@@ -720,14 +717,20 @@ describe('8. the public projection gained attendance_mode and nothing else', () 
     'why_purpose',
   ];
 
-  test('the allowlist is the old list plus the one field', () => {
-    expect([...PUBLIC_EVENT_COLUMNS].sort()).toEqual([...BEFORE, 'attendance_mode'].sort());
+  // OSE-2197 (v2.0.0) later took lat and lon out; nothing else changed.
+  const REMOVED_SINCE = new Set(['lat', 'lon']);
+
+  test('the allowlist is the old list plus the one field, less the point OSE-2197 removed', () => {
+    expect([...PUBLIC_EVENT_COLUMNS].sort()).toEqual(
+      [...BEFORE, 'attendance_mode'].filter((c) => !REMOVED_SINCE.has(c)).sort()
+    );
   });
 
   // v1.5.0 added the mode; v1.6.0 (OSE-1998) added the `booths` envelope key and
-  // changed no column, so the column lists below are still the mode's.
-  test('the contract snapshot is v1.6.0 and lists the same columns on both endpoints', () => {
-    expect(snapshot.version).toBe('1.6.0');
+  // changed no column; v2.0.0 (OSE-2197) removed lat and lon. The column lists
+  // below are the projection's.
+  test('the contract snapshot is v2.0.0 and lists the same columns on both endpoints', () => {
+    expect(snapshot.version).toBe('2.0.0');
     for (const endpoint of ['GET /api/v2/events', 'GET /api/v2/events/:id'] as const) {
       expect(snapshot.endpoints[endpoint].projected_columns, endpoint).toEqual(
         [...PUBLIC_EVENT_COLUMNS].sort()

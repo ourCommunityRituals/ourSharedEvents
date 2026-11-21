@@ -16,25 +16,40 @@
 import { describe, test, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { floorNestedCounts, flooredRatePct } from '../src/lib/count-floor';
+import { floorNestedCounts, floorPublishedChain, flooredRatePct } from '../src/lib/count-floor';
 import { clearsFloor, statLine, walkInStatLine } from '../src/lib/recap-stat-lines';
 
 const SUPPRESSED = '<p data-testid="stat-walk-ins">Fewer than 5 Walked in</p>';
 
 describe('walkInStatLine — the two ways a walk-in count is withheld read the same', () => {
-  test('20 check-ins with 18 walk-ins and with 3 walk-ins emit byte-identical markup', () => {
-    // 18: walk-ins clear 5 but leave 2 who registered and came.
+  test('20 check-ins with 3 walk-ins is the suppressed line', () => {
     // 3: walk-ins are under 5.
-    expect(walkInStatLine(20, 18)).toBe(walkInStatLine(20, 3));
+    expect(walkInStatLine(20, 3)).toBe(SUPPRESSED);
+  });
+
+  test('OSE-2151: an exact rest of 1 to 4 is still withheld, though rounding would hide it', () => {
+    // Exact, 18 walk-ins leave 2 who registered and came: withheld (OSE-1752).
+    // Rounded (20 and 15) the rest would read 5, so the exact pair is judged too.
     expect(walkInStatLine(20, 18)).toBe(SUPPRESSED);
+    expect(walkInStatLine(20, 19)).toBe(SUPPRESSED);
+  });
+
+  test('OSE-2151: a published walk-in count is rounded down to a multiple of 5', () => {
+    // 23 of 30 leaves 7: published, as 20 (30 - 20 = 10, a rest a reader may read).
+    expect(walkInStatLine(30, 23)).toBe(
+      '<p data-testid="stat-walk-ins"><strong>20</strong> Walked in</p>'
+    );
+    // Neighbours inside a step of 5 read the same.
+    expect(walkInStatLine(31, 22)).toBe(walkInStatLine(30, 20));
   });
 
   test('every withheld walk-in count, whatever the reason, is the one suppressed line', () => {
     const differing: string[] = [];
     for (let checkins = 5; checkins <= 60; checkins++) {
       for (let walkIns = 0; walkIns <= checkins; walkIns++) {
-        const [, shown] = floorNestedCounts([checkins, walkIns]);
-        if (shown !== null) continue;
+        const [, shown] = floorPublishedChain([checkins, walkIns]);
+        const [, exact] = floorNestedCounts([checkins, walkIns]);
+        if (shown !== null && exact !== null) continue;
         const line = walkInStatLine(checkins, walkIns);
         if (line !== SUPPRESSED) differing.push(`${checkins}/${walkIns}: ${line}`);
       }
@@ -42,9 +57,9 @@ describe('walkInStatLine — the two ways a walk-in count is withheld read the s
     expect(differing).toEqual([]);
   });
 
-  test('a published walk-in count is unchanged: exact, bold, same test id', () => {
+  test('a published walk-in count: rounded down to a multiple of 5, bold, same test id', () => {
     expect(walkInStatLine(20, 8)).toBe(
-      '<p data-testid="stat-walk-ins"><strong>8</strong> Walked in</p>'
+      '<p data-testid="stat-walk-ins"><strong>5</strong> Walked in</p>'
     );
     // What is left is exactly 5, or none: both publish.
     expect(walkInStatLine(20, 15)).toBe(
@@ -72,7 +87,7 @@ describe('walkInStatLine — the two ways a walk-in count is withheld read the s
   });
 
   test('the walk-in share is withheld in exactly the cases the line is, so the card reads alike', () => {
-    // The share line is drawn from flooredRatePct, the line from floorNestedCounts.
+    // The share line is drawn from flooredRatePct, the line from floorPublishedChain.
     // If they ever disagreed, one card would carry a share the other lacks.
     const disagree: string[] = [];
     for (let checkins = 0; checkins <= 60; checkins++) {

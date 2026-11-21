@@ -93,6 +93,20 @@
  *      that moves an event's status out of 'active' batches
  *      closeVoteSetUnlessPublished with the move (one transaction), or is
  *      exempt with its reason (STATUS_WRITER_EXEMPT). No D1 trigger: 0025.
+ *  12. NO SIDE, NO DUPLICATE AND NO T OR V IN A LOG (OSE-2128 follow-up, H1,
+ *      L7, L9). castVote (lib/vote-cast.ts) builds one batch for both sides:
+ *      the side appears only where the input is read, where the team marker
+ *      to bind is chosen, and in the counter's binds (one SQL text for both
+ *      sides); the statement list has no spread, no ternary and is never
+ *      changed after it is built, so OPERATION_COST's d1Queries, and the
+ *      database's per-query analytics, cannot carry the side. CastOutcome has no `counted` or
+ *      `duplicate`, and the vote handler names neither, so the route cannot
+ *      tell them apart. On the vote and result path (the vote route and its
+ *      lib, the set and result libs, the admin votables and open-objects
+ *      handlers, the voter page and its render, and the cost emitter), no
+ *      console call names T or V (secret_margin, secret_floor, margin, floor,
+ *      their ranges or the draw). The workers pool holds the same through the
+ *      Worker's fetch (tests/vote-route.spec.ts, "the logs cannot tell a side").
  *
  * What it cannot see: a value carried out by a variable (a listed lib file that
  * returns `row` to a handler). S3 and S5 add workers-pool tests that their
@@ -129,6 +143,12 @@
  *   qr-verify batch (11 red), an `is_vote_code` write planted in
  *   handlers/votables.ts (11 red) |
  *   date: 2026-11-18
+ * @born-red OSE-2128 | method: injected-fault, each removed after: the team
+ *   statement spread in only for an up vote (12 red), teamNight conditioned on
+ *   `side === 'up'` (12 red), the team HMAC skipped for "not for me" (12 red),
+ *   the two per-side counter texts put back (12 red), `'duplicate'` put back
+ *   in CastOutcome (12 red),
+ *   a `console.log` of `margin` in openVoteSet (12 red) | date: 2026-11-20
  */
 
 import { test, expect } from '@playwright/test';
@@ -147,6 +167,12 @@ const VOTE_SETS_LIB = 'src/lib/vote-sets.ts';
 const OPEN_OBJECTS_LIB = 'src/lib/vote-open-objects.ts';
 const OPEN_OBJECTS_HANDLER = 'src/handlers/vote-objects.ts';
 const SWITCH_LIB = 'src/lib/voting-switch.ts';
+const RESULTS_LIB = 'src/lib/vote-results.ts';
+const CAST_LIB = 'src/lib/vote-cast.ts';
+const VOTE_HANDLER = 'src/handlers/vote.ts';
+const PUBLIC_RESULT_LIB = 'src/lib/vote-public-result.ts';
+const VOTE_PAGE_HANDLER = 'src/handlers/vote-page.ts';
+const VOTE_PAGE_RENDER = 'src/lib/vote-page-render.ts';
 
 /**
  * Every Worker file that names a vote table, and why. A route story (S3, S4a,
@@ -158,6 +184,12 @@ const VOTE_TABLE_FILES: Record<string, string> = {
     'S3 (OSE-2127): every write to vote_sets and votable_objects: create, open, reopen, close, the final lock and the nightly final job; it makes the tally row with its object and deletes markers at final.',
   [OPEN_OBJECTS_LIB]:
     'S3c (OSE-2135): the public open-objects read. One SELECT of id, kind, label and closes_at from votable_objects, joined to vote_sets for its state, final and void flags only. No write, no counter, no secret (rule 8).',
+  [CAST_LIB]:
+    'S4a (OSE-2128): one vote. One D1 batch inserts the receipt (open checks inside the insert), raises one side counter only when the receipt was new, and inserts the team and participant markers. It answers counted, duplicate or closed, never a number.',
+  [RESULTS_LIB]:
+    "S5 (OSE-2130): the night's result. Two UPDATEs, run in finalizeVoteSet's batch, that reads the tallies, the team and participant markers, T and V inside SQL and writes only the outcome and the winner's id.",
+  [PUBLIC_RESULT_LIB]:
+    "S4b (OSE-2129): the voter page's result. Reads outcome and the winner's id from a final, non-void vote_sets row, and labels from votable_objects. No write, no counter, no secret.",
 };
 
 /**
@@ -168,13 +200,20 @@ const VOTE_TABLE_FILES: Record<string, string> = {
 const SECRET_READERS: Record<string, string> = {
   [VOTE_SETS_LIB]:
     'S3 (OSE-2127) writes T and V once, at the first open, and nulls them at final. It never reads them back.',
+  [RESULTS_LIB]:
+    'S5 (OSE-2130) compares the lead with T and the voters with V inside its result UPDATE. Neither leaves the database.',
 };
 
 /**
- * Files that may name the live counters. Empty: nothing counts yet. S4a (the
- * vote write) and S5 (results at final) add their own lib file here.
+ * Files that may name the live counters. S5 (results at final) reads them in
+ * SQL; S4a (the vote write) adds its own lib file here.
  */
-const COUNT_READERS: Record<string, string> = {};
+const COUNT_READERS: Record<string, string> = {
+  [CAST_LIB]:
+    'S4a (OSE-2128) raises up_count or down_count by one inside the vote batch. It reads no counter back.',
+  [RESULTS_LIB]:
+    'S5 (OSE-2130) reads up_count inside the result UPDATE, to rank objects. No count leaves the database.',
+};
 
 const SECRET_COLUMNS = ['secret_margin', 'secret_floor'];
 const COUNT_COLUMNS = [
@@ -433,9 +472,51 @@ const COOKIE_READERS: Record<string, string> = {
 const COOKIE_READ =
   /\.get\(\s*['"`]cookie['"`]\s*\)|['"`]cookie['"`]|\bgetOrCreateAnonId\s*\(|\bose_anon\b|\bdocument\.cookie\b/i;
 
+/** The vote route's log words, for the negative control (OSE-2128). */
+const VOTE_WORDS_CONTROL =
+  /\b(?:body|object_id|objectId|side|eventId|event_id|pass|claims|k|receipt|participant|team|outcome)\b/;
+
 /** Words a log line on the scan path must not name (OSE-2133). */
 const PASS_WORDS =
   /\b(?:Location|location|redirectTarget|redirect|votePageTarget|pass|issueVotePass|mintVotePass|voterKey|k|anonId|url|href|headers)\b/;
+
+/** A word for T or V (decision 7): the columns, their names in code, their ranges and the draw. */
+const TV_WORDS =
+  /\b(?:secret_margin|secret_floor|secretMargin|secretFloor|margin|floor|SECRET_MARGIN_RANGE|SECRET_FLOOR_RANGE|drawUniform)\b/;
+
+/**
+ * Why castVote's batch, or the work before it, could depend on the side
+ * (OSE-2128, H1). The side may appear in castVote in three places only: the
+ * destructuring of the input, the choice of the team marker to bind (made, or
+ * null for "not for me"), and the counter's binds. Any other `side` (an alias,
+ * `input.side`, a condition on a statement or on the HMAC) is a problem. The
+ * statement list has no spread but `...open` and no ternary, and is never
+ * changed after it is built (no push, splice or filter). Empty when the batch
+ * and the work are one shape for both sides; it fails closed when castVote is
+ * not found.
+ */
+function sideFreeBatchProblems(code: string): string[] {
+  const out: string[] = [];
+  const fn = code.indexOf('export async function castVote');
+  if (fn < 0) return ['no castVote'];
+  const next = code.indexOf('\nexport ', fn + 1);
+  const body = code.slice(fn, next < 0 ? code.length : next);
+  const stray = body
+    .replace(/const\s*\{\s*eventId,\s*objectId,\s*side,\s*k,\s*epoch\s*\}\s*=\s*input;/, '')
+    .replace(/const\s+team\s*=\s*side\s*===\s*'up'\s*\?\s*made\s*:\s*null;/, '')
+    .replace(/\.bind\(\s*side\s*,\s*side\s*,\s*objectId\s*\)/, '')
+    .replace(/side:\s*VoteSide/, '');
+  if (/\bside\b/.test(stray)) out.push('castVote uses the side beyond its three places');
+  const at = body.indexOf('const statements = [');
+  if (at < 0) return [...out, 'no `const statements = [` in castVote'];
+  const block = body.slice(at, body.indexOf('];', at));
+  const rest = block.replace(/\?\?\s*null/g, '');
+  if (/\.\.\.(?!open\b)/.test(rest)) out.push('a spread in the statement list');
+  if (/\?/.test(rest.replace(/'[^']*'/g, ''))) out.push('a ternary in the statement list');
+  if (/\bstatements\s*\.\s*(?!length\b)\w+/.test(body))
+    out.push('the statement list is changed after it is built');
+  return out;
+}
 
 /** Every `console.<level>(…)` call in a file, to its closing parenthesis. */
 function consoleCalls(code: string): string[] {
@@ -452,6 +533,12 @@ function consoleCalls(code: string): string[] {
   }
   return out;
 }
+
+/** A browser storage API or the cookie, as code names it (OSE-2129). */
+const STORAGE_OR_COOKIE =
+  /\b(localStorage|sessionStorage|indexedDB|caches\.open)\b|document\.cookie/;
+/** A fetch whose address is built with the pass (OSE-2129). */
+const PASS_IN_URL = /fetch\([^,]*\bpass\b/;
 
 const SOURCES = walk(SRC_DIR, /\.(ts|js|mjs|html)$/).map((path) => {
   const raw = readFileSync(path, 'utf8');
@@ -718,6 +805,131 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
     ])
       expect(COOKIE_READ.test(planted), planted).toBe(true);
     expect(COOKIE_READ.test("headers.append('Set-Cookie', value)")).toBe(false);
+  });
+
+  // OSE-2128 (S4a): the vote route reads no browser state and logs nothing
+  // about a vote. Rule 10 already refuses a cookie reader not on its list;
+  // this names the route's own files, so the rule cannot be met by listing them.
+  test('OSE-2128 | cookie | the vote route never reads the Cookie header or ose_anon, and is never listed', () => {
+    for (const file of [VOTE_HANDLER, CAST_LIB]) {
+      const src = SOURCES.find((s) => s.file === file);
+      expect(src, `${file} is read`).toBeTruthy();
+      expect(COOKIE_READ.test(src!.code), `${file} reads the anonymous cookie`).toBe(false);
+      expect(file in COOKIE_READERS, `${file} can never be a cookie reader`).toBe(false);
+      expect(/Set-Cookie/i.test(src!.code), `${file} sets a cookie`).toBe(false);
+    }
+  });
+
+  test('OSE-2128 | log | no console call in the vote route names the object, side, event, pass, k or receipt', () => {
+    const VOTE_WORDS =
+      /\b(?:body|object_id|objectId|side|eventId|event_id|pass|claims|k|receipt|participant|team|outcome)\b/;
+    for (const file of [VOTE_HANDLER, CAST_LIB]) {
+      const src = SOURCES.find((s) => s.file === file);
+      expect(src, `${file} is read`).toBeTruthy();
+      const named = consoleCalls(src!.code).filter((call) => VOTE_WORDS.test(call));
+      expect(named, `${file} logs a vote detail`).toEqual([]);
+    }
+    expect(VOTE_WORDS_CONTROL.test('console.error(JSON.stringify({ side: body.side }))')).toBe(
+      true
+    );
+  });
+
+  test('OSE-2128 | log | one batch for both sides, and the route cannot tell counted from duplicate', () => {
+    const cast = SOURCES.find((s) => s.file === CAST_LIB)!.code;
+    const handler = SOURCES.find((s) => s.file === VOTE_HANDLER)!.code;
+    expect(sideFreeBatchProblems(cast), `${CAST_LIB}: the batch depends on the side`).toEqual([]);
+    const outcome = /export\s+type\s+CastOutcome\s*=([^;]*);/.exec(cast);
+    expect(outcome, 'CastOutcome is declared').toBeTruthy();
+    expect(outcome![1], 'CastOutcome names counted or duplicate').not.toMatch(
+      /['"](?:counted|duplicate)['"]/
+    );
+    expect(handler, `${VOTE_HANDLER} names counted or duplicate`).not.toMatch(
+      /['"](?:counted|duplicate)['"]/
+    );
+    // Negative controls: today's shape passes; H1, and the review's bypasses
+    // (a splice after the list, a filtered conditional, the HMAC skipped for
+    // "not for me", an alias), are caught.
+    const today = `export async function castVote(db, pepper, input) {
+      const { eventId, objectId, side, k, epoch } = input;
+      const teamNight = obj.played_by === 'team' && !!obj.group_id;
+      const made = teamNight ? await voteTeamMarker(pepper, k, obj.group_id) : null;
+      const team = side === 'up' ? made : null;
+      const statements = [
+        db.prepare(RECEIPT_INSERT).bind(receipt, ...open),
+        db.prepare(COUNT).bind(side, side, objectId),
+        db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, obj.group_id ?? null, team, team),
+      ];
+      const results = await db.batch(statements);
+    }`;
+    expect(sideFreeBatchProblems(today)).toEqual([]);
+    const TEAM_LINE =
+      'db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, obj.group_id ?? null, team, team),';
+    for (const bad of [
+      today.replace(TEAM_LINE, '...(teamNight ? [db.prepare(TEAM_MARKER_INSERT)] : []),'),
+      today.replace("=== 'team' &&", "=== 'team' && side === 'up' &&"),
+      today.replace(
+        'const results',
+        'if (team) statements.splice(2, 0, db.prepare(TEAM_MARKER_INSERT));\n const results'
+      ),
+      today.replace(TEAM_LINE, "input.side === 'up' && db.prepare(TEAM_MARKER_INSERT),"),
+      today.replace('const made = teamNight ?', "const made = teamNight && side === 'up' ?"),
+      today.replace(
+        'db.prepare(COUNT).bind(side, side, objectId),',
+        "db.prepare(side === 'up' ? COUNT_UP : COUNT_DOWN).bind(objectId),"
+      ),
+      today.replace('const team = side', 'const s = side;\n const team = s'),
+    ])
+      expect(sideFreeBatchProblems(bad), bad).not.toEqual([]);
+  });
+
+  test('OSE-2128 | log | no console call on the vote or result path names T or V', () => {
+    const files = [
+      VOTE_HANDLER,
+      CAST_LIB,
+      VOTE_SETS_LIB,
+      RESULTS_LIB,
+      OPEN_OBJECTS_HANDLER,
+      'src/lib/vote-public-result.ts',
+      'src/handlers/votables.ts',
+      'src/handlers/vote-page.ts',
+      'src/lib/vote-page-render.ts',
+      'src/lib/cost-metric.ts',
+    ];
+    for (const file of files) {
+      const src = SOURCES.find((s) => s.file === file);
+      expect(src, `${file} is read`).toBeTruthy();
+      const named = consoleCalls(src!.code).filter((call) => TV_WORDS.test(call));
+      expect(named, `${file} logs T or V`).toEqual([]);
+    }
+    const costLib = SOURCES.find((s) => s.file === 'src/lib/cost-metric.ts')!.code;
+    const emitter = costLib.slice(costLib.indexOf('export function emitOperationCost'));
+    expect(emitter.length, 'the OPERATION_COST emitter is found').toBeGreaterThan(100);
+    expect(TV_WORDS.test(emitter), 'the OPERATION_COST emitter names T or V').toBe(false);
+    for (const planted of [
+      "console.log(JSON.stringify({ type: 'VOTE_SET_OPEN', margin }))",
+      'console.info(set.secret_floor)',
+      'console.warn(`T=${secretMargin}`)',
+    ])
+      expect(
+        consoleCalls(planted).some((c) => TV_WORDS.test(c)),
+        planted
+      ).toBe(true);
+    expect(
+      TV_WORDS.test("console.log(JSON.stringify({ type: 'VOTE_FINAL_JOB', finalized }))")
+    ).toBe(false);
+  });
+
+  test('OSE-2128 | route | only the router imports the vote handler; it is routed for POST only, behind the switch', () => {
+    const importers = SOURCES.filter(({ code }) =>
+      /from\s+['"]\.\.?\/(?:handlers\/)?vote['"]/.test(code)
+    ).map((s) => s.file);
+    expect(importers).toEqual(['src/router.ts']);
+    const router = SOURCES.find((s) => s.file === 'src/router.ts')!.code;
+    const at = router.indexOf('handleVote(request, env');
+    expect(at).toBeGreaterThan(0);
+    const cond = router.slice(router.lastIndexOf('if (', at), at);
+    expect(cond).toMatch(/method === 'POST'/);
+    expect(cond).toMatch(/\bvotingEnabled\(env\)/);
   });
 
   test('OSE-2125 | gate | the detectors see what they are for (negative controls)', () => {
@@ -1292,5 +1504,62 @@ test.describe("Invariant: the room's own vote code and the live event (OSE-2140,
         },
       ])
     ).toEqual([]);
+  });
+});
+
+test.describe('Invariant: the voter page (OSE-2129)', () => {
+  const byFile = new Map(SOURCES.map((s) => [s.file, s]));
+  const code = (file: string) => byFile.get(file)?.code ?? '';
+
+  test('OSE-2129 | result | the page reads a result only from a final, non-void set, and names no number', () => {
+    const sqls = sqlLiterals(code(PUBLIC_RESULT_LIB));
+    expect(sqls.length, `${PUBLIC_RESULT_LIB} holds its two reads`).toBe(2);
+    const setRead = sqls.find((q) => /FROM vote_sets/.test(q)) ?? '';
+    expect(setRead).toMatch(/s\.is_final = 1/);
+    expect(setRead).toMatch(/s\.is_void = 0/);
+    for (const q of sqls) {
+      expect(READS_STAR.test(q), 'no SELECT *').toBe(false);
+      expect(/\b(INSERT|UPDATE|DELETE)\b/i.test(q), 'the result read writes nothing').toBe(false);
+      expect(/COUNT\s*\(|SUM\s*\(/i.test(q), 'the result read counts nothing').toBe(false);
+    }
+  });
+
+  test('OSE-2129 | result | only the voter page imports the result read, and only the router imports the page', () => {
+    const importers = (mod: string) =>
+      SOURCES.filter(({ code }) =>
+        new RegExp(`from\\s+['"][./]*[\\w/]*${mod}(?:\\.js)?['"]`).test(code)
+      )
+        .map((s) => s.file)
+        .sort();
+    expect(importers('lib/vote-public-result')).toEqual([VOTE_PAGE_HANDLER]);
+    expect(importers('handlers/vote-page')).toEqual(['src/router.ts']);
+  });
+
+  test('OSE-2129 | page | the voter page keeps the pass in memory: no storage, no cookie, no pass in a URL', () => {
+    for (const file of [VOTE_PAGE_HANDLER, VOTE_PAGE_RENDER]) {
+      expect(STORAGE_OR_COOKIE.test(code(file)), `${file} names a storage API or a cookie`).toBe(
+        false
+      );
+      expect(file in COOKIE_READERS, `${file} can never be a cookie reader`).toBe(false);
+    }
+    const page = code(VOTE_PAGE_RENDER);
+    expect(page, 'the fragment leaves the address bar first').toMatch(/history\.replaceState\(/);
+    expect(page, 'the pass is sent only in a POST body').toMatch(
+      /body: JSON\.stringify\(\{ object_id: objectId, side: side, pass: pass \}\)/
+    );
+    expect(PASS_IN_URL.test(page), 'no fetch URL is built with the pass').toBe(false);
+    expect(page.match(/credentials: 'omit'/g)?.length, 'both requests send no cookie').toBe(2);
+  });
+
+  test('OSE-2129 | gate | the page rules can fail (negative controls)', () => {
+    expect(STORAGE_OR_COOKIE.test("localStorage.setItem('p', pass)")).toBe(true);
+    expect(STORAGE_OR_COOKIE.test('sessionStorage.p = pass')).toBe(true);
+    expect(STORAGE_OR_COOKIE.test("indexedDB.open('v')")).toBe(true);
+    expect(STORAGE_OR_COOKIE.test("document.cookie = 'p=' + pass")).toBe(true);
+    expect(STORAGE_OR_COOKIE.test("fetch('/api/v2/vote/' + id, { credentials: 'omit' })")).toBe(
+      false
+    );
+    expect(PASS_IN_URL.test("fetch('/api/v2/vote/' + eventId + '?pass=' + pass)")).toBe(true);
+    expect(PASS_IN_URL.test("fetch('/api/v2/vote/' + encodeURIComponent(eventId), {")).toBe(false);
   });
 });

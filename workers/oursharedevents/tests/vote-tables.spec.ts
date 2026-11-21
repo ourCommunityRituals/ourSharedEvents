@@ -270,6 +270,9 @@ describe('OSE-2125 | the vote tables: where they live and what they hold', () =>
       'refused_votes',
       'created_at',
       'updated_at',
+      'outcome', // 0114 (OSE-2130): 'winner' or 'too_close', written at final
+      'winner_object_id',
+      'winner_team_id',
     ]);
     expect(await columns('votable_objects')).toEqual([
       'id',

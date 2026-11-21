@@ -28,6 +28,9 @@
  * sponsor link, 40px logo, art below the cards, print one plain line) | date: 2026-11-12
  * @born-red OSE-1991 phone spacing | method: run against accb936f's template
  * (the wider title and body padding): the spacing case went red | date: 2026-11-12
+ * @born-red OSE-2196 | method: the bundle mock without `directions` (CI run
+ * 44646453048 on 2e304154): no map buttons, both Where cases red. The poster
+ * draws them only from the server's directions | date: 2026-11-20
  */
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
@@ -79,6 +82,11 @@ async function load(
           timezone: 'America/Chicago',
           ...(art ? { cover_image_url: '/art-1991.svg' } : {}),
         },
+        // OSE-2196: the server's answer for a listed event with no cell: it may
+        // be routed to, and both maps search its address. An off-map event's
+        // bundle sends directions: null, and the poster draws no map buttons.
+        routable: true,
+        directions: { query: ADDRESS },
         sponsors,
         slots: [],
       }),

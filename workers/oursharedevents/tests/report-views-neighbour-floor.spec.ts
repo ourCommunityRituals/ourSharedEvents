@@ -172,16 +172,19 @@ describe('OSE-2087 | one report view in an event-day under the floor moves nothi
     });
   }
 
-  test('control: one more view on the day of 7 moves both routes', async () => {
-    const before = await readAll(BASE);
-    const after = await readAll({ ...BASE, 'D1/bar_owner': 5 });
+  // Published counts are rounded down to a multiple of 5 (OSE-2151), so the
+  // control crosses a step: a day of 9 -> 10 moves both routes, where 7 -> 8
+  // would not.
+  test('control: one more view on a day, from 9 to 10, moves both routes', async () => {
+    const before = await readAll({ ...BASE, 'D1/bar_owner': 6 });
+    const after = await readAll({ ...BASE, 'D1/bar_owner': 7 });
     expect(moved(before, after).sort()).toEqual(ROUTES.map((r) => r.name).sort());
   });
 
   test('the base dataset publishes the day of 7 on both routes, and only it', async () => {
     const all = await readAll(BASE);
     for (const r of ROUTES)
-      expect(views(all[r.name]), r.name).toEqual({ count: 7, suppressed: false, floor: 5 });
+      expect(views(all[r.name]), r.name).toEqual({ count: 5, suppressed: false, floor: 5 }); // 7, rounded down
   });
 
   test('with no day at 5 the figure is withheld, and reads the same as no views at all', async () => {

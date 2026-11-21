@@ -6,8 +6,11 @@
     <title>Upcoming events | OurSharedEvents</title>
     <link rel="stylesheet" href="/ui.css" />
     <style>
-      header { background: var(--surface); border-bottom: 1px solid var(--border); color: var(--text); padding: 1.25rem 2rem; display: flex; align-items: center; gap: 1rem; }
+      header { background: var(--surface); border-bottom: 1px solid var(--border); color: var(--text); padding: 1.25rem 2rem; display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
       header h1 { overflow-wrap: anywhere; font-size: 1.4rem; font-weight: 600; letter-spacing: -0.01em; }
+      header nav { margin-inline-start: auto; display: flex; flex-wrap: wrap; }
+      header nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.75rem; color: var(--text-muted); text-decoration: none; }
+      header nav [aria-current='page'] { font-weight: 700; color: var(--text); }
       main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
       h2 { font-size: 1.1rem; font-weight: 600; color: var(--text-muted); margin-bottom: 1rem; }
       
@@ -94,20 +97,6 @@
       }
       .skip-link { position: absolute; inset-inline-start: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
       .skip-link:focus { position: fixed; top: 0; inset-inline-start: 0; width: auto; height: auto; padding: 0.5rem 1rem; background: var(--surface); color: var(--text); font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid var(--accent); }
-      footer {
-        text-align: center;
-        padding: 1.5rem;
-        font-size: 0.8rem;
-        color: var(--text-muted);
-        border-top: 1px solid var(--border);
-      }
-      footer a {
-        color: var(--accent);
-        text-decoration: none;
-      }
-      footer a:hover {
-        text-decoration: underline;
-      }
       
     .ose-lang { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin: 1.5rem 0 0; }
     .ose-lang a { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0.5rem 1rem; color: var(--accent); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: underline; }
@@ -178,6 +167,10 @@
     </div>
     <script nonce="N">(function(){function o(){return document.querySelectorAll('.ose-langmenu details[open]');}document.addEventListener('click',function(e){var d=o();for(var i=0;i<d.length;i++){if(!d[i].contains(e.target))d[i].open=false;}});document.addEventListener('keydown',function(e){if(e.key!=='Escape')return;var d=o();if(!d.length)return;var s=d[0].querySelector('summary');for(var i=0;i<d.length;i++)d[i].open=false;if(s)s.focus();});})();</script>
       <h1 data-testid="public-title"><a href="/" data-testid="public-home-link" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;min-height:44px">OurSharedEvents</a></h1>
+      <nav data-testid="public-nav" aria-label="Primary">
+        <a href="/events?where=Blue%20Island%2C%20IL" data-testid="nav-events" aria-current="page">Events</a>
+        <a href="/map?where=Blue%20Island%2C%20IL" data-testid="nav-map">Map</a>
+      </nav>
     </header>
     <main id="main-content" data-testid="public-main" aria-label="Upcoming community events">
       <section data-testid="public-sponsor-section" aria-label="Event sponsors">
@@ -189,8 +182,8 @@
         ></div>
       </section>
       <section data-testid="public-events-section" aria-labelledby="events-heading">
-        <p id="events-count" class="sr-only" data-testid="public-events-count" role="status" aria-live="polite">8 events in Blue Island</p>
-        <h2 id="events-heading" data-testid="public-events-heading" tabindex="-1">Events in Blue Island</h2>
+        <p id="events-count" class="sr-only" data-testid="public-events-count" role="status" aria-live="polite">8 events in Blue Island, IL</p>
+        <h2 id="events-heading" data-testid="public-events-heading" tabindex="-1">Events in Blue Island, IL</h2>
         <!-- Discovery filters (lib/event-discovery): server-rendered GET form +
              "when" chips. Works with no JS; the URL is the state. -->
         
@@ -201,7 +194,7 @@
           <button type="submit" class="disc-go" data-testid="disc-go">Search</button>
         </form>
         <nav class="disc-chips" aria-label="When" data-testid="disc-chips"><a class="disc-chip active" href="/events?when=all&amp;q=Blue%20Island" data-testid="disc-when-all" aria-current="true">Everything</a><a class="disc-chip" href="/events?when=weekend&amp;q=Blue%20Island" data-testid="disc-when-weekend">This weekend</a><a class="disc-chip" href="/events?when=week&amp;q=Blue%20Island" data-testid="disc-when-week">Next 7 days</a><a class="disc-chip" href="/events?when=month&amp;q=Blue%20Island" data-testid="disc-when-month">This month</a><a class="disc-chip" href="/events?when=past&amp;q=Blue%20Island" data-testid="disc-when-past">Recently wrapped</a><a class="disc-clear" href="/events" data-testid="disc-clear">Clear</a></nav>
-        <p class="disc-summary" data-testid="disc-summary">8 events in Blue Island</p>
+        <p class="disc-summary" data-testid="disc-summary">8 events in Blue Island, IL</p>
         <!-- OSE-1243: server-rendered. The Worker replaces this marker with the
              event cards before the page is sent, so the served HTML is the
              truth and there is no second round trip to see an event. The

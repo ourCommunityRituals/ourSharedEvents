@@ -2,7 +2,7 @@
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0113, forms 0015–0018.
+Covers: main 0078–0114, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 113              | 36       |
+| Main (`ocr-db-production`)        | 77               | 114              | 37       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -128,7 +128,7 @@ its counts were not taken first. They were read on staging the next day (run 436
 events, 60 of them with no place at all, 3 of those on the public list. Its per-status breakdown was
 replaced by one count on 2026-11-15 so the file fits the strict rule.
 
-## Main database, 0078 to 0113
+## Main database, 0078 to 0114
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -170,6 +170,7 @@ replaced by one count on 2026-11-15 so the file fits the strict rule.
 | `0111_vote_tables.sql`                                    | Adds the six vote tables (ADR-040): sets, objects, tallies and keyed markers. Writes no row. No route reads them yet.             | No   |
 | `0112_sponsor_and_campaign_created_by.sql`                | Adds `created_by` to `sponsor_business` and `campaigns`, and an index on each (OSE-1561). Writes no row; existing rows read NULL. | No   |
 | `0113_vote_code_and_event_status.sql`                     | Adds `poster_deployments.is_vote_code` (the room's vote code) and its index; closes sets open on unpublished events.              | Yes  |
+| `0114_vote_result.sql`                                    | Adds `vote_sets.outcome`, `winner_object_id` and `winner_team_id`, the night's result written at final (OSE-2130). Writes no row. | No   |
 
 ## Forms database, 0015 to 0018
 
@@ -383,7 +384,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0113_vote_code_and_event_status.sql` and `113`;
+2. **The level.** Expected: `0114_vote_result.sql` and `114`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash

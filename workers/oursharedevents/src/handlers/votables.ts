@@ -12,7 +12,9 @@
  *   POST /api/v2/admin/events/:id/votables/open                   first open (stamps the epoch, draws T and V)
  *   POST /api/v2/admin/events/:id/votables/reopen                 reopen a closed set
  *   POST /api/v2/admin/events/:id/votables/close                  close the set
- *   POST /api/v2/admin/events/:id/votables/finalize               make a set that never opened final
+ *   POST /api/v2/admin/events/:id/votables/finalize               compute the night's result and make
+ *                                                                 the set final (a closed set, or one
+ *                                                                 that never opened; OSE-2130)
  *   POST /api/v2/admin/events/:id/votables/objects                add an object { kind, label, ... }
  *   PUT  /api/v2/admin/events/:id/votables/objects/:oid           change an object
  *   POST /api/v2/admin/events/:id/votables/objects/:oid/open      open it { window_seconds? }

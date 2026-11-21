@@ -192,9 +192,9 @@ describe('OSE-896 — admin event stats endpoint', () => {
     expect(lowBody.stats.checkins).toMatchObject({ count: null, suppressed: true });
 
     const high = await createEvent('Chk High');
-    await seedCheckins(high, 7); // 7 >= 5 → exact
+    await seedCheckins(high, 7); // 7 >= 5 → published, rounded down to 5 (OSE-2151)
     const highBody = (await (await stats(high)).json()) as any;
-    expect(highBody.stats.checkins).toMatchObject({ count: 7, suppressed: false });
+    expect(highBody.stats.checkins).toMatchObject({ count: 5, suppressed: false });
   });
 });
 

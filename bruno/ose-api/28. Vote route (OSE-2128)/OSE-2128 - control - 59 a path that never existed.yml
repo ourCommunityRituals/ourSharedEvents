@@ -1,0 +1,29 @@
+info:
+  name: "OSE-2128 | control | 59 a path that never existed"
+  type: http
+  seq: 59
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/vote-never-was"
+  headers:
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2128 control: the router 404', function () { expect(res.getStatus()).to.eql(404); });
+        bru.setVar('voteRouteNowhere', JSON.stringify(res.getBody()));
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -23,7 +23,9 @@ runtime:
           expect(online.attendance_mode).to.eql('online');
         });
         test('OSE-2012 place, not person: the online event has no place, coordinates or cell', function () {
-          expect([online.location, online.where_address, online.lat, online.lon, online.h3_res7, online.venue]).to.eql([null, null, null, null, null, null]);
+          expect([online.location, online.where_address, online.h3_res7, online.venue]).to.eql([null, null, null, null]);
+          // OSE-2197: no public event answer carries lat or lon, online or not.
+          expect(online).to.not.have.any.keys('lat', 'lon');
         });
         test('OSE-2012: every listed event carries one of the three modes', function () {
           expect(items.length).to.be.above(0);

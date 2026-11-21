@@ -5,20 +5,26 @@
  * With a street layer, the map's `<svg>` carries its frame (`data-x0`,
  * `data-y0`, `data-scale`, `data-mpu`) and each area its centre (`data-ll`), so
  * the map's script can place the phone's own position on the drawing
- * (lib/map-pan-script.ts). These are the only coordinate-shaped numbers on the
- * page. This file proves they say no more than the cell ids the page already
- * shows:
- *   - the frame and the centre are the same whatever the events and wherever
- *     they are: they come from the area's res-7 cell id alone;
+ * (lib/map-pan-script.ts). Zoomed in on one area, each place's dot also carries
+ * its own point (`data-ll`, OSE-2198; owner 2026-11-19: the distance from the
+ * person to an event is measured to the event's res-9 cell): the centre of the
+ * res-9 cell the dot is drawn at. These are the only coordinate-shaped numbers
+ * on the page. This file proves they say no more than the cells the page
+ * already shows:
+ *   - the frame and the area's centre are the same whatever the events and
+ *     wherever they are: they come from the area's res-7 cell id alone;
  *   - moving any event anywhere inside its res-9 block changes no byte of the
  *     zoomed page (and anywhere inside its res-7 area, no byte of the area map),
  *     so nothing finer than the block can be read from it, by any means;
  *   - each dot, read back through the page's own frame, is its block's centre;
+ *   - each dot's own point is exactly that block's centre, to five decimals,
+ *     pinned per cell: worked out here from the cell id the dot's drawing reads
+ *     back to, never read off the page, and never an event's own point;
  *   - nothing else in the zoomed part has the shape of a coordinate.
  *
  * The staging layer is the Bruno request "OSE-1891 - GET area (seeded)" in
  * bruno/ose-pages/16. Landing Map Zoom; it pins the same strings as FIXTURE_*
- * below, for the same cell, so the two layers cannot drift.
+ * below, for the same cells, so the two layers cannot drift.
  *
  * Node project: pure rendering.
  *
@@ -29,6 +35,16 @@
  *   its point as a data attribute, the touch target drawn off its dot, a point
  *   in micro-degrees, an area-map centre that is not its cell's); each turned
  *   this file red | date: 2026-11-18
+ * @born-red each place's own point is its res-9 cell's (OSE-2198) | method:
+ *   first, the dots' new `data-ll` with this file as it was: the coordinate scan
+ *   went red in all four areas. Then, with this file extended, 7 faults injected
+ *   into src/lib/attendee-map.ts one at a time, each put back (a dot's point
+ *   written from its first event's own lat/lon; from the area's centre; from a
+ *   neighbouring block's centre; to six decimals; the event's own point added
+ *   as a second attribute; a merged dot's point taken from the block merged
+ *   into it; the dot's point written on the dot's touch target too); each
+ *   turned this file red. After the security review, each dot given back a
+ *   list of its event ids: red too | date: 2026-11-19
  */
 import { describe, expect, test } from 'vitest';
 import { cellToBoundary, cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
@@ -49,6 +65,13 @@ const FIXTURE_POINTS: [number, number, string][] = [
 const FIXTURE_FRAME =
   'data-x0="0.255867824" data-y0="0.372606262" data-scale="3363057.841" data-mpu="8.909"';
 const FIXTURE_CENTRE = 'data-ll="41.61285,-87.85547"';
+// Each place's own point: its res-9 cell's centre, by the number on its dot
+// (north is 1). Pinned in the Bruno check too. Change both or neither.
+const FIXTURE_PLACES: Record<number, [cell: string, ll: string]> = {
+  1: ['892664405d7ffff', 'data-ll="41.62094,-87.85603"'], // the business
+  2: ['89266440547ffff', 'data-ll="41.61159,-87.86385"'],
+  3: ['89266440537ffff', 'data-ll="41.60601,-87.84653"'],
+};
 const MILE = 'MPU / unitPx() / 1609.344';
 // Coordinate-shaped: three or more decimals (a degree to about 110 m anywhere, a
 // radian, a fraction of the frame) or seven or more digits in a row (micro-degrees).
@@ -69,13 +92,22 @@ const streetsFor = (cells: string[]) => ({
   svg: '<g data-testid="amap-streets"></g>',
 });
 
-function ev(i: number, cell: string, lat: number, lon: number, kind = 'address'): ZoomEvent {
+// The event carries its point beside its stored res-9 cell, so a map that read
+// the point instead of the cell (OSE-2197) would draw it off its block centre.
+function ev(
+  i: number,
+  cell: string,
+  lat: number,
+  lon: number,
+  kind = 'address'
+): ZoomEvent & { lat: number; lon: number } {
   return {
     id: `e${i}`,
     name: `Event ${i}`,
     startDateISO: '2026-11-25',
     phase: 'pre_event',
     h3_res7: cell,
+    h3_res9: latLngToCell(lat, lon, 9),
     lat,
     lon,
     place_kind: kind,
@@ -127,6 +159,18 @@ const frameOf = (html: string) => {
   return m ? m[0] : '';
 };
 const centreOf = (html: string) => (tagOf(html, 'amap-zone').match(/data-ll="[^"]+"/) || [''])[0];
+/** A cell's centre as the page may write it, worked out here from the cell id alone. */
+const pointOf = (cell: string) =>
+  `data-ll="${cellToLatLng(cell)
+    .map((v) => v.toFixed(5))
+    .join(',')}"`;
+/** Each dot's opening tag, by its number. */
+const dotTags = (html: string) =>
+  new Map(
+    [...html.matchAll(/<a href="#amap-dot-(\d+)"[^>]*data-testid="amap-dot"[^>]*>/g)].map(
+      (m) => [Number(m[1]), m[0]] as const
+    )
+  );
 
 function metres(a: [number, number], b: [number, number]): number {
   const k = 111_195;
@@ -172,6 +216,27 @@ describe("the georeference on the zoomed map is the area cell's (OSE-2150)", () 
         .map((v) => v.toFixed(5))
         .join(',')}"`
     );
+  });
+
+  test("the staging fixture's places each write the point the Bruno check pins: their res-9 cell's centre", () => {
+    const html = zoomPage(
+      FIXTURE_CELL,
+      FIXTURE_POINTS.map(([la, ln, k], i) => ev(i, FIXTURE_CELL, la, ln, k))
+    );
+    const tags = dotTags(html);
+    expect([...tags.keys()]).toEqual([1, 2, 3]);
+    for (const [n, [cell, ll]] of Object.entries(FIXTURE_PLACES)) {
+      const [la, ln] = FIXTURE_POINTS[Number(n) - 1]!;
+      // The pin is the cell's centre, and the cell is the place's own block.
+      expect(latLngToCell(la, ln, 9)).toBe(cell);
+      expect(pointOf(cell)).toBe(ll);
+      expect(tags.get(Number(n))!.match(/data-ll="[^"]+"/g)).toEqual([ll]);
+      expect(html.split(ll).length - 1, `place ${n} is written once`).toBe(1);
+      // Never the seeded point itself, at any precision the page could write.
+      for (const dp of [3, 4, 5, 6]) {
+        expect(html).not.toContain(`${la.toFixed(dp)},${ln.toFixed(dp)}`);
+      }
+    }
   });
 
   test.each(CELLS)('in %s the frame and the centre do not move when the places do', (cell) => {
@@ -241,28 +306,86 @@ describe("the georeference on the zoomed map is the area cell's (OSE-2150)", () 
   );
 
   test.each(CELLS)(
-    "in %s the zoomed part holds no coordinate-shaped number but the cell's frame, its centre and the metres in a mile",
+    "in %s each dot's own point is its block's centre, pinned to the cell and never the event's",
     (cell) => {
+      const blocks = blocksIn(cell, 4);
+      const events = blocks.map((b, i) =>
+        ev(i, cell, ...inside(b, i, 0.7), i ? 'address' : 'business')
+      );
+      const html = zoomPage(cell, events);
+      const tags = dotTags(html);
+      const back = readBack(html);
+      expect(tags.size).toBe(blocks.length);
+      for (const { n, at } of back) {
+        // The block is the one the dot's drawing reads back to; its point is
+        // worked out here from that cell id alone, not read off the page.
+        const block = latLngToCell(at[0], at[1], 9);
+        const own = events[blocks.indexOf(block)]!;
+        const lls = tags.get(n)!.match(/data-ll="[^"]+"/g);
+        expect(lls).toEqual([pointOf(block)]);
+        const [lat, lng] = lls![0]!.slice(9, -1).split(',').map(Number) as [number, number];
+        // Five decimals of the centre: inside the block, within a metre or two of
+        // its centre, and well away from where the event itself is.
+        expect(latLngToCell(lat, lng, 9)).toBe(block);
+        expect(metres([lat, lng], cellToLatLng(block) as [number, number])).toBeLessThan(2);
+        expect(metres([lat, lng], [own.lat as number, own.lon as number])).toBeGreaterThan(20);
+        // The same events on another point of the same block: the same point.
+        expect(pointOf(latLngToCell(own.lat as number, own.lon as number, 9))).toBe(lls![0]);
+      }
+    }
+  );
+
+  test.each(CELLS)(
+    "in %s the zoomed part holds no coordinate-shaped number but the cell's frame, its centre, each place's own block centre and the metres in a mile",
+    (cell) => {
+      // The first block is the area's centre child, whose centre is the area's
+      // own: a place there writes the same point as the area, on its own dot.
       const blocks = blocksIn(cell, 3);
+      expect(cellToLatLng(blocks[0]!)).toEqual(cellToLatLng(cell));
       const html = zoomPage(
         cell,
         blocks.map((b, i) => ev(i, cell, ...inside(b, i, 0.5), i ? 'address' : 'business'))
       );
-      const part = zoomedPart(html);
+      let part = zoomedPart(html);
       const frame = frameOf(html);
       const centre = centreOf(html);
       expect(part.split(frame).length - 1).toBe(1);
-      expect(part.split(centre).length - 1).toBe(1);
+      // The area's centre is on the area's outline, once.
+      const zone = tagOf(html, 'amap-zone');
+      expect(zone.match(/data-ll="[^"]+"/g)).toEqual([centre]);
+      part = part.replace(zone, zone.replace(centre, ''));
+      // Each place's point is on its own dot, once, and is the centre of the
+      // block that dot reads back to (worked out here, not read off the page).
+      const back = readBack(html);
+      expect(back.length).toBe(3);
+      for (const [n, tag] of dotTags(html)) {
+        const at = back.find((b) => b.n === n)!.at;
+        const own = pointOf(latLngToCell(at[0], at[1], 9));
+        expect(tag.match(/data-ll="[^"]+"/g)).toEqual([own]);
+        part = part.replace(tag, tag.replace(own, ''));
+      }
       // The area's own cell id is the one run of seven digits allowed.
-      const rest = part
-        .replace(frame, '')
-        .replace(centre, '')
-        .replace(MILE, '')
-        .split(cell)
-        .join('');
+      const rest = part.replace(frame, '').replace(MILE, '').split(cell).join('');
       expect(unescaped(rest).match(COORD)?.[0] ?? null).toBe(null);
     }
   );
+
+  test('a dot carries its point and no event id: which events are at a place is its panel, as before', () => {
+    const blocks = blocksIn(FIXTURE_CELL, 3);
+    const html = zoomPage(
+      FIXTURE_CELL,
+      blocks.map((b, i) => ev(i, FIXTURE_CELL, ...inside(b, i, 0.5), i ? 'address' : 'business'))
+    );
+    for (const [, tag] of dotTags(html)) {
+      expect(tag.match(/\sdata-[a-z-]+=/g)).toEqual([
+        ' data-testid=',
+        ' data-exact=',
+        ' data-count=',
+        ' data-ll=',
+      ]);
+      expect(tag).not.toMatch(/\be\d\b/);
+    }
+  });
 
   test("two blocks near enough to merge are one dot, drawn at the first block's centre", () => {
     const [first] = blocksIn(FIXTURE_CELL, 1);
@@ -278,6 +401,15 @@ describe("the georeference on the zoomed map is the area cell's (OSE-2150)", () 
     const block = latLngToCell(back[0]!.at[0], back[0]!.at[1], 9);
     expect([first, next]).toContain(block);
     expect(metres(back[0]!.at, cellToLatLng(block) as [number, number])).toBeLessThan(1);
+    // Its own point is the block it is drawn at; the block merged into it is
+    // written nowhere, and the dot holds both events.
+    const other = block === first ? next : first!;
+    const tag = dotTags(html).get(1)!;
+    expect(tag.match(/data-ll="[^"]+"/g)).toEqual([pointOf(block)]);
+    expect(tag).toContain('data-count="2"');
+    // (The area's centre child shares the area's centre, which its outline carries.)
+    const asArea = pointOf(other) === pointOf(FIXTURE_CELL) ? 1 : 0;
+    expect(html.split(pointOf(other).slice(9, -1)).length - 1).toBe(asArea);
   });
 });
 

@@ -1,0 +1,43 @@
+info:
+  name: GET /?zip=49127 (the top menu carries the zip)
+  type: http
+  seq: 36
+
+# OSE-2165: the example the CCR proved on staging. /?zip=49127 served nav-map as
+# /map with no query. Now both header links carry the zip. Strict: 200 only.
+http:
+  method: GET
+  url: "{{baseUrl}}/?zip=49127"
+  headers:
+    - name: User-Agent
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const body = String(res.getBody());
+        const nav = (body.match(/<nav data-testid="landing-nav"[\s\S]*?<\/nav>/) || [""])[0];
+        const hrefOf = function (id) {
+          const tags = nav.match(/<a [^>]*>/g) || [];
+          const tag = tags.filter(function (t) { return t.includes('data-testid="' + id + '"'); })[0] || '';
+          return (tag.match(/href="([^"]*)"/) || [])[1] || '';
+        };
+
+        test("Returns 200 (strict: a 403 is not accepted)", function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+        test("Map carries the zip", function () {
+          expect(hrefOf("nav-map")).to.equal("/map?zip=49127");
+        });
+        test("Events carries the zip", function () {
+          expect(hrefOf("nav-events")).to.equal("/events?zip=49127");
+        });
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

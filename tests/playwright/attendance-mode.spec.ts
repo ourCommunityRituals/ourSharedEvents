@@ -220,12 +220,10 @@ test.describe('online or in person', () => {
     expect(byId(hall)?.attendance_mode).toBe('in_person');
     const item = byId(online);
     expect(item, 'the brand API returns the online event').toBeTruthy();
-    expect([item!.attendance_mode, item!.location, item!.lat, item!.h3_res7]).toEqual([
-      'online',
-      null,
-      null,
-      null,
-    ]);
+    expect([item!.attendance_mode, item!.location, item!.h3_res7]).toEqual(['online', null, null]);
+    // OSE-2197: no public event answer carries lat or lon, online or not.
+    expect(item).not.toHaveProperty('lat');
+    expect(item).not.toHaveProperty('lon');
 
     for (const path of ['/events', '/', '/?view=list']) {
       const body = await (await page.request.get(path)).text();

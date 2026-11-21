@@ -5,10 +5,14 @@
  * rule 10). On 2026-11-18 the owner chose "a small script on the map only" so
  * the map can be pinched, scrolled and dragged. This is that script, and the
  * only one the map carries. It keeps the other half of rule 10: it makes no
- * request of any kind (no fetch, no image, no tile). It changes only the
- * drawing the server already sent: its `viewBox`, the size its text and lines
- * are set at, and one mark it adds. Without it (an old browser, or scripts
- * off) the map is exactly what it was, and its buttons stay hidden.
+ * request of any kind (no fetch, no image, no tile). It changes the drawing the
+ * server already sent: its `viewBox`, the size its text and lines are set at,
+ * and one mark it adds. Once the visitor asks where they are, it also writes
+ * distances, as text, into the list under the map and (zoomed in, OSE-2198)
+ * into the place panels and the event cards below the map, and puts those
+ * cards nearest first: the one change it makes outside the map's figure.
+ * Without it (an old browser, or scripts off) the map is exactly what it was,
+ * and its buttons stay hidden.
  *
  * WHAT IT DOES
  *   - Phone first (owner, 2026-11-18: "phone is the primary interface"): a
@@ -22,15 +26,31 @@
  *     slowly than the map. From twice the size the second tier of street names
  *     and landmarks shows (`data-k`, lib/street-labels.ts).
  *   - A scale bar in miles, worked out from the drawing's real size on screen.
- *   - Where the visitor already allowed location, or taps "Show where I am": a
+ *   - When the visitor taps "Show where I am", and only then, even where
+ *     location is already allowed (owner, 2026-11-19: "the user need to tap and
+ *     save purposely by choice"; OSE-2198 Part C): a
  *     ringed dot where they are, the distance to each area in the list under
  *     the map with the nearest put first, and a line read out by a screen
  *     reader naming the nearest area.
+ *   - Zoomed in on one area (OSE-2198; owner, 2026-11-19: "this is how you get
+ *     accurate measurements and distance from current location to event
+ *     distance"): the distance is to each PLACE, not the area. Each dot carries
+ *     its res-9 cell's centre (`data-ll`, the point it is drawn at); the
+ *     place's panel says how far it is, the event cards below the map (the
+ *     zoomed area's list, owner 2026-11-17) say how far their place is and are
+ *     put nearest first, and the line names the nearest place. A place's
+ *     events are the ones its panel names. An event with no place on the map,
+ *     or one its place's panel does not name, is measured to the area's centre
+ *     and says "about".
  *
  * NEVER WHO, NEVER WHERE (invariant 3: geolocation picks what to show and is
  * never stored). The position is read by the phone and used by the phone: it
- * is never sent, stored, logged or put in the address. The script asks for it
- * only when location is already allowed or on a tap, never on its own.
+ * is never sent, stored, logged or put in the address, and no cell is made
+ * from it (owner ruling 2026-11-16, "zip finds, tap places"): it goes into the
+ * distance sum and the you-are-here mark, and nowhere else. The script asks for
+ * it only on the tap, never on its own; it keeps nothing (no storage, no
+ * cookie) and makes no request (tests/e2e/0-architecture/
+ * location-on-tap.invariant.spec.ts).
  *
  * On a phone a one-finger drag scrolls the page while the map is whole
  * (`touch-action: pan-y`), and moves the map once it is zoomed in. A tap that
@@ -50,7 +70,10 @@ const SCRIPT = String.raw`(function () {
   var bar = ctl.querySelector('.amap-bar'), barText = ctl.querySelector('[data-testid="amap-scale-text"]');
   var status = ctl.querySelector('[data-testid="amap-you-status"]');
   function say(key, d, name) {
-    return (ctl.getAttribute('data-' + key) || '').replace('{d}', d).replace('{name}', name || '');
+    // Replaced by a function, so a name with "$&" in it is written as it is.
+    return (ctl.getAttribute('data-' + key) || '')
+      .replace('{d}', function () { return d; })
+      .replace('{name}', function () { return name || ''; });
   }
   var texts = [].slice.call(svg.querySelectorAll('text:not(.amap-dn)'));
   var lines = [].slice.call(svg.querySelectorAll('.amap-s path'));
@@ -228,22 +251,27 @@ const SCRIPT = String.raw`(function () {
     return 2 * 3958.8 * Math.asin(Math.min(1, Math.sqrt(h)));
   }
   function fmt(d) { return d < 10 ? d.toFixed(1) : String(Math.round(d)); }
-  function located(lat, lng) {
-    here = [lat, lng];
+  function pointOf(el) { var p = el.getAttribute('data-ll').split(','); return [+p[0], +p[1]]; }
+  // " · 0.4 mi from you" at the end of box, in its own span, written as text.
+  function note(box, cls, text) {
+    var s = box.querySelector('.' + cls);
+    if (!s) {
+      s = document.createElement('span');
+      s.className = cls;
+      s.setAttribute('data-testid', cls);
+      box.appendChild(s);
+    }
+    s.textContent = ' · ' + text;
+  }
+  // The landing's map: the distance to each area's centre, in the list under it.
+  function areas(lat, lng) {
     var best = null;
     [].forEach.call(fig.querySelectorAll('[data-ll]'), function (el) {
-      var ll = el.getAttribute('data-ll').split(','), d = miles(lat, lng, +ll[0], +ll[1]);
-      if (!best || d < best.d) best = { d: d, name: el.getAttribute('data-name') || '' };
+      var p = pointOf(el), d = miles(lat, lng, p[0], p[1]);
+      if (!best || d < best.d) best = { d: d, key: 'nearest', name: el.getAttribute('data-name') || '' };
       var row = fig.querySelector('li[data-area="' + el.getAttribute('data-cell') + '"]');
       if (!row) return;
-      var s = row.querySelector('.amap-dist');
-      if (!s) {
-        s = document.createElement('span');
-        s.className = 'amap-dist';
-        s.setAttribute('data-testid', 'amap-dist');
-        row.appendChild(s);
-      }
-      s.textContent = ' · ' + say('from', fmt(d));
+      note(row, 'amap-dist', say('from', fmt(d)));
       row.setAttribute('data-d', d.toFixed(3));
     });
     // Nearest first: the list under the map is put in order of distance. Each
@@ -254,8 +282,46 @@ const SCRIPT = String.raw`(function () {
         .sort(function (a, b) { return +a.getAttribute('data-d') - +b.getAttribute('data-d'); })
         .forEach(function (li) { ol.appendChild(li); });
     });
+    return best;
+  }
+  // Zoomed in on one area: the distance to each place's own point (its res-9
+  // cell's centre, on its dot), not the area's. Its panel and its events' cards
+  // say how far; the cards are put nearest first. An event with no place on the
+  // map is measured to the area's centre and says "about".
+  function places(lat, lng, zone) {
+    var best = null, near = Object.create(null), a = pointOf(zone), far = miles(lat, lng, a[0], a[1]);
+    // A dot is a link to its panel (#amap-dot-N); the panel is the section its
+    // title (amap-ph-N) heads, its first line says what is there, and its cards
+    // are the place's events.
+    [].forEach.call(fig.querySelectorAll('a[href^="#amap-dot-"][data-ll]'), function (dot) {
+      var p = pointOf(dot), d = miles(lat, lng, p[0], p[1]);
+      var n = (dot.getAttribute('href') || '').replace('#amap-dot-', '');
+      var title = document.getElementById('amap-ph-' + n);
+      var panel = title && title.parentNode;
+      var meta = panel && panel.querySelector('p.amap-pm');
+      if (meta) note(meta, 'amap-place-dist', say('from', fmt(d)));
+      if (panel) [].forEach.call(panel.querySelectorAll('[data-event-id]'), function (c) { near[c.getAttribute('data-event-id')] = d; });
+      if (!best || d < best.d) best = { d: d, key: 'near-place', name: title ? title.textContent : n };
+    });
+    var cards = [].slice.call(document.querySelectorAll('.view-list article.event-card[data-event-id]'));
+    cards.forEach(function (c) {
+      var id = c.getAttribute('data-event-id'), placed = id in near, d = placed ? near[id] : far;
+      var meta = c.querySelector('p.meta');
+      if (meta) note(meta, 'amap-card-dist', say(placed ? 'from' : 'from-about', fmt(d)));
+      c.setAttribute('data-pd', d.toFixed(3));
+    });
+    // Nearest first; the same distance keeps the page's order (sort is stable).
+    cards.slice()
+      .sort(function (x, y) { return +x.getAttribute('data-pd') - +y.getAttribute('data-pd'); })
+      .forEach(function (c) { c.parentNode.appendChild(c); });
+    return best || { d: far, key: 'nearest', name: zone.getAttribute('data-name') || '' };
+  }
+  function located(lat, lng) {
+    here = [lat, lng];
+    var zone = fig.querySelector('.amap-zone[data-ll]');
+    var best = zone ? places(lat, lng, zone) : areas(lat, lng);
     mark();
-    status.textContent = say(inFrame(proj(lat, lng)) ? 'you' : 'outside') + (best ? ' ' + say('nearest', fmt(best.d), best.name) : '');
+    status.textContent = say(inFrame(proj(lat, lng)) ? 'you' : 'outside') + (best ? ' ' + say(best.key, fmt(best.d), best.name) : '');
   }
   var geo = navigator.geolocation, me = btn('me');
   function find() {
@@ -267,13 +333,15 @@ const SCRIPT = String.raw`(function () {
       { enableHighAccuracy: false, maximumAge: 600000, timeout: 15000 }
     );
   }
+  // Read only on the tap, even where location is already allowed (owner,
+  // 2026-11-19: "the user need to tap and save purposely by choice"). The
+  // permission state only hides a button that could never work.
   if (!geo) me.hidden = true;
   else {
     me.addEventListener('click', find);
     if (navigator.permissions && navigator.permissions.query) {
       navigator.permissions.query({ name: 'geolocation' }).then(function (s) {
-        if (s.state === 'granted') find();
-        else if (s.state === 'denied') me.hidden = true;
+        if (s.state === 'denied') me.hidden = true;
       }, function () {});
     }
   }

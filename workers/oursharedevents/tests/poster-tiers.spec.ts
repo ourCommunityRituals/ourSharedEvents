@@ -26,6 +26,7 @@
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { floorTaps } from '../src/lib/poster-reach';
+import { roundForPublish } from '../src/lib/count-floor';
 import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 import { AS_PERSON } from './helpers/person-agent';
 
@@ -479,25 +480,26 @@ describe('Tier 3 | reach: placements ranked by scans, venue vs community, taps p
   });
 
   // Each poster's scans are in one hour, so a poster's figure is its own
-  // count when it is 5 or more, and withheld otherwise (OSE-1656).
+  // count when it is 5 or more, and withheld otherwise (OSE-1656). A published
+  // figure is rounded down to a multiple of 5 (OSE-2151): 23 reads 20.
   test('venue areas, most-scanned first (an active area with none to show still shows)', () => {
     expect(reach.venue.placements.map((p) => [p.label, p.scans])).toEqual([
-      ['Front door', shown(23)],
-      ['Bar', shown(11)],
+      ['Front door', shown(20)],
+      ['Bar', shown(10)],
       ['Stage left', HELD],
     ]);
-    expect(reach.venue.scans).toEqual(shown(34));
+    expect(reach.venue.scans).toEqual(shown(30));
     expect(reach.venue.places).toBe(1); // every area shares the venue's res-7 cell
   });
 
   test('community places, most-scanned first, with their description/address; retired + unscanned drop out', () => {
     expect(reach.community.placements.map((p) => [p.label, p.scans])).toEqual([
-      ['Harbor Library', shown(9)],
+      ['Harbor Library', shown(5)],
       ['Café', HELD],
     ]);
     expect(reach.community.placements[0].address).toBe('100 Library Ln, Sawyer, MI');
     // The café's 4 never joins the sum (it read 13, which gave the 4 back).
-    expect(reach.community.scans).toEqual(shown(9));
+    expect(reach.community.scans).toEqual(shown(5));
     expect(reach.community.places).toBeGreaterThanOrEqual(1);
   });
 
@@ -505,23 +507,24 @@ describe('Tier 3 | reach: placements ranked by scans, venue vs community, taps p
     // Raw: EVENT 12, DONATE 6, REGISTER 2. REGISTER (2) is under the floor and
     // joins no sum. DONATE, the smallest listed code, sits with it in "other
     // links" (so that group is never one code); the group's figure and the
-    // total count only the codes that clear the floor: 6, and 12 + 6 = 18.
+    // total count only the codes that clear the floor, each rounded down to a
+    // multiple of 5 (OSE-2151): 6 reads 5, and 10 + 5 = 15.
     // As raw sums they were 8 and 20, and each moved when REGISTER gained a tap.
     expect(reach.taps.codes.map((c) => [c.kind, c.word, c.taps.count])).toEqual([
-      ['public', 'EVENT', 12],
+      ['public', 'EVENT', 10],
     ]);
     expect(reach.taps.other).toEqual({
       codes: 2,
-      taps: { count: 6, suppressed: false, floor: 5 },
+      taps: { count: 5, suppressed: false, floor: 5 },
     });
-    expect(reach.taps.total).toEqual({ count: 18, suppressed: false, floor: 5 });
+    expect(reach.taps.total).toEqual({ count: 15, suppressed: false, floor: 5 });
     expect(raw).not.toMatch(/"taps":\s*\{\s*"count":\s*2\b/);
     const shown = reach.taps.codes.reduce((t, c) => t + (c.taps.count ?? 0), 0);
     expect(reach.taps.total.count! - shown).toBe(reach.taps.other!.taps.count);
   });
 
   test('totals: scans and taps each floored on their own grain — and the card’s own totals agree', () => {
-    expect(reach.totals).toEqual({ scans: shown(43), taps: shown(18) });
+    expect(reach.totals).toEqual({ scans: shown(35), taps: shown(15) });
     expect(reach.totals).not.toHaveProperty('reach'); // scans + taps would un-floor taps
     const activity = (JSON.parse(raw) as { activity: { scans: Floored; clicks: Floored } })
       .activity;
@@ -631,9 +634,10 @@ describe('Tier 3 | floorTaps — K=5 at the finest grain, closed to subtraction'
       const hidden = raw.filter((r) => !f.codes.some((c) => c.kind === r.kind));
       expect(f.other?.codes ?? 0, JSON.stringify(raw)).toBe(hidden.length);
       if (f.codes.length) expect(hidden.length, JSON.stringify(raw)).not.toBe(1);
-      // Each sum is exactly the counts that clear the floor on their own.
+      // Each sum is exactly the counts that clear the floor on their own, each
+      // rounded down to a multiple of 5 (OSE-2151).
       const clear = (rows: { taps: number }[]) =>
-        rows.filter((r) => r.taps >= K).reduce((t, r) => t + r.taps, 0);
+        rows.filter((r) => r.taps >= K).reduce((t, r) => t + roundForPublish(r.taps), 0);
       expect(f.total.count ?? 0, JSON.stringify(raw)).toBe(clear(raw));
       expect(f.other?.taps.count ?? 0, JSON.stringify(raw)).toBe(clear(hidden));
       // So what subtraction gives is a figure that is published anyway.

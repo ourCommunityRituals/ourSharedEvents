@@ -172,10 +172,11 @@ describe('OSE-669 #7 — per-contributing-bucket floor BEFORE summation', () => 
     const { body } = await rollup(reqAsEmail('a@brand-a.test'));
     expect(body.ok).toBe(true);
     expect(body.rollup!.events).toBe(2);
-    // 6 (e669a1) + 3 (e669a2, dropped) → 6, NOT 9. This is the ruling.
-    expect(body.rollup!.registrations).toEqual({ count: 6, suppressed: false, floor: 5 });
-    // 7 (e669a1) + 2 (e669a2, dropped) → 7, NOT 9.
-    expect(body.rollup!.checkins).toEqual({ count: 7, suppressed: false, floor: 5 });
+    // 6 (e669a1) + 3 (e669a2, dropped) → 6, NOT 9. This is the ruling. A
+    // published count is then rounded down to a multiple of 5 (OSE-2151).
+    expect(body.rollup!.registrations).toEqual({ count: 5, suppressed: false, floor: 5 });
+    // 7 (e669a1) + 2 (e669a2, dropped) → 7, NOT 9; published as 5.
+    expect(body.rollup!.checkins).toEqual({ count: 5, suppressed: false, floor: 5 });
   });
 
   test('when no event clears K, the metric suppresses (never shows a sub-K sum)', async () => {
@@ -195,7 +196,7 @@ describe('OSE-669 #9 — brand-scoped, server-derived, no cross-tenant reach', (
   test('a brand-A operator never sees brand-B totals', async () => {
     const { body } = await rollup(reqAsEmail('a@brand-a.test'));
     // If brand-B leaked in, registrations would be 16 and sponsors 6.
-    expect(body.rollup!.registrations.count).toBe(6);
+    expect(body.rollup!.registrations.count).toBe(5);
     expect(body.rollup!.activeSponsors).toBe(3);
     expect(body.scopedTo).toEqual(['br669a']);
   });
@@ -210,7 +211,7 @@ describe('OSE-669 #9 — brand-scoped, server-derived, no cross-tenant reach', (
     const { status, body } = await rollup(reqAsEmail('a@brand-a.test', '?brand_id=br669a'));
     expect(status).toBe(200);
     expect(body.scopedTo).toEqual(['br669a']);
-    expect(body.rollup!.registrations.count).toBe(6);
+    expect(body.rollup!.registrations.count).toBe(5);
   });
 
   test('unauthenticated caller → fully-suppressed strip (zero events)', async () => {

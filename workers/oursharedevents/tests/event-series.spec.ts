@@ -314,9 +314,9 @@ describe('a declared series feeds the SharedReport trend exactly as a detected o
     expect(fromDeclared.series_id).toBe(declared.json.series.id);
     expect(fromDeclared.series_name).toBe('The daily room');
     expect(fromDeclared.instances.map((i) => [i.event_id, i.distinct_scanners])).toEqual([
-      [A1, 6],
-      [A2, 9],
-      [A3, 14],
+      [A1, 5],
+      [A2, 5],
+      [A3, 10],
     ]);
 
     // The same three events on a series the detector found and an organizer accepted.
@@ -836,9 +836,9 @@ describe('cadence: the five a programme slot can state (OSE-2017)', () => {
     expect(
       r.report.headcount_trend.instances.map((i) => [i.event_id, i.distinct_scanners])
     ).toEqual([
-      [A1, 6],
-      [A2, 9],
-      [A3, 14],
+      [A1, 5],
+      [A2, 5],
+      [A3, 10],
     ]);
   });
 

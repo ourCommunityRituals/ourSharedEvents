@@ -18,8 +18,12 @@
  *
  * OSE convention: lowercase state values match the D1 status column.
  *
- * Ported from prior worker implementation (zero external imports).
+ * Ported from prior worker implementation. Its one import is listedSql, the
+ * publish-grace test the routable rule (below) is built on; that module imports
+ * nothing, so this one stays free of runtime dependencies.
  */
+
+import { listedSql } from '../lib/publish-grace';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -165,6 +169,67 @@ export function eventLiveSql(alias = 'e'): string {
   return live.length === 1
     ? `${col} = '${live[0]}'`
     : `${col} IN (${live.map((s) => `'${s}'`).join(', ')})`;
+}
+
+// ── Routable: listed and live (OSE-2196) ──────────────────────────────────────
+
+/** The fields of an `events` row the routable rule reads. */
+export interface RoutableEvent {
+  status?: string | null;
+  is_published?: number | null;
+  listed_from?: string | null;
+}
+
+/**
+ * Owner ruling, 2026-11-19: "Anything that is listed as private or off map
+ * cannot be routed to." A route to an event (a Directions menu, the map's
+ * "Take me there", a maps link of any kind) is offered only when the event is
+ * ROUTABLE, and routable is exactly LISTED: the rule the list, the map and the
+ * brand's calendar feed already use to decide who appears on them.
+ *
+ *   1. live: its status renders on 'public' (canRender above, eventLiveSql);
+ *   2. on the map: `is_published = 1` (off map, "unlisted", is 0);
+ *   3. past its publish grace: `listed_from` is unset or has passed
+ *      (lib/publish-grace.ts). Inside the window the event is still off the
+ *      map, so it is not routable either.
+ *
+ * Those are every private marker the events table has (status, is_published,
+ * listed_from). An off-map event still opens at its link (PO 2026-10-07); it
+ * simply offers no route.
+ *
+ * `asPublished` answers for an admin draft preview: would this event be
+ * routable once it is published and its grace has passed? So the preview of a
+ * draft that will be listed shows its Directions, and one that will be off the
+ * map shows none.
+ */
+export function isRoutable(
+  e: RoutableEvent,
+  opts: { now?: Date; asPublished?: boolean } = {}
+): boolean {
+  if (e.is_published !== 1) return false;
+  if (opts.asPublished) return true;
+  // The stored state exactly, as eventLiveSql compares it: no case folding or
+  // trimming, so the TS and SQL forms can never disagree (a stray 'ACTIVE' is
+  // not routable on either side).
+  const status = e.status ?? '';
+  if (!isValidEventState(status) || !canRender(status, 'public')) return false;
+  // The grace test as listedSql writes it: the stored text against now in the
+  // same toISOString shape, compared as text. Written the same way so the two
+  // forms agree on every value, a malformed one included.
+  if (e.listed_from && !(e.listed_from <= (opts.now ?? new Date()).toISOString())) return false;
+  return true;
+}
+
+/**
+ * isRoutable as SQL over an `events` row: eventLiveSql, `is_published = 1` and
+ * listedSql (lib/publish-grace.ts), so the rule is written once. The map's and
+ * the list's source query (lib/data-provider.ts fetchEvents) uses it, which is
+ * what keeps the map panel's "Take me there" to routable events. `alias` is the
+ * `events` alias in scope; '' is a bare column.
+ */
+export function eventRoutableSql(alias = ''): string {
+  const pub = alias ? `${alias}.is_published` : 'is_published';
+  return `${pub} = 1 AND ${eventLiveSql(alias)} AND ${listedSql(alias)}`;
 }
 
 // ── Transitions ───────────────────────────────────────────────────────────────

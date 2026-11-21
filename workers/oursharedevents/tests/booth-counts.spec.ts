@@ -80,24 +80,25 @@ describe('a stall is the sum of its cleared placement-hours', () => {
     expect(out.booths[0].scans).toEqual(WITHHELD);
   });
 
-  test('seven in one hour at one placement: the stall reads 7', () => {
+  // OSE-2151: a cleared hour is published rounded down to a multiple of 5.
+  test('seven in one hour at one placement: the stall reads 5', () => {
     const out = boothCounts(
       [stall('b1', 'A1')],
       [{ id: 'p1', booth_id: 'b1' }],
       [cell('p1', H(10), 7)]
     );
-    expect(out.booths[0].scans).toEqual(shown(7));
-    expect(out.total).toEqual(shown(7));
+    expect(out.booths[0].scans).toEqual(shown(5));
+    expect(out.total).toEqual(shown(5));
     expect(out.any_withheld).toBe(false);
   });
 
-  test('a cleared hour and a withheld hour: only the cleared one counts (6 + 4 reads 6)', () => {
+  test('a cleared hour and a withheld hour: only the cleared one counts (6 + 4 reads 5)', () => {
     const out = boothCounts(
       [stall('b1', 'A1')],
       [{ id: 'p1', booth_id: 'b1' }],
       [cell('p1', H(10), 6), cell('p1', H(11), 4)]
     );
-    expect(out.booths[0].scans).toEqual(shown(6));
+    expect(out.booths[0].scans).toEqual(shown(5));
   });
 
   test('a stall with no placement, and one with no scans, read withheld (never 0)', () => {
@@ -122,8 +123,9 @@ describe('"no stall" is one more part, built the same way', () => {
       ],
       [cell('p1', H(10), 5), cell('p2', H(10), 6), cell('p3', H(10), 2), cell('p9', H(10), 8)]
     );
-    expect(out.no_stall).toEqual({ placements: 2, scans: shown(14) });
-    expect(out.total).toEqual(shown(19));
+    // 6 + 8 publish as 5 + 5; with the stall's 5 the total is 15.
+    expect(out.no_stall).toEqual({ placements: 2, scans: shown(10) });
+    expect(out.total).toEqual(shown(15));
   });
 
   test('"no stall" with placements and nothing cleared is a withheld row', () => {
@@ -165,13 +167,13 @@ describe('totals never take a withheld stall', () => {
   ];
   const out = boothCounts(booths, placements, cells);
 
-  test('the fair total is the published stalls only: 6, not 17 and not 9', () => {
-    expect(out.total).toEqual(shown(6));
+  test('the fair total is the published stalls only: 5 (6 rounded), not 17 and not 9', () => {
+    expect(out.total).toEqual(shown(5));
   });
 
-  test('a category is its published stalls: food 6, craft withheld (4 + 4 is not 8)', () => {
+  test('a category is its published stalls: food 5 (6 rounded), craft withheld (4 + 4 is not 8)', () => {
     expect(out.categories).toEqual([
-      { category: 'food', booths: 2, scans: shown(6) },
+      { category: 'food', booths: 2, scans: shown(5) },
       { category: 'craft', booths: 1, scans: WITHHELD },
     ]);
   });

@@ -776,6 +776,7 @@ jobs:
             tests/e2e/0-architecture/sponsor-share-covenant.invariant.spec.ts \
             tests/e2e/0-architecture/scan-path-split.invariant.spec.ts \
             tests/e2e/0-architecture/geo-resolution.structural.invariant.spec.ts \
+            tests/e2e/0-architecture/public-event-coordinates.invariant.spec.ts \
             tests/e2e/0-architecture/place-name-search.invariant.spec.ts \
             tests/e2e/0-architecture/ncr-accumulation.structural.invariant.spec.ts \
             tests/e2e/0-architecture/sponsor-identity-split.invariant.spec.ts \
@@ -789,7 +790,8 @@ jobs:
             tests/e2e/0-architecture/timestamp-precision.invariant.spec.ts \
             tests/e2e/0-architecture/votes-never-who.invariant.spec.ts \
             tests/e2e/0-architecture/lexicon-allowance.invariant.spec.ts \
-            tests/e2e/0-architecture/router-route-list.invariant.spec.ts
+            tests/e2e/0-architecture/router-route-list.invariant.spec.ts \
+            tests/e2e/0-architecture/location-on-tap.invariant.spec.ts
 
       # ── Shard: component ───────────────────────────────────────────────────
       # Real browser engine, no deploy. The webServer in
@@ -891,6 +893,7 @@ jobs:
             tests/e2e/2-pages/street-map-contrast.component.spec.ts \
             tests/e2e/2-pages/street-map-pan.component.spec.ts \
             tests/e2e/2-pages/wcag-map.component.spec.ts \
+            tests/e2e/2-pages/voter-page.component.spec.ts \
             tests/e2e/2-pages/landing-menu.component.spec.ts \
             tests/e2e/2-pages/landing-tabs.component.spec.ts
 
@@ -1752,6 +1755,23 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/map-zoom-area-seed.sql
 
+      # OSE-2196 (owner 2026-11-19): no route to a place that is off the map, and
+      # a listed place's route goes to its res-9 cell, never its stored point.
+      # Two active off-map events, a grace event and two listed controls, for
+      # Bruno Pages folder "17. Routable (OSE-2196)". The off-map pair sits in
+      # the zoomed map fixture's area, so it runs after that seed. Upserts by
+      # id; "Unpublish routable fixture" takes the listed ones off after the run.
+      # NOT continue-on-error: a missing fixture fails here by name.
+      - name: 'Seed routable fixtures (OSE-2196)'
+        if: matrix.section == 'pages'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/routable-seed.sql
+
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
       # from the collection root, so each step sets working-directory. Secrets are
@@ -1854,12 +1874,26 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/landing-zip-own-area-reset.sql
 
+      # OSE-2196: the routable fixture's listed events (far from every stock
+      # place, in no search) are listed only for the run above. Take them off
+      # again, pass or fail, so staging's own totals never carry them. A failed
+      # reset fails the job by name.
+      - name: 'Unpublish routable fixture (OSE-2196)'
+        if: always() && matrix.section == 'pages'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/routable-reset.sql
+
       # OSE-2160 (F-46): a Bruno run that checked nothing exits 0. An empty
       # collection, a wrong working directory or a run whose requests were all
       # skipped is green to `bru`. This reads the JUnit report and fails when the
       # cases that proved something are fewer than the matrix's min_cases, or the
       # skipped requests are more than max_skipped (zero cases is the extreme).
-      # Sits after the map-count check and the two resets (tests/unit/ci/map-counts-check.test.js
+      # Sits after the map-count check and the resets (tests/unit/ci/map-counts-check.test.js
       # pins those straight after the Bruno step), and runs only while every step before it
       # passed. Not continue-on-error: a run
       # that proved too little is red. Pinned by tests/unit/ci/bruno-min-cases.test.js.
@@ -2680,6 +2714,26 @@ jobs:
             tests/e2e/3-flows/sponsor-thumbnails.spec.ts
         timeout-minutes: 6
 
+      # OSE-2164: a dead link says something. HTTP only, no fixture: /s/<bad> answers
+      # a browser a branded 404 (one button to /events) and a script the JSON, a
+      # malformed and an unknown code are byte-identical, and the /es event 404 reads
+      # Spanish. Replaces tests/playwright/flow-shortlink-resolver.spec.ts, which no
+      # workflow ran. The handlers are proved in the workers pool (dead-link-words.spec.ts).
+      - name: 'T4l: Dead Links Say Something'
+        if: matrix.section == 'surfaces'
+        id: dead-links
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          # The stg edge challenges a script client unless the read carries X-OCR-CI
+          # (the stg skip rule), and a phone agent. Sent to the stg origin only.
+          OCR_CI_EDGE_TOKEN: ${{ secrets.OCR_CI_EDGE_TOKEN }}
+          PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
+        run: |
+          PW_LABEL='T4l: Dead Links Say Something' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/3-flows/dead-links.spec.ts
+        timeout-minutes: 4
+
       # Epic OSE-1880 (hyperlocal map), the staging layer of OSE-1886, OSE-1891 and
       # OSE-1896. The fixture is applied HERE, right before the specs that read it,
       # and unpublished right after them (staging is one site with stock data, owner
@@ -2809,6 +2863,7 @@ jobs:
           echo "| T4i Language Path Prefix | \`${{ steps.language-path-prefix.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4j Sponsor Thumbnails | \`${{ steps.sponsor-thumbnails.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4k Map Zoom, Place Panel and Map Links | \`${{ steps.map-place-panel.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4l Dead Links Say Something | \`${{ steps.dead-links.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
       # ── OSE-1171: per-gate NAMED CHECKS ──────────────────────────────────────────
       # Each leg publishes a check-run for the gates IT ran, so a red names its own
@@ -2857,6 +2912,7 @@ jobs:
               post "T4i: Language Path Prefix"                        "${{ steps.language-path-prefix.outcome }}"
               post "T4j: Sponsor Thumbnails"                          "${{ steps.sponsor-thumbnails.outcome }}"
               post "T4k: Map Zoom, Place Panel and Map Links"         "${{ steps.map-place-panel.outcome }}"
+              post "T4l: Dead Links Say Something"                    "${{ steps.dead-links.outcome }}"
               ;;
           esac
       # ── S2 Post-execution integrity — the tamper tripwire, IN THE SAME VM that ran

@@ -102,7 +102,7 @@ beforeAll(async () => {
 
 describe('OSE-818 — SharedReport payload keys speak the lexicon', () => {
   test('the built report carries the seeded data (the walk has something to read)', () => {
-    expect(report.distinct_scanners).toBe(16);
+    expect(report.distinct_scanners).toBe(10); // each bucket rounded down to a multiple of 5
     expect(Array.isArray(report.sponsor_displays)).toBe(true);
     expect((report.sponsor_displays as unknown[]).length).toBeGreaterThan(0);
   });

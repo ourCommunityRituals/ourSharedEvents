@@ -1,0 +1,36 @@
+info:
+  name: "OSE-2196 | GET /api/v2/events/rt-listed-pre/poster-bundle | routable true (listed, control)"
+  type: http
+  seq: 7
+
+# The control: a listed event's poster keeps its map buttons. Its bundle says
+# `routable: true`, and `directions.query` is the point of its res-9 cell
+# 89298e593bbffff, never its stored point (owner, 2026-11-19: "it should resolve
+# to the H3"). The poster builds both map links from that text.
+# Fixture: bruno/fixtures/routable-seed.sql.
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/rt-listed-pre/poster-bundle"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+        const b = res.getBody() || {};
+        test('routable is true', function () {
+          expect(b.routable).to.equal(true);
+        });
+        test('the poster maps search the res-9 cell point, never the stored point', function () {
+          expect(b.directions).to.eql({ query: '38.51280,-116.51088' });
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
