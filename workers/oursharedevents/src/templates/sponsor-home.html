@@ -9,61 +9,52 @@
     <!-- Toasts (OSE-1564): how this page says an action worked or failed.
          Same-origin and deferred; the page still works if it does not load. -->
     <script src="/ui-toast.js" defer></script>
-    <!-- Sponsor home: server-rendered, phone-first, token-driven. -->
+    <!-- Sponsor home: server-rendered, phone-first, token-driven. The look is
+         @ocr/ui's (canvas SponsorHome): .header with a .brand label over the one
+         page heading, .stats-row, .section-title, sectioned cards, .btn family.
+         This block holds only what /ui.css has no class for. -->
     <style>
-      .header a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; color: var(--accent); font-weight: 600; }
-      main { max-width: 720px; margin: 0 auto; padding: 1rem 16px 3rem; }
-      .sh-head { margin: 0.5rem 0 1.25rem; }
-      .sh-head h2 { overflow-wrap: anywhere; font-size: 1.6rem; font-weight: 700; line-height: 1.2; margin: 0 0 0.35rem; }
-      .sh-head p { color: var(--text-muted); margin: 0; font-size: 1rem; }
-      .sh-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.5rem), 1fr)); gap: 0.5rem; margin-bottom: 1.25rem; }
-      .sh-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 0.5rem; text-align: center; }
-      .sh-stat .n { display: block; font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
-      .sh-stat .l { display: block; font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; }
-      .sh-section-title { font-size: 0.95rem; font-weight: 600; color: var(--text-muted); margin: 1.25rem 0 0.5rem; }
-      .sh-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
-      .sh-card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: var(--radius-sm); padding: 1rem; }
-      .sh-card.needs-answer { border-left-color: var(--warn); }
-      .sh-card.declined { border-left-color: var(--border); opacity: 0.75; }
-      .sh-card h2 { overflow-wrap: anywhere; font-size: 1.15rem; font-weight: 700; margin: 0 0 0.25rem; line-height: 1.25; }
-      .sh-when { font-size: 1rem; font-weight: 600; margin: 0 0 0.25rem; }
-      .sh-meta { font-size: 0.9rem; color: var(--text-muted); margin: 0 0 0.75rem; }
+      .header { position: static; gap: 12px; }
+      .header > div { min-width: 0; overflow-wrap: anywhere; }
+      main { max-width: 720px; margin: 0 auto; padding: 16px 16px 48px; }
+      .sh-summary { flex-wrap: wrap; }
+      .sh-section { margin-top: 24px; }
+      .sh-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+      .sh-card .card-title { display: block; overflow-wrap: anywhere; }
+      .sh-when { font-weight: 600; }
+      .sh-pills { margin: 8px 0; }
       .sh-state { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; margin-right: 0.35rem; }
       .sh-state.live { background: var(--success); color: var(--bg); }
-      .sh-state.soon { background: var(--accent); color: var(--bg); }
-      .sh-state.done { background: var(--border); color: var(--text); }
+      .sh-state.soon { background: var(--accent); color: var(--on-accent); }
+      .sh-state.done, .sh-state.declined { background: var(--border); color: var(--text); }
       .sh-state.pending { background: var(--warn); color: var(--bg); }
-      .sh-state.declined { background: var(--border); color: var(--text); }
-      .sh-why { font-size: 0.95rem; color: var(--text); margin: 0.35rem 0 0; }
-      .sh-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-      .sh-actions .btn { flex: 1 1 auto; min-height: 48px; font-size: 1rem; }
-      .sh-msg { margin: 0.5rem 0 0; font-size: 0.9rem; min-height: 1.2em; }
+      .sh-why { margin: 8px 0; }
+      .sh-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+      .sh-actions .btn { flex: 1 1 auto; font-size: 1rem; }
+      .sh-msg { margin-top: 8px; min-height: 1.2em; }
       .sh-msg.ok { color: var(--success); }
-      .sh-msg.error { color: var(--danger); }
-      .sh-empty { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 1.5rem 1rem; text-align: center; color: var(--text-muted); }
-      .sh-foot { margin-top: 2rem; font-size: 0.85rem; color: var(--text-muted); }
-      .sh-foot code { font-size: 0.8rem; }
+      .sh-msg.error { color: var(--error); }
+      .sh-foot { margin-top: 32px; }
     </style>
   </head>
   <body>
-    <header class="header">
-      <h1>OurSharedEvents</h1>
-      <a href="/events" data-testid="sponsor-home-nav-events">What's on</a>
+    <header class="header" data-testid="sponsor-home-header">
+      <div>
+        <span class="brand" data-testid="sponsor-home-brand">ourSharedEvents · sponsor</span>
+        <h1 data-testid="sponsor-home-name"><!--OCR_SPONSOR_NAME--></h1>
+      </div>
+      <a class="btn btn-link" href="/events" data-testid="sponsor-home-nav-events">What's on</a>
     </header>
     <main id="main-content" data-testid="sponsor-home" data-sponsor-id="<!--OCR_SPONSOR_ID-->">
-      <div class="sh-head">
-        <h2 data-testid="sponsor-home-name"><!--OCR_SPONSOR_NAME--></h2>
-      </div>
-
-      <div class="sh-summary" data-testid="sponsor-home-summary">
-        <div class="sh-stat"><span class="n" data-testid="sponsor-home-count-live"><!--OCR_COUNT_LIVE--></span><span class="l">Live now</span></div>
-        <div class="sh-stat"><span class="n" data-testid="sponsor-home-count-upcoming"><!--OCR_COUNT_UPCOMING--></span><span class="l">Coming up</span></div>
-        <div class="sh-stat"><span class="n" data-testid="sponsor-home-count-pending"><!--OCR_COUNT_PENDING--></span><span class="l">Need your answer</span></div>
+      <div class="stats-row sh-summary" data-testid="sponsor-home-summary">
+        <div class="stat-card"><div class="stat-value" data-testid="sponsor-home-count-live"><!--OCR_COUNT_LIVE--></div><div class="stat-label">Live now</div></div>
+        <div class="stat-card"><div class="stat-value" data-testid="sponsor-home-count-upcoming"><!--OCR_COUNT_UPCOMING--></div><div class="stat-label">Coming up</div></div>
+        <div class="stat-card"><div class="stat-value" data-testid="sponsor-home-count-pending"><!--OCR_COUNT_PENDING--></div><div class="stat-label">Need your answer</div></div>
       </div>
 
       <!--OCR_SPONSOR_PLACEMENTS-->
 
-      <p class="sh-foot" data-testid="sponsor-home-foot">
+      <p class="sub-line sh-foot" data-testid="sponsor-home-foot">
         Your private link, good until <!--OCR_EXPIRES-->. Reports show counts, never who.
       </p>
     </main>
