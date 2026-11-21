@@ -36,11 +36,11 @@ beforeAll(async () => {
 // ─── REG-1: Core count and phase assertions ───────────────────────────────────
 
 describe('REG-1: Phase 1 event type seed', () => {
-  test('exactly 48 event types seeded (47 from 0024 + Watch Party from 0097)', async () => {
+  test('exactly 49 event types seeded (47 from 0024 + Watch Party from 0097 + Storytime from 0115)', async () => {
     const result = await tenv()
       .DB.prepare('SELECT COUNT(*) as cnt FROM event_type_registry')
       .first<{ cnt: number }>();
-    expect(result?.cnt).toBe(48);
+    expect(result?.cnt).toBe(49);
   });
 
   test('all seeded types have phase=1', async () => {
@@ -123,6 +123,7 @@ describe('REG-1: Spot-check key Phase 1 UEC codes', () => {
     'GAR-PLANTING-001',
     'FAI-INTERFAITH-001',
     'PER-OPENMIC-001',
+    'PER-STORYTIME-001',
     'TAB-BOARDGAME-001',
     'FIT-RUNNING-001',
     'LIT-BOOKCLUB-001',
