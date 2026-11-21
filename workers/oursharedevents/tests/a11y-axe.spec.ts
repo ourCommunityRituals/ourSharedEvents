@@ -172,7 +172,7 @@ describe('A11Y-7: axe-core WCAG 2.0 AA — zero critical/serious violations', ()
       .replace('<!--OCR_COUNT_PENDING-->', '0')
       .replace(
         '<!--OCR_SPONSOR_PLACEMENTS-->',
-        '<div class="sh-empty" data-testid="sponsor-home-empty">No placements yet. When an organizer adds you to an event, it shows up here.</div>'
+        '<section class="sh-section"><h2 class="section-title">Your placements</h2><p class="sub-line" data-testid="sponsor-home-empty">No placements yet.</p></section>'
       )
       .replace('<!--OCR_EXPIRES-->', 'Oct 1, 2026');
     await scanPage('Sponsor home page', page);
