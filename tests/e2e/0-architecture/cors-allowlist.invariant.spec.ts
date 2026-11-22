@@ -103,6 +103,7 @@ test.describe('Invariant 15: CORS Allowlist Immutability — structural code-sha
     // localhost:*, or a competitor's domain would break this assertion.
     //
     // The pattern captures: 'https://...', "https://..."
+    // test. is the weekly client test site (OSE-2211), a staging-only origin.
     const originMatches = [...src.matchAll(/['"]https?:\/\/([^'"]+)['"]/g)];
     const domains = originMatches.map((m) => m[1]);
     // Filter to only those inside the ALLOWED_ORIGINS block
@@ -116,7 +117,7 @@ test.describe('Invariant 15: CORS Allowlist Immutability — structural code-sha
         domain,
         `CORS allowlist contains '${domain}' which is not an OCR-owned oursharedevents.com domain — ` +
           'only oursharedevents.com and its subdomains may be in the CORS allowlist'
-      ).toMatch(/^(?:www\.|stg\.)?oursharedevents\.com$/);
+      ).toMatch(/^(?:www\.|stg\.|test\.)?oursharedevents\.com$/);
     }
     expect(allowedDomains.length, 'CORS allowlist must contain at least 1 domain').toBeGreaterThan(
       0
