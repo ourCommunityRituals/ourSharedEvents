@@ -1,0 +1,14 @@
+{
+  "type": "Feature",
+  "properties": {
+    "name": "Canada, as simple boxes",
+    "note": "Boxes, not borders, like street-map-us-region.geojson: a strip of the northern United States and open ocean are included, so a border town draws whole from either file. Greenland is left out (only a sliver of its west coast falls inside the northern box). Drawn 2026-11-22 for `pmtiles extract --region`; one region archive of North America (OSE-2210)."
+  },
+  "geometry": {
+    "type": "MultiPolygon",
+    "coordinates": [
+      [[[-141.1, 41.6], [-52.5, 41.6], [-52.5, 60.0], [-141.1, 60.0], [-141.1, 41.6]]],
+      [[[-141.1, 60.0], [-60.0, 60.0], [-60.0, 83.2], [-141.1, 83.2], [-141.1, 60.0]]]
+    ]
+  }
+}
