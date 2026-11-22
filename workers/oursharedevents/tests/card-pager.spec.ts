@@ -23,6 +23,7 @@ import {
   CARD_PAGER_STYLE,
   PAGE_SIZE,
   cardPagerControls,
+  cardPagerScript,
 } from '../src/lib/card-pager';
 import { renderEventList, type EventListItem } from '../src/lib/event-list';
 import { renderSponsorHomePage, type PlacementRow } from '../src/lib/sponsor-home-render';
@@ -266,9 +267,9 @@ describe("a fair's stalls | five at a time", () => {
 describe('the card pager | the piece', () => {
   it('a filter that hides cards is counted: only showing cards make the five', () => {
     const items = Array.from({ length: 9 }, (_, i) => `<li data-i="${i}">Card ${i}</li>`).join('');
-    const p = open(
-      `<ul id="l">${items}</ul>${cardPagerControls({ list: 'l', cards: 'li', testid: 'm' })}<style>${CARD_PAGER_STYLE.slice(7, -8)}</style><script>${CARD_PAGER_SCRIPT}</script>`
-    );
+    const controls = cardPagerControls({ list: 'l', cards: 'li', testid: 'm' });
+    // The page's own pieces, as a page sends them: the list, the controls, then the one script.
+    const p = open('<ul id="l">' + items + '</ul>' + controls + cardPagerScript());
     expect(p.shown('#l li', 'data-i')).toEqual(['0', '1', '2', '3', '4']);
     // Another script hides two cards (a filter): the next two step up.
     p.qa('#l li')[1]!.style.display = 'none';

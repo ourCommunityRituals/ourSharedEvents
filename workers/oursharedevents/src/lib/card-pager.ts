@@ -110,8 +110,10 @@ export interface CardPagerOptions {
   list: string;
   /** Which of its descendants are the cards (a CSS selector). */
   cards: string;
-  /** The button's test id; the status line's is the same plus `-status`. */
+  /** The button's test id. */
   testid: string;
+  /** The status line's test id. Defaults to the button's plus `-status`. */
+  statusTestid?: string;
   /** The page's language. */
   lang?: Lang;
   /** The status line, with `{n}` and `{total}`. Defaults to "Showing 5 of 12 events." */
@@ -127,7 +129,7 @@ export function cardPagerControls(o: CardPagerOptions): string {
   const says = escapeHtml(
     (o.says ?? msg(lang, 'area.moreShown')).replace('{n}', '%n').replace('{total}', '%t')
   );
-  return `<p class="card-more" data-card-more="${escapeHtml(o.list)}" data-cards="${escapeHtml(o.cards)}" hidden><button class="btn btn-secondary" type="button" data-testid="${escapeHtml(o.testid)}">${msg(lang, 'area.more')}</button></p><p class="card-more-status" role="status" aria-live="polite" data-testid="${escapeHtml(o.testid)}-status" data-says="${says}"></p>`;
+  return `<p class="card-more" data-card-more="${escapeHtml(o.list)}" data-cards="${escapeHtml(o.cards)}" hidden><button class="btn btn-secondary" type="button" data-testid="${escapeHtml(o.testid)}">${msg(lang, 'area.more')}</button></p><p class="card-more-status" role="status" aria-live="polite" data-testid="${escapeHtml(o.statusTestid ?? `${o.testid}-status`)}" data-says="${says}"></p>`;
 }
 
 /** The style and the script, once per page, after the last list. */

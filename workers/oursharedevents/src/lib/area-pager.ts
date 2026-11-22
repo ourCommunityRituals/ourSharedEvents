@@ -64,5 +64,5 @@ export const AREA_PAGER_SCRIPT = String.raw`(function () {
  * pager finds more than five cards to show.
  */
 export function areaPager(lang: Lang): string {
-  return `${cardPagerControls({ list: 'area-list', cards: 'article.event-card', testid: 'area-more', lang })}${cardPagerScript()}<script>${AREA_PAGER_SCRIPT}</script>`;
+  return `${cardPagerControls({ list: 'area-list', cards: 'article.event-card', testid: 'area-more', statusTestid: 'area-more-status', lang })}${cardPagerScript()}<script>${AREA_PAGER_SCRIPT}</script>`;
 }
