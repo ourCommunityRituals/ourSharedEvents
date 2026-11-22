@@ -344,6 +344,8 @@ test.describe('search and filters: a sponsor is never a search criterion', () =>
 
   test('landing: no filter names a sponsor, and the card is not tagged by it', async ({ page }) => {
     await loadAndRecord(page);
+    // Cards come five at a time; bring the seeded one into view first.
+    await showAllCards(page);
     const card = page.locator(`[data-testid="area-list"] [data-event-id="${seeded.eventId}"]`);
     await expect(card).toBeVisible();
     await expect(card).toContainText(`Supported by ${seeded.sponsorName}`);
