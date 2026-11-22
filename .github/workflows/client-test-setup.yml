@@ -1,0 +1,159 @@
+# One-time setup of the client test site, test.oursharedevents.com (OSE-2211).
+#
+# Dispatched by the owner, once, from the Actions tab. It creates, by name and
+# only where missing:
+#   - D1 databases  ocr-db-test, ocr-forms-db-test
+#   - KV namespace  ose-rate-limit-test
+#   - R2 bucket     ose-uploads-test
+#   - the six Worker secrets of the test site, each a fresh random value made
+#     inside this job. Nobody sees them: they are masked, written to a file in
+#     the runner's temporary folder with owner-only permissions, handed to
+#     wrangler and deleted. A secret that already exists is never replaced.
+#
+# Running it again is safe: it only adds what is missing. It never deploys the
+# site (the "Client test site" workflow does), never reads a secret's value,
+# and never names staging's or production's resources.
+#
+# It uses the staging GitHub environment's Cloudflare credential, the one the
+# staging deploy uses (the test site is a staging-class site in the same account).
+# Runbook: docs/runbooks/RUNBOOK-CLIENT-TEST-SITE.md, step 3.
+
+name: Client test site setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type TEST to confirm: create the test site databases, bucket and secrets'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: client-test-site
+  cancel-in-progress: false
+  queue: max
+
+env:
+  WORKER_DIR: workers/oursharedevents
+  TEST_CONFIG: wrangler.client-test.toml
+
+jobs:
+  setup:
+    name: 'Create what the client test site needs'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - name: 'Refuse unless TEST was typed'
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "TEST" ]; then
+            echo "::error::Type TEST in the confirm box. This workflow sets up the client test site only."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install worker dependencies (the pinned wrangler)
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npm ci --prefer-offline || npm ci
+
+      - name: 'Databases, namespace and bucket (only the missing ones)'
+        working-directory: ${{ env.WORKER_DIR }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          W="npx wrangler"
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
+          {
+            echo "### Client test site setup"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          D1="$($W d1 list --json)"
+          for DB in ocr-db-test ocr-forms-db-test; do
+            if printf '%s' "$D1" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.exit(JSON.parse(s).some(d=>d.name===process.argv[1])?0:1))" "$DB"; then
+              echo "- D1 $DB: already there" >> "$GITHUB_STEP_SUMMARY"
+            else
+              $W d1 create "$DB" >/dev/null
+              echo "- D1 $DB: created" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+          KV_TITLE=ose-rate-limit-test
+          KV="$(curl -sf --max-time 30 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API/storage/kv/namespaces?per_page=100")"
+          if printf '%s' "$KV" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.exit(JSON.parse(s).result.some(n=>n.title===process.argv[1])?0:1))" "$KV_TITLE"; then
+            echo "- KV $KV_TITLE: already there" >> "$GITHUB_STEP_SUMMARY"
+          else
+            curl -sf --max-time 30 -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H 'Content-Type: application/json' --data "{\"title\":\"$KV_TITLE\"}" \
+              "$API/storage/kv/namespaces" >/dev/null
+            echo "- KV $KV_TITLE: created" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          BUCKET=ose-uploads-test
+          if $W r2 bucket info "$BUCKET" >/dev/null 2>&1; then
+            echo "- R2 $BUCKET: already there" >> "$GITHUB_STEP_SUMMARY"
+          else
+            $W r2 bucket create "$BUCKET" >/dev/null
+            echo "- R2 $BUCKET: created (private, no public URL)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: 'Worker secrets (only the missing ones; values never shown)'
+        working-directory: ${{ env.WORKER_DIR }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          W="npx wrangler"
+          # The Worker may not exist yet; then no secret exists yet either.
+          EXISTING="$($W secret list -c "$TEST_CONFIG" 2>/dev/null || echo '[]')"
+          umask 077
+          FILE="$RUNNER_TEMP/client-test-secrets.json"
+          trap 'rm -f "$FILE"' EXIT
+          ADDED=""
+          echo '{' > "$FILE"
+          SEP=""
+          for SECRET in FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER ANON_ID_HASH_PEPPER IP_HASH_PEPPER RATE_LIMIT_KEY_PEPPER SHARED_REPORT_SIGNING_SECRET; do
+            if printf '%s' "$EXISTING" | grep -q "\"$SECRET\""; then
+              echo "- secret $SECRET: already set, left as it is" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            VALUE="$(openssl rand -hex 32)"
+            echo "::add-mask::$VALUE"
+            printf '%s"%s":"%s"\n' "$SEP" "$SECRET" "$VALUE" >> "$FILE"
+            SEP=","
+            unset VALUE
+            ADDED="$ADDED $SECRET"
+          done
+          echo '}' >> "$FILE"
+          if [ -n "$ADDED" ]; then
+            $W secret bulk "$FILE" -c "$TEST_CONFIG" >/dev/null
+            for S in $ADDED; do echo "- secret $S: set (a new random value)" >> "$GITHUB_STEP_SUMMARY"; done
+          fi
+          rm -f "$FILE"
+          {
+            echo
+            echo "Next: run the **Client test site** workflow with action **update** (runbook step 4)."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -86,6 +86,16 @@ describe('OSE-1417 | CORS allowlist is per environment', () => {
     }
   });
 
+  test('OSE-2211: the client test site origin is trusted by a staging-class Worker only', async () => {
+    const TEST_SITE = 'https://test.oursharedevents.com';
+    const ok = await preflight('staging', TEST_SITE);
+    expect(ok.headers.get('Access-Control-Allow-Origin')).toBe(TEST_SITE);
+    for (const workerEnv of ['production', 'development', 'test']) {
+      const res = await preflight(workerEnv, TEST_SITE);
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    }
+  });
+
   test('an unbound request fails closed to the production set', () => {
     const req = new Request('https://t.test/x', { headers: { Origin: STG } });
     expect(corsOrigin(req)).toBeNull();
