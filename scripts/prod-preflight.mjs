@@ -47,6 +47,8 @@ export const STAGING_ONLY_VARS = [
   'ALLOW_OCR_INTERNAL',
   // OSE-1800: the CI service actor's synthetic brand; production has no svc actor.
   'CI_SERVICE_ACTOR_BRAND',
+  // Owner 2026-11-22: an outside tester's one practice brand; production maps nobody by env.
+  'ADMIN_BRAND_MEMBERSHIP',
 ];
 
 /**

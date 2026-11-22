@@ -45,6 +45,8 @@ export const INTENTIONAL_VALUE_DIFFERENCES = {
     'a separate Access app per environment, so a separate audience; production is pinned (OSE-1353), staging is still unpinned (OSE-1377)',
   STREET_MAP:
     'the street layer is switched on one environment at a time, staging first (owner 2026-11-09). Production has no MAP_TILES binding yet, so its value does nothing until it is bound; production may be "on" only once staging is (tests/unit/ci/env-parity.test.js)',
+  ALLOWED_ADMIN_EMAILS:
+    "staging also lets in the outside tester's practice account (owner 2026-11-22); production stays the owner alone",
   VOTING_ENABLED:
     'the voting kill switch (lib/voting-switch.ts, OSE-2135, OSE ADR-040). Off in both today. Only the owner turns it on, not before the voter page (S4b, OSE-2129) ships, and staging first: production may be "on" only once staging is (tests/unit/ci/env-parity.test.js), so production stays inert for voting until the owner says otherwise',
 };
@@ -60,6 +62,8 @@ export const INTENTIONAL_ONLY_IN = {
       'the CI service token accepted as a brand admin (OSE-1800); production has none (tests/prod-admin-scope-config.spec.ts)',
     CI_SERVICE_ACTOR_BRAND:
       'the one synthetic brand the CI service actor administers (OSE-1800); production has none',
+    ADMIN_BRAND_MEMBERSHIP:
+      "the outside tester's one practice brand on staging (owner 2026-11-22); production has none",
   },
   production: {},
 };

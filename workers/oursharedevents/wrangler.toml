@@ -358,9 +358,17 @@ ADMIN_SCOPE_ALL = "true"
 # owner sets once the token exists and CF_ACCESS_AUD is pinned here (OSE-1377).
 # STAGING ONLY — tests/prod-admin-scope-config.spec.ts keeps it out of production.
 CI_SERVICE_ACTOR_BRAND = "ci-brand"
-# Admin email allowlist — plaintext vars take priority over secrets; set actual values here
-ALLOWED_ADMIN_EMAILS = "mzdano@gmail.com"
+# Admin email allowlist — plaintext vars take priority over secrets; set actual values here.
+# STAGING ONLY: the second address is the first outside tester's practice account (owner
+# 2026-11-22). It is the school's own published contact address, so nothing private is in
+# this public file. Her scope is the one practice brand in ADMIN_BRAND_MEMBERSHIP below.
+ALLOWED_ADMIN_EMAILS = "mzdano@gmail.com,circuskazoo@gmail.com"
 ALLOWED_ADMIN_DOMAINS = "oursharedevents.com"
+# STAGING ONLY: email -> brands for an outside tester (owner 2026-11-22). Read by
+# resolveAdminBrandScopeAsync only when the address has no admin_brand_memberships row,
+# so it never widens anyone else. One practice brand, never the platform brand, so she
+# sees and creates only her own events and sponsors. Production has none.
+ADMIN_BRAND_MEMBERSHIP = '{"circuskazoo@gmail.com":["circus-kazoo-test"]}'
 # CF Access team domain for JWT signature verification (OSE-573)
 # Leave empty in local dev to skip signature verification (ALLOW_ADMIN_KEY_FALLBACK handles dev auth)
 CF_ACCESS_TEAM_DOMAIN = "mzdano.cloudflareaccess.com"
