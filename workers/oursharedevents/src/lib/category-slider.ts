@@ -187,15 +187,17 @@ const SCRIPT = String.raw`(function () {
         });
       })(labels[j]);
     }
-    // Button items: one chosen, its value in the slider's input.
+    // Button items: at most one chosen, its value in the slider's input. A tap on
+    // the chosen one clears the choice (the field is optional where it is used).
     var input = box.querySelector('[data-icon-slider-value]');
     var buttons = track.querySelectorAll('button[data-value]');
     for (var k = 0; k < buttons.length; k++) {
       buttons[k].addEventListener('click', function (ev) {
         var b = ev.currentTarget;
-        for (var m = 0; m < buttons.length; m++) buttons[m].setAttribute('aria-pressed', String(buttons[m] === b));
+        var on = b.getAttribute('aria-pressed') !== 'true';
+        for (var m = 0; m < buttons.length; m++) buttons[m].setAttribute('aria-pressed', String(on && buttons[m] === b));
         if (input) {
-          input.value = b.getAttribute('data-value');
+          input.value = on ? b.getAttribute('data-value') : '';
           input.dispatchEvent(new Event('change', { bubbles: true }));
         }
       });

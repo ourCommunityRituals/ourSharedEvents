@@ -264,8 +264,8 @@ test('375 px: the arrows step the row along and stop at each end', async ({ brow
   const c = await ctx(browser, 375);
   const page = await c.newPage();
   await open(page);
-  const prev = page.getByTestId('toggle-type-prev');
-  const next = page.getByTestId('toggle-type-next');
+  const prev = page.locator('[data-testid="toggle-type"] .icon-slider-arrow[data-step="-1"]');
+  const next = page.locator('[data-testid="toggle-type"] .icon-slider-arrow[data-step="1"]');
   await expect(next).toBeVisible();
   await expect(prev).toBeDisabled();
   for (const b of [prev, next]) {
@@ -293,7 +293,9 @@ test('1280 px: the arrows show only when the row is wider than the screen', asyn
   const page = await c.newPage();
   await open(page);
   const wider = await track(page).evaluate((t) => t.scrollWidth > t.clientWidth + 1);
-  await expect(page.getByTestId('toggle-type-next')).toBeVisible({ visible: wider });
+  await expect(
+    page.locator('[data-testid="toggle-type"] .icon-slider-arrow[data-step="1"]')
+  ).toBeVisible({ visible: wider });
   await c.close();
 });
 
@@ -303,7 +305,9 @@ test('375 px, scripts off: the row still scrolls with a swipe, the items still f
   const c = await ctx(browser, 375, 'light', false);
   const page = await c.newPage();
   await open(page);
-  await expect(page.getByTestId('toggle-type-next')).toBeHidden();
+  await expect(
+    page.locator('[data-testid="toggle-type"] .icon-slider-arrow[data-step="1"]')
+  ).toBeHidden();
   await track(page).evaluate((t) => t.scrollBy({ left: 400 }));
   expect(await track(page).evaluate((t) => t.scrollLeft)).toBeGreaterThan(0);
   await slider(page).getByText('Faith Community').click();
@@ -350,7 +354,7 @@ test('right to left: the row starts at the right, and "more" goes left', async (
   const first = await slider(page).locator('label[for="type-all"]').boundingBox();
   const second = await slider(page).locator('.icon-slider-item').nth(1).boundingBox();
   expect(first!.x).toBeGreaterThan(second!.x);
-  await page.getByTestId('toggle-type-next').click();
+  await page.locator('[data-testid="toggle-type"] .icon-slider-arrow[data-step="1"]').click();
   await expect.poll(() => track(page).evaluate((t) => t.scrollLeft)).toBeLessThan(-100);
   await c.close();
 });
@@ -360,7 +364,7 @@ test('the slider asks for nothing and keeps nothing', async ({ browser }) => {
   const page = await c.newPage();
   const asked = await open(page);
   const before = asked.length;
-  await page.getByTestId('toggle-type-next').click();
+  await page.locator('[data-testid="toggle-type"] .icon-slider-arrow[data-step="1"]').click();
   await slider(page).getByText('Fundraisers').click();
   await page.locator('#cat-fnd').focus();
   await page.waitForTimeout(300);
@@ -386,7 +390,9 @@ test.describe('mutation: every check fails on a fault', () => {
 
   test('axe catches an arrow with no name (4.1.2 button-name)', async ({ browser }) => {
     const { c, page } = await fresh(browser);
-    await page.getByTestId('toggle-type-next').evaluate((b) => b.removeAttribute('aria-label'));
+    await page
+      .locator('[data-testid="toggle-type"] .icon-slider-arrow[data-step="1"]')
+      .evaluate((b) => b.removeAttribute('aria-label'));
     const found = await axeWcag(page);
     expect(
       found.some((l) => l.startsWith('button-name ')),

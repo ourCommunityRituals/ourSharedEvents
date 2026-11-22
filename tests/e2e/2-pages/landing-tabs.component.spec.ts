@@ -184,9 +184,9 @@ for (const s of SCREENS) {
       // One tabpanel shows; its chips are the group the tab names.
       await expect(page.getByRole('tabpanel')).toHaveCount(1);
       await expect(page.getByTestId('toggle-window')).toBeVisible();
-      await expect(page.getByTestId('tabpanel-near')).toBeHidden();
+      await expect(page.locator('#tabpanel-near')).toBeHidden();
       await tab(page, 'near').click();
-      await expect(page.getByTestId('tabpanel-near')).toBeVisible();
+      await expect(page.locator('#tabpanel-near')).toBeVisible();
       await expect(page.getByTestId('toggle-window')).toBeHidden();
       expect(await selected(page)).toBe('false,true');
       // On every tab, the distance list's included, nothing in the filter block

@@ -886,6 +886,11 @@ jobs:
       # dark: 44 px items with 16 px names and one icon each, a tap that filters,
       # arrows that step and stop, keyboard and right to left, nothing asked for or
       # kept; its mutation tests inject a fault per check.
+      #
+      # wcag-sponsor-kind.component.spec.ts (owner 2026-11-22, OSE-2207: in Create
+      # Sponsor the slider picks the kind of business) holds the admin sponsor
+      # form's slider to the same rules at 320, 390 and 1280 px, light and dark:
+      # the form stays phone-wide with 20 kinds, and a tap picks, moves and clears.
       - name: 'Component: viewport specs vs local worker'
         if: matrix.shard == 'component'
         run: |
@@ -904,7 +909,8 @@ jobs:
             tests/e2e/2-pages/voter-page.component.spec.ts \
             tests/e2e/2-pages/landing-menu.component.spec.ts \
             tests/e2e/2-pages/landing-tabs.component.spec.ts \
-            tests/e2e/2-pages/wcag-slider.component.spec.ts
+            tests/e2e/2-pages/wcag-slider.component.spec.ts \
+            tests/e2e/2-pages/wcag-sponsor-kind.component.spec.ts
 
   # T0 test sub-gates: keep the existing required context `T0 Gate (tests)` as
   # an aggregate below, but split the former 9+ minute long-pole job into

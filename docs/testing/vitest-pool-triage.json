@@ -3565,6 +3565,13 @@
       "testCount": 9
     },
     {
+      "file": "workers/oursharedevents/tests/sponsor-business-kind.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, env.DB",
+      "testCount": 8
+    },
+    {
       "file": "workers/oursharedevents/tests/sponsor-card-link-gate.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

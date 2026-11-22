@@ -208,6 +208,13 @@ describe('the wiring script', () => {
       'b'
     );
     expect(changed).toBe(1);
+    // A tap on the chosen one clears the choice.
+    b.click();
+    expect(b.getAttribute('aria-pressed')).toBe('false');
+    expect((w.document.querySelector('[data-icon-slider-value]') as HTMLInputElement).value).toBe(
+      ''
+    );
+    expect(changed).toBe(2);
   });
 });
 
