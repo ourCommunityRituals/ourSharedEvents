@@ -31,7 +31,8 @@ import type { Lang } from './i18n/languages.js';
 /** How many cards show at first, and how many more each tap brings. */
 export const PAGE_SIZE = 5;
 
-const SCRIPT = String.raw`(function () {
+/** The script's own text, exported so a test can read it without parsing HTML. */
+export const AREA_PAGER_SCRIPT = String.raw`(function () {
   var list = document.getElementById('area-list');
   var more = document.querySelector('[data-testid="area-more"]');
   if (!list || !more) return;
@@ -118,5 +119,5 @@ export function areaPager(lang: Lang): string {
   const says = escapeHtml(
     msg(lang, 'area.moreShown').replace('{n}', '%n').replace('{total}', '%t')
   );
-  return `${STYLE}<p class="area-more" hidden><button class="btn btn-secondary" type="button" data-testid="area-more">${msg(lang, 'area.more')}</button></p><p class="near-note" role="status" aria-live="polite" data-testid="area-more-status" data-says="${says}"></p><script>${SCRIPT}</script>`;
+  return `${STYLE}<p class="area-more" hidden><button class="btn btn-secondary" type="button" data-testid="area-more">${msg(lang, 'area.more')}</button></p><p class="near-note" role="status" aria-live="polite" data-testid="area-more-status" data-says="${says}"></p><script>${AREA_PAGER_SCRIPT}</script>`;
 }

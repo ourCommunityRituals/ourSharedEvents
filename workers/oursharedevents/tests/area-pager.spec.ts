@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { JSDOM } from 'jsdom';
 import { latLngToCell } from 'h3-js';
 import { renderLandingArea, type LandingAreaItem } from '../src/lib/landing-area';
-import { areaPager, PAGE_SIZE } from '../src/lib/area-pager';
+import { areaPager, AREA_PAGER_SCRIPT, PAGE_SIZE } from '../src/lib/area-pager';
 import { cellsKey } from '../src/lib/street-map';
 
 const NOW = Date.parse('2026-11-21T12:00:00Z');
@@ -196,12 +196,12 @@ describe('the cards five at a time | what the script does', () => {
 });
 
 describe('the cards five at a time | what the script may never do', () => {
-  // The script's own text, cut out by position (no tag-matching pattern).
-  const html = areaPager('en');
-  const src = html.slice(
-    html.indexOf('<script>') + '<script>'.length,
-    html.lastIndexOf('</script>')
-  );
+  // The script's own text, as the module exports it.
+  const src = AREA_PAGER_SCRIPT;
+  it('is the script the pager sends', () => {
+    expect(src).toContain('area-more');
+    expect(areaPager('en')).toContain(src);
+  });
   it('never reads a position, asks for anything, or stores anything', () => {
     for (const banned of [
       /geolocation/,
