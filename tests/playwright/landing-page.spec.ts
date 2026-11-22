@@ -19,6 +19,7 @@
  * local worker that config starts. Relative URLs only: the config owns the host.
  */
 import { test, expect, type Page } from '@playwright/test';
+import { showAllCards } from './helpers/area-more';
 import { openAreaFilters, openAreaTab } from './helpers/area-filters';
 import {
   createLiveEvent,
@@ -283,17 +284,20 @@ test.describe('landing: the Type row is the event categories', () => {
 
     const card = (title: string) =>
       page.getByTestId('area-card').filter({ has: page.getByText(title, { exact: true }) });
+    await showAllCards(page);
     for (const t of Object.values(titles)) await expect(card(t), t).toBeVisible();
 
     const requestsAfterLoad: string[] = [];
     page.on('request', (r) => requestsAfterLoad.push(r.url()));
     await arts.click();
     await expect(page.locator('#cat-art')).toBeChecked();
+    await showAllCards(page);
     await expect(card(titles.music)).toBeVisible();
     await expect(card(titles.gallery)).toBeVisible();
     await expect(card(titles.mixer)).toBeHidden();
 
     await page.locator('label[for="type-all"]').click();
+    await showAllCards(page);
     await expect(card(titles.mixer)).toBeVisible();
     expect(requestsAfterLoad, 'choosing a category stays on the device').toEqual([]);
   });
@@ -340,6 +344,8 @@ test.describe('search and filters: a sponsor is never a search criterion', () =>
 
   test('landing: no filter names a sponsor, and the card is not tagged by it', async ({ page }) => {
     await loadAndRecord(page);
+    // Cards come five at a time; bring the seeded one into view first.
+    await showAllCards(page);
     const card = page.locator(`[data-testid="area-list"] [data-event-id="${seeded.eventId}"]`);
     await expect(card).toBeVisible();
     await expect(card).toContainText(`Supported by ${seeded.sponsorName}`);

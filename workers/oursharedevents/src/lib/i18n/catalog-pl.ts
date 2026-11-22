@@ -307,6 +307,8 @@ export const pl: Record<MessageKey, string> = {
   'area.nearNone':
     'Brak wydarzeń z miejscem na mapie w promieniu {d} mil. Spróbuj większej odległości.',
   'area.nearAway': 'ok. {d} mil stąd',
+  'area.more': 'Kliknij, aby zobaczyć więcej',
+  'area.moreShown': 'Wyświetlono {n} z {total} wydarzeń.',
   'map.near': 'w pobliżu: {venue}',
   'map.exampleLabel':
     'Przykładowa mapa: trzy okolice narysowane jako ponumerowane sześciokąty, najbardziej ruchliwa w najciemniejszym odcieniu',

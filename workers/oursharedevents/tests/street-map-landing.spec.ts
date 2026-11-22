@@ -384,7 +384,7 @@ describe('street map | the landing page handler', () => {
 
   it('fat finger: a mistyped MAP_TILES_ARCHIVE leaves the page as it was, and the bucket is never asked', async () => {
     const plain = await landing({});
-    const mistyped = 'Us-20261115.PMTILES';
+    const mistyped = 'Us-20261120.PMTILES';
     const bucket = fakeBucket(
       mistyped,
       await pmtilesArchive(tilesForCells(cellsOf(plain)).tiles, { gzip: true })
@@ -399,7 +399,7 @@ describe('street map | the landing page handler', () => {
     expect(html).not.toContain('data-testid="amap-credit"');
     expect(cellsOf(html)).toEqual(cellsOf(plain));
     // Control: the same bucket under the name as typed correctly draws.
-    const right = 'us-20261115.pmtiles';
+    const right = 'us-20261120.pmtiles';
     const good = fakeBucket(
       right,
       await pmtilesArchive(tilesForCells(cellsOf(plain)).tiles, { gzip: true })

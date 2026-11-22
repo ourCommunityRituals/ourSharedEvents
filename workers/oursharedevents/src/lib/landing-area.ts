@@ -87,6 +87,7 @@ import { fmt, msg } from './i18n/catalog.js';
 import { AREA_FILTERS_STYLE, FILTERS_TOGGLE_ID } from './area-filters-style.js';
 import { AREA_TABS_STYLE } from './area-tabs-style.js';
 import { AREA_TABS_SCRIPT } from './area-tabs-script.js';
+import { areaPager } from './area-pager.js';
 import { DEFAULT_LANG, type Lang } from './i18n/languages.js';
 import { OTHER_CATEGORY_CODE, type TypeCategory } from './event-type-catalog.js';
 
@@ -690,6 +691,7 @@ function buildAreaMarkup(args: {
           </div>
           <div class="view-list" id="${AREA_LIST_ID}" data-testid="area-list">${emptyMessages}${cards}
           </div>
+          ${areaPager(lang)}
         </div>`;
 
   const filtersToggle = `<input type="checkbox" id="${FILTERS_TOGGLE_ID}" class="toggle-radio" />`;
@@ -751,13 +753,11 @@ function nearPanel(lang: Lang): string {
 export function injectLandingArea(
   html: string,
   area: RenderedLandingArea,
-  opts?: { areaFirst?: boolean; mapFirst?: boolean }
+  opts?: { mapFirst?: boolean }
 ): string {
   if (!html.includes(LANDING_AREA_MARKER)) return html;
-  // A zip search answers with its results first (owner 2026-10-10).
-  const view = opts?.areaFirst ? 'map' : area.defaultView;
   return injectMarker(
-    orderLandingSections(html, view, { whereAfterArea: opts?.mapFirst === true }),
+    orderLandingSections(html, { mapPage: opts?.mapFirst === true }),
     LANDING_AREA_MARKER,
     area.html
   );
@@ -788,19 +788,16 @@ function placeWhere(html: string, afterArea: boolean): string {
 }
 
 /**
- * Which leads the landing page (PO, 2026-10-03). Fewer than LIST_MAX events:
- * the two create doors lead and the area follows, because the page's job is to
- * get the first gatherings made. At LIST_MAX or more the area's default view is
- * the map, and the map leads; the doors move directly beneath it. One rule, one
- * threshold: this reads the same `defaultView` the list/map toggle uses.
- * Markers are always removed; a template without them is returned unchanged.
+ * Where the two create doors go (owner, 2026-11-21: "the Create event and Create
+ * Sponsor button would get moved to the top of the screen"). On the landing they
+ * stay where the template puts them, at the top under the heading, whatever the
+ * count, the view or a search. On /map the map leads, so the search and then the
+ * doors follow it. Markers are always removed; a template without them is
+ * returned unchanged.
  */
-export function orderLandingSections(
-  page: string,
-  defaultView: 'list' | 'map',
-  opts?: { whereAfterArea?: boolean }
-): string {
-  const html = placeWhere(page, opts?.whereAfterArea === true);
+export function orderLandingSections(page: string, opts?: { mapPage?: boolean }): string {
+  const mapPage = opts?.mapPage === true;
+  const html = placeWhere(page, mapPage);
   const a = html.indexOf(DOORS_START);
   const b = html.indexOf(DOORS_END);
   const c = html.indexOf(AFTER_AREA);
@@ -812,5 +809,5 @@ export function orderLandingSections(
   const before = html.slice(0, a);
   const middle = html.slice(b + DOORS_END.length, c);
   const after = html.slice(c + AFTER_AREA.length);
-  return defaultView === 'map' ? before + middle + doors + after : before + doors + middle + after;
+  return mapPage ? before + middle + doors + after : before + doors + middle + after;
 }

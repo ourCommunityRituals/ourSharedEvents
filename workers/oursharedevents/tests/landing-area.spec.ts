@@ -571,9 +571,9 @@ describe('OSE-1824 | the landing sections keep their order rules', () => {
   const E = '<!--OCR_DOORS_END-->';
   const A = '<!--OCR_AFTER_AREA-->';
 
-  it('doors at the very start of the page still move under the map', () => {
-    expect(orderLandingSections(`${S}D${E}M${A}T`, 'map')).toBe('MDT');
-    expect(orderLandingSections(`${S}D${E}M${A}T`, 'list')).toBe('DMT');
+  it('doors at the very start of the page move under the map on /map, and stay first on the landing', () => {
+    expect(orderLandingSections(`${S}D${E}M${A}T`, { mapPage: true })).toBe('MDT');
+    expect(orderLandingSections(`${S}D${E}M${A}T`)).toBe('DMT');
   });
 
   it.each([
@@ -581,7 +581,7 @@ describe('OSE-1824 | the landing sections keep their order rules', () => {
     ['doors end before start', `x${E}D${S}M${A}T`],
     ['after-area before doors end', `x${S}D${A}M${E}T`],
   ])('%s: the page comes back unchanged', (_, html) => {
-    expect(orderLandingSections(html, 'map')).toBe(html);
+    expect(orderLandingSections(html, { mapPage: true })).toBe(html);
   });
 
   it('a page without the area marker is not reordered either', () => {
@@ -670,26 +670,24 @@ describe('the attendee-map grade: phone filters, the search on /map, filters on 
   it('the search moves only when both its markers and the end of the area are there', () => {
     const W = '<!--OCR_WHERE_START-->W<!--OCR_WHERE_END-->';
     // No area end to move it to: it stays, and its markers go.
-    expect(orderLandingSections(`a${W}bc`, 'map', { whereAfterArea: true })).toBe('aWbc');
+    expect(orderLandingSections(`a${W}bc`, { mapPage: true })).toBe('aWbc');
     // At the very start of the page, too.
-    expect(orderLandingSections(`${W}b`, 'list')).toBe('Wb');
+    expect(orderLandingSections(`${W}b`)).toBe('Wb');
     // The area's end first in the page: the search still goes just before it.
-    expect(
-      orderLandingSections(`<!--OCR_AFTER_AREA-->q${W}`, 'map', { whereAfterArea: true })
-    ).toBe('W<!--OCR_AFTER_AREA-->q');
-    expect(orderLandingSections(`a${W}b`, 'list')).toBe('aWb');
+    expect(orderLandingSections(`<!--OCR_AFTER_AREA-->q${W}`, { mapPage: true })).toBe(
+      'W<!--OCR_AFTER_AREA-->q'
+    );
+    expect(orderLandingSections(`a${W}b`)).toBe('aWb');
     // One marker alone, or the two the wrong way round: the page is left as it is.
     expect(
-      orderLandingSections('a<!--OCR_WHERE_START-->W<!--OCR_AFTER_AREA-->', 'map', {
-        whereAfterArea: true,
-      })
+      orderLandingSections('a<!--OCR_WHERE_START-->W<!--OCR_AFTER_AREA-->', { mapPage: true })
     ).toBe('a<!--OCR_WHERE_START-->W<!--OCR_AFTER_AREA-->');
     const back = 'a<!--OCR_WHERE_END-->W<!--OCR_WHERE_START-->b<!--OCR_AFTER_AREA-->';
-    expect(orderLandingSections(back, 'map', { whereAfterArea: true })).toBe(back);
+    expect(orderLandingSections(back, { mapPage: true })).toBe(back);
     // Both, and the area's end: the search goes just before it.
-    expect(
-      orderLandingSections(`a${W}b<!--OCR_AFTER_AREA-->c`, 'map', { whereAfterArea: true })
-    ).toBe('abW<!--OCR_AFTER_AREA-->c');
+    expect(orderLandingSections(`a${W}b<!--OCR_AFTER_AREA-->c`, { mapPage: true })).toBe(
+      'abW<!--OCR_AFTER_AREA-->c'
+    );
   });
 
   it("each hexagon, legend row and event link carries its events' filter classes", () => {

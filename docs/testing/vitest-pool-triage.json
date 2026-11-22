@@ -513,11 +513,18 @@
       "testCount": 9
     },
     {
+      "file": "workers/oursharedevents/tests/area-pager.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 11
+    },
+    {
       "file": "workers/oursharedevents/tests/area-tabs.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 29
+      "testCount": 30
     },
     {
       "file": "workers/oursharedevents/tests/as-display-public-admin.spec.ts",
@@ -1371,7 +1378,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, env.DB",
-      "testCount": 20
+      "testCount": 24
     },
     {
       "file": "workers/oursharedevents/tests/event-type-reachability.spec.ts",

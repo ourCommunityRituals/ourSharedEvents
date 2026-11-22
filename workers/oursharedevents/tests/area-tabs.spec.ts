@@ -426,18 +426,41 @@ describe('the distance choice | what the phone does with its own position', () =
     expect(kept).toHaveLength(7);
   });
 
-  it('Any distance puts every event back, in the order the page had', () => {
+  it('Any distance puts every event back, nearest first once the position is known (owner, 2026-11-21)', () => {
     const geo = fake();
     const { q, qa, win } = open(area(), geo);
     const before = qa('.view-list article.event-card').map((c) => c.getAttribute('data-event-id'));
     choose(win as unknown as Window, '10');
     choose(win as unknown as Window, '0');
     const after = qa('.view-list article.event-card');
-    expect(after.map((c) => c.getAttribute('data-event-id'))).toEqual(before);
+    const ids = after.map((c) => c.getAttribute('data-event-id'));
+    expect([...ids].sort()).toEqual([...before].sort());
     expect(after.every((c) => c.style.display !== 'none')).toBe(true);
-    expect(qa('[data-testid="card-distance"]')).toHaveLength(0);
+    // The cards with a distance lead, nearest first, each saying how far; the
+    // rest (no place on the map) follow in the page's own order.
+    const placed = after.filter((c) => c.hasAttribute('data-d'));
+    const d = placed.map((c) => +c.getAttribute('data-d')!);
+    expect(placed.length).toBeGreaterThan(0);
+    expect(d).toEqual([...d].sort((a, b) => a - b));
+    expect(after.slice(0, placed.length)).toEqual(placed);
+    const rest = ids.slice(placed.length);
+    expect(rest).toEqual(before.filter((id) => rest.includes(id)));
+    expect(qa('[data-testid="card-distance"]')).toHaveLength(placed.length);
+    // Each area's distance rides on its row of the map's list, for the pager.
+    expect(qa('li[data-area]').every((li) => li.hasAttribute('data-d'))).toBe(true);
     expect(qa('g[data-cell]').every((g) => g.style.display !== 'none')).toBe(true);
     expect(q('#tab-near').hasAttribute('data-changed')).toBe(false);
+  });
+
+  it('Any distance before any position keeps the order the page had', () => {
+    const geo = fake();
+    const { qa, win } = open(area(), geo);
+    const before = qa('.view-list article.event-card').map((c) => c.getAttribute('data-event-id'));
+    choose(win as unknown as Window, '0');
+    const after = qa('.view-list article.event-card');
+    expect(after.map((c) => c.getAttribute('data-event-id'))).toEqual(before);
+    expect(qa('[data-testid="card-distance"]')).toHaveLength(0);
+    expect(qa('li[data-area]').some((li) => li.hasAttribute('data-d'))).toBe(false);
   });
 
   it('a refused position puts the choice back to Any distance and says why', () => {

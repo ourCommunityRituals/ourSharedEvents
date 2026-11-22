@@ -115,6 +115,12 @@ describe('OSE-2164 | /s/<dead code> | a browser reads a page, a script reads JSO
     for (const accept of [PAGE, { Accept: '*/*' }]) {
       const unknown = await get('/s/zzzz99', accept);
       const unknownBody = await unknown.text();
+      // The staging checks (Bruno pages folder 17 and tests/e2e/3-flows/dead-links.spec.ts)
+      // take out a script naming __CF$cv$params, and every nonce value, before they compare,
+      // because the edge adds them per read. That is safe only while the Worker's own page
+      // carries neither, so nothing the Worker writes is left out of the comparison.
+      expect(unknownBody, 'the Worker writes no __CF$cv$params').not.toContain('__CF$cv$params');
+      expect(unknownBody, 'the Worker writes no nonce attribute').not.toContain('nonce=');
       for (const bad of shapes) {
         const res = await get(`/s/${encodeURIComponent(bad)}`, accept);
         expect(res.status, bad).toBe(unknown.status);

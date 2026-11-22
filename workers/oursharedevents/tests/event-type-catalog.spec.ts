@@ -75,14 +75,14 @@ describe('acceptance criterion — no orphaned types after 0076', () => {
     expect(row?.n).toBe(0);
   });
 
-  test('every type has the category of its UEC prefix (47 seeded + Watch Party, 0097)', async () => {
+  test('every type has the category of its UEC prefix (47 seeded + Watch Party, 0097 + Storytime, 0115)', async () => {
     const row = await env.DB.prepare(
       `SELECT COUNT(*) AS total,
               SUM(CASE WHEN category_code = substr(uec_code, 1, instr(uec_code, '-') - 1) THEN 1 ELSE 0 END) AS matched
          FROM event_type_registry`
     ).first<{ total: number; matched: number }>();
-    expect(row?.total).toBe(48);
-    expect(row?.matched).toBe(48);
+    expect(row?.total).toBe(49);
+    expect(row?.matched).toBe(49);
   });
 
   test('15 categories, and every one has at least one type', async () => {
@@ -189,7 +189,7 @@ describe('GET /api/v2/admin/event-types', () => {
     expect(res.status).toBe(401);
   });
 
-  test('returns the grouped catalog: 15 categories, 48 types, 0 orphans, Sports > Bocce', async () => {
+  test('returns the grouped catalog: 15 categories, 49 types, 0 orphans, Sports > Bocce', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
       headers: ADMIN_HEADERS,
     });
@@ -198,7 +198,7 @@ describe('GET /api/v2/admin/event-types', () => {
     expect(body.ok).toBe(true);
     expect(body.orphans).toBe(0);
     expect(body.categories).toHaveLength(15);
-    expect(body.categories.reduce((n, c) => n + c.types.length, 0)).toBe(48);
+    expect(body.categories.reduce((n, c) => n + c.types.length, 0)).toBe(49);
     const rec = body.categories.find((c) => c.code === 'REC');
     expect(rec?.name).toMatch(/Sports/);
     expect(rec?.types.some((t) => t.uec_code === 'REC-BOCCE-001')).toBe(true);
@@ -247,6 +247,86 @@ describe('Watch Party (0097)', () => {
       .bind(id)
       .first<{ event_type_id: string | null }>();
     expect(r?.event_type_id).toBe('etr-soc-watchparty');
+  });
+});
+
+// Part of OSE-2155 (migration 0115): Storytime is adults telling stories aloud,
+// in Performing Arts, beside Storytelling Night. A new type rather than
+// Storytelling Night itself is an assumption, not an owner ruling.
+// @born-red OSE-2155 | method: run with 0115 removed, every test here fails | date: 2026-11-21
+describe('Storytime (0115)', () => {
+  test('the picker lists it under Performing Arts, beside an unchanged Storytelling Night', async () => {
+    const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
+      headers: ADMIN_HEADERS,
+    });
+    const body = (await res.json()) as Catalog;
+    const per = body.categories.find((c) => c.code === 'PER');
+    expect(per?.types.find((t) => t.uec_code === 'PER-STORYTIME-001')).toEqual(
+      expect.objectContaining({ id: 'etr-per-storytime', name: 'Storytime' })
+    );
+    expect(per?.types.find((t) => t.uec_code === 'PER-STORY-001')).toEqual(
+      expect.objectContaining({ id: 'etr-per-story', name: 'Storytelling Night' })
+    );
+  });
+
+  test('it is Phase 1, tier 1, active, and carries no age, child or family wording', async () => {
+    const r = await env.DB.prepare(
+      `SELECT name, description, phase, legal_clearance_tier, is_active, category_code
+         FROM event_type_registry WHERE uec_code = 'PER-STORYTIME-001'`
+    ).first<{
+      name: string;
+      description: string;
+      phase: number;
+      legal_clearance_tier: number;
+      is_active: number;
+      category_code: string;
+    }>();
+    expect(r).toEqual(
+      expect.objectContaining({
+        phase: 1,
+        legal_clearance_tier: 1,
+        is_active: 1,
+        category_code: 'PER',
+      })
+    );
+    // The owner: no HIPAA, COPPA or SOPPA until further notice. The type names
+    // no audience by age or family.
+    expect(`${r?.name} ${r?.description}`).not.toMatch(
+      /\b(child|children|kid|kids|toddler|baby|babies|infant|family|families|parent|carer|caregiver|ages?\s*\d)/i
+    );
+  });
+
+  test('a sponsor can reach it through the same template as Storytelling Night', async () => {
+    const rows = await env.DB.prepare(
+      `SELECT uec_code, template_id FROM template_event_types
+        WHERE uec_code IN ('PER-STORY-001', 'PER-STORYTIME-001')
+        ORDER BY uec_code, template_id`
+    ).all<{ uec_code: string; template_id: string }>();
+    expect(rows.results).toEqual([
+      { uec_code: 'PER-STORY-001', template_id: 'music_event' },
+      { uec_code: 'PER-STORYTIME-001', template_id: 'music_event' },
+    ]);
+  });
+
+  test('an event can be saved as Storytime', async () => {
+    const res = await SELF.fetch('https://t.test/api/v2/admin/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...ADMIN_HEADERS },
+      body: JSON.stringify({
+        attendance_mode: 'in_person',
+        location: 'Test Hall',
+        title: 'Told stories night',
+        brand_id: BRAND,
+        slug: `story-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        event_type_id: 'etr-per-storytime',
+      }),
+    });
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: string };
+    const r = await env.DB.prepare('SELECT event_type_id FROM events WHERE id = ?')
+      .bind(id)
+      .first<{ event_type_id: string | null }>();
+    expect(r?.event_type_id).toBe('etr-per-storytime');
   });
 });
 

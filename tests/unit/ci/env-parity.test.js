@@ -979,8 +979,8 @@ describe('the street-map names the owner types are the names the Worker binds', 
 
   test('the rule read from the Worker is its own: it takes the key in wrangler.toml and refuses a path', () => {
     const rule = workerRule();
-    expect(rule.test('us-20261115.pmtiles')).toBe(true);
-    expect(rule.test('../us-20261115.pmtiles')).toBe(false);
+    expect(rule.test('us-20261120.pmtiles')).toBe(true);
+    expect(rule.test('../us-20261120.pmtiles')).toBe(false);
   });
 
   test.each([
@@ -1006,10 +1006,10 @@ describe('the street-map names the owner types are the names the Worker binds', 
 
   test.each([
     ['two digits of the date swapped', 'us-20261151.pmtiles'],
-    ['the extension in capitals', 'us-20261115.PMTILES'],
-    ['a capital in the name', 'US-20261115.pmtiles'],
-    ['a space after', 'us-20261115.pmtiles '],
-    ['the bucket pasted in front', 'ose-map-tiles/us-20261115.pmtiles'],
+    ['the extension in capitals', 'us-20261120.PMTILES'],
+    ['a capital in the name', 'US-20261120.pmtiles'],
+    ['a space after', 'us-20261120.pmtiles '],
+    ['the bucket pasted in front', 'ose-map-tiles/us-20261120.pmtiles'],
     ['the planet name of 2026-11-09 left in', 'planet-20261109.pmtiles'],
   ])('fat finger in wrangler.toml: the archive name with %s', (_, to) => {
     const stgAt = toml().search(/^\[env\.staging\]/m);
@@ -1017,7 +1017,7 @@ describe('the street-map names the owner types are the names the Worker binds', 
       toml().slice(0, stgAt) +
       toml()
         .slice(stgAt)
-        .replace('MAP_TILES_ARCHIVE = "us-20261115.pmtiles"', `MAP_TILES_ARCHIVE = "${to}"`);
+        .replace('MAP_TILES_ARCHIVE = "us-20261120.pmtiles"', `MAP_TILES_ARCHIVE = "${to}"`);
     expect(text).not.toBe(toml());
     expect(nameProblems(text, runbook(), workerRule())).not.toEqual([]);
   });
@@ -1025,37 +1025,37 @@ describe('the street-map names the owner types are the names the Worker binds', 
   test.each([
     [
       'the upload key with two digits swapped',
-      'r2:ose-map-tiles/us-20261115.pmtiles',
+      'r2:ose-map-tiles/us-20261120.pmtiles',
       'r2:ose-map-tiles/us-20261151.pmtiles',
     ],
     [
       'the upload to the bucket of before 2026-11-14',
-      'r2:ose-map-tiles/us-20261115.pmtiles',
-      'r2:ose-map-tiles-staging/us-20261115.pmtiles',
+      'r2:ose-map-tiles/us-20261120.pmtiles',
+      'r2:ose-map-tiles-staging/us-20261120.pmtiles',
     ],
     [
       'the upload under the bare build name',
-      'r2:ose-map-tiles/us-20261115.pmtiles',
-      'r2:ose-map-tiles/20261115.pmtiles',
+      'r2:ose-map-tiles/us-20261120.pmtiles',
+      'r2:ose-map-tiles/20261120.pmtiles',
     ],
     [
       'the upload under the planet key of 2026-11-09',
-      'r2:ose-map-tiles/us-20261115.pmtiles',
+      'r2:ose-map-tiles/us-20261120.pmtiles',
       'r2:ose-map-tiles/planet-20261109.pmtiles',
     ],
     [
       'a whole build uploaded in place of the extract',
-      'rclone copyto us-20261115.pmtiles',
-      'rclone copyto 20261115.pmtiles',
+      'rclone copyto us-20261120.pmtiles',
+      'rclone copyto 20261120.pmtiles',
     ],
     [
       'the extract written under another name',
-      '20261115.pmtiles us-20261115.pmtiles --region',
-      '20261115.pmtiles usa-20261115.pmtiles --region',
+      '20261120.pmtiles us-20261120.pmtiles --region',
+      '20261120.pmtiles usa-20261120.pmtiles --region',
     ],
     [
       'the extract cut from another build',
-      'build.protomaps.com/20261115.pmtiles us-',
+      'build.protomaps.com/20261120.pmtiles us-',
       'build.protomaps.com/20261114.pmtiles us-',
     ],
     [
@@ -1081,17 +1081,17 @@ describe('the street-map names the owner types are the names the Worker binds', 
     ['the token scoped to another bucket', '`ose-map-tiles` only', '`ose-uploads-staging` only'],
     [
       'the check run on a file of another date',
-      'check-street-map-archive.mjs us-20261115.pmtiles',
+      'check-street-map-archive.mjs us-20261120.pmtiles',
       'check-street-map-archive.mjs us-20261151.pmtiles',
     ],
     [
       'the check run on the whole build',
-      'check-street-map-archive.mjs us-20261115.pmtiles',
-      'check-street-map-archive.mjs 20261115.pmtiles',
+      'check-street-map-archive.mjs us-20261120.pmtiles',
+      'check-street-map-archive.mjs 20261120.pmtiles',
     ],
     [
       'the check command dropped',
-      'node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261115.pmtiles',
+      'node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261120.pmtiles',
       '',
     ],
   ])('fat finger in the runbook: %s', (_, from, to) => {
@@ -1105,9 +1105,9 @@ describe('the street-map names the owner types are the names the Worker binds', 
   // @born-red street-map check order | method: the order rule switched off in nameProblems, and this test went red; the "check" rule switched off, and the three check cases above went red | date: 2026-11-11
   test('fat finger in the runbook: the check moved after the upload', () => {
     const check =
-      'node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261115.pmtiles';
+      'node workers/oursharedevents/scripts/check-street-map-archive.mjs us-20261120.pmtiles';
     const upload =
-      'rclone copyto us-20261115.pmtiles r2:ose-map-tiles/us-20261115.pmtiles --immutable --s3-chunk-size=256M --stats=1m --stats-one-line -v';
+      'rclone copyto us-20261120.pmtiles r2:ose-map-tiles/us-20261120.pmtiles --immutable --s3-chunk-size=256M --stats=1m --stats-one-line -v';
     expect(runbook()).toContain(check);
     expect(runbook()).toContain(upload);
     const moved = runbook().replace(check, '').replace(upload, `${upload}\n   ${check}`);

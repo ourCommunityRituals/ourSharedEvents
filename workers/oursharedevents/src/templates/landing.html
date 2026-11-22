@@ -146,22 +146,8 @@
 
     <main id="main-content" data-testid="landing-main">
       <h1 class="lead" data-testid="landing-h1">{{t:landing.lead}}</h1>
-      <!--OCR_WHERE_START--><section class="where" aria-label="{{t:landing.whereLabel}}" data-testid="landing-where">
-        <div class="near-me" data-testid="near-me" hidden>
-          <button class="btn btn-primary" type="button" data-testid="near-me-button">
-            {{t:landing.nearMe}}
-          </button>
-          <p class="near-note" data-testid="near-me-note" aria-live="polite">
-            {{t:landing.nearNote}}
-          </p>
-        </div>
-        <!--OCR_WHERE-->
-        <form id="near-form" method="post" action="/near" hidden>
-          <input type="hidden" name="g" />
-        </form>
-      </section><!--OCR_WHERE_END-->
-      <!-- Doors lead the area below LIST_MAX events, follow it at or above
-           (lib/landing-area.ts orderLandingSections). -->
+      <!-- The doors sit at the top, under the heading (owner, 2026-11-21); on
+           /map they follow the map (lib/landing-area.ts orderLandingSections). -->
       <!--OCR_DOORS_START-->
       <section class="doors" data-testid="landing-doors" aria-label="{{t:landing.doorsLabel}}">
         <a class="door" href="/admin?start=event" data-testid="door-create-event"
@@ -182,6 +168,20 @@
         </details>
       </section>
       <!--OCR_DOORS_END-->
+      <!--OCR_WHERE_START--><section class="where" aria-label="{{t:landing.whereLabel}}" data-testid="landing-where">
+        <div class="near-me" data-testid="near-me" hidden>
+          <button class="btn btn-primary" type="button" data-testid="near-me-button">
+            {{t:landing.nearMe}}
+          </button>
+          <p class="near-note" data-testid="near-me-note" aria-live="polite">
+            {{t:landing.nearNote}}
+          </p>
+        </div>
+        <!--OCR_WHERE-->
+        <form id="near-form" method="post" action="/near" hidden>
+          <input type="hidden" name="g" />
+        </form>
+      </section><!--OCR_WHERE_END-->
 
       <section class="area-section" aria-label="{{t:landing.events}}" data-testid="landing-area">
         <h2 class="area-heading" data-testid="area-heading"><!--OCR_AREA_HEADING--></h2>
