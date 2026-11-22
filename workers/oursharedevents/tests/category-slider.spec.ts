@@ -176,7 +176,9 @@ describe('the wiring script', () => {
     const spy = vi.fn();
     (dom.window.HTMLElement.prototype as unknown as { scrollIntoView: () => void }).scrollIntoView =
       spy;
-    dom.window.eval(src.replace(/^<script>|<\/script>$/g, ''));
+    // Our own constant: it opens with <script> and closes with </script>; run what is between.
+    expect(src.startsWith('<script>') && src.endsWith('</script>')).toBe(true);
+    dom.window.eval(src.slice('<script>'.length, -'</script>'.length));
     (dom.window.document.getElementById('r1') as HTMLInputElement).focus();
     expect(spy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
   });
