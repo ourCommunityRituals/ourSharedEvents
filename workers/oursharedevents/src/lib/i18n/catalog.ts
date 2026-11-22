@@ -331,6 +331,8 @@ const en = {
     'Showing events within {d} mi, nearest first. Events with no place on the map are left out.',
   'area.nearNone': 'No events with a place on the map within {d} mi. Try a wider distance.',
   'area.nearAway': 'about {d} mi away',
+  'area.more': 'Click for more',
+  'area.moreShown': 'Showing {n} of {total} events.',
   // The neighborhood map (lib/attendee-map.ts).
   'map.near': 'near {venue}',
   'map.exampleLabel':
@@ -786,6 +788,8 @@ const es: Record<MessageKey, string> = {
   'area.nearNone':
     'No hay eventos con lugar en el mapa a menos de {d} mi. Prueba una distancia mayor.',
   'area.nearAway': 'a unas {d} mi',
+  'area.more': 'Haz clic para ver más',
+  'area.moreShown': 'Mostrando {n} de {total} eventos.',
   'map.near': 'cerca de {venue}',
   'map.exampleLabel':
     'Mapa de ejemplo: tres barrios dibujados como hexágonos numerados; el de más actividad, con el tono más oscuro',

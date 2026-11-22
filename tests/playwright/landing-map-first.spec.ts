@@ -2,7 +2,8 @@
  * The map-first landing, measured on the pull request (OSE-2160, F-52).
  *
  * At ten or more events in the default window (LIST_MAX, lib/landing-area.ts)
- * the landing leads with the map and the doors move under it. The local worker
+ * the landing opens on the map. The doors sit at the top, under the heading, at
+ * any count (owner, 2026-11-21). The local worker
  * the phone audit boots is migrated and empty, so the global setup leaves it
  * with a handful of events: the audit measured the list-first layout and the
  * map-first layout was measured only by the nightly run on staging. A change
@@ -15,7 +16,7 @@
  * page for all of them. The events are archived in `afterAll`, so the specs that
  * run after this one see the page as they did before.
  *
- * Born red: SEED_TOTAL = 9 leaves the doors leading and the "map leads" cases
+ * Born red: SEED_TOTAL = 9 leaves the list open and the "map leads" cases
  * fail. The seed is counted, not assumed: it reads how many cards the landing
  * already shows in the window and adds the difference.
  *
@@ -106,13 +107,19 @@ test.describe('landing at ten or more events: the map leads', () => {
     await expect(page.locator('#view-list')).not.toBeChecked();
   });
 
-  test('the doors sit under the map, not above it', async ({ page }) => {
+  test('the doors sit at the top, under the heading and above the map (owner, 2026-11-21)', async ({
+    page,
+  }) => {
     await open(page, '/');
+    const h1 = await page.getByTestId('landing-h1').boundingBox();
     const map = await page.getByTestId('area-map').boundingBox();
     const doors = await page.getByTestId('landing-doors').boundingBox();
     expect(map, 'the map has a box').not.toBeNull();
     expect(doors, 'the doors have a box').not.toBeNull();
-    expect(doors!.y, 'doors follow the map when the map leads').toBeGreaterThan(map!.y);
+    expect(doors!.y, 'doors follow the heading').toBeGreaterThan(h1!.y);
+    expect(doors!.y, 'doors come before the map').toBeLessThan(map!.y);
+    // Both doors are on the first screen of a phone.
+    expect(doors!.y + doors!.height).toBeLessThan(PHONE.height);
   });
 
   test('the action is above the fold and the map starts on the first screen', async ({ page }) => {

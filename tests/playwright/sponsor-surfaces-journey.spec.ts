@@ -15,6 +15,7 @@
  * own event and sponsor, so it does not depend on any other spec's rows.
  */
 import { test, expect, type Page } from '@playwright/test';
+import { showAllCards } from './helpers/area-more';
 import {
   seedSponsorHome,
   waitUntilListed,
@@ -106,6 +107,7 @@ const surfaces: Record<string, (page: Page) => Promise<boolean>> = {
   'landing card': async (page) => {
     await page.setViewportSize(PHONE);
     await page.goto('/');
+    await showAllCards(page);
     const card = page.locator(`[data-testid="area-card"][data-event-id="${seeded.eventId}"]`);
     await expect(card.getByTestId('area-card-name')).toContainText(seeded.eventTitle);
     return card
@@ -167,6 +169,7 @@ for (const [name, path, cardTestId] of [
   }) => {
     await page.setViewportSize(PHONE);
     await page.goto(path);
+    await showAllCards(page);
     const card = page.locator(`[data-testid="${cardTestId}"][data-event-id="${seeded.eventId}"]`);
     await expect(card).toBeVisible();
     const box = (await card.boundingBox())!;
@@ -199,6 +202,7 @@ test('events list and landing offer the same date, place and Register on the sam
     ['/', 'area-card'],
   ] as const) {
     await page.goto(path);
+    await showAllCards(page);
     const card = page.locator(`[data-testid="${cardTestId}"][data-event-id="${seeded.eventId}"]`);
     await expect(card.getByTestId('public-event-cta')).toHaveText('Register');
     facts.push([

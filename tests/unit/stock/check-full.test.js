@@ -100,10 +100,16 @@ const challengeWith = (ray) => ({
 });
 const challenge = challengeWith(RAY);
 
+// The doors sit at the top of every landing (owner, 2026-11-21); which view
+// opens is what tells a map-first page from a list-first one.
 const MAP_FIRST =
-  '<section data-testid="landing-area"></section><section data-testid="landing-doors"></section>';
+  '<section data-testid="landing-doors"></section><section data-testid="landing-area">' +
+  '<input type="radio" name="view" id="view-list" class="toggle-radio" />' +
+  '<input type="radio" name="view" id="view-map" class="toggle-radio" checked /></section>';
 const DOORS_FIRST =
-  '<section data-testid="landing-doors"></section><section data-testid="landing-area"></section>';
+  '<section data-testid="landing-doors"></section><section data-testid="landing-area">' +
+  '<input type="radio" name="view" id="view-list" class="toggle-radio" checked />' +
+  '<input type="radio" name="view" id="view-map" class="toggle-radio" /></section>';
 
 // An event page's sponsor strip as pages.ts renders it: one sponsor as art.
 const THUMB = '/api/v2/sponsors/sp_x/logo?slot=sidebar';
@@ -404,7 +410,7 @@ describe('checkNodes: anchor, zip, QR, pages and art', () => {
     expect(r[A].reasons).toEqual(['no-anchor']);
   });
 
-  test('the zip view must lead with the area, before the doors', async () => {
+  test('the zip view must open on the map', async () => {
     const { manifest, listed } = day({ [A]: PER_NODE });
     const zip = node(A).zips[0];
     const r = await run(

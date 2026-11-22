@@ -272,6 +272,30 @@
 
     <main id="main-content" data-testid="landing-main">
       <h1 class="lead" data-testid="landing-h1">What&#x2019;s happening near you?</h1>
+      <!-- The doors sit at the top, under the heading (owner, 2026-11-21); on
+           /map they follow the map (lib/landing-area.ts orderLandingSections). -->
+      
+      <section class="doors" data-testid="landing-doors" aria-label="For organizers">
+        <a class="door" href="/admin?start=event" data-testid="door-create-event"
+          ><span class="btn btn-secondary" data-testid="door-event-cta"
+            >Sign in to create an event</span
+          ></a
+        >
+        <a class="door" href="/admin?start=sponsor" data-testid="door-create-sponsor"
+          ><span class="btn btn-secondary" data-testid="door-sponsor-cta"
+            >Sign in to add a sponsor</span
+          ></a
+        >
+        <details class="doors-why">
+          <summary>Why sign in?</summary>
+          <p data-testid="doors-signin-note">
+            Organizer tools are private and by invitation. Cloudflare Access emails you a one-time
+            code, so OurSharedEvents never sees or stores a password. Attendees never sign in, and
+            nothing here names them.
+          </p>
+        </details>
+      </section>
+      
       <section class="where" aria-label="Where are you?" data-testid="landing-where">
         <div class="near-me" data-testid="near-me" hidden>
           <button class="btn btn-primary" type="button" data-testid="near-me-button">
@@ -296,9 +320,6 @@
           <input type="hidden" name="g" />
         </form>
       </section>
-      <!-- Doors lead the area below LIST_MAX events, follow it at or above
-           (lib/landing-area.ts orderLandingSections). -->
-      
 
       <section class="area-section" aria-label="Events" data-testid="landing-area">
         <h2 class="area-heading" data-testid="area-heading">Near Blue Island, IL <a class="where-change" href="/?change=1" data-testid="where-change">Change</a></h2>
@@ -419,6 +440,75 @@
             <a class="cta" href="/events/evt_g07/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 7">Register</a>
           </article>
           </div>
+          <style>.view-list .event-card[data-more]{display:none}.area-more{margin:1rem 0 0}.area-more .btn{width:100%}@media(min-width:480px){.area-more .btn{width:auto;min-width:14rem}}</style><p class="area-more" hidden><button class="btn btn-secondary" type="button" data-testid="area-more">Click for more</button></p><p class="near-note" role="status" aria-live="polite" data-testid="area-more-status" data-says="Showing %n of %t events."></p><script nonce="N">(function () {
+  var list = document.getElementById('area-list');
+  var more = document.querySelector('[data-testid="area-more"]');
+  if (!list || !more) return;
+  var box = more.parentNode, status = box.parentNode.querySelector('[data-testid="area-more-status"]');
+  var STEP = 5, limit = STEP;
+  var cards = [].slice.call(list.querySelectorAll('article.event-card'));
+  if (!cards.length) return;
+
+  // Nearest first, from the distances the map's list carries.
+  var rowOf = {};
+  [].forEach.call(document.querySelectorAll('li[data-area]'), function (li) {
+    [].forEach.call(li.querySelectorAll('a[href]:not(.amap-zoom)'), function (a) {
+      var m = /\/events\/([^/?#]+)/.exec(a.getAttribute('href') || '');
+      if (m) rowOf[decodeURIComponent(m[1])] = li;
+    });
+  });
+  function far(c) {
+    var li = rowOf[c.getAttribute('data-event-id')];
+    return li && li.hasAttribute('data-d') ? +li.getAttribute('data-d') : Infinity;
+  }
+  function nearest() {
+    var order = cards.slice().sort(function (a, b) {
+      var x = far(a), y = far(b);
+      return x === y ? 0 : x < y ? -1 : 1; // equal: the server's order (sort is stable)
+    });
+    var now = [].slice.call(list.querySelectorAll('article.event-card'));
+    if (order.every(function (c, i) { return now[i] === c; })) return;
+    order.forEach(function (c) { list.appendChild(c); });
+  }
+
+  // Five at a time, counting only the cards the filters leave showing.
+  function page() {
+    cards.forEach(function (c) { c.removeAttribute('data-more'); });
+    var total = 0;
+    [].forEach.call(list.querySelectorAll('article.event-card'), function (c) {
+      if (getComputedStyle(c).display === 'none') return;
+      total += 1;
+      if (total > limit) c.setAttribute('data-more', '');
+    });
+    box.hidden = total <= limit;
+    status.textContent = total > STEP
+      ? (status.getAttribute('data-says') || '').replace('%n', String(Math.min(limit, total))).replace('%t', String(total))
+      : '';
+  }
+  function showing() {
+    return [].filter.call(list.querySelectorAll('article.event-card'), function (c) {
+      return getComputedStyle(c).display !== 'none';
+    });
+  }
+  more.addEventListener('click', function () {
+    var before = showing().length;
+    limit += STEP;
+    page();
+    var next = showing()[before], link = next && next.querySelector('a[href]');
+    if (link) link.focus();
+  });
+  // A filter changed: start again at five.
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.type === 'radio') { limit = STEP; page(); }
+  });
+  // The other scripts move cards and hide them by distance; count again after.
+  if (window.MutationObserver) {
+    new MutationObserver(page).observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+    var legend = document.querySelector('ol.amap-legend');
+    if (legend) new MutationObserver(nearest).observe(legend, { subtree: true, attributes: true, attributeFilter: ['data-d'] });
+  }
+  page();
+})();</script>
         </div><script nonce="N">(function () {
   var box = document.querySelector('.area-filters[data-tabs]');
   if (!box) return;
@@ -551,15 +641,18 @@
     var r = radius(), live = r > 0 && !!here, dist = {}, shown = 0;
     areas.forEach(function (a) {
       var c = a.getAttribute('data-cell'), p = centre[c];
-      dist[c] = live ? miles(here[0], here[1], p[0], p[1]) : 0;
+      dist[c] = here ? miles(here[0], here[1], p[0], p[1]) : 0;
       a.style.display = !live || dist[c] <= r ? '' : 'none';
     });
     [].forEach.call(document.querySelectorAll('li[data-area]'), function (li) {
       var c = li.getAttribute('data-area');
       li.style.display = !live || !(c in dist) || dist[c] <= r ? '' : 'none';
+      // Once known, each area's distance rides on its row, where the cards'
+      // pager (lib/area-pager.ts) reads it to put them nearest first.
+      if (here && c in dist) li.setAttribute('data-d', dist[c].toFixed(3));
     });
     cards.forEach(function (c) {
-      var cell = areaOf[c.getAttribute('data-event-id')], d = live && cell in dist ? dist[cell] : null;
+      var cell = areaOf[c.getAttribute('data-event-id')], d = here && cell in dist ? dist[cell] : null;
       var ok = !live || (d !== null && d <= r);
       c.style.display = ok ? '' : 'none';
       if (live && ok) shown += 1;
@@ -608,27 +701,6 @@
   select(0, false);
   marks();
 })();</script>
-      </section>
-      
-      <section class="doors" data-testid="landing-doors" aria-label="For organizers">
-        <a class="door" href="/admin?start=event" data-testid="door-create-event"
-          ><span class="btn btn-secondary" data-testid="door-event-cta"
-            >Sign in to create an event</span
-          ></a
-        >
-        <a class="door" href="/admin?start=sponsor" data-testid="door-create-sponsor"
-          ><span class="btn btn-secondary" data-testid="door-sponsor-cta"
-            >Sign in to add a sponsor</span
-          ></a
-        >
-        <details class="doors-why">
-          <summary>Why sign in?</summary>
-          <p data-testid="doors-signin-note">
-            Organizer tools are private and by invitation. Cloudflare Access emails you a one-time
-            code, so OurSharedEvents never sees or stores a password. Attendees never sign in, and
-            nothing here names them.
-          </p>
-        </details>
       </section>
       
 

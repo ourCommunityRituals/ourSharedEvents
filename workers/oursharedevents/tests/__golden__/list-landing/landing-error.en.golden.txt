@@ -272,6 +272,30 @@
 
     <main id="main-content" data-testid="landing-main">
       <h1 class="lead" data-testid="landing-h1">What&#x2019;s happening near you?</h1>
+      <!-- The doors sit at the top, under the heading (owner, 2026-11-21); on
+           /map they follow the map (lib/landing-area.ts orderLandingSections). -->
+      
+      <section class="doors" data-testid="landing-doors" aria-label="For organizers">
+        <a class="door" href="/admin?start=event" data-testid="door-create-event"
+          ><span class="btn btn-secondary" data-testid="door-event-cta"
+            >Sign in to create an event</span
+          ></a
+        >
+        <a class="door" href="/admin?start=sponsor" data-testid="door-create-sponsor"
+          ><span class="btn btn-secondary" data-testid="door-sponsor-cta"
+            >Sign in to add a sponsor</span
+          ></a
+        >
+        <details class="doors-why">
+          <summary>Why sign in?</summary>
+          <p data-testid="doors-signin-note">
+            Organizer tools are private and by invitation. Cloudflare Access emails you a one-time
+            code, so OurSharedEvents never sees or stores a password. Attendees never sign in, and
+            nothing here names them.
+          </p>
+        </details>
+      </section>
+      
       <section class="where" aria-label="Where are you?" data-testid="landing-where">
         <div class="near-me" data-testid="near-me" hidden>
           <button class="btn btn-primary" type="button" data-testid="near-me-button">
@@ -296,30 +320,6 @@
           <input type="hidden" name="g" />
         </form>
       </section>
-      <!-- Doors lead the area below LIST_MAX events, follow it at or above
-           (lib/landing-area.ts orderLandingSections). -->
-      
-      <section class="doors" data-testid="landing-doors" aria-label="For organizers">
-        <a class="door" href="/admin?start=event" data-testid="door-create-event"
-          ><span class="btn btn-secondary" data-testid="door-event-cta"
-            >Sign in to create an event</span
-          ></a
-        >
-        <a class="door" href="/admin?start=sponsor" data-testid="door-create-sponsor"
-          ><span class="btn btn-secondary" data-testid="door-sponsor-cta"
-            >Sign in to add a sponsor</span
-          ></a
-        >
-        <details class="doors-why">
-          <summary>Why sign in?</summary>
-          <p data-testid="doors-signin-note">
-            Organizer tools are private and by invitation. Cloudflare Access emails you a one-time
-            code, so OurSharedEvents never sees or stores a password. Attendees never sign in, and
-            nothing here names them.
-          </p>
-        </details>
-      </section>
-      
 
       <section class="area-section" aria-label="Events" data-testid="landing-area">
         <h2 class="area-heading" data-testid="area-heading">Coming up</h2>

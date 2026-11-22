@@ -30,7 +30,10 @@
  * distance the phone reads its own position, works out the distance to each
  * area's centre, hides the events (and hexagons) farther than that, lists the rest
  * nearest first and says "about N mi away" on each card. An event with no mapped
- * place has no centre and is left out while a distance is chosen.
+ * place has no centre and is left out while a distance is chosen. Once the
+ * position is known, "Any distance" hides nothing but keeps the cards nearest
+ * first, each saying how far (owner, 2026-11-21: "ordered in closest to the
+ * present location").
  *
  * NEVER WHO, NEVER WHERE (invariants 3 and 4; the owner's ruling of 2026-11-16,
  * "zip finds, tap places"). The position is read by the phone and used by the
@@ -173,15 +176,18 @@ const SCRIPT = String.raw`(function () {
     var r = radius(), live = r > 0 && !!here, dist = {}, shown = 0;
     areas.forEach(function (a) {
       var c = a.getAttribute('data-cell'), p = centre[c];
-      dist[c] = live ? miles(here[0], here[1], p[0], p[1]) : 0;
+      dist[c] = here ? miles(here[0], here[1], p[0], p[1]) : 0;
       a.style.display = !live || dist[c] <= r ? '' : 'none';
     });
     [].forEach.call(document.querySelectorAll('li[data-area]'), function (li) {
       var c = li.getAttribute('data-area');
       li.style.display = !live || !(c in dist) || dist[c] <= r ? '' : 'none';
+      // Once known, each area's distance rides on its row, where the cards'
+      // pager (lib/area-pager.ts) reads it to put them nearest first.
+      if (here && c in dist) li.setAttribute('data-d', dist[c].toFixed(3));
     });
     cards.forEach(function (c) {
-      var cell = areaOf[c.getAttribute('data-event-id')], d = live && cell in dist ? dist[cell] : null;
+      var cell = areaOf[c.getAttribute('data-event-id')], d = here && cell in dist ? dist[cell] : null;
       var ok = !live || (d !== null && d <= r);
       c.style.display = ok ? '' : 'none';
       if (live && ok) shown += 1;

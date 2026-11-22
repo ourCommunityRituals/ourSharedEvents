@@ -188,6 +188,7 @@ import { ZOOM_STYLE } from './map-zoom-style.js';
 // What a narrow screen changes: its own module, for the same budget.
 import { NARROW_MAP_STYLE } from './map-narrow-style.js';
 // From which screen width a hexagon is a link: its own module, for the same budget.
+import { MAP_LIST_HIDDEN_CLASS, MAP_LIST_STYLE } from './map-list-style.js';
 import { LINK_FROM_PX, LINK_STYLE, MAP_GUTTER_PX, MAP_MAX_PX } from './map-link-style.js';
 import {
   renderPlacePanels,
@@ -692,7 +693,9 @@ function legendFor(
   zoomHref?: (cell: string) => string,
   filterClasses?: FilterClasses,
   /** The map's script is on: each row says which area it is, for its distance. */
-  pan?: boolean
+  pan?: boolean,
+  /** The landing: the list stays in the page, unseen (lib/map-list-style.ts). */
+  quiet?: boolean
 ): string {
   const rows = areas
     .map((a) => {
@@ -721,7 +724,8 @@ function legendFor(
       return `<li value="${a.n}"${areaClassAttr(a, filterClasses)} data-testid="amap-legend-area"${pan ? ` data-area="${a.cell}"` : ''}><strong>${place}${eventCount(k, lang)}:</strong> ${links}${zoom}</li>`;
     })
     .join('');
-  return `<ol class="amap-legend" data-testid="amap-legend">${rows}</ol>`;
+  const cls = quiet ? `amap-legend ${MAP_LIST_HIDDEN_CLASS}` : 'amap-legend';
+  return `<ol class="${cls}" data-testid="amap-legend">${rows}</ol>`;
 }
 
 // ── zoomed in on one area ────────────────────────────────────────────────────
@@ -1019,6 +1023,8 @@ export function renderAttendeeMap(
       ? opts.streets.svg
       : undefined;
   const credit = streets ? streetCredit(lang) : '';
+  // The landing (its pills give filter classes) keeps the list but does not show it.
+  const quiet = !!opts?.filterClasses;
   const map = svgFor(drawn, lang, streets, opts?.zoomHref, opts?.filterClasses);
   // "Tap a hexagon" only where a hexagon is a link.
   const tap =
@@ -1028,9 +1034,9 @@ export function renderAttendeeMap(
         ? ` ${msg(lang, 'map.tapToZoom')}`
         : ` <span class="amap-w${map.links}" data-testid="amap-tap">${msg(lang, 'map.tapToZoom')}</span>`;
   const html = `<figure class="amap" data-testid="amap"${map.tall ? ' data-tall' : ''}${streets ? ' data-pan' : ''}>
-              ${MAP_STYLE}${streets ? STREET_STYLE + LABEL_STYLE + PAN_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}${NARROW_MAP_STYLE}${map.links ? LINK_STYLE : ''}
+              ${MAP_STYLE}${streets ? STREET_STYLE + LABEL_STYLE + PAN_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}${NARROW_MAP_STYLE}${map.links ? LINK_STYLE : ''}${quiet ? MAP_LIST_STYLE : ''}
               ${map.svg}${streets ? panControls(lang) : ''}
-              ${legendFor(drawn, lang, opts?.sponsorTitles, opts?.zoomHref, opts?.filterClasses, !!streets)}
+              ${legendFor(drawn, lang, opts?.sponsorTitles, opts?.zoomHref, opts?.filterClasses, !!streets, quiet)}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}${tap}</figcaption>${credit}
             </figure>${streets ? PAN_SCRIPT : ''}`;
   return { html, state: 'map', count, areas: drawn };

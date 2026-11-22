@@ -273,6 +273,30 @@
 
     <main id="main-content" data-testid="landing-main">
       <h1 class="lead" data-testid="landing-h1">¿Qué pasa cerca de ti?</h1>
+      <!-- The doors sit at the top, under the heading (owner, 2026-11-21); on
+           /map they follow the map (lib/landing-area.ts orderLandingSections). -->
+      
+      <section class="doors" data-testid="landing-doors" aria-label="Para quienes organizan">
+        <a class="door" href="/admin?start=event" data-testid="door-create-event"
+          ><span class="btn btn-secondary" data-testid="door-event-cta"
+            >Inicia sesión para crear un evento</span
+          ></a
+        >
+        <a class="door" href="/admin?start=sponsor" data-testid="door-create-sponsor"
+          ><span class="btn btn-secondary" data-testid="door-sponsor-cta"
+            >Inicia sesión para agregar un patrocinador</span
+          ></a
+        >
+        <details class="doors-why">
+          <summary>¿Por qué iniciar sesión?</summary>
+          <p data-testid="doors-signin-note">
+            Las herramientas para organizar son privadas y solo por invitación. Cloudflare Access
+            te envía por correo un código de un solo uso, así que OurSharedEvents nunca ve ni guarda una
+            contraseña. Quienes asisten nunca inician sesión, y nada aquí los nombra.
+          </p>
+        </details>
+      </section>
+      
       <section class="where" aria-label="¿Dónde estás?" data-testid="landing-where">
         <div class="near-me" data-testid="near-me" hidden>
           <button class="btn btn-primary" type="button" data-testid="near-me-button">
@@ -298,9 +322,6 @@
           <input type="hidden" name="lang" value="es" />
         </form>
       </section>
-      <!-- Doors lead the area below LIST_MAX events, follow it at or above
-           (lib/landing-area.ts orderLandingSections). -->
-      
 
       <section class="area-section" aria-label="Eventos" data-testid="landing-area">
         <h2 class="area-heading" data-testid="area-heading">Próximamente</h2>
@@ -346,9 +367,9 @@
         <div class="area" data-testid="area">
           <div class="view-map" data-testid="area-map">
             <figure class="amap" data-testid="amap" data-tall>
-              <style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-inline-start:1.5rem}.amap-credit a,.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style><style>.amap-zone{fill:var(--border-strong);fill-opacity:.06;stroke:var(--border-strong);stroke-width:3}.amap-dot{fill:var(--accent);stroke:var(--bg);stroke-width:3}.amap-blk .amap-dot{fill-opacity:.45;stroke-dasharray:4 3}.amap-dn{fill:var(--on-accent);font:700 18px system-ui}.amap-back,.amap-zoom{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style><style>@media(max-width:479px){.amap[data-zoom] svg{aspect-ratio:4/3}.amap[data-tall] svg{aspect-ratio:1/1}.amap-dn{font-size:23px}.as-t,.amap-num{font-size:28px}}</style>
+              <style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-inline-start:1.5rem}.amap-credit a,.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style><style>.amap-zone{fill:var(--border-strong);fill-opacity:.06;stroke:var(--border-strong);stroke-width:3}.amap-dot{fill:var(--accent);stroke:var(--bg);stroke-width:3}.amap-blk .amap-dot{fill-opacity:.45;stroke-dasharray:4 3}.amap-dn{fill:var(--on-accent);font:700 18px system-ui}.amap-back,.amap-zoom{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style><style>@media(max-width:479px){.amap[data-zoom] svg{aspect-ratio:4/3}.amap[data-tall] svg{aspect-ratio:1/1}.amap-dn{font-size:23px}.as-t,.amap-num{font-size:28px}}</style><style>.amap-quiet:not(:focus-within){position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}</style>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" preserveAspectRatio="xMidYMid slice" role="group" aria-labelledby="amap-caption" data-testid="amap-svg"><g class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson when-weekend cat-rec" data-testid="amap-area" data-cell="872664544ffffff" data-count="7"><a href="/es/?area=872664544ffffff" data-testid="amap-area-link"><title>Zona 1, Blue Island: 7 eventos</title><polygon class="amap-cell" points="293.8,240.7 258.5,271.5 269.9,316.7 316.6,331.2 351.9,300.5 340.5,255.2" fill-opacity="0.80" stroke-width="1.5"/><text class="amap-num" x="305.2" y="286.0" text-anchor="middle" dominant-baseline="central">1<tspan x="305.2" dy="1.15em" data-testid="amap-area-name">Blue Island</tspan></text></a></g><g class="amap-f when-week when-month when-next-90 cat-mkt product-ose modality-inperson" data-testid="amap-area" data-cell="872664cdbffffff" data-count="4"><a href="/es/?area=872664cdbffffff" data-testid="amap-area-link"><title>Zona 2, Chicago: 4 eventos</title><polygon class="amap-cell" points="283.5,28.8 248.1,59.6 259.6,104.9 306.3,119.4 341.6,88.6 330.2,43.3" fill-opacity="0.54" stroke-width="1.5"/><text class="amap-num" x="294.9" y="74.1" text-anchor="middle" dominant-baseline="central">2<tspan x="294.9" dy="1.15em" data-testid="amap-area-name">Chicago</tspan></text></a></g></svg>
-              <ol class="amap-legend" data-testid="amap-legend"><li value="1" class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson when-weekend cat-rec" data-testid="amap-legend-area"><strong><span data-testid="amap-legend-name">Blue Island</span> &middot; 7 eventos:</strong> <span class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson"><a href="/es/events/evt_g13" data-testid="amap-event">Morning Market</a></span> <span class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/es/events/evt_g09" data-testid="amap-event">Golden Event 9</a></span> <span class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/es/events/evt_g10" data-testid="amap-event">Golden Event 10</a></span> <span class="amap-f when-weekend when-week when-month when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/es/events/evt_g01" data-testid="amap-event">Trivia Night</a></span> <span class="amap-f when-weekend when-week when-month when-next-90 cat-rec product-ose modality-inperson">&middot; <a href="/es/events/evt_g02" data-testid="amap-event">Bocce League</a> <span data-testid="amap-event-sponsor">(Con el apoyo de Beggars Pizza)</span></span> <span class="amap-f when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/es/events/evt_g05" data-testid="amap-event">Golden Event 5</a></span> <span class="amap-f when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/es/events/evt_g07" data-testid="amap-event">Golden Event 7</a></span> <a class="amap-zoom" href="/es/?area=872664544ffffff" data-testid="amap-zoom">Acercar</a></li><li value="2" class="amap-f when-week when-month when-next-90 cat-mkt product-ose modality-inperson" data-testid="amap-legend-area"><strong><span data-testid="amap-legend-name">Chicago</span> &middot; 4 eventos:</strong> <span class="amap-f when-week when-month when-next-90 cat-mkt product-ose modality-inperson"><a href="/es/events/evt_g03" data-testid="amap-event">Vinyl Swap</a></span> <span class="amap-f when-next-90 cat-mkt product-ose modality-inperson">&middot; <a href="/es/events/evt_g04" data-testid="amap-event">Golden Event 4</a></span> <span class="amap-f when-next-90 cat-mkt product-ose modality-inperson">&middot; <a href="/es/events/evt_g06" data-testid="amap-event">Golden Event 6</a></span> <span class="amap-f when-next-90 cat-mkt product-ose modality-inperson">&middot; <a href="/es/events/evt_g08" data-testid="amap-event">Golden Event 8</a></span> <a class="amap-zoom" href="/es/?area=872664cdbffffff" data-testid="amap-zoom">Acercar</a></li></ol>
+              <ol class="amap-legend amap-quiet" data-testid="amap-legend"><li value="1" class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson when-weekend cat-rec" data-testid="amap-legend-area"><strong><span data-testid="amap-legend-name">Blue Island</span> &middot; 7 eventos:</strong> <span class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson"><a href="/es/events/evt_g13" data-testid="amap-event">Morning Market</a></span> <span class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/es/events/evt_g09" data-testid="amap-event">Golden Event 9</a></span> <span class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/es/events/evt_g10" data-testid="amap-event">Golden Event 10</a></span> <span class="amap-f when-weekend when-week when-month when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/es/events/evt_g01" data-testid="amap-event">Trivia Night</a></span> <span class="amap-f when-weekend when-week when-month when-next-90 cat-rec product-ose modality-inperson">&middot; <a href="/es/events/evt_g02" data-testid="amap-event">Bocce League</a> <span data-testid="amap-event-sponsor">(Con el apoyo de Beggars Pizza)</span></span> <span class="amap-f when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/es/events/evt_g05" data-testid="amap-event">Golden Event 5</a></span> <span class="amap-f when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/es/events/evt_g07" data-testid="amap-event">Golden Event 7</a></span> <a class="amap-zoom" href="/es/?area=872664544ffffff" data-testid="amap-zoom">Acercar</a></li><li value="2" class="amap-f when-week when-month when-next-90 cat-mkt product-ose modality-inperson" data-testid="amap-legend-area"><strong><span data-testid="amap-legend-name">Chicago</span> &middot; 4 eventos:</strong> <span class="amap-f when-week when-month when-next-90 cat-mkt product-ose modality-inperson"><a href="/es/events/evt_g03" data-testid="amap-event">Vinyl Swap</a></span> <span class="amap-f when-next-90 cat-mkt product-ose modality-inperson">&middot; <a href="/es/events/evt_g04" data-testid="amap-event">Golden Event 4</a></span> <span class="amap-f when-next-90 cat-mkt product-ose modality-inperson">&middot; <a href="/es/events/evt_g06" data-testid="amap-event">Golden Event 6</a></span> <span class="amap-f when-next-90 cat-mkt product-ose modality-inperson">&middot; <a href="/es/events/evt_g08" data-testid="amap-event">Golden Event 8</a></span> <a class="amap-zoom" href="/es/?area=872664cdbffffff" data-testid="amap-zoom">Acercar</a></li></ol>
               <figcaption id="amap-caption" data-testid="amap-caption">11 eventos en 2 barrios en los próximos 90 días. Los filtros de arriba acotan el mapa y la lista. Cada hexágono mide unos pocos kilómetros cuadrados y nunca es una dirección. Toca un hexágono para ver sus eventos en el mapa.</figcaption>
             </figure>
           </div>
@@ -474,6 +495,75 @@
             <a class="cta" href="/es/events/evt_g08/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 8">Inscribirse</a>
           </article>
           </div>
+          <style>.view-list .event-card[data-more]{display:none}.area-more{margin:1rem 0 0}.area-more .btn{width:100%}@media(min-width:480px){.area-more .btn{width:auto;min-width:14rem}}</style><p class="area-more" hidden><button class="btn btn-secondary" type="button" data-testid="area-more">Haz clic para ver más</button></p><p class="near-note" role="status" aria-live="polite" data-testid="area-more-status" data-says="Mostrando %n de %t eventos."></p><script nonce="N">(function () {
+  var list = document.getElementById('area-list');
+  var more = document.querySelector('[data-testid="area-more"]');
+  if (!list || !more) return;
+  var box = more.parentNode, status = box.parentNode.querySelector('[data-testid="area-more-status"]');
+  var STEP = 5, limit = STEP;
+  var cards = [].slice.call(list.querySelectorAll('article.event-card'));
+  if (!cards.length) return;
+
+  // Nearest first, from the distances the map's list carries.
+  var rowOf = {};
+  [].forEach.call(document.querySelectorAll('li[data-area]'), function (li) {
+    [].forEach.call(li.querySelectorAll('a[href]:not(.amap-zoom)'), function (a) {
+      var m = /\/events\/([^/?#]+)/.exec(a.getAttribute('href') || '');
+      if (m) rowOf[decodeURIComponent(m[1])] = li;
+    });
+  });
+  function far(c) {
+    var li = rowOf[c.getAttribute('data-event-id')];
+    return li && li.hasAttribute('data-d') ? +li.getAttribute('data-d') : Infinity;
+  }
+  function nearest() {
+    var order = cards.slice().sort(function (a, b) {
+      var x = far(a), y = far(b);
+      return x === y ? 0 : x < y ? -1 : 1; // equal: the server's order (sort is stable)
+    });
+    var now = [].slice.call(list.querySelectorAll('article.event-card'));
+    if (order.every(function (c, i) { return now[i] === c; })) return;
+    order.forEach(function (c) { list.appendChild(c); });
+  }
+
+  // Five at a time, counting only the cards the filters leave showing.
+  function page() {
+    cards.forEach(function (c) { c.removeAttribute('data-more'); });
+    var total = 0;
+    [].forEach.call(list.querySelectorAll('article.event-card'), function (c) {
+      if (getComputedStyle(c).display === 'none') return;
+      total += 1;
+      if (total > limit) c.setAttribute('data-more', '');
+    });
+    box.hidden = total <= limit;
+    status.textContent = total > STEP
+      ? (status.getAttribute('data-says') || '').replace('%n', String(Math.min(limit, total))).replace('%t', String(total))
+      : '';
+  }
+  function showing() {
+    return [].filter.call(list.querySelectorAll('article.event-card'), function (c) {
+      return getComputedStyle(c).display !== 'none';
+    });
+  }
+  more.addEventListener('click', function () {
+    var before = showing().length;
+    limit += STEP;
+    page();
+    var next = showing()[before], link = next && next.querySelector('a[href]');
+    if (link) link.focus();
+  });
+  // A filter changed: start again at five.
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.type === 'radio') { limit = STEP; page(); }
+  });
+  // The other scripts move cards and hide them by distance; count again after.
+  if (window.MutationObserver) {
+    new MutationObserver(page).observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+    var legend = document.querySelector('ol.amap-legend');
+    if (legend) new MutationObserver(nearest).observe(legend, { subtree: true, attributes: true, attributeFilter: ['data-d'] });
+  }
+  page();
+})();</script>
         </div><script nonce="N">(function () {
   var box = document.querySelector('.area-filters[data-tabs]');
   if (!box) return;
@@ -606,15 +696,18 @@
     var r = radius(), live = r > 0 && !!here, dist = {}, shown = 0;
     areas.forEach(function (a) {
       var c = a.getAttribute('data-cell'), p = centre[c];
-      dist[c] = live ? miles(here[0], here[1], p[0], p[1]) : 0;
+      dist[c] = here ? miles(here[0], here[1], p[0], p[1]) : 0;
       a.style.display = !live || dist[c] <= r ? '' : 'none';
     });
     [].forEach.call(document.querySelectorAll('li[data-area]'), function (li) {
       var c = li.getAttribute('data-area');
       li.style.display = !live || !(c in dist) || dist[c] <= r ? '' : 'none';
+      // Once known, each area's distance rides on its row, where the cards'
+      // pager (lib/area-pager.ts) reads it to put them nearest first.
+      if (here && c in dist) li.setAttribute('data-d', dist[c].toFixed(3));
     });
     cards.forEach(function (c) {
-      var cell = areaOf[c.getAttribute('data-event-id')], d = live && cell in dist ? dist[cell] : null;
+      var cell = areaOf[c.getAttribute('data-event-id')], d = here && cell in dist ? dist[cell] : null;
       var ok = !live || (d !== null && d <= r);
       c.style.display = ok ? '' : 'none';
       if (live && ok) shown += 1;
@@ -663,27 +756,6 @@
   select(0, false);
   marks();
 })();</script>
-      </section>
-      
-      <section class="doors" data-testid="landing-doors" aria-label="Para quienes organizan">
-        <a class="door" href="/admin?start=event" data-testid="door-create-event"
-          ><span class="btn btn-secondary" data-testid="door-event-cta"
-            >Inicia sesión para crear un evento</span
-          ></a
-        >
-        <a class="door" href="/admin?start=sponsor" data-testid="door-create-sponsor"
-          ><span class="btn btn-secondary" data-testid="door-sponsor-cta"
-            >Inicia sesión para agregar un patrocinador</span
-          ></a
-        >
-        <details class="doors-why">
-          <summary>¿Por qué iniciar sesión?</summary>
-          <p data-testid="doors-signin-note">
-            Las herramientas para organizar son privadas y solo por invitación. Cloudflare Access
-            te envía por correo un código de un solo uso, así que OurSharedEvents nunca ve ni guarda una
-            contraseña. Quienes asisten nunca inician sesión, y nada aquí los nombra.
-          </p>
-        </details>
       </section>
       
 
