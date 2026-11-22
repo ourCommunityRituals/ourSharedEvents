@@ -69,9 +69,14 @@ beforeAll(async () => {
   body = await res.text();
 });
 
-const typeRow = () => body.match(/data-testid="toggle-type">([\s\S]*?)<\/fieldset>/)?.[1] ?? '';
+const typeRow = () =>
+  body.match(/data-testid="toggle-type">([\s\S]*?)<div class="icon-slider-nav"/)?.[1] ?? '';
 const chips = () =>
-  [...typeRow().matchAll(/<label class="disc-chip" for="([^"]+)">([^<]*)<\/label>/g)].map((m) => ({
+  [
+    ...typeRow().matchAll(
+      /<label class="icon-slider-item" for="([^"]+)"[^>]*><svg[\s\S]*?<\/svg><span class="icon-slider-text">([^<]*)<\/span><\/label>/g
+    ),
+  ].map((m) => ({
     id: m[1],
     label: m[2],
   }));

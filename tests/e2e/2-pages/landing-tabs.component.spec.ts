@@ -24,6 +24,10 @@
  *     4: the position never leaves the phone);
  *   - with scripts off the page is what it was: the chips and the Filters fold.
  *
+ * Since OSE-2207 (owner 2026-11-22) the category choice is not a tab: it is the
+ * icon slider above the List / Map row, always on screen
+ * (wcag-slider.component.spec.ts), so the tabs are When and Near me.
+ *
  * Born red (2026-11-18, Chromium, one fault at a time in area-tabs-script.ts or
  * landing-area.ts, each put back): the panels all left showing (the one-group and
  * space tests); the arrow key not moving (the keyboard test); the position put in
@@ -168,8 +172,10 @@ for (const s of SCREENS) {
       if (s.zoom) await page.addStyleTag({ content: 'html{font-size:200%}' });
       await openFilters(page);
       await expect(page.getByRole('tablist', { name: 'Filter events' })).toBeVisible();
-      await expect(page.getByRole('tab')).toHaveText(['When', 'Type', 'Near me']);
-      expect(await selected(page)).toBe('true,false,false');
+      // The category choice left the tabs for the always-visible icon slider
+      // (OSE-2207, owner 2026-11-22): When and Near me remain.
+      await expect(page.getByRole('tab')).toHaveText(['When', 'Near me']);
+      expect(await selected(page)).toBe('true,false');
       for (const t of await page.getByRole('tab').all()) {
         const b = (await t.boundingBox())!;
         expect(Math.round(b.height), 'tab height').toBeGreaterThanOrEqual(TARGET_PX);
@@ -178,18 +184,18 @@ for (const s of SCREENS) {
       // One tabpanel shows; its chips are the group the tab names.
       await expect(page.getByRole('tabpanel')).toHaveCount(1);
       await expect(page.getByTestId('toggle-window')).toBeVisible();
-      await expect(page.getByTestId('toggle-type')).toBeHidden();
-      await tab(page, 'type').click();
-      await expect(page.getByTestId('toggle-type')).toBeVisible();
+      await expect(page.getByTestId('tabpanel-near')).toBeHidden();
+      await tab(page, 'near').click();
+      await expect(page.getByTestId('tabpanel-near')).toBeVisible();
       await expect(page.getByTestId('toggle-window')).toBeHidden();
-      expect(await selected(page)).toBe('false,true,false');
+      expect(await selected(page)).toBe('false,true');
       // On every tab, the distance list's included, nothing in the filter block
       // reaches past the screen. The block is measured, not the whole page: the
       // event cards' Register button (shared card style, event-list.ts, not this
       // change) runs 1 px past a 320 px screen at 200% text in the wider fonts of
       // a Linux runner, so a page-wide check went red on a fault that is not the
       // tabs'. That overflow is its own ticket.
-      for (const name of ['when', 'type', 'near']) {
+      for (const name of ['when', 'near']) {
         await tab(page, name).click();
         const past = await page.evaluate(() => {
           const block = document.querySelector('[data-testid="area-filters"]')!;
@@ -209,8 +215,10 @@ for (const s of SCREENS) {
       await openFilters(page);
       await tab(page, 'when').focus();
       await page.keyboard.press('ArrowRight');
-      expect(await selected(page)).toBe('false,true,false');
-      await expect(tab(page, 'type')).toBeFocused();
+      expect(await selected(page)).toBe('false,true');
+      await expect(tab(page, 'near')).toBeFocused();
+      await page.keyboard.press('Home');
+      await expect(tab(page, 'when')).toBeFocused();
       await page.keyboard.press('End');
       await expect(tab(page, 'near')).toBeFocused();
       await page.keyboard.press('ArrowRight');
@@ -221,19 +229,18 @@ for (const s of SCREENS) {
       await expect(tab(page, 'when')).toBeFocused();
       expect(
         await page.getByRole('tab').evaluateAll((els) => els.map((e) => e.tabIndex).join(','))
-      ).toBe('0,-1,-1');
+      ).toBe('0,-1');
       // The chips' radios come before the row in the page, so Shift+Tab from the
-      // open tab reaches the open group's radio, never a closed group's.
+      // open tab goes back into the page, never to a closed group's radio. (Since
+      // OSE-2207 the stop just before the tabs is the always-visible icon slider.)
       await page.keyboard.press('Shift+Tab');
-      const onChip = await page.evaluate(
-        () => document.activeElement?.id.startsWith('win-') ?? false
+      const onClosed = await page.evaluate(
+        () => (document.activeElement as HTMLInputElement | null)?.name === 'near'
       );
-      expect(onChip, 'focus goes into the open group').toBe(true);
+      expect(onClosed, 'focus never lands in the closed group').toBe(false);
       // A closed group's radios are not on screen, so they take no focus and have no name.
       const closed = await page.evaluate(() =>
-        [...document.querySelectorAll<HTMLInputElement>('input[id^="cat-"], #type-all')].map(
-          (r) => r.hidden
-        )
+        [...document.querySelectorAll<HTMLInputElement>('input[name="near"]')].map((r) => r.hidden)
       );
       expect(closed.every(Boolean), 'a closed group is hidden').toBe(true);
     });
@@ -244,7 +251,7 @@ for (const s of SCREENS) {
       await page.keyboard.press('Tab');
       await tab(page, 'when').focus();
       await page.keyboard.press('ArrowRight'); // keyboard focus, so :focus-visible
-      const ring = await tab(page, 'type').evaluate((el) => {
+      const ring = await tab(page, 'near').evaluate((el) => {
         const cs = getComputedStyle(el);
         return [cs.outlineStyle, parseFloat(cs.outlineWidth)] as const;
       });
@@ -255,15 +262,14 @@ for (const s of SCREENS) {
     test('a chosen value on a closed tab leaves a dot on its tab', async ({ page }) => {
       await open(page);
       await openFilters(page);
-      await tab(page, 'type').click();
-      await page.getByText('Sports & Recreation').click();
-      await tab(page, 'when').click();
-      await expect(tab(page, 'type')).toHaveAttribute('data-changed', '');
-      await expect(tab(page, 'type')).toContainText('●');
-      await expect(tab(page, 'type').locator('.sr-only')).toHaveText('(filter on)', {
+      await page.locator('label[for="win-month"]').click();
+      await tab(page, 'near').click();
+      await expect(tab(page, 'when')).toHaveAttribute('data-changed', '');
+      await expect(tab(page, 'when')).toContainText('●');
+      await expect(tab(page, 'when').locator('.sr-only')).toHaveText('(filter on)', {
         useInnerText: false,
       });
-      await expect(tab(page, 'when')).not.toHaveAttribute('data-changed', '');
+      await expect(tab(page, 'near')).not.toHaveAttribute('data-changed', '');
     });
   });
 }
@@ -281,13 +287,31 @@ test.describe('375 px: the space the tabs save', () => {
         const page = await context.newPage();
         await open(page);
         await openFilters(page);
-        return (await page.getByTestId('area-filters').boundingBox())!.height;
+        if (!js) return (await page.getByTestId('area-filters').boundingBox())!.height;
+        // With the script: the open block as it is, against every panel it holds
+        // shown at once without the tab row (since OSE-2207 the groups are When
+        // and Near me; with scripts off Near me is not offered at all).
+        const tabs = (await page.getByTestId('area-filters').boundingBox())!.height;
+        stackedAll = await page.evaluate(() =>
+          [...document.querySelectorAll<HTMLElement>('[data-testid^="tabpanel-"]')].reduce(
+            (sum, p) => {
+              const was = p.hidden;
+              p.hidden = false;
+              const h = p.getBoundingClientRect().height;
+              p.hidden = was;
+              return sum + h;
+            },
+            0
+          )
+        );
+        return tabs;
       } finally {
         await context.close();
       }
     };
+    let stackedAll = 0;
     const withTabs = await height(true);
-    const stacked = await height(false);
+    const stacked = Math.max(await height(false), stackedAll);
     test.info().annotations.push({
       type: 'filters height at 375 px',
       description: `tabs ${Math.round(withTabs)} px, stacked ${Math.round(stacked)} px`,
@@ -328,9 +352,10 @@ test.describe('scripts off', () => {
         const page = await context.newPage();
         await open(page, '/', now);
         await expect(page.getByTestId('area-filters')).toBeHidden(); // folded on a phone
+        // The icon slider is outside the fold, so it shows before Filters is opened.
+        await expect(page.getByTestId('toggle-type')).toBeVisible();
         await page.getByTestId('area-filters-btn').click();
         await expect(page.getByTestId('toggle-window')).toBeVisible();
-        await expect(page.getByTestId('toggle-type')).toBeVisible();
         await expect(page.getByRole('tablist')).toHaveCount(0);
         await expect(page.getByTestId('near-panel')).toBeHidden();
         // A chip still filters, by the CSS-only radios.
@@ -355,7 +380,7 @@ test.describe('right to left', () => {
     await openFilters(page);
     await tab(page, 'when').focus();
     await page.keyboard.press('ArrowLeft');
-    await expect(tab(page, 'type')).toBeFocused();
+    await expect(tab(page, 'near')).toBeFocused();
     await page.keyboard.press('ArrowRight');
     await expect(tab(page, 'when')).toBeFocused();
   });
@@ -371,7 +396,7 @@ for (const scheme of ['light', 'dark'] as const) {
       const page = await context.newPage();
       await open(page);
       await openFilters(page);
-      for (const name of ['when', 'type', 'near']) {
+      for (const name of ['when', 'near']) {
         await tab(page, name).click();
         await settleTransitions(page);
         expect(await axeWcag(page), `axe, the ${name} tab`).toEqual([]);
@@ -526,7 +551,9 @@ test.describe('distance from where the person is', () => {
     });
     await open(page);
     await openFilters(page);
-    await expect(page.getByRole('tab')).toHaveText(['When', 'Type']);
+    // One group left (When), so there is nothing to tab between: no tab row.
+    await expect(page.getByRole('tablist')).toHaveCount(0);
+    await expect(page.getByTestId('toggle-window')).toBeVisible();
     await expect(page.getByTestId('near-panel')).toBeHidden();
   });
 });

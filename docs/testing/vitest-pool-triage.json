@@ -758,6 +758,13 @@
       "testCount": 3
     },
     {
+      "file": "workers/oursharedevents/tests/category-slider.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 19
+    },
+    {
       "file": "workers/oursharedevents/tests/ci-service-actor-router.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
