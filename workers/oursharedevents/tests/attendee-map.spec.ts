@@ -499,19 +499,19 @@ describe('attendee map | the example below the gate (PO 2026-10-03)', () => {
   });
 });
 
-describe('landing | which leads: the create doors or the map (PO 2026-10-03)', () => {
+describe('landing | the create doors sit at the top (owner, 2026-11-21)', () => {
   const PAGE =
     '<h1>H</h1><!--OCR_DOORS_START--><section data-testid="landing-doors">D</section><!--OCR_DOORS_END-->' +
     '<section data-testid="landing-area">A</section><!--OCR_AFTER_AREA--><p>tail</p>';
 
-  it('fewer than LIST_MAX events: the doors lead, then the area', () => {
-    const html = orderLandingSections(PAGE, 'list');
+  it('on the landing the doors lead the area, whatever the count', () => {
+    const html = orderLandingSections(PAGE);
     expect(html.indexOf('landing-doors')).toBeLessThan(html.indexOf('landing-area'));
     expect(html).not.toContain('<!--OCR_');
   });
 
-  it('LIST_MAX or more: the area (map) leads and the doors sit directly beneath it', () => {
-    const html = orderLandingSections(PAGE, 'map');
+  it('on /map the area leads and the doors sit directly beneath it', () => {
+    const html = orderLandingSections(PAGE, { mapPage: true });
     expect(html.indexOf('landing-area')).toBeLessThan(html.indexOf('landing-doors'));
     expect(html.indexOf('landing-doors')).toBeLessThan(html.indexOf('tail'));
     expect(html).not.toContain('<!--OCR_');
@@ -519,10 +519,10 @@ describe('landing | which leads: the create doors or the map (PO 2026-10-03)', (
   });
 
   it('a template without the markers is returned unchanged', () => {
-    expect(orderLandingSections('<p>plain</p>', 'map')).toBe('<p>plain</p>');
+    expect(orderLandingSections('<p>plain</p>', { mapPage: true })).toBe('<p>plain</p>');
   });
 
-  it('the real landing template: doors first under the threshold, map first at it, markers gone', () => {
+  it('the real landing template: the heading, then the doors, then the search, then the area, at any count', () => {
     const served = (n: number) =>
       injectLandingArea(
         LANDING_HTML,
@@ -531,23 +531,15 @@ describe('landing | which leads: the create doors or the map (PO 2026-10-03)', (
           { now: NOW }
         )
       );
-    const few = served(LIST_MAX - 1);
-    expect(few.indexOf('data-testid="landing-doors"')).toBeLessThan(
-      few.indexOf('data-testid="landing-area"')
-    );
-    const many10 = served(LIST_MAX);
-    expect(many10.indexOf('data-testid="landing-area"')).toBeLessThan(
-      many10.indexOf('data-testid="landing-doors"')
-    );
-    // Both doors survive the move, once each, and the h1 still leads the page.
-    for (const page of [few, many10]) {
+    for (const page of [served(LIST_MAX - 1), served(LIST_MAX)]) {
+      const at = (t: string) => page.indexOf(`data-testid="${t}"`);
+      expect(at('landing-h1')).toBeLessThan(at('landing-doors'));
+      expect(at('landing-doors')).toBeLessThan(at('landing-where'));
+      expect(at('landing-where')).toBeLessThan(at('landing-area'));
       expect(page).not.toContain('<!--OCR_DOORS');
       expect(page).not.toContain('<!--OCR_AFTER_AREA');
       expect(page.match(/data-testid="door-create-event"/g)?.length).toBe(1);
       expect(page.match(/data-testid="door-create-sponsor"/g)?.length).toBe(1);
-      expect(page.indexOf('data-testid="landing-h1"')).toBeLessThan(
-        page.indexOf('data-testid="landing-area"')
-      );
     }
   });
 
@@ -563,7 +555,8 @@ describe('landing | which leads: the create doors or the map (PO 2026-10-03)', (
 });
 
 describe('attendee map | OSE-1522: the legend names the consented sponsor by an event title', () => {
-  const legendOf = (html: string) => html.match(/<ol class="amap-legend"[^]*?<\/ol>/)?.[0] ?? '';
+  const legendOf = (html: string) =>
+    html.match(/<ol class="amap-legend[^"]*"[^]*?<\/ol>/)?.[0] ?? '';
   const sponsorTitles = new Map([['e0', 'Hall <b>Bakery</b>']]);
 
   it('a sponsored event is followed by "Supported by <title>", escaped; the others are not', () => {

@@ -230,10 +230,13 @@ describe('GET / with a zip', () => {
     expect(body).not.toContain('Where Test');
   });
 
-  test('results come before the organizer buttons', async () => {
+  test('the organizer buttons sit at the top, the results follow the search (owner, 2026-11-21)', async () => {
     const { body } = await page('/?zip=60406');
-    expect(body.indexOf('data-testid="landing-area"')).toBeLessThan(
-      body.indexOf('data-testid="landing-doors"')
+    const doors = body.indexOf('data-testid="landing-doors"');
+    expect(doors).toBeGreaterThan(body.indexOf('data-testid="landing-h1"'));
+    expect(doors).toBeLessThan(body.indexOf('data-testid="where-form"'));
+    expect(body.indexOf('data-testid="where-form"')).toBeLessThan(
+      body.indexOf('data-testid="landing-area"')
     );
   });
 
@@ -247,13 +250,13 @@ describe('GET / with a zip', () => {
     expect((await page('/')).body).toMatch(/data-testid="area-heading">Coming up</);
   });
 
-  test('the zip box is on every landing answer, first after the heading', async () => {
+  test('the zip box is on every landing answer, after the heading and the organizer buttons', async () => {
     const { body } = await page('/');
     const h1 = body.indexOf('data-testid="landing-h1"');
     const form = body.indexOf('data-testid="where-form"');
     expect(h1).toBeGreaterThan(0);
     expect(form).toBeGreaterThan(h1);
-    expect(form).toBeLessThan(body.indexOf('data-testid="landing-doors"'));
+    expect(form).toBeGreaterThan(body.indexOf('data-testid="landing-doors"'));
     expect(form).toBeLessThan(body.indexOf('data-testid="landing-area"'));
   });
 

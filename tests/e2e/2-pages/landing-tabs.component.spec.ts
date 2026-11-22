@@ -47,6 +47,7 @@ import {
   withClock,
 } from '../helpers/render-landing-map';
 import { axeWcag, settleTransitions } from '../helpers/wcag';
+import { showAllCards } from '../../playwright/helpers/area-more';
 
 /** Touch target floor, in CSS px (AGENTS.md invariant 8). */
 const TARGET_PX = 44;
@@ -431,9 +432,15 @@ test.describe('distance from where the person is', () => {
 
     const cards = page.getByTestId('area-card');
     await expect(cards).toHaveCount(12);
+    // The cards show five at a time (lib/area-pager.ts); a choice starts again at
+    // five, so each count below first taps "Click for more" to the end.
+    const kept = async () => {
+      await showAllCards(page);
+      return page.locator('article.event-card:visible');
+    };
     await within(10).click();
     await expect(page.locator('#near-10')).toBeChecked();
-    await expect(page.locator('article.event-card:visible')).toHaveCount(6);
+    await expect(await kept()).toHaveCount(6);
     await expect(page.getByTestId('card-distance').first()).toHaveText(
       /^ · about \d+(\.\d)? mi away$/
     );
@@ -442,18 +449,24 @@ test.describe('distance from where the person is', () => {
 
     // The smallest choice reaches the six events in the area the phone stands in.
     await within(2).click();
-    await expect(page.locator('article.event-card:visible')).toHaveCount(6);
+    await expect(await kept()).toHaveCount(6);
     await within(25).click();
-    await expect(page.locator('article.event-card:visible')).toHaveCount(12);
+    await expect(await kept()).toHaveCount(12);
     const dists = await page
       .locator('article.event-card:visible')
       .evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-d'))));
     expect(dists).toEqual([...dists].sort((a, b) => a - b));
 
+    // Any distance: every event back, still nearest first now the position is
+    // known (owner, 2026-11-21), each saying how far.
     await within(0).click();
     await expect(page.locator('#near-0')).toBeChecked();
-    await expect(page.locator('article.event-card:visible')).toHaveCount(12);
-    await expect(page.getByTestId('card-distance')).toHaveCount(0);
+    await expect(await kept()).toHaveCount(12);
+    await expect(page.getByTestId('card-distance')).toHaveCount(12);
+    const back = await page
+      .locator('article.event-card:visible')
+      .evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-d'))));
+    expect(back).toEqual([...back].sort((a, b) => a - b));
     await expect(page.getByTestId('near-status')).toHaveText('');
 
     // Nothing but the page and its stylesheet was asked for, the position is in no
@@ -501,6 +514,7 @@ test.describe('distance from where the person is', () => {
     await expect(page.getByTestId('near-status')).toHaveText(
       'Location is off, so distance cannot be used.'
     );
+    await showAllCards(page);
     await expect(page.locator('article.event-card:visible')).toHaveCount(12);
   });
 
@@ -514,5 +528,130 @@ test.describe('distance from where the person is', () => {
     await openFilters(page);
     await expect(page.getByRole('tab')).toHaveText(['When', 'Type']);
     await expect(page.getByTestId('near-panel')).toBeHidden();
+  });
+});
+
+// The landing cleanup (owner, 2026-11-21): the doors at the top, the numbered
+// list under the map kept but not shown, the cards five at a time with "Click
+// for more", nearest first once a distance is known (lib/area-pager.ts,
+// lib/map-list-style.ts, lib/landing-area.ts orderLandingSections).
+// Born red (2026-11-22, Chromium, one fault at a time, each put back): six a
+// page instead of five (3 red); the nearest-first sort switched off (1 red);
+// focus left on the button after a tap (2 red); the list left hidden while one
+// of its links has focus (2 red); the doors put back under the area (2 red).
+test.describe('the landing cleanup (owner, 2026-11-21)', () => {
+  let context: BrowserContext;
+  test.afterEach(async () => {
+    await context?.close();
+  });
+  const shown = (page: Page) =>
+    page
+      .locator('article.event-card:visible')
+      .evaluateAll((els) => els.map((e) => e.getAttribute('data-event-id')));
+  const ids = (from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => `evt_t${String(from + i).padStart(2, '0')}`);
+
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`${scheme}: the doors lead, the list is kept unseen, five cards then Click for more`, async ({
+      browser,
+    }) => {
+      context = await browser.newContext({
+        viewport: { width: 375, height: 812 },
+        colorScheme: scheme,
+      });
+      const page = await context.newPage();
+      await open(page);
+
+      // The doors: under the heading, above the search, on the first screen, 44 px.
+      const box = async (id: string) => (await page.getByTestId(id).boundingBox())!;
+      const [h1, doors, where] = [
+        await box('landing-h1'),
+        await box('landing-doors'),
+        await box('landing-where'),
+      ];
+      expect(doors.y).toBeGreaterThan(h1.y);
+      expect(doors.y).toBeLessThan(where.y);
+      for (const d of ['door-event-cta', 'door-sponsor-cta']) {
+        const b = await box(d);
+        expect(Math.round(b.height), d).toBeGreaterThanOrEqual(TARGET_PX);
+        expect(b.y + b.height, `${d} on the first screen`).toBeLessThan(812);
+      }
+
+      // The numbered list: in the page and read out, with no box on screen.
+      const legend = page.getByTestId('amap-legend');
+      await expect(legend.locator('li[data-area]')).toHaveCount(2);
+      expect(Math.round((await legend.boundingBox())!.width)).toBeLessThanOrEqual(1);
+      await expect(
+        page.getByRole('list').filter({ has: page.getByTestId('amap-legend-area') })
+      ).toHaveCount(1);
+      // A keyboard user who reaches its links sees it while they are there (2.4.7).
+      await legend.getByTestId('amap-zoom').first().focus();
+      expect((await legend.boundingBox())!.width).toBeGreaterThan(200);
+      await page.getByTestId('landing-h1').click();
+      expect(Math.round((await legend.boundingBox())!.width)).toBeLessThanOrEqual(1);
+
+      // Five, in the order the server sent (soonest first), then five more a tap.
+      const more = page.getByTestId('area-more');
+      const status = page.getByTestId('area-more-status');
+      expect(await shown(page)).toEqual(ids(1, 5));
+      await expect(more).toBeVisible();
+      await expect(more).toHaveText('Click for more');
+      await expect(status).toHaveText('Showing 5 of 12 events.');
+      const b = (await more.boundingBox())!;
+      expect(Math.round(b.height)).toBeGreaterThanOrEqual(TARGET_PX);
+      const list = (await page.getByTestId('area-list').boundingBox())!;
+      expect(Math.round(b.width), 'full width on a phone, for a thumb').toBe(
+        Math.round(list.width)
+      );
+      expect(await axeWcag(page), `${scheme}: WCAG A/AA`).toEqual([]);
+
+      await more.click();
+      expect(await shown(page)).toEqual(ids(1, 10));
+      await expect(status).toHaveText('Showing 10 of 12 events.');
+      // Focus moves to the first card the tap brought in.
+      expect(
+        await page.evaluate(() =>
+          document.activeElement?.closest('article')?.getAttribute('data-event-id')
+        )
+      ).toBe('evt_t06');
+      await more.click();
+      expect(await shown(page)).toEqual(ids(1, 12));
+      await expect(more).toBeHidden();
+      await expect(status).toHaveText('Showing 12 of 12 events.');
+    });
+  }
+
+  test('Show where I am puts the cards nearest first; a filter starts again at five', async ({
+    browser,
+  }) => {
+    const [lat, lon] = cellToLatLng(JOLIET);
+    context = await browser.newContext({
+      viewport: { width: 375, height: 812 },
+      geolocation: { latitude: lat + 0.004, longitude: lon + 0.004 },
+      permissions: ['geolocation'],
+    });
+    const page = await context.newPage();
+    await open(page);
+    await page.getByTestId('area-more').click();
+    expect(await shown(page)).toHaveLength(10);
+    await page.getByTestId('amap-me').click();
+    // Joliet's six (events 7 to 12) first, then Blue Island's; the page still
+    // shows ten, now the ten nearest.
+    await expect.poll(() => shown(page)).toEqual([...ids(7, 12), ...ids(1, 4)]);
+    // A filter starts again at five.
+    await openFilters(page);
+    await page.locator('label[for="win-month"]').click();
+    await expect.poll(async () => (await shown(page)).length).toBeLessThanOrEqual(5);
+  });
+
+  test('with scripts off every card shows and there is no button', async ({ browser }) => {
+    context = await browser.newContext({
+      viewport: { width: 375, height: 812 },
+      javaScriptEnabled: false,
+    });
+    const page = await context.newPage();
+    await open(page);
+    await expect(page.locator('article.event-card:visible')).toHaveCount(12);
+    await expect(page.getByTestId('area-more')).toBeHidden();
   });
 });

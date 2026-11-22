@@ -26,7 +26,9 @@ const STRIP_RE = /data-testid="(?:pre|live)-sponsor-strip"/;
 // A sponsor's thumbnail art on the event page (pages.ts renderSponsorItem).
 const THUMB_SRC_RE = /data-testid="sponsor-thumb" src="([^"]+)"/g;
 const AREA_MARK = 'data-testid="landing-area"';
-const DOORS_MARK = 'data-testid="landing-doors"';
+// The map view opens: its radio is the checked one (the doors sit at the top of
+// every landing since the owner's 2026-11-21 ask, so their place says nothing).
+const MAP_OPEN = /<input type="radio" name="view" id="view-map" class="toggle-radio" checked/;
 
 // The Cloudflare edge answers a challenged read itself (cf-mitigated: challenge,
 // a 403 "Just a moment..." page) and the Worker never runs. stg challenges a
@@ -294,8 +296,8 @@ export async function checkNodes({
       reasons.push('no-anchor');
     }
 
-    // the zip view leads with the area, the doors under it (a place under the
-    // map gate does not lead with the map, so the check is skipped there)
+    // the zip view opens on the map (a place under the map gate does not, so
+    // the check is skipped there)
     // The wider area (no boundary, no zip; owner 2026-11-19) has no zip page and no
     // landing map of its own: its rows are placed by address, so its count and cells
     // are checked, and its pages on a sample (AREA_SAMPLE) so a load stays one run.
@@ -308,11 +310,9 @@ export async function checkNodes({
       const zipPath = `/?zip=${encodeURIComponent(zip)}`;
       const res = await publicGet(siteUrl(zipPath));
       const page = res && res.status === 200 ? await bodyOf(res) : '';
-      const areaAt = page.indexOf(AREA_MARK);
-      const doorsAt = page.indexOf(DOORS_MARK);
       const fault = readFault(res, zipPath);
       if (fault) reasons.push(fault);
-      else if (areaAt < 0 || (doorsAt >= 0 && doorsAt < areaAt))
+      else if (page.indexOf(AREA_MARK) < 0 || !MAP_OPEN.test(page))
         reasons.push(`zip-not-map-first:${zip}`);
     }
 

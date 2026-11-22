@@ -273,6 +273,30 @@
 
     <main id="main-content" data-testid="landing-main">
       <h1 class="lead" data-testid="landing-h1">¿Qué pasa cerca de ti?</h1>
+      <!-- The doors sit at the top, under the heading (owner, 2026-11-21); on
+           /map they follow the map (lib/landing-area.ts orderLandingSections). -->
+      
+      <section class="doors" data-testid="landing-doors" aria-label="Para quienes organizan">
+        <a class="door" href="/admin?start=event" data-testid="door-create-event"
+          ><span class="btn btn-secondary" data-testid="door-event-cta"
+            >Inicia sesión para crear un evento</span
+          ></a
+        >
+        <a class="door" href="/admin?start=sponsor" data-testid="door-create-sponsor"
+          ><span class="btn btn-secondary" data-testid="door-sponsor-cta"
+            >Inicia sesión para agregar un patrocinador</span
+          ></a
+        >
+        <details class="doors-why">
+          <summary>¿Por qué iniciar sesión?</summary>
+          <p data-testid="doors-signin-note">
+            Las herramientas para organizar son privadas y solo por invitación. Cloudflare Access
+            te envía por correo un código de un solo uso, así que OurSharedEvents nunca ve ni guarda una
+            contraseña. Quienes asisten nunca inician sesión, y nada aquí los nombra.
+          </p>
+        </details>
+      </section>
+      
       <section class="where" aria-label="¿Dónde estás?" data-testid="landing-where">
         <div class="near-me" data-testid="near-me" hidden>
           <button class="btn btn-primary" type="button" data-testid="near-me-button">
@@ -298,9 +322,6 @@
           <input type="hidden" name="lang" value="es" />
         </form>
       </section>
-      <!-- Doors lead the area below LIST_MAX events, follow it at or above
-           (lib/landing-area.ts orderLandingSections). -->
-      
 
       <section class="area-section" aria-label="Eventos" data-testid="landing-area">
         <h2 class="area-heading" data-testid="area-heading">Cerca de Oak Lawn, IL <a class="where-change" href="/es/?change=1" data-testid="where-change">Cambiar</a></h2>
@@ -308,27 +329,6 @@
           <p><strong>Todavía no hay nada en Oak Lawn, IL.</strong></p>
           <p><a href="/es/events" data-testid="area-empty-all">Ver todos los eventos</a> &middot; <a href="/admin?start=event" data-testid="area-empty-create">Crear uno</a></p>
         </div>
-      </section>
-      
-      <section class="doors" data-testid="landing-doors" aria-label="Para quienes organizan">
-        <a class="door" href="/admin?start=event" data-testid="door-create-event"
-          ><span class="btn btn-secondary" data-testid="door-event-cta"
-            >Inicia sesión para crear un evento</span
-          ></a
-        >
-        <a class="door" href="/admin?start=sponsor" data-testid="door-create-sponsor"
-          ><span class="btn btn-secondary" data-testid="door-sponsor-cta"
-            >Inicia sesión para agregar un patrocinador</span
-          ></a
-        >
-        <details class="doors-why">
-          <summary>¿Por qué iniciar sesión?</summary>
-          <p data-testid="doors-signin-note">
-            Las herramientas para organizar son privadas y solo por invitación. Cloudflare Access
-            te envía por correo un código de un solo uso, así que OurSharedEvents nunca ve ni guarda una
-            contraseña. Quienes asisten nunca inician sesión, y nada aquí los nombra.
-          </p>
-        </details>
       </section>
       
 

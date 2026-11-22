@@ -152,15 +152,15 @@ describe('the landing area latch (LIST_MAX events on the page, recorded nightly)
     expect(cells).not.toContain(LANDING_AREA_LATCH_KEY);
   });
 
-  test('after the count drops below 10, "/" still leads with the map and draws it (no flapping)', async () => {
+  test('after the count drops below 10, "/" still opens on the map and draws it (no flapping)', async () => {
     // Four of the five busy events wrap up: six events remain.
     await tenv.DB.prepare(
       `UPDATE events SET status = 'archived' WHERE id IN ('lt-busy-0','lt-busy-1','lt-busy-2','lt-busy-3')`
     ).run();
     const html = await (await SELF.fetch('https://x/')).text();
-    expect(html.indexOf('data-testid="landing-area"')).toBeLessThan(
-      html.indexOf('data-testid="landing-doors"')
-    );
+    // The doors sit at the top whatever the count (owner, 2026-11-21); the
+    // latch keeps the map view open.
+    expect(html).toMatch(/id="view-map"[^>]*checked/);
     expect(html).toContain(`data-cell="${BUSY}"`);
     expect(html).toContain(`data-cell="${QUIET}"`);
     expect(html).not.toContain('data-testid="amap-example"');
