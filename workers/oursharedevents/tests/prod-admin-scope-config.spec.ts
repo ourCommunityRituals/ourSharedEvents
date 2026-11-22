@@ -67,11 +67,12 @@ describe('OSE-1415 | production admin scope config', () => {
     }
   );
 
-  // Owner 2026-11-22: an outside tester's practice brand is mapped by env on
-  // staging only. On production every admin's brand comes from a membership row.
-  test('ADMIN_BRAND_MEMBERSHIP is NOT set in [env.production.vars]', () => {
-    const prod = setKeys(envVarsSection(toml, 'production'));
-    expect(prod).not.toContain('ADMIN_BRAND_MEMBERSHIP');
+  // Owner 2026-11-22: staging testers are a staging secret (lib/staging-testers.ts),
+  // never a plain setting, and never on production. The code also ignores the
+  // setting off staging; this keeps it out of the production config itself.
+  test('STAGING_TESTERS is NOT set in [env.production.vars] or [env.staging.vars]', () => {
+    expect(setKeys(envVarsSection(toml, 'production'))).not.toContain('STAGING_TESTERS');
+    expect(setKeys(envVarsSection(toml, 'staging'))).not.toContain('STAGING_TESTERS');
   });
 
   test('the staging opt-in is still where it belongs (parser sanity)', () => {

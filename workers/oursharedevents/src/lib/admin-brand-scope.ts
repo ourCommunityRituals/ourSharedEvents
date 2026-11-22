@@ -23,7 +23,11 @@
  * granted to a real (email) operator. Absent the flag, key actors also deny.
  */
 
+import { stagingTesterBrand } from './staging-testers';
+
 export interface AdminBrandScopeEnv {
+  /** Staging testers, email → one practice brand (lib/staging-testers.ts). A staging secret. */
+  STAGING_TESTERS?: string;
   /** Interim email→brandIds map, JSON: `{ "user@x": ["brand-A", ...] }`. B2 fallback. */
   ADMIN_BRAND_MEMBERSHIP?: string;
   /** `'true'` lets key/automation actors run unscoped (CI/staging only, never an email operator). */
@@ -105,6 +109,11 @@ export function resolveAdminBrandScope(
   if (actor.startsWith('key:')) {
     return env.ADMIN_SCOPE_ALL === 'true' ? { mode: 'all' } : { mode: 'deny' };
   }
+
+  // A staging tester has exactly its one practice brand (staging only; the
+  // membership table, when it has rows for the address, is read first).
+  const testerBrand = stagingTesterBrand(actor, env);
+  if (testerBrand !== null) return { mode: 'scoped', brandIds: [testerBrand] };
 
   // Email operator → interim membership map. Absent / malformed / unmapped /
   // empty membership all collapse to deny-all — never the whole table.

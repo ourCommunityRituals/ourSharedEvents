@@ -308,7 +308,7 @@ describe('OSE-1257 hosted runner migration mirrors staging into production', () 
   test('the production deploy gate refuses static admin credentials', () => {
     const ci = readFile('.github/workflows/oursharedevents-ci.yml');
     const gate = ci.slice(ci.indexOf('--env production 2>&1'));
-    expect(gate).toMatch(/for SECRET in ADMIN_KEY X_OCR_INTERNAL ADMIN_TOKEN; do/);
+    expect(gate).toMatch(/for SECRET in ADMIN_KEY X_OCR_INTERNAL ADMIN_TOKEN STAGING_TESTERS; do/);
     expect(gate).toMatch(/is set on the production worker/);
   });
 });

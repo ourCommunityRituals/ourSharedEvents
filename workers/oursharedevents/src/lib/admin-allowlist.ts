@@ -21,7 +21,9 @@
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export interface AdminAllowlistEnv {
+import { stagingTesterBrand, type StagingTestersEnv } from './staging-testers';
+
+export interface AdminAllowlistEnv extends StagingTestersEnv {
   /** CSV of exact-match admin email addresses */
   ALLOWED_ADMIN_EMAILS?: string;
   /** CSV of allowed domain suffixes (e.g. "oursharedevents.com") */
@@ -60,6 +62,9 @@ export function isAdminEmailAllowed(email: string, env: AdminAllowlistEnv): bool
   if (emails.length === 0 && domains.length === 0) return false;
 
   if (emails.includes(emailLower)) return true;
+
+  // A staging tester (lib/staging-testers.ts): staging only, one practice brand.
+  if (stagingTesterBrand(emailLower, env) !== null) return true;
 
   const domain = extractDomain(emailLower);
   if (domain && domains.includes(domain)) return true;

@@ -3810,6 +3810,13 @@
       "testCount": 19
     },
     {
+      "file": "workers/oursharedevents/tests/staging-testers.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 16
+    },
+    {
       "file": "workers/oursharedevents/tests/standards-propagation.spec.ts",
       "bucket": "node",
       "needsReview": true,
