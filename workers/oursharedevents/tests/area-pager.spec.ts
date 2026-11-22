@@ -196,7 +196,12 @@ describe('the cards five at a time | what the script does', () => {
 });
 
 describe('the cards five at a time | what the script may never do', () => {
-  const src = areaPager('en').match(/<script>([^]*)<\/script>/)![1];
+  // The script's own text, cut out by position (no tag-matching pattern).
+  const html = areaPager('en');
+  const src = html.slice(
+    html.indexOf('<script>') + '<script>'.length,
+    html.lastIndexOf('</script>')
+  );
   it('never reads a position, asks for anything, or stores anything', () => {
     for (const banned of [
       /geolocation/,
