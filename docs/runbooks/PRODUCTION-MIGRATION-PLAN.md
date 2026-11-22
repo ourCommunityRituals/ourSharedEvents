@@ -2,7 +2,7 @@
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0114, forms 0015–0018.
+Covers: main 0078–0115, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 114              | 37       |
+| Main (`ocr-db-production`)        | 77               | 115              | 38       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -128,7 +128,7 @@ its counts were not taken first. They were read on staging the next day (run 436
 events, 60 of them with no place at all, 3 of those on the public list. Its per-status breakdown was
 replaced by one count on 2026-11-15 so the file fits the strict rule.
 
-## Main database, 0078 to 0114
+## Main database, 0078 to 0115
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -171,6 +171,7 @@ replaced by one count on 2026-11-15 so the file fits the strict rule.
 | `0112_sponsor_and_campaign_created_by.sql`                | Adds `created_by` to `sponsor_business` and `campaigns`, and an index on each (OSE-1561). Writes no row; existing rows read NULL. | No   |
 | `0113_vote_code_and_event_status.sql`                     | Adds `poster_deployments.is_vote_code` (the room's vote code) and its index; closes sets open on unpublished events.              | Yes  |
 | `0114_vote_result.sql`                                    | Adds `vote_sets.outcome`, `winner_object_id` and `winner_team_id`, the night's result written at final (OSE-2130). Writes no row. | No   |
+| `0115_event_type_storytime.sql`                           | Adds the Storytime event type (Performing arts) and maps it to one template, then refreshes the templates' clearance tier.        | Yes  |
 
 ## Forms database, 0015 to 0018
 
@@ -183,7 +184,7 @@ replaced by one count on 2026-11-15 so the file fits the strict rule.
 
 ## The migrations that write or remove rows
 
-Fourteen files. Each is listed with what it changes, why it is safe on production as it is
+Fifteen files. Each is listed with what it changes, why it is safe on production as it is
 today, and what would be different if production held data.
 
 ### `0081_sponsor_tier_and_compact_logo.sql`
@@ -335,6 +336,20 @@ today, and what would be different if production held data.
 - **Check:** `SELECT name, category_code FROM event_type_registry WHERE uec_code = 'SOC-WATCHPARTY-001';`
   returns `Watch Party`, `SOC`.
 
+### `0115_event_type_storytime.sql`
+
+- **`INSERT INTO event_type_registry`**: adds one row, `PER-STORYTIME-001` "Storytime",
+  in Performing Arts: adults telling stories aloud. `INSERT OR IGNORE`, so a second run
+  adds nothing. Storytelling Night (`PER-STORY-001`) is not changed.
+- **`INSERT INTO template_event_types`**: maps it to `music_event`, the template that
+  already holds Storytelling Night, so a sponsor can reach it.
+- **`UPDATE event_templates`**: recomputes `max_clearance_tier` for every template, the
+  same statement 0057, 0063 and 0097 ran. The new type is tier 1 like every other, so no
+  template's value changes.
+- **Safe because** it only adds catalog rows. It touches no event, scan or form row.
+- **Check:** `SELECT name, category_code FROM event_type_registry WHERE uec_code = 'PER-STORYTIME-001';`
+  returns `Storytime`, `PER`.
+
 ### `0098_drop_subscribers_from_anonymous_db.sql`
 
 - **Removes the table `subscribers`**: takes the landing-page email list out of the main
@@ -384,7 +399,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0114_vote_result.sql` and `114`;
+2. **The level.** Expected: `0115_event_type_storytime.sql` and `115`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash
