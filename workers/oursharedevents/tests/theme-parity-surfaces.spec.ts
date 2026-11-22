@@ -117,9 +117,16 @@ describe('invisible in one theme', () => {
 
   test('/sponsor header link has a token colour and a 44px target', async () => {
     // Read the template: without a signed link the route serves the error page.
-    const css = cssOf(templateSource('sponsor-home.html'));
-    expect(decl(css, '.header a', 'color')).toMatch(/^var\(--/);
-    expect(decl(css, '.header a', 'min-height')).toBe('44px');
+    // Since the FE pass (part of OSE-1322) the link is @ocr/ui's .btn-link, as on
+    // Logs and Settings: /ui.css gives it var(--text-muted) and a 44px minimum
+    // height, and the page must not re-colour or re-size it.
+    const src = templateSource('sponsor-home.html');
+    expect(src).toMatch(
+      /<a class="btn btn-link" href="\/events" data-testid="sponsor-home-nav-events">/
+    );
+    const css = cssOf(src);
+    expect(css).not.toMatch(/\.header a\b|\.btn-link/);
+    expect(literalColours(css)).toEqual([]);
   });
 });
 

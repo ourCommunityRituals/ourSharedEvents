@@ -26,6 +26,8 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { passStgEdge, throwIfEdgeAnswered } from '../helpers/stg-edge';
+import { sponsorHomeLookProblems } from '../helpers/sponsor-home-look';
 
 const TIMEOUT = 30_000;
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.X_OCR_INTERNAL || '';
@@ -183,6 +185,8 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   let eventId: string;
   let sponsorId: string;
   let placementId: string;
+  /** The sponsor's own /sponsor?t= token, minted in Step 1b, opened in Step 1c. */
+  let homeToken: string | null = null;
 
   test.describe.configure({ mode: 'serial' });
 
@@ -269,6 +273,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     expect(mint.body.ok).toBe(true);
     const token = new URL(mint.body.url).searchParams.get('t');
     expect(token, 'home-link URL carries a ?t= token').toBeTruthy();
+    homeToken = token;
 
     const res = await adminFetch(
       request,
@@ -278,6 +283,30 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     );
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Step 1c: The sponsor's own page wears the @ocr/ui look (FE pass, part of
+  // OSE-1322): a .brand label over the one <h1> (the sponsor's name), .stats-row,
+  // h2.section-title, sectioned placement cards, 44px targets. Read with the
+  // deployed /ui.css, so a class that no longer applies is caught too.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  test('Step 1c: Sponsor home wears the @ocr/ui header, stats and sectioned cards', async ({
+    page,
+  }) => {
+    // Blocking in T4b: no minted link is a failure there, never a green skip.
+    precondition(!homeToken, 'Step 1b minted no sponsor home link');
+    await passStgEdge(page);
+    const res = await page.goto(`/sponsor?t=${encodeURIComponent(homeToken!)}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: TIMEOUT,
+    });
+    throwIfEdgeAnswered(res, '/sponsor');
+    expect(res?.status()).toBe(200);
+    await expect(page.getByTestId('placement-card').first()).toBeVisible({ timeout: TIMEOUT });
+    const problems = await sponsorHomeLookProblems(page, SPONSOR_NAME);
+    expect(problems, problems.join('\n')).toEqual([]);
   });
 
   // ─────────────────────────────────────────────────────────────────────────────

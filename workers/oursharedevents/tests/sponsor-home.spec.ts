@@ -262,6 +262,93 @@ describe('GET /sponsor — the page', () => {
   });
 });
 
+/**
+ * FE pass (part of OSE-1322): the sponsor home wears the @ocr/ui vocabulary that
+ * admin.html took in PR #1459 (canvas SponsorHome), not its own copy of it.
+ *
+ * @born-red sponsor home FE pass | method: the four cases below run against
+ *   the page before the change (own .sh-head / .sh-stat / .sh-card chrome, the
+ *   wordmark as the <h1>, accent and warn left borders, --danger as text ink):
+ *   4/4 fail; they pass on the new page | date: 2026-11-19
+ */
+describe('FE pass: @ocr/ui header, stats, sections and sectioned cards', () => {
+  async function html(): Promise<string> {
+    const minted = await mintSponsorHomeToken(tenv, 'shs-brew', BRAND);
+    const res = await SELF.fetch(`https://t.test/sponsor?t=${minted!.token}`);
+    expect(res.status).toBe(200);
+    return res.text();
+  }
+  /** The page without its scripts, so a class named in script text is not counted. */
+  function markup(page: string): string {
+    let out = '';
+    let at = 0;
+    for (;;) {
+      const open = page.indexOf('<script', at);
+      if (open === -1) return out + page.slice(at);
+      out += page.slice(at, open);
+      const close = page.indexOf('</script', open);
+      if (close === -1) return out;
+      at = page.indexOf('>', close) + 1;
+    }
+  }
+  function ownStyle(page: string): string {
+    const a = page.indexOf('<style');
+    return a === -1 ? '' : page.slice(a, page.indexOf('</style>', a));
+  }
+
+  test('header: a .brand label over the one <h1>, which is the sponsor name', async () => {
+    const page = markup(await html());
+    const head = page.slice(page.indexOf('<header class="header"'), page.indexOf('</header>'));
+    expect(head).toMatch(/<span class="brand"[^>]*>ourSharedEvents · sponsor<\/span>/);
+    expect(head).toMatch(/<h1 data-testid="sponsor-home-name">Local Brewery<\/h1>/);
+    expect(page.match(/<h1[\s>]/g)?.length).toBe(1);
+    expect(head).toContain('class="btn btn-link" href="/events"');
+  });
+
+  test('summary: .stats-row of three .stat-card, each count in a .stat-value', async () => {
+    const page = markup(await html());
+    expect(page).toContain('class="stats-row sh-summary" data-testid="sponsor-home-summary"');
+    expect(page.match(/class="stat-card"/g)?.length).toBe(3);
+    for (const id of ['live', 'upcoming', 'pending']) {
+      expect(page).toMatch(new RegExp(`class="stat-value" data-testid="sponsor-home-count-${id}"`));
+    }
+  });
+
+  test('cards: sectioned, title in .card-header as <h3>, under an <h2 class="section-title">', async () => {
+    const page = markup(await html());
+    expect(page).toContain('<h2 class="section-title">Your placements</h2>');
+    const cards = page.split('<article ').slice(1);
+    expect(cards.length).toBeGreaterThanOrEqual(4);
+    for (const c of cards) {
+      expect(c).toMatch(/^class="card card--sectioned sh-card[ "]/);
+      expect(c).toMatch(
+        /<div class="card-header"><h3 class="card-title" data-testid="[a-z]+-title">/
+      );
+      expect(c).toContain('<div class="card-body">');
+    }
+  });
+
+  test('no forked chrome: no own head, stat or card rules, no tinted left edge, no fill as ink', async () => {
+    const css = ownStyle(await html());
+    for (const gone of [
+      '.sh-head',
+      '.sh-stat',
+      '.sh-section-title',
+      '.sh-empty',
+      '.header a',
+      'border-left',
+      'opacity',
+    ]) {
+      // Whole names only: `.sh-stat` must not match the kept `.sh-state` pill.
+      const re = new RegExp(gone.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w-])');
+      expect(css, gone).not.toMatch(re);
+    }
+    expect(css).not.toMatch(/color:\s*var\(--danger\)/);
+    expect(css).toMatch(/\.sh-msg\.error\s*\{\s*color:\s*var\(--error\)/);
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+  });
+});
+
 describe('POST /api/v2/sponsor/placements/:id/respond', () => {
   async function respond(placementId: string, token: string | null, accepted: unknown) {
     const res = await SELF.fetch(

@@ -95,38 +95,60 @@ function shPager(list: string, testid: string, noun: string, count: number): str
   });
 }
 
+/**
+ * The @ocr/ui card anatomy (canvas SponsorHome; admin.html since PR #1459):
+ * a sectioned card, its title in .card-header, the rest in .card-body.
+ * `sh-card` stays as the hook the page script finds a card by.
+ */
+const CARD = 'card card--sectioned sh-card';
+
+/** A titled group of cards: one <h2 class="section-title"> under the page's <h1>. */
+function section(title: string, body: string): string {
+  return `<section class="sh-section"><h2 class="section-title">${title}</h2>${body}</section>`;
+}
+
 /** "Your requests" + "Events you could back" (lib/sponsor-discovery). */
 function renderDiscovery(discoverable: DiscoverableEvent[], requests: SponsorRequestRow[]): string {
   const parts: string[] = [];
   if (requests.length) {
     const cards = requests.map((r) => {
       const waiting = r.organizer_accepted == null;
-      return `<article class="sh-card${waiting ? '' : ' declined'}" data-testid="request-card" data-placement-id="${esc(r.placement_id)}" data-event-id="${esc(r.event_id)}">
-        <h2 data-testid="request-title">${esc(r.title)}</h2>
+      return `<article class="${CARD}${waiting ? '' : ' declined'}" data-testid="request-card" data-placement-id="${esc(r.placement_id)}" data-event-id="${esc(r.event_id)}">
+        <div class="card-header"><h3 class="card-title" data-testid="request-title">${esc(r.title)}</h3></div>
+        <div class="card-body">
         <p class="sh-when">${esc(humanDate(r.start_date))}</p>
-        <p class="sh-meta"><span class="sh-state ${waiting ? 'pending' : 'declined'}" data-testid="request-state">${waiting ? 'Waiting for the organizer' : 'The organizer said no'}</span></p>
+        <p class="sh-pills"><span class="sh-state ${waiting ? 'pending' : 'declined'}" data-testid="request-state">${waiting ? 'Waiting for the organizer' : 'The organizer said no'}</span></p>
+        </div>
       </article>`;
     });
     parts.push(
-      `<p class="sh-section-title">Your requests</p><div class="sh-list" id="sh-requests" data-testid="sponsor-home-requests">${cards.join('')}</div>${shPager('sh-requests', 'request-more', 'requests', cards.length)}`
+      section(
+        'Your requests',
+        `<div class="sh-list" id="sh-requests" data-testid="sponsor-home-requests">${cards.join('')}</div>${shPager('sh-requests', 'request-more', 'requests', cards.length)}`
+      )
     );
   }
   // Nearest first: the events in the sponsor's own area lead, each group in
   // the order the server sent (owner 2026-11-21; sort is stable).
   const near = [...discoverable].sort((a, b) => Number(b.near === 1) - Number(a.near === 1));
   const cards = near.map(
-    (e) => `<article class="sh-card" data-testid="discover-card" data-event-id="${esc(e.id)}">
-        <h2 data-testid="discover-title">${esc(e.title)}</h2>
+    (e) => `<article class="${CARD}" data-testid="discover-card" data-event-id="${esc(e.id)}">
+        <div class="card-header"><h3 class="card-title" data-testid="discover-title">${esc(e.title)}</h3></div>
+        <div class="card-body">
         <p class="sh-when">${esc(humanDate(e.start_date))}</p>
-        <p class="sh-meta">${e.location ? esc(e.location) : ''}${Number(e.near) === 1 ? `${e.location ? ' · ' : ''}<span class="sh-state live" data-testid="discover-near">Near you</span>` : ''}</p>
+        <p class="sub-line">${e.location ? esc(e.location) : ''}${Number(e.near) === 1 ? `${e.location ? ' · ' : ''}<span class="sh-state live" data-testid="discover-near">Near you</span>` : ''}</p>
         <div class="sh-actions"><button type="button" class="btn btn-primary" data-action="sponsor-request" data-event-id="${esc(e.id)}" data-testid="discover-ask">Ask to join</button></div>
         <p class="sh-msg" role="status" aria-live="polite"></p>
+        </div>
       </article>`
   );
   parts.push(
-    cards.length
-      ? `<p class="sh-section-title">Events you could back</p><p class="sh-why" data-testid="discover-why">Your name shows only if the organizer says yes.</p><div class="sh-list" id="sh-discover" data-testid="sponsor-home-discover">${cards.join('')}</div>${shPager('sh-discover', 'discover-more', 'events', cards.length)}`
-      : `<p class="sh-section-title">Events you could back</p><div class="sh-empty" data-testid="sponsor-home-discover-empty">Nothing new right now.</div>`
+    section(
+      'Events you could back',
+      cards.length
+        ? `<p class="sh-why" data-testid="discover-why">Your name shows only if the organizer says yes.</p><div class="sh-list" id="sh-discover" data-testid="sponsor-home-discover">${cards.join('')}</div>${shPager('sh-discover', 'discover-more', 'events', cards.length)}`
+        : `<p class="sub-line" data-testid="sponsor-home-discover-empty">Nothing new right now.</p>`
+    )
   );
   return parts.join('');
 }
@@ -226,11 +248,12 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
       `<button type="button" class="btn btn-secondary" data-action="placement-respond" data-placement-id="${esc(p.placement_id)}" data-accepted="0" data-testid="placement-decline"${declined ? ' hidden' : ''}>Decline</button>`;
 
     cards.push(
-      `<article class="sh-card${isPending ? ' needs-answer' : ''}${declined ? ' declined' : ''}" data-testid="placement-card" data-placement-id="${esc(p.placement_id)}" data-event-id="${esc(p.event_id)}" data-sponsor-accepted="${isPending ? '' : p.sponsor_accepted}" data-was-pending="${isPending ? '1' : '0'}">
-        <h2 data-testid="placement-title">${esc(p.title)}</h2>
+      `<article class="${CARD}${isPending ? ' needs-answer' : ''}${declined ? ' declined' : ''}" data-testid="placement-card" data-placement-id="${esc(p.placement_id)}" data-event-id="${esc(p.event_id)}" data-sponsor-accepted="${isPending ? '' : p.sponsor_accepted}" data-was-pending="${isPending ? '1' : '0'}">
+        <div class="card-header"><h3 class="card-title" data-testid="placement-title">${esc(p.title)}</h3></div>
+        <div class="card-body">
         <p class="sh-when" data-testid="placement-when">${esc(humanDate(p.start_date))}</p>
-        <p class="sh-meta">${p.location ? esc(p.location) + ' · ' : ''}${esc(p.tier)} placement${Number(p.locality_band) === 1 ? ' · local' : ''}</p>
-        <p class="sh-meta"><span class="sh-state ${stateCls}" data-testid="placement-event-state">${stateLabel}</span><span class="sh-state ${answerCls}" data-testid="placement-state">${answerLabel}</span></p>
+        <p class="sub-line">${p.location ? esc(p.location) + ' · ' : ''}${esc(p.tier)} placement${Number(p.locality_band) === 1 ? ' · local' : ''}</p>
+        <p class="sh-pills"><span class="sh-state ${stateCls}" data-testid="placement-event-state">${stateLabel}</span><span class="sh-state ${answerCls}" data-testid="placement-state">${answerLabel}</span></p>
         ${isPending ? `<p class="sh-why" data-testid="placement-why">Accepting puts your name on this event's page, poster and TV screen.</p>` : ''}
         ${(() => {
           // Pre-event window: an accepted, listed, not-yet-started placement
@@ -242,14 +265,17 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
         })()}
         <div class="sh-actions">${links.join('')}${respond}</div>
         <p class="sh-msg" role="status" aria-live="polite"></p>
+        </div>
       </article>`
     );
   }
 
-  const list =
+  const list = section(
+    'Your placements',
     cards.length === 0
-      ? `<div class="sh-empty" data-testid="sponsor-home-empty">No placements yet.</div>`
-      : `<p class="sh-section-title">Your placements</p><div class="sh-list" id="sh-placements" data-testid="sponsor-home-list">${cards.join('')}</div>${shPager('sh-placements', 'placement-more', 'placements', cards.length)}`;
+      ? `<p class="sub-line" data-testid="sponsor-home-empty">No placements yet.</p>`
+      : `<div class="sh-list" id="sh-placements" data-testid="sponsor-home-list">${cards.join('')}</div>${shPager('sh-placements', 'placement-more', 'placements', cards.length)}`
+  );
 
   // injectMarker (not String.replace) so a sponsor name or placement markup
   // carrying a `$` cannot splice the trusted page shell (CCR-PR567 H1).
