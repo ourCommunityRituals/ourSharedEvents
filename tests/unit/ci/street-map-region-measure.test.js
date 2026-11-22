@@ -99,6 +99,15 @@ describe('North America is three region archives that between them cover it', ()
       ['Whitehorse', -135.06, 60.72],
       ['Iqaluit', -68.52, 63.75],
       ['Windsor', -83.03, 42.31],
+      ['Victoria', -123.37, 48.43],
+      ['Winnipeg', -97.14, 49.9],
+      ['Thunder Bay', -89.25, 48.38],
+      ['Sault Ste. Marie', -84.33, 46.52],
+      ['Ottawa', -75.7, 45.42],
+      ['Kingston, Ontario', -76.48, 44.23],
+      ['Niagara Falls, Ontario', -79.08, 43.09],
+      ['Point Pelee', -82.51, 41.96],
+      ['Saint John, New Brunswick', -66.06, 45.27],
     ],
     mx: [
       ['Mexico City', -99.13, 19.43],
@@ -126,6 +135,21 @@ describe('North America is three region archives that between them cover it', ()
   it('a border town draws whole from either side: Detroit is in us and ca', () => {
     expect(m.regionCovers(read(m.REGIONS.us), -83.05, 42.33)).toBe(true);
     expect(m.regionCovers(read(m.REGIONS.ca), -83.05, 42.33)).toBe(true);
+  });
+
+  // The first Canada cut took most of the northern states and measured 11 GB,
+  // more than the United States file. A US city well south of the border must
+  // stay out of the Canada file.
+  it.each([
+    ['Seattle', -122.33, 47.61],
+    ['Minneapolis', -93.27, 44.98],
+    ['Chicago', -87.63, 41.88],
+    ['Cleveland', -81.69, 41.5],
+    ['Syracuse', -76.15, 43.05],
+    ['Boston', -71.06, 42.36],
+    ['Portland, Maine', -70.26, 43.66],
+  ])('the Canada file keeps out %s', (_name, lon, lat) => {
+    expect(m.regionCovers(read(m.REGIONS.ca), lon, lat)).toBe(false);
   });
 
   it('Greenland is not in any region file (left out on purpose)', () => {

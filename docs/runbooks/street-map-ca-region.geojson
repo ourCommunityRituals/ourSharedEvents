@@ -2,12 +2,17 @@
   "type": "Feature",
   "properties": {
     "name": "Canada, as simple boxes",
-    "note": "Boxes, not borders, like street-map-us-region.geojson: a strip of the northern United States and open ocean are included, so a border town draws whole from either file. Greenland is left out (only a sliver of its west coast falls inside the northern box). Drawn 2026-11-22 for `pmtiles extract --region`; one region archive of North America (OSE-2210)."
+    "note": "Boxes, not borders, like street-map-us-region.geojson. The boxes follow the border in steps so they take only thin strips of the United States (the first cut, one box from 41.6 N, measured 11 GB because it held most of the northern states). A border town such as Windsor and Detroit draws whole from either file. Greenland is left out (only a sliver of its west coast falls inside the northern box). Drawn 2026-11-22 for `pmtiles extract --region`; one region archive of North America (OSE-2210)."
   },
   "geometry": {
     "type": "MultiPolygon",
     "coordinates": [
-      [[[-141.1, 41.6], [-52.5, 41.6], [-52.5, 60.0], [-141.1, 60.0], [-141.1, 41.6]]],
+      [[[-141.1, 48.3], [-95.1, 48.3], [-95.1, 60.0], [-141.1, 60.0], [-141.1, 48.3]]],
+      [[[-95.2, 48.0], [-84.0, 48.0], [-84.0, 60.0], [-95.2, 60.0], [-95.2, 48.0]]],
+      [[[-84.5, 45.0], [-52.5, 45.0], [-52.5, 60.0], [-84.5, 60.0], [-84.5, 45.0]]],
+      [[[-83.2, 41.6], [-78.9, 41.6], [-78.9, 45.0], [-83.2, 45.0], [-83.2, 41.6]]],
+      [[[-80.0, 43.4], [-74.3, 43.4], [-74.3, 45.0], [-80.0, 45.0], [-80.0, 43.4]]],
+      [[[-69.1, 43.4], [-52.5, 43.4], [-52.5, 45.0], [-69.1, 45.0], [-69.1, 43.4]]],
       [[[-141.1, 60.0], [-60.0, 60.0], [-60.0, 83.2], [-141.1, 83.2], [-141.1, 60.0]]]
     ]
   }
