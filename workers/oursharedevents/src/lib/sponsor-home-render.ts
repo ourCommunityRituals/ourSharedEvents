@@ -15,6 +15,7 @@
  * byte-identical to the previous inline render (guarded by sponsor-home.spec.ts).
  */
 
+import { cardPagerControls, cardPagerScript, PAGE_SIZE } from './card-pager';
 import SPONSOR_HOME_HTML from '../templates/sponsor-home.html';
 import { injectLegalFooter } from './legal-footer';
 import { injectMarker } from './inject-marker';
@@ -80,6 +81,20 @@ export interface SponsorHomeRenderInput {
   requests?: SponsorRequestRow[];
 }
 
+/**
+ * Owner 2026-11-22: every list of cards shows five at a time, with "Click for
+ * more" under it (lib/card-pager.ts). Only a list longer than five gets one.
+ */
+function shPager(list: string, testid: string, noun: string, count: number): string {
+  if (count <= PAGE_SIZE) return '';
+  return cardPagerControls({
+    list,
+    cards: 'article.sh-card',
+    testid,
+    says: `Showing {n} of {total} ${noun}.`,
+  });
+}
+
 /** "Your requests" + "Events you could back" (lib/sponsor-discovery). */
 function renderDiscovery(discoverable: DiscoverableEvent[], requests: SponsorRequestRow[]): string {
   const parts: string[] = [];
@@ -93,10 +108,13 @@ function renderDiscovery(discoverable: DiscoverableEvent[], requests: SponsorReq
       </article>`;
     });
     parts.push(
-      `<p class="sh-section-title">Your requests</p><div class="sh-list" data-testid="sponsor-home-requests">${cards.join('')}</div>`
+      `<p class="sh-section-title">Your requests</p><div class="sh-list" id="sh-requests" data-testid="sponsor-home-requests">${cards.join('')}</div>${shPager('sh-requests', 'request-more', 'requests', cards.length)}`
     );
   }
-  const cards = discoverable.map(
+  // Nearest first: the events in the sponsor's own area lead, each group in
+  // the order the server sent (owner 2026-11-21; sort is stable).
+  const near = [...discoverable].sort((a, b) => Number(b.near === 1) - Number(a.near === 1));
+  const cards = near.map(
     (e) => `<article class="sh-card" data-testid="discover-card" data-event-id="${esc(e.id)}">
         <h2 data-testid="discover-title">${esc(e.title)}</h2>
         <p class="sh-when">${esc(humanDate(e.start_date))}</p>
@@ -107,7 +125,7 @@ function renderDiscovery(discoverable: DiscoverableEvent[], requests: SponsorReq
   );
   parts.push(
     cards.length
-      ? `<p class="sh-section-title">Events you could back</p><p class="sh-why" data-testid="discover-why">Your name shows only if the organizer says yes.</p><div class="sh-list" data-testid="sponsor-home-discover">${cards.join('')}</div>`
+      ? `<p class="sh-section-title">Events you could back</p><p class="sh-why" data-testid="discover-why">Your name shows only if the organizer says yes.</p><div class="sh-list" id="sh-discover" data-testid="sponsor-home-discover">${cards.join('')}</div>${shPager('sh-discover', 'discover-more', 'events', cards.length)}`
       : `<p class="sh-section-title">Events you could back</p><div class="sh-empty" data-testid="sponsor-home-discover-empty">Nothing new right now.</div>`
   );
   return parts.join('');
@@ -231,7 +249,7 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
   const list =
     cards.length === 0
       ? `<div class="sh-empty" data-testid="sponsor-home-empty">No placements yet.</div>`
-      : `<p class="sh-section-title">Your placements</p><div class="sh-list" data-testid="sponsor-home-list">${cards.join('')}</div>`;
+      : `<p class="sh-section-title">Your placements</p><div class="sh-list" id="sh-placements" data-testid="sponsor-home-list">${cards.join('')}</div>${shPager('sh-placements', 'placement-more', 'placements', cards.length)}`;
 
   // injectMarker (not String.replace) so a sponsor name or placement markup
   // carrying a `$` cannot splice the trusted page shell (CCR-PR567 H1).
@@ -240,7 +258,13 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
   page = injectMarker(page, '<!--OCR_COUNT_LIVE-->', String(live));
   page = injectMarker(page, '<!--OCR_COUNT_UPCOMING-->', String(upcoming));
   page = injectMarker(page, '<!--OCR_COUNT_PENDING-->', String(pending));
-  page = injectMarker(page, '<!--OCR_SPONSOR_PLACEMENTS-->', list + discovery);
+  const lists = list + discovery;
+  // One copy of the pager's script, only when a list is long enough to use it.
+  page = injectMarker(
+    page,
+    '<!--OCR_SPONSOR_PLACEMENTS-->',
+    lists + (lists.includes('data-card-more=') ? cardPagerScript() : '')
+  );
   page = injectMarker(page, '<!--OCR_EXPIRES-->', esc(humanDate(expiresIso)));
 
   return injectLegalFooter(page, 'public');

@@ -271,7 +271,7 @@
               
             </div>
             <a class="cta" href="/events/evt_g07/register" data-testid="public-event-cta" data-cta="register" aria-label="Register for Golden Event 7">Register</a>
-          </article><h2 class="events-subheading" data-testid="public-events-wrapped-heading">Wrapped</h2>
+          </article><p class="card-more" data-card-more="events" data-cards="article.event-card:not([data-phase=&quot;post_event&quot;])" hidden><button class="btn btn-secondary" type="button" data-testid="events-more">Click for more</button></p><p class="card-more-status" role="status" aria-live="polite" data-testid="events-more-status" data-says="Showing %n of %t events."></p><h2 class="events-subheading" data-testid="public-events-wrapped-heading">Wrapped</h2>
           <article class="event-card" data-testid="public-event-card" data-event-id="evt_g12" data-phase="post_event">
             <a class="event-card-link" href="/events/evt_g12/golden-12" data-testid="public-event-card-link" aria-label="Open Fall Fest public page"></a>
             <span class="event-thumb-box"><img class="event-thumb" src="/event-default-thumb.svg" alt="" width="64" height="64" loading="lazy" decoding="async" data-testid="public-event-thumb"></span>
@@ -280,8 +280,61 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">Thursday, October 1, 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               
             </div>
-            <a class="cta cta-secondary" href="/events/evt_g12/golden-12" data-testid="public-event-cta" data-cta="recap" aria-label="See how Fall Fest went">See how it went</a>
-          </article>
+            <a class="cta cta-secondary" href="/events/evt_g12/golden-12" data-testid="public-event-cta" data-cta="recap" aria-label="See how it went: Fall Fest">See how it went</a>
+          </article><style>[data-paged-out]{display:none!important}.card-more{margin:1rem 0 0}.card-more-status{margin:.5rem 0 0;color:var(--text-muted)}.card-more .btn{width:100%}@media(min-width:480px){.card-more .btn{width:auto;min-width:14rem}}</style><script nonce="N">(function () {
+  var STEP = 5;
+  var pagers = [];
+  function visible(c) { return getComputedStyle(c).display !== 'none'; }
+  [].forEach.call(document.querySelectorAll('[data-card-more]'), function (box) {
+    if (box.hasAttribute('data-paging')) return;
+    var list = document.getElementById(box.getAttribute('data-card-more'));
+    var more = box.querySelector('button');
+    var status = box.nextElementSibling;
+    var pick = box.getAttribute('data-cards');
+    if (!list || !more || !pick) return;
+    box.setAttribute('data-paging', '');
+    var limit = STEP;
+    function cards() { return [].slice.call(list.querySelectorAll(pick)); }
+    function showing() { return cards().filter(visible); }
+    function page() {
+      var all = cards(), total = 0;
+      all.forEach(function (c) { c.removeAttribute('data-paged-out'); });
+      all.forEach(function (c) {
+        if (!visible(c)) return;
+        total += 1;
+        if (total > limit) c.setAttribute('data-paged-out', '');
+      });
+      // Change only what differs: the controls may sit inside the list they
+      // watch, and an unchanged write would wake the watcher again.
+      if (box.hidden !== (total <= limit)) box.hidden = total <= limit;
+      var says = total > STEP
+        ? (status && status.getAttribute('data-says') || '').replace('%n', String(Math.min(limit, total))).replace('%t', String(total))
+        : '';
+      if (status && status.textContent !== says) status.textContent = says;
+    }
+    more.addEventListener('click', function () {
+      var before = showing().length;
+      limit += STEP;
+      page();
+      var next = showing()[before];
+      if (!next) return;
+      // The card's own link or button; a card with neither takes focus itself.
+      var link = next.matches('a[href],button') ? next : next.querySelector('a[href],button');
+      if (!link) { next.setAttribute('tabindex', '-1'); link = next; }
+      link.focus();
+    });
+    // Other scripts move cards or hide them (a filter, a distance); count again after.
+    if (window.MutationObserver) {
+      new MutationObserver(page).observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'hidden'] });
+    }
+    pagers.push(function () { limit = STEP; page(); });
+    page();
+  });
+  // A filter changed: every list starts again at five.
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.type === 'radio') pagers.forEach(function (start) { start(); });
+  });
+})();</script>
         </div>
       </section>
       <nav class="ose-lang" data-testid="language-switch" aria-label="Language">

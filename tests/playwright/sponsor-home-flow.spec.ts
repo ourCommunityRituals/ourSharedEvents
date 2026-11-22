@@ -32,6 +32,7 @@
  * its own sponsor, so it never depends on (or disturbs) the audit's one.
  */
 import { test, expect, type Page } from '@playwright/test';
+import { showAllCards } from './helpers/area-more';
 import {
   createLiveEvent,
   waitUntilListed,
@@ -295,6 +296,8 @@ test.describe('sponsor discovery: ask to join → organizer approves', () => {
     await expect(card).toHaveCount(0);
     await waitUntilListed(otherListedFrom);
     await page.goto(sponsorPath());
+    // Five cards at a time (lib/card-pager.ts): staging has more to back than five.
+    await showAllCards(page);
     await expect(card).toBeVisible();
     const askBtn = card.getByTestId('discover-ask');
     const box = await askBtn.boundingBox();

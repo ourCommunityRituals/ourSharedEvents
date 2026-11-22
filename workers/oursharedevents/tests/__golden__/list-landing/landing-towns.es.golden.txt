@@ -414,12 +414,63 @@
             <a class="cta" href="/es/events/evt_g08/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 8">Inscribirse</a>
           </article>
           </div>
-          <style>#area-list .event-card[data-more]{display:none}.area-more{margin:1rem 0 0}.area-more .btn{width:100%}@media(min-width:480px){.area-more .btn{width:auto;min-width:14rem}}</style><p class="area-more" hidden><button class="btn btn-secondary" type="button" data-testid="area-more">Haz clic para ver más</button></p><p class="near-note" role="status" aria-live="polite" data-testid="area-more-status" data-says="Mostrando %n de %t eventos."></p><script nonce="N">(function () {
+          <p class="card-more" data-card-more="area-list" data-cards="article.event-card" hidden><button class="btn btn-secondary" type="button" data-testid="area-more">Haz clic para ver más</button></p><p class="card-more-status" role="status" aria-live="polite" data-testid="area-more-status" data-says="Mostrando %n de %t eventos."></p><style>[data-paged-out]{display:none!important}.card-more{margin:1rem 0 0}.card-more-status{margin:.5rem 0 0;color:var(--text-muted)}.card-more .btn{width:100%}@media(min-width:480px){.card-more .btn{width:auto;min-width:14rem}}</style><script nonce="N">(function () {
+  var STEP = 5;
+  var pagers = [];
+  function visible(c) { return getComputedStyle(c).display !== 'none'; }
+  [].forEach.call(document.querySelectorAll('[data-card-more]'), function (box) {
+    if (box.hasAttribute('data-paging')) return;
+    var list = document.getElementById(box.getAttribute('data-card-more'));
+    var more = box.querySelector('button');
+    var status = box.nextElementSibling;
+    var pick = box.getAttribute('data-cards');
+    if (!list || !more || !pick) return;
+    box.setAttribute('data-paging', '');
+    var limit = STEP;
+    function cards() { return [].slice.call(list.querySelectorAll(pick)); }
+    function showing() { return cards().filter(visible); }
+    function page() {
+      var all = cards(), total = 0;
+      all.forEach(function (c) { c.removeAttribute('data-paged-out'); });
+      all.forEach(function (c) {
+        if (!visible(c)) return;
+        total += 1;
+        if (total > limit) c.setAttribute('data-paged-out', '');
+      });
+      // Change only what differs: the controls may sit inside the list they
+      // watch, and an unchanged write would wake the watcher again.
+      if (box.hidden !== (total <= limit)) box.hidden = total <= limit;
+      var says = total > STEP
+        ? (status && status.getAttribute('data-says') || '').replace('%n', String(Math.min(limit, total))).replace('%t', String(total))
+        : '';
+      if (status && status.textContent !== says) status.textContent = says;
+    }
+    more.addEventListener('click', function () {
+      var before = showing().length;
+      limit += STEP;
+      page();
+      var next = showing()[before];
+      if (!next) return;
+      // The card's own link or button; a card with neither takes focus itself.
+      var link = next.matches('a[href],button') ? next : next.querySelector('a[href],button');
+      if (!link) { next.setAttribute('tabindex', '-1'); link = next; }
+      link.focus();
+    });
+    // Other scripts move cards or hide them (a filter, a distance); count again after.
+    if (window.MutationObserver) {
+      new MutationObserver(page).observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'hidden'] });
+    }
+    pagers.push(function () { limit = STEP; page(); });
+    page();
+  });
+  // A filter changed: every list starts again at five.
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.type === 'radio') pagers.forEach(function (start) { start(); });
+  });
+})();</script><script nonce="N">(function () {
   var list = document.getElementById('area-list');
-  var more = document.querySelector('[data-testid="area-more"]');
-  if (!list || !more) return;
-  var box = more.parentNode, status = box.parentNode.querySelector('[data-testid="area-more-status"]');
-  var STEP = 5, limit = STEP;
+  var legend = document.querySelector('ol.amap-legend');
+  if (!list || !legend || !window.MutationObserver) return;
   var cards = [].slice.call(list.querySelectorAll('article.event-card'));
   if (!cards.length) return;
 
@@ -444,44 +495,7 @@
     if (order.every(function (c, i) { return now[i] === c; })) return;
     order.forEach(function (c) { list.appendChild(c); });
   }
-
-  // Five at a time, counting only the cards the filters leave showing.
-  function page() {
-    cards.forEach(function (c) { c.removeAttribute('data-more'); });
-    var total = 0;
-    [].forEach.call(list.querySelectorAll('article.event-card'), function (c) {
-      if (getComputedStyle(c).display === 'none') return;
-      total += 1;
-      if (total > limit) c.setAttribute('data-more', '');
-    });
-    box.hidden = total <= limit;
-    status.textContent = total > STEP
-      ? (status.getAttribute('data-says') || '').replace('%n', String(Math.min(limit, total))).replace('%t', String(total))
-      : '';
-  }
-  function showing() {
-    return [].filter.call(list.querySelectorAll('article.event-card'), function (c) {
-      return getComputedStyle(c).display !== 'none';
-    });
-  }
-  more.addEventListener('click', function () {
-    var before = showing().length;
-    limit += STEP;
-    page();
-    var next = showing()[before], link = next && next.querySelector('a[href]');
-    if (link) link.focus();
-  });
-  // A filter changed: start again at five.
-  document.addEventListener('change', function (e) {
-    if (e.target && e.target.type === 'radio') { limit = STEP; page(); }
-  });
-  // The other scripts move cards and hide them by distance; count again after.
-  if (window.MutationObserver) {
-    new MutationObserver(page).observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
-    var legend = document.querySelector('ol.amap-legend');
-    if (legend) new MutationObserver(nearest).observe(legend, { subtree: true, attributes: true, attributeFilter: ['data-d'] });
-  }
-  page();
+  new MutationObserver(nearest).observe(legend, { subtree: true, attributes: true, attributeFilter: ['data-d'] });
 })();</script>
         </div><script nonce="N">(function () {
   var box = document.querySelector('.area-filters[data-tabs]');
