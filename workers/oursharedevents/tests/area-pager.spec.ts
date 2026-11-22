@@ -103,7 +103,9 @@ describe('the cards five at a time | what the server sends', () => {
 
   it('the style hides only the waiting cards, with tokens and no colour of its own', () => {
     const style = areaPager('en').match(/<style>[^<]*<\/style>/)![0];
-    expect(style).toContain('.view-list .event-card[data-more]{display:none}');
+    expect(style).toContain('#area-list .event-card[data-more]{display:none}');
+    // Never a rule that reads as hiding the list itself (tests/listing-card-links.spec.ts).
+    expect(style).not.toMatch(/\.view-list[^{}]*\{\s*display:\s*none/);
     expect(style).not.toMatch(/#[0-9a-f]{3,8}\b/i);
     expect(style.length - '<style></style>'.length).toBeLessThanOrEqual(400);
   });

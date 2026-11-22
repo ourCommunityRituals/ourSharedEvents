@@ -496,7 +496,7 @@
             <a class="cta" href="/es/events/evt_g08/register" data-testid="public-event-cta" data-cta="register" aria-label="Inscribirse en Golden Event 8">Inscribirse</a>
           </article>
           </div>
-          <style>.view-list .event-card[data-more]{display:none}.area-more{margin:1rem 0 0}.area-more .btn{width:100%}@media(min-width:480px){.area-more .btn{width:auto;min-width:14rem}}</style><p class="area-more" hidden><button class="btn btn-secondary" type="button" data-testid="area-more">Haz clic para ver más</button></p><p class="near-note" role="status" aria-live="polite" data-testid="area-more-status" data-says="Mostrando %n de %t eventos."></p><script nonce="N">(function () {
+          <style>#area-list .event-card[data-more]{display:none}.area-more{margin:1rem 0 0}.area-more .btn{width:100%}@media(min-width:480px){.area-more .btn{width:auto;min-width:14rem}}</style><p class="area-more" hidden><button class="btn btn-secondary" type="button" data-testid="area-more">Haz clic para ver más</button></p><p class="near-note" role="status" aria-live="polite" data-testid="area-more-status" data-says="Mostrando %n de %t eventos."></p><script nonce="N">(function () {
   var list = document.getElementById('area-list');
   var more = document.querySelector('[data-testid="area-more"]');
   if (!list || !more) return;

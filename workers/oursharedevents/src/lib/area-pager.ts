@@ -109,7 +109,7 @@ export const AREA_PAGER_SCRIPT = String.raw`(function () {
  * one 400-char inline style budget.
  */
 const STYLE =
-  '<style>.view-list .event-card[data-more]{display:none}.area-more{margin:1rem 0 0}.area-more .btn{width:100%}@media(min-width:480px){.area-more .btn{width:auto;min-width:14rem}}</style>';
+  '<style>#area-list .event-card[data-more]{display:none}.area-more{margin:1rem 0 0}.area-more .btn{width:100%}@media(min-width:480px){.area-more .btn{width:auto;min-width:14rem}}</style>';
 
 /**
  * The button and its status line, placed after the last card, and the script.
