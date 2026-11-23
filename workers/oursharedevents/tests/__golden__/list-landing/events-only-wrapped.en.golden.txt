@@ -210,7 +210,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">Thursday, October 1, 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               
             </div>
-            <a class="cta cta-secondary" href="/events/evt_g12/golden-12" data-testid="public-event-cta" data-cta="recap" aria-label="See how Fall Fest went">See how it went</a>
+            <a class="cta cta-secondary" href="/events/evt_g12/golden-12" data-testid="public-event-cta" data-cta="recap" aria-label="See how it went: Fall Fest">See how it went</a>
           </article>
         </div>
       </section>

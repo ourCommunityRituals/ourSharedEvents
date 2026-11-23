@@ -15,6 +15,7 @@
  * byte-identical to the previous inline render (guarded by sponsor-home.spec.ts).
  */
 
+import { cardPagerControls, cardPagerScript, PAGE_SIZE } from './card-pager';
 import SPONSOR_HOME_HTML from '../templates/sponsor-home.html';
 import { injectLegalFooter } from './legal-footer';
 import { injectMarker } from './inject-marker';
@@ -81,6 +82,20 @@ export interface SponsorHomeRenderInput {
 }
 
 /**
+ * Owner 2026-11-22: every list of cards shows five at a time, with "Click for
+ * more" under it (lib/card-pager.ts). Only a list longer than five gets one.
+ */
+function shPager(list: string, testid: string, noun: string, count: number): string {
+  if (count <= PAGE_SIZE) return '';
+  return cardPagerControls({
+    list,
+    cards: 'article.sh-card',
+    testid,
+    says: `Showing {n} of {total} ${noun}.`,
+  });
+}
+
+/**
  * The @ocr/ui card anatomy (canvas SponsorHome; admin.html since PR #1459):
  * a sectioned card, its title in .card-header, the rest in .card-body.
  * `sh-card` stays as the hook the page script finds a card by.
@@ -109,11 +124,14 @@ function renderDiscovery(discoverable: DiscoverableEvent[], requests: SponsorReq
     parts.push(
       section(
         'Your requests',
-        `<div class="sh-list" data-testid="sponsor-home-requests">${cards.join('')}</div>`
+        `<div class="sh-list" id="sh-requests" data-testid="sponsor-home-requests">${cards.join('')}</div>${shPager('sh-requests', 'request-more', 'requests', cards.length)}`
       )
     );
   }
-  const cards = discoverable.map(
+  // Nearest first: the events in the sponsor's own area lead, each group in
+  // the order the server sent (owner 2026-11-21; sort is stable).
+  const near = [...discoverable].sort((a, b) => Number(b.near === 1) - Number(a.near === 1));
+  const cards = near.map(
     (e) => `<article class="${CARD}" data-testid="discover-card" data-event-id="${esc(e.id)}">
         <div class="card-header"><h3 class="card-title" data-testid="discover-title">${esc(e.title)}</h3></div>
         <div class="card-body">
@@ -128,7 +146,7 @@ function renderDiscovery(discoverable: DiscoverableEvent[], requests: SponsorReq
     section(
       'Events you could back',
       cards.length
-        ? `<p class="sh-why" data-testid="discover-why">Your name shows only if the organizer says yes.</p><div class="sh-list" data-testid="sponsor-home-discover">${cards.join('')}</div>`
+        ? `<p class="sh-why" data-testid="discover-why">Your name shows only if the organizer says yes.</p><div class="sh-list" id="sh-discover" data-testid="sponsor-home-discover">${cards.join('')}</div>${shPager('sh-discover', 'discover-more', 'events', cards.length)}`
         : `<p class="sub-line" data-testid="sponsor-home-discover-empty">Nothing new right now.</p>`
     )
   );
@@ -256,7 +274,7 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
     'Your placements',
     cards.length === 0
       ? `<p class="sub-line" data-testid="sponsor-home-empty">No placements yet.</p>`
-      : `<div class="sh-list" data-testid="sponsor-home-list">${cards.join('')}</div>`
+      : `<div class="sh-list" id="sh-placements" data-testid="sponsor-home-list">${cards.join('')}</div>${shPager('sh-placements', 'placement-more', 'placements', cards.length)}`
   );
 
   // injectMarker (not String.replace) so a sponsor name or placement markup
@@ -266,7 +284,13 @@ export function renderSponsorHomePage(input: SponsorHomeRenderInput): string {
   page = injectMarker(page, '<!--OCR_COUNT_LIVE-->', String(live));
   page = injectMarker(page, '<!--OCR_COUNT_UPCOMING-->', String(upcoming));
   page = injectMarker(page, '<!--OCR_COUNT_PENDING-->', String(pending));
-  page = injectMarker(page, '<!--OCR_SPONSOR_PLACEMENTS-->', list + discovery);
+  const lists = list + discovery;
+  // One copy of the pager's script, only when a list is long enough to use it.
+  page = injectMarker(
+    page,
+    '<!--OCR_SPONSOR_PLACEMENTS-->',
+    lists + (lists.includes('data-card-more=') ? cardPagerScript() : '')
+  );
   page = injectMarker(page, '<!--OCR_EXPIRES-->', esc(humanDate(expiresIso)));
 
   return injectLegalFooter(page, 'public');
