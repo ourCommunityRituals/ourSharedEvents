@@ -32,7 +32,17 @@ describe('OSE-610: canonical demo link registry', () => {
   });
 
   it('slug permanence — canonical paths are pinned (changing one is a breaking change)', () => {
-    expect(demoPaths().sort()).toEqual(['/demo', '/demo/free', '/demo/mid', '/demo/premium']);
+    expect(demoPaths().sort()).toEqual([
+      '/demo',
+      '/demo/bocce',
+      '/demo/bocce/club',
+      '/demo/bocce/league',
+      '/demo/bocce/network',
+      '/demo/bocce/semipro',
+      '/demo/free',
+      '/demo/mid',
+      '/demo/premium',
+    ]);
   });
 
   it('is versioned', () => {

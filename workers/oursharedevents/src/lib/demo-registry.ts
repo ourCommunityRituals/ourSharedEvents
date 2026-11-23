@@ -9,7 +9,7 @@
  * so the published UI and the registry can never drift.
  */
 
-export const DEMO_REGISTRY_VERSION = '1.0.0';
+export const DEMO_REGISTRY_VERSION = '1.1.0';
 
 export interface DemoLink {
   /** Stable key — never reused for a different destination. */
@@ -49,6 +49,36 @@ export const DEMO_LINKS: readonly DemoLink[] = [
     title: 'Premium · Enterprise',
     description: 'Reach furthest + top governance share (floored, never exclusionary).',
     tier: 'premium',
+  },
+  {
+    key: 'demo-bocce',
+    path: '/demo/bocce',
+    title: 'Lakeside Bocce Co.: our pull',
+    description: 'A practice parent company: every venture adds up on one page.',
+  },
+  {
+    key: 'demo-bocce-club',
+    path: '/demo/bocce/club',
+    title: 'Lakeside Bocce Club',
+    description: 'A practice clubhouse: scans by court.',
+  },
+  {
+    key: 'demo-bocce-semipro',
+    path: '/demo/bocce/semipro',
+    title: 'Lakeside Semi-Pro League',
+    description: 'A practice semi-pro league: scans by match night.',
+  },
+  {
+    key: 'demo-bocce-league',
+    path: '/demo/bocce/league',
+    title: 'Lakeside Bocce League',
+    description: 'Practice bar leagues: scans by league night.',
+  },
+  {
+    key: 'demo-bocce-network',
+    path: '/demo/bocce/network',
+    title: 'Lakeside Bocce Network',
+    description: 'A practice broadcast network: stream link clicks.',
   },
 ] as const;
 

@@ -46,6 +46,8 @@ export const UNLIMITED_PAGES: Readonly<Record<string, Unlimited>> = {
   '/privacy-policy': fixed('The privacy page'),
   '/demo': fixed('The demo index'),
   '/demo/:param': fixed('A demo site, built from fixtures in the bundle'),
+  '/demo/bocce': fixed('The practice bocce parent page, built from fixtures in the bundle'),
+  '/demo/bocce/:param': fixed('A practice bocce venture, built from fixtures in the bundle'),
   '/ui-preview': fixed('The component showcase'),
 
   // ── Forwards and POST targets ────────────────────────────────────────────

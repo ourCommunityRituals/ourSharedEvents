@@ -65,6 +65,11 @@ const SURFACES: Surface[] = [
   { name: 'demo mid', path: () => '/demo/mid' },
   { name: 'demo premium', path: () => '/demo/premium' },
   { name: 'demo unknown site', path: () => '/demo/no-such-site' },
+  { name: 'demo bocce parent', path: () => '/demo/bocce' },
+  { name: 'demo bocce club', path: () => '/demo/bocce/club' },
+  { name: 'demo bocce semi-pro', path: () => '/demo/bocce/semipro' },
+  { name: 'demo bocce league', path: () => '/demo/bocce/league' },
+  { name: 'demo bocce network', path: () => '/demo/bocce/network' },
 ];
 
 async function open(page: Page, surface: Surface): Promise<void> {

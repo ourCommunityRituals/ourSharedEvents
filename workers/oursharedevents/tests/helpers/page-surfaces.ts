@@ -174,6 +174,15 @@ export const PAGE_SURFACES: Readonly<Record<string, PageSurface>> = {
     '/demo/premium',
     '/demo/no-such-site'
   ),
+  '/demo/bocce': page('The practice bocce family: the parent company page.', '/demo/bocce'),
+  '/demo/bocce/:param': page(
+    'A practice bocce venture, and the unknown-site page.',
+    '/demo/bocce/club',
+    '/demo/bocce/semipro',
+    '/demo/bocce/league',
+    '/demo/bocce/network',
+    '/demo/bocce/no-such-site'
+  ),
 
   // ── Site pages ───────────────────────────────────────────────────────────
   '/privacy': page('Privacy policy.', '/privacy'),

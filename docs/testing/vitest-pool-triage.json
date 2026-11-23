@@ -1010,6 +1010,13 @@
       "testCount": 35
     },
     {
+      "file": "workers/oursharedevents/tests/demo-bocce.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
+    },
+    {
       "file": "workers/oursharedevents/tests/demo-ci-gate.spec.ts",
       "bucket": "node",
       "needsReview": false,

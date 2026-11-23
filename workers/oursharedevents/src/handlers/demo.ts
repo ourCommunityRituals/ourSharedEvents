@@ -127,7 +127,7 @@ const DEMO_STYLE = `<style>
   .demo-lede { color: var(--text-muted); font-size: 1.05rem; margin: 0 0 1rem; }
   .demo-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 1.5rem; }
   .demo-tab {
-    padding: 0.55rem 1rem; border-radius: 0.5rem; text-decoration: none;
+    padding: 0.72rem 1rem; border-radius: 0.5rem; text-decoration: none;
     border: 1px solid var(--border); color: var(--text); background: var(--surface);
     font-weight: 600;
   }
@@ -188,9 +188,23 @@ const DEMO_STYLE = `<style>
 
 // ── Response helper — no scripts on these pages, so a tight CSP with no nonce ─────
 
-function demoHtml(body: string, status = 200): Response {
+/**
+ * The brands a demo page may wear (`data-brand` on <html>, themes from @ocr/ui).
+ * A fixed list: the attribute is never built from a request (OSE-2219).
+ */
+export const DEMO_BRANDS = [
+  'lakeside-co',
+  'lakeside-club',
+  'lakeside-semipro',
+  'lakeside-league',
+  'lakeside-network',
+] as const;
+export type DemoBrand = (typeof DEMO_BRANDS)[number];
+
+export function demoHtml(body: string, status = 200, brand?: DemoBrand): Response {
+  const brandAttr = brand && DEMO_BRANDS.includes(brand) ? ` data-brand="${brand}"` : '';
   const doc = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en"${brandAttr}>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
