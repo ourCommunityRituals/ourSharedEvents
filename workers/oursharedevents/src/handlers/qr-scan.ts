@@ -252,6 +252,8 @@ export async function handleQrScan(
   // OSE-2133: a vote pass needs a stored scan. A duplicate is one: its hour's
   // marker exists only while the first scan's write stood (a failed write
   // releases it, below).
+  // A scan the dedup check could not vet (dedupUnavailable) is neither stored
+  // nor a duplicate, so it carries no vote pass either (OSE-1784).
   let scanStored = isDuplicate;
 
   // OSE-1496 (owner, 2026-11-23): at most POSTER_HOUR_CAP scans per poster per

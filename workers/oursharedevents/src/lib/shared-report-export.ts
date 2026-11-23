@@ -494,8 +494,11 @@ export async function exportAnonIdReturns(
                   AND air.pepper_epoch = ?4
                   -- ADR-026 rule B: an event under K adds no one to a group and
                   -- makes no one a returner. The gate counts the rows this query
-                  -- sums (current pepper, seen in the window), a subset of the
-                  -- report's sample, so a passing event is also published.
+                  -- sums (current pepper, seen in the window). Since OSE-1784 the
+                  -- report publishes no count from this grain (its people figure
+                  -- is the poster sum), so a passing event's own count is not
+                  -- published beside it; follow-up story in the CCR of
+                  -- 2026-11-23.
                   AND air.venue_id IN (
                     SELECT venue_id FROM anon_id_returns
                      WHERE pepper_epoch = ?4 AND last_seen_at >= ?1
@@ -755,7 +758,8 @@ export async function exportCorridorDensityBaseline(
         result.rowsSkipped++;
         continue;
       }
-      // The counts are distinct people. The read path publishes them through
+      // The counts are sums of published poster figures (OSE-1784; distinct
+      // people before 2026-11-23). The read path publishes them through
       // this same call (OSE-1751): a window under CORRIDOR_BASELINE_MIN_SAMPLE is
       // suppressed, and the pair is a chain (90d ⊇ 30d), so 90d − 30d never names
       // a group under K. A row with nothing left to say is withheld.

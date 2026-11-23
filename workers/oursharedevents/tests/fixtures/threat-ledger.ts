@@ -2058,13 +2058,13 @@ const ANALYTIC_LAYER: ThreatEntry[] = [
       "The baseline's rule B gate counts hashes across peppers, as the report's sample_size does, so after a pepper rotation one person can be two hashes and lift an event of 4 to 5. The returns export gate counts the current pepper only and is not affected.",
     severity: 'LOW',
     target_invariant: { number: 7, name: 'aggregate_only_reporting' },
-    mitigation_story: 'OSE-1946',
+    mitigation_story: 'OSE-1784',
     test_ref: null,
-    status: 'open',
+    status: 'mitigated',
     red_birth: null,
     last_run_green: null,
     notes:
-      "Same window as the report's own sample_size, so fixing it means changing what the report counts too, while retired-pepper rows wait to be purged. Owner decision.",
+      'OSE-1784 (owner, 2026-11-23): the baseline no longer counts hashes; it adds up published poster figures, and the report no longer publishes sample_size, so no gate here counts across peppers.',
   },
 ];
 

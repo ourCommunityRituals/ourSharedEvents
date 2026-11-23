@@ -607,7 +607,7 @@ describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
     try {
       for (let i = 0; i < 5; i++) {
         const res = await handleQrScan(
-          makeRequest(VALID_QR_TOKEN, {
+          await makeRequest(VALID_QR_TOKEN, {
             existingCookie: 'anon_77777777-7777-7777-7777-777777777777',
           }),
           makeEnv(kvThatThrows({ get: true })),

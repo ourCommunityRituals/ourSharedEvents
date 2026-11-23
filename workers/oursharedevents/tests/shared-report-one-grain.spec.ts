@@ -256,6 +256,65 @@ describe('one people figure, from the posters (OSE-1784)', () => {
     expect(JSON.stringify(rep)).not.toMatch(/:15\b/);
   });
 
+  // The baseline must be the report's own figure, summed, whatever the event
+  // holds: two events in one slot, several posters, an hour under the floor,
+  // the room's vote code, and scans filed against another event's poster.
+  test('two events in one slot: the baseline is the sum of their this_event_count, every edge included', async () => {
+    const db = tenv().DB;
+    const a = `${PREFIX}pair-a`;
+    const b = `${PREFIX}pair-b`;
+    const start = new Date(Date.now() - 10 * 86400_000);
+    start.setUTCMinutes(0, 0, 0);
+    // a: poster 1 has hours of 7 and 3 (5 published), poster 2 has 6 (5).
+    await seedEvent(a, { hours: [7, 3], attendees: 16 });
+    await seedPosterHour(db, a, 21, 6, `${a}-p2`);
+    // a's vote code: 9 scans in one hour, never a people figure.
+    await seedPosterHour(db, a, 22, 9, `${a}-vote`);
+    await db
+      .prepare(`UPDATE poster_deployments SET is_vote_code = 1 WHERE id = ?`)
+      .bind(`${a}-vote`)
+      .run();
+    // b: 12 in one hour (10 published).
+    await seedEvent(b, { hours: [12], attendees: 12 });
+    // Five scans filed under b at a's poster: neither event's figure.
+    for (let i = 0; i < 5; i++) {
+      await db
+        .prepare(
+          `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+           VALUES (?, ?, ?, '2026-05-07T19:00')`
+        )
+        .bind(`${b}-stray-${i}`, b, `${a}-poster`)
+        .run();
+    }
+    for (const id of [a, b]) {
+      await db
+        .prepare(`UPDATE events SET start_date = ? WHERE id = ?`)
+        .bind(start.toISOString(), id)
+        .run();
+    }
+    await db
+      .prepare(`DELETE FROM corridor_density_baseline WHERE corridor_id = ?`)
+      .bind(CELL7)
+      .run();
+
+    const r = await refreshCorridorBaselines({ DB: db });
+    expect(r.errors).toBe(0);
+    const ra = await build(a);
+    const rb = await build(b);
+    expect(ra.corridor_density.this_event_count).toBe(10);
+    expect(rb.corridor_density.this_event_count).toBe(10);
+    const row = await db
+      .prepare(
+        `SELECT window_30d_count, window_90d_count FROM corridor_density_baseline
+          WHERE corridor_id = ? AND bucket_dow = ? AND bucket_hour = ?`
+      )
+      .bind(CELL7, start.getUTCDay(), start.getUTCHours())
+      .first<{ window_30d_count: number; window_90d_count: number }>();
+    expect(row).toEqual({ window_30d_count: 20, window_90d_count: 20 });
+    expect(ra.corridor_density.baseline_30d).toBe(20);
+    expect(ra.corridor_density.density_ratio_30d).toBeCloseTo(10 / 20, 9);
+  });
+
   test('another instance of the series is its own poster sum', async () => {
     const id = `${PREFIX}anchor`;
     const other = `${PREFIX}other`;

@@ -183,7 +183,7 @@ export function publishCorridorBaseline(
     suppression.push({
       field,
       reason: 'below_min_sample_size',
-      detail: `a baseline of fewer than ${CORRIDOR_BASELINE_MIN_SAMPLE} distinct attendees, or one too close to the other window to publish, is withheld`,
+      detail: `a baseline of fewer than ${CORRIDOR_BASELINE_MIN_SAMPLE} (the published poster figures of the corridor's events in this weekday and hour, added up), or one too close to the other window to publish, is withheld`,
     });
   };
   if (window_30d === null) withheld('corridor_density.baseline_30d');
