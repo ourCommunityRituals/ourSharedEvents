@@ -237,12 +237,18 @@ describe('the landing category choice is the icon slider', () => {
       venue: 'Hall',
       event_type_id: type,
     }) as unknown as LandingAreaItem;
-  const html = renderLandingArea(
-    [ev('a', 'etr-rec-bocce'), ev('b', 'etr-lit-club'), ev('c', 'etr-none')],
-    { now: NOW, typeCategories: cats }
-  ).html;
+  // Rendered inside each test, never at describe level: a render outside a test
+  // makes every landing-area.ts mutant "static" for Stryker, which then runs the
+  // whole landing group's specs against each one (the mutation job ran past its
+  // 15 minutes that way on 2026-11-23).
+  const render = (): string =>
+    renderLandingArea([ev('a', 'etr-rec-bocce'), ev('b', 'etr-lit-club'), ev('c', 'etr-none')], {
+      now: NOW,
+      typeCategories: cats,
+    }).html;
 
   it('shows one item per category present, each with its own icon, All first and Other last', () => {
+    const html = render();
     const items = [
       ...html.matchAll(/<label class="icon-slider-item" for="([^"]+)"[^>]*>(<svg[\s\S]*?<\/svg>)/g),
     ];
@@ -254,6 +260,7 @@ describe('the landing category choice is the icon slider', () => {
   });
 
   it('sits above the List / Map row and outside the Filters fold, so it is always on screen', () => {
+    const html = render();
     const slider = html.indexOf('data-testid="toggle-type"');
     expect(slider).toBeGreaterThan(-1);
     expect(slider).toBeLessThan(html.indexOf('data-testid="area-toggles"'));
@@ -263,6 +270,7 @@ describe('the landing category choice is the icon slider', () => {
   });
 
   it('a chosen item takes the accent, a tick and a focus ring, from tokens; the radio still hides other cards', () => {
+    const html = render();
     expect(html).toContain(
       "#cat-rec:checked ~ .icon-slider label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}"
     );
@@ -279,6 +287,7 @@ describe('the landing category choice is the icon slider', () => {
   });
 
   it('ships the wiring script once, after the slider', () => {
+    const html = render();
     expect(html.split(ICON_SLIDER_SCRIPT)).toHaveLength(2);
     expect(html.indexOf(ICON_SLIDER_SCRIPT)).toBeGreaterThan(
       html.indexOf('data-testid="toggle-type"')
