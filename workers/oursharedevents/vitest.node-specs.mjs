@@ -70,6 +70,7 @@ export const NODE_SPECS = [
   // via helpers/uec) and the four that need a real DOM — `a11y-axe`, `keyboard-nav`,
   // `as-keyboard-nav`, `screen-reader` (axe/document); a jsdom batch is a follow-up.
   'tests/admin-brand-scope.spec.ts',
+  'tests/staging-testers.spec.ts',
   'tests/admin-servicetoken-fallthrough.spec.ts',
   'tests/codeql-src-findings.spec.ts',
   'tests/corridor-map.spec.ts',

@@ -38,7 +38,8 @@ export const REQUIRED_SECRETS = [
   'RATE_LIMIT_KEY_PEPPER',
   'ANON_ID_HASH_PEPPER',
 ];
-export const FORBIDDEN_SECRETS = ['ADMIN_KEY', 'X_OCR_INTERNAL', 'ADMIN_TOKEN'];
+// STAGING_TESTERS (owner 2026-11-22): outside testers and their practice brands, staging only.
+export const FORBIDDEN_SECRETS = ['ADMIN_KEY', 'X_OCR_INTERNAL', 'ADMIN_TOKEN', 'STAGING_TESTERS'];
 
 /** Settings staging has on purpose and production must never have. */
 export const STAGING_ONLY_VARS = [

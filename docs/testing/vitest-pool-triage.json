@@ -2610,7 +2610,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 5
+      "testCount": 6
     },
     {
       "file": "workers/oursharedevents/tests/public-brand-owner-wall.spec.ts",
@@ -3829,6 +3829,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): env.DB",
       "testCount": 19
+    },
+    {
+      "file": "workers/oursharedevents/tests/staging-testers.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 16
     },
     {
       "file": "workers/oursharedevents/tests/standards-propagation.spec.ts",
