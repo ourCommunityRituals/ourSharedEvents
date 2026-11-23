@@ -30,7 +30,8 @@
  *   GET /privacy /privacy-policy → the privacy policy page
  *   GET /demo                    → the demo site's front door (public, mock data only, OSE-605)
  *   GET /demo/:site              → one of the standing demo sites
- *   GET /demo/bocce[/:site]      → the practice bocce family, one look per brand (OSE-2219)
+ *   GET /demo/bocce              → the practice bocce family's parent page (OSE-2219)
+ *   GET /demo/bocce/:site        → one practice bocce venture, one look per brand (OSE-2219)
  *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)
  *   GET /ui-toast.js             → shared OCR toast script (@ocr/ui), loaded by admin and sponsor home
  *   GET /ui-preview              → component showcase for Claude Design (no auth)
