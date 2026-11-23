@@ -16,6 +16,7 @@ import { runDraftExpiry } from './lib/draft-expiry';
 import { runVoteFinalJob } from './lib/vote-sets';
 import { runCorridorLatch } from './lib/corridor-latch';
 import { runScanReturnsRetention } from './lib/scan-returns-retention';
+import { runPosterHourTallyPrune } from './lib/poster-hour-cap';
 import { runEventPlaceBackfill } from './lib/event-place';
 import { afterAllSettle, runSpineKeyCheck } from './lib/spine-keys-store';
 import {
@@ -172,6 +173,9 @@ export default {
     //   final deletes its receipts and markers and nulls T and V. It deletes
     //   tallies 30 days after final. A set that opened waits for S5, which
     //   computes its result in the same step. DB only; no count in any log line.
+    // runPosterHourTallyPrune (lib/poster-hour-cap.ts, OSE-1496) deletes
+    //   DB.scan_poster_hour_tally rows older than two days: the per-poster-hour
+    //   cap needs only the current hour. Counts per placement only; never throws.
     const jobs = [
       runFormDataLifecycle(env),
       runRegistrationContactClear(env),
@@ -183,6 +187,7 @@ export default {
       runScanReturnsRetention(env),
       runEventPlaceBackfill(env),
       runVoteFinalJob(env),
+      runPosterHourTallyPrune(env),
     ];
     ctx.waitUntil(Promise.all(jobs));
     ctx.waitUntil(afterAllSettle(jobs, () => runSpineKeyCheck(env)));

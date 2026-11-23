@@ -43,6 +43,7 @@ import {
   VOTE_PASS_TTL_SECONDS,
 } from '../src/lib/vote-pass';
 import { scanNodeKey, SCAN_NODE_KEY_CONTEXT } from '../src/lib/scan-node-key';
+import { signAnonId } from '../src/lib/anonymous-id';
 import {
   VOTE_PARTICIPANT_CONTEXT,
   VOTE_RECEIPT_CONTEXT,
@@ -146,11 +147,18 @@ function scanEnv(over: Partial<QrScanEnv> = {}): QrScanEnv {
   };
 }
 
-function scanRequest(eventId: string, opts: { type?: string | null; cookie?: string } = {}) {
+// A returning visitor presents the cookie the Worker signed for them (OSE-1496).
+async function scanRequest(
+  eventId: string,
+  opts: { type?: string | null; cookie?: string } = {}
+): Promise<Request> {
   const type = opts.type === undefined ? 'vote' : opts.type;
   const url = `${ORIGIN}/q/${TOKEN[eventId]}${type === null ? '' : `?type=${type}`}`;
   const headers: Record<string, string> = { 'User-Agent': 'vote-pass-test' };
-  if (opts.cookie !== undefined) headers.Cookie = `ose_anon=${opts.cookie}`;
+  if (opts.cookie !== undefined) {
+    const pepper = (env as unknown as { ANON_ID_HASH_PEPPER: string }).ANON_ID_HASH_PEPPER;
+    headers.Cookie = `ose_anon=${await signAnonId(opts.cookie, pepper)}`;
+  }
   return new Request(url, { headers });
 }
 
@@ -159,7 +167,7 @@ async function scan(
   opts: { type?: string | null; cookie?: string; env?: QrScanEnv; countable?: boolean } = {}
 ): Promise<Response> {
   return handleQrScan(
-    scanRequest(eventId, opts),
+    await scanRequest(eventId, opts),
     opts.env ?? scanEnv(),
     TOKEN[eventId],
     opts.countable ?? true
@@ -503,7 +511,7 @@ describe('OSE-2133 | /q issues the vote pass', () => {
     const call = async (over: Partial<RouterEnv>) => {
       const ctx = createExecutionContext();
       const res = await route(
-        scanRequest(OPEN, { cookie: COOKIE }),
+        await scanRequest(OPEN, { cookie: COOKIE }),
         { ...(env as unknown as RouterEnv), ...over } as RouterEnv,
         ctx
       );

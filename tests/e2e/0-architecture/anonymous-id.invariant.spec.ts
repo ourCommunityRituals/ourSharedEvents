@@ -117,7 +117,8 @@ test.describe('Invariant: Anonymous ID — Cookie Contract', () => {
     }, eventId);
 
     if (response.status === 201 && response.anonId) {
-      expect(response.anonId).toMatch(/^anon_[a-f0-9-]+$/);
+      // Signed since OSE-1496: `anon_<uuid>_s1_<HMAC-SHA256, base64url>`.
+      expect(response.anonId).toMatch(/^anon_[a-f0-9-]+_s1_[A-Za-z0-9_-]{43}$/);
     }
   });
 });

@@ -146,3 +146,41 @@ describe('the recap page reaches the walk-in line only through walkInStatLine', 
     expect(hits).toEqual([]);
   });
 });
+
+/**
+ * OSE-1787 — what the reader sees of the pair (the "Checked in" line and the
+ * "Walked in" line) must never narrow the people who registered and came
+ * (check-ins minus walk-ins) to a group of 1 to 4.
+ *
+ * The case the ticket was filed on: 6 check-ins beside the old "held" label
+ * meant walk-ins were 5 and exactly 1 registered person came. OSE-1752 gave
+ * both withheld cases one wording, and OSE-2151 rounds both lines down to a
+ * multiple of 5, so that output no longer exists. This walks every pair up to
+ * 120 check-ins and groups them by the markup a reader would see. For each
+ * group the possible rests must not all lie in 1..4.
+ */
+describe('OSE-1787: no visible recap output pins a registered group of 1 to 4', () => {
+  test('every rendered (checked in, walked in) pair leaves the small group ambiguous', () => {
+    const rests = new Map<string, Set<number>>();
+    for (let checkins = 0; checkins <= 120; checkins++) {
+      for (let walkIns = 0; walkIns <= checkins; walkIns++) {
+        const seen =
+          statLine(checkins, 'Checked in', 'stat-checkins') + walkInStatLine(checkins, walkIns);
+        const set = rests.get(seen) ?? new Set<number>();
+        set.add(checkins - walkIns);
+        rests.set(seen, set);
+      }
+    }
+    const pinned = [...rests.entries()]
+      .filter(([, set]) => [...set].every((rest) => rest >= 1 && rest <= 4))
+      .map(([seen]) => seen);
+    expect(pinned).toEqual([]);
+  });
+
+  test('the ticket case reads like its neighbours: 6 check-ins with 5 walk-ins', () => {
+    // 6 and 5 left exactly 1 registered person; it now reads like 9 and 0.
+    const sixFive = statLine(6, 'Checked in', 'c') + walkInStatLine(6, 5);
+    const nineNone = statLine(9, 'Checked in', 'c') + walkInStatLine(9, 0);
+    expect(sixFive).toBe(nineNone);
+  });
+});

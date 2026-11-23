@@ -27,6 +27,7 @@
 
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
+import { signAnonId } from '../src/lib/anonymous-id';
 import { handleQrScan, type QrScanEnv } from '../src/handlers/qr-scan';
 import { scanNodeKey } from '../src/lib/scan-node-key';
 
@@ -125,9 +126,9 @@ function makeEnv(kv?: KVNamespace): QrScanEnv {
  * named OW session — session cookie, three named-profile cookies, AND a Bearer
  * token — alongside the legitimate `ose_anon` cookie.
  */
-function adversarialNamedScanRequest(): Request {
+async function adversarialNamedScanRequest(): Promise<Request> {
   const cookie = [
-    `ose_anon=${KNOWN_ANON}`,
+    `ose_anon=${await signAnonId(KNOWN_ANON, makeEnv().ANON_ID_HASH_PEPPER!)}`,
     `ow_session=${OW_SESSION_VALUES[0]}`,
     `ow_profile_curator=${OW_SESSION_VALUES[1]}`,
     `ow_profile_player=${OW_SESSION_VALUES[2]}`,
@@ -162,7 +163,7 @@ beforeEach(async () => {
 describe('OSE-1049 Layer B — Blindness: a named OW session that reaches the scan endpoint is ignored', () => {
   test('OSE-1049 | INTEGRATION | scan with OW session + 3 profile cookies + Bearer | scan_node_returns holds ONLY the ose_anon id, no session-derived value', async () => {
     const res = await handleQrScan(
-      adversarialNamedScanRequest(),
+      await adversarialNamedScanRequest(),
       makeEnv(makeInMemoryKV()),
       VALID_QR_TOKEN
     );
@@ -206,7 +207,11 @@ describe('OSE-1049 Layer B — Blindness: a named OW session that reaches the sc
   });
 
   test('OSE-1049 | INTEGRATION | the WHERE row (scan_placement_events) carries no identity at all', async () => {
-    await handleQrScan(adversarialNamedScanRequest(), makeEnv(makeInMemoryKV()), VALID_QR_TOKEN);
+    await handleQrScan(
+      await adversarialNamedScanRequest(),
+      makeEnv(makeInMemoryKV()),
+      VALID_QR_TOKEN
+    );
 
     const row = await tenv()
       .DB.prepare(`SELECT * FROM scan_placement_events WHERE event_id = ? LIMIT 1`)
@@ -232,7 +237,11 @@ describe('OSE-1049 Layer B — Blindness: a named OW session that reaches the sc
   });
 
   test('OSE-1049 | INTEGRATION | anonymous scan writes exactly one WHO row keyed on the anon id, regardless of how many named profiles are present', async () => {
-    await handleQrScan(adversarialNamedScanRequest(), makeEnv(makeInMemoryKV()), VALID_QR_TOKEN);
+    await handleQrScan(
+      await adversarialNamedScanRequest(),
+      makeEnv(makeInMemoryKV()),
+      VALID_QR_TOKEN
+    );
 
     const rows = await tenv()
       .DB.prepare(`SELECT anonymous_id FROM scan_node_returns WHERE event_id = ?`)

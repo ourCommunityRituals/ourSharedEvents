@@ -83,6 +83,8 @@ jobs:
             script: test:mutation
           - group: landing
             script: test:mutation
+          - group: catalog
+            script: test:mutation
           - group: guards
             script: test:mutation
           - group: render
@@ -238,7 +240,7 @@ jobs:
         # The break threshold in stryker.conf.mjs is per run; this fails when any
         # one guard file is under its own floor (admin.ts: 100%). OSE-1801, CCR S-2.
         # All eight reports: a floored file missing from all, or in two, fails.
-        run: node scripts/ci/mutation-file-floor.mjs reports/mutation-group-map/mutation.json reports/mutation-group-landing/mutation.json reports/mutation-group-guards/mutation.json reports/mutation-group-render/mutation.json reports/mutation-group-forms/mutation.json reports/mutation-group-tiles/mutation.json reports/mutation-group-zip/mutation.json reports/mutation-group-language/mutation.json
+        run: node scripts/ci/mutation-file-floor.mjs reports/mutation-group-map/mutation.json reports/mutation-group-landing/mutation.json reports/mutation-group-catalog/mutation.json reports/mutation-group-guards/mutation.json reports/mutation-group-render/mutation.json reports/mutation-group-forms/mutation.json reports/mutation-group-tiles/mutation.json reports/mutation-group-zip/mutation.json reports/mutation-group-language/mutation.json
 
   # OSE-1695 — mutation testing of the CI security rules in scripts/ci (repository root, not the
   # Worker). A surviving mutant in branch-push-secret-exposure.mjs means the test that keeps

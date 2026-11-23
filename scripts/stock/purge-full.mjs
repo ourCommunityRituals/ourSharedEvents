@@ -48,6 +48,7 @@ export const PURGE_TABLES = [
   { table: 'scan_node_returns', column: 'event_id', ids: 'event' }, // 0062
   { table: 'scan_aggregates', column: 'event_id', ids: 'event' }, // 0006
   { table: 'scan_cell_aggregates', column: 'event_id', ids: 'event' }, // 0087
+  { table: 'scan_poster_hour_tally', column: 'poster_deployment_id', ids: 'poster' }, // 0117
   { table: 'anon_id_returns', column: 'venue_id', ids: 'event' }, // 0031 (venue_id → events.id)
   { table: 'sponsor_displays', column: 'event_id', ids: 'event' }, // 0102
   { table: 'sponsor_displays', column: 'sponsor_id', ids: 'sponsor' }, // 0102 (→ sponsor_business.id)

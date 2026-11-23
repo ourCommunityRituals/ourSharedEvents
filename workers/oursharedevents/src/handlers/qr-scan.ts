@@ -54,6 +54,7 @@
 import { eventLiveSql } from '../domain/event-state';
 import { isValidQrTokenShape } from '../lib/qr-token';
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
+import { scanHourOf, takePosterHourPlace } from '../lib/poster-hour-cap';
 import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-buffer';
 import { scanNodeKey } from '../lib/scan-node-key';
 import { issueVotePass, votePageTarget, VOTE_CODE_TYPE } from '../lib/vote-pass';
@@ -157,13 +158,14 @@ export async function handleQrScan(
   // no cookie, and no event id in the Location (eventLiveSql, the shared test).
   const lookupDeployment = () =>
     env.DB.prepare(
-      `SELECT pd.id AS id, pd.event_id AS event_id FROM poster_deployments pd
+      `SELECT pd.id AS id, pd.event_id AS event_id, pd.is_vote_code AS is_vote_code
+         FROM poster_deployments pd
          JOIN events e ON e.id = pd.event_id
         WHERE pd.qr_token = ? AND pd.is_active = 1 AND ${eventLiveSql('e')} LIMIT 1`
     )
       .bind(qrToken)
-      .first<{ id: string; event_id: string }>();
-  let deployment: { id: string; event_id: string } | null;
+      .first<{ id: string; event_id: string; is_vote_code: number | null }>();
+  let deployment: { id: string; event_id: string; is_vote_code: number | null } | null;
   try {
     deployment = await lookupDeployment().catch(() => lookupDeployment());
   } catch (err) {
@@ -203,7 +205,7 @@ export async function handleQrScan(
   const nowDate = new Date(nowMs);
 
   // Anonymous ID: read from cookie or generate new one.
-  const { anonId, isNew } = getOrCreateAnonId(request);
+  const { anonId, isNew, cookieValue } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
   // OSE-1659: what is stored and queued is the keyed scan id, never the cookie
   // value. Null without the pepper: the scan still counts, with no id.
   const scanKey = await scanNodeKey(anonId, env.ANON_ID_HASH_PEPPER);
@@ -242,7 +244,19 @@ export async function handleQrScan(
   // releases it, below).
   let scanStored = isDuplicate;
 
-  if (!isDuplicate) {
+  // OSE-1496 (owner, 2026-11-23): at most POSTER_HOUR_CAP scans per poster per
+  // hour are counted, whatever cookie a caller sends. A duplicate takes no
+  // place. Past the cap the visitor is sent on as usual and nothing is stored.
+  // The room's vote code is not capped (lib/poster-hour-cap.ts).
+  let overCap = false;
+  if (!isDuplicate && deployment.is_vote_code !== 1) {
+    overCap = !(await takePosterHourPlace(env.DB, deploymentId, scanHourOf(scanBucket(nowDate))));
+    if (overCap) {
+      console.log(JSON.stringify({ type: 'SCAN_NOT_COUNTED', reason: 'poster_hour_cap' }));
+    }
+  }
+
+  if (!isDuplicate && !overCap) {
     const bucket = scanBucket(nowDate);
     // TL-078: the browser-name hash is only the fallback for a scan with no
     // keyed id. With the id, the browser name is not read at all.
@@ -328,5 +342,5 @@ export async function handleQrScan(
   });
 
   // Set anon_id cookie on the redirect if the visitor is new (first scan ever).
-  return isNew ? setAnonCookie(redirectResponse, anonId) : redirectResponse;
+  return isNew ? setAnonCookie(redirectResponse, cookieValue) : redirectResponse;
 }
