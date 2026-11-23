@@ -24,6 +24,7 @@
  * Data source: D1 database (DB binding)
  */
 
+import { isBusinessKind } from '../lib/business-kinds.js';
 import { corsHeaders } from '../lib/cors';
 import { isJsonContentType } from '../lib/content-type';
 import {
@@ -301,7 +302,7 @@ export async function handleAdminListSponsors(
   const cols = `sb.id AS id, sp.event_id AS event_id, sb.name AS name,
                 sb.display_name AS display_name, sb.address_line AS address_line,
                 sb.contact_phone AS contact_phone, sb.contact_email AS contact_email,
-                sb.header_text AS header_text, sb.header_image_url AS header_image_url,
+                sb.header_text AS header_text, sb.header_image_url AS header_image_url, sb.business_kind AS business_kind,
                 la.url AS logo_url, lc.url AS sidebar_logo_url,
                 sb.website_url AS website_url, COALESCE(sp.tier, sb.tier) AS tier,
                 '[]' AS placement_formats, sp.click_token AS click_token,
@@ -465,7 +466,7 @@ export async function handleAdminGetSponsor(
       `SELECT sb.id AS id, sp.event_id AS event_id, sb.name AS name,
               sb.display_name AS display_name, sb.address_line AS address_line,
               sb.contact_phone AS contact_phone, sb.contact_email AS contact_email,
-              sb.header_text AS header_text, sb.header_image_url AS header_image_url,
+              sb.header_text AS header_text, sb.header_image_url AS header_image_url, sb.business_kind AS business_kind,
               la.url AS logo_url, lc.url AS sidebar_logo_url,
               sb.website_url AS website_url, COALESCE(sp.tier, sb.tier) AS tier,
               '[]' AS placement_formats, sp.click_token AS click_token,
@@ -522,6 +523,22 @@ function checkHeaderImage(raw: unknown, rid: string): string | null | Response {
     );
   }
   return v.url;
+}
+
+/**
+ * OSE-2207 (0116): the sponsor's kind of business, picked by icon in Create
+ * Sponsor. Optional; '' / null clears it; anything else must be on the list in
+ * lib/business-kinds.ts, exactly. Returns the stored value or an error response.
+ */
+function checkBusinessKind(raw: unknown, rid: string): string | null | Response {
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (isBusinessKind(raw)) return raw;
+  return errorResponse(
+    'INVALID_BUSINESS_KIND',
+    'Kind of business must be one of the listed kinds, or left out',
+    400,
+    rid
+  );
 }
 
 export async function handleAdminCreateSponsor(
@@ -598,6 +615,8 @@ export async function handleAdminCreateSponsor(
   // ever served through the consent-gated logo proxy (?slot=header).
   const headerImage = checkHeaderImage(body.header_image_url, rid);
   if (headerImage instanceof Response) return headerImage;
+  const businessKind = checkBusinessKind(body.business_kind, rid);
+  if (businessKind instanceof Response) return businessKind;
   // OSE-670/OSE-799 (#25): placement is UNIFORM and non-purchasable. The client
   // CANNOT choose a named slot — that was the covenant violation. sponsor_placement
   // carries NO placement_formats column at all now (the split retired it); the
@@ -708,9 +727,9 @@ export async function handleAdminCreateSponsor(
     env.DB.prepare(
       `INSERT INTO sponsor_business
          (id, brand_id, name, website_url, tier, display_name, address_line,
-          contact_phone, contact_email, header_text, header_image_url,
+          contact_phone, contact_email, header_text, header_image_url, business_kind,
           lat, lon, h3_res9, h3_res7, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       businessId,
       brandId,
@@ -723,6 +742,7 @@ export async function handleAdminCreateSponsor(
       card.contact_email,
       card.header_text,
       headerImage,
+      businessKind,
       sponsorLat,
       sponsorLon,
       sponsorH3Res9,
@@ -935,6 +955,13 @@ export async function handleAdminUpdateSponsor(
     if (headerImage instanceof Response) return headerImage;
     businessSets.push('header_image_url = ?');
     businessVals.push(headerImage);
+  }
+  // OSE-2207 (0116): the kind of business; '' / null clears it.
+  if ('business_kind' in body) {
+    const kind = checkBusinessKind(body.business_kind, rid);
+    if (kind instanceof Response) return kind;
+    businessSets.push('business_kind = ?');
+    businessVals.push(kind);
   }
 
   for (const [field, spec] of Object.entries(fieldSpecs)) {

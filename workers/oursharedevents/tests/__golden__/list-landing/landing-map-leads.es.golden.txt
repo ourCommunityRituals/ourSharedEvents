@@ -344,19 +344,19 @@
 #mod-online:checked ~ .toggles label[for='mod-online']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#mod-online:checked ~ .toggles label[for='mod-online']::before{content:'\2713';margin-inline-end:.35rem}#mod-online:focus-visible ~ .toggles label[for='mod-online']{outline:3px solid var(--accent);outline-offset:2px}#mod-online:checked ~ .area .event-card:not(.modality-online),#mod-online:checked ~ .area .amap-f:not(.modality-online){display:none}
 #mod-inperson:checked ~ .toggles label[for='mod-inperson']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#mod-inperson:checked ~ .toggles label[for='mod-inperson']::before{content:'\2713';margin-inline-end:.35rem}#mod-inperson:focus-visible ~ .toggles label[for='mod-inperson']{outline:3px solid var(--accent);outline-offset:2px}#mod-inperson:checked ~ .area .event-card:not(.modality-inperson),#mod-inperson:checked ~ .area .amap-f:not(.modality-inperson){display:none}
 </style><style data-testid="area-type-css">
-#type-all:checked ~ .toggles label[for='type-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-all:checked ~ .toggles label[for='type-all']::before{content:'\2713';margin-inline-end:.35rem}#type-all:focus-visible ~ .toggles label[for='type-all']{outline:3px solid var(--accent);outline-offset:2px}
-#cat-rec:checked ~ .toggles label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-rec:checked ~ .toggles label[for='cat-rec']::before{content:'\2713';margin-inline-end:.35rem}#cat-rec:focus-visible ~ .toggles label[for='cat-rec']{outline:3px solid var(--accent);outline-offset:2px}#cat-rec:checked ~ .area .event-card:not(.cat-rec),#cat-rec:checked ~ .area .amap-f:not(.cat-rec){display:none}
-#cat-ent:checked ~ .toggles label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .toggles label[for='cat-ent']::before{content:'\2713';margin-inline-end:.35rem}#cat-ent:focus-visible ~ .toggles label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent),#cat-ent:checked ~ .area .amap-f:not(.cat-ent){display:none}
-#cat-mkt:checked ~ .toggles label[for='cat-mkt']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-mkt:checked ~ .toggles label[for='cat-mkt']::before{content:'\2713';margin-inline-end:.35rem}#cat-mkt:focus-visible ~ .toggles label[for='cat-mkt']{outline:3px solid var(--accent);outline-offset:2px}#cat-mkt:checked ~ .area .event-card:not(.cat-mkt),#cat-mkt:checked ~ .area .amap-f:not(.cat-mkt){display:none}
-#cat-lit:checked ~ .toggles label[for='cat-lit']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-lit:checked ~ .toggles label[for='cat-lit']::before{content:'\2713';margin-inline-end:.35rem}#cat-lit:focus-visible ~ .toggles label[for='cat-lit']{outline:3px solid var(--accent);outline-offset:2px}#cat-lit:checked ~ .area .event-card:not(.cat-lit),#cat-lit:checked ~ .area .amap-f:not(.cat-lit){display:none}
-</style><style>@media(max-width:599.98px){.toggle-radio{width:1px;height:1px;margin:0}#filters-open:not(:checked)~.toggle-radio,#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn,#filters-open{display:none}}</style><style>button.disc-chip{font-family:inherit}button.disc-chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.area-tabs .disc-chip.active{background:var(--surface);border:2px solid var(--accent);color:var(--text)}.area-tabs .disc-chip.active::before{content:none}.area-tab{flex:1 1 100%;margin:.25rem 0}.near-d{white-space:nowrap}</style>
+#type-all:checked ~ .icon-slider label[for='type-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-all:checked ~ .icon-slider label[for='type-all'] .icon-slider-icon{color:inherit}#type-all:checked ~ .icon-slider label[for='type-all'] .icon-slider-text::before{content:'\2713\00a0'}#type-all:focus-visible ~ .icon-slider label[for='type-all']{outline:3px solid var(--accent);outline-offset:2px}
+#cat-rec:checked ~ .icon-slider label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-rec:checked ~ .icon-slider label[for='cat-rec'] .icon-slider-icon{color:inherit}#cat-rec:checked ~ .icon-slider label[for='cat-rec'] .icon-slider-text::before{content:'\2713\00a0'}#cat-rec:focus-visible ~ .icon-slider label[for='cat-rec']{outline:3px solid var(--accent);outline-offset:2px}#cat-rec:checked ~ .area .event-card:not(.cat-rec),#cat-rec:checked ~ .area .amap-f:not(.cat-rec){display:none}
+#cat-ent:checked ~ .icon-slider label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .icon-slider label[for='cat-ent'] .icon-slider-icon{color:inherit}#cat-ent:checked ~ .icon-slider label[for='cat-ent'] .icon-slider-text::before{content:'\2713\00a0'}#cat-ent:focus-visible ~ .icon-slider label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent),#cat-ent:checked ~ .area .amap-f:not(.cat-ent){display:none}
+#cat-mkt:checked ~ .icon-slider label[for='cat-mkt']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-mkt:checked ~ .icon-slider label[for='cat-mkt'] .icon-slider-icon{color:inherit}#cat-mkt:checked ~ .icon-slider label[for='cat-mkt'] .icon-slider-text::before{content:'\2713\00a0'}#cat-mkt:focus-visible ~ .icon-slider label[for='cat-mkt']{outline:3px solid var(--accent);outline-offset:2px}#cat-mkt:checked ~ .area .event-card:not(.cat-mkt),#cat-mkt:checked ~ .area .amap-f:not(.cat-mkt){display:none}
+#cat-lit:checked ~ .icon-slider label[for='cat-lit']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-lit:checked ~ .icon-slider label[for='cat-lit'] .icon-slider-icon{color:inherit}#cat-lit:checked ~ .icon-slider label[for='cat-lit'] .icon-slider-text::before{content:'\2713\00a0'}#cat-lit:focus-visible ~ .icon-slider label[for='cat-lit']{outline:3px solid var(--accent);outline-offset:2px}#cat-lit:checked ~ .area .event-card:not(.cat-lit),#cat-lit:checked ~ .area .amap-f:not(.cat-lit){display:none}
+</style><style>@media(max-width:599.98px){.toggle-radio{width:1px;height:1px;margin:0}#filters-open:not(:checked)~.toggle-radio:not([name=type]),#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn,#filters-open{display:none}}</style><style>button.disc-chip{font-family:inherit}button.disc-chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.area-tabs .disc-chip.active{background:var(--surface);border:2px solid var(--accent);color:var(--text)}.area-tabs .disc-chip.active::before{content:none}.area-tab{flex:1 1 100%;margin:.25rem 0}.near-d{white-space:nowrap}</style>
+        <div class="icon-slider" data-icon-slider data-testid="toggle-type"><p class="icon-slider-heading" id="toggle-type-label">Tipos de eventos</p><div class="icon-slider-track" role="group" aria-labelledby="toggle-type-label" tabindex="0"><label class="icon-slider-item" for="type-all" data-testid="type-item-all"><svg class="icon-slider-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg><span class="icon-slider-text">Todos los tipos</span></label><label class="icon-slider-item" for="cat-rec" data-testid="type-item-cat-rec"><svg class="icon-slider-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5v17M6.2 5.8c2.6 2.4 2.6 10 0 12.4M17.8 5.8c-2.6 2.4-2.6 10 0 12.4"/></svg><span class="icon-slider-text">Sports &amp; Recreation</span></label><label class="icon-slider-item" for="cat-ent" data-testid="type-item-cat-ent"><svg class="icon-slider-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/><path d="M10 7.8a2 2 0 1 1 2.6 1.9c-.4.2-.6.5-.6.9v.4"/><circle cx="12" cy="13" r=".6" fill="currentColor"/></svg><span class="icon-slider-text">Entertainment &amp; Trivia</span></label><label class="icon-slider-item" for="cat-mkt" data-testid="type-item-cat-mkt"><svg class="icon-slider-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 9.5 5 4h14l1.5 5.5"/><path d="M3.5 9.5a2.1 2.1 0 0 0 4.25 0 2.1 2.1 0 0 0 4.25 0 2.1 2.1 0 0 0 4.25 0 2.1 2.1 0 0 0 4.25 0"/><path d="M5 11.5V20h14v-8.5M10 20v-4.5h4V20"/></svg><span class="icon-slider-text">Neighborhood Markets</span></label><label class="icon-slider-item" for="cat-lit" data-testid="type-item-cat-lit"><svg class="icon-slider-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 6.5C10.3 5 7.8 4.5 4 4.5v13c3.8 0 6.3.5 8 2 1.7-1.5 4.2-2 8-2v-13c-3.8 0-6.3.5-8 2zM12 6.5v13"/></svg><span class="icon-slider-text">Literary &amp; Book Clubs</span></label></div><div class="icon-slider-nav" hidden><button type="button" class="icon-slider-arrow" data-step="-1" aria-label="Ver opciones anteriores" data-testid="toggle-type-prev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button><button type="button" class="icon-slider-arrow" data-step="1" aria-label="Ver más opciones" data-testid="toggle-type-next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7"/></svg></button></div></div>
         <div class="toggles" data-testid="area-toggles">
           <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">Vista</legend><label class="disc-chip" for="view-list">Lista</label><label class="disc-chip" for="view-map">Mapa</label></fieldset>
           <div class="disc-chips area-filters-btn"><label class="disc-chip" for="filters-open" data-testid="area-filters-btn">Filtros</label></div>
         </div>
         <div class="toggles area-filters" data-testid="area-filters" data-tabs="Filtrar eventos" data-tabs-on="filtro activo">
           <div class="area-tab" data-tab="when" data-tab-label="Cuándo"><fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">Cuándo</legend><label class="disc-chip" for="win-weekend">Este fin de semana</label><label class="disc-chip" for="win-week">Próximos 7 días</label><label class="disc-chip" for="win-month">Este mes</label><label class="disc-chip" for="win-next-90">Próximos 90 días</label></fieldset></div>
-          <div class="area-tab" data-tab="type" data-tab-label="Tipo"><fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">Tipo</legend><label class="disc-chip" for="type-all">Todos los tipos</label><label class="disc-chip" for="cat-rec">Sports &amp; Recreation</label><label class="disc-chip" for="cat-ent">Entertainment &amp; Trivia</label><label class="disc-chip" for="cat-mkt">Neighborhood Markets</label><label class="disc-chip" for="cat-lit">Literary &amp; Book Clubs</label></fieldset></div>
           <div class="area-tab" data-tab="where" data-tab-label="Dónde"><fieldset class="disc-chips" data-testid="toggle-modality"><legend class="disc-label">Dónde</legend><label class="disc-chip" for="mod-all">Todos</label><label class="disc-chip" for="mod-online">En línea</label><label class="disc-chip" for="mod-inperson">En persona</label></fieldset></div>
           <div class="area-tab" data-tab="near" data-tab-label="Cerca de mí" data-testid="near-panel" hidden data-locating="Buscando tu ubicación..." data-off="La ubicación está desactivada, así que no se puede usar la distancia." data-shown="Mostrando eventos a menos de %d mi, del más cercano al más lejano. Se omiten los eventos sin lugar en el mapa." data-none="No hay eventos con lugar en el mapa a menos de %d mi. Prueba una distancia mayor." data-away="a unas %d mi">
             <fieldset id="near-radius" class="disc-chips near-chips" data-testid="near-radius"><legend class="disc-label">Distancia desde donde estás, en millas</legend><input type="radio" name="near" id="near-0" value="0" class="toggle-radio" checked /><label class="disc-chip" for="near-0">Cualquier distancia</label><input type="radio" name="near" id="near-2" value="2" class="toggle-radio" /><label class="disc-chip" for="near-2">A menos de 2 mi</label><input type="radio" name="near" id="near-5" value="5" class="toggle-radio" /><label class="disc-chip" for="near-5">A menos de 5 mi</label><input type="radio" name="near" id="near-10" value="10" class="toggle-radio" /><label class="disc-chip" for="near-10">A menos de 10 mi</label><input type="radio" name="near" id="near-25" value="25" class="toggle-radio" /><label class="disc-chip" for="near-25">A menos de 25 mi</label><input type="radio" name="near" id="near-50" value="50" class="toggle-radio" /><label class="disc-chip" for="near-50">A menos de 50 mi</label></fieldset>
@@ -769,6 +769,61 @@
   document.addEventListener('change', marks);
   select(0, false);
   marks();
+})();</script><script nonce="N">(function () {
+  var all = document.querySelectorAll('[data-icon-slider]');
+  for (var i = 0; i < all.length; i++) wire(all[i]);
+  function wire(box) {
+    var track = box.querySelector('.icon-slider-track');
+    var nav = box.querySelector('.icon-slider-nav');
+    if (!track || !nav) return;
+    var EDGE = 6;
+    var prev = nav.querySelector('[data-step="-1"]');
+    var next = nav.querySelector('[data-step="1"]');
+    var rtl = getComputedStyle(track).direction === 'rtl';
+    function pos() { return Math.abs(track.scrollLeft); }
+    function update() {
+      var room = track.scrollWidth - track.clientWidth;
+      // A few px of slack: the snap and the track's own padding can leave the
+      // row 2 px from either end, which is still the end.
+      nav.hidden = room <= EDGE;
+      prev.disabled = pos() <= EDGE;
+      next.disabled = pos() >= room - EDGE;
+    }
+    function step(dir) {
+      var by = Math.max(track.clientWidth * 0.8, 100) * dir * (rtl ? -1 : 1);
+      track.scrollBy({ left: by, behavior: 'smooth' });
+    }
+    prev.addEventListener('click', function () { step(-1); });
+    next.addEventListener('click', function () { step(1); });
+    track.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    // A radio kept elsewhere: when it takes focus, its label comes into view.
+    var labels = track.querySelectorAll('label[for]');
+    for (var j = 0; j < labels.length; j++) {
+      (function (label) {
+        var radio = document.getElementById(label.getAttribute('for'));
+        if (radio) radio.addEventListener('focus', function () {
+          label.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        });
+      })(labels[j]);
+    }
+    // Button items: at most one chosen, its value in the slider's input. A tap on
+    // the chosen one clears the choice (the field is optional where it is used).
+    var input = box.querySelector('[data-icon-slider-value]');
+    var buttons = track.querySelectorAll('button[data-value]');
+    for (var k = 0; k < buttons.length; k++) {
+      buttons[k].addEventListener('click', function (ev) {
+        var b = ev.currentTarget;
+        var on = b.getAttribute('aria-pressed') !== 'true';
+        for (var m = 0; m < buttons.length; m++) buttons[m].setAttribute('aria-pressed', String(on && buttons[m] === b));
+        if (input) {
+          input.value = on ? b.getAttribute('data-value') : '';
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    }
+    update();
+  }
 })();</script>
       </section>
       

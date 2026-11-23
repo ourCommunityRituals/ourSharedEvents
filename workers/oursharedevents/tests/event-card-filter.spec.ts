@@ -192,9 +192,11 @@ describe('OSE-1520 | one filter control, four or five chips', () => {
     ).html;
     const legend = (testid: string) =>
       mixed.match(new RegExp(`data-testid="${testid}"><legend[^>]*>([^<]*)<`))?.[1] ?? '';
-    expect(legend('toggle-type')).toBe('Type');
+    // The category choice is the icon slider (OSE-2207): a visible heading names it.
+    expect(mixed).toMatch(
+      /data-testid="toggle-type"><p class="icon-slider-heading" id="toggle-type-label">Kinds of events<\/p>/
+    );
     expect(legend('toggle-modality')).toBe('Where');
-    expect(mixed).not.toMatch(/data-testid="toggle-type"><legend>/); // a class, not the sr-only default
   });
 
   test('keyboard focus is visible on a landing filter (the radios are not next to their labels)', () => {

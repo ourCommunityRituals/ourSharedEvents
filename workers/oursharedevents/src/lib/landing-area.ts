@@ -87,6 +87,7 @@ import { fmt, msg } from './i18n/catalog.js';
 import { AREA_FILTERS_STYLE, FILTERS_TOGGLE_ID } from './area-filters-style.js';
 import { AREA_TABS_STYLE } from './area-tabs-style.js';
 import { AREA_TABS_SCRIPT } from './area-tabs-script.js';
+import { ICON_SLIDER_SCRIPT, renderIconSlider } from './category-slider.js';
 import { areaPager } from './area-pager.js';
 import { DEFAULT_LANG, type Lang } from './i18n/languages.js';
 import { OTHER_CATEGORY_CODE, type TypeCategory } from './event-type-catalog.js';
@@ -196,12 +197,17 @@ function categoryOf(
   item: LandingAreaItem,
   lang: Lang,
   typeCategories: ReadonlyMap<string, TypeCategory> | undefined
-): { slug: string; label: string; order: number } {
+): { slug: string; code: string; label: string; order: number } {
   const cat = typeCategories?.get(str(item.event_type_id));
   if (!cat || cat.code === OTHER_CATEGORY_CODE) {
-    return { slug: OTHER_SLUG, label: msg(lang, 'area.otherType'), order: Infinity };
+    return {
+      slug: OTHER_SLUG,
+      code: OTHER_CATEGORY_CODE,
+      label: msg(lang, 'area.otherType'),
+      order: Infinity,
+    };
   }
-  return { slug: `cat-${slugify(cat.code)}`, label: cat.name, order: cat.order };
+  return { slug: `cat-${slugify(cat.code)}`, code: cat.code, label: cat.name, order: cat.order };
 }
 
 function modalityOf(item: LandingAreaItem): 'online' | 'inperson' {
@@ -395,7 +401,7 @@ export function renderLandingArea(
   if (live.length === 0)
     return zoom ? renderEmptyZoom(zoom, now, lang) : renderEmptyLandingArea(lang);
 
-  const categoryMap = new Map<string, { label: string; order: number }>(); // by slug
+  const categoryMap = new Map<string, { code: string; label: string; order: number }>(); // by slug
   const modalities = new Set<string>();
   // How many listed events are over before dark (owner, 2026-11-18).
   let daylightCount = 0;
@@ -415,7 +421,11 @@ export function renderLandingArea(
       for (const w of windows) filledWindows.add(w);
 
       const category = categoryOf(e, lang, opts?.typeCategories);
-      categoryMap.set(category.slug, { label: category.label, order: category.order });
+      categoryMap.set(category.slug, {
+        code: category.code,
+        label: category.label,
+        order: category.order,
+      });
       const modality = modalityOf(e);
       modalities.add(modality);
       const classes = [...windows, category.slug, 'product-ose', `modality-${modality}`];
@@ -444,7 +454,7 @@ export function renderLandingArea(
   // Create Event picker does; "Other" last.
   const categories = [...categoryMap.entries()]
     .sort(([, a], [, b]) => a.order - b.order || a.label.localeCompare(b.label))
-    .map(([slug, { label }]) => ({ slug, label }));
+    .map(([slug, { code, label }]) => ({ slug, code, label }));
 
   // Once the area has been recorded at LIST_MAX (nightly, lib/corridor-latch) it
   // keeps leading with the map while it has anything to show.
@@ -504,7 +514,8 @@ export function renderLandingArea(
   });
   return {
     html,
-    categories,
+    // The icon key stays inside the markup; callers see slug and name.
+    categories: categories.map(({ slug, label }) => ({ slug, label })),
     windowCount,
     defaultView,
     leadsWithMap,
@@ -546,6 +557,21 @@ function chipRules(id: string): string {
 }
 
 /**
+ * The chosen look and the keyboard focus ring of an icon slider item whose radio
+ * sits before the slider (lib/category-slider.ts). Tokens only; a tick before the
+ * name says "chosen" without colour (WCAG 1.4.1).
+ */
+function sliderRules(id: string): string {
+  const label = `.icon-slider label[for='${id}']`;
+  return (
+    `#${id}:checked ~ ${label}{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}` +
+    `#${id}:checked ~ ${label} .icon-slider-icon{color:inherit}` +
+    `#${id}:checked ~ ${label} .icon-slider-text::before{content:'\\2713\\00a0'}` +
+    `#${id}:focus-visible ~ ${label}{outline:3px solid var(--accent);outline-offset:2px}`
+  );
+}
+
+/**
  * The chosen look and the focus ring of a "Near me" chip. Its radio is the label's
  * immediate previous sibling, so the rules are adjacent-sibling ones; tokens only.
  */
@@ -567,7 +593,7 @@ function hide(id: string, cls: string): string {
 
 function buildAreaMarkup(args: {
   cards: string;
-  categories: { slug: string; label: string }[];
+  categories: { slug: string; code: string; label: string }[];
   defaultView: 'list' | 'map';
   mapHtml: string;
   /** Both online and in-person events are listed, so the Where choice can differ. */
@@ -637,8 +663,8 @@ function buildAreaMarkup(args: {
   // carries the one class of its category, so a category's rule keeps every
   // type under it.
   const typeCss = [
-    chipRules('type-all'),
-    ...categories.map((c) => chipRules(c.slug) + hide(c.slug, c.slug)),
+    sliderRules('type-all'),
+    ...categories.map((c) => sliderRules(c.slug) + hide(c.slug, c.slug)),
   ].join('\n');
   const typeStyle = showTypes ? `<style data-testid="area-type-css">\n${typeCss}\n</style>` : '';
 
@@ -646,10 +672,32 @@ function buildAreaMarkup(args: {
   // View and When say what they are to assistive tech; Type and Where are the
   // refinements, so they carry a visible label (the old bar had four groups,
   // two of them unlabelled, such as "All / OSE / Hybrid").
-  const typePills = showTypes
-    ? `<fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">${msg(lang, 'area.type')}</legend>${pill('type-all', msg(lang, 'area.allTypes'))}${categories
-        .map((c) => pill(c.slug, escapeHtml(c.label)))
-        .join('')}</fieldset>`
+  // The category choice is the icon slider (OSE-2207, owner 2026-11-22): always
+  // on screen above the cards, never folded behind Filters, one picture per
+  // category. Its items are the labels of the type radios above, so the radios
+  // still do the filtering and nothing is stored.
+  const typeSlider = showTypes
+    ? renderIconSlider({
+        label: msg(lang, 'area.kinds'),
+        showLabel: true,
+        testid: 'toggle-type',
+        prevLabel: msg(lang, 'slider.prev'),
+        nextLabel: msg(lang, 'slider.next'),
+        items: [
+          {
+            icon: 'ALL',
+            text: msg(lang, 'area.allTypes'),
+            forId: 'type-all',
+            testid: 'type-item-all',
+          },
+          ...categories.map((c) => ({
+            icon: c.code,
+            text: c.label,
+            forId: c.slug,
+            testid: `type-item-${c.slug}`,
+          })),
+        ],
+      })
     : '';
   const modPills = mixedModality
     ? `<fieldset class="disc-chips" data-testid="toggle-modality"><legend class="disc-label">${msg(lang, 'area.where')}</legend>${pill('mod-all', msg(lang, 'area.all'))}${pill('mod-online', msg(lang, 'area.online'))}${pill('mod-inperson', msg(lang, 'area.inPerson'))}</fieldset>`
@@ -669,7 +717,6 @@ function buildAreaMarkup(args: {
         </div>
         <div class="toggles area-filters" data-testid="area-filters" data-tabs="${escapeHtml(msg(lang, 'area.tabs'))}" data-tabs-on="${escapeHtml(msg(lang, 'area.tabsOn'))}">
           ${tab('when', msg(lang, 'disc.when'), `<fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">${msg(lang, 'disc.when')}</legend>${LANDING_WINDOWS.map((w) => pill(`win-${w}`, discoveryChipLabel(w, lang))).join('')}</fieldset>`)}
-          ${showTypes ? tab('type', msg(lang, 'area.type'), typePills) : ''}
           ${modPills || dayPills ? tab('where', msg(lang, 'area.where'), `${modPills}${dayPills}`) : ''}
           ${nearPanel(lang)}
         </div>`;
@@ -697,8 +744,9 @@ function buildAreaMarkup(args: {
   const filtersToggle = `<input type="checkbox" id="${FILTERS_TOGGLE_ID}" class="toggle-radio" />`;
   return `${viewRadios}${filtersToggle}${winRadios}${typeRadios}${modRadios}${dayRadios}
         ${winStyle}${typeStyle}${AREA_FILTERS_STYLE}${AREA_TABS_STYLE}
+        ${typeSlider}
         ${toggles}
-        ${area}${AREA_TABS_SCRIPT}`;
+        ${area}${AREA_TABS_SCRIPT}${showTypes ? ICON_SLIDER_SCRIPT : ''}`;
 }
 
 /**

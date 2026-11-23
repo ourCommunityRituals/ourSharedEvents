@@ -8,6 +8,8 @@
  *   Replace the embedded strings with a fetch() call to Firebase Hosting URL.
  */
 
+import { ICON_SLIDER_SCRIPT, renderIconSlider } from '../lib/category-slider.js';
+import { BUSINESS_KINDS, BUSINESS_KIND_ICONS } from '../lib/business-kinds.js';
 import { fetchNextEventsAtVenue, MAX_NEXT_AT_VENUE, type NextEventRow } from '../lib/next-at-venue';
 import { isGoogleMapsConfigured } from '../lib/maps';
 import { HARDENING_HEADERS, LANDING_PERMISSIONS_POLICY } from '../lib/security-headers';
@@ -2777,8 +2779,36 @@ export async function handleAdminPosterPreviewPage(
   });
 }
 
+/**
+ * OSE-2207 (owner 2026-11-22): Create Sponsor's kind of business, picked by
+ * icon. The admin page is English, like the rest of the sponsor form.
+ */
+export const SPON_KIND_MARKER = '<!--OCR_SPON_KIND-->';
+const SPON_KIND_SLIDER =
+  renderIconSlider({
+    label: 'Kind of business (optional)',
+    showLabel: true,
+    testid: 'spon-kind',
+    name: 'business_kind',
+    selected: '',
+    prevLabel: 'Show earlier kinds',
+    nextLabel: 'Show more kinds',
+    icons: BUSINESS_KIND_ICONS,
+    items: BUSINESS_KINDS.map((k) => ({
+      icon: k.value,
+      text: k.label,
+      value: k.value,
+      testid: `spon-kind-${k.value}`,
+    })),
+  }) + ICON_SLIDER_SCRIPT;
+
 export function handleAdminPage(_env: PagesEnv): Response {
-  const res = html(injectLegalFooter(ADMIN_HTML, 'admin'));
+  const res = html(
+    injectLegalFooter(
+      ADMIN_HTML.replace(SPON_KIND_MARKER, () => SPON_KIND_SLIDER),
+      'admin'
+    )
+  );
   // Not kept in a browser or shared-device cache, so it is not shown again after sign-out.
   res.headers.set('Cache-Control', 'no-store');
   return res;
