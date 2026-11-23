@@ -23,6 +23,7 @@ import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { roundForPublish } from '../src/lib/count-floor';
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
+import { clearPosterHours, seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
   DB: D1Database;
@@ -90,6 +91,7 @@ async function clearTables(): Promise<void> {
   await db.prepare(`DELETE FROM scan_cell_aggregates WHERE event_id LIKE 'test-evt-rrf-%'`).run();
   await db.prepare(`UPDATE events SET series_id = NULL WHERE id LIKE 'test-evt-rrf-%'`).run();
   await db.prepare(`DELETE FROM event_series WHERE id LIKE 'ser-rrf-%'`).run();
+  await clearPosterHours(db, 'test-evt-rrf-');
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-rrf-%'`).run();
 }
 
@@ -202,7 +204,7 @@ describe('return_rate gates at the platform floor (K), not a private constant', 
     });
   }
 
-  test('exactly K distinct attendees: the sample size is published; a rate over nobody is not', async () => {
+  test('exactly K distinct attendees: the section is published without a sample size; a rate over nobody is not', async () => {
     const id = 'test-evt-rrf-atk';
     await seedEvent(id, CELL);
     await seedAnons(id, CORRIDOR_MAP_MIN_COUNT);
@@ -210,7 +212,9 @@ describe('return_rate gates at the platform floor (K), not a private constant', 
     const r = await buildSharedReport(tenv().DB, id);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.return_rate.sample_size).toBe(CORRIDOR_MAP_MIN_COUNT);
+    // OSE-1784: the sample size is never published (one people figure, from
+    // the posters).
+    expect(r.report.return_rate.sample_size).toBeNull();
     // Nobody came twice and nobody was seen elsewhere: 0 is under the floor like
     // 1 to 4, so neither rate is published. (This test used to expect both.)
     expect(r.report.return_rate.venue_pct).toBeNull();
@@ -232,7 +236,7 @@ describe('return_rate gates at the platform floor (K), not a private constant', 
     const r = await buildSharedReport(tenv().DB, id);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.return_rate.sample_size).toBe(CORRIDOR_MAP_MIN_COUNT);
+    expect(r.report.return_rate.sample_size).toBeNull(); // OSE-1784
     expect(r.report.return_rate.venue_pct).toBeNull();
     expect(r.report._meta.suppression_reasons.map((s) => s.field)).toContain(
       'return_rate.venue_pct'
@@ -271,8 +275,10 @@ describe('a published return rate never multiplies back to a group under the flo
         expect(r.ok).toBe(true);
         if (!r.ok) return;
         const { venue_pct, sample_size } = r.report.return_rate;
-        // Published rounded down to a multiple of 5 (OSE-2151).
-        expect(sample_size).toBe(roundForPublish(sample));
+        // OSE-1784: never published. The rate is still worked out from the
+        // rounded counts (OSE-2151), so a reader who learns the head count some
+        // other way still cannot multiply it back to a group under the floor.
+        expect(sample_size).toBeNull();
         // Both sides at least K; "everyone came twice" (the rest is 0) is
         // withheld like 1 to 4 (OSE-1649 item 3).
         const safe = twice >= K && sample - twice >= K;
@@ -287,7 +293,7 @@ describe('a published return rate never multiplies back to a group under the flo
           expect(venue_pct, `${twice} of ${sample} must be withheld`).toBeNull();
         }
         if (venue_pct !== null) {
-          const g = groups(venue_pct, sample_size as number);
+          const g = groups(venue_pct, roundForPublish(sample));
           expect(g.counted).toBeGreaterThanOrEqual(K);
           expect(g.rest >= K, `rest of ${g.rest}`).toBe(true);
         }
@@ -435,21 +441,16 @@ describe('no below_min_sample_size detail prints an observed count', () => {
   // builder (as a template literal, and as string concatenation, which the
   // source gate in aggregate-only.invariant does not read), and with the
   // pre-fix loop ("area 1 of 6 suppressed ...", one line per area).
-  test('the launch-day map (no poster scans yet): one hidden-area line, naming only the floor, the same whether the head count is published or withheld', async () => {
+  test('the launch-day map (no map cells yet): one hidden-area line, naming only the floor, the same whether the head count is published or withheld', async () => {
     const seen: Array<{ hidden: number; detail: string | undefined }> = [];
     for (const [id, people] of [
       ['test-evt-rrf-map-shown', 20],
       ['test-evt-rrf-map-held', 3],
     ] as const) {
       await seedEvent(id, CELL);
-      await tenv()
-        .DB.prepare(
-          `INSERT INTO scan_aggregates
-             (id, event_id, bucket_date, bucket_hour, total_scans, distinct_agent_hashes, computed_at)
-           VALUES (?, ?, '2026-05-07', 19, ?, ?, datetime('now'))`
-        )
-        .bind(`sa-${id}`, id, people * 2, people)
-        .run();
+      // OSE-1784: the head count is the poster sum. The posters have scans but
+      // no map cells are materialized yet, so the map is the launch-day one.
+      await seedPosterHour(tenv().DB, id, 19, people);
 
       const r = await buildSharedReport(tenv().DB, id);
       expect(r.ok).toBe(true);

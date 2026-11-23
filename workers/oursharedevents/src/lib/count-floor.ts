@@ -307,10 +307,12 @@ export function floorCumulativeOfParts(
 }
 
 /**
- * The corridor baseline: distinct people in the 90 days and in the 30 days of a
- * (corridor, day, hour) bucket, published together (OSE-1751). The 90-day window
- * holds the 30-day one, so the two are a chain: published on their own, 112 and
- * 109 hand a reader the 3 people who were there only in days 31 to 90.
+ * The corridor baseline: the published poster figures of a (corridor, day, hour)
+ * bucket's events in the 90 days and in the 30 days, added up, published together
+ * (OSE-1751; a sum of poster figures since OSE-1784, 2026-11-23, before that
+ * distinct people). The 90-day window holds the 30-day one, so the two are a
+ * chain: published on their own, 112 and 109 hand a reader the 3 counted only in
+ * days 31 to 90.
  *
  * A window under CORRIDOR_BASELINE_MIN_SAMPLE is withheld, and the pair goes
  * through `floorPublishedChain`, so each value is rounded and any two published

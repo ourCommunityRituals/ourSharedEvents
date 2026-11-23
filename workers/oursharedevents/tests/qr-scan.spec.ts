@@ -561,7 +561,7 @@ describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
     }
   });
 
-  test('OSE-1988 | RAINY | KV get throws | dedup skipped, scan written, visitor sent to the event', async () => {
+  test('OSE-1784 | RAINY | KV get throws | scan not counted, visitor sent to the event', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const res = await handleQrScan(
@@ -572,13 +572,14 @@ describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
       expect(res.status).toBe(302);
       expect(res.headers.get('Location') ?? '').toContain(`/events/${TEST_EVENT_ID}`);
       expect(res.headers.get('Set-Cookie') ?? '').toContain('ose_anon=');
-      expect(await countScans(tenv().DB)).toBe(1);
+      // OSE-1784 (owner, 2026-11-23): no check, no count.
+      expect(await countScans(tenv().DB)).toBe(0);
     } finally {
       warnSpy.mockRestore();
     }
   });
 
-  test('OSE-1988 | RAINY | KV put throws | dedup skipped, scan written, visitor sent to the event', async () => {
+  test('OSE-1784 | RAINY | KV put throws | scan not counted, visitor sent to the event', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const res = await handleQrScan(
@@ -592,7 +593,60 @@ describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
       expect(res.headers.get('Location') ?? '').toContain(`/events/${TEST_EVENT_ID}`);
       // A returning visitor: still no new cookie on the blip path.
       expect(res.headers.get('Set-Cookie')).toBeNull();
-      expect(await countScans(tenv().DB)).toBe(1);
+      expect(await countScans(tenv().DB)).toBe(0);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('OSE-1784 | RAINY | KV get throws | the scan takes no place under the poster-hour cap', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await tenv().DB.prepare(`DELETE FROM scan_poster_hour_tally`).run();
+      await handleQrScan(
+        await makeRequest(VALID_QR_TOKEN),
+        makeEnv(kvThatThrows({ get: true })),
+        VALID_QR_TOKEN
+      );
+      const tally = await tenv()
+        .DB.prepare(`SELECT COALESCE(SUM(scans), 0) AS n FROM scan_poster_hour_tally`)
+        .first<{ n: number }>();
+      // A scan that is not counted must not use up a real visitor's place.
+      expect(tally?.n).toBe(0);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('OSE-1784 | RAINY | KV not bound at all | the scan is still written (a config gap, not a blip)', async () => {
+    const res = await handleQrScan(
+      await makeRequest(VALID_QR_TOKEN),
+      makeEnv(undefined),
+      VALID_QR_TOKEN
+    );
+    expect(res.status).toBe(302);
+    expect(await countScans(tenv().DB)).toBe(1);
+  });
+
+  test('OSE-1784 | RAINY | one person scans 5 times while KV fails | 0 counted, never a published 5', async () => {
+    const logged: string[] = [];
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation((...a) => {
+      logged.push(a.map(String).join(' '));
+    });
+    try {
+      for (let i = 0; i < 5; i++) {
+        const res = await handleQrScan(
+          await makeRequest(VALID_QR_TOKEN, {
+            existingCookie: 'anon_77777777-7777-7777-7777-777777777777',
+          }),
+          makeEnv(kvThatThrows({ get: true })),
+          VALID_QR_TOKEN
+        );
+        expect(res.status).toBe(302);
+      }
+      expect(await countScans(tenv().DB)).toBe(0);
+      expect(logged.filter((l) => l.includes('SCAN_DEDUP_UNAVAILABLE'))).toHaveLength(5);
+      for (const line of logged) expect(line).not.toContain(VALID_QR_TOKEN);
     } finally {
       warnSpy.mockRestore();
     }

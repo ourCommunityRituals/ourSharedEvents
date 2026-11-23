@@ -301,11 +301,13 @@ and the pair is floored as a chain (90d ⊇ 30d): the 30-day count is `null`
 when it sits 1–4 below the 90-day count, so `90d − 30d` never names fewer than
 5 people. A row with both windows `null` is withheld.
 
-**Only published events count (ADR-026 rule B):** the table is built by
-`refreshCorridorBaselines`, which adds people only from events whose own count
-the SharedReport publishes (5 or more, every row: `PUBLISHED_EVENT_IDS_SQL` in
-`lib/shared-report.ts`). An event under 5 adds no one to any baseline row, so
-these figures can be lower than the raw corridor traffic in small corridors.
+**Only published figures count (ADR-026 rule B):** the table is built by
+`refreshCorridorBaselines`, which since OSE-1784 (2026-11-23) adds up each
+event's published poster figure, the number the SharedReport shows as
+`this_event_count` (poster-hours under 5 add nothing; the rest are rounded down
+to a multiple of 5). Rows before that date counted distinct people from events
+with 5 or more. These figures can be lower than the raw corridor traffic in
+small corridors.
 
 **Routing:** Baselines are cross-event aggregates. **Default to `general` pool** for v1 — these are corridor-level density signals that don't encode per-attendee state. If a corridor's events span multiple pools, the baseline is intentionally less-precise on routing (it's a baseline; it summarizes mixed traffic). This is a deliberate v1 simplification documented for revisit if a HIPAA/COPPA corridor surfaces a routing issue.
 

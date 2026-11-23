@@ -68,6 +68,11 @@
 -- with that title are removed here, so each pass starts from the same state.
 -- Idempotent. Never apply to production.
 
+-- ONE PEOPLE FIGURE (OSE-1784, request 82). camp-rpt-evt also has one poster,
+-- pd_camp_rpt, with 7 scans in one hour and 3 in the next (10 different
+-- people), and the same 10 people in anon_id_returns. Every people figure of the
+-- report is the poster sum, 5: never 10, and the sample size is not published.
+--
 -- THE "NOTHING YET" NOTE (OSE-2093, requests 85 to 88). Two more events with no
 -- scans, no sponsors and no displays, read as SharedReports:
 --   camp-rpt-none-evt  nobody seen
@@ -75,7 +80,9 @@
 -- Both must carry the same `_event` note: 0 people reads the same as 1 to 4.
 --
 -- ── idempotency: clear prior fixed-id rows (child -> parent) ──
-DELETE FROM anon_id_returns WHERE venue_id IN ('camp-rpt-none-evt','camp-rpt-few-evt');
+DELETE FROM anon_id_returns WHERE venue_id IN ('camp-rpt-none-evt','camp-rpt-few-evt','camp-rpt-evt');
+DELETE FROM scan_placement_events WHERE poster_deployment_id = 'pd_camp_rpt';
+DELETE FROM poster_deployments WHERE id = 'pd_camp_rpt';
 -- An event points at its campaign (0110), so the link goes before the campaigns.
 UPDATE events SET campaign_id = NULL WHERE id IN ('camp-on-evt','camp-off-evt','camp-ci-evt','camp-rpt-evt');
 DELETE FROM sponsor_displays WHERE sponsor_id IN
@@ -237,6 +244,32 @@ INSERT INTO sponsor_displays (id, sponsor_id, event_id, surface, placement, even
   ('sd_camp_rpt_l4_poster_1', 'sb_camp_rpt_l4', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
   ('sd_camp_rpt_l4_poster_2', 'sb_camp_rpt_l4', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00'),
   ('sd_camp_rpt_l4_poster_3', 'sb_camp_rpt_l4', 'camp-rpt-evt', 'poster', 'fixture', 'display', '2026-11-01 18:00:00');
+
+-- ── one people figure (OSE-1784): a poster with hours of 7 and 3, and the same 10 people seen.
+INSERT INTO poster_deployments (id, event_id, qr_token, placement_label)
+VALUES ('pd_camp_rpt', 'camp-rpt-evt', 'fx-camp-rpt-poster', 'Fixture board');
+INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket) VALUES
+  ('spe_camp_rpt_19_1', 'camp-rpt-evt', 'pd_camp_rpt', '2026-11-01T19:00'),
+  ('spe_camp_rpt_19_2', 'camp-rpt-evt', 'pd_camp_rpt', '2026-11-01T19:00'),
+  ('spe_camp_rpt_19_3', 'camp-rpt-evt', 'pd_camp_rpt', '2026-11-01T19:00'),
+  ('spe_camp_rpt_19_4', 'camp-rpt-evt', 'pd_camp_rpt', '2026-11-01T19:00'),
+  ('spe_camp_rpt_19_5', 'camp-rpt-evt', 'pd_camp_rpt', '2026-11-01T19:00'),
+  ('spe_camp_rpt_19_6', 'camp-rpt-evt', 'pd_camp_rpt', '2026-11-01T19:00'),
+  ('spe_camp_rpt_19_7', 'camp-rpt-evt', 'pd_camp_rpt', '2026-11-01T19:00'),
+  ('spe_camp_rpt_20_1', 'camp-rpt-evt', 'pd_camp_rpt', '2026-11-01T20:00'),
+  ('spe_camp_rpt_20_2', 'camp-rpt-evt', 'pd_camp_rpt', '2026-11-01T20:00'),
+  ('spe_camp_rpt_20_3', 'camp-rpt-evt', 'pd_camp_rpt', '2026-11-01T20:00');
+INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at) VALUES
+  ('camp-rpt-person-01', 'camp-rpt-evt', '2026-11-01 19:00:00', '2026-11-01 19:00:00'),
+  ('camp-rpt-person-02', 'camp-rpt-evt', '2026-11-01 19:00:00', '2026-11-01 19:00:00'),
+  ('camp-rpt-person-03', 'camp-rpt-evt', '2026-11-01 19:00:00', '2026-11-01 19:00:00'),
+  ('camp-rpt-person-04', 'camp-rpt-evt', '2026-11-01 19:00:00', '2026-11-01 19:00:00'),
+  ('camp-rpt-person-05', 'camp-rpt-evt', '2026-11-01 19:00:00', '2026-11-01 19:00:00'),
+  ('camp-rpt-person-06', 'camp-rpt-evt', '2026-11-01 19:00:00', '2026-11-01 19:00:00'),
+  ('camp-rpt-person-07', 'camp-rpt-evt', '2026-11-01 19:00:00', '2026-11-01 19:00:00'),
+  ('camp-rpt-person-08', 'camp-rpt-evt', '2026-11-01 20:00:00', '2026-11-01 20:00:00'),
+  ('camp-rpt-person-09', 'camp-rpt-evt', '2026-11-01 20:00:00', '2026-11-01 20:00:00'),
+  ('camp-rpt-person-10', 'camp-rpt-evt', '2026-11-01 20:00:00', '2026-11-01 20:00:00');
 
 -- ── the "nothing yet" note (OSE-2093): two bare events, one with 4 people seen.
 INSERT INTO events (id, brand_id, title, slug, status, is_published, start_date, end_date, timezone, settings_json, data_class)

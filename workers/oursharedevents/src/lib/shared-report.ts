@@ -92,26 +92,18 @@ export const CORRIDOR_BASELINE_MIN_SAMPLE = 10;
 export const CORRIDOR_MAP_MIN_COUNT = 5;
 
 /**
- * ADR-026 rule B (OSE-1946): a corridor group is built only from events whose
- * own people count is published. The SharedReport publishes an event's count
- * exactly from K up (`sample_size`, `this_event_count`: distinct anon_id_hash
- * per venue_id, every row). If a group also held an event under K, that exact
- * count beside the rounded group would name the other: 11 published, a group
- * of 15, so the other event had 4. An event whose own count is withheld
- * therefore adds nothing to any group: not to the corridor baseline, not to the
- * corridor returns export, and no one becomes a returner through it.
+ * ADR-026 rule B (OSE-1946): a corridor group is built only from figures the
+ * SharedReport publishes. If a group also held an event whose own count is
+ * withheld, a count beside the rounded group would name it: 11 published, a
+ * group of 15, so the other event had 4.
  *
- * The gate must count the same rows its consumer sums for the event. Here that
- * is every row, as in the report and in `refreshCorridorBaselines`. The returns
- * export sums only current-pepper rows seen in its window, so it gates on those
- * (inline in `exportAnonIdReturns`). A subset at K or more implies the report
- * publishes the event too.
- *
- * Use as `venue_id IN (${PUBLISHED_EVENT_IDS_SQL})`. Uncorrelated, so SQLite
- * evaluates it once per statement; it reads the (venue_id, …) index.
+ * Since OSE-1784 (owner, 2026-11-23) the report's people figure for an event is
+ * the sum of its published poster rows, and `refreshCorridorBaselines` adds up
+ * exactly those sums, so the baseline holds the rule by construction: a
+ * withheld poster-hour adds nothing to the event, and so nothing to the group.
+ * The corridor returns export still gates on its own rows (inline in
+ * `exportAnonIdReturns`), because it counts returners, not poster scans.
  */
-export const PUBLISHED_EVENT_IDS_SQL = `SELECT venue_id FROM anon_id_returns
-       GROUP BY venue_id HAVING COUNT(DISTINCT anon_id_hash) >= ${CORRIDOR_MAP_MIN_COUNT}`;
 
 // Auto-detector clustering window: look back 8 weeks of events per venue.
 const SERIES_DETECTOR_LOOKBACK_DAYS = 56;
@@ -332,8 +324,13 @@ export async function materializeAnonIdReturns(
  * Phase 2 — refresh corridor_density_baseline rolling windows.
  *
  * Reads all events grouped by (corridor_id, day-of-week, hour-of-day) and
- * computes the rolling distinct-anon-id-hash counts for the 30-day and
- * 90-day windows ending now. Overwrites the existing baseline rows
+ * adds up their published people figures for the 30-day and 90-day windows
+ * ending now. OSE-1784 (owner, 2026-11-23, "posters too"): an event's figure
+ * is the sum of its published poster rows, the same number the report shows
+ * as `this_event_count`, so the baseline is made only of figures already
+ * published. It can no longer show that someone was there whom no published
+ * figure counts (an event alone in its slot reads its own poster sum back),
+ * and the density ratio divides like by like. Overwrites the existing baseline rows
  * (idempotent — last-writer-wins for the cell).
  *
  * Cells with zero events in the window are not written (storage savings;
@@ -367,7 +364,7 @@ export async function refreshCorridorBaselines(
   const h3Keys = new Set<string>();
   const legacyKeys = new Set<string>();
 
-  // For each (corridor_id, dow, hour), compute window distinct-hash counts.
+  // For each (corridor_id, dow, hour), add up the events' published people.
   // The corridor key is the res7 cell, lowercased (ADR-011 / OSE-616): H3 is
   // case-insensitive but this key is not, so one cell stored in two spellings
   // must group into ONE baseline row, never two that collide at export.
@@ -376,26 +373,47 @@ export async function refreshCorridorBaselines(
   // returns 00-23. Both match the schema's bucket_dow/bucket_hour expectations.
   try {
     const cells = await env.DB.prepare(
-      `SELECT
+      `WITH poster_hours AS (
+         -- One row per poster-hour of an event in the 90-day window: the grain
+         -- the report publishes people in (never the room's vote code).
+         -- Driven from the window's events (CROSS JOIN keeps that order), so
+         -- each night reads only their scans through idx_spe_event_poster,
+         -- never every scan ever stored.
+         SELECT s.event_id, COUNT(*) AS n
+           FROM events w
+          CROSS JOIN scan_placement_events s ON s.event_id = w.id
+           JOIN poster_deployments pd
+             ON pd.id = s.poster_deployment_id
+            AND pd.event_id = s.event_id
+            AND pd.is_vote_code = 0
+          WHERE w.start_date >= ?
+          GROUP BY s.event_id, s.poster_deployment_id, substr(s.scan_bucket, 1, 13)
+       ),
+       event_people AS (
+         -- The event's published people figure: each poster-hour under the
+         -- floor adds nothing, the rest are rounded down to a multiple of 5
+         -- and added (floorTotalOfParts), as the report's poster rows are.
+         SELECT event_id,
+                SUM(CASE WHEN n >= ? THEN n - (n % ?) ELSE 0 END) AS people
+           FROM poster_hours
+          GROUP BY event_id
+       )
+       SELECT
          COALESCE(LOWER(e.h3_res7), e.corridor_id) AS corridor_id,
          CAST(strftime('%w', e.start_date) AS INTEGER) AS bucket_dow,
          CAST(strftime('%H', e.start_date) AS INTEGER) AS bucket_hour,
-         COUNT(DISTINCT
-           CASE WHEN e.start_date >= ? THEN air.anon_id_hash END
-         ) AS window_30d_count,
-         COUNT(DISTINCT
-           CASE WHEN e.start_date >= ? THEN air.anon_id_hash END
-         ) AS window_90d_count
+         COALESCE(SUM(CASE WHEN e.start_date >= ? THEN ep.people END), 0) AS window_30d_count,
+         COALESCE(SUM(ep.people), 0) AS window_90d_count
        FROM events e
-       -- ADR-026 rule B: an event whose own count is withheld adds no one.
-       LEFT JOIN anon_id_returns air ON air.venue_id = e.id
-         AND air.venue_id IN (${PUBLISHED_EVENT_IDS_SQL})
+       LEFT JOIN event_people ep ON ep.event_id = e.id
        WHERE (e.h3_res7 IS NOT NULL OR e.corridor_id IS NOT NULL)
          AND e.start_date IS NOT NULL
          AND e.start_date >= ?
        GROUP BY COALESCE(LOWER(e.h3_res7), e.corridor_id), bucket_dow, bucket_hour`
     )
-      .bind(floor30dIso, floor90dIso, floor90dIso)
+      // The rounding step is PUBLISH_ROUNDING, which count-floor.ts defines as
+      // CORRIDOR_MAP_MIN_COUNT (imported there from here, so not back again).
+      .bind(floor90dIso, CORRIDOR_MAP_MIN_COUNT, CORRIDOR_MAP_MIN_COUNT, floor30dIso, floor90dIso)
       .all<{
         corridor_id: string;
         bucket_dow: number;
@@ -425,7 +443,7 @@ export async function refreshCorridorBaselines(
     for (const c of cells.results ?? []) {
       (isH3Cell(c.corridor_id) ? h3Keys : legacyKeys).add(c.corridor_id);
       if ((c.window_30d_count ?? 0) === 0 && (c.window_90d_count ?? 0) === 0) {
-        // ADR-026 rule B: a bucket whose events are all withheld counts no one.
+        // A bucket whose events published no people figure counts no one.
         // A row an earlier run stored here would keep counting them, and the
         // report reads it, so the bucket must hold no row at all.
         await env.DB.prepare(

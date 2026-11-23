@@ -8,7 +8,7 @@
  *
  * Shapes are SYNTHETIC. Staging holds test traffic, which is not representative,
  * and production has no scans. `hours` is the distinct browsers seen in each
- * hour; `people` is the true number of different browsers over the event, given
+ * hour (since OSE-1784, scans at one poster in that hour); `people` is the true number of different browsers over the event, given
  * by the shape (a browser present in two hours appears in two entries of `hours`).
  *
  * Read the result as: published vs people. `null` means the report shows nothing
@@ -17,6 +17,7 @@
 import { env } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
+import { seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
   DB: D1Database;
@@ -90,15 +91,10 @@ async function publishedFor(shape: Shape): Promise<number | null> {
     )
     .bind(id, shape.name, id)
     .run();
+  // OSE-1784: the report counts people in poster-hours, so each hour is that
+  // many scans at the event's one poster. The hourly floor is the same.
   for (const [i, count] of shape.hours.entries()) {
-    await db()
-      .prepare(
-        `INSERT INTO scan_aggregates
-           (id, event_id, bucket_date, bucket_hour, total_scans, distinct_agent_hashes, computed_at)
-         VALUES (?, ?, '2026-05-07', ?, ?, ?, datetime('now'))`
-      )
-      .bind(`sa-${id}-${i}`, id, 18 + i, count, count)
-      .run();
+    await seedPosterHour(db(), id, 18 + i, count);
   }
   const r = await buildSharedReport(db(), id);
   if (!r.ok) throw new Error(`report did not build for ${shape.name}: ${r.error}`);

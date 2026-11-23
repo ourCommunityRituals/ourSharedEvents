@@ -24,6 +24,7 @@ import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 import { floorCorridorBaseline } from '../src/lib/count-floor';
 import { mintSignedLinkToken } from '../src/lib/shared-report-auth';
 import ADMIN_HTML from '../src/templates/admin.html';
+import { seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
   DB: D1Database;
@@ -73,7 +74,9 @@ async function clearReadTables(): Promise<void> {
   await db.prepare(`DELETE FROM scan_node_returns`).run();
   // NOTE: sponsor_displays has a trigger referencing sponsors_old; we
   // don't seed sponsor_displays in this spec so skip clearing it.
-  await db.prepare(`DELETE FROM poster_deployments WHERE id LIKE 'test-pd-read-%'`).run();
+  await db
+    .prepare(`DELETE FROM poster_deployments WHERE id LIKE 'test-pd-read-%' OR id LIKE '%-poster'`)
+    .run();
   // Sponsors and campaigns FK on events — must be deleted before events.
   // OSE-799 A2: the event FK is on sponsor_placement now (sponsor_business has none).
   await db.prepare(`DELETE FROM sponsor_placement WHERE event_id LIKE 'test-evt-read-%'`).run();
@@ -147,6 +150,9 @@ async function seedScanAggregate(eventId: string, uniqueAgents: number): Promise
     )
     .bind(`sa-${eventId}`, eventId, '2026-05-07', uniqueAgents * 3, uniqueAgents)
     .run();
+  // OSE-1784: the report counts people in poster-hours only. The aggregate row
+  // above now gives only `materialized_at`; the same people scan one poster.
+  await seedPosterHour(tenv().DB, eventId, 19, uniqueAgents);
 }
 
 async function seedAnonReturn(opts: {
@@ -215,11 +221,12 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     expect(r.report.event_id).toBe('test-evt-read-full');
     expect(r.report.distinct_scanners).toBe(40); // 42, rounded down to a multiple of 5
     // 5 distinct anons → meets the K = CORRIDOR_MAP_MIN_COUNT floor (OSE-1421: it
-    // was a private 3), so the sample size is published. The venue rate counts
+    // was a private 3), so the return rates are worked out. The sample size is
+    // never published (OSE-1784: one people figure, from the posters). The venue rate counts
     // people seen at another event of a confirmed series (OSE-1652); this event
     // is in none, so there is nothing to compare with. (This test used to pin
     // venue_pct = 20 from a return_count of 2, which counts job runs.)
-    expect(r.report.return_rate.sample_size).toBe(CORRIDOR_MAP_MIN_COUNT);
+    expect(r.report.return_rate.sample_size).toBeNull();
     expect(r.report.return_rate.venue_pct).toBeNull();
     expect(r.report._meta.suppression_reasons).toContainEqual(
       expect.objectContaining({

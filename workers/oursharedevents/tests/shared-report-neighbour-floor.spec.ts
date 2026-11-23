@@ -74,10 +74,12 @@ const STAMP = '2026-05-08 03:00:00';
  * `BASE` clears the floor everywhere, so every section publishes.
  */
 interface World {
-  /** People in the event's second hour bucket (scan_aggregates). */
-  hourPeople: number;
-  /** People in a second hour bucket of the earlier event in the same series. */
-  siblingHourPeople: number;
+  /**
+   * Scans at a poster of the earlier event in the series, in its second hour.
+   * OSE-1784: a trend instance is that event's poster sum (it was its
+   * scan_aggregates buckets, which the report no longer counts people from).
+   */
+  siblingPosterHour: number;
   /** People seen at this event (anon_id_returns rows). */
   attendees: number;
   /** Of those, how many were also at the earlier event of the series (OSE-1652). */
@@ -105,8 +107,7 @@ interface World {
 }
 
 const BASE: World = {
-  hourPeople: 11,
-  siblingHourPeople: 11,
+  siblingPosterHour: 11,
   attendees: 20,
   cameTwice: 10,
   seenElsewhere: 10,
@@ -209,8 +210,9 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
     db.prepare(`UPDATE events SET series_id = ? WHERE id IN (?, ?)`).bind(series, eventId, ser)
   );
 
-  // People per hour bucket. A constant sub-K bucket rides along (3), so a rule
-  // that let two small buckets add up past the floor would show.
+  // Hour buckets. OSE-1784: the report counts no people from them any more
+  // (only when it was materialized), so they are constant here: one under the
+  // floor and one over it, which must reach no published number.
   const bucket = (ev: string, hour: number, people: number) =>
     db
       .prepare(
@@ -220,10 +222,8 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
       )
       .bind(`${ev}-sa-${hour}`, ev, hour, people * 2, people, STAMP);
   stmts.push(bucket(eventId, 19, 20), bucket(eventId, 21, 3));
-  if (w.hourPeople > 0) stmts.push(bucket(eventId, 20, w.hourPeople));
   stmts.push(bucket(sib, 19, 12), bucket(sib, 21, 3));
   stmts.push(bucket(ser, 19, 12), bucket(ser, 21, 3));
-  if (w.siblingHourPeople > 0) stmts.push(bucket(ser, 20, w.siblingHourPeople));
 
   // People seen at the event. The first `cameTwice` were also at the earlier
   // event of the series; the LAST `seenElsewhere` were also at the corridor
@@ -296,6 +296,32 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
   scans(p1, 21, 3);
   scans(p1, 20, w.posterHour);
   scans(p2, 19, w.posterOnly);
+  // The earlier event in the series has a poster too (its trend instance).
+  // A constant sub-K hour (3) rides along, as at this event's first poster.
+  const p3 = `${eventId}-p3`;
+  stmts.push(
+    db
+      .prepare(
+        `INSERT INTO poster_deployments (id, event_id, qr_token, placement_label)
+         VALUES (?, ?, ?, 'Hall board')`
+      )
+      .bind(p3, ser, `qr-${p3}`)
+  );
+  const serScans = (hour: number, n: number) => {
+    for (let i = 0; i < n; i++) {
+      stmts.push(
+        db
+          .prepare(
+            `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket, created_at)
+             VALUES (?, ?, ?, ?, ?)`
+          )
+          .bind(`${p3}-s-${hour}-${i}`, ser, p3, `2026-04-23T${hour}:00`, STAMP)
+      );
+    }
+  };
+  serScans(19, 12);
+  serScans(21, 3);
+  serScans(20, w.siblingPosterHour);
 
   // Scans per map cell, per hour.
   const cell = (res9: string, hour: number, n: number) =>
@@ -540,8 +566,7 @@ const plain = (key: keyof World, name: string, unit: string): Lever => ({
 });
 
 const LEVERS: Lever[] = [
-  plain('hourPeople', 'people in one hour of the event', 'one person'),
-  plain('siblingHourPeople', 'people in one hour of another event in the series', 'one person'),
+  plain('siblingPosterHour', 'scans at a poster of another event in the series', 'one scan'),
   {
     name: 'people seen at the event',
     unit: 'one person',
@@ -648,6 +673,7 @@ describe('the harness can see: a full report, and each lever above the floor', (
       .map(([p]) => p);
     expect(withheld).toEqual([
       'report.click_outs.by_kind.signup', // the constant sub-K kind
+      'report.return_rate.sample_size', // never published (OSE-1784)
     ]);
   });
 
@@ -743,8 +769,17 @@ type How =
   | { how: 'floored'; floor: number }
   /** A sum of counts that each passed `floor` first. Null when nothing passed, never 0. */
   | { how: 'sum of floored parts'; floor: number }
-  /** A percentage of the count at `of`, through `flooredRatePct`. */
-  | { how: 'rate'; of: string }
+  /**
+   * A percentage through `flooredRatePct`, published without its sample
+   * (OSE-1784), so it cannot be multiplied back into a head count. Never 100.
+   */
+  | { how: 'rate' }
+  /**
+   * The report's one people figure (OSE-1784): the sum of the published
+   * poster_attribution rows of the same report, where that section is in the
+   * reader's depth; otherwise a floored sum like any other.
+   */
+  | { how: 'poster sum' }
   /** One published count divided by another. Null unless both are published. */
   | { how: 'ratio'; num: string; den: string }
   /** Things the organizer set up (sponsors, map cells), or rows shown: not people. */
@@ -757,13 +792,12 @@ const SUM: How = { how: 'sum of floored parts', floor: K };
 const NOT_PEOPLE: How = { how: 'not people' };
 
 const REGISTRY: Record<string, How> = {
-  distinct_scanners: SUM, // people per hour bucket, each bucket floored
+  distinct_scanners: { how: 'poster sum' },
   'click_outs.by_kind.*': FLOORED,
   'click_outs.total': SUM, // the published kinds
-  'return_rate.sample_size': FLOORED,
-  'return_rate.venue_pct': { how: 'rate', of: 'return_rate.sample_size' },
-  'return_rate.corridor_pct': { how: 'rate', of: 'return_rate.sample_size' },
-  'corridor_density.this_event_count': FLOORED,
+  'return_rate.venue_pct': { how: 'rate' },
+  'return_rate.corridor_pct': { how: 'rate' },
+  'corridor_density.this_event_count': { how: 'poster sum' },
   'corridor_density.baseline_30d': { how: 'floored', floor: CORRIDOR_BASELINE_MIN_SAMPLE },
   'corridor_density.baseline_90d': { how: 'floored', floor: CORRIDOR_BASELINE_MIN_SAMPLE },
   'corridor_density.density_ratio_30d': {
@@ -785,7 +819,7 @@ const REGISTRY: Record<string, How> = {
   'sponsor_class_breakdown.*.total_displays': SUM, // OSE-2089: withheld is null, never 0
   'sponsor_class_breakdown.*.sponsor_count': NOT_PEOPLE,
   'poster_attribution[].scan_count': SUM, // poster-hours, each hour floored
-  'headcount_trend.instances[].distinct_scanners': SUM,
+  'headcount_trend.instances[].distinct_scanners': SUM, // each event's own poster sum
   'corridor_map.cell_count': NOT_PEOPLE, // cells drawn; a cell under the floor is not drawn
   // Row counts. Rows are dropped, never shown withheld, so these count what is shown.
   'sponsor_displays.length': NOT_PEOPLE,
@@ -836,14 +870,18 @@ function broken(rule: How, value: number, at: (rel: string) => Leaf | undefined)
       return whole && value >= rule.floor ? null : `under the floor of ${rule.floor}`;
     case 'sum of floored parts':
       return whole && value >= rule.floor ? null : `under the floor of ${rule.floor}`;
-    case 'rate': {
-      const sample = at(rule.of);
-      if (typeof sample !== 'number') return `published without its sample (${rule.of})`;
-      const counted = Math.round((value * sample) / 100);
-      if (Math.abs((counted / sample) * 100 - value) > 1e-9) return 'not a share of its sample';
-      if (counted < K) return `counts ${counted} people`;
-      const rest = sample - counted;
-      return rest === 0 || rest >= K ? null : `leaves ${rest} people`;
+    case 'rate':
+      return value > 0 && value < 100 ? null : 'not a share strictly between 0 and 100';
+    case 'poster sum': {
+      if (!(whole && value >= K)) return `under the floor of ${K}`;
+      const rows = at('poster_attribution.length');
+      if (typeof rows !== 'number') return null; // the section is not in this depth
+      let sum = 0;
+      for (let i = 0; i < rows; i++) {
+        const v = at(`poster_attribution[${i}].scan_count`);
+        if (typeof v === 'number') sum += v;
+      }
+      return value === sum ? null : `not the sum of the poster rows (${sum})`;
     }
     case 'ratio': {
       const num = at(rule.num);

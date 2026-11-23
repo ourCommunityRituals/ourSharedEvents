@@ -184,9 +184,11 @@ describe('OSE-1376 — same scans, different event zones → different labels, i
       const id = `evt-1376-${tz.replace('/', '-').toLowerCase()}`;
       await seedEvent(id, tz, '2026-10-24');
       await seedPoster(id, `pd-1376-${id}`, EVENING_SCANS);
+      // Hour buckets the report no longer counts people from (OSE-1784): they
+      // must not reach distinct_scanners in either zone.
       await seedAggregates(id, [
         ['2026-10-25', 0, 7],
-        ['2026-10-25', 1, 3], // sub-K bucket — dropped before summation (OSE-683)
+        ['2026-10-25', 1, 3],
         ['2026-10-25', 2, 9],
       ]);
       reports.push(await build(id));
@@ -215,10 +217,9 @@ describe('OSE-1376 — same scans, different event zones → different labels, i
     expect(pc.last_scan_at).toBe('2026-10-25T02:00:00Z');
     expect(pb.first_scan_at).toBe(pc.first_scan_at);
     expect(pb.last_scan_at).toBe(pc.last_scan_at);
-    // 7 + 9 survive; the 3-bucket is dropped exactly as before, in both zones.
-    // Each published rounded down to a multiple of 5 (OSE-2151): 5 + 5.
-    expect(chi.distinct_scanners).toBe(10);
-    expect(ber.distinct_scanners).toBe(10);
+    // OSE-1784: the head count is the sum of the poster rows, in both zones.
+    expect(chi.distinct_scanners).toBe(pc.scan_count);
+    expect(ber.distinct_scanners).toBe(pb.scan_count);
   });
 });
 
@@ -334,18 +335,13 @@ describe('OSE-1376 — floors and never-who are unchanged by the zone', () => {
     await clearTables();
   });
 
-  test('a sub-K poster is dropped and sub-K buckets are excluded identically in every zone', async () => {
+  test('a sub-K poster is dropped, and the head count is the same poster sum, in every zone', async () => {
     const totals: Array<number | null> = [];
     for (const tz of ['America/Chicago', 'Europe/Berlin', 'Asia/Kolkata', null]) {
       const id = `evt-1376-floor-${tz ? tz.split('/')[1]!.toLowerCase() : 'none'}`;
       await seedEvent(id, tz, '2026-10-24');
       await seedPoster(id, `pd-1376-small-${id}`, EVENING_SCANS.slice(0, 4), 1); // 4 < K
       await seedPoster(id, `pd-1376-big-${id}`, EVENING_SCANS); // 6 >= K
-      await seedAggregates(id, [
-        ['2026-10-25', 0, 4], // sub-K
-        ['2026-10-25', 1, 4], // sub-K (4+4 would clear K if summed raw — must not)
-        ['2026-10-25', 2, 5], // exactly K — survives
-      ]);
       const rep = await build(id);
       expect(
         rep.poster_attribution.find((p) => p.poster_deployment_id === `pd-1376-small-${id}`)
@@ -353,9 +349,14 @@ describe('OSE-1376 — floors and never-who are unchanged by the zone', () => {
       for (const p of rep.poster_attribution) {
         expect(p.scan_count).toBeGreaterThanOrEqual(CORRIDOR_MAP_MIN_COUNT);
       }
+      // OSE-1784: the small poster adds nothing to the head count either.
+      expect(rep.distinct_scanners).toBe(
+        rep.poster_attribution.reduce((sum, p) => sum + p.scan_count, 0)
+      );
       totals.push(rep.distinct_scanners);
     }
-    expect(totals).toEqual([5, 5, 5, 5]);
+    const big = EVENING_SCANS.length * CORRIDOR_MAP_MIN_COUNT;
+    expect(totals).toEqual([big, big, big, big]);
   });
 
   test('the payload carries no per-person field and nothing finer than the hour', async () => {

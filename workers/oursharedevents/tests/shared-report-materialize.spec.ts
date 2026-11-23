@@ -27,6 +27,7 @@ import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { runSharedReportMaterialization } from '../src/handlers/shared-report-materialize';
 import { phaseTimesFor } from '../src/lib/event-datetime';
 import { hashAnonIdForReturns, pepperEpoch } from '../src/lib/anon-id-hash';
+import { seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
   DB: D1Database;
@@ -163,11 +164,15 @@ beforeAll(async () => {
 // guaranteed by `CREATE TABLE IF NOT EXISTS` + the ALTER-table re-run
 // guard in applyMigrations.
 /**
- * Seeds `n` distinct people at an event (default five, K). ADR-026 rule B: the
- * corridor baseline counts only events whose own count is published, so an
- * event a test expects in the baseline needs K people.
+ * Seeds `n` distinct people at an event (default five, K): `n` anon_id_returns
+ * rows, and `n` scans in one hour at a poster of its own. OSE-1784 (owner,
+ * 2026-11-23, "posters too"): the corridor baseline adds up each event's
+ * published poster figure, so an event a test expects in the baseline needs a
+ * poster-hour of K scans, and `n` people there count as `n` rounded down to a
+ * multiple of 5.
  */
 async function seedReturners(venueId: string, prefix: string, n = 5): Promise<void> {
+  await seedPosterHour(tenv().DB, venueId, 19, n, `test-pd-mat-${venueId}-${prefix}`);
   const nowIso = new Date().toISOString();
   for (let i = 0; i < n; i++) {
     await tenv()
@@ -369,8 +374,13 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
       const r = await buildSharedReport(tenv().DB, id);
       expect(r.ok).toBe(true);
       if (!r.ok) return;
-      // Six people, published rounded down to a multiple of 5 (OSE-2151).
-      expect(r.report.return_rate.sample_size, `run ${run}`).toBe(5);
+      // Six people clear the floor, so the rates are worked out; the sample
+      // size itself is never published (OSE-1784).
+      expect(r.report.return_rate.sample_size, `run ${run}`).toBeNull();
+      expect(
+        r.report._meta.suppression_reasons.some((x) => x.field === 'return_rate'),
+        `run ${run}`
+      ).toBe(false);
       // Nobody came back: 0 of 6 is withheld like 1 to 4, never 100%.
       expect(r.report.return_rate.venue_pct, `run ${run}`).toBeNull();
       expect(
@@ -549,7 +559,9 @@ describe('OSE-272 Phase 2: refreshCorridorBaselines', () => {
     // savings per design); to assert a row IS written, we need at least
     // one hash linked to this event via venue_id.
     const nowIso = new Date().toISOString();
-    // Five people (K): rule B counts only events whose own count is published.
+    // Five people (K) at a poster: the baseline adds up published poster
+    // figures (OSE-1784), so a poster-hour of 5 is what puts the event in it.
+    await seedPosterHour(db, 'test-evt-mat-corr-A', 19, 5, 'test-pd-mat-corr-A');
     for (let i = 0; i < 5; i++) {
       await db
         .prepare(
@@ -765,16 +777,17 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       .run();
   });
 
-  // ADR-026 rule B (OSE-1946). The report shows an event's own count exactly
-  // (this_event_count) beside the rounded baseline of its bucket. If the bucket
-  // also held an event whose own count is withheld, 11 beside a baseline of 15
-  // would say the other event had 4. So an event under K adds nothing to the
-  // baseline; an event of exactly K does (pair).
+  // ADR-026 rule B (OSE-1946). The report shows an event's own count
+  // (this_event_count) beside the baseline of its bucket. If the bucket also
+  // held an event whose own count is withheld, the difference would name it.
+  // Since OSE-1784 the baseline is the sum of published poster figures: the
+  // 11-person event adds the 10 it publishes, an event under K adds nothing, an
+  // event of exactly K adds 5 (pair).
   test.each([
-    [4, 11],
-    [5, 16],
+    [4, 10],
+    [5, 15],
   ])(
-    'rule B: a bucket of an 11-person event and a %i-person event stores %i',
+    'rule B: a bucket of an 11-person event (published 10) and a %i-person event stores %i',
     async (other, expected) => {
       const db = tenv().DB;
       const cell = '872664544ffffff';
@@ -789,6 +802,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
           .prepare(`UPDATE events SET h3_res7 = ?, start_date = ? WHERE id = ?`)
           .bind(cell, startIso, id)
           .run();
+        await seedPosterHour(db, id, 19, people, `test-pd-mat-${id}`);
         for (let i = 0; i < people; i++) {
           await db
             .prepare(
@@ -964,7 +978,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
   // the whole suite. The 30d-vs-90d split is the entire product of this table,
   // so pin it: an event aged inside the 31–90 day band populates the 90-day
   // window while leaving the 30-day window empty.
-  test('rolling windows split — 45-day-old event: window_30d_count=0, window_90d_count=6', async () => {
+  test('rolling windows split — 45-day-old event: window_30d_count=0, window_90d_count=5 (6 people at a poster publish 5)', async () => {
     const db = tenv().DB;
     await seedEvent({ id: 'test-evt-mat-window-split', start_offset_hours: -45 * 24 });
     await db
@@ -990,7 +1004,7 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
       .first<{ window_30d_count: number; window_90d_count: number }>();
     expect(row).not.toBeNull();
     expect(row!.window_30d_count).toBe(0);
-    expect(row!.window_90d_count).toBe(6);
+    expect(row!.window_90d_count).toBe(5);
   });
 });
 
