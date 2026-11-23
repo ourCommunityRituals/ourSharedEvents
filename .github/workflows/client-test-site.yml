@@ -1,0 +1,305 @@
+# The client test site, test.oursharedevents.com (OSE-2211).
+#
+# A private copy of staging for outside testers that moves once a week, so the
+# app does not change under someone in the middle of testing (owner 2026-11-22).
+# Staging moves on every merge; this site moves only here.
+#
+#   Weekly (Mondays 11:00 UTC = 5 AM Central in winter): deploy the newest main
+#   commit whose post-merge staging chain had T1, T2, T3 and T4 all succeed. If
+#   staging was red all week, the site stays where it is.
+#
+#   Hold: the repository variable CLIENT_TEST_HOLD set to true pauses the weekly
+#   update (during a tester's session). A hand-run update still runs.
+#
+#   By hand (Actions tab, "Client test site", Run workflow):
+#     update    the same as the weekly run, now. `sha` may name a commit, which
+#               must still be on main with a green staging chain.
+#     rollback  back to the previous version of the Worker (or `version_id`).
+#               Code only: the databases keep the testers' data and stay migrated.
+#     look      what the site runs and what an update would deploy. Changes nothing.
+#
+# It deploys with workers/oursharedevents/wrangler.client-test.toml only and never
+# names `--env staging` or `--env production` (tests/unit/ci/client-test-site.test.js).
+# Testers' data carries over: an update applies new migrations and never resets.
+# Runbook: docs/runbooks/RUNBOOK-CLIENT-TEST-SITE.md.
+
+name: Client test site
+
+on:
+  schedule:
+    - cron: '0 11 * * 1'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'update (deploy the newest green commit), rollback, or look (changes nothing)'
+        type: choice
+        options: [update, rollback, look]
+        default: update
+      sha:
+        description: 'update only, optional: a main commit with a green staging chain'
+        type: string
+        required: false
+      version_id:
+        description: 'rollback only, optional: the Worker version to go back to (from look); empty = the previous one'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+# One writer on the test site at a time; a second run waits, never cancels.
+concurrency:
+  group: client-test-site
+  cancel-in-progress: false
+  queue: max
+
+env:
+  WORKER_DIR: workers/oursharedevents
+  TEST_CONFIG: wrangler.client-test.toml
+  TEST_BASE_URL: https://test.oursharedevents.com
+
+jobs:
+  pick:
+    name: 'Pick what to do'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      action: ${{ steps.decide.outputs.action }}
+      sha: ${{ steps.pick.outputs.sha }}
+      run_id: ${{ steps.pick.outputs.run_id }}
+    steps:
+      - name: Decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_ACTION: ${{ github.event.inputs.action }}
+          HOLD: ${{ vars.CLIENT_TEST_HOLD }}
+        run: |
+          ACTION="${INPUT_ACTION:-update}"
+          if [ "$EVENT" = "schedule" ] && [ "$HOLD" = "true" ]; then
+            echo "::notice title=On hold::CLIENT_TEST_HOLD is true, so this week's update is skipped. Set it to false (or delete it) to resume."
+            ACTION="hold"
+          fi
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
+          echo "### Client test site: $ACTION" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: steps.decide.outputs.action == 'update' || steps.decide.outputs.action == 'look'
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        if: steps.decide.outputs.action == 'update' || steps.decide.outputs.action == 'look'
+        with:
+          node-version: '22'
+
+      - name: 'Pick: the newest main commit with a green staging chain (T1 to T4)'
+        id: pick
+        if: steps.decide.outputs.action == 'update' || steps.decide.outputs.action == 'look'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PICK_SHA: ${{ github.event.inputs.sha }}
+        run: |
+          node scripts/ci/client-test-site.mjs pick | tee -a "$GITHUB_OUTPUT"
+          {
+            echo
+            echo "Picked commit: \`$(grep '^sha=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)\`"
+            echo "Its staging run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$(grep '^run_id=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  update:
+    name: 'Update the client test site'
+    needs: pick
+    if: needs.pick.outputs.action == 'update'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ needs.pick.outputs.sha }}
+
+      - name: 'Gate: the commit is on main (OSE-1662)'
+        env:
+          SHIP_SHA: ${{ needs.pick.outputs.sha }}
+        run: bash scripts/ci/assert-on-main.sh
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: workers/oursharedevents/package-lock.json
+
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install worker dependencies
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npm ci --prefer-offline || npm ci
+
+      - name: 'Find the test site databases and namespace by name'
+        working-directory: ${{ env.WORKER_DIR }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 list --json > "$RUNNER_TEMP/d1.json"
+          curl -sf --max-time 30 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/storage/kv/namespaces?per_page=100" \
+            > "$RUNNER_TEMP/kv.json"
+          node ../../scripts/ci/client-test-site.mjs resolve-ids "$TEST_CONFIG" "$RUNNER_TEMP/d1.json" "$RUNNER_TEMP/kv.json"
+
+      - name: 'Gate: the Worker secrets exist (names only)'
+        working-directory: ${{ env.WORKER_DIR }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          OUT="$(npx wrangler secret list -c "$TEST_CONFIG" 2>&1)" || { echo "::error::Could not list the test Worker's secrets. Run the Client test site setup workflow first."; exit 1; }
+          for SECRET in SHARED_REPORT_SIGNING_SECRET FORMS_ENCRYPTION_KEY FORMS_HASH_PEPPER RATE_LIMIT_KEY_PEPPER ANON_ID_HASH_PEPPER IP_HASH_PEPPER; do
+            if ! echo "$OUT" | grep -q "\"$SECRET\""; then
+              echo "::error::$SECRET is not set on the test Worker. Run the Client test site setup workflow (it adds only the missing ones)."
+              exit 1
+            fi
+          done
+          echo "All six secrets are present (names only)."
+
+      - name: 'Apply new migrations (testers keep their data)'
+        working-directory: ${{ env.WORKER_DIR }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 migrations apply DB -c "$TEST_CONFIG" --remote
+          npx wrangler d1 migrations apply FORMS_DB -c "$TEST_CONFIG" --remote
+
+      - name: Stamp build version
+        id: stamp
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          VERSION="test-$(git rev-parse --short HEAD)-$(date -u +%Y%m%d)"
+          sed -i "s/^WORKER_BUILD_VERSION = \"test-.*\"/WORKER_BUILD_VERSION = \"$VERSION\"/" "$TEST_CONFIG"
+          grep -q "WORKER_BUILD_VERSION = \"$VERSION\"" "$TEST_CONFIG"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy the client test site
+        working-directory: ${{ env.WORKER_DIR }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SHA: ${{ needs.pick.outputs.sha }}
+          RUN_ID: ${{ needs.pick.outputs.run_id }}
+        run: npx wrangler deploy -c "$TEST_CONFIG" --message "client-test ${SHA} (staging run ${RUN_ID})"
+
+      - name: 'Check: private, and up'
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          EXPECT_BUILD: ${{ steps.stamp.outputs.version }}
+        run: |
+          sleep 10
+          bash scripts/ci/client-test-smoke.sh
+          echo "Deployed \`$EXPECT_BUILD\` to $TEST_BASE_URL" >> "$GITHUB_STEP_SUMMARY"
+
+  rollback:
+    name: 'Roll the client test site back'
+    needs: pick
+    if: needs.pick.outputs.action == 'rollback'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install worker dependencies
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npm ci --prefer-offline || npm ci
+
+      - name: Roll back (code only; the databases are untouched)
+        working-directory: ${{ env.WORKER_DIR }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION_ID: ${{ github.event.inputs.version_id }}
+        run: |
+          if [ -n "$VERSION_ID" ] && ! printf '%s' "$VERSION_ID" | grep -Eq '^[0-9a-f-]{36}$'; then
+            echo "::error::version_id must be a version id as the look action lists it."
+            exit 1
+          fi
+          npx wrangler rollback ${VERSION_ID:+"$VERSION_ID"} -c "$TEST_CONFIG" --message "client-test rollback by ${GITHUB_ACTOR}" --yes
+
+      - name: 'Check: private, and up'
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          sleep 10
+          bash scripts/ci/client-test-smoke.sh
+
+  look:
+    name: 'Look: what the client test site runs'
+    needs: pick
+    if: needs.pick.outputs.action == 'look'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install worker dependencies (the pinned wrangler)
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npm ci --prefer-offline || npm ci
+
+      - name: List the Worker's deployments (read only)
+        working-directory: ${{ env.WORKER_DIR }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          NEXT_SHA: ${{ needs.pick.outputs.sha }}
+        run: |
+          {
+            echo "An update now would deploy \`$NEXT_SHA\`."
+            echo
+            echo "Deployments of the test Worker (each message names its commit):"
+            echo '```'
+            npx wrangler deployments list -c "$TEST_CONFIG" 2>&1 | tail -60 || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"

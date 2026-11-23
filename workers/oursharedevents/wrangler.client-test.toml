@@ -1,0 +1,121 @@
+# ============================================================================
+# Client test site: test.oursharedevents.com (OSE-2211)
+# ============================================================================
+# A private copy of staging for outside testers, updated once a week (owner
+# 2026-11-22). Staging moves on every merge; this site moves only when
+# .github/workflows/client-test-site.yml deploys a main commit whose staging
+# chain (T1 to T4) went green: Mondays 11:00 UTC, or by hand (update, roll back).
+# Runbook: docs/runbooks/RUNBOOK-CLIENT-TEST-SITE.md.
+#
+# WHY A FILE OF ITS OWN, not [env.test] in wrangler.toml: the staging/production
+# parity check, the production preflight and their tests read wrangler.toml as
+# exactly two environments. A third would weaken those checks; a file of its own
+# leaves them untouched and cannot be deployed by an `--env` typo. Deploy with
+#   npx wrangler deploy -c wrangler.client-test.toml
+# The settings it shares with wrangler.toml (main, compatibility date, account,
+# module rules) are held equal by tests/unit/ci/client-test-site.test.js.
+#
+# It is a staging-class site, never production and never local:
+#   - WORKER_ENV is "staging". A local name ("test", "development") would open
+#     the local-dev auth conveniences in src/auth/admin.ts; "production" would
+#     write production's BigQuery dataset. The test holds it to "staging".
+#   - None of staging's CI escape hatches: no ADMIN_SCOPE_ALL, no key fallback, no
+#     internal header, no CI service actor. Admins and testers sign in through
+#     Cloudflare Access, as on production.
+#   - The whole host sits behind a Cloudflare Access app (email one-time code), an
+#     owner dashboard step. The weekly job fails if an anonymous visit is answered.
+#
+# Its own databases, KV, uploads bucket and limiter counts, so testers' data never
+# mixes with CI's on staging and carries over from week to week. The owner's
+# one-time setup job (client-test-setup.yml) creates them by the names below. Their
+# ids read "set-by-setup" here: the weekly job looks each one up by its name and
+# writes the id into its own copy of this file before it migrates and deploys
+# (scripts/ci/client-test-site.mjs resolve-ids), and stops if any is missing.
+# ============================================================================
+
+name = "oursharedevents-test"
+main = "src/index.ts"
+compatibility_date = "2026-04-28"
+account_id = "c4dee735e39737db94d7befeecf96e82"
+workers_dev = false
+routes = [
+  { pattern = "test.oursharedevents.com/*", zone_name = "oursharedevents.com" }
+]
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ocr-db-test"
+database_id = "set-by-setup"
+migrations_dir = "migrations"
+
+[[d1_databases]]
+binding = "FORMS_DB"
+database_name = "ocr-forms-db-test"
+database_id = "set-by-setup"
+migrations_dir = "migrations-forms"
+
+[[r2_buckets]]
+binding = "UPLOADS_BUCKET"
+bucket_name = "ose-uploads-test"
+
+# The street map reads staging's one archive bucket (owner 2026-11-14: one bucket,
+# loaded once, read by every environment). The Worker only reads it.
+[[r2_buckets]]
+binding = "MAP_TILES"
+bucket_name = "ose-map-tiles"
+
+# The setup job creates the namespace titled "ose-rate-limit-test".
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "set-by-setup"
+
+# Account-unique ids, different from every id in wrangler.toml, so the test site
+# never shares counts with staging or production.
+[[ratelimits]]
+name = "PUBLIC_READ_EDGE_LIMITER"
+namespace_id = "15097"
+simple = { limit = 60, period = 10 }
+
+[[ratelimits]]
+name = "FORM_EDGE_LIMITER"
+namespace_id = "15098"
+simple = { limit = 60, period = 10 }
+
+[observability]
+enabled = true
+
+# The nightly retention sweep, as on staging and production.
+[triggers]
+crons = ["0 3 * * *"]
+
+[vars]
+WORKER_ENV = "staging"
+WORKER_BUILD_VERSION = "test-2026.11.22"
+DRAFT_EXPIRY_DAYS = "30"
+SUBSCRIBERS_RETENTION_DAYS = "90"
+SCAN_RETURNS_RETENTION_DAYS = "365"
+PUBLISH_GRACE_MINUTES = "10"
+SPONSOR_GEO_MATCH_ENABLED = "0"
+# Same archive key and switch as staging (held equal by the client-test-site test).
+MAP_TILES_ARCHIVE = "us-20261120.pmtiles"
+STREET_MAP = "on"
+VOTING_ENABLED = "off"
+TURNSTILE_ENABLED = "0"
+ALLOWED_ADMIN_EMAILS = "mzdano@gmail.com"
+ALLOWED_ADMIN_DOMAINS = "oursharedevents.com"
+CF_ACCESS_TEAM_DOMAIN = "mzdano.cloudflareaccess.com"
+# The test site's own Access app audience. Empty until the owner creates the app;
+# then pasted here in a PR to pin aud + iss on the Access JWT (as production is).
+CF_ACCESS_AUD = ""
+BIGQUERY_DATASET_ID = "oursharedevents_backup_test"
+# No GCP / WIF settings on purpose: the test site has no workload identity, so the
+# BigQuery backup and export stay off here.
+
+# Secrets (generated inside the setup job, never seen by anyone):
+#   FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, ANON_ID_HASH_PEPPER, IP_HASH_PEPPER,
+#   RATE_LIMIT_KEY_PEPPER, SHARED_REPORT_SIGNING_SECRET
+# Outside testers: the STAGING_TESTERS secret (PR #1521), set by the owner.

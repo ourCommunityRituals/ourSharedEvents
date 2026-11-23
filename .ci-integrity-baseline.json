@@ -811,7 +811,7 @@
   "readUsesOnNewSecret": {
     "direction": "up",
     "reason": "Reads must name OCR_HUB_READ (OSE-1695): may only rise; a deleted read site needs a retired entry.",
-    "total": 35,
+    "total": 39,
     "byFile": {
       ".github/workflows/advanced-security-scan.yml": {
         "count": 2,
@@ -828,6 +828,22 @@
           "report-drift :: Checkout OCR-docs brain (read-only)"
         ],
         "reason": "contract-check and report-drift check out the OCR-docs brain read-only; reads stay on OCR_HUB_READ."
+      },
+      ".github/workflows/client-test-setup.yml": {
+        "count": 1,
+        "steps": [
+          "setup :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "OSE-2211: the client test site setup installs the Worker's pinned wrangler, which needs the hub packages; the read stays on OCR_HUB_READ."
+      },
+      ".github/workflows/client-test-site.yml": {
+        "count": 3,
+        "steps": [
+          "look :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "rollback :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "update :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+        ],
+        "reason": "OSE-2211: the weekly client test site deploy, rollback and look install the Worker (and its pinned wrangler), which bundles @ocr/ui; reads stay on OCR_HUB_READ."
       },
       ".github/workflows/conformance-report.yml": {
         "count": 2,
