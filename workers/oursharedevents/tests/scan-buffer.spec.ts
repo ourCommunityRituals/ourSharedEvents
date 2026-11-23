@@ -141,7 +141,7 @@ describe('handleScanBatch (queue consumer)', () => {
   });
 });
 
-describe('handleScanBatch — a dropped scan releases its dedup marker (OSE-1459)', () => {
+describe('handleScanBatch — a dropped scan and the KV markers (OSE-1459, OSE-2214)', () => {
   function failingDb() {
     return {
       prepare: () => ({ bind: (...args: unknown[]) => ({ args }) }),
@@ -177,8 +177,16 @@ describe('handleScanBatch — a dropped scan releases its dedup marker (OSE-1459
     expect(store.has(key)).toBe(true);
   });
 
-  test('a failed write on the last attempt (about to dead-letter) deletes the marker', async () => {
-    const { store, kv } = fakeKv([key]);
+  test('OSE-2214 | a failed write on the last attempt touches no KV at all: the message names no phone', async () => {
+    const kvCalls: string[] = [];
+    const kv = new Proxy({} as KVNamespace, {
+      get:
+        (_t, prop) =>
+        (...args: unknown[]) => {
+          kvCalls.push(`${String(prop)}(${args.map(String).join(',')})`);
+          return Promise.resolve(null);
+        },
+    });
     const message = {
       body: MSG,
       attempts: SCAN_QUEUE_MAX_RETRIES + 1,
@@ -193,6 +201,8 @@ describe('handleScanBatch — a dropped scan releases its dedup marker (OSE-1459
     await handleScanBatch(batch, { DB: failingDb(), RATE_LIMIT_KV: kv });
 
     expect(message.retry).toHaveBeenCalledTimes(1);
-    expect(store.has(key)).toBe(false);
+    // OSE-2214: a scan message carries no phone id, so the consumer has no
+    // marker to name and never reads or writes KV.
+    expect(kvCalls).toEqual([]);
   });
 });

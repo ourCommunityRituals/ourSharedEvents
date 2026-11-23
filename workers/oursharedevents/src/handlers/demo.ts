@@ -108,7 +108,7 @@ const FLAG_LABELS: Record<string, string> = {
 
 // Friendly section names for the depth exhibit.
 const SECTION_LABELS: Record<string, string> = {
-  distinct_scanners: 'Distinct scanners',
+  distinct_scanners: 'Scans',
   sponsor_displays: 'Sponsor logo displays',
   campaign_summary: 'Campaign comparison',
   poster_attribution: 'Poster placement breakdown',
@@ -309,7 +309,7 @@ function tierLadder(): string {
           <th scope="row">Free · Local</th>
           <td>Smoke test — honest &amp; complete</td>
           <td>&ldquo;Did it work?&rdquo;</td>
-          <td>Distinct scanners + your own logo displays &rarr; establish local presence</td>
+          <td>Scans + your own logo displays &rarr; establish local presence</td>
         </tr>
         <tr class="paid">
           <th scope="row">Mid <span class="map-badge">+ the map</span></th>
@@ -421,15 +421,7 @@ function depthExhibit(depth: ReportDepth): string {
   const cards: string[] = [];
 
   // local depth (always present)
-  cards.push(
-    statCard(
-      'Distinct scanners',
-      String(distinctScanners),
-      'anonymous, counted once each',
-      true,
-      'free'
-    )
-  );
+  cards.push(statCard('Scans', String(distinctScanners), 'every scan of your codes', true, 'free'));
   cards.push(statCard('Your logo displays', String(scans.length), 'rotation counts', true, 'free'));
 
   // mid depth

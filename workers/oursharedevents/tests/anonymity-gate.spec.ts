@@ -221,8 +221,6 @@ const USER_AGENT_READERS: Record<string, string> = {
     'isLinkPreviewRequest: robot or not, for link counts (/s/ and the short codes); returns a boolean, keeps nothing',
   'src/lib/invalid-traffic.ts':
     'isAutomatedClient: robot or not, for the sponsor proof layer (OSE-1310); returns a boolean, keeps nothing',
-  'src/handlers/qr-scan.ts':
-    'TL-078: hashed and stored only for a scan with no keyed id (ANON_ID_HASH_PEPPER unset), the visitor-count fallback; production requires the pepper',
 };
 const USER_AGENT_READ = /headers\.get\(\s*['"`]user-agent['"`]\s*\)/i;
 

@@ -129,13 +129,15 @@ test('the report link opens the report for this event', async ({ page }) => {
   await openReport(page);
 });
 
-// OSE-818 (owner 2026-10-11): the scan count is "Distinct scanners", read from
-// `distinct_scanners`. The old banned wording must not come back on the page.
-test('the scan card says "Distinct Scanners", in the lexicon', async ({ page }) => {
+// OSE-2214 (owner 2026-11-23): OSE counts scans on the code, never people, so
+// the figure read from `distinct_scanners` is labelled "Scans" (was "Distinct
+// scanners", OSE-818). The old banned wording must not come back on the page.
+test('the scan card says "Scans", never a count of people (OSE-2214)', async ({ page }) => {
   await openReport(page);
   const card = page.getByTestId('signed-link-distinct-scanners');
   await expect(card).toBeVisible();
-  await expect(card).toContainText('Distinct Scanners');
+  await expect(card).toContainText('Scans');
+  await expect(card).not.toContainText(/distinct scanners/i);
   const text = (await page.getByTestId('signed-link-report-article').innerText()).toLowerCase();
   expect(text).not.toContain('unique');
   expect(text).not.toContain('distinct gatherings');

@@ -883,10 +883,10 @@ export async function aggregateScanBuckets(
  * session-derived value out, so this is a SCAN count, and no poster id is
  * stored — the cell is the place.
  *
- * Only poster-hours with at least CORRIDOR_MAP_MIN_COUNT scans are counted:
- * dedup is per person per poster per hour, so a floored poster-hour is K
- * people, while a cell summed from raw scans could be one person at K posters.
- * A cell-hour whose poster-hours are all under the floor is stored as 0.
+ * Only poster-hours with at least CORRIDOR_MAP_MIN_COUNT scans are counted,
+ * so the floor applies to each code's own traffic before cells are summed
+ * (OSE-2214: scans on the code, never phones). A cell-hour whose poster-hours
+ * are all under the floor is stored as 0.
  *
  * Recomputed from scratch for every event in the 90-day window and swapped in
  * with one atomic batch (DELETE the window, INSERT the fresh rows), so a
@@ -921,10 +921,8 @@ async function aggregateScanCells(
     // INSERT ... SELECT ... GROUP BY rather than one INSERT per row.
     //
     // The K-floor is applied per poster-hour BEFORE poster-hours are summed
-    // into their cell. /q/ dedup is one scan per person per poster per hour,
-    // so a poster-hour of >= K scans is >= K people; a cell-hour summed from
-    // raw scans is not (one person scanning K posters in one cell is K
-    // scans). A sub-K poster-hour adds 0, so a cell-hour with activity but no
+    // into their cell, so each code's own traffic must reach K (OSE-2214).
+    // A sub-K poster-hour adds 0, so a cell-hour with activity but no
     // poster-hour at the floor is kept as a 0 row: the report then reads the
     // map as 'suppressed' (activity withheld), not as 'no scans'.
     //

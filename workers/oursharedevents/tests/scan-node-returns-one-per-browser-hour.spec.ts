@@ -97,20 +97,20 @@ beforeEach(async () => {
   await db().prepare('DELETE FROM scan_node_returns WHERE event_id = ?').bind(EVT).run();
 });
 
-describe('one WHO row per browser, event and hour', () => {
-  test('before/after: a second poster in the same hour is one scan, the scanner count is unchanged', async () => {
+describe('one placement row per scan (OSE-2214: no per-browser filter)', () => {
+  test('OSE-2214 | a message that still carries a phone id | stored with none, so every scan is its own row', async () => {
     await scan(1, 'pd_opb_a');
-    await scan(1, 'pd_opb_b'); // same browser, other poster, same hour
+    await scan(1, 'pd_opb_b'); // same (old-style) id, other poster, same hour
     await scan(2, 'pd_opb_a');
 
-    // Before 0101 the WHO table had 3 rows. After: 2 (browser 1 once, browser 2 once).
-    expect(await count('scan_node_returns')).toBe(2);
-    // Per-poster scans are untouched: all three scans are placed.
+    // OSE-2214 (owner, 2026-11-23): the writer stores no phone id, so nothing
+    // collapses by phone. Every scan is traffic on its code.
+    expect(await count('scan_node_returns')).toBe(3);
     expect(await count('scan_placement_events')).toBe(3);
 
     const agg = await aggregate();
-    expect(agg?.total_scans).toBe(2); // was 3
-    expect(agg?.distinct_agent_hashes).toBe(2); // unchanged
+    expect(agg?.total_scans).toBe(3);
+    expect(agg?.distinct_agent_hashes).toBe(0);
   });
 
   test('the same browser in another hour is another row', async () => {
@@ -125,17 +125,17 @@ describe('one WHO row per browser, event and hour', () => {
     expect(await count('scan_node_returns')).toBe(2);
   });
 
-  test('a direct duplicate insert is refused by the index, not just ignored by the writer', async () => {
-    await scan(7, 'pd_opb_a');
-    await expect(
+  test('a direct duplicate insert of a keyed row is refused by the index, not just ignored by the writer', async () => {
+    const insert = (id: string) =>
       db()
         .prepare(
           `INSERT INTO scan_node_returns (id, event_id, anonymous_id, scan_bucket, created_at)
-           VALUES ('snr_dup_direct', ?, ?, ?, '2026-10-10 19:00:00')`
+           VALUES (?, ?, ?, ?, '2026-10-10 19:00:00')`
         )
-        .bind(EVT, key(7), HOUR)
-        .run()
-    ).rejects.toThrow(/UNIQUE/i);
+        .bind(id, EVT, key(7), HOUR)
+        .run();
+    await insert('snr_dup_first');
+    await expect(insert('snr_dup_direct')).rejects.toThrow(/UNIQUE/i);
   });
 });
 

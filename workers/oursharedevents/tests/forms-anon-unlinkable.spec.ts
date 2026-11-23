@@ -224,16 +224,17 @@ describe('cross-database: a scan and the four forms from one cookie share no val
     await scan(cookieValue, token);
     await submitAllForms(cookieValue, eventId, 'join-test@example.com');
 
-    // The scan really was recorded under this cookie, so the join has a left side.
+    // The scan really was recorded. OSE-2214: it stores no phone id, so the
+    // join has no left side at all for this cookie.
     const scanIds = await scanAnonymousIds();
-    expect(scanIds.length).toBeGreaterThan(0);
     const scanRow = await mainDb()
       .prepare('SELECT COUNT(*) AS c FROM scan_node_returns WHERE event_id = ?')
       .bind(eventId)
       .first<{ c: number }>();
     expect(scanRow!.c).toBe(1);
-    // OSE-1659: the scan side holds the keyed id of this cookie, not the cookie.
-    expect(scanIds).toContain(await scanNodeKey(cookieValue, tenv().ANON_ID_HASH_PEPPER));
+    // OSE-2214: the scan side holds neither the cookie nor its keyed id.
+    expect(scanIds).not.toContain(await scanNodeKey(cookieValue, tenv().ANON_ID_HASH_PEPPER));
+    expect(scanIds).not.toContain(cookieValue);
 
     // Every form really wrote a row, and each row carries an id (the decision
     // was to replace the id, not drop it), so the join has a right side.
@@ -456,9 +457,12 @@ describe('erasure by email: the forms rows go, the scan rows are out of reach', 
     // No longer possible: finding that browser's scan rows from the email.
     expect(body.scanReturnsDeleted).toBe(0);
     expect(body.anonIdReturnsDeleted).toBe(0);
+    // OSE-2214: the scan row stays, and it names no phone.
     const scanRow = await mainDb()
-      .prepare('SELECT COUNT(*) AS c FROM scan_node_returns WHERE anonymous_id = ?')
-      .bind(await scanNodeKey(cookieValue, tenv().ANON_ID_HASH_PEPPER))
+      .prepare(
+        'SELECT COUNT(*) AS c FROM scan_node_returns WHERE event_id = ? AND anonymous_id IS NULL'
+      )
+      .bind(eventId)
       .first<{ c: number }>();
     expect(scanRow!.c).toBe(1);
   });

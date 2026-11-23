@@ -182,31 +182,28 @@ describe('scanNodeKey', () => {
 // 2. What a real scan stores
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe('a real scan stores the keyed id', () => {
-  test('INTEGRATION | GET /q/<token> with a cookie | the row holds scanNodeKey(cookie), not the cookie', async () => {
+describe('OSE-2214: a real scan stores no phone id', () => {
+  test('OSE-2214 | INTEGRATION | GET /q/<token> with a cookie | the row holds no id at all', async () => {
     const cookie = newCookieValue();
     const { eventId, token } = await newEvent();
     await scan(cookie, token);
 
-    const ids = await storedScanIds(eventId);
-    expect(ids).toEqual([await scanNodeKey(cookie, tenv().ANON_ID_HASH_PEPPER)]);
-    expect(ids[0]).not.toContain(cookie);
+    // OSE-2214 (owner, 2026-11-23): OSE counts the code, never the phone.
+    expect(await storedScanIds(eventId)).toEqual([null]);
   });
 
-  test('INTEGRATION | one cookie at two events | the same key at both, so a return is still countable', async () => {
+  test('OSE-2214 | INTEGRATION | one cookie at two events | no id at either, so no return can be linked', async () => {
     const cookie = newCookieValue();
     const a = await newEvent();
     const b = await newEvent();
     await scan(cookie, a.token);
     await scan(cookie, b.token);
 
-    const [idA] = await storedScanIds(a.eventId);
-    const [idB] = await storedScanIds(b.eventId);
-    expect(isScanNodeKey(idA)).toBe(true);
-    expect(idA).toBe(idB);
+    expect(await storedScanIds(a.eventId)).toEqual([null]);
+    expect(await storedScanIds(b.eventId)).toEqual([null]);
   });
 
-  test('INTEGRATION | scan, register, check in, then the returns job | the scan column holds no value found in any other table of either database', async () => {
+  test('OSE-2214 | INTEGRATION | scan, register, check in, then the returns job | the scan column holds no value at all', async () => {
     const cookie = newCookieValue();
     const { eventId, token } = await newEvent();
     await scan(cookie, token);
@@ -241,7 +238,7 @@ describe('a real scan stores the keyed id', () => {
       .prepare('SELECT COUNT(*) AS c FROM anon_id_returns WHERE venue_id = ?')
       .bind(eventId)
       .first<{ c: number }>();
-    expect(returns!.c, 'the returns job still finds this browser').toBe(1);
+    expect(returns!.c, 'OSE-2214: the returns job finds no browser to link').toBe(0);
 
     const scanIds = new Set(
       (
@@ -250,7 +247,7 @@ describe('a real scan stores the keyed id', () => {
           .all<{ anonymous_id: string }>()
       ).results.map((r) => r.anonymous_id)
     );
-    expect(scanIds.size).toBeGreaterThan(0);
+    expect(scanIds.size, 'OSE-2214: no scan row holds a phone id').toBe(0);
 
     const others = [
       ...(await everyValue(
@@ -337,24 +334,29 @@ async function distinctVisitors(eventId: string): Promise<number> {
   return row?.n ?? 0;
 }
 
-describe('TL-078: a keyed scan keeps no browser-name hash (2026-10-10)', () => {
+describe('TL-078 / OSE-2214: a scan keeps no browser-name hash', () => {
   // @born-red TL-078 | method: deliberate-fixture-break | date: 2026-10-10
-  test('INTEGRATION | GET /q/<token> with the pepper set | the row has the keyed id and no browser-name hash', async () => {
+  test('OSE-2214 | INTEGRATION | GET /q/<token> with the pepper set | the row has no id and no browser-name hash', async () => {
     const { eventId, token } = await newEvent();
     await scan(newCookieValue(), token);
-    expect((await storedScanIds(eventId)).map(isScanNodeKey)).toEqual([true]);
+    expect(await storedScanIds(eventId)).toEqual([null]);
     expect(await storedUaHashes(eventId)).toEqual([null]);
   });
 
-  test('INTEGRATION | two browsers with the same browser name | still counted as two visitors, by keyed id alone', async () => {
+  test('OSE-2214 | INTEGRATION | two scans | two placement rows, and nothing that tells the phones apart', async () => {
     const { eventId, token } = await newEvent();
     await scan(newCookieValue(), token);
     await scan(newCookieValue(), token);
+    expect(await storedScanIds(eventId)).toEqual([null, null]);
     expect(await storedUaHashes(eventId)).toEqual([null, null]);
-    expect(await distinctVisitors(eventId)).toBe(2);
+    const placed = await mainDb()
+      .prepare('SELECT COUNT(*) AS c FROM scan_placement_events WHERE event_id = ?')
+      .bind(eventId)
+      .first<{ c: number }>();
+    expect(placed!.c).toBe(2);
   });
 
-  test('INTEGRATION | no pepper | the hash is kept as the fallback, so the visitor count is not zero', async () => {
+  test('OSE-2214 | INTEGRATION | no pepper | no browser-name hash either: the browser name is not read', async () => {
     const { eventId, token } = await newEvent();
     const noPepper = { ...(env as unknown as QrScanEnv), ANON_ID_HASH_PEPPER: undefined };
     await handleQrScan(
@@ -365,12 +367,10 @@ describe('TL-078: a keyed scan keeps no browser-name hash (2026-10-10)', () => {
       token
     );
     expect(await storedScanIds(eventId)).toEqual([null]);
-    const [hash] = await storedUaHashes(eventId);
-    expect(hash).toMatch(/^[0-9a-f]{16}$/);
-    expect(await distinctVisitors(eventId)).toBe(1);
+    expect(await storedUaHashes(eventId)).toEqual([null]);
   });
 
-  test('INTEGRATION | a queued message with a keyed id and a hash (from the previous Worker) | the hash is not stored', async () => {
+  test('OSE-2214 | INTEGRATION | a queued message with a keyed id and a hash (from the previous Worker) | neither is stored', async () => {
     const { eventId } = await newEvent();
     const key = await scanNodeKey(newCookieValue(), tenv().ANON_ID_HASH_PEPPER);
     const msg: ScanMessage = {
@@ -388,7 +388,7 @@ describe('TL-078: a keyed scan keeps no browser-name hash (2026-10-10)', () => {
       { queue: 'ose-scans', messages: [message] } as unknown as MessageBatch<ScanMessage>,
       { DB: mainDb() }
     );
-    expect(await storedScanIds(eventId)).toEqual([key]);
+    expect(await storedScanIds(eventId)).toEqual([null]);
     expect(await storedUaHashes(eventId)).toEqual([null]);
   });
 });
@@ -398,12 +398,18 @@ describe('TL-078: a keyed scan keeps no browser-name hash (2026-10-10)', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('erasure reaches the keyed rows', () => {
-  test('INTEGRATION | an email linked to a cookie by a legacy form row | its keyed scan rows and returns are deleted', async () => {
+  test('INTEGRATION | an email linked to a cookie by a legacy form row | its keyed scan rows (stored before OSE-2214) and returns are deleted', async () => {
     const cookie = newCookieValue();
     const email = `snk-erase-${crypto.randomUUID().slice(0, 8)}@example.com`;
-    const { eventId, token } = await newEvent();
-    await scan(cookie, token);
+    const { eventId } = await newEvent();
     const key = await scanNodeKey(cookie, tenv().ANON_ID_HASH_PEPPER);
+    // A keyed row stored before OSE-2214 (scans store no id now).
+    await mainDb()
+      .prepare(
+        `INSERT INTO scan_node_returns (id, event_id, anonymous_id, scan_bucket) VALUES (?, ?, ?, '2026-10-10T12:00')`
+      )
+      .bind(`snr_${crypto.randomUUID()}`, eventId, key)
+      .run();
     expect(await storedScanIds(eventId)).toEqual([key]);
 
     // A pre-0016 form row: the only shape that still links an email to a cookie.
