@@ -1,0 +1,15 @@
+{
+  "type": "Feature",
+  "properties": {
+    "name": "Mexico, Central America, the Caribbean and Bermuda, as simple boxes",
+    "note": "Boxes, not borders, like street-map-us-region.geojson: a strip of the southern United States, the north of Colombia and Venezuela, and open ocean are included. Drawn 2026-11-22 for `pmtiles extract --region`; one region archive of North America (OSE-2210)."
+  },
+  "geometry": {
+    "type": "MultiPolygon",
+    "coordinates": [
+      [[[-118.5, 7.1], [-77.1, 7.1], [-77.1, 32.8], [-118.5, 32.8], [-118.5, 7.1]]],
+      [[[-85.1, 9.9], [-59.4, 9.9], [-59.4, 27.3], [-85.1, 27.3], [-85.1, 9.9]]],
+      [[[-65.0, 32.2], [-64.6, 32.2], [-64.6, 32.5], [-65.0, 32.5], [-65.0, 32.2]]]
+    ]
+  }
+}
