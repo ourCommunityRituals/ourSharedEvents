@@ -21,6 +21,7 @@
 // every `data-testid`, so the surface's existing selectors keep meaning what
 // they meant.
 
+import { cardPagerControls, cardPagerScript, PAGE_SIZE } from './card-pager.js';
 import { escapeHtml } from './html-escape.js';
 import { eventFormPath, eventPagePath } from './canonical.js';
 import { injectMarker } from './inject-marker.js';
@@ -237,7 +238,18 @@ export function renderEventList(
 
   const card = (e: EventListItem) =>
     renderEventCard(e, { sponsorTitle: sponsorTitles?.get(str(e.id)), lang });
+  // Owner 2026-11-22: every list of cards shows five at a time, with "Click for
+  // more" under it (lib/card-pager.ts). Upcoming and wrapped page apart, so the
+  // wrapped heading never sits over cards that are not showing yet. The order is
+  // the server's: this page knows no place.
+  let paged = false;
+  const pager = (count: number, cards: string, testid: string) => {
+    if (count <= PAGE_SIZE) return '';
+    paged = true;
+    return cardPagerControls({ list: 'events', cards, testid, lang });
+  };
   let html = ordered.upcoming.map(card).join('');
+  html += pager(upcoming, 'article.event-card:not([data-phase="post_event"])', 'events-more');
   if (ordered.wrapped.length > 0) {
     if (opts.wrappedHeading !== false) {
       if (upcoming === 0) {
@@ -246,7 +258,13 @@ export function renderEventList(
       html += `<h2 class="events-subheading" data-testid="public-events-wrapped-heading">${msg(lang, 'list.wrappedHeading')}</h2>`;
     }
     html += ordered.wrapped.map(card).join('');
+    html += pager(
+      ordered.wrapped.length,
+      'article.event-card[data-phase="post_event"]',
+      'events-wrapped-more'
+    );
   }
+  if (paged) html += cardPagerScript();
 
   return { html, countText, upcoming };
 }

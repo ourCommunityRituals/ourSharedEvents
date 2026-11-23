@@ -7,7 +7,7 @@
  * until the list ends; a filter starts again at five; the cards nearest first
  * once the map's list carries distances, the server's order until then), and what
  * the script may never do: read a position, ask for anything or store anything.
- * A real browser runs it in tests/e2e/2-pages/landing-pager.component.spec.ts.
+ * A real browser runs it in tests/e2e/2-pages/landing-tabs.component.spec.ts.
  *
  * Node project: pure rendering, the script's text, and jsdom. Registered in
  * vitest.node-specs.mjs.
@@ -18,6 +18,7 @@ import { latLngToCell } from 'h3-js';
 import { renderLandingArea, type LandingAreaItem } from '../src/lib/landing-area';
 import { areaPager, AREA_PAGER_SCRIPT, PAGE_SIZE } from '../src/lib/area-pager';
 import { cellsKey } from '../src/lib/street-map';
+import { CARD_PAGER_SCRIPT } from '../src/lib/card-pager';
 
 const NOW = Date.parse('2026-11-21T12:00:00Z');
 const CHICAGO = latLngToCell(41.8781, -87.6298, 7);
@@ -85,12 +86,14 @@ describe('the cards five at a time | what the server sends', () => {
     const list = html.indexOf('data-testid="area-list"');
     const button = html.indexOf('data-testid="area-more"');
     expect(button).toBeGreaterThan(list);
+    // The app's one card pager (lib/card-pager.ts), pointed at the landing's list.
     expect(html).toMatch(
-      /<p class="area-more" hidden><button class="btn btn-secondary" type="button" data-testid="area-more">Click for more<\/button><\/p>/
+      /<p class="card-more" data-card-more="area-list" data-cards="article.event-card" hidden><button class="btn btn-secondary" type="button" data-testid="area-more">Click for more<\/button><\/p>/
     );
     expect(html).toMatch(
       /role="status" aria-live="polite" data-testid="area-more-status" data-says="Showing %n of %t events."/
     );
+    expect(html).toContain(CARD_PAGER_SCRIPT);
     // Without the script, nothing is held back.
     expect(html).not.toMatch(/<article[^>]*data-more/);
   });
@@ -103,7 +106,7 @@ describe('the cards five at a time | what the server sends', () => {
 
   it('the style hides only the waiting cards, with tokens and no colour of its own', () => {
     const style = areaPager('en').match(/<style>[^<]*<\/style>/)![0];
-    expect(style).toContain('#area-list .event-card[data-more]{display:none}');
+    expect(style).toContain('[data-paged-out]{display:none!important}');
     // Never a rule that reads as hiding the list itself (tests/listing-card-links.spec.ts).
     expect(style).not.toMatch(/\.view-list[^{}]*\{\s*display:\s*none/);
     expect(style).not.toMatch(/#[0-9a-f]{3,8}\b/i);
@@ -199,10 +202,11 @@ describe('the cards five at a time | what the script does', () => {
 
 describe('the cards five at a time | what the script may never do', () => {
   // The script's own text, as the module exports it.
-  const src = AREA_PAGER_SCRIPT;
-  it('is the script the pager sends', () => {
-    expect(src).toContain('area-more');
-    expect(areaPager('en')).toContain(src);
+  const src = AREA_PAGER_SCRIPT + CARD_PAGER_SCRIPT;
+  it('is the script the pager sends, beside the shared pager', () => {
+    expect(AREA_PAGER_SCRIPT).toContain('ol.amap-legend');
+    expect(areaPager('en')).toContain(AREA_PAGER_SCRIPT);
+    expect(areaPager('en')).toContain(CARD_PAGER_SCRIPT);
   });
   it('never reads a position, asks for anything, or stores anything', () => {
     for (const banned of [

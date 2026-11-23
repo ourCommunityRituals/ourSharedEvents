@@ -751,6 +751,13 @@
       "testCount": 21
     },
     {
+      "file": "workers/oursharedevents/tests/card-pager.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 14
+    },
+    {
       "file": "workers/oursharedevents/tests/category-registry.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

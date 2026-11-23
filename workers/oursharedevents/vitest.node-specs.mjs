@@ -192,6 +192,7 @@ export const NODE_SPECS = [
   'tests/area-tabs.spec.ts',
   'tests/category-slider.spec.ts',
   'tests/area-pager.spec.ts',
+  'tests/card-pager.spec.ts',
   'tests/street-map-landing.spec.ts',
   // The landing's own call for the street layer (the pages.ts block Stryker
   // mutates): its surface in the log line, when it asks, how many passes.

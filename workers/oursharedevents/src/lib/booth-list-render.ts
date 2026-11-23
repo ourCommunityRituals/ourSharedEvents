@@ -15,7 +15,9 @@
  *      one whose stored category is not on the list, is in the "Other" group,
  *      which is last. Within a group the stalls keep the order of the public
  *      read (the organizer's sort, then number). Each stall is one row, a link
- *      to its own page, showing "Stall <number>" and the trading name;
+ *      to its own page, showing "Stall <number>" and the trading name. A group
+ *      of more than five shows five at a time, with "Click for more" under it
+ *      (lib/card-pager.ts);
  *   5. a link to the fair's page, then Back.
  *
  * What it never says: a count of any kind (not how many stalls, not how many in
@@ -29,6 +31,7 @@
 
 import { escapeHtml as esc } from './html-escape';
 import { renderBackButton } from './back-button';
+import { cardPagerControls, cardPagerScript, PAGE_SIZE } from './card-pager';
 import { eventPagePath } from './canonical';
 import { BOOTH_CATEGORIES, type BoothCategory } from './event-booths';
 import { boothPagePath, type PublicBooth } from './public-booths';
@@ -98,11 +101,24 @@ function renderRow(eventId: string, booth: PublicBooth): string {
 
 function renderGroup(eventId: string, group: BoothGroup): string {
   const headingId = `booth-group-${group.category}`;
+  const listId = `booth-list-${group.category}`;
+  // Owner 2026-11-22: every list of cards shows five at a time, with "Click for
+  // more" under it (lib/card-pager.ts). Its status line names no number: this
+  // page never says how many stalls there are.
+  const pager =
+    group.booths.length > PAGE_SIZE
+      ? cardPagerControls({
+          list: listId,
+          cards: 'li',
+          testid: `booth-list-more-${group.category}`,
+          says: 'Stalls show five at a time.',
+        })
+      : '';
   return `<section class="bl-group" aria-labelledby="${headingId}" data-testid="booth-list-group" data-category="${group.category}">
         <h2 class="section-title" id="${headingId}" data-testid="booth-list-group-title">${esc(group.label)}</h2>
-        <ul class="detail-list bl-list">
+        <ul class="detail-list bl-list" id="${listId}">
         ${group.booths.map((b) => renderRow(eventId, b)).join('\n        ')}
-        </ul>
+        </ul>${pager}
       </section>`;
 }
 
@@ -122,6 +138,7 @@ export function renderBoothListPage(input: BoothListPageInput): string {
       ${renderSponsorStrip(input.sponsors)}
       <h1 class="bl-title" id="booth-list-title" data-testid="booth-list-title">Stalls</h1>
       ${groups.map((g) => renderGroup(event.id, g)).join('\n      ')}
+      ${groups.some((g) => g.booths.length > PAGE_SIZE) ? cardPagerScript() : ''}
       <a class="btn btn-primary btn-block bp-gap" href="${esc(eventPath)}" data-testid="booth-list-event-link">See the fair: ${eventTitle}</a>
       ${renderBackButton({ fallbackHref: eventPath, testid: 'booth-list-back', className: 'btn btn-secondary btn-block' })}`,
   });
