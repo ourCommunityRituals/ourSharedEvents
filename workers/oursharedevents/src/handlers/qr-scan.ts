@@ -28,6 +28,8 @@
  *   - KV get/put error → the visitor still reaches the page, but the scan is
  *     not written or counted (OSE-1784, owner 2026-11-23): a count can be a
  *     little low during a blip, never lifted past the floor by repeats.
+ *     The room's vote code is the exception: its scans are never a published
+ *     count, so it is written without the check and voting keeps working.
  *
  * Backend blips (OSE-1988): no D1 or KV error becomes a 500. The deployment
  * lookup is retried once, then the visitor is sent home (no cookie, no scan);
@@ -253,8 +255,11 @@ export async function handleQrScan(
   // marker exists only while the first scan's write stood (a failed write
   // releases it, below).
   // A scan the dedup check could not vet (dedupUnavailable) is neither stored
-  // nor a duplicate, so it carries no vote pass either (OSE-1784).
+  // nor a duplicate (OSE-1784), except on the room's vote code: its scans are
+  // never a published count, so it skips the check and voting keeps working
+  // (owner, 2026-11-23, "keep voting working").
   let scanStored = isDuplicate;
+  const uncounted = dedupUnavailable && deployment.is_vote_code !== 1;
 
   // OSE-1496 (owner, 2026-11-23): at most POSTER_HOUR_CAP scans per poster per
   // hour are counted, whatever cookie a caller sends. A duplicate takes no
@@ -269,7 +274,7 @@ export async function handleQrScan(
     }
   }
 
-  if (!isDuplicate && !dedupUnavailable && !overCap) {
+  if (!isDuplicate && !uncounted && !overCap) {
     const bucket = scanBucket(nowDate);
     // TL-078: the browser-name hash is only the fallback for a scan with no
     // keyed id. With the id, the browser name is not read at all.
