@@ -2004,7 +2004,7 @@ const ANALYTIC_LAYER: ThreatEntry[] = [
     id: 'TL-094',
     layer: 'export_boundary',
     threat:
-      "A withheld event recovered by subtraction: the SharedReport publishes an event's count exactly from 5 up, while the corridor baseline and the BigQuery returns export round a group that also held an event under 5. 11 published beside a group of 15 says the other event had 4 (OSE-1946 analysis: exact in 8% of cases, narrowed in 72%). Mitigated by ADR-026 rule B: an event whose own count is withheld adds no one to any group (PUBLISHED_EVENT_IDS_SQL in refreshCorridorBaselines; inline current-pepper gate in exportAnonIdReturns), and a baseline bucket whose events are all withheld holds no row, so a count an earlier run stored there cannot stay readable.",
+      "A withheld event recovered by subtraction: the SharedReport publishes an event's count exactly from 5 up, while the corridor baseline and the BigQuery returns export round a group that also held an event under 5. 11 published beside a group of 15 says the other event had 4 (OSE-1946 analysis: exact in 8% of cases, narrowed in 72%). Mitigated by ADR-026 rule B: an event whose own count is withheld adds no one to any group (refreshCorridorBaselines adds up only published poster figures since OSE-1784; inline current-pepper gate in exportAnonIdReturns), and a baseline bucket whose events are all withheld holds no row, so a count an earlier run stored there cannot stay readable.",
     severity: 'HIGH',
     target_invariant: { number: 7, name: 'aggregate_only_reporting' },
     mitigation_story: 'OSE-1946',

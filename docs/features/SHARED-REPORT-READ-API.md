@@ -159,11 +159,12 @@ interface SharedReport {
   } | null;
 
   // 3. Corridor density — vs. rolling 30d/90d baseline
-  //    The baselines hold people only from events with at least K = 5 distinct attendees
-  //    (ADR-026 rule B), so a withheld event adds no one to them. `this_event_count` is
-  //    `distinct_scanners` (OSE-1784), and the ratios are worked out from it. The baselines
-  //    are still distinct people over the corridor's events, so a ratio compares poster
-  //    scans with a crowd of people: an index of how busy the night was, not a share.
+  //    `this_event_count` is `distinct_scanners` (OSE-1784), and the ratios are worked
+  //    out from it. Since 2026-11-23 (owner, "posters too") the baselines are the sum of
+  //    the same published poster figure over the corridor's events in that weekday and
+  //    hour, so a ratio divides like by like, and a withheld poster-hour adds nothing to
+  //    either side (ADR-026 rule B holds by construction). Nightly snapshots taken before
+  //    that day counted distinct people, so the archive changes meaning on that date.
   corridor_density: {
     this_event_count: number | null;
     baseline_30d: number | null;

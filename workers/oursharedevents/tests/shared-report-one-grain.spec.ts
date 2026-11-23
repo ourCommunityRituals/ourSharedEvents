@@ -22,7 +22,7 @@
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { buildSharedReport, type SharedReport } from '../src/lib/shared-report-builder';
-import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
+import { CORRIDOR_MAP_MIN_COUNT, refreshCorridorBaselines } from '../src/lib/shared-report';
 import { clearPosterHours, seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
@@ -215,6 +215,45 @@ describe('one people figure, from the posters (OSE-1784)', () => {
     expect(note?.detail?.match(/\d+/g)).toEqual([String(K)]);
     // The aggregate row still dates the report.
     expect(rep._meta.materialized_at).not.toBeNull();
+  });
+
+  // OSE-1784 (owner, 2026-11-23, "posters too"): the corridor baseline is the
+  // sum of the events' published poster figures. Before, it counted distinct
+  // people, so an event alone in its slot published its people (15) beside its
+  // poster sum (10), and the difference said someone was there whom no
+  // published figure counts.
+  test('an event alone in its slot: the baseline it builds is its own poster sum, never its people', async () => {
+    const id = `${PREFIX}alone`;
+    const start = new Date(Date.now() - 10 * 86400_000);
+    start.setUTCMinutes(0, 0, 0);
+    // 12 and 3 at one poster: 10 published; 15 different people came.
+    await seedEvent(id, { hours: [12, 3], attendees: 15 });
+    await tenv()
+      .DB.prepare(`UPDATE events SET start_date = ? WHERE id = ?`)
+      .bind(start.toISOString(), id)
+      .run();
+    await tenv()
+      .DB.prepare(`DELETE FROM corridor_density_baseline WHERE corridor_id = ?`)
+      .bind(CELL7)
+      .run();
+
+    const r = await refreshCorridorBaselines({ DB: tenv().DB });
+    expect(r.errors).toBe(0);
+    const row = await tenv()
+      .DB.prepare(
+        `SELECT window_30d_count, window_90d_count FROM corridor_density_baseline
+          WHERE corridor_id = ? AND bucket_dow = ? AND bucket_hour = ?`
+      )
+      .bind(CELL7, start.getUTCDay(), start.getUTCHours())
+      .first<{ window_30d_count: number; window_90d_count: number }>();
+    expect(row).toEqual({ window_30d_count: 10, window_90d_count: 10 });
+
+    const rep = await build(id);
+    expect(posterSum(rep)).toBe(10);
+    expect(rep.corridor_density.this_event_count).toBe(10);
+    // Like divided by like: the event is the whole of its baseline.
+    expect(rep.corridor_density.density_ratio_30d).toBe(1);
+    expect(JSON.stringify(rep)).not.toMatch(/:15\b/);
   });
 
   test('another instance of the series is its own poster sum', async () => {

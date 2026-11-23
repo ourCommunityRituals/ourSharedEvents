@@ -24,11 +24,15 @@
  *     One person counts once per poster per hour, so an hourly poster count is
  *     a count of people (OSE-1459): the K-floor on poster cells and on
  *     poster_attribution then means "at least K people", not "K requests".
- *   - KV missing, or a KV get/put error → still write scan (dedup is best-effort).
+ *   - KV missing → still write scan (a config gap, not a blip).
+ *   - KV get/put error → the visitor still reaches the page, but the scan is
+ *     not written or counted (OSE-1784, owner 2026-11-23): a count can be a
+ *     little low during a blip, never lifted past the floor by repeats.
  *
  * Backend blips (OSE-1988): no D1 or KV error becomes a 500. The deployment
  * lookup is retried once, then the visitor is sent home (no cookie, no scan);
- * a KV error skips dedup; a scan write error is logged and the redirect stands.
+ * a KV error leaves the scan uncounted; a scan write error is logged and the
+ * redirect stands.
  *
  * Structured log (SCAN_RECORDED) contains only aggregated signals: no raw
  * anon_id, no exact timestamp, no lat/lng.
@@ -214,6 +218,7 @@ export async function handleQrScan(
   // Hour dedup (OSE-1459): same anon + same deployment in the same hour bucket
   // the scan is stored under → skip write. One person, one poster, one hour.
   let isDuplicate = false;
+  let dedupUnavailable = false;
   let dedupKey: string | null = null;
   if (env.RATE_LIMIT_KV) {
     const key = scanDedupKey(scanKey ?? anonId, deploymentId, scanBucket(nowDate));
@@ -227,11 +232,16 @@ export async function handleQrScan(
         dedupKey = key;
       }
     } catch (err) {
-      // OSE-1988: dedup is best-effort, as when KV is unbound. A KV blip skips
-      // it and the scan is written; no marker is held, so none is released.
+      // OSE-1784 (owner, 2026-11-23, "skip counting it"): when the check
+      // cannot run, the scan is not counted. The visitor still reaches the
+      // page; the count can only be a little low, never lifted by one person
+      // scanning again and again (the SharedReport counts these rows as
+      // people). No marker is held, so none is released. (Was OSE-1988:
+      // write it anyway.)
+      dedupUnavailable = true;
       console.warn(
         JSON.stringify({
-          type: 'SCAN_DEDUP_SKIPPED',
+          type: 'SCAN_DEDUP_UNAVAILABLE',
           deployment_id: deploymentId,
           error: errorLabel(err),
         })
@@ -247,16 +257,17 @@ export async function handleQrScan(
   // OSE-1496 (owner, 2026-11-23): at most POSTER_HOUR_CAP scans per poster per
   // hour are counted, whatever cookie a caller sends. A duplicate takes no
   // place. Past the cap the visitor is sent on as usual and nothing is stored.
-  // The room's vote code is not capped (lib/poster-hour-cap.ts).
+  // The room's vote code is not capped (lib/poster-hour-cap.ts). A scan the
+  // dedup check could not vet takes no place either: it is not counted.
   let overCap = false;
-  if (!isDuplicate && deployment.is_vote_code !== 1) {
+  if (!isDuplicate && !dedupUnavailable && deployment.is_vote_code !== 1) {
     overCap = !(await takePosterHourPlace(env.DB, deploymentId, scanHourOf(scanBucket(nowDate))));
     if (overCap) {
       console.log(JSON.stringify({ type: 'SCAN_NOT_COUNTED', reason: 'poster_hour_cap' }));
     }
   }
 
-  if (!isDuplicate && !overCap) {
+  if (!isDuplicate && !dedupUnavailable && !overCap) {
     const bucket = scanBucket(nowDate);
     // TL-078: the browser-name hash is only the fallback for a scan with no
     // keyed id. With the id, the browser name is not read at all.
