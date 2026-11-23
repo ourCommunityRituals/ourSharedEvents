@@ -62,6 +62,7 @@ const SCAN_TABLES = [
   'anon_id_returns', // keyed returning-browser rows, rolled up from scans
   'scan_aggregates', // event-hour rollup of the two above
   'scan_cell_aggregates', // event-hour-cell rollup of the two above
+  'scan_poster_hour_tally', // scans per poster per hour, for the cap (0116, OSE-1496)
   'shortlinks', // clicks and last_clicked_at move on /s
   'shortlink_click_daily', // day counter moved on /s
   'share_opens_daily', // day counter moved by opening a shared link

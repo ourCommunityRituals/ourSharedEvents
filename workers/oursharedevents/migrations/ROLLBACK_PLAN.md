@@ -110,6 +110,19 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0116: scan_poster_hour_tally (OSE-1496, the 100-scans-per-poster-hour cap).
+-- Additive: one new table, no index, no row written. THE ROLLBACK IS: revert
+-- the Worker and LEAVE THE TABLE. The older Worker does not know it, so it
+-- counts every scan again (no cap) and nothing prunes the table; the newer
+-- Worker's cron prunes it when it returns.
+--
+-- Anonymity on rollback: counts per poster per hour only (no browser, cookie,
+-- address or location column). Leaving it is safe.
+--
+-- Surgical reverse, only if the table itself must go. It forgets only the
+-- current hour's places, so a poster may count up to 100 more that hour:
+DROP TABLE IF EXISTS scan_poster_hour_tally;
+
 -- 0114: the night's result on vote_sets (OSE-2130, OSE ADR-040 decision 7):
 -- outcome, winner_object_id and winner_team_id, all null until a set is final.
 -- Additive: three nullable columns. No row is written or rewritten.

@@ -19,6 +19,7 @@
  */
 
 import { env, SELF } from 'cloudflare:test';
+import { signAnonId } from '../src/lib/anonymous-id';
 import { describe, test, expect, beforeAll, vi, afterEach } from 'vitest';
 import {
   handleFormRegistration,
@@ -53,6 +54,11 @@ const FORMS_ANON_COLUMNS = [
   { table: 'form_surveys', column: 'anonymous_id' },
   { table: 'email_signups', column: 'anonymous_id' },
 ] as const;
+
+/** The cookie the Worker would have signed for this id (OSE-1496). */
+function signed(id: string): Promise<string> {
+  return signAnonId(id, (env as unknown as { ANON_ID_HASH_PEPPER: string }).ANON_ID_HASH_PEPPER);
+}
 
 function newCookieValue(): string {
   return `anon_${crypto.randomUUID()}`;
@@ -130,7 +136,7 @@ afterEach(() => {
 async function scan(cookieValue: string, token: string): Promise<void> {
   const res = await SELF.fetch(`https://t.test/q/${token}`, {
     redirect: 'manual',
-    headers: { Cookie: `ose_anon=${cookieValue}`, 'User-Agent': 'unlinkable-spec' },
+    headers: { Cookie: `ose_anon=${await signed(cookieValue)}`, 'User-Agent': 'unlinkable-spec' },
   });
   expect(res.status).toBe(302);
 }
@@ -143,7 +149,10 @@ async function submit(
 ): Promise<Response> {
   const res = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/forms/${form}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: `ose_anon=${cookieValue}` },
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: `ose_anon=${await signed(cookieValue)}`,
+    },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   return res;

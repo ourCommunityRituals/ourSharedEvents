@@ -67,6 +67,7 @@ const DB_TABLES = [
   'scan_cell_aggregates', // 0087 (OSE-1459 — scans counted at each poster res9 cell)
   'scan_node_returns', // 0062 (OSE-798 A1 — session side of the split scan path; no placement id)
   'scan_placement_events', // 0062 (OSE-798 A1 — placement side; no session-derived column)
+  'scan_poster_hour_tally', // 0116 (OSE-1496 — scans per poster per hour, for the 100 cap; counts only)
   'security_alerts', // 0042 (OSE-558 security observability)
   'security_metrics', // 0042 (OSE-558 security observability)
   'share_opens_daily', // 0096 (OSE-1684 — share opens per event × screen × phase × day, aggregate only)

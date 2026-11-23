@@ -51,8 +51,8 @@ function reqWithCookie(cookie: string): Request {
 }
 
 describe('OSE-1053 Layer A — Boundary: an OW session cannot bleed into the anon scan', () => {
-  test('OSE-1053 | UNIT | OW named session + N profile cookies, no ose_anon | anon id is freshly generated, independent of every OW value', () => {
-    const { anonId, isNew } = getOrCreateAnonId(reqWithCookie(OW_NAMED_COOKIES));
+  test('OSE-1053 | UNIT | OW named session + N profile cookies, no ose_anon | anon id is freshly generated, independent of every OW value', async () => {
+    const { anonId, isNew } = await getOrCreateAnonId(reqWithCookie(OW_NAMED_COOKIES), undefined);
 
     // No `ose_anon` by name ⇒ a fresh anonymous id, not derived from anything sent.
     expect(isNew).toBe(true);
@@ -64,10 +64,13 @@ describe('OSE-1053 Layer A — Boundary: an OW session cannot bleed into the ano
     }
   });
 
-  test('OSE-1053 | UNIT | ose_anon present alongside OW cookies | reads ONLY ose_anon, ignores every OW cookie', () => {
+  test('OSE-1053 | UNIT | ose_anon present alongside OW cookies | reads ONLY ose_anon, ignores every OW cookie', async () => {
+    // No pepper here (unsigned read); the signed read is in
+    // anon-cookie-signing-and-poster-cap.spec.ts (OSE-1496).
     const existing = 'anon_1111-2222-3333-4444';
-    const { anonId, isNew } = getOrCreateAnonId(
-      reqWithCookie(`ose_anon=${existing}; ${OW_NAMED_COOKIES}`)
+    const { anonId, isNew } = await getOrCreateAnonId(
+      reqWithCookie(`ose_anon=${existing}; ${OW_NAMED_COOKIES}`),
+      undefined
     );
 
     expect(isNew).toBe(false);
@@ -75,11 +78,12 @@ describe('OSE-1053 Layer A — Boundary: an OW session cannot bleed into the ano
     expect(anonId).toBe(existing);
   });
 
-  test('OSE-1053 | UNIT | adversarial: an OW cookie whose VALUE looks like an anon id | is NOT adopted (name-scoped read, not value-sniffed)', () => {
+  test('OSE-1053 | UNIT | adversarial: an OW cookie whose VALUE looks like an anon id | is NOT adopted (name-scoped read, not value-sniffed)', async () => {
     // An attacker-controlled OW profile cookie carrying an `anon_`-shaped value
     // must never be mistaken for the OSE anon cookie.
-    const { anonId, isNew } = getOrCreateAnonId(
-      reqWithCookie('ow_profile_curator=anon_forged-by-ow; ow_session=named-session-abc123')
+    const { anonId, isNew } = await getOrCreateAnonId(
+      reqWithCookie('ow_profile_curator=anon_forged-by-ow; ow_session=named-session-abc123'),
+      undefined
     );
 
     expect(isNew).toBe(true); // no `ose_anon` by NAME ⇒ fresh
@@ -87,7 +91,12 @@ describe('OSE-1053 Layer A — Boundary: an OW session cannot bleed into the ano
   });
 
   test('OSE-1053 | UNIT | setAnonCookie emits a HOST-ONLY cookie | no Domain attribute; HttpOnly + Secure + SameSite=Lax present', () => {
-    const res = setAnonCookie(new Response(null, { status: 302 }), generateAnonId());
+    const anonId = generateAnonId();
+    const res = setAnonCookie(new Response(null, { status: 302 }), {
+      anonId,
+      isNew: true,
+      cookieValue: anonId,
+    });
     const setCookie = res.headers.get('Set-Cookie') ?? '';
 
     // Parse-and-assert the emitted header (integrity, not toContain-only).

@@ -15,6 +15,7 @@
  */
 
 import { env, SELF } from 'cloudflare:test';
+import { signAnonId } from '../src/lib/anonymous-id';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { SCAN_NODE_KEY_PREFIX, isScanNodeKey, scanNodeKey } from '../src/lib/scan-node-key';
 import { eventAnonKey } from '../src/lib/event-anon-key';
@@ -37,6 +38,11 @@ interface TestEnv {
 const tenv = () => env as unknown as TestEnv;
 const mainDb = () => tenv().DB;
 const formsDb = () => tenv().FORMS_DB;
+
+/** The cookie the Worker would have signed for this id (OSE-1496). */
+function signed(id: string): Promise<string> {
+  return signAnonId(id, (env as unknown as { ANON_ID_HASH_PEPPER: string }).ANON_ID_HASH_PEPPER);
+}
 
 function newCookieValue(): string {
   return `anon_${crypto.randomUUID()}`;
@@ -80,7 +86,10 @@ async function newEvent(): Promise<{ eventId: string; token: string }> {
 async function scan(cookieValue: string, token: string): Promise<void> {
   const res = await SELF.fetch(`https://t.test/q/${token}`, {
     redirect: 'manual',
-    headers: { Cookie: `ose_anon=${cookieValue}`, 'User-Agent': 'scan-node-key-spec' },
+    headers: {
+      Cookie: `ose_anon=${await signed(cookieValue)}`,
+      'User-Agent': 'scan-node-key-spec',
+    },
   });
   expect(res.status).toBe(302);
 }
@@ -203,13 +212,13 @@ describe('a real scan stores the keyed id', () => {
     await scan(cookie, token);
     const reg = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/forms/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: `ose_anon=${cookie}` },
+      headers: { 'Content-Type': 'application/json', Cookie: `ose_anon=${await signed(cookie)}` },
       body: JSON.stringify({ name: 'Pat Example', email: 'snk-join@example.com' }),
     });
     expect(reg.status).toBe(200);
     const checkin = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/forms/checkin`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: `ose_anon=${cookie}` },
+      headers: { 'Content-Type': 'application/json', Cookie: `ose_anon=${await signed(cookie)}` },
     });
     expect(checkin.status).toBe(200);
 

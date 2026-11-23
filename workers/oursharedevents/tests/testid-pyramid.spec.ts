@@ -40,6 +40,7 @@
  */
 
 import { env, SELF } from 'cloudflare:test';
+import { signAnonId } from '../src/lib/anonymous-id';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { eventAnonKey } from '../src/lib/event-anon-key';
 import { CORE_TIME_AND_TYPE } from './helpers/core-values';
@@ -527,7 +528,8 @@ describe('L3 Integration: Anonymous ID → DB → Form submissions', () => {
     expect(setCookie).toContain('SameSite=Lax'); // invariant #1 — cookie contract completeness
 
     // The DB holds the keyed id, and it is not the value the cookie was set to.
-    const cookieValue = /ose_anon=(anon_[a-zA-Z0-9_-]+)/.exec(setCookie)![1];
+    // The cookie is `<id>_s1_<signature>` (OSE-1496); keyed ids derive from the id.
+    const cookieValue = /ose_anon=(anon_[a-zA-Z0-9_-]+)/.exec(setCookie)![1].split('_s1_')[0];
     const tenv = env as unknown as TestEnv;
     const row = await tenv.FORMS_DB.prepare(
       'SELECT anonymous_id FROM form_registrations WHERE event_id = ? ORDER BY created_at DESC LIMIT 1'
@@ -543,13 +545,17 @@ describe('L3 Integration: Anonymous ID → DB → Form submissions', () => {
   test('returning visitor with cookie gets the same keyed id on every form of one event', async () => {
     const eventId = 'evt-integ-anon-reuse';
     const anonId = 'anon_test-fixed-id-12345';
+    const signedCookie = await signAnonId(
+      anonId,
+      (env as unknown as { ANON_ID_HASH_PEPPER: string }).ANON_ID_HASH_PEPPER
+    );
 
     // First submission sets the cookie
     const res1 = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/forms/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Cookie: `ose_anon=${anonId}`,
+        Cookie: `ose_anon=${signedCookie}`,
       },
       body: JSON.stringify({ name: 'Return Visitor 1' }),
     });
@@ -558,7 +564,7 @@ describe('L3 Integration: Anonymous ID → DB → Form submissions', () => {
     // Second submission with same cookie
     const res2 = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/forms/checkin`, {
       method: 'POST',
-      headers: { Cookie: `ose_anon=${anonId}` },
+      headers: { Cookie: `ose_anon=${signedCookie}` },
     });
     expect(res2.status).toBe(200);
 

@@ -38,6 +38,12 @@ export interface FlooredCount {
   suppressed: boolean;
   /** The floor applied (echoed so clients render "below N" without hardcoding). */
   floor: number;
+  /**
+   * Present (true) only on a scan figure that includes a poster-hour which
+   * reached the per-poster-hour cap (lib/poster-hour-cap.ts, OSE-1496): the
+   * real figure may be higher, so it reads "N or more".
+   */
+  at_least?: true;
 }
 
 /**

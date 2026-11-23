@@ -95,7 +95,8 @@ describe('QA-1: Migration idempotency', () => {
     // + 1 (event_booths — migration 0109, OSE-1998) = 41.
     // + 6 (votable_objects, vote_sets, vote_tallies, vote_receipts,
     //   vote_participants, vote_team_markers — migration 0111, OSE-2125) = 47.
-    expect(names).toHaveLength(47);
+    // + 1 (scan_poster_hour_tally — migration 0116, OSE-1496; no index) = 48.
+    expect(names).toHaveLength(48);
   });
 
   test('indexes remain at exactly 90 after idempotent re-run', async () => {

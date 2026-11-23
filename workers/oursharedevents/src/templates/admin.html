@@ -7953,7 +7953,9 @@
           // `plan`; that is the plan, not the privacy floor, so it says so.
           at('pd-scans').textContent = scansLocked
             ? 'Scan counts come with the Mid plan'
-            : scans === null ? oseFewerThan(pd.scans && pd.scans.floor, 'scans in any hour') : scans + ' scans';
+            : scans === null ? oseFewerThan(pd.scans && pd.scans.floor, 'scans in any hour')
+            // OSE-1496: a poster that reached 100 scans in an hour counted no more.
+            : scans + (pd.scans.at_least ? ' or more scans' : ' scans');
 
           // 1. The short link + Copy lead the card.
           at('pd-short-link').textContent = scanUrl;
@@ -9741,7 +9743,7 @@
         if (!live) lede = 'Your event link, poster and QR code switch on when you publish.';
         else if (!hasLink) lede = 'Open the poster once to create your event link, then share it with friends and family.';
         else if (tapsN === null && scansN === null) lede = 'Share your link with friends and family. Every tap opens the event page; taps show here once a link has 5 or more. Posters widen the reach.';
-        else lede = 'People are finding it: ' + (tapsN === null ? oseFewerThan(a.clicks && a.clicks.floor, 'taps on any one link', true) : tapsN + ' link taps') + ' and ' + (scansN === null ? oseFewerThan(a.scans && a.scans.floor, 'poster scans in any one hour', true) : scansN + ' poster scans') + ' so far.';
+        else lede = 'People are finding it: ' + (tapsN === null ? oseFewerThan(a.clicks && a.clicks.floor, 'taps on any one link', true) : tapsN + ' link taps') + ' and ' + (scansN === null ? oseFewerThan(a.scans && a.scans.floor, 'poster scans in any one hour', true) : scansN + (a.scans.at_least ? ' or more poster scans' : ' poster scans')) + ' so far.';
         set('pre-event-lede', lede);
 
         // The one thing to do now.
@@ -9798,7 +9800,7 @@
 
         // A withheld tile reads in words, never "Held", "<5" or 0. Both
         // figures are sums of floored parts, so the words say which part.
-        set('pre-event-scans', scansN === null ? oseFewerThan(a.scans && a.scans.floor, 'in any hour') : String(scansN));
+        set('pre-event-scans', scansN === null ? oseFewerThan(a.scans && a.scans.floor, 'in any hour') : String(scansN) + (a.scans.at_least ? ' or more' : ''));
         set('pre-event-clicks', tapsN === null ? oseFewerThan(a.clicks && a.clicks.floor, 'on any one link') : String(tapsN));
         [['pre-event-scans', scansN], ['pre-event-clicks', tapsN]].forEach(function (t) {
           var el = document.querySelector('[data-testid="' + t[0] + '"]');
@@ -9883,7 +9885,7 @@
           // Each placement's scans arrive floored (OSE-1656): words, never 0.
           return list.map(function (x) {
             var n = x && x.scans && typeof x.scans.count === 'number' ? num(x.scans.count) : null;
-            return { name: String((x && x.label) || 'Poster'), n: n === null ? oseFewerThan(x && x.scans && x.scans.floor, '', true) : n };
+            return { name: String((x && x.label) || 'Poster'), n: n === null ? oseFewerThan(x && x.scans && x.scans.floor, '', true) : x.scans.at_least ? n + ' or more' : n };
           });
         };
         // A floored count: its number when it cleared the floor, else null.

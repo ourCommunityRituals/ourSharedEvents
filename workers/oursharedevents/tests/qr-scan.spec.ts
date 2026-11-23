@@ -29,6 +29,7 @@ import { env } from 'cloudflare:test';
 import { handleQrScan, type QrScanEnv } from '../src/handlers/qr-scan';
 import { SCAN_QUEUE_MAX_RETRIES } from '../src/lib/scan-buffer';
 import { isScanNodeKey } from '../src/lib/scan-node-key';
+import { signAnonId } from '../src/lib/anonymous-id';
 
 interface TestEnv {
   DB: D1Database;
@@ -132,18 +133,22 @@ async function countScans(db: D1Database): Promise<number> {
   return row?.c ?? 0;
 }
 
-function makeRequest(
+// A returning visitor presents the cookie the Worker signed for them (OSE-1496).
+async function makeRequest(
   qrToken: string,
   opts: { type?: string; existingCookie?: string; country?: string } = {}
-): Request {
+): Promise<Request> {
   const url = `https://test.local/q/${encodeURIComponent(qrToken)}${opts.type ? `?type=${opts.type}` : ''}`;
   const headers: Record<string, string> = {
     'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) AppleWebKit/605.1.15',
   };
-  if (opts.existingCookie) headers['Cookie'] = `ose_anon=${opts.existingCookie}`;
+  if (opts.existingCookie)
+    headers['Cookie'] = `ose_anon=${await signAnonId(opts.existingCookie, PEPPER)}`;
   if (opts.country) headers['CF-IPCountry'] = opts.country;
   return new Request(url, { headers });
 }
+
+const PEPPER = (env as unknown as { ANON_ID_HASH_PEPPER: string }).ANON_ID_HASH_PEPPER;
 
 function makeEnv(kv?: KVNamespace): QrScanEnv {
   return {
@@ -178,7 +183,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
   test('OSE-625/OSE-1318 | UNIT | valid token, new visitor | writes scan row and 302-redirects to event page', async () => {
     const kv = makeInMemoryKV();
     const res = await handleQrScan(
-      makeRequest(VALID_QR_TOKEN, { type: 'register' }),
+      await makeRequest(VALID_QR_TOKEN, { type: 'register' }),
       makeEnv(kv),
       VALID_QR_TOKEN
     );
@@ -195,7 +200,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
 
   test('OSE-625 | UNIT | valid token, new visitor | Set-Cookie header sets ose_anon cookie', async () => {
     const kv = makeInMemoryKV();
-    const res = await handleQrScan(makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
+    const res = await handleQrScan(await makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
 
     expect(res.status).toBe(302);
     const setCookie = res.headers.get('Set-Cookie') ?? '';
@@ -207,7 +212,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     const kv = makeInMemoryKV();
     const existingAnonId = 'anon_11111111-1111-1111-1111-111111111111';
     const res = await handleQrScan(
-      makeRequest(VALID_QR_TOKEN, { existingCookie: existingAnonId }),
+      await makeRequest(VALID_QR_TOKEN, { existingCookie: existingAnonId }),
       makeEnv(kv),
       VALID_QR_TOKEN
     );
@@ -223,9 +228,9 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     const req = () => makeRequest(VALID_QR_TOKEN, { existingCookie: existingAnonId });
     const scanEnv = makeEnv(kv);
 
-    await handleQrScan(req(), scanEnv, VALID_QR_TOKEN);
-    await handleQrScan(req(), scanEnv, VALID_QR_TOKEN);
-    await handleQrScan(req(), scanEnv, VALID_QR_TOKEN);
+    await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
+    await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
+    await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
 
     const scanCount = await countScans(tenv().DB);
     expect(scanCount).toBe(1);
@@ -242,13 +247,13 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
       const scanEnv = makeEnv(kv);
 
       vi.setSystemTime(new Date('2026-10-03T19:05:00Z'));
-      await handleQrScan(req(), scanEnv, VALID_QR_TOKEN);
+      await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
       vi.setSystemTime(new Date('2026-10-03T19:45:00Z')); // 40 min later, same hour
-      await handleQrScan(req(), scanEnv, VALID_QR_TOKEN);
+      await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
       expect(await countScans(tenv().DB)).toBe(1);
 
       vi.setSystemTime(new Date('2026-10-03T20:02:00Z')); // next hour bucket
-      await handleQrScan(req(), scanEnv, VALID_QR_TOKEN);
+      await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
       expect(await countScans(tenv().DB)).toBe(2);
     } finally {
       vi.useRealTimers();
@@ -275,12 +280,16 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     });
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const failed = await handleQrScan(req(), { DB: flakyDb, RATE_LIMIT_KV: kv }, VALID_QR_TOKEN);
+      const failed = await handleQrScan(
+        await req(),
+        { DB: flakyDb, RATE_LIMIT_KV: kv },
+        VALID_QR_TOKEN
+      );
       expect(failed.status).toBe(302);
       expect(await countScans(db)).toBe(0);
 
       failWrites = false;
-      await handleQrScan(req(), { DB: flakyDb, RATE_LIMIT_KV: kv }, VALID_QR_TOKEN);
+      await handleQrScan(await req(), { DB: flakyDb, RATE_LIMIT_KV: kv }, VALID_QR_TOKEN);
       expect(await countScans(db)).toBe(1);
     } finally {
       errSpy.mockRestore();
@@ -293,7 +302,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     const sent: Record<string, unknown>[] = [];
     const queue = { send: async (m: Record<string, unknown>) => void sent.push(m) };
     const res = await handleQrScan(
-      makeRequest(VALID_QR_TOKEN),
+      await makeRequest(VALID_QR_TOKEN),
       { ...makeEnv(makeInMemoryKV()), SCAN_QUEUE: queue as never },
       VALID_QR_TOKEN
     );
@@ -320,8 +329,8 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     const existingAnonId = 'anon_33333333-3333-3333-3333-333333333333';
     const req = () => makeRequest(VALID_QR_TOKEN, { existingCookie: existingAnonId });
 
-    await handleQrScan(req(), scanEnv, VALID_QR_TOKEN);
-    await handleQrScan(req(), scanEnv, VALID_QR_TOKEN);
+    await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
+    await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
 
     const scanCount = await countScans(tenv().DB);
     expect(scanCount).toBe(2);
@@ -330,7 +339,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
   test('OSE-625 | UNIT | redirect URL type passthrough | checkin type preserved in redirect', async () => {
     const kv = makeInMemoryKV();
     const res = await handleQrScan(
-      makeRequest(VALID_QR_TOKEN, { type: 'checkin' }),
+      await makeRequest(VALID_QR_TOKEN, { type: 'checkin' }),
       makeEnv(kv),
       VALID_QR_TOKEN
     );
@@ -344,7 +353,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     // The '<script>' below is ADVERSARIAL TEST INPUT — this test asserts it is
     // neutralized (redirect must NOT contain '<script>', see assertion below).
     const res = await handleQrScan(
-      makeRequest(VALID_QR_TOKEN, { type: 'malicious<script>' }),
+      await makeRequest(VALID_QR_TOKEN, { type: 'malicious<script>' }),
       makeEnv(kv), // nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag
       VALID_QR_TOKEN
     );
@@ -356,7 +365,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
 
   test('OSE-625 | UNIT | scan row values | scan_bucket is hour-granularity (YYYY-MM-DDTHH:00)', async () => {
     const kv = makeInMemoryKV();
-    await handleQrScan(makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
+    await handleQrScan(await makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
 
     const row = await tenv()
       .DB.prepare(`SELECT scan_bucket FROM scan_placement_events WHERE event_id = ? LIMIT 1`)
@@ -371,7 +380,11 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
   // OSE-1460 (PO 2026-10-01): inverted. The visitor's IP country is never recorded.
   test('OSE-1460 | UNIT | scan row values | country_code is never stored, even with CF-IPCountry', async () => {
     const kv = makeInMemoryKV();
-    await handleQrScan(makeRequest(VALID_QR_TOKEN, { country: 'US' }), makeEnv(kv), VALID_QR_TOKEN);
+    await handleQrScan(
+      await makeRequest(VALID_QR_TOKEN, { country: 'US' }),
+      makeEnv(kv),
+      VALID_QR_TOKEN
+    );
 
     const row = await tenv()
       .DB.prepare(`SELECT country_code FROM scan_node_returns WHERE event_id = ? LIMIT 1`)
@@ -383,7 +396,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
 
   test('OSE-625 | UNIT | scan row values | anonymous_id stored (not null) — a keyed scan id, never the cookie (OSE-1659)', async () => {
     const kv = makeInMemoryKV();
-    await handleQrScan(makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
+    await handleQrScan(await makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
 
     const row = await tenv()
       .DB.prepare(`SELECT anonymous_id FROM scan_node_returns WHERE event_id = ? LIMIT 1`)
@@ -397,7 +410,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
   test('OSE-625 | UNIT | invalid token shape (no qrt_ prefix) | 302 to homepage, no DB write', async () => {
     const kv = makeInMemoryKV();
     const res = await handleQrScan(
-      makeRequest('not-a-valid-token'),
+      await makeRequest('not-a-valid-token'),
       makeEnv(kv),
       'not-a-valid-token'
     );
@@ -410,7 +423,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
   test('OSE-625 | UNIT | token too long (>128 chars) | 302 to homepage, no DB write', async () => {
     const longToken = 'qrt_' + 'x'.repeat(200);
     const kv = makeInMemoryKV();
-    const res = await handleQrScan(makeRequest(longToken), makeEnv(kv), longToken);
+    const res = await handleQrScan(await makeRequest(longToken), makeEnv(kv), longToken);
 
     expect(res.status).toBe(302);
     expect(res.headers.get('Location')).toBe('/');
@@ -420,7 +433,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
   test('OSE-625 | UNIT | unknown qr_token (not in DB) | 302 to homepage, no DB write', async () => {
     const kv = makeInMemoryKV();
     const unknownToken = 'qrt_unknown_token_xyz_not_in_db';
-    const res = await handleQrScan(makeRequest(unknownToken), makeEnv(kv), unknownToken);
+    const res = await handleQrScan(await makeRequest(unknownToken), makeEnv(kv), unknownToken);
 
     expect(res.status).toBe(302);
     expect(res.headers.get('Location')).toBe('/');
@@ -429,7 +442,11 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
 
   test('OSE-625 | UNIT | inactive deployment token | 302 to homepage, no DB write', async () => {
     const kv = makeInMemoryKV();
-    const res = await handleQrScan(makeRequest(INACTIVE_QR_TOKEN), makeEnv(kv), INACTIVE_QR_TOKEN);
+    const res = await handleQrScan(
+      await makeRequest(INACTIVE_QR_TOKEN),
+      makeEnv(kv),
+      INACTIVE_QR_TOKEN
+    );
 
     expect(res.status).toBe(302);
     expect(res.headers.get('Location')).toBe('/');
@@ -438,7 +455,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
 
   test('OSE-625 | UNIT | redirect | Cache-Control: no-store prevents CDN caching of redirect', async () => {
     const kv = makeInMemoryKV();
-    const res = await handleQrScan(makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
+    const res = await handleQrScan(await makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
 
     expect(res.headers.get('Cache-Control')).toBe('no-store');
   });
@@ -499,7 +516,7 @@ describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const res = await handleQrScan(
-        makeRequest(VALID_QR_TOKEN, { type: 'checkin' }),
+        await makeRequest(VALID_QR_TOKEN, { type: 'checkin' }),
         { ...makeEnv(makeInMemoryKV()), DB: db },
         VALID_QR_TOKEN
       );
@@ -522,7 +539,7 @@ describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
     });
     try {
       const res = await handleQrScan(
-        makeRequest(VALID_QR_TOKEN, { country: 'US' }),
+        await makeRequest(VALID_QR_TOKEN, { country: 'US' }),
         { ...makeEnv(makeInMemoryKV()), DB: db },
         VALID_QR_TOKEN
       );
@@ -548,7 +565,7 @@ describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const res = await handleQrScan(
-        makeRequest(VALID_QR_TOKEN),
+        await makeRequest(VALID_QR_TOKEN),
         makeEnv(kvThatThrows({ get: true })),
         VALID_QR_TOKEN
       );
@@ -565,7 +582,7 @@ describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const res = await handleQrScan(
-        makeRequest(VALID_QR_TOKEN, {
+        await makeRequest(VALID_QR_TOKEN, {
           existingCookie: 'anon_66666666-6666-6666-6666-666666666666',
         }),
         makeEnv(kvThatThrows({ put: true })),

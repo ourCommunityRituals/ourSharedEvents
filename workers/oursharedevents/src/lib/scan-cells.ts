@@ -22,6 +22,17 @@
 
 import { floorTotalOfParts, type FlooredCount } from './count-floor';
 import { localDay } from './local-day';
+import { POSTER_HOUR_CAP } from './poster-hour-cap';
+
+/**
+ * The floored sum of `ns`, marked `at_least` when any cell reached the
+ * per-poster-hour cap (OSE-1496, owner 2026-11-23: "100 or more"). A capped
+ * cell is 100 scans, so it always clears the floor and joins the sum.
+ */
+function sumOfCells(ns: readonly number[]): FlooredCount {
+  const total = floorTotalOfParts([...ns]);
+  return ns.some((n) => n >= POSTER_HOUR_CAP) ? { ...total, at_least: true } : total;
+}
 
 /**
  * The hour of a scan_bucket ("YYYY-MM-DDTHH"), the grain of one cell. Every
@@ -71,7 +82,7 @@ export async function readEventScanCells(db: D1Database, eventId: string): Promi
 
 /** All scans in `cells`: the sum of the cells that clear the floor. */
 export function scansOf(cells: readonly ScanCell[]): FlooredCount {
-  return floorTotalOfParts(cells.map((c) => c.n));
+  return sumOfCells(cells.map((c) => c.n));
 }
 
 /** Scans per poster, each the sum of that poster's cells that clear the floor. */
@@ -83,7 +94,7 @@ export function scansByPoster(cells: readonly ScanCell[]): Map<string, FlooredCo
     parts.set(c.poster, list);
   }
   const out = new Map<string, FlooredCount>();
-  for (const [poster, ns] of parts) out.set(poster, floorTotalOfParts(ns));
+  for (const [poster, ns] of parts) out.set(poster, sumOfCells(ns));
   return out;
 }
 
@@ -125,7 +136,7 @@ export function scansByLocalDay(
   const out: { day: string; count: FlooredCount }[] = [];
   for (let i = 0; i < days; i++) {
     const day = addDays(first, i);
-    out.push({ day, count: floorTotalOfParts(parts.get(day) ?? []) });
+    out.push({ day, count: sumOfCells(parts.get(day) ?? []) });
   }
   return out;
 }
