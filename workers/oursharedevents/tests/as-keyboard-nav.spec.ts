@@ -148,7 +148,7 @@ describe('AS-12: Keyboard nav on Public page (OSE-57)', () => {
     const pre = renderEventList([{ id: 'e1', name: 'Bocce Thursday', phase: 'pre_event' }]).html;
     const post = renderEventList([{ id: 'e2', name: 'Game Night', phase: 'post_event' }]).html;
     expect(pre).toContain('aria-label="Register for Bocce Thursday"');
-    expect(post).toContain('aria-label="See how Game Night went"');
+    expect(post).toContain('aria-label="See how it went: Game Night"');
   });
 
   test('public events container has aria-live="polite" for screen reader announcements', async () => {

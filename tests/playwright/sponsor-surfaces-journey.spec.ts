@@ -95,6 +95,7 @@ const surfaces: Record<string, (page: Page) => Promise<boolean>> = {
   'events list card': async (page) => {
     await page.setViewportSize(PHONE);
     await page.goto('/events');
+    await showAllCards(page);
     const card = page.locator(
       `[data-testid="public-event-card"][data-event-id="${seeded.eventId}"]`
     );

@@ -878,6 +878,12 @@ jobs:
       # nearest first while the page asks for nothing but itself and keeps the
       # position out of the address, the cookies and the storage. Scripts off: the
       # page is what it was.
+      #
+      # card-pager.component.spec.ts (owner 2026-11-22: every list of cards five at
+      # a time, "Click for more" under it) drives /events, the sponsor's home and a
+      # fair's stalls on a phone: five then five more a tap until the list ends,
+      # focus on the first new card, a 44 px button across the list, axe light and
+      # dark, 320 px reflow, 2.5.8, scripts off, and a mutation check per check.
       - name: 'Component: viewport specs vs local worker'
         if: matrix.shard == 'component'
         run: |
@@ -895,7 +901,8 @@ jobs:
             tests/e2e/2-pages/wcag-map.component.spec.ts \
             tests/e2e/2-pages/voter-page.component.spec.ts \
             tests/e2e/2-pages/landing-menu.component.spec.ts \
-            tests/e2e/2-pages/landing-tabs.component.spec.ts
+            tests/e2e/2-pages/landing-tabs.component.spec.ts \
+            tests/e2e/2-pages/card-pager.component.spec.ts
 
   # T0 test sub-gates: keep the existing required context `T0 Gate (tests)` as
   # an aggregate below, but split the former 9+ minute long-pole job into

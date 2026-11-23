@@ -43,6 +43,7 @@ interface Bucket {
 
 interface Bundle {
   handleLandingPage: (env: unknown, ctx: null, request: Request) => Promise<Response>;
+  handlePublicPage: (env: unknown, ctx: null, request: Request) => Promise<Response>;
   serveCss: () => Response;
   DEFAULT_ARCHIVE: string;
   resetPmtilesCache: () => void;
@@ -77,7 +78,7 @@ function load(): Promise<Bundle> {
     await esbuild.build({
       stdin: {
         contents:
-          "export { handleLandingPage } from './src/handlers/pages.ts';\n" +
+          "export { handleLandingPage, handlePublicPage } from './src/handlers/pages.ts';\n" +
           "export { serveCss } from '@ocr/ui';\n" +
           "export { DEFAULT_ARCHIVE } from './src/lib/street-map.ts';\n" +
           "export { resetPmtilesCache } from './src/lib/pmtiles.ts';\n" +
@@ -218,6 +219,23 @@ export async function renderLanding(
       throw new Error(`landing ${path} drew no street layer over its synthetic archive`);
     }
     return html;
+  } finally {
+    delete (globalThis as Record<string, unknown>)[ROWS_KEY];
+  }
+}
+
+/**
+ * The /events page at `path` (`/events`, `/events?when=past`) holding `rows`, as
+ * the Worker renders it (lib/event-list.ts). No map and no street layer: the
+ * page has neither.
+ */
+export async function renderEvents(path: string, rows: Row[]): Promise<string> {
+  const b = await load();
+  (globalThis as Record<string, unknown>)[ROWS_KEY] = rows;
+  try {
+    const res = await b.handlePublicPage({}, null, new Request(`${ORIGIN}${path}`));
+    if (res.status !== 200) throw new Error(`events ${path} answered ${res.status}`);
+    return res.text();
   } finally {
     delete (globalThis as Record<string, unknown>)[ROWS_KEY];
   }

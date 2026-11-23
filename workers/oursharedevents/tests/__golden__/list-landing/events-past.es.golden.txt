@@ -211,7 +211,7 @@
               <p class="meta" data-testid="public-event-meta"><span data-testid="public-event-date">jueves, 1 de octubre de 2026</span> &middot; <span data-testid="public-event-venue">Rock Island Public House</span></p>
               
             </div>
-            <a class="cta cta-secondary" href="/es/events/evt_g12/golden-12" data-testid="public-event-cta" data-cta="recap" aria-label="Ver cómo salió Fall Fest">Ver cómo salió</a>
+            <a class="cta cta-secondary" href="/es/events/evt_g12/golden-12" data-testid="public-event-cta" data-cta="recap" aria-label="Ver cómo salió: Fall Fest">Ver cómo salió</a>
           </article>
         </div>
       </section>

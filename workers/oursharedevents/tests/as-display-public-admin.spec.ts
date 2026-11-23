@@ -195,7 +195,7 @@ describe('AS-6: ARIA attributes on Public page (OSE-51)', () => {
     const pre = renderEventList([{ id: 'e1', name: 'Bocce Thursday', phase: 'pre_event' }]).html;
     const post = renderEventList([{ id: 'e2', name: 'Game Night', phase: 'post_event' }]).html;
     expect(pre).toContain('aria-label="Register for Bocce Thursday"');
-    expect(post).toContain('aria-label="See how Game Night went"');
+    expect(post).toContain('aria-label="See how it went: Game Night"');
   });
 
   test('event cards expose the article role via a semantic <article> (AS-6 role criterion)', () => {
