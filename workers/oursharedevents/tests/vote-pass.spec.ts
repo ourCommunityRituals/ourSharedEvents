@@ -322,36 +322,6 @@ describe('OSE-2133 | /q issues the vote pass', () => {
     expect(passOf(lost)).toBeNull();
   });
 
-  test('OSE-1784 | RAINY | KV fails on the vote code | the scan is stored and the pass still issued', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const failing = new Proxy(makeKV(), {
-      get(target, prop) {
-        if (prop === 'get' || prop === 'put') {
-          return () => Promise.reject(new Error('KV GET/PUT failed: 503 Service Unavailable'));
-        }
-        return Reflect.get(target, prop);
-      },
-    });
-    const before = await tenv.DB.prepare(
-      `SELECT COUNT(*) AS n FROM scan_placement_events WHERE poster_deployment_id = ?`
-    )
-      .bind(DEPLOYMENT(OPEN_2))
-      .first<{ n: number }>();
-    const res = await scan(OPEN_2, {
-      cookie: 'anon_99999999-8888-7777-6666-555555555555',
-      env: scanEnv({ RATE_LIMIT_KV: failing }),
-    });
-    // Owner, 2026-11-23 ("keep voting working"): the vote code's scans are
-    // never a published count, so a storage fault does not stop the room voting.
-    expect(passOf(res)).not.toBeNull();
-    const after = await tenv.DB.prepare(
-      `SELECT COUNT(*) AS n FROM scan_placement_events WHERE poster_deployment_id = ?`
-    )
-      .bind(DEPLOYMENT(OPEN_2))
-      .first<{ n: number }>();
-    expect((after?.n ?? 0) - (before?.n ?? 0)).toBe(1);
-  });
-
   test('OSE-2133 | SECURITY | a failure reading the set mints no pass and keeps the redirect', async () => {
     const broken = new Proxy(tenv.DB, {
       get(target, prop) {

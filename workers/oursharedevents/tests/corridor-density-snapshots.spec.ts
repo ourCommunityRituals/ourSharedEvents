@@ -14,7 +14,6 @@
 
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
-import { clearPosterHours, seedPosterHour } from './helpers/seed-poster-hours';
 import {
   refreshCorridorBaselines,
   type SharedReportMaterializeEnv,
@@ -52,7 +51,6 @@ async function clearSnapshotTables(): Promise<void> {
   await db.prepare(`DELETE FROM corridor_density_snapshots`).run();
   await db.prepare(`DELETE FROM corridor_density_baseline`).run();
   await db.prepare(`DELETE FROM anon_id_returns`).run();
-  await clearPosterHours(db, 'test-cds-');
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-cds-%'`).run();
   await db.prepare(`DELETE FROM corridors WHERE id LIKE 'test-cds-corr-%'`).run();
   await db.prepare(`DELETE FROM node_hierarchy WHERE id LIKE 'test-cds-node-%'`).run();
@@ -118,13 +116,11 @@ async function seedCorridorAndEvent(opts: {
 }
 
 /**
- * Seeds five people (K) under `hashSuffix`: five anon_id_returns rows and five
- * scans in one hour at a poster of their own. OSE-1784: the baseline adds up
- * each event's published poster figure, so an event needs a poster-hour of K
- * to reach it at all.
+ * Seeds five people (K) under `hashSuffix`. ADR-026 rule B: the baseline counts
+ * only events whose own count is published, so an event needs K people to
+ * reach it at all.
  */
 async function seedAnonIdReturn(eventId: string, hashSuffix: string): Promise<void> {
-  await seedPosterHour(tenv().DB, eventId, 19, 5, `${eventId}-poster-${hashSuffix}`);
   const nowIso = new Date().toISOString();
   for (let i = 0; i < 5; i++) {
     const hash = `${hashSuffix}${i}`.padStart(32, 'a');

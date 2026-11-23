@@ -28,7 +28,6 @@ import { env, SELF } from 'cloudflare:test';
 import { usePaidReportPlan } from './helpers/paid-report-plan';
 import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 import { mintSignedLinkToken, type SignedLinkRole } from '../src/lib/shared-report-auth';
-import { clearPosterHours, seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
   DB: D1Database;
@@ -73,7 +72,6 @@ async function clearTables(): Promise<void> {
   await db.prepare(`DELETE FROM sponsor_placement WHERE sponsor_business_id LIKE 'sp-pn-%'`).run();
   await db.prepare(`DELETE FROM sponsor_business WHERE id LIKE 'sp-pn-%'`).run();
   await db.prepare(`DELETE FROM scan_aggregates WHERE event_id LIKE 'test-evt-pn-%'`).run();
-  await clearPosterHours(db, 'test-evt-pn-');
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-pn-%'`).run();
 }
 
@@ -101,9 +99,6 @@ async function seedEvent(id: string, scans: Scans): Promise<void> {
         )
         .bind(`sa-${id}-${hour}`, id, hour, K - 1, K - 1)
         .run();
-      // OSE-1784: people are counted in poster-hours, so the same hours under
-      // the floor are scans at a poster too.
-      await seedPosterHour(db, id, hour, K - 1);
     }
   }
 }
@@ -189,13 +184,7 @@ for (const scans of SHAPES) {
         await setAttendees(K);
         const after = await read(role);
         expect(after.text).not.toBe(before.text);
-        // OSE-1784: the sample size is never published; what moves is the
-        // return-rate note, which no longer says too few people were seen.
-        expect(after.report.return_rate?.sample_size).toBeNull();
-        const whole = (r: Report) =>
-          r._meta.suppression_reasons.some((x) => x.field === 'return_rate');
-        expect(whole(before.report)).toBe(true);
-        expect(whole(after.report)).toBe(false);
+        expect(after.report.return_rate?.sample_size).toBe(K);
       });
     }
 

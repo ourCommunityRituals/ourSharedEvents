@@ -400,23 +400,13 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     expect(baseline?.rowsSkipped).toBe(0);
     for (const c of bqCalls) expect(c.dataset).toBe('oureventring_general_stg');
 
-    // As if eleven more people had scanned that poster in that hour (the scan
-    // rows /q writes, and the rows the nightly job writes under the same
-    // pepper): twelve people publish 10 at the poster, which is what the
-    // baseline adds up since OSE-1784. 10 is CORRIDOR_BASELINE_MIN_SAMPLE, so
-    // the job keys a baseline row, and it crosses keyed by the res7 corridor
-    // node and nothing finer.
+    // As if eleven more people had scanned that hour (rows as the nightly job
+    // writes them, under the same pepper): twelve people are past K and past
+    // CORRIDOR_BASELINE_MIN_SAMPLE, so the job keys a baseline row, and it
+    // crosses keyed by the res7 corridor node and nothing finer.
     const epoch = await pepperEpoch(TRACE_PEPPER);
     const seen = new Date().toISOString();
     for (let i = 0; i < 11; i++) {
-      await tenv()
-        .DB.prepare(
-          `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
-           SELECT ?, event_id, poster_deployment_id, scan_bucket
-             FROM scan_placement_events WHERE event_id = ? LIMIT 1`
-        )
-        .bind(`trace-more-spe-${i}`, eventId)
-        .run();
       await tenv()
         .DB.prepare(
           `INSERT INTO anon_id_returns
@@ -439,7 +429,7 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     const keyed = await tenv()
       .DB.prepare('SELECT corridor_id, window_30d_count FROM corridor_density_baseline')
       .all<{ corridor_id: string; window_30d_count: number }>();
-    expect(keyed.results).toEqual([{ corridor_id: EAGLES_RES7, window_30d_count: 10 }]);
+    expect(keyed.results).toEqual([{ corridor_id: EAGLES_RES7, window_30d_count: 12 }]);
     bqCalls.length = 0;
     const raised = await exportCorridorDensityBaseline(exportEnv());
     vi.restoreAllMocks();
@@ -456,10 +446,6 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     }
     // Belt and braces: the poster/venue res9 node appears nowhere in the payload.
     expect(JSON.stringify(bqCalls)).not.toContain(EAGLES_RES9);
-    // The later hops trace the one real scan: take the eleven back out.
-    await tenv()
-      .DB.prepare(`DELETE FROM scan_placement_events WHERE id LIKE 'trace-more-spe-%'`)
-      .run();
   });
 
   test('hop 6 — the manifest records each phase with corridor coverage, no row data', async () => {

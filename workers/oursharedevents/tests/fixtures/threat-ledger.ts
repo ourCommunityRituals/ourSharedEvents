@@ -2004,7 +2004,7 @@ const ANALYTIC_LAYER: ThreatEntry[] = [
     id: 'TL-094',
     layer: 'export_boundary',
     threat:
-      "A withheld event recovered by subtraction: the SharedReport publishes an event's count exactly from 5 up, while the corridor baseline and the BigQuery returns export round a group that also held an event under 5. 11 published beside a group of 15 says the other event had 4 (OSE-1946 analysis: exact in 8% of cases, narrowed in 72%). Mitigated by ADR-026 rule B: an event whose own count is withheld adds no one to any group (refreshCorridorBaselines adds up only published poster figures since OSE-1784; inline current-pepper gate in exportAnonIdReturns), and a baseline bucket whose events are all withheld holds no row, so a count an earlier run stored there cannot stay readable.",
+      "A withheld event recovered by subtraction: the SharedReport publishes an event's count exactly from 5 up, while the corridor baseline and the BigQuery returns export round a group that also held an event under 5. 11 published beside a group of 15 says the other event had 4 (OSE-1946 analysis: exact in 8% of cases, narrowed in 72%). Mitigated by ADR-026 rule B: an event whose own count is withheld adds no one to any group (PUBLISHED_EVENT_IDS_SQL in refreshCorridorBaselines; inline current-pepper gate in exportAnonIdReturns), and a baseline bucket whose events are all withheld holds no row, so a count an earlier run stored there cannot stay readable.",
     severity: 'HIGH',
     target_invariant: { number: 7, name: 'aggregate_only_reporting' },
     mitigation_story: 'OSE-1946',
@@ -2058,13 +2058,13 @@ const ANALYTIC_LAYER: ThreatEntry[] = [
       "The baseline's rule B gate counts hashes across peppers, as the report's sample_size does, so after a pepper rotation one person can be two hashes and lift an event of 4 to 5. The returns export gate counts the current pepper only and is not affected.",
     severity: 'LOW',
     target_invariant: { number: 7, name: 'aggregate_only_reporting' },
-    mitigation_story: 'OSE-1784',
+    mitigation_story: 'OSE-1946',
     test_ref: null,
-    status: 'mitigated',
+    status: 'open',
     red_birth: null,
     last_run_green: null,
     notes:
-      'OSE-1784 (owner, 2026-11-23): the baseline no longer counts hashes; it adds up published poster figures, and the report no longer publishes sample_size, so no gate here counts across peppers.',
+      "Same window as the report's own sample_size, so fixing it means changing what the report counts too, while retired-pepper rows wait to be purged. Owner decision.",
   },
 ];
 

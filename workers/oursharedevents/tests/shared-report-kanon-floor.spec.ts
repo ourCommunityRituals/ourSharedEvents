@@ -30,7 +30,6 @@ import { env } from 'cloudflare:test';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
-import { clearPosterHours, seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
   DB: D1Database;
@@ -92,7 +91,6 @@ async function clearTables(): Promise<void> {
   await db.prepare(`UPDATE events SET series_id = NULL`).run();
   await db.prepare(`DELETE FROM event_series`).run();
   await db.prepare(`DELETE FROM shortlinks WHERE event_id LIKE 'test-evt-kanon-%'`).run();
-  await clearPosterHours(db, 'test-evt-kanon-');
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-kanon-%'`).run();
 }
 
@@ -186,13 +184,16 @@ async function seedEvent(id: string): Promise<void> {
     .run();
 }
 
-/**
- * Seed one contributing hour of people. OSE-1784: the report counts people in
- * poster-hours only, so a "bucket" is that many scans at the event's poster in
- * one hour. The per-hour floor before summation (OSE-683) is unchanged.
- */
+/** Seed one scan_aggregates bucket (one contributing bucket to distinct_scanners). */
 async function seedBucket(eventId: string, suffix: string, uniqueAgents: number): Promise<void> {
-  await seedPosterHour(tenv().DB, eventId, suffix, uniqueAgents);
+  await tenv()
+    .DB.prepare(
+      `INSERT INTO scan_aggregates
+         (id, event_id, bucket_date, bucket_hour, total_scans, distinct_agent_hashes, computed_at)
+       VALUES (?, ?, '2026-05-07', ?, ?, ?, datetime('now'))`
+    )
+    .bind(`sa-${eventId}-${suffix}`, eventId, suffix, uniqueAgents * 3, uniqueAgents)
+    .run();
 }
 
 beforeAll(async () => {

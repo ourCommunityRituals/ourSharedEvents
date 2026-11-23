@@ -19,7 +19,6 @@ import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { detectEventSeriesClusters } from '../src/lib/shared-report';
-import { clearPosterHours, seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
   DB: D1Database;
@@ -69,7 +68,6 @@ async function clearTables(): Promise<void> {
   await db.prepare(`DELETE FROM scan_aggregates WHERE event_id LIKE 'test-evt-trend-%'`).run();
   await db.prepare(`UPDATE events SET series_id = NULL`).run();
   await db.prepare(`DELETE FROM event_series`).run();
-  await clearPosterHours(db, 'test-evt-trend-');
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-trend-%'`).run();
 }
 
@@ -128,9 +126,6 @@ async function seedBucket(eventId: string, uniqueAgents: number): Promise<void> 
     )
     .bind(`sa-${eventId}`, eventId, uniqueAgents * 3, uniqueAgents)
     .run();
-  // OSE-1784: the report counts people in poster-hours only; the aggregate row
-  // above gives `materialized_at`, and the same people scan one poster.
-  await seedPosterHour(tenv().DB, eventId, 19, uniqueAgents);
 }
 
 beforeAll(async () => {

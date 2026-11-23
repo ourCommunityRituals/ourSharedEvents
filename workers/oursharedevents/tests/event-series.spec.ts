@@ -44,7 +44,6 @@ import {
   parseReject,
   projectSeries,
 } from '../src/lib/event-series';
-import { clearPosterHours, seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
   DB: D1Database;
@@ -213,7 +212,6 @@ beforeEach(async () => {
   await db.prepare(`DELETE FROM event_series`).run();
   await db.prepare(`DELETE FROM scan_aggregates WHERE event_id LIKE 'evt-ser-%'`).run();
   await db.prepare(`DELETE FROM shortlinks WHERE event_id LIKE 'evt-ser-%'`).run();
-  await clearPosterHours(db, 'evt-ser-');
   await db.prepare(`DELETE FROM events WHERE id LIKE 'evt-ser-%'`).run();
   await db.prepare(`DELETE FROM admin_audit_log WHERE resource_id LIKE 'evt-ser-%'`).run();
 
@@ -237,8 +235,6 @@ beforeEach(async () => {
       )
       .bind(`sa-${id}`, id, people * 2, people)
       .run();
-    // OSE-1784: the trend counts people in poster-hours (scans at one poster).
-    await seedPosterHour(db, id, 19, people);
     await db
       .prepare(`INSERT INTO shortlinks (code, event_id, clicks) VALUES (?, ?, ?)`)
       .bind(`ser-${n++}`, id, people + 3)

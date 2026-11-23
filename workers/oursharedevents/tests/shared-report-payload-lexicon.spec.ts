@@ -24,7 +24,6 @@ import {
 } from '../src/lib/schema-lexicon';
 import SNAPSHOT from '../src/api-schema-snapshots/shared-report.snapshot.json';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
-import { seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
   DB: D1Database;
@@ -56,9 +55,19 @@ async function seed(): Promise<void> {
     )
     .bind(EVT, EVT)
     .run();
-  // OSE-1784: people are counted in poster-hours (scans at one poster).
-  await seedPosterHour(db, EVT, 18, 7);
-  await seedPosterHour(db, EVT, 19, 9);
+  for (const [hour, devices] of [
+    ['18', 7],
+    ['19', 9],
+  ] as const) {
+    await db
+      .prepare(
+        `INSERT INTO scan_aggregates
+           (id, event_id, bucket_date, bucket_hour, total_scans, distinct_agent_hashes, computed_at)
+         VALUES (?, ?, '2026-05-07', ?, ?, ?, datetime('now'))`
+      )
+      .bind(`sa-${EVT}-${hour}`, EVT, hour, devices * 2, devices)
+      .run();
+  }
   await seedSplitSponsor(db, { id: 'sp-payload-lexicon', eventId: EVT, name: 'Corner Cafe' });
   for (let i = 0; i < 6; i++) {
     await db

@@ -334,15 +334,7 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
     'lib/shared-report.ts > refreshCorridorBaselines: FROM events e',
     'refreshCorridorBaselines cron — aggregates by `COALESCE(LOWER(h3_res7), ' +
       'corridor_id)` across brands. A corridor is a shared geography by design; ' +
-      'never-who (the sum of published poster figures, OSE-1784). Not request-reachable.',
-  ],
-
-  [
-    'lib/shared-report.ts > refreshCorridorBaselines: FROM events w',
-    'refreshCorridorBaselines cron (OSE-1784) — the poster-hour step drives its ' +
-      'scan read from the 90-day window of events so it can search by index. It ' +
-      'feeds the same cross-brand corridor aggregate as the entry above, returns ' +
-      'only rounded poster figures per event, and is not request-reachable.',
+      'never-who (COUNT DISTINCT anon hash). Not request-reachable.',
   ],
 
   [

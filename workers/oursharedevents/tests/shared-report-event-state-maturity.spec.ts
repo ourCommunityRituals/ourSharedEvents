@@ -61,7 +61,6 @@ import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { usePaidReportPlan } from './helpers/paid-report-plan';
 import { env, SELF } from 'cloudflare:test';
 import { mintSignedLinkToken } from '../src/lib/shared-report-auth';
-import { clearPosterHours, seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
   DB: D1Database;
@@ -103,7 +102,6 @@ async function applyMigrations(): Promise<void> {
 async function clearTables(): Promise<void> {
   const db = tenv().DB;
   await db.prepare(`DELETE FROM scan_aggregates`).run();
-  await clearPosterHours(db, 'test-evt-esm-');
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-esm-%'`).run();
 }
 
@@ -130,9 +128,6 @@ async function seedBucket(eventId: string, suffix: string, uniqueAgents: number)
     )
     .bind(`sa-${eventId}-${suffix}`, eventId, suffix, uniqueAgents * 3, uniqueAgents)
     .run();
-  // OSE-1784: the report counts people in poster-hours only; the aggregate row
-  // above gives `materialized_at`, and the same people scan one poster.
-  await seedPosterHour(tenv().DB, eventId, suffix, uniqueAgents);
 }
 
 interface Report {

@@ -138,7 +138,7 @@ CREATE TABLE corridor_density_baseline (
 - Same as `anon_id_returns` — aggregates only, no PII, no FORMS_DB joins.
 - Indexes on `(corridor_id, bucket_dow, bucket_hour)` for fast lookup at SharedReport time.
 - Materialization runs nightly. Cron worker computes rolling-window aggregates across the events in each corridor whose own count is published.
-- **As built (ADR-026 rule B, OSE-1946, #1173; OSE-1784, 2026-11-23):** `refreshCorridorBaselines` (`lib/shared-report.ts`) adds up each event's published poster figure (poster-hours of 5 or more, each rounded down to a multiple of 5, never the vote code), the same number the SharedReport shows as `this_event_count`. A figure the report withholds adds nothing, so no neighbour can be subtracted from the baseline. Until 2026-11-23 it counted distinct `anon_id_hash` rows of events with 5 or more.
+- **As built (ADR-026 rule B, OSE-1946, #1173):** `refreshCorridorBaselines` (`lib/shared-report.ts`) reads `anon_id_returns` joined to `events`, not `scan_aggregates`, and counts people only from events with 5 or more distinct `anon_id_hash` rows (`PUBLISHED_EVENT_IDS_SQL`). An event the SharedReport withholds adds no one, so its exact neighbour cannot be subtracted from the rounded baseline.
 
 **Materialization:**
 
