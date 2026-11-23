@@ -7,8 +7,10 @@
 // 43052131567, test runs per file):
 //
 //   map      attendee-map.ts                                      33%
-//   landing  the landing's Type row: landing-area.ts, the event-  30%
-//            type catalog and its read, the events.ts range
+//   landing  the landing's Type row: landing-area.ts (and, until  30%
+//            2026-11-23, the catalog group below)
+//   catalog  the event-type catalog and its read, the events.ts   own job
+//            range
 //   guards   the privacy and auth guards: admin.ts, count-floor.ts, 18%
 //            pii.ts, report-depth.ts, retention-windows.ts
 //   render   the street layer and the page renderers:             19%
@@ -42,6 +44,15 @@
 // the 24 mutants that never end and wait out their limit, the slowest 48 s
 // each), and because every spec that reaches them reaches street-map.ts too
 // (48 of render's 51 specs), so neither job runs a spec render did not run.
+//
+// catalog was part of landing until 2026-11-23. landing had grown to the edge
+// of its 15 minutes: on main that day it took 11 min 52 s (run 45220626203) on
+// a fast runner and 14 min 12 s (45202271951) on a slow one (the dry run alone
+// 57 s against 77 s), and PR 1523, which changes none of its files, was
+// cancelled at the limit twice on slow runners (run 45222202079, both
+// attempts at 648 of 649 mutants). The catalog files are the cut: 100 of its
+// 649 mutants, mostly module-level tables whose static mutants rerun every
+// spec the group runs, while landing-area.ts keeps its 549.
 //
 // The language layer is its own job too (stryker.language.conf.mjs), as before.
 //
@@ -82,8 +93,8 @@ import process from 'node:process';
 /** Group name -> the source files it mutates (paths as Stryker reports them). */
 export const MUTATION_GROUPS = Object.freeze({
   map: Object.freeze(['src/lib/attendee-map.ts']),
-  landing: Object.freeze([
-    'src/lib/landing-area.ts',
+  landing: Object.freeze(['src/lib/landing-area.ts']),
+  catalog: Object.freeze([
     'src/lib/event-type-catalog.ts',
     'src/lib/event-type-catalog-read.ts',
     'src/handlers/events.ts',
