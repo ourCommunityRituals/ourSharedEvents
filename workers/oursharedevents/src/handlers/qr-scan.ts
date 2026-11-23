@@ -205,8 +205,7 @@ export async function handleQrScan(
   const nowDate = new Date(nowMs);
 
   // Anonymous ID: read from cookie or generate new one.
-  const visitor = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
-  const { anonId, isNew } = visitor;
+  const { anonId, isNew, cookieValue } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
   // OSE-1659: what is stored and queued is the keyed scan id, never the cookie
   // value. Null without the pepper: the scan still counts, with no id.
   const scanKey = await scanNodeKey(anonId, env.ANON_ID_HASH_PEPPER);
@@ -343,5 +342,5 @@ export async function handleQrScan(
   });
 
   // Set anon_id cookie on the redirect if the visitor is new (first scan ever).
-  return isNew ? setAnonCookie(redirectResponse, visitor) : redirectResponse;
+  return isNew ? setAnonCookie(redirectResponse, cookieValue) : redirectResponse;
 }

@@ -942,16 +942,16 @@ const EXEMPTIONS: ReadonlyArray<{ file: string; sink: string; carries: string; r
   {
     file: 'handlers/forms.ts',
     sink: 'setAnonCookie',
-    carries: '`anonId`',
+    carries: '`cookieValue`',
     reason:
-      'The form routes send the anonymous id back as the ose_anon cookie. That is the cookie ' +
+      'The form routes send the anonymous id back as the ose_anon cookie (signed since OSE-1496). That is the cookie ' +
       'itself (invariant 4: the one cookie, on /q and the forms routes), an anonymous token and ' +
       'not a sign-in. cookie-setters.invariant.spec.ts lists where it may be set.',
   },
   {
     file: 'handlers/qr-scan.ts',
     sink: 'setAnonCookie',
-    carries: '`anonId`',
+    carries: '`cookieValue`',
     reason:
       'GET /q/:token sends the anonymous id back as the ose_anon cookie: the same cookie, the ' +
       'same rule (invariant 4), listed in cookie-setters.invariant.spec.ts.',

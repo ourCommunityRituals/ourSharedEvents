@@ -63,6 +63,13 @@ const SIGNED_RE = new RegExp(`^(${ID_PART})${SIG_MARK}([A-Za-z0-9_-]{43})$`);
 const LEGACY_RE = /^anon_[a-zA-Z0-9_-]+$/;
 const COOKIE_RE = new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;\\s]*)`);
 
+/**
+ * The full ose_anon cookie value. Branded so that only a value from
+ * getOrCreateAnonId can be set: passing the bare id to setAnonCookie fails to
+ * compile, which is how a call site that would set an unsigned cookie is caught.
+ */
+export type AnonCookieValue = string & { readonly __anonCookie: unique symbol };
+
 /** What a request's visitor is, and the cookie to set when `isNew`. */
 export interface AnonVisitor {
   /** `anon_<uuid>`: what callers derive keyed ids from. Never stored raw. */
@@ -70,7 +77,7 @@ export interface AnonVisitor {
   /** True when no valid cookie came in: the response must set `cookieValue`. */
   isNew: boolean;
   /** The full cookie value (signed when a pepper is configured). */
-  cookieValue: string;
+  cookieValue: AnonCookieValue;
 }
 
 /**
@@ -172,28 +179,34 @@ export async function getOrCreateAnonId(
   request: Request,
   pepper: string | undefined
 ): Promise<AnonVisitor> {
-  const raw = COOKIE_RE.exec(request.headers.get('Cookie') ?? '')?.[1] ?? '';
+  const cookie = request.headers.get('Cookie') ?? '';
+  const match = cookie.match(COOKIE_RE);
+  const raw = match ? match[1] : '';
 
   if (pepper) {
     const known = raw ? await verifyAnonCookie(raw, pepper) : null;
-    if (known) return { anonId: known, isNew: false, cookieValue: raw };
+    if (known) return { anonId: known, isNew: false, cookieValue: raw as AnonCookieValue };
     const anonId = generateAnonId();
-    return { anonId, isNew: true, cookieValue: await signAnonId(anonId, pepper) };
+    return {
+      anonId,
+      isNew: true,
+      cookieValue: (await signAnonId(anonId, pepper)) as AnonCookieValue,
+    };
   }
 
   if (raw && raw.length <= MAX_LEGACY_LEN && LEGACY_RE.test(raw)) {
-    return { anonId: raw, isNew: false, cookieValue: raw };
+    return { anonId: raw, isNew: false, cookieValue: raw as AnonCookieValue };
   }
   const anonId = generateAnonId();
-  return { anonId, isNew: true, cookieValue: anonId };
+  return { anonId, isNew: true, cookieValue: anonId as AnonCookieValue };
 }
 
-/** Clone a Response with the Set-Cookie header for this visitor. */
-export function setAnonCookie(response: Response, visitor: AnonVisitor): Response {
+/** Clone a Response with the Set-Cookie header for this visitor's cookie value. */
+export function setAnonCookie(response: Response, cookieValue: AnonCookieValue): Response {
   const headers = new Headers(response.headers);
   headers.append(
     'Set-Cookie',
-    `${COOKIE_NAME}=${visitor.cookieValue}; HttpOnly; Secure; SameSite=Lax; Max-Age=${MAX_AGE_SECONDS}; Path=/`
+    `${COOKIE_NAME}=${cookieValue}; HttpOnly; Secure; SameSite=Lax; Max-Age=${MAX_AGE_SECONDS}; Path=/`
   );
   return new Response(response.body, {
     status: response.status,

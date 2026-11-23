@@ -248,8 +248,7 @@ export async function handleFormRegistration(
   );
   if (turnstileDeny) return turnstileDeny;
 
-  const visitor = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
-  const { anonId, isNew } = visitor;
+  const { anonId, isNew, cookieValue } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
   const name = trimStr(body!.name, 200);
   if (typeof body!.email === 'string' && body!.email.length > 320) {
     return errorResponse('INVALID_EMAIL', 'Invalid email format', 400, request);
@@ -337,7 +336,7 @@ export async function handleFormRegistration(
 
   logFormEvent('register', eventId, 'submit', { isNew, latencyMs: Date.now() - start });
   const res = jsonResponse({ ok: true, id, registrationBucket: bucket }, request);
-  return isNew ? setAnonCookie(res, visitor) : res;
+  return isNew ? setAnonCookie(res, cookieValue) : res;
 }
 
 // ─── Public: Self-delete a registration (OSE-659) ───────────────────────────────
@@ -447,8 +446,7 @@ export async function handleFormCheckin(
   // The row stores a per-event keyed id, never the cookie value; no secret, no write.
   if (!env.FORMS_HASH_PEPPER) return pepperNotConfigured(request);
 
-  const visitor = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
-  const { anonId, isNew } = visitor;
+  const { anonId, isNew, cookieValue } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
   // OSE-1373: which door this check-in came through, from the request alone.
   const walkIn = (await readArrivalPath(request)) === 'walk_in' ? 1 : 0;
 
@@ -481,7 +479,7 @@ export async function handleFormCheckin(
     // decision 2026-09-04): the host reads them on the admin route, floored at
     // K=5, and the recap shows them after. The exact total goes to the log above.
     const res = jsonResponse({ ok: true }, request);
-    return isNew ? setAnonCookie(res, visitor) : res;
+    return isNew ? setAnonCookie(res, cookieValue) : res;
   } catch (err) {
     return handleDbError('checkin', eventId, errorLabel(err), request);
   }
@@ -506,8 +504,7 @@ export async function handleFormSurvey(
   );
   if (turnstileDeny) return turnstileDeny;
 
-  const visitor = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
-  const { anonId, isNew } = visitor;
+  const { anonId, isNew, cookieValue } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
   const responses = body!.responses;
   if (!responses || typeof responses !== 'object') {
     return errorResponse('MISSING_FIELD', 'Missing required field: responses', 400, request);
@@ -532,7 +529,7 @@ export async function handleFormSurvey(
 
   logFormEvent('survey', eventId, 'submit', { isNew, latencyMs: Date.now() - start });
   const res = jsonResponse({ ok: true, id }, request);
-  return isNew ? setAnonCookie(res, visitor) : res;
+  return isNew ? setAnonCookie(res, cookieValue) : res;
 }
 
 // ─── Public: Email Signup ───────────────────────────────────────────────────────
@@ -556,8 +553,7 @@ export async function handleFormEmailSignup(
   );
   if (turnstileDeny) return turnstileDeny;
 
-  const visitor = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
-  const { anonId, isNew } = visitor;
+  const { anonId, isNew, cookieValue } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
   const email = trimStr(body!.email, 320) ?? '';
   if (!email) return errorResponse('MISSING_FIELD', 'Missing required field: email', 400, request);
   if (!isValidEmail(email))
@@ -588,7 +584,7 @@ export async function handleFormEmailSignup(
         latencyMs: Date.now() - start,
       });
       const res = jsonResponse({ ok: true, id: existing.id as string, duplicate: true }, request);
-      return isNew ? setAnonCookie(res, visitor) : res;
+      return isNew ? setAnonCookie(res, cookieValue) : res;
     }
 
     const encrypted = await encryptEmail(email, encryptionKey);
@@ -618,7 +614,7 @@ export async function handleFormEmailSignup(
       latencyMs: Date.now() - start,
     });
     const res = jsonResponse({ ok: true, id }, request);
-    return isNew ? setAnonCookie(res, visitor) : res;
+    return isNew ? setAnonCookie(res, cookieValue) : res;
   } catch (err) {
     return handleDbError('email-signup', eventId, errorLabel(err), request);
   }

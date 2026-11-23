@@ -25,7 +25,12 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { getOrCreateAnonId, setAnonCookie, generateAnonId } from '../src/lib/anonymous-id';
+import {
+  getOrCreateAnonId,
+  setAnonCookie,
+  generateAnonId,
+  type AnonCookieValue,
+} from '../src/lib/anonymous-id';
 
 // A realistic OW named session: a session cookie plus multiple named-profile
 // hints — the curator / bocce-player / artist personas one person may hold at
@@ -92,11 +97,7 @@ describe('OSE-1053 Layer A — Boundary: an OW session cannot bleed into the ano
 
   test('OSE-1053 | UNIT | setAnonCookie emits a HOST-ONLY cookie | no Domain attribute; HttpOnly + Secure + SameSite=Lax present', () => {
     const anonId = generateAnonId();
-    const res = setAnonCookie(new Response(null, { status: 302 }), {
-      anonId,
-      isNew: true,
-      cookieValue: anonId,
-    });
+    const res = setAnonCookie(new Response(null, { status: 302 }), anonId as AnonCookieValue);
     const setCookie = res.headers.get('Set-Cookie') ?? '';
 
     // Parse-and-assert the emitted header (integrity, not toContain-only).
