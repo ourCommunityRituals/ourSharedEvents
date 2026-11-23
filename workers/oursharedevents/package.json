@@ -33,18 +33,18 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.23.0",
-    "@cloudflare/workers-types": "^5.20261113.1",
+    "@cloudflare/workers-types": "^5.20261120.1",
     "@stryker-mutator/core": "^10.1.1",
     "@stryker-mutator/vitest-runner": "^10.1.1",
     "@types/jsdom": "^28.0.1",
-    "axe-core": "^4.14.0",
+    "axe-core": "^4.14.1",
     "eslint-plugin-security": "^4.2.1",
-    "fast-check": "^4.10.2",
+    "fast-check": "^4.10.3",
     "js-yaml": "^4.3.2",
     "jsdom": "^29.0.2",
     "typescript": "^5.0.0",
     "vitest": "^4.1.12",
-    "wrangler": "4.161.0"
+    "wrangler": "4.165.0"
   },
   "overrides": {
     "undici": "7.30.0",
