@@ -339,17 +339,17 @@
 #win-month:checked ~ .toggles label[for='win-month']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-month:checked ~ .toggles label[for='win-month']::before{content:'\2713';margin-inline-end:.35rem}#win-month:focus-visible ~ .toggles label[for='win-month']{outline:3px solid var(--accent);outline-offset:2px}#win-month:checked ~ .area .event-card:not(.when-month),#win-month:checked ~ .area .amap-f:not(.when-month){display:none}
 #win-next-90:checked ~ .toggles label[for='win-next-90']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#win-next-90:checked ~ .toggles label[for='win-next-90']::before{content:'\2713';margin-inline-end:.35rem}#win-next-90:focus-visible ~ .toggles label[for='win-next-90']{outline:3px solid var(--accent);outline-offset:2px}#win-next-90:checked ~ .area .event-card:not(.when-next-90),#win-next-90:checked ~ .area .amap-f:not(.when-next-90){display:none}
 </style><style data-testid="area-type-css">
-#type-all:checked ~ .toggles label[for='type-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-all:checked ~ .toggles label[for='type-all']::before{content:'\2713';margin-inline-end:.35rem}#type-all:focus-visible ~ .toggles label[for='type-all']{outline:3px solid var(--accent);outline-offset:2px}
-#cat-rec:checked ~ .toggles label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-rec:checked ~ .toggles label[for='cat-rec']::before{content:'\2713';margin-inline-end:.35rem}#cat-rec:focus-visible ~ .toggles label[for='cat-rec']{outline:3px solid var(--accent);outline-offset:2px}#cat-rec:checked ~ .area .event-card:not(.cat-rec),#cat-rec:checked ~ .area .amap-f:not(.cat-rec){display:none}
-#cat-ent:checked ~ .toggles label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .toggles label[for='cat-ent']::before{content:'\2713';margin-inline-end:.35rem}#cat-ent:focus-visible ~ .toggles label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent),#cat-ent:checked ~ .area .amap-f:not(.cat-ent){display:none}
-</style><style>@media(max-width:599.98px){.toggle-radio{width:1px;height:1px;margin:0}#filters-open:not(:checked)~.toggle-radio,#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn,#filters-open{display:none}}</style><style>button.disc-chip{font-family:inherit}button.disc-chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.area-tabs .disc-chip.active{background:var(--surface);border:2px solid var(--accent);color:var(--text)}.area-tabs .disc-chip.active::before{content:none}.area-tab{flex:1 1 100%;margin:.25rem 0}.near-d{white-space:nowrap}</style>
+#type-all:checked ~ .icon-slider label[for='type-all']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#type-all:checked ~ .icon-slider label[for='type-all'] .icon-slider-icon{color:inherit}#type-all:checked ~ .icon-slider label[for='type-all'] .icon-slider-text::before{content:'\2713\00a0'}#type-all:focus-visible ~ .icon-slider label[for='type-all']{outline:3px solid var(--accent);outline-offset:2px}
+#cat-rec:checked ~ .icon-slider label[for='cat-rec']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-rec:checked ~ .icon-slider label[for='cat-rec'] .icon-slider-icon{color:inherit}#cat-rec:checked ~ .icon-slider label[for='cat-rec'] .icon-slider-text::before{content:'\2713\00a0'}#cat-rec:focus-visible ~ .icon-slider label[for='cat-rec']{outline:3px solid var(--accent);outline-offset:2px}#cat-rec:checked ~ .area .event-card:not(.cat-rec),#cat-rec:checked ~ .area .amap-f:not(.cat-rec){display:none}
+#cat-ent:checked ~ .icon-slider label[for='cat-ent']{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}#cat-ent:checked ~ .icon-slider label[for='cat-ent'] .icon-slider-icon{color:inherit}#cat-ent:checked ~ .icon-slider label[for='cat-ent'] .icon-slider-text::before{content:'\2713\00a0'}#cat-ent:focus-visible ~ .icon-slider label[for='cat-ent']{outline:3px solid var(--accent);outline-offset:2px}#cat-ent:checked ~ .area .event-card:not(.cat-ent),#cat-ent:checked ~ .area .amap-f:not(.cat-ent){display:none}
+</style><style>@media(max-width:599.98px){.toggle-radio{width:1px;height:1px;margin:0}#filters-open:not(:checked)~.toggle-radio:not([name=type]),#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn,#filters-open{display:none}}</style><style>button.disc-chip{font-family:inherit}button.disc-chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}.area-tabs .disc-chip.active{background:var(--surface);border:2px solid var(--accent);color:var(--text)}.area-tabs .disc-chip.active::before{content:none}.area-tab{flex:1 1 100%;margin:.25rem 0}.near-d{white-space:nowrap}</style>
+        <div class="icon-slider" data-icon-slider data-testid="toggle-type"><p class="icon-slider-heading" id="toggle-type-label">Kinds of events</p><div class="icon-slider-track" role="group" aria-labelledby="toggle-type-label" tabindex="0"><label class="icon-slider-item" for="type-all" data-testid="type-item-all"><svg class="icon-slider-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg><span class="icon-slider-text">All types</span></label><label class="icon-slider-item" for="cat-rec" data-testid="type-item-cat-rec"><svg class="icon-slider-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5v17M6.2 5.8c2.6 2.4 2.6 10 0 12.4M17.8 5.8c-2.6 2.4-2.6 10 0 12.4"/></svg><span class="icon-slider-text">Sports &amp; Recreation</span></label><label class="icon-slider-item" for="cat-ent" data-testid="type-item-cat-ent"><svg class="icon-slider-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/><path d="M10 7.8a2 2 0 1 1 2.6 1.9c-.4.2-.6.5-.6.9v.4"/><circle cx="12" cy="13" r=".6" fill="currentColor"/></svg><span class="icon-slider-text">Entertainment &amp; Trivia</span></label></div><div class="icon-slider-nav" hidden><button type="button" class="icon-slider-arrow" data-step="-1" aria-label="Show earlier choices" data-testid="toggle-type-prev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg></button><button type="button" class="icon-slider-arrow" data-step="1" aria-label="Show more choices" data-testid="toggle-type-next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7"/></svg></button></div></div>
         <div class="toggles" data-testid="area-toggles">
           <fieldset class="disc-chips" data-testid="toggle-view"><legend class="sr-only">View</legend><label class="disc-chip" for="view-list">List</label><label class="disc-chip" for="view-map">Map</label></fieldset>
           <div class="disc-chips area-filters-btn"><label class="disc-chip" for="filters-open" data-testid="area-filters-btn">Filters</label></div>
         </div>
         <div class="toggles area-filters" data-testid="area-filters" data-tabs="Filter events" data-tabs-on="filter on">
           <div class="area-tab" data-tab="when" data-tab-label="When"><fieldset class="disc-chips" data-testid="toggle-window"><legend class="sr-only">When</legend><label class="disc-chip" for="win-weekend">This weekend</label><label class="disc-chip" for="win-week">Next 7 days</label><label class="disc-chip" for="win-month">This month</label><label class="disc-chip" for="win-next-90">Next 90 days</label></fieldset></div>
-          <div class="area-tab" data-tab="type" data-tab-label="Type"><fieldset class="disc-chips" data-testid="toggle-type"><legend class="disc-label">Type</legend><label class="disc-chip" for="type-all">All types</label><label class="disc-chip" for="cat-rec">Sports &amp; Recreation</label><label class="disc-chip" for="cat-ent">Entertainment &amp; Trivia</label></fieldset></div>
           
           <div class="area-tab" data-tab="near" data-tab-label="Near me" data-testid="near-panel" hidden data-locating="Finding your location..." data-off="Location is off, so distance cannot be used." data-shown="Showing events within %d mi, nearest first. Events with no place on the map are left out." data-none="No events with a place on the map within %d mi. Try a wider distance." data-away="about %d mi away">
             <fieldset id="near-radius" class="disc-chips near-chips" data-testid="near-radius"><legend class="disc-label">Distance from where you are, in miles</legend><input type="radio" name="near" id="near-0" value="0" class="toggle-radio" checked /><label class="disc-chip" for="near-0">Any distance</label><input type="radio" name="near" id="near-2" value="2" class="toggle-radio" /><label class="disc-chip" for="near-2">Within 2 mi</label><input type="radio" name="near" id="near-5" value="5" class="toggle-radio" /><label class="disc-chip" for="near-5">Within 5 mi</label><input type="radio" name="near" id="near-10" value="10" class="toggle-radio" /><label class="disc-chip" for="near-10">Within 10 mi</label><input type="radio" name="near" id="near-25" value="25" class="toggle-radio" /><label class="disc-chip" for="near-25">Within 25 mi</label><input type="radio" name="near" id="near-50" value="50" class="toggle-radio" /><label class="disc-chip" for="near-50">Within 50 mi</label></fieldset>
@@ -700,6 +700,61 @@
   document.addEventListener('change', marks);
   select(0, false);
   marks();
+})();</script><script nonce="N">(function () {
+  var all = document.querySelectorAll('[data-icon-slider]');
+  for (var i = 0; i < all.length; i++) wire(all[i]);
+  function wire(box) {
+    var track = box.querySelector('.icon-slider-track');
+    var nav = box.querySelector('.icon-slider-nav');
+    if (!track || !nav) return;
+    var EDGE = 6;
+    var prev = nav.querySelector('[data-step="-1"]');
+    var next = nav.querySelector('[data-step="1"]');
+    var rtl = getComputedStyle(track).direction === 'rtl';
+    function pos() { return Math.abs(track.scrollLeft); }
+    function update() {
+      var room = track.scrollWidth - track.clientWidth;
+      // A few px of slack: the snap and the track's own padding can leave the
+      // row 2 px from either end, which is still the end.
+      nav.hidden = room <= EDGE;
+      prev.disabled = pos() <= EDGE;
+      next.disabled = pos() >= room - EDGE;
+    }
+    function step(dir) {
+      var by = Math.max(track.clientWidth * 0.8, 100) * dir * (rtl ? -1 : 1);
+      track.scrollBy({ left: by, behavior: 'smooth' });
+    }
+    prev.addEventListener('click', function () { step(-1); });
+    next.addEventListener('click', function () { step(1); });
+    track.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    // A radio kept elsewhere: when it takes focus, its label comes into view.
+    var labels = track.querySelectorAll('label[for]');
+    for (var j = 0; j < labels.length; j++) {
+      (function (label) {
+        var radio = document.getElementById(label.getAttribute('for'));
+        if (radio) radio.addEventListener('focus', function () {
+          label.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        });
+      })(labels[j]);
+    }
+    // Button items: at most one chosen, its value in the slider's input. A tap on
+    // the chosen one clears the choice (the field is optional where it is used).
+    var input = box.querySelector('[data-icon-slider-value]');
+    var buttons = track.querySelectorAll('button[data-value]');
+    for (var k = 0; k < buttons.length; k++) {
+      buttons[k].addEventListener('click', function (ev) {
+        var b = ev.currentTarget;
+        var on = b.getAttribute('aria-pressed') !== 'true';
+        for (var m = 0; m < buttons.length; m++) buttons[m].setAttribute('aria-pressed', String(on && buttons[m] === b));
+        if (input) {
+          input.value = on ? b.getAttribute('data-value') : '';
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    }
+    update();
+  }
 })();</script>
       </section>
       
