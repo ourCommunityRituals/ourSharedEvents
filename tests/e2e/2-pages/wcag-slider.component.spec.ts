@@ -331,6 +331,12 @@ for (const width of [375, 1280]) {
     for (let i = 0; i < CATS.length; i++) await page.keyboard.press('ArrowRight');
     await expect(page.locator('#cat-fai')).toBeChecked();
     await expect(page.locator('#cat-fai')).toBeFocused();
+    // WebKit drops :focus-visible after a script focus() even when arrow keys
+    // follow, so step out and back in by keyboard: Shift+Tab returns to the
+    // chosen radio, as a keyboard user would come back to it.
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.locator('#cat-fai')).toBeFocused();
     const label = slider(page).locator('label[for="cat-fai"]');
     await expect(label).toBeInViewport({ ratio: 0.9 });
     const ring = await label.evaluate((el) => {
