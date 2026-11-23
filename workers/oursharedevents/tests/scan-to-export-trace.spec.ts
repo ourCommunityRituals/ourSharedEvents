@@ -304,10 +304,11 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
 
     const node = await tenv()
       .DB.prepare(
-        'SELECT COUNT(*) AS n FROM scan_node_returns WHERE event_id = ? AND anonymous_id IS NOT NULL'
+        'SELECT COUNT(*) AS n FROM scan_node_returns WHERE event_id = ? AND anonymous_id IS NULL'
       )
       .bind(eventId)
       .first<{ n: number }>();
+    // OSE-2214: the event-hour row is written, and it names no phone.
     expect(node?.n).toBe(1);
   });
 
@@ -359,13 +360,13 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       .all<{ total_scans: number; h3_res9: string; h3_res7: string }>();
     expect(agg.results).toEqual([{ total_scans: 1, h3_res9: EAGLES_RES9, h3_res7: EAGLES_RES7 }]);
 
-    // anon_id_returns: the scanner's return row for this event (hashed, never raw).
+    // anon_id_returns: OSE-2214, the scan stores no phone id, so the returns
+    // job has nobody to link and writes no row.
     const ret = await tenv()
       .DB.prepare('SELECT anon_id_hash, return_count FROM anon_id_returns WHERE venue_id = ?')
       .bind(eventId)
       .all<{ anon_id_hash: string; return_count: number }>();
-    expect(ret.results).toHaveLength(1);
-    expect(ret.results![0].return_count).toBe(1);
+    expect(ret.results).toHaveLength(0);
 
     // Corridor baseline: ADR-026 rule B (OSE-1946). One person is under K, so
     // the SharedReport withholds this event's own count, and an event whose own
@@ -578,10 +579,11 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     expect(again?.n).toBe(5);
   });
 
-  test('hop 8 (OSE-1459) — one person scanning five posters in one cell does not publish it', async () => {
-    // Five posters hung at one spot (one res9 cell), all scanned by the SAME
-    // visitor within the hour. Dedup is per poster, so that is five scans in
-    // the cell, but one person: the cell must hold 0, never a publishable count.
+  test('hop 8 — five posters in one cell, one scan each, publish 0: the floor is per poster-hour', async () => {
+    // Five posters hung at one spot (one res9 cell), each scanned once within
+    // the hour. The K-floor applies to each poster-hour before cells are summed
+    // (OSE-2214: a count of scans on the code, never of phones), so no poster
+    // reaches K and the cell must hold 0, never a publishable count.
     const tokens: string[] = [];
     for (let i = 0; i < 5; i++) {
       const placed = await SELF.fetch(
@@ -600,16 +602,11 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       tokens.push(((await placed.json()) as { qr_token: string }).qr_token);
     }
 
-    let cookie = '';
     for (const token of tokens) {
-      const scan = await SELF.fetch(`https://t.test/q/${token}`, {
-        redirect: 'manual',
-        headers: cookie ? { Cookie: cookie } : {},
-      });
+      const scan = await SELF.fetch(`https://t.test/q/${token}`, { redirect: 'manual' });
       expect(scan.status).toBe(302);
-      if (!cookie) cookie = (scan.headers.get('Set-Cookie') ?? '').split(';')[0];
+      expect(scan.headers.get('Set-Cookie')).toBeNull();
     }
-    expect(cookie).toMatch(/^ose_anon=/);
     const placedRows = await tenv()
       .DB.prepare(
         `SELECT COUNT(*) AS n FROM scan_placement_events spe

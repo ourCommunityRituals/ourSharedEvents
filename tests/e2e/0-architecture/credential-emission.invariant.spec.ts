@@ -951,10 +951,11 @@ const EXEMPTIONS: ReadonlyArray<{ file: string; sink: string; carries: string; r
   {
     file: 'handlers/qr-scan.ts',
     sink: 'setAnonCookie',
-    carries: '`cookieValue`',
+    carries: '`newCookie`',
     reason:
-      'GET /q/:token sends the anonymous id back as the ose_anon cookie: the same cookie, the ' +
-      'same rule (invariant 4), listed in cookie-setters.invariant.spec.ts.',
+      'GET /q/:token on the room vote code only (OSE-2214: a poster code sets none) sends the ' +
+      'anonymous id back as the ose_anon cookie: the same cookie, the same rule (invariant 4), ' +
+      'listed in cookie-setters.invariant.spec.ts.',
   },
 ];
 

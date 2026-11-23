@@ -28,7 +28,6 @@ import { vi, describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { handleQrScan, type QrScanEnv } from '../src/handlers/qr-scan';
 import { SCAN_QUEUE_MAX_RETRIES } from '../src/lib/scan-buffer';
-import { isScanNodeKey } from '../src/lib/scan-node-key';
 import { signAnonId } from '../src/lib/anonymous-id';
 
 interface TestEnv {
@@ -198,14 +197,14 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     expect(scanCount).toBe(1);
   });
 
-  test('OSE-625 | UNIT | valid token, new visitor | Set-Cookie header sets ose_anon cookie', async () => {
+  test('OSE-2214 | UNIT | poster code, new visitor | sets no cookie, and the scan counts', async () => {
     const kv = makeInMemoryKV();
     const res = await handleQrScan(await makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
 
     expect(res.status).toBe(302);
-    const setCookie = res.headers.get('Set-Cookie') ?? '';
-    expect(setCookie).toContain('ose_anon=');
-    expect(setCookie).toContain('HttpOnly');
+    // OSE-2214 (owner, 2026-11-23): OSE counts the code, never the phone.
+    expect(res.headers.get('Set-Cookie')).toBeNull();
+    expect(await countScans(tenv().DB)).toBe(1);
   });
 
   test('OSE-625 | UNIT | valid token, returning visitor | no Set-Cookie header emitted', async () => {
@@ -222,7 +221,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     expect(setCookie).toBeNull();
   });
 
-  test('OSE-625 | UNIT | duplicate scan in the same hour | second call does NOT write a second row', async () => {
+  test('OSE-2214 | UNIT | the same phone scans 3 times in an hour | 3 scans counted (the code, not the phone)', async () => {
     const kv = makeInMemoryKV();
     const existingAnonId = 'anon_22222222-2222-2222-2222-222222222222';
     const req = () => makeRequest(VALID_QR_TOKEN, { existingCookie: existingAnonId });
@@ -232,38 +231,39 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
     await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
 
-    const scanCount = await countScans(tenv().DB);
-    expect(scanCount).toBe(1);
+    // Retires the per-phone hourly filter (OSE-1459): every scan is traffic.
+    expect(await countScans(tenv().DB)).toBe(3);
   });
 
-  test('OSE-1459 | UNIT | one person counts once per poster per hour, again the next hour', async () => {
-    // The dedup window is the scan's hour bucket, not 5 minutes, so an hourly
-    // poster count is a count of people and the K-floor means K people.
-    vi.useFakeTimers({ toFake: ['Date'] });
-    try {
-      const kv = makeInMemoryKV();
-      const anon = 'anon_44444444-4444-4444-4444-444444444444';
-      const req = () => makeRequest(VALID_QR_TOKEN, { existingCookie: anon });
-      const scanEnv = makeEnv(kv);
-
-      vi.setSystemTime(new Date('2026-10-03T19:05:00Z'));
-      await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
-      vi.setSystemTime(new Date('2026-10-03T19:45:00Z')); // 40 min later, same hour
-      await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
-      expect(await countScans(tenv().DB)).toBe(1);
-
-      vi.setSystemTime(new Date('2026-10-03T20:02:00Z')); // next hour bucket
-      await handleQrScan(await req(), scanEnv, VALID_QR_TOKEN);
-      expect(await countScans(tenv().DB)).toBe(2);
-    } finally {
-      vi.useRealTimers();
-    }
+  test('OSE-2214 | UNIT | a poster code reads no cookie and keeps no marker | KV is never touched', async () => {
+    const calls: string[] = [];
+    const kv = new Proxy(makeInMemoryKV(), {
+      get(target, prop) {
+        const v = Reflect.get(target, prop);
+        if (typeof v !== 'function') return v;
+        return (...args: unknown[]) => {
+          calls.push(String(prop));
+          return (v as (...a: unknown[]) => unknown).apply(target, args);
+        };
+      },
+    }) as KVNamespace;
+    const res = await handleQrScan(
+      await makeRequest(VALID_QR_TOKEN, {
+        existingCookie: 'anon_44444444-4444-4444-4444-444444444444',
+      }),
+      makeEnv(kv),
+      VALID_QR_TOKEN
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Set-Cookie')).toBeNull();
+    expect(calls).toEqual([]);
+    expect(await countScans(tenv().DB)).toBe(1);
   });
 
-  test('OSE-1459 | UNIT | a scan that fails to store does not block a retry in the same hour', async () => {
-    // The dedup marker is set before the write. If the write fails, nothing
-    // was stored, so the marker must be released: otherwise the hourly dedup
-    // would swallow the retry and the scan would be lost for the hour.
+  test('OSE-2214 | UNIT | a poster scan that fails to store is counted when the phone tries again', async () => {
+    // A failed write stores nothing, and nothing stops the retry: a poster
+    // code keeps no per-phone marker (OSE-2214), so the next scan counts.
+    // The vote code's marker release is covered in vote-pass.spec.ts.
     const kv = makeInMemoryKV();
     const anon = 'anon_55555555-5555-5555-5555-555555555555';
     const req = () => makeRequest(VALID_QR_TOKEN, { existingCookie: anon });
@@ -313,8 +313,8 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
   });
 
   test('OSE-1459 | CONFIG | SCAN_QUEUE_MAX_RETRIES matches the staging scan consumer max_retries', () => {
-    // The consumer releases a dropped scan's dedup marker on the last delivery,
-    // which it recognises by this constant. It must track wrangler.toml.
+    // The consumer recognises a message's last delivery by this constant
+    // (Queues delivers at most max_retries + 1 times). It must track wrangler.toml.
     const toml = (env as Record<string, unknown>).TEST_WRANGLER_TOML as string;
     expect(typeof toml).toBe('string');
     const block =
@@ -394,17 +394,26 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     expect(row!.country_code).toBeNull();
   });
 
-  test('OSE-625 | UNIT | scan row values | anonymous_id stored (not null) — a keyed scan id, never the cookie (OSE-1659)', async () => {
+  test('OSE-2214 | UNIT | scan row values | no phone id and no browser-name hash, even with a signed cookie', async () => {
     const kv = makeInMemoryKV();
-    await handleQrScan(await makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
+    await handleQrScan(
+      await makeRequest(VALID_QR_TOKEN, {
+        existingCookie: 'anon_33333333-3333-3333-3333-333333333333',
+      }),
+      makeEnv(kv),
+      VALID_QR_TOKEN
+    );
 
     const row = await tenv()
-      .DB.prepare(`SELECT anonymous_id FROM scan_node_returns WHERE event_id = ? LIMIT 1`)
+      .DB.prepare(
+        `SELECT anonymous_id, user_agent_hash FROM scan_node_returns WHERE event_id = ? LIMIT 1`
+      )
       .bind(TEST_EVENT_ID)
-      .first<{ anonymous_id: string }>();
+      .first<{ anonymous_id: string | null; user_agent_hash: string | null }>();
 
-    expect(row!.anonymous_id).not.toBeNull();
-    expect(isScanNodeKey(row!.anonymous_id)).toBe(true);
+    expect(row).not.toBeNull();
+    expect(row!.anonymous_id).toBeNull();
+    expect(row!.user_agent_hash).toBeNull();
   });
 
   test('OSE-625 | UNIT | invalid token shape (no qrt_ prefix) | 302 to homepage, no DB write', async () => {
@@ -561,61 +570,44 @@ describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
     }
   });
 
-  test('OSE-1784 | RAINY | KV get throws | scan not counted, visitor sent to the event', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const res = await handleQrScan(
-        await makeRequest(VALID_QR_TOKEN),
-        makeEnv(kvThatThrows({ get: true })),
-        VALID_QR_TOKEN
-      );
-      expect(res.status).toBe(302);
-      expect(res.headers.get('Location') ?? '').toContain(`/events/${TEST_EVENT_ID}`);
-      expect(res.headers.get('Set-Cookie') ?? '').toContain('ose_anon=');
-      // OSE-1784 (owner, 2026-11-23): no check, no count.
-      expect(await countScans(tenv().DB)).toBe(0);
-    } finally {
-      warnSpy.mockRestore();
-    }
+  test('OSE-2214 | RAINY | KV get throws | a poster scan still counts (it never asks KV)', async () => {
+    const res = await handleQrScan(
+      await makeRequest(VALID_QR_TOKEN),
+      makeEnv(kvThatThrows({ get: true })),
+      VALID_QR_TOKEN
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location') ?? '').toContain(`/events/${TEST_EVENT_ID}`);
+    expect(res.headers.get('Set-Cookie')).toBeNull();
+    expect(await countScans(tenv().DB)).toBe(1);
   });
 
-  test('OSE-1784 | RAINY | KV put throws | scan not counted, visitor sent to the event', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const res = await handleQrScan(
-        await makeRequest(VALID_QR_TOKEN, {
-          existingCookie: 'anon_66666666-6666-6666-6666-666666666666',
-        }),
-        makeEnv(kvThatThrows({ put: true })),
-        VALID_QR_TOKEN
-      );
-      expect(res.status).toBe(302);
-      expect(res.headers.get('Location') ?? '').toContain(`/events/${TEST_EVENT_ID}`);
-      // A returning visitor: still no new cookie on the blip path.
-      expect(res.headers.get('Set-Cookie')).toBeNull();
-      expect(await countScans(tenv().DB)).toBe(0);
-    } finally {
-      warnSpy.mockRestore();
-    }
+  test('OSE-2214 | RAINY | KV put throws | a poster scan still counts', async () => {
+    const res = await handleQrScan(
+      await makeRequest(VALID_QR_TOKEN, {
+        existingCookie: 'anon_66666666-6666-6666-6666-666666666666',
+      }),
+      makeEnv(kvThatThrows({ put: true })),
+      VALID_QR_TOKEN
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location') ?? '').toContain(`/events/${TEST_EVENT_ID}`);
+    expect(res.headers.get('Set-Cookie')).toBeNull();
+    expect(await countScans(tenv().DB)).toBe(1);
   });
 
-  test('OSE-1784 | RAINY | KV get throws | the scan takes no place under the poster-hour cap', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      await tenv().DB.prepare(`DELETE FROM scan_poster_hour_tally`).run();
-      await handleQrScan(
-        await makeRequest(VALID_QR_TOKEN),
-        makeEnv(kvThatThrows({ get: true })),
-        VALID_QR_TOKEN
-      );
-      const tally = await tenv()
-        .DB.prepare(`SELECT COALESCE(SUM(scans), 0) AS n FROM scan_poster_hour_tally`)
-        .first<{ n: number }>();
-      // A scan that is not counted must not use up a real visitor's place.
-      expect(tally?.n).toBe(0);
-    } finally {
-      warnSpy.mockRestore();
-    }
+  test('OSE-2214 | RAINY | KV get throws | the counted scan takes its place under the poster-hour cap', async () => {
+    await tenv().DB.prepare(`DELETE FROM scan_poster_hour_tally`).run();
+    await handleQrScan(
+      await makeRequest(VALID_QR_TOKEN),
+      makeEnv(kvThatThrows({ get: true })),
+      VALID_QR_TOKEN
+    );
+    const tally = await tenv()
+      .DB.prepare(`SELECT COALESCE(SUM(scans), 0) AS n FROM scan_poster_hour_tally`)
+      .first<{ n: number }>();
+    // The cap (OSE-1496) is the only guard, so every counted scan uses a place.
+    expect(tally?.n).toBe(1);
   });
 
   test('OSE-1784 | RAINY | KV not bound at all | the scan is still written (a config gap, not a blip)', async () => {
@@ -628,7 +620,7 @@ describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
     expect(await countScans(tenv().DB)).toBe(1);
   });
 
-  test('OSE-1784 | RAINY | one person scans 5 times while KV fails | 0 counted, never a published 5', async () => {
+  test('OSE-2214 | RAINY | one phone scans 5 times while KV fails | 5 scans counted, no dedup line', async () => {
     const logged: string[] = [];
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation((...a) => {
       logged.push(a.map(String).join(' '));
@@ -644,9 +636,8 @@ describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
         );
         expect(res.status).toBe(302);
       }
-      expect(await countScans(tenv().DB)).toBe(0);
-      expect(logged.filter((l) => l.includes('SCAN_DEDUP_UNAVAILABLE'))).toHaveLength(5);
-      for (const line of logged) expect(line).not.toContain(VALID_QR_TOKEN);
+      expect(await countScans(tenv().DB)).toBe(5);
+      expect(logged.filter((l) => l.includes('SCAN_DEDUP_UNAVAILABLE'))).toHaveLength(0);
     } finally {
       warnSpy.mockRestore();
     }

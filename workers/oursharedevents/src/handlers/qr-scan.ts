@@ -5,36 +5,20 @@
  * then 302-redirects the attendee to the event page with enough query context
  * for the event-page CTA to continue to the appropriate attributed form.
  *
- * Privacy invariants:
- *   - Only scan_bucket (hour-granularity UTC) is stored — no exact timestamp.
- *   - user_agent_hash is written only when the scan has no keyed id
- *     (ANON_ID_HASH_PEPPER unset), as the visitor-count fallback (TL-078). It is
- *     an unsalted SHA-256 truncated to 16 hex chars, so it is a device trait, not
- *     a secret; production refuses to deploy without the pepper.
- *   - anonymous_id is a keyed scan id derived from the HttpOnly cookie
- *     (lib/scan-node-key.ts, OSE-1659) — never the cookie value, no PII, no IP.
- *   - No visitor location: the Cloudflare country header is never read, so country_code stays
- *     NULL (OSE-1460). Place comes only from the poster's corridor.
- *   - No referrer logged.
- *
- * Dedup:
- *   - KV key `scan:dedup:{scanKey}:{deploymentId}:{hour_bucket}`, 1-hour TTL
- *     (the cookie value only when ANON_ID_HASH_PEPPER is unset).
- *   - Same anon + same deployment + same hour bucket → no second scan row.
- *     One person counts once per poster per hour, so an hourly poster count is
- *     a count of people (OSE-1459): the K-floor on poster cells and on
- *     poster_attribution then means "at least K people", not "K requests".
- *   - KV missing → still write scan (a config gap, not a blip).
- *   - KV get/put error → the visitor still reaches the page, but the scan is
- *     not written or counted (OSE-1784, owner 2026-11-23): a count can be a
- *     little low during a blip, never lifted past the floor by repeats.
- *     The room's vote code is the exception: its scans are never a published
- *     count, so it is written without the check and voting keeps working.
+ * OSE counts traffic on the code, never the phone (OSE-2214, owner 2026-11-23;
+ * ADR-024 option C for scans). A poster code:
+ *   - neither reads nor sets the ose_anon cookie;
+ *   - keeps no per-phone marker: every scan counts, up to POSTER_HOUR_CAP per
+ *     poster per hour (OSE-1496, lib/poster-hour-cap.ts), the only guard
+ *     (this retires the per-phone hourly dedup of OSE-1459);
+ *   - stores no phone id and reads no browser name (closes TL-078);
+ *   - stores only the hour bucket, no exact time; no visitor location (the
+ *     Cloudflare country header is never read, OSE-1460); no referrer.
  *
  * Backend blips (OSE-1988): no D1 or KV error becomes a 500. The deployment
- * lookup is retried once, then the visitor is sent home (no cookie, no scan);
- * a KV error leaves the scan uncounted; a scan write error is logged and the
- * redirect stands.
+ * lookup is retried once, then the visitor is sent home (no scan); a cap
+ * read error counts the scan (lib/poster-hour-cap.ts); a scan write error is
+ * logged and the redirect stands.
  *
  * Structured log (SCAN_RECORDED) contains only aggregated signals: no raw
  * anon_id, no exact timestamp, no lat/lng.
@@ -45,10 +29,11 @@
  * (OSE-2140), the event's vote set is open and the event is Published
  * (OSE-2142), the visitor goes to
  * `/events/<id>/vote#t=<pass>` (lib/vote-pass.ts). The pass is only in the
- * fragment. The uncounted path, a failed write, a missing pepper, an ordinary
- * poster code, a closed set, an event that is not Published, or the switch off
+ * fragment. A failed write, a missing pepper, an ordinary poster code, a closed set, an event that is not Published, or the switch off
  * mint none, and the code keeps today's redirect. This is
- * still the only place the cookie is read on the vote path (invariant 4).
+ * still the only place the cookie is read on the vote path (invariant 4). The
+ * vote code alone keeps the cookie and a one-hour keyed marker (ADR-040), so a
+ * repeat scan keeps its pass; its scans are never a published count.
  * NO LOG LINE names the redirect's Location, the pass or the voter key
  * (tests/e2e/0-architecture/votes-never-who.invariant.spec.ts).
  *
@@ -59,7 +44,7 @@
 
 import { eventLiveSql } from '../domain/event-state';
 import { isValidQrTokenShape } from '../lib/qr-token';
-import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
+import { getOrCreateAnonId, setAnonCookie, type AnonCookieValue } from '../lib/anonymous-id';
 import { scanHourOf, takePosterHourPlace } from '../lib/poster-hour-cap';
 import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-buffer';
 import { scanNodeKey } from '../lib/scan-node-key';
@@ -94,24 +79,10 @@ export interface QrScanEnv extends VotingSwitchEnv {
   // S3c). Only votingEnabled reads it; on, a vote code may mint a pass.
 }
 
-/** Hour-bucketed UTC timestamp string — privacy invariant for scan_node_returns.anonymous_id. */
+/** Hour-bucketed UTC timestamp string: the only time a scan row keeps. */
 function scanBucket(now: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}:00`;
-}
-
-/** SHA-256 of user-agent string, truncated to 16 hex chars. Not reversible. */
-async function hashUserAgent(ua: string): Promise<string | null> {
-  try {
-    const encoded = new TextEncoder().encode(ua.slice(0, 512));
-    const buf = await crypto.subtle.digest('SHA-256', encoded);
-    return Array.from(new Uint8Array(buf))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('')
-      .slice(0, 16);
-  } catch {
-    return null;
-  }
 }
 
 const SCAN_FORM_TYPES = new Set(['register', 'checkin', 'survey', 'email-signup']);
@@ -209,92 +180,85 @@ export async function handleQrScan(
 
   const nowMs = Date.now();
   const nowDate = new Date(nowMs);
+  const bucket = scanBucket(nowDate);
+  const url = new URL(request.url);
+  const isVoteCode = deployment.is_vote_code === 1;
 
-  // Anonymous ID: read from cookie or generate new one.
-  const { anonId, isNew, cookieValue } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
-  // OSE-1659: what is stored and queued is the keyed scan id, never the cookie
-  // value. Null without the pepper: the scan still counts, with no id.
-  const scanKey = await scanNodeKey(anonId, env.ANON_ID_HASH_PEPPER);
-  if (!scanKey) warnScanPepperMissing();
-
-  // Hour dedup (OSE-1459): same anon + same deployment in the same hour bucket
-  // the scan is stored under → skip write. One person, one poster, one hour.
+  // OSE-2214 (owner, 2026-11-23; ADR-024 option C for scans): OSE counts the
+  // traffic on the code, never the phone. A poster code neither reads nor sets
+  // the ose_anon cookie, keeps no per-phone marker and stores no phone id:
+  // every scan counts, up to POSTER_HOUR_CAP per poster per hour (OSE-1496),
+  // which is the only guard. The room's vote code is the exception (ADR-040):
+  // its pass still needs the cookie, and its scans are never a published count.
+  let voterId: string | null = null;
+  // The cookie to set: only on the vote code, and only for a browser without one.
+  let newCookie: AnonCookieValue | null = null;
   let isDuplicate = false;
-  let dedupUnavailable = false;
   let dedupKey: string | null = null;
-  if (env.RATE_LIMIT_KV) {
-    const key = scanDedupKey(scanKey ?? anonId, deploymentId, scanBucket(nowDate));
-    try {
-      const existing = await env.RATE_LIMIT_KV.get(key);
-      if (existing !== null) {
-        isDuplicate = true;
-      } else {
-        // The key names its hour, so a 1-hour TTL always outlives that hour.
-        await env.RATE_LIMIT_KV.put(key, '1', { expirationTtl: 3600 });
-        dedupKey = key;
+  if (isVoteCode) {
+    const { anonId, isNew, cookieValue } = await getOrCreateAnonId(
+      request,
+      env.ANON_ID_HASH_PEPPER
+    );
+    voterId = anonId;
+    newCookie = isNew ? cookieValue : null;
+    // The vote pass is one per voter: a repeat scan of the vote code in the
+    // same hour is not written again, and keeps its pass (OSE-2133). The marker
+    // is keyed, never the cookie value, and lives one hour.
+    const scanKey = await scanNodeKey(anonId, env.ANON_ID_HASH_PEPPER);
+    if (!scanKey) warnScanPepperMissing();
+    if (env.RATE_LIMIT_KV) {
+      const key = scanDedupKey(scanKey ?? anonId, deploymentId, bucket);
+      try {
+        if ((await env.RATE_LIMIT_KV.get(key)) !== null) {
+          isDuplicate = true;
+        } else {
+          await env.RATE_LIMIT_KV.put(key, '1', { expirationTtl: 3600 });
+          dedupKey = key;
+        }
+      } catch (err) {
+        // The vote code is written without the check (OSE-1784, "keep voting
+        // working"): its scans are never a published count.
+        console.warn(
+          JSON.stringify({
+            type: 'SCAN_DEDUP_UNAVAILABLE',
+            deployment_id: deploymentId,
+            error: errorLabel(err),
+          })
+        );
       }
-    } catch (err) {
-      // OSE-1784 (owner, 2026-11-23, "skip counting it"): when the check
-      // cannot run, the scan is not counted. The visitor still reaches the
-      // page; the count can only be a little low, never lifted by one person
-      // scanning again and again (the SharedReport counts these rows as
-      // people). No marker is held, so none is released. (Was OSE-1988:
-      // write it anyway.)
-      dedupUnavailable = true;
-      console.warn(
-        JSON.stringify({
-          type: 'SCAN_DEDUP_UNAVAILABLE',
-          deployment_id: deploymentId,
-          error: errorLabel(err),
-        })
-      );
     }
   }
 
-  // OSE-2133: a vote pass needs a stored scan. A duplicate is one: its hour's
-  // marker exists only while the first scan's write stood (a failed write
-  // releases it, below).
-  // A scan the dedup check could not vet (dedupUnavailable) is neither stored
-  // nor a duplicate (OSE-1784), except on the room's vote code: its scans are
-  // never a published count, so it skips the check and voting keeps working
-  // (owner, 2026-11-23, "keep voting working").
+  // OSE-2133: a vote pass needs a stored scan; a duplicate is one.
   let scanStored = isDuplicate;
-  const uncounted = dedupUnavailable && deployment.is_vote_code !== 1;
 
-  // OSE-1496 (owner, 2026-11-23): at most POSTER_HOUR_CAP scans per poster per
-  // hour are counted, whatever cookie a caller sends. A duplicate takes no
-  // place. Past the cap the visitor is sent on as usual and nothing is stored.
-  // The room's vote code is not capped (lib/poster-hour-cap.ts). A scan the
-  // dedup check could not vet takes no place either: it is not counted.
+  // OSE-1496: at most POSTER_HOUR_CAP scans per poster per hour are counted.
+  // Past the cap the visitor is sent on as usual and nothing is stored. The
+  // room's vote code is not capped (lib/poster-hour-cap.ts).
   let overCap = false;
-  if (!isDuplicate && !dedupUnavailable && deployment.is_vote_code !== 1) {
-    overCap = !(await takePosterHourPlace(env.DB, deploymentId, scanHourOf(scanBucket(nowDate))));
+  if (!isVoteCode) {
+    overCap = !(await takePosterHourPlace(env.DB, deploymentId, scanHourOf(bucket)));
     if (overCap) {
       console.log(JSON.stringify({ type: 'SCAN_NOT_COUNTED', reason: 'poster_hour_cap' }));
     }
   }
 
-  if (!isDuplicate && !uncounted && !overCap) {
-    const bucket = scanBucket(nowDate);
-    // TL-078: the browser-name hash is only the fallback for a scan with no
-    // keyed id. With the id, the browser name is not read at all.
-    const uaHash = scanKey ? null : await hashUserAgent(request.headers.get('User-Agent') ?? '');
-
+  if (!isDuplicate && !overCap) {
     try {
-      // OSE-798: the placement event (WHERE) and the node return (WHO) are
-      // written to SEPARATE tables so no durable row carries both a placement id
-      // and a session-derived value (doctrine rule 6). The write is buffered
-      // through SCAN_QUEUE when bound so a scan spike can't throttle the hot
-      // path; unbound or on a queue outage it falls straight to the direct D1
-      // batch, so counts are never lost. Row-building + the direct write live in
-      // lib/scan-buffer.ts, shared with the queue() consumer in index.ts.
+      // OSE-798: the placement event (WHERE) and the event-hour row are written
+      // to SEPARATE tables. The write is buffered through SCAN_QUEUE when bound
+      // so a scan spike can't throttle the hot path; unbound or on a queue
+      // outage it falls straight to the direct D1 batch, so counts are never
+      // lost (lib/scan-buffer.ts). OSE-2214: no phone id and no browser-name
+      // hash ride in the message; the browser name is not read at all.
       const outcome = await enqueueOrWriteScan(env, {
         placement_row_id: `spe_${crypto.randomUUID()}`,
         return_row_id: `snr_${crypto.randomUUID()}`,
         event_id: eventId,
         deployment_id: deploymentId,
-        anon_id: scanKey,
-        ua_hash: uaHash,
+        anon_id: null,
+        ua_hash: null,
         country: null, // rollback-safe wire field; never a real country (OSE-1460)
         scan_bucket: bucket,
       });
@@ -306,7 +270,6 @@ export async function handleQrScan(
           deployment_id: deploymentId,
           event_id: eventId,
           scan_bucket: bucket,
-          is_new_anon: isNew,
         })
       );
     } catch (err) {
@@ -319,8 +282,8 @@ export async function handleQrScan(
           error: errorLabel(err),
         })
       );
-      // Nothing was stored, so release this hour's dedup marker: a retry in the
-      // same hour must be able to record the scan, not be taken as a repeat.
+      // Nothing was stored, so release the vote code's hour marker: a retry in
+      // the same hour must be able to record the scan and get its pass.
       if (dedupKey && env.RATE_LIMIT_KV) {
         await env.RATE_LIMIT_KV.delete(dedupKey).catch(() => {});
       }
@@ -330,7 +293,6 @@ export async function handleQrScan(
   // Pass `?type=` through to the event page (e.g. ?type=checkin from the QR URL).
   // Also embed `?deployment=` so the event-page CTA can continue to the form
   // without losing sourcePlacementId attribution.
-  const url = new URL(request.url);
   let redirectTarget = qrScanTarget(
     url.origin,
     eventId,
@@ -341,10 +303,10 @@ export async function handleQrScan(
   // OSE-2133: a vote code whose scan stands may carry a pass, in the fragment
   // only. A failure here (a D1 blip reading the set) mints none and the
   // visitor keeps today's redirect; the line names the failure, nothing else.
-  if (scanStored && url.searchParams.get('type') === VOTE_CODE_TYPE) {
+  if (voterId && scanStored && url.searchParams.get('type') === VOTE_CODE_TYPE) {
     let pass: string | null = null;
     try {
-      pass = await issueVotePass(env, anonId, eventId, deploymentId, nowMs);
+      pass = await issueVotePass(env, voterId, eventId, deploymentId, nowMs);
     } catch (err) {
       console.warn(JSON.stringify({ type: 'VOTE_PASS_SKIPPED', error: errorLabel(err) }));
     }
@@ -359,6 +321,7 @@ export async function handleQrScan(
     },
   });
 
-  // Set anon_id cookie on the redirect if the visitor is new (first scan ever).
-  return isNew ? setAnonCookie(redirectResponse, cookieValue) : redirectResponse;
+  // Only the vote code sets the cookie, and only for a browser without one.
+  if (newCookie) return setAnonCookie(redirectResponse, newCookie);
+  return redirectResponse;
 }

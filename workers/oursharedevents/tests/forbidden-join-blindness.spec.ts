@@ -161,7 +161,7 @@ beforeEach(async () => {
 });
 
 describe('OSE-1049 Layer B — Blindness: a named OW session that reaches the scan endpoint is ignored', () => {
-  test('OSE-1049 | INTEGRATION | scan with OW session + 3 profile cookies + Bearer | scan_node_returns holds ONLY the ose_anon id, no session-derived value', async () => {
+  test('OSE-1049 | INTEGRATION | scan with OW session + 3 profile cookies + Bearer | scan_node_returns holds no id at all, no session-derived value (OSE-2214)', async () => {
     const res = await handleQrScan(
       await adversarialNamedScanRequest(),
       makeEnv(makeInMemoryKV()),
@@ -175,10 +175,10 @@ describe('OSE-1049 Layer B — Blindness: a named OW session that reaches the sc
       .first<Record<string, unknown>>();
     expect(row).not.toBeNull();
 
-    // The WHO row's identity column is EXACTLY the keyed id of the ose_anon
-    // cookie (OSE-1659) — derived from the anonymous cookie alone, never from
-    // the session, and never the cookie value itself.
-    expect(row!.anonymous_id).toBe(await scanNodeKey(KNOWN_ANON, makeEnv().ANON_ID_HASH_PEPPER));
+    // OSE-2214: the identity column is empty. A poster scan stores no phone
+    // id at all, so nothing from the cookie, the session or the Bearer lands.
+    expect(row!.anonymous_id).toBeNull();
+    expect(row!.user_agent_hash).toBeNull();
 
     // Integrity: the row's SHAPE carries no session column beyond the known
     // anonymous schema (id / event_id / anonymous_id / user_agent_hash /
@@ -236,7 +236,7 @@ describe('OSE-1049 Layer B — Blindness: a named OW session that reaches the sc
     }
   });
 
-  test('OSE-1049 | INTEGRATION | anonymous scan writes exactly one WHO row keyed on the anon id, regardless of how many named profiles are present', async () => {
+  test('OSE-1049 | INTEGRATION | anonymous scan writes exactly one WHO row with no id, regardless of how many named profiles are present', async () => {
     await handleQrScan(
       await adversarialNamedScanRequest(),
       makeEnv(makeInMemoryKV()),
@@ -249,10 +249,8 @@ describe('OSE-1049 Layer B — Blindness: a named OW session that reaches the sc
       .all<{ anonymous_id: string }>();
 
     expect(rows.results.length).toBe(1);
-    // The single row is credited to the anonymous id (keyed, OSE-1659) — the
-    // named side (3 profiles + session + Bearer) contributed nothing joinable.
-    expect(rows.results[0].anonymous_id).toBe(
-      await scanNodeKey(KNOWN_ANON, makeEnv().ANON_ID_HASH_PEPPER)
-    );
+    // OSE-2214: the single row names no one; the named side (3 profiles +
+    // session + Bearer) contributed nothing, and neither did the cookie.
+    expect(rows.results[0].anonymous_id).toBeNull();
   });
 });

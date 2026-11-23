@@ -180,24 +180,18 @@ describe('OSE-1496 | the ose_anon cookie is signed', () => {
     expect((await getOrCreateAnonId(scanReq(POSTER_TOKEN, long), undefined)).isNew).toBe(true);
   });
 
-  test('OSE-1496 | INTEGRATION | /q with a made-up cookie | stores nothing derived from it, and sets a signed cookie', async () => {
+  test('OSE-2214 | INTEGRATION | /q on a poster code with a made-up cookie | stores nothing derived from it, and sets no cookie', async () => {
     const res = await handleQrScan(scanReq(POSTER_TOKEN, ID), scanEnv(), POSTER_TOKEN);
     expect(res.status).toBe(302);
-    const set = cookieOf(res);
-    expect(set).toBeDefined();
-    const newId = await verifyAnonCookie(set!, PEPPER());
-    expect(newId).not.toBeNull();
-    const keys = await storedScanKeys();
-    expect(keys).toHaveLength(1);
-    expect(keys[0]).not.toBe(await scanNodeKey(ID, PEPPER()));
-    expect(keys[0]).toBe(await scanNodeKey(newId!, PEPPER()));
+    expect(res.headers.get('Set-Cookie')).toBeNull();
+    expect(await storedScanKeys()).toEqual([null]);
   });
 
-  test('OSE-1496 | INTEGRATION | /q with the signed cookie | stores the keyed id of its id, sets no cookie', async () => {
+  test('OSE-2214 | INTEGRATION | /q on a poster code with the signed cookie | stores no id, sets no cookie', async () => {
     const value = await signAnonId(ID, PEPPER());
     const res = await handleQrScan(scanReq(POSTER_TOKEN, value), scanEnv(), POSTER_TOKEN);
     expect(res.headers.get('Set-Cookie')).toBeNull();
-    expect(await storedScanKeys()).toEqual([await scanNodeKey(ID, PEPPER())]);
+    expect(await storedScanKeys()).toEqual([null]);
   });
 
   test('OSE-1496 | SECURITY | a check-in with a made-up cookie | does not store the keyed id of the made-up value', async () => {
@@ -220,7 +214,7 @@ describe('OSE-1496 | the ose_anon cookie is signed', () => {
 // ── 2. The cap ───────────────────────────────────────────────────────────────
 
 describe('OSE-1496 | at most 100 scans per poster per hour', () => {
-  test('OSE-1496 | INTEGRATION | 101 different visitors in one hour | 100 stored, the 101st still sent to the event', async () => {
+  test('OSE-1496 | INTEGRATION | 101 scans of one poster in one hour | 100 stored, the 101st still sent to the event', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
       vi.setSystemTime(new Date('2026-11-23T19:05:00Z'));

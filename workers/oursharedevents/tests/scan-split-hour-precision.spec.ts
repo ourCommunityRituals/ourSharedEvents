@@ -121,9 +121,11 @@ describe('the adversarial join (event_id + created_at)', () => {
       .bind(EVT)
       .all<{ who: string; posters: number }>();
 
-    expect(rows.results).toHaveLength(3);
-    // Every browser matches every poster: the join isolates nobody.
-    for (const r of rows.results) expect(r.posters, r.who).toBe(3);
+    // OSE-2214: no row names a browser at all, so there is one group (NULL),
+    // and it matches every poster: the join isolates nobody.
+    expect(rows.results).toHaveLength(1);
+    expect(rows.results[0].who).toBeNull();
+    expect(rows.results[0].posters).toBe(3);
   });
 
   test('neither table stores a second, whatever the write time', async () => {

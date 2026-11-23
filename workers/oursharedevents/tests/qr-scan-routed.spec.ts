@@ -29,7 +29,6 @@
 
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
-import { isScanNodeKey } from '../src/lib/scan-node-key';
 
 interface TestEnv {
   DB: D1Database;
@@ -138,6 +137,8 @@ describe('OSE-939: routed scan path — GET /q/<token> via SELF.fetch', () => {
     expect(location).toContain(`/events/${TEST_EVENT_ID}`);
     expect(location).toContain('type=register');
     expect(location).toContain(`deployment=${TEST_DEPLOYMENT_ID}`);
+    // OSE-2214: a poster code sets no cookie on the routed path either.
+    expect(res.headers.get('Set-Cookie')).toBeNull();
   });
 
   test('OSE-939 | INTEGRATION | valid active token | both A2 split rows land (WHERE + WHO)', async () => {
@@ -152,7 +153,7 @@ describe('OSE-939: routed scan path — GET /q/<token> via SELF.fetch', () => {
     expect(await countNodeReturnRows(tenv().DB), 'exactly one scan_node_returns row').toBe(1);
   });
 
-  test('OSE-939 | INTEGRATION | node return row | carries anonymous_id, no placement id column exists', async () => {
+  test('OSE-939/OSE-2214 | INTEGRATION | node return row | no phone id, no placement id column exists', async () => {
     await SELF.fetch(`https://t.test/q/${encodeURIComponent(VALID_QR_TOKEN)}`, {
       headers: { 'User-Agent': IPHONE_UA },
       redirect: 'manual',
@@ -163,11 +164,11 @@ describe('OSE-939: routed scan path — GET /q/<token> via SELF.fetch', () => {
         `SELECT anonymous_id, scan_bucket FROM scan_node_returns WHERE event_id = ? LIMIT 1`
       )
       .bind(TEST_EVENT_ID)
-      .first<{ anonymous_id: string; scan_bucket: string }>();
+      .first<{ anonymous_id: string | null; scan_bucket: string }>();
 
     expect(row).not.toBeNull();
-    // OSE-1659: a keyed scan id, never the raw ose_anon cookie value.
-    expect(isScanNodeKey(row!.anonymous_id)).toBe(true);
+    // OSE-2214: no phone id at all; OSE counts the code, never the phone.
+    expect(row!.anonymous_id).toBeNull();
     // Privacy invariant survives the routed path: hour-granularity bucket only.
     expect(row!.scan_bucket).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:00$/);
   });

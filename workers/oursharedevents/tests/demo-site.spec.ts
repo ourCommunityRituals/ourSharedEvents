@@ -39,8 +39,11 @@ describe('demo site — three depths, same data', () => {
   it('free depth shows the device count but locks premium sections', async () => {
     const html = await text(handleDemoSite('free'));
     expect(html).toContain('Free · Local');
-    // OSE-818: the count is distinct scanners, in the lexicon ("unique" is banned).
-    expect(html).toContain('Distinct scanners');
+    // OSE-2214 (owner, 2026-11-23): OSE counts scans on the code, never people,
+    // so the figure reads "Scans" (was "Distinct scanners", OSE-818).
+    expect(html).toContain('every scan of your codes');
+    expect(html.toLowerCase()).not.toContain('distinct scanners');
+    expect(html.toLowerCase()).not.toContain('counted once each');
     expect(html.toLowerCase()).not.toContain('unique gatherings');
     // premium-only sections rendered but locked: a dashed card (upgrade hint visible)
     expect(html).toContain('depth-locked');

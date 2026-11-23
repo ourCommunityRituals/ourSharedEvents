@@ -110,7 +110,10 @@ describe('OSE-295 shared-report mobile workability — API layer', () => {
     expect(html).toContain('data-label="Scans"');
     expect(html).toContain('data-label="First"');
     expect(html).toContain('data-label="Last"');
-    expect(html).toContain('data-label="Distinct scanners"');
+    // OSE-2214: the figure reads "Scans", never a count of people.
+    expect(html).toContain('data-label="Scans"');
+    expect(html.toLowerCase()).not.toContain('distinct scanners');
+    expect(html.toLowerCase()).not.toContain('data-label="people"');
   });
 
   test('OSE-295 | API | GET /sharedReport (mobile media query) | main padding tightens for narrow viewports', async () => {
