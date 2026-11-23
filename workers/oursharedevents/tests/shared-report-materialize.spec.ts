@@ -369,8 +369,13 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
       const r = await buildSharedReport(tenv().DB, id);
       expect(r.ok).toBe(true);
       if (!r.ok) return;
-      // Six people, published rounded down to a multiple of 5 (OSE-2151).
-      expect(r.report.return_rate.sample_size, `run ${run}`).toBe(5);
+      // Six people clear the floor, so the rates are worked out; the sample
+      // size itself is never published (OSE-1784).
+      expect(r.report.return_rate.sample_size, `run ${run}`).toBeNull();
+      expect(
+        r.report._meta.suppression_reasons.some((x) => x.field === 'return_rate'),
+        `run ${run}`
+      ).toBe(false);
       // Nobody came back: 0 of 6 is withheld like 1 to 4, never 100%.
       expect(r.report.return_rate.venue_pct, `run ${run}`).toBeNull();
       expect(

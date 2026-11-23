@@ -93,9 +93,10 @@ export const CORRIDOR_MAP_MIN_COUNT = 5;
 
 /**
  * ADR-026 rule B (OSE-1946): a corridor group is built only from events whose
- * own people count is published. The SharedReport publishes an event's count
- * exactly from K up (`sample_size`, `this_event_count`: distinct anon_id_hash
- * per venue_id, every row). If a group also held an event under K, that exact
+ * distinct attendees reach K. The SharedReport used to publish that count
+ * (`sample_size`, `this_event_count`: distinct anon_id_hash per venue_id); since
+ * OSE-1784 its people figure is the poster sum instead, and this rule still
+ * keeps an event under K out of every group. If a group also held one, a
  * count beside the rounded group would name the other: 11 published, a group
  * of 15, so the other event had 4. An event whose own count is withheld
  * therefore adds nothing to any group: not to the corridor baseline, not to the

@@ -77,6 +77,19 @@ runtime:
           expect(notes[0].detail).to.match(/^fewer than 5 /);
           expect(JSON.stringify(notes)).to.not.include('camp_fx_rpt');
         });
+        // OSE-1784 (owner 2026-11-23, one number, from the posters): the fixture gives
+        // camp-rpt-evt one poster with hours of 7 and 3 people (10 in all, the same 10
+        // in anon_id_returns). Every people figure is the poster sum, 5; none is 10.
+        // Mock-layer twin: workers/oursharedevents/tests/shared-report-one-grain.spec.ts.
+        test('S14 report: one people figure, the poster sum (5), never the 10 seen', function () {
+          const posters = report.poster_attribution || [];
+          expect(posters.map(function (p) { return p.scan_count; })).to.eql([5]);
+          expect(report.distinct_scanners).to.eql(5);
+          expect((report.return_rate || {}).sample_size).to.eql(null);
+          expect(((report.corridor_density || {}).this_event_count == null) ||
+            report.corridor_density.this_event_count === 5).to.eql(true);
+          expect(JSON.stringify(report)).to.not.match(/"(distinct_scanners|this_event_count|sample_size|scan_count)":10\b/);
+        });
         test('S14 report: no sponsor row under 5 is published', function () {
           const rows = report.sponsor_displays || [];
           expect(rows.length).to.be.above(0);

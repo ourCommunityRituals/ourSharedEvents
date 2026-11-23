@@ -105,7 +105,17 @@ interface SharedReport {
   event_start_date: string; // ISO
   event_end_date: string | null; // ISO
 
-  // 1. Unique gatherings — from scan_aggregates.distinct_agent_hashes
+  // 1. The report's one people figure (OSE-1784, owner ruling 2026-11-23, "one number,
+  //    from the posters"): the sum of the published `poster_attribution` rows, through
+  //    `floorTotalOfParts`. `corridor_density.this_event_count` and this event's
+  //    `headcount_trend` instance are the same number, so no two figures can be
+  //    subtracted to name a group under K. Null when no poster row is published.
+  //    (It used to sum scan_aggregates hours, a different grain from the poster rows.)
+  //    What it counts: a person once per poster per hour, added across posters and
+  //    hours, each poster-hour under K dropped and the rest rounded down to a multiple
+  //    of 5. So it can be below the true number (quiet hours) or above it (one person at
+  //    two posters, or in two hours). An event with no poster publishes none. When null,
+  //    `_meta.suppression_reasons` says so in words, the same at 0 as at 1 to 4.
   distinct_scanners: number | null;
 
   // 2. Return rate — % of this event's distinct anon_id_hashes also seen at another event:
@@ -114,11 +124,11 @@ interface SharedReport {
   //    nightly job). An event in no confirmed series gets `venue_pct: null` with
   //    `no_series`.
   //    Published only from K = 5 distinct attendees (CORRIDOR_MAP_MIN_COUNT, the platform
-  //    floor); below it all three fields are null with `below_min_sample_size` (OSE-1421).
+  //    floor); below it both rates are null with `below_min_sample_size` (OSE-1421).
   //    Each rate also passes the floor on its own (`flooredRatePct`, lib/count-floor.ts):
-  //    a rate beside `sample_size` is a head count (20% of 5 is one person), so it is
+  //    a rate beside a head count is a head count (20% of 5 is one person), so it is
   //    published only when the people it counts and the people it does not count are
-  //    each at least K (OSE-1649). Otherwise that rate is null, `sample_size` stays, and
+  //    each at least K (OSE-1649). Otherwise that rate is null, and
   //    `_meta.suppression_reasons` carries `return_rate.venue_pct` or
   //    `return_rate.corridor_pct` with `below_min_sample_size`. So neither 0% nor 100%
   //    is published: 100% would turn into a dash the day one more person came, and say
@@ -132,7 +142,9 @@ interface SharedReport {
   return_rate: {
     venue_pct: number | null; // also seen at another event of this event's confirmed series
     corridor_pct: number | null; // returners seen at corridor before
-    sample_size: number | null; // total distinct anons used as denominator
+    // Always null (OSE-1784): the exact whole-event count of a second grain, which set
+    // against the poster rows could name a group under K. The key stays for old readers.
+    sample_size: null;
   };
 
   // 2b. Click-outs — anonymous short-link (`/s/`) clicks per destination kind. Sent to
@@ -147,14 +159,16 @@ interface SharedReport {
   } | null;
 
   // 3. Corridor density — vs. rolling 30d/90d baseline
-  //    The baselines hold people only from events whose own count is published
-  //    (ADR-026 rule B): an event under K = 5 adds no one, so this_event_count,
-  //    exact, cannot be subtracted from a baseline to recover a withheld event.
+  //    The baselines hold people only from events with at least K = 5 distinct attendees
+  //    (ADR-026 rule B), so a withheld event adds no one to them. `this_event_count` is
+  //    `distinct_scanners` (OSE-1784), and the ratios are worked out from it. The baselines
+  //    are still distinct people over the corridor's events, so a ratio compares poster
+  //    scans with a crowd of people: an index of how busy the night was, not a share.
   corridor_density: {
     this_event_count: number | null;
     baseline_30d: number | null;
     baseline_90d: number | null;
-    density_ratio_30d: number | null; // this_event / baseline_30d
+    density_ratio_30d: number | null; // this_event_count / baseline_30d (both published)
     density_ratio_90d: number | null;
   };
 
