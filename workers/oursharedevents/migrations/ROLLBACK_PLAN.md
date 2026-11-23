@@ -110,7 +110,7 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
--- 0116: scan_poster_hour_tally (OSE-1496, the 100-scans-per-poster-hour cap).
+-- 0117: scan_poster_hour_tally (OSE-1496, the 100-scans-per-poster-hour cap).
 -- Additive: one new table, no index, no row written. THE ROLLBACK IS: revert
 -- the Worker and LEAVE THE TABLE. The older Worker does not know it, so it
 -- counts every scan again (no cap) and nothing prunes the table; the newer

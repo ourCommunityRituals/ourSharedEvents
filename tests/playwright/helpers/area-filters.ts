@@ -14,10 +14,11 @@ export async function openAreaFilters(page: Page): Promise<void> {
 
 /**
  * The groups are tabs now (lib/area-tabs-script.ts, OSE-2156): When shows first,
- * and Type and Near me sit behind their tab. Open filters, then a tab by name
- * ('when', 'type' or 'near').
+ * and Near me sits behind its tab. Open filters, then a tab by name ('when' or
+ * 'near'). The categories are no tab: they are the icon slider, always on
+ * screen (OSE-2207).
  */
-export async function openAreaTab(page: Page, name: 'when' | 'type' | 'near'): Promise<void> {
+export async function openAreaTab(page: Page, name: 'when' | 'near'): Promise<void> {
   await openAreaFilters(page);
   await page.getByTestId(`tab-${name}`).click();
 }

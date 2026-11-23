@@ -70,6 +70,7 @@ export const NODE_SPECS = [
   // via helpers/uec) and the four that need a real DOM — `a11y-axe`, `keyboard-nav`,
   // `as-keyboard-nav`, `screen-reader` (axe/document); a jsdom batch is a follow-up.
   'tests/admin-brand-scope.spec.ts',
+  'tests/staging-testers.spec.ts',
   'tests/admin-servicetoken-fallthrough.spec.ts',
   'tests/codeql-src-findings.spec.ts',
   'tests/corridor-map.spec.ts',
@@ -190,6 +191,7 @@ export const NODE_SPECS = [
   'tests/map-pan.spec.ts',
   // The landing's filter tabs and distance choice (OSE-2156): the markup, the script in jsdom, its bans.
   'tests/area-tabs.spec.ts',
+  'tests/category-slider.spec.ts',
   'tests/area-pager.spec.ts',
   'tests/card-pager.spec.ts',
   'tests/street-map-landing.spec.ts',

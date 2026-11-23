@@ -14,8 +14,14 @@
 /** Production origins, trusted in every environment. */
 const ALLOWED_ORIGINS = new Set(['https://oursharedevents.com', 'https://www.oursharedevents.com']);
 
-/** Origins trusted only when WORKER_ENV === 'staging'. */
-const STAGING_ONLY_ORIGINS = new Set(['https://stg.oursharedevents.com']);
+/**
+ * Origins trusted only when WORKER_ENV === 'staging': staging itself and the
+ * weekly client test site (OSE-2211), which runs as a staging-class Worker.
+ */
+const STAGING_ONLY_ORIGINS = new Set([
+  'https://stg.oursharedevents.com',
+  'https://test.oursharedevents.com',
+]);
 
 interface CorsEnv {
   WORKER_ENV?: string;

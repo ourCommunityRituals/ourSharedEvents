@@ -1,4 +1,4 @@
--- Migration 0116: the per-poster-hour scan cap (Part of OSE-1496).
+-- Migration 0117: the per-poster-hour scan cap (Part of OSE-1496).
 --
 -- WHY. Owner decision 2026-11-23 (decision card): each poster counts at most
 -- 100 scans in one hour, and a figure that reached the cap reads "100 or

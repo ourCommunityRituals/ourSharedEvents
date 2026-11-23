@@ -151,8 +151,10 @@ const typeCss = (html: string) =>
   html.match(/<style data-testid="area-type-css">([\s\S]*?)<\/style>/)?.[1] ?? '';
 const typeChips = (html: string) =>
   [
-    ...(html.match(/data-testid="toggle-type">([\s\S]*?)<\/fieldset>/)?.[1] ?? '').matchAll(
-      /<label class="disc-chip" for="([^"]+)">([^<]*)<\/label>/g
+    ...(
+      html.match(/data-testid="toggle-type">([\s\S]*?)<div class="icon-slider-nav"/)?.[1] ?? ''
+    ).matchAll(
+      /<label class="icon-slider-item" for="([^"]+)"[^>]*><svg[\s\S]*?<\/svg><span class="icon-slider-text">([^<]*)<\/span><\/label>/g
     ),
   ].map((m) => [m[1], m[2]]);
 
@@ -636,7 +638,9 @@ describe('the attendee-map grade: phone filters, the search on /map, filters on 
     // the map's accessibility audit of 2026-11-18): the checkbox comes right
     // after the view radios and before every folded radio, and while it is not
     // checked those radios are not displayed; the view radios stay before it.
-    expect(html).toContain('#filters-open:not(:checked)~.toggle-radio,');
+    // The type radios stay out of it: their labels are the always-visible icon
+    // slider (OSE-2207).
+    expect(html).toContain('#filters-open:not(:checked)~.toggle-radio:not([name=type]),');
     const firstWin = html.indexOf('id="win-');
     expect(box).toBeLessThan(firstWin);
     expect(html.indexOf('id="view-map"')).toBeLessThan(box);

@@ -20,7 +20,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { showAllCards } from './helpers/area-more';
-import { openAreaFilters, openAreaTab } from './helpers/area-filters';
+import { openAreaFilters } from './helpers/area-filters';
 import {
   createLiveEvent,
   seedSponsorCard,
@@ -271,7 +271,8 @@ test.describe('landing: the Type row is the event categories', () => {
 
   test('a category chip shows every type under it, and only those', async ({ page }) => {
     await loadAndRecord(page);
-    await openAreaTab(page, 'type');
+    // The categories are the icon slider now (OSE-2207): always on screen above
+    // the cards, never behind Filters or a tab.
     const row = page.getByTestId('toggle-type');
     await expect(row).toBeVisible();
     // Real category names, never a type id made readable ("Etr Art Music").

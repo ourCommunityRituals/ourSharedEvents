@@ -19,6 +19,9 @@
  * radio whose label is folded away read as a small touch target in the phone
  * audit (mobile-workability.spec.ts, PR checks of 2026-11-17).
  *
+ * The type radios are left out of the fold: their labels are the icon slider,
+ * which is always on screen (OSE-2207), so the radios keep their focus.
+ *
  * A control whose label is not on screen is not in the tab order either (WCAG
  * 2.4.7 Focus Visible, 4.1.2; the map's accessibility audit of 2026-11-18): the
  * checkbox comes before the folded groups' radios, so while the chip is not
@@ -34,4 +37,4 @@ export const FILTERS_FOLD_PX = 600;
 export const FILTERS_TOGGLE_ID = 'filters-open';
 
 export const AREA_FILTERS_STYLE =
-  '<style>@media(max-width:599.98px){.toggle-radio{width:1px;height:1px;margin:0}#filters-open:not(:checked)~.toggle-radio,#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn,#filters-open{display:none}}</style>';
+  '<style>@media(max-width:599.98px){.toggle-radio{width:1px;height:1px;margin:0}#filters-open:not(:checked)~.toggle-radio:not([name=type]),#filters-open:not(:checked)~.area-filters{display:none}}@media(min-width:600px){.area-filters-btn,#filters-open{display:none}}</style>';

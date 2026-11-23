@@ -772,6 +772,13 @@
       "testCount": 3
     },
     {
+      "file": "workers/oursharedevents/tests/category-slider.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 19
+    },
+    {
       "file": "workers/oursharedevents/tests/ci-service-actor-router.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -881,7 +888,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 9
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/cost-metric.spec.ts",
@@ -2610,7 +2617,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 5
+      "testCount": 6
     },
     {
       "file": "workers/oursharedevents/tests/public-brand-owner-wall.spec.ts",
@@ -3572,6 +3579,13 @@
       "testCount": 9
     },
     {
+      "file": "workers/oursharedevents/tests/sponsor-business-kind.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, env.DB",
+      "testCount": 8
+    },
+    {
       "file": "workers/oursharedevents/tests/sponsor-card-link-gate.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -3822,6 +3836,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): env.DB",
       "testCount": 19
+    },
+    {
+      "file": "workers/oursharedevents/tests/staging-testers.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 16
     },
     {
       "file": "workers/oursharedevents/tests/standards-propagation.spec.ts",

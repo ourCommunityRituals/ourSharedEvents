@@ -67,6 +67,14 @@ describe('OSE-1415 | production admin scope config', () => {
     }
   );
 
+  // Owner 2026-11-22: staging testers are a staging secret (lib/staging-testers.ts),
+  // never a plain setting, and never on production. The code also ignores the
+  // setting off staging; this keeps it out of the production config itself.
+  test('STAGING_TESTERS is NOT set in [env.production.vars] or [env.staging.vars]', () => {
+    expect(setKeys(envVarsSection(toml, 'production'))).not.toContain('STAGING_TESTERS');
+    expect(setKeys(envVarsSection(toml, 'staging'))).not.toContain('STAGING_TESTERS');
+  });
+
   test('the staging opt-in is still where it belongs (parser sanity)', () => {
     const stg = setKeys(envVarsSection(toml, 'staging'));
     expect(stg).toContain('ADMIN_SCOPE_ALL');

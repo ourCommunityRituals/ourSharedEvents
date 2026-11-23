@@ -5487,6 +5487,10 @@
                 Required. Sets how often the sponsor rotates.
               </p>
             </div>
+            <!-- OSE-2207 (owner 2026-11-22): the kind of business, picked by icon.
+                 Optional. The page fills this in (handlers/pages.ts
+                 handleAdminPage, lib/business-kinds.ts). -->
+            <div class="full-width" data-testid="spon-kind-field"><!--OCR_SPON_KIND--></div>
             <div>
               <label for="spon-event">Event (optional)</label>
               <select
@@ -5964,12 +5968,25 @@
           document.getElementById('spon-name').focus();
         }
 
+        // OSE-2207: the kind-of-business slider's value and its pressed button.
+        // A form reset leaves a hidden field as it was, so this sets both.
+        function setSponKind(v) {
+          var box = document.querySelector('[data-testid="spon-kind"]');
+          if (!box) return;
+          var input = box.querySelector('[data-icon-slider-value]');
+          if (input) input.value = v || '';
+          box.querySelectorAll('button[data-value]').forEach(function (b) {
+            b.setAttribute('aria-pressed', String(!!v && b.getAttribute('data-value') === v));
+          });
+        }
+
         function doCloseForm() {
           document.getElementById('spon-form-wrap').setAttribute('hidden', '');
           document.getElementById('add-spon-toggle').setAttribute('aria-expanded', 'false');
           document.getElementById('add-spon-toggle').textContent = '+ Add Sponsor';
           document.getElementById('spon-edit-id').value = '';
           document.getElementById('spon-create-form').reset();
+          setSponKind('');
           showCardDetails(false);
           showHeaderDetails(false);
           syncImageChoice();
@@ -6041,6 +6058,7 @@
             document.getElementById('spon-image-choice').value = s.logo_url || s.sidebar_logo_url ? 'own' : 'default';
             syncImageChoice();
             document.getElementById('spon-website').value = s.website_url || '';
+            setSponKind(s.business_kind || '');
             document.getElementById('spon-display-name').value = s.display_name || '';
             document.getElementById('spon-address').value = s.address_line || '';
             document.getElementById('spon-phone').value = s.contact_phone || '';
@@ -6213,6 +6231,10 @@
           if (logoVal || editId) body.logo_url = logoVal || null;
           if (sideLogoVal || editId) body.sidebar_logo_url = sideLogoVal || null;
           if (siteVal || editId) body.website_url = siteVal || null;
+          // OSE-2207: the kind of business; on an edit an unpicked kind clears it.
+          const kindEl = document.querySelector('[data-testid="spon-kind"] [data-icon-slider-value]');
+          const kindVal = kindEl ? kindEl.value : '';
+          if (kindVal || editId) body.business_kind = kindVal || null;
           // Public card fields: optional; on an edit a blank field clears it.
           [['spon-display-name', 'display_name'], ['spon-address', 'address_line'],
            ['spon-phone', 'contact_phone'], ['spon-email', 'contact_email'],
