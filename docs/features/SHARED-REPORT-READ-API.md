@@ -162,9 +162,12 @@ interface SharedReport {
   //    `this_event_count` is `distinct_scanners` (OSE-1784), and the ratios are worked
   //    out from it. Since 2026-11-23 (owner, "posters too") the baselines are the sum of
   //    the same published poster figure over the corridor's events in that weekday and
-  //    hour, so a ratio divides like by like, and a withheld poster-hour adds nothing to
+  //    hour, so a ratio divides like by like: this event's share of its slot's published
+  //    figure (the baseline holds this event too while it is in the window, so an event alone
+  //    in its slot reads 1), and a withheld poster-hour adds nothing to
   //    either side (ADR-026 rule B holds by construction). Nightly snapshots taken before
-  //    that day counted distinct people, so the archive changes meaning on that date.
+  //    the first nightly run after the deploy counted distinct people (a row written earlier
+  //    on the deploy day keeps that meaning), so the archive changes meaning there.
   corridor_density: {
     this_event_count: number | null;
     baseline_30d: number | null;

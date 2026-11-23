@@ -599,6 +599,35 @@ describe('OSE-1988: a D1 or KV blip on /q never becomes a 500', () => {
     }
   });
 
+  test('OSE-1784 | RAINY | KV get throws | the scan takes no place under the poster-hour cap', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await tenv().DB.prepare(`DELETE FROM scan_poster_hour_tally`).run();
+      await handleQrScan(
+        await makeRequest(VALID_QR_TOKEN),
+        makeEnv(kvThatThrows({ get: true })),
+        VALID_QR_TOKEN
+      );
+      const tally = await tenv()
+        .DB.prepare(`SELECT COALESCE(SUM(scans), 0) AS n FROM scan_poster_hour_tally`)
+        .first<{ n: number }>();
+      // A scan that is not counted must not use up a real visitor's place.
+      expect(tally?.n).toBe(0);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('OSE-1784 | RAINY | KV not bound at all | the scan is still written (a config gap, not a blip)', async () => {
+    const res = await handleQrScan(
+      await makeRequest(VALID_QR_TOKEN),
+      makeEnv(undefined),
+      VALID_QR_TOKEN
+    );
+    expect(res.status).toBe(302);
+    expect(await countScans(tenv().DB)).toBe(1);
+  });
+
   test('OSE-1784 | RAINY | one person scans 5 times while KV fails | 0 counted, never a published 5', async () => {
     const logged: string[] = [];
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation((...a) => {

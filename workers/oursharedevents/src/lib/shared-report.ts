@@ -376,13 +376,17 @@ export async function refreshCorridorBaselines(
       `WITH poster_hours AS (
          -- One row per poster-hour of an event in the 90-day window: the grain
          -- the report publishes people in (never the room's vote code).
+         -- Driven from the window's events (CROSS JOIN keeps that order), so
+         -- each night reads only their scans through idx_spe_event_poster,
+         -- never every scan ever stored.
          SELECT s.event_id, COUNT(*) AS n
-           FROM scan_placement_events s
+           FROM events w
+          CROSS JOIN scan_placement_events s ON s.event_id = w.id
            JOIN poster_deployments pd
              ON pd.id = s.poster_deployment_id
             AND pd.event_id = s.event_id
             AND pd.is_vote_code = 0
-           JOIN events w ON w.id = s.event_id AND w.start_date >= ?
+          WHERE w.start_date >= ?
           GROUP BY s.event_id, s.poster_deployment_id, substr(s.scan_bucket, 1, 13)
        ),
        event_people AS (
