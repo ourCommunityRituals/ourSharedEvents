@@ -27,6 +27,6 @@ variables:
   # is "off" and their switch-on half while it is "on"; the other logs NOT RUN. tests/unit/ci/
   # env-parity.test.js holds the two equal. It turns nothing on by itself.
   - name: votingSwitch
-    value: "off"
+    value: "on"
   - secret: true
     name: ocrInternalSecret

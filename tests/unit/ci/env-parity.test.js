@@ -801,10 +801,13 @@ describe('the voting kill switch (VOTING_ENABLED)', () => {
   // The owner's rule (OSE-2135 DevOps gate): off on staging and production, on
   // only where the owner turns it on. Off for local dev too, so a test that
   // needs it on says so.
-  test('as it stands: off for local dev, off for staging, off on production', () => {
+  // Owner, 2026-11-24 (OSE-2227): on for staging only. Local dev and the
+  // workers test pool stay off; production stays off until the owner says so.
+  test('as it stands: off for local dev, on for staging, off on production', () => {
     const b = blocks(toml());
-    for (const name of NAMES) expect(valueIn(b[name]), name).toBe('off');
-    expect(copyIn(stagingEnv())).toBe('off');
+    const want = { staging: 'on' };
+    for (const name of NAMES) expect(valueIn(b[name]), name).toBe(want[name] ?? 'off');
+    expect(copyIn(stagingEnv())).toBe('on');
   });
 
   test('a block with no value, or a value that is neither word: refused', () => {

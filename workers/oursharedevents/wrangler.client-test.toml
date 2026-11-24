@@ -103,7 +103,7 @@ SPONSOR_GEO_MATCH_ENABLED = "0"
 # Same archive key and switch as staging (held equal by the client-test-site test).
 MAP_TILES_ARCHIVE = "us-20261120.pmtiles"
 STREET_MAP = "on"
-VOTING_ENABLED = "off"
+VOTING_ENABLED = "on"
 TURNSTILE_ENABLED = "0"
 ALLOWED_ADMIN_EMAILS = "mzdano@gmail.com"
 ALLOWED_ADMIN_DOMAINS = "oursharedevents.com"

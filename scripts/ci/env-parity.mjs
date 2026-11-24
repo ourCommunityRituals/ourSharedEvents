@@ -46,7 +46,7 @@ export const INTENTIONAL_VALUE_DIFFERENCES = {
   STREET_MAP:
     'the street layer is switched on one environment at a time, staging first (owner 2026-11-09). Production has no MAP_TILES binding yet, so its value does nothing until it is bound; production may be "on" only once staging is (tests/unit/ci/env-parity.test.js)',
   VOTING_ENABLED:
-    'the voting kill switch (lib/voting-switch.ts, OSE-2135, OSE ADR-040). Off in both today. Only the owner turns it on, not before the voter page (S4b, OSE-2129) ships, and staging first: production may be "on" only once staging is (tests/unit/ci/env-parity.test.js), so production stays inert for voting until the owner says otherwise',
+    'the voting kill switch (lib/voting-switch.ts, OSE-2135, OSE ADR-040). On for staging since 2026-11-24 (owner, OSE-2227), off on production. Staging first: production may be "on" only once staging is (tests/unit/ci/env-parity.test.js), so production stays inert for voting until the owner says otherwise',
 };
 
 /** Settings only one environment may carry, and why. */
