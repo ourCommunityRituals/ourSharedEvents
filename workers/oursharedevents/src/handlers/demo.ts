@@ -173,7 +173,7 @@ const DEMO_STYLE = `<style>
   .ladder caption { text-align: left; padding: 0 0 0.6rem; color: var(--text-muted); font-size: 0.9rem; }
   .ladder th, .ladder td { text-align: left; padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; font-size: 0.9rem; }
   .ladder thead th { color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
-  .ladder tbody th { font-weight: 700; white-space: nowrap; }
+  .ladder tbody th { font-weight: 700; }
   .ladder tr.paid { background: var(--surface); }
   .ladder .map-badge { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--accent); color: var(--bg); margin-left: 0.4rem; }
   .ladder-floor { margin-top: 0.6rem; padding: 0.65rem 0.85rem; border-left: 3px solid var(--accent); background: var(--surface); color: var(--text-muted); font-size: 0.85rem; border-radius: 0 0.4rem 0.4rem 0; }
