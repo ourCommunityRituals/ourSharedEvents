@@ -96,7 +96,7 @@ function expectBaselineIsOneChain(report: Record<string, unknown>): void {
 
 /**
  * OSE-1751, on the seeded event. sponsors-tiers-smoke.sql puts 112 people in 90
- * days and 109 in 30 in this event's bucket, plus 12 attendees, so every value
+ * days and 109 in 30 in this event's bucket, plus 12 poster scans in one hour, so every value
  * below exists and the check cannot pass on nulls. Published independently the
  * pair names 3 people; the deployed Worker must publish 110 and 105 and divide
  * the ratios by those. A read path that gates each window itself, or divides by
