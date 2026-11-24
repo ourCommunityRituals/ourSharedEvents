@@ -458,6 +458,20 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
     'lib/shared-report-export.ts > exportEventSeries: JOIN events e ON e.id = es.venue_id',
     'Same OER export, the event_series emission twin. Cross-brand by design.',
   ],
+
+  [
+    'lib/corridor-flow-export.ts > WEEK_PARTS_SQL: JOIN events e ON e.id = s.event_id',
+    'Same OER export, phase 4 (OSE-2216, boundary doc 4.1.2): weekly poster scans ' +
+      'by res-7 corridor pair and event type across ALL brands, each poster-hour ' +
+      'floored and the flow rounded to 5. No brand, event or poster leaves; OER ' +
+      'ingests every brand by design; cron-only, not request-reachable.',
+  ],
+
+  [
+    'lib/corridor-flow-export.ts > firstScanDay: JOIN events e ON e.id = s.event_id',
+    'Same phase 4: the first day any production poster scan was kept, across all ' +
+      'brands, to start the weekly history. Reads one date; no row leaves.',
+  ],
   // Line-sensitive: shifted 223→228 when the class-doc was rewritten to the
   // asymmetric ADR-019 model (CCR-PR567 re-run item 10). Bump on any edit to
   // sponsor-resolver.ts above this query. 228→252 for OSE-1316/1317 (the
