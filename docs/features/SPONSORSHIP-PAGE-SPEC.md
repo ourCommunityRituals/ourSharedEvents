@@ -48,7 +48,7 @@ Given (tier × targeting × 7-day window), render a **live preview** of the Shar
 the sponsor will receive — using the real `DEPTH_SECTIONS`:
 
 - **Local ($0):** "was I there?" — gatherings, own displays, class aggregate.
-- **Mid:** + corridor map, poster→scan attribution, return rate, campaign, density.
+- **Mid:** + corridor map, poster→scan attribution, campaign, density. (Return rate retired by OSE-2214, 2026-11-23.)
 - **Premium:** + cross-event headcount trend.
   Plus an **expected frequency-share** estimate (tier × corridor density) — transparency,
   **never a slot promise**.

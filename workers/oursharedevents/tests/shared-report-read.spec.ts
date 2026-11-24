@@ -219,25 +219,13 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.report.event_id).toBe('test-evt-read-full');
-    expect(r.report.distinct_scanners).toBe(40); // 42, rounded down to a multiple of 5
-    // 5 distinct anons → meets the K = CORRIDOR_MAP_MIN_COUNT floor (OSE-1421: it
-    // was a private 3), so the return rates are worked out. The sample size is
-    // never published (OSE-1784: one people figure, from the posters). The venue rate counts
-    // people seen at another event of a confirmed series (OSE-1652); this event
-    // is in none, so there is nothing to compare with. (This test used to pin
-    // venue_pct = 20 from a return_count of 2, which counts job runs.)
-    expect(r.report.return_rate.sample_size).toBeNull();
-    expect(r.report.return_rate.venue_pct).toBeNull();
-    expect(r.report._meta.suppression_reasons).toContainEqual(
-      expect.objectContaining({
-        field: 'return_rate.venue_pct',
-        reason: 'no_series',
-      })
-    );
+    expect(r.report.scans).toBe(40); // 42, rounded down to a multiple of 5
+    // OSE-2214: no return rate is published, whatever anon rows exist.
+    expect('return_rate' in r.report).toBe(false);
     // No baseline seeded → corridor_density_30d/90d nulled with reason
     const reasons = r.report._meta.suppression_reasons.map((s) => s.field);
     expect(reasons).toContain('corridor_density');
-    expect(reasons).toContain('headcount_trend');
+    expect(reasons).toContain('scan_trend');
   });
 
   test('response shape never includes anon_id_hash field', async () => {
@@ -253,7 +241,7 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     expect(json).not.toContain('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx');
   });
 
-  test('suppresses return_rate when distinct anons below minimum', async () => {
+  test('OSE-2214 | publishes no return_rate and no note about one, even with anon rows', async () => {
     await seedEvent({ id: 'test-evt-read-low' });
     await seedScanAggregate('test-evt-read-low', 2);
     await seedAnonReturn({ hash: '1'.repeat(32), venueId: 'test-evt-read-low' });
@@ -261,10 +249,9 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     const r = await buildSharedReport(tenv().DB, 'test-evt-read-low');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.return_rate.venue_pct).toBeNull();
-    expect(r.report.return_rate.sample_size).toBeNull();
+    expect('return_rate' in r.report).toBe(false);
     const reasons = r.report._meta.suppression_reasons.map((s) => s.field);
-    expect(reasons).toContain('return_rate');
+    expect(reasons.some((f) => f.startsWith('return_rate'))).toBe(false);
   });
 
   test('suppresses corridor_density when baseline is below min sample', async () => {
@@ -376,7 +363,7 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     expect(fields).not.toContain('corridor_density');
   });
 
-  test('headcount_trend populates from confirmed event_series', async () => {
+  test('scan_trend populates from confirmed event_series', async () => {
     await seedEvent({ id: 'test-evt-read-anchor' });
     await tenv()
       .DB.prepare(
@@ -409,9 +396,9 @@ describe('OSE-272 Session 5 — buildSharedReport', () => {
     const r = await buildSharedReport(tenv().DB, 'test-evt-read-anchor');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.headcount_trend.series_id).toBe('srs-test-read');
-    expect(r.report.headcount_trend.series_name).toBe('Thursday Trivia');
-    expect(r.report.headcount_trend.instances.length).toBeGreaterThanOrEqual(3);
+    expect(r.report.scan_trend.series_id).toBe('srs-test-read');
+    expect(r.report.scan_trend.series_name).toBe('Thursday Trivia');
+    expect(r.report.scan_trend.instances.length).toBeGreaterThanOrEqual(3);
   });
 });
 
@@ -481,11 +468,11 @@ describe('OSE-272 Session 5 — GET /api/v2/events/:id/shared-report', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
-      report: { event_id: string; distinct_scanners: number };
+      report: { event_id: string; scans: number };
     };
     expect(body.ok).toBe(true);
     expect(body.report.event_id).toBe('test-evt-read-200');
-    expect(body.report.distinct_scanners).toBe(30);
+    expect(body.report.scans).toBe(30);
   });
 
   test('returns Cache-Control: no-store (+ Vary: Authorization) for a closed event', async () => {
@@ -593,12 +580,12 @@ describe('OSE-272 Session 5 — POST /api/v2/events/shared-reports/batch', () =>
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
-      reports: Record<string, { distinct_scanners: number }>;
+      reports: Record<string, { scans: number }>;
       errors: Record<string, { code: string }>;
     };
     expect(body.ok).toBe(true);
-    expect(body.reports['test-evt-read-batch-1'].distinct_scanners).toBe(10);
-    expect(body.reports['test-evt-read-batch-2'].distinct_scanners).toBe(5);
+    expect(body.reports['test-evt-read-batch-1'].scans).toBe(10);
+    expect(body.reports['test-evt-read-batch-2'].scans).toBe(5);
     expect(body.errors['evt-does-not-exist'].code).toBe('NOT_FOUND');
   });
 
@@ -687,8 +674,8 @@ describe('OSE-577 — batch service-token class split (cross-product fails close
     expect(body.ok).toBe(true);
     const report = body.reports['test-evt-read-577-internal'];
     expect(report).toBeDefined();
-    expect(report).toHaveProperty('distinct_scanners');
-    expect(report).toHaveProperty('headcount_trend'); // premium-only field
+    expect(report).toHaveProperty('scans');
+    expect(report).toHaveProperty('scan_trend'); // premium-only field
     expect(report).toHaveProperty('sponsor_class_breakdown');
   });
 
@@ -758,9 +745,9 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
     expect(report).toBeDefined();
     // All sections present — no field stripping
     expect(report).toHaveProperty('event_id');
-    expect(report).toHaveProperty('distinct_scanners');
-    expect(report).toHaveProperty('headcount_trend');
-    expect(report).toHaveProperty('return_rate');
+    expect(report).toHaveProperty('scans');
+    expect(report).toHaveProperty('scan_trend');
+    expect(report).not.toHaveProperty('return_rate'); // OSE-2214
     expect(report).toHaveProperty('poster_attribution');
     expect(report).toHaveProperty('sponsor_class_breakdown');
   });
@@ -1539,7 +1526,7 @@ describe('H3 corridor map + open-question resolutions', () => {
 // ── OSE-816 — enforce report depth server-side (sponsor role only) ───────────
 // filterReportByDepth existed, was pure + fail-closed, and was NEVER called
 // (SR-25 removed it: "straight readout"). On the wire a mid sponsor token still
-// received headcount_trend — a Premium section the browser hid but curl did not.
+// received scan_trend — a Premium section the browser hid but curl did not.
 // This wires the ONE gate at read for sponsor tokens: admin/bar_owner/internal
 // resolve to premium (no-op, skipped). sponsor_class_breakdown stays at every
 // depth (OSE-719 — tier-neutral class-aggregate). The enforcement-state test
@@ -1588,25 +1575,25 @@ describe('OSE-816 — server-side report depth enforcement (sponsor role only)',
       'evt-816-barowner',
       await mintDepth('evt-816-barowner', 'bar_owner')
     );
-    expect(report).toHaveProperty('headcount_trend'); // premium section retained
+    expect(report).toHaveProperty('scan_trend'); // premium section retained
     expect(report).toHaveProperty('sponsor_class_breakdown');
     expect(report).not.toHaveProperty('upgrade'); // role skip → no filter, no hint
   });
 
-  test('OSE-816 | API | sponsor @ mid | headcount_trend STRIPPED, class_breakdown kept, upgrade names it', async () => {
+  test('OSE-816 | API | sponsor @ mid | scan_trend STRIPPED, class_breakdown kept, upgrade names it', async () => {
     await seedEvent({ id: 'evt-816-mid', start_date: '2026-05-07T19:00:00Z' });
     await seedScanAggregate('evt-816-mid', 20);
     const { report } = await readReport(
       'evt-816-mid',
       await mintDepth('evt-816-mid', 'sponsor', 'mid')
     );
-    expect(report).not.toHaveProperty('headcount_trend'); // premium-only, withheld
+    expect(report).not.toHaveProperty('scan_trend'); // premium-only, withheld
     expect(report).toHaveProperty('sponsor_class_breakdown'); // OSE-719: tier-neutral
     expect(report).toHaveProperty('sponsor_displays');
     expect(report).toHaveProperty('upgrade');
     const upgrade = report.upgrade as { locked_sections: string[]; next_depth: string | null };
     expect(upgrade.next_depth).toBe('premium');
-    expect(upgrade.locked_sections).toContain('headcount_trend');
+    expect(upgrade.locked_sections).toContain('scan_trend');
   });
 
   test('OSE-816 | API | sponsor @ local | mid+premium sections stripped, class_breakdown kept, upgrade → mid', async () => {
@@ -1616,7 +1603,7 @@ describe('OSE-816 — server-side report depth enforcement (sponsor role only)',
       'evt-816-local',
       await mintDepth('evt-816-local', 'sponsor', 'local')
     );
-    expect(report).not.toHaveProperty('headcount_trend');
+    expect(report).not.toHaveProperty('scan_trend');
     expect(report).not.toHaveProperty('corridor_map'); // mid section, withheld at local
     expect(report).not.toHaveProperty('poster_attribution');
     expect(report).toHaveProperty('sponsor_class_breakdown'); // OSE-719: survives even at local
@@ -1633,7 +1620,7 @@ describe('OSE-816 — server-side report depth enforcement (sponsor role only)',
       'evt-816-cap',
       await mintDepth('evt-816-cap', 'sponsor', 'premium')
     );
-    expect(report).not.toHaveProperty('headcount_trend');
+    expect(report).not.toHaveProperty('scan_trend');
     expect(report).not.toHaveProperty('corridor_map');
     expect(report).toHaveProperty('sponsor_class_breakdown');
   });
@@ -1716,9 +1703,9 @@ describe('OSE-682 — the plan caps report depth (router → read handler)', () 
       'test-evt-read-682-org',
       await mint('test-evt-read-682-org', 'bar_owner')
     );
-    expect(report).toHaveProperty('distinct_scanners');
+    expect(report).toHaveProperty('scans');
     expect(report).toHaveProperty('sponsor_class_breakdown');
-    expect(report).not.toHaveProperty('headcount_trend');
+    expect(report).not.toHaveProperty('scan_trend');
     expect(report).not.toHaveProperty('poster_attribution');
     expect(report).not.toHaveProperty('corridor_map');
     expect((report.upgrade as { next_depth: string | null }).next_depth).toBe('mid');
@@ -1757,7 +1744,7 @@ describe('OSE-682 — the plan caps report depth (router → read handler)', () 
       'test-evt-read-682-ovr',
       await mint('test-evt-read-682-ovr', 'bar_owner')
     );
-    expect(report).toHaveProperty('headcount_trend');
+    expect(report).toHaveProperty('scan_trend');
     expect(report).not.toHaveProperty('upgrade');
   });
 });
@@ -1796,8 +1783,8 @@ describe('OSE-682 — the batch read caps by plan', () => {
     await seedEvent({ id: 'test-evt-read-682-b1' });
     await seedScanAggregate('test-evt-read-682-b1', 20);
     const r = (await batch(['test-evt-read-682-b1']))['test-evt-read-682-b1']!;
-    expect(r).toHaveProperty('distinct_scanners');
-    expect(r).not.toHaveProperty('headcount_trend');
+    expect(r).toHaveProperty('scans');
+    expect(r).not.toHaveProperty('scan_trend');
     expect(r).not.toHaveProperty('poster_attribution');
     expect((r.upgrade as { next_depth: string }).next_depth).toBe('mid');
   });
@@ -1807,7 +1794,7 @@ describe('OSE-682 — the batch read caps by plan', () => {
     await seedEvent({ id: 'test-evt-read-682-b2' });
     await seedScanAggregate('test-evt-read-682-b2', 20);
     const r = (await batch(['test-evt-read-682-b2']))['test-evt-read-682-b2']!;
-    expect(r).toHaveProperty('headcount_trend');
+    expect(r).toHaveProperty('scan_trend');
     expect(r).not.toHaveProperty('upgrade');
   });
 });
@@ -1863,7 +1850,7 @@ describe('OSE-1650 — sponsor link depth: what the form offers is what the link
     // Mid's next step is Premium; Local's is Mid. Mid keeps poster attribution.
     expect((report.upgrade as { next_depth: string | null }).next_depth).toBe('premium');
     expect(report).toHaveProperty('poster_attribution');
-    expect(report).not.toHaveProperty('headcount_trend');
+    expect(report).not.toHaveProperty('scan_trend');
   });
 
   test('every depth the form offers a sponsor is one the route accepts for a sponsor', async () => {

@@ -7,7 +7,7 @@
  * sponsor displays, a click-out) and walks every key of it, then checks the
  * declared contract (shared-report.snapshot.json) and the depth sections.
  *
- * It also holds the rename (owner 2026-10-11): `distinct_scanners` is on the
+ * It also holds the rename (owner 2026-10-11): `scans` is on the
  * report and in every depth, and `unique_gatherings` is in none of them.
  *
  * @born-red OSE-818 | method: built-report key walk vs banned lexicon | date: 2026-10-11
@@ -93,7 +93,7 @@ beforeAll(async () => {
 
 describe('OSE-818 — SharedReport payload keys speak the lexicon', () => {
   test('the built report carries the seeded data (the walk has something to read)', () => {
-    expect(report.distinct_scanners).toBe(10); // each bucket rounded down to a multiple of 5
+    expect(report.scans).toBe(10); // each bucket rounded down to a multiple of 5
     expect(Array.isArray(report.sponsor_displays)).toBe(true);
     expect((report.sponsor_displays as unknown[]).length).toBeGreaterThan(0);
   });
@@ -155,18 +155,18 @@ describe('OSE-931 — sponsor_impressions is sponsor_displays (PO 2026-08-20)', 
     for (const [depth, list] of Object.entries(DEPTH_SECTIONS)) {
       expect(list, depth).not.toContain('sponsor_impressions');
     }
-    expect(SNAPSHOT.version).toBe('3.0.0');
+    expect(SNAPSHOT.version).toBe('4.0.0');
   });
 });
 
-describe('OSE-818 — unique_gatherings is distinct_scanners (owner 2026-10-11)', () => {
+describe('OSE-818 — unique_gatherings is scans (owner 2026-10-11)', () => {
   test('the report, the contract and every depth carry the new name only', () => {
     expect('unique_gatherings' in report).toBe(false);
-    expect(SNAPSHOT.top_level_fields).toContain('distinct_scanners');
+    expect(SNAPSHOT.top_level_fields).toContain('scans');
     expect(SNAPSHOT.top_level_fields).not.toContain('unique_gatherings');
-    expect(SNAPSHOT.version).toBe('3.0.0');
+    expect(SNAPSHOT.version).toBe('4.0.0');
     for (const [depth, list] of Object.entries(DEPTH_SECTIONS)) {
-      expect(list, depth).toContain('distinct_scanners');
+      expect(list, depth).toContain('scans');
       expect(list, depth).not.toContain('unique_gatherings');
     }
   });

@@ -31,12 +31,7 @@ interface SharedReportFixture {
   event_title: string;
   event_start_date: string;
   event_end_date: string | null;
-  distinct_scanners: number | null;
-  return_rate: {
-    venue_pct: number | null;
-    corridor_pct: number | null;
-    sample_size: number | null;
-  };
+  scans: number | null;
   corridor_density: {
     this_event_count: number | null;
     baseline_30d: number | null;
@@ -57,13 +52,13 @@ interface SharedReportFixture {
     first_scan_at: string;
     last_scan_at: string;
   }>;
-  headcount_trend: {
+  scan_trend: {
     series_id: string | null;
     series_name: string | null;
     instances: Array<{
       event_id: string;
       start_date: string;
-      distinct_scanners: number | null;
+      scans: number | null;
     }>;
   };
   _meta: {
@@ -78,8 +73,7 @@ function makeReportFixture(overrides: Partial<SharedReportFixture> = {}): Shared
     event_title: 'Empty Bottle — Thursday Jazz',
     event_start_date: '2026-05-14T20:00:00Z',
     event_end_date: '2026-05-14T23:30:00Z',
-    distinct_scanners: 84,
-    return_rate: { venue_pct: 31.4, corridor_pct: 19.2, sample_size: 84 },
+    scans: 84,
     corridor_density: {
       this_event_count: 84,
       baseline_30d: 62,
@@ -110,13 +104,13 @@ function makeReportFixture(overrides: Partial<SharedReportFixture> = {}): Shared
         last_scan_at: '2026-05-14T21:02:00Z',
       },
     ],
-    headcount_trend: {
+    scan_trend: {
       series_id: 'srs_1',
       series_name: 'Thursday Jazz',
       instances: [
-        { event_id: 'evt_test_2024', start_date: '2026-05-07T20:00:00Z', distinct_scanners: 64 },
-        { event_id: 'evt_test_2025', start_date: '2026-04-30T20:00:00Z', distinct_scanners: 71 },
-        { event_id: TEST_EVENT_ID, start_date: '2026-05-14T20:00:00Z', distinct_scanners: 84 },
+        { event_id: 'evt_test_2024', start_date: '2026-05-07T20:00:00Z', scans: 64 },
+        { event_id: 'evt_test_2025', start_date: '2026-04-30T20:00:00Z', scans: 71 },
+        { event_id: TEST_EVENT_ID, start_date: '2026-05-14T20:00:00Z', scans: 84 },
       ],
     },
     _meta: {
@@ -148,7 +142,7 @@ async function loadSharedReportWithMockedResponse(
 }
 
 test.describe('OSE-R-003 — signed-link SharedReport page in browser', () => {
-  test('OSE-R-003 | FE | GET /sharedReport (signed-link with valid token) | renders the event title, distinct scanners, and return rate', async ({
+  test('OSE-R-003 | FE | GET /sharedReport (signed-link with valid token) | renders the event title and the scans, with no return-rate card (OSE-2214)', async ({
     page,
   }) => {
     await loadSharedReportWithMockedResponse(page, {
@@ -161,7 +155,8 @@ test.describe('OSE-R-003 — signed-link SharedReport page in browser', () => {
       /Empty Bottle/
     );
     await expect(page.locator('[data-testid="signed-link-distinct-scanners"]')).toContainText('84');
-    await expect(page.locator('[data-testid="signed-link-return-rate"]')).toContainText('31.4%');
+    // OSE-2214: the return rate is retired; no card for it.
+    await expect(page.locator('[data-testid="signed-link-return-rate"]')).toHaveCount(0);
   });
 
   test('OSE-R-003 | FE | GET /sharedReport (signed-link with valid token) | admin sections are hidden so the page shows ONLY the customer report', async ({

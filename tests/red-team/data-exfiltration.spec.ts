@@ -191,9 +191,7 @@ test.describe('EX-003 — SharedReport data requires a signed link token', () =>
     expect(response.status(), '/sharedReport must not 5xx').toBeLessThan(500);
     const body = await response.text();
     // No server-rendered report payload: no JSON report object, no counts.
-    expect(body, 'the shell must not embed a report payload').not.toMatch(
-      /"distinct_scanners"\s*:\s*\d/
-    );
+    expect(body, 'the shell must not embed a report payload').not.toMatch(/"scans"\s*:\s*\d/);
     expect(body, 'the shell must not embed sponsor display rows').not.toMatch(
       /"sponsor_displays"\s*:\s*\[\s*\{/
     );

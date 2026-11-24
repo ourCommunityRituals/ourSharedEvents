@@ -22,7 +22,7 @@
  *
  *   1. STATE-INVARIANCE — identical data on an `active`, a `draft`, and an
  *      `archived` event yields an IDENTICAL section set + identical
- *      distinct_scanners. Guards against anyone later slipping an event-status
+ *      scans. Guards against anyone later slipping an event-status
  *      gate into the builder, which would break the tier-blind/state-blind
  *      substrate doctrine.
  *   2. DATA-MATURITY through the K-floor, as seen on the read path — 0 scans →
@@ -33,7 +33,7 @@
  * @born-red invariant#tenant/#5 | method: event-state-blind-read | armed: 2026-09-08
  *   (1) STATE-INVARIANCE reddens if a `WHERE status = 'active'` gate is added to
  *       the builder's event lookup: the draft/archived reads then empty or 404 and
- *       the section-set / distinct_scanners equality assertions fail.
+ *       the section-set / scans equality assertions fail.
  *   (2) MATURITY reddens if the per-bucket floor is neutralized (raw SUM): the
  *       sub-K row (agents=3) then publishes 3, tripping `forbid: 3`. Proven at the
  *       builder level in shared-report-kanon-floor.spec.ts; this spec proves the
@@ -136,7 +136,7 @@ async function seedBucket(eventId: string, suffix: string, uniqueAgents: number)
 }
 
 interface Report {
-  distinct_scanners?: number | null;
+  scans?: number | null;
   [k: string]: unknown;
 }
 
@@ -196,10 +196,10 @@ describe('OSE-1172 — the SharedReport section set is event-STATUS-blind (state
     const keys = (r: typeof active) => Object.keys(r.body.report ?? {}).sort();
     expect(keys(draft)).toEqual(keys(active));
     expect(keys(archived)).toEqual(keys(active));
-    expect(draft.body.report?.distinct_scanners).toBe(active.body.report?.distinct_scanners);
-    expect(archived.body.report?.distinct_scanners).toBe(active.body.report?.distinct_scanners);
+    expect(draft.body.report?.scans).toBe(active.body.report?.scans);
+    expect(archived.body.report?.scans).toBe(active.body.report?.scans);
     // Sanity: the shared value is the real floored count, not null.
-    expect(active.body.report?.distinct_scanners).toBe(5); // 7, rounded down (OSE-2151)
+    expect(active.body.report?.scans).toBe(5); // 7, rounded down (OSE-2151)
   });
 });
 
@@ -226,7 +226,7 @@ describe('OSE-1172 — data maturity flows through the K=5 floor to the wire (no
     value: number | null;
   }[] = [
     {
-      name: 'no scans yet (young event) → distinct_scanners null',
+      name: 'no scans yet (young event) → scans null',
       agents: 0,
       mode: 'null',
       forbid: null,
@@ -248,7 +248,7 @@ describe('OSE-1172 — data maturity flows through the K=5 floor to the wire (no
 
     const { status, body } = await readAsAdmin(id);
     expect(status).toBe(200);
-    const got = body.report?.distinct_scanners;
+    const got = body.report?.scans;
 
     if (mode === 'null') expect(got).toBeNull();
     if (mode === 'suppressed') expect(got === null || got === 0).toBe(true);

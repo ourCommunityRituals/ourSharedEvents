@@ -67,7 +67,7 @@ The term-length change compresses _when the flip fires_, not _what is sold_. Tab
 | **Local · community use** (block party host, neighbor, community group, league, charity, faith org) | $0 forever [ATT — 30% floor + locals-first, `sponsor-allocation.ts:249`]; hosting stays free at every Local class | **$0 forever** [DECIDED 2026-09-03, OSE-1198]. Keyed on `sponsor_business.business_type` in the non-commercial set (community_org, charity, nonprofit, league_org, sports_club; faith_org already free by `tier-gates.yaml`). The class attaches to the **placement / activity**, not the letterhead: a church's own potluck is community; a church's for-profit night is a business placement. |
 | **Local · established business** (the barber, the tavern)                                           | —                                                                                                                 | **Small flat fee** [HYP: $10–25/mo flat, validated with the first five local businesses before written as fact]. Keyed on a commercial `business_type` (bar, brewery, retail, restaurant, professional_services, photographer, corporate). Same 1× weight, same 30% floor, never outbid for position.                                                                                           |
 | **Local · first-year business** (license issued within the last 12 months at activation)            | —                                                                                                                 | **First placement free, then the flat fee** [DECIDED 2026-09-03]. Unit of "first placement" [REC]: one event template + one area for one cycle (one month), matching two-sided acceptance. Eligibility: self-attested `license_issued_month` (OSE-1207), visible to the host at acceptance; no license number stored.                                                                           |
-| **Mid**                                                                                             | $49/mo target [HYP], value = `corridor_map` **live** + `return_rate`                                              | $25–75/event headline **or** $99/mo wrapper [HYP], under the one attested WTP point ($200/mo, COMPETITIVE-BRIEF:88)                                                                                                                                                                                                                                                                             |
+| **Mid**                                                                                             | $49/mo target [HYP], value = `corridor_map` **live** + `poster_attribution` (scans per poster by hour)            | $25–75/event headline **or** $99/mo wrapper [HYP], under the one attested WTP point ($200/mo, COMPETITIVE-BRIEF:88)                                                                                                                                                                                                                                                                             |
 | **Premium**                                                                                         | NOT priced until phase5 (visible-not-given)                                                                       | $149–199/mo [HYP] ≈ 1.5–2x Mid, frequency SKU (7x vs 3x = 2.33x reach), 40% cap, never outranks a local                                                                                                                                                                                                                                                                                         |
 
 Constraints holding the table (verified this loop): `SPONSOR_MAX='mid'` (report-depth.ts:118) — sponsors never buy Premium depth. Revenue = event managers + **non-local** sponsors + **local business** sponsors (community-use Local stays $0 forever by decision, not by leakage — see OSE-1198).
@@ -99,11 +99,11 @@ The 3-month flip above is a Mid/Premier mechanism. Local business sponsors pay t
 
 The draft proposed "90-day floor + Gate A′ ∧ Gate B." **Two corrections make this the single biggest change from the draft:**
 
-1. **Gate A′ is re-scoped: drop `corridor_density` ratio from the in-window value entirely.** The ratio's `window_30d_count >= 10` is **distinct returning attendees over a 30-DAY ROLLING window** (`shared-report.ts:244-249,231`), NOT 10 event firings. It saturates at ~4 weekly instances' worth of distinct anons and is _perversely hardest for high-retention corridors_ — if the same loyal people return each week, `COUNT(DISTINCT hash)` stops climbing. The draft's "day 70 ratio publishes" is arithmetically wrong. **Gate A′ fires only on: `corridor_map.source === 'live'` (a poster cell in `scan_cell_aggregates` with at least one hour of ≥5 scans — OSE-1459 + the OSE-683 drop-before-sum floor) AND `return_rate` un-suppressed (min-sample 5). The density ratio is a month-4+ upsell, never an in-window billed section.**
+1. **Gate A′ is re-scoped: drop `corridor_density` ratio from the in-window value entirely.** The ratio's `window_30d_count >= 10` is **distinct returning attendees over a 30-DAY ROLLING window** (`shared-report.ts:244-249,231`), NOT 10 event firings. It saturates at ~4 weekly instances' worth of distinct anons and is _perversely hardest for high-retention corridors_ — if the same loyal people return each week, `COUNT(DISTINCT hash)` stops climbing. The draft's "day 70 ratio publishes" is arithmetically wrong. **Gate A′ fires only on: `corridor_map.source === 'live'` (a poster cell in `scan_cell_aggregates` with at least one hour of ≥5 scans — OSE-1459 + the OSE-683 drop-before-sum floor) AND `poster_attribution` publishes (at least one poster with ≥5 scans in one hour). `return_rate` was retired by OSE-2214 (it followed one phone across events). The density ratio is a month-4+ upsell, never an in-window billed section.**
 
 2. **Redefine when "3 months" begins (Critic 1 Fix 2b, adopted).** The manager clock does not start at first report pull (that shows the _fallback_ map). It starts at the **first `source:'live'` report pull for that organizer.** This structurally guarantees you never invoice a fallback map and makes the founder's "3 months" honest by anchoring it to first rendered value. Below that: **auto-extend free** with an honest banner ("Corridor map is in preview — it runs live once your events accumulate scans"). Reads only already-computed `corridorMap.source` (builder:576) — invariant-clean, no new flag.
 
-**So: managers = 3 months _from first live-map render_, gated on `source:'live'` + `return_rate`, plus Gate B (≥1 ring rotation: ≥1 event, poster/QR, scans, ≥2 report pulls).** This is superior to a flat manager floor because the median community organizer is monthly/bi-weekly cadence — a signup-anchored 90-day flip only ever fires for hand-picked weekly comp anchors, which is a sample-of-one, not a conversion signal.
+**So: managers = 3 months _from first live-map render_, gated on `source:'live'` + `poster_attribution`, plus Gate B (≥1 ring rotation: ≥1 event, poster/QR, scans, ≥2 report pulls).** This is superior to a flat manager floor because the median community organizer is monthly/bi-weekly cadence — a signup-anchored 90-day flip only ever fires for hand-picked weekly comp anchors, which is a sample-of-one, not a conversion signal.
 
 **Premium caveat carried:** Premium depth (BigQuery/OER cross-corridor + Vertex predictive = phase5) has no ETA and unprovisioned infra. Priced visible-not-given. **Do not promise Premium inside 3 months.**
 
@@ -111,23 +111,23 @@ The draft proposed "90-day floor + Gate A′ ∧ Gate B." **Two corrections make
 
 ## (C) 3-MONTH SATURATION / RING-ACTIVATION PLAN
 
-The window closes **ONE ring in ONE corridor.** Compression forces engineered ignition. The binding constant is **live-map render + `return_rate` (min-sample 5)** — NOT the density ratio (unreachable in-window per Critic 1) and NOT phase4.
+The window closes **ONE ring in ONE corridor.** Compression forces engineered ignition. The binding constant is **live-map render + `poster_attribution` (≥5 scans of one poster in one hour)** — NOT the density ratio (unreachable in-window per Critic 1) and NOT phase4.
 
 ### Governing thresholds (verified)
 
 | Constant                          | Value              | Gates                                                                                                              | In-window?               |
 | --------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------ |
 | `CORRIDOR_MAP_MIN_COUNT` (K-anon) | **5**              | a map cell is a poster's res9; it renders only from hours with ≥5 scans there (sub-K hours dropped before the sum) | YES (per event)          |
-| `return_rate` gate (= K)          | **5**              | sample publishes at ≥5 distinct anons (floor `CORRIDOR_MAP_MIN_COUNT`; was 3); a rate needs ≥5 returners too       | YES (~2-3 events)        |
+| `poster_attribution` gate (= K)   | **5**              | a poster row publishes at ≥5 scans in one hour (floor `CORRIDOR_MAP_MIN_COUNT`); `return_rate` retired, OSE-2214   | YES (first event)        |
 | `CORRIDOR_BASELINE_MIN_SAMPLE`    | **10**             | density **ratio** — 10 distinct return-anons in a **30-day rolling** bucket                                        | **NO — month-4+ upsell** |
 | fallback map                      | res7 cell + ring-1 | renders on the **first single event**                                                                              | Day 1                    |
 
 ### First-corridor choice criteria (select by CADENCE, not geography)
 
-1. **Event cadence ≥ weekly in a single (dow, hour) slot** — maximizes distinct-attendee accrual toward `source:'live'` + `return_rate`, keeps the rolling 30-day bucket occupied. It does NOT "clear 10 events."
-2. **≥5 people scanning one poster within one hour** (scans are deduplicated per person per poster per hour, OSE-1459) — the live map counts scans per poster per hour, drops any poster-hour under K=5 before adding it to its cell, and drops any cell-hour under K=5 before summing (`CORRIDOR_MAP_MIN_COUNT`, OSE-683). Thinly spread scans never light a cell; posters at the door during the event do.
-3. **NEW-attendee turnover, not just loyal returners** — the corridor needs a stream of _distinct_ anons to ever cross return_rate's min-sample cleanly.
-4. **A confirmable recurring `event_series`** so headcount_trend teaser can light (Premium visible-not-given demo).
+1. **Event cadence ≥ weekly in a single (dow, hour) slot** — maximizes scan accrual toward `source:'live'` + `poster_attribution`, keeps the rolling 30-day bucket occupied. It does NOT "clear 10 events."
+2. **≥5 scans of one poster within one hour** (every scan counts, capped at 100 per poster per hour; no per-phone dedup since OSE-2214) — the live map counts scans per poster per hour, drops any poster-hour under K=5 before adding it to its cell, and drops any cell-hour under K=5 before summing (`CORRIDOR_MAP_MIN_COUNT`, OSE-683). Thinly spread scans never light a cell; posters at the door during the event do.
+3. **Posters where people are** — scans, not returning phones, are what publish (OSE-2214 retired `return_rate`).
+4. **A confirmable recurring `event_series`** so the scan_trend teaser can light (Premium visible-not-given demo).
 5. **Defensibly geo-derivable `is_local`** at the promotion seam (`draft.h3_res7 === ev.h3_res7`, sponsor-promotion.ts:166-168) — pick a corridor where locality is NOT contested (OSE-662 hazard).
 
 _Auto-disqualify:_ monthly cadence, scattered dow/hour, no poster reaching 5 scans in an hour, all-loyal-zero-turnover, no series, contested locality.
@@ -142,14 +142,14 @@ _Auto-disqualify:_ monthly cadence, scattered dow/hour, no poster reaching 5 sca
 
 ### Timeline (weekly anchor, best case — CORRECTED per Critic 1)
 
-Day 1 fallback map + logo counts visible → ~day 14-21 first `source:'live'` render (once scan-aggregation cron runs over an event where a poster drew ≥5 scans in one hour; **note the baseline/aggregate refresh is nightly cron, `shared-report-materialize.ts:81-89`, not read-time — accrual is cron-cadence-bound**) → ~day 21-30 `return_rate` clears min-sample 5 → **manager clock STARTS here (first live pull), not at signup** → day 90 (sponsor side, own anniversary): 2–3 comp sponsors convert to paid frequency SKU via Payment Link. **Revenue inside the founder's 90 days = the sponsors only, collected manually. The ~1 manager conversion the draft booked lands ~90 days AFTER first live render (≈ calendar day 110-120), i.e. outside the founder's window.**
+Day 1 fallback map + logo counts visible → ~day 14-21 first `source:'live'` render (once scan-aggregation cron runs over an event where a poster drew ≥5 scans in one hour; **note the baseline/aggregate refresh is nightly cron, `shared-report-materialize.ts:81-89`, not read-time — accrual is cron-cadence-bound**) → **manager clock STARTS here (first live pull), not at signup** → day 90 (sponsor side, own anniversary): 2–3 comp sponsors convert to paid frequency SKU via Payment Link. **Revenue inside the founder's 90 days = the sponsors only, collected manually. The ~1 manager conversion the draft booked lands ~90 days AFTER first live render (≈ calendar day 110-120), i.e. outside the founder's window.**
 
 ### Failure tripwires (each code-grounded)
 
 1. No poster reaches 5 scans in any hour → every poster cell is dropped and `corridor_map.source` is `'suppressed'` ("Map hidden to keep things anonymous") — **fatal, abort the corridor.**
-2. All-loyal audience, no distinct-anon turnover → `return_rate` never clears min-sample 5 → no differentiated Mid value renders.
+2. Posters placed where few people pass → no poster reaches 5 scans in an hour → no differentiated Mid value renders.
 3. Scan-aggregation cron hasn't run / no `scan_cell_aggregates` rows (scans at poster cells, OSE-1459) → map stuck `source:'fallback'` → auto-extend, clock never starts.
-4. Live map + return_rate render, still no manager conversion after their 90d = **the real, honest WTP failure** — the map isn't worth $49.
+4. Live map + poster breakdown render, still no manager conversion after their 90d = **the real, honest WTP failure** — the map isn't worth $49.
 5. Comp sponsors don't convert at day 90 despite frequency rendering → the $99/mo wrapper is mispriced (independent of any gate).
 
 ---
@@ -174,13 +174,13 @@ Ship the 3-month clock, dunning ladder, and anniversary meter as real tested `sr
 - **Grandfather — LEANER than the draft (Critic 2 Fix 2):** the draft's 60/40/20/0-from-first-invoice is _more generous under compression_ (short free period → whole cohort synchronizes onto the richest rung). **Use 50/25/0 (3-year), metered from `min(first_invoice, signup + 120d)`** — prevents a sponsor sitting free indefinitely then starting a fresh clock. Keyed `founding_cell_id + founding_ts` (NEVER `is_local`). Cap year-1 credit at the Mid dollar; **model finance on the capped, SYNCHRONIZED base** (materially larger than the draft's staggered assumption).
 - **Anti-churn — FIX THE FREE-RIDE (Critic 2 Fix 1):** the draft's "lapse = downgrade to base 1x, keep ≥2% `min_presence`, never evicted" is a churn **accelerant**, not a retention feature. Because `allocateShares` water-fills (`sponsor-allocation.ts:262-281`), a lapsed sponsor's vacated share **redistributes to survivors** — a rational, correlated incentive to also lapse and free-ride at 2%. **Make the 2% floor paid-or-comp-gated after one grace cycle:** on soft-lapse a sponsor falls to base for one anniversary cycle, then `min_presence` applies only if `free_tier|comp` is true; a pure non-paying lapsed sponsor decays out of _guaranteed_ presence (still eligible to re-enter). **Model small-sponsor churn at 55–70% CORRELATED, not 40–60% independent** — lapses are coupled through the shared pool. If the $99/mo wrapper doesn't survive 65% correlated flip churn, it is mispriced.
 
-### TIER 2 — EVENT MANAGERS (Mid = live map + return_rate; clock starts at first live render)
+### TIER 2 — EVENT MANAGERS (Mid = live map + poster breakdown by hour; clock starts at first live render)
 
-- **Term = 3 months FROM FIRST `source:'live'` PULL**, gated `source:'live'` ∧ `return_rate` un-suppressed ∧ Gate B. Below that → **auto-extend free** (never invoice an empty/fallback map).
-- **Probe-1 @ first report pull (fallback map):** CTA "$19 single-event **live-map unlock**" — the settled honest WTP instrument, a **Payment-Link URL**, priced explicitly as a *sample/founding SKU*, **never "the map subscription."** **Critic 3 Fix 3a:** the `$19` instrument must read a **different signal** (an explicit user click-to-unlock event) than the flip gate reads (`corridorMap.source`) — otherwise the take-rate measures the gate, not willingness (endogenous WTP).
+- **Term = 3 months FROM FIRST `source:'live'` PULL**, gated `source:'live'` ∧ `poster_attribution` published ∧ Gate B. Below that → **auto-extend free** (never invoice an empty/fallback map).
+- **Probe-1 @ first report pull (fallback map):** CTA "$19 single-event **live-map unlock**" — the settled honest WTP instrument, a **Payment-Link URL**, priced explicitly as a _sample/founding SKU_, **never "the map subscription."** **Critic 3 Fix 3a:** the `$19` instrument must read a **different signal** (an explicit user click-to-unlock event) than the flip gate reads (`corridorMap.source`) — otherwise the take-rate measures the gate, not willingness (endogenous WTP).
 - **Probe-2 @ Gate A′ satisfied (live map renders):** first honest recurring $49/mo Mid ask.
 - **Grandfather:** same 50/25/0 metered from `min(first_invoice, signup+120d)`, keyed `founding_cell_id + founding_ts`.
-- **Anti-churn small locals — RESTORE THE RAMP (Critic 2 Fix 3):** the draft's hard $25–75/event ask at day 90 lands *before* differentiated value for the most price-sensitive, covenant-protected cohort. **Small locals get the SAME depth-gate protection managers get** (no hard ask before their own `source:'live'`), **PLUS a graduated first step: one de-risked $19 unlock first, then $25–75/event or wrapper only after one successful $19 event.** Model **40–60% flip churn on the $19 step**, and derive $25–75 conversion _conditional on surviving $19_.
+- **Anti-churn small locals — RESTORE THE RAMP (Critic 2 Fix 3):** the draft's hard $25–75/event ask at day 90 lands _before_ differentiated value for the most price-sensitive, covenant-protected cohort. **Small locals get the SAME depth-gate protection managers get** (no hard ask before their own `source:'live'`), **PLUS a graduated first step: one de-risked $19 unlock first, then $25–75/event or wrapper only after one successful $19 event.** Model **40–60% flip churn on the $19 step**, and derive $25–75 conversion _conditional on surviving $19_.
 - **Compressed dunning (both tiers, via quarantined billing-clock):** reminder day-75 → offer day-85 → soft-lapse day-95 → `subscription:false` → `free_tier` (fallback map stays, differentiated depth locks). Ships with a born-red `local_floor_pct ≥ 30` covenant test.
 
 ---
@@ -219,8 +219,8 @@ Carried as settled, sharpened by the compression and Critic 3:
 ## WHAT 3 MONTHS CANNOT BUY (honest limits)
 
 - **No automated revenue.** OSE-745 stubs mean every conversion is a founder hand-selling a Payment Link. Book the 90-day goal as **"N out-of-band Payment-Link conversions from comp sponsors at $99/mo or $25–75/event" — a price-discovery number, not MRR.**
-- **No median-manager conversion in the founder's window.** Only hand-picked weekly comp anchors clear live-map + return_rate fast enough; their ~90-days-from-first-render lands near calendar day 110-120. Monthly/bi-weekly organizers ride auto-extend — that is correct behavior, not failure.
-- **No corridor-density value.** The differentiated density ratio is unreachable in 90 days and hardest for the retention story you want. Sell live-map + return_rate; hold density as a month-4+ upsell.
+- **No median-manager conversion in the founder's window.** Only hand-picked weekly comp anchors clear live-map + poster breakdown fast enough; their ~90-days-from-first-render lands near calendar day 110-120. Monthly/bi-weekly organizers ride auto-extend — that is correct behavior, not failure.
+- **No corridor-density value.** The differentiated density ratio is unreachable in 90 days and hardest for the retention story you want. Sell live-map + poster breakdown; hold density as a month-4+ upsell.
 - **No Premium.** Phase5 infra unprovisioned; visible-not-given.
 - **No local-keyed pricing.** `is_local` is buyable-attack-exposed until OSE-661/663; grandfather keys `founding_cell_id + founding_ts` only.
 
@@ -228,9 +228,9 @@ Carried as settled, sharpened by the compression and Critic 3:
 
 ```
 Sponsors  → hard 3-month flip from own activation (frequency renders TODAY — honest; manual Payment-Link collection)
-Managers  → 3 months FROM FIRST source:'live' PULL, gated source:'live' ∧ return_rate ∧ Gate B; auto-extend on fallback
+Managers  → 3 months FROM FIRST source:'live' PULL, gated source:'live' ∧ poster_attribution ∧ Gate B; auto-extend on fallback
 Saturate  → ONE weekly, high-turnover corridor: 3 comp anchors + 1 weekly slot + 2–3 comp sponsors + poster subsidy;
-            DROP the density ratio (unreachable in-window); bill on live-map + return_rate only
+            DROP the density ratio (unreachable in-window); bill on live-map + poster breakdown only
 Transition→ event-triggered WTP probes (Payment-Link URLs, never src/ charges);
             grandfather 50/25/0 metered from min(first_invoice, signup+120d), keyed founding_cell_id+ts;
             small locals: $19 unlock gated on source:'live' first, then $25–75 @ 40–60% churn;

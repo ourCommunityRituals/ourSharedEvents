@@ -84,11 +84,11 @@ runtime:
         test('S14 report: one people figure, the poster sum (5), never the 10 seen', function () {
           const posters = report.poster_attribution || [];
           expect(posters.map(function (p) { return p.scan_count; })).to.eql([5]);
-          expect(report.distinct_scanners).to.eql(5);
-          expect((report.return_rate || {}).sample_size).to.eql(null);
+          expect(report.scans).to.eql(5);
+          expect('return_rate' in report).to.eql(false); // OSE-2214: retired
           expect(((report.corridor_density || {}).this_event_count == null) ||
             report.corridor_density.this_event_count === 5).to.eql(true);
-          expect(JSON.stringify(report)).to.not.match(/"(distinct_scanners|this_event_count|sample_size|scan_count)":10\b/);
+          expect(JSON.stringify(report)).to.not.match(/"(scans|this_event_count|sample_size|scan_count)":10\b/);
         });
         test('S14 report: no sponsor row under 5 is published', function () {
           const rows = report.sponsor_displays || [];

@@ -122,7 +122,7 @@ async function seedPoster(
   }
 }
 
-/** Hour buckets on scan_aggregates (distinct_scanners source), distinct counts given. */
+/** Hour buckets on scan_aggregates (scans source), distinct counts given. */
 async function seedAggregates(
   eventId: string,
   buckets: Array<[string, number, number]>
@@ -185,7 +185,7 @@ describe('OSE-1376 — same scans, different event zones → different labels, i
       await seedEvent(id, tz, '2026-10-24');
       await seedPoster(id, `pd-1376-${id}`, EVENING_SCANS);
       // Hour buckets the report no longer counts people from (OSE-1784): they
-      // must not reach distinct_scanners in either zone.
+      // must not reach scans in either zone.
       await seedAggregates(id, [
         ['2026-10-25', 0, 7],
         ['2026-10-25', 1, 3],
@@ -218,8 +218,8 @@ describe('OSE-1376 — same scans, different event zones → different labels, i
     expect(pb.first_scan_at).toBe(pc.first_scan_at);
     expect(pb.last_scan_at).toBe(pc.last_scan_at);
     // OSE-1784: the head count is the sum of the poster rows, in both zones.
-    expect(chi.distinct_scanners).toBe(pc.scan_count);
-    expect(ber.distinct_scanners).toBe(pb.scan_count);
+    expect(chi.scans).toBe(pc.scan_count);
+    expect(ber.scans).toBe(pb.scan_count);
   });
 });
 
@@ -350,10 +350,8 @@ describe('OSE-1376 — floors and never-who are unchanged by the zone', () => {
         expect(p.scan_count).toBeGreaterThanOrEqual(CORRIDOR_MAP_MIN_COUNT);
       }
       // OSE-1784: the small poster adds nothing to the head count either.
-      expect(rep.distinct_scanners).toBe(
-        rep.poster_attribution.reduce((sum, p) => sum + p.scan_count, 0)
-      );
-      totals.push(rep.distinct_scanners);
+      expect(rep.scans).toBe(rep.poster_attribution.reduce((sum, p) => sum + p.scan_count, 0));
+      totals.push(rep.scans);
     }
     const big = EVENING_SCANS.length * CORRIDOR_MAP_MIN_COUNT;
     expect(totals).toEqual([big, big, big, big]);

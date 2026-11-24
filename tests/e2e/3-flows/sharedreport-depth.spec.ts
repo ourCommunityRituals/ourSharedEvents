@@ -46,13 +46,13 @@ async function fetchReport(
 }
 
 /**
- * OSE-818 (owner 2026-10-11): the scan count is `distinct_scanners` at every
+ * OSE-818 (owner 2026-10-11): the scan count is `scans` at every
  * depth, on the deployed Worker; the old key is gone. Called from the tests that
  * already read a report, so it adds no conditional skip (CI integrity ratchet).
  */
 function expectScannerCount(report: Record<string, unknown>): void {
-  expect('distinct_scanners' in report).toBe(true);
-  const v = report.distinct_scanners;
+  expect('scans' in report).toBe(true);
+  const v = report.scans;
   expect(v === null || (typeof v === 'number' && Number.isInteger(v) && v >= 5)).toBe(true);
   expect('unique_gatherings' in report).toBe(false);
 }
@@ -159,8 +159,8 @@ test.describe('SharedReport depth gate', () => {
     expectSeededBaseline(report);
     // corridor_map key present at premium (value may be null if no h3 data).
     expect('corridor_map' in report).toBe(true);
-    // headcount_trend is the genuinely premium-only section — present here.
-    expect('headcount_trend' in report).toBe(true);
+    // scan_trend is the genuinely premium-only section — present here.
+    expect('scan_trend' in report).toBe(true);
     // No upgrade hint at premium: nothing is withheld (upgrade lives at
     // report.upgrade and is omitted entirely for premium/admin/bar_owner).
     expect('upgrade' in report).toBe(false);
@@ -179,7 +179,7 @@ test.describe('SharedReport depth gate', () => {
     expect('poster_attribution' in report).toBe(false);
     expect('return_rate' in report).toBe(false);
     expect('corridor_map' in report).toBe(false);
-    expect('headcount_trend' in report).toBe(false);
+    expect('scan_trend' in report).toBe(false);
     // The refusal is printed on the wire at report.upgrade (ADR-017), pointing
     // one rung up to 'mid'.
     const upgrade = report.upgrade as { next_depth?: string; locked_sections?: unknown };
@@ -219,10 +219,10 @@ test.describe('SharedReport depth gate', () => {
     expectSeededBaseline(report);
     // Mid depth = the Mid sections are present (corridor_map is a MID section —
     // the paid value line, OSE-682 — NOT premium-only), and the single
-    // premium-only section (headcount_trend) is omitted.
+    // premium-only section (scan_trend) is omitted.
     expect('corridor_map' in report).toBe(true);
     expect('campaign_summary' in report).toBe(true);
-    expect('headcount_trend' in report).toBe(false);
+    expect('scan_trend' in report).toBe(false);
     // Below premium → the refusal is printed at report.upgrade, next rung 'premium'.
     const upgrade = report.upgrade as { next_depth?: string } | undefined;
     expect(upgrade).toBeDefined();
@@ -247,15 +247,15 @@ test.describe('SharedReport depth gate', () => {
     expect(text).not.toMatch(/hex-cell/);
   });
 
-  test('MID sponsor token → no headcount_trend (the premium-only section)', async ({ request }) => {
+  test('MID sponsor token → no scan_trend (the premium-only section)', async ({ request }) => {
     test.skip(!POST || !MID_TOKEN, 'fixtures not seeded');
     const res = await fetchReport(request, POST!, MID_TOKEN!);
     const body = await res.json();
     const report = body.report as Record<string, unknown>;
-    // headcount_trend (cross-event) is the ONLY genuinely premium-only section —
+    // scan_trend (cross-event) is the ONLY genuinely premium-only section —
     // withheld at mid. corridor_map is a Mid section and IS present here (asserted
     // in the mid-sections test above); do not confuse the two.
-    expect('headcount_trend' in report).toBe(false);
+    expect('scan_trend' in report).toBe(false);
     expect('corridor_map' in report).toBe(true);
   });
 

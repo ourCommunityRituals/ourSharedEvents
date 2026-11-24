@@ -417,18 +417,8 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
   // must withhold"); no other event's count, id or brand is published.
   // 430→482 and 436→488 when publishCorridorBaseline was added above these queries (OSE-1751).
 
-  [
-    'lib/shared-report-builder.ts > buildSharedReport: JOIN events e ON e.id = a.venue_id',
-    'Corridor-wide per-event COUNTs keyed by `COALESCE(LOWER(h3_res7), corridor_id) = ?` ' +
-      '(a geography). Cross-brand geographic aggregate by design; never-who (COUNT of ' +
-      "anon_id_hash per event); only this event's rate and an all-or-none yes/no are published.",
-  ],
-
-  [
-    'lib/shared-report-builder.ts > buildSharedReport: JOIN events oe ON oe.id = o.venue_id',
-    "Same corridor statement, the correlated EXISTS over the corridor's other events " +
-      '(same geography key). Same rationale.',
-  ],
+  // OSE-2214: the two corridor return-rate reads (JOIN events e / oe on anon_id_returns)
+  // were retired with return_rate, so their exemptions are gone.
   // OSE-1421: the series-instance read (was :800) now binds `brand_id = ?` itself.
   // Line-sensitive: 263→296 and 513→554 for OSE-616 (emitRow guard + corridor
   // coverage + ran fields above these queries; corridor_id now COALESCE(h3_res7, …)).

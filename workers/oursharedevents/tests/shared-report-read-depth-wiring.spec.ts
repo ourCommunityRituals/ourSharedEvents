@@ -64,7 +64,7 @@ function fullReport(): Record<string, unknown> {
     event_title: 'Depth Wiring Night',
     event_start_date: '2026-06-01T18:00:00Z',
     event_end_date: '2026-06-01T22:00:00Z',
-    distinct_scanners: 99,
+    scans: 99,
     sponsor_displays: [
       { sponsor_id: 'sp_A', count: 10, surface: 'poster' },
       { sponsor_id: 'sp_B', count: 5, surface: 'poster' },
@@ -75,7 +75,7 @@ function fullReport(): Record<string, unknown> {
     return_rate: 0.42,
     corridor_density: [{ cell: '89266454447ffff', count: 20 }],
     corridor_map: { svg: '<svg/>' },
-    headcount_trend: [{ date: '2026-06-01', count: 99 }],
+    scan_trend: [{ date: '2026-06-01', count: 99 }],
     // suppression_reasons is always on a built report; a sponsor link's read
     // rewrites its campaign entry (OSE-2046).
     _meta: { built_at: '2026-07-28T00:00:00Z', suppression_reasons: [] },
@@ -108,11 +108,11 @@ describe('OSE-714 | read handler composes filterReportByDepth (enforcement-state
     const { status, report } = await callAs('sponsor', { depth: 'local', sponsor_id: 'sp_A' });
     expect(status).toBe(200);
     // Local keeps the smoke-test basics...
-    expect(report.distinct_scanners).toBe(99);
+    expect(report.scans).toBe(99);
     expect(report.event_title).toBe('Depth Wiring Night');
     // ...and the HANDLER (not the client) omits every paid section:
     expect('corridor_map' in report).toBe(false);
-    expect('headcount_trend' in report).toBe(false);
+    expect('scan_trend' in report).toBe(false);
     expect('poster_attribution' in report).toBe(false);
     expect('return_rate' in report).toBe(false);
     expect('corridor_density' in report).toBe(false);
@@ -124,18 +124,18 @@ describe('OSE-714 | read handler composes filterReportByDepth (enforcement-state
     expect(rows.map((x) => x.sponsor_id)).toEqual(['sp_A']);
   });
 
-  it('SPONSOR-2: mid sponsor token → corridor_map delivered, only premium-only headcount_trend withheld', async () => {
+  it('SPONSOR-2: mid sponsor token → corridor_map delivered, only premium-only scan_trend withheld', async () => {
     const { report } = await callAs('sponsor', { depth: 'mid', sponsor_id: 'sp_A' });
     expect('corridor_map' in report).toBe(true);
     expect('poster_attribution' in report).toBe(true);
-    expect('headcount_trend' in report).toBe(false);
+    expect('scan_trend' in report).toBe(false);
     expect((report.upgrade as { next_depth?: string } | undefined)?.next_depth).toBe('premium');
   });
 
   it('ADMIN: non-sponsor role bypasses the filter entirely — full report, all sponsor rows, no upgrade', async () => {
     const { report } = await callAs('admin');
     // The "sponsor role ONLY" half of the wiring: admin is NOT filtered.
-    expect('headcount_trend' in report).toBe(true);
+    expect('scan_trend' in report).toBe(true);
     expect('corridor_map' in report).toBe(true);
     const rows = report.sponsor_displays as Array<{ sponsor_id: string }>;
     expect(rows.map((x) => x.sponsor_id).sort()).toEqual(['sp_A', 'sp_B']);
@@ -155,10 +155,10 @@ describe('OSE-682 | read handler caps depth to the plan', () => {
   it('FREE-ORG: organizer on a Free plan gets Local: basics kept, paid sections withheld, upgrade → mid', async () => {
     const { status, report } = await callAs('bar_owner', {}, false);
     expect(status).toBe(200);
-    expect(report.distinct_scanners).toBe(99);
+    expect(report.scans).toBe(99);
     expect('corridor_map' in report).toBe(false);
     expect('poster_attribution' in report).toBe(false);
-    expect('headcount_trend' in report).toBe(false);
+    expect('scan_trend' in report).toBe(false);
     expect((report.upgrade as { next_depth?: string } | undefined)?.next_depth).toBe('mid');
     // The organizer still sees every sponsor row at its own event.
     const rows = report.sponsor_displays as Array<{ sponsor_id: string }>;
@@ -177,7 +177,7 @@ describe('OSE-682 | read handler caps depth to the plan', () => {
   it('PAID-ORG: organizer on a paid plan keeps the full report, no upgrade', async () => {
     const { report } = await callAs('bar_owner', {}, true);
     expect('corridor_map' in report).toBe(true);
-    expect('headcount_trend' in report).toBe(true);
+    expect('scan_trend' in report).toBe(true);
     expect('upgrade' in report).toBe(false);
   });
 

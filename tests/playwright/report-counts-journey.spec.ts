@@ -130,7 +130,7 @@ test('the report link opens the report for this event', async ({ page }) => {
 });
 
 // OSE-2214 (owner 2026-11-23): OSE counts scans on the code, never people, so
-// the figure read from `distinct_scanners` is labelled "Scans" (was "Distinct
+// the figure read from `scans` is labelled "Scans" (was "Distinct
 // scanners", OSE-818). The old banned wording must not come back on the page.
 test('the scan card says "Scans", never a count of people (OSE-2214)', async ({ page }) => {
   await openReport(page);

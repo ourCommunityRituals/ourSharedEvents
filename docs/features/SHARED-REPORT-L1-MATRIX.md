@@ -204,7 +204,7 @@ or the raw body.
 
 > **Wire-contract gotchas already learned (don't re-drift):** depth is section
 > **omission** — there is **no top-level `body.depth`**; `upgrade` lives at
-> `report.upgrade`; `corridor_map` is a **Mid** section (`headcount_trend` is the
+> `report.upgrade`; `corridor_map` is a **Mid** section (`scan_trend` is the
 > sole premium-only one). A dead E2E test drifted on exactly these (OSE-834). The
 > handler is authoritative, CI-locked by `shared-report-read.spec.ts`.
 

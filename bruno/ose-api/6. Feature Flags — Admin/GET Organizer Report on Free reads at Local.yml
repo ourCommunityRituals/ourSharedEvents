@@ -32,9 +32,9 @@ runtime:
 
         });
 
-        test('Keeps the Local basics: distinct scanners and the class breakdown', function() {
+        test('Keeps the Local basics: scans and the class breakdown', function() {
 
-        \    expect(json.report).to.have.property('distinct_scanners');
+        \    expect(json.report).to.have.property('scans');
 
         \    expect(json.report).to.have.property('sponsor_class_breakdown');
 
@@ -48,7 +48,7 @@ runtime:
 
         \    expect(json.report).to.not.have.property('return_rate');
 
-        \    expect(json.report).to.not.have.property('headcount_trend');
+        \    expect(json.report).to.not.have.property('scan_trend');
 
         });
 

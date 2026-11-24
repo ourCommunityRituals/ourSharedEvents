@@ -22,15 +22,14 @@ const SAMPLE_REPORT = {
   event_title: 'Test Event',
   event_start_date: '2026-06-01T18:00:00Z',
   event_end_date: '2026-06-01T22:00:00Z',
-  distinct_scanners: 99,
+  scans: 99,
   sponsor_displays: [
     { sponsor_id: 'sp_A', impressions: 200 },
     { sponsor_id: 'sp_B', impressions: 75 },
   ],
   poster_attribution: { views: 500, scans: 100 },
-  return_rate: 0.42,
   corridor_density: [{ cell: '89266454447ffff', count: 20 }],
-  headcount_trend: [{ date: '2026-06-01', count: 99 }],
+  scan_trend: [{ date: '2026-06-01', count: 99 }],
   _meta: { built_at: '2026-07-28T00:00:00Z' },
 } as const;
 
@@ -115,7 +114,7 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     expect(DEPTH_SECTIONS.mid, 'Mid (paid) gets the map').toContain('corridor_map');
     expect(DEPTH_SECTIONS.premium, 'Premium (paid) gets the map').toContain('corridor_map');
     // Free stays honest-essential, not crippled: it keeps the smoke-test basics.
-    expect(DEPTH_SECTIONS.local).toContain('distinct_scanners');
+    expect(DEPTH_SECTIONS.local).toContain('scans');
     expect(DEPTH_SECTIONS.local).toContain('sponsor_displays');
   });
 
@@ -123,9 +122,8 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     const resolved = resolveDepth({ role: 'admin' });
     const { report, upgrade } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
     // Omission-only: no values are transformed
-    expect(report.distinct_scanners).toBe(99);
-    expect(report.return_rate).toBe(0.42);
-    expect(report.headcount_trend).toEqual(SAMPLE_REPORT.headcount_trend);
+    expect(report.scans).toBe(99);
+    expect(report.scan_trend).toEqual(SAMPLE_REPORT.scan_trend);
     expect(report.corridor_density).toEqual(SAMPLE_REPORT.corridor_density);
     // Premium is the top tier — no upgrade hint
     expect(upgrade).toBeNull();
@@ -238,36 +236,34 @@ describe('TL-010 | Depth escalation guard — resolveDepth caps + filterReportBy
     expect(resolved.depth).toBe('mid');
   });
 
-  it('local depth strips mid-tier fields (poster_attribution, return_rate, corridor_density)', () => {
+  it('local depth strips mid-tier fields (poster_attribution, corridor_density)', () => {
     const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
     const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
     expect(report.poster_attribution).toBeUndefined();
-    expect(report.return_rate).toBeUndefined();
     expect(report.corridor_density).toBeUndefined();
   });
 
-  it('local depth strips premium-tier field (headcount_trend)', () => {
+  it('local depth strips premium-tier field (scan_trend)', () => {
     const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
     const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
-    expect(report.headcount_trend).toBeUndefined();
+    expect(report.scan_trend).toBeUndefined();
   });
 
-  it('local depth still allows base fields (event_id, event_title, distinct_scanners, _meta)', () => {
+  it('local depth still allows base fields (event_id, event_title, scans, _meta)', () => {
     const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
     const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
     expect(report.event_id).toBe('evt_test');
     expect(report.event_title).toBe('Test Event');
-    expect(report.distinct_scanners).toBe(99);
+    expect(report.scans).toBe(99);
     expect(report._meta).toBeDefined();
   });
 
-  it('mid depth exposes mid-tier fields but strips premium-only field (headcount_trend)', () => {
+  it('mid depth exposes mid-tier fields but strips premium-only field (scan_trend)', () => {
     const resolved = resolveDepth({ role: 'sponsor', depth: 'mid', sponsor_id: 'sp_A' });
     const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
     expect(report.poster_attribution).toBeDefined();
-    expect(report.return_rate).toBe(0.42);
     expect(report.corridor_density).toBeDefined();
-    expect(report.headcount_trend).toBeUndefined();
+    expect(report.scan_trend).toBeUndefined();
   });
 
   it('upgrade hint names the locked sections when depth is not premium', () => {
@@ -372,10 +368,10 @@ describe('OSE-682 | capDepthToPlan: a plan without the paid report reads at Loca
       { ...SAMPLE_REPORT, corridor_map: { svg: '<svg/>' } },
       capped
     );
-    expect(report.distinct_scanners).toBe(99);
+    expect(report.scans).toBe(99);
     expect(report.sponsor_displays).toHaveLength(2); // organizer sees its event's rows
     expect('corridor_map' in report).toBe(false);
-    expect('headcount_trend' in report).toBe(false);
+    expect('scan_trend' in report).toBe(false);
     expect(upgrade?.next_depth).toBe('mid');
     expect(upgrade?.locked_sections).toContain('corridor_map');
   });

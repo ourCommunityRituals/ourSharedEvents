@@ -15,11 +15,11 @@
  * Vitest (SELF.fetch) instead of only against staging.
  *
  * CONTRACT (ADR-017 / REPORT-DEPTH.md / DEPTH_SECTIONS in lib/report-depth.ts):
- *   • local  (free): event meta + distinct_scanners + sponsor_displays (own) +
+ *   • local  (free): event meta + scans + sponsor_displays (own) +
  *     sponsor_class_breakdown. The paid sections are ABSENT.
- *   • mid    (paid): adds campaign_summary, poster_attribution, return_rate,
+ *   • mid    (paid): adds campaign_summary, poster_attribution,
  *     corridor_density, corridor_map (the map = the paid value line, OSE-682).
- *   • premium        : adds headcount_trend (cross-event). admin/bar_owner/internal
+ *   • premium        : adds scan_trend (cross-event). admin/bar_owner/internal
  *     resolve to premium; a premium/admin response carries NO `upgrade` key.
  *   • sponsor caps at mid; the filter is omission-only (same numbers, fewer
  *     sections — Invariant #5); the refusal is PRINTED in
@@ -33,7 +33,7 @@
  * @born-red invariant#5/depth | method: depth-section-omission-on-wire | armed: 2026-09-09
  *   Neutralize the one gate (`handlers/shared-report-read.ts:178-181` — skip
  *   filterReportByDepth for the sponsor role, return the full built report) and the
- *   `local` case reddens: corridor_map / campaign_summary / headcount_trend become
+ *   `local` case reddens: corridor_map / campaign_summary / scan_trend become
  *   present (not.toHaveProperty fails) and `upgrade` disappears (next_depth fails).
  *   The lib-level report-depth.spec.ts proves the filter in isolation; THIS proves
  *   it is WIRED into the single read path and survives serialization.
@@ -176,44 +176,42 @@ const PROFILES: DepthProfile[] = [
     name: 'LOCAL sponsor → base sections only; paid sections omitted; mid locked',
     role: 'sponsor',
     depth: 'local',
-    present: ['distinct_scanners', 'sponsor_displays', 'sponsor_class_breakdown'],
+    present: ['scans', 'sponsor_displays', 'sponsor_class_breakdown'],
     absent: [
       'campaign_summary',
       'poster_attribution',
-      'return_rate',
       'corridor_density',
       'corridor_map',
-      'headcount_trend',
+      'scan_trend',
     ],
     upgrade: { next_depth: 'mid', lockedIncludes: ['corridor_map', 'campaign_summary'] },
   },
   {
-    name: 'MID sponsor → map + optimization present; headcount_trend (premium) omitted; premium locked',
+    name: 'MID sponsor → map + optimization present; scan_trend (premium) omitted; premium locked',
     role: 'sponsor',
     depth: 'mid',
     present: [
-      'distinct_scanners',
+      'scans',
       'sponsor_displays',
       'sponsor_class_breakdown',
       'campaign_summary',
       'poster_attribution',
-      'return_rate',
       'corridor_density',
       'corridor_map',
     ],
-    absent: ['headcount_trend'],
-    upgrade: { next_depth: 'premium', lockedIncludes: ['headcount_trend'] },
+    absent: ['scan_trend'],
+    upgrade: { next_depth: 'premium', lockedIncludes: ['scan_trend'] },
   },
   {
     name: 'ADMIN → full premium depth; no upgrade hint',
     role: 'admin',
     present: [
-      'distinct_scanners',
+      'scans',
       'sponsor_displays',
       'sponsor_class_breakdown',
       'campaign_summary',
       'corridor_map',
-      'headcount_trend',
+      'scan_trend',
     ],
     absent: [],
     upgrade: null,

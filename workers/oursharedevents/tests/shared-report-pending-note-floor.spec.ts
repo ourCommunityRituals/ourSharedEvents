@@ -18,6 +18,9 @@
  * [1, 1, 1, 0] is expected. The 1 -> 2, 2 -> 3 and 3 -> 4 pairs and the controls
  * passed on main and are guards.
  *
+ * OSE-2214 (owner, 2026-11-23): the report no longer reads people at all, so the
+ * pairs now move one SCAN at a time in one poster hour; the rule is the same.
+ *
  * Staging twin: bruno/ose-api/18. Campaigns (S14), requests 85 to 88. On a local
  * worker with the staging fixture, request 88 went red on main's builder
  * ("expected +0 to deeply equal 1") and the folder is green with the change.
@@ -108,25 +111,23 @@ async function seedEvent(id: string, scans: Scans): Promise<void> {
   }
 }
 
-/** Set the people seen at the event (anon_id_returns rows) to exactly `n`. */
-async function setAttendees(n: number): Promise<void> {
+/**
+ * Set the scans at one poster hour of the event to exactly `n` (OSE-2214: the
+ * report counts scans of the code, never people; anon_id_returns is no longer
+ * read). Hour 21 is apart from the shapes' hours 19 and 20.
+ */
+async function setScansInOneHour(n: number): Promise<void> {
   const db = tenv().DB;
-  await db.prepare(`DELETE FROM anon_id_returns WHERE venue_id = ?`).bind(EVT).run();
-  for (let i = 0; i < n; i++) {
-    await db
-      .prepare(
-        `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
-         VALUES (?, ?, ?, ?, 1, ?)`
-      )
-      .bind(`pn${String(i).padStart(62, '0')}`, EVT, STAMP, STAMP, STAMP)
-      .run();
-  }
+  await db
+    .prepare(`DELETE FROM scan_placement_events WHERE event_id = ? AND scan_bucket LIKE '%T21:%'`)
+    .bind(EVT)
+    .run();
+  await seedPosterHour(db, EVT, 21, n);
 }
 const STAMP = '2026-05-08 03:00:00';
 
 interface Report {
-  return_rate: { sample_size: number | null } | null;
+  scans: number | null;
   _meta: { suppression_reasons: Array<{ field: string; reason: string; detail?: string }> };
 }
 
@@ -164,45 +165,39 @@ const READERS: Array<[string, SignedLinkRole]> = [
 const SHAPES: Scans[] = ['no scan buckets', 'scan buckets under the floor'];
 
 for (const scans of SHAPES) {
-  describe(`one person more under the floor changes nothing (${scans})`, () => {
+  describe(`one scan more under the floor changes nothing (${scans})`, () => {
     beforeEach(async () => {
-      // People first: their rows point at the event.
-      await tenv().DB.prepare(`DELETE FROM anon_id_returns WHERE venue_id = ?`).bind(EVT).run();
       await clearTables();
       await seedEvent(EVT, scans);
     });
 
     for (const [reader, role] of READERS) {
       for (let a = 0; a < K - 1; a++) {
-        test(`${a} -> ${a + 1} people, ${reader}: the whole report is the same`, async () => {
-          await setAttendees(a);
+        test(`${a} -> ${a + 1} scans in one hour, ${reader}: the whole report is the same`, async () => {
+          await setScansInOneHour(a);
           const before = await read(role);
-          await setAttendees(a + 1);
+          await setScansInOneHour(a + 1);
           const after = await read(role);
           expect(after.text).toBe(before.text);
         });
       }
 
-      test(`control: ${K - 1} -> ${K} people, ${reader}: the report moves`, async () => {
-        await setAttendees(K - 1);
+      test(`control: ${K - 1} -> ${K} scans in one hour, ${reader}: the report moves`, async () => {
+        await setScansInOneHour(K - 1);
         const before = await read(role);
-        await setAttendees(K);
+        await setScansInOneHour(K);
         const after = await read(role);
         expect(after.text).not.toBe(before.text);
-        // OSE-1784: the sample size is never published; what moves is the
-        // return-rate note, which no longer says too few people were seen.
-        expect(after.report.return_rate?.sample_size).toBeNull();
-        const whole = (r: Report) =>
-          r._meta.suppression_reasons.some((x) => x.field === 'return_rate');
-        expect(whole(before.report)).toBe(true);
-        expect(whole(after.report)).toBe(false);
+        // OSE-2214: what moves is the scan figure, from withheld to 5.
+        expect(before.report.scans).toBeNull();
+        expect(after.report.scans).toBe(K);
       });
     }
 
-    test('0 and 4 people carry the same "nothing yet" note; 5 people carry none', async () => {
+    test('0 and 4 scans in an hour carry the same "nothing yet" note; 5 carry none', async () => {
       const notes: number[] = [];
       for (const n of [0, 1, K - 1, K]) {
-        await setAttendees(n);
+        await setScansInOneHour(n);
         notes.push(pendingNotes((await read('bar_owner')).report).length);
       }
       expect(notes).toEqual([1, 1, 1, 0]);

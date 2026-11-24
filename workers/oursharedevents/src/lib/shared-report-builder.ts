@@ -6,14 +6,13 @@
  *   docs/features/SHARED-REPORT-READ-API.md
  *
  * Six fields per Session 1 ratified contract:
- *   1. distinct_scanners        — the sum of the published poster_attribution rows
- *                                 (OSE-1784: the report's one people figure)
- *   2. return_rate              — % of distinct anons also seen at another event
- *      (of the confirmed series, and of the corridor)
- *   3. corridor_density         — distinct_scanners vs the corridor's rolling baseline
+ *   1. scans        — the sum of the published poster_attribution rows
+ *                                 (OSE-1784: the report's one figure: scans of the code, OSE-2214)
+ *   2. (return_rate, retired by OSE-2214: it followed one phone across events)
+ *   3. corridor_density         — scans vs the corridor's rolling baseline
  *   4. sponsor_displays[]    — per sponsor × surface
  *   5. poster_attribution[]     — per poster deployment
- *   6. headcount_trend          — across confirmed event_series instances
+ *   6. scan_trend          — across confirmed event_series instances
  *
  * Plus `_meta.suppression_reasons[]` for below-min-sample fields (S5-Q5).
  *
@@ -38,10 +37,10 @@ import {
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 import { renderCorridorMap } from './corridor-map';
 import { gridRingUnsafe } from 'h3-js';
+import { POSTER_HOUR_CAP } from './poster-hour-cap';
 import { tagsConsistent } from './h3-tagging';
 import {
   applyCountFloor,
-  flooredRatePct,
   floorCorridorBaseline,
   floorTotalOfParts,
   publishCount,
@@ -117,30 +116,6 @@ function bucketToHour(iso: string): string {
   if (!d) return iso; // pass through unparseable values unchanged
   d.setUTCMinutes(0, 0, 0);
   return d.toISOString().replace('.000Z', 'Z');
-}
-
-// Why a return rate is withheld over a sample that is itself published. Names
-// the floor, never an observed count (OSE-1421).
-const CORRIDOR_RATE_WITHHELD_DETAIL = `a group of fewer than ${CORRIDOR_MAP_MIN_COUNT} people could be worked out from this rate or from another event's in this corridor`;
-const RATE_WITHHELD_DETAIL = `one side of this rate is a group of fewer than ${CORRIDOR_MAP_MIN_COUNT} people`;
-
-/**
- * A return rate as the report publishes it: `flooredRatePct`, and never 100%.
- *
- * `flooredRatePct` lets the people a rate does not count be none (the nested
- * rule shared with the returns export). The report is read live, so 100%
- * turning into a dash when one more person comes says that person did not
- * return: "none" and "1 to 4" must look the same (OSE-1649 item 3, owner
- * ruling 2026-10-08, no exceptions). The returns export keeps the shared rule:
- * it publishes weekly snapshots rounded down to multiples of 5, the owner's
- * measure against differencing (2026-10-01).
- */
-function reportRatePct(part: number, whole: number): number | null {
-  // The rate is worked out from the rounded counts (OSE-2151), so it can read
-  // 100% while the exact part is still short of the whole (12 of 14 → 10 of
-  // 10). Withheld at 100% on the published numbers as on the exact ones.
-  const pct = flooredRatePct(part, whole);
-  return pct === null || pct >= 100 ? null : pct;
 }
 
 export type SuppressionReasonCode =
@@ -277,18 +252,25 @@ export interface SharedReport {
   event_end_date: string | null;
 
   /**
-   * The report's one people figure (OSE-1784, owner 2026-11-23): the sum of the
+   * The report's one figure (OSE-1784; scans of the code since OSE-2214): the sum of the
    * published `poster_attribution` rows. `corridor_density.this_event_count` and
-   * this event's `headcount_trend` instance are the same number. Null when no
+   * this event's `scan_trend` instance are the same number. Null when no
    * poster row is published.
    */
-  distinct_scanners: number | null;
+  scans: number | null;
+
+  /**
+   * OSE-2214: true when any published poster hour reached the cap of 100 stored
+   * scans, so `scans` (and `corridor_density.this_event_count`, the same number)
+   * is a lower bound and reads "or more". Never true when `scans` is null.
+   */
+  scans_at_least: boolean;
 
   /**
    * Rc — anonymous digital click-out counts from the /s/ routing layer, per
    * destination kind (public/donate/signup/…). Group-level counter only (no IP,
    * no per-visitor id, no cookie, no referrer); each kind passes the same K=5
-   * floor as distinct_scanners, and `total` is the sum of the kinds that are
+   * floor as scans, and `total` is the sum of the kinds that are
    * published (null when none is), so a sub-K count never ships and cannot be
    * had by subtraction. This is the digital half of the flywheel — surfaced on
    * the SharedReport / post-event recap only (never pre/event/poster, OSE-509).
@@ -297,24 +279,6 @@ export interface SharedReport {
     by_kind: Record<string, number | null>;
     total: number | null;
   } | null;
-
-  /**
-   * A rate is null unless the people it counts and the people it does not count
-   * are each at least K (`reportRatePct`): otherwise a rate is a head count
-   * under the floor, and 100% turning into a dash would single one person out
-   * (OSE-1649). The corridor rate is also withheld whenever another event in
-   * the corridor must withhold its own.
-   *
-   * `sample_size` is always null (OSE-1784, owner 2026-11-23). It was the exact
-   * head count of a second grain (anon_id_returns), and set against the poster
-   * figures it could name a group under the floor. The key stays so a reader
-   * of the old shape gets "withheld", not a missing field.
-   */
-  return_rate: {
-    venue_pct: number | null;
-    corridor_pct: number | null;
-    sample_size: null;
-  };
 
   corridor_density: {
     this_event_count: number | null;
@@ -409,6 +373,13 @@ export interface SharedReport {
     location: string;
     h3_res9: string | null;
     scan_count: number;
+    /**
+     * OSE-2214: true when at least one hour at this poster reached the cap of
+     * POSTER_HOUR_CAP stored scans (lib/poster-hour-cap.ts). Scans past the cap
+     * are sent on but not stored, so the count is then a lower bound and the
+     * page reads it as "or more".
+     */
+    hour_cap_reached: boolean;
     /** UTC hour bucket (ISO-8601 `Z`) — the stored cell, unchanged. */
     first_scan_at: string;
     last_scan_at: string;
@@ -421,13 +392,15 @@ export interface SharedReport {
     last_scan_label: string;
   }>;
 
-  headcount_trend: {
+  scan_trend: {
     series_id: string | null;
     series_name: string | null;
     instances: Array<{
       event_id: string;
       start_date: string;
-      distinct_scanners: number | null;
+      scans: number | null;
+      /** OSE-2214: that instance's own "or more" (see `scans_at_least`). */
+      scans_at_least: boolean;
     }>;
   };
 
@@ -488,9 +461,9 @@ interface EventRow {
  * multiple of 5 hour by hour. A poster with nothing published is dropped.
  *
  * OSE-1784 (owner, 2026-11-23, "one number, from the posters"): this is the
- * report's ONE grain for people. distinct_scanners, this_event_count, the
- * density ratios and each headcount_trend instance are the sum of these rows
- * (`peopleFromPosters`), so no two published figures can be subtracted to name
+ * report's ONE grain for scans. scans, this_event_count, the
+ * density ratios and each scan_trend instance are the sum of these rows
+ * (`scansFromPosters`), so no two published figures can be subtracted to name
  * a group under the floor.
  */
 async function readPosterAttribution(
@@ -503,9 +476,9 @@ async function readPosterAttribution(
   //    figure for the vote (OSE ADR-040).
   // 6. poster_attribution — per poster_deployment_id
   //    OSE-1459: the K-floor is applied per poster-HOUR before the hours are
-  //    summed. /q/ dedup is one scan per person per poster per hour, so only a
-  //    poster-hour of >= K scans is >= K people; a total over all hours is
-  //    not (one person scanning once in each of K hours is K scans). A sub-K
+  //    summed. Since OSE-2214 (owner, 2026-11-23) every scan counts and the
+  //    floor is on scans of the code, never people: a poster-hour of >= K
+  //    scans publishes, whoever scanned. A sub-K
   //    hour adds nothing, including to first/last scan times. Those times
   //    come from scan_bucket (the hour /q/ recorded), not created_at, which a
   //    queued scan gets when the consumer writes it, possibly an hour later.
@@ -521,7 +494,8 @@ async function readPosterAttribution(
          pd.h3_res9             AS h3_res9,
          COALESCE(SUM(CASE WHEN ph.n >= ? THEN ph.n - (ph.n % ?) ELSE 0 END), 0) AS scan_count,
          MIN(CASE WHEN ph.n >= ? THEN ph.first_at END) AS first_scan_at,
-         MAX(CASE WHEN ph.n >= ? THEN ph.last_at END)  AS last_scan_at
+         MAX(CASE WHEN ph.n >= ? THEN ph.last_at END)  AS last_scan_at,
+         MAX(CASE WHEN ph.n >= ? THEN 1 ELSE 0 END)    AS hour_cap_reached
        FROM poster_deployments pd
        LEFT JOIN (SELECT poster_deployment_id,
                          COUNT(*)        AS n,
@@ -541,6 +515,7 @@ async function readPosterAttribution(
       PUBLISH_ROUNDING,
       CORRIDOR_MAP_MIN_COUNT,
       CORRIDOR_MAP_MIN_COUNT,
+      POSTER_HOUR_CAP,
       eventId,
       eventId
     )
@@ -551,6 +526,7 @@ async function readPosterAttribution(
       scan_count: number;
       first_scan_at: string;
       last_scan_at: string;
+      hour_cap_reached: number | null;
     }>();
   // OSE-711: K-anon floor on poster scan_count. `HAVING scan_count > 0` is a
   // presence filter, NOT a privacy floor — a poster with 1–4 scans would
@@ -573,6 +549,7 @@ async function readPosterAttribution(
         location: r.location,
         h3_res9: r.h3_res9 ?? null,
         scan_count: floored.count as number,
+        hour_cap_reached: r.hour_cap_reached === 1,
         first_scan_at: firstBucket,
         last_scan_at: lastBucket,
         // OSE-1376: label the already-hourly UTC bucket in the event's zone.
@@ -583,10 +560,10 @@ async function readPosterAttribution(
 }
 
 /**
- * The report's people figure (OSE-1784): the sum of the published poster rows,
+ * The report's scan figure (OSE-1784, OSE-2214): the sum of the published poster rows,
  * through `floorTotalOfParts`. Null when no poster row is published, never 0.
  */
-function peopleFromPosters(rows: SharedReport['poster_attribution']): number | null {
+function scansFromPosters(rows: SharedReport['poster_attribution']): number | null {
   return rows.length > 0 ? floorTotalOfParts(rows.map((r) => r.scan_count)).count : null;
 }
 
@@ -610,9 +587,9 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   // OSE-1376: hour labels render in the event's zone (fallback: platform home zone).
   const reportZone = resolveEventZone(event.timezone);
 
-  // 2. poster_attribution, then distinct_scanners from it (OSE-1784).
+  // 2. poster_attribution, then scans from it (OSE-1784).
   //    The people figures used to come from three grains: scan_aggregates
-  //    (distinct_scanners), anon_id_returns (sample_size, this_event_count)
+  //    (scans), anon_id_returns (sample_size, this_event_count)
   //    and the poster-hours (poster_attribution). Each was floored on its own,
   //    so one could be subtracted from another: hours of 7 and 3 people at one
   //    poster published a poster sum of 5 beside a sample size of 10, and the
@@ -625,152 +602,22 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     .bind(eventId)
     .first<{ computed_at: string | null }>();
   const materializedAt = saMeta?.computed_at ?? null;
-  const distinctScanners = peopleFromPosters(posterAttribution);
+  const scans = scansFromPosters(posterAttribution);
   // Said in words, the same at 0 as at 1 to 4 (OSE-1649 item 2), so the card
   // never shows a bare dash.
-  if (distinctScanners === null) {
+  if (scans === null) {
     suppression.push({
-      field: 'distinct_scanners',
+      field: 'scans',
       reason: 'below_min_sample_size',
       detail: `fewer than ${CORRIDOR_MAP_MIN_COUNT} scans at any poster in any hour`,
     });
   }
 
-  // 3. return_rate — for distinct anon_id_hashes at this event, how many
-  //    were also seen at prior events (any other venue_id).
-  let venuePct: number | null = null;
-  let corridorPct: number | null = null;
-  const air = await db
-    .prepare(`SELECT COUNT(DISTINCT anon_id_hash) AS c FROM anon_id_returns WHERE venue_id = ?`)
-    .bind(eventId)
-    .first<{ c: number }>();
-  const distinctAnonsHere = air?.c ?? 0;
-  // Part of OSE-1421: return_rate gates at the platform floor K, the same one
-  // every other aggregate here uses (it had a private constant of 3). Below it
-  // the denominator is so small that the percentage is identifying (50% over 2
-  // narrows a returner to one of two specific people). Suppressed per S5-Q5.
-  if (distinctAnonsHere >= CORRIDOR_MAP_MIN_COUNT) {
-    // OSE-1784: the sample size itself is not published. It was the exact
-    // whole-event head count from a second grain, so it could be set against
-    // the poster figures. The rates below still use it, inside flooredRatePct.
-    // venue_pct — of the people at THIS event, how many came to another event
-    // of its confirmed series: the same place, again (OSE-1652). A venue is
-    // not a row of its own; a confirmed series is how the schema says "this
-    // gathering recurs here" (0033/0034), and it is the grouping the headcount
-    // trend reads. Counted as distinct events, like corridor_pct and the
-    // returns export. Never `return_count`: the nightly job adds one to it on
-    // every run over the same scans, so it counts runs, not returns, and read
-    // as a return it made six one-time visitors a 100% rate.
-    const series = await confirmedSeriesOf(db, event);
-    if (series) {
-      const repeatRow = await db
-        .prepare(
-          `SELECT COUNT(DISTINCT a.anon_id_hash) AS c
-           FROM anon_id_returns a
-           JOIN events e ON e.id = a.venue_id
-           WHERE e.series_id = ?
-             AND e.brand_id = ?
-             AND a.venue_id != ?
-             AND a.anon_id_hash IN (
-               SELECT anon_id_hash FROM anon_id_returns WHERE venue_id = ?
-             )`
-        )
-        .bind(series.id, event.brand_id, eventId, eventId)
-        .first<{ c: number }>();
-      // A rate beside its sample size IS its numerator (20% of 5 is one person),
-      // and the rest of the group is its complement. `flooredRatePct` publishes
-      // the rate only when neither is a group under the floor; otherwise null.
-      venuePct = reportRatePct(repeatRow?.c ?? 0, distinctAnonsHere);
-      if (venuePct === null) {
-        suppression.push({
-          field: 'return_rate.venue_pct',
-          reason: 'below_min_sample_size',
-          detail: RATE_WITHHELD_DETAIL,
-        });
-      }
-    } else {
-      suppression.push({
-        field: 'return_rate.venue_pct',
-        reason: 'no_series',
-        detail: 'event is not part of a confirmed series',
-      });
-    }
+  // 3. return_rate was retired by OSE-2214 (owner, 2026-11-23): it counted the
+  //    same phone across events, and OSE counts traffic on the code, never a
+  //    person. Section numbers below are kept so the history still reads.
 
-    // corridor_pct — fraction of anons at THIS event who appeared at any
-    // OTHER event in the same corridor. Uses h3_res7 (BE-24b) falling back
-    // to corridor_id for legacy events geocoded before BE-24b landed.
-    //
-    // A corridor's rates are published together or not at all (OSE-1649 item
-    // 1). With two events in a corridor, "seen at both" is one number that each
-    // report divides by its own sample size. If this event withholds its rate
-    // because 1 to 4 of its people went nowhere else, the other event's rate
-    // times its published sample size is that same overlap, and this event's
-    // sample size minus it is the withheld group. So every event in the
-    // corridor whose sample size is published (K or more people) is read here,
-    // and if any of them must withhold its corridor rate, all of them do. An
-    // event under K publishes no rate, so nothing can be subtracted from it,
-    // and it does not hold the others back. (Since OSE-1784 no sample size is
-    // published at all; the rule is kept because a reader may learn a head
-    // count some other way, and it costs only rates that were close to the floor.)
-    const corridorKey = corridorKeyOf(event);
-    if (corridorKey) {
-      const corridorRows = await db
-        .prepare(
-          `SELECT a.venue_id AS event_id,
-                  COUNT(DISTINCT a.anon_id_hash) AS people,
-                  COUNT(DISTINCT CASE WHEN EXISTS (
-                    SELECT 1 FROM anon_id_returns o
-                      JOIN events oe ON oe.id = o.venue_id
-                     WHERE o.anon_id_hash = a.anon_id_hash
-                       AND o.venue_id != a.venue_id
-                       AND COALESCE(LOWER(oe.h3_res7), oe.corridor_id) = ?
-                  ) THEN a.anon_id_hash END) AS elsewhere
-             FROM anon_id_returns a
-             JOIN events e ON e.id = a.venue_id
-            WHERE COALESCE(LOWER(e.h3_res7), e.corridor_id) = ?
-            GROUP BY a.venue_id`
-        )
-        .bind(corridorKey, corridorKey)
-        .all<{ event_id: string; people: number; elsewhere: number }>();
-      const rows = corridorRows.results ?? [];
-      const own = rows.find((r) => r.event_id === eventId);
-      const ownRate = reportRatePct(own?.elsewhere ?? 0, distinctAnonsHere);
-      const anotherWithholds = rows.some(
-        (r) =>
-          r.event_id !== eventId &&
-          r.people >= CORRIDOR_MAP_MIN_COUNT &&
-          reportRatePct(r.elsewhere, r.people) === null
-      );
-      corridorPct = anotherWithholds ? null : ownRate;
-      if (corridorPct === null) {
-        // One reason for both cases: a different string for "another event
-        // withholds" would say that this event's own rate passed.
-        suppression.push({
-          field: 'return_rate.corridor_pct',
-          reason: 'below_min_sample_size',
-          detail: CORRIDOR_RATE_WITHHELD_DETAIL,
-        });
-      }
-    } else {
-      suppression.push({
-        field: 'return_rate.corridor_pct',
-        reason: 'no_baseline_yet',
-        detail: 'event has no h3_res7 or corridor_id',
-      });
-    }
-  } else {
-    // Said at 0 people as at 1 to 4 (OSE-1649 item 2): a note that appeared
-    // only when someone was there would tell "nobody" from "1 to 4".
-    suppression.push({
-      field: 'return_rate',
-      reason: 'below_min_sample_size',
-      // Says THAT the floor was not met, never by how much: a string that prints
-      // the observed count is the count (OSE-1421).
-      detail: `fewer than ${CORRIDOR_MAP_MIN_COUNT} distinct attendees`,
-    });
-  }
-
-  // 4. corridor_density — this event's anon count vs (corridor, dow, hour)
+  // 4. corridor_density — this event's scan count vs (corridor, dow, hour)
   //    baseline. NULL if no corridor or no baseline row yet.
   let thisEventCount: number | null = null;
   let baseline30d: number | null = null;
@@ -796,12 +643,12 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       .bind(densityCorridorKey, dow, hour)
       .first<{ window_30d_count: number; window_90d_count: number }>();
 
-    // OSE-1784: this_event_count is the report's one people figure, the sum of
-    // the published poster rows (distinct_scanners), never a count of its own.
+    // OSE-1784: this_event_count is the report's one scan figure, the sum of
+    // the published poster rows (scans), never a count of its own.
     // It used to be COUNT(DISTINCT anon_id_hash), floored on its own (DS-01),
     // and the gap between it and the poster rows could name a group under K.
     // Null when no poster row is published; the ratios below are then null too.
-    thisEventCount = distinctScanners;
+    thisEventCount = scans;
     // Said at 0 as at 1 to 4 (OSE-1649 item 2).
     if (thisEventCount === null) {
       suppression.push({
@@ -1032,11 +879,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     // falling back to the venue preview as if there were no scans.
     corridorMap = { svg: '', suppressed: [], cell_count: 0, source: 'suppressed' };
   } else if (event.h3_res7 && !h3TagsCorrupt) {
-    // Launch-day fallback: res7 neighborhood hex lit with distinctScanners count +
+    // Launch-day fallback: res7 neighborhood hex lit with scans count +
     // ring-1 neighbors at count=0 (suppressed by privacy floor — correct).
     // source='fallback' lets the client render accurate "neighborhood" copy (not "block").
     const ring = gridRingUnsafe(event.h3_res7, 1);
-    const count = distinctScanners ?? 0;
+    const count = scans ?? 0;
     buildCorridorMap(
       [{ cell: event.h3_res7, count }, ...ring.map((c: string) => ({ cell: c, count: 0 }))],
       'fallback'
@@ -1049,21 +896,22 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     });
   }
 
-  // 8. headcount_trend — across confirmed event_series instances
+  // 8. scan_trend — across confirmed event_series instances
   let trendSeriesId: string | null = null;
   let trendSeriesName: string | null = null;
   const trendInstances: Array<{
     event_id: string;
     start_date: string;
-    distinct_scanners: number | null;
+    scans: number | null;
+    scans_at_least: boolean;
   }> = [];
   if (event.series_id) {
     const series = await confirmedSeriesOf(db, event);
     if (series) {
       trendSeriesId = series.id;
       trendSeriesName = series.series_name;
-      // OSE-1784: each instance is that event's own one people figure, the sum
-      // of its published poster rows, the same derivation as distinct_scanners
+      // OSE-1784: each instance is that event's own one scan figure, the sum
+      // of its published poster rows, the same derivation as scans
       // above (it was the scan_aggregates grain). An instance with no published
       // poster row is null, never 0.
       const inst = await db
@@ -1085,37 +933,34 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         trendInstances.push({
           event_id: r.event_id,
           start_date: r.start_date,
-          distinct_scanners: peopleFromPosters(rows),
+          scans: scansFromPosters(rows),
+          scans_at_least: rows.some((p) => p.hour_cap_reached),
         });
       }
     } else {
       suppression.push({
-        field: 'headcount_trend',
+        field: 'scan_trend',
         reason: 'no_series',
         detail: 'no confirmed event_series row for this event',
       });
     }
   } else {
     suppression.push({
-      field: 'headcount_trend',
+      field: 'scan_trend',
       reason: 'no_series',
       detail: 'event has no series_id',
     });
   }
 
   // Surface materialization pending when essentially no signal exists yet.
-  // OSE-2093: "no people yet" is read through the floor, never as a raw 0. The
-  // note used to appear at exactly 0 people and go at 1, so its presence told 0
+  // OSE-2093: "nothing yet" is read through the floor, never as a raw 0. The
+  // note used to appear at exactly 0 and go at 1, so its presence told 0
   // from 1 to 4. Under the floor reads the same as none (invariant 2).
-  if (
-    distinctScanners === null &&
-    applyCountFloor(distinctAnonsHere).suppressed &&
-    sponsorDisplays.length === 0
-  ) {
+  if (scans === null && sponsorDisplays.length === 0) {
     suppression.push({
       field: '_event',
       reason: 'materialization_pending',
-      detail: 'no published scan, attendee or sponsor display count for this event yet',
+      detail: 'no published scan or sponsor display count for this event yet',
     });
   }
 
@@ -1152,14 +997,9 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       event_title: event.title,
       event_start_date: event.start_date,
       event_end_date: event.end_date,
-      distinct_scanners: distinctScanners,
+      scans,
+      scans_at_least: posterAttribution.some((p) => p.hour_cap_reached),
       click_outs: clickOuts,
-      return_rate: {
-        venue_pct: venuePct,
-        corridor_pct: corridorPct,
-        // OSE-1784: never published (see return_rate above).
-        sample_size: null,
-      },
       corridor_density: {
         this_event_count: thisEventCount,
         baseline_30d: baseline30d,
@@ -1173,7 +1013,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       campaign_summary: campaignSummary,
       sponsor_class_breakdown: sponsorClassBreakdown,
       poster_attribution: posterAttribution,
-      headcount_trend: {
+      scan_trend: {
         series_id: trendSeriesId,
         series_name: trendSeriesName,
         instances: trendInstances,

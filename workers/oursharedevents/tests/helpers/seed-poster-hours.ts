@@ -2,8 +2,8 @@
  * Seed poster scans hour by hour: the one grain the SharedReport counts people
  * in (OSE-1784, owner 2026-11-23, "one number, from the posters").
  *
- * distinct_scanners, corridor_density.this_event_count and every
- * headcount_trend instance are the sum of an event's published poster rows, so
+ * scans, corridor_density.this_event_count and every
+ * scan_trend instance are the sum of an event's published poster rows, so
  * a test that wants a head count seeds scans at a poster here. Each scan is one
  * scan_placement_events row in the given hour; /q/ stores at most one per
  * person per poster per hour, so `n` rows in one hour are `n` people.

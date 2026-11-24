@@ -98,7 +98,7 @@ async function publishedFor(shape: Shape): Promise<number | null> {
   }
   const r = await buildSharedReport(db(), id);
   if (!r.ok) throw new Error(`report did not build for ${shape.name}: ${r.error}`);
-  return (r.report as unknown as { distinct_scanners: number | null }).distinct_scanners;
+  return (r.report as unknown as { scans: number | null }).scans;
 }
 
 beforeAll(applyMigrations);

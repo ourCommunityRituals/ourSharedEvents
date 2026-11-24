@@ -308,7 +308,7 @@ describe('a declared series feeds the SharedReport trend exactly as a detected o
     const r = await buildSharedReport(tenv.DB, eventId);
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error('report did not build');
-    return r.report.headcount_trend;
+    return r.report.scan_trend;
   }
 
   test('the same events give the same trend points, whichever way the series began', async () => {
@@ -317,7 +317,7 @@ describe('a declared series feeds the SharedReport trend exactly as a detected o
     const fromDeclared = await trendOf(A2);
     expect(fromDeclared.series_id).toBe(declared.json.series.id);
     expect(fromDeclared.series_name).toBe('The daily room');
-    expect(fromDeclared.instances.map((i) => [i.event_id, i.distinct_scanners])).toEqual([
+    expect(fromDeclared.instances.map((i) => [i.event_id, i.scans])).toEqual([
       [A1, 5],
       [A2, 5],
       [A3, 10],
@@ -435,7 +435,7 @@ describe('BORN RED 1: another brand’s event can never join a series', () => {
     const r = await buildSharedReport(tenv.DB, B1);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.headcount_trend.series_id).toBeNull();
+    expect(r.report.scan_trend.series_id).toBeNull();
     expect(JSON.stringify(r.report)).not.toContain('The daily room');
   });
 });
@@ -555,13 +555,9 @@ describe('BORN RED 3: promoting a trial changes no past date or count', () => {
     const reportAfter = await buildSharedReport(tenv.DB, A1);
     expect(reportBefore.ok && reportAfter.ok).toBe(true);
     if (!reportBefore.ok || !reportAfter.ok) return;
-    expect(reportAfter.report.distinct_scanners).toEqual(reportBefore.report.distinct_scanners);
+    expect(reportAfter.report.scans).toEqual(reportBefore.report.scans);
     // The trend starts from the first try, in date order.
-    expect(reportAfter.report.headcount_trend.instances.map((i) => i.event_id)).toEqual([
-      A1,
-      A2,
-      A3,
-    ]);
+    expect(reportAfter.report.scan_trend.instances.map((i) => i.event_id)).toEqual([A1, A2, A3]);
   });
 
   test('promoting through a detector suggestion leaves the past alone too', async () => {
@@ -837,9 +833,7 @@ describe('cadence: the five a programme slot can state (OSE-2017)', () => {
     const r = await buildSharedReport(tenv.DB, A2);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(
-      r.report.headcount_trend.instances.map((i) => [i.event_id, i.distinct_scanners])
-    ).toEqual([
+    expect(r.report.scan_trend.instances.map((i) => [i.event_id, i.scans])).toEqual([
       [A1, 5],
       [A2, 5],
       [A3, 10],

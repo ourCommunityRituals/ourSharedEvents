@@ -43,12 +43,12 @@ const FULL_REPORT: Record<string, unknown> = {
   event_title: 'Sponsor Audit Test Event',
   event_start_date: '2026-08-03T18:00:00Z',
   event_end_date: '2026-08-03T22:00:00Z',
-  distinct_scanners: 50,
+  scans: 50,
   sponsor_displays: [{ sponsor_id: 'sp_test', impressions: 100 }],
   poster_attribution: { views: 300, scans: 60 },
   return_rate: 0.35,
   corridor_density: [{ cell: '89266454447ffff', count: 10 }],
-  headcount_trend: [{ date: '2026-08-03', count: 50 }],
+  scan_trend: [{ date: '2026-08-03', count: 50 }],
   _meta: { built_at: '2026-08-03T00:00:00Z' },
 };
 

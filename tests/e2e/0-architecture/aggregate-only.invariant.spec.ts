@@ -33,11 +33,9 @@
  *   - A future refactor adds `SELECT anon_id_hash, ...` to a builder query
  *     → CI fails (anon_id_hash projection regex matches) → raw identity leak
  *     prevented before PR merges
- *   - Someone weakens the return_rate gate below the platform floor K, or
- *     brings back a private threshold constant
- *     → CI fails (gate check fails) → de-anonymization via small-sample
- *     percentages would slip through (e.g., return_rate=50% with 2 attendees
- *     narrows a returner to one of two specific people)
+ *   - Someone brings back a per-person figure (return_rate, a read of
+ *     anon_id_returns) into the report (OSE-2214: count the code, never
+ *     the person) → CI fails
  *   - A suppression detail starts printing an observed count (OSE-1421)
  *   - A new field is added to SharedReport that includes raw identity data
  *     (e.g., an email, a raw hash) → the interface scan catches it
@@ -151,22 +149,14 @@ test.describe('Invariant 7: Aggregate-Only Reporting — structural code-shape l
     ).not.toMatch(/\banon_id\b(?!_hash)/);
   });
 
-  test('OSE-INV7 | privacy | suppression | return_rate gates at the platform floor K >= 5, not a private constant', () => {
+  test('OSE-INV7 | privacy | OSE-2214 | the report counts the code, never a person: no read of anon_id_returns and no return_rate', () => {
     const src = readFileSync(BUILDER_PATH, 'utf8');
-    // A return_rate percentage is only safe to publish when the sample is large
-    // enough that it cannot narrow down a single individual (50% over 2 attendees
-    // names one specific returner). OSE-1421: the gate was a private
-    // RETURN_RATE_MIN_SAMPLE = 3, below the platform floor every other aggregate
-    // uses. It now reads CORRIDOR_MAP_MIN_COUNT (K), so there is ONE floor.
-    expect(
-      src,
-      'a private RETURN_RATE_MIN_SAMPLE constant must not come back: return_rate shares the platform floor'
-    ).not.toMatch(/RETURN_RATE_MIN_SAMPLE\s*=/);
-    expect(
-      src,
-      'builder must gate return_rate computation on `distinctAnonsHere >= CORRIDOR_MAP_MIN_COUNT` — ' +
-        'a missing or weaker guard lets small-sample percentages expose de-anonymizing data'
-    ).toMatch(/if\s*\(\s*distinctAnonsHere\s*>=\s*CORRIDOR_MAP_MIN_COUNT\s*\)/);
+    // Owner, 2026-11-23: OSE counts traffic on the QR code, never the person.
+    // return_rate followed one phone across events (anon_id_returns); it was
+    // retired, and nothing in the report may read per-person rows again.
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code, 'the report builder must not read anon_id_returns').not.toMatch(/anon_id_returns/);
+    expect(code, 'the report builder must not publish return_rate').not.toMatch(/return_rate/);
 
     const floorSrc = readFileSync(
       join(REPO_ROOT, 'workers', 'oursharedevents', 'src', 'lib', 'shared-report.ts'),
@@ -176,17 +166,8 @@ test.describe('Invariant 7: Aggregate-Only Reporting — structural code-shape l
     expect(floor, 'CORRIDOR_MAP_MIN_COUNT must be exported from shared-report.ts').not.toBeNull();
     expect(
       parseInt(floor![1], 10),
-      'the platform floor K must stay >= 5 (return_rate and every other aggregate share it)'
+      'the platform floor K must stay >= 5 (every aggregate shares it)'
     ).toBeGreaterThanOrEqual(5);
-  });
-
-  test('OSE-INV7 | privacy | suppression | return_rate is suppressed (nulled) when below the floor', () => {
-    const src = readFileSync(BUILDER_PATH, 'utf8');
-    // The guard must result in suppression being recorded (push to suppression array)
-    expect(
-      src,
-      'builder must push a suppression reason when distinctAnonsHere < CORRIDOR_MAP_MIN_COUNT'
-    ).toMatch(/field:\s*'return_rate'[\s\S]{0,80}below_min_sample_size/);
   });
 
   test('OSE-INV7 | privacy | suppression | a suppression detail never interpolates an observed count', () => {
@@ -245,13 +226,18 @@ test.describe('Invariant 7: Aggregate-Only Reporting — structural code-shape l
         'Assign it from applyCountFloor(distinctAnonsHere).count instead.'
     ).not.toMatch(/thisEventCount\s*=\s*distinctAnonsHere\s*;/);
 
-    // The floored assignment must be present: thisEventCount is set from an
-    // applyCountFloor result whose .count is null below K.
+    // The floored figure: since OSE-1784 this_event_count is the report's one
+    // figure, the sum of the published (floored) poster rows, and since OSE-2214
+    // it counts scans of the code. (This used to look for
+    // applyCountFloor(distinctAnonsHere), which matched only by chance after
+    // OSE-1784 moved the figure to the poster rows.)
     expect(
       src,
-      'DS-01: this_event_count must be derived from applyCountFloor(distinctAnonsHere) — ' +
-        'sub-K counts must be suppressed (null), >= K counts exact.'
-    ).toMatch(/applyCountFloor\s*\(\s*distinctAnonsHere\s*\)/);
+      'DS-01: this_event_count must be the floored poster sum (`thisEventCount = scans;`)'
+    ).toMatch(/thisEventCount\s*=\s*scans\s*;/);
+    expect(src, 'and that sum must come from the floored poster rows').toMatch(
+      /const scans = scansFromPosters\(/
+    );
 
     // density_ratio must not re-expose the raw numerator when the count is
     // suppressed: the ratio computation must be guarded on thisEventCount being

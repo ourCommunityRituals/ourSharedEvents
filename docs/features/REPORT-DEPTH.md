@@ -141,15 +141,14 @@ a published row and has no floor.
 | Section                                                         | Local | Mid | Premium |
 | --------------------------------------------------------------- | :---: | :-: | :-----: |
 | `event_id` / `event_title` / dates                              |   ●   |  ●  |    ●    |
-| `distinct_scanners`                                             |   ●   |  ●  |    ●    |
+| `scans` (+ `scans_at_least`, OSE-2214; was `distinct_scanners`) |   ●   |  ●  |    ●    |
 | `sponsor_displays` (own rows only)                              |   ●   |  ●  |    ●    |
 | `sponsor_class_breakdown`                                       |   ●   |  ●  |    ●    |
 | `campaign_summary`                                              |       |  ●  |    ●    |
 | `poster_attribution`                                            |       |  ●  |    ●    |
-| `return_rate`                                                   |       |  ●  |    ●    |
 | `corridor_density`                                              |       |  ●  |    ●    |
 | `corridor_map` (the visible map — the paid value line, OSE-682) |       |  ●  |    ●    |
-| `headcount_trend` (cross-event)                                 |       |     |    ●    |
+| `scan_trend` (cross-event; was `headcount_trend`)               |       |     |    ●    |
 
 > **Free (local) stays honest, not crippled:** it keeps the smoke-test basics
 > ("I was there": headcount + own logo counts). The map is the first paid line.
@@ -159,7 +158,7 @@ a published row and has no floor.
 > above (Mid+, paid), and (2) the **h3 base-layer map** the whole report is
 > _built from_ (`shared-report-builder.ts`, built **unconditionally and
 > tier-blind** — it references every cell to derive `corridor_density`,
-> `distinct_scanners`, and the map itself). Depth gates only (1); (2) is never
+> `scans`, and the map itself). Depth gates only (1); (2) is never
 > tier-gated (Invariant #5). Reading a delivery-layer omission (no `corridor_map`
 > _section_ at Local) as a statement about the base layer is a mistake — a dead
 > E2E test once did exactly that and asserted the wrong contract (OSE-834).
