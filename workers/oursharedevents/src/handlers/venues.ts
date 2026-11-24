@@ -151,17 +151,13 @@ export async function handleListVenues(request: Request, env: VenuesEnv): Promis
   if (scope.mode === 'deny') {
     return fail(request, reqId, 403, 'BRAND_SCOPE_DENIED', 'No brand membership for this caller');
   }
+  const named = new URL(request.url).searchParams.get('brand_id');
+  if (scope.mode === 'all' && (!named || !BRAND_ID_RE.test(named))) {
+    return fail(request, reqId, 400, 'BRAND_REQUIRED', 'Name one brand with ?brand_id=');
+  }
+  const brands = scope.mode === 'all' ? [named as string] : scope.brandIds;
   return guarded(request, reqId, async () => {
-    let rows: Array<VenueRow & { role: string; status: string | null; operator: string | null }>;
-    if (scope.mode === 'all') {
-      const brand = new URL(request.url).searchParams.get('brand_id');
-      if (!brand || !BRAND_ID_RE.test(brand)) {
-        return fail(request, reqId, 400, 'BRAND_REQUIRED', 'Name one brand with ?brand_id=');
-      }
-      rows = await listFor(env.DB, [brand]);
-    } else {
-      rows = await listFor(env.DB, scope.brandIds);
-    }
+    const rows = await listFor(env.DB, brands);
     return json(request, reqId, {
       ok: true,
       venues: rows.map((r) => ({
@@ -409,30 +405,32 @@ async function readLine(
   brand: string,
   dc: string
 ): Promise<{ line: Line; scanCells: number[]; tapsPerEvent: (number | null)[] }> {
-  const at = `e.host_venue_id = ? AND e.brand_id = ? AND ${DC}`;
   const [events, scans, taps, sponsors] = await Promise.all([
     db
-      .prepare(`SELECT COUNT(*) AS n FROM events e WHERE ${at}`)
-      .bind(venueId, brand, dc)
+      .prepare(
+        `SELECT COUNT(*) AS n FROM events e
+          WHERE e.brand_id = ? AND e.host_venue_id = ? AND ${DC}`
+      )
+      .bind(brand, venueId, dc)
       .first<{ n: number }>(),
     db
       .prepare(
         `SELECT COUNT(*) AS n FROM scan_placement_events s
            JOIN events e ON e.id = s.event_id
            JOIN poster_deployments pd ON pd.id = s.poster_deployment_id
-          WHERE ${at} AND pd.is_vote_code = 0
+          WHERE e.brand_id = ? AND e.host_venue_id = ? AND ${DC} AND pd.is_vote_code = 0
           GROUP BY s.poster_deployment_id, ${scanHourSql('s')}`
       )
-      .bind(venueId, brand, dc)
+      .bind(brand, venueId, dc)
       .all<{ n: number }>(),
     db
       .prepare(
         `SELECT sl.event_id AS event_id, COALESCE(SUM(sl.clicks), 0) AS taps
            FROM shortlinks sl JOIN events e ON e.id = sl.event_id
-          WHERE ${at}
+          WHERE e.brand_id = ? AND e.host_venue_id = ? AND ${DC}
           GROUP BY sl.event_id, ${TAP_CODE_SQL}`
       )
-      .bind(venueId, brand, dc)
+      .bind(brand, venueId, dc)
       .all<{ event_id: string; taps: number }>(),
     db
       .prepare(
@@ -440,9 +438,9 @@ async function readLine(
                 COUNT(DISTINCT CASE WHEN ${PLACEMENT_ON_SHOW_SQL} THEN sb.id END) AS businesses
            FROM sponsor_placement sp JOIN events e ON e.id = sp.event_id
            JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
-          WHERE ${at}`
+          WHERE e.brand_id = ? AND e.host_venue_id = ? AND ${DC}`
       )
-      .bind(venueId, brand, dc)
+      .bind(brand, venueId, dc)
       .first<{ on_show: number; businesses: number }>(),
   ]);
   const scanCells = (scans.results ?? []).map((r) => num(r.n));
@@ -490,21 +488,6 @@ export async function handleVenueRollup(
     )
       .bind(venue.id)
       .all<{ brand_id: string }>();
-    const marks = brands.map(() => '?').join(', ');
-    // The footprint: distinct sponsor businesses on show anywhere at the venue.
-    // One business at two operators' events is one business here.
-    const footprint =
-      brands.length === 0
-        ? null
-        : await env.DB.prepare(
-            `SELECT COUNT(DISTINCT sb.id) AS n
-               FROM sponsor_placement sp JOIN events e ON e.id = sp.event_id
-               JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
-              WHERE e.host_venue_id = ? AND e.brand_id IN (${marks}) AND ${DC}
-                AND ${PLACEMENT_ON_SHOW_SQL}`
-          )
-            .bind(venue.id, ...brands, dc)
-            .first<{ n: number }>();
     return json(request, reqId, {
       ok: true,
       venue: { id: venue.id, name: venue.name, owner_brand: venue.brand_id },
@@ -517,7 +500,10 @@ export async function handleVenueRollup(
         poster_scans: floorTotalOfParts(read.flatMap((r) => r.scanCells)),
         link_taps: floorTotalOfParts(read.flatMap((r) => r.tapsPerEvent)),
         sponsors_on_show: read.reduce((s, r) => s + r.line.sponsors_on_show, 0),
-        businesses_on_show: num(footprint?.n),
+        // A sponsor shows only at events of its own brand (two-sided consent,
+        // PLACEMENT_ON_SHOW_SQL), so no business is on two lines: the footprint
+        // is the sum of the lines.
+        businesses_on_show: read.reduce((s, r) => s + r.line.businesses_on_show, 0),
       },
       by_operator: read.map((r) => ({
         ...r.line,

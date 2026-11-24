@@ -1236,39 +1236,18 @@ export async function route(
   // /api/v2/admin/venues/** — OSE-2221. A venue is reached by id only by its
   // owner (the handler proves the owner brand is in scope; a miss is 404).
   // Writes are audited against the venue, so the row carries its brand.
-  const venueOpMatch =
-    pathname.match(/^\/api\/v2\/admin\/venues\/([^/]+)\/operators$/) ??
-    pathname.match(/^\/api\/v2\/admin\/venues\/([^/]+)\/operators\/([^/]+)$/);
-  const venueRollupMatch = pathname.match(/^\/api\/v2\/admin\/venues\/([^/]+)\/rollup$/);
-  if (
-    (pathname === '/api/v2/admin/venues' && (method === 'GET' || method === 'POST')) ||
-    (venueOpMatch && !venueOpMatch[2] && method === 'PUT') ||
-    (venueOpMatch && venueOpMatch[2] && method === 'DELETE') ||
-    (venueRollupMatch && method === 'GET')
-  ) {
-    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const action =
-      method === 'POST'
-        ? 'CREATE_VENUE'
-        : method === 'PUT'
-          ? 'LIST_VENUE_OPERATOR'
-          : method === 'DELETE'
-            ? 'UNLIST_VENUE_OPERATOR'
-            : null; // a read is not audited
-    const target = venueOpMatch?.[1];
-    const deny = await requireAdmin(request, env, reqId);
+  const _venueCall = async (
+    reqId: string,
+    deny: Response | null,
+    action: string | null,
+    target: string | undefined,
+    run: () => Promise<Response>
+  ): Promise<Response> => {
     if (deny) {
       if (action) _audit(reqId, action, 'denied', 'venue', target);
       return deny;
     }
-    let res: Response;
-    if (venueRollupMatch) res = await handleVenueRollup(request, env, venueRollupMatch[1]);
-    else if (venueOpMatch && method === 'PUT')
-      res = await handlePutVenueOperator(request, env, venueOpMatch[1]);
-    else if (venueOpMatch && venueOpMatch[2])
-      res = await handleDeleteVenueOperator(request, env, venueOpMatch[1], venueOpMatch[2]);
-    else if (method === 'POST') res = await handleCreateVenue(request, env);
-    else res = await handleListVenues(request, env);
+    const res = await run();
     if (action) {
       const outcome = _auditOutcome(res);
       let id = target;
@@ -1282,6 +1261,40 @@ export async function route(
       _audit(reqId, action, outcome, 'venue', id);
     }
     return res;
+  };
+  if (pathname === '/api/v2/admin/venues' && (method === 'GET' || method === 'POST')) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    return method === 'POST'
+      ? _venueCall(reqId, deny, 'CREATE_VENUE', undefined, () => handleCreateVenue(request, env))
+      : _venueCall(reqId, deny, null, undefined, () => handleListVenues(request, env));
+  }
+  const venueOperatorsMatch = pathname.match(/^\/api\/v2\/admin\/venues\/([^/]+)\/operators$/);
+  if (venueOperatorsMatch && method === 'PUT') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    const id = venueOperatorsMatch[1];
+    return _venueCall(reqId, deny, 'LIST_VENUE_OPERATOR', id, () =>
+      handlePutVenueOperator(request, env, id)
+    );
+  }
+  const venueOperatorMatch = pathname.match(
+    /^\/api\/v2\/admin\/venues\/([^/]+)\/operators\/([^/]+)$/
+  );
+  if (venueOperatorMatch && method === 'DELETE') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    const [, id, brand] = venueOperatorMatch;
+    return _venueCall(reqId, deny, 'UNLIST_VENUE_OPERATOR', id, () =>
+      handleDeleteVenueOperator(request, env, id, brand)
+    );
+  }
+  const venueRollupMatch = pathname.match(/^\/api\/v2\/admin\/venues\/([^/]+)\/rollup$/);
+  if (venueRollupMatch && method === 'GET') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    const id = venueRollupMatch[1];
+    return _venueCall(reqId, deny, null, id, () => handleVenueRollup(request, env, id));
   }
 
   // PUT /api/v2/admin/events/:id/venue — OSE-2221. The event is brand-scoped by
