@@ -28,6 +28,8 @@
  *   - `scan_node_returns`: DELETE rows whose `scan_bucket` (the scan's hour) is
  *     older than N days. Keyed on the bucket, not `created_at`, because neither
  *     split table keeps a time finer than the hour (OSE-923, migration 0100).
+ *   - `anon_id_returns`: empty since migration 0119 (OSE-2214) and written by
+ *     nothing; the delete below stays until the table is dropped.
  *   - `anon_id_returns`: DELETE rows whose `last_seen_at` is older than N days
  *     — keyed off the most recent return, not the first sighting, so a
  *     pseudonym that keeps returning within the window never ages out even if

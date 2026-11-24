@@ -20,17 +20,12 @@
  *     scheduled() handler.
  *   - This file MUST NOT read the forms database (Gate 1 carries over).
  *   - No re-hashing, no enrichment. Phases 2 and 3 pass anonymity-clean
- *     aggregates through; Phase 1 aggregates per-person return rows into
- *     k-floored corridor counts first, so no per-person row ever leaves
- *     (OSE-1460).
+ *     aggregates through. Phase 1, the corridor returns export, is retired
+ *     (OSE-2214).
  *
  * Library shape:
  *
- *   exportAnonIdReturns(env)             — Phase 1 of the export tick.
- *     When anon_id_returns changed past the watermark, snapshots return
- *     COUNTS per corridor × event type × pool over RETURNS_WINDOW_DAYS,
- *     k-floored at RETURNS_MIN_COUNT (OSE-1460: no per-person row, no
- *     anon_id_hash, no venue leaves); streams to per-pool dataset.
+ *   exportAnonIdReturns — retired by OSE-2214 (it counted phones seen again).
  *
  *   exportCorridorDensityBaseline(env)   — Phase 2 of the export tick.
  *     Reads new/changed rows from corridor_density_baseline; routes to
@@ -42,7 +37,6 @@
  *     to events for pool routing; streams to per-pool dataset.
  */
 
-import { pepperEpoch } from './anon-id-hash';
 import {
   bigQueryInsertRowsToDataset,
   isBigQueryConfigured,
@@ -57,13 +51,7 @@ import {
   phaseToPool,
   type RegulatoryPool,
 } from './pool-contract';
-import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
-import {
-  PUBLISH_ROUNDING,
-  floorCorridorBaseline,
-  floorPublishedChain,
-  roundForPublish,
-} from './count-floor';
+import { PUBLISH_ROUNDING, floorCorridorBaseline, roundForPublish } from './count-floor';
 import {
   assertCorridorGrainRow,
   canonicalCorridorId,
@@ -97,13 +85,6 @@ export interface ExportResult {
    * not run".
    */
   ran?: boolean;
-  /**
-   * OSE-1460: snapshot marker rows written (one per pool per run). Not counted
-   * in rowsExported: a marker is not data, it tells OER which snapshot is current.
-   */
-  snapshotMarkers?: number;
-  /** Returns phase only: false when no weekly snapshot was due this run. */
-  snapshotDue?: boolean;
 }
 
 /**
@@ -136,8 +117,6 @@ const BQ_INSERT_CHUNK = 500;
 
 // BQ table names per source. Names are stable across pool datasets —
 // each pool's dataset has its own copy of these tables.
-/** OSE-1460: counts per corridor; replaces the old per-person returns table. */
-const BQ_TABLE_CORRIDOR_RETURNS = 'corridor_returns_export';
 const BQ_TABLE_CORRIDOR_DENSITY = 'corridor_density_baseline_export';
 const BQ_TABLE_EVENT_SERIES = 'event_series_export';
 
@@ -284,396 +263,13 @@ async function prepareExport(
   };
 }
 
-// ── Phase 1 — exportAnonIdReturns (corridor return counts) ─────────────────
+// ── Phase 1 — retired ───────────────────────────────────────────────────────
 //
-// OSE-1460 (PO decision 2026-10-01): no per-person row crosses to OER. Before,
-// this phase sent one row per (anon_id_hash, venue) with first/last seen and
-// a visit count: a pseudonymous longitudinal record, against the aggregate-only
-// boundary (OCR_ARCHITECTURE_oerAggregationBoundary.md: never emit anon_id;
-// corridor-level location only). It now sends counts per corridor, event type
-// and pool over a rolling window, and nothing below RETURNS_MIN_COUNT.
-//
-// One person is counted once per (corridor, event type, pool): tiers that share
-// a pool are one group. A return means they were seen at 2+ distinct events. The venue never
-// leaves: venue_id carries the 'corridor-aggregate' sentinel, the same one the
-// corridor baseline uses, so the required-tag contract is unchanged.
-
-/** Rolling window the return counts cover, in days. */
-export const RETURNS_WINDOW_DAYS = 90;
-/** A group, or a count inside it, below this is never exported (k-floor). */
-export const RETURNS_MIN_COUNT = CORRIDOR_MAP_MIN_COUNT;
-// The rounding primitives live in count-floor.ts (OSE-1782); re-exported so the
-// export path and its specs keep their import.
+// OSE-2214 (owner, 2026-11-23): the corridor returns export (OSE-1460) is
+// gone. It counted phones seen at 2+ events, and OSE counts scans of the code,
+// never people. The BigQuery table corridor_returns_export receives nothing
+// more; the rounding primitives stay re-exported for the export specs.
 export { PUBLISH_ROUNDING, roundForPublish };
-/**
- * The returns snapshot is weekly, not nightly (PO decision 2026-10-01): fewer
- * snapshots to compare. A run takes one only when the last successful snapshot
- * is at least this old; the 12-hour slack keeps a daily cron from slipping a
- * day on a few minutes of jitter, and a failed run is retried the next night.
- */
-export const RETURNS_SNAPSHOT_INTERVAL_MS = 7 * 86_400_000 - 12 * 3_600_000;
-/** Export-state row that records when the last returns snapshot succeeded. */
-export const RETURNS_SNAPSHOT_STATE = 'corridor_returns_snapshot';
-/**
- * Export-state row that records when a returns snapshot last began publishing.
- * It is written before the first BigQuery insert of a run, so a run that fails
- * after sending some rows (or whose success write fails) still uses up its week:
- * the next night must not publish a second snapshot a day after the first.
- */
-export const RETURNS_SNAPSHOT_CLAIM_STATE = 'corridor_returns_snapshot_claim';
-/** Groups read per page of the snapshot query. */
-export const RETURNS_PAGE_SIZE = 500;
-/** Page bound: a snapshot larger than this fails closed (no marker) rather than run unbounded. */
-export const RETURNS_MAX_PAGES = 200;
-
-/**
- * The pool a clearance tier exports to, in SQL, so the floor applies per pool
- * and not per tier: tiers that share a pool are one group (OSE-1460 review).
- * Mirrors phaseToPool() (pool-contract.ts): NULL and 1–3 are 'general'. Any
- * other tier keeps its own key, and resolvePoolFailClosed quarantines it.
- * tests/shared-report-bigquery-export.spec.ts pins the two against each other.
- */
-export const RETURNS_POOL_KEY_SQL = `CASE WHEN e.legal_clearance_tier IS NULL
-            OR e.legal_clearance_tier IN (1, 2, 3) THEN 'general'
-          ELSE 'tier-' || e.legal_clearance_tier END`;
-
-interface CorridorReturnsRow {
-  corridor_id: string | null;
-  legal_clearance_tier: number | null;
-  uec_code: string | null;
-  people: number;
-  returned_2plus: number;
-  returned_3plus: number;
-  returned_5plus: number;
-}
-
-/** Thrown when another invocation won the weekly snapshot claim first. */
-class SnapshotClaimLost extends Error {
-  constructor() {
-    super('returns snapshot already claimed by another run');
-  }
-}
-
-export async function exportAnonIdReturns(
-  env: SharedReportExportEnv,
-  // Test seam only: paging limits and the clock. Production uses the defaults.
-  limits: { pageSize?: number; maxPages?: number; now?: Date } = {}
-): Promise<ExportResult> {
-  const pageSize = limits.pageSize ?? RETURNS_PAGE_SIZE;
-  const maxPages = limits.maxPages ?? RETURNS_MAX_PAGES;
-  const start = Date.now();
-  const prep = await prepareExport(env, 'anon_id_returns', 'anon_id_returns');
-  if (!prep) {
-    return {
-      phase: 'anon_id_returns',
-      rowsRead: 0,
-      rowsExported: 0,
-      rowsSkipped: 0,
-      errors: 0,
-      perPool: makeEmptyPerPool(),
-      durationMs: Date.now() - start,
-    };
-  }
-  const { watermark, result } = prep;
-
-  // Weekly cadence: a run that is not due changes nothing, not even the source
-  // watermark, so the next due run sees exactly what this one would have.
-  const now = limits.now ?? new Date();
-  // The week starts at the later of the last complete snapshot and the last run
-  // that began publishing, finished or not (RETURNS_SNAPSHOT_CLAIM_STATE).
-  const lastSnapshot = await getWatermark(env.DB, RETURNS_SNAPSHOT_STATE);
-  const lastClaim = await getWatermark(env.DB, RETURNS_SNAPSHOT_CLAIM_STATE);
-  const sinceLast = now.getTime() - Math.max(Date.parse(lastSnapshot), Date.parse(lastClaim));
-  // Fail closed: due only once the full interval has passed. A last snapshot or
-  // claim stamped ahead of this clock (skew between invocations) is not due;
-  // treating a negative gap as due would let a second run publish at once.
-  result.snapshotDue = sinceLast >= RETURNS_SNAPSHOT_INTERVAL_MS;
-  if (!result.snapshotDue) {
-    result.durationMs = Date.now() - start;
-    return result;
-  }
-
-  try {
-    // A rolling window changes as rows age out even when nothing new was
-    // materialized, so every due run (weekly, above) takes a whole snapshot
-    // with its own computed_at. OER reads the latest marked snapshot; a group
-    // missing from it has fallen out of the window or under the floor.
-    // The watermark only records how far the source has been seen.
-    const changed = await env.DB.prepare(
-      `SELECT COUNT(*) AS n, MAX(computed_at) AS max_computed_at
-         FROM anon_id_returns WHERE computed_at > ?`
-    )
-      .bind(watermark)
-      .first<{ n: number; max_computed_at: string | null }>();
-    result.rowsRead = changed?.n ?? 0;
-    const nextWatermark = changed?.max_computed_at ?? watermark;
-
-    // One pepper only (migration 0091): after a rotation the same browser has a
-    // second hash, so mixing peppers would count one person twice and could lift
-    // a group of fewer than five people over the floor. Rows of an older or
-    // unknown pepper are not counted; with no pepper configured, nothing is.
-    const epoch = await pepperEpoch(env.ANON_ID_HASH_PEPPER);
-    // The window's first day, whole: the last_seen_at pre-filter starts at that
-    // day's midnight, so a row materialized early on the floor day is not dropped.
-    const floorDay = new Date(now.getTime() - RETURNS_WINDOW_DAYS * 86_400_000)
-      .toISOString()
-      .slice(0, 10);
-    // And no later than today: an event rescheduled into the future keeps its
-    // earlier rows, but it has not happened in the window, so it is not counted.
-    const todayDay = now.toISOString().slice(0, 10);
-    // The window is the event's own day (COALESCE(end_date, start_date), as the
-    // materializer reads it), not last_seen_at: last_seen_at is when the cron
-    // materialized the row, hours after the event and later again on a re-run.
-    // The last_seen_at bound stays because it can only be later than the event
-    // day, so it is a safe, indexed pre-filter (0090) and never drops a row.
-    // A return is a person seen at 2+ distinct events in the corridor. This
-    // counts events, not return_count: the materializer bumps return_count on
-    // every re-run over the same scans, so it is not a return signal.
-    // Each run is its own snapshot, identified by its full timestamp: the
-    // window moves continuously, so two runs never describe the same data.
-    // Retries inside one run reuse this value, so their insertIds dedupe.
-    const computedAt = now.toISOString();
-    const insertIdFor =
-      (pool: RegulatoryPool) =>
-      (row: Record<string, unknown>): string =>
-        `cr-${String(row.computed_at)}-${String(row.corridor_id)}-${String(row.uec_code)}-${pool}`;
-    const groupsInSnapshot: Record<RegulatoryPool, number> = { general: 0 };
-    // Claim the week before the first row can reach BigQuery. Lazy, so a run
-    // that fails on its D1 reads (nothing sent) is retried the next night; once
-    // anything may have been sent, a failure waits for the next week.
-    // The claim is a compare-and-set on the value the due check read: of two
-    // overlapping invocations that both found the snapshot due, only the one
-    // whose UPDATE changes the row publishes; the other stops, having sent nothing.
-    let claimed = false;
-    const claimSnapshot = async (): Promise<void> => {
-      if (claimed) return;
-      const res = await env.DB.prepare(
-        `UPDATE bigquery_export_state
-            SET last_exported_at = ?1, last_run_at = datetime('now'), updated_at = datetime('now')
-          WHERE table_name = ?2 AND last_exported_at = ?3`
-      )
-        .bind(computedAt, RETURNS_SNAPSHOT_CLAIM_STATE, lastClaim)
-        .run();
-      if ((res.meta?.changes ?? 0) !== 1) throw new SnapshotClaimLost();
-      claimed = true;
-    };
-
-    // The groups are read a page at a time by a stable key (corridor, pool,
-    // type), so neither the D1 result nor this Worker ever holds the whole
-    // snapshot, however many corridors and types there are. The page key is
-    // applied inside the aggregation, so a later page groups only the keys
-    // after the cursor; each page still reads the indexed window. A run that dies
-    // part-way has written no marker, so OER keeps reading the last complete
-    // snapshot.
-    let after: [string, string, string] = ['', '', ''];
-    let first = true;
-    for (let page = 0; ; page++) {
-      const rows = await env.DB.prepare(
-        `SELECT * FROM (
-           SELECT corridor_id, pool_key, MIN(legal_clearance_tier) AS legal_clearance_tier, uec_code,
-                  COALESCE(corridor_id, '') AS k_corridor, COALESCE(uec_code, '') AS k_type,
-                  COUNT(*)                                          AS people,
-                  SUM(CASE WHEN events_seen >= 2 THEN 1 ELSE 0 END) AS returned_2plus,
-                  SUM(CASE WHEN events_seen >= 3 THEN 1 ELSE 0 END) AS returned_3plus,
-                  SUM(CASE WHEN events_seen >= 5 THEN 1 ELSE 0 END) AS returned_5plus
-             FROM (
-               SELECT air.anon_id_hash,
-                      -- Lower-cased before grouping: H3 cells are case-insensitive, and
-                      -- one cell stored in two cases must be one group under the floor.
-                      COALESCE(LOWER(e.h3_res7), e.corridor_id) AS corridor_id,
-                      ${RETURNS_POOL_KEY_SQL} AS pool_key,
-                      MIN(e.legal_clearance_tier) AS legal_clearance_tier,
-                      etr.uec_code,
-                      COUNT(DISTINCT air.venue_id) AS events_seen
-                 FROM anon_id_returns air
-                 JOIN events e ON e.id = air.venue_id
-                 LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
-                WHERE air.last_seen_at >= ?1
-                  AND substr(COALESCE(e.end_date, e.start_date), 1, 10) >= ?2
-                  AND substr(COALESCE(e.end_date, e.start_date), 1, 10) <= ?3
-                  AND air.pepper_epoch = ?4
-                  -- ADR-026 rule B: an event under K adds no one to a group and
-                  -- makes no one a returner. The gate counts the rows this query
-                  -- sums (current pepper, seen in the window). Since OSE-1784 the
-                  -- report publishes no count from this grain (its people figure
-                  -- is the poster sum), so a passing event's own count is not
-                  -- published beside it; follow-up story in the CCR of
-                  -- 2026-11-23.
-                  AND air.venue_id IN (
-                    SELECT venue_id FROM anon_id_returns
-                     WHERE pepper_epoch = ?4 AND last_seen_at >= ?1
-                     GROUP BY venue_id
-                    HAVING COUNT(DISTINCT anon_id_hash) >= ${CORRIDOR_MAP_MIN_COUNT})
-                  -- The page key, applied before both GROUP BYs so each page
-                  -- only aggregates the groups still ahead of the cursor.
-                  AND (?5 = 1 OR (
-                        COALESCE(COALESCE(LOWER(e.h3_res7), e.corridor_id), ''),
-                        ${RETURNS_POOL_KEY_SQL},
-                        COALESCE(etr.uec_code, '')
-                      ) > (?6, ?7, ?8))
-                GROUP BY air.anon_id_hash, 2, 3, 5
-             )
-            GROUP BY corridor_id, pool_key, uec_code
-         )
-         ORDER BY k_corridor, pool_key, k_type
-         LIMIT ?9`
-      )
-        .bind(
-          `${floorDay}T00:00:00.000Z`,
-          floorDay,
-          todayDay,
-          epoch ?? '',
-          first ? 1 : 0,
-          after[0],
-          after[1],
-          after[2],
-          pageSize
-        )
-        .all<CorridorReturnsRow & { pool_key: string; k_corridor: string; k_type: string }>();
-      const results = rows.results ?? [];
-      if (results.length === 0) break;
-      // Checked after the fetch, so a snapshot of exactly the cap passes: only
-      // a page that actually holds rows beyond the cap fails the run closed.
-      if (page >= maxPages) {
-        throw new Error(
-          `returns snapshot exceeds ${maxPages * pageSize} groups; no marker written`
-        );
-      }
-      const last = results[results.length - 1];
-      after = [last.k_corridor, last.pool_key, last.k_type];
-      first = false;
-
-      const byPool: Record<RegulatoryPool, Record<string, unknown>[]> = { general: [] };
-      for (const r of results) {
-        const pool = resolvePoolFailClosed(r.legal_clearance_tier, r.corridor_id, result);
-        if (pool === null) continue; // fail closed: withhold unclassifiable groups
-        // A group with no real corridor is withheld, never exported as 'unknown'
-        // (several would collide on one key), and so is any group under the floor.
-        const corridorId = canonicalCorridorId(r.corridor_id);
-        if (corridorId === UNKNOWN_CORRIDOR || r.people < RETURNS_MIN_COUNT) {
-          result.rowsSkipped++;
-          continue;
-        }
-        // people ⊇ 2+ ⊇ 3+ ⊇ 5+: floored as one chain, so no subtraction of two
-        // published counts reveals a group under the floor (people 12, 2+ 9
-        // would say 3 came once). The group floor above already holds people.
-        // Rounded first (floorPublishedChain), so every published value is a
-        // multiple of 5.
-        const [peopleOut, ret2, ret3, ret5] = floorPublishedChain(
-          [r.people, r.returned_2plus, r.returned_3plus, r.returned_5plus],
-          RETURNS_MIN_COUNT,
-          RETURNS_MIN_COUNT
-        );
-        const uec = r.uec_code ?? 'unknown';
-        const tags = {
-          corridor_id: corridorId,
-          venue_id: 'corridor-aggregate',
-          event_type: uec,
-          uec_code: uec,
-          regulatory_pool: pool,
-          product_id: PRODUCT_ID,
-        };
-        assertRequiredTags(tags);
-        emitRow(
-          byPool[pool],
-          {
-            ...tags,
-            row_type: 'group',
-            window_days: RETURNS_WINDOW_DAYS,
-            people_count: peopleOut,
-            returned_2plus: ret2,
-            returned_3plus: ret3,
-            returned_5plus: ret5,
-            computed_at: computedAt,
-            exported_at: now.toISOString(),
-          },
-          result
-        );
-      }
-
-      for (const pool of REGULATORY_POOLS) {
-        const batch = byPool[pool];
-        groupsInSnapshot[pool] += batch.length;
-        for (let i = 0; i < batch.length; i += BQ_INSERT_CHUNK) {
-          await claimSnapshot();
-          const res = await bigQueryInsertRowsToDataset(
-            env,
-            datasetForPool(pool, env.WORKER_ENV),
-            BQ_TABLE_CORRIDOR_RETURNS,
-            batch.slice(i, i + BQ_INSERT_CHUNK),
-            insertIdFor(pool)
-          );
-          result.rowsExported += res.rowCount;
-          result.perPool[pool] += res.rowCount;
-        }
-      }
-      if (results.length < pageSize) break;
-    }
-
-    // One marker per pool per run, written after the groups, so OER can tell
-    // which snapshot is current even when it is empty: without it, a run in
-    // which every group aged out or fell under the floor would write nothing,
-    // and OER would keep reading the previous snapshot as current.
-    for (const pool of REGULATORY_POOLS) {
-      const markerTags = {
-        corridor_id: UNKNOWN_CORRIDOR,
-        venue_id: 'corridor-aggregate',
-        event_type: 'snapshot',
-        uec_code: 'snapshot',
-        regulatory_pool: pool,
-        product_id: PRODUCT_ID,
-      };
-      assertRequiredTags(markerTags);
-      const marker = {
-        ...markerTags,
-        row_type: 'snapshot',
-        window_days: RETURNS_WINDOW_DAYS,
-        groups_in_snapshot: groupsInSnapshot[pool],
-        computed_at: computedAt,
-        exported_at: now.toISOString(),
-      };
-      assertCorridorGrainRow(marker);
-      await claimSnapshot();
-      await bigQueryInsertRowsToDataset(
-        env,
-        datasetForPool(pool, env.WORKER_ENV),
-        BQ_TABLE_CORRIDOR_RETURNS,
-        [marker],
-        () => `cr-${computedAt}-snapshot-${pool}`
-      );
-      result.snapshotMarkers = (result.snapshotMarkers ?? 0) + 1;
-    }
-
-    await advanceWatermark(env.DB, 'anon_id_returns', nextWatermark, result.rowsExported);
-    // Only a complete snapshot (groups and markers sent) starts the next week.
-    await advanceWatermark(env.DB, RETURNS_SNAPSHOT_STATE, computedAt, 0);
-  } catch (err) {
-    if (err instanceof SnapshotClaimLost) {
-      // Another invocation claimed this week first and is publishing it. This
-      // run sent nothing, so it is not a failure; it is simply not due.
-      result.snapshotDue = false;
-      result.durationMs = Date.now() - start;
-      return result;
-    }
-    result.errors++;
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(
-      JSON.stringify({
-        type: 'SHARED_REPORT_EXPORT_ERROR',
-        phase: 'anon_id_returns',
-        error: errorLabel(err),
-      })
-    );
-    try {
-      await markFailed(env.DB, 'anon_id_returns', msg);
-    } catch {
-      // markFailed itself failed — nothing more we can do.
-    }
-  }
-
-  result.durationMs = Date.now() - start;
-  return result;
-}
 
 // ── Phase 2 — exportCorridorDensityBaseline ────────────────────────────────
 

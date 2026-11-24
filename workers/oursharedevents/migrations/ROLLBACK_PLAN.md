@@ -110,6 +110,19 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0119: clear the stored phone ids (OSE-2214, the owner's rule of 2026-11-23:
+-- count the code, never the person). Data-only: it deletes every
+-- anon_id_returns row and nulls scan_node_returns.anonymous_id /
+-- user_agent_hash and scan_aggregates.distinct_agent_hashes. No schema change.
+-- THERE IS NO REVERSE, BY DESIGN: the cleared values are per-phone ids, and
+-- restoring them is exactly what the owner ruled out. Scan totals are not
+-- touched, so the report reads the same. Revert the Worker no further back
+-- than d266016 (OSE-2214 PR 1, #1531): from there the scan path stores no id,
+-- so the older nightly job finds none and writes no returns. A Worker from
+-- before d266016 would store phone ids again, and nothing would clear them. A D1 Time
+-- Travel restore to before 0119 would bring the ids back; it is an owner step
+-- (AGENTS.md, Human approval) and should not be used to undo this migration.
+
 -- 0118: brand_parents (OSE-1553, a brand's parent brand). Additive: one
 -- new table and its index. THE ROLLBACK IS: revert the Worker and LEAVE THE
 -- TABLE. The older Worker does not read it, so every member is back to

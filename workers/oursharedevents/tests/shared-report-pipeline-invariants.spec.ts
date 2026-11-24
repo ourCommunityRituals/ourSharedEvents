@@ -226,17 +226,17 @@ describe('OSE-272 Gate 5: SharedReport BigQuery export is cron-only', () => {
   });
 
   // @born-red OSE-1460 | method: source-negative-assertion | armed: 2026-10-01
-  test('OSE-1460: no exported row carries anon_id_hash or a real venue id', () => {
-    // The returns phase used to send one row per (anon_id_hash, venue). It now
-    // sends k-floored corridor counts. anon_id_hash may appear in SQL (to count
-    // people) but never as a key of an object handed to BigQuery, and venue_id
-    // is only ever the 'corridor-aggregate' sentinel or an event_series row's.
+  // OSE-2214 (2026-11-24): the returns export is retired, so the exporter reads
+  // no per-phone table at all.
+  test('OSE-1460 / OSE-2214: the exporter reads no per-phone table and sends no anon_id_hash', () => {
     const src = loadSource('src/lib/shared-report-export.ts');
     expect(src, 'shared-report-export.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
     expect(src!).not.toMatch(/\banon_id_hash\s*:/);
     expect(src!).not.toMatch(/anon_id_returns_export/);
-    expect(src!).toMatch(/BQ_TABLE_CORRIDOR_RETURNS = 'corridor_returns_export'/);
-    expect(src!).toMatch(/RETURNS_MIN_COUNT/);
+    // No SQL reads the per-phone tables (comments may name them).
+    expect(src!).not.toMatch(/\bFROM\s+(anon_id_returns|scan_node_returns)\b/i);
+    expect(src!).not.toMatch(/\bJOIN\s+(anon_id_returns|scan_node_returns)\b/i);
+    expect(src!).not.toMatch(/BQ_TABLE_CORRIDOR_RETURNS\s*=/);
   });
 
   test('export pipeline writes only aggregate tables, never raw scans/forms', () => {

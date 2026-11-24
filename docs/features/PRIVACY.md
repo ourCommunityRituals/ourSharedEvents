@@ -1,5 +1,11 @@
 # Privacy & PII Lifecycle
 
+> **2026-11-24, OSE-2214.** A poster scan now sets no cookie and stores no phone id
+> (PR 1), the report counts scans of the code (PR 2), and the nightly returns job and its
+> export are retired with migration 0119 clearing every stored phone id (PR 3). Where this
+> page describes `anon_id_returns` or a return rate, that is history. `ose_anon` remains
+> only on the room's vote code and the forms routes.
+
 > Anonymous ID first. Presence, not identity.
 > See [VISION.md](VISION.md) for why this is the foundational design principle.
 

@@ -6,7 +6,7 @@
  *
  *  -1. scan_aggregation  — roll up raw scans into scan_aggregates (OSE-632)
  *   0. h3_cell_backfill  — tag scan_aggregates rows with h3 cells from events
- *   1. anon_id_returns   — per-event upsert of return-rate signal
+ *   1. (retired)         — anon_id_returns, the per-phone return rate (OSE-2214)
  *   2. corridor_density  — rolling 30/90d baseline refresh
  *   3. event_series      — Q2 hybrid auto-detector (pending candidates)
  *
@@ -27,7 +27,6 @@
 import {
   aggregateScanBuckets,
   backfillH3Cells,
-  materializeAnonIdReturns,
   refreshCorridorBaselines,
   detectEventSeriesClusters,
   type SharedReportMaterializeEnv,
@@ -72,15 +71,8 @@ export async function runSharedReportMaterialization(
     phases.push(makeErrorResult('h3_cell_backfill', errorLabel(err)));
   }
 
-  // Phase 1 — per-event return-rate materialization
-  try {
-    const r = await materializeAnonIdReturns(env);
-    phases.push(r);
-    totalErrors += r.errors;
-  } catch (err) {
-    totalErrors++;
-    phases.push(makeErrorResult('anon_id_returns', errorLabel(err)));
-  }
+  // Phase 1 (anon_id_returns, the per-phone return rate) is retired: OSE
+  // counts scans of the code, never people (OSE-2214).
 
   // Phase 2 — corridor baseline refresh
   try {
@@ -138,10 +130,9 @@ export async function runSharedReportMaterialization(
 
 /**
  * The row counters that count places, time buckets or events, and so are
- * written to the summary line as they are. Every other counter counts people
- * or their scans (anon_id_returns rows are one person at one event; the scan
- * roll-up's skipped rows are scans), and the line gives those only from the
- * floor up (AGENTS.md invariant 2): below it the value is null, never 0.
+ * written to the summary line as they are. Every other counter counts scans
+ * (the scan roll-up's skipped rows are scans), and the line gives those only
+ * from the floor up (AGENTS.md invariant 2): below it the value is null, never 0.
  * A phase or counter not listed here is withheld the same way, so a new phase
  * has to be read against the floor before its row counts reach a log.
  */

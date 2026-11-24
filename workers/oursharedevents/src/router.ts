@@ -586,7 +586,8 @@ export type RouterEnv = PagesEnv &
     // to alert when the key age exceeds the 90-day rotation window.
     FORMS_KEY_ROTATED_AT?: string;
     /**
-     * OSE-1351 — scan_node_returns / anon_id_returns TTL retention window in
+     * OSE-1351 — scan_node_returns / anon_id_returns (empty since 0119,
+     * OSE-2214) TTL retention window in
      * days, read by the scheduled `runScanReturnsRetention` job in
      * `lib/scan-returns-retention.ts`. Unset → uncapped. Since OSE-1659
      * wrangler.toml sets "365" in every env (the ose_anon cookie lifetime, the

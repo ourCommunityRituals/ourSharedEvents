@@ -1238,12 +1238,12 @@ jobs:
             fi
           done
           echo "SHARED_REPORT_SIGNING_SECRET, FORMS_ENCRYPTION_KEY, FORMS_HASH_PEPPER, RATE_LIMIT_KEY_PEPPER present on staging (names only: wrangler cannot read values; length is enforced at provisioning by scripts/set-secrets.sh)."
-          # OSE-1659: ANON_ID_HASH_PEPPER keys scan_node_returns.anonymous_id and
-          # hashes anon_id_returns. Without it scans are stored with no id and
-          # returns are not counted, but nothing breaks and nothing leaks, so a
-          # missing value is a warning until it has been provisioned once.
+          # ANON_ID_HASH_PEPPER signs the ose_anon cookie on the room's vote code
+          # and the forms routes, and keys the vote pass (ADR-040). Since OSE-2214
+          # poster scans store no id and no returns are counted, so a missing
+          # value breaks voting only, and is a warning until provisioned once.
           if ! echo "$OUT" | grep -q "ANON_ID_HASH_PEPPER"; then
-            echo "::warning title=ANON_ID_HASH_PEPPER missing::ANON_ID_HASH_PEPPER is not set on the staging worker: scans are stored with no id and returning visitors are not counted (OSE-1659). Provision it: bash scripts/set-secrets.sh staging"
+            echo "::warning title=ANON_ID_HASH_PEPPER missing::ANON_ID_HASH_PEPPER is not set on the staging worker: the room vote code and signed ose_anon cookies cannot work (ADR-040). Provision it: bash scripts/set-secrets.sh staging"
           fi
 
       # ────────────────────────────────────────────────────────────────────

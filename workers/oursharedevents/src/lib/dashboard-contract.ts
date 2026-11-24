@@ -541,7 +541,7 @@ export const NOT_MEASURED: readonly NotMeasured[] = [
     id: 'repeat_participation',
     dashboard: 'corridor',
     reason:
-      'Returns are published once, weekly and rounded, by corridor_returns_export (OSE-1460). A second read here would open a differencing surface.',
+      'OSE counts scans of the code, never people (OSE-2214): there is no per-person return figure to show. The corridor returns export was retired with it.',
   },
   {
     id: 'local_showcase_engagement',

@@ -1,5 +1,11 @@
 # SharedReport Data Pipeline — Design
 
+> **2026-11-24, OSE-2214.** Phase 1 of the nightly job (`materializeAnonIdReturns`, which
+> hashed each phone into `anon_id_returns` for the return rate) is retired, and migration
+> 0119 emptied `anon_id_returns` and cleared the ids in `scan_node_returns`. OSE counts
+> scans of the code, never people (owner, 2026-11-23). The table stays, empty, until a
+> later migration drops it. Sections below that describe Phase 1 are history.
+
 **Status:** **Design ratified** (Session 1 of OSE-272 complete; Session 2 unblocked)
 **Date:** 2026-05-14 (drafted), **2026-05-15 (ratified)**
 **Authors:** mzdan + Co-Architect
@@ -208,7 +214,7 @@ All SharedReport aggregates write to the **main `DB`** (not `FORMS_DB`). Rationa
 
 ### What it produces
 
-> **OSE-2214 (2026-11-24).** The report no longer carries `return_rate`: it followed one phone across events. The nightly returns job, `anon_id_returns_view` and the returns export below still run until the next step of OSE-2214 retires them; read the `return_rate_pct` lines as history.
+> **OSE-2214 (2026-11-24).** The report no longer carries `return_rate`: it followed one phone across events. The nightly returns job and the returns export below were retired by OSE-2214 PR 3 (2026-11-24, migration 0119); read the `return_rate_pct` and `anon_id_returns` lines as history.
 
 A single read-time view `v_shared_report` (or a query function) that the SharedReport renderer (OSE-245) reads from:
 

@@ -24,8 +24,8 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0118_brand_tree.sql */
-export const REQUIRED_DB_MIGRATION = 118;
+/** Highest migration in migrations/ — currently 0119_clear_phone_ids.sql */
+export const REQUIRED_DB_MIGRATION = 119;
 
 /** Highest migration in migrations-forms/ — currently 0018_registration_email_encrypted.sql */
 export const REQUIRED_FORMS_MIGRATION = 18;

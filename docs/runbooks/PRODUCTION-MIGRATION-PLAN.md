@@ -2,7 +2,7 @@
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0118, forms 0015–0018.
+Covers: main 0078–0119, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 118              | 41       |
+| Main (`ocr-db-production`)        | 77               | 119              | 42       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -128,7 +128,7 @@ its counts were not taken first. They were read on staging the next day (run 436
 events, 60 of them with no place at all, 3 of those on the public list. Its per-status breakdown was
 replaced by one count on 2026-11-15 so the file fits the strict rule.
 
-## Main database, 0078 to 0118
+## Main database, 0078 to 0119
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -175,6 +175,7 @@ replaced by one count on 2026-11-15 so the file fits the strict rule.
 | `0116_sponsor_business_kind.sql`                          | Adds `sponsor_business.business_kind`, the sponsor's kind of business picked in Create Sponsor (OSE-2207). Writes no row.         | No   |
 | `0117_scan_poster_hour_cap.sql`                           | Adds `scan_poster_hour_tally`, scans per poster per hour for the 100-scan cap (OSE-1496). Counts only. Writes no row.             | No   |
 | `0118_brand_tree.sql`                                     | Adds `brand_parents`, a brand's parent brand, so a parent company reaches its ventures (OSE-1553). Writes no row.                 | No   |
+| `0119_clear_phone_ids.sql`                                | Deletes every `anon_id_returns` row and clears the phone id and browser hash in `scan_node_returns` (OSE-2214).                   | Yes  |
 
 ## Forms database, 0015 to 0018
 
@@ -187,7 +188,7 @@ replaced by one count on 2026-11-15 so the file fits the strict rule.
 
 ## The migrations that write or remove rows
 
-Fifteen files. Each is listed with what it changes, why it is safe on production as it is
+Sixteen files. Each is listed with what it changes, why it is safe on production as it is
 today, and what would be different if production held data.
 
 ### `0081_sponsor_tier_and_compact_logo.sql`
@@ -381,6 +382,22 @@ today, and what would be different if production held data.
   live would still be written with a raw id. Production has no events, so no form can
   be sent. The check below confirms it.
 
+### `0119_clear_phone_ids.sql`
+
+- **`DELETE FROM anon_id_returns`**: removes every return row. Each was one phone's
+  peppered hash at one event, for the return rate the owner retired on 2026-11-23
+  ("count the code, never the person", OSE-2214). Nothing writes the table any more.
+- **`UPDATE scan_node_returns`**: clears `anonymous_id` (the keyed scan id) and
+  `user_agent_hash`. Rows and every other column stay, so scan totals do not change.
+- **`UPDATE scan_aggregates`**: sets `distinct_agent_hashes` to 0, as the nightly roll-up
+  now writes it. `total_scans` does not change.
+- **Safe because** production has no events, so it has no scans and no return rows.
+  Nothing to clear.
+- **If it did clear:** the cleared values are gone, and that is the intent. No report
+  reads them since OSE-2214.
+- **After the deploy:** the scan write stores no id and the nightly job has no returns
+  phase, so nothing can come back.
+
 ### One more: `0091_anon_id_returns_pepper_epoch.sql`
 
 The file itself only adds a column. But from then on the **nightly job deletes** every
@@ -402,7 +419,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0118_brand_tree.sql` and `118`;
+2. **The level.** Expected: `0119_clear_phone_ids.sql` and `119`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash
@@ -427,7 +444,8 @@ The deploy job does the first three itself and goes red if any fails.
    npx wrangler d1 execute DB --env production --remote --command "
    SELECT COUNT(*) FROM scan_node_returns WHERE country_code IS NOT NULL;
    SELECT COUNT(*) FROM scan_aggregates WHERE top_country IS NOT NULL;
-   SELECT COUNT(*) FROM anon_id_returns WHERE pepper_epoch IS NULL;"
+   SELECT COUNT(*) FROM anon_id_returns;
+   SELECT COUNT(*) FROM scan_node_returns WHERE anonymous_id IS NOT NULL OR user_agent_hash IS NOT NULL;"
 
    npx wrangler d1 execute FORMS_DB --env production --remote --command "
    SELECT COUNT(*) FROM form_registrations WHERE anonymous_id IS NOT NULL AND substr(anonymous_id, 1, 5) <> 'evk1_';
@@ -448,6 +466,7 @@ The deploy job does the first three itself and goes red if any fails.
 - **The main database's `subscribers` rows, removed by `0098`.** On production there
   were none.
 - **Rows the nightly job deletes after `0091`.** On production today there are none.
+- **Return rows and phone ids cleared by `0119`.** On production today there are none.
 - **The whole database can be rewound** to the restore point you noted. The command,
   its conditions and its stop line are in
   [DISASTER-RECOVERY.md §6](./DISASTER-RECOVERY.md#6-break-glass-restore-a-database-to-an-earlier-time),
