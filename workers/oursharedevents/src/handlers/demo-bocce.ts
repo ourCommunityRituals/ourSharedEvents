@@ -22,6 +22,7 @@
 
 import { esc, escUrl } from '@ocr/ui';
 import { publishCount } from '../lib/count-floor.js';
+import { fewerThan } from '../lib/withheld-words.js';
 import { demoHtml, type DemoBrand } from './demo.js';
 
 export type BocceSite = 'co' | 'club' | 'semipro' | 'league' | 'network';
@@ -193,7 +194,7 @@ function sumScans(rows: Row[]): number {
 export function bocceCountText(raw: number | null): string {
   if (raw === null) return 'Not started yet';
   const p = publishCount(raw);
-  return p.count === null ? 'Fewer than 5' : p.count.toLocaleString('en-US');
+  return p.count === null ? fewerThan() : p.count.toLocaleString('en-US');
 }
 
 function ventureRows(): Row[] {
