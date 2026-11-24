@@ -22,6 +22,7 @@ import {
   type ExportResult,
   type SharedReportExportEnv,
 } from '../lib/shared-report-export';
+import { exportCorridorFlows } from '../lib/corridor-flow-export';
 import { logExportManifest } from '../lib/audit-log';
 
 import { errorLabel } from '../lib/error-label';
@@ -30,6 +31,7 @@ const PHASE_TABLE: Record<string, string> = {
   anon_id_returns: 'corridor_returns_export', // OSE-1460: counts, not per-person rows
   corridor_density_baseline: 'corridor_density_baseline_export',
   event_series: 'event_series_export',
+  corridor_flows: 'corridor_flow_export', // OSE-2216: weekly NCR flows (boundary doc 4.1.2)
 };
 
 export interface SharedReportExportRunResult {
@@ -107,6 +109,28 @@ export async function runSharedReportBigQueryExport(
       JSON.stringify({
         type: 'SHARED_REPORT_EXPORT_PHASE_THREW',
         phase: 'event_series',
+        error: errorLabel(err),
+      })
+    );
+  }
+
+  // Phase 4 — corridor_flows (OSE-2216). Weekly, append only; its own state row.
+  try {
+    phases.push(await exportCorridorFlows(env));
+  } catch (err) {
+    phases.push({
+      phase: 'corridor_flows',
+      rowsRead: 0,
+      rowsExported: 0,
+      rowsSkipped: 0,
+      errors: 1,
+      perPool: { general: 0 },
+      durationMs: 0,
+    });
+    console.error(
+      JSON.stringify({
+        type: 'SHARED_REPORT_EXPORT_PHASE_THREW',
+        phase: 'corridor_flows',
         error: errorLabel(err),
       })
     );

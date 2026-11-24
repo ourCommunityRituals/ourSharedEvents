@@ -484,6 +484,7 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     expect(Object.keys(byPhase).sort()).toEqual([
       'anon_id_returns',
       'corridor_density_baseline',
+      'corridor_flows', // OSE-2216: ran; its first week is not complete yet
       'event_series',
     ]);
     expect(byPhase.event_series.rows_exported).toBe(0);

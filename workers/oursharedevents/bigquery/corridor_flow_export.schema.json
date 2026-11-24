@@ -1,0 +1,61 @@
+[
+  {
+    "name": "row_type",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "'flow' (one week x source corridor x destination corridor x event type x pool) or 'week' (one marker per pool per week sent)"
+  },
+  {
+    "name": "corridor_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "The source corridor (H3 res-7, same as source_cell); 'unknown' only on week markers"
+  },
+  {
+    "name": "venue_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Always 'corridor-aggregate': no venue or event crosses (boundary doc 4.1.2)"
+  },
+  { "name": "event_type", "type": "STRING", "mode": "REQUIRED" },
+  { "name": "uec_code", "type": "STRING", "mode": "REQUIRED" },
+  { "name": "regulatory_pool", "type": "STRING", "mode": "REQUIRED" },
+  { "name": "product_id", "type": "STRING", "mode": "REQUIRED" },
+  {
+    "name": "week",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "The Monday (UTC) that starts the week"
+  },
+  {
+    "name": "source_cell",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Flow rows only: H3 res-7 cell where the posters hang"
+  },
+  {
+    "name": "destination_cell",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Flow rows only: H3 res-7 cell of those posters' events"
+  },
+  {
+    "name": "scans",
+    "type": "INT64",
+    "mode": "NULLABLE",
+    "description": "Flow rows only: scans on posters, each poster-hour floored first, never below 5, rounded down to a multiple of 5"
+  },
+  {
+    "name": "flows_in_week",
+    "type": "INT64",
+    "mode": "NULLABLE",
+    "description": "Week markers only: flow rows sent for this week and pool"
+  },
+  {
+    "name": "computed_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "When the run that sent this week read it"
+  },
+  { "name": "exported_at", "type": "TIMESTAMP", "mode": "REQUIRED" }
+]
