@@ -454,7 +454,11 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     // Every phase that ran is on record — including event_series, which ran
     // with nothing past its watermark ("ran, nothing new" ≠ "did not run").
     // OSE-2214: the returns phase is retired, so it has no manifest row.
-    expect(Object.keys(byPhase).sort()).toEqual(['corridor_density_baseline', 'event_series']);
+    expect(Object.keys(byPhase).sort()).toEqual([
+      'corridor_density_baseline',
+      'corridor_flows', // OSE-2216: ran; its first week is not complete yet
+      'event_series',
+    ]);
     expect(byPhase.event_series.rows_exported).toBe(0);
     expect(JSON.parse(byPhase.event_series.details).rows_read).toBe(0);
     for (const [phase, r] of Object.entries(byPhase)) {

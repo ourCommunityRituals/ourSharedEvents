@@ -132,6 +132,8 @@ const VENUE_ID_VALUES_BY_TABLE: Readonly<Record<string, readonly string[]>> = {
   event_series_export: ['r.venue_id'],
   corridor_returns_export: ["'corridor-aggregate'"],
   corridor_density_baseline_export: ["'corridor-aggregate'"],
+  // OSE-2216 (boundary doc 4.1.2): weekly corridor flows; no venue or event crosses.
+  corridor_flow_export: ["'corridor-aggregate'"],
 };
 
 /** `r.venue_id` is an event id only while the query joins the series' venue_id to events.id. */
@@ -679,6 +681,9 @@ test.describe('Invariant 17 (export grain): the rule can see what it is meant to
     expect(files, 'the SharedReport exporter must be derived as an exporter').toContain(
       'lib/shared-report-export.ts'
     );
+    expect(files, 'the corridor flow exporter (OSE-2216) must be derived as an exporter').toContain(
+      'lib/corridor-flow-export.ts'
+    );
     expect(
       SCHEMAS.map((s) => s.table),
       'every table the Worker writes has a schema file; the four known ones must be derived'
@@ -688,6 +693,7 @@ test.describe('Invariant 17 (export grain): the rule can see what it is meant to
         'corridor_returns_export',
         'corridor_density_baseline_export',
         'event_series_export',
+        'corridor_flow_export',
       ])
     );
     const allLists = EXPORTERS.flatMap((e) =>

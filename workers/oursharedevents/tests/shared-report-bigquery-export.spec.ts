@@ -483,10 +483,14 @@ describe('OSE-272 Session 4 orchestrator: runSharedReportBigQueryExport', () => 
     uninstallBqMock();
   });
 
-  test('runs the 2 remaining phases (the returns export is retired) and returns aggregated result shape', async () => {
+  test('runs the 3 remaining phases (the returns export is retired) and returns aggregated result shape', async () => {
     const r = await runSharedReportBigQueryExport(makeEnv());
     // OSE-2214: no phase reads per-phone data; anon_id_returns is not exported.
-    expect(r.phases.map((p) => p.phase)).toEqual(['corridor_density_baseline', 'event_series']);
+    expect(r.phases.map((p) => p.phase)).toEqual([
+      'corridor_density_baseline',
+      'event_series',
+      'corridor_flows', // OSE-2216
+    ]);
     expect(typeof r.totalDurationMs).toBe('number');
     expect(typeof r.totalErrors).toBe('number');
     expect(typeof r.totalRowsExported).toBe('number');
@@ -528,12 +532,14 @@ describe('OSE-272 Session 4 orchestrator: runSharedReportBigQueryExport', () => 
     await seedConfirmedSeries('test-evt-exp-iso1', 1);
     bqFailNextN = 1; // Phase 2 fails; phase 3 still runs and exports
     const r = await runSharedReportBigQueryExport(makeEnv());
-    expect(r.phases).toHaveLength(2);
+    expect(r.phases).toHaveLength(3);
     const phase2 = r.phases.find((p) => p.phase === 'corridor_density_baseline');
     expect(phase2!.errors).toBe(1);
     const phase3 = r.phases.find((p) => p.phase === 'event_series');
     expect(phase3!.errors).toBe(0);
     expect(phase3!.rowsExported).toBe(1);
+    const phase4 = r.phases.find((p) => p.phase === 'corridor_flows');
+    expect(phase4!.errors).toBe(0);
   });
 
   test('logs SHARED_REPORT_EXPORT_COMPLETE with structured payload', async () => {

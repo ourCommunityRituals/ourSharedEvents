@@ -432,7 +432,7 @@ The watermark advances only after the **whole batch** is accepted (for the basel
 Delivery guarantee: **at-least-once** for the baseline and event-series phases.
 For returns, each weekly snapshot is all-or-nothing from OER's point of view: a
 snapshot without its marker row is incomplete and must be ignored, and it is
-not retried. No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `corridor_returns_export`: `(corridor_id, uec_code, regulatory_pool, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
+not retried. No row is skipped (the watermark only advances after every row of the batch is accepted), but a retried row may appear twice in BigQuery. Readers (OER) must dedupe on each table's natural key — `corridor_density_baseline_export`: `(corridor_id, bucket_dow, bucket_hour, computed_at)`; `corridor_returns_export`: `(corridor_id, uec_code, regulatory_pool, computed_at)`; `event_series_export`: `(id, updated_at)`; `events_backup`: `(id, updated_at)`; `corridor_flow_export`: `(week, source_cell, destination_cell, uec_code, regulatory_pool)`. Exactly-once delivery (staging table + MERGE, or the Storage Write API with offsets) is tracked separately (OSE-1462).
 
 **Rows BigQuery rejects inside an HTTP 200.** `tabledata.insertAll` reports
 per-row rejections in `insertErrors` with a 200 status. `bigQueryInsertRowsToDataset`
@@ -485,7 +485,7 @@ Every line below names a test in `workers/oursharedevents/tests/shared-report-bi
 - **Read API for the BQ exports.** Session 5 ships the read API (`GET /api/v2/events/:id/shared-report` + WKRP batch). Session 4 is write-only.
 - **WKRP batch endpoint.** Session 5 (ratified).
 - **Historical backfill of pre-Session-3 data.** First export pass uses the epoch watermark — picks up everything in D1 at the time. No special backfill needed.
-- **BQ table creation.** `tabledata.insertAll` fails when the table is missing; BigQuery never creates it on first insert. All four pool tables (`events_backup`, `corridor_returns_export`, `corridor_density_baseline_export`, `event_series_export`) have a checked-in schema at `workers/oursharedevents/bigquery/<table>.schema.json`, kept in step with the code by the export specs (`tests/helpers/bigquery-pool-schema.ts`), and are created by `scripts/bq-create-pool-tables.sh` (runbook: `docs/runbooks/RUNBOOK-DEPLOYMENT.md`, OSE-1416). Staging's tables exist since 2026-10-02; production's dataset does not exist yet.
+- **BQ table creation.** `tabledata.insertAll` fails when the table is missing; BigQuery never creates it on first insert. All five pool tables (`events_backup`, `corridor_returns_export`, `corridor_density_baseline_export`, `event_series_export`, and since OSE-2216 `corridor_flow_export`) have a checked-in schema at `workers/oursharedevents/bigquery/<table>.schema.json`, kept in step with the code by the export specs (`tests/helpers/bigquery-pool-schema.ts`), and are created by `scripts/bq-create-pool-tables.sh` (runbook: `docs/runbooks/RUNBOOK-DEPLOYMENT.md`, OSE-1416). Staging's tables exist since 2026-10-02; production's dataset does not exist yet.
 - **Cross-pool baseline routing.** Corridor baselines default to `general` in v1. Documented for revisit if a HIPAA/COPPA corridor surfaces a need.
 - **Sponsor impression export.** Sponsor impressions are already exported via the existing `runBigQueryBackup`. No change in Session 4.
 - **Real-time export.** Cron-only, daily. No real-time streaming.
@@ -528,3 +528,12 @@ BigQuery is the **analytics surface**, not the **product read surface**. Session
 > _"S4-Q1 same tick. S4-Q2 incremental. S4-Q3 split by reg pool. S4-Q4 no, isolated. WKRP batch endpoint: yes."_
 
 Implementation PR follows after PR #187 (Session 3) is merged to `main`. Session 4 references the Session 3 tables; merging Session 3 first preserves a clean dependency chain.
+
+## Phase 4: weekly corridor flows (OSE-2216, 2026-11-24)
+
+Contract: OCR-docs `OCR_ARCHITECTURE_oerAggregationBoundary.md` section 4.1.2 (approved by the PO in OCR-docs #185). Code: `src/lib/corridor-flow-export.ts`; spec: `tests/corridor-flow-export.spec.ts`.
+
+- **Row:** `week` (Monday, UTC), `source_cell` (res-7 cell of the poster), `destination_cell` (res-7 cell of its event), `uec_code`, `scans`, plus the pool tags (`corridor_id` = source cell, `venue_id` = `'corridor-aggregate'`). Table `corridor_flow_export`.
+- **Source:** `scan_placement_events` joined to `poster_deployments` and `events`, production events only. No phone, cookie, return or density table is read.
+- **Floor:** a part is one poster in one hour (as on the admin corridor dashboard, OSE-1656). Each part goes through `floorTotalOfParts`; a flow under 5 is not sent; `scans` is rounded down to a multiple of 5. Events with no type, a cell finer than res 7, or an unclassifiable tier are withheld.
+- **Cadence:** a week is sent once, after its Sunday ends (UTC), oldest first, at most 8 weeks a night. Each week is claimed on the state row `corridor_flow_week` before its first insert and ends with one `row_type = 'week'` marker per pool (`flows_in_week`), so an empty week is told apart from a missing one. A failed send hands the claim back and the next night sends the same week with the same insertIds.

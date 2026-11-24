@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bq-create-pool-tables.sh: create the four pool tables in one pool dataset (OSE-1416).
+# bq-create-pool-tables.sh: create the pool tables in one pool dataset (OSE-1416).
 #
 #   bash scripts/bq-create-pool-tables.sh <gcp-project> <dataset>
 #   bash scripts/bq-create-pool-tables.sh project-7cc9adcd-ed55-47aa-958 oureventring_general_stg
@@ -28,6 +28,7 @@ declare -A PARTITION=(
   [corridor_returns_export]=exported_at
   [corridor_density_baseline_export]=exported_at
   [event_series_export]=exported_at
+  [corridor_flow_export]=exported_at
 )
 
 for f in "$SCHEMA_DIR"/*.schema.json; do
