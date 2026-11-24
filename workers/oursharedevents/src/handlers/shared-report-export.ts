@@ -16,7 +16,6 @@
  */
 
 import {
-  exportAnonIdReturns,
   exportCorridorDensityBaseline,
   exportEventSeries,
   type ExportResult,
@@ -27,7 +26,6 @@ import { logExportManifest } from '../lib/audit-log';
 import { errorLabel } from '../lib/error-label';
 /** BigQuery table each phase writes, for the manifest's provenance record. */
 const PHASE_TABLE: Record<string, string> = {
-  anon_id_returns: 'corridor_returns_export', // OSE-1460: counts, not per-person rows
   corridor_density_baseline: 'corridor_density_baseline_export',
   event_series: 'event_series_export',
 };
@@ -46,27 +44,9 @@ export async function runSharedReportBigQueryExport(
   const start = Date.now();
   const phases: ExportResult[] = [];
 
-  // Phase 1 — anon_id_returns. Each phase isolates its own failure.
-  try {
-    phases.push(await exportAnonIdReturns(env));
-  } catch (err) {
-    phases.push({
-      phase: 'anon_id_returns',
-      rowsRead: 0,
-      rowsExported: 0,
-      rowsSkipped: 0,
-      errors: 1,
-      perPool: { general: 0 }, // declined regimes removed (OSE-1220)
-      durationMs: 0,
-    });
-    console.error(
-      JSON.stringify({
-        type: 'SHARED_REPORT_EXPORT_PHASE_THREW',
-        phase: 'anon_id_returns',
-        error: errorLabel(err),
-      })
-    );
-  }
+  // Phase 1 (the corridor returns export, OSE-1460) is retired: it published
+  // phones seen again, and OSE counts scans of the code, never people (OSE-2214).
+  // Each remaining phase isolates its own failure.
 
   // Phase 2 — corridor_density_baseline
   try {

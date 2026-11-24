@@ -3100,7 +3100,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 10
+      "testCount": 12
     },
     {
       "file": "workers/oursharedevents/tests/riph-brain-conformance.spec.ts",
@@ -3163,7 +3163,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 19
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/scan-node-returns-one-per-browser-hour.spec.ts",
@@ -3303,7 +3303,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 54
+      "testCount": 23
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-campaign-summary.spec.ts",
@@ -3394,7 +3394,7 @@
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 42
+      "testCount": 34
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-mobile-workability.spec.ts",

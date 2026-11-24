@@ -589,7 +589,8 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
 
   // 2. poster_attribution, then scans from it (OSE-1784).
   //    The people figures used to come from three grains: scan_aggregates
-  //    (scans), anon_id_returns (sample_size, this_event_count)
+  //    (scans), anon_id_returns (sample_size, this_event_count; retired by
+  //    OSE-2214, migration 0119)
   //    and the poster-hours (poster_attribution). Each was floored on its own,
   //    so one could be subtracted from another: hours of 7 and 3 people at one
   //    poster published a poster sum of 5 beside a sample size of 10, and the

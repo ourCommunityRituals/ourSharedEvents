@@ -22,7 +22,8 @@ import { eventAnonKey } from '../src/lib/event-anon-key';
 import { hashAnonIdForReturns } from '../src/lib/anon-id-hash';
 import { handleQrScan, type QrScanEnv } from '../src/handlers/qr-scan';
 import { handleScanBatch, type ScanMessage } from '../src/lib/scan-buffer';
-import { aggregateScanBuckets, materializeAnonIdReturns } from '../src/lib/shared-report';
+import { aggregateScanBuckets } from '../src/lib/shared-report';
+import { runSharedReportMaterialization } from '../src/handlers/shared-report-materialize';
 import { handleDataSubjectErase, type DataSubjectEnv } from '../src/handlers/data-subject';
 import { hashEmail } from '../src/lib/forms-db';
 
@@ -229,11 +230,9 @@ describe('OSE-2214: a real scan stores no phone id', () => {
         eventId
       )
       .run();
-    const mat = await materializeAnonIdReturns({
-      DB: mainDb(),
-      ANON_ID_HASH_PEPPER: tenv().ANON_ID_HASH_PEPPER,
-    });
-    expect(mat.errors).toBe(0);
+    // OSE-2214: the nightly job has no returns phase; run it whole.
+    const mat = await runSharedReportMaterialization({ DB: mainDb() });
+    expect(mat.totalErrors).toBe(0);
     const returns = await mainDb()
       .prepare('SELECT COUNT(*) AS c FROM anon_id_returns WHERE venue_id = ?')
       .bind(eventId)
@@ -453,8 +452,12 @@ describe('erasure reaches the keyed rows', () => {
 describe('migration 0095 clears raw cookie values already in scan_node_returns', () => {
   function scrubStatements(): string[] {
     const all: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
-    return all.filter((s) =>
-      /^UPDATE\s+scan_node_returns\s+SET\s+anonymous_id\s*=\s*NULL\b/i.test(s.trim())
+    // 0095 keeps a keyed id (its GLOB 'snk1_*' clause); 0119 clears every id
+    // and is tested below.
+    return all.filter(
+      (s) =>
+        /^UPDATE\s+scan_node_returns\s+SET\s+anonymous_id\s*=\s*NULL\b/i.test(s.trim()) &&
+        /GLOB\s+'snk1_\*'/.test(s)
     );
   }
 
@@ -494,5 +497,89 @@ describe('migration 0095 clears raw cookie values already in scan_node_returns',
       ['none', null, 'ua-hash'],
       ['raw', null, 'ua-hash'],
     ]);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 6. Migration 0119 clears every stored phone id (OSE-2214)
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('migration 0119 clears every stored phone id (OSE-2214)', () => {
+  function statementsOf0119(): string[] {
+    const all: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
+    return all.filter(
+      (s) =>
+        /^DELETE\s+FROM\s+anon_id_returns\s*;?$/i.test(s.trim()) ||
+        /^UPDATE\s+scan_node_returns\s+SET\s+anonymous_id\s*=\s*NULL\s*,\s*user_agent_hash\s*=\s*NULL\b/i.test(
+          s.trim()
+        ) ||
+        /^UPDATE\s+scan_aggregates\s+SET\s+distinct_agent_hashes\s*=\s*0\b/i.test(s.trim())
+    );
+  }
+
+  test('MIGRATION 0119 | its three statements exist | once each', () => {
+    expect(statementsOf0119()).toHaveLength(3);
+  });
+
+  test('MIGRATION 0119 | keyed ids, browser hashes, return rows and distinct figures | all cleared; rows and scan totals stay', async () => {
+    const { eventId } = await newEvent();
+    const key = `snk1_${'ef'.repeat(32)}`;
+    const cases: Array<[string, string | null, string | null]> = [
+      ['key', key, 'ua-hash'],
+      ['ua', null, 'ua-hash'],
+      ['none', null, null],
+    ];
+    for (const [suffix, id, ua] of cases) {
+      await mainDb()
+        .prepare(
+          `INSERT INTO scan_node_returns (id, event_id, anonymous_id, user_agent_hash, scan_bucket)
+           VALUES (?, ?, ?, ?, '2026-11-20T12:00')`
+        )
+        .bind(`snr-0119-${suffix}-${eventId}`, eventId, id, ua)
+        .run();
+    }
+    await mainDb()
+      .prepare(
+        `INSERT INTO anon_id_returns
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
+         VALUES (?, ?, datetime('now'), datetime('now'), 2, datetime('now'))`
+      )
+      .bind('a'.repeat(32), eventId)
+      .run();
+    await mainDb()
+      .prepare(
+        `INSERT INTO scan_aggregates
+           (id, event_id, bucket_date, bucket_hour, total_scans, distinct_agent_hashes, computed_at)
+         VALUES (?, ?, '2026-11-20', 12, 3, 2, datetime('now'))`
+      )
+      .bind(`agg-0119-${eventId}`, eventId)
+      .run();
+
+    // Twice: the migration header says a second run finds nothing to clear.
+    for (let run = 0; run < 2; run++)
+      for (const stmt of statementsOf0119()) await mainDb().prepare(stmt).run();
+
+    const rows = await mainDb()
+      .prepare(
+        'SELECT id, anonymous_id, user_agent_hash FROM scan_node_returns WHERE event_id = ? ORDER BY id'
+      )
+      .bind(eventId)
+      .all<{ id: string; anonymous_id: string | null; user_agent_hash: string | null }>();
+    expect(
+      rows.results.map((r) => [r.id.split('-')[2], r.anonymous_id, r.user_agent_hash])
+    ).toEqual([
+      ['key', null, null],
+      ['none', null, null],
+      ['ua', null, null],
+    ]);
+    const returns = await mainDb()
+      .prepare('SELECT COUNT(*) AS c FROM anon_id_returns')
+      .first<{ c: number }>();
+    expect(returns!.c).toBe(0);
+    const agg = await mainDb()
+      .prepare('SELECT total_scans, distinct_agent_hashes FROM scan_aggregates WHERE event_id = ?')
+      .bind(eventId)
+      .first<{ total_scans: number; distinct_agent_hashes: number }>();
+    expect(agg).toEqual({ total_scans: 3, distinct_agent_hashes: 0 });
   });
 });

@@ -13,17 +13,16 @@
  *   - This file MUST NOT be invoked by any user-facing route — only the
  *     scheduled() handler (Gate 4 — landing alongside Session 3 wiring).
  *   - Inputs are aggregated upstream signal; outputs are aggregate rows
- *     stored in anon_id_returns / corridor_density_baseline / event_series.
- *     No raw anon_id ever persisted (Gate 2 — Session 2 schema enforced this).
+ *     stored in corridor_density_baseline / event_series / scan_aggregates.
+ *     No phone id is read or persisted (OSE-2214).
  *
  * Library shape:
  *
- *   materializeAnonIdReturns(env, opts) — Phase 1 of the nightly cron.
- *     For each event ended in the lookback window, reads scans.anonymous_id,
- *     hashes with ANON_ID_HASH_PEPPER, upserts into anon_id_returns.
+ *   materializeAnonIdReturns — retired by OSE-2214 (it followed one phone
+ *     across events).
  *
  *   refreshCorridorBaselines(env) — Phase 2 of the nightly cron.
- *     Recomputes 30-day and 90-day rolling distinct-anon-id counts per
+ *     Recomputes 30-day and 90-day rolling sums of published scans per
  *     (corridor × day-of-week × hour-of-day) cell. Overwrites the
  *     corridor_density_baseline table.
  *
@@ -34,14 +33,11 @@
  *     series.
  */
 
-import { hashAnonIdForReturns, pepperEpoch } from './anon-id-hash';
-import { phaseTimesFor } from './event-datetime';
 import { isH3Cell } from './export-geography';
 import { errorLabel } from './error-label';
 
 export interface SharedReportMaterializeEnv {
   DB: D1Database;
-  ANON_ID_HASH_PEPPER?: string;
 }
 
 export interface MaterializationResult {
@@ -67,9 +63,9 @@ const SERIES_HOUR_TOLERANCE = 1;
 // CCR Loop 9, 2026-09-05). It said "10 events / 30d". It is not events, it is
 // not corridor-wide, and it is not forward-looking:
 //
-//   unit       distinct anonymous attendees — COUNT(DISTINCT anon_id_hash),
-//              see refreshCorridorDensityBaseline below and migration 0032:44
-//              ("rolling 30-day distinct anon_id_hash count")
+//   unit       published scans — the sum of each event's published poster
+//              hours (OSE-1784; scans of the code, never people, OSE-2214),
+//              see refreshCorridorBaselines below
 //   grain      per (corridor_id, bucket_dow, bucket_hour) — a time-of-week
 //              cell, not a whole corridor
 //   direction  TRAILING — what already happened
@@ -77,7 +73,7 @@ const SERIES_HOUR_TOLERANCE = 1;
 //              it is not a readiness or eligibility gate for any surface
 //
 // Do not reuse this as a threshold for whether something should be SHOWN. A
-// trailing attendee count cannot answer a question about a forward window, and
+// trailing scan count cannot answer a question about a forward window, and
 // a per-time-bucket floor cannot answer one about a corridor.
 //
 // Callers of the SharedReport read API enforce it at render time; here we just
@@ -101,224 +97,15 @@ export const CORRIDOR_MAP_MIN_COUNT = 5;
  * the sum of its published poster rows, and `refreshCorridorBaselines` adds up
  * exactly those sums, so the baseline holds the rule by construction: a
  * withheld poster-hour adds nothing to the event, and so nothing to the group.
- * The corridor returns export still gates on its own rows (inline in
- * `exportAnonIdReturns`), because it counts returners, not poster scans.
  */
 
 // Auto-detector clustering window: look back 8 weeks of events per venue.
 const SERIES_DETECTOR_LOOKBACK_DAYS = 56;
 
-// Materialization lookback window for post-event aggregation:
-// events whose end_date is between 2 hours and 26 hours ago.
-// The 2h floor avoids materializing while attendees are still arriving. The
-// cron is nightly (03:00 UTC), so the 26h ceiling covers the day since the
-// last run plus a 2h overlap; a whole missed night is not caught up.
-const MATERIALIZATION_FLOOR_HOURS = 2;
-const MATERIALIZATION_CEILING_HOURS = 26;
-
-/**
- * Phase 1 — materialize anon_id_returns for events that recently ended.
- *
- * For each candidate event:
- *   1. Read distinct `anonymous_id` from `scan_node_returns` for the event
- *   2. Hash each with ANON_ID_HASH_PEPPER (skip if pepper missing → null hash)
- *   3. Upsert `anon_id_returns(anon_id_hash, venue_id=event_id, ...)`:
- *      - INSERT a new row on first sight
- *      - UPDATE last_seen_at + return_count on repeat
- *
- * The (anon_id_hash, venue_id) PK ensures one row per (anon, event). Each run
- * re-reads the event's distinct ids, so return_count counts runs, not scans:
- * nothing may read it as a visit count (the export counts distinct events).
- */
-/** Old-pepper rows deleted per statement, and the most statements per run. */
-const PEPPER_PURGE_CHUNK = 1000;
-const PEPPER_PURGE_MAX_CHUNKS = 50;
-
-export async function materializeAnonIdReturns(
-  env: SharedReportMaterializeEnv
-): Promise<MaterializationResult> {
-  const start = Date.now();
-  const result: MaterializationResult = {
-    phase: 'anon_id_returns',
-    eventsProcessed: 0,
-    rowsUpserted: 0,
-    rowsSkipped: 0,
-    errors: 0,
-    durationMs: 0,
-  };
-
-  if (!env.DB) {
-    result.durationMs = Date.now() - start;
-    return result;
-  }
-
-  if (!env.ANON_ID_HASH_PEPPER) {
-    // Pepper missing — silently skip materialization with structured warning.
-    // Same fail-safe pattern as IP_HASH_PEPPER in subscribers (OSE-207).
-    console.warn(
-      JSON.stringify({
-        type: 'ANON_ID_HASH_PEPPER_MISSING',
-        note: 'SharedReport return-rate materialization skipped. Set wrangler/Doppler secret ANON_ID_HASH_PEPPER to enable.',
-      })
-    );
-    result.durationMs = Date.now() - start;
-    return result;
-  }
-
-  // Migration 0091: every row records which pepper hashed it. Rows of an older
-  // or unknown pepper are deleted here: the export never counts them, and after
-  // a rotation erasure (data-subject.ts) can only re-derive the current hash, so
-  // it could never find them. A rotation is a reset, not a second identity.
-  // This is the bounded safety net (PEPPER_PURGE_CHUNK x PEPPER_PURGE_MAX_CHUNKS
-  // rows a run, then ANON_ID_RETURNS_PEPPER_PURGE_INCOMPLETE); the complete
-  // purge is the rotation step in docs/runbooks/RUNBOOK-DEPLOYMENT.md.
-  const epoch = await pepperEpoch(env.ANON_ID_HASH_PEPPER);
-  try {
-    let purged = 0;
-    let complete = false;
-    for (let i = 0; i < PEPPER_PURGE_MAX_CHUNKS; i++) {
-      const res = await env.DB.prepare(
-        `DELETE FROM anon_id_returns WHERE rowid IN (
-           SELECT rowid FROM anon_id_returns
-            WHERE pepper_epoch IS NULL OR pepper_epoch < ?1 OR pepper_epoch > ?1
-            LIMIT ${PEPPER_PURGE_CHUNK})`
-      )
-        .bind(epoch)
-        .run();
-      const n = res.meta?.changes ?? 0;
-      purged += n;
-      if (n < PEPPER_PURGE_CHUNK) {
-        complete = true;
-        break;
-      }
-    }
-    if (purged > 0) {
-      console.log(JSON.stringify({ type: 'ANON_ID_RETURNS_PEPPER_PURGE', rows: purged }));
-    }
-    if (!complete) {
-      // Every chunk came back full: rows may remain, or the last chunk took the
-      // last of them. Look before raising the alert.
-      const left = await env.DB.prepare(
-        `SELECT 1 FROM anon_id_returns
-          WHERE pepper_epoch IS NULL OR pepper_epoch < ?1 OR pepper_epoch > ?1 LIMIT 1`
-      )
-        .bind(epoch)
-        .first();
-      complete = left === null;
-    }
-    if (!complete) {
-      // Rows erasure cannot reach are still there; the next run continues. The
-      // rotation runbook purges the table in full, so this is the safety net.
-      console.error(
-        JSON.stringify({
-          type: 'ANON_ID_RETURNS_PEPPER_PURGE_INCOMPLETE',
-          rows_deleted: purged,
-          note: 'Old-pepper anon_id_returns rows remain. Run the full purge in RUNBOOK-DEPLOYMENT.md.',
-        })
-      );
-    }
-  } catch (err) {
-    result.errors++;
-    console.error(
-      JSON.stringify({
-        type: 'ANON_ID_RETURNS_PEPPER_PURGE_ERROR',
-        error: errorLabel(err),
-      })
-    );
-  }
-
-  // Find events that ended in the materialization window.
-  const nowMs = Date.now();
-  const floorMs = nowMs - MATERIALIZATION_CEILING_HOURS * 60 * 60 * 1000;
-  const ceilingMs = nowMs - MATERIALIZATION_FLOOR_HOURS * 60 * 60 * 1000;
-
-  // OSE-616: events.end_date is a CALENDAR DAY ("YYYY-MM-DD", the API's only
-  // accepted shape) that ends at local 23:59:59.999 in the event's zone — not
-  // an instant. Comparing the raw string against ISO instants only ever caught
-  // a date-only event on the one cron tick where the string happened to sort
-  // inside the window. Select by calendar day (padded two days each side, so
-  // every zone is covered), then keep only events whose real end instant
-  // (phaseTimesFor — the same rule the public event page uses) is in window.
-  // A date-only event may have no end_date at all: it ends with its start
-  // day, so the prefilter reads COALESCE(end_date, start_date).
-  const dayPad = 2 * 86_400_000;
-  const fromDay = new Date(floorMs - dayPad).toISOString().slice(0, 10);
-  const toDay = new Date(ceilingMs + dayPad).toISOString().slice(0, 10);
-  const dayRows = await env.DB.prepare(
-    `SELECT id, start_date, end_date, starts_at, timezone FROM events
-       WHERE status = 'active'
-         AND COALESCE(end_date, start_date) IS NOT NULL
-         AND substr(COALESCE(end_date, start_date), 1, 10) BETWEEN ? AND ?`
-  )
-    .bind(fromDay, toDay)
-    .all<{
-      id: string;
-      start_date: string | null;
-      end_date: string | null;
-      starts_at: string | null;
-      timezone: string | null;
-    }>();
-  const candidates = {
-    results: (dayRows.results ?? []).filter((e) => {
-      const endIso = phaseTimesFor(e).end_date;
-      const endMs = endIso ? Date.parse(endIso) : NaN;
-      return Number.isFinite(endMs) && endMs >= floorMs && endMs <= ceilingMs;
-    }),
-  };
-
-  for (const row of candidates.results ?? []) {
-    result.eventsProcessed++;
-    try {
-      const anonRows = await env.DB.prepare(
-        `SELECT DISTINCT anonymous_id FROM scan_node_returns
-           WHERE event_id = ?
-             AND anonymous_id IS NOT NULL`
-      )
-        .bind(row.id)
-        .all<{ anonymous_id: string }>();
-
-      for (const ar of anonRows.results ?? []) {
-        const hash = await hashAnonIdForReturns(ar.anonymous_id, env.ANON_ID_HASH_PEPPER);
-        if (!hash) {
-          result.rowsSkipped++;
-          continue;
-        }
-        // UPSERT — bump return_count + last_seen_at on conflict.
-        // Note: venue_id is set to the event_id where this scan happened.
-        // The "return rate" read-API query in Session 5 will aggregate
-        // these per-event rows back up to (venue or corridor) scope.
-        const nowIso = new Date().toISOString();
-        await env.DB.prepare(
-          `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at,
-              pepper_epoch)
-           VALUES (?, ?, ?, ?, 1, ?, ?)
-           ON CONFLICT(anon_id_hash, venue_id) DO UPDATE SET
-             last_seen_at = excluded.last_seen_at,
-             return_count  = return_count + 1,
-             computed_at  = excluded.computed_at,
-             pepper_epoch = excluded.pepper_epoch`
-        )
-          .bind(hash, row.id, nowIso, nowIso, nowIso, epoch)
-          .run();
-        result.rowsUpserted++;
-      }
-    } catch (err) {
-      result.errors++;
-      console.error(
-        JSON.stringify({
-          type: 'SHARED_REPORT_MATERIALIZE_ERROR',
-          phase: 'anon_id_returns',
-          event_id: row.id,
-          error: errorLabel(err),
-        })
-      );
-    }
-  }
-
-  result.durationMs = Date.now() - start;
-  return result;
-}
+// OSE-2214 (owner, 2026-11-23): Phase 1, materializeAnonIdReturns, is retired.
+// It hashed each phone's id per event into anon_id_returns so a return rate
+// could follow one phone across events. OSE counts scans of the code, never
+// people, so nothing here reads a phone id any more (migration 0119 clears them).
 
 /**
  * Phase 2 — refresh corridor_density_baseline rolling windows.
@@ -754,7 +541,8 @@ function formatHour(hour: number): string {
  * Groups scans by (event_id, bucket_date, bucket_hour) for events whose
  * start_date falls within the last 90 days. Computes:
  *   - total_scans   = COUNT(*) of scan rows in the bucket
- *   - distinct_agent_hashes = COUNT(DISTINCT COALESCE(anonymous_id, user_agent_hash))
+ *   - distinct_agent_hashes = always 0 (OSE-2214: no phone is told apart; the
+ *     column stays until a migration can drop it, and nothing reads it)
  *   - top_country   = always NULL (OSE-1460: the visitor's country is not recorded)
  *
  * IDs are deterministic — `agg_{event_id}_{bucket_date}_{bucket_hour}` — so
@@ -792,6 +580,12 @@ export async function aggregateScanBuckets(
     await env.DB.prepare(
       `UPDATE scan_node_returns SET country_code = NULL WHERE country_code IS NOT NULL`
     ).run();
+    // OSE-2214: likewise a Worker from before PR 1 can write a phone id or a
+    // browser-name hash in the deploy window after migration 0119; this clears it.
+    await env.DB.prepare(
+      `UPDATE scan_node_returns SET anonymous_id = NULL, user_agent_hash = NULL
+        WHERE anonymous_id IS NOT NULL OR user_agent_hash IS NOT NULL`
+    ).run();
 
     // Aggregate totals per (event_id, bucket_date, bucket_hour).
     // scan_bucket format: YYYY-MM-DDTHH:00 → date = first 10 chars, hour = chars 12-13.
@@ -801,7 +595,7 @@ export async function aggregateScanBuckets(
          substr(scan_bucket, 1, 10)             AS bucket_date,
          CAST(substr(scan_bucket, 12, 2) AS INTEGER) AS bucket_hour,
          COUNT(*)                               AS total_scans,
-         COUNT(DISTINCT COALESCE(anonymous_id, user_agent_hash)) AS distinct_agent_hashes
+         0                                      AS distinct_agent_hashes
        FROM scan_node_returns
        WHERE event_id IN (
          SELECT id FROM events WHERE start_date >= ?

@@ -5,7 +5,7 @@
  * database with realistic scan + event + sponsor data.
  *
  * Coverage:
- *   - Phase 1: anon_id_returns upsert from scans.anonymous_id
+ *   - Phase 1 (anon_id_returns) retired by OSE-2214: no per-phone row is written
  *   - Phase 2: corridor_density_baseline rolling window refresh
  *   - Phase 3: event_series auto-detector (Q2 hybrid lifecycle)
  *   - Failure-isolation: a phase failure does not abort other phases
@@ -18,15 +18,12 @@ import { describe, test, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import {
   aggregateScanBuckets,
-  materializeAnonIdReturns,
   refreshCorridorBaselines,
   detectEventSeriesClusters,
   type SharedReportMaterializeEnv,
 } from '../src/lib/shared-report';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { runSharedReportMaterialization } from '../src/handlers/shared-report-materialize';
-import { phaseTimesFor } from '../src/lib/event-datetime';
-import { hashAnonIdForReturns, pepperEpoch } from '../src/lib/anon-id-hash';
 import { seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
@@ -135,7 +132,7 @@ async function seedEvent(opts: {
     .run();
 }
 
-// OSE-798: anon_id_returns + scan-bucket aggregation read the SESSION side
+// OSE-798: scan-bucket aggregation reads the SESSION side
 // (scan_node_returns: anonymous_id / user_agent_hash / country_code, keyed by
 // event_id + scan_bucket). No poster_deployment_id lives on this side, so we
 // seed scan_node_returns only — the placement table is irrelevant here.
@@ -164,32 +161,14 @@ beforeAll(async () => {
 // guaranteed by `CREATE TABLE IF NOT EXISTS` + the ALTER-table re-run
 // guard in applyMigrations.
 /**
- * Seeds `n` distinct people at an event (default five, K): `n` anon_id_returns
- * rows, and `n` scans in one hour at a poster of its own. OSE-1784 (owner,
- * 2026-11-23, "posters too"): the corridor baseline adds up each event's
- * published poster figure, so an event a test expects in the baseline needs a
- * poster-hour of K scans, and `n` people there count as `n` rounded down to a
- * multiple of 5.
+ * Seeds `n` scans (default five, K) in one hour at a poster of its own. OSE-1784
+ * (owner, 2026-11-23, "posters too"): the corridor baseline adds up each
+ * event's published poster figure, so an event a test expects in the baseline
+ * needs a poster-hour of K scans, and `n` scans there count as `n` rounded down
+ * to a multiple of 5. OSE-2214: no anon_id_returns row is seeded.
  */
 async function seedReturners(venueId: string, prefix: string, n = 5): Promise<void> {
   await seedPosterHour(tenv().DB, venueId, 19, n, `test-pd-mat-${venueId}-${prefix}`);
-  const nowIso = new Date().toISOString();
-  for (let i = 0; i < n; i++) {
-    await tenv()
-      .DB.prepare(
-        `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
-         VALUES (?, ?, ?, ?, 1, ?)`
-      )
-      .bind(
-        `${prefix}${String(i).padStart(2, '0')}`.padEnd(32, '0'),
-        venueId,
-        nowIso,
-        nowIso,
-        nowIso
-      )
-      .run();
-  }
 }
 
 async function resetForTest(): Promise<void> {
@@ -197,273 +176,75 @@ async function resetForTest(): Promise<void> {
   await clearPipelineTables();
 }
 
-// ─── Phase 1 — anon_id_returns materialization ──────────────────────────────
+// ─── Phase 1 — retired (OSE-2214) ───────────────────────────────────────────
+//
+// The nightly job no longer hashes phones into anon_id_returns: OSE counts
+// scans of the code, never people (owner, 2026-11-23). These guard that a
+// legacy id left in scan_node_returns still produces no per-phone row.
 
-describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
-  test('the pepper purge and its leftover probe use the pepper_epoch index, not a full scan', async () => {
-    for (const sql of [
-      `EXPLAIN QUERY PLAN SELECT rowid FROM anon_id_returns
-         WHERE pepper_epoch IS NULL OR pepper_epoch < ?1 OR pepper_epoch > ?1 LIMIT 1000`,
-      `EXPLAIN QUERY PLAN SELECT 1 FROM anon_id_returns
-         WHERE pepper_epoch IS NULL OR pepper_epoch < ?1 OR pepper_epoch > ?1 LIMIT 1`,
-    ]) {
-      const plan = await tenv().DB.prepare(sql).bind('epoch').all<{ detail: string }>();
-      const details = (plan.results ?? []).map((r) => r.detail).join(' | ');
-      expect(details).toContain('idx_anon_id_returns_pepper_epoch');
-      expect(details).not.toMatch(/SCAN anon_id_returns(?! USING)/);
-    }
-  });
-
+describe('OSE-2214: the nightly job writes no per-phone return row', () => {
   beforeEach(async () => {
     await resetForTest();
   });
 
-  test('graceful skip when ANON_ID_HASH_PEPPER is missing — no rows, no errors', async () => {
-    await seedEvent({ id: 'test-evt-mat-skip', end_offset_hours: -4 });
-    await seedScan('test-evt-mat-skip', 'anon_test_skip');
-    const r = await materializeAnonIdReturns({ DB: tenv().DB });
-    expect(r.errors).toBe(0);
-    expect(r.rowsUpserted).toBe(0);
-    const count = await tenv()
-      .DB.prepare(`SELECT COUNT(*) AS c FROM anon_id_returns`)
-      .first<{ c: number }>();
-    expect(count!.c).toBe(0);
-  });
-
-  test('upserts a row for each distinct anonymous_id at an ended event', async () => {
-    await seedEvent({ id: 'test-evt-mat-1', end_offset_hours: -4 });
-    await seedScan('test-evt-mat-1', 'anon_aaa');
-    await seedScan('test-evt-mat-1', 'anon_bbb');
-    // Same event, same anon, another hour. Within one hour a repeat is refused by
-    // the UNIQUE index (migration 0101, OSE-923), so the duplicate is across hours.
-    await seedScan('test-evt-mat-1', 'anon_aaa', '2026-W21');
-    const r = await materializeAnonIdReturns({
+  test('scans carrying a legacy phone id at an ended event write no anon_id_returns row', async () => {
+    await seedEvent({ id: 'test-evt-mat-retired', start_offset_hours: -6, end_offset_hours: -4 });
+    for (let i = 0; i < 6; i++) await seedScan('test-evt-mat-retired', `anon_legacy_${i}`);
+    const r = await runSharedReportMaterialization({
       DB: tenv().DB,
       ANON_ID_HASH_PEPPER: TEST_PEPPER,
     });
-    expect(r.errors).toBe(0);
-    // Two distinct anons → two rows. The duplicate scan is collapsed by
-    // the SELECT DISTINCT in the materializer (PK protects from dup row).
-    expect(r.rowsUpserted).toBe(2);
+    expect(r.totalErrors).toBe(0);
+    expect(r.phases.map((p) => p.phase)).not.toContain('anon_id_returns');
     const rows = await tenv()
-      .DB.prepare(`SELECT * FROM anon_id_returns WHERE venue_id = ?`)
-      .bind('test-evt-mat-1')
-      .all();
-    expect(rows.results).toHaveLength(2);
-  });
-
-  test('OSE-616: a date-only event with no end_date ends with its start day and is materialized', async () => {
-    // The API stores calendar days and end_date is optional: such an event
-    // ends at local end-of-day of start_date (phaseTimesFor). Pick a zone
-    // where that instant is 4–24h ago, inside the 2–26h window.
-    const now = Date.now();
-    let pick: { day: string; zone: string } | null = null;
-    for (const zone of [
-      'Pacific/Kiritimati',
-      'Asia/Tokyo',
-      'Asia/Kolkata',
-      'Europe/London',
-      'America/Chicago',
-      'Pacific/Honolulu',
-      'Pacific/Pago_Pago',
-    ]) {
-      for (let back = -1; back <= 2 && !pick; back++) {
-        const day = new Date(now - back * 86_400_000).toISOString().slice(0, 10);
-        const end = phaseTimesFor({ start_date: day, end_date: null, timezone: zone }).end_date;
-        const endMs = end ? Date.parse(end) : NaN;
-        if (endMs >= now - 24 * 3600_000 && endMs <= now - 4 * 3600_000) pick = { day, zone };
-      }
-      if (pick) break;
-    }
-    expect(pick, 'a (day, zone) pair ending 4–24h ago').not.toBeNull();
-    await tenv()
-      .DB.prepare(
-        `INSERT INTO events
-           (id, brand_id, title, slug, status, location, start_date, end_date, timezone, created_at, updated_at)
-         VALUES ('test-evt-mat-startonly', 'test-brand', 'Start only', 'test-evt-mat-startonly',
-                 'active', 'Test Venue', ?, NULL, ?, datetime('now'), datetime('now'))`
-      )
-      .bind(pick!.day, pick!.zone)
-      .run();
-    await seedScan('test-evt-mat-startonly', 'anon_startonly');
-
-    const r = await materializeAnonIdReturns({ DB: tenv().DB, ANON_ID_HASH_PEPPER: TEST_PEPPER });
-    expect(r.errors).toBe(0);
-    const rows = await tenv()
-      .DB.prepare(`SELECT COUNT(*) AS n FROM anon_id_returns WHERE venue_id = ?`)
-      .bind('test-evt-mat-startonly')
+      .DB.prepare(`SELECT COUNT(*) AS n FROM anon_id_returns`)
       .first<{ n: number }>();
-    expect(rows?.n).toBe(1);
+    expect(rows!.n).toBe(0);
   });
 
-  test('never persists raw anonymous_id — only the hash', async () => {
-    await seedEvent({ id: 'test-evt-mat-hash', end_offset_hours: -4 });
-    await seedScan('test-evt-mat-hash', 'anon_uniquemarker123');
-    await materializeAnonIdReturns({
-      DB: tenv().DB,
-      ANON_ID_HASH_PEPPER: TEST_PEPPER,
-    });
-    const row = await tenv()
-      .DB.prepare(`SELECT anon_id_hash FROM anon_id_returns WHERE venue_id = ?`)
-      .bind('test-evt-mat-hash')
-      .first<{ anon_id_hash: string }>();
-    expect(row).not.toBeNull();
-    // Must be 32 hex chars
-    expect(row!.anon_id_hash).toMatch(/^[a-f0-9]{32}$/);
-    // Must NOT contain the raw anon string anywhere
-    expect(row!.anon_id_hash).not.toContain('uniquemarker123');
-  });
-
-  test('idempotent — re-running on same scans bumps return_count, not row count', async () => {
-    await seedEvent({ id: 'test-evt-mat-idem', end_offset_hours: -4 });
-    await seedScan('test-evt-mat-idem', 'anon_idem');
-    const env1: SharedReportMaterializeEnv = {
-      DB: tenv().DB,
-      ANON_ID_HASH_PEPPER: TEST_PEPPER,
-    };
-    await materializeAnonIdReturns(env1);
-    await materializeAnonIdReturns(env1);
-    await materializeAnonIdReturns(env1);
-    const row = await tenv()
-      .DB.prepare(`SELECT return_count FROM anon_id_returns WHERE venue_id = ?`)
-      .bind('test-evt-mat-idem')
-      .first<{ return_count: number }>();
-    expect(row).not.toBeNull();
-    // 3 re-runs on the SAME scan event → return_count bumps each time
-    expect(row!.return_count).toBe(3);
-    // Still exactly one row (PK protects)
-    const count = await tenv()
-      .DB.prepare(`SELECT COUNT(*) AS c FROM anon_id_returns WHERE venue_id = ?`)
-      .bind('test-evt-mat-idem')
-      .first<{ c: number }>();
-    expect(count!.c).toBe(1);
-  });
-
-  // OSE-1652. `return_count` counts runs of this job, as the test above pins, so
-  // the report's venue return rate must not read it. It used to ("people whose
-  // return_count is over 1"): the job reads an event once on a normal night, and
-  // a second run (a delivery repeated, a run by hand) made six people who each
-  // scanned once read as a 100% venue return rate. The rate now counts people
-  // seen at another event of the same confirmed series.
-  //
-  // Seen red on main at 5da1d61: the second report read 100.
-  test('six people who each scanned once never read as returning, however often the job runs', async () => {
-    const id = 'test-evt-mat-rate';
-    await seedEvent({ id, start_offset_hours: -8, end_offset_hours: -4 });
-    // A confirmed series with an earlier event that none of the six went to.
-    await seedEvent({
-      id: 'test-evt-mat-rate-prev',
-      start_offset_hours: -200,
-      end_offset_hours: -196,
-    });
-    await tenv()
-      .DB.prepare(
-        `INSERT INTO event_series (id, venue_id, series_name, state) VALUES ('ser-mat-rate', ?, 'Weekly', 'confirmed')`
+  test('the scan roll-up clears a phone id or browser hash an older Worker wrote after 0119', async () => {
+    const db = tenv().DB;
+    await seedEvent({ id: 'test-evt-mat-late', start_offset_hours: -24 });
+    await db
+      .prepare(
+        `INSERT INTO scan_node_returns (id, event_id, scan_bucket, anonymous_id, user_agent_hash, created_at)
+         VALUES ('snr-late-1', 'test-evt-mat-late', '2026-11-24T10:00', ?, 'ua-hash', datetime('now'))`
       )
-      .bind('test-evt-mat-rate-prev')
+      .bind(`snk1_${'ab'.repeat(32)}`)
       .run();
-    await tenv()
-      .DB.prepare(`UPDATE events SET series_id = 'ser-mat-rate' WHERE id IN (?, ?)`)
-      .bind(id, 'test-evt-mat-rate-prev')
-      .run();
-    for (let i = 0; i < 6; i++) await seedScan(id, `anon_once_${i}`);
-    const jobEnv: SharedReportMaterializeEnv = { DB: tenv().DB, ANON_ID_HASH_PEPPER: TEST_PEPPER };
-
-    for (let run = 1; run <= 3; run++) {
-      await materializeAnonIdReturns(jobEnv);
-      const r = await buildSharedReport(tenv().DB, id);
-      expect(r.ok).toBe(true);
-      if (!r.ok) return;
-      // OSE-2214: the report no longer publishes a return rate at all, so
-      // however often the job runs, nothing in it reads as returning.
-      expect('return_rate' in r.report, `run ${run}`).toBe(false);
-    }
-  });
-
-  test('skips events with NULL anonymous_id scans (no row written)', async () => {
-    await seedEvent({ id: 'test-evt-mat-nullanon', end_offset_hours: -4 });
-    await seedScan('test-evt-mat-nullanon', null);
-    const r = await materializeAnonIdReturns({
-      DB: tenv().DB,
-      ANON_ID_HASH_PEPPER: TEST_PEPPER,
-    });
-    expect(r.errors).toBe(0);
-    expect(r.rowsUpserted).toBe(0);
-  });
-
-  test('after a pepper rotation, rows of the old or an unknown pepper are deleted, so erasure can reach everything left', async () => {
-    await seedEvent({ id: 'test-evt-mat-rot', end_offset_hours: -4 });
-    await seedScan('test-evt-mat-rot', 'anon_rotated');
-    await materializeAnonIdReturns({ DB: tenv().DB, ANON_ID_HASH_PEPPER: 'retired-pepper' });
-    const oldHash = await hashAnonIdForReturns('anon_rotated', 'retired-pepper');
-    // A pre-0091 row: its pepper is unknown.
-    await tenv()
-      .DB.prepare(
-        `INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
-         VALUES ('legacy-hash-000000000000000000000', 'test-evt-mat-rot', datetime('now'), datetime('now'), 1, datetime('now'))`
+    await aggregateScanBuckets({ DB: db });
+    const row = await db
+      .prepare(
+        `SELECT anonymous_id, user_agent_hash FROM scan_node_returns WHERE id = 'snr-late-1'`
       )
-      .run();
-
-    const r = await materializeAnonIdReturns({ DB: tenv().DB, ANON_ID_HASH_PEPPER: TEST_PEPPER });
-    expect(r.errors).toBe(0);
-    const rows = await tenv()
-      .DB.prepare(`SELECT anon_id_hash, pepper_epoch FROM anon_id_returns`)
-      .all<{ anon_id_hash: string; pepper_epoch: string | null }>();
-    const current = await pepperEpoch(TEST_PEPPER);
-    // Erasure re-derives only the current hash; nothing under another one survives.
-    expect(rows.results?.map((x) => x.anon_id_hash)).toEqual([
-      await hashAnonIdForReturns('anon_rotated', TEST_PEPPER),
-    ]);
-    expect(rows.results?.every((x) => x.pepper_epoch === current)).toBe(true);
-    expect(rows.results?.some((x) => x.anon_id_hash === oldHash)).toBe(false);
+      .first<{ anonymous_id: string | null; user_agent_hash: string | null }>();
+    expect(row).toEqual({ anonymous_id: null, user_agent_hash: null });
   });
 
-  test.each([
-    [50_000, false],
-    [50_001, true],
-  ])(
-    'purge of %i old-pepper rows: incomplete alert = %s (no false alarm at the exact cap)',
-    async (n, expectAlert) => {
-      await seedEvent({ id: 'test-evt-mat-cap', end_offset_hours: -400 });
-      await tenv()
-        .DB.prepare(
-          `WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < ?)
-           INSERT INTO anon_id_returns (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at, pepper_epoch)
-           SELECT printf('%032d', i), 'test-evt-mat-cap', datetime('now'), datetime('now'), 1, datetime('now'), 'retired-epoch' FROM k`
+  test('the scan roll-up counts every scan and tells no browser apart', async () => {
+    const db = tenv().DB;
+    await seedEvent({ id: 'test-evt-mat-nodist', start_offset_hours: -24 * 2 });
+    const bucket = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 13) + ':00';
+    for (const [id, anon] of [
+      ['snr-nd-1', 'anon_x'],
+      ['snr-nd-2', 'anon_y'],
+      ['snr-nd-3', null],
+    ] as const) {
+      await db
+        .prepare(
+          `INSERT INTO scan_node_returns (id, event_id, scan_bucket, anonymous_id, created_at)
+           VALUES (?, ?, ?, ?, datetime('now'))`
         )
-        .bind(n)
+        .bind(id, 'test-evt-mat-nodist', bucket, anon)
         .run();
-      const errors: string[] = [];
-      const spy = vi.spyOn(console, 'error').mockImplementation((m: unknown) => {
-        errors.push(String(m));
-      });
-      try {
-        await materializeAnonIdReturns({ DB: tenv().DB, ANON_ID_HASH_PEPPER: TEST_PEPPER });
-      } finally {
-        spy.mockRestore();
-      }
-      const alerted = errors.some((e) => e.includes('ANON_ID_RETURNS_PEPPER_PURGE_INCOMPLETE'));
-      expect(alerted).toBe(expectAlert);
-      const left = await tenv()
-        .DB.prepare(`SELECT COUNT(*) AS c FROM anon_id_returns`)
-        .first<{ c: number }>();
-      expect(left!.c).toBe(n - 50_000);
-    },
-    60_000
-  );
-
-  test('skips events outside the lookback window (end_date too old OR too recent)', async () => {
-    // Event ended 50 hours ago (older than ceiling): should be skipped
-    await seedEvent({ id: 'test-evt-mat-old', end_offset_hours: -50 });
-    await seedScan('test-evt-mat-old', 'anon_old');
-    // Event ending in 1 hour (still in progress): should be skipped
-    await seedEvent({ id: 'test-evt-mat-new', end_offset_hours: 1 });
-    await seedScan('test-evt-mat-new', 'anon_new');
-    const r = await materializeAnonIdReturns({
-      DB: tenv().DB,
-      ANON_ID_HASH_PEPPER: TEST_PEPPER,
-    });
-    expect(r.rowsUpserted).toBe(0);
+    }
+    await aggregateScanBuckets({ DB: db });
+    const row = await db
+      .prepare(`SELECT total_scans, distinct_agent_hashes FROM scan_aggregates WHERE event_id = ?`)
+      .bind('test-evt-mat-nodist')
+      .first<{ total_scans: number; distinct_agent_hashes: number }>();
+    expect(row!.total_scans).toBe(3);
+    expect(row!.distinct_agent_hashes).toBe(0);
   });
 });
 
@@ -1159,7 +940,6 @@ describe('OSE-634: runSharedReportMaterialization — the summary line', () => {
     expect(phases.map((p) => p.phase)).toEqual([
       'scan_aggregation',
       'h3_cell_backfill',
-      'anon_id_returns',
       'corridor_density_baseline',
       'event_series_detector',
     ]);
@@ -1203,11 +983,11 @@ describe('OSE-634: runSharedReportMaterialization — the summary line', () => {
     expect(types.filter((t) => t === 'SHARED_REPORT_MATERIALIZE_COMPLETE')).toHaveLength(1);
     // The summary is the last word of the run.
     expect(types[types.length - 1]).toBe('SHARED_REPORT_MATERIALIZE_COMPLETE');
-    const returns = phaseOf(summary!, 'anon_id_returns');
-    expect(returns.events_processed).toBe(1);
-    // Six people is at the floor or above: the number is given, rounded down
-    // to a multiple of 5 (OSE-2151).
-    expect(returns.rows_upserted).toBe(5);
+    // OSE-2214: no phase counts people; the scan roll-up wrote one hour row.
+    expect((summary!.phases as SummaryPhase[]).map((p) => p.phase)).not.toContain(
+      'anon_id_returns'
+    );
+    expect(phaseOf(summary!, 'scan_aggregation').rows_upserted).toBe(1);
   });
 
   test('OSE-634 | SRE-OBS-01 | never who | a people counter under the floor is withheld, not zero and not exact', async () => {
@@ -1224,14 +1004,13 @@ describe('OSE-634: runSharedReportMaterialization — the summary line', () => {
         ANON_ID_HASH_PEPPER: TEST_PEPPER,
       });
     });
-    // The run itself did the work on three people...
-    expect(result!.phases[2].rowsUpserted).toBe(3);
-    // ...and the line does not say so.
-    const returns = phaseOf(lines[0], 'anon_id_returns');
-    expect(returns.events_processed).toBe(1);
-    expect(returns.rows_upserted).toBeNull();
-    expect(returns.rows_skipped).toBeNull();
-    // Scans skipped for want of a cell are people's actions too.
+    expect(result!.totalErrors).toBe(0);
+    // OSE-2214: the per-phone phase is gone, so no people counter is written.
+    expect((lines[0].phases as SummaryPhase[]).map((p) => p.phase)).not.toContain(
+      'anon_id_returns'
+    );
+    // Scans skipped by the roll-up are people's actions: under the floor the
+    // line gives null, never 0 and never the exact number.
     expect(phaseOf(lines[0], 'scan_aggregation').rows_skipped).toBeNull();
     // No event is named anywhere in the line.
     expect(JSON.stringify(lines[0])).not.toContain('test-evt-mat-few');
@@ -1259,7 +1038,7 @@ describe('OSE-634: runSharedReportMaterialization — the summary line', () => {
     expect(lines).toHaveLength(1);
     expect(lines[0].ok).toBe(false);
     expect(lines[0].total_errors).toBeGreaterThanOrEqual(1);
-    expect((lines[0].phases as SummaryPhase[]).length).toBe(5);
+    expect((lines[0].phases as SummaryPhase[]).length).toBe(4);
     expect(phaseOf(lines[0], 'corridor_density_baseline').errors).toBeGreaterThanOrEqual(1);
     expect(phaseOf(lines[0], 'event_series_detector').errors).toBe(0);
   });
@@ -1349,10 +1128,11 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
       .first<{ total_scans: number; distinct_agent_hashes: number }>();
     expect(row).not.toBeNull();
     expect(row!.total_scans).toBe(2);
-    expect(row!.distinct_agent_hashes).toBe(2);
+    // OSE-2214: no browser is told apart; the figure is always 0.
+    expect(row!.distinct_agent_hashes).toBe(0);
   });
 
-  test('OSE-632 | BE-SCAN-2 | same anon scans twice in bucket | one row, distinct_agent_hashes counts 1', async () => {
+  test('OSE-632 | BE-SCAN-2 | same anon scans twice in bucket | one row, distinct_agent_hashes stays 0', async () => {
     const db = tenv().DB;
     await seedEvent({ id: 'test-evt-mat-agg-dedup', start_offset_hours: -24 * 5 });
     const bucket = new Date(Date.now() - 12 * 3600 * 1000).toISOString().slice(0, 13) + ':00';
@@ -1382,7 +1162,7 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
       .first<{ total_scans: number; distinct_agent_hashes: number }>();
     // One row per browser-hour: total_scans was 2 before 0101.
     expect(row!.total_scans).toBe(1);
-    expect(row!.distinct_agent_hashes).toBe(1);
+    expect(row!.distinct_agent_hashes).toBe(0);
   });
 
   test('OSE-632 | BE-SCAN-2 | running twice is idempotent | same row count, no duplicates', async () => {
@@ -1447,16 +1227,14 @@ describe('OSE-272 Session 3: runSharedReportMaterialization (cron orchestrator)'
     await resetForTest();
   });
 
-  test('runs all 5 phases and returns aggregated result shape', async () => {
+  test('runs the 4 remaining phases (the returns phase is retired) and returns aggregated result shape', async () => {
     const r = await runSharedReportMaterialization({
       DB: tenv().DB,
       ANON_ID_HASH_PEPPER: TEST_PEPPER,
     });
-    expect(r.phases).toHaveLength(5);
     expect(r.phases.map((p) => p.phase)).toEqual([
       'scan_aggregation',
       'h3_cell_backfill',
-      'anon_id_returns',
       'corridor_density_baseline',
       'event_series_detector',
     ]);
@@ -1472,13 +1250,11 @@ describe('OSE-272 Session 3: runSharedReportMaterialization (cron orchestrator)'
     expect(r.totalErrors).toBe(0);
   });
 
-  test('continues running phases even if pepper is missing (anon_id_returns silently skips)', async () => {
+  test('runs every phase without the pepper: no phase needs it any more', async () => {
     await seedEvent({ id: 'test-evt-mat-orch', end_offset_hours: -4 });
     await seedScan('test-evt-mat-orch', 'anon_orch');
     const r = await runSharedReportMaterialization({ DB: tenv().DB });
-    // anon_id_returns noops gracefully (pepper missing); all other phases still run
-    expect(r.phases).toHaveLength(5);
+    expect(r.phases).toHaveLength(4);
     expect(r.totalErrors).toBe(0);
-    expect(r.phases[2].rowsUpserted).toBe(0); // anon_id_returns is phases[2]; skipped without pepper
   });
 });

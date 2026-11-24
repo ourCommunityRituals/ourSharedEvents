@@ -2077,7 +2077,8 @@ export async function handleUpdateEvent(
  * orphans have zero activity and delete cleanly.
  *
  * Not handled (rare, deliberately): an event acting as a `venue_id` for an
- * event_series / anon_id_returns row will FK-block the final DELETE (503) —
+ * event_series row (or a legacy anon_id_returns row, none since migration
+ * 0119) will FK-block the final DELETE (503) —
  * you should not silently destroy a venue other rows point at; archive it.
  *
  * Scope note: like the sibling PUT, this is id-only (no brand-scope clause in

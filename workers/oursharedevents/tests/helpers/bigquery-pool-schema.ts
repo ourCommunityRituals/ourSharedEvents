@@ -20,6 +20,8 @@ interface Field {
 
 const POOL_TABLES: Record<string, Field[]> = {
   events_backup: eventsBackup,
+  // OSE-2214: no writer since PR 3; the BigQuery table and its schema stay until
+  // the owner drops the table, so the export-grain gate still reads it.
   corridor_returns_export: corridorReturns,
   corridor_density_baseline_export: corridorDensity,
   event_series_export: eventSeries,

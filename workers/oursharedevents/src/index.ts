@@ -122,10 +122,9 @@ export default {
     //   Its Phase 4 deletes email-list rows (subscribers, FORMS_DB since
     //   OSE-1661) older than subscriberRetentionDays(): 1 to 90 days, default
     //   90 (owner 2026-10-11). Audited to pii_audit_log like the other phases.
-    // runSharedReportMaterialization (OSE-272 Session 3) reads DB only;
-    //   off by default (env.ANON_ID_HASH_PEPPER unset → Phase 1 no-ops with
-    //   structured warning). Phases 2 + 3 (corridor baseline + event-series
-    //   detector) run regardless — they don't need the pepper.
+    // runSharedReportMaterialization (OSE-272 Session 3) reads DB only. No
+    //   phase needs the pepper: the per-phone returns phase is retired
+    //   (OSE-2214, count the code, never the person).
     // runSharedReportBigQueryExport (OSE-272 Session 4) reads main DB only
     //   AND streams to BigQuery; off by default (BQ config unset → no-op).
     //   Same cron tick as materialization (S4-Q1 ratified), but SEQUENCED
@@ -146,7 +145,8 @@ export default {
     //   corridor) the first night it holds ≥ 5 upcoming published events. A
     //   one-way door; carries no identity. Never throws.
     // runScanReturnsRetention (lib/scan-returns-retention.ts, OSE-1351) reads
-    //   DB.scan_node_returns + DB.anon_id_returns ONLY; on in every env since
+    //   DB.scan_node_returns + DB.anon_id_returns ONLY (the latter empty since
+    //   migration 0119, OSE-2214, and kept until the table is dropped); on in every env since
     //   OSE-1659 (wrangler.toml SCAN_RETURNS_RETENTION_DAYS = "365"; unset →
     //   no-op). Deletes rows older than the window from both tables
     //   independently. Does NOT touch the ose_anon cookie

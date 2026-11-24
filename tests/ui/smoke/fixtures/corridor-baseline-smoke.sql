@@ -5,8 +5,8 @@
 --   node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/corridor-baseline-smoke.sql
 --
 -- WHY A FILE OF ITS OWN, RUN RIGHT BEFORE THE GATE
--- The staging Worker has a 03:00 UTC cron. Its anon_id_returns step deletes attendee
--- rows with no pepper epoch (these have none), and its baseline refresh recomputes
+-- The staging Worker has a 03:00 UTC cron (its anon_id_returns step is retired by
+-- OSE-2214, so only the baseline refresh matters now). The refresh recomputes
 -- every corridor bucket from real data, so either can replace what is seeded here.
 -- Seeded with the other smoke fixtures, a CI run that straddled 03:00 had tens of
 -- minutes for that to happen. Applied in the step just before T4f it has seconds.

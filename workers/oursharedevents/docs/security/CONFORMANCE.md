@@ -85,7 +85,7 @@
 
 **Status:** ✅ Enforced 
 
-**Claim:** NCR data is the platform's long-horizon intelligence. Scan counts are permanently retained because they contain no PII — the anonymous ID never appears in scan_aggregates, only in the anon_id_returns intermediary. If someone adds a PII-bearing column to scan_aggregates (e.g., a raw anon_id_hash stored per row rather than per aggregate bucket), the no-TTL promise becomes a liability: unbounded retention of pseudonymous data under GDPR is an exposure. The invariant protects both sides: permanent retention requires zero PII in the accumulation schema; any PII addition must trigger a retention policy and a brain invariant update.
+**Claim:** NCR data is the platform's long-horizon intelligence. Scan counts are permanently retained because they contain no PII — the anonymous ID never appears in scan_aggregates, only in the anon_id_returns intermediary (retired 2026-11-24, OSE-2214: migration 0119 emptied it and nothing writes it). If someone adds a PII-bearing column to scan_aggregates (e.g., a raw anon_id_hash stored per row rather than per aggregate bucket), the no-TTL promise becomes a liability: unbounded retention of pseudonymous data under GDPR is an exposure. The invariant protects both sides: permanent retention requires zero PII in the accumulation schema; any PII addition must trigger a retention policy and a brain invariant update.
 
 **Enforcement:**
 

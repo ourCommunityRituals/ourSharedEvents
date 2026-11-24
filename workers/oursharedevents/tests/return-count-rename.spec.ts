@@ -11,7 +11,6 @@
 import { env } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { EXEMPT_IDENTIFIERS } from '../src/lib/schema-lexicon';
-import { materializeAnonIdReturns } from '../src/lib/shared-report';
 
 interface TestEnv {
   DB: D1Database;
@@ -72,34 +71,13 @@ describe('the schema', () => {
 });
 
 describe('the writer', () => {
-  test('a repeat run bumps return_count and keeps one row (the UPSERT names the new column)', async () => {
-    await db()
-      .prepare(
-        `INSERT OR IGNORE INTO events (id, brand_id, title, slug, status, start_date, end_date, created_at, updated_at)
-         VALUES ('evt_return_count', 'b', 'Return count', 'evt_return_count', 'active',
-                 date('now', '-1 day'), date('now', '-1 day'), datetime('now'), datetime('now'))`
-      )
-      .run();
-    await db()
-      .prepare(
-        `INSERT OR IGNORE INTO scan_node_returns (id, event_id, anonymous_id, scan_bucket, created_at)
-         VALUES ('snr_rc_1', 'evt_return_count', ?, '2026-10-10T19:00', '2026-10-10 19:00:00')`
-      )
-      .bind(`snk1_${'0'.repeat(64)}`)
-      .run();
-
-    const run = () =>
-      materializeAnonIdReturns({ DB: db(), ANON_ID_HASH_PEPPER: 'pepper-return-count' } as never);
-    await run();
-    await run();
-
-    const rows = await db()
-      .prepare('SELECT return_count FROM anon_id_returns WHERE venue_id = ?')
-      .bind('evt_return_count')
-      .all<{ return_count: number }>();
-    // One pseudonym, one row; the count moved only if the event was in the job's window.
-    expect(rows.results.length).toBeLessThanOrEqual(1);
-    for (const r of rows.results) expect(r.return_count).toBeGreaterThanOrEqual(1);
+  test('OSE-2214: no source writes anon_id_returns any more (the nightly writer is retired)', () => {
+    const files = JSON.parse(tenv().TEST_SOURCE_FILES_JSON) as Record<string, string>;
+    const writers = Object.entries(files)
+      .filter(([p]) => /[\\/]src[\\/]/.test(p))
+      .filter(([, t]) => /INSERT\s+(OR\s+\w+\s+)?INTO\s+anon_id_returns\b/i.test(t))
+      .map(([p]) => p);
+    expect(writers, 'files in src that still write anon_id_returns').toEqual([]);
   });
 
   test('no source names the old column', () => {

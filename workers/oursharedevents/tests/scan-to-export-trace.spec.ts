@@ -10,7 +10,7 @@
  *                         corridor node; the click record holds no place itself
  *   scan_aggregates     → hour bucket for the event, tagged with the venue's
  *                         res9 + res7 (a live scan at the venue)
- *   anon_id_returns     → the scanner's anonymous return row for the event
+ *   anon_id_returns     → retired (OSE-2214): no per-phone row is written
  *   corridor baseline   → keyed by the res7 corridor node (872664544ffffff)
  *   BigQuery export     → every row carries corridor_id = the res7 node and
  *                         NOTHING finer: no res9, no coordinate, no placement
@@ -25,10 +25,9 @@
  * runSharedReportBigQueryExport), exactly as scheduled() calls them; BigQuery is
  * a recording fetch mock. The event is created exactly as the API stores one:
  * a calendar-day start_date/end_date ("YYYY-MM-DD") plus an IANA timezone, no
- * hand-written ISO instants. The return-rate phase only reads events that
- * ENDED 2–26 hours ago, so the test picks a zone whose end-of-day falls inside
- * that window right now (dateOnlyFixture) — the same day-end rule the public
- * page and the materializer use (phaseTimesFor).
+ * hand-written ISO instants. The test picks a zone whose end-of-day fell 2–26
+ * hours ago (dateOnlyFixture), the window the retired return-rate phase read
+ * (OSE-2214), using the same day-end rule as the public page (phaseTimesFor).
  *
  * Hop 7 (OSE-1459): a scan at a second poster across town is counted at that
  * poster's own res9 cell (scan_cell_aggregates), not the venue's, once that
@@ -60,7 +59,6 @@ import {
   isCorridorId,
 } from '../src/lib/export-geography';
 import { phaseTimesFor } from '../src/lib/event-datetime';
-import { pepperEpoch } from '../src/lib/anon-id-hash';
 import { refreshCorridorBaselines } from '../src/lib/shared-report';
 import { bigQueryInsertRows } from '../src/cloud/bigquery';
 import { gridDisk } from 'h3-js';
@@ -360,8 +358,8 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
       .all<{ total_scans: number; h3_res9: string; h3_res7: string }>();
     expect(agg.results).toEqual([{ total_scans: 1, h3_res9: EAGLES_RES9, h3_res7: EAGLES_RES7 }]);
 
-    // anon_id_returns: OSE-2214, the scan stores no phone id, so the returns
-    // job has nobody to link and writes no row.
+    // anon_id_returns: OSE-2214, the nightly job has no returns phase and the
+    // scan stores no phone id, so no row is written.
     const ret = await tenv()
       .DB.prepare('SELECT anon_id_hash, return_count FROM anon_id_returns WHERE venue_id = ?')
       .bind(eventId)
@@ -384,31 +382,21 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     expect(run.totalErrors, JSON.stringify(run.phases)).toBe(0);
 
     const byTable = Object.fromEntries(bqCalls.map((c) => [c.table, c]));
-    // One person is under K, so the event adds no one to any group (ADR-026
-    // rule B): the returns table gets only its snapshot marker, with no group
-    // left to withhold, and the corridor baseline has no row to send. Nothing
-    // about the lone scanner crosses.
-    expect(Object.keys(byTable).sort()).toEqual(['corridor_returns_export']);
-    const returnRows = byTable.corridor_returns_export.rows.map((r) => r.json);
-    expect(returnRows).toEqual([
-      expect.objectContaining({ row_type: 'snapshot', groups_in_snapshot: 0 }),
-    ]);
-    const returns = run.phases.find((p) => p.phase === 'anon_id_returns');
-    expect(returns?.rowsExported).toBe(0);
-    expect(returns?.rowsSkipped).toBe(0);
+    // One scan is under K, so the event adds nothing to the corridor baseline
+    // (ADR-026 rule B) and the baseline has no row to send. The returns export
+    // is retired (OSE-2214), so nothing at all crosses for the lone scan.
+    expect(Object.keys(byTable)).toEqual([]);
+    expect(run.phases.map((p) => p.phase)).not.toContain('anon_id_returns');
     const baseline = run.phases.find((p) => p.phase === 'corridor_density_baseline');
     expect(baseline?.rowsExported).toBe(0);
     expect(baseline?.rowsSkipped).toBe(0);
     for (const c of bqCalls) expect(c.dataset).toBe('oureventring_general_stg');
 
-    // As if eleven more people had scanned that poster in that hour (the scan
-    // rows /q writes, and the rows the nightly job writes under the same
-    // pepper): twelve people publish 10 at the poster, which is what the
+    // As if eleven more scans had reached that poster in that hour (the scan
+    // rows /q writes): twelve scans publish 10 at the poster, which is what the
     // baseline adds up since OSE-1784. 10 is CORRIDOR_BASELINE_MIN_SAMPLE, so
     // the job keys a baseline row, and it crosses keyed by the res7 corridor
     // node and nothing finer.
-    const epoch = await pepperEpoch(TRACE_PEPPER);
-    const seen = new Date().toISOString();
     for (let i = 0; i < 11; i++) {
       await tenv()
         .DB.prepare(
@@ -417,22 +405,6 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
              FROM scan_placement_events WHERE event_id = ? LIMIT 1`
         )
         .bind(`trace-more-spe-${i}`, eventId)
-        .run();
-      await tenv()
-        .DB.prepare(
-          `INSERT INTO anon_id_returns
-             (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at,
-              pepper_epoch)
-           VALUES (?, ?, ?, ?, 1, ?, ?)`
-        )
-        .bind(
-          `trace-more-${String(i).padStart(2, '0')}`.padEnd(32, '0'),
-          eventId,
-          seen,
-          seen,
-          seen,
-          epoch
-        )
         .run();
     }
     const refreshed = await refreshCorridorBaselines({ DB: tenv().DB });
@@ -481,21 +453,16 @@ describe('OSE-616 trace: one Eagles Hall scan, scan → aggregate → corridor �
     );
     // Every phase that ran is on record — including event_series, which ran
     // with nothing past its watermark ("ran, nothing new" ≠ "did not run").
-    expect(Object.keys(byPhase).sort()).toEqual([
-      'anon_id_returns',
-      'corridor_density_baseline',
-      'event_series',
-    ]);
+    // OSE-2214: the returns phase is retired, so it has no manifest row.
+    expect(Object.keys(byPhase).sort()).toEqual(['corridor_density_baseline', 'event_series']);
     expect(byPhase.event_series.rows_exported).toBe(0);
-    // OSE-1460: the returns phase writes counts to corridor_returns_export.
-    expect(JSON.parse(byPhase.anon_id_returns.details).table).toBe('corridor_returns_export');
     expect(JSON.parse(byPhase.event_series.details).rows_read).toBe(0);
     for (const [phase, r] of Object.entries(byPhase)) {
       expect(r.actor).toBe('cron:scheduler');
       expect(r.outcome).toBe('success');
       const d = JSON.parse(r.details);
-      // Nothing crosses: event_series had nothing new, and the lone scanner is
-      // under the floor for both the returns and the baseline (OSE-1460).
+      // Nothing crosses: event_series had nothing new, and the lone scan is
+      // under the floor for the baseline.
       expect(r.rows_exported).toBe(0);
       expect(d.corridor_id_present).toBe(0);
       expect(d.corridor_id_unknown).toBe(0);

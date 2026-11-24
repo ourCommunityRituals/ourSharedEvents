@@ -437,6 +437,10 @@ TO "principalSet://iam.googleapis.com/projects/295230478705/locations/global/wor
 
 ### Purge return rows after migration 0091 and after any `ANON_ID_HASH_PEPPER` rotation (OSE-1460)
 
+> **Retired 2026-11-24 (OSE-2214).** Migration 0119 deletes every `anon_id_returns` row and
+> nothing writes the table any more, so this purge has nothing left to remove. Kept for
+> an environment still below 0119.
+
 **Why:** `anon_id_returns.anon_id_hash` is keyed by `ANON_ID_HASH_PEPPER`. Erasure (`handlers/data-subject.ts`) can only re-derive the hash under the current pepper, so rows written under any other pepper, or before 0091 (`pepper_epoch` NULL), cannot be found for a person who asks to be erased. The export never counts them. The nightly materializer deletes them, but at most 50,000 rows a run; past that it logs `ANON_ID_RETURNS_PEPPER_PURGE_INCOMPLETE` and continues the next night. This step removes them all at once.
 
 **When:**
