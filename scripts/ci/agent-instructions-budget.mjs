@@ -16,6 +16,9 @@ export const BUDGET = {
   'AGENTS.md': 12 * 1024,
   'CLAUDE.md': 6 * 1024,
   'workers/oursharedevents/CLAUDE.md': 8 * 1024,
+  // Read on demand, not every turn, but it grew to 311 KB before the 2026-11-24 split;
+  // dated entries live in docs/brain/role-state/<role>.md.
+  'docs/brain/ROLE-STATE.md': 12 * 1024,
   skill: 8 * 1024,
 };
 const MODELS = new Set(['haiku', 'sonnet', 'opus', 'inherit']);
@@ -53,7 +56,12 @@ function check(root) {
   for (const rel of ['AGENTS.md', 'CLAUDE.md']) {
     if (!existsSync(file(rel))) problems.push(`${rel} is missing`);
   }
-  for (const rel of ['AGENTS.md', 'CLAUDE.md', 'workers/oursharedevents/CLAUDE.md']) {
+  for (const rel of [
+    'AGENTS.md',
+    'CLAUDE.md',
+    'workers/oursharedevents/CLAUDE.md',
+    'docs/brain/ROLE-STATE.md',
+  ]) {
     if (!existsSync(file(rel))) continue;
     const size = bytes(read(file(rel)));
     if (size > BUDGET[rel]) problems.push(`${rel} is ${size} bytes; the budget is ${BUDGET[rel]}`);
