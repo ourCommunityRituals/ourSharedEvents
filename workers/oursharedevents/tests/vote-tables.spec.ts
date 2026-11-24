@@ -36,6 +36,11 @@ import {
   voteTeamMarker,
 } from '../src/lib/votes';
 import { SCAN_NODE_KEY_CONTEXT, scanNodeKey } from '../src/lib/scan-node-key';
+import {
+  OFF_LIMITS_RULES,
+  offLimitsRuleFor,
+  type OffLimitsRuleId,
+} from '../src/lib/vote-off-limits';
 
 interface TestEnv {
   DB: D1Database;
@@ -610,5 +615,47 @@ describe('OSE-2125 | what an object may be', () => {
     }
     expect(parseVotableLabel('  Blue   Moon  ')).toEqual({ ok: true, value: 'Blue Moon' });
     expect(parseVotableLabel('Stall 12: Hot Pies').ok).toBe(true);
+  });
+});
+
+// OSE-2225 (ADR-040 decision 12): the off-limits list. Each rule names a
+// sample of the shape it refuses; a rule added without a sample fails here.
+describe('OSE-2225 | the off-limits list', () => {
+  const SHAPES: Record<OffLimitsRuleId, string[]> = {
+    email: ['Painting by ann@example.com', 'rosa＠example.com'],
+    phone: [
+      'Float, call 555 123 4567',
+      '(312) 555-0199',
+      'call ٥٥٥١٢٣٤٥٦٧',
+      'call 555\u200b123\u200b45',
+    ],
+  };
+
+  test('every rule in the list refuses its shape, and says which rule in plain words', () => {
+    expect(OFF_LIMITS_RULES.map((r) => r.id).sort()).toEqual(Object.keys(SHAPES).sort());
+    for (const rule of OFF_LIMITS_RULES) {
+      expect(rule.decided, rule.id).toMatch(/ADR-040 decision/);
+      for (const label of SHAPES[rule.id]) {
+        expect(offLimitsRuleFor(label)?.id, label).toBe(rule.id);
+        const parsed = parseVotableLabel(label);
+        expect(parsed, label).toMatchObject({ ok: false, code: 'INVALID_LABEL', rule: rule.id });
+        if (!parsed.ok) {
+          expect(parsed.error).toContain(rule.words);
+          expect(parsed.error).toContain('Name the work, not the person who made it.');
+        }
+      }
+    }
+  });
+
+  test('a label on no rule passes, and names nothing', () => {
+    for (const label of [
+      'Best chili',
+      'Float 7: the river parade',
+      'Stall 12',
+      'Rock 👩\u200d🎤 night',
+    ]) {
+      expect(offLimitsRuleFor(label), label).toBeNull();
+      expect(parseVotableLabel(label).ok, label).toBe(true);
+    }
   });
 });

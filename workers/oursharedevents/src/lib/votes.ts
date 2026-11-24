@@ -14,8 +14,10 @@
  *     event-level object (decision 4): the set's one result is the event's vote.
  *     A person may be an object only as an opted-in presenter (Q9); no opt-in
  *     exists in OSE yet, so no kind for it exists either.
- *   - parseVotableLabel: a label is the name of a thing. It refuses email- and
- *     phone-shaped text, the same shapes a booth name refuses.
+ *   - parseVotableLabel: a label is the name of a thing. What it may never hold
+ *     is the off-limits list in lib/vote-off-limits.ts (ADR-040 decision 12,
+ *     OSE-2225), today email- and phone-shaped text, the same shapes a booth
+ *     name refuses. No label rule lives here.
  *   - The three markers, each an HMAC under its own server-only subkey:
  *       receipt             HMAC(K_receipt,     k ‖ object_id)
  *       participant marker  HMAC(K_participant, k ‖ set_id)
@@ -33,6 +35,8 @@
  * Gates: tests/vote-tables.spec.ts (workers pool) and
  * tests/e2e/0-architecture/votes-never-who.invariant.spec.ts (T0).
  */
+
+import { offLimitsRefusal, offLimitsRuleFor, type OffLimitsRuleId } from './vote-off-limits';
 
 /** The six vote tables, all in DB (ADR-040 decision 1). Never in FORMS_DB. */
 export const VOTE_TABLES = [
@@ -85,7 +89,9 @@ export const VOTE_RECEIPT_CONTEXT = 'ose:vote:receipt:v1';
 export const VOTE_PARTICIPANT_CONTEXT = 'ose:vote:participant:v1';
 export const VOTE_TEAM_CONTEXT = 'ose:vote:team-marker:v1';
 
-export type Parsed<T> = { ok: true; value: T } | { ok: false; code: string; error: string };
+/** A refusal may name the off-limits rule that refused it (OSE-2225). */
+export type Parsed<T> =
+  { ok: true; value: T } | { ok: false; code: string; error: string; rule?: OffLimitsRuleId };
 
 const bad = (code: string, error: string): { ok: false; code: string; error: string } => ({
   ok: false,
@@ -93,18 +99,6 @@ const bad = (code: string, error: string): { ok: false; code: string; error: str
   error,
 });
 
-// The shapes a booth name and a series name refuse (lib/event-booths.ts,
-// lib/event-series.ts): a contact detail is a person's, and a label is a thing's.
-const EMAIL_SHAPED = /\S@\S/u;
-// Any decimal digit (\p{Nd}), so fullwidth or Arabic-Indic digits count too.
-const PHONE_SHAPED = /(?:\p{Nd}[\s().-]*){7,}/u;
-/**
- * The text the shape checks read (OSE-2127 security review): NFKC folds a
- * fullwidth ＠ or digit to its plain form, and format characters (\p{Cf}, such
- * as a zero-width space) are dropped, so neither can hide an address or a
- * number. The label is stored as typed; only the check reads this copy.
- */
-const shapeText = (label: string) => label.normalize('NFKC').replace(/\p{Cf}/gu, '');
 const CONTROL_CHAR = /[\u0000-\u001f\u007f]/;
 
 /** Check an object's label. Returns the trimmed label, or why it is refused. */
@@ -115,11 +109,9 @@ export function parseVotableLabel(raw: unknown): Parsed<string> {
   if (!label) return bad('INVALID_LABEL', 'label is required');
   if (label.length > VOTABLE_LABEL_MAX)
     return bad('INVALID_LABEL', `label must be ${VOTABLE_LABEL_MAX} characters or fewer`);
-  if (EMAIL_SHAPED.test(shapeText(label)) || PHONE_SHAPED.test(shapeText(label)))
-    return bad(
-      'INVALID_LABEL',
-      'label names the thing voted on; it must not hold an email address or phone number'
-    );
+  const rule = offLimitsRuleFor(label);
+  if (rule)
+    return { ok: false, code: 'INVALID_LABEL', error: offLimitsRefusal(rule), rule: rule.id };
   return { ok: true, value: label };
 }
 

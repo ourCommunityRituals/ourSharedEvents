@@ -108,6 +108,14 @@
  *      their ranges or the draw). The workers pool holds the same through the
  *      Worker's fetch (tests/vote-route.spec.ts, "the logs cannot tell a side").
  *
+ *  13. THE OFF-LIMITS LIST IS THE ONLY PLACE A LABEL RULE LIVES (OSE-2225,
+ *      ADR-040 decision 12). lib/votes.ts asks lib/vote-off-limits.ts
+ *      (offLimitsRuleFor) and holds no pattern of its own. No other vote file
+ *      (src/lib/vot*, src/handlers/vot*) and not the admin Voting card's markup
+ *      and script holds a label rule's pattern: an email shape (`\S@\S`) or a
+ *      phone shape (a `{7,}` run). A rule copied into a handler or the card
+ *      fails here.
+ *
  * What it cannot see: a value carried out by a variable (a listed lib file that
  * returns `row` to a handler). S3 and S5 add workers-pool tests that their
  * responses carry no guarded key.
@@ -149,6 +157,10 @@
  *   the two per-side counter texts put back (12 red), `'duplicate'` put back
  *   in CastOutcome (12 red),
  *   a `console.log` of `margin` in openVoteSet (12 red) | date: 2026-11-20
+ * @born-red OSE-2225 | method: injected-fault, each removed after: the email
+ *   pattern copied into handlers/votables.ts (13 red), the phone pattern put
+ *   back in the Voting card's script (13 red), parseVotableLabel no longer
+ *   asking offLimitsRuleFor (13 red) | date: 2026-11-24
  */
 
 import { test, expect } from '@playwright/test';
@@ -1561,5 +1573,84 @@ test.describe('Invariant: the voter page (OSE-2129)', () => {
     );
     expect(PASS_IN_URL.test("fetch('/api/v2/vote/' + eventId + '?pass=' + pass)")).toBe(true);
     expect(PASS_IN_URL.test("fetch('/api/v2/vote/' + encodeURIComponent(eventId), {")).toBe(false);
+  });
+});
+
+/**
+ * Rule 13 (OSE-2225, ADR-040 decision 12): the off-limits list in
+ * lib/vote-off-limits.ts is the only place a label rule lives.
+ */
+const OFF_LIMITS_LIB = 'src/lib/vote-off-limits.ts';
+/** A copy of a label rule: the email shape, or a phone shape's run of seven. */
+const LABEL_RULE_COPY = [/\\S@\\S/, /\{7,\}/];
+
+/** The admin Voting card: its markup and its script, from the card to the end of its script. */
+function votingCardSlice(html: string): string {
+  const start = html.indexOf('id="votes-card"');
+  if (start < 0) return '';
+  const fetchAt = html.indexOf('window.votesFetch', start);
+  const end = fetchAt < 0 ? -1 : html.indexOf('</script>', fetchAt);
+  return end < 0 ? html.slice(start) : html.slice(start, end);
+}
+
+/** Every place outside the list that holds a label rule's pattern. */
+function labelRuleCopies(files: { file: string; code: string }[]): string[] {
+  const out: string[] = [];
+  for (const { file, code } of files) {
+    if (file === OFF_LIMITS_LIB) continue;
+    let text = '';
+    if (/^src\/(lib|handlers)\/vot[^/]*\.ts$/.test(file)) text = code;
+    else if (file === 'src/templates/admin.html') text = votingCardSlice(code);
+    for (const re of LABEL_RULE_COPY) if (re.test(text)) out.push(`${file}: ${re.source}`);
+  }
+  return out;
+}
+
+/** parseVotableLabel asks the list, by import and by call. */
+function labelParserProblems(votes: string): string[] {
+  const out: string[] = [];
+  if (!/import\s*\{[^}]*\boffLimitsRuleFor\b[^}]*\}\s*from\s*'\.\/vote-off-limits'/.test(votes))
+    out.push('lib/votes.ts does not import offLimitsRuleFor from ./vote-off-limits');
+  const at = votes.indexOf('export function parseVotableLabel');
+  const body = at < 0 ? '' : votes.slice(at, votes.indexOf('\n}\n', at));
+  if (!/offLimitsRuleFor\(/.test(body)) out.push('parseVotableLabel does not ask offLimitsRuleFor');
+  return out;
+}
+
+test.describe('Invariant: the off-limits list (OSE-2225)', () => {
+  const byFile = new Map(SOURCES.map((s) => [s.file, s]));
+
+  test('OSE-2225 | off limits | the list exists and parseVotableLabel asks it', () => {
+    expect(byFile.has(OFF_LIMITS_LIB), `${OFF_LIMITS_LIB} exists`).toBe(true);
+    expect(labelParserProblems(byFile.get(VOTES_LIB)?.code ?? '')).toEqual([]);
+  });
+
+  test('OSE-2225 | off limits | no other vote file, and not the Voting card, holds a label rule', () => {
+    expect(
+      labelRuleCopies(SOURCES),
+      'A label rule lives only in lib/vote-off-limits.ts. Add a rule there, by a decision recorded in ADR-040.'
+    ).toEqual([]);
+    // The list itself holds both shapes, so the detectors see what they are for.
+    const list = byFile.get(OFF_LIMITS_LIB)?.code ?? '';
+    for (const re of LABEL_RULE_COPY) expect(re.test(list), re.source).toBe(true);
+  });
+
+  test('OSE-2225 | gate | the rules can fail (negative controls)', () => {
+    const handler = 'const EMAIL = /\\S@\\S/u;\nif (EMAIL.test(label)) return bad();';
+    expect(labelRuleCopies([{ file: 'src/handlers/votables.ts', code: handler }])).toHaveLength(1);
+    const card =
+      '<div id="votes-card"></div><script>window.votesFetch = 1; var bad = /(?:\\d[\\s().-]*){7,}/.test(label);</script>';
+    expect(labelRuleCopies([{ file: 'src/templates/admin.html', code: card }])).toHaveLength(1);
+    const stalls = '<script>if (/\\S@\\S/.test(name)) no();</script><div id="votes-card"></div>';
+    expect(labelRuleCopies([{ file: 'src/templates/admin.html', code: stalls }])).toEqual([]);
+    expect(labelRuleCopies([{ file: OFF_LIMITS_LIB, code: handler }])).toEqual([]);
+    expect(
+      labelParserProblems('export function parseVotableLabel(raw) {\n  return ok;\n}\n')
+    ).toHaveLength(2);
+    expect(
+      labelParserProblems(
+        "import { offLimitsRuleFor } from './vote-off-limits';\nexport function parseVotableLabel(raw) {\n  const r = offLimitsRuleFor(raw);\n}\n"
+      )
+    ).toEqual([]);
   });
 });

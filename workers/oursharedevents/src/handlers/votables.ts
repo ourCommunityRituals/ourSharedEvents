@@ -167,8 +167,13 @@ function reply(request: Request, status: number, body: Record<string, unknown>):
   );
 }
 
+/** A refusal carries its code and words, and for a refused label the off-limits rule (OSE-2225). */
 const refuse = (request: Request, f: VoteFail) =>
-  reply(request, f.status, { code: f.code, error: f.error });
+  reply(
+    request,
+    f.status,
+    f.rule ? { code: f.code, error: f.error, rule: f.rule } : { code: f.code, error: f.error }
+  );
 
 function answer<T>(request: Request, r: VoteResult<T>, key: string, status = 200): Response {
   return r.ok ? reply(request, status, { [key]: r.value }) : refuse(request, r);

@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2225 | refuse | a phone number is off limits, and the answer names the rule"
+  type: http
+  seq: 31
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{offLimitsEventId}}/votables/objects"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"kind\": \"entry\", \"label\": \"Float, call 555 123 4567\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2225 refuse: 400 INVALID_LABEL, rule phone, in plain words', function () { expect(res.getStatus()).to.eql(400); expect(b.code).to.eql('INVALID_LABEL'); expect(b.rule).to.eql('phone'); expect(b.error).to.contain('a phone number'); expect(JSON.stringify(b)).to.not.contain('555 123 4567'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

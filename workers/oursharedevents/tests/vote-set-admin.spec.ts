@@ -334,6 +334,26 @@ describe('3. a label names a thing, never a person', () => {
     expect(res.status).toBe(400);
     expect(res.json.code).toBe('INVALID_LABEL');
   });
+  test.each([
+    ['email', 'rosa@example.com', 'an email address'],
+    ['phone', 'call 555 123 4567', 'a phone number'],
+  ])(
+    'the refusal names its off-limits rule, %s, in plain words (OSE-2225)',
+    async (rule, label, words) => {
+      const res = await call('POST', vp(A1, '/objects'), A, { kind: 'song', label });
+      expect(res.status).toBe(400);
+      expect(res.json).toMatchObject({ code: 'INVALID_LABEL', rule });
+      expect(res.json.error).toContain(words);
+      const ok = await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: 'Fine' });
+      const put = await call('PUT', vp(A1, `/objects/${ok.json.object.id}`), A, { label });
+      expect(put.json).toMatchObject({ code: 'INVALID_LABEL', rule });
+    }
+  );
+  test('a refusal that is not a label names no rule', async () => {
+    const res = await call('POST', vp(A1, '/objects'), A, { kind: 'person', label: 'X' });
+    expect(res.status).toBe(400);
+    expect(res.json).not.toHaveProperty('rule');
+  });
   test('a label with an emoji sequence is kept as typed', async () => {
     const res = await call('POST', vp(A1, '/objects'), A, {
       kind: 'song',

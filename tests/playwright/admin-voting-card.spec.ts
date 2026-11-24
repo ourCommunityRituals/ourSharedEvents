@@ -23,6 +23,9 @@
  *   8. OSE-2224 (ADR-040 decision 12): the card offers "Entry (anything you
  *      name)"; an entry is added, listed as an Entry, and the kind then stays
  *      fixed for the set.
+ *   9. OSE-2225 (ADR-040 decision 12): under the label box the card says "Name
+ *      the work, not the person who made it."; a label the off-limits list
+ *      refuses says which rule refused it, in plain words, from the server.
  *
  * Runs in the blocking phone audit (playwright.mobile.config.ts), against the
  * local worker that config starts with a local pepper. The event is made here.
@@ -333,5 +336,34 @@ test.describe('admin: the Voting card', () => {
     await expect(rows(page).first().getByTestId('vote-row-kind')).toHaveText('Entry');
     await expect(kind).toHaveValue('entry');
     await expect(kind).toBeDisabled();
+  });
+
+  test('the warning sits under the label box, and a refusal names its rule (OSE-2225)', async ({
+    page,
+    request,
+  }) => {
+    const id = await makeEvent(request, `Art walk ${Date.now()}`);
+    await openCard(page);
+    await selectEvent(page, id);
+    await expect(page.getByTestId('votes-card')).toBeVisible();
+    if (!(await page.getByTestId('votes-body').isVisible()))
+      await page.getByTestId('votes-toggle').click();
+    await page.getByTestId('votes-make-btn').click();
+    await expect(summary(page)).toHaveText('Voting is set up, not open yet.');
+
+    const input = page.getByTestId('vote-label-input');
+    const warning = page.getByTestId('vote-label-warning');
+    await expect(warning).toBeVisible();
+    await expect(warning).toHaveText('Name the work, not the person who made it.');
+    await expect(input).toHaveAttribute('aria-describedby', /\bvote-label-warning\b/);
+    const [inputBox, warningBox] = [await input.boundingBox(), await warning.boundingBox()];
+    expect(warningBox!.y).toBeGreaterThanOrEqual(inputBox!.y + inputBox!.height);
+
+    await input.fill('Painting, call 555 123 4567');
+    await page.getByTestId('vote-add-btn').click();
+    await expect(page.getByTestId('vote-label-error')).toContainText('a phone number');
+    await expect(page.getByTestId('vote-label-error')).toContainText('off limits');
+    await expect(input).toHaveAttribute('aria-invalid', 'true');
+    await expect(rows(page)).toHaveCount(0);
   });
 });

@@ -77,6 +77,7 @@ import {
   parseVotableLabel,
   type VotableKind,
 } from './votes';
+import type { OffLimitsRuleId } from './vote-off-limits';
 import { resultStatements, type VoteOutcome } from './vote-results';
 
 /** The longest window an object can be open for in one go: 12 hours (a fair day). */
@@ -104,7 +105,14 @@ export const VOTE_TALLY_KEEP_DAYS = 30;
 export const SECRET_MARGIN_RANGE = [5, 9] as const;
 export const SECRET_FLOOR_RANGE = [10, 14] as const;
 
-export type VoteFail = { ok: false; status: number; code: string; error: string };
+/** `rule` names the off-limits rule that refused a label (OSE-2225), and nothing else. */
+export type VoteFail = {
+  ok: false;
+  status: number;
+  code: string;
+  error: string;
+  rule?: OffLimitsRuleId;
+};
 export type VoteResult<T> = { ok: true; value: T } | VoteFail;
 
 const fail = (status: number, code: string, error: string): VoteFail => ({
@@ -113,6 +121,13 @@ const fail = (status: number, code: string, error: string): VoteFail => ({
   code,
   error,
 });
+
+/** A refused label: 400, with the off-limits rule when one refused it. */
+function labelFail(label: { code: string; error: string; rule?: OffLimitsRuleId }): VoteFail {
+  const f = fail(400, label.code, label.error);
+  if (label.rule) f.rule = label.rule;
+  return f;
+}
 
 export const NO_SET = fail(404, 'VOTE_SET_NOT_FOUND', 'This event has no vote set');
 export const NO_OBJECT = fail(404, 'VOTABLE_NOT_FOUND', 'Votable object not found');
@@ -706,7 +721,7 @@ export function parseVotableCreate(body: unknown): VoteResult<VotableInput> {
     return fail(400, 'UNKNOWN_FIELD', `Not a field of a votable object: ${extra.join(', ')}`);
   if (!isVotableKind(b.kind)) return fail(400, 'INVALID_KIND', KIND_LIST_ERROR);
   const label = parseVotableLabel(b.label);
-  if (!label.ok) return fail(400, label.code, label.error);
+  if (!label.ok) return labelFail(label);
   const booth = parseOptionalId(b.booth_id);
   if (booth === undefined) return fail(400, 'INVALID_BOOTH', 'booth_id must be a booth id');
   const group = parseOptionalId(b.group_id);
@@ -733,7 +748,7 @@ export function parseVotableUpdate(body: unknown): VoteResult<VotablePatch> {
   const out: VotablePatch = {};
   if ('label' in b) {
     const label = parseVotableLabel(b.label);
-    if (!label.ok) return fail(400, label.code, label.error);
+    if (!label.ok) return labelFail(label);
     out.label = label.value;
   }
   if ('booth_id' in b) {
