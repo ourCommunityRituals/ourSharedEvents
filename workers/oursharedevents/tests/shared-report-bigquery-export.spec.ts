@@ -1234,13 +1234,14 @@ describe('OSE-272 Session 4 orchestrator: runSharedReportBigQueryExport', () => 
     uninstallBqMock();
   });
 
-  test('runs all 3 phases and returns aggregated result shape', async () => {
+  test('runs all 4 phases and returns aggregated result shape', async () => {
     const r = await runSharedReportBigQueryExport(makeEnv());
-    expect(r.phases).toHaveLength(3);
+    expect(r.phases).toHaveLength(4);
     expect(r.phases.map((p) => p.phase)).toEqual([
       'anon_id_returns',
       'corridor_density_baseline',
       'event_series',
+      'corridor_flows', // OSE-2216
     ]);
     expect(typeof r.totalDurationMs).toBe('number');
     expect(typeof r.totalErrors).toBe('number');
@@ -1264,13 +1265,15 @@ describe('OSE-272 Session 4 orchestrator: runSharedReportBigQueryExport', () => 
     }
     bqFailNextN = 1; // Phase 1 fails
     const r = await runSharedReportBigQueryExport(makeEnv());
-    expect(r.phases).toHaveLength(3);
+    expect(r.phases).toHaveLength(4);
     const phase1 = r.phases.find((p) => p.phase === 'anon_id_returns');
     expect(phase1!.errors).toBe(1);
     const phase2 = r.phases.find((p) => p.phase === 'corridor_density_baseline');
     expect(phase2!.errors).toBe(0);
     const phase3 = r.phases.find((p) => p.phase === 'event_series');
     expect(phase3!.errors).toBe(0);
+    const phase4 = r.phases.find((p) => p.phase === 'corridor_flows');
+    expect(phase4!.errors).toBe(0);
   });
 
   test('logs SHARED_REPORT_EXPORT_COMPLETE with structured payload', async () => {

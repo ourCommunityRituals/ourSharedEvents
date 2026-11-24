@@ -1,7 +1,7 @@
 /**
  * Check a row against its BigQuery pool table schema (OSE-1416).
  *
- * The four pool tables (`bigquery/*.schema.json`) are created from those files
+ * The pool tables (`bigquery/*.schema.json`) are created from those files
  * by `scripts/bq-create-pool-tables.sh`. The export specs run every row they
  * capture through `poolSchemaViolations`, so an export that starts sending a
  * field with no column, drops a REQUIRED one, or changes a value's type turns
@@ -11,6 +11,7 @@ import eventsBackup from '../../bigquery/events_backup.schema.json';
 import corridorReturns from '../../bigquery/corridor_returns_export.schema.json';
 import corridorDensity from '../../bigquery/corridor_density_baseline_export.schema.json';
 import eventSeries from '../../bigquery/event_series_export.schema.json';
+import corridorFlow from '../../bigquery/corridor_flow_export.schema.json';
 
 interface Field {
   name: string;
@@ -23,8 +24,10 @@ const POOL_TABLES: Record<string, Field[]> = {
   corridor_returns_export: corridorReturns,
   corridor_density_baseline_export: corridorDensity,
   event_series_export: eventSeries,
+  corridor_flow_export: corridorFlow,
 };
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/;
 
 function fits(type: string, value: unknown): boolean {
@@ -33,6 +36,8 @@ function fits(type: string, value: unknown): boolean {
       return typeof value === 'string';
     case 'INT64':
       return typeof value === 'number' && Number.isInteger(value);
+    case 'DATE':
+      return typeof value === 'string' && DATE_RE.test(value);
     case 'TIMESTAMP':
       return typeof value === 'string' && TIMESTAMP_RE.test(value);
     default:
