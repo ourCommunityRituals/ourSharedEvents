@@ -1168,6 +1168,8 @@
               '</td>' +
               '<td data-label="Scans">' +
               esc(fmtInt(p.scan_count)) +
+              // OSE-2214: scans past 100 in an hour are not stored, so the count is a floor.
+              (p.hour_cap_reached ? ' or more' : '') +
               '</td>' +
               '<td data-label="First" data-testid="poster-row-first-scan">' +
               esc(scanLabel(p.first_scan_label, p.first_scan_at)) +
@@ -1181,7 +1183,9 @@
               '</tr>'
           )
           .join('');
-        const trendInstances = (report.headcount_trend && report.headcount_trend.instances) || [];
+        // OSE-2214: a poster hour that reached the 100-scan cap makes the total a floor.
+        const orMore = (atLeast) => (atLeast ? ' or more' : '');
+        const trendInstances = (report.scan_trend && report.scan_trend.instances) || [];
         const trendRows = trendInstances
           .map(
             (t) =>
@@ -1190,7 +1194,8 @@
               esc(fmtDate(t.start_date)) +
               '</td>' +
               '<td data-label="Scans">' +
-              fmtInt(t.distinct_scanners) +
+              fmtInt(t.scans) +
+              orMore(t.scans_at_least) +
               '</td>' +
               '</tr>'
           )
@@ -1209,22 +1214,15 @@
           '<section class="stats-row" data-testid="signed-link-stats">' +
           '<div class="stat-card" data-testid="signed-link-distinct-scanners">' +
           '<dl class="stat-dl"><dt>Scans</dt><dd>' +
-          fmtInt(report.distinct_scanners) +
+          fmtInt(report.scans) +
+          orMore(report.scans_at_least) +
           '</dd></dl>' +
-          suppressionNote('distinct_scanners') +
-          '</div>' +
-          '<div class="stat-card" data-testid="signed-link-return-rate">' +
-          '<dl class="stat-dl"><dt>Return Rate (this series)</dt><dd>' +
-          fmtPct(report.return_rate && report.return_rate.venue_pct) +
-          '</dd></dl>' +
-          // The whole section can be withheld (too few people), or the rate
-          // alone (too few returned, or too few did not). Either way the card
-          // shows a dash and says why, never a bare dash.
-          (suppressionNote('return_rate') || suppressionNote('return_rate.venue_pct')) +
+          suppressionNote('scans') +
           '</div>' +
           '<div class="stat-card" data-testid="signed-link-corridor-density">' +
           '<dl class="stat-dl"><dt>Corridor Scans</dt><dd data-testid="corridor-density-count">' +
           fmtInt(report.corridor_density && report.corridor_density.this_event_count) +
+          orMore(report.scans_at_least) +
           '</dd></dl>' +
           '<dl class="stat-dl"><dt>vs 30d Baseline</dt><dd data-testid="corridor-density-ratio-30d">' +
           fmtRatio(report.corridor_density && report.corridor_density.density_ratio_30d) +
@@ -1359,8 +1357,8 @@
             : '') +
           (trendRows
             ? '<section class="funnel-card" data-testid="signed-link-trend-section">' +
-              '<h3>Headcount Trend</h3>' +
-              '<table class="funnel-table" aria-label="Headcount trend across the series">' +
+              '<h3>Scan Trend</h3>' +
+              '<table class="funnel-table" aria-label="Scans across the series">' +
               '<thead><tr><th scope="col">Date</th><th scope="col">Scans</th></tr></thead>' +
               '<tbody>' +
               trendRows +

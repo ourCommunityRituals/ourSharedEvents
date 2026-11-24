@@ -35,13 +35,13 @@ describe('OSE-1266 outcome preview — depth mapping (honest sponsor cap)', () =
     const p = buildOutcomePreview(base({ tier: 'mid', sponsorId: 'sp_self' }));
     expect(p.report_depth).toBe('mid');
     expect(p.report_sections).toContain('corridor_map');
-    expect(p.report_sections).not.toContain('headcount_trend'); // premium-only, sponsor-capped
+    expect(p.report_sections).not.toContain('scan_trend'); // premium-only, sponsor-capped
   });
 
   it('premium tier → still MID depth (sponsors cap at mid) — buys frequency, not deeper data', () => {
     const p = buildOutcomePreview(base({ tier: 'premium', sponsorId: 'sp_self' }));
     expect(p.report_depth).toBe('mid');
-    expect(p.report_sections).not.toContain('headcount_trend');
+    expect(p.report_sections).not.toContain('scan_trend');
   });
 });
 

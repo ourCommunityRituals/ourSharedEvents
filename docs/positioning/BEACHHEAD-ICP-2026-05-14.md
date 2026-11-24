@@ -55,7 +55,7 @@ The events generate the data; the SharedReport delivers it. Every event will clo
 
 ## What the architecture lets us legally deliver
 
-The SharedReport contains gathering density signal, return rate signal, corridor density, sponsor-rotation reach, poster-scan attribution, and time-of-day patterns — all aggregated from anonymous IDs, with no per-attendee identity at any layer.
+The SharedReport contains gathering density signal, corridor density, sponsor-rotation reach, poster-scan attribution, and time-of-day patterns — all aggregated from anonymous IDs, with no per-attendee identity at any layer.
 
 **Sales line:** "You cannot accidentally collect attendee identity, because the platform cannot accidentally show it to you — but you do get a sponsor-grade analytics report at every event close, and the data compounds over time as your venue's corridor signal grows."
 

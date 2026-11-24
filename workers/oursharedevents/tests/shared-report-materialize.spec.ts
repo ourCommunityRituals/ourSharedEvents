@@ -374,19 +374,9 @@ describe('OSE-272 Phase 1: materializeAnonIdReturns', () => {
       const r = await buildSharedReport(tenv().DB, id);
       expect(r.ok).toBe(true);
       if (!r.ok) return;
-      // Six people clear the floor, so the rates are worked out; the sample
-      // size itself is never published (OSE-1784).
-      expect(r.report.return_rate.sample_size, `run ${run}`).toBeNull();
-      expect(
-        r.report._meta.suppression_reasons.some((x) => x.field === 'return_rate'),
-        `run ${run}`
-      ).toBe(false);
-      // Nobody came back: 0 of 6 is withheld like 1 to 4, never 100%.
-      expect(r.report.return_rate.venue_pct, `run ${run}`).toBeNull();
-      expect(
-        r.report._meta.suppression_reasons.find((x) => x.field === 'return_rate.venue_pct')?.reason,
-        `run ${run}`
-      ).toBe('below_min_sample_size');
+      // OSE-2214: the report no longer publishes a return rate at all, so
+      // however often the job runs, nothing in it reads as returning.
+      expect('return_rate' in r.report, `run ${run}`).toBe(false);
     }
   });
 

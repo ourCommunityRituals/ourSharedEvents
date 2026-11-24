@@ -387,7 +387,6 @@ export const NODE_SPECS = [
   'tests/public-page-admin-probe.spec.ts',
   // The Return Rate card when the API withholds the rate on its own: the same
   // jsdom-over-the-real-template shape as the spec above. No cloudflare:test.
-  'tests/shared-report-return-rate-card.spec.ts',
   // Locked sections on a sponsor link: the real read handler (builder and audit
   // log replaced, as in shared-report-read-depth-wiring) feeds the real template
   // in jsdom. No cloudflare:test.

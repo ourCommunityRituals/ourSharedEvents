@@ -2613,7 +2613,7 @@ jobs:
         timeout-minutes: 5
 
       # OSE-1751: the depth gate checks the corridor baseline against a seeded 112/109
-      # pair and 12 attendees. The staging Worker's 03:00 UTC cron deletes attendee rows
+      # pair and 12 poster scans. The staging Worker's 03:00 UTC cron deletes attendee rows
       # with no pepper epoch and recomputes baselines, so this seed is applied HERE, in
       # the step just before the gate, and not with the other smoke fixtures above,
       # which are two test steps earlier. Idempotent; a failed seed reds the tier.

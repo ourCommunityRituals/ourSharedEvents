@@ -39,7 +39,7 @@ aggregations plus per-section lookups:
 roughly lines 199–738). Each individual query is bounded and indexed; the
 concern is **multiplicity**, not any single statement.
 
-**The one super-linear path.** The `headcount_trend` computation for a
+**The one super-linear path.** The `scan_trend` (was `headcount_trend`) computation for a
 _confirmed recurring series_ issues **one D1 read per series instance**, in a
 sequential loop:
 
@@ -64,7 +64,7 @@ low thousands of D1 reads.
 
 - Non-series and short-series reports are flat — the loop only runs for
   confirmed series (`event_series` in the confirmed state), otherwise
-  `headcount_trend` is suppressed. Most reports never enter the loop.
+  `scan_trend` is suppressed. Most reports never enter the loop.
 - `.first()`-style single-row reads inside the builder are counted as _queries_
   but their `rows_read` is not observable in-request (see the cost-metric
   contract's honest-limits section). The fan-out is visible via `d1Queries`

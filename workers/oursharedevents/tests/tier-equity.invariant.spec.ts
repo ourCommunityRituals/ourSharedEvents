@@ -69,15 +69,14 @@ const FULL_REPORT = {
   event_title: 'Test Event',
   event_start_date: '2026-06-01T18:00:00Z',
   event_end_date: '2026-06-01T22:00:00Z',
-  distinct_scanners: 42,
+  scans: 42,
   sponsor_displays: [
     { sponsor_id: 'sp_A', impressions: 100 },
     { sponsor_id: 'sp_B', impressions: 50 },
   ],
   poster_attribution: { views: 200, scans: 40 },
-  return_rate: 0.35,
   corridor_density: [{ cell: 'h3_abc', count: 12 }],
-  headcount_trend: [{ date: '2026-06-01', count: 42 }],
+  scan_trend: [{ date: '2026-06-01', count: 42 }],
   _meta: { built_at: '2026-07-26T00:00:00Z' },
 } as const;
 
@@ -90,28 +89,26 @@ describe('B. read-side depth is omission-only', () => {
       expect(allowed.has(key), `unexpected key "${key}" in local tier`).toBe(true);
     }
     // Values are NOT transformed
-    expect(report.distinct_scanners).toBe(42);
+    expect(report.scans).toBe(42);
     expect(report.event_id).toBe('evt_test');
     // Premium-only field absent
-    expect('headcount_trend' in report).toBe(false);
+    expect('scan_trend' in report).toBe(false);
   });
 
-  it('mid tier: includes poster_attribution and return_rate but not headcount_trend', () => {
+  it('mid tier: includes poster_attribution but not scan_trend (return_rate retired, OSE-2214)', () => {
     const resolved = resolveDepth({ role: 'sponsor', depth: 'mid' });
     const { report } = filterReportByDepth({ ...FULL_REPORT }, resolved);
     expect('poster_attribution' in report).toBe(true);
-    expect('return_rate' in report).toBe(true);
-    expect('headcount_trend' in report).toBe(false);
+    expect('scan_trend' in report).toBe(false);
     // Values unchanged
-    expect(report.return_rate).toBe(0.35);
   });
 
-  it('premium tier: all sections pass through including headcount_trend', () => {
+  it('premium tier: all sections pass through including scan_trend', () => {
     const resolved = resolveDepth({ role: 'admin' });
     const { report } = filterReportByDepth({ ...FULL_REPORT }, resolved);
-    expect('headcount_trend' in report).toBe(true);
-    expect(report.headcount_trend).toEqual(FULL_REPORT.headcount_trend);
-    expect(report.distinct_scanners).toBe(42);
+    expect('scan_trend' in report).toBe(true);
+    expect(report.scan_trend).toEqual(FULL_REPORT.scan_trend);
+    expect(report.scans).toBe(42);
   });
 
   it('sponsor scope: local sponsor sees only their own impressions — no cross-contamination', () => {

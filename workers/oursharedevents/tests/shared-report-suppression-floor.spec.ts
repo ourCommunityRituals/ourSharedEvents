@@ -1,18 +1,15 @@
 /**
- * Part of OSE-1421 — the SharedReport's remaining unfloored fields (Invariant #7,
- * aggregate-only, K = 5) and the suppression strings that printed what they hid.
+ * The SharedReport's suppression lines and sponsor rows pass the floor
+ * (Invariant #7, aggregate-only, K = 5) without printing what they hide.
  *
- * Three defects, each pinned here against the miniflare D1:
+ * Moved here from `shared-report-return-rate-floor.spec.ts` (OSE-1421) when
+ * OSE-2214 retired `return_rate`: these guards were never about the return
+ * rate, and they keep running without it.
  *
- *   1. `return_rate` was gated at a private constant of 3, not the platform floor
- *      K = CORRIDOR_MAP_MIN_COUNT = 5, so a percentage shipped over a sub-K
- *      denominator (D4, small cell).
- *   2. Its suppression detail printed the number it hides
- *      (`"2 of 3 required distinct anons"`), as did the corridor baseline's
- *      (`"3 of 10 required"`) and the corridor map's hidden-area counts. A
- *      suppression string that prints the count is the count (D4).
- *   3. `sponsor_displays[].count` shipped raw at every depth, beside campaign
- *      rollups computed from the same rows with the per-bucket floor (D2).
+ *   - A suppression detail names the floor, never an observed count (D4).
+ *   - The launch-day map writes one hidden-area line, the same whether the scan
+ *     figure is published or withheld.
+ *   - `sponsor_displays[].count` passes the same floor as its rollups (D2).
  *
  * Every test ends with the never-who assertion over the payload.
  */
@@ -21,7 +18,6 @@ import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
-import { roundForPublish } from '../src/lib/count-floor';
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 import { clearPosterHours, seedPosterHour } from './helpers/seed-poster-hours';
 
@@ -81,7 +77,6 @@ async function applyMigrations(): Promise<void> {
 
 async function clearTables(): Promise<void> {
   const db = tenv().DB;
-  await db.prepare(`DELETE FROM anon_id_returns`).run();
   await db.prepare(`DELETE FROM corridor_density_baseline`).run();
   await db.prepare(`DELETE FROM scan_aggregates WHERE event_id LIKE 'test-evt-rrf-%'`).run();
   await db.prepare(`DELETE FROM sponsor_displays WHERE id LIKE 'si-rrf-%'`).run();
@@ -96,9 +91,8 @@ async function clearTables(): Promise<void> {
 }
 
 /**
- * The event, and the earlier event of its confirmed series (OSE-1652): the
- * venue return rate counts people seen at another event of the same series.
- * The earlier event has no cell, so it never counts toward corridor_pct.
+ * The event, and an earlier event of its confirmed series (OSE-1652). The
+ * earlier event has no cell.
  */
 async function seedEvent(id: string, h3Res7: string | null = null): Promise<void> {
   const db = tenv().DB;
@@ -126,29 +120,6 @@ async function seedEvent(id: string, h3Res7: string | null = null): Promise<void
     .run();
 }
 
-/**
- * `n` people at the event; the first `cameTwice` of them were also at the
- * earlier event of its series. `return_count` is left at 1: it counts runs of
- * the nightly job, not visits, and the report no longer reads it.
- */
-async function seedAnons(eventId: string, n: number, cameTwice = 0): Promise<void> {
-  const now = new Date().toISOString();
-  const row = (hash: string, venue: string) =>
-    tenv()
-      .DB.prepare(
-        `INSERT INTO anon_id_returns
-           (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
-         VALUES (?, ?, ?, ?, 1, ?)`
-      )
-      .bind(hash, venue, now, now, now)
-      .run();
-  for (let i = 0; i < n; i++) {
-    const hash = `${i}`.padStart(32, 'f');
-    await row(hash, eventId);
-    if (i < cameTwice) await row(hash, `${eventId}-prev`);
-  }
-}
-
 async function seedImpressions(
   sponsorId: string,
   eventId: string,
@@ -165,200 +136,8 @@ async function seedImpressions(
       .run();
   }
 }
-
 beforeAll(async () => {
   await applyMigrations();
-});
-
-describe('return_rate gates at the platform floor (K), not a private constant', () => {
-  beforeEach(async () => {
-    await applyMigrations();
-    await clearTables();
-  });
-
-  test('the floor it must use is K = 5', () => {
-    expect(CORRIDOR_MAP_MIN_COUNT).toBe(5);
-  });
-
-  for (const n of [1, 2, 3, 4]) {
-    test(`${n} distinct attendee(s): no percentage, no sample size, and a count-free detail`, async () => {
-      const id = `test-evt-rrf-sub${n}`;
-      await seedEvent(id, CELL);
-      await seedAnons(id, n);
-
-      const r = await buildSharedReport(tenv().DB, id);
-      expect(r.ok).toBe(true);
-      if (!r.ok) return;
-
-      expect(r.report.return_rate.venue_pct).toBeNull();
-      expect(r.report.return_rate.corridor_pct).toBeNull();
-      expect(r.report.return_rate.sample_size).toBeNull();
-
-      const reason = r.report._meta.suppression_reasons.find((s) => s.field === 'return_rate');
-      expect(reason?.reason).toBe('below_min_sample_size');
-      // Names the floor, never the observed count.
-      expect(reason?.detail).toContain(`fewer than ${CORRIDOR_MAP_MIN_COUNT}`);
-      expect(numbersIn(reason?.detail)).toEqual([String(CORRIDOR_MAP_MIN_COUNT)]);
-
-      expect(bannedKeysIn(r.report)).toEqual([]);
-    });
-  }
-
-  test('exactly K distinct attendees: the section is published without a sample size; a rate over nobody is not', async () => {
-    const id = 'test-evt-rrf-atk';
-    await seedEvent(id, CELL);
-    await seedAnons(id, CORRIDOR_MAP_MIN_COUNT);
-
-    const r = await buildSharedReport(tenv().DB, id);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    // OSE-1784: the sample size is never published (one people figure, from
-    // the posters).
-    expect(r.report.return_rate.sample_size).toBeNull();
-    // Nobody came twice and nobody was seen elsewhere: 0 is under the floor like
-    // 1 to 4, so neither rate is published. (This test used to expect both.)
-    expect(r.report.return_rate.venue_pct).toBeNull();
-    expect(r.report.return_rate.corridor_pct).toBeNull();
-    const fields = r.report._meta.suppression_reasons.map((s) => s.field);
-    expect(fields).not.toContain('return_rate'); // the section itself is published
-    expect(fields).toContain('return_rate.venue_pct');
-    expect(fields).toContain('return_rate.corridor_pct');
-    expect(bannedKeysIn(r.report)).toEqual([]);
-  });
-
-  // OSE-1649 item 3: 100% is withheld too. Published, it turns into a dash the
-  // day one more person comes, which says that person did not return.
-  test('exactly K distinct attendees who all came twice: 100% is withheld like "all but one"', async () => {
-    const id = 'test-evt-rrf-all5';
-    await seedEvent(id, CELL);
-    await seedAnons(id, CORRIDOR_MAP_MIN_COUNT, CORRIDOR_MAP_MIN_COUNT);
-
-    const r = await buildSharedReport(tenv().DB, id);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.report.return_rate.sample_size).toBeNull(); // OSE-1784
-    expect(r.report.return_rate.venue_pct).toBeNull();
-    expect(r.report._meta.suppression_reasons.map((s) => s.field)).toContain(
-      'return_rate.venue_pct'
-    );
-  });
-});
-
-/**
- * A rate published beside its sample size is a head count: rate x sample / 100.
- * So the rate itself passes the floor: the people it counts and the people it
- * does not count must each be at least K (OSE-1649: never 100% either).
- * Every (sample, returners) pair below is read through the real builder.
- */
-describe('a published return rate never multiplies back to a group under the floor', () => {
-  beforeEach(async () => {
-    await applyMigrations();
-    await clearTables();
-  });
-
-  const K = CORRIDOR_MAP_MIN_COUNT;
-  /** The two groups a rate splits its sample into, recovered as a reader would. */
-  function groups(pct: number, sample: number): { counted: number; rest: number } {
-    const counted = Math.round((pct * sample) / 100);
-    return { counted, rest: sample - counted };
-  }
-
-  for (const sample of [K, 9, 10, 12]) {
-    test(`venue_pct over ${sample} people, for every number who came twice`, async () => {
-      const id = `test-evt-rrf-sweep-${sample}`;
-      await seedEvent(id, CELL);
-      let publishedSomewhere = false;
-      for (let twice = 0; twice <= sample; twice++) {
-        await tenv().DB.prepare(`DELETE FROM anon_id_returns`).run();
-        await seedAnons(id, sample, twice);
-        const r = await buildSharedReport(tenv().DB, id);
-        expect(r.ok).toBe(true);
-        if (!r.ok) return;
-        const { venue_pct, sample_size } = r.report.return_rate;
-        // OSE-1784: never published. The rate is still worked out from the
-        // rounded counts (OSE-2151), so a reader who learns the head count some
-        // other way still cannot multiply it back to a group under the floor.
-        expect(sample_size).toBeNull();
-        // Both sides at least K; "everyone came twice" (the rest is 0) is
-        // withheld like 1 to 4 (OSE-1649 item 3).
-        const safe = twice >= K && sample - twice >= K;
-        if (safe) {
-          // Worked out from the rounded counts, the ones published beside it.
-          expect(venue_pct, `${twice} of ${sample}`).toBeCloseTo(
-            (roundForPublish(twice) / roundForPublish(sample)) * 100,
-            6
-          );
-          publishedSomewhere = true;
-        } else {
-          expect(venue_pct, `${twice} of ${sample} must be withheld`).toBeNull();
-        }
-        if (venue_pct !== null) {
-          const g = groups(venue_pct, roundForPublish(sample));
-          expect(g.counted).toBeGreaterThanOrEqual(K);
-          expect(g.rest >= K, `rest of ${g.rest}`).toBe(true);
-        }
-        // Withheld with a reason that names the floor only; published without one.
-        const reason = r.report._meta.suppression_reasons.find(
-          (s) => s.field === 'return_rate.venue_pct'
-        );
-        expect(reason !== undefined).toBe(venue_pct === null);
-        if (reason) {
-          expect(reason.reason).toBe('below_min_sample_size');
-          expect(numbersIn(reason.detail)).toEqual([String(K)]);
-        }
-      }
-      // Both sides at least K means a rate needs 2K people: under that, every
-      // split is withheld; from there, the sweep must publish one, or it proves
-      // nothing.
-      expect(publishedSomewhere, `published over ${sample} people`).toBe(sample >= 2 * K);
-    });
-  }
-
-  test('corridor_pct over 12 people, for every number also seen at another event in the corridor', async () => {
-    const id = 'test-evt-rrf-corr';
-    const other = 'test-evt-rrf-corr-other';
-    const sample = 12;
-    await seedEvent(id, CELL);
-    await seedEvent(other, CELL);
-    let published = 0;
-    for (let elsewhere = 0; elsewhere <= sample; elsewhere++) {
-      await tenv().DB.prepare(`DELETE FROM anon_id_returns`).run();
-      await seedAnons(id, sample);
-      await seedAnons(other, elsewhere); // the same first `elsewhere` people
-      // Ten people of the other event's own, so its rate can pass: a corridor's
-      // rates are published together or not at all (OSE-1649 item 1).
-      for (let i = 0; i < 10; i++) {
-        await tenv()
-          .DB.prepare(
-            `INSERT INTO anon_id_returns
-               (anon_id_hash, venue_id, first_seen_at, last_seen_at, return_count, computed_at)
-             VALUES (?, ?, datetime('now'), datetime('now'), 1, datetime('now'))`
-          )
-          .bind(`o${i}`.padStart(32, 'e'), other)
-          .run();
-      }
-      const r = await buildSharedReport(tenv().DB, id);
-      expect(r.ok).toBe(true);
-      if (!r.ok) return;
-      const { corridor_pct } = r.report.return_rate;
-      const safe = elsewhere >= K && sample - elsewhere >= K;
-      if (safe) {
-        expect(corridor_pct, `${elsewhere} of ${sample}`).toBeCloseTo(
-          (roundForPublish(elsewhere) / roundForPublish(sample)) * 100,
-          6
-        );
-        published++;
-      } else {
-        expect(corridor_pct, `${elsewhere} of ${sample} must be withheld`).toBeNull();
-      }
-      const reason = r.report._meta.suppression_reasons.find(
-        (s) => s.field === 'return_rate.corridor_pct'
-      );
-      expect(reason !== undefined).toBe(corridor_pct === null);
-    }
-    // 5, 6, 7 of 12: both sides at least K. 12 of 12 is withheld (item 3).
-    expect(published).toBe(3);
-  });
 });
 
 describe('no below_min_sample_size detail prints an observed count', () => {
@@ -399,7 +178,8 @@ describe('no below_min_sample_size detail prints an observed count', () => {
   test('across a report that suppresses several fields, every sub-floor detail names only a floor', async () => {
     const id = 'test-evt-rrf-all';
     await seedEvent(id, CELL);
-    await seedAnons(id, 2); // return_rate + this_event_count suppressed
+    // Two scans in one poster hour: the scan figure is withheld.
+    await seedPosterHour(tenv().DB, id, 19, 2);
     // A poster-area cell under the floor: the map's own hidden-area line.
     await tenv()
       .DB.prepare(
@@ -448,7 +228,7 @@ describe('no below_min_sample_size detail prints an observed count', () => {
       ['test-evt-rrf-map-held', 3],
     ] as const) {
       await seedEvent(id, CELL);
-      // OSE-1784: the head count is the poster sum. The posters have scans but
+      // OSE-1784: the scan figure is the poster sum. The posters have scans but
       // no map cells are materialized yet, so the map is the launch-day one.
       await seedPosterHour(tenv().DB, id, 19, people);
 
@@ -457,7 +237,7 @@ describe('no below_min_sample_size detail prints an observed count', () => {
       if (!r.ok) return;
 
       expect(r.report.corridor_map?.source).toBe('fallback');
-      expect(r.report.distinct_scanners).toBe(people >= CORRIDOR_MAP_MIN_COUNT ? people : null);
+      expect(r.report.scans).toBe(people >= CORRIDOR_MAP_MIN_COUNT ? people : null);
       const lines = r.report._meta.suppression_reasons.filter((s) => s.field === 'corridor_map');
       expect(lines, 'one line, not one per hidden area').toHaveLength(1);
       expect(lines[0]!.reason).toBe('below_min_sample_size');

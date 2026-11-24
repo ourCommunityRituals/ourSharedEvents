@@ -39,7 +39,7 @@
  *
  * Seen red: with main's report builder (before `floorTotalOfParts` and
  * `flooredRatePct`) 18 hidden pairs, 6 zero pairs and the registry fail, on
- * `click_outs.total`, `return_rate.venue_pct` and `return_rate.corridor_pct`.
+ * `click_outs.total` (the return rates were retired by OSE-2214).
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -178,7 +178,7 @@ async function seedWorld(eventId: string, w: World): Promise<void> {
   const db = tenv().DB;
   // Two other events, one per question, so each lever moves one thing. `sib`
   // shares the corridor cell and no series (corridor_pct); `ser` is the earlier
-  // event of the series and has no cell (venue_pct and headcount_trend).
+  // event of the series and has no cell (venue_pct and scan_trend).
   const sib = `${eventId}-sib`;
   const ser = `${eventId}-ser`;
   const series = `${eventId}-series`;
@@ -567,29 +567,10 @@ const plain = (key: keyof World, name: string, unit: string): Lever => ({
 
 const LEVERS: Lever[] = [
   plain('siblingPosterHour', 'scans at a poster of another event in the series', 'one scan'),
-  {
-    name: 'people seen at the event',
-    unit: 'one person',
-    at: (n) => set({ attendees: n, cameTwice: 0, seenElsewhere: 0 }),
-    control: [
-      set({ attendees: 24, cameTwice: 10, seenElsewhere: 10 }),
-      set({ attendees: 25, cameTwice: 10, seenElsewhere: 10 }),
-    ],
-  },
-  plain('cameTwice', 'people who came more than once', 'one returning visitor'),
-  {
-    name: 'people who came only once',
-    unit: 'one returning visitor',
-    at: (n) => set({ cameTwice: BASE.attendees - n }),
-    control: [set({ cameTwice: 10 }), set({ cameTwice: 9 })],
-  },
-  plain('seenElsewhere', 'people also seen elsewhere in the corridor', 'one returning visitor'),
-  {
-    name: 'people seen nowhere else in the corridor',
-    unit: 'one returning visitor',
-    at: (n) => set({ seenElsewhere: BASE.attendees - n }),
-    control: [set({ seenElsewhere: 10 }), set({ seenElsewhere: 9 })],
-  },
+  // OSE-2214 (owner, 2026-11-23): the report counts scans of the code and reads
+  // no people, so the four levers on anon_id_returns (people seen, came more
+  // than once, came only once, seen elsewhere in the corridor) reach nothing
+  // and were removed with return_rate.
   plain('sponsorSurface', "a sponsor's impressions on one surface", 'one impression'),
   plain('sponsorOnly', "a sponsor's only impressions", 'one impression'),
   plain('posterHour', 'scans at a poster in one hour', 'one scan'),
@@ -650,15 +631,14 @@ describe('the harness can see: a full report, and each lever above the floor', (
     const numeric = [...admin].filter(([, v]) => typeof v === 'number').map(([p]) => p);
     // Every top-level section of the report has at least one number in it.
     for (const section of [
-      'distinct_scanners',
+      'scans',
       'click_outs',
-      'return_rate',
       'corridor_density',
       'sponsor_displays',
       'campaign_summary',
       'sponsor_class_breakdown',
       'poster_attribution',
-      'headcount_trend',
+      'scan_trend',
       'corridor_map',
     ]) {
       expect(
@@ -673,7 +653,6 @@ describe('the harness can see: a full report, and each lever above the floor', (
       .map(([p]) => p);
     expect(withheld).toEqual([
       'report.click_outs.by_kind.signup', // the constant sub-K kind
-      'report.return_rate.sample_size', // never published (OSE-1784)
     ]);
   });
 
@@ -792,11 +771,9 @@ const SUM: How = { how: 'sum of floored parts', floor: K };
 const NOT_PEOPLE: How = { how: 'not people' };
 
 const REGISTRY: Record<string, How> = {
-  distinct_scanners: { how: 'poster sum' },
+  scans: { how: 'poster sum' },
   'click_outs.by_kind.*': FLOORED,
   'click_outs.total': SUM, // the published kinds
-  'return_rate.venue_pct': { how: 'rate' },
-  'return_rate.corridor_pct': { how: 'rate' },
   'corridor_density.this_event_count': { how: 'poster sum' },
   'corridor_density.baseline_30d': { how: 'floored', floor: CORRIDOR_BASELINE_MIN_SAMPLE },
   'corridor_density.baseline_90d': { how: 'floored', floor: CORRIDOR_BASELINE_MIN_SAMPLE },
@@ -819,13 +796,13 @@ const REGISTRY: Record<string, How> = {
   'sponsor_class_breakdown.*.total_displays': SUM, // OSE-2089: withheld is null, never 0
   'sponsor_class_breakdown.*.sponsor_count': NOT_PEOPLE,
   'poster_attribution[].scan_count': SUM, // poster-hours, each hour floored
-  'headcount_trend.instances[].distinct_scanners': SUM, // each event's own poster sum
+  'scan_trend.instances[].scans': SUM, // each event's own poster sum
   'corridor_map.cell_count': NOT_PEOPLE, // cells drawn; a cell under the floor is not drawn
   // Row counts. Rows are dropped, never shown withheld, so these count what is shown.
   'sponsor_displays.length': NOT_PEOPLE,
   'campaign_summary.length': NOT_PEOPLE,
   'poster_attribution.length': NOT_PEOPLE,
-  'headcount_trend.instances.length': NOT_PEOPLE,
+  'scan_trend.instances.length': NOT_PEOPLE,
   'corridor_map.suppressed.length': NOT_PEOPLE,
   '_meta.suppression_reasons.length': NOT_PEOPLE,
   'upgrade.locked_sections.length': NOT_PEOPLE,

@@ -52,7 +52,7 @@ describe('OSE-682 | /sharedReport on a plan without the paid report | the page l
     const html = await res.text();
     expect(html).not.toContain('data-surface="ose-error"');
     expect(html).not.toContain('switched on here yet');
-    expect(html).toContain('report.distinct_scanners');
+    expect(html).toContain('report.scans');
   });
 
   test('API caller (Accept: application/json) → 200, no REPORT_DISABLED envelope', async () => {

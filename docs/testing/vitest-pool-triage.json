@@ -3387,7 +3387,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 14
+      "testCount": 16
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-materialize.spec.ts",
@@ -3453,18 +3453,11 @@
       "testCount": 74
     },
     {
-      "file": "workers/oursharedevents/tests/shared-report-return-rate-card.spec.ts",
-      "bucket": "node",
-      "needsReview": false,
-      "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 6
-    },
-    {
-      "file": "workers/oursharedevents/tests/shared-report-return-rate-floor.spec.ts",
+      "file": "workers/oursharedevents/tests/shared-report-scans-on-the-code.spec.ts",
       "bucket": "node",
       "needsReview": true,
       "reason": "cloudflare:test imported for env only, no runtime marker",
-      "testCount": 13
+      "testCount": 4
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-sponsor-isolation.spec.ts",
@@ -3472,6 +3465,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-suppression-floor.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 7
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-trend-brand-scope.spec.ts",

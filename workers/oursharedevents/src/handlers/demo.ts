@@ -29,8 +29,6 @@ import {
   getEventFixture,
   getFlagsForTier,
   getScanRecords,
-  getCheckinFixtures,
-  getRegistrationFixtures,
   getSurveyFixtures,
   getPosterDeployments,
   getRiphDataset,
@@ -65,7 +63,7 @@ const DEMO_TIERS: Record<DemoTier, DemoTierConfig> = {
     label: 'Free · Local',
     flagTier: 'free',
     depth: 'local',
-    tagline: 'Proof you were there — headcount and your own logo counts.',
+    tagline: 'Proof you were there — scans of your codes and your own logo counts.',
   },
   mid: {
     slug: 'mid',
@@ -108,14 +106,13 @@ const FLAG_LABELS: Record<string, string> = {
 
 // Friendly section names for the depth exhibit.
 const SECTION_LABELS: Record<string, string> = {
-  distinct_scanners: 'Scans',
+  scans: 'Scans',
   sponsor_displays: 'Sponsor logo displays',
   campaign_summary: 'Campaign comparison',
   poster_attribution: 'Poster placement breakdown',
-  return_rate: 'Return rate',
   corridor_density: 'Corridor density',
   corridor_map: 'Corridor map (real H3 cells)',
-  headcount_trend: 'Headcount trend (cross-event)',
+  scan_trend: 'Scan trend (cross-event)',
 };
 
 // ── Scoped demo styling — role tokens only, no hardcoded palette ─────────────────
@@ -417,15 +414,11 @@ function flagPanel(flagTier: FlagTier): string {
 /** Depth exhibit — real aggregate stats from the mock snapshot, gated by depth. */
 function depthExhibit(depth: ReportDepth): string {
   const scans = getScanRecords();
-  const checkins = getCheckinFixtures();
-  const registrations = getRegistrationFixtures();
   const surveys = getSurveyFixtures();
   const posters = getPosterDeployments();
   const event = getEventFixture();
 
-  const distinctScanners = new Set(scans.map((s) => s.anon_id)).size;
   const avgRating = surveys.reduce((a, s) => a + s.rating, 0) / Math.max(1, surveys.length);
-  const returnRate = Math.round((checkins.length / Math.max(1, registrations.length)) * 100);
 
   const allowed = new Set(DEPTH_SECTIONS[depth]);
   const has = (section: string) => allowed.has(section);
@@ -435,7 +428,7 @@ function depthExhibit(depth: ReportDepth): string {
   const cards: string[] = [];
 
   // local depth (always present)
-  cards.push(statCard('Scans', String(distinctScanners), 'every scan of your codes', true, 'free'));
+  cards.push(statCard('Scans', String(scans.length), 'every scan of your codes', true, 'free'));
   cards.push(statCard('Your logo displays', String(scans.length), 'rotation counts', true, 'free'));
 
   // mid depth
@@ -445,15 +438,6 @@ function depthExhibit(depth: ReportDepth): string {
       `${posters.length} sites`,
       'poster attribution',
       has('poster_attribution'),
-      'mid'
-    )
-  );
-  cards.push(
-    statCard(
-      'Return rate',
-      `${returnRate}%`,
-      'check-ins ÷ registrations',
-      has('return_rate'),
       'mid'
     )
   );
@@ -482,8 +466,8 @@ function depthExhibit(depth: ReportDepth): string {
     statCard(
       'Cross-event trend',
       'Enabled',
-      'headcount across the season',
-      has('headcount_trend'),
+      'scans across the season',
+      has('scan_trend'),
       'premium'
     )
   );
@@ -499,7 +483,7 @@ function depthExhibit(depth: ReportDepth): string {
     across ${surveys.length} responses). Dashed cards are sections a deeper tier unlocks —
     the numbers already exist; the tier decides what renders.</p>
     <div class="stat-row">${cards.join('')}</div>
-    <p class="demo-note">Sections at this depth: <span>${sectionList ? '' : 'headcount + own logo only'}</span></p>
+    <p class="demo-note">Sections at this depth: <span>${sectionList ? '' : 'scans + own logo only'}</span></p>
     <ul>${sectionList}</ul>
   </section>`;
 }
@@ -571,7 +555,7 @@ function seasonSection(): string {
       const items = insts
         .map(
           (e) =>
-            `<li><span>${esc(e.title)}</span><span>${e.headcount} attended · ${esc(e.start_date)}</span></li>`
+            `<li><span>${esc(e.title)}</span><span>${e.headcount} scans · ${esc(e.start_date)}</span></li>`
         )
         .join('');
       return `<div class="demo-card">
@@ -593,7 +577,7 @@ function seasonSection(): string {
   return `<section class="demo-section" aria-labelledby="season-h">
     <h2 id="season-h">The RIPH season — four recurring containers</h2>
     <p class="demo-note">One venue, four recurring containers (trivia · bocce · pinball · cigar social club)
-    across a mock season — consolidated so a sponsor's reach rolls up ACROSS them. Headcounts vary and
+    across a mock season — consolidated so a sponsor's reach rolls up ACROSS them. Scan counts vary and
     climb, so the ladder shows real states — not a flat demo.</p>
     <div class="demo-grid">${leagueBlocks}</div>
     ${fbNote}

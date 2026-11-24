@@ -1,5 +1,5 @@
 /**
- * Part of OSE-1421 — `headcount_trend` must never cross brands (Invariant #9).
+ * Part of OSE-1421 — `scan_trend` must never cross brands (Invariant #9).
  *
  * The defect (CCR, three-loop Security-led read): `event_series` has no brand
  * column, the series detector clustered on location + weekday + hour alone, and
@@ -137,7 +137,7 @@ beforeAll(async () => {
   await applyMigrations();
 });
 
-describe('headcount_trend reads only the reporting event’s own brand', () => {
+describe('scan_trend reads only the reporting event’s own brand', () => {
   beforeEach(async () => {
     await applyMigrations();
     await clearTables();
@@ -164,13 +164,13 @@ describe('headcount_trend reads only the reporting event’s own brand', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    const ids = r.report.headcount_trend.instances.map((i) => i.event_id).sort();
+    const ids = r.report.scan_trend.instances.map((i) => i.event_id).sort();
     expect(ids).toEqual(['test-evt-trend-a1', 'test-evt-trend-a2']);
     // Brand B's floored headcounts must not appear anywhere in brand A's report.
     const json = JSON.stringify(r.report);
     expect(json).not.toContain('test-evt-trend-b');
-    expect(json).not.toContain('"distinct_scanners":77');
-    expect(json).not.toContain('"distinct_scanners":88');
+    expect(json).not.toContain('"scans":77');
+    expect(json).not.toContain('"scans":88');
 
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
@@ -188,10 +188,10 @@ describe('headcount_trend reads only the reporting event’s own brand', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    expect(r.report.headcount_trend.series_id).toBeNull();
-    expect(r.report.headcount_trend.series_name).toBeNull();
-    expect(r.report.headcount_trend.instances).toEqual([]);
-    const reason = r.report._meta.suppression_reasons.find((s) => s.field === 'headcount_trend');
+    expect(r.report.scan_trend.series_id).toBeNull();
+    expect(r.report.scan_trend.series_name).toBeNull();
+    expect(r.report.scan_trend.instances).toEqual([]);
+    const reason = r.report._meta.suppression_reasons.find((s) => s.field === 'scan_trend');
     expect(reason?.reason).toBe('no_series');
     expect(JSON.stringify(r.report)).not.toContain('foreign');
     expect(bannedKeysIn(r.report)).toEqual([]);
@@ -210,8 +210,8 @@ describe('headcount_trend reads only the reporting event’s own brand', () => {
     const r = await buildSharedReport(tenv().DB, 'test-evt-trend-s3');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.report.headcount_trend.series_id).toBe('srs-trend-own');
-    expect(r.report.headcount_trend.instances.map((i) => i.distinct_scanners)).toEqual([5, 5, 10]);
+    expect(r.report.scan_trend.series_id).toBe('srs-trend-own');
+    expect(r.report.scan_trend.instances.map((i) => i.scans)).toEqual([5, 5, 10]);
     expect(bannedKeysIn(r.report)).toEqual([]);
   });
 });

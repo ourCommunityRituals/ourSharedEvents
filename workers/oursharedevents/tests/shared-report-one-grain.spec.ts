@@ -4,13 +4,13 @@
  *
  * The defect: three people figures came from three grains, each floored on its
  * own. `return_rate.sample_size` and `corridor_density.this_event_count` were
- * the whole-event distinct count (anon_id_returns), `distinct_scanners` summed
+ * the whole-event distinct count (anon_id_returns), `scans` summed
  * scan_aggregates hours, and `poster_attribution` summed poster-hours. Hours of
  * 7 and 3 different people at one poster published a poster sum of 5 beside a
  * sample size of 10, so the 3 under the floor could be read off by subtraction.
  *
- * The rule now: distinct_scanners, this_event_count (and its density ratios)
- * and this event's headcount_trend instance are the sum of the published
+ * The rule now: scans, this_event_count (and its density ratios)
+ * and this event's scan_trend instance are the sum of the published
  * poster rows, through `floorTotalOfParts`; the sample size is never published.
  * The neighbour harness (shared-report-neighbour-floor.spec.ts) holds the same
  * rule over every dataset it builds, in its field registry ("poster sum").
@@ -132,11 +132,10 @@ async function build(id: string): Promise<SharedReport> {
 /** Every published people figure of a report, by name. */
 function peopleFigures(rep: SharedReport, id: string): Record<string, number | null> {
   return {
-    distinct_scanners: rep.distinct_scanners,
-    'return_rate.sample_size': rep.return_rate.sample_size,
+    scans: rep.scans,
     'corridor_density.this_event_count': rep.corridor_density.this_event_count,
-    'headcount_trend (this event)':
-      rep.headcount_trend.instances.find((i) => i.event_id === id)?.distinct_scanners ?? null,
+    'scan_trend (this event)':
+      rep.scan_trend.instances.find((i) => i.event_id === id)?.scans ?? null,
   };
 }
 
@@ -160,12 +159,13 @@ describe('one people figure, from the posters (OSE-1784)', () => {
     // The poster row: the 7-hour rounded to 5, the 3-hour under the floor.
     expect(rep.poster_attribution.map((p) => p.scan_count)).toEqual([5]);
     expect(posterSum(rep)).toBe(5);
-    // Every people figure is that same 5; none is the whole-event 10.
+    // Every figure is that same 5; none is the whole-event 10. (return_rate and
+    // its sample size were retired by OSE-2214, so no key is left to check.)
+    expect('return_rate' in rep).toBe(false);
     expect(peopleFigures(rep, id)).toEqual({
-      distinct_scanners: 5,
-      'return_rate.sample_size': null,
+      scans: 5,
       'corridor_density.this_event_count': 5,
-      'headcount_trend (this event)': 5,
+      'scan_trend (this event)': 5,
     });
     // And the density ratios are worked out from it, not from the 10.
     expect(rep.corridor_density.density_ratio_30d).toBeCloseTo(5 / 40, 9);
@@ -183,9 +183,7 @@ describe('one people figure, from the posters (OSE-1784)', () => {
         const rep = await build(id);
         const sum = rep.poster_attribution.length > 0 ? posterSum(rep) : null;
         for (const [name, v] of Object.entries(peopleFigures(rep, id))) {
-          if (name === 'return_rate.sample_size') {
-            if (v !== null) gaps.push(`${a}+${b}: sample_size published as ${v}`);
-          } else if (v !== sum) {
+          if (v !== sum) {
             gaps.push(`${a}+${b}: ${name} = ${v}, poster sum = ${sum}`);
           }
         }
@@ -202,10 +200,9 @@ describe('one people figure, from the posters (OSE-1784)', () => {
     const rep = await build(id);
     expect(rep.poster_attribution).toEqual([]);
     expect(peopleFigures(rep, id)).toEqual({
-      distinct_scanners: null,
-      'return_rate.sample_size': null,
+      scans: null,
       'corridor_density.this_event_count': null,
-      'headcount_trend (this event)': null,
+      'scan_trend (this event)': null,
     });
     // Withheld in words that name only the floor.
     const note = rep._meta.suppression_reasons.find(
@@ -332,7 +329,7 @@ describe('one people figure, from the posters (OSE-1784)', () => {
     await seedPosterHour(tenv().DB, other, 19, 9);
     await seedPosterHour(tenv().DB, other, 20, 4);
     const rep = await build(id);
-    const inst = rep.headcount_trend.instances.find((i) => i.event_id === other);
-    expect(inst?.distinct_scanners).toBe(5);
+    const inst = rep.scan_trend.instances.find((i) => i.event_id === other);
+    expect(inst?.scans).toBe(5);
   });
 });

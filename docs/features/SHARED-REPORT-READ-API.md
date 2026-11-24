@@ -108,44 +108,22 @@ interface SharedReport {
   // 1. The report's one people figure (OSE-1784, owner ruling 2026-11-23, "one number,
   //    from the posters"): the sum of the published `poster_attribution` rows, through
   //    `floorTotalOfParts`. `corridor_density.this_event_count` and this event's
-  //    `headcount_trend` instance are the same number, so no two figures can be
+  //    `scan_trend` instance are the same number, so no two figures can be
   //    subtracted to name a group under K. Null when no poster row is published.
   //    (It used to sum scan_aggregates hours, a different grain from the poster rows.)
-  //    What it counts: a person once per poster per hour, added across posters and
-  //    hours, each poster-hour under K dropped and the rest rounded down to a multiple
-  //    of 5. So it can be below the true number (quiet hours) or above it (one person at
-  //    two posters, or in two hours). An event with no poster publishes none. When null,
+  //    What it counts (OSE-2214, owner 2026-11-23): scans of the code, never people.
+  //    Every scan counts, up to 100 per poster per hour (more are sent on but not
+  //    stored, and the poster row then has `hour_cap_reached: true`, read as "or more").
+  //    Added across posters and hours, each poster-hour under K dropped and the rest
+  //    rounded down to a multiple of 5. Until 2026-11-23 a phone counted once per
+  //    poster per hour, so baselines and trends that reach back before that date mix
+  //    the two rules. An event with no poster publishes none. When null,
   //    `_meta.suppression_reasons` says so in words, the same at 0 as at 1 to 4.
-  distinct_scanners: number | null;
+  scans: number | null;
 
-  // 2. Return rate — % of this event's distinct anon_id_hashes also seen at another event:
-  //    of its confirmed series (`venue_pct`, OSE-1652) or in its corridor (`corridor_pct`).
-  //    Both count distinct events, never `return_count` (that column counts runs of the
-  //    nightly job). An event in no confirmed series gets `venue_pct: null` with
-  //    `no_series`.
-  //    Published only from K = 5 distinct attendees (CORRIDOR_MAP_MIN_COUNT, the platform
-  //    floor); below it both rates are null with `below_min_sample_size` (OSE-1421).
-  //    Each rate also passes the floor on its own (`flooredRatePct`, lib/count-floor.ts):
-  //    a rate beside a head count is a head count (20% of 5 is one person), so it is
-  //    published only when the people it counts and the people it does not count are
-  //    each at least K (OSE-1649). Otherwise that rate is null, and
-  //    `_meta.suppression_reasons` carries `return_rate.venue_pct` or
-  //    `return_rate.corridor_pct` with `below_min_sample_size`. So neither 0% nor 100%
-  //    is published: 100% would turn into a dash the day one more person came, and say
-  //    that person did not return. (The returns export keeps the shared nested rule,
-  //    which allows "all": its weekly snapshots are rounded down to multiples of 5.)
-  //    A corridor's rates are published together or not at all: if any event in the
-  //    corridor with a published sample size must withhold its corridor rate, every
-  //    event's is withheld, because with two events "seen at both" is one number and
-  //    the other report's rate gives it back. The `return_rate`, head-count and map
-  //    notes are given at 0 as at 1 to 4, so a note never tells "none" from "a few".
-  return_rate: {
-    venue_pct: number | null; // also seen at another event of this event's confirmed series
-    corridor_pct: number | null; // returners seen at corridor before
-    // Always null (OSE-1784): the exact whole-event count of a second grain, which set
-    // against the poster rows could name a group under K. The key stays for old readers.
-    sample_size: null;
-  };
+  // 2. (Return rate, retired by OSE-2214 on 2026-11-23 with snapshot 4.0.0. It
+  //    followed one phone across events; OSE counts traffic on the code, never a
+  //    person. A reader of the old shape no longer gets the `return_rate` key.)
 
   // 2b. Click-outs — anonymous short-link (`/s/`) clicks per destination kind. Sent to
   //    organizer, admin and internal readers only (not in `DEPTH_SECTIONS`, so never
@@ -159,7 +137,7 @@ interface SharedReport {
   } | null;
 
   // 3. Corridor density — vs. rolling 30d/90d baseline
-  //    `this_event_count` is `distinct_scanners` (OSE-1784), and the ratios are worked
+  //    `this_event_count` is `scans` (OSE-1784), and the ratios are worked
   //    out from it. Since 2026-11-23 (owner, "posters too") the baselines are the sum of
   //    the same published poster figure over the corridor's events in that weekday and
   //    hour, so a ratio divides like by like: this event's share of its slot's published
@@ -191,6 +169,7 @@ interface SharedReport {
     poster_deployment_id: string;
     location: string; // venue label, not coords
     scan_count: number;
+    hour_cap_reached: boolean; // OSE-2214: an hour here reached 100 stored scans, so scan_count is "or more"
     first_scan_at: string; // ISO, UTC hour bucket
     last_scan_at: string; // ISO, UTC hour bucket
     first_scan_label: string; // OSE-1376 — same bucket in the event's zone, e.g. "Sat, Oct 24 · 7 PM CDT"
@@ -202,13 +181,13 @@ interface SharedReport {
   //    (owner ruling 2026-10-01): the detector clusters per brand, and this read
   //    drops any instance of another brand and withholds a series anchored at
   //    another brand's event (`no_series`).
-  headcount_trend: {
+  scan_trend: {
     series_id: string | null; // null if no confirmed series for this event
     series_name: string | null;
     instances: Array<{
       event_id: string;
       start_date: string;
-      distinct_scanners: number | null;
+      scans: number | null;
     }>;
   };
 
@@ -337,8 +316,8 @@ As ratified, the single-event endpoint set `private, max-age=3600`; that was wit
 - Empty event → returns `MATERIALIZATION_PENDING`
 - Event with full materialization → returns SharedReport with all six fields
 - Event with corridor below min-sample → `corridor_density.*` are null, suppression reason logged
-- Event without a confirmed series → `headcount_trend.series_id` is null with `no_series` reason
-- Event with confirmed series → `headcount_trend.instances[]` populated
+- Event without a confirmed series → `scan_trend.series_id` is null with `no_series` reason
+- Event with confirmed series → `scan_trend.instances[]` populated
 - Two brands sharing a venue, weekday and hour → each brand's trend holds only its own instances (`tests/shared-report-trend-brand-scope.spec.ts`)
 
 **Integration (`tests/shared-report-read.spec.ts`):**

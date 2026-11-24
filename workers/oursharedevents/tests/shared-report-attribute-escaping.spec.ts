@@ -278,7 +278,7 @@ function report(fill: Fill): Record<string, unknown> {
     event_id: 'evt_1',
     event_title: fill('EVENT'),
     event_start_date: '2026-09-26T23:00:00Z',
-    distinct_scanners: 84,
+    scans: 84,
     return_rate: { venue_pct: 31.4, corridor_pct: 50, sample_size: 84 },
     corridor_density: { this_event_count: 84, density_ratio_30d: 2.1, density_ratio_90d: 1.05 },
     sponsor_displays: [
@@ -309,8 +309,8 @@ function report(fill: Fill): Record<string, unknown> {
         last_scan_label: fill('LASTLABEL'),
       },
     ],
-    headcount_trend: {
-      instances: [{ event_id: 'evt_1', start_date: '2026-09-26T23:00:00Z', distinct_scanners: 84 }],
+    scan_trend: {
+      instances: [{ event_id: 'evt_1', start_date: '2026-09-26T23:00:00Z', scans: 84 }],
     },
     corridor_map: {
       svg: '<svg viewBox="0 0 10 10" role="img" aria-label="Corridor map"><polygon points="1,1 9,1 5,9" fill="#888"/></svg>',
@@ -321,7 +321,7 @@ function report(fill: Fill): Record<string, unknown> {
     upgrade: { locked_sections: [fill('SECTION'), fill('SECTION2')], next_depth: fill('DEPTH') },
     _meta: {
       materialized_at: '2026-09-27T04:00:00Z',
-      suppression_reasons: [{ field: 'distinct_scanners', reason: 'below_min_sample_size' }],
+      suppression_reasons: [{ field: 'scans', reason: 'below_min_sample_size' }],
       timezone: { zone: fill('ZONE'), source: 'event' },
     },
   };
@@ -399,7 +399,7 @@ describe('the signed-link view: the report a sponsor or bar owner opens', () => 
     const t = hostile('NUM');
     Object.assign(wild, {
       event_start_date: t,
-      distinct_scanners: t,
+      scans: t,
       return_rate: { venue_pct: t, corridor_pct: t, sample_size: t },
       corridor_density: { this_event_count: t, density_ratio_30d: t, density_ratio_90d: t },
       sponsor_displays: [{ sponsor_name: plain('BUSINESS'), surface: 'poster', count: t }],
@@ -411,11 +411,11 @@ describe('the signed-link view: the report a sponsor or bar owner opens', () => 
       poster_attribution: [
         { location: plain('POSTERPLACE'), scan_count: t, first_scan_at: t, last_scan_at: t },
       ],
-      headcount_trend: { instances: [{ start_date: t, distinct_scanners: t }] },
+      scan_trend: { instances: [{ start_date: t, scans: t }] },
       corridor_map: { svg: '', suppressed: [], cell_count: t, source: t },
       _meta: {
         suppression_reasons: [
-          { field: 'distinct_scanners', reason: t },
+          { field: 'scans', reason: t },
           { field: t, reason: t },
         ],
         timezone: { zone: plain('ZONE'), source: t },

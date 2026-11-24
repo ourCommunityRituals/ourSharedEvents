@@ -49,11 +49,11 @@ runtime:
 
         });
 
-        test('Reads the scan count as distinct_scanners, labelled Scans (OSE-2214), never unique_gatherings (OSE-818)', function() {
+        test('Reads the scan count as scans, labelled Scans (OSE-2214), never unique_gatherings (OSE-818)', function() {
 
         \    const html = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));
 
-        \    expect(html).to.include('report.distinct_scanners');
+        \    expect(html).to.include('report.scans');
 
         \    expect(html).to.include('<dt>Scans</dt>');
 

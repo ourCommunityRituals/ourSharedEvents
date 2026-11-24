@@ -375,7 +375,7 @@ export async function refreshCorridorBaselines(
     const cells = await env.DB.prepare(
       `WITH poster_hours AS (
          -- One row per poster-hour of an event in the 90-day window: the grain
-         -- the report publishes people in (never the room's vote code).
+         -- the report publishes scans in (never the room's vote code).
          -- Driven from the window's events (CROSS JOIN keeps that order), so
          -- each night reads only their scans through idx_spe_event_poster,
          -- never every scan ever stored.
@@ -390,7 +390,7 @@ export async function refreshCorridorBaselines(
           GROUP BY s.event_id, s.poster_deployment_id, substr(s.scan_bucket, 1, 13)
        ),
        event_people AS (
-         -- The event's published people figure: each poster-hour under the
+         -- The event's published scan figure (OSE-2214): each poster-hour under the
          -- floor adds nothing, the rest are rounded down to a multiple of 5
          -- and added (floorTotalOfParts), as the report's poster rows are.
          SELECT event_id,

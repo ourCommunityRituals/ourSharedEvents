@@ -193,7 +193,7 @@ describe('OSE-R-003 SharedReport signed-link UI — API layer', () => {
     }
   });
 
-  test('OSE-R-003 | API | GET /sharedReport (signed-link payload) | rendered article carries event_title, distinct_scanners, return_rate, corridor_density data-testids', async () => {
+  test('OSE-R-003 | API | GET /sharedReport (signed-link payload) | rendered article carries event_title, scans and corridor_density data-testids, and no return-rate card (OSE-2214)', async () => {
     const html = await fetchSharedReportPage();
     // These data-testids are the contract the Playwright FE spec relies on
     // to find rendered fields. If a future refactor renames them, the
@@ -203,13 +203,16 @@ describe('OSE-R-003 SharedReport signed-link UI — API layer', () => {
       'signed-link-event-title',
       'signed-link-event-date',
       'signed-link-distinct-scanners',
-      'signed-link-return-rate',
       'signed-link-corridor-density',
     ]) {
       expect(html, `signed-link render must emit data-testid="${testid}"`).toMatch(
         new RegExp(`data-testid="${testid}"`)
       );
     }
+    // OSE-2214: the return rate is retired, and a poster hour at the cap reads "or more".
+    expect(html).not.toMatch(/data-testid="signed-link-return-rate"/);
+    expect(html).toMatch(/hour_cap_reached \? ' or more'/);
+    expect(html).toMatch(/orMore\(report\.scans_at_least\)/);
   });
 
   // ── OSE-817 — the printed refusal renders SOLELY from report.upgrade ──────────

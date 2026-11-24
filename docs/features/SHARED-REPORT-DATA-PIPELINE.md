@@ -208,18 +208,20 @@ All SharedReport aggregates write to the **main `DB`** (not `FORMS_DB`). Rationa
 
 ### What it produces
 
+> **OSE-2214 (2026-11-24).** The report no longer carries `return_rate`: it followed one phone across events. The nightly returns job, `anon_id_returns_view` and the returns export below still run until the next step of OSE-2214 retires them; read the `return_rate_pct` lines as history.
+
 A single read-time view `v_shared_report` (or a query function) that the SharedReport renderer (OSE-245) reads from:
 
 ```sql
 -- Pseudocode — actual implementation likely a function in src/lib/
 SELECT
   sa.event_id,
-  sa.distinct_agent_hashes              AS distinct_scanners,
+  sa.distinct_agent_hashes              AS scans,
   rr.return_rate                AS return_rate_pct,
   (sa.distinct_agent_hashes * 1.0 / cdb.window_30d_count) AS corridor_density_ratio,
   si.impression_count,
   si.click_count,
-  hcs.trend_array               AS headcount_trend
+  hcs.trend_array               AS scan_trend
 FROM scan_aggregates sa
 LEFT JOIN (SELECT venue_id, return_rate FROM anon_id_returns_view) rr ON ...
 LEFT JOIN corridor_density_baseline cdb ON sa.event_id->corridor + dow + hour
@@ -239,12 +241,12 @@ Export contract (one row per event):
 | event_id               | string     | events.id                                              |
 | corridor_id            | string     | events.corridor_id                                     |
 | event_date             | date       | events.start_date                                      |
-| distinct_scanners      | int        | scan_aggregates.distinct_agent_hashes                  |
+| scans                  | int        | scan_aggregates.distinct_agent_hashes                  |
 | return_rate_pct        | float      | anon_id_returns aggregate                              |
 | corridor_density_ratio | float      | scan_aggregates ÷ corridor_density_baseline.window_30d |
 | sponsor_displays       | int        | sponsor_displays count where event_type='impression'   |
 | sponsor_clicks         | int        | sponsor_displays count where event_type='click'        |
-| headcount_trend        | array[int] | event_series rolling headcounts                        |
+| scan_trend             | array[int] | event_series rolling headcounts                        |
 | materialized_at        | timestamp  | computed_at of the aggregation                         |
 
 **Crucial:** NO `anon_id` or `anon_id_hash` field in the BigQuery export. The export is per-event, not per-attendee.
@@ -360,7 +362,7 @@ The 5 open questions surfaced in the initial design draft have been answered. Se
 
 > **Amended 2026-11-13 by [ADR-029](../adr/ADR-029-declared-event-series.md).** The admin step below was not built until OSE-2014; until then no series could become `confirmed`. It is now a set of routes under `/api/v2/admin/events/:id/series`, not a screen. An organizer can also **declare** a series up front, anchored on an event with no venue needed, and a declared series is `confirmed` at once. Confirming a suggestion attaches no event by itself: the organizer names the events. A rejection reason is one of a fixed list, not free text.
 
-The platform auto-detects candidate series by clustering events on `venue + day_of_week + hour_of_day`, surfaces them to the admin UI as suggestions, and the admin clicks accept/reject. Confirmed series participate in `headcount_trend`; rejected suggestions are remembered so the platform doesn't re-suggest them.
+The platform auto-detects candidate series by clustering events on `venue + day_of_week + hour_of_day`, surfaces them to the admin UI as suggestions, and the admin clicks accept/reject. Confirmed series participate in `scan_trend`; rejected suggestions are remembered so the platform doesn't re-suggest them.
 
 **Implementation note (this is the deviation from the original draft):**
 
@@ -393,7 +395,7 @@ Auto-detector runs nightly. It looks at the last 8 weeks of events per venue, cl
 
 Admin UI presents pending suggestions with `accept` / `reject` / `edit name` actions. Auto-detector skips clusters that already match a `rejected` row to avoid re-prompting.
 
-Only `confirmed` series are joined to `events.series_id` for SharedReport `headcount_trend`. `pending` and `rejected` rows are detection-loop bookkeeping.
+Only `confirmed` series are joined to `events.series_id` for SharedReport `scan_trend`. `pending` and `rejected` rows are detection-loop bookkeeping.
 
 **Scope impact on Session 2:** the migration is slightly more complex (lifecycle column + check constraint + index), and Session 3 gets a new sub-deliverable: the auto-detector cron worker. Net: ~1-2 additional hours of work across Sessions 2-3.
 
@@ -415,7 +417,7 @@ Cron computes SharedReport aggregates for every event regardless of tier. Tier-g
 
 - `materializeSharedReport(eventId)` runs unconditionally on every post-event cron tick
 - `GET /api/v2/events/:id/shared-report` reads the materialized data, applies tier-gating at response-shape time
-- Free tier response: `{ ok: true, tier: 'free', distinct_scanners: <int>, full_data_locked: true, upgrade_hint: { ... } }`
+- Free tier response: `{ ok: true, tier: 'free', scans: <int>, full_data_locked: true, upgrade_hint: { ... } }`
 - Paid tier response: full 6-field payload
 
 ---

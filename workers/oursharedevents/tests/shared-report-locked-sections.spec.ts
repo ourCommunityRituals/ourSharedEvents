@@ -92,9 +92,9 @@ function fullReport(): SharedReport {
     event_title: 'Bocce Night',
     event_start_date: '2026-09-26T23:00:00Z',
     event_end_date: '2026-09-27T03:00:00Z',
-    distinct_scanners: 84,
+    scans: 84,
+    scans_at_least: false,
     click_outs: { by_kind: { public: 20 }, total: 20 },
-    return_rate: { venue_pct: 31.4, corridor_pct: 50, sample_size: 84 },
     corridor_density: {
       this_event_count: 84,
       baseline_30d: 40,
@@ -137,18 +137,29 @@ function fullReport(): SharedReport {
         location: 'Front window',
         h3_res9: '89266454447ffff',
         scan_count: 14,
+        hour_cap_reached: false,
         first_scan_at: '2026-09-26T23:00:00Z',
         last_scan_at: '2026-09-27T01:00:00Z',
         first_scan_label: 'Sat, Sep 26 · 6 PM CDT',
         last_scan_label: 'Sat, Sep 26 · 8 PM CDT',
       },
     ],
-    headcount_trend: {
+    scan_trend: {
       series_id: 'srs_1',
       series_name: 'Saturday League',
       instances: [
-        { event_id: 'evt_prev', start_date: '2026-09-19T23:00:00Z', distinct_scanners: 61 },
-        { event_id: EVENT_ID, start_date: '2026-09-26T23:00:00Z', distinct_scanners: 84 },
+        {
+          event_id: 'evt_prev',
+          start_date: '2026-09-19T23:00:00Z',
+          scans: 61,
+          scans_at_least: false,
+        },
+        {
+          event_id: EVENT_ID,
+          start_date: '2026-09-26T23:00:00Z',
+          scans: 84,
+          scans_at_least: false,
+        },
       ],
     },
     corridor_map: {
@@ -259,7 +270,7 @@ const capital = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 /** Where each withheld section would be drawn if it were sent. */
 const OWN_RENDER: Record<string, string> = {
   poster_attribution: 'signed-link-poster-section',
-  headcount_trend: 'signed-link-trend-section',
+  scan_trend: 'signed-link-trend-section',
   corridor_map: 'corridor-map-section',
 };
 
@@ -467,43 +478,36 @@ describe('present behaviour, pinned until the owner decides the look and the wor
   });
 
   // The locked state is said once, in the group at the end. Where the section
-  // itself would sit, nothing says "locked": the two sections that have a card
-  // in the top row keep the card, empty.
+  // itself would sit, nothing says "locked": the section that has a card in
+  // the top row keeps the card, empty. (OSE-2214 retired the return-rate card.)
   test('a locked section with a card in the top row keeps that card, showing a dash and no reason', async () => {
     const body = await read('sponsor', { depth: 'local', sponsor_id: SPONSOR_ID });
     expect(body.report.upgrade!.locked_sections).toEqual(
-      expect.arrayContaining(['return_rate', 'corridor_density'])
+      expect.arrayContaining(['corridor_density'])
     );
     const p = await open(body);
-    const rate = all(p.doc, 'signed-link-return-rate')[0]!;
+    expect(all(p.doc, 'signed-link-return-rate')).toHaveLength(0);
     const density = all(p.doc, 'signed-link-corridor-density')[0]!;
-    expect(squash(rate.querySelector('dd')?.textContent)).toBe('—');
     expect([...density.querySelectorAll('dd')].map((dd) => squash(dd.textContent))).toEqual([
       '—',
       '—',
       '—',
     ]);
-    expect(all(rate, 'report-suppression-note')).toHaveLength(0);
     expect(all(density, 'report-suppression-note')).toHaveLength(0);
-    expect(squash(rate.textContent)).not.toMatch(/Mid report|locked/i);
+    expect(squash(density.textContent)).not.toMatch(/Mid report|locked/i);
   });
 
   // OPEN, not accepted. `_meta.suppression_reasons` is sent whole at every
   // depth, so a local link is told why a section it is not sent was withheld,
-  // and the page prints that reason: "hidden to keep things anonymous" on the
-  // Return Rate card, and a Corridor Scan Map heading with the same line, while
-  // the group at the end says both are on the Mid report. Pinned so that
+  // and the page prints that reason: "hidden to keep things anonymous" under a
+  // Corridor Scan Map heading, while the group at the end says it is on the Mid
+  // report. (The Return Rate card that also printed it was retired, OSE-2214.) Pinned so that
   // closing it (reasons filtered by depth, or the page skipping a locked
   // section) is a visible change here.
   test('OPEN: a reason about a locked section still reaches a local link, and the page prints it', async () => {
     const hidden = 'Hidden to keep things anonymous — not enough data yet.';
     const withReasons = fullReport();
     withReasons._meta.suppression_reasons = [
-      {
-        field: 'return_rate',
-        reason: 'below_min_sample_size',
-        detail: 'fewer than 5 distinct attendees',
-      },
       {
         field: 'corridor_map',
         reason: 'below_min_sample_size',
@@ -513,17 +517,11 @@ describe('present behaviour, pinned until the owner decides the look and the wor
     vi.mocked(buildSharedReport).mockResolvedValue({ ok: true, report: withReasons });
 
     const body = await read('sponsor', { depth: 'local', sponsor_id: SPONSOR_ID });
-    expect(body.report.upgrade!.locked_sections).toEqual(
-      expect.arrayContaining(['return_rate', 'corridor_map'])
-    );
+    expect(body.report.upgrade!.locked_sections).toEqual(expect.arrayContaining(['corridor_map']));
     const meta = body.report._meta as { suppression_reasons: Array<{ field: string }> };
-    expect(meta.suppression_reasons.map((r) => r.field)).toEqual(['return_rate', 'corridor_map']);
+    expect(meta.suppression_reasons.map((r) => r.field)).toEqual(['corridor_map']);
 
     const p = await open(body);
-    const rate = all(p.doc, 'signed-link-return-rate')[0]!;
-    expect(all(rate, 'report-suppression-note').map((n) => squash(n.textContent))).toEqual([
-      hidden,
-    ]);
     const map = all(p.doc, 'corridor-map-section');
     expect(map).toHaveLength(1);
     expect(squash(map[0]!.textContent)).toBe(`Corridor Scan Map${hidden}`);
@@ -532,5 +530,42 @@ describe('present behaviour, pinned until the owner decides the look and the wor
     expect(
       all(p.doc, 'signed-link-locked-section').map((c) => c.getAttribute('data-section-name'))
     ).toEqual(body.report.upgrade!.locked_sections);
+  });
+});
+
+// OSE-2214: a poster hour that reached the cap of 100 stored scans makes every
+// figure built from it a lower bound, so the page says "or more" beside each,
+// and says nothing extra when no hour reached the cap.
+describe('OSE-2214: "or more" when an hour reached the scan cap', () => {
+  const cardText = (p: Page, id: string) => squash(all(p.doc, id)[0]?.textContent);
+
+  test('at the cap: the scan card, the corridor count, the poster row and the trend row say "or more"', async () => {
+    const capped = fullReport();
+    capped.scans = 105;
+    capped.scans_at_least = true;
+    capped.corridor_density.this_event_count = 105;
+    capped.poster_attribution[0].scan_count = 105;
+    capped.poster_attribution[0].hour_cap_reached = true;
+    capped.scan_trend.instances[1] = {
+      ...capped.scan_trend.instances[1],
+      scans: 105,
+      scans_at_least: true,
+    };
+    vi.mocked(buildSharedReport).mockResolvedValue({ ok: true, report: capped });
+    const p = await open(await read('admin'));
+    expect(cardText(p, 'signed-link-distinct-scanners')).toContain('105 or more');
+    expect(cardText(p, 'signed-link-corridor-density')).toContain('105 or more');
+    expect(squash(p.doc.body.textContent)).toMatch(/Front window\s*105 or more/);
+    const trend = all(p.doc, 'signed-link-trend-row').map((r) => squash(r.textContent));
+    expect(trend.some((t) => t.includes('105 or more'))).toBe(true);
+    expect(trend.some((t) => t.includes('61 or more'))).toBe(false);
+  });
+
+  test('under the cap: no "or more" anywhere', async () => {
+    vi.mocked(buildSharedReport).mockResolvedValue({ ok: true, report: fullReport() });
+    const p = await open(await read('admin'));
+    expect(squash(all(p.doc, 'signed-link-report-article')[0]?.textContent)).not.toMatch(
+      /\d or more/
+    );
   });
 });
