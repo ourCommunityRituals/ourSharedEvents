@@ -116,7 +116,7 @@ Arithmetic: all findings raised, less the withdrawn one: High 2 × 10 + Medium 6
 ## Verification
 
 - **Born red.** On the old source: 16 of the rewritten tests fail (no returns phase, no returns table call, `distinct_agent_hashes` 0, the trace hops, no writer of `anon_id_returns`). The exporter invariant fails on the old exporter. The self-clear test fails with the clear removed. Two ported guards fail on planted faults (staging dataset ignored; a HIPAA row let through).
-- **Local runs.** Affected worker specs pass (materialize 35, export 22, scan-node-key 19, trace 20, pipeline invariants 54). Architecture structural specs pass (export-grain, tenant-isolation, timestamp-precision: 53). Root `npm test`: 5,818 passed after the plan update. `tsc` clean; triage `--check` up to date. Full worker suite: see the PR body.
+- **Local runs.** Affected worker specs pass (materialize 35, export 22, scan-node-key 19, trace 20, pipeline invariants 54). Architecture structural specs pass (export-grain, tenant-isolation, timestamp-precision: 53). Root `npm test`: 5,818 passed after the plan update. `tsc` clean; triage `--check` up to date. Full worker suite: 15,539 passed and 2 failed (d1-error-log expected the retired phase's log lines); fixed, and that spec plus the 8 edited specs re-run: 201 passed.
 - **After merge.** T1 to T4 green on the merge commit; the plan's post-deploy query reads 0 for ids and return rows.
 
 ## Risks accepted

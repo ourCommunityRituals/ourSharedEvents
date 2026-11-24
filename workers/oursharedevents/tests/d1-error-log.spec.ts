@@ -297,8 +297,8 @@ describe.each(Object.keys(MESSAGES) as Form[])(
         'DRAFT_EXPIRY_ERROR',
         'SCAN_RETURNS_RETENTION_ERROR',
         'SHARED_REPORT_MATERIALIZE_ERROR',
-        'SHARED_REPORT_MATERIALIZE_PHASE_FATAL',
-        'ANON_ID_RETURNS_PEPPER_PURGE_ERROR',
+        // OSE-2214: the returns phase is retired, and with it its pepper-purge
+        // line and the fatal line it wrote when it threw.
         'LIFECYCLE',
       ]);
     });
