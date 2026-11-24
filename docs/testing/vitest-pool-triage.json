@@ -688,6 +688,13 @@
       "testCount": 7
     },
     {
+      "file": "workers/oursharedevents/tests/brand-tree.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 13
+    },
+    {
       "file": "workers/oursharedevents/tests/brand-voice-surfaces.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -972,7 +979,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 30
+      "testCount": 31
     },
     {
       "file": "workers/oursharedevents/tests/data-class-schema.spec.ts",

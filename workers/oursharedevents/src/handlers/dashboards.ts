@@ -243,6 +243,8 @@ interface BrandOps {
   posters: number;
   places: Set<string>;
   onShow: number;
+  /** Distinct sponsor businesses on show at one or more of the brand's events. */
+  businessesOnShow: number;
   pendingRequests: number;
   /**
    * Report opens per event per day, raw. Opens are actions by link holders,
@@ -318,11 +320,12 @@ async function readBrandOps(
         )
         .bind(brand, dc)
     ),
-    first<{ on_show: number; pending: number }>(
+    first<{ on_show: number; pending: number; businesses: number }>(
       db
         .prepare(
           `SELECT SUM(CASE WHEN ${PLACEMENT_ON_SHOW_SQL} THEN 1 ELSE 0 END) AS on_show,
-                  SUM(CASE WHEN ${PENDING_SQL} THEN 1 ELSE 0 END) AS pending
+                  SUM(CASE WHEN ${PENDING_SQL} THEN 1 ELSE 0 END) AS pending,
+                  COUNT(DISTINCT CASE WHEN ${PLACEMENT_ON_SHOW_SQL} THEN sb.id END) AS businesses
              FROM sponsor_placement sp JOIN events e ON e.id = sp.event_id
              JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
             WHERE e.brand_id = ? AND ${DC}`
@@ -379,6 +382,7 @@ async function readBrandOps(
     posters: num(posters?.cnt),
     places: new Set(places.map((p) => p.cell)),
     onShow: num(sponsors?.on_show),
+    businessesOnShow: num(sponsors?.businesses),
     pendingRequests: num(sponsors?.pending),
     reportViewCells: views.map((r) => num(r.n)),
     admin: adminMap,
@@ -454,6 +458,7 @@ export async function handleOperationsDashboard(
       created30d = 0,
       posters = 0,
       onShow = 0,
+      businessesOnShow = 0,
       pendingRequests = 0;
     for (const b of perBrand) {
       for (const [s, n] of b.byStatus) byStatus[s] = (byStatus[s] ?? 0) + n;
@@ -466,6 +471,7 @@ export async function handleOperationsDashboard(
       scanCells.push(...b.scanCells);
       posters += b.posters;
       onShow += b.onShow;
+      businessesOnShow += b.businessesOnShow;
       pendingRequests += b.pendingRequests;
       reportViewCells.push(...b.reportViewCells);
     }
@@ -508,7 +514,27 @@ export async function handleOperationsDashboard(
         anonymous: { scans },
         explicit,
       },
-      sponsors: { on_show: onShow, pending_requests: pendingRequests },
+      sponsors: {
+        on_show: onShow,
+        businesses_on_show: businessesOnShow,
+        pending_requests: pendingRequests,
+      },
+      // OSE-1532: one line per brand in scope. A parent company reaches its
+      // ventures through the brand tree (lib/brand-tree.ts), so this is the
+      // venture-by-venture view under the totals above. Each line is built by
+      // the same floor rule as the total, from the same parts, so the floored
+      // lines add up to the floored total and none can be differenced out.
+      by_brand: brands.map((brand, i) => {
+        const b = perBrand[i];
+        return {
+          brand,
+          events: b.eventIds.length,
+          poster_scans: floorTotalOfParts(b.scanCells),
+          link_taps: floorTotalOfParts(b.tapsPerEvent),
+          sponsors_on_show: b.onShow,
+          businesses_on_show: b.businessesOnShow,
+        };
+      }),
       shared_report: { views_30d: floorTotalOfParts(reportViewCells) },
     });
   });

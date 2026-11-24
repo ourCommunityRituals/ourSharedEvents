@@ -50,7 +50,9 @@ import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 // own actions are under the floor).
 // 4.0.0 (2026-11-19, OSE-2151): every `floored` value is rounded down to a
 // multiple of 5 from the floor up (owner ruling 2026-11-18); no longer exact.
-export const DASHBOARD_CONTRACT_VERSION = '4.0.0';
+// 4.1.0 (2026-11-23, OSE-1532): new metrics sponsors.businesses_on_show and
+// by_brand[] (one line per brand in scope: a parent company and its ventures).
+export const DASHBOARD_CONTRACT_VERSION = '4.1.0';
 
 export type DashboardId = 'operations' | 'event' | 'corridor';
 export type PrivacyClass = 'entity' | 'floored';
@@ -215,6 +217,58 @@ export const DASHBOARD_METRICS = {
     path: 'sponsors.on_show',
     source: ON_SHOW,
     description: 'Sponsor placements a visitor can see right now.',
+  },
+  'sponsors.businesses_on_show': {
+    dashboard: 'operations',
+    privacy: 'entity',
+    path: 'sponsors.businesses_on_show',
+    source: ON_SHOW + ' (distinct sponsor_business per brand)',
+    description:
+      'The sponsor footprint: distinct businesses on show at one or more events. A business backing two ventures counts once per venture.',
+  },
+  'by_brand.brand': {
+    dashboard: 'operations',
+    privacy: 'entity',
+    path: 'by_brand[].brand',
+    source: 'events.brand_id (the brands in scope)',
+    description:
+      'One line per brand in scope, so a parent company sees each venture beside the total.',
+  },
+  'by_brand.events': {
+    dashboard: 'operations',
+    privacy: 'entity',
+    path: 'by_brand[].events',
+    source: 'events',
+    description: "The brand's events.",
+  },
+  'by_brand.poster_scans': {
+    dashboard: 'operations',
+    privacy: 'floored',
+    path: 'by_brand[].poster_scans',
+    source: 'scan_placement_events (per poster-hour, floored, survivors summed)',
+    description:
+      "The brand's poster scans, built from the same poster-hours as reach.poster_scans, so the lines add up to the total.",
+  },
+  'by_brand.link_taps': {
+    dashboard: 'operations',
+    privacy: 'floored',
+    path: 'by_brand[].link_taps',
+    source: 'shortlinks.clicks (per event and code, floored, survivors summed; then per event)',
+    description: "The brand's short-link taps, by the same rule as reach.link_taps.",
+  },
+  'by_brand.sponsors_on_show': {
+    dashboard: 'operations',
+    privacy: 'entity',
+    path: 'by_brand[].sponsors_on_show',
+    source: ON_SHOW,
+    description: "The brand's sponsor placements a visitor can see right now.",
+  },
+  'by_brand.businesses_on_show': {
+    dashboard: 'operations',
+    privacy: 'entity',
+    path: 'by_brand[].businesses_on_show',
+    source: ON_SHOW + ' (distinct sponsor_business)',
+    description: "Distinct businesses on show at the brand's events.",
   },
   'sponsors.pending_requests': {
     dashboard: 'operations',
