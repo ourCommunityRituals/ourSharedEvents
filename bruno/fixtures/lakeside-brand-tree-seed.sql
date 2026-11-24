@@ -27,3 +27,12 @@ INSERT INTO brand_parents (brand_id, parent_brand_id) VALUES ('lakeside-league',
 ON CONFLICT(brand_id) DO UPDATE SET parent_brand_id = 'lakeside-co';
 INSERT INTO brand_parents (brand_id, parent_brand_id) VALUES ('lakeside-network', 'lakeside-co')
 ON CONFLICT(brand_id) DO UPDATE SET parent_brand_id = 'lakeside-co';
+
+-- The clubhouse as a venue the company owns (Part of OSE-2221). Owner,
+-- 2026-11-23: a company can own a venue, and every venture below it counts
+-- there. The Bruno folder "29. Venues (OSE-2221)" reads its roll-up. The id
+-- is fixed so the folder finds it; nothing is held there until a venture's
+-- event is. No person, no coordinates.
+INSERT INTO venues (id, brand_id, name) VALUES
+  ('ven_1a6e51de0c1b00000000000000000001', 'lakeside-co', 'Lakeside Clubhouse')
+ON CONFLICT(id) DO UPDATE SET brand_id = 'lakeside-co', name = 'Lakeside Clubhouse';

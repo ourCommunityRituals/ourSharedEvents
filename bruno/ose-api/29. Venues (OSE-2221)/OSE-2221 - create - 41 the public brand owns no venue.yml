@@ -1,0 +1,36 @@
+info:
+  name: "OSE-2221 | rainy | create | the shared public brand cannot own a venue"
+  type: http
+  seq: 41
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/venues"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"brand_id":"root","name":"Not a venue"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2221 rainy: 403 for the public brand', function () {
+          expect(res.getStatus()).to.eql(403);
+          expect(b.code).to.eql('BRAND_FORBIDDEN');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

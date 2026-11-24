@@ -222,6 +222,14 @@
  *   GET    /api/v2/admin/events/:id/dashboard       → organizer / partner report, one event
  *   GET    /api/v2/admin/events/:id/stats           → dashboard aggregate counts for one event (OSE-896)
  *
+ *   Venues (auth required — OSE-2221; a place owner and the operators who run events there):
+ *   GET    /api/v2/admin/venues                         → venues the caller owns or runs events at
+ *   POST   /api/v2/admin/venues                         → make a venue owned by a brand in scope (audited)
+ *   PUT    /api/v2/admin/venues/:id/operators           → list a brand at the venue: on_platform or grandfathered (owner only, audited)
+ *   DELETE /api/v2/admin/venues/:id/operators/:brand    → take a brand off the venue's list; its events stop counting (owner only, audited)
+ *   GET    /api/v2/admin/venues/:id/rollup              → floored scans, taps and sponsors at the venue, per operator and in total (owner only)
+ *   PUT    /api/v2/admin/events/:id/venue               → hold the event at a venue that lists its brand, or clear it (auth, audited)
+ *
  *   Admin Audit Log (auth required — OSE-212):
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
  *                                             (?scope=brand&source=&since=&brand= for the Logs screen)
@@ -331,6 +339,14 @@ import {
   handleCorridorDashboard,
   handleEventDashboard,
 } from './handlers/dashboards';
+import {
+  handleCreateVenue,
+  handleDeleteVenueOperator,
+  handleListVenues,
+  handlePutVenueOperator,
+  handleSetEventVenue,
+  handleVenueRollup,
+} from './handlers/venues';
 import { handleAdminEventLivePage } from './handlers/live-monitor';
 import {
   handlePublicPage,
@@ -1215,6 +1231,85 @@ export async function route(
     const offPlatform = await _platformOnly(reqId);
     if (offPlatform) return offPlatform;
     return handleBackfillH3Cells(request, env);
+  }
+
+  // /api/v2/admin/venues/** — OSE-2221. A venue is reached by id only by its
+  // owner (the handler proves the owner brand is in scope; a miss is 404).
+  // Writes are audited against the venue, so the row carries its brand.
+  const _venueCall = async (
+    reqId: string,
+    deny: Response | null,
+    action: string | null,
+    target: string | undefined,
+    run: () => Promise<Response>
+  ): Promise<Response> => {
+    if (deny) {
+      if (action) _audit(reqId, action, 'denied', 'venue', target);
+      return deny;
+    }
+    const res = await run();
+    if (action) {
+      const outcome = _auditOutcome(res);
+      let id = target;
+      if (!id && outcome === 'success') {
+        const body = (await res
+          .clone()
+          .json()
+          .catch(() => null)) as { id?: unknown } | null;
+        if (typeof body?.id === 'string') id = body.id;
+      }
+      _audit(reqId, action, outcome, 'venue', id);
+    }
+    return res;
+  };
+  if (pathname === '/api/v2/admin/venues' && (method === 'GET' || method === 'POST')) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    return method === 'POST'
+      ? _venueCall(reqId, deny, 'CREATE_VENUE', undefined, () => handleCreateVenue(request, env))
+      : _venueCall(reqId, deny, null, undefined, () => handleListVenues(request, env));
+  }
+  const venueOperatorsMatch = pathname.match(/^\/api\/v2\/admin\/venues\/([^/]+)\/operators$/);
+  if (venueOperatorsMatch && method === 'PUT') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    const id = venueOperatorsMatch[1];
+    return _venueCall(reqId, deny, 'LIST_VENUE_OPERATOR', id, () =>
+      handlePutVenueOperator(request, env, id)
+    );
+  }
+  const venueOperatorMatch = pathname.match(
+    /^\/api\/v2\/admin\/venues\/([^/]+)\/operators\/([^/]+)$/
+  );
+  if (venueOperatorMatch && method === 'DELETE') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    const [, id, brand] = venueOperatorMatch;
+    return _venueCall(reqId, deny, 'UNLIST_VENUE_OPERATOR', id, () =>
+      handleDeleteVenueOperator(request, env, id, brand)
+    );
+  }
+  const venueRollupMatch = pathname.match(/^\/api\/v2\/admin\/venues\/([^/]+)\/rollup$/);
+  if (venueRollupMatch && method === 'GET') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    const id = venueRollupMatch[1];
+    return _venueCall(reqId, deny, null, id, () => handleVenueRollup(request, env, id));
+  }
+
+  // PUT /api/v2/admin/events/:id/venue — OSE-2221. The event is brand-scoped by
+  // guardAdminObjectScope above; the handler checks the venue lists its brand.
+  const eventVenueMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/venue$/);
+  if (eventVenueMatch && method === 'PUT') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'SET_EVENT_VENUE', 'denied', 'event', eventVenueMatch[1]);
+      return deny;
+    }
+    const res = await handleSetEventVenue(request, env, eventVenueMatch[1]);
+    _audit(reqId, 'SET_EVENT_VENUE', _auditOutcome(res), 'event', eventVenueMatch[1]);
+    return res;
   }
 
   // GET /api/v2/admin/dashboards/{operations,corridor} — OSE-1468 governed

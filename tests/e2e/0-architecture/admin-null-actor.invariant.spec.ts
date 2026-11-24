@@ -148,6 +148,11 @@ const SITES: Record<string, { kind: Kind; count: number; why: string }> = {
   },
   'handlers/dashboards.ts: const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);':
     { kind: 'scope-denies-null', count: 1, why: 'Dashboard brand scope.' },
+  'handlers/venues.ts: return resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);': {
+    kind: 'scope-denies-null',
+    count: 1,
+    why: 'Venue owner scope (OSE-2221).',
+  },
   'handlers/portfolio-rollup.ts: extractAdminActor(request, env),': {
     kind: 'scope-denies-null',
     count: 1,

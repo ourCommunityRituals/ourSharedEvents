@@ -247,6 +247,10 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
     body: () => ({ series_id: 'evtsrs_matrix' }),
   }),
   eventRoute('/api/v2/admin/events/:id/series', 'DELETE', '/series', { variant: 'detach' }),
+  // OSE-2221: clearing the venue is a write to the event's own row.
+  eventRoute('/api/v2/admin/events/:id/venue', 'PUT', '/venue', {
+    body: () => ({ venue_id: null }),
+  }),
   eventRoute('/api/v2/admin/events/:id/series/confirm', 'POST', '/series/confirm', {
     body: (t) => ({
       series_id: 'evtsrs_matrix',
@@ -484,6 +488,14 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
  * without a reason a reviewer would accept.
  */
 export const ROUTE_EXEMPTIONS: Readonly<Record<string, string>> = {
+  '/api/v2/admin/venues':
+    'A venue is not one of the matrix fixtures; its isolation is held by tests/venues.spec.ts (OSE-2221): only the owner brand reaches a venue by id, another brand gets the same 404 as an unknown venue, and a list shows a brand only the venues it owns or is listed at.',
+  '/api/v2/admin/venues/:id/operators':
+    'A venue is not one of the matrix fixtures; its isolation is held by tests/venues.spec.ts (OSE-2221): only the owner brand reaches a venue by id, another brand gets the same 404 as an unknown venue, and a list shows a brand only the venues it owns or is listed at.',
+  '/api/v2/admin/venues/:id/operators/:id':
+    'A venue is not one of the matrix fixtures; its isolation is held by tests/venues.spec.ts (OSE-2221): only the owner brand reaches a venue by id, another brand gets the same 404 as an unknown venue, and a list shows a brand only the venues it owns or is listed at.',
+  '/api/v2/admin/venues/:id/rollup':
+    'A venue is not one of the matrix fixtures; its isolation is held by tests/venues.spec.ts (OSE-2221): only the owner brand reaches a venue by id, another brand gets the same 404 as an unknown venue, and a list shows a brand only the venues it owns or is listed at.',
   '/admin': 'HTML shell; carries no rows. The data calls it makes are the routes above.',
   '/api/v2/admin/screens/logs':
     'HTML shell; carries no rows. Its data call is /api/v2/admin/audit-log?scope=brand, which is in the matrix.',

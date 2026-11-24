@@ -1,0 +1,36 @@
+info:
+  name: "OSE-2221 | rainy | operators | a status other than on_platform or grandfathered is refused"
+  type: http
+  seq: 21
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/venues/ven_1a6e51de0c1b00000000000000000001/operators"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"brand_id":"lakeside-club","status":"sometimes"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2221 rainy: 400 INVALID_STATUS', function () {
+          expect(res.getStatus()).to.eql(400);
+          expect(b.code).to.eql('INVALID_STATUS');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

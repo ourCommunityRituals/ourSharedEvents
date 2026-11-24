@@ -110,6 +110,21 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0120: venues, venue_operators, events.host_venue_id (OSE-2221, a venue a
+-- brand owns and the operators who run events there). Additive: two new
+-- tables, one nullable column, three indexes. THE ROLLBACK IS: revert the
+-- Worker and LEAVE THE TABLES AND THE COLUMN. The older Worker never reads
+-- them, so no venue roll-up is served and nothing else changes.
+--
+-- Surgical reverse, only if the objects themselves must go (venues and their
+-- lists are lost; owners make them again):
+DROP INDEX IF EXISTS idx_events_host_venue;
+ALTER TABLE events DROP COLUMN host_venue_id;
+DROP INDEX IF EXISTS idx_venue_operators_brand;
+DROP TABLE IF EXISTS venue_operators;
+DROP INDEX IF EXISTS idx_venues_brand;
+DROP TABLE IF EXISTS venues;
+
 -- 0119: clear the stored phone ids (OSE-2214, the owner's rule of 2026-11-23:
 -- count the code, never the person). Data-only: it deletes every
 -- anon_id_returns row and nulls scan_node_returns.anonymous_id /
