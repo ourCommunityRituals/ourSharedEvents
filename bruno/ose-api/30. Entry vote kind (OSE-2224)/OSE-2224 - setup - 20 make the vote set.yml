@@ -1,0 +1,32 @@
+info:
+  name: "OSE-2224 | setup | make the vote set"
+  type: http
+  seq: 20
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteEntryNightId}}/votables"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"played_by\": \"object\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2224 setup: the set is made', function () { expect(res.getStatus()).to.eql(201); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

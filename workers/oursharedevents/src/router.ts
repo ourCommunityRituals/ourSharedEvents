@@ -119,7 +119,7 @@
  *   POST   /api/v2/admin/events/:id/votables/code/replace → retire the vote code and make a new token, in one batch (auth, audited, OSE-2140)
  *   POST   /api/v2/admin/events/:id/votables/open|reopen|close → open (stamps the epoch, draws T and V once), reopen, close the set; refused when final; open and reopen need the event Published (auth, audited, OSE-2142)
  *   POST   /api/v2/admin/events/:id/votables/finalize → compute the night's result and make a closed set final, for good; the answer's set.result is the outcome and the winner only (auth, audited, OSE-2130)
- *   POST   /api/v2/admin/events/:id/votables/objects → add a song or stall to the set (auth, audited)
+ *   POST   /api/v2/admin/events/:id/votables/objects → add a song, stall or entry to the set (auth, audited)
  *   PUT    /api/v2/admin/events/:id/votables/objects/:oid → change an object of this event (auth, audited)
  *   POST   /api/v2/admin/events/:id/votables/objects/:oid/open|reopen|close → an object's window; closes_at set by the server (auth, audited)
  *   GET    /api/v2/admin/events/:id/preview → draft/ready pre-event page, HTML, no-store + noindex (auth, OSE-1355)

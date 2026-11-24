@@ -241,7 +241,7 @@ function renderAbout(): string {
         <h2 class="section-title" id="vote-about-title">About this vote</h2>
         <ul class="vp-list">
           <li class="vp-row" data-testid="vote-anonymous">Your vote is anonymous. Nobody sees who you are or how you voted.</li>
-          <li class="vp-row" data-testid="vote-one-each">You get one vote on each song, stall or event. You cannot change it once it is in.</li>
+          <li class="vp-row" data-testid="vote-one-each">You get one vote on each song, stall, entry or event. You cannot change it once it is in.</li>
           <li class="vp-row">It is for fun. Vote for what you enjoy.</li>
         </ul>
         <details class="card vp-gap" data-testid="vote-house-rule">

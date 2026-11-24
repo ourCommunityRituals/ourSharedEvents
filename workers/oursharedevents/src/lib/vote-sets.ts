@@ -70,17 +70,28 @@ import { pepperEpoch } from './anon-id-hash';
 import { EVENT_LIVE, EVENT_ON_ITS_DATES, EVENT_PUBLISHED, eventIsLive } from './event-live';
 import { eventLiveSql } from '../domain/event-state';
 import { hourStamp } from './scan-buffer';
-import { isVotableKind, isVoteTeamId, parseVotableLabel, type VotableKind } from './votes';
+import {
+  VOTABLE_KINDS,
+  isVotableKind,
+  isVoteTeamId,
+  parseVotableLabel,
+  type VotableKind,
+} from './votes';
 import { resultStatements, type VoteOutcome } from './vote-results';
 
 /** The longest window an object can be open for in one go: 12 hours (a fair day). */
 export const VOTE_WINDOW_MAX_SECONDS = 12 * 60 * 60;
 /** The shortest: 30 seconds. */
 export const VOTE_WINDOW_MIN_SECONDS = 30;
-/** With no window given: 10 minutes for a song (longer than the 7:11 song), a fair day for a stall. */
+/**
+ * With no window given: 10 minutes for a song (longer than the 7:11 song), and
+ * the whole event for a stall or an entry (a fair day, the longest window;
+ * ADR-040 decision 12). The Record type makes a new kind name its default.
+ */
 export const VOTE_WINDOW_DEFAULT_SECONDS: Record<VotableKind, number> = {
   song: 10 * 60,
   stall: VOTE_WINDOW_MAX_SECONDS,
+  entry: VOTE_WINDOW_MAX_SECONDS,
 };
 /** The most objects one set holds. */
 export const VOTE_OBJECTS_MAX = 500;
@@ -137,7 +148,7 @@ export interface VoteSetView {
 /** A final set's one result (ADR-040 decision 7, Q14). */
 export interface VoteSetResult {
   outcome: VoteOutcome;
-  /** The winning song or stall: its id and label. Null unless won by an object. */
+  /** The winning song, stall or entry: its id and label. Null unless won by an object. */
   winner_object: { id: string; label: string } | null;
   /** The winning team's opaque OSE id. Null unless won by a team. */
   winner_team_id: string | null;
@@ -682,6 +693,9 @@ function parseOptionalId(raw: unknown): string | null | undefined {
   return typeof raw === 'string' && raw.length <= 80 ? raw : undefined;
 }
 
+/** The INVALID_KIND message, built from the list so it always names every kind. */
+export const KIND_LIST_ERROR = `kind must be ${VOTABLE_KINDS.slice(0, -1).join(', ')} or ${VOTABLE_KINDS[VOTABLE_KINDS.length - 1]}`;
+
 /** Check a new object's body. Any other field is refused, so no person field can ride along. */
 export function parseVotableCreate(body: unknown): VoteResult<VotableInput> {
   if (!body || typeof body !== 'object' || Array.isArray(body))
@@ -690,7 +704,7 @@ export function parseVotableCreate(body: unknown): VoteResult<VotableInput> {
   const extra = Object.keys(b).filter((k) => !CREATE_FIELDS.has(k));
   if (extra.length)
     return fail(400, 'UNKNOWN_FIELD', `Not a field of a votable object: ${extra.join(', ')}`);
-  if (!isVotableKind(b.kind)) return fail(400, 'INVALID_KIND', 'kind must be song or stall');
+  if (!isVotableKind(b.kind)) return fail(400, 'INVALID_KIND', KIND_LIST_ERROR);
   const label = parseVotableLabel(b.label);
   if (!label.ok) return fail(400, label.code, label.error);
   const booth = parseOptionalId(b.booth_id);

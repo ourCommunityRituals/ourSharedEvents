@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2224 | entry | a kind off the list names all three kinds"
+  type: http
+  seq: 32
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteEntryNightId}}/votables/objects"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"kind\": \"person\", \"label\": \"Entry nobody\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2224 entry: 400 INVALID_KIND, and the message names song, stall and entry', function () { expect(res.getStatus()).to.eql(400); expect(b.code).to.eql('INVALID_KIND'); expect(b.error).to.eql('kind must be song, stall or entry'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

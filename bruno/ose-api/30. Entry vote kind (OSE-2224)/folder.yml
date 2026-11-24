@@ -1,0 +1,28 @@
+info:
+  name: Entry vote kind (OSE-2224)
+  type: folder
+request: {}
+docs: |-
+  Scan to vote, step 4 (OSE-2224, part of OSE-2222; OSE ADR-040 decision 12).
+  The `entry` kind: anything the organizer names can be voted on (a painting, a
+  float, a dish, a business's display). The label is the organizer's own words.
+
+  Seq 10 makes one synthetic, unlisted live event. The admin routes (not
+  switched) make the set, add an entry, refuse a song in that set, refuse a
+  kind off the list with a message that names all three kinds, open the set,
+  and open the entry with no window given, which must default to the whole
+  event (12 hours, the longest window), as a stall's does.
+
+  The public open-objects read has two halves, chosen by votingSwitch in the
+  environment file (as in folder 24):
+  - off (staging today): the read is a 404 and carries nothing of the entry
+    (seq 61). The on half logs NOT RUN.
+  - on: the read lists the open entry with id, kind 'entry' and label only
+    (seq 60). The off half logs NOT RUN.
+
+  A vote set is never deleted, so seq 905 archives the event. Each run leaves
+  one archived synthetic event on staging. Opening the set needs
+  ANON_ID_HASH_PEPPER on staging (seq 40).
+
+  Mock-layer twin: workers/oursharedevents/tests/vote-set-admin.spec.ts,
+  describe "12. an entry is anything the host names".

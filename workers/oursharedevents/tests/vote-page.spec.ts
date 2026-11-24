@@ -247,7 +247,7 @@ describe('what the page says', () => {
   test('anonymous, one vote on each, and the house rule with its ten risks [list cut to nine]', async () => {
     const res = await page(N1);
     expect(res.text).toContain('Your vote is anonymous.');
-    expect(res.text).toContain('You get one vote on each song, stall or event.');
+    expect(res.text).toContain('You get one vote on each song, stall, entry or event.');
     expect(res.text).toContain("The house rule: don't be a jag-off");
     expect(HOUSE_RULE_RISKS.length).toBe(10);
     const risks = between(res.text, 'data-testid="vote-house-rule-risks"', '</ol>');

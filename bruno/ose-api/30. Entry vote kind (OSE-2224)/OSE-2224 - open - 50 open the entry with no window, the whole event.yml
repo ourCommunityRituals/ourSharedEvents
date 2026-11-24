@@ -1,0 +1,34 @@
+info:
+  name: "OSE-2224 | open | open the entry with no window, the whole event"
+  type: http
+  seq: 50
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteEntryNightId}}/votables/objects/{{voteEntryId}}/open"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        const span = b.object ? Date.parse(b.object.closes_at) - Date.now() : 0;
+        test('OSE-2224 open: the entry is open now, its window the whole event (12 h), not a song\'s 10 minutes', function () { expect(res.getStatus()).to.eql(200); expect(b.object.open_now).to.eql(true); expect(span).to.be.above((12 * 3600 - 300) * 1000); expect(span).to.be.at.most(12 * 3600 * 1000 + 60000); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -1,0 +1,34 @@
+info:
+  name: "OSE-2224 | entry | add an entry the host names"
+  type: http
+  seq: 30
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteEntryNightId}}/votables/objects"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"kind\": \"entry\", \"label\": \"Entry chili one\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2224 entry: 201, the entry is kept with its kind and the host\'s words, in draft', function () { expect(res.getStatus()).to.eql(201); expect(b.object.kind).to.eql('entry'); expect(b.object.label).to.eql('Entry chili one'); expect(b.object.state).to.eql('draft'); });
+        bru.setVar('voteEntryId', (b.object && b.object.id) || 'missing-entry');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

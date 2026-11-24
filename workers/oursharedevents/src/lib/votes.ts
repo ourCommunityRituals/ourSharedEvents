@@ -7,7 +7,9 @@
  * cannot pick its own:
  *
  *   - VOTE_TABLES: the six table names. The gates read this list.
- *   - VOTABLE_KINDS: what an object may be. A song or a stall (decision 2). A
+ *   - VOTABLE_KINDS: what an object may be. A song, a stall (decision 2), or an
+ *     entry: whatever the organizer names, such as a painting, a float, a dish
+ *     or a business's display (decision 12, OSE-2224). A
  *     team is never an object: it is the song's opaque `group_id`. There is no
  *     event-level object (decision 4): the set's one result is the event's vote.
  *     A person may be an object only as an opted-in presenter (Q9); no opt-in
@@ -43,8 +45,12 @@ export const VOTE_TABLES = [
 ] as const;
 export type VoteTable = (typeof VOTE_TABLES)[number];
 
-/** What an object may be (ADR-040 decision 2). Kept in code, not in a CHECK. */
-export const VOTABLE_KINDS = ['song', 'stall'] as const;
+/**
+ * What an object may be (ADR-040 decisions 2 and 12). Kept in code, not in a
+ * CHECK, so adding a kind needs no migration. `entry` is whatever the
+ * organizer names; its label is the organizer's own words.
+ */
+export const VOTABLE_KINDS = ['song', 'stall', 'entry'] as const;
 export type VotableKind = (typeof VOTABLE_KINDS)[number];
 
 /** A set is played by its objects or by their teams, fixed at the first open. */

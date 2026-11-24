@@ -4206,7 +4206,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 53
+      "testCount": 57
     },
     {
       "file": "workers/oursharedevents/tests/vote-tables.spec.ts",

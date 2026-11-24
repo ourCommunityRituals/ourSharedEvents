@@ -20,6 +20,9 @@
  *      "Publish the event to open voting."; once the event is Published it opens.
  *   7. OSE-2140: the room's vote code is made from the card, which shows its
  *      `/q` URL (asking for a pass) and its QR, and is replaced from it.
+ *   8. OSE-2224 (ADR-040 decision 12): the card offers "Entry (anything you
+ *      name)"; an entry is added, listed as an Entry, and the kind then stays
+ *      fixed for the set.
  *
  * Runs in the blocking phone audit (playwright.mobile.config.ts), against the
  * local worker that config starts with a local pepper. The event is made here.
@@ -304,5 +307,31 @@ test.describe('admin: the Voting card', () => {
         .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
       expect(found, `${colorScheme}:\n${found.join('\n')}`).toEqual([]);
     }
+  });
+
+  test('an entry, anything the host names, is added from the card (OSE-2224)', async ({
+    page,
+    request,
+  }) => {
+    const id = await makeEvent(request, `Chili cook-off ${Date.now()}`);
+    await openCard(page);
+    await selectEvent(page, id);
+    await expect(page.getByTestId('votes-card')).toBeVisible();
+    if (!(await page.getByTestId('votes-body').isVisible()))
+      await page.getByTestId('votes-toggle').click();
+    await page.getByTestId('votes-make-btn').click();
+    await expect(summary(page)).toHaveText('Voting is set up, not open yet.');
+
+    const kind = page.getByTestId('vote-kind-input');
+    await expect(kind.locator('option[value="entry"]')).toHaveText('Entry (anything you name)');
+    await kind.selectOption('entry');
+    await page.getByTestId('vote-label-input').fill('Best chili');
+    await page.getByTestId('vote-add-btn').click();
+    await expect(page.getByTestId('votes-msg')).toHaveText('Entry added.');
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page).first().getByTestId('vote-row-label')).toHaveText('Best chili');
+    await expect(rows(page).first().getByTestId('vote-row-kind')).toHaveText('Entry');
+    await expect(kind).toHaveValue('entry');
+    await expect(kind).toBeDisabled();
   });
 });

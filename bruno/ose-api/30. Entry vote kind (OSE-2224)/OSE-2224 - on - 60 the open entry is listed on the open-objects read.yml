@@ -1,0 +1,29 @@
+info:
+  name: "OSE-2224 | on | the open entry is listed on the open-objects read"
+  type: http
+  seq: 60
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/vote/{{voteEntryNightId}}/objects"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') !== 'on') {
+          console.log('NOT RUN (VOTING_ENABLED is off on this environment): the open-read half runs only while it is on');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2224 on: 200, the open entry with id, kind and label only', function () { expect(res.getStatus()).to.eql(200); expect(b.objects).to.eql([{ id: bru.getVar('voteEntryId'), kind: 'entry', label: 'Entry chili one' }]); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

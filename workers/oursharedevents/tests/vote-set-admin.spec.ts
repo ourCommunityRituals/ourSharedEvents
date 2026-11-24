@@ -24,7 +24,11 @@
  *      hold no vote, and deletes its receipts and markers [job skipped]; since
  *      S5 (OSE-2130) a set that opened is made final too, with its result;
  *      tallies go 30 days after final;
- *  11. an event with a vote set is archived, never deleted.
+ *  11. an event with a vote set is archived, never deleted;
+ *  12. an entry is anything the host names (OSE-2224, ADR-040 decision 12): a
+ *      host can add one [kind left out of the list], its window defaults to
+ *      the whole event [song's 10 minutes used], and a set of entries refuses
+ *      a song [one-kind rule removed].
  *
  * @born-red OSE-2127 | method: injected-fault, each removed after; the list and
  * the counts are in the PR body | date: 2026-11-18
@@ -359,6 +363,61 @@ describe('3. a label names a thing, never a person', () => {
     const stall = await call('POST', vp(A1, '/objects'), A, { kind: 'stall', label: 'T' });
     expect(stall.status).toBe(409);
     expect(stall.json.code).toBe('KIND_MISMATCH');
+  });
+});
+
+// ── 12: the entry kind (OSE-2224, ADR-040 decision 12) ───────────────────────
+
+describe('12. an entry is anything the host names', () => {
+  test('a host can add an entry object', async () => {
+    expect((await call('POST', vp(A1), A, {})).status).toBe(201);
+    const res = await call('POST', vp(A1, '/objects'), A, {
+      kind: 'entry',
+      label: 'Float 7: the river parade',
+    });
+    expect(res.status).toBe(201);
+    expect(res.json.object).toMatchObject({
+      kind: 'entry',
+      label: 'Float 7: the river parade',
+      state: 'draft',
+    });
+    expect(await all(`SELECT kind, label FROM votable_objects WHERE event_id = ?`, A1)).toEqual([
+      { kind: 'entry', label: 'Float 7: the river parade' },
+    ]);
+  });
+
+  test("an entry's window defaults to the whole event", async () => {
+    expect((await call('POST', vp(A1), A, {})).status).toBe(201);
+    const entry = await call('POST', vp(A1, '/objects'), A, { kind: 'entry', label: 'Best chili' });
+    expect(entry.status).toBe(201);
+    expect((await call('POST', vp(A1, '/open'), A, {})).status).toBe(200);
+    const res = await call('POST', vp(A1, `/objects/${entry.json.object.id}/open`), A, {});
+    expect(res.status).toBe(200);
+    const span = Date.parse(res.json.object.closes_at) - Date.now();
+    expect(VOTE_WINDOW_DEFAULT_SECONDS.entry).toBe(VOTE_WINDOW_MAX_SECONDS);
+    expect(span).toBeGreaterThan((VOTE_WINDOW_MAX_SECONDS - 10) * 1000);
+    expect(span).toBeLessThanOrEqual(VOTE_WINDOW_MAX_SECONDS * 1000);
+  });
+
+  test('a set of entries refuses a song', async () => {
+    expect((await call('POST', vp(A1), A, {})).status).toBe(201);
+    expect(
+      (await call('POST', vp(A1, '/objects'), A, { kind: 'entry', label: 'Painting one' })).status
+    ).toBe(201);
+    const song = await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: 'Song one' });
+    expect(song.status).toBe(409);
+    expect(song.json.code).toBe('KIND_MISMATCH');
+    expect(await all(`SELECT kind FROM votable_objects WHERE event_id = ?`, A1)).toEqual([
+      { kind: 'entry' },
+    ]);
+  });
+
+  test('the refusal of a kind off the list names all three kinds', async () => {
+    expect((await call('POST', vp(A1), A, {})).status).toBe(201);
+    const res = await call('POST', vp(A1, '/objects'), A, { kind: 'person', label: 'X' });
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe('INVALID_KIND');
+    expect(res.json.error).toBe('kind must be song, stall or entry');
   });
 });
 
