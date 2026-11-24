@@ -96,7 +96,8 @@ describe('QA-1: Migration idempotency', () => {
     // + 6 (votable_objects, vote_sets, vote_tallies, vote_receipts,
     //   vote_participants, vote_team_markers — migration 0111, OSE-2125) = 47.
     // + 1 (scan_poster_hour_tally — migration 0117, OSE-1496; no index) = 48.
-    expect(names).toHaveLength(48);
+    // + 1 (brand_parents — migration 0118, OSE-1553) = 49.
+    expect(names).toHaveLength(49);
   });
 
   test('indexes remain at exactly 90 after idempotent re-run', async () => {
@@ -138,7 +139,7 @@ describe('QA-1: Migration idempotency', () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(90); // +1 (0113: idx_poster_deployments_one_vote_code) +2 (0112: idx_sponsor_business_created_by, idx_campaigns_created_by) +2 (0111: idx_votable_objects_event_id, idx_votable_objects_set_group) +1 (0110: idx_events_campaign_id) +2 (0109: idx_event_booths_event_id, idx_poster_deployments_booth_id) +2 (0104: idx_events_venue_canonical, idx_events_event_correlation) +1 (0101: idx_snr_event_anon_bucket) +1 (0092: idx_anon_id_returns_pepper_epoch) +2 (0075) +1 (0076: idx_event_type_registry_category) +1 (0087: idx_scan_cell_aggregates_event_cell) +1 (0088: idx_admin_audit_log_brand_created) +1 (0089: idx_snr_country_nonnull) +2 (0090: idx_anon_id_returns_last_seen, idx_anon_id_returns_computed_at)
+    expect(indexes.results).toHaveLength(91); // +1 (0118: idx_brand_parents_parent) +1 (0113: idx_poster_deployments_one_vote_code) +2 (0112: idx_sponsor_business_created_by, idx_campaigns_created_by) +2 (0111: idx_votable_objects_event_id, idx_votable_objects_set_group) +1 (0110: idx_events_campaign_id) +2 (0109: idx_event_booths_event_id, idx_poster_deployments_booth_id) +2 (0104: idx_events_venue_canonical, idx_events_event_correlation) +1 (0101: idx_snr_event_anon_bucket) +1 (0092: idx_anon_id_returns_pepper_epoch) +2 (0075) +1 (0076: idx_event_type_registry_category) +1 (0087: idx_scan_cell_aggregates_event_cell) +1 (0088: idx_admin_audit_log_brand_created) +1 (0089: idx_snr_country_nonnull) +2 (0090: idx_anon_id_returns_last_seen, idx_anon_id_returns_computed_at)
   });
 });
 

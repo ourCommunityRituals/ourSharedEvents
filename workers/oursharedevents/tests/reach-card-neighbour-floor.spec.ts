@@ -588,9 +588,14 @@ describe('the operations dashboard adds up a brand: only links that clear the fl
     const base = await publishBrand({ 'reach-ops-a': a, 'reach-ops-b': b });
     // Rounded (OSE-2151), a listed link shows once it crosses a multiple of 5.
     const moreA = await publishBrand({ 'reach-ops-a': { ...a, public: 15 }, 'reach-ops-b': b });
-    expect(opsLine(differences(base, moreA))).toEqual(['ops | reach.link_taps.count: 15 -> 20']);
+    // The brand's own line under the total (OSE-1532) moves with it, and nothing else.
+    const moved = [
+      'ops | reach.link_taps.count: 15 -> 20',
+      'ops | by_brand[0].link_taps.count: 15 -> 20',
+    ];
+    expect(opsLine(differences(base, moreA))).toEqual(moved);
     const moreB = await publishBrand({ 'reach-ops-a': a, 'reach-ops-b': { ...b, public: 10 } });
-    expect(opsLine(differences(base, moreB))).toEqual(['ops | reach.link_taps.count: 15 -> 20']);
+    expect(opsLine(differences(base, moreB))).toEqual(moved);
     // One more inside a step of 5 moves nothing.
     const inStep = await publishBrand({ 'reach-ops-a': { ...a, public: 11 }, 'reach-ops-b': b });
     expect(opsLine(differences(base, inStep))).toEqual([]);

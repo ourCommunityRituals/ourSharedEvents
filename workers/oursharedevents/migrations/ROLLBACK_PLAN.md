@@ -110,6 +110,17 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0118: brand_parents (OSE-1553, a brand's parent brand). Additive: one
+-- new table and its index. THE ROLLBACK IS: revert the Worker and LEAVE THE
+-- TABLE. The older Worker does not read it, so every member is back to
+-- exactly the brands they are a member of (a parent's members no longer
+-- reach the ventures). That is narrower, never wider.
+--
+-- Surgical reverse, only if the table itself must go (rows are lost; the
+-- runbook step or the staging seed writes them again):
+DROP INDEX IF EXISTS idx_brand_parents_parent;
+DROP TABLE IF EXISTS brand_parents;
+
 -- 0117: scan_poster_hour_tally (OSE-1496, the 100-scans-per-poster-hour cap).
 -- Additive: one new table, no index, no row written. THE ROLLBACK IS: revert
 -- the Worker and LEAVE THE TABLE. The older Worker does not know it, so it

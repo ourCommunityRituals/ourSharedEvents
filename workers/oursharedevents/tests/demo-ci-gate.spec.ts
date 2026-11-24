@@ -17,12 +17,16 @@
  */
 import { describe, it, expect } from 'vitest';
 import { handleDemoIndex, handleDemoSite } from '../src/handlers/demo';
+import { handleBocceDemo } from '../src/handlers/demo-bocce';
 import { demoPaths } from '../src/lib/demo-registry';
 import { getRiphDataset } from '../src/lib/mock-data';
 
 /** Dispatch a registry path to its handler — mirrors the router's demo routes. */
 function dispatch(path: string): Response {
   if (path === '/demo') return handleDemoIndex();
+  if (path === '/demo/bocce') return handleBocceDemo('co');
+  const b = path.match(/^\/demo\/bocce\/([^/]+)$/);
+  if (b) return handleBocceDemo(b[1]);
   const m = path.match(/^\/demo\/([^/]+)$/);
   if (m) return handleDemoSite(m[1]);
   throw new Error(`no demo handler for ${path}`);

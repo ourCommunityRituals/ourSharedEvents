@@ -16,12 +16,14 @@
  *   - A listed address passes the admin allowlist (lib/admin-allowlist.ts). It
  *     still has to pass Cloudflare Access first: the owner adds it to the
  *     staging Access policy too.
- *   - Its brand scope is exactly its one brand (lib/admin-brand-scope.ts),
- *     used only when the address has no admin_brand_memberships row.
+ *   - Its brand scope is its one brand (lib/admin-brand-scope.ts), used only
+ *     when the address has no admin_brand_memberships row, plus any brands
+ *     below it in the brand tree (lib/brand-tree.ts, OSE-1553): a tester of a
+ *     parent company reaches its ventures, as any member of it does.
  *
  * FAIL CLOSED. A malformed setting, a malformed address, a brand that is not a
  * plain slug, or the platform or public brand all grant nothing. A tester never
- * gets 'all', more than one brand, or a role (resolveAdminRoles reads the
+ * gets 'all', a second brand of its own (only the tree's ventures below it), or a role (resolveAdminRoles reads the
  * membership table only), so owner-only screens stay closed to them.
  */
 import { PLATFORM_BRAND_ID, PUBLIC_BRAND_ID } from './admin-brand-scope';

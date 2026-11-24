@@ -127,7 +127,7 @@ const DEMO_STYLE = `<style>
   .demo-lede { color: var(--text-muted); font-size: 1.05rem; margin: 0 0 1rem; }
   .demo-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 1.5rem; }
   .demo-tab {
-    padding: 0.55rem 1rem; border-radius: 0.5rem; text-decoration: none;
+    padding: 0.72rem 1rem; border-radius: 0.5rem; text-decoration: none;
     border: 1px solid var(--border); color: var(--text); background: var(--surface);
     font-weight: 600;
   }
@@ -173,7 +173,7 @@ const DEMO_STYLE = `<style>
   .ladder caption { text-align: left; padding: 0 0 0.6rem; color: var(--text-muted); font-size: 0.9rem; }
   .ladder th, .ladder td { text-align: left; padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; font-size: 0.9rem; }
   .ladder thead th { color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
-  .ladder tbody th { font-weight: 700; white-space: nowrap; }
+  .ladder tbody th { font-weight: 700; }
   .ladder tr.paid { background: var(--surface); }
   .ladder .map-badge { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--accent); color: var(--bg); margin-left: 0.4rem; }
   .ladder-floor { margin-top: 0.6rem; padding: 0.65rem 0.85rem; border-left: 3px solid var(--accent); background: var(--surface); color: var(--text-muted); font-size: 0.85rem; border-radius: 0 0.4rem 0.4rem 0; }
@@ -188,9 +188,23 @@ const DEMO_STYLE = `<style>
 
 // ── Response helper — no scripts on these pages, so a tight CSP with no nonce ─────
 
-function demoHtml(body: string, status = 200): Response {
+/**
+ * The brands a demo page may wear (`data-brand` on <html>, themes from @ocr/ui).
+ * A fixed list: the attribute is never built from a request (OSE-2219).
+ */
+export const DEMO_BRANDS = [
+  'lakeside-co',
+  'lakeside-club',
+  'lakeside-semipro',
+  'lakeside-league',
+  'lakeside-network',
+] as const;
+export type DemoBrand = (typeof DEMO_BRANDS)[number];
+
+export function demoHtml(body: string, status = 200, brand?: DemoBrand): Response {
+  const brandAttr = brand && DEMO_BRANDS.includes(brand) ? ` data-brand="${brand}"` : '';
   const doc = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en"${brandAttr}>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">

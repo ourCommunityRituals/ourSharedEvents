@@ -205,6 +205,12 @@ if (manifest.app === 'ose') {
     { path: '/demo/mid', status: 200, title: 'Demo — Mid' },
     { path: '/demo/premium', status: 200, title: 'Demo — Premium · Enterprise' },
     { path: '/demo/no-such-site', status: 404, title: 'No such demo site' },
+    { path: '/demo/bocce', status: 200, title: 'Demo — Lakeside Bocce Co.' },
+    { path: '/demo/bocce/club', status: 200, title: 'Demo — Lakeside Bocce Club' },
+    { path: '/demo/bocce/semipro', status: 200, title: 'Demo — Lakeside Semi-Pro League' },
+    { path: '/demo/bocce/league', status: 200, title: 'Demo — Lakeside Bocce League' },
+    { path: '/demo/bocce/network', status: 200, title: 'Demo — Lakeside Bocce Network' },
+    { path: '/demo/bocce/no-such-site', status: 404, title: 'No such demo site' },
   ];
 
   for (const demo of demoPages) {

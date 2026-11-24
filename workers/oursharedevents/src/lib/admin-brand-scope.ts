@@ -24,6 +24,7 @@
  */
 
 import { stagingTesterBrand } from './staging-testers';
+import { withDescendants } from './brand-tree';
 
 export interface AdminBrandScopeEnv {
   /** Staging testers, email → one practice brand (lib/staging-testers.ts). A staging secret. */
@@ -151,6 +152,19 @@ export function resolveAdminBrandScope(
  * - email actor with no rows: fall back to the env map, else deny.
  */
 export async function resolveAdminBrandScopeAsync(
+  actor: string | null,
+  env: AdminBrandScopeEnv
+): Promise<AdminBrandScope> {
+  const scope = await resolveMemberScope(actor, env);
+  // OSE-1553: a member of a brand also reaches every brand below it. Only for
+  // a person (email actor); automation actors keep exactly their own scope.
+  if (scope.mode !== 'scoped' || !actor || actor.startsWith('key:') || actor.startsWith('svc:'))
+    return scope;
+  return { mode: 'scoped', brandIds: await withDescendants(env.DB, scope.brandIds) };
+}
+
+/** The brands an actor is a member of, before the brand tree (see above). */
+async function resolveMemberScope(
   actor: string | null,
   env: AdminBrandScopeEnv
 ): Promise<AdminBrandScope> {

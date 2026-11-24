@@ -30,6 +30,8 @@
  *   GET /privacy /privacy-policy → the privacy policy page
  *   GET /demo                    → the demo site's front door (public, mock data only, OSE-605)
  *   GET /demo/:site              → one of the standing demo sites
+ *   GET /demo/bocce              → the practice bocce family's parent page (OSE-2219)
+ *   GET /demo/bocce/:site        → one practice bocce venture, one look per brand (OSE-2219)
  *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)
  *   GET /ui-toast.js             → shared OCR toast script (@ocr/ui), loaded by admin and sponsor home
  *   GET /ui-preview              → component showcase for Claude Design (no auth)
@@ -352,6 +354,7 @@ import { handleBoothListPage } from './handlers/booth-list-page';
 import { handleAdminBoothCounts } from './handlers/booth-counts';
 import { handleBriefingPage } from './handlers/briefing';
 import { handleDemoIndex, handleDemoSite } from './handlers/demo';
+import { handleBocceDemo } from './handlers/demo-bocce';
 import {
   requireAdmin,
   extractAdminActor,
@@ -960,6 +963,13 @@ export async function route(
   // mock dataset at three depths. Depth is render-side only (SR-25 respected).
   if (pathname === '/demo' && method === 'GET') {
     return handleDemoIndex();
+  }
+  if (pathname === '/demo/bocce' && method === 'GET') {
+    return handleBocceDemo('co');
+  }
+  const bocceMatch = pathname.match(/^\/demo\/bocce\/([^/]+)$/);
+  if (bocceMatch && method === 'GET') {
+    return handleBocceDemo(bocceMatch[1]);
   }
   const demoSiteMatch = pathname.match(/^\/demo\/([^/]+)$/);
   if (demoSiteMatch && method === 'GET') {

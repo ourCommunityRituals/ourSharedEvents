@@ -2,7 +2,7 @@
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0117, forms 0015–0018.
+Covers: main 0078–0118, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 117              | 40       |
+| Main (`ocr-db-production`)        | 77               | 118              | 41       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -128,7 +128,7 @@ its counts were not taken first. They were read on staging the next day (run 436
 events, 60 of them with no place at all, 3 of those on the public list. Its per-status breakdown was
 replaced by one count on 2026-11-15 so the file fits the strict rule.
 
-## Main database, 0078 to 0117
+## Main database, 0078 to 0118
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -174,6 +174,7 @@ replaced by one count on 2026-11-15 so the file fits the strict rule.
 | `0115_event_type_storytime.sql`                           | Adds the Storytime event type (Performing arts) and maps it to one template, then refreshes the templates' clearance tier.        | Yes  |
 | `0116_sponsor_business_kind.sql`                          | Adds `sponsor_business.business_kind`, the sponsor's kind of business picked in Create Sponsor (OSE-2207). Writes no row.         | No   |
 | `0117_scan_poster_hour_cap.sql`                           | Adds `scan_poster_hour_tally`, scans per poster per hour for the 100-scan cap (OSE-1496). Counts only. Writes no row.             | No   |
+| `0118_brand_tree.sql`                                     | Adds `brand_parents`, a brand's parent brand, so a parent company reaches its ventures (OSE-1553). Writes no row.                 | No   |
 
 ## Forms database, 0015 to 0018
 
@@ -401,7 +402,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0117_scan_poster_hour_cap.sql` and `117`;
+2. **The level.** Expected: `0118_brand_tree.sql` and `118`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash

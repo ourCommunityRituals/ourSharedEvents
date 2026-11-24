@@ -313,9 +313,38 @@ describe('founder / operations cockpit', () => {
     expect(body.reach.poster_scans).toEqual({ count: 5, suppressed: false, floor: 5 });
     expect(body.reach.active_posters).toBe(4);
     expect(body.reach.poster_places).toBe(2);
-    expect(body.sponsors).toEqual({ on_show: 2, pending_requests: 1 });
+    // OSE-1532: the sponsor footprint, distinct businesses on show.
+    expect(body.sponsors).toEqual({ on_show: 2, businesses_on_show: 2, pending_requests: 1 });
+    // One brand in scope: one line, the same figures as the totals.
+    expect(body.by_brand).toEqual([
+      {
+        brand: DASH.brandA,
+        events: 3,
+        poster_scans: body.reach.poster_scans,
+        link_taps: body.reach.link_taps,
+        sponsors_on_show: 2,
+        businesses_on_show: 2,
+      },
+    ]);
     // Report opens are floored too (one event-day of 4 opens: withheld).
     expect(body.shared_report.views_30d).toEqual({ count: null, suppressed: true, floor: 5 });
+  });
+
+  test('OSE-1532: with two brands in scope, one line per brand, and the lines add up to the totals', async () => {
+    const { body } = await call(handleOperationsDashboard, reqAs(AB, OPS));
+    const lines = body.by_brand as Body[];
+    expect(lines.map((l) => l.brand)).toEqual([DASH.brandA, DASH.brandB]);
+    const sum = (k: string) =>
+      lines.reduce((n, l) => n + (typeof l[k] === 'number' ? l[k] : (l[k].count ?? 0)), 0);
+    expect(sum('events')).toBe(body.events.total);
+    expect(sum('poster_scans')).toBe(body.reach.poster_scans.count ?? 0);
+    expect(sum('link_taps')).toBe(body.reach.link_taps.count ?? 0);
+    expect(sum('sponsors_on_show')).toBe(body.sponsors.on_show);
+    expect(sum('businesses_on_show')).toBe(body.sponsors.businesses_on_show);
+    // dash-a's line is what dash-a's own operator sees.
+    const own = (await call(handleOperationsDashboard, reqAs(A, OPS))).body;
+    expect(lines[0].poster_scans).toEqual(own.reach.poster_scans);
+    expect(lines[0].link_taps).toEqual(own.reach.link_taps);
   });
 
   test('#7: taps are floored per code and explicit choices per event, then summed', async () => {

@@ -129,6 +129,8 @@ const OUTSIDE_THE_FOLDER: Readonly<Record<string, { why: Why; reason: string }>>
   '/ui-preview': { why: 'site', reason: 'Component showcase.' },
   '/demo': { why: 'site', reason: 'Demo index.' },
   '/demo/:param': { why: 'site', reason: 'A demo site, not an event.' },
+  '/demo/bocce': { why: 'site', reason: 'The practice bocce family page, not an event.' },
+  '/demo/bocce/:param': { why: 'site', reason: 'One practice bocce venture page, not an event.' },
   '/.well-known/openid-configuration': { why: 'site', reason: 'Workload identity.' },
   '/.well-known/jwks.json': { why: 'site', reason: 'Workload identity.' },
   'const:EVENT_DEFAULT_THUMB_PATH': {
