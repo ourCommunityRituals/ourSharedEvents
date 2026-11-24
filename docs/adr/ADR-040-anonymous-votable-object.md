@@ -1,7 +1,7 @@
 # ADR-040: An anonymous vote is a counter on an object, never a row about a voter
 
-**Status:** Accepted. The owner accepted this ADR by merging PR #1414 on 2026-11-18. The owner answered every question on 2026-11-17 and 2026-11-18 (comments on PRs #1413 and #1414; D6 and D10 in the owner's own session on 2026-11-18; Q6 to Q16 in question forms on 2026-11-18, Q17 in the owner's own words). Amended twice on 2026-11-18: decision 6 after the S0 spike (OSE-2122) and a three-loop CCR (PR #1416, merged in #1417); then decisions 1 to 10 after the five-loop S1 CCR (PR #1418) and the owner's answers to it, including the reversal of D3, in PR #1420 (a draft until the owner merges it). Amended a third time on 2026-11-18, after the owner's decisions on S3d and S3e: the room's own vote code (decision 6) and decision 11, "nothing is more live than its container" (OSE-2140, OSE-2142). Still open: the level of detail in the published report (OSE-520), and the owner's wording for the house-rule card and the report. Built so far: the tables (S2), the admin set-up (S3), the pass at `/q` (S3b), the public open-objects read and the switch (S3c), and the vote code and the container rule (S3d, S3e). Not built: the vote route, the voter page and the results.
-**Date:** 2026-11-17. Amended 2026-11-18 (decision 6 after S0; decisions 1 to 10 after the S1 CCR; decisions 6 and 11 after S3d and S3e).
+**Status:** Accepted. The owner accepted this ADR by merging PR #1414 on 2026-11-18. The owner answered every question on 2026-11-17 and 2026-11-18 (comments on PRs #1413 and #1414; D6 and D10 in the owner's own session on 2026-11-18; Q6 to Q16 in question forms on 2026-11-18, Q17 in the owner's own words). Amended twice on 2026-11-18: decision 6 after the S0 spike (OSE-2122) and a three-loop CCR (PR #1416, merged in #1417); then decisions 1 to 10 after the five-loop S1 CCR (PR #1418) and the owner's answers to it, including the reversal of D3, in PR #1420 (a draft until the owner merges it). Amended a third time on 2026-11-18, after the owner's decisions on S3d and S3e: the room's own vote code (decision 6) and decision 11, "nothing is more live than its container" (OSE-2140, OSE-2142). Still open: the level of detail in the published report (OSE-520), and the owner's wording for the house-rule card and the report. Amended a fourth time on 2026-11-24 for scan to vote at events and markets (decision 12, OSE-2223 under OSE-2222). Built: the tables (S2), the admin set-up (S3), the pass at `/q` (S3b), the public open-objects read and the switch (S3c), the vote code and the container rule (S3d, S3e), and the vote route, the voter page and the night's result (S4a, S4b, S5, PR #1490). Voting is switched off in every environment (`VOTING_ENABLED = "off"`). Not built: the `entry` kind, the off-limits list and the host's vote-code screen (decision 12), and the fun report (OSE-520).
+**Date:** 2026-11-17. Amended 2026-11-18 (decision 6 after S0; decisions 1 to 10 after the S1 CCR; decisions 6 and 11 after S3d and S3e) and 2026-11-24 (decision 12, scan to vote at events and markets).
 **Deciders:** Owner (PO). Sr Architect owns the draft. Dr of Security advises on the membrane.
 **Ticket:** OSE-1193 (blocks OSE-2000 under the fairs epic OSE-1996; step 1 of OW-218, Fist of Five)
 
@@ -79,7 +79,7 @@ A song object stands for one play. OurWKRP keeps the link from its `playback_eve
 
 The owner confirmed this on 2026-11-18 (C1), and added that it sets up voting on whatever else comes to be voted on: an art competition, community parade floats, and so on. Each of those is one more kind of object; the engine does not change.
 
-An object is a thing: a song or a stall. On a team night each song carries its team in `group_id`, set when the song is created and fixed once the set first opens, and the team is what wins (decision 7). A person may be the object only if they opted in as a presenter (Q9; AGENTS.md invariant 1). Labels refuse email- and phone-shaped text.
+An object is a thing: a song, a stall, or an entry the organizer names (decision 12). On a team night each song carries its team in `group_id`, set when the song is created and fixed once the set first opens, and the team is what wins (decision 7). A person may be the object only if they opted in as a presenter (Q9; AGENTS.md invariant 1). Labels refuse email- and phone-shaped text.
 
 ### 3. A song's window follows the song, not the hour
 
@@ -208,6 +208,20 @@ An event's status (Draft, Ready, Published, Archived; Published may be listed or
 
 **Not in this decision:** stalls, sponsors and other children of an event. A sweep of every public read that shows a child of an event is follow-up work under the same rule (OSE-2144 covers sponsors and scans).
 
+### 12. Scan to vote at events and markets
+
+**Owner, 2026-11-24** (in the project thread for splitting music out of ourWKRP; recorded in OSE-2222): "it is what ever the event organizer sets up to be voted on. This is the point. We may have to designate certain items are off limits, but yes, this design open up the ability for onsite voting." And: scan to vote "encourages onsites engagement. Whereas offisite donations will are already possible."
+
+This decision opens the same engine to any event or market. It changes no table, no rule in decisions 1 to 11, and no published number.
+
+- **An entry the organizer names.** One more kind, `entry`, is added to `VOTABLE_KINDS` beside `song` and `stall`. It stands for whatever the organizer puts up for a vote: a painting, a float, a dish, a business's display. The label is the organizer's words, checked by the off-limits list below. An entry's window defaults to the whole event, as a stall's does. A set still holds one kind (decision 4). No migration: the kinds are a code list (decision 2).
+- **The off-limits list.** Some things may never be an object. The rules live in one module, used by `parseVotableLabel`, and nowhere else. They start as the rules already in force: a label holding an email address or a phone number is refused, and a person may be the object only if they opted in as a presenter (Q9). The host's Voting card says plainly, under the label box: "Name the work, not the person who made it." A rule is added to the list only by a decision recorded here.
+- **The host's vote-code screen.** An event or market without an ourWKRP room screen still needs a screen to scan. A host-only page shows the event's vote code (decision 6) as a large QR with one short line, "Scan to vote", and nothing else: no count, no list of objects. It is an admin page, scoped to the event's brand. It is not the public display: the TV page and `display-config` still carry no vote word (decision 7, invariant 5), and the vote code's token stays out of every public answer.
+- **On-site only.** Voting exists to bring people to the event. Support from elsewhere is a donation, which already works. A vote still needs a scan of the room's code, and a pass lasts 30 minutes (Q12). No location check is added, because it would mean collecting where a person is (invariant 3). The remote-voting risk accepted in decision 9 stands: a photo of the code can be used from elsewhere while voting is open, and a host who fears that replaces the code (decision 6).
+- **Solo or as a team.** On the ourWKRP side, a single artist or business owner may stand alone, or people may group together for a fun competition (owner, 2026-11-24: "again, choice"). On OSE this needs nothing new: a set is played by objects or by teams (decision 7), and a team stays an opaque `group_id`.
+
+**Not in this decision:** a code beside each piece of work in place of the event's one vote code (decision 6 says that needs its own review), and remote or link voting (out, by the on-site rule).
+
 ## Relation to campaigns
 
 **Owner, 2026-11-18:** voting does not replace campaigns.
@@ -284,7 +298,8 @@ The stories (D10 = yes; each is a Linear ticket under OSE-1193):
   - S3d (OSE-2140), the room's own vote code (decision 6), and S3e (OSE-2142), a vote set follows its event's status (decision 11). Both before S4a and S4b.
 - **After S2, S3 and S3b:** S4a (OSE-2128), the vote route. Then S4c (OSE-2134), its hardening, and S4b (OSE-2129), the voter page (also after S3c).
 - **After S4a:** S5 (OSE-2130), results after the set is final, team totals as distinct up-voters included. The fun report is OSE-520, after S5.
-- **Not voting work, but in conflict:** OSE-513 and OSE-518 describe a live tally on the display. Decision 7 and invariant 5 forbid it; the owner rewrites or cancels them.
+- **Not voting work, but in conflict:** OSE-513 and OSE-518 describe a live tally on the display. Decision 7 and invariant 5 forbid it. The owner canceled OSE-513 and its children on 2026-11-24.
+- **Decision 12 (2026-11-24), under OSE-2222:** OSE-2223 (this amendment), then OSE-2224 (the `entry` kind), OSE-2225 (the off-limits list and the warning), OSE-2226 (the host's vote-code screen); the shared brain follows in OCR-229. Then S4c (OSE-2134), N3 (OSE-2131) and N4 (OSE-2132), a staging real-room test (OSE-2227), and the owner's production switch (OSE-2228).
 - **Other tickets:**
   - N1 (OW-220), the OurWKRP route that opens and closes song objects, brand-bound, after S3;
   - N2 (OSE-2126), a cookie-mint cap at `/q`, on hold with triggers (decision 6);
@@ -304,6 +319,7 @@ Every test is seen failing first, at the workers-pool layer and on staging (Brun
 ## Revisit Criteria
 
 - The owner settles the published report's level of detail.
+- A rule is wanted on the off-limits list, or a code beside each piece of work is wanted (decision 12).
 - A count is wanted during the night (invariant 5).
 - A per-object number, or a per-song result, is wanted in a published result (Q8, Q14).
 - A vote limit beyond one per object is wanted ("to start").
