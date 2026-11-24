@@ -2,6 +2,7 @@
  * Agent instruction budget (scripts/ci/agent-instructions-budget.mjs).
  *
  * 1. The real tree passes: AGENTS.md <= 12 KB, CLAUDE.md <= 6 KB and imports it,
+ *    docs/brain/ROLE-STATE.md <= 12 KB,
  *    the Copilot pointer exists, every skill and agent is well formed.
  * 2. Hermetic born-red cases: a minimal valid tree passes, then each injected
  *    fault turns the script red with its own message.
@@ -66,6 +67,11 @@ describe('agent instruction budget: born red', () => {
       'CLAUDE.md over budget',
       (r) => put(r, 'CLAUDE.md', '@AGENTS.md\n' + 'x'.repeat(6 * 1024)),
       /CLAUDE\.md is \d+ bytes/,
+    ],
+    [
+      'ROLE-STATE.md over budget',
+      (r) => put(r, 'docs/brain/ROLE-STATE.md', 'x'.repeat(12 * 1024 + 1)),
+      /docs\/brain\/ROLE-STATE\.md is \d+ bytes/,
     ],
     [
       'CLAUDE.md without the import',
