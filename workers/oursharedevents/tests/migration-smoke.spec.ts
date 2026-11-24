@@ -83,6 +83,8 @@ const DB_TABLES = [
   'sponsor_event_types', // 0019 (0067: FK repointed to sponsor_business)
   'sponsor_placement', // 0067 (OSE-799 A2 — per-event attachment; replaces sponsors)
   'template_event_types', // 0056 (OSE-727 Sponsor Onboarding — template×registry clearance join)
+  'venue_operators', // 0119 (OSE-2221 — brands that run events at a venue; no person column)
+  'venues', // 0119 (OSE-2221 — a place a brand owns; no person column)
   'votable_objects', // 0111 (OSE-2125, ADR-040 — what can be voted on: a song or a stall)
   'vote_participants', // 0111 (OSE-2125 — one keyed marker per browser per set; no voter id)
   'vote_receipts', // 0111 (OSE-2125 — one keyed receipt per browser per object; no side, no time)

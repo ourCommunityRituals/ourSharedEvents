@@ -1,0 +1,55 @@
+info:
+  name: "OSE-2221 | rollup | every figure withheld or at least 5, and the lines add up"
+  type: http
+  seq: 30
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/venues/ven_1a6e51de0c1b00000000000000000001/rollup?data_class=all"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        const floored = function (v) {
+          expect(v).to.be.an('object');
+          expect(v.floor).to.eql(5);
+          if (v.suppressed) expect(v.count).to.eql(null);
+          else expect(v.count).to.be.at.least(5);
+        };
+        test('OSE-2221 rollup: 200 for the clubhouse', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(b.venue.owner_brand).to.eql('lakeside-co');
+        });
+        test('OSE-2221 rollup: the owner and its listed venture each have a line', function () {
+          const brands = (b.by_operator || []).map(function (l) { return l.brand; });
+          expect(brands).to.include('lakeside-co');
+          expect(brands).to.include('lakeside-club');
+        });
+        test('OSE-2221 rollup: scans and taps are withheld or at least 5, per line and in total', function () {
+          floored(b.totals.poster_scans);
+          floored(b.totals.link_taps);
+          (b.by_operator || []).forEach(function (l) { floored(l.poster_scans); floored(l.link_taps); });
+        });
+        test('OSE-2221 rollup: the floored lines add up to the floored total', function () {
+          const sum = (b.by_operator || []).reduce(function (s, l) { return s + (l.poster_scans.count || 0); }, 0);
+          expect(sum).to.eql(b.totals.poster_scans.count || 0);
+        });
+        test('OSE-2221 rollup: no event id, title or person in the answer', function () {
+          const text = JSON.stringify(b);
+          expect(text).to.not.match(/"(event_id|title|email|anon[a-z_]*)"/);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

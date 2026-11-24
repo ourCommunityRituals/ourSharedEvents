@@ -1,0 +1,17 @@
+info:
+  name: Venues (OSE-2221)
+  type: folder
+request: {}
+docs: |-
+  The staging layer of OSE-2221: a venue a brand owns, the operators who run
+  events there, and the owner's roll-up of the activity.
+
+  Fixture: bruno/fixtures/lakeside-brand-tree-seed.sql makes the practice venue
+  ven_1a6e51de0c1b00000000000000000001 ("Lakeside Clubhouse"), owned by lakeside-co, the stand-in parent
+  company. Its ventures (lakeside-club and the others) count there through the
+  brand tree.
+
+  The key actor reads every brand by name (scope mode all). The folder writes
+  one idempotent row (lakeside-club listed on the platform) and nothing else.
+
+  Mock-layer twin: workers/oursharedevents/tests/venues.spec.ts.

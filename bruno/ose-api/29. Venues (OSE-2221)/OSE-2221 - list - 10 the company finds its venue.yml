@@ -1,0 +1,34 @@
+info:
+  name: "OSE-2221 | list | the company finds the clubhouse it owns"
+  type: http
+  seq: 10
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/venues?brand_id=lakeside-co"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2221 list: 200', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-2221 list: the clubhouse is listed, owned by lakeside-co', function () {
+          const v = (b.venues || []).filter(function (x) { return x.id === 'ven_1a6e51de0c1b00000000000000000001'; })[0];
+          expect(v, 'seeded venue').to.be.an('object');
+          expect(v.role).to.eql('owner');
+          expect(v.owner_brand).to.eql('lakeside-co');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

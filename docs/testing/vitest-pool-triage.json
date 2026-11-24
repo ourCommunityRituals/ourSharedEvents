@@ -4146,6 +4146,13 @@
       "testCount": 11
     },
     {
+      "file": "workers/oursharedevents/tests/venues.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB, createExecutionContext, waitOnExecutionContext",
+      "testCount": 15
+    },
+    {
       "file": "workers/oursharedevents/tests/visitor-country-cleared.spec.ts",
       "bucket": "node",
       "needsReview": true,
