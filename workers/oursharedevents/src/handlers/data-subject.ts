@@ -198,6 +198,8 @@ export async function handleDataSubjectErase(
   // Phase E (OSE-1350): purge anon_id_returns rows. They hash the keyed scan id
   // (or, before OSE-1659, the raw id), so both hashes are deleted. A missing
   // pepper skips this phase with a warning rather than failing the request.
+  // OSE-2214: nothing writes the table and migration 0119 emptied it; the
+  // phase stays as a belt-and-braces delete until the table is dropped.
   //
   // In practice the set is empty since forms migration 0016 (#860): FORMS_DB
   // no longer holds a cookie value, so no stored record links an email to a scan

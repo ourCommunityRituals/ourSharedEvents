@@ -1,5 +1,12 @@
 # SharedReport BigQuery Export — Design
 
+> **2026-11-24, OSE-2214 (owner, 2026-11-23: "count the code, never the person").** Phase 1,
+> the corridor returns export (`exportAnonIdReturns` → `corridor_returns_export`), is
+> retired. It counted phones seen at more than one event. The export now runs two phases:
+> `corridor_density_baseline` and `event_series`. The BigQuery table and its schema file
+> stay until an owner drops the table (it receives nothing). The text below is the design
+> as ratified, kept for history.
+
 **Status:** **Design ratified** (Session 4 of OSE-272; Session 3 = PR #187 in user's merge queue)
 **Date:** 2026-05-15
 **Authors:** mzdan + Co-Architect

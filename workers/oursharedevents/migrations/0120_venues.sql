@@ -1,4 +1,4 @@
--- Migration 0119: a venue someone owns, and the operators who run events there
+-- Migration 0120: a venue someone owns, and the operators who run events there
 -- (Part of OSE-2221).
 --
 -- WHY. Owner, 2026-11-23: a bar owner has several event operators on the
@@ -26,7 +26,7 @@
 --         events listed operators chose to hold there, never an event row, a
 --         form or an edit. The platform and public brands own no venue and
 --         are no operator.
---   #19 — > 0118, unique prefix, append-only, no table drop.
+--   #19 — > 0119, unique prefix, append-only, no table drop.
 --   ADR-001 — MAIN DB only.
 
 CREATE TABLE IF NOT EXISTS venues (

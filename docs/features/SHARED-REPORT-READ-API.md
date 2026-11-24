@@ -342,13 +342,13 @@ As ratified, the single-event endpoint set `private, max-age=3600`; that was wit
 
 ## Anonymity invariants
 
-| Invariant                                 | How preserved                                                                                                                                               |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No raw `anon_id` in response              | Source tables only hold `anon_id_hash`; response never includes hashes either (they're internal correlation keys, not consumer data).                       |
-| No PII leakage via batch endpoint         | Service token gates access. Anonymity invariant doesn't change between single-event and batch — same anon-safe aggregates returned.                         |
-| Sponsor-as-viewer can't see attendee data | Same shape as bar-owner-as-viewer. Both see aggregates only.                                                                                                |
-| WKRP cannot enrich with identity in OSE   | OSE never sees `performer_id`. WKRP joins identity in its OWN DB after receiving the OSE aggregates. ADR-001 boundary preserved.                            |
-| Below-min-sample suppression              | Prevents inference attacks via small denominators. A return rate computed from 1 attendee is effectively identifying; the suppression eliminates this risk. |
+| Invariant                                 | How preserved                                                                                                                            |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| No raw `anon_id` in response              | Source tables only hold `anon_id_hash`; response never includes hashes either (they're internal correlation keys, not consumer data).    |
+| No PII leakage via batch endpoint         | Service token gates access. Anonymity invariant doesn't change between single-event and batch — same anon-safe aggregates returned.      |
+| Sponsor-as-viewer can't see attendee data | Same shape as bar-owner-as-viewer. Both see aggregates only.                                                                             |
+| WKRP cannot enrich with identity in OSE   | OSE never sees `performer_id`. WKRP joins identity in its OWN DB after receiving the OSE aggregates. ADR-001 boundary preserved.         |
+| Below-min-sample suppression              | Prevents inference attacks via small denominators: a figure under 5 is withheld. (The return rate it once guarded is retired, OSE-2214.) |
 
 ---
 

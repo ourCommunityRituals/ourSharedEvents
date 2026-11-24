@@ -59,7 +59,7 @@ const SRC_DIR = join(WORKER_DIR, 'src');
 const SCAN_TABLES = [
   'scan_placement_events', // WHERE, one row per scan on /q
   'scan_node_returns', // WHO, one row per browser-hour on /q
-  'anon_id_returns', // keyed returning-browser rows, rolled up from scans
+  'anon_id_returns', // retired returning-browser rows (OSE-2214: empty, no writer)
   'scan_aggregates', // event-hour rollup of the two above
   'scan_cell_aggregates', // event-hour-cell rollup of the two above
   'scan_poster_hour_tally', // scans per poster per hour, for the cap (0117, OSE-1496)
@@ -111,20 +111,10 @@ const ALLOWLIST: Record<string, AllowEntry> = {
   },
 
   // Rollups the scheduled materialize job writes. The clock is the job's, not the scan's.
-  'anon_id_returns.first_seen_at': {
-    kinds: ['js-clock'],
-    reason:
-      'Stamped with the materialize run time, never the scan time, and written by the scheduled job only (0031).',
-  },
-  'anon_id_returns.last_seen_at': {
-    kinds: ['js-clock'],
-    reason:
-      'Stamped with the materialize run time, never the scan time, and written by the scheduled job only (0031).',
-  },
   'anon_id_returns.computed_at': {
-    kinds: ['default', 'js-clock'],
+    kinds: ['default'],
     reason:
-      'When the scheduled job computed the row, which says nothing about when anyone scanned.',
+      'The 0031 column default only. Nothing writes the table since OSE-2214 (migration 0119 emptied it).',
   },
   'scan_aggregates.computed_at': {
     kinds: ['default', 'js-clock'],

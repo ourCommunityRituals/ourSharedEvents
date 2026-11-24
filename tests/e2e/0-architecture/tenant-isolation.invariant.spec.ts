@@ -321,16 +321,6 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
   ],
 
   [
-    'lib/shared-report.ts > materializeAnonIdReturns: `SELECT id, start_date, end_date, starts_at, timezone FROM events',
-    'materializeAnonIdReturns cron — `SELECT id, … FROM events WHERE status=active ' +
-      'AND substr(COALESCE(end_date, start_date),1,10) BETWEEN ? AND ?` (calendar-day ' +
-      'window incl. start-only events, then the real ' +
-      'end instant via phaseTimesFor — OSE-616; re-keyed 157→167). Cross-brand ' +
-      'geographic baseline input; the output is never-who anon-return aggregates. ' +
-      'Not request-reachable.',
-  ],
-
-  [
     'lib/shared-report.ts > refreshCorridorBaselines: FROM events e',
     'refreshCorridorBaselines cron — aggregates by `COALESCE(LOWER(h3_res7), ' +
       'corridor_id)` across brands. A corridor is a shared geography by design; ' +
@@ -435,14 +425,6 @@ const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
   // 490→493 and 894→897 for the fail-closed skew check.
   // 494→484 and 898→889 when roundForPublish moved to count-floor.ts (OSE-1782).
   // 484→489 and 889→893 when the baseline export called floorCorridorBaseline (OSE-1751).
-
-  [
-    'lib/shared-report-export.ts > exportAnonIdReturns: JOIN events e ON e.id = air.venue_id',
-    'BigQuery/OER export (runSharedReportBigQueryExport, index.ts scheduled) — ' +
-      'anon_id_returns joined to event geo metadata over a 90-day window across ALL ' +
-      'brands, then aggregated to k-floored corridor counts (OSE-1460): no anon hash ' +
-      'or venue leaves. OER ingests every brand by design; not request-reachable.',
-  ],
 
   [
     'lib/shared-report-export.ts > exportEventSeries: JOIN events e ON e.id = es.venue_id',

@@ -7,9 +7,12 @@
  * anonymity scopes — per-attendee event correlation vs. rate-limit /
  * subscriber identity — have independent compromise blast radii.
  *
- * Used by the SharedReport data pipeline to populate:
+ * Used by the SharedReport data pipeline to populate (until OSE-2214):
  *   - anon_id_returns.anon_id_hash       (migration 0031)
  *   - corridor_density_baseline distinct-anon counts (migration 0032)
+ * OSE-2214 retired both writers and migration 0119 emptied anon_id_returns.
+ * `hashAnonIdForReturns` is kept for the erasure path only, which still
+ * deletes any legacy row by its hash until the table is dropped.
  *
  * Returns null if no pepper is configured. Callers MUST treat null as
  * "no SharedReport signal available for this anon_id" and either skip the

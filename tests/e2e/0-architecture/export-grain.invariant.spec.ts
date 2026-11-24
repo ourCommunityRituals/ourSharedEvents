@@ -701,10 +701,11 @@ test.describe('Invariant 17 (export grain): the rule can see what it is meant to
     );
     expect(
       allLists.length,
-      'expected the backup handler (2) and the SharedReport exporter (7+) SELECT lists'
-    ).toBeGreaterThanOrEqual(8);
+      // OSE-2214 retired the returns export and its SELECT lists.
+      'expected the backup handler (2) and the SharedReport exporter (4+) SELECT lists'
+    ).toBeGreaterThanOrEqual(6);
     const words = new Set(allLists.flatMap((l) => inspectList(l.list, '').words));
-    for (const w of ['corridor_id', 'uec_code', 'legal_clearance_tier', 'anon_id_hash']) {
+    for (const w of ['corridor_id', 'uec_code', 'legal_clearance_tier', 'window_30d_count']) {
       expect(words.has(w), `the SELECT scanner must see "${w}"`).toBe(true);
     }
     const backup = EXPORTERS.find((e) => e.file === 'handlers/bigquery.ts')!;

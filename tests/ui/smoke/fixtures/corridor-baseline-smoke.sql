@@ -5,8 +5,8 @@
 --   node ../../scripts/ci/d1-seed-staging.mjs DB ../../tests/ui/smoke/fixtures/corridor-baseline-smoke.sql
 --
 -- WHY A FILE OF ITS OWN, RUN RIGHT BEFORE THE GATE
--- The staging Worker has a 03:00 UTC cron. Its anon_id_returns step deletes attendee
--- rows with no pepper epoch (these have none), and its baseline refresh recomputes
+-- The staging Worker has a 03:00 UTC cron (its anon_id_returns step is retired by
+-- OSE-2214, so only the baseline refresh matters now). The refresh recomputes
 -- every corridor bucket from real data, so either can replace what is seeded here.
 -- Seeded with the other smoke fixtures, a CI run that straddled 03:00 had tens of
 -- minutes for that to happen. Applied in the step just before T4f it has seconds.
@@ -31,19 +31,34 @@ SELECT LOWER(h3_res7), CAST(strftime('%w', start_date) AS INTEGER),
 -- longer reach the report). 12 scans of one poster in one hour publish 10
 -- (floor 5, rounded down to a multiple of 5), so this_event_count has a value
 -- and the ratios exist. The cron does not delete poster scans.
+--
+-- One INSERT per scan, never a UNION ALL chain: staging D1 refused the 12-term
+-- compound SELECT ("too many terms in compound SELECT", run 45311429088), and
+-- tests/unit/ci/d1-seed-no-compound-select.test.js keeps every seed file off it.
 INSERT OR IGNORE INTO poster_deployments (id, event_id, qr_token, placement_label)
 VALUES ('poster-smoke-1751', 'evt_smoke_tiers', 'qr-smoke-1751', 'Depth gate poster');
 
 INSERT OR IGNORE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
-SELECT 'scan-1751-01', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers' UNION ALL
-SELECT 'scan-1751-02', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers' UNION ALL
-SELECT 'scan-1751-03', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers' UNION ALL
-SELECT 'scan-1751-04', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers' UNION ALL
-SELECT 'scan-1751-05', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers' UNION ALL
-SELECT 'scan-1751-06', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers' UNION ALL
-SELECT 'scan-1751-07', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers' UNION ALL
-SELECT 'scan-1751-08', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers' UNION ALL
-SELECT 'scan-1751-09', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers' UNION ALL
-SELECT 'scan-1751-10', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers' UNION ALL
-SELECT 'scan-1751-11', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers' UNION ALL
+SELECT 'scan-1751-01', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers';
+INSERT OR IGNORE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+SELECT 'scan-1751-02', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers';
+INSERT OR IGNORE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+SELECT 'scan-1751-03', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers';
+INSERT OR IGNORE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+SELECT 'scan-1751-04', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers';
+INSERT OR IGNORE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+SELECT 'scan-1751-05', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers';
+INSERT OR IGNORE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+SELECT 'scan-1751-06', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers';
+INSERT OR IGNORE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+SELECT 'scan-1751-07', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers';
+INSERT OR IGNORE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+SELECT 'scan-1751-08', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers';
+INSERT OR IGNORE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+SELECT 'scan-1751-09', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers';
+INSERT OR IGNORE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+SELECT 'scan-1751-10', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers';
+INSERT OR IGNORE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
+SELECT 'scan-1751-11', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers';
+INSERT OR IGNORE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
 SELECT 'scan-1751-12', id, 'poster-smoke-1751', strftime('%Y-%m-%dT%H:00', start_date) FROM events WHERE id = 'evt_smoke_tiers';
