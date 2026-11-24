@@ -131,6 +131,33 @@ test.describe('admin: the Voting card', () => {
     await expect(page.getByTestId('vote-kind-input')).toBeDisabled();
   });
 
+  test('an entry can be added, under the warning to name the work (OSE-2224, OSE-2225)', async ({
+    page,
+    request,
+  }) => {
+    // Its own event: the night above already holds songs, and a set holds one kind.
+    const fair = await makeEvent(request, `Art fair ${Date.now()}`);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.setExtraHTTPHeaders(AUTH);
+    await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+    await selectEvent(page, fair);
+    await page.getByTestId('votes-toggle').click();
+    await page.getByTestId('votes-make-btn').click();
+    await expect(page.getByTestId('vote-label-warning')).toHaveText(
+      'Name the work, not the person who made it.'
+    );
+    await page.getByTestId('vote-kind-input').selectOption('entry');
+    await page.getByTestId('vote-label-input').fill('Call 312 555 0199');
+    await page.getByTestId('vote-add-btn').click();
+    await expect(page.getByTestId('vote-label-error')).toContainText('phone number');
+
+    await page.getByTestId('vote-label-input').fill('The blue float');
+    await page.getByTestId('vote-add-btn').click();
+    await expect(page.getByTestId('votes-msg')).toHaveText('Entry added.');
+    await expect(rows(page).first().getByTestId('vote-row-label')).toHaveText('The blue float');
+    await expect(rows(page).first().getByTestId('vote-row-kind')).toHaveText('Entry');
+  });
+
   test('a draft event: Open is greyed out and the card says to publish (OSE-2142)', async ({
     page,
     request,

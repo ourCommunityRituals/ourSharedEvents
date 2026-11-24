@@ -26,6 +26,9 @@ export const NODE_SPECS = [
   // OSE-1782 — derived gate: no count published except through count-floor.ts
   // (reads the projection's field list and the src/ tree; no runtime).
   'tests/count-floor-publication.derived.spec.ts',
+  // OSE-2225 — the off-limits list is the one home of vote label rules
+  // (imports the vote libs and reads src/; no runtime).
+  'tests/vote-off-limits.spec.ts',
   // OSE-1751 — the report's corridor baseline is one chain, shared with the export
   'tests/corridor-baseline-publication.spec.ts',
   // OSE-1752 — the recap's walk-in line reads the same however it is withheld

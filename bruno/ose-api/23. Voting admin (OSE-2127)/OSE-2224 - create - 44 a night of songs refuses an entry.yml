@@ -1,0 +1,34 @@
+info:
+  name: OSE-2224 | rainy | create | a night of songs refuses an entry
+  type: http
+  seq: 44
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/objects"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"kind\": \"entry\", \"label\": \"The blue float\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        // OSE-2224 (ADR-040 decision 12): entry is a kind now, and a set still holds one kind.
+        test('OSE-2224 rainy: 409 KIND_MISMATCH, not 400 INVALID_KIND', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('KIND_MISMATCH'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

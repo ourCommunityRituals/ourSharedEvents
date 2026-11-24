@@ -77,10 +77,15 @@ import { resultStatements, type VoteOutcome } from './vote-results';
 export const VOTE_WINDOW_MAX_SECONDS = 12 * 60 * 60;
 /** The shortest: 30 seconds. */
 export const VOTE_WINDOW_MIN_SECONDS = 30;
-/** With no window given: 10 minutes for a song (longer than the 7:11 song), a fair day for a stall. */
+/**
+ * With no window given: 10 minutes for a song (longer than the 7:11 song), a
+ * fair day for a stall, and the whole event for an entry, as a stall's
+ * (ADR-040 decision 12).
+ */
 export const VOTE_WINDOW_DEFAULT_SECONDS: Record<VotableKind, number> = {
   song: 10 * 60,
   stall: VOTE_WINDOW_MAX_SECONDS,
+  entry: VOTE_WINDOW_MAX_SECONDS,
 };
 /** The most objects one set holds. */
 export const VOTE_OBJECTS_MAX = 500;
@@ -690,7 +695,7 @@ export function parseVotableCreate(body: unknown): VoteResult<VotableInput> {
   const extra = Object.keys(b).filter((k) => !CREATE_FIELDS.has(k));
   if (extra.length)
     return fail(400, 'UNKNOWN_FIELD', `Not a field of a votable object: ${extra.join(', ')}`);
-  if (!isVotableKind(b.kind)) return fail(400, 'INVALID_KIND', 'kind must be song or stall');
+  if (!isVotableKind(b.kind)) return fail(400, 'INVALID_KIND', 'kind must be song, stall or entry');
   const label = parseVotableLabel(b.label);
   if (!label.ok) return fail(400, label.code, label.error);
   const booth = parseOptionalId(b.booth_id);

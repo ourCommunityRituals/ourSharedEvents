@@ -1,0 +1,34 @@
+info:
+  name: OSE-2225 | rainy | create | an entry label with a phone number is refused, naming the rule
+  type: http
+  seq: 45
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/objects"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"kind\": \"entry\", \"label\": \"Booth, call 312 555 0199\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        // OSE-2225: the off-limits list says which rule refused the label, in plain words.
+        test('OSE-2225 rainy: 400 INVALID_LABEL, and the words name the phone rule', function () { expect(res.getStatus()).to.eql(400); expect(b.code).to.eql('INVALID_LABEL'); expect(JSON.stringify(b)).to.contain('cannot hold a phone number'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
