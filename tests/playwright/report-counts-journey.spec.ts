@@ -143,15 +143,16 @@ test('the scan card says "Scans", never a count of people (OSE-2214)', async ({ 
   expect(text).not.toContain('distinct gatherings');
 });
 
-// On a phone the three summary cards stack, each the full width of the row.
+// On a phone the summary cards stack, each the full width of the row. There
+// are two since OSE-2214 retired the return-rate card (scans, sponsor displays).
 // @ocr/ui's .stats-row (loaded after the page's own rules) is a sideways
-// strip of flex:1 cards; at 375px that squeezed all three into one row and
+// strip of flex:1 cards; at 375px that squeezed them into one row and
 // wrapped their notes a word or two per line. Nothing may scroll sideways.
 test('on a phone the summary cards stack full width, with no sideways scroll', async ({ page }) => {
   await openReport(page);
   const row = page.getByTestId('signed-link-stats');
   const cards = row.locator(':scope > .stat-card');
-  await expect(cards).toHaveCount(3);
+  await expect(cards).toHaveCount(2);
   const rowBox = await row.boundingBox();
   expect(rowBox, 'summary row has a box').not.toBeNull();
   const boxes = await cards.evaluateAll((els) =>
@@ -203,12 +204,12 @@ test('on a laptop the summary cards share one row, equal width', async ({ page }
   await openReport(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   const cards = page.getByTestId('signed-link-stats').locator(':scope > .stat-card');
-  await expect(cards).toHaveCount(3);
+  await expect(cards).toHaveCount(2);
   const boxes = await cards.evaluateAll((els) =>
     els.map((e) => e.getBoundingClientRect().toJSON())
   );
   const tops = new Set(boxes.map((b) => Math.round(b.top)));
-  expect(tops.size, 'all three cards start on the same line').toBe(1);
+  expect(tops.size, 'both cards start on the same line').toBe(1);
   const widths = boxes.map((b) => b.width);
   expect(
     Math.max(...widths) - Math.min(...widths),
