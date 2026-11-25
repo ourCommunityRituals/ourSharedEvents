@@ -7201,8 +7201,6 @@
       window.votesRefusal = function (code) {
         var SAID = {
           INVALID_LABEL: 'Use the name of the song, stall or entry: 80 characters at most, and no email address or phone number.',
-          LABEL_EMAIL: 'A label names the thing voted on, so it cannot hold an email address.',
-          LABEL_PHONE: 'A label names the thing voted on, so it cannot hold a phone number.',
           KIND_MISMATCH: 'A vote holds one kind: all songs, all stalls, or all entries.',
           VOTE_SET_FINAL: 'The results are final. Voting cannot open again.',
           EVENT_OVER: 'The event is over. Voting cannot open again.',
@@ -7409,10 +7407,9 @@
         input.removeAttribute('aria-invalid');
         var label = input.value.trim().replace(/\s+/g, ' ');
         var kind = window.votesKind(document.getElementById('vote-kind').value);
-        // A first check only, for quick words; the server's off-limits list decides.
-        var why = !label || label.length > 80 ? 'INVALID_LABEL'
-          : /\S@\S/.test(label) ? 'LABEL_EMAIL'
-          : /(?:\d[\s().-]*){7,}/.test(label) ? 'LABEL_PHONE' : '';
+        // Only the length is checked here. What a label may never hold is the
+        // off-limits list on the server (lib/vote-off-limits.ts), never a copy of it.
+        var why = !label || label.length > 80 ? 'INVALID_LABEL' : '';
         if (why) {
           error.textContent = window.votesRefusal(why);
           error.hidden = false;

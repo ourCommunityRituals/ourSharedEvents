@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2224 | add | a set of entries refuses a song"
+  type: http
+  seq: 31
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{entryEventId}}/votables/objects"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"kind\": \"song\", \"label\": \"Song one\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2224 add: 409 KIND_MISMATCH, a set holds one kind', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('KIND_MISMATCH'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

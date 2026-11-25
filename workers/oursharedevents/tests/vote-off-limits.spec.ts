@@ -8,7 +8,8 @@
  *      reaches every route [parseVotableLabel given its own copy of the rules];
  *   3. the list is the only place a label rule lives: no file under src/ other
  *      than lib/vote-off-limits.ts holds the email or phone shape next to a
- *      vote label [a rule copied into the handler];
+ *      vote label, and the admin Voting card's script holds neither [a rule
+ *      copied into the handler; the card's own first check put back];
  *   4. the Voting card shows the warning, in the owner's words, tied to the
  *      label box [warning line removed];
  *   5. a person is never a kind (Q9): `person`, `team` and `event` stay off
@@ -87,6 +88,16 @@ describe('OSE-2225 | the off-limits list', () => {
       if (!/vot(e|able)/i.test(rel)) continue;
       if (shapes.some((s) => s.test(text))) offenders.push(rel);
     }
+    // The admin page is one file for every card (a booth name keeps its own
+    // check), so only the Voting card's script is read: from the card to the
+    // end of the script block that holds voteAdd.
+    const html = readFileSync(join(SRC, 'templates', 'admin.html'), 'utf8');
+    const start = html.indexOf('id="votes-card"');
+    const add = html.indexOf('window.voteAdd = ', start);
+    expect(start, 'the Voting card is in admin.html').toBeGreaterThan(-1);
+    expect(add, 'voteAdd is in the Voting card script').toBeGreaterThan(start);
+    const card = html.slice(start, html.indexOf('</script>', add));
+    if (shapes.some((s) => s.test(card))) offenders.push('templates/admin.html (Voting card)');
     expect(offenders, 'a vote label rule outside lib/vote-off-limits.ts').toEqual([]);
   });
 

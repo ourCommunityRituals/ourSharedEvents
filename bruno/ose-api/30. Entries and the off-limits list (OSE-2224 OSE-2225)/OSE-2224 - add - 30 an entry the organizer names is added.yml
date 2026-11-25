@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2224 | add | an entry the organizer names is added"
+  type: http
+  seq: 30
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{entryEventId}}/votables/objects"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"kind\": \"entry\", \"label\": \"Watercolor of the old mill\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2224 add: 201, an entry, kept as named', function () { expect(res.getStatus()).to.eql(201); expect(b.object.kind).to.eql('entry'); expect(b.object.label).to.eql('Watercolor of the old mill'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
