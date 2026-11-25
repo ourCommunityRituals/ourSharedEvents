@@ -37,7 +37,9 @@ import { readLatches } from '../lib/corridor-latch';
 import ADMIN_SIGNIN_HTML from '../templates/admin-signin.html';
 import DISPLAY_HTML from '../templates/display.html';
 import POSTER_HTML from '../templates/poster.html';
+import { injectMarker } from '../lib/inject-marker';
 import SHARED_REPORT_HTML from '../templates/shared-report.html';
+import { LAYOUT_SKINS_MARKER, layoutSkinsHead } from '../lib/layout-skins';
 import {
   withProvenanceBanner,
   injectProvenanceBanner,
@@ -3284,7 +3286,11 @@ export async function handleSharedReportPage(env: PagesEnv): Promise<Response> {
   // map thumbnails via the /api/v2/maps/venue-image proxy endpoint.
   const mapsAttr = isGoogleMapsConfigured(env) ? ' data-maps-configured="1"' : '';
   const content = injectLegalFooter(
-    SHARED_REPORT_HTML.replace('<body>', `<body${mapsAttr}>`),
+    injectMarker(
+      SHARED_REPORT_HTML.replace('<body>', `<body${mapsAttr}>`),
+      LAYOUT_SKINS_MARKER,
+      layoutSkinsHead('report')
+    ),
     'shared-report'
   );
   const res = html(

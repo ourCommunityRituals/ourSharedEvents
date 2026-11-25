@@ -1,0 +1,29 @@
+info:
+  name: "OSE-2232 | read | a new event reads the standard skins"
+  type: http
+  seq: 20
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{skinEventId}}/layouts"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2232 read: 200, standard report and words-first vote screen', function () { expect(res.getStatus()).to.eql(200); expect(b.layouts.report.skin).to.eql('standard'); expect(b.layouts.vote_screen.skin).to.eql('words_first'); });
+        test('OSE-2232 read: each layout comes as a .md skin file', function () { expect(b.markdown.report).to.match(/^---\nsurface: report\nskin: standard\n/); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

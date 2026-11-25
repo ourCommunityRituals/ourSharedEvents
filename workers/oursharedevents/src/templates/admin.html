@@ -7152,6 +7152,8 @@
             <img class="pc-qr" id="votes-code-qr" data-testid="votes-code-qr" alt="QR code for the room’s vote code" width="164" height="164" />
             <div class="pd-link"><code id="votes-code-url" data-testid="votes-code-url"></code></div>
             <p class="sub-line" id="votes-code-replace-hint" data-testid="votes-code-replace-hint">If the code was photographed or shared, replace it. The old code stops working at once.</p>
+            <p class="sub-line" data-testid="votes-screen-hint">No room screen? Open the vote screen on a laptop, tablet or TV you are signed in on. It shows only this code and "Scan to vote".</p>
+            <a class="btn btn-secondary" id="votes-screen-open" data-testid="votes-screen-open" href="/admin" target="_blank" rel="noopener">Open the vote screen</a>
           </div>
           <div class="flex-row">
             <button type="button" class="btn btn-secondary" id="votes-code-make" data-action="votes-code-make" data-testid="votes-code-make">Make the vote code</button>
@@ -7289,6 +7291,8 @@
         byId('votes-code').hidden = !set || set.final;
         byId('votes-code-show').hidden = !codeUrl;
         byId('votes-code-url').textContent = codeUrl;
+        // OSE-2226: the host's full-screen page for this code (admin only).
+        byId('votes-screen-open').setAttribute('href', '/api/v2/admin/events/' + encodeURIComponent(String(id)) + '/vote-screen');
         var qrImg = byId('votes-code-qr');
         if (codeQr) qrImg.setAttribute('src', codeQr); else qrImg.removeAttribute('src');
         qrImg.hidden = !codeQr;
@@ -8857,6 +8861,288 @@
         });
       })();
     </script>
+    <!-- Page layouts (OSE-2232, OSE-2226). How this event's SharedReport and
+         vote screen are arranged: a ready-made skin, then parts moved up and
+         down and set wide. Saved into the event's settings (settings.layouts,
+         lib/layout-skins.ts) through PUT /api/v2/admin/events/:id, like the TV
+         card. The same layout travels as a .md skin file: "Download the skin
+         file" writes it, "Load a skin file" sends one to
+         PUT /api/v2/admin/events/:id/layouts (the solution engineer's path).
+         A skin arranges only: it never recolors and never hides a part. -->
+    <div class="card card--sectioned layouts-card" id="layouts-card" data-testid="layouts-card">
+      <div class="card-header">
+        <h2 class="card-title">Page layouts</h2>
+      </div>
+      <div class="card-body">
+        <h3 class="pd-card-title" id="layout-report-title">Report</h3>
+        <p class="pd-target" data-testid="layout-report-hint">Everyone who opens this event's report link sees it this way. Every part still shows.</p>
+        <div class="create-form">
+          <div class="full-width">
+            <label for="layout-report-skin">Start from</label>
+            <select id="layout-report-skin" data-testid="layout-report-skin"></select>
+          </div>
+          <div class="full-width">
+            <label class="create-publish-label"><input type="checkbox" id="layout-report-two" data-testid="layout-report-two" /> <span>Two columns on a wide screen</span></label>
+          </div>
+        </div>
+        <ol class="pc-list" id="layout-report-parts" data-testid="layout-report-parts" aria-labelledby="layout-report-title"></ol>
+        <h3 class="pd-card-title" id="layout-vote-title">Vote screen</h3>
+        <div class="create-form">
+          <div class="full-width">
+            <label for="layout-vote-skin">Arrangement</label>
+            <select id="layout-vote-skin" data-testid="layout-vote-skin"></select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary copy-btn" id="layout-save" data-testid="layout-save" disabled>Save layouts</button>
+          <button type="button" class="btn btn-secondary copy-btn" id="layout-download" data-testid="layout-download" disabled>Download the report skin file</button>
+          <button type="button" class="btn btn-secondary copy-btn" id="layout-load-open" data-testid="layout-load-open" disabled>Load a skin file</button>
+          <input type="file" id="layout-load" data-testid="layout-load" accept=".md,text/markdown,text/plain" hidden />
+        </div>
+        <p class="create-msg" id="layout-msg" data-testid="layout-msg" role="status"></p>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var st = { eventId: null, info: null, report: null, vote: null };
+        function $(id) { return document.getElementById(id); }
+        function msg(text, kind) {
+          var m = $('layout-msg');
+          if (!m) return;
+          m.textContent = text;
+          m.className = 'create-msg' + (kind ? ' ' + kind : '');
+        }
+        function setDisabled(off) {
+          var card = $('layouts-card');
+          if (!card) return;
+          card.querySelectorAll('input, button, select').forEach(function (el) { el.disabled = off; });
+        }
+        function words(surface, name) {
+          var list = (st.info && st.info.regions && st.info.regions[surface]) || [];
+          var hit = list.find(function (r) { return r && r.name === name; });
+          return hit && typeof hit.words === 'string' ? hit.words : name;
+        }
+        function copy(l) {
+          return { skin: String(l.skin), columns: l.columns === 2 ? 2 : 1, order: l.order.slice(), wide: l.wide.slice() };
+        }
+        function skinOf(surface, name) {
+          var list = (st.info && st.info.skins && st.info.skins[surface]) || [];
+          var hit = list.find(function (k) { return k && k.name === name; });
+          return hit ? copy(hit.layout) : null;
+        }
+        function fillSelect(sel, surface, current) {
+          if (!sel) return;
+          sel.textContent = '';
+          var list = (st.info && st.info.skins && st.info.skins[surface]) || [];
+          list.forEach(function (k) {
+            var o = document.createElement('option');
+            o.value = k.name;
+            o.textContent = k.words;
+            sel.appendChild(o);
+          });
+          if (current === 'custom') {
+            var c = document.createElement('option');
+            c.value = 'custom';
+            c.textContent = 'Your own arrangement';
+            sel.appendChild(c);
+          }
+          sel.value = current;
+        }
+        function render() {
+          var list = $('layout-report-parts');
+          if (!list || !st.report) return;
+          list.textContent = '';
+          var two = st.report.columns === 2;
+          st.report.order.forEach(function (name, i) {
+            var li = document.createElement('li');
+            li.className = 'pc-row';
+            li.setAttribute('data-testid', 'layout-report-part');
+            li.setAttribute('data-region', name);
+            var label = document.createElement('label');
+            label.className = 'create-publish-label';
+            var box = document.createElement('input');
+            box.type = 'checkbox';
+            box.checked = st.report.wide.indexOf(name) !== -1;
+            box.disabled = !two;
+            box.setAttribute('data-act', 'wide');
+            box.setAttribute('data-testid', 'layout-report-wide');
+            var span = document.createElement('span');
+            span.textContent = words('report', name) + (two ? ' (full width)' : '');
+            label.appendChild(box);
+            label.appendChild(span);
+            var moves = document.createElement('div');
+            moves.className = 'form-actions';
+            [['up', 'Move up', i === 0], ['down', 'Move down', i === st.report.order.length - 1]].forEach(function (m) {
+              var b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'btn btn-secondary copy-btn';
+              b.textContent = m[1];
+              b.setAttribute('aria-label', m[1] + ': ' + words('report', name));
+              b.setAttribute('data-act', m[0]);
+              b.setAttribute('data-testid', 'layout-report-' + m[0]);
+              b.disabled = m[2];
+              moves.appendChild(b);
+            });
+            li.appendChild(label);
+            li.appendChild(moves);
+            list.appendChild(li);
+          });
+          var twoBox = $('layout-report-two');
+          if (twoBox) twoBox.checked = two;
+          fillSelect($('layout-report-skin'), 'report', st.report.skin);
+          fillSelect($('layout-vote-skin'), 'vote_screen', st.vote ? st.vote.skin : '');
+        }
+        /** Once moved, a layout is the organizer's own: its skin reads custom. */
+        function moved() {
+          var base = skinOf('report', st.report.skin);
+          if (!base) return;
+          var same = base.columns === st.report.columns &&
+            base.order.join() === st.report.order.join() &&
+            base.wide.slice().sort().join() === st.report.wide.slice().sort().join();
+          if (!same) st.report.skin = 'custom';
+        }
+        function fill(info) {
+          st.info = info;
+          st.report = info && info.layouts && info.layouts.report ? copy(info.layouts.report) : null;
+          st.vote = info && info.layouts && info.layouts.vote_screen ? copy(info.layouts.vote_screen) : null;
+          render();
+        }
+        window.loadLayouts = async function (eventId) {
+          st.eventId = eventId;
+          st.report = null;
+          var list = $('layout-report-parts');
+          if (list) list.textContent = '';
+          setDisabled(true);
+          msg('');
+          try {
+            var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/layouts');
+            var data = await res.json();
+            if (!res.ok || !data || !data.ok) throw new Error('load');
+            if (st.eventId !== eventId) return; // a newer selection won
+            fill(data);
+            setDisabled(false);
+            render();
+          } catch (e) {
+            if (st.eventId === eventId) msg('Could not load the layouts.', 'error');
+          }
+        };
+        var list = $('layout-report-parts');
+        if (list) {
+          list.addEventListener('click', function (ev) {
+            var btn = ev.target.closest('button[data-act]');
+            if (!btn || btn.disabled || !st.report) return;
+            var i = Array.prototype.indexOf.call(list.children, btn.closest('li'));
+            var j = btn.getAttribute('data-act') === 'up' ? i - 1 : i + 1;
+            if (i < 0 || j < 0 || j >= st.report.order.length) return;
+            var o = st.report.order;
+            var t = o[i]; o[i] = o[j]; o[j] = t;
+            moved();
+            render();
+            var row = list.children[j];
+            var again = row && row.querySelector('[data-act="' + btn.getAttribute('data-act') + '"]');
+            var other = row && row.querySelector('[data-act="' + (btn.getAttribute('data-act') === 'up' ? 'down' : 'up') + '"]');
+            if (again && !again.disabled) again.focus();
+            else if (other && !other.disabled) other.focus();
+          });
+          list.addEventListener('change', function (ev) {
+            var box = ev.target.closest('input[data-act="wide"]');
+            if (!box || !st.report) return;
+            var name = box.closest('li').getAttribute('data-region');
+            st.report.wide = st.report.wide.filter(function (n) { return n !== name; });
+            if (box.checked) st.report.wide.push(name);
+            moved();
+            fillSelect($('layout-report-skin'), 'report', st.report.skin);
+          });
+        }
+        var twoBox = $('layout-report-two');
+        if (twoBox) twoBox.addEventListener('change', function () {
+          if (!st.report) return;
+          st.report.columns = twoBox.checked ? 2 : 1;
+          moved();
+          render();
+        });
+        var reportSkin = $('layout-report-skin');
+        if (reportSkin) reportSkin.addEventListener('change', function () {
+          var next = skinOf('report', reportSkin.value);
+          if (next) { st.report = next; render(); }
+        });
+        var voteSkin = $('layout-vote-skin');
+        if (voteSkin) voteSkin.addEventListener('change', function () {
+          var next = skinOf('vote_screen', voteSkin.value);
+          if (next) st.vote = next;
+        });
+        var save = $('layout-save');
+        if (save) save.addEventListener('click', async function () {
+          if (!st.eventId || !st.report || !st.vote) return;
+          var eventId = st.eventId;
+          setDisabled(true);
+          msg('Saving…');
+          try {
+            var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ settings: { layouts: { report: st.report, vote_screen: st.vote } } }),
+            });
+            var data = await res.json().catch(function () { return null; });
+            if (st.eventId !== eventId) return;
+            if (!res.ok || !data || !data.ok) {
+              msg(data && data.error ? 'Not saved: ' + data.error : 'Could not save. The layouts are unchanged.', 'error');
+              return;
+            }
+            msg('Saved. The report and the vote screen use this layout the next time they open.', 'success');
+            window.loadLayouts(eventId);
+          } catch (e) {
+            if (st.eventId === eventId) msg('Could not save. The layouts are unchanged.', 'error');
+          } finally {
+            if (st.eventId === eventId) { setDisabled(false); render(); }
+          }
+        });
+        var down = $('layout-download');
+        if (down) down.addEventListener('click', function () {
+          var md = st.info && st.info.markdown && typeof st.info.markdown.report === 'string' ? st.info.markdown.report : '';
+          if (!md || !st.eventId) return;
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
+          a.download = 'report-skin-' + st.eventId + '.md';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+          msg('Downloaded the saved report skin. Unsaved moves are not in it.', 'success');
+        });
+        var load = $('layout-load');
+        var loadOpen = $('layout-load-open');
+        if (loadOpen && load) loadOpen.addEventListener('click', function () { load.click(); });
+        if (load) load.addEventListener('change', async function () {
+          var file = load.files && load.files[0];
+          load.value = '';
+          if (!file || !st.eventId) return;
+          if (file.size > 8192) { msg('A skin file is at most 8 KB.', 'error'); return; }
+          var eventId = st.eventId;
+          setDisabled(true);
+          msg('Loading the skin file…');
+          try {
+            var text = await file.text();
+            var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/layouts', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ markdown: text }),
+            });
+            var data = await res.json().catch(function () { return null; });
+            if (st.eventId !== eventId) return;
+            if (!res.ok || !data || !data.ok) {
+              msg(data && data.error ? 'Not loaded: ' + data.error : 'Could not load the file. The layouts are unchanged.', 'error');
+              return;
+            }
+            fill(data);
+            msg('Loaded and saved.', 'success');
+          } catch (e) {
+            if (st.eventId === eventId) msg('Could not load the file. The layouts are unchanged.', 'error');
+          } finally {
+            if (st.eventId === eventId) { setDisabled(false); render(); }
+          }
+        });
+      })();
+    </script>
     </main>
     <script>
       // ─── OSE-R-005 label maps ─────────────────────────────────────────────
@@ -8921,6 +9207,7 @@
         if (typeof window.scopeSurfaceCards === 'function') window.scopeSurfaceCards(d.id, d.name);
         if (typeof window.loadPosterArt === 'function') window.loadPosterArt(d.id);
         if (typeof window.loadTvDisplay === 'function') window.loadTvDisplay(d.id);
+        if (typeof window.loadLayouts === 'function') window.loadLayouts(d.id);
       });
 
       // ── OSE-675: memoized admin-events fetch ──

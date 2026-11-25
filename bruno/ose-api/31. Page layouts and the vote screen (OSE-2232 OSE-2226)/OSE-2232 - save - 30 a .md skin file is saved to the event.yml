@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2232 | save | a .md skin file is saved to the event"
+  type: http
+  seq: 30
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{skinEventId}}/layouts"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"markdown\": \"---\\nsurface: report\\nskin: custom\\ncolumns: 2\\norder: map, stats, sponsors, classes, posters, trend, locked\\nwide: map, trend\\n---\\n\\nMap leads for the corridor partners. Sent by the solution engineer.\\n\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2232 save: 200, the report takes the file layout', function () { expect(res.getStatus()).to.eql(200); expect(b.surface).to.eql('report'); expect(b.layouts.report.skin).to.eql('custom'); expect(b.layouts.report.order[0]).to.eql('map'); expect(b.layouts.report.wide).to.eql(['map', 'trend']); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

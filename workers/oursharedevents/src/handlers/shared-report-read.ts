@@ -20,6 +20,8 @@
  * the read API NEVER writes to SharedReport tables — read-only.
  */
 
+import { parseEventSettings, resolveLayout } from '../lib/event-settings';
+import { defaultLayout } from '../lib/layout-skins';
 import {
   extractBearerToken,
   mintSignedLinkToken,
@@ -199,8 +201,22 @@ export async function handleGetSharedReport(
   // `private, max-age=300` while the event ran and `max-age=3600` after it
   // (S5-Q4 / Q7), which saved a rebuild on a repeat view inside that window.
   // Every view is a fresh read now, bounded by the route's rate limit (router.ts).
+  // OSE-2232: how this event's report is arranged (lib/layout-skins.ts). Outside
+  // `report`, so the depth filter above never sees it: it names regions only,
+  // never a count, and every reader of the event's link gets the same skin. A
+  // read that fails gives the standard skin rather than no report.
+  let layout = defaultLayout('report');
+  try {
+    const row = await env.DB.prepare('SELECT settings_json FROM events WHERE id = ?')
+      .bind(eventId)
+      .first<{ settings_json: string | null }>();
+    layout = resolveLayout(parseEventSettings(row?.settings_json ?? null), 'report');
+  } catch {
+    /* standard skin */
+  }
+
   ctx.waitUntil(logReportAccess(env, eventId, claim.role, 'granted'));
-  return jsonResponse({ ok: true, report }, 200, {
+  return jsonResponse({ ok: true, report, layout }, 200, {
     'Cache-Control': 'no-store',
     Vary: 'Authorization',
   });

@@ -452,6 +452,53 @@ describe('OSE-272 Session 5 — GET /api/v2/events/:id/shared-report', () => {
     expect(res.status).toBe(404);
   });
 
+  // OSE-2232: the event's skin travels with the report, outside `report`, so
+  // the depth filter never sees it, and a sponsor's link gets the same skin.
+  test('OSE-2232: carries the event layout, the standard skin when none is saved', async () => {
+    await seedEvent({ id: 'test-evt-read-skin', start_date: '2026-05-07T19:00:00Z' });
+    await seedScanAggregate('test-evt-read-skin', 30);
+    const read = async (role: 'bar_owner' | 'sponsor') => {
+      const token = await makeSignedLink('test-evt-read-skin', role);
+      const res = await SELF.fetch(
+        'https://test.local/api/v2/events/test-evt-read-skin/shared-report',
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      expect(res.status).toBe(200);
+      return (await res.json()) as {
+        report: Record<string, unknown>;
+        layout: Record<string, unknown>;
+      };
+    };
+    const before = await read('bar_owner');
+    expect(before.layout).toMatchObject({ skin: 'standard', columns: 1, wide: [] });
+    expect(before.report).not.toHaveProperty('layout');
+
+    const mapFirst = {
+      skin: 'map_first',
+      columns: 2,
+      order: ['map', 'stats', 'sponsors', 'classes', 'posters', 'trend', 'locked'],
+      wide: ['map', 'posters', 'trend', 'locked'],
+    };
+    await tenv()
+      .DB.prepare('UPDATE events SET settings_json = ? WHERE id = ?')
+      .bind(JSON.stringify({ layouts: { report: mapFirst } }), 'test-evt-read-skin')
+      .run();
+    expect((await read('bar_owner')).layout).toEqual(mapFirst);
+    expect((await read('sponsor')).layout).toEqual(mapFirst);
+
+    // A bad stored value never breaks the report: it reads as the standard skin.
+    await tenv()
+      .DB.prepare('UPDATE events SET settings_json = ? WHERE id = ?')
+      .bind(
+        JSON.stringify({ layouts: { report: { skin: 'standard', order: ['map'] } } }),
+        'test-evt-read-skin'
+      )
+      .run();
+    expect((await read('bar_owner')).layout).toMatchObject({ skin: 'standard', columns: 1 });
+  });
+
   test('returns 200 + SharedReport with valid token + materialized event', async () => {
     await seedEvent({
       id: 'test-evt-read-200',

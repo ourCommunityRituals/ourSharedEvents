@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2232 | refuse | a file that claims a skin it does not match is refused"
+  type: http
+  seq: 40
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{skinEventId}}/layouts"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"markdown\": \"---\\nsurface: report\\nskin: standard\\ncolumns: 2\\norder: map, stats, sponsors, classes, posters, trend, locked\\nwide:\\n---\\n\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2232 refuse: 400 INVALID_SKIN, in words', function () { expect(res.getStatus()).to.eql(400); expect(b.code).to.eql('INVALID_SKIN'); expect(b.error).to.match(/set skin to custom/); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

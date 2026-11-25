@@ -199,6 +199,16 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
   eventRoute('/api/v2/admin/events/:id', 'DELETE', ''),
   eventRoute('/api/v2/admin/events/:id/stats', 'GET', '/stats'),
   eventRoute('/api/v2/admin/events/:id/live', 'GET', '/live'),
+  // OSE-2226: the host's vote screen holds the vote code's QR; another brand
+  // must not open it. OSE-2232: the page layouts, read and saved from a .md file.
+  eventRoute('/api/v2/admin/events/:id/vote-screen', 'GET', '/vote-screen'),
+  eventRoute('/api/v2/admin/events/:id/layouts', 'GET', '/layouts'),
+  eventRoute('/api/v2/admin/events/:id/layouts', 'PUT', '/layouts', {
+    body: () => ({
+      markdown:
+        '---\nsurface: vote_screen\nskin: code_first\ncolumns: 1\norder: code, line\nwide:\n---\n',
+    }),
+  }),
   eventRoute('/api/v2/admin/events/:id/dashboard', 'GET', '/dashboard'),
   eventRoute('/api/v2/admin/events/:id/pre-event-activity', 'GET', '/pre-event-activity'),
   eventRoute('/api/v2/admin/events/:id/preview', 'GET', '/preview'),
