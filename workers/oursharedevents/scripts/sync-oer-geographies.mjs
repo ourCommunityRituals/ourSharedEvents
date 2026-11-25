@@ -3,7 +3,7 @@
  * Copy ourEventRings' map frame into OSE: towns, corridor segments and nodes.
  *
  * OER (ourCommunityRituals/ourEventRings) is the source. OSE keeps a typed copy
- * at src/lib/ncr/oer-geographies.generated.ts, synced by hand (the OSE ADR-012
+ * at src/lib/ncr/corridor-geographies.generated.ts, synced by hand (the OSE ADR-012
  * pattern), so the Worker never reads OER, the dataset or the network. Nothing
  * here is about people or scans: it is road research and town lines.
  *
@@ -19,7 +19,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const TARGET = resolve(HERE, '../src/lib/ncr/oer-geographies.generated.ts');
+const TARGET = resolve(HERE, '../src/lib/ncr/corridor-geographies.generated.ts');
 /** Douglas-Peucker tolerance for town outlines, in degrees (about 40 m). */
 const TOWN_TOLERANCE = 0.0004;
 /** Towns closer than this (degrees, about 60 m) count as touching for tints. */
@@ -203,7 +203,7 @@ function build(oer, segmentsDir, ref) {
 // Road research and town lines only: no scans, counts or people.
 import type { OerGeography } from './layer-stack';
 
-export const OER_SOURCE = { repo: 'ourCommunityRituals/ourEventRings', ref: ${JSON.stringify(ref)} } as const;
+export const OER_SOURCE = { repo: 'ourCommunityRituals/ourEventRings', ref: ${JSON.stringify(ref)} } as const; // pragma: allowlist secret (a git commit id, not a secret)
 
 export const OER_GEOGRAPHIES: readonly OerGeography[] = ${body};
 `;
@@ -222,7 +222,7 @@ const out = build(resolve(oer), resolve(segmentsDir), ref);
 if (process.argv.includes('--check')) {
   const cur = existsSync(TARGET) ? readFileSync(TARGET, 'utf8') : '';
   if (cur !== out) {
-    console.error('oer-geographies.generated.ts differs from OER; run without --check and commit');
+    console.error('corridor-geographies.generated.ts differs from OER; run without --check and commit');
     process.exit(1);
   }
   console.log('in sync');

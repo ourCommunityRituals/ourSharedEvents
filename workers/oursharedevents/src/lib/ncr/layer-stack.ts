@@ -180,7 +180,7 @@ export const LAYER_STACK: readonly LayerSpec[] = Object.freeze([
 
 export const ALL_LAYERS: readonly LayerId[] = LAYER_STACK.map((l) => l.id);
 
-/** OER's frame for one place (generated copy: oer-geographies.generated.ts). */
+/** OER's frame for one place (generated copy: corridor-geographies.generated.ts). */
 export interface OerGeography {
   id: string;
   name: string;

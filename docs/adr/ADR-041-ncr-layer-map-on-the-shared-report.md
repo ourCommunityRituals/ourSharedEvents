@@ -53,14 +53,14 @@ and rings carry no number. `tests/shared-report-neighbour-floor.spec.ts` registe
 gets it (Mid and Premium). The renderer and the page never gate.
 
 **D4. OER's frame is a synced copy.** Towns, corridor segments and nodes come from OER through
-`scripts/sync-oer-geographies.mjs` into `lib/ncr/oer-geographies.generated.ts`, pinned to an OER
+`scripts/sync-oer-geographies.mjs` into `lib/ncr/corridor-geographies.generated.ts`, pinned to an OER
 commit (`OER_SOURCE.ref`), the ADR-012 pattern. The Worker reads no OER file, dataset or network.
 This copy is road research and town lines, not anything OER derived from scans, so ADR-026 rule A
-does not reach it. While OER PR 6 is open the pin is its head; a later sync moves it to OER `main`.
+does not reach it. Data only flows in: invariant 17's emission gate (`tests/oer-boundary.spec.ts`, no import of OER code or call to OER) still holds. While OER PR 6 is open the pin is its head; a later sync moves it to OER `main`.
 
 **D5. No ring on a report until the owner decides.** Rings are OER-derived: OER finds them by
 reading many events' scans. ADR-026 rule A keeps anything OER derives away from readers of a
-SharedReport until rule C (noise) exists. `lib/ncr/oer-rings.ts` is empty, and a test fails if it
+SharedReport until rule C (noise) exists. `lib/ncr/report-rings.ts` is empty, and a test fails if it
 is not, because OER's only rings today are practice data. The owner weighs three options, written up
 with examples for him (Claude Docs, "Ring shapes on the SharedReport: the three options"):
 

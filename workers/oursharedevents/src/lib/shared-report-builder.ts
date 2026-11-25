@@ -36,8 +36,8 @@ import {
 } from './sponsor-class-breakdown';
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 import { renderLayerMap, type AreaCount, type LayerSummary } from './ncr/layer-stack';
-import { OER_GEOGRAPHIES } from './ncr/oer-geographies.generated';
-import { OER_RINGS } from './ncr/oer-rings';
+import { OER_GEOGRAPHIES } from './ncr/corridor-geographies.generated';
+import { OER_RINGS } from './ncr/report-rings';
 import { gridRingUnsafe } from 'h3-js';
 import { POSTER_HOUR_CAP } from './poster-hour-cap';
 import { tagsConsistent } from './h3-tagging';

@@ -31,8 +31,8 @@ import {
   renderLayerMap,
   type LayerId,
 } from '../src/lib/ncr/layer-stack';
-import { OER_GEOGRAPHIES, OER_SOURCE } from '../src/lib/ncr/oer-geographies.generated';
-import { OER_RINGS } from '../src/lib/ncr/oer-rings';
+import { OER_GEOGRAPHIES, OER_SOURCE } from '../src/lib/ncr/corridor-geographies.generated';
+import { OER_RINGS } from '../src/lib/ncr/report-rings';
 
 // Two poster spots on 95th St in Evergreen Park and one in Beverly.
 const A = latLngToCell(41.7215, -87.7017, 9);
