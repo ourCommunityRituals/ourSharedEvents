@@ -145,7 +145,7 @@ OSE and OW are **parallel platforms with opposite identity invariants**, sharing
 | Identity | Anonymous ID — no PII (Invariant 1) | Named identity — voluntary attribution |
 | Database | Separate | Separate |
 | Funding | Sponsor model | Free, community-based |
-| Posture | Operational platform for events | Cultural statement, music first, all arts capable |
+| Posture | Operational platform for events | Cultural statement, the named plant-your-flag side; all arts capable, music an optional part |
 
 "OSE + OW converge under the OCR moniker" means **shared architecture and brand**, not merged data. Cross-platform features (e.g., OW QR codes routing to anonymous OR named SharedReports) are per-record decisions, not database merges.
 
@@ -200,18 +200,21 @@ The design system has one home: `@ocr/ui` in the hub monorepo (`ourCommunityRitu
 | **OSP** | OurSharedPulse | Pre-platform consulting. Human-delivered. | No anonymous ID |
 | **OSG** | OurSharedGames | Founding activation format. Anchor game nights. | Inherits OSE (anonymous) · hybrid-capable |
 | **OSR** | OurSharedRecords | Music, story, archive. Oral history. | Archive · OSE-class anonymous · hybrid-capable |
-| **OW** | OurWKRP | Community music curation. Named identity. Free. | Named identity · hybrid-capable |
+| **OW** | OurWKRP | The named, plant-your-flag side. Solo or team profiles. Music behind a switch. Free. | Named identity · hybrid-capable |
 | **OA** | OurAirwaves | Front of the flywheel. Deployment + white label. | Deployment · provisions named class |
 
 ### Per-product detail (only where it adds beyond the table)
 
 **OSE — OurSharedEvents.** Cloudflare Worker + D1. Six display surfaces (Landing, Public Events, Admin Dashboard, Display, Poster, Shared Report). Domain: oursharedevents.com.
 
-**OW — OurWKRP.** Same architecture as OSE, **separate database**, named identity. Free, community-based — a cultural statement, not a revenue product. Music is the starting medium; architecturally extends to all arts.
+**OW — OurWKRP.** Same architecture as OSE, **separate database**, named identity. Free, community-based — a cultural statement, not a revenue product. OW is the named, plant-your-flag side: a person (athlete, artist, volunteer, business owner) stands for what they do, and can still attend OSE events anonymously.
 
-- **Fists of 5** — five-person teams competing through music. Spotify-plan workaround today; AppleMusicKit unlimited (Apple Developer license) is the target.
-- **DJ layer** — DJs lead Fists of 5 teams. Every DJ has a personal profile, deployed through OA (front of the flywheel = single-person white-label).
-- **QR referrals → SharedReports** — DJs display QR codes during sets. Codes can be anonymous (route to OSE-style reporting) or named (stay in OW). Per-code choice. Friday cadence, compounding.
+- **Solo or team, by choice** (owner, 2026-11-24). A single artist or business owner can stand alone, or people can group together for a fun competition with community voting.
+- **Scan to vote** (OSE ADR-040 decision 12, owner 2026-11-24). People at the event scan the room's code and vote on whatever the organizer sets up, with an off-limits list. On site only; support from elsewhere is a donation. Votes live on OSE as counters on objects, never rows about voters. Brain type: `scan_to_vote` (GR-008).
+- **Music is one part, behind a switch** (owner, 2026-11-24; OSE-2222). Music ships off by one setting, `MUSIC_ENABLED` (OW-224), so the rest of OW launches without it. No files are removed. When the switch is on:
+  - **Fists of 5** — five-person teams competing through music (`playlist_battle`, MC-003). Spotify-plan workaround today; AppleMusicKit unlimited (Apple Developer license) is the target.
+  - **DJ layer** — DJs lead Fists of 5 teams. Every DJ has a personal profile, deployed through OA (front of the flywheel = single-person white-label).
+  - **QR referrals → SharedReports** — DJs display QR codes during sets. Codes can be anonymous (route to OSE-style reporting) or named (stay in OW). Per-code choice. Friday cadence, compounding.
 - **Anchors and venue targets** — Primary: RIPH. White-label venue targets: Reckless Records, Smart Bar, Hyde Park Records.
 
 ---
@@ -265,12 +268,13 @@ Full doctrine: `LOCKED_NCR_Methodology_v1.3`.
 - **OER ingestion threshold** — archive depth that triggers activation; per-source schemas, cadence, retention.
 - **Sponsor schema vertical field** — per code review, the sponsor schema does not yet record which entity-type/vertical the sponsor belongs to. Decide whether to add (v1.2.0 contract bump + D1 migration) or rely on the entity-agnostic Triangle wrapper alone.
 - **Apple Developer license (OW)** — application status, timeline, fallback if denied.
-- **OW cross-arts expansion** — music is the starting medium. Roadmap and triggers for visual arts, performance, literature.
+- **OW cross-arts expansion** — scan to vote opens OW to any entry the organizer sets up (2026-11-24); music is one part behind a switch. Still open: roadmap and triggers for visual arts, performance, literature.
 - **QR code routing rules (OW → SharedReports)** — when anonymous vs. named. Per-set, per-DJ, per-corridor?
 - **OSE drift** — OSE CLAUDE.md says "5 MVP Surfaces" but should be 6 to match this document and OSE's own SURFACES.md. OSE's product VISION lives at `docs/features/VISION.md` rather than `docs/OCR_VISION.md` per the four-files invariant.
 
 ---
 
 *Last updated: 2026-04-14 (v2 — code-matched rewrite. Architecture mirrors `ourSharedEvents/tests/e2e/0-architecture/`. Earlier inventions removed.)*
+*Edited 2026-11-24: OW is the named, plant-your-flag side; solo or team profiles; scan to vote (OSE ADR-040 decision 12); music behind a switch (OCR-229). Awaiting human review.*
 *Owner: Matt*
 *Status: DRAFT — awaiting review. Source-of-truth version remains `OCR_VISION.md`.*
