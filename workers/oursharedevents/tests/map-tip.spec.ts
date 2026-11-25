@@ -7,7 +7,9 @@
  * its `<title>` (scripts off: the browser's own tooltip, as before) and in
  * `data-tip`; the script once per map; a style with tokens only. And what the
  * script does, run in jsdom on the map's own markup:
- *   - the `<title>`s become `aria-label`s (same name read, no browser tooltip);
+ *   - the `<title>`s stay, as the shapes' names (an aria-label would break
+ *     WCAG 2.5.3), and are emptied only while a mouse is over their shape, so
+ *     the browser's own tooltip does not show beside this one;
  *   - a mouse puts the tooltip 16 px below and right of the pointer, flipped
  *     at the screen's right and bottom edges, and hides it off the shape;
  *   - a press and hold on a phone shows it 64 px above the finger, and the
@@ -26,7 +28,7 @@
  * @born-red the map's tooltip | method: faults put in one at a time in
  *   lib/map-tip-script.ts, this file run, the source restored; each turned it
  *   red: GAP set to 0 (the tooltip back on the pointer); the right-edge flip
- *   removed; the `<title>` left in place; the click after a hold not
+ *   removed; the `<title>` not emptied on hover; the `<title>` not put back; the click after a hold not
  *   prevented; the hold's timer not cancelled on a move; the tap on a plain
  *   hexagon not shown; data-tip left off the dots in attendee-map.ts |
  *   date: 2026-11-25
@@ -177,15 +179,29 @@ describe('the map tooltip | what the server sends', () => {
 });
 
 describe('the map tooltip | in a browser (jsdom)', () => {
-  it('the <title>s become the links’ names, and the tooltip starts hidden from sight and from screen readers', () => {
+  it('the <title>s stay (the shapes keep their names), and the tooltip starts hidden from sight and from screen readers', () => {
     const { doc, tip } = open(linked());
-    expect(doc.querySelectorAll('[data-tip] title')).toHaveLength(0);
-    const link = doc.querySelector('[data-testid="amap-area-link"]')!;
-    const area = link.closest('[data-tip]')!;
-    expect(link.getAttribute('aria-label')).toBe(area.getAttribute('data-tip'));
+    const titles = doc.querySelectorAll('[data-tip] title');
+    expect(titles.length).toBeGreaterThan(0);
+    for (const t of titles) {
+      expect(t.textContent).toBe(t.closest('[data-tip]')!.getAttribute('data-tip'));
+    }
+    // An aria-label would break WCAG 2.5.3 (the name must hold the number shown).
+    expect(doc.querySelector('[data-testid="amap-area-link"][aria-label]')).toBe(null);
     expect(tip.hidden).toBe(true);
     expect(tip.getAttribute('aria-hidden')).toBe('true');
     expect(doc.querySelector('figure.amap')!.classList.contains('amap-tips')).toBe(true);
+  });
+
+  it('while a mouse is over a shape its <title> is empty (no second, browser tooltip), and it comes back', () => {
+    const { doc, ptr } = open(linked());
+    const area = doc.querySelector('[data-testid="amap-area"]')!;
+    const words = area.getAttribute('data-tip');
+    ptr('pointermove', area.querySelector('polygon')!, 300, 200);
+    for (const t of area.querySelectorAll('title')) expect(t.textContent).toBe('');
+    ptr('pointermove', doc.body, 600, 600);
+    for (const t of area.querySelectorAll('title')) expect(t.textContent).toBe(words);
+    expect(area.querySelector('title[data-t]')).toBe(null);
   });
 
   it('a mouse: 16 px below and right of the pointer, following it, never on it', () => {

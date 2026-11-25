@@ -12,10 +12,13 @@
  * preview, with the address, not the area's name and count.
  *
  * WHAT IT DOES. The server still sends the `<title>` (with scripts off, the
- * browser's tooltip is what it was) and, beside it, the same words in
- * `data-tip`. When this runs, each `<title>` becomes its parent's `aria-label`,
- * so a screen reader reads the same name and the browser's tooltip no longer
- * shows; then one tooltip of its own:
+ * browser's tooltip is what it was; and it is the shape's name for a screen
+ * reader) and, beside it, the same words in `data-tip`. The `<title>` stays:
+ * made an `aria-label` it would break WCAG 2.5.3 (a link's name must hold the
+ * number it shows; tests/e2e/2-pages/wcag-map.component.spec.ts). Only while a
+ * mouse is over a shape is its `<title>` emptied, so the browser's own tooltip
+ * does not show beside this one, and it is put back when the mouse leaves.
+ * Then one tooltip of its own:
  *   - mouse or pen: 16 px below and right of the pointer, following it, flipped
  *     to the other side where it would leave the screen;
  *   - keyboard focus on an area or a place: centred above it, or below where
@@ -45,15 +48,27 @@ const SCRIPT = String.raw`(function () {
   tip.setAttribute('aria-hidden', 'true');
   tip.hidden = true;
   document.body.appendChild(tip);
-  figs.forEach(function (fig) {
-    fig.classList.add('amap-tips');
-    [].forEach.call(fig.querySelectorAll('[data-tip] title'), function (t) {
-      var p = t.parentNode;
-      if (!p.getAttribute('aria-label')) p.setAttribute('aria-label', t.textContent);
-      p.removeChild(t);
+  figs.forEach(function (fig) { fig.classList.add('amap-tips'); });
+  var cur = null, timer = 0, press = null, held = false, muted = null;
+  // The browser's own tooltip, from the <title>, would show beside this one:
+  // the <title> is emptied while the mouse is over its shape, then put back.
+  function mute(el) {
+    if (muted === el) return;
+    unmute();
+    muted = el;
+    [].forEach.call(el.querySelectorAll('title'), function (t) {
+      t.setAttribute('data-t', t.textContent);
+      t.textContent = '';
     });
-  });
-  var cur = null, timer = 0, press = null, held = false;
+  }
+  function unmute() {
+    if (!muted) return;
+    [].forEach.call(muted.querySelectorAll('title[data-t]'), function (t) {
+      t.textContent = t.getAttribute('data-t');
+      t.removeAttribute('data-t');
+    });
+    muted = null;
+  }
   function at(e) {
     var t = e.target;
     return t && t.closest ? t.closest('figure.amap [data-tip]') : null;
@@ -94,6 +109,7 @@ const SCRIPT = String.raw`(function () {
     clearTimeout(timer);
     tip.hidden = true;
     cur = null;
+    unmute();
   }
   function touchShow(el, x, y) {
     if (!open(el)) return;
@@ -111,7 +127,7 @@ const SCRIPT = String.raw`(function () {
       return;
     }
     var el = at(e);
-    if (el && open(el)) beside(e.clientX, e.clientY);
+    if (el && open(el)) { mute(el); beside(e.clientX, e.clientY); }
     else if (cur) hide();
   });
   document.addEventListener('pointerout', function (e) {
