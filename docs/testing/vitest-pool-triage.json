@@ -3089,6 +3089,13 @@
       "testCount": 32
     },
     {
+      "file": "workers/oursharedevents/tests/report-layer-map.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 13
+    },
+    {
       "file": "workers/oursharedevents/tests/report-plan.spec.ts",
       "bucket": "node",
       "needsReview": false,

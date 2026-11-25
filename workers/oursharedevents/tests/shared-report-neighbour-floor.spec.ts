@@ -798,6 +798,13 @@ const REGISTRY: Record<string, How> = {
   'poster_attribution[].scan_count': SUM, // poster-hours, each hour floored
   'scan_trend.instances[].scans': SUM, // each event's own poster sum
   'corridor_map.cell_count': NOT_PEOPLE, // cells drawn; a cell under the floor is not drawn
+  // OSE ADR-041: res 7/6/5 areas add up poster spots that each passed the floor.
+  'corridor_map.areas[].scans': SUM,
+  'corridor_map.areas[].res': { how: 'key', min: 5, max: 7 },
+  'corridor_map.layers[].order': { how: 'key', min: 10, max: 90 }, // the stack's place, not a count
+  'corridor_map.layers[].shown': NOT_PEOPLE, // marks drawn on the map
+  'corridor_map.areas.length': NOT_PEOPLE,
+  'corridor_map.layers.length': NOT_PEOPLE,
   // Row counts. Rows are dropped, never shown withheld, so these count what is shown.
   'sponsor_displays.length': NOT_PEOPLE,
   'campaign_summary.length': NOT_PEOPLE,

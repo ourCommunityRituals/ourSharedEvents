@@ -35,7 +35,9 @@ import {
   type ClassPlacement,
 } from './sponsor-class-breakdown';
 import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
-import { renderCorridorMap } from './corridor-map';
+import { renderLayerMap, type AreaCount, type LayerSummary } from './ncr/layer-stack';
+import { OER_GEOGRAPHIES } from './ncr/oer-geographies.generated';
+import { OER_RINGS } from './ncr/oer-rings';
 import { gridRingUnsafe } from 'h3-js';
 import { POSTER_HOUR_CAP } from './poster-hour-cap';
 import { tagsConsistent } from './h3-tagging';
@@ -414,6 +416,14 @@ export interface SharedReport {
      * K-floor, so no map (and no cell id) is published (OSE-1459).
      */
     source: 'live' | 'fallback' | 'suppressed';
+    /**
+     * OSE ADR-041: the NCR layer stack this map draws, bottom to top, with each
+     * layer's meaning and how many marks it drew, so an agent reads the same
+     * cues a person sees. Empty when the map is suppressed.
+     */
+    layers: LayerSummary[];
+    /** Res 7, 6 and 5 areas: sums of the published poster-spot counts inside. */
+    areas: AreaCount[];
   } | null;
 
   _meta: {
@@ -783,12 +793,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   //    Fallback (launch-day honesty): event's own h3_res7 corridor cell +
   //    gridRingUnsafe ring neighbors, so "one venue lighting one cell on
   //    day one IS the product" (ring gives the saturation promise context).
-  let corridorMap: {
-    svg: string;
-    suppressed: string[];
-    cell_count: number;
-    source: 'live' | 'fallback' | 'suppressed';
-  } | null = null;
+  let corridorMap: SharedReport['corridor_map'] = null;
 
   // Q10: integrity check — if stored H3 tags are inconsistent (res9 parent ≠ stored res7),
   // the map cells are geographically incoherent. Emit a suppression warning and skip the
@@ -807,14 +812,32 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     });
   }
 
+  // OSE ADR-041: the map is the NCR layer stack (base, hexagons, corridors,
+  // rings) drawn from counts this report already publishes. Only cells at or
+  // above the floor reach the renderer, rounded as published (OSE-2151).
   function buildCorridorMap(
     cells: Array<{ cell: string; count: number }>,
-    source: 'live' | 'fallback'
+    source: 'live' | 'fallback',
+    around: string | null,
+    suppressedCells: string[]
   ): void {
-    const { svg, suppressed: suppressedCells } = renderCorridorMap(cells, {
-      minCount: CORRIDOR_MAP_MIN_COUNT,
+    const spots = cells
+      .filter((c) => c.count >= CORRIDOR_MAP_MIN_COUNT)
+      .map((c) => ({ cell: c.cell, count: roundForPublish(c.count) }));
+    const { svg, layers, areas } = renderLayerMap({
+      spots,
+      around,
+      geographies: OER_GEOGRAPHIES,
+      rings: OER_RINGS,
     });
-    corridorMap = { svg, suppressed: suppressedCells, cell_count: cells.length, source };
+    corridorMap = {
+      svg,
+      suppressed: suppressedCells,
+      cell_count: cells.length,
+      source,
+      layers,
+      areas,
+    };
     // Q: strip H3 cell IDs from suppression detail — cell IDs are trivially reverse-geocoded,
     // which would undermine the privacy floor's intent. Count is enough context.
     // One count-free line: how many areas were hidden is itself a count of small
@@ -872,13 +895,22 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   if (shownCells.length > 0) {
     buildCorridorMap(
       shownCells.map((r) => ({ cell: r.cell, count: r.count })),
-      'live'
+      'live',
+      null,
+      []
     );
   } else if (cellData.length > 0) {
     // Poster cells exist but none clears the floor: publish no map at all
     // (the page shows its "hidden to keep things anonymous" note), rather than
     // falling back to the venue preview as if there were no scans.
-    corridorMap = { svg: '', suppressed: [], cell_count: 0, source: 'suppressed' };
+    corridorMap = {
+      svg: '',
+      suppressed: [],
+      cell_count: 0,
+      source: 'suppressed',
+      layers: [],
+      areas: [],
+    };
   } else if (event.h3_res7 && !h3TagsCorrupt) {
     // Launch-day fallback: res7 neighborhood hex lit with scans count +
     // ring-1 neighbors at count=0 (suppressed by privacy floor — correct).
@@ -887,7 +919,9 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     const count = scans ?? 0;
     buildCorridorMap(
       [{ cell: event.h3_res7, count }, ...ring.map((c: string) => ({ cell: c, count: 0 }))],
-      'fallback'
+      'fallback',
+      event.h3_res7,
+      count >= CORRIDOR_MAP_MIN_COUNT ? ring : [event.h3_res7, ...ring]
     );
   } else if (!h3TagsCorrupt) {
     suppression.push({

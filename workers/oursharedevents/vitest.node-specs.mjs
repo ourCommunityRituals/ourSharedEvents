@@ -338,6 +338,7 @@ export const NODE_SPECS = [
   'tests/sponsor-public-card-ui.spec.ts',
   // SharedReport corridor map: mountCorridorSvg run in jsdom (CodeQL, PR #691).
   'tests/corridor-map-mount.spec.ts',
+  'tests/report-layer-map.spec.ts',
   // OSE-1410 follow-up — the five template findings the CodeQL gate reported:
   // poster-art + poster-deployment card scripts run in jsdom, the rest by script text.
   'tests/codeql-template-findings.spec.ts',
