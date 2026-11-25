@@ -24,6 +24,7 @@ import {
   REGION_WORDS,
   SKINS,
   SURFACE_REGIONS,
+  SURFACE_REQUIRED,
   skinLayout,
   type LayoutSurface,
   type SurfaceLayout,
@@ -63,7 +64,7 @@ function describe(settingsJson: string | null) {
     LayoutSurface,
     { name: string; words: string; layout: SurfaceLayout }[]
   >;
-  const regions = {} as Record<LayoutSurface, { name: string; words: string }[]>;
+  const regions = {} as Record<LayoutSurface, { name: string; words: string; required: boolean }[]>;
   for (const surface of LAYOUT_SURFACES) {
     layouts[surface] = resolveLayout(settings, surface);
     markdown[surface] = skinMarkdown(surface, layouts[surface]);
@@ -75,6 +76,7 @@ function describe(settingsJson: string | null) {
     regions[surface] = SURFACE_REGIONS[surface].map((name) => ({
       name,
       words: REGION_WORDS[surface][name]!,
+      required: SURFACE_REQUIRED[surface].includes(name),
     }));
   }
   markdown.all = skinFile(layouts);

@@ -8869,14 +8869,14 @@
          page, shared with ourWKRP): "Download the skin file" writes it,
          "Load a skin file" sends one to
          PUT /api/v2/admin/events/:id/layouts (the solution engineer's path).
-         A skin arranges only: it never recolors and never hides a part. -->
+         A skin arranges only: it never recolors and never hides a required part. -->
     <div class="card card--sectioned layouts-card" id="layouts-card" data-testid="layouts-card">
       <div class="card-header">
         <h2 class="card-title">Page layouts</h2>
       </div>
       <div class="card-body">
         <h3 class="pd-card-title" id="layout-report-title">Report</h3>
-        <p class="pd-target" data-testid="layout-report-hint">Everyone who opens this event's report link sees it this way. Every part still shows.</p>
+        <p class="pd-target" data-testid="layout-report-hint">Everyone who opens this event's report link sees it this way. Scans and sponsor displays always show; you can turn the other parts off.</p>
         <div class="create-form">
           <div class="full-width">
             <label for="layout-report-skin">Start from</label>
@@ -8956,17 +8956,38 @@
           if (!list || !st.report) return;
           list.textContent = '';
           var two = st.report.columns === 2;
-          st.report.order.forEach(function (name, i) {
+          // Shown parts in their order, then the optional parts turned off.
+          var all = ((st.info && st.info.regions && st.info.regions.report) || []);
+          var off = all.filter(function (r) { return st.report.order.indexOf(r.name) === -1; })
+            .map(function (r) { return r.name; });
+          st.report.order.concat(off).forEach(function (name, i) {
+            var shown = i < st.report.order.length;
+            var meta = all.find(function (r) { return r.name === name; }) || {};
             var li = document.createElement('li');
             li.className = 'pc-row';
             li.setAttribute('data-testid', 'layout-report-part');
             li.setAttribute('data-region', name);
+            li.setAttribute('data-shown', shown ? '1' : '0');
+            // OSE-2232: a required part always shows; an optional one can be turned off.
+            var showLabel = document.createElement('label');
+            showLabel.className = 'create-publish-label';
+            var show = document.createElement('input');
+            show.type = 'checkbox';
+            show.checked = shown;
+            show.disabled = !!meta.required;
+            show.setAttribute('data-act', 'show');
+            show.setAttribute('data-testid', 'layout-report-show');
+            var showText = document.createElement('span');
+            showText.textContent = meta.required ? 'Always shown' : 'Show';
+            showLabel.appendChild(show);
+            showLabel.appendChild(showText);
+            li.appendChild(showLabel);
             var label = document.createElement('label');
             label.className = 'create-publish-label';
             var box = document.createElement('input');
             box.type = 'checkbox';
             box.checked = st.report.wide.indexOf(name) !== -1;
-            box.disabled = !two;
+            box.disabled = !two || !shown;
             box.setAttribute('data-act', 'wide');
             box.setAttribute('data-testid', 'layout-report-wide');
             var span = document.createElement('span');
@@ -8975,7 +8996,7 @@
             label.appendChild(span);
             var moves = document.createElement('div');
             moves.className = 'form-actions';
-            [['up', 'Move up', i === 0], ['down', 'Move down', i === st.report.order.length - 1]].forEach(function (m) {
+            [['up', 'Move up', !shown || i === 0], ['down', 'Move down', !shown || i === st.report.order.length - 1]].forEach(function (m) {
               var b = document.createElement('button');
               b.type = 'button';
               b.className = 'btn btn-secondary copy-btn';
@@ -9050,6 +9071,16 @@
             else if (other && !other.disabled) other.focus();
           });
           list.addEventListener('change', function (ev) {
+            var sh = ev.target.closest('input[data-act="show"]');
+            if (sh && st.report) {
+              var region = sh.closest('li').getAttribute('data-region');
+              st.report.order = st.report.order.filter(function (n) { return n !== region; });
+              st.report.wide = st.report.wide.filter(function (n) { return n !== region; });
+              if (sh.checked) st.report.order.push(region);
+              moved();
+              render();
+              return;
+            }
             var box = ev.target.closest('input[data-act="wide"]');
             if (!box || !st.report) return;
             var name = box.closest('li').getAttribute('data-region');

@@ -242,7 +242,9 @@ describe('OSE-2232 | the layouts route and the settings write', () => {
       body: { markdown: '---\nsurface: report\nskin: standard\ncolumns: 1\norder: map\n---' },
     });
     expect(bad.status).toBe(400);
-    expect(((await bad.json()) as { error: string }).error).toMatch(/order must list each of/);
+    expect(((await bad.json()) as { error: string }).error).toMatch(
+      /order must list every required part. Missing: stats, sponsors/
+    );
     const extra = await call('PUT', layouts(), { body: { markdown: md, layout: {} } });
     expect(extra.status).toBe(400);
     const still = await tenv.DB.prepare(`SELECT settings_json FROM events WHERE id = ?`)

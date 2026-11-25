@@ -9,10 +9,19 @@
  * THE SHAPE. A surface (the SharedReport, the host's vote screen) is cut into
  * named regions. A layout says, for one event and one surface:
  *
- *   - order    every region, each once, in the order they appear;
+ *   - order    the regions shown, each once, in the order they appear. Every
+ *              required region is in it (SURFACE_REQUIRED); an optional one
+ *              left out is not shown;
  *   - wide     the regions that run the full width when there are two columns;
  *   - columns  1 (one stack) or 2 (a grid on a wide screen; one stack on a phone);
  *   - skin     the ready-made layout it started from, or "custom" once moved.
+ *
+ * ONE ENGINE, A CATALOGUE PER SURFACE (owner, 2026-11-25): "I do not want the
+ * configurations or layouts to carry over to SharedReports. I want the
+ * abstraction to carry over ... with the predetermined elements between
+ * required and optional." Each surface has its own regions, its own required
+ * set and its own skins; a layout belongs to one surface and is never copied
+ * to another. What is shared is this module: the checks, the mover, the grid.
  *
  * A skin is a named, ready-made layout. The organizer picks one and may move
  * parts from there. The layout lives in the event's settings
@@ -21,9 +30,10 @@
  * WHAT A SKIN NEVER DOES.
  *   - Recolor. Colors come from the design tokens only (AGENTS.md invariant 8).
  *     A skin arranges; the brand and the theme still paint.
- *   - Hide. Every region is in `order`, so a part the reader may see is never
- *     dropped by a skin. What a reader may see is still decided where it was
- *     (the report's depth filter, lib/report-depth.ts).
+ *   - Hide a required part. Every required region is in `order`; only an
+ *     optional one may be left out. Leaving a part out only takes a part off the page: what a
+ *     reader may see at all is still decided where it was (the report's depth
+ *     filter, lib/report-depth.ts), and hiding never shows anything more.
  *   - Carry a count, a name or a link. Only region names from the lists below.
  *
  * READING ORDER. The page moves its regions in the DOM, not with CSS `order`,
@@ -46,6 +56,23 @@ export const SURFACE_REGIONS: { readonly [S in LayoutSurface]: readonly string[]
   report: ['stats', 'map', 'sponsors', 'classes', 'posters', 'trend', 'locked'],
   vote_screen: ['line', 'code'],
 };
+
+/**
+ * The regions each surface always shows. Every other region is optional: the
+ * client may hide it. Additions to this list are decisions (proposed
+ * 2026-11-25, the owner confirms): the report always shows its scans and the
+ * sponsor displays (a sponsor that accepted is shown, AGENTS.md invariant 6);
+ * the vote screen is only its line and its code.
+ */
+export const SURFACE_REQUIRED: { readonly [S in LayoutSurface]: readonly string[] } = {
+  report: ['stats', 'sponsors'],
+  vote_screen: ['line', 'code'],
+};
+
+/** The regions a client may hide on a surface. */
+export function optionalRegions(surface: LayoutSurface): string[] {
+  return SURFACE_REGIONS[surface].filter((r) => !SURFACE_REQUIRED[surface].includes(r));
+}
 
 /** The words an organizer reads for each region. */
 export const REGION_WORDS: { readonly [S in LayoutSurface]: Readonly<Record<string, string>> } = {
@@ -187,24 +214,31 @@ export function checkLayout(
   const order = o.order;
   if (
     !Array.isArray(order) ||
-    order.length !== regions.length ||
     new Set(order).size !== order.length ||
     !order.every((r) => typeof r === 'string' && regions.includes(r))
   ) {
     return {
       ok: false,
-      error: `${at}.order must list each of ${regions.join(', ')} once`,
+      error: `${at}.order may list only ${regions.join(', ')}, each at most once`,
+    };
+  }
+  // Shared wording with ourWKRP#139: one engine, one refusal.
+  const missing = SURFACE_REQUIRED[surface].filter((r) => !(order as string[]).includes(r));
+  if (missing.length) {
+    return {
+      ok: false,
+      error: `${at}.order must list every required part. Missing: ${missing.join(', ')}`,
     };
   }
   const wide = o.wide;
   if (
     !Array.isArray(wide) ||
     new Set(wide).size !== wide.length ||
-    !wide.every((r) => typeof r === 'string' && regions.includes(r))
+    !wide.every((r) => typeof r === 'string' && (order as string[]).includes(r))
   ) {
     return {
       ok: false,
-      error: `${at}.wide must list some of ${regions.join(', ')}, each at most once`,
+      error: `${at}.wide may list only parts in order, each at most once`,
     };
   }
   const value: SurfaceLayout = {
@@ -258,8 +292,9 @@ export function readLayout(surface: LayoutSurface, v: unknown): SurfaceLayout | 
 /**
  * The one mover (browser side). `OSE_applyLayout(container, layout, regions)`
  * moves the container's direct children marked `data-region` into the
- * layout's order, marks the wide ones, and sets the column count. A child the
- * layout does not name keeps its place after the named ones; a name that is
+ * layout's order, marks the wide ones, and sets the column count. A region the
+ * layout does not name is marked hidden (`data-layout-hidden`) and keeps its
+ * place after the named ones; a name that is
  * not an allowed region is ignored. A missing or bad layout changes nothing.
  * It is a string so each page gets the same code (no copy in a template).
  */
@@ -274,6 +309,8 @@ window.OSE_applyLayout = function (container, layout, regions) {
     var n = el.getAttribute('data-region');
     if (n && allowed.indexOf(n) !== -1 && !byName[n]) byName[n] = el;
   });
+  // A region the layout leaves out is not shown (an optional part the client
+  // turned off). It keeps its place after the shown ones.
   var rest = Array.prototype.filter.call(container.children, function (el) {
     var n = el.getAttribute('data-region');
     return n && byName[n] === el && order.indexOf(n) === -1;
@@ -285,6 +322,8 @@ window.OSE_applyLayout = function (container, layout, regions) {
   Object.keys(byName).forEach(function (n) {
     if (wide.indexOf(n) !== -1) byName[n].setAttribute('data-wide', '1');
     else byName[n].removeAttribute('data-wide');
+    if (order.indexOf(n) === -1) byName[n].setAttribute('data-layout-hidden', '1');
+    else byName[n].removeAttribute('data-layout-hidden');
   });
   container.setAttribute('data-layout-columns', layout.columns === 2 ? '2' : '1');
   container.setAttribute('data-layout-skin', /^[a-z_]{1,32}$/.test(String(layout.skin)) ? String(layout.skin) : 'custom');
@@ -298,6 +337,7 @@ window.OSE_applyLayout = function (container, layout, regions) {
  * runs the full width. No color here: spacing and grid only.
  */
 export const LAYOUT_CSS = `
+[data-layout-hidden="1"]{display:none!important}
 [data-layout-columns="2"]{display:grid;grid-template-columns:minmax(0,1fr);gap:1rem;align-items:start}
 @media (min-width:720px){
   [data-layout-columns="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}

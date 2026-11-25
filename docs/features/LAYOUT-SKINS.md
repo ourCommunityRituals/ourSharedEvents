@@ -6,6 +6,19 @@ Stories: OSE-2232 (SharedReport skins), OSE-2226 (the host's vote screen). Owner
 
 And on how it is handed over: one base brand; customization for ourSharedEvents goes through a solution engineer, through Bruno, exchanging .md files; ourWKRP users get a small front end to do the same for themselves (ourWKRP#139 mirrors this format).
 
+## One engine, a catalogue per page
+
+Owner, 2026-11-25: "I do not want the configurations or layouts to carry over to SharedReports. I want the abstraction to carry over which allows the ability for client to now configure SharedReports in their own way with the predetermined elements between required and optional."
+
+So what is shared is the engine: the shape of a layout, the checks, the one DOM mover, the grid and the .md file. What is never shared is a configuration. Each page (the report, the vote screen, later the printed and the digital poster) has its own parts, its own required and optional marks, its own skins, and its own saved layout. A poster layout is never copied to a report, or the other way.
+
+| Page          | Required parts      | Optional parts (the client may turn off)       |
+| ------------- | ------------------- | ---------------------------------------------- |
+| `report`      | `stats`, `sponsors` | `map`, `classes`, `posters`, `trend`, `locked` |
+| `vote_screen` | `line`, `code`      | none                                           |
+
+The report's required set is proposed (scans are what the report is for; a sponsor that accepted is always shown, AGENTS.md invariant 6) and waits on the owner's OK.
+
 ## The idea in one paragraph
 
 A page is cut into named **parts** (regions). A **layout** says, for one event and one page, the order of every part, which parts run full width, and whether the page uses one column or two on a wide screen. A **skin** is a ready-made layout with a name. The organizer picks a skin and may move parts from there; once moved, the layout is "custom". The layout is stored in the event's settings, so every reader of that event's page gets the same arrangement.
@@ -13,7 +26,7 @@ A page is cut into named **parts** (regions). A **layout** says, for one event a
 ## Rules every skin keeps
 
 1. **It arranges, never recolors.** Colors, fonts and sizes come from the design tokens (`packages/tokens`) through `/ui.css`. A skin file that names a color, font or size is refused with words that say so.
-2. **It never hides a part.** A layout lists every part exactly once. What a reader may see is still decided where it always was (the report's depth filter, `lib/report-depth.ts`).
+2. **It never hides a required part.** Each page has its own catalogue of parts, each **required** or **optional** (owner, 2026-11-25). `order` lists the parts shown, each once; every required part must be in it, and an optional part left out is not shown. Leaving a part out only takes it off the page: what a reader may see at all is still decided where it always was (the report's depth filter, `lib/report-depth.ts`).
 3. **It carries no numbers.** No count, no person, no link. A skin file with a count or votes key is refused: counts under 5 are never shown, and a skin is not a way around that.
 4. **Reading order is what you see.** Parts are moved in the DOM, not with CSS `order`, so a screen reader and the Tab key follow the visible order.
 5. **A phone is one column.** Two columns start at 720px. A part marked wide spans both.
@@ -57,9 +70,9 @@ wide: map, trend
 Notes for whoever edits this file. The system keeps only the lines above.
 ```
 
-Keys: `surface`, `skin`, `columns` (1 or 2), `order` (every part once), `wide` (some parts, may be empty). Lists are comma separated; `[a, b]` also reads. At most 8 KB. The notes are never stored.
+Keys: `surface`, `skin`, `columns` (1 or 2), `order` (the parts shown, each once; every required part), `wide` (some parts, may be empty). Lists are comma separated; `[a, b]` also reads. At most 8 KB. The notes are never stored.
 
-One file may hold one block per page, for this product and for ourWKRP (owner, 2026-11-25: clients on either product, or both, can skin). A block starts at a `---` line whose next line is `surface:`. Each product saves the blocks for its own pages and names the rest in `skipped`; a page named twice is refused. `standard` and `side_by_side` are skin names on every page.
+One file may hold one block per page, for this product and for ourWKRP (owner, 2026-11-25: clients on either product, or both, can skin). A block starts at a `---` line whose next line is `surface:`. Each product saves the blocks for its own pages and names the rest in `skipped`; a page named twice is refused. Each page has a free `standard` skin; every other skin belongs to its page.
 
 The solution engineer's loop: download the event's skin file from the "Page layouts" card (or `GET .../layouts`, field `markdown`), edit it, and send it back with the Bruno request in folder 31 (`PUT .../layouts`, body `{"markdown": "..."}`), or with "Load a skin file" on the card. A refusal says which line to fix.
 

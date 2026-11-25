@@ -33,8 +33,9 @@
  * once. One file may carry a client's pages on both products (owner,
  * 2026-11-25: clients on ourSharedEvents, on ourWKRP, or on both can skin):
  * each product reads the blocks for its own surfaces and passes over the rest
- * (ourWKRP#139 reads the same file). "standard" and "side_by_side" are skin
- * names on every surface, so one name can be picked once for every page.
+ * (ourWKRP#139 reads the same file). Each block is its own page's layout:
+ * nothing in one block is copied to another (owner, 2026-11-25). Every page
+ * has a free "standard" skin; other skins belong to their page.
  *
  * A list is comma separated; `[a, b]` is read the same. Key names and region
  * names are the ones in lib/layout-skins.ts; the checks are that module's
@@ -50,6 +51,7 @@ import {
   REGION_WORDS,
   SKINS,
   SURFACE_REGIONS,
+  SURFACE_REQUIRED,
   checkLayout,
   isLayoutSurface,
   notALayoutKey,
@@ -191,9 +193,14 @@ function notes(surfaces: LayoutSurface[]): string[] {
   for (const surface of surfaces) {
     const words = REGION_WORDS[surface];
     out.push(
-      `- ${surface} parts, top to bottom, each once: ${SURFACE_REGIONS[surface]
-        .map((r) => `${r} (${words[r]})`)
-        .join(', ')}. Skins: ${Object.keys(SKINS[surface]).join(', ')}, or custom once moved.`
+      `- ${surface} parts, top to bottom, each at most once: ${SURFACE_REGIONS[surface]
+        .map(
+          (r) =>
+            `${r} (${words[r]}${SURFACE_REQUIRED[surface].includes(r) ? ', required' : ', optional'})`
+        )
+        .join(
+          ', '
+        )}. Leave an optional part out of order to hide it. Skins: ${Object.keys(SKINS[surface]).join(', ')}, or custom once changed.`
     );
   }
   out.push(

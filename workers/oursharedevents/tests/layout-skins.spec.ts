@@ -4,8 +4,9 @@
  * Rules held here, each named after the fault it was watched failing on:
  *   1. every ready-made skin passes the same check a save does, and the first
  *      skin of the report is today's order in one column [standard skin reordered];
- *   2. a layout must list every region once, so a skin can never hide a part
- *      [the "every region" check removed];
+ *   2. a layout lists every required part; an optional part may be left out,
+ *      which hides it (owner, 2026-11-25: required and optional elements per
+ *      surface) [the required check removed];
  *   3. a layout names regions only: an unknown key, region, skin or column
  *      count is refused [key allowlist removed];
  *   4. the settings reader drops a bad stored layout and the surface takes its
@@ -13,8 +14,8 @@
  *   5. a skin file (.md) reads to the same layout a save holds, one block per
  *      page; another product's block is passed over; a written file reads
  *      back to what it was written from [list parse broken];
- *   6. the browser mover moves regions in the DOM, keeps a part the layout does
- *      not name, ignores a name that is not a region, and marks the wide ones
+ *   6. the browser mover moves regions in the DOM, hides a part the layout
+ *      leaves out, ignores a name that is not a region, and marks the wide ones
  *      [mover takes a name that is not an allowed region];
  *   7. the report page's parts and the region list agree, and the layout CSS
  *      holds no color [a data-region removed from the report];
@@ -37,6 +38,7 @@ import {
   LAYOUT_SURFACES,
   SKINS,
   SURFACE_REGIONS,
+  SURFACE_REQUIRED,
   checkLayout,
   defaultLayout,
   layoutSkinsHead,
@@ -68,15 +70,37 @@ describe('OSE-2232 | layout skins', () => {
     expect(defaultLayout('vote_screen').order).toEqual(['line', 'code']);
   });
 
-  test('2. a layout lists every region once: nothing can be hidden', () => {
+  test('2. a required part always shows; an optional part may be left out', () => {
+    expect(SURFACE_REQUIRED.report).toEqual(['stats', 'sponsors']);
+    expect(SURFACE_REQUIRED.vote_screen).toEqual(['line', 'code']);
     const base = defaultLayout('report');
-    const missing = { ...base, order: base.order.slice(1) };
-    const twice = { ...base, order: [...base.order.slice(1), 'map'] };
-    for (const bad of [missing, twice]) {
-      const r = checkLayout('report', bad);
-      expect(r.ok).toBe(false);
-      if (!r.ok) expect(r.error).toMatch(/must list each of stats, map/);
+    const noStats = checkLayout('report', { ...base, skin: 'custom', order: base.order.slice(1) });
+    expect(noStats.ok).toBe(false);
+    if (!noStats.ok) {
+      expect(noStats.error).toBe(
+        'settings.layouts.report.order must list every required part. Missing: stats'
+      );
     }
+    const twice = checkLayout('report', { ...base, order: [...base.order, 'map'] });
+    expect(twice.ok).toBe(false);
+    if (!twice.ok) expect(twice.error).toMatch(/order may list only stats, map/);
+
+    const noMap = { ...base, skin: 'custom', order: base.order.filter((r) => r !== 'map') };
+    const ok = checkLayout('report', noMap);
+    expect(ok.ok && ok.value.order).toEqual([
+      'stats',
+      'sponsors',
+      'classes',
+      'posters',
+      'trend',
+      'locked',
+    ]);
+    // Hiding is a change: it cannot keep a ready-made skin's name.
+    const named = checkLayout('report', { ...noMap, skin: 'standard' });
+    expect(named.ok).toBe(false);
+    // A hidden part cannot run wide.
+    const wideHidden = checkLayout('report', { ...noMap, columns: 2, wide: ['map'] });
+    expect(wideHidden.ok).toBe(false);
   });
 
   test('3. a layout names regions only', () => {
@@ -93,9 +117,9 @@ describe('OSE-2232 | layout skins', () => {
       [{ ...base, extra: 1 }, /extra is not part of a layout/],
       [{ ...base, skin: 'loud' }, /skin must be one of standard/],
       [{ ...base, columns: 3 }, /columns must be 1 or 2/],
-      [{ ...base, wide: ['map', 'map'] }, /wide must list some of/],
-      [{ ...base, wide: ['<img>'] }, /wide must list some of/],
-      [{ ...base, order: [...base.order.slice(1), 'person'] }, /order must list/],
+      [{ ...base, wide: ['map', 'map'] }, /wide may list only parts in order/],
+      [{ ...base, wide: ['<img>'] }, /wide may list only parts in order/],
+      [{ ...base, order: [...base.order, 'person'] }, /order may list only/],
       ['standard', /must be an object/],
     ];
     for (const [v, words] of cases) {
@@ -211,7 +235,7 @@ describe('OSE-2232 | layout skins', () => {
       ],
       [
         '---\nsurface: vote_screen\nskin: code_first\ncolumns: 1\norder: code\n---',
-        /vote_screen: order must list each of line, code once/,
+        /vote_screen: order must list every required part. Missing: line/,
       ],
       [
         '---\nsurface: vote_screen\nskin: standard\ncolumns: 1\norder: code, line\n---',
@@ -278,6 +302,13 @@ describe('OSE-2232 | layout skins', () => {
     ).toBeUndefined();
     expect(
       box.children.find((c) => c.attrs['data-region'] === 'person')!.attrs['data-wide']
+    ).toBeUndefined();
+    // trend is a region the layout leaves out: hidden, not removed.
+    expect(
+      box.children.find((c) => c.attrs['data-region'] === 'trend')!.attrs['data-layout-hidden']
+    ).toBe('1');
+    expect(
+      box.children.find((c) => c.attrs['data-region'] === 'stats')!.attrs['data-layout-hidden']
     ).toBeUndefined();
     expect(box.attrs['data-layout-columns']).toBe('2');
     expect(apply(box, null, ['stats'])).toBe(false);
