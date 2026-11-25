@@ -811,7 +811,7 @@
   "readUsesOnNewSecret": {
     "direction": "up",
     "reason": "Reads must name OCR_HUB_READ (OSE-1695): may only rise; a deleted read site needs a retired entry.",
-    "total": 39,
+    "total": 40,
     "byFile": {
       ".github/workflows/advanced-security-scan.yml": {
         "count": 2,
@@ -886,9 +886,10 @@
         "reason": "PR-code and nightly mobile audits build and serve the Worker, which needs the pinned hub @ocr/ui (ADR-008)."
       },
       ".github/workflows/mutation-testing.yml": {
-        "count": 1,
+        "count": 2,
         "steps": [
-          "mutation-group :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
+          "mutation-group :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref",
+          "mutation-layers :: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref"
         ],
         "reason": "Stryker runs the Worker test suite, which imports the pinned hub @ocr/ui (ADR-008)."
       },

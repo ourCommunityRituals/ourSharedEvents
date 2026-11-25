@@ -307,3 +307,71 @@ jobs:
           path: reports/mutation-ci-scripts/**
           retention-days: 30
           if-no-files-found: warn
+
+  # ── The layers above unit ────────────────────────────────────────────────
+  # The jobs above judge Stryker's mutants with the node-project specs (the
+  # unit layer). Stryker cannot switch a mutant on inside workerd, where the
+  # Worker's integration specs run (vitest.workers.config.mts, real D1), or
+  # inside the `wrangler dev` the Playwright journeys drive. This job carries
+  # mutation up the pyramid with hand-written mutants (mutation/layer-mutants.json):
+  # each is one fault in a rule the product promises, written into the source,
+  # and the integration or end-to-end specs named for it must fail
+  # (scripts/ci/layer-mutation.mjs). Every mutant must be killed.
+  #
+  # Nightly and on manual dispatch only, and not part of the required
+  # `mutation` check: the journeys start a local Worker per mutant (about 15
+  # minutes in all). It is red on its own when a layer is hollow. Make it
+  # required once a few nightly runs have shown it holds steady.
+  mutation-layers:
+    name: mutation (integration and end to end)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            workers/oursharedevents/package-lock.json
+      - name: Stage pinned hub packages (@ocr/ui required, @ocr/flags) @ .ocr-hub-ref
+        # Required, as in the groups above: the Worker bundles @ocr/ui.
+        shell: bash
+        timeout-minutes: 3
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          OCR_HUB_READ: ${{ secrets.OCR_HUB_READ }}
+        run: bash scripts/ci-stage-ocr-workspace.sh
+      - name: Install root dependencies
+        run: npm ci
+      - name: Install worker dependencies
+        working-directory: workers/oursharedevents
+        run: npm ci
+      - name: Install Playwright Chromium
+        timeout-minutes: 10
+        run: bash scripts/ci/install-playwright-browsers.sh chromium
+      # A baseline run per layer on the unchanged source first (it must pass),
+      # then one run per mutant. Every mutant must be killed.
+      - name: Run the integration and end-to-end mutants
+        run: npm run test:mutation:layers
+      # The journeys' JSON reports can hold request headers; refuse to upload
+      # one that recorded a credential (OSE-1470), as the other report uploads do.
+      - name: Scan the reports for credentials
+        if: always()
+        run: bash scripts/ci/scan-artifacts-for-secrets.sh reports/mutation-layers/
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nightly-mutation-layers
+          path: reports/mutation-layers/**
+          retention-days: 14
+          if-no-files-found: error

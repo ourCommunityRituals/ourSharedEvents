@@ -244,7 +244,30 @@ test('displays under the floor of 5: the report still shows no number', async ({
   expect(counted, 'displays the server counted').toBeGreaterThan(0);
   expect(counted, 'still under the floor').toBeLessThan(FLOOR);
 
+  // The page floors as well (shared-report.html), so the words below would
+  // read the same if the Worker had sent the small number. The Worker's own
+  // answer is read here too: under the floor it sends no number at all. (The
+  // end-to-end mutant `e2e-count-floor-gate-off`, mutation/layer-mutants.json,
+  // survived this journey before this check.)
+  const reportRead = page.waitForResponse(
+    (r) =>
+      r.url().endsWith(`/api/v2/events/${encodeURIComponent(seeded.eventId)}/shared-report`) &&
+      r.request().method() === 'GET'
+  );
   await openReport(page);
+  const sent = (await (await reportRead).json()) as Record<string, unknown>;
+  const report = (sent.value ?? sent.report ?? sent) as {
+    sponsor_class_breakdown?: Record<string, { total_displays: number | null } | null>;
+  };
+  expect(report.sponsor_class_breakdown, 'the report carries the class breakdown').toBeTruthy();
+  for (const [cls, c] of Object.entries(report.sponsor_class_breakdown ?? {})) {
+    const n = c?.total_displays ?? null;
+    expect(n === null || n >= FLOOR, `${cls} displays the Worker sent: ${n}`).toBe(true);
+  }
+  expect(
+    report.sponsor_class_breakdown?.premium?.total_displays ?? null,
+    'premium, under the floor'
+  ).toBeNull();
   // The sponsor is placed and has accepted, so it is counted whatever was shown
   // (owner ruling 2026-11-16: the count is of each sponsor taking part).
   await expect(page.getByTestId('premium-sponsor-count')).toHaveText('1');
