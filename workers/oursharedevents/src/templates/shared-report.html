@@ -449,28 +449,6 @@
         font-weight: 700;
         white-space: nowrap;
       }
-      /* OSE ADR-041 — the NCR layer stack. Tokens only (invariant 8). Towns are
-         light tints, see-through; hexagons thin to heavy by size; corridors
-         dashed where they cross a town line; rings on top. */
-      .lm-town { stroke: var(--text-muted); stroke-opacity: 0.35; stroke-width: 0.9; fill-opacity: 0.22; }
-      .lm-t0 { fill: var(--ocr-blue-300); }
-      .lm-t1 { fill: var(--ocr-amber-400); }
-      .lm-t2 { fill: var(--ocr-teal-300); }
-      .lm-t3 { fill: var(--ocr-red-300); }
-      .lm-t4 { fill: var(--ocr-navy-500); }
-      .lm-t5 { fill: var(--ocr-green-400); }
-      .lm-h7 { fill: var(--accent); stroke: var(--accent); stroke-width: 0.8; }
-      .lm-h6 { fill: none; stroke: var(--text-muted); stroke-width: 1.4; stroke-opacity: 0.7; }
-      .lm-h5 { fill: none; stroke: var(--text); stroke-width: 2.4; stroke-opacity: 0.6; }
-      .lm-seg { fill: none; stroke: var(--text); stroke-linecap: round; stroke-linejoin: round; }
-      .lm-tier1 { stroke-width: 3.5; }
-      .lm-tier2 { stroke-width: 2; }
-      .lm-straddle { stroke: var(--warn); stroke-dasharray: 8 4; }
-      .lm-node { fill: var(--bg); stroke: var(--text); stroke-width: 2; }
-      .lm-spot { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
-      .lm-ring { fill: var(--success); fill-opacity: 0.25; stroke: var(--success); stroke-width: 2; }
-      .lm-steps { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
-      .lm-steps button { min-height: 44px; }
       /* tablet — chip sits beside the heading rather than stacking under it */
       @media (min-width: 700px) {
         .corridor-map-head {
@@ -1277,7 +1255,7 @@
                 const bodyHtml =
                   cm.source === 'suppressed'
                     ? '<p class="report-note" data-testid="corridor-map-suppressed-note">Map hidden to keep things anonymous — not enough scan density yet.</p>'
-                    : '<div class="lm-steps" role="group" aria-label="Build the map one layer at a time" data-lm-steps></div>' +
+                    : '<div class="filter-row" role="group" aria-label="Build the map one layer at a time" data-lm-steps></div>' +
                       '<p class="report-note" data-testid="layer-map-say" data-lm-say aria-live="polite"></p>' +
                       '<div class="corridor-map-svg" data-corridor-svg></div>' +
                       (cm.source === 'fallback'
@@ -1507,8 +1485,10 @@
 
       function mountCorridorSvg(slot, markup) {
         const NS = 'http://www.w3.org/2000/svg';
-        // OSE ADR-041 adds the layer stack's g / path / polyline / circle and
-        // its class and data-layer attributes. Still no href, style or on*.
+        // OSE ADR-041 adds the layer stack's g / path / polyline / circle, its
+        // class and data-layer attributes and the paint attributes that carry
+        // @ocr/ui tokens (ADR-008: no stylesheet of our own). Still no href,
+        // style or on*.
         const TAGS = { svg: 1, g: 1, polygon: 1, polyline: 1, path: 1, circle: 1, text: 1, title: 1 };
         const ATTRS = {
           viewBox: 1, role: 1, 'aria-label': 1, points: 1, fill: 1, 'fill-opacity': 1,
@@ -1517,6 +1497,7 @@
           'data-testid': 1, 'data-cell': 1, 'data-count': 1,
           class: 1, d: 1, cx: 1, cy: 1, r: 1,
           'data-layer': 1, 'data-step': 1, 'data-order': 1, 'data-res': 1,
+          'stroke-opacity': 1, 'stroke-linecap': 1, 'stroke-linejoin': 1,
         };
         const decode = (s) =>
           s.replace(/&(amp|lt|gt|quot|#39);/g, (m, e) =>

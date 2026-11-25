@@ -245,6 +245,41 @@ export interface LayerMapResult {
 
 const RES = [7, 6, 5] as const;
 
+/**
+ * How each mark is painted, as SVG presentation attributes holding @ocr/ui
+ * tokens (ADR-008: no stylesheet of the spoke's own, no raw colour). Towns
+ * take one of six light tints; neighbours never share one.
+ */
+const TINTS = [
+  'ocr-blue-300',
+  'ocr-amber-400',
+  'ocr-teal-300',
+  'ocr-red-300',
+  'ocr-navy-500',
+  'ocr-green-400',
+];
+const T = (name: string) => `var(--${name})`;
+const PAINT: Record<string, Record<string, string | number>> = {
+  town: {
+    stroke: T('text-muted'),
+    'stroke-opacity': 0.35,
+    'stroke-width': 0.9,
+    'fill-opacity': 0.22,
+  },
+  h7: { fill: T('accent'), stroke: T('accent'), 'stroke-width': 0.8 },
+  h6: { fill: 'none', stroke: T('text-muted'), 'stroke-width': 1.4, 'stroke-opacity': 0.7 },
+  h5: { fill: 'none', stroke: T('text'), 'stroke-width': 2.4, 'stroke-opacity': 0.6 },
+  seg: { fill: 'none', stroke: T('text'), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
+  straddle: { stroke: T('warn'), 'stroke-dasharray': '8 4' },
+  node: { fill: T('bg'), stroke: T('text'), 'stroke-width': 2 },
+  spot: { fill: T('accent'), stroke: T('bg'), 'stroke-width': 2 },
+  ring: { fill: T('success'), 'fill-opacity': 0.25, stroke: T('success'), 'stroke-width': 2 },
+};
+const paint = (...parts: Array<Record<string, string | number>>) =>
+  Object.entries(Object.assign({}, ...parts) as Record<string, string | number>)
+    .map(([k, v]) => ` ${k}="${v}"`)
+    .join('');
+
 function esc(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -311,7 +346,7 @@ export function renderLayerMap(input: LayerMapInput): LayerMapResult {
         if (!rings.some((r) => r.some(([x, y]) => inFrame(frame, x, y, frame.w)))) continue;
         const d = rings.map((r) => 'M' + r.map(xy).join('L') + 'Z').join('');
         marks['base.towns'].push(
-          `<path class="lm-town lm-t${t.tint % 6}" d="${d}"><title>${esc(t.name)}</title></path>`
+          `<path class="lm-town lm-t${t.tint % 6}" d="${d}"${paint(PAINT.town!, { fill: T(TINTS[t.tint % 6]!) })}><title>${esc(t.name)}</title></path>`
         );
       }
     }
@@ -323,7 +358,10 @@ export function renderLayerMap(input: LayerMapInput): LayerMapResult {
     if (!want.has(id)) continue;
     const word = res === 7 ? 'Small area' : res === 6 ? 'Medium area' : 'Large area';
     for (const a of areas.filter((x) => x.res === res)) {
-      const shade = res === 7 ? ` fill-opacity="${(0.2 + 0.55 * (a.scans / max)).toFixed(2)}"` : '';
+      const shade = paint(
+        PAINT[`h${res}`]!,
+        res === 7 ? { 'fill-opacity': (0.2 + 0.55 * (a.scans / max)).toFixed(2) } : {}
+      );
       marks[id].push(
         `<polygon class="lm-h${res}" points="${hexPoints(a.cell)}"${shade} data-cell="${a.cell}" data-count="${a.scans}"><title>${word} (res ${res}): ${a.scans} scans</title></polygon>`
       );
@@ -336,8 +374,13 @@ export function renderLayerMap(input: LayerMapInput): LayerMapResult {
         const p = s.line.map(([lng, lat]) => pt(lat!, lng!));
         if (!p.some(([x, y]) => inFrame(frame, x, y))) continue;
         const cls = `lm-seg lm-tier${s.tier === 1 ? 1 : 2}${s.straddles ? ' lm-straddle' : ''}`;
+        const look = paint(
+          PAINT.seg!,
+          { 'stroke-width': s.tier === 1 ? 3.5 : 2 },
+          s.straddles ? PAINT.straddle! : {}
+        );
         marks.corridors.push(
-          `<polyline class="${cls}" points="${p.map(xy).join(' ')}"><title>${esc(s.name)}: ${esc(s.from)} to ${esc(s.to)}${s.straddles ? ' (crosses a town line)' : ''}</title></polyline>`
+          `<polyline class="${cls}" points="${p.map(xy).join(' ')}"${look}><title>${esc(s.name)}: ${esc(s.from)} to ${esc(s.to)}${s.straddles ? ' (crosses a town line)' : ''}</title></polyline>`
         );
       }
     }
@@ -346,7 +389,7 @@ export function renderLayerMap(input: LayerMapInput): LayerMapResult {
         const [x, y] = pt(n.at[1]!, n.at[0]!);
         if (!inFrame(frame, x, y)) continue;
         marks.nodes.push(
-          `<circle class="lm-node" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5"><title>${esc(n.name)}</title></circle>`
+          `<circle class="lm-node" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5"${paint(PAINT.node!)}><title>${esc(n.name)}</title></circle>`
         );
       }
     }
@@ -358,7 +401,7 @@ export function renderLayerMap(input: LayerMapInput): LayerMapResult {
       if (!cells.some((c) => frameCells.includes(c))) continue;
       for (const c of cells) {
         marks.rings.push(
-          `<polygon class="lm-ring lm-ring-${r.size}" points="${hexPoints(c)}"><title>Ring (${r.size})</title></polygon>`
+          `<polygon class="lm-ring lm-ring-${r.size}" points="${hexPoints(c)}"${paint(PAINT.ring!)}><title>Ring (${r.size})</title></polygon>`
         );
       }
     }
@@ -369,7 +412,7 @@ export function renderLayerMap(input: LayerMapInput): LayerMapResult {
       const [la, ln] = cellToLatLng(s.cell);
       const [x, y] = pt(la, ln);
       marks['report.cells'].push(
-        `<circle class="lm-spot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" data-testid="hex-cell" data-cell="${s.cell}" data-count="${s.count}"><title>Poster spot: ${s.count} scans</title></circle>`
+        `<circle class="lm-spot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6"${paint(PAINT.spot!)} data-testid="hex-cell" data-cell="${s.cell}" data-count="${s.count}"><title>Poster spot: ${s.count} scans</title></circle>`
       );
     }
   }
