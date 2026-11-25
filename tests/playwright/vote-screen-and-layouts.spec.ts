@@ -97,9 +97,17 @@ test.describe('the host vote screen and page layouts', () => {
     browser,
   }) => {
     const phone = await browser.newContext({ viewport: { width: 375, height: 812 } });
+    // The pass rides in the redirect's fragment. The vote page reads it and
+    // then clears it from the address bar (lib/vote-page-render.ts), so the
+    // pass is checked on the redirect itself, not on the final URL.
+    const hop = await phone.request.get(code.url, { maxRedirects: 0 });
+    expect(hop.status()).toBe(302);
+    expect(hop.headers()['location'] ?? '').toMatch(
+      new RegExp(`/events/${eventId}/vote#t=[^&#]+$`)
+    );
     const page = await phone.newPage();
     await page.goto(code.url, { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(new RegExp(`/events/${eventId}/vote#t=`));
+    await expect(page).toHaveURL(new RegExp(`/events/${eventId}/vote$`));
     await phone.close();
   });
 
