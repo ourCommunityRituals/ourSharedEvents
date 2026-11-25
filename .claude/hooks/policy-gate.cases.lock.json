@@ -1,5 +1,5 @@
 {
-  "tests": 487,
+  "tests": 504,
   "mustBlock": {
     "analysis-failed": 2,
     "bypass-permissions": 8,
@@ -8,10 +8,10 @@
     "credential-search": 16,
     "credential-store": 6,
     "d1-remote-migrate": 1,
-    "d1-remote-write": 3,
+    "d1-remote-write": 4,
     "encoded-command": 2,
     "env-dump": 8,
-    "gh-admin-merge": 3,
+    "gh-admin-merge": 4,
     "gh-api-protected": 21,
     "gh-auth-token": 8,
     "gh-config": 3,
@@ -25,10 +25,10 @@
     "git-config-list": 1,
     "git-delete-main": 5,
     "git-env": 3,
-    "git-force-push": 19,
+    "git-force-push": 20,
     "git-push-dynamic": 4,
     "git-remote-redirect": 8,
-    "git-tag-push": 51,
+    "git-tag-push": 53,
     "mcp-cloudflare-write": 4,
     "mcp-code-execution": 4,
     "mcp-session-control": 4,
@@ -40,9 +40,9 @@
     "pipe-to-shell": 2,
     "prod-dispatch": 3,
     "self-config": 46,
-    "wrangler-deploy": 7,
+    "wrangler-deploy": 13,
     "wrangler-destroy": 5,
-    "wrangler-production": 2,
-    "wrangler-secret": 2
+    "wrangler-production": 3,
+    "wrangler-secret": 3
   }
 }

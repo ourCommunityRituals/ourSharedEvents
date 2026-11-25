@@ -312,6 +312,12 @@ jobs:
           # so a configured subscription is never silently bypassed for billing.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
+          # --setting-sources user (OSE-2231, security sweep 2026-11-25 H1): tag
+          # mode checks out the PR branch itself, after any restore step could
+          # run, so a .claude/settings.json hook added on that branch would run
+          # here next to the Claude credentials. Only user settings are loaded:
+          # no in-repo settings, hooks or CLAUDE.md. Context goes in the comment.
           claude_args: |
             --model claude-sonnet-5-5
             --max-turns 20
+            --setting-sources user
