@@ -588,9 +588,9 @@ describe('OSE-2125 | receipts and markers', () => {
 });
 
 describe('OSE-2125 | what an object may be', () => {
-  test('an object is a song or a stall (ADR-040 decisions 2 and 4)', () => {
+  test('an object is a song, a stall or an entry (ADR-040 decisions 2, 4 and 12)', () => {
     // No event-level object, and a team is a group_id, never an object.
-    expect([...VOTABLE_KINDS]).toEqual(['song', 'stall']);
+    expect([...VOTABLE_KINDS]).toEqual(['song', 'stall', 'entry']);
   });
 
   test('a label refuses email- and phone-shaped text', () => {

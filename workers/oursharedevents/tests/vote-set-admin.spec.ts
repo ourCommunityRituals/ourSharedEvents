@@ -360,6 +360,36 @@ describe('3. a label names a thing, never a person', () => {
     expect(stall.status).toBe(409);
     expect(stall.json.code).toBe('KIND_MISMATCH');
   });
+
+  // OSE-2224 (ADR-040 decision 12): anything the organizer names can be voted on.
+  test('a host can add an entry object', async () => {
+    const res = await call('POST', vp(A1, '/objects'), A, {
+      kind: 'entry',
+      label: 'The blue float',
+    });
+    expect(res.status).toBe(201);
+    expect(res.json.object).toMatchObject({ kind: 'entry', label: 'The blue float' });
+    expect(
+      await one(`SELECT kind, label FROM votable_objects WHERE event_id = ?`, A1)
+    ).toMatchObject({ kind: 'entry', label: 'The blue float' });
+  });
+  test('a set of entries refuses a song', async () => {
+    expect(
+      (await call('POST', vp(A1, '/objects'), A, { kind: 'entry', label: 'Chili, batch 2' })).status
+    ).toBe(201);
+    const song = await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: 'Song' });
+    expect(song.status).toBe(409);
+    expect(song.json.code).toBe('KIND_MISMATCH');
+  });
+  test('an entry label that names a contact is refused with the rule in words', async () => {
+    const res = await call('POST', vp(A1, '/objects'), A, {
+      kind: 'entry',
+      label: 'Painting by ann@example.com',
+    });
+    expect(res.status).toBe(400);
+    expect(res.json.code).toBe('INVALID_LABEL');
+    expect(JSON.stringify(res.json)).toContain('cannot hold an email address');
+  });
 });
 
 // ── create and the one set ───────────────────────────────────────────────────
@@ -662,6 +692,20 @@ describe('an object window is set by the server', () => {
       expect(
         (await call('POST', vp(A1, `/objects/${songId}/reopen`), A, { window_seconds: w })).status
       ).toBe(400);
+  });
+
+  test("an entry's window defaults to the whole event, as a stall's (OSE-2224)", async () => {
+    expect((await call('POST', vp(A1), A, {})).status).toBe(201);
+    const entry = await call('POST', vp(A1, '/objects'), A, { kind: 'entry', label: 'Float one' });
+    expect(entry.status).toBe(201);
+    expect((await call('POST', vp(A1, '/open'), A, {})).status).toBe(200);
+    expect(VOTE_WINDOW_DEFAULT_SECONDS.entry).toBe(VOTE_WINDOW_MAX_SECONDS);
+    const t0 = Date.now();
+    const res = await call('POST', vp(A1, `/objects/${entry.json.object.id}/open`), A, {});
+    expect(res.status).toBe(200);
+    const span = Date.parse(res.json.object.closes_at) - t0;
+    expect(span).toBeGreaterThan((VOTE_WINDOW_MAX_SECONDS - 10) * 1000);
+    expect(span).toBeLessThanOrEqual((VOTE_WINDOW_MAX_SECONDS + 5) * 1000);
   });
 
   test('a reopen of an object still open is refused; once its window ran out, it re-arms', async () => {

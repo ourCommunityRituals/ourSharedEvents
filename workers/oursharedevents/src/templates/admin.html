@@ -7102,7 +7102,7 @@
           <div id="votes-make" data-testid="votes-make" hidden>
             <label for="votes-played-by">Who wins</label>
             <select id="votes-played-by" data-testid="votes-played-by">
-              <option value="object">The song or stall with the most votes</option>
+              <option value="object">The song, stall or entry with the most votes</option>
               <option value="team">The team with the most votes</option>
             </select>
             <p class="sub-line" data-testid="votes-make-hint">This cannot change once voting is set up.</p>
@@ -7116,7 +7116,7 @@
             <button type="button" class="btn btn-secondary" id="votes-reopen" data-action="votes-set-move" data-move="reopen" data-testid="votes-reopen">Reopen voting</button>
           </div>
           <p class="sub-line" id="votes-publish-hint" data-testid="votes-publish-hint" hidden>Publish the event to open voting.</p>
-          <p class="sub-line" id="votes-empty" data-testid="votes-empty" hidden>Nothing to vote on yet. Add a song or a stall below.</p>
+          <p class="sub-line" id="votes-empty" data-testid="votes-empty" hidden>Nothing to vote on yet. Add a song, a stall or an entry below.</p>
           <ul class="pc-list" id="votes-list" data-testid="votes-list" aria-label="What people can vote on"></ul>
         </div>
 
@@ -7125,7 +7125,7 @@
           <div class="create-form">
             <div>
               <label for="vote-label">Name</label>
-              <input type="text" id="vote-label" data-testid="vote-label-input" maxlength="80" autocomplete="off" aria-describedby="vote-label-hint vote-label-error" />
+              <input type="text" id="vote-label" data-testid="vote-label-input" maxlength="80" autocomplete="off" aria-describedby="vote-label-warning vote-label-hint vote-label-error" />
               <p class="create-field-error" id="vote-label-error" data-testid="vote-label-error" hidden></p>
             </div>
             <div>
@@ -7133,10 +7133,12 @@
               <select id="vote-kind" data-testid="vote-kind-input">
                 <option value="song">Song</option>
                 <option value="stall">Stall</option>
+                <option value="entry">Entry (anything you name)</option>
               </select>
             </div>
           </div>
-          <p class="sub-line" id="vote-label-hint" data-testid="vote-label-hint">The name of the song or stall. For a song, the track title only, never a person’s name. Never an email address or phone number.</p>
+          <p class="sub-line" id="vote-label-warning" data-testid="vote-label-warning">Name the work, not the person who made it.</p>
+          <p class="sub-line" id="vote-label-hint" data-testid="vote-label-hint">The name of the song, stall or entry: a painting, a float, a dish, a display. For a song, the track title only. Never an email address or phone number.</p>
           <div class="flex-row">
             <button type="button" class="btn btn-primary" data-action="vote-add" data-testid="vote-add-btn">Add it</button>
           </div>
@@ -7192,15 +7194,20 @@
         } catch (x) { res = null; }
         return { ok: !!(res && res.ok && data && data.ok), status: res ? res.status : 0, data: data };
       };
+      /** OSE-2224: the three kinds (ADR-040 decision 12). Anything else reads as a song. */
+      window.votesKind = function (k) { return k === 'stall' || k === 'entry' ? k : 'song'; };
+      window.votesKindWord = function (k) { k = window.votesKind(k); return k === 'stall' ? 'Stall' : k === 'entry' ? 'Entry' : 'Song'; };
       /** OSE-2127: plain words for each refusal the votables routes give. */
       window.votesRefusal = function (code) {
         var SAID = {
-          INVALID_LABEL: 'Use the name of the song or stall: 80 characters at most, and no email address or phone number.',
-          KIND_MISMATCH: 'A vote holds one kind: all songs, or all stalls.',
+          INVALID_LABEL: 'Use the name of the song, stall or entry: 80 characters at most, and no email address or phone number.',
+          LABEL_EMAIL: 'A label names the thing voted on, so it cannot hold an email address.',
+          LABEL_PHONE: 'A label names the thing voted on, so it cannot hold a phone number.',
+          KIND_MISMATCH: 'A vote holds one kind: all songs, all stalls, or all entries.',
           VOTE_SET_FINAL: 'The results are final. Voting cannot open again.',
           EVENT_OVER: 'The event is over. Voting cannot open again.',
           EVENT_NOT_PUBLISHED: 'Publish the event to open voting.',
-          VOTE_SET_NOT_OPEN: 'Open voting first, then open a song or stall.',
+          VOTE_SET_NOT_OPEN: 'Open voting first, then open a song, stall or entry.',
           PEPPER_NOT_SET: 'Voting cannot open on this site yet: the anonymous key is not set up.',
           PEPPER_CHANGED: 'The anonymous key changed since voting first opened, so no vote could count. Voting stays closed.',
           WRONG_STATE: 'That changed in another window. The list is up to date now.',
@@ -7298,7 +7305,7 @@
         byId('votes-team-note').hidden = !team || set.final;
         byId('votes-empty').hidden = !set || objects.length > 0;
         var kind = byId('vote-kind');
-        if (objects.length) { kind.value = objects[0].kind === 'stall' ? 'stall' : 'song'; kind.disabled = true; }
+        if (objects.length) { kind.value = window.votesKind(objects[0].kind); kind.disabled = true; }
         else kind.disabled = false;
         var tpl = byId('vote-row-tpl');
         objects.forEach(function (o) {
@@ -7307,7 +7314,7 @@
           var at = function (x) { return row.querySelector('[data-testid="' + x + '"]'); };
           row.setAttribute('data-object-id', String(o.id));
           at('vote-row-label').textContent = String(o.label);
-          at('vote-row-kind').textContent = o.kind === 'stall' ? 'Stall' : 'Song';
+          at('vote-row-kind').textContent = window.votesKindWord(o.kind);
           at('vote-row-state').textContent = window.voteRowState(o);
           var expired = o.state === 'open' && !o.open_now;
           var keep = [];
@@ -7401,20 +7408,25 @@
         error.textContent = '';
         input.removeAttribute('aria-invalid');
         var label = input.value.trim().replace(/\s+/g, ' ');
-        var kind = document.getElementById('vote-kind').value === 'stall' ? 'stall' : 'song';
-        var bad = !label || label.length > 80 || /\S@\S/.test(label) || /(?:\d[\s().-]*){7,}/.test(label);
-        if (bad) {
-          error.textContent = window.votesRefusal('INVALID_LABEL');
+        var kind = window.votesKind(document.getElementById('vote-kind').value);
+        // A first check only, for quick words; the server's off-limits list decides.
+        var why = !label || label.length > 80 ? 'INVALID_LABEL'
+          : /\S@\S/.test(label) ? 'LABEL_EMAIL'
+          : /(?:\d[\s().-]*){7,}/.test(label) ? 'LABEL_PHONE' : '';
+        if (why) {
+          error.textContent = window.votesRefusal(why);
           error.hidden = false;
           input.setAttribute('aria-invalid', 'true');
           input.focus();
           return null;
         }
-        var r = await window.votesWrite(btn, '/objects', { kind: kind, label: label }, (kind === 'stall' ? 'Stall' : 'Song') + ' added.');
+        var r = await window.votesWrite(btn, '/objects', { kind: kind, label: label }, window.votesKindWord(kind) + ' added.');
         if (!r || r.stale) return r;
         if (r.ok) input.value = '';
         else if (r.data && r.data.code === 'INVALID_LABEL') {
-          error.textContent = window.votesRefusal('INVALID_LABEL');
+          // The off-limits list (lib/vote-off-limits.ts) says which rule refused it.
+          var ruleWords = typeof r.data.error === 'string' && /^A label names the thing voted on/.test(r.data.error) ? r.data.error : '';
+          error.textContent = ruleWords || window.votesRefusal('INVALID_LABEL');
           error.hidden = false;
           input.setAttribute('aria-invalid', 'true');
           input.focus();
