@@ -254,6 +254,8 @@ const config = defineConfig({
       ` --var ADMIN_KEY:${LOCAL_ADMIN_KEY}` +
       ` --var ALLOW_ADMIN_KEY_FALLBACK:true` +
       ` --var ADMIN_SCOPE_ALL:true` +
+      // Voting on, as staging has it (OSE-2227); the vote screen spec needs it.
+      ` --var VOTING_ENABLED:on` +
       ` --var SHARED_REPORT_SIGNING_SECRET:${LOCAL_SIGNING_SECRET}` +
       ` --var FORMS_ENCRYPTION_KEY:${LOCAL_FORMS_KEY}` +
       ` --var FORMS_HASH_PEPPER:${LOCAL_FORMS_PEPPER}` +

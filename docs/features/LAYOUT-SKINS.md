@@ -81,11 +81,11 @@ The poster can take the same shape with no new idea, only new parts:
 | `codes`    | The QR grid (`showQRSection` still turns it off)                   |
 | `blurb`    | The short description                                              |
 
-Before it is built, three questions for the owner, because a poster is printed and cannot be fixed afterwards:
+Three questions went to the owner before building, because a poster is printed and cannot be fixed afterwards. All three are answered (2026-11-25):
 
-1. **Can the sponsor panel move?** The fairness covenant says "same size, same spots for every sponsor". A poster skin could move the panel as a whole (every sponsor moves together), or the panel could be pinned. Recommended: the panel moves as a whole, and its inside never changes.
-2. **Is the QR pinned to a printable spot?** A code needs its quiet zone and a minimum printed size. Recommended: `codes` may move but never shrink below the print floor, and never sits on the art (type is never set on an image; a code is treated the same).
-3. **Paper sizes.** A layout per paper size (letter, tabloid, half-letter) or one layout for all? Recommended: one layout, with two columns only on tabloid and wider.
+1. **Can the sponsor panel move?** Decided (owner, 2026-11-25): it moves as a whole, and its inside never changes. The fairness covenant says "same size, same spots for every sponsor". A poster skin could move the panel as a whole (every sponsor moves together), or the panel could be pinned. Recommended: the panel moves as a whole, and its inside never changes.
+2. **Is the QR pinned to a printable spot?** Decided (owner, 2026-11-25): it may move, never shrinks below the print floor, and never sits on the art. A code needs its quiet zone and a minimum printed size. Recommended: `codes` may move but never shrink below the print floor, and never sits on the art (type is never set on an image; a code is treated the same).
+3. **Paper sizes.** Decided (owner, 2026-11-25): one layout for all sizes, two columns only on tabloid and wider. A layout per paper size (letter, tabloid, half-letter) or one layout for all? Recommended: one layout, with two columns only on tabloid and wider.
 
 The poster template (`src/templates/poster.html`) is already split into header, stage, art, body and footer blocks, so marking them with `data-region` and calling the same mover is a small change once these are answered.
 

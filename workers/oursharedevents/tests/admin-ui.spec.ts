@@ -582,7 +582,7 @@ describe('ADMIN-15 Structure: Copy buttons', () => {
     const htmlNoScripts = withoutScripts(html);
     const copyBtns =
       htmlNoScripts.match(/<button[^>]*class="btn btn-secondary copy-btn"[^>]*>/g) ?? [];
-    expect(copyBtns.length).toBe(9); // +1: pd-create-btn (OSE-636 poster deployment form); +3: poster codes Add / Save / Undo (OSE-1357 p2); +1: TV display Save
+    expect(copyBtns.length).toBe(12); // +3: Page layouts Save / Download / Load (OSE-2232); +1: pd-create-btn (OSE-636 poster deployment form); +3: poster codes Add / Save / Undo (OSE-1357 p2); +1: TV display Save
   });
 });
 
