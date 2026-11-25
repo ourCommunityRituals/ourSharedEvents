@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2225 | refuse | an entry naming an email address is refused, in the rule's words"
+  type: http
+  seq: 40
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{entryEventId}}/votables/objects"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"kind\": \"entry\", \"label\": \"Painting by ann@example.com\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2225 refuse: 400 INVALID_LABEL, the email rule in words, the label not echoed', function () { expect(res.getStatus()).to.eql(400); expect(b.code).to.eql('INVALID_LABEL'); expect(b.error).to.contain('cannot hold an email address'); expect(JSON.stringify(b)).to.not.contain('ann@example.com'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

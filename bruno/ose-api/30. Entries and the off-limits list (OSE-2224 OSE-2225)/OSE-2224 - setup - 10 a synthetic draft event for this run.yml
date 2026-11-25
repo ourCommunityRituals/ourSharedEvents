@@ -1,0 +1,34 @@
+info:
+  name: "OSE-2224 | setup | a synthetic draft event for this run"
+  type: http
+  seq: 10
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"attendance_mode\":\"in_person\",\"location\":\"OSE-2224 Hall\",\"title\":\"OSE-2224 art walk (staging, synthetic)\",\"status\":\"draft\",\"is_published\":false,\"data_class\":\"synthetic\",\"start_date\":\"2099-01-01\",\"start_time\":\"12:00\",\"timezone\":\"America/Chicago\",\"event_type_id\":\"etr-rec-bocce\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2224 setup: the draft event is created', function () { expect(res.getStatus()).to.eql(201); expect(b.id).to.be.a('string'); });
+        bru.setVar('entryEventId', b.id || 'missing-event');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -1,0 +1,16 @@
+info:
+  name: Entries and the off-limits list (OSE-2224 OSE-2225)
+  type: folder
+request: {}
+docs: |-
+  Scan to vote, steps 4 and 5 (OSE-2224 and OSE-2225, part of OSE-2222;
+  OSE ADR-040 decision 12). An organizer can put any named entry up for a
+  vote, and a set of entries holds only entries. The off-limits list
+  (lib/vote-off-limits.ts) refuses a label holding an email address with
+  400 INVALID_LABEL and the rule's plain words, without echoing the label.
+  Folder 23 (seq 44, 45) covers an entry on a night of songs and the phone rule.
+  Seq 10 makes one synthetic draft event; setting up voting is allowed on a
+  draft event (decision 11), so nothing here needs the pepper or the switch.
+  A vote set is never deleted, so seq 905 archives the event.
+  Mock-layer twin: workers/oursharedevents/tests/vote-set-admin.spec.ts
+  (OSE-2224 tests) and tests/vote-off-limits.spec.ts.
