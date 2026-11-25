@@ -9031,13 +9031,14 @@
           st.vote = info && info.layouts && info.layouts.vote_screen ? copy(info.layouts.vote_screen) : null;
           render();
         }
-        window.loadLayouts = async function (eventId) {
+        // keepMsg: a reload right after a save keeps the "Saved." line on screen.
+        window.loadLayouts = async function (eventId, keepMsg) {
           st.eventId = eventId;
           st.report = null;
           var list = $('layout-report-parts');
           if (list) list.textContent = '';
           setDisabled(true);
-          msg('');
+          if (!keepMsg) msg('');
           try {
             var res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/layouts');
             var data = await res.json();
@@ -9126,7 +9127,7 @@
               return;
             }
             msg('Saved. The report and the vote screen use this layout the next time they open.', 'success');
-            window.loadLayouts(eventId);
+            window.loadLayouts(eventId, true);
           } catch (e) {
             if (st.eventId === eventId) msg('Could not save. The layouts are unchanged.', 'error');
           } finally {
