@@ -1,0 +1,16 @@
+info:
+  name: Off-limits list (OSE-2225)
+  type: folder
+request: {}
+docs: |-
+  Scan to vote, step 5 (OSE-2225, part of OSE-2222; OSE ADR-040 decision 12).
+  The off-limits list (lib/vote-off-limits.ts) is the only place a label rule
+  lives. A label it refuses answers 400 INVALID_LABEL with `rule`, the rule's
+  id, and plain words that name it. A label on no rule is kept.
+
+  Seq 10 makes one synthetic draft event; setting up voting is allowed on a
+  draft event (decision 11), so nothing here needs the pepper or the switch.
+  A vote set is never deleted, so seq 905 archives the event.
+
+  Mock-layer twin: workers/oursharedevents/tests/vote-set-admin.spec.ts,
+  section 3, and tests/vote-tables.spec.ts, "OSE-2225 | the off-limits list".

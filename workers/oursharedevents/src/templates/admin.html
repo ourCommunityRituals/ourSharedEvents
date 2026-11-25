@@ -7126,7 +7126,9 @@
           <div class="create-form">
             <div>
               <label for="vote-label">Name</label>
-              <input type="text" id="vote-label" data-testid="vote-label-input" maxlength="80" autocomplete="off" aria-describedby="vote-label-hint vote-label-error" />
+              <input type="text" id="vote-label" data-testid="vote-label-input" maxlength="80" autocomplete="off" aria-describedby="vote-label-warning vote-label-hint vote-label-error" />
+              <!-- OSE-2225 (ADR-040 decision 12): the owner's warning, under the label box. -->
+              <p class="sub-line" id="vote-label-warning" data-testid="vote-label-warning">Name the work, not the person who made it.</p>
               <p class="create-field-error" id="vote-label-error" data-testid="vote-label-error" hidden></p>
             </div>
             <div>
@@ -7401,6 +7403,13 @@
       window.voteKindOf = function (k) {
         return Object.prototype.hasOwnProperty.call(window.VOTE_KIND_WORDS, k) ? k : 'song';
       };
+      // OSE-2225: a label the off-limits list refused says which rule, in plain words.
+      // The rule itself lives only on the server; this is just its name for people.
+      window.votesLabelRefusal = function (rule) {
+        var WORDS = { email: 'an email address', phone: 'a phone number' };
+        if (!Object.prototype.hasOwnProperty.call(WORDS, rule)) return window.votesRefusal('INVALID_LABEL');
+        return 'This name holds ' + WORDS[rule] + ', which is off limits. Name the work, not the person who made it.';
+      };
       window.voteAdd = async function (btn) {
         var input = document.getElementById('vote-label');
         var error = document.getElementById('vote-label-error');
@@ -7409,7 +7418,9 @@
         input.removeAttribute('aria-invalid');
         var label = input.value.trim().replace(/\s+/g, ' ');
         var kind = window.voteKindOf(document.getElementById('vote-kind').value);
-        var bad = !label || label.length > 80 || /\S@\S/.test(label) || /(?:\d[\s().-]*){7,}/.test(label);
+        // OSE-2225: only the length is checked here. What a label may never hold
+        // is the off-limits list on the server (lib/vote-off-limits.ts), never a copy.
+        var bad = !label || label.length > 80;
         if (bad) {
           error.textContent = window.votesRefusal('INVALID_LABEL');
           error.hidden = false;
@@ -7421,7 +7432,7 @@
         if (!r || r.stale) return r;
         if (r.ok) input.value = '';
         else if (r.data && r.data.code === 'INVALID_LABEL') {
-          error.textContent = window.votesRefusal('INVALID_LABEL');
+          error.textContent = window.votesLabelRefusal(r.data.rule);
           error.hidden = false;
           input.setAttribute('aria-invalid', 'true');
           input.focus();

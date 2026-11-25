@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2225 | keep | a name on no rule is kept, and names no rule"
+  type: http
+  seq: 40
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{offLimitsEventId}}/votables/objects"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"kind\": \"entry\", \"label\": \"Watercolor of the old mill\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2225 keep: 201, the entry is kept as named', function () { expect(res.getStatus()).to.eql(201); expect(b.object.label).to.eql('Watercolor of the old mill'); expect(b).to.not.have.property('rule'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
