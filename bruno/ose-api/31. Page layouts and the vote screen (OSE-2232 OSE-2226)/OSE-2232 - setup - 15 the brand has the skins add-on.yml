@@ -1,0 +1,33 @@
+info:
+  name: "OSE-2232 | setup | the brand has the skins add-on"
+  type: http
+  seq: 15
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/addons"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"brand_id\": \"root\", \"addon\": \"skins\", \"on\": true}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2232 setup: the platform turns the skins add-on on for the brand', function () { expect(res.getStatus()).to.eql(200); expect(b.addons.skins).to.eql(true); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

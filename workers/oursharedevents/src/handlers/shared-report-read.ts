@@ -22,6 +22,7 @@
 
 import { parseEventSettings, resolveLayout } from '../lib/event-settings';
 import { defaultLayout } from '../lib/layout-skins';
+import { entitledLayout, hasAddon } from '../lib/brand-addons';
 import {
   extractBearerToken,
   mintSignedLinkToken,
@@ -207,10 +208,15 @@ export async function handleGetSharedReport(
   // read that fails gives the standard skin rather than no report.
   let layout = defaultLayout('report');
   try {
-    const row = await env.DB.prepare('SELECT settings_json FROM events WHERE id = ?')
+    const row = await env.DB.prepare('SELECT settings_json, brand_id FROM events WHERE id = ?')
       .bind(eventId)
-      .first<{ settings_json: string | null }>();
-    layout = resolveLayout(parseEventSettings(row?.settings_json ?? null), 'report');
+      .first<{ settings_json: string | null; brand_id: string | null }>();
+    // A look other than standard shows only while the brand's skins add-on is on.
+    layout = entitledLayout(
+      'report',
+      resolveLayout(parseEventSettings(row?.settings_json ?? null), 'report'),
+      await hasAddon(env.DB, row?.brand_id, 'skins')
+    );
   } catch {
     /* standard skin */
   }

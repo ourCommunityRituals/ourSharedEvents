@@ -112,8 +112,8 @@ export const SKINS: { readonly [S in LayoutSurface]: Readonly<Record<string, Ski
     },
   },
   vote_screen: {
-    words_first: {
-      words: 'Words above the code',
+    standard: {
+      words: 'Standard: words above the code',
       columns: 1,
       order: ['line', 'code'],
       wide: [],
@@ -244,7 +244,7 @@ export function notALayoutKey(key: string): string {
     return 'is not taken: colors, fonts and sizes come from the design system, which keeps contrast readable';
   }
   if (/count|votes?|floor|total|number/i.test(key)) {
-    return 'is not taken: a skin carries no numbers, and counts under 5 are never shown';
+    return 'is not taken: a skin carries no numbers; counts keep the count floor, whatever the look';
   }
   return 'is not part of a layout';
 }

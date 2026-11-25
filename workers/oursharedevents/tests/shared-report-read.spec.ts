@@ -454,7 +454,7 @@ describe('OSE-272 Session 5 — GET /api/v2/events/:id/shared-report', () => {
 
   // OSE-2232: the event's skin travels with the report, outside `report`, so
   // the depth filter never sees it, and a sponsor's link gets the same skin.
-  test('OSE-2232: carries the event layout, the standard skin when none is saved', async () => {
+  test('OSE-2232: carries the event layout, the standard skin when none is saved or the add-on is off', async () => {
     await seedEvent({ id: 'test-evt-read-skin', start_date: '2026-05-07T19:00:00Z' });
     await seedScanAggregate('test-evt-read-skin', 30);
     const read = async (role: 'bar_owner' | 'sponsor') => {
@@ -485,6 +485,16 @@ describe('OSE-272 Session 5 — GET /api/v2/events/:id/shared-report', () => {
       .DB.prepare('UPDATE events SET settings_json = ? WHERE id = ?')
       .bind(JSON.stringify({ layouts: { report: mapFirst } }), 'test-evt-read-skin')
       .run();
+    // Without the brand's skins add-on the saved skin is kept, and the report
+    // shows the standard one (lib/brand-addons.ts).
+    await tenv().DB.prepare(`DELETE FROM brand_addons WHERE brand_id = 'test-brand'`).run();
+    expect((await read('bar_owner')).layout).toMatchObject({ skin: 'standard', columns: 1 });
+    await tenv()
+      .DB.prepare(
+        `INSERT OR IGNORE INTO brand_addons (brand_id, addon, granted_at, granted_by)
+         VALUES ('test-brand', 'skins', datetime('now'), 'platform')`
+      )
+      .run();
     expect((await read('bar_owner')).layout).toEqual(mapFirst);
     expect((await read('sponsor')).layout).toEqual(mapFirst);
 
@@ -497,6 +507,7 @@ describe('OSE-272 Session 5 — GET /api/v2/events/:id/shared-report', () => {
       )
       .run();
     expect((await read('bar_owner')).layout).toMatchObject({ skin: 'standard', columns: 1 });
+    await tenv().DB.prepare(`DELETE FROM brand_addons WHERE brand_id = 'test-brand'`).run();
   });
 
   test('returns 200 + SharedReport with valid token + materialized event', async () => {

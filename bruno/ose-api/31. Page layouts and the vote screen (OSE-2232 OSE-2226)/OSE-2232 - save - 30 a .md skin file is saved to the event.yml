@@ -23,7 +23,7 @@ runtime:
     - type: after-response
       code: |-
         const b = res.getBody() || {};
-        test('OSE-2232 save: 200, the report takes the file layout', function () { expect(res.getStatus()).to.eql(200); expect(b.surface).to.eql('report'); expect(b.layouts.report.skin).to.eql('custom'); expect(b.layouts.report.order[0]).to.eql('map'); expect(b.layouts.report.wide).to.eql(['map', 'trend']); });
+        test('OSE-2232 save: 200, the report takes the file layout', function () { expect(res.getStatus()).to.eql(200); expect(b.saved).to.include('report'); expect(b.layouts.report.skin).to.eql('custom'); expect(b.layouts.report.order[0]).to.eql('map'); expect(b.layouts.report.wide).to.eql(['map', 'trend']); });
 
 settings:
   encodeUrl: true

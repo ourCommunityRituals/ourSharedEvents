@@ -4,7 +4,8 @@
 //          the ready-made skins, the region words, and each layout as a skin
 //          file (.md) to hand over.
 //   PUT  → {"markdown": "<a skin file>"}: read the file (lib/layout-skin-md.ts)
-//          and save its layout for the surface it names. This is the solution
+//          and save the layout of every surface it names, in one write.
+//          Blocks for another product's pages are passed over (`skipped`). This is the solution
 //          engineer's path (a Bruno request carrying a .md file); the admin
 //          card saves through the event's own settings write instead. Both are
 //          held to lib/layout-skins.ts checkLayout.
@@ -12,7 +13,8 @@
 // Admin only: requireAdmin runs in the router, the admin write guard has
 // checked the write (same origin or a key actor, JSON body), and
 // guardAdminObjectScope has answered 404 for an event outside the caller's
-// brands. The write is audited against the event in the router, with no
+// brands. A look other than the standard skin needs the brand's skins add-on
+// (403 ADDON_REQUIRED without it). The write is audited against the event in the router, with no
 // detail. A layout carries region names only: no count, no person, no link.
 
 import { corsHeaders } from '../lib/cors';
@@ -26,7 +28,8 @@ import {
   type LayoutSurface,
   type SurfaceLayout,
 } from '../lib/layout-skins';
-import { parseSkinMarkdown, skinMarkdown } from '../lib/layout-skin-md';
+import { parseSkinFile, skinFile, skinMarkdown } from '../lib/layout-skin-md';
+import { ADDON_REQUIRED_WORDS, hasAddon, surfacesNeedingAddon } from '../lib/brand-addons';
 
 export interface LayoutsEnv {
   DB: D1Database;
@@ -43,17 +46,19 @@ function json(request: Request, body: unknown, status = 200): Response {
   });
 }
 
-async function readSettings(env: LayoutsEnv, eventId: string): Promise<string | null | undefined> {
-  const row = await env.DB.prepare('SELECT settings_json FROM events WHERE id = ?')
+async function readEvent(
+  env: LayoutsEnv,
+  eventId: string
+): Promise<{ settings_json: string | null; brand_id: string | null } | null> {
+  return env.DB.prepare('SELECT settings_json, brand_id FROM events WHERE id = ?')
     .bind(eventId)
-    .first<{ settings_json: string | null }>();
-  return row ? row.settings_json : undefined;
+    .first<{ settings_json: string | null; brand_id: string | null }>();
 }
 
 function describe(settingsJson: string | null) {
   const settings = parseEventSettings(settingsJson);
   const layouts = {} as Record<LayoutSurface, SurfaceLayout>;
-  const markdown = {} as Record<LayoutSurface, string>;
+  const markdown = {} as Record<LayoutSurface | 'all', string>;
   const skins = {} as Record<
     LayoutSurface,
     { name: string; words: string; layout: SurfaceLayout }[]
@@ -72,6 +77,7 @@ function describe(settingsJson: string | null) {
       words: REGION_WORDS[surface][name]!,
     }));
   }
+  markdown.all = skinFile(layouts);
   return { layouts, markdown, skins, regions };
 }
 
@@ -80,11 +86,14 @@ export async function handleAdminLayouts(
   env: LayoutsEnv,
   eventId: string
 ): Promise<Response> {
-  const settingsJson = await readSettings(env, eventId);
-  if (settingsJson === undefined) return json(request, { ok: false, code: 'NOT_FOUND' }, 404);
+  const event = await readEvent(env, eventId);
+  if (!event) return json(request, { ok: false, code: 'NOT_FOUND' }, 404);
+  // The standard look is free; any other needs the brand's skins add-on
+  // (lib/brand-addons.ts). Without it a page shows the standard skin.
+  const entitled = await hasAddon(env.DB, event.brand_id, 'skins');
 
   if (request.method === 'GET') {
-    return json(request, { ok: true, ...describe(settingsJson) });
+    return json(request, { ok: true, entitled, ...describe(event.settings_json) });
   }
 
   let body: unknown;
@@ -104,11 +113,14 @@ export async function handleAdminLayouts(
       400
     );
   }
-  const parsed = parseSkinMarkdown((body as { markdown?: unknown }).markdown);
+  const parsed = parseSkinFile((body as { markdown?: unknown }).markdown);
   if (!parsed.ok) {
     return json(request, { ok: false, code: 'INVALID_SKIN', error: parsed.error }, 400);
   }
-  const patch = JSON.stringify({ layouts: { [parsed.surface]: parsed.layout } });
+  if (!entitled && surfacesNeedingAddon(parsed.layouts).length) {
+    return json(request, { ok: false, code: 'ADDON_REQUIRED', error: ADDON_REQUIRED_WORDS }, 403);
+  }
+  const patch = JSON.stringify({ layouts: parsed.layouts });
   await env.DB.prepare(
     `UPDATE events
         SET settings_json = json_patch(COALESCE(settings_json, '{}'), ?),
@@ -117,6 +129,12 @@ export async function handleAdminLayouts(
   )
     .bind(patch, new Date().toISOString(), eventId)
     .run();
-  const after = await readSettings(env, eventId);
-  return json(request, { ok: true, surface: parsed.surface, ...describe(after ?? null) });
+  const after = await readEvent(env, eventId);
+  return json(request, {
+    ok: true,
+    entitled,
+    saved: Object.keys(parsed.layouts),
+    skipped: parsed.skipped,
+    ...describe(after?.settings_json ?? null),
+  });
 }

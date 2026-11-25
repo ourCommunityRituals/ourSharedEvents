@@ -31,6 +31,7 @@ import { escapeHtml } from '../lib/html-escape.js';
 import { readVoteCode } from '../lib/vote-code';
 import { votingEnabled, type VotingSwitchEnv } from '../lib/voting-switch';
 import { parseEventSettings, resolveLayout } from '../lib/event-settings';
+import { entitledLayout, hasAddon } from '../lib/brand-addons';
 import {
   LAYOUT_CLIENT_JS,
   LAYOUT_CSS,
@@ -136,11 +137,11 @@ export async function handleAdminVoteScreenPage(
   if (!eventId || eventId.length > 128 || !/^[a-zA-Z0-9_\-]+$/.test(eventId)) {
     return fail(404, "We couldn't find that event", 'This vote screen link is invalid.');
   }
-  let row: { id: string; settings_json: string | null } | null;
+  let row: { id: string; settings_json: string | null; brand_id: string | null } | null;
   try {
-    row = await env.DB.prepare('SELECT id, settings_json FROM events WHERE id = ?')
+    row = await env.DB.prepare('SELECT id, settings_json, brand_id FROM events WHERE id = ?')
       .bind(eventId)
-      .first<{ id: string; settings_json: string | null }>();
+      .first<{ id: string; settings_json: string | null; brand_id: string | null }>();
   } catch {
     return fail(503, "We're having trouble loading this event", 'Try again in a minute.');
   }
@@ -177,9 +178,14 @@ export async function handleAdminVoteScreenPage(
         true
       );
     } else {
+      // A look other than standard shows only while the brand's skins add-on is on.
       page = voteScreenHtml(
         code.qr,
-        resolveLayout(parseEventSettings(row.settings_json), 'vote_screen')
+        entitledLayout(
+          'vote_screen',
+          resolveLayout(parseEventSettings(row.settings_json), 'vote_screen'),
+          await hasAddon(env.DB, row.brand_id, 'skins')
+        )
       );
     }
   }

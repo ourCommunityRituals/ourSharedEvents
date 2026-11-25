@@ -128,6 +128,8 @@
  *   GET    /api/v2/admin/events/:id/vote-screen → the host's vote-code screen: the vote code's QR and "Scan to vote", HTML, no-store + noindex (auth, OSE-2226, OSE ADR-040)
  *   GET    /api/v2/admin/events/:id/layouts → each page's layout (report, vote screen), the skins, and each as a .md skin file (auth, OSE-2232)
  *   PUT    /api/v2/admin/events/:id/layouts → save a layout from a .md skin file {markdown} (auth, audited, OSE-2232)
+ *   GET    /api/v2/admin/addons?brand_id= → a brand's paid add-ons (platform only, OSE-2232)
+ *   PUT    /api/v2/admin/addons → turn a brand's add-on on or off {brand_id, addon, on} (platform only, audited, OSE-2232)
  *   GET    /api/v2/admin/events/:id/poster-bundle  → poster bundle for draft/ready/live, no-store (auth)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
@@ -352,6 +354,7 @@ import {
 } from './handlers/venues';
 import { handleAdminEventLivePage } from './handlers/live-monitor';
 import { handleAdminVoteScreenPage } from './handlers/vote-screen';
+import { handleAdminAddons } from './handlers/brand-addons';
 import { handleAdminLayouts } from './handlers/layouts';
 import {
   handlePublicPage,
@@ -1226,6 +1229,26 @@ export async function route(
     const outcome = _auditOutcome(response);
     _audit(reqId, 'CREATE_EVENT', outcome, 'event', await _createdId(response));
     return response;
+  }
+
+  // GET/PUT /api/v2/admin/addons — OSE-2232. A brand's paid add-ons (today
+  // 'skins': any look other than the standard skin). Platform only; every PUT
+  // is audited, refusals included.
+  if (pathname === '/api/v2/admin/addons' && (method === 'GET' || method === 'PUT')) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      if (method === 'PUT') _audit(reqId, 'ADDON_SET', 'denied', 'platform', pathname);
+      return deny;
+    }
+    const offPlatform = await _platformOnly(reqId);
+    if (offPlatform) {
+      if (method === 'PUT') _audit(reqId, 'ADDON_SET', 'denied', 'platform', pathname);
+      return offPlatform;
+    }
+    const res = await handleAdminAddons(request, env);
+    if (method === 'PUT') _audit(reqId, 'ADDON_SET', _auditOutcome(res), 'platform', pathname);
+    return res;
   }
 
   // POST /api/v2/admin/events/backfill-h3-cells — OSE-489 one-shot H3 backfill

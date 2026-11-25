@@ -10,8 +10,9 @@
  *      count is refused [key allowlist removed];
  *   4. the settings reader drops a bad stored layout and the surface takes its
  *      standard skin; the writer refuses it in words [lenient write];
- *   5. a skin file (.md) reads to the same layout a save holds, and a written
- *      file reads back to the layout it was written from [list parse broken];
+ *   5. a skin file (.md) reads to the same layout a save holds, one block per
+ *      page; another product's block is passed over; a written file reads
+ *      back to what it was written from [list parse broken];
  *   6. the browser mover moves regions in the DOM, keeps a part the layout does
  *      not name, ignores a name that is not a region, and marks the wide ones
  *      [mover takes a name that is not an allowed region];
@@ -41,7 +42,7 @@ import {
   layoutSkinsHead,
   skinLayout,
 } from '../src/lib/layout-skins';
-import { parseSkinMarkdown, skinMarkdown } from '../src/lib/layout-skin-md';
+import { parseSkinFile, skinFile, skinMarkdown } from '../src/lib/layout-skin-md';
 import {
   parseEventSettings,
   resolveLayout,
@@ -87,7 +88,7 @@ describe('OSE-2232 | layout skins', () => {
       ],
       [
         { ...base, votes: 3 },
-        /votes is not taken: a skin carries no numbers, and counts under 5 are never shown/,
+        /votes is not taken: a skin carries no numbers; counts keep the count floor/,
       ],
       [{ ...base, extra: 1 }, /extra is not part of a layout/],
       [{ ...base, skin: 'loud' }, /skin must be one of standard/],
@@ -140,32 +141,61 @@ describe('OSE-2232 | layout skins', () => {
       '---',
       '',
       'Notes: the trend leads, for the series sponsor.',
+      '---',
+      'A rule in the notes is still notes.',
+      '',
+      '---',
+      'surface: profile',
+      'skin: side_by_side',
+      '---',
+      '',
+      '---',
+      'surface: vote_screen',
+      'skin: side_by_side',
+      'columns: 2',
+      'order: code, line',
+      'wide:',
+      '---',
     ].join('\n');
-    const r = parseSkinMarkdown(md);
-    expect(r).toEqual({
+    expect(parseSkinFile(md)).toEqual({
       ok: true,
-      surface: 'report',
-      layout: {
-        skin: 'custom',
-        columns: 2,
-        order: ['trend', 'map', 'stats', 'sponsors', 'classes', 'posters', 'locked'],
-        wide: ['map', 'trend'],
+      layouts: {
+        report: {
+          skin: 'custom',
+          columns: 2,
+          order: ['trend', 'map', 'stats', 'sponsors', 'classes', 'posters', 'locked'],
+          wide: ['map', 'trend'],
+        },
+        vote_screen: skinLayout('vote_screen', 'side_by_side'),
       },
+      skipped: ['profile'],
     });
     for (const surface of LAYOUT_SURFACES) {
       for (const name of Object.keys(SKINS[surface])) {
         const layout = skinLayout(surface, name)!;
-        expect(parseSkinMarkdown(skinMarkdown(surface, layout))).toEqual({
+        expect(parseSkinFile(skinMarkdown(surface, layout))).toEqual({
           ok: true,
-          surface,
-          layout,
+          layouts: { [surface]: layout },
+          skipped: [],
         });
       }
     }
+    const both = {
+      report: skinLayout('report', 'map_first')!,
+      vote_screen: defaultLayout('vote_screen'),
+    };
+    expect(parseSkinFile(skinFile(both))).toEqual({ ok: true, layouts: both, skipped: [] });
+    // One name on every page: standard and side_by_side exist on each surface.
+    for (const surface of LAYOUT_SURFACES) {
+      expect(Object.keys(SKINS[surface])).toEqual(
+        expect.arrayContaining(['standard', 'side_by_side'])
+      );
+    }
+
     const refusals: [string, RegExp][] = [
-      ['surface: report', /starts with a line of three dashes/],
-      ['---\nsurface: report\n', /must end with a line of three dashes/],
-      ['---\nsurface: poster\nskin: x\ncolumns: 1\norder: a\n---', /surface must be one of/],
+      ['surface: report', /names no page this product arranges/],
+      ['---\nsurface: report\n', /block at line 1 must end with a line of three dashes/],
+      ['---\nsurface: poster\nskin: x\n---', /names no page this product arranges/],
       [
         '---\nsurface: report\ncolor: red\n---',
         /line 3: color is not taken: colors, fonts and sizes/,
@@ -174,20 +204,30 @@ describe('OSE-2232 | layout skins', () => {
         '---\nsurface: report\nfloor: 1\n---',
         /line 3: floor is not taken: a skin carries no numbers/,
       ],
+      ['---\nsurface: vote_screen\nskin: code_first\nskin: standard\n---', /skin is given twice/],
       [
-        '---\nsurface: vote_screen\nskin: code_first\nskin: words_first\n---',
-        /skin is given twice/,
+        '---\nsurface: vote_screen\nskin: code_first\ncolumns: 1\n---',
+        /vote_screen: order is missing/,
       ],
-      ['---\nsurface: vote_screen\nskin: code_first\ncolumns: 1\n---', /order is missing/],
       [
         '---\nsurface: vote_screen\nskin: code_first\ncolumns: 1\norder: code\n---',
-        /order must list each of line, code once/,
+        /vote_screen: order must list each of line, code once/,
       ],
-      ['---\n<script>\n---', /line 2 must read key: value/],
+      [
+        '---\nsurface: vote_screen\nskin: standard\ncolumns: 1\norder: code, line\n---',
+        /vote_screen: differs from the standard skin; set skin to custom/,
+      ],
+      [
+        skinMarkdown('vote_screen', defaultLayout('vote_screen')) +
+          '\n' +
+          skinMarkdown('vote_screen', defaultLayout('vote_screen')),
+        /surface vote_screen is given twice/,
+      ],
+      ['---\nsurface: report\n<script>\n---', /line 3 must read key: value/],
       ['x'.repeat(9000), /at most 8192 bytes/],
     ];
     for (const [text, words] of refusals) {
-      const p = parseSkinMarkdown(text);
+      const p = parseSkinFile(text);
       expect(p.ok, text.slice(0, 40)).toBe(false);
       if (!p.ok) expect(p.error).toMatch(words);
     }
@@ -261,7 +301,7 @@ describe('OSE-2232 | layout skins', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/differs from the map_first skin; set skin to custom/);
     expect(checkLayout('report', { ...moved, skin: 'custom' }).ok).toBe(true);
-    const swapped = skinLayout('vote_screen', 'words_first')!;
+    const swapped = skinLayout('vote_screen', 'standard')!;
     swapped.order.reverse();
     expect(checkLayout('vote_screen', swapped).ok).toBe(false);
     expect(parseEventSettings({ layouts: { vote_screen: swapped } }).layouts).toBeUndefined();

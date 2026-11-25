@@ -4220,7 +4220,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 7
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/vote-set-admin.spec.ts",

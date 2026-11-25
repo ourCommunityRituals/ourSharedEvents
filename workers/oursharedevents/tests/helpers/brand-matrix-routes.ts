@@ -206,7 +206,7 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
   eventRoute('/api/v2/admin/events/:id/layouts', 'PUT', '/layouts', {
     body: () => ({
       markdown:
-        '---\nsurface: vote_screen\nskin: code_first\ncolumns: 1\norder: code, line\nwide:\n---\n',
+        '---\nsurface: vote_screen\nskin: standard\ncolumns: 1\norder: line, code\nwide:\n---\n',
     }),
   }),
   eventRoute('/api/v2/admin/events/:id/dashboard', 'GET', '/dashboard'),
@@ -498,6 +498,8 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
  * without a reason a reviewer would accept.
  */
 export const ROUTE_EXEMPTIONS: Readonly<Record<string, string>> = {
+  '/api/v2/admin/addons':
+    'Platform only (key actor or platform brand, AUD-3): a brand cannot read or turn on add-ons, its own or another. Held by tests/brand-addons.spec.ts (OSE-2232).',
   '/api/v2/admin/venues':
     'A venue is not one of the matrix fixtures; its isolation is held by tests/venues.spec.ts (OSE-2221): only the owner brand reaches a venue by id, another brand gets the same 404 as an unknown venue, and a list shows a brand only the venues it owns or is listed at.',
   '/api/v2/admin/venues/:id/operators':

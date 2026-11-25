@@ -14,9 +14,17 @@
  *      saves a .md skin, refuses a bad one in words and audits the save
  *      [save not audited / bad file stored];
  *   6. the event's own settings write takes a layout and refuses a bad one
- *      [layouts left out of validateSettingsPatch].
+ *      [layouts left out of validateSettingsPatch];
+ *   7. without the brand's skins add-on, the standard look still saves, any
+ *      other look is refused in words (403), and a saved one shows as the
+ *      standard skin [gate removed from the .md save / the settings write /
+ *      the vote screen];
+ *   8. only the platform turns an add-on on or off, and each change is
+ *      audited [_platformOnly removed / audit removed].
  *
  * Placement: workers pool (route + D1).
+ *
+ * Tests 1-6 run with the add-on on (beforeEach); 7 and 8 take it away.
  *
  * @born-red OSE-2226, OSE-2232 | method: injected-fault, each removed after;
  * listed in the PR body | date: 2026-11-25
@@ -104,7 +112,16 @@ beforeAll(async () => {
   );
 });
 
+const KEY = { Authorization: 'Bearer test-admin-key-e2e-2026' };
+const grant = () =>
+  run(
+    `INSERT OR IGNORE INTO brand_addons (brand_id, addon, granted_at, granted_by)
+     VALUES (?, 'skins', datetime('now'), 'platform')`,
+    BRAND
+  );
+
 beforeEach(async () => {
+  await grant();
   await run(`DELETE FROM poster_deployments WHERE event_id = ?`, NIGHT);
   await run(`DELETE FROM vote_sets WHERE event_id = ?`, NIGHT);
   await run(`DELETE FROM events WHERE id = ?`, NIGHT);
@@ -181,7 +198,7 @@ describe('OSE-2226 | the host vote screen', () => {
   test('4. takes the event vote-screen layout', async () => {
     await makeCode();
     const before = await (await call('GET', screen())).text();
-    expect(before).toContain('"skin":"words_first"');
+    expect(before).toContain('"skin":"standard"');
     await run(
       `UPDATE events SET settings_json = ? WHERE id = ?`,
       JSON.stringify({ layouts: { vote_screen: skinLayout('vote_screen', 'side_by_side') } }),
@@ -199,7 +216,7 @@ describe('OSE-2232 | the layouts route and the settings write', () => {
     expect(read.status).toBe(200);
     const body = (await read.json()) as Record<string, any>;
     expect(body.layouts.report.skin).toBe('standard');
-    expect(body.layouts.vote_screen.skin).toBe('words_first');
+    expect(body.layouts.vote_screen.skin).toBe('standard');
     expect(body.skins.report.map((k: { name: string }) => k.name)).toEqual([
       'standard',
       'map_first',
@@ -214,7 +231,7 @@ describe('OSE-2232 | the layouts route and the settings write', () => {
     const saved = await call('PUT', layouts(), { body: { markdown: md } });
     expect(saved.status).toBe(200);
     const after = (await saved.json()) as Record<string, any>;
-    expect(after.surface).toBe('report');
+    expect(after.saved).toEqual(['report']);
     expect(after.layouts.report.order.slice(0, 2)).toEqual(['map', 'stats']);
     const stored = await tenv.DB.prepare(`SELECT settings_json FROM events WHERE id = ?`)
       .bind(NIGHT)
@@ -254,5 +271,87 @@ describe('OSE-2232 | the layouts route and the settings write', () => {
       body: { settings: { layouts: { report: { ...good, wide: ['person'] } } } },
     });
     expect(bad.status).toBe(400);
+  });
+});
+
+describe('OSE-2232 | the skins add-on: standard is free, any other look is sold', () => {
+  const WORDS = 'Custom looks are an add-on. Ask us to turn them on.';
+  const STANDARD_MD =
+    '---\nsurface: vote_screen\nskin: standard\ncolumns: 1\norder: line, code\nwide:\n---\n';
+  const SIDE_MD =
+    '---\nsurface: vote_screen\nskin: side_by_side\ncolumns: 2\norder: code, line\nwide:\n---\n';
+
+  test('7. without the add-on: standard saves, others are refused, a saved one shows standard', async () => {
+    await run(`DELETE FROM brand_addons WHERE brand_id = ?`, BRAND);
+    const read = (await (await call('GET', layouts())).json()) as { entitled: boolean };
+    expect(read.entitled).toBe(false);
+
+    const std = await call('PUT', layouts(), { body: { markdown: STANDARD_MD } });
+    expect(std.status).toBe(200);
+
+    const side = await call('PUT', layouts(), { body: { markdown: SIDE_MD } });
+    expect(side.status).toBe(403);
+    expect(await side.json()).toMatchObject({ code: 'ADDON_REQUIRED', error: WORDS });
+
+    const viaSettings = await call('PUT', `/api/v2/admin/events/${NIGHT}`, {
+      body: { settings: { layouts: { report: skinLayout('report', 'map_first') } } },
+    });
+    expect(viaSettings.status).toBe(403);
+    expect(await viaSettings.json()).toMatchObject({ code: 'ADDON_REQUIRED', error: WORDS });
+    const stored = await tenv.DB.prepare(`SELECT settings_json FROM events WHERE id = ?`)
+      .bind(NIGHT)
+      .first<{ settings_json: string | null }>();
+    expect(stored?.settings_json ?? '').not.toContain('map_first');
+
+    // A look saved while the add-on was on stays saved, and shows as standard.
+    await run(
+      `UPDATE events SET settings_json = ? WHERE id = ?`,
+      JSON.stringify({ layouts: { vote_screen: skinLayout('vote_screen', 'side_by_side') } }),
+      NIGHT
+    );
+    await makeCode();
+    const page = await (await call('GET', screen())).text();
+    expect(page).toContain('"skin":"standard"');
+    expect(page).not.toContain('"skin":"side_by_side"');
+    const kept = (await (await call('GET', layouts())).json()) as Record<string, any>;
+    expect(kept.layouts.vote_screen.skin).toBe('side_by_side');
+  });
+
+  test('8. only the platform turns it on or off, and each change is audited', async () => {
+    await run(`DELETE FROM brand_addons WHERE brand_id = ?`, BRAND);
+    const addons = '/api/v2/admin/addons';
+    const on = { brand_id: BRAND, addon: 'skins', on: true };
+
+    const self = await call('PUT', addons, { body: on });
+    expect(self.status).toBe(404);
+    expect(((await (await call('GET', layouts())).json()) as { entitled: boolean }).entitled).toBe(
+      false
+    );
+
+    const bad = await call('PUT', addons, { headers: KEY, body: { ...on, addon: 'colors' } });
+    expect(bad.status).toBe(400);
+
+    const granted = await call('PUT', addons, { headers: KEY, body: on });
+    expect(granted.status).toBe(200);
+    expect(await granted.json()).toMatchObject({ brand_id: BRAND, addons: { skins: true } });
+    expect(((await (await call('GET', layouts())).json()) as { entitled: boolean }).entitled).toBe(
+      true
+    );
+    expect((await call('PUT', layouts(), { body: { markdown: SIDE_MD } })).status).toBe(200);
+
+    const off = await call('PUT', addons, { headers: KEY, body: { ...on, on: false } });
+    expect(await off.json()).toMatchObject({ addons: { skins: false } });
+    const page = await (await call('GET', screen())).text();
+    expect(page).not.toContain('"skin":"side_by_side"');
+
+    const audit = await tenv.DB.prepare(
+      `SELECT outcome FROM admin_audit_log WHERE action = 'ADDON_SET' ORDER BY rowid`
+    ).all<{ outcome: string }>();
+    expect(audit.results.map((r) => r.outcome).slice(-4)).toEqual([
+      'denied',
+      'denied',
+      'success',
+      'success',
+    ]);
   });
 });

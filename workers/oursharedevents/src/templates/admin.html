@@ -8865,8 +8865,9 @@
          vote screen are arranged: a ready-made skin, then parts moved up and
          down and set wide. Saved into the event's settings (settings.layouts,
          lib/layout-skins.ts) through PUT /api/v2/admin/events/:id, like the TV
-         card. The same layout travels as a .md skin file: "Download the skin
-         file" writes it, "Load a skin file" sends one to
+         card. The same layouts travel as one .md skin file (one block per
+         page, shared with ourWKRP): "Download the skin file" writes it,
+         "Load a skin file" sends one to
          PUT /api/v2/admin/events/:id/layouts (the solution engineer's path).
          A skin arranges only: it never recolors and never hides a part. -->
     <div class="card card--sectioned layouts-card" id="layouts-card" data-testid="layouts-card">
@@ -8882,7 +8883,7 @@
             <select id="layout-report-skin" data-testid="layout-report-skin"></select>
           </div>
           <div class="full-width">
-            <label class="create-publish-label"><input type="checkbox" id="layout-report-two" data-testid="layout-report-two" /> <span>Two columns on a wide screen</span></label>
+            <label class="create-publish-label" for="layout-report-two"><input type="checkbox" id="layout-report-two" data-testid="layout-report-two" /> <span>Two columns on a wide screen</span></label>
           </div>
         </div>
         <ol class="pc-list" id="layout-report-parts" data-testid="layout-report-parts" aria-labelledby="layout-report-title"></ol>
@@ -8895,10 +8896,12 @@
         </div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary copy-btn" id="layout-save" data-testid="layout-save" disabled>Save layouts</button>
-          <button type="button" class="btn btn-secondary copy-btn" id="layout-download" data-testid="layout-download" disabled>Download the report skin file</button>
+          <button type="button" class="btn btn-secondary copy-btn" id="layout-download" data-testid="layout-download" disabled>Download the skin file</button>
           <button type="button" class="btn btn-secondary copy-btn" id="layout-load-open" data-testid="layout-load-open" disabled>Load a skin file</button>
+          <label for="layout-load" hidden>Skin file (.md)</label>
           <input type="file" id="layout-load" data-testid="layout-load" accept=".md,text/markdown,text/plain" hidden />
         </div>
+        <p class="pd-target" id="layout-addon" data-testid="layout-addon" hidden>The standard look is free. Other looks are an add-on: try them here, and ask us to turn the add-on on to save them.</p>
         <p class="create-msg" id="layout-msg" data-testid="layout-msg" role="status"></p>
       </div>
     </div>
@@ -9020,6 +9023,8 @@
             if (!res.ok || !data || !data.ok) throw new Error('load');
             if (st.eventId !== eventId) return; // a newer selection won
             fill(data);
+            var addon = $('layout-addon');
+            if (addon) addon.hidden = data.entitled !== false;
             setDisabled(false);
             render();
           } catch (e) {
@@ -9099,15 +9104,15 @@
         });
         var down = $('layout-download');
         if (down) down.addEventListener('click', function () {
-          var md = st.info && st.info.markdown && typeof st.info.markdown.report === 'string' ? st.info.markdown.report : '';
+          var md = st.info && st.info.markdown && typeof st.info.markdown.all === 'string' ? st.info.markdown.all : '';
           if (!md || !st.eventId) return;
           var a = document.createElement('a');
           a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
-          a.download = 'report-skin-' + st.eventId + '.md';
+          a.download = 'skin-' + st.eventId + '.md';
           document.body.appendChild(a);
           a.click();
           setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
-          msg('Downloaded the saved report skin. Unsaved moves are not in it.', 'success');
+          msg('Downloaded the saved skin for the report and the vote screen. Unsaved moves are not in it.', 'success');
         });
         var load = $('layout-load');
         var loadOpen = $('layout-load-open');
@@ -9134,7 +9139,8 @@
               return;
             }
             fill(data);
-            msg('Loaded and saved.', 'success');
+            var skipped = Array.isArray(data.skipped) && data.skipped.length ? ' Pages for another product were left for it: ' + data.skipped.filter(function (x) { return /^[a-z_]{1,32}$/.test(String(x)); }).join(', ') + '.' : '';
+            msg('Loaded and saved.' + skipped, 'success');
           } catch (e) {
             if (st.eventId === eventId) msg('Could not load the file. The layouts are unchanged.', 'error');
           } finally {

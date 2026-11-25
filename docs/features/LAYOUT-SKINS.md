@@ -21,16 +21,27 @@ A page is cut into named **parts** (regions). A **layout** says, for one event a
 
 ## Where it lives
 
-| Piece                                                 | File                                                                          |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Parts, skins, checks, the one DOM mover, the grid CSS | `workers/oursharedevents/src/lib/layout-skins.ts`                             |
-| The .md skin file: read and write                     | `workers/oursharedevents/src/lib/layout-skin-md.ts`                           |
-| Stored per event                                      | `settings.layouts.<page>` in `events.settings_json` (`lib/event-settings.ts`) |
-| Admin card                                            | "Page layouts" in `src/templates/admin.html`                                  |
-| Read, and save a .md file                             | `GET` / `PUT /api/v2/admin/events/:id/layouts`                                |
-| The report reads it                                   | `GET /api/v2/events/:id/shared-report` answers `layout` beside `report`       |
-| The vote screen                                       | `GET /api/v2/admin/events/:id/vote-screen`                                    |
-| Staging checks                                        | Bruno folder 31                                                               |
+| Piece                                                     | File                                                                                                   |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Parts, skins, checks, the one DOM mover, the grid CSS     | `workers/oursharedevents/src/lib/layout-skins.ts`                                                      |
+| The .md skin file: read and write                         | `workers/oursharedevents/src/lib/layout-skin-md.ts`                                                    |
+| Stored per event                                          | `settings.layouts.<page>` in `events.settings_json` (`lib/event-settings.ts`)                          |
+| Admin card                                                | "Page layouts" in `src/templates/admin.html`                                                           |
+| Read, and save a .md file                                 | `GET` / `PUT /api/v2/admin/events/:id/layouts`                                                         |
+| The report reads it                                       | `GET /api/v2/events/:id/shared-report` answers `layout` beside `report`                                |
+| The vote screen                                           | `GET /api/v2/admin/events/:id/vote-screen`                                                             |
+| The skins add-on (who may use a look other than standard) | `brand_addons` (migration 0121), `src/lib/brand-addons.ts`, `PUT /api/v2/admin/addons` (platform only) |
+| Staging checks                                            | Bruno folder 31                                                                                        |
+
+## Free and paid looks
+
+Owner, 2026-11-25: "I want the base skin as what I use and sell so everyone can use without the skin, then sell the skin and reasonable extra service."
+
+- The **standard** skin is free for every brand, on every page.
+- Any other look, a ready-made skin or a custom one, is the **skins add-on**, turned on per brand by the platform (`PUT /api/v2/admin/addons` with `{"brand_id", "addon": "skins", "on": true}`; key actor only, audited as `ADDON_SET`). A brand cannot turn it on for itself.
+- Without it, a save of any other look is refused with 403 `ADDON_REQUIRED`: "Custom looks are an add-on. Ask us to turn them on." The card still lets the organizer try other skins, and says so.
+- If the add-on is turned off, the saved look is kept and the pages show the standard skin until it is on again. A read that fails counts as off.
+- There is no billing yet: the row is the switch.
 
 ## The .md skin file
 
@@ -48,13 +59,15 @@ Notes for whoever edits this file. The system keeps only the lines above.
 
 Keys: `surface`, `skin`, `columns` (1 or 2), `order` (every part once), `wide` (some parts, may be empty). Lists are comma separated; `[a, b]` also reads. At most 8 KB. The notes are never stored.
 
+One file may hold one block per page, for this product and for ourWKRP (owner, 2026-11-25: clients on either product, or both, can skin). A block starts at a `---` line whose next line is `surface:`. Each product saves the blocks for its own pages and names the rest in `skipped`; a page named twice is refused. `standard` and `side_by_side` are skin names on every page.
+
 The solution engineer's loop: download the event's skin file from the "Page layouts" card (or `GET .../layouts`, field `markdown`), edit it, and send it back with the Bruno request in folder 31 (`PUT .../layouts`, body `{"markdown": "..."}`), or with "Load a skin file" on the card. A refusal says which line to fix.
 
 ## Parts today
 
 **Report** (`report`): `stats` (Scans), `map` (Corridor map), `sponsors` (Sponsor displays), `classes` (Local and paid sponsors), `posters` (Poster attribution), `trend` (Scan trend), `locked` (More on the next report). The event's title and date header is not a part: it always comes first. Skins: `standard` (today's page, one column), `map_first`, `sponsors_first`, `side_by_side`.
 
-**Vote screen** (`vote_screen`): `line` ("Scan to vote", the page's one h1) and `code` (the QR). Skins: `words_first`, `code_first`, `side_by_side` (for a wide TV).
+**Vote screen** (`vote_screen`): `line` ("Scan to vote", the page's one h1) and `code` (the QR). Skins: `standard`, `code_first`, `side_by_side` (for a wide TV).
 
 ## Next: the poster (priority 2, design only)
 

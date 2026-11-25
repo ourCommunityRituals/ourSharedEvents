@@ -6,8 +6,9 @@
  * lightweight front end will let flag-side users do the same for themselves.
  * So the file is the hand-over, and both sides read and write the same shape.
  *
- * THE FILE. A front-matter block of plain `key: value` lines between `---`
- * lines, then free notes that the system keeps no copy of:
+ * THE FILE. One header block per page ("surface"), each a run of plain
+ * `key: value` lines between two `---` lines; everything else is notes, which
+ * the system keeps no copy of:
  *
  *   ---
  *   surface: report
@@ -17,7 +18,23 @@
  *   wide: map, posters, trend, locked
  *   ---
  *
+ *   ---
+ *   surface: vote_screen
+ *   skin: standard
+ *   columns: 1
+ *   order: line, code
+ *   wide:
+ *   ---
+ *
  *   Notes for whoever reads this file.
+ *
+ * A block starts at a `---` line whose next non-blank line is `surface:`, so a
+ * `---` rule in the notes is still notes. A file names each surface at most
+ * once. One file may carry a client's pages on both products (owner,
+ * 2026-11-25: clients on ourSharedEvents, on ourWKRP, or on both can skin):
+ * each product reads the blocks for its own surfaces and passes over the rest
+ * (ourWKRP#139 reads the same file). "standard" and "side_by_side" are skin
+ * names on every surface, so one name can be picked once for every page.
  *
  * A list is comma separated; `[a, b]` is read the same. Key names and region
  * names are the ones in lib/layout-skins.ts; the checks are that module's
@@ -51,32 +68,18 @@ function list(v: string): string[] {
   return inner.split(',').map((x) => x.trim().replace(/^["']|["']$/g, ''));
 }
 
-/** Read a skin file. The words on failure say which line to fix. */
-export function parseSkinMarkdown(
-  text: unknown
-): { ok: true; surface: LayoutSurface; layout: SurfaceLayout } | { ok: false; error: string } {
-  if (typeof text !== 'string' || !text.trim()) {
-    return { ok: false, error: 'markdown must be the text of a skin file' };
-  }
-  if (new TextEncoder().encode(text).length > SKIN_MD_MAX_BYTES) {
-    return { ok: false, error: `a skin file is at most ${SKIN_MD_MAX_BYTES} bytes` };
-  }
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/);
-  let i = 0;
-  while (i < lines.length && !lines[i]!.trim()) i++;
-  if (lines[i]?.trim() !== '---') {
-    return { ok: false, error: 'a skin file starts with a line of three dashes (---)' };
-  }
+/** One header block's fields, or the words that say which line to fix. */
+function readBlock(
+  lines: string[],
+  start: number
+): { ok: true; fields: Record<string, string>; end: number } | { ok: false; error: string } {
   const fields: Record<string, string> = {};
-  let closed = false;
-  for (i++; i < lines.length; i++) {
+  for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i]!;
-    if (line.trim() === '---') {
-      closed = true;
-      break;
-    }
+    if (line.trim() === '---') return { ok: true, fields, end: i };
     if (!line.trim() || line.trim().startsWith('#')) continue;
-    const m = /^\s*([A-Za-z_]+)\s*:\s*(.*?)\s*$/.exec(line);
+    // No \s* after the colon: a line of spaces would make that pattern slow.
+    const m = /^\s*([A-Za-z_]+)\s*:(.*)$/.exec(line);
     if (!m) return { ok: false, error: `line ${i + 1} must read key: value` };
     const key = m[1]!;
     if (!(KEYS as readonly string[]).includes(key)) {
@@ -86,31 +89,88 @@ export function parseSkinMarkdown(
       };
     }
     if (key in fields) return { ok: false, error: `line ${i + 1}: ${key} is given twice` };
-    fields[key] = m[2]!;
+    fields[key] = m[2]!.trim();
   }
-  if (!closed) return { ok: false, error: 'the header must end with a line of three dashes (---)' };
-  const surface = fields.surface;
-  if (!isLayoutSurface(surface)) {
-    return { ok: false, error: `surface must be one of ${LAYOUT_SURFACES.join(', ')}` };
-  }
-  for (const k of ['skin', 'columns', 'order'] as const) {
-    if (fields[k] === undefined) return { ok: false, error: `${k} is missing` };
-  }
-  const checked = checkLayout(surface, {
-    skin: fields.skin,
-    columns: fields.columns === '1' ? 1 : fields.columns === '2' ? 2 : fields.columns,
-    order: list(fields.order!),
-    wide: list(fields.wide ?? ''),
-  });
-  if (!checked.ok)
-    return { ok: false, error: checked.error.replace(`settings.layouts.${surface}.`, '') };
-  return { ok: true, surface, layout: checked.value };
+  return {
+    ok: false,
+    error: `the block at line ${start + 1} must end with a line of three dashes (---)`,
+  };
 }
 
-/** Write a layout as a skin file a person can read, change and send back. */
-export function skinMarkdown(surface: LayoutSurface, layout: SurfaceLayout): string {
-  const words = REGION_WORDS[surface];
-  const skins = Object.keys(SKINS[surface]);
+/** Does a block start at line i: a "---" line whose next non-blank line is "surface:"? */
+function startsBlock(lines: string[], i: number): boolean {
+  if (lines[i]!.trim() !== '---') return false;
+  for (let j = i + 1; j < lines.length; j++) {
+    if (!lines[j]!.trim()) continue;
+    return /^\s*surface\s*:/.test(lines[j]!);
+  }
+  return false;
+}
+
+/**
+ * Read a skin file: one header block per surface. Blocks for a surface this
+ * product does not arrange (another product's page) are passed over and
+ * named in `skipped`; a file with none of ours is refused. The words on
+ * failure say which line or which surface to fix.
+ */
+export function parseSkinFile(
+  text: unknown
+):
+  | { ok: true; layouts: Partial<Record<LayoutSurface, SurfaceLayout>>; skipped: string[] }
+  | { ok: false; error: string } {
+  if (typeof text !== 'string' || !text.trim()) {
+    return { ok: false, error: 'markdown must be the text of a skin file' };
+  }
+  if (new TextEncoder().encode(text).length > SKIN_MD_MAX_BYTES) {
+    return { ok: false, error: `a skin file is at most ${SKIN_MD_MAX_BYTES} bytes` };
+  }
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+  const layouts: Partial<Record<LayoutSurface, SurfaceLayout>> = {};
+  const seen = new Set<string>();
+  const skipped: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!startsBlock(lines, i)) continue;
+    const block = readBlock(lines, i);
+    if (!block.ok) return block;
+    const { fields } = block;
+    const surface = String(fields.surface ?? '');
+    if (seen.has(surface)) {
+      return { ok: false, error: `line ${i + 1}: surface ${surface} is given twice in this file` };
+    }
+    seen.add(surface);
+    i = block.end;
+    if (!isLayoutSurface(surface)) {
+      if (/^[a-z_]{1,32}$/.test(surface)) skipped.push(surface);
+      continue;
+    }
+    for (const k of ['skin', 'columns', 'order'] as const) {
+      if (fields[k] === undefined) return { ok: false, error: `${surface}: ${k} is missing` };
+    }
+    const checked = checkLayout(surface, {
+      skin: fields.skin,
+      columns: fields.columns === '1' ? 1 : fields.columns === '2' ? 2 : fields.columns,
+      order: list(fields.order!),
+      wide: list(fields.wide ?? ''),
+    });
+    if (!checked.ok) {
+      const at = `settings.layouts.${surface}`;
+      return {
+        ok: false,
+        error: `${surface}: ${checked.error.replace(`${at}.`, '').replace(`${at} `, '')}`,
+      };
+    }
+    layouts[surface] = checked.value;
+  }
+  if (!Object.keys(layouts).length) {
+    return {
+      ok: false,
+      error: `the file names no page this product arranges (${LAYOUT_SURFACES.join(', ')}); a page starts with a line of three dashes (---) and then surface:`,
+    };
+  }
+  return { ok: true, layouts, skipped };
+}
+
+function block(surface: LayoutSurface, layout: SurfaceLayout): string[] {
   return [
     '---',
     `surface: ${surface}`,
@@ -119,14 +179,41 @@ export function skinMarkdown(surface: LayoutSurface, layout: SurfaceLayout): str
     `order: ${layout.order.join(', ')}`,
     `wide: ${layout.wide.join(', ')}`,
     '---',
+  ];
+}
+
+function notes(surfaces: LayoutSurface[]): string[] {
+  const out = [
     '',
-    'Notes for whoever edits this file. The system keeps only the lines above.',
+    'Notes for whoever edits this file. The system keeps only the blocks between the --- lines.',
     '',
-    `- order: every part once, top to bottom. Parts: ${SURFACE_REGIONS[surface]
-      .map((r) => `${r} (${words[r]})`)
-      .join(', ')}.`,
+  ];
+  for (const surface of surfaces) {
+    const words = REGION_WORDS[surface];
+    out.push(
+      `- ${surface} parts, top to bottom, each once: ${SURFACE_REGIONS[surface]
+        .map((r) => `${r} (${words[r]})`)
+        .join(', ')}. Skins: ${Object.keys(SKINS[surface]).join(', ')}, or custom once moved.`
+    );
+  }
+  out.push(
     '- wide: parts that run the full width when columns is 2. A phone always shows one column.',
-    `- skin: where this started (${skins.join(', ')}), or custom once moved.`,
-    '',
+    "- A block for another product's page (an ourWKRP profile) may sit in the same file; each product reads its own.",
+    ''
+  );
+  return out;
+}
+
+/** Write one surface's layout as a skin file. */
+export function skinMarkdown(surface: LayoutSurface, layout: SurfaceLayout): string {
+  return [...block(surface, layout), ...notes([surface])].join('\n');
+}
+
+/** Write every surface's layout into one skin file, one block each. */
+export function skinFile(layouts: Record<LayoutSurface, SurfaceLayout>): string {
+  const surfaces = LAYOUT_SURFACES.filter((s) => layouts[s]);
+  return [
+    ...surfaces.flatMap((s, n) => (n ? ['', ...block(s, layouts[s])] : block(s, layouts[s]))),
+    ...notes(surfaces),
   ].join('\n');
 }
