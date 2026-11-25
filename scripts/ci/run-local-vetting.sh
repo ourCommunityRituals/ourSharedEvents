@@ -46,6 +46,12 @@ echo "::group::Migrate local D1 (DB + FORMS_DB)"
 echo "::endgroup::"
 
 echo "::group::Start local worker on ${BASE}"
+# The voting switch follows staging's (OSE-2227): the Bruno run below uses the
+# ose-staging environment, whose votingSwitch says which half of the voting folders
+# to run, and tests/unit/ci/env-parity.test.js holds that copy equal to staging's
+# VOTING_ENABLED. So the local worker reads the same word, and the two halves agree.
+VOTING_LOCAL="$(sed -n '/- name: votingSwitch/{n;s/.*value: *"\([a-z]*\)".*/\1/p}' "$ROOT/bruno/ose-api/environments/ose-staging.yml")"
+[ "$VOTING_LOCAL" = "on" ] || VOTING_LOCAL=off
 # Same vars as playwright.mobile.config.ts, plus WORKER_ENV=staging (so /health and the
 # CORS allowlist match the staging-shaped tests) and the internal-auth pair the Bruno
 # collections use. All values are local and random-per-run; none is a real secret.
@@ -58,7 +64,7 @@ echo "::group::Start local worker on ${BASE}"
     --var FORMS_ENCRYPTION_KEY:local-forms-key-1234567890123456789 \
     --var FORMS_HASH_PEPPER:local-pepper-1234567890 \
     --var ANON_ID_HASH_PEPPER:local-anon-pepper-12345678901234567890 \
-    --var PUBLISH_GRACE_MINUTES:1) >"$WORKER_LOG" 2>&1 &
+    --var PUBLISH_GRACE_MINUTES:1 --var "VOTING_ENABLED:${VOTING_LOCAL}") >"$WORKER_LOG" 2>&1 &
 WORKER_PID=$!
 for _ in $(seq 1 60); do
   curl -fsS -m 3 "${BASE}/health" 2>/dev/null | grep -q '"db":"ok"' && break

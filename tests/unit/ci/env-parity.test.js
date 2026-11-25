@@ -810,6 +810,31 @@ describe('the voting kill switch (VOTING_ENABLED)', () => {
     expect(copyIn(stagingEnv())).toBe('on');
   });
 
+  // OSE-2227: the PR's local run (scripts/ci/run-local-vetting.sh) starts a worker
+  // and runs Bruno with the ose-staging environment. Its worker must read the same
+  // word the Bruno copy says, or the switch-on half runs against a switched-off
+  // worker (the red "T2/T3 Local" on the PR that turned staging on).
+  test('the local vetting worker follows the Bruno copy of the switch', () => {
+    const script = root('scripts/ci/run-local-vetting.sh');
+    expect(script).toMatch(/--var "VOTING_ENABLED:\$\{VOTING_LOCAL\}"/);
+    const line = /^VOTING_LOCAL="\$\((.*)\)"$/m.exec(script)?.[1];
+    expect(line, 'VOTING_LOCAL is read from a command').toBeDefined();
+    const { execFileSync } = require('node:child_process');
+    const read = (yaml) => {
+      const dir = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'vote-'));
+      fs.mkdirSync(path.join(dir, 'bruno/ose-api/environments'), { recursive: true });
+      fs.writeFileSync(path.join(dir, 'bruno/ose-api/environments/ose-staging.yml'), yaml);
+      return execFileSync('bash', ['-c', `ROOT=${JSON.stringify(dir)}; ${line}`])
+        .toString()
+        .trim();
+    };
+    const real = stagingEnv();
+    expect(read(real)).toBe(copyIn(real));
+    for (const w of ['on', 'off']) {
+      expect(read(real.replace(/(name: votingSwitch\r?\n\s+value: )"[^"]*"/, `$1"${w}"`))).toBe(w);
+    }
+  });
+
   test('a block with no value, or a value that is neither word: refused', () => {
     for (const name of NAMES) {
       const b = blocks(allOff());
